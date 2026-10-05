@@ -1,0 +1,104 @@
+{
+ "estimate": {
+  "ceiling_usd": null,
+  "high_usd": 0.04,
+  "low_usd": 0.01
+ },
+ "instances": [
+  {
+   "id": "count#1",
+   "identity": "f8a9e8ecdbd14337e2bd5a3729b8992a2d6a91a51e41dc62841f5bb088c34578",
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "count",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {},
+   "state": "planned",
+   "step": "count",
+   "take": [
+    1
+   ],
+   "type": "nodes/cases.py#lines@1",
+   "uses": "./nodes/cases.py#lines",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "text": {
+     "file": "c3f9c8c283a2b1f2f1896f27a01cbe3cddc0c9d93f752e4639035a0f5b36f6e8"
+    }
+   }
+  },
+  {
+   "id": "draw#1",
+   "identity": null,
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "draw",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.04,
+    "low_usd": 0.01
+   },
+   "reads": [
+    "count#1"
+   ],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+     "route": "img-a@acme"
+    }
+   },
+   "state": "planned",
+   "step": "draw",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [
+    "count#1"
+   ],
+   "with": {
+    "background": "auto",
+    "prompt": {
+     "pending": [
+      "count#1"
+     ]
+    },
+    "vars": {}
+   }
+  }
+ ],
+ "kind": "fx-graph-v1",
+ "pending": [],
+ "problems": [],
+ "types": {
+  "./nodes/cases.py#lines": {
+   "identity": "nodes/cases.py#lines@1",
+   "source": {
+    "files": {
+     "nodes/cases.py": "d34041da3235ac70a67a2748fbffc8cd8ab51dc12db3098472c52e2f40db0930"
+    },
+    "resources": {}
+   }
+  },
+  "fx/image.generate@1": {
+   "identity": "fx/image.generate@1.1"
+  }
+ },
+ "workflow": {
+  "file": "workflows/case.yaml",
+  "id": "case",
+  "title": "Linear"
+ }
+}

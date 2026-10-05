@@ -1,6 +1,10 @@
 //! The `grida-fx` command.
 
-fn main() {
-    eprintln!("grida-fx {}: no commands yet", env!("CARGO_PKG_VERSION"));
-    std::process::exit(2);
+mod args;
+mod cli;
+mod print;
+mod verbs;
+
+fn main() -> std::process::ExitCode {
+    cli::main(std::env::args_os().collect())
 }

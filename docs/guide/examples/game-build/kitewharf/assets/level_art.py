@@ -7,13 +7,15 @@ from kitewharf_levels import read_level  # the game's reader (installed with the
 
 from grida.fx import Workflow
 
-HOME = Path(__file__).resolve().parent  # the folder with fx.yaml: where ./ and ../ paths start
+HOME = Path(__file__).resolve().parent  # the folder with fx.yaml: where ./ paths start
 
 
 def project_path(file: Path) -> str:
-    """A file as a workflow names it: relative to HOME, starting with ./ or ../, never absolute."""
+    """A file as a workflow names it: ./ and relative to HOME, which it must not leave."""
     relative = Path(os.path.relpath(file.resolve(), HOME)).as_posix()
-    return relative if relative.startswith("../") else f"./{relative}"
+    if relative == ".." or relative.startswith("../"):
+        raise ValueError(f"{relative} is outside the FX project: keep the level's art in it")
+    return f"./{relative}"
 
 
 def build(level: str) -> Workflow:

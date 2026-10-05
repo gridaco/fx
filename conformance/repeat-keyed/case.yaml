@@ -1,3 +1,4 @@
+# A keyed `for_each` over an input list, collected into one step.
 steps:
 - argv:
   - expand

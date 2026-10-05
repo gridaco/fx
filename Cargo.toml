@@ -14,8 +14,19 @@ grida-fx-core = { path = "crates/grida-fx-core" }
 grida-fx-protocol = { path = "crates/grida-fx-protocol" }
 grida-fx-runtime = { path = "crates/grida-fx-runtime" }
 grida-fx-providers = { path = "crates/grida-fx-providers" }
-serde = { version = "1", features = ["derive"] }
+serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", features = ["preserve_order"] }
+sha2 = "0.10"
+ryu-js = "1"
+indexmap = { version = "2", features = ["serde"] }
+yaml-rust2 = "0.13"
+jsonschema = { version = "0.58", default-features = false }
+regex = "1"
+png = "0.18"
+gif = "0.14"
+image-webp = "0.2"
+clap = { version = "4", features = ["derive"] }
+tempfile = "3"
 
 [workspace.lints.rust]
 unsafe_code = "deny"

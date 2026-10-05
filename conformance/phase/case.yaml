@@ -1,3 +1,4 @@
+# A `for_each` over a step's output with `max:` makes a pending second phase, priced at its maximum.
 steps:
 - argv:
   - expand

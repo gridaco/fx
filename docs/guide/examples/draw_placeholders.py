@@ -55,8 +55,8 @@ TARGETS = {
     "concept-gallery/inputs/tidebell/poster.png": poster,
     "looping-parallax/art/far_cliffs.png": far_cliffs,
     "looping-parallax/art/near_masts.png": near_masts,
-    "game-build/kitewharf/art/far_cliffs.png": far_cliffs,
-    "game-build/kitewharf/art/near_masts.png": near_masts,
+    "game-build/kitewharf/assets/art/far_cliffs.png": far_cliffs,
+    "game-build/kitewharf/assets/art/near_masts.png": near_masts,
 }
 
 

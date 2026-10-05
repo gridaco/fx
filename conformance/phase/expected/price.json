@@ -1,0 +1,33 @@
+{
+ "ceiling_usd": null,
+ "estimate": {
+  "high_usd": 0.24,
+  "low_usd": 0
+ },
+ "phases": [
+  {
+   "calls": [
+    0,
+    0
+   ],
+   "high_usd": 0,
+   "low_usd": 0,
+   "phase": 1,
+   "steps": 1,
+   "then": []
+  },
+  {
+   "calls": [
+    0,
+    0
+   ],
+   "high_usd": 0.24,
+   "low_usd": 0,
+   "phase": 2,
+   "steps": 0,
+   "then": [
+    "draw (up to 6)"
+   ]
+  }
+ ]
+}

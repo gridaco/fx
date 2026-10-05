@@ -1,0 +1,319 @@
+{
+ "estimate": {
+  "ceiling_usd": null,
+  "high_usd": 0.12,
+  "low_usd": 0.01
+ },
+ "instances": [
+  {
+   "id": "build.draw#1.1",
+   "identity": "d2342b8f73aabce1fec173d254fd81c7d40fee25c44e0db6c82371c2caadce40",
+   "judged_by": [
+    "build.audit#1.1"
+   ],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "build.draw",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.04,
+    "low_usd": 0.01
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+     "route": "img-a@acme"
+    }
+   },
+   "state": "planned",
+   "step": "build.draw",
+   "take": [
+    1,
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "a mesh",
+    "vars": {}
+   }
+  },
+  {
+   "id": "build.audit#1.1",
+   "identity": null,
+   "judged_by": [],
+   "judges": "build.draw#1.1",
+   "key": null,
+   "needs": [],
+   "path": "build.audit",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [
+    "build.draw#1.1"
+   ],
+   "routes": {},
+   "state": "planned",
+   "step": "build.audit",
+   "take": [
+    1,
+    1
+   ],
+   "type": "nodes/cases.py#verdict@1",
+   "uses": "./nodes/cases.py#verdict",
+   "view": false,
+   "waiting_on": [
+    "build.draw#1.1"
+   ],
+   "with": {
+    "accept_take": 1,
+    "subject": {
+     "pending": [
+      "build.draw#1.1"
+     ]
+    }
+   }
+  },
+  {
+   "id": "build.draw#2.1",
+   "identity": "7f8fdb16e79a475814300798a59cfc855826a600710a2b163c686153b86cd22f",
+   "judged_by": [
+    "build.audit#2.1"
+   ],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "build.draw",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.04,
+    "low_usd": 0.01
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+     "route": "img-a@acme"
+    }
+   },
+   "state": "maybe",
+   "step": "build.draw",
+   "take": [
+    2,
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "a mesh",
+    "vars": {}
+   }
+  },
+  {
+   "id": "build.audit#2.1",
+   "identity": null,
+   "judged_by": [],
+   "judges": "build.draw#2.1",
+   "key": null,
+   "needs": [],
+   "path": "build.audit",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [
+    "build.draw#2.1"
+   ],
+   "routes": {},
+   "state": "maybe",
+   "step": "build.audit",
+   "take": [
+    2,
+    1
+   ],
+   "type": "nodes/cases.py#verdict@1",
+   "uses": "./nodes/cases.py#verdict",
+   "view": false,
+   "waiting_on": [
+    "build.draw#2.1"
+   ],
+   "with": {
+    "accept_take": 1,
+    "subject": {
+     "pending": [
+      "build.draw#2.1"
+     ]
+    }
+   }
+  },
+  {
+   "id": "build.draw#3.1",
+   "identity": "ef20caddbaa387e52e217254090c8593edfba3322c2a351fc8f3fd7c284b23d3",
+   "judged_by": [
+    "build.audit#3.1"
+   ],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "build.draw",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.04,
+    "low_usd": 0.01
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+     "route": "img-a@acme"
+    }
+   },
+   "state": "maybe",
+   "step": "build.draw",
+   "take": [
+    3,
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "a mesh",
+    "vars": {}
+   }
+  },
+  {
+   "id": "build.audit#3.1",
+   "identity": null,
+   "judged_by": [],
+   "judges": "build.draw#3.1",
+   "key": null,
+   "needs": [],
+   "path": "build.audit",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [
+    "build.draw#3.1"
+   ],
+   "routes": {},
+   "state": "maybe",
+   "step": "build.audit",
+   "take": [
+    3,
+    1
+   ],
+   "type": "nodes/cases.py#verdict@1",
+   "uses": "./nodes/cases.py#verdict",
+   "view": false,
+   "waiting_on": [
+    "build.draw#3.1"
+   ],
+   "with": {
+    "accept_take": 1,
+    "subject": {
+     "pending": [
+      "build.draw#3.1"
+     ]
+    }
+   }
+  },
+  {
+   "id": "export#1",
+   "identity": null,
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "export",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [
+    "build.audit#1.1",
+    "build.audit#2.1",
+    "build.audit#3.1",
+    "build.draw#1.1",
+    "build.draw#2.1",
+    "build.draw#3.1"
+   ],
+   "routes": {},
+   "state": "planned",
+   "step": "export",
+   "take": [
+    1
+   ],
+   "type": "nodes/cases.py#shout@1",
+   "uses": "./nodes/cases.py#shout",
+   "view": false,
+   "waiting_on": [
+    "build.audit#1.1",
+    "build.audit#2.1",
+    "build.audit#3.1",
+    "build.draw#1.1",
+    "build.draw#2.1",
+    "build.draw#3.1"
+   ],
+   "with": {
+    "text": {
+     "pending": [
+      "build.audit#1.1",
+      "build.audit#2.1",
+      "build.audit#3.1",
+      "build.draw#1.1",
+      "build.draw#2.1",
+      "build.draw#3.1"
+     ]
+    }
+   }
+  }
+ ],
+ "kind": "fx-graph-v1",
+ "pending": [],
+ "problems": [],
+ "types": {
+  "./nodes/cases.py#shout": {
+   "identity": "nodes/cases.py#shout@1",
+   "source": {
+    "files": {
+     "nodes/cases.py": "d34041da3235ac70a67a2748fbffc8cd8ab51dc12db3098472c52e2f40db0930"
+    },
+    "resources": {}
+   }
+  },
+  "./nodes/cases.py#verdict": {
+   "identity": "nodes/cases.py#verdict@1",
+   "source": {
+    "files": {
+     "nodes/cases.py": "d34041da3235ac70a67a2748fbffc8cd8ab51dc12db3098472c52e2f40db0930"
+    },
+    "resources": {}
+   }
+  },
+  "fx/image.generate@1": {
+   "identity": "fx/image.generate@1.1"
+  }
+ },
+ "workflow": {
+  "file": "workflows/case.yaml",
+  "id": "case",
+  "title": "A group that regenerates"
+ }
+}

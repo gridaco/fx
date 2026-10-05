@@ -123,6 +123,7 @@
   {"name": "number_overflow_just_above_max", "input": "1.8e308", "refuse": "number_overflow"},
   {"name": "invalid_json_leading_zero", "input": "01", "refuse": "invalid_json"},
   {"name": "invalid_json_leading_plus", "input": "+1", "refuse": "invalid_json"},
-  {"name": "invalid_json_trailing_comma", "input": "[1,]", "refuse": "invalid_json"}
+  {"name": "invalid_json_trailing_comma", "input": "[1,]", "refuse": "invalid_json"},
+  {"name": "invalid_json_escape_before_non_ascii", "input": "\"\\é\"", "refuse": "invalid_json"}
  ]
 }

@@ -7,6 +7,14 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+grida-fx-core.workspace = true
+grida-fx-protocol.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+indexmap.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true

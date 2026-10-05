@@ -161,8 +161,11 @@
             ]
           },
           "with": {
-            "description": "The plain with-values (identity.md §3, §8). A value not known until something runs is `{\"pending\": \"<what it waits on>\"}`.",
-            "type": "object"
+            "description": "The plain with-values (identity.md §3, §8). A value not known until something runs is `{\"pending\": [<what it waits on>]}`: the ids (identity.md §11) of the instances whose results it needs, sorted and distinct, each also in `waiting_on`.",
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/$defs/with_value"
+            }
           },
           "routes": {
             "description": "Each capability the type calls, with the route bound to it.",
@@ -192,7 +195,7 @@
             }
           },
           "state": {
-            "description": "`planned`: will run. `maybe`: runs only if a condition known at run time holds. `absent`: will not run. `blocked`: something it reads failed. `failed`: refused while planning. `done`: already ran (a step `at: plan`).",
+            "description": "`planned`: will run. `maybe`: runs only if a condition known at run time holds. `absent`: will not run. `blocked`: something it reads failed. `failed`: it has a result that failed (its body or an assertion failed). `done`: it has a result, from this run, an earlier one or a step `at: plan`.",
             "enum": [
               "planned",
               "maybe",
@@ -375,6 +378,35 @@
     }
   },
   "$defs": {
+    "with_value": {
+      "description": "A plain value (identity.md §3), at any depth; a pending one is an object whose only member is `pending`, an array of the instance ids it waits on.",
+      "if": {
+        "type": "object",
+        "required": [
+          "pending"
+        ],
+        "maxProperties": 1
+      },
+      "then": {
+        "properties": {
+          "pending": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          }
+        }
+      },
+      "else": {
+        "items": {
+          "$ref": "#/$defs/with_value"
+        },
+        "additionalProperties": {
+          "$ref": "#/$defs/with_value"
+        }
+      }
+    },
     "relative_path": {
       "description": "A POSIX path relative to its base: no leading `/`, no empty, `.` or `..` segment.",
       "type": "string",

@@ -1,3 +1,5 @@
+# A file input's digest in a local step's identity, a pending value that leaves an identity null,
+# and workflow outputs.
 steps:
 - argv:
   - expand

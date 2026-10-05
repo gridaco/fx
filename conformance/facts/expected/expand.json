@@ -1,0 +1,100 @@
+{
+ "estimate": {
+  "ceiling_usd": null,
+  "high_usd": 0.08,
+  "low_usd": 0.02
+ },
+ "instances": [
+  {
+   "id": "describe#1",
+   "identity": "a8580a41d4b7b9c0bae5f4732bd0a4c0a99be32e8deb1704d003ef325e1b4576",
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "describe",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.04,
+    "low_usd": 0.01
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+     "route": "img-a@acme"
+    }
+   },
+   "state": "planned",
+   "step": "describe",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "3x2, 82 bytes, opaque false; 6 bytes of text/plain",
+    "vars": {}
+   }
+  },
+  {
+   "id": "wider#1",
+   "identity": null,
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "wider",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.04,
+    "low_usd": 0.01
+   },
+   "reads": [
+    "describe#1"
+   ],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+     "route": "img-a@acme"
+    }
+   },
+   "state": "planned",
+   "step": "wider",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [
+    "describe#1"
+   ],
+   "with": {
+    "background": "auto",
+    "prompt": {
+     "pending": [
+      "describe#1"
+     ]
+    },
+    "vars": {}
+   }
+  }
+ ],
+ "kind": "fx-graph-v1",
+ "pending": [],
+ "problems": [],
+ "types": {
+  "fx/image.generate@1": {
+   "identity": "fx/image.generate@1.1"
+  }
+ },
+ "workflow": {
+  "file": "workflows/case.yaml",
+  "id": "case",
+  "title": "Facts in expressions"
+ }
+}

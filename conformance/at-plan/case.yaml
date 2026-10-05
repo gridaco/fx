@@ -1,3 +1,5 @@
+# An `at: plan` step runs while planning, and a `for_each` over its output expands to keyed
+# instances; its price.
 steps:
 - argv:
   - expand

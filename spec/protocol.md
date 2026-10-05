@@ -12,7 +12,8 @@ The words MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
 
 **Starting a host.** The engine starts the host with its working directory at the project root and talks over the host's stdin and stdout.
 - A project module is hosted by the host of its language, chosen by suffix: `.py` is Python. The built-in types whose bodies live in `grida.fx.std` are hosted by the Python host.
-- The Python host is `<python> -m grida.fx.host`. `<python>` is `GRIDA_FX_PYTHON` when it is set; otherwise the project's `.venv` interpreter (`.venv/bin/python`, or `.venv\Scripts\python.exe` on Windows) when it exists; otherwise `python3` on `PATH`.
+- The Python host is `<python> -P -m grida.fx.host`. `<python>` is `GRIDA_FX_PYTHON` when it is set; otherwise the project's `.venv` interpreter (`.venv/bin/python`, or `.venv\Scripts\python.exe` on Windows) when it exists; otherwise `python3` on `PATH`.
+- `-P`, Python's safe-path option (Python 3.11 and later), keeps the working directory off `sys.path`. The project root is therefore not on `sys.path` until `initialize` puts it there, after the host has imported what it needs, and a project module named like a standard library module (`json.py`, `typing.py`) or like `grida` cannot replace the host's own imports. The engine also sets `PYTHONSAFEPATH=grida-fx` in the host's environment when the variable is unset or empty, for an interpreter wrapper that drops `-P`. The host removes a `PYTHONSAFEPATH` of exactly that value before it loads user code, so the programs user code starts inherit the user's environment.
 
 **Framing.** Each message is a header, `Content-Length: <n>\r\n`, an empty line `\r\n`, and then n bytes of UTF-8 JSON, as in LSP's base protocol. n counts bytes, not characters. A reader MUST ignore other header fields; a sender SHOULD write none.
 
@@ -28,7 +29,7 @@ The words MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
 
 **Output streams.** stdout carries protocol messages only. A host MUST keep whatever user code prints off it: the Python host duplicates file descriptor 1 for the protocol and points descriptor 1 at stderr before it imports any user code. stderr is free-form log text. The engine may show or keep it and never parses it.
 
-**End of input.** A host MUST exit when its stdin reaches end of file.
+**End of input.** A host MUST exit when its stdin reaches end of file. Neither end of input nor `exit` waits for threads that user code started: the Python host flushes and closes the protocol stream, then ends the process at once (`os._exit`).
 
 ## 2. Session
 
@@ -173,10 +174,11 @@ The result is `{modules, builtins}`:
 **Source closure.** `closure` lists the module and every project module it imports, transitively ([identity.md](identity.md) §6). Which files those are depends on the language's import rules, so the host computes the list; the engine reads and hashes the files itself, and computes the type identity and the `fx.lock` check. For Python:
 - every `import a.b` in the file's syntax tree names `a.b`, and every `from m import x` names both `m` and `m.x`. Relative imports resolve against the importing file's package. Imports count wherever they appear (inside functions and conditionals too), whether or not they run.
 - A name is in the closure when it resolves to `<base>/a/b.py` or `<base>/a/b/__init__.py`. The base is the project root, or, for a name whose first part is a declared source package, that package's parent folder.
+- A file counts only when every part of its path below the base is spelled exactly as its directory entry, case included, as Python's own import requires. The closure is then the same on file systems that ignore case and on those that do not: `from Lib import Helper` names nothing when the file is `lib/helper.py`.
 
 Each entry is `{label, path}`. `label` is the file's path relative to the nearer of the project root and its source package's parent, POSIX. `path` is the absolute path the engine reads; it never enters a record.
 
-Loading a module runs its top-level code, with imports resolved against the project root first. A module outside the project root is an error.
+Loading a module runs its top-level code, with imports resolved against the project root first. A module outside the project root is an error. Whatever the module raises while it loads is its error, `SystemExit`, `KeyboardInterrupt` and `asyncio.CancelledError` included; it never ends the host.
 
 ### 5.2 `build`
 
@@ -187,13 +189,13 @@ Runs a workflow builder (`grida-fx run workflows/levels.py:build`).
 | `path` | the builder file, relative to the project root |
 | `function` | the builder function's name |
 | `arguments` | `{name: string}`, given to the function as keyword arguments |
-| `cwd` | the engine's working directory, absolute. The host runs the builder there, since a builder reads its own files relative to where `grida-fx` runs. |
+| `cwd` | the engine's working directory, absolute. The host loads the builder module (running its top-level code) and runs the builder there, since a builder reads its own files relative to where `grida-fx` runs, then returns to its own working directory. |
 
 The result is `{document, takes_anchor}`:
 - `document` is the workflow as `fx: workflow/v1`, exactly as the SDK's `Workflow` writes it, with no defaults filled in. The engine validates it like a workflow file. It enters the plan digest under `<path>:<function>` ([identity.md](identity.md) §10).
 - `takes_anchor` is the project-relative path of the module that constructed the `Workflow` (in Python, the file that called `Workflow(…)`), or `path` when that module is unknown or outside the project. The engine keeps the workflow's takes file, `<workflow id>.takes.yaml`, in the anchor's folder.
 
-Errors: `load_failed` (no such file or function, or an import failed) and `build_failed` (the builder raised, or returned something other than a `Workflow`). A `build_failed` message reads `<function>: <exception type>: <message>`.
+Errors: `load_failed` (no such file or function, or an import failed) and `build_failed` (the builder raised anything, `KeyboardInterrupt` and `asyncio.CancelledError` included, or returned something other than a `Workflow`). A `build_failed` message reads `<function>: <exception type>: <message>`, or `<function>: <exception type>` when the message is empty.
 
 ### 5.3 `run`
 
@@ -604,3 +606,4 @@ The Python engine FX grew out of ran bodies in its own process and handed them l
 | A timeout cannot stop a body running in a thread | A host that ignores `$/cancel` is ended |
 | A param holding a file that is neither text nor JSON arrives as a live object | `param_files` |
 | `NodeFailure`, `CapabilityError` and other exceptions | Error codes, each saying whether the node may run again |
+| A builder's takes file is `<builder module>.takes.yaml`, next to the builder file | `<workflow id>.takes.yaml` in the folder of the module that constructed the `Workflow` (§5.2), since one builder module may build several workflows. Milestone 2 renames such takes files. |

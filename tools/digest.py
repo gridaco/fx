@@ -623,6 +623,10 @@ def _refuse_line_breaks(text: str, label: str) -> None:
     )
 
 
+# The deepest nesting FX reads, in YAML as in JSON (spec/yaml.md, "Nesting").
+MAX_DEPTH = 512
+
+
 def load_yaml(text: str | bytes, label: str = "<yaml>") -> Any:
     """Load one document of the strict YAML subset (spec/yaml.md) as a JSON value.
 
@@ -662,7 +666,18 @@ def load_yaml(text: str | bytes, label: str = "<yaml>") -> Any:
         if not content:
             return {}
         documents = 0
+        depth = 0
         for event in yaml.parse(text, Loader=yaml.SafeLoader):
+            if isinstance(event, yaml.NodeEvent) and depth > MAX_DEPTH:
+                raise RefusedInput(
+                    f"{_mark(event, label)}: nested too deeply: a value inside more than "
+                    f"{MAX_DEPTH} collections",
+                    "invalid_yaml",
+                )
+            if isinstance(event, yaml.SequenceStartEvent | yaml.MappingStartEvent):
+                depth += 1
+            elif isinstance(event, yaml.SequenceEndEvent | yaml.MappingEndEvent):
+                depth -= 1
             if isinstance(event, yaml.DocumentStartEvent):
                 documents += 1
                 if documents > 1:

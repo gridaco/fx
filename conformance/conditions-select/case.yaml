@@ -1,3 +1,4 @@
+# `if:` on an input and on a judge's fact, `on_reject: continue`, and `fx/select@1` with `first_of`.
 steps:
 - argv:
   - expand

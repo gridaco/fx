@@ -8,11 +8,11 @@ check that everything still plans, without spending."
 ```
 kitewharf/                              # the game's repo
   levels/docks.toml                     # the game's own level format
-  art/far_cliffs.png, art/near_masts.png   # the sky's layer pictures (../draw_placeholders.py)
   assets/                               # the FX project
     fx.yaml
     level_art.py                        # a Python builder: the game's TOML → an FX workflow
     kitewharf_levels.py                 # stand-in for the game's own level reader
+    art/far_cliffs.png, art/near_masts.png   # the sky's layer pictures (../draw_placeholders.py)
     workflows/icon.yaml                 # a plain workflow file, used as a step
     workflows/looping-parallax.yaml     # copied from the looping-parallax example
     nodes/plate.py                      # the game's own node type
@@ -44,13 +44,15 @@ from kitewharf_levels import read_level  # the game's reader (installed with the
 
 from grida.fx import Workflow
 
-HOME = Path(__file__).resolve().parent  # the folder with fx.yaml: where ./ and ../ paths start
+HOME = Path(__file__).resolve().parent  # the folder with fx.yaml: where ./ paths start
 
 
 def project_path(file: Path) -> str:
-    """A file as a workflow names it: relative to HOME, starting with ./ or ../, never absolute."""
+    """A file as a workflow names it: ./ and relative to HOME, which it must not leave."""
     relative = Path(os.path.relpath(file.resolve(), HOME)).as_posix()
-    return relative if relative.startswith("../") else f"./{relative}"
+    if relative == ".." or relative.startswith("../"):
+        raise ValueError(f"{relative} is outside the FX project: keep the level's art in it")
+    return f"./{relative}"
 
 
 def build(level: str) -> Workflow:
@@ -90,10 +92,12 @@ The builder runs only while planning. The values it puts in `with_` are what FX 
 the TOML file is never a hidden input: change a pickup's look and only that icon re-runs.
 
 A file path in `with_` follows the rule of a workflow file: relative to the workflow's home (the
-folder with `fx.yaml`, here `assets/`), starting with `./` or `../`. The level file names its sky
-layers relative to itself, in `levels/`, so `project_path` rebases each one onto `assets/`. (The
-two folders are siblings, so `../art/far_cliffs.png` reads the same from both.) An absolute path
-would be refused, and would tie the plan to one machine.
+folder with `fx.yaml`, here `assets/`), and inside it. That is why the sky's layer pictures live
+in `assets/art/`. The level file names them relative to itself, in `levels/`
+(`../assets/art/far_cliffs.png`), so `project_path` rebases each one onto `assets/`
+(`./art/far_cliffs.png`). A picture outside `assets/`, such as a `kitewharf/art/` folder next to
+`levels/`, would be refused while planning, and so would an absolute path, which would also tie
+the plan to one machine; `project_path` says so before FX does.
 
 ## Building
 
@@ -153,8 +157,17 @@ grida-fx plan level_art.py:build --arg level=../levels/docks.toml --check --expe
 - **`--check`** fails on any error: a missing tool, an unknown node type, a failed assertion, a
   missing take.
 - **`--expect-cached`** fails if anything would be generated. That catches "someone changed a
-  level but didn't build its art". It needs the team cache (`cache:` in `fx.yaml` pointing at
-  shared storage), or it is skipped.
+  level but didn't build its art". It passes once the team cache (`cache:` in `fx.yaml` pointing
+  at shared storage) holds the level's art. Before that, as on a fresh clone of this example, it
+  prints the plan, names every step that would run, and exits 1:
+
+```
+kitewharf-level-art  ·  1 phase
+phase 1   20 steps   3–7 provider calls   $0.12 – $2.10
+cached    0 of 11 known steps
+estimate  $0.12 – $2.10   ceiling $5.00
+not cached: plate#1, icon['lantern'].draw#1, icon['lantern'].draw#2, icon['lantern'].draw#3, icon['rope'].draw#1, icon['rope'].draw#2, icon['rope'].draw#3, sky.layer['far_cliffs'].loops_already#1, sky.layer['far_cliffs'].mirror#1, sky.layer['near_masts'].loops_already#1, sky.layer['near_masts'].mirror#1, icon['lantern'].clean#1, icon['lantern'].clean#2, icon['lantern'].clean#3, icon['rope'].clean#1, icon['rope'].clean#2, icon['rope'].clean#3, sky.layer['far_cliffs'].chosen#1, sky.layer['near_masts'].chosen#1, sky.compose#1
+```
 
 ## What this example tests
 

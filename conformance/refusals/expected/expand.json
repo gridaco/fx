@@ -1,0 +1,205 @@
+{
+ "estimate": {
+  "ceiling_usd": null,
+  "high_usd": 0.046,
+  "low_usd": 0.013
+ },
+ "instances": [
+  {
+   "id": "draw#1",
+   "identity": "a54c0c314729452a1dac01d6546cb394181c9392e905a75d0c761e3381827064",
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "draw",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.04,
+    "low_usd": 0.01
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+     "route": "img-a@acme"
+    }
+   },
+   "state": "planned",
+   "step": "draw",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "x",
+    "vars": {}
+   }
+  },
+  {
+   "id": "write#1",
+   "identity": "ac53055bc6d6256d1e288337285096fab5419efbbf970286f2599917e741ac31",
+   "judged_by": [
+    "review#1"
+   ],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "write",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.002,
+    "low_usd": 0.001
+   },
+   "reads": [],
+   "routes": {
+    "structured.generate": {
+     "fingerprint": "1a974f1107934b4388bf8dbbdc9931a2353db3612d5e2624c2f6eb3e6ba6db2e",
+     "route": "llm-a@acme"
+    }
+   },
+   "state": "planned",
+   "step": "write",
+   "take": [
+    1
+   ],
+   "type": "fx/structured.generate@1.1",
+   "uses": "fx/structured.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "matte": "#ffffff",
+    "prompt": "x",
+    "schema": {
+     "file": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356"
+    },
+    "vars": {}
+   }
+  },
+  {
+   "id": "review#1",
+   "identity": "141777f4e3170fd414b7b86afde920bdc4070e3ca9cfbd31cb8494ce32439397",
+   "judged_by": [],
+   "judges": "write#1",
+   "key": null,
+   "needs": [],
+   "path": "review",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.004,
+    "low_usd": 0.002
+   },
+   "reads": [],
+   "routes": {
+    "vision.review": {
+     "fingerprint": "8a97e04a747c459dd341a76267a931a68baa60c8c55b39e50018d789f2b2855f",
+     "route": "llm-a@other"
+    }
+   },
+   "state": "planned",
+   "step": "review",
+   "take": [
+    1
+   ],
+   "type": "fx/vision.review@1.1",
+   "uses": "fx/vision.review@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "question": "right?",
+    "report": "annotations",
+    "vars": {}
+   }
+  },
+  {
+   "id": "lost#1",
+   "identity": "a987c0e53ae35d676235579ed180d277b737c74abd9cda2667c57802fc444aab",
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "lost",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {},
+   "state": "planned",
+   "step": "lost",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "x",
+    "vars": {}
+   }
+  }
+ ],
+ "kind": "fx-graph-v1",
+ "pending": [
+  {
+   "high_usd": 0,
+   "max": 1,
+   "path": "unbounded",
+   "phase": 2
+  }
+ ],
+ "problems": [
+  {
+   "message": "at most one name",
+   "where": "workflow.assert[0]"
+  },
+  {
+   "message": "img-a@acme does not support mask",
+   "where": "draw.requires"
+  },
+  {
+   "message": "shares the model llm-a with write; route one of them to a different model",
+   "where": "review.independent_of"
+  },
+  {
+   "message": "no route img-z@nowhere serves image.generate (known routes: img-a@acme)",
+   "where": "lost.route"
+  },
+  {
+   "message": "the list comes from a step, so the plan cannot count it: add max: (the most items this repeat may run)",
+   "where": "unbounded"
+  }
+ ],
+ "types": {
+  "./nodes/cases.py#shout": {
+   "identity": "nodes/cases.py#shout@1",
+   "source": {
+    "files": {
+     "nodes/cases.py": "d34041da3235ac70a67a2748fbffc8cd8ab51dc12db3098472c52e2f40db0930"
+    },
+    "resources": {}
+   }
+  },
+  "fx/image.generate@1": {
+   "identity": "fx/image.generate@1.1"
+  },
+  "fx/structured.generate@1": {
+   "identity": "fx/structured.generate@1.1"
+  },
+  "fx/vision.review@1": {
+   "identity": "fx/vision.review@1.1"
+  }
+ },
+ "workflow": {
+  "file": "workflows/case.yaml",
+  "id": "case",
+  "title": "Everything a plan refuses"
+ }
+}

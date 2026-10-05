@@ -1,3 +1,4 @@
+# `takes: 3` with `pick: first_accepted`, priced as three calls.
 steps:
 - argv:
   - expand

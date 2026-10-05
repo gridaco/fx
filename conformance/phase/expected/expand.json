@@ -1,0 +1,68 @@
+{
+ "estimate": {
+  "ceiling_usd": null,
+  "high_usd": 0.24,
+  "low_usd": 0
+ },
+ "instances": [
+  {
+   "id": "split#1",
+   "identity": "bf962085678453d7f58ea3e3f1d88c1f36a272be03574ef28b91397301f05a5e",
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "split",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {},
+   "state": "planned",
+   "step": "split",
+   "take": [
+    1
+   ],
+   "type": "nodes/cases.py#lines@1",
+   "uses": "./nodes/cases.py#lines",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "text": {
+     "file": "911169ddaaf146aff539f58c26c489af3b892dff0fe283c1c264c65ae5aa59a2"
+    }
+   }
+  }
+ ],
+ "kind": "fx-graph-v1",
+ "pending": [
+  {
+   "high_usd": 0.24,
+   "max": 6,
+   "path": "draw",
+   "phase": 2
+  }
+ ],
+ "problems": [],
+ "types": {
+  "./nodes/cases.py#lines": {
+   "identity": "nodes/cases.py#lines@1",
+   "source": {
+    "files": {
+     "nodes/cases.py": "d34041da3235ac70a67a2748fbffc8cd8ab51dc12db3098472c52e2f40db0930"
+    },
+    "resources": {}
+   }
+  },
+  "fx/image.generate@1": {
+   "identity": "fx/image.generate@1.1"
+  }
+ },
+ "workflow": {
+  "file": "workflows/case.yaml",
+  "id": "case",
+  "title": "A repeat over a step's output"
+ }
+}

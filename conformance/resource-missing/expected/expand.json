@@ -1,0 +1,63 @@
+{
+ "estimate": {
+  "ceiling_usd": null,
+  "high_usd": 0,
+  "low_usd": 0
+ },
+ "instances": [
+  {
+   "id": "fine#1",
+   "identity": "087a6ea54a67a18526142f744dc70f967e01adff8d5970dd28c28e9092a074de",
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "fine",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {},
+   "state": "planned",
+   "step": "fine",
+   "take": [
+    1
+   ],
+   "type": "source:40ae3f97efc1a0535cc2172fdde24573c40aad6b9939493abcb1b26059e2075f",
+   "uses": "./nodes/n.py#echo",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "text": "hello"
+   }
+  }
+ ],
+ "kind": "fx-graph-v1",
+ "pending": [],
+ "problems": [
+  {
+   "message": "./nodes/n.py#lost: declared resource prompts/missing.md is not a project file",
+   "where": "lost"
+  }
+ ],
+ "types": {
+  "./nodes/n.py#echo": {
+   "identity": "source:40ae3f97efc1a0535cc2172fdde24573c40aad6b9939493abcb1b26059e2075f",
+   "source": {
+    "files": {
+     "nodes/n.py": "48fc219b4ab905076631cbc437cee705c0de1c3adcd26bab292e6c9ecacb4387"
+    },
+    "resources": {
+     "prompts/r.md": "addc2533aadc26534d6957983e09b6d5db177c5fe2be458e8ca899394e20f5bd"
+    }
+   }
+  }
+ },
+ "workflow": {
+  "file": "workflows/case.yaml",
+  "id": "case",
+  "title": "A declared resource that is missing"
+ }
+}

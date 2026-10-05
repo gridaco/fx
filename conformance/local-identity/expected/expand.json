@@ -1,0 +1,97 @@
+{
+ "estimate": {
+  "ceiling_usd": null,
+  "high_usd": 0,
+  "low_usd": 0
+ },
+ "instances": [
+  {
+   "id": "a#1",
+   "identity": "511782d66d16a009ed3673de4bf647c5f2452373202fc2d92645114c57462be2",
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "a",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {},
+   "state": "planned",
+   "step": "a",
+   "take": [
+    1
+   ],
+   "type": "source:0def34fd9aba01ea946962466ec971e3189515424fe76ebe2d913db4aeaa60a4",
+   "uses": "./nodes/n.py#echo",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "text": "hello"
+   }
+  },
+  {
+   "id": "b#1",
+   "identity": "00e52dfa07c982e3f3144185156909f9bbe1660e38f5d6496642ed8908ae177e",
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "b",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {},
+   "state": "planned",
+   "step": "b",
+   "take": [
+    1
+   ],
+   "type": "nodes/n.py#pinned@2",
+   "uses": "./nodes/n.py#pinned",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "text": "hello"
+   }
+  }
+ ],
+ "kind": "fx-graph-v1",
+ "pending": [],
+ "problems": [],
+ "types": {
+  "./nodes/n.py#echo": {
+   "identity": "source:0def34fd9aba01ea946962466ec971e3189515424fe76ebe2d913db4aeaa60a4",
+   "source": {
+    "files": {
+     "nodes/helper.py": "1ea5aa2ea6a549a746640e2a089294ec8954d4664a5eef4dcc023064f3537689",
+     "nodes/n.py": "e31f04013996e6a7e2f1c97b6d4033a322719e5bcd6cf60c8cec3292b99c8123"
+    },
+    "resources": {
+     "prompts/r.md": "addc2533aadc26534d6957983e09b6d5db177c5fe2be458e8ca899394e20f5bd"
+    }
+   }
+  },
+  "./nodes/n.py#pinned": {
+   "identity": "nodes/n.py#pinned@2",
+   "source": {
+    "files": {
+     "nodes/helper.py": "1ea5aa2ea6a549a746640e2a089294ec8954d4664a5eef4dcc023064f3537689",
+     "nodes/n.py": "e31f04013996e6a7e2f1c97b6d4033a322719e5bcd6cf60c8cec3292b99c8123"
+    },
+    "resources": {}
+   }
+  }
+ },
+ "workflow": {
+  "file": "workflows/case.yaml",
+  "id": "case",
+  "title": "Local node identity"
+ }
+}

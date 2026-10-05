@@ -1,0 +1,184 @@
+{
+ "estimate": {
+  "ceiling_usd": null,
+  "high_usd": 0,
+  "low_usd": 0
+ },
+ "instances": [
+  {
+   "id": "loud['ada']#1",
+   "identity": "fbd51250a6696c1d2cb60fb60e76b382796c41774627be8ab32f95981529c83a",
+   "judged_by": [],
+   "judges": null,
+   "key": "ada",
+   "needs": [],
+   "path": "loud['ada']",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {},
+   "state": "planned",
+   "step": "loud",
+   "take": [
+    1
+   ],
+   "type": "nodes/cases.py#shout@1",
+   "uses": "./nodes/cases.py#shout",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "text": "ada"
+   }
+  },
+  {
+   "id": "loud['bo']#1",
+   "identity": "931ec2479e7fdb1ccb1962d09bf7df950426b4905118e90679d34edfd0cf47a5",
+   "judged_by": [],
+   "judges": null,
+   "key": "bo",
+   "needs": [],
+   "path": "loud['bo']",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {},
+   "state": "planned",
+   "step": "loud",
+   "take": [
+    1
+   ],
+   "type": "nodes/cases.py#shout@1",
+   "uses": "./nodes/cases.py#shout",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "text": "bo"
+   }
+  },
+  {
+   "id": "loud['cy']#1",
+   "identity": "30d391ba8ea127ced504b6b062067b5c09cb2cd53728ad2e63a3aca21e7eda90",
+   "judged_by": [],
+   "judges": null,
+   "key": "cy",
+   "needs": [],
+   "path": "loud['cy']",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {},
+   "state": "planned",
+   "step": "loud",
+   "take": [
+    1
+   ],
+   "type": "nodes/cases.py#shout@1",
+   "uses": "./nodes/cases.py#shout",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "text": "cy"
+   }
+  },
+  {
+   "id": "joined#1",
+   "identity": null,
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "joined",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [
+    "loud['ada']#1",
+    "loud['bo']#1",
+    "loud['cy']#1"
+   ],
+   "routes": {},
+   "state": "planned",
+   "step": "joined",
+   "take": [
+    1
+   ],
+   "type": "nodes/cases.py#join@1",
+   "uses": "./nodes/cases.py#join",
+   "view": false,
+   "waiting_on": [
+    "loud['ada']#1",
+    "loud['bo']#1",
+    "loud['cy']#1"
+   ],
+   "with": {
+    "parts": {
+     "collection": [
+      [
+       "ada",
+       {
+        "pending": [
+         "loud['ada']#1"
+        ]
+       }
+      ],
+      [
+       "bo",
+       {
+        "pending": [
+         "loud['bo']#1"
+        ]
+       }
+      ],
+      [
+       "cy",
+       {
+        "pending": [
+         "loud['cy']#1"
+        ]
+       }
+      ]
+     ]
+    }
+   }
+  }
+ ],
+ "kind": "fx-graph-v1",
+ "pending": [],
+ "problems": [],
+ "types": {
+  "./nodes/cases.py#join": {
+   "identity": "nodes/cases.py#join@1",
+   "source": {
+    "files": {
+     "nodes/cases.py": "d34041da3235ac70a67a2748fbffc8cd8ab51dc12db3098472c52e2f40db0930"
+    },
+    "resources": {}
+   }
+  },
+  "./nodes/cases.py#shout": {
+   "identity": "nodes/cases.py#shout@1",
+   "source": {
+    "files": {
+     "nodes/cases.py": "d34041da3235ac70a67a2748fbffc8cd8ab51dc12db3098472c52e2f40db0930"
+    },
+    "resources": {}
+   }
+  }
+ },
+ "workflow": {
+  "file": "workflows/case.yaml",
+  "id": "case",
+  "title": "Keyed repeat"
+ }
+}

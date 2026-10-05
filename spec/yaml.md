@@ -10,6 +10,7 @@ The vectors in `vectors/yaml/` pin every rule: `accept/*.yaml` with the JSON eac
 - **Line breaks.** U+0085, U+2028 and U+2029 are refused anywhere in a stream. YAML 1.1 treats them as line breaks and YAML 1.2 as content, so they have no single meaning.
 - **One document.** A stream holds one document. An explicit `---` start marker and a final `...` end marker are allowed; a second document is refused.
 - **Empty document.** An empty stream, one holding only comments, or an explicit `---` with no content is the empty mapping `{}`.
+- **Nesting.** A value may sit inside at most 512 collections, as in a JSON document FX reads; a deeper one is refused.
 - **Top level.** The top-level value may be any value. The documents FX defines are mappings, and their schemas refuse anything else.
 
 ## Not supported

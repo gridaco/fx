@@ -1,0 +1,313 @@
+{
+ "estimate": {
+  "ceiling_usd": null,
+  "high_usd": 0.12,
+  "low_usd": 0.03
+ },
+ "instances": [
+  {
+   "id": "draw#1",
+   "identity": "f19e692f5fd33d67ad579e1eae45067cffbf0840fb1f719399a8d524c59e5642",
+   "judged_by": [
+    "check#1"
+   ],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "draw",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.04,
+    "low_usd": 0.01
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+     "route": "img-a@acme"
+    }
+   },
+   "state": "planned",
+   "step": "draw",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "three takes",
+    "vars": {}
+   }
+  },
+  {
+   "id": "draw#2",
+   "identity": "66f30022239a778f6e4b45ca5831ca7b0cce26e66f24a189420dd062295a14fd",
+   "judged_by": [
+    "check#2"
+   ],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "draw",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.04,
+    "low_usd": 0.01
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+     "route": "img-a@acme"
+    }
+   },
+   "state": "planned",
+   "step": "draw",
+   "take": [
+    2
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "three takes",
+    "vars": {}
+   }
+  },
+  {
+   "id": "draw#3",
+   "identity": "18d6acb0eb949ef60ccdb10b4fbcdd26a944a7f5d898b794bbc97e30d90f31cd",
+   "judged_by": [
+    "check#3"
+   ],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "draw",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.04,
+    "low_usd": 0.01
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+     "route": "img-a@acme"
+    }
+   },
+   "state": "planned",
+   "step": "draw",
+   "take": [
+    3
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "three takes",
+    "vars": {}
+   }
+  },
+  {
+   "id": "check#1",
+   "identity": null,
+   "judged_by": [],
+   "judges": "draw#1",
+   "key": null,
+   "needs": [],
+   "path": "check",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [
+    "draw#1"
+   ],
+   "routes": {},
+   "state": "planned",
+   "step": "check",
+   "take": [
+    1
+   ],
+   "type": "nodes/cases.py#verdict@1",
+   "uses": "./nodes/cases.py#verdict",
+   "view": false,
+   "waiting_on": [
+    "draw#1"
+   ],
+   "with": {
+    "accept_take": 2,
+    "subject": {
+     "pending": [
+      "draw#1"
+     ]
+    }
+   }
+  },
+  {
+   "id": "check#2",
+   "identity": null,
+   "judged_by": [],
+   "judges": "draw#2",
+   "key": null,
+   "needs": [],
+   "path": "check",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [
+    "draw#2"
+   ],
+   "routes": {},
+   "state": "planned",
+   "step": "check",
+   "take": [
+    2
+   ],
+   "type": "nodes/cases.py#verdict@1",
+   "uses": "./nodes/cases.py#verdict",
+   "view": false,
+   "waiting_on": [
+    "draw#2"
+   ],
+   "with": {
+    "accept_take": 2,
+    "subject": {
+     "pending": [
+      "draw#2"
+     ]
+    }
+   }
+  },
+  {
+   "id": "check#3",
+   "identity": null,
+   "judged_by": [],
+   "judges": "draw#3",
+   "key": null,
+   "needs": [],
+   "path": "check",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [
+    "draw#3"
+   ],
+   "routes": {},
+   "state": "planned",
+   "step": "check",
+   "take": [
+    3
+   ],
+   "type": "nodes/cases.py#verdict@1",
+   "uses": "./nodes/cases.py#verdict",
+   "view": false,
+   "waiting_on": [
+    "draw#3"
+   ],
+   "with": {
+    "accept_take": 2,
+    "subject": {
+     "pending": [
+      "draw#3"
+     ]
+    }
+   }
+  },
+  {
+   "id": "after#1",
+   "identity": null,
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "after",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [
+    "check#1",
+    "check#2",
+    "check#3",
+    "draw#1",
+    "draw#2",
+    "draw#3"
+   ],
+   "routes": {},
+   "state": "planned",
+   "step": "after",
+   "take": [
+    1
+   ],
+   "type": "nodes/cases.py#shout@1",
+   "uses": "./nodes/cases.py#shout",
+   "view": false,
+   "waiting_on": [
+    "check#1",
+    "check#2",
+    "check#3",
+    "draw#1",
+    "draw#2",
+    "draw#3"
+   ],
+   "with": {
+    "text": {
+     "pending": [
+      "check#1",
+      "check#2",
+      "check#3",
+      "draw#1",
+      "draw#2",
+      "draw#3"
+     ]
+    }
+   }
+  }
+ ],
+ "kind": "fx-graph-v1",
+ "pending": [],
+ "problems": [],
+ "types": {
+  "./nodes/cases.py#shout": {
+   "identity": "nodes/cases.py#shout@1",
+   "source": {
+    "files": {
+     "nodes/cases.py": "d34041da3235ac70a67a2748fbffc8cd8ab51dc12db3098472c52e2f40db0930"
+    },
+    "resources": {}
+   }
+  },
+  "./nodes/cases.py#verdict": {
+   "identity": "nodes/cases.py#verdict@1",
+   "source": {
+    "files": {
+     "nodes/cases.py": "d34041da3235ac70a67a2748fbffc8cd8ab51dc12db3098472c52e2f40db0930"
+    },
+    "resources": {}
+   }
+  },
+  "fx/image.generate@1": {
+   "identity": "fx/image.generate@1.1"
+  }
+ },
+ "workflow": {
+  "file": "workflows/case.yaml",
+  "id": "case",
+  "title": "Takes and pick"
+ }
+}

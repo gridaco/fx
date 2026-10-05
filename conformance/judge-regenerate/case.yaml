@@ -1,3 +1,4 @@
+# A judge's `on_reject: {regenerate: {max: 3, then: fail}}`, priced as up to three calls.
 steps:
 - argv:
   - expand

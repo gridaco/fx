@@ -1,0 +1,222 @@
+{
+ "estimate": {
+  "ceiling_usd": null,
+  "high_usd": 0,
+  "low_usd": 0
+ },
+ "instances": [
+  {
+   "id": "combo['open']['smile']#1",
+   "identity": "e94f778ba757d63e0dff771d7ac32a6c562aeb746fb1d487023d73989f732796",
+   "judged_by": [],
+   "judges": null,
+   "key": "open.smile",
+   "needs": [],
+   "path": "combo['open']['smile']",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {},
+   "state": "planned",
+   "step": "combo",
+   "take": [
+    1
+   ],
+   "type": "nodes/cases.py#shout@1",
+   "uses": "./nodes/cases.py#shout",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "text": "open smile"
+   }
+  },
+  {
+   "id": "combo['open']['flat']#1",
+   "identity": "e03df11f722e972c2a68793ab0391474838c6665ef7e111ac2bd2997195874c4",
+   "judged_by": [],
+   "judges": null,
+   "key": "open.flat",
+   "needs": [],
+   "path": "combo['open']['flat']",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {},
+   "state": "planned",
+   "step": "combo",
+   "take": [
+    1
+   ],
+   "type": "nodes/cases.py#shout@1",
+   "uses": "./nodes/cases.py#shout",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "text": "open flat"
+   }
+  },
+  {
+   "id": "combo['shut']['smile']#1",
+   "identity": "023b72d2059524b1eabc5ab3642194c5dee8e0f7a415e66cec0103059df47312",
+   "judged_by": [],
+   "judges": null,
+   "key": "shut.smile",
+   "needs": [],
+   "path": "combo['shut']['smile']",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {},
+   "state": "planned",
+   "step": "combo",
+   "take": [
+    1
+   ],
+   "type": "nodes/cases.py#shout@1",
+   "uses": "./nodes/cases.py#shout",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "text": "shut smile"
+   }
+  },
+  {
+   "id": "combo['shut']['flat']#1",
+   "identity": "524e23529059c09228e7635ddd345e47e7d0aeeb8b3d8f253fe4c756b3bac2b2",
+   "judged_by": [],
+   "judges": null,
+   "key": "shut.flat",
+   "needs": [],
+   "path": "combo['shut']['flat']",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {},
+   "state": "planned",
+   "step": "combo",
+   "take": [
+    1
+   ],
+   "type": "nodes/cases.py#shout@1",
+   "uses": "./nodes/cases.py#shout",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "text": "shut flat"
+   }
+  },
+  {
+   "id": "all#1",
+   "identity": null,
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "all",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [
+    "combo['open']['flat']#1",
+    "combo['open']['smile']#1",
+    "combo['shut']['flat']#1",
+    "combo['shut']['smile']#1"
+   ],
+   "routes": {},
+   "state": "planned",
+   "step": "all",
+   "take": [
+    1
+   ],
+   "type": "nodes/cases.py#join@1",
+   "uses": "./nodes/cases.py#join",
+   "view": false,
+   "waiting_on": [
+    "combo['open']['flat']#1",
+    "combo['open']['smile']#1",
+    "combo['shut']['flat']#1",
+    "combo['shut']['smile']#1"
+   ],
+   "with": {
+    "parts": {
+     "collection": [
+      [
+       "open.smile",
+       {
+        "pending": [
+         "combo['open']['smile']#1"
+        ]
+       }
+      ],
+      [
+       "open.flat",
+       {
+        "pending": [
+         "combo['open']['flat']#1"
+        ]
+       }
+      ],
+      [
+       "shut.smile",
+       {
+        "pending": [
+         "combo['shut']['smile']#1"
+        ]
+       }
+      ],
+      [
+       "shut.flat",
+       {
+        "pending": [
+         "combo['shut']['flat']#1"
+        ]
+       }
+      ]
+     ]
+    }
+   }
+  }
+ ],
+ "kind": "fx-graph-v1",
+ "pending": [],
+ "problems": [],
+ "types": {
+  "./nodes/cases.py#join": {
+   "identity": "nodes/cases.py#join@1",
+   "source": {
+    "files": {
+     "nodes/cases.py": "d34041da3235ac70a67a2748fbffc8cd8ab51dc12db3098472c52e2f40db0930"
+    },
+    "resources": {}
+   }
+  },
+  "./nodes/cases.py#shout": {
+   "identity": "nodes/cases.py#shout@1",
+   "source": {
+    "files": {
+     "nodes/cases.py": "d34041da3235ac70a67a2748fbffc8cd8ab51dc12db3098472c52e2f40db0930"
+    },
+    "resources": {}
+   }
+  }
+ },
+ "workflow": {
+  "file": "workflows/case.yaml",
+  "id": "case",
+  "title": "Matrix"
+ }
+}

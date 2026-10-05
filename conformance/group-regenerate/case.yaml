@@ -1,3 +1,4 @@
+# A group with `regenerate: {max, until}`: nested take ids (`build.draw#2.1`) and `maybe` states.
 steps:
 - argv:
   - expand

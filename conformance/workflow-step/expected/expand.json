@@ -1,0 +1,84 @@
+{
+ "estimate": {
+  "ceiling_usd": null,
+  "high_usd": 0,
+  "low_usd": 0
+ },
+ "instances": [
+  {
+   "id": "each['ada'].loud#1",
+   "identity": "42f3dee2c04e27700766545aac6a97c7c330a532e5663917381fb77bc5dc87ca",
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "each['ada'].loud",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {},
+   "state": "planned",
+   "step": "each.loud",
+   "take": [
+    1
+   ],
+   "type": "nodes/cases.py#shout@1",
+   "uses": "./nodes/cases.py#shout",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "text": "ada!"
+   }
+  },
+  {
+   "id": "each['bo'].loud#1",
+   "identity": "25de8bba9ea1a4d3d9b464ab8ee9c5f562ec47ba062638b19816247fb5b0bb1a",
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "each['bo'].loud",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {},
+   "state": "planned",
+   "step": "each.loud",
+   "take": [
+    1
+   ],
+   "type": "nodes/cases.py#shout@1",
+   "uses": "./nodes/cases.py#shout",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "text": "bo!"
+   }
+  }
+ ],
+ "kind": "fx-graph-v1",
+ "pending": [],
+ "problems": [],
+ "types": {
+  "./nodes/cases.py#shout": {
+   "identity": "nodes/cases.py#shout@1",
+   "source": {
+    "files": {
+     "nodes/cases.py": "d34041da3235ac70a67a2748fbffc8cd8ab51dc12db3098472c52e2f40db0930"
+    },
+    "resources": {}
+   }
+  }
+ },
+ "workflow": {
+  "file": "workflows/case.yaml",
+  "id": "case",
+  "title": "A workflow used as a step"
+ }
+}

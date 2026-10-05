@@ -1,3 +1,4 @@
+# A local run, then `project` of its record: cache misses, output digests, nothing charged.
 steps:
 - argv:
   - run

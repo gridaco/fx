@@ -1,3 +1,4 @@
+# A 2x2 `matrix` with dotted keys, collected into a `text{}` port.
 steps:
 - argv:
   - expand

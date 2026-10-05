@@ -1,3 +1,4 @@
+# A workflow used as a repeated step, with its own input defaults.
 steps:
 - argv:
   - expand

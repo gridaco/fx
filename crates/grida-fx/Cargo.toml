@@ -12,6 +12,15 @@ path = "src/main.rs"
 
 [dependencies]
 grida-fx-core.workspace = true
+grida-fx-protocol.workspace = true
+grida-fx-runtime.workspace = true
+serde_json.workspace = true
+indexmap.workspace = true
+clap.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+jsonschema.workspace = true
 
 [lints]
 workspace = true

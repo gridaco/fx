@@ -1,0 +1,1113 @@
+{
+ "kind": "fx-std-catalog-v1",
+ "types": [
+  {
+   "uses": "fx/image.generate@1",
+   "name": "image.generate",
+   "major": 1,
+   "version": 1,
+   "inputs": {
+    "references": "image[]?"
+   },
+   "params": {
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "size": {
+     "type": "string",
+     "x-fx-optional": true
+    },
+    "background": {
+     "enum": [
+      "opaque",
+      "transparent",
+      "auto"
+     ],
+     "default": "auto"
+    },
+    "vars": {
+     "type": "object",
+     "default": {}
+    }
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "judge": false,
+   "capability": "image.generate",
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "capability"
+  },
+  {
+   "uses": "fx/image.edit@1",
+   "name": "image.edit",
+   "major": 1,
+   "version": 1,
+   "inputs": {
+    "image": "image",
+    "mask": "image?",
+    "references": "image[]?"
+   },
+   "params": {
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "size": {
+     "type": "string",
+     "x-fx-optional": true
+    },
+    "background": {
+     "enum": [
+      "opaque",
+      "transparent",
+      "auto"
+     ],
+     "default": "auto"
+    },
+    "vars": {
+     "type": "object",
+     "default": {}
+    }
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "judge": false,
+   "capability": "image.edit",
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "capability"
+  },
+  {
+   "uses": "fx/structured.generate@1",
+   "name": "structured.generate",
+   "major": 1,
+   "version": 1,
+   "inputs": {
+    "schema": "json",
+    "context": "file[]?"
+   },
+   "params": {
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "system": {
+     "type": "string",
+     "x-fx-template": true,
+     "x-fx-optional": true
+    },
+    "vars": {
+     "type": "object",
+     "default": {}
+    },
+    "matte": {
+     "type": "string",
+     "default": "#ffffff"
+    },
+    "max_tokens": {
+     "type": "integer",
+     "x-fx-optional": true
+    }
+   },
+   "outputs": {
+    "json": "json"
+   },
+   "judge": false,
+   "capability": "structured.generate",
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "capability"
+  },
+  {
+   "uses": "fx/video.generate@1",
+   "name": "video.generate",
+   "major": 1,
+   "version": 1,
+   "inputs": {
+    "first_frame": "image?",
+    "last_frame": "image?"
+   },
+   "params": {
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "duration": {
+     "type": "number",
+     "x-fx-optional": true
+    },
+    "resolution": {
+     "type": "string",
+     "x-fx-optional": true
+    },
+    "aspect_ratio": {
+     "type": "string",
+     "x-fx-optional": true
+    }
+   },
+   "outputs": {
+    "video": "video/mp4"
+   },
+   "judge": false,
+   "capability": "video.generate",
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "capability"
+  },
+  {
+   "uses": "fx/speech.generate@1",
+   "name": "speech.generate",
+   "major": 1,
+   "version": 1,
+   "inputs": {},
+   "params": {
+    "text": {
+     "type": "string"
+    },
+    "voice": {
+     "type": "string"
+    },
+    "stability": {
+     "type": "number",
+     "x-fx-optional": true
+    },
+    "language_code": {
+     "type": "string",
+     "x-fx-optional": true
+    },
+    "max_chars": {
+     "type": "integer",
+     "x-fx-optional": true
+    }
+   },
+   "outputs": {
+    "audio": "audio"
+   },
+   "judge": false,
+   "capability": "speech.generate",
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "capability"
+  },
+  {
+   "uses": "fx/sound.generate@1",
+   "name": "sound.generate",
+   "major": 1,
+   "version": 1,
+   "inputs": {},
+   "params": {
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "duration": {
+     "type": "number",
+     "x-fx-optional": true
+    },
+    "prompt_influence": {
+     "type": "number",
+     "x-fx-optional": true
+    },
+    "loop": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "outputs": {
+    "audio": "audio"
+   },
+   "judge": false,
+   "capability": "sound.generate",
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "capability"
+  },
+  {
+   "uses": "fx/music.generate@1",
+   "name": "music.generate",
+   "major": 1,
+   "version": 1,
+   "inputs": {},
+   "params": {
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "duration": {
+     "type": "number",
+     "x-fx-optional": true
+    }
+   },
+   "outputs": {
+    "audio": "audio"
+   },
+   "judge": false,
+   "capability": "music.generate",
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "capability"
+  },
+  {
+   "uses": "fx/mesh.generate@1",
+   "name": "mesh.generate",
+   "major": 1,
+   "version": 1,
+   "inputs": {
+    "views": "image{}"
+   },
+   "params": {
+    "face_limit": {
+     "type": "integer",
+     "x-fx-optional": true
+    },
+    "quad": {
+     "type": "boolean",
+     "default": false
+    },
+    "texture": {
+     "type": "boolean",
+     "default": true
+    },
+    "pbr": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "outputs": {
+    "model": "model"
+   },
+   "judge": false,
+   "capability": "mesh.generate",
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "capability"
+  },
+  {
+   "uses": "fx/mesh.rig@1",
+   "name": "mesh.rig",
+   "major": 1,
+   "version": 1,
+   "inputs": {
+    "model": "model"
+   },
+   "params": {
+    "rig_type": {
+     "type": "string",
+     "default": "biped"
+    },
+    "skeleton": {
+     "type": "string",
+     "default": "mixamo"
+    },
+    "allow_negative_check": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "outputs": {
+    "model": "model/gltf-binary"
+   },
+   "judge": false,
+   "capability": "mesh.rig",
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "capability"
+  },
+  {
+   "uses": "fx/background.remove@1",
+   "name": "background.remove",
+   "major": 1,
+   "version": 1,
+   "inputs": {
+    "image": "image"
+   },
+   "params": {},
+   "outputs": {
+    "image": "image/png"
+   },
+   "judge": false,
+   "capability": "background.remove",
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "capability"
+  },
+  {
+   "uses": "fx/vision.annotate@1",
+   "name": "vision.annotate",
+   "major": 1,
+   "version": 1,
+   "inputs": {
+    "image": "image?",
+    "images": "image[]?"
+   },
+   "params": {
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "shapes": {
+     "type": "array",
+     "default": [
+      "point",
+      "points",
+      "box"
+     ]
+    },
+    "fields": {
+     "type": "object",
+     "default": {}
+    },
+    "grounding": {
+     "enum": [
+      "grid",
+      "native"
+     ],
+     "default": "grid"
+    },
+    "vars": {
+     "type": "object",
+     "default": {}
+    }
+   },
+   "outputs": {
+    "annotations": "annotations"
+   },
+   "judge": false,
+   "capability": "vision.annotate",
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "capability"
+  },
+  {
+   "uses": "fx/vision.review@1",
+   "name": "vision.review",
+   "major": 1,
+   "version": 1,
+   "inputs": {
+    "image": "image?",
+    "images": "image[]?",
+    "feedback": "annotations?"
+   },
+   "params": {
+    "question": {
+     "type": "string",
+     "x-fx-optional": true,
+     "x-fx-template": true
+    },
+    "criteria": {
+     "type": "array",
+     "x-fx-optional": true
+    },
+    "report": {
+     "enum": [
+      "annotations",
+      "verdict"
+     ],
+     "default": "annotations"
+    },
+    "review_size": {
+     "type": "integer",
+     "x-fx-optional": true
+    },
+    "vars": {
+     "type": "object",
+     "default": {}
+    }
+   },
+   "outputs": {
+    "annotations": "annotations?",
+    "mask": "image/png?"
+   },
+   "judge": true,
+   "capability": "vision.review",
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "capability"
+  },
+  {
+   "uses": "fx/structured.review@1",
+   "name": "structured.review",
+   "major": 1,
+   "version": 1,
+   "inputs": {
+    "subject": "json",
+    "rubric": "text?",
+    "context": "file[]?"
+   },
+   "params": {
+    "question": {
+     "type": "string",
+     "x-fx-optional": true
+    },
+    "criteria": {
+     "type": "array",
+     "x-fx-optional": true
+    }
+   },
+   "outputs": {},
+   "judge": true,
+   "capability": "structured.review",
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "capability"
+  },
+  {
+   "uses": "fx/image.check_alpha@1",
+   "name": "image.check_alpha",
+   "major": 1,
+   "version": 1,
+   "description": "Judge whether a picture is transparent where it should be, or fully opaque.",
+   "inputs": {
+    "image": "image"
+   },
+   "params": {
+    "expect": {
+     "enum": [
+      "transparent",
+      "opaque"
+     ],
+     "default": "transparent"
+    }
+   },
+   "outputs": {},
+   "judge": true,
+   "capability": null,
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "python"
+  },
+  {
+   "uses": "fx/image.check_size@1",
+   "name": "image.check_size",
+   "major": 1,
+   "version": 1,
+   "description": "Judge a picture's size against the width and height asked for.",
+   "inputs": {
+    "image": "image"
+   },
+   "params": {
+    "width": {
+     "type": "integer",
+     "x-fx-optional": true
+    },
+    "height": {
+     "type": "integer",
+     "x-fx-optional": true
+    }
+   },
+   "outputs": {},
+   "judge": true,
+   "capability": null,
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "python"
+  },
+  {
+   "uses": "fx/audio.check_duration@1",
+   "name": "audio.check_duration",
+   "major": 1,
+   "version": 1,
+   "inputs": {
+    "audio": "audio"
+   },
+   "params": {
+    "min_s": {
+     "type": "number",
+     "x-fx-optional": true
+    },
+    "max_s": {
+     "type": "number",
+     "x-fx-optional": true
+    }
+   },
+   "outputs": {},
+   "judge": true,
+   "capability": null,
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "none"
+  },
+  {
+   "uses": "fx/image.resize@1",
+   "name": "image.resize",
+   "major": 1,
+   "version": 1,
+   "description": "Scale a picture to fit: by its longest side, or to a width and height.",
+   "inputs": {
+    "image": "image"
+   },
+   "params": {
+    "longest_side": {
+     "type": "integer",
+     "x-fx-optional": true
+    },
+    "width": {
+     "type": "integer",
+     "x-fx-optional": true
+    },
+    "height": {
+     "type": "integer",
+     "x-fx-optional": true
+    }
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "judge": false,
+   "capability": null,
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "python"
+  },
+  {
+   "uses": "fx/image.crop@1",
+   "name": "image.crop",
+   "major": 1,
+   "version": 1,
+   "description": "Cut a box out of a picture: ``box`` as [x0, y0, x1, y1] from 0 to 1, padded.",
+   "inputs": {
+    "image": "image",
+    "region": "annotations?"
+   },
+   "params": {
+    "box": {
+     "type": "array",
+     "x-fx-optional": true
+    },
+    "padding": {
+     "type": "number",
+     "default": 0
+    }
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "judge": false,
+   "capability": null,
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "python"
+  },
+  {
+   "uses": "fx/image.pad@1",
+   "name": "image.pad",
+   "major": 1,
+   "version": 1,
+   "description": "Centre a picture on a transparent canvas of the asked size.",
+   "inputs": {
+    "image": "image"
+   },
+   "params": {
+    "width": {
+     "type": "integer"
+    },
+    "height": {
+     "type": "integer"
+    }
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "judge": false,
+   "capability": null,
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "python"
+  },
+  {
+   "uses": "fx/image.compose@1",
+   "name": "image.compose",
+   "major": 1,
+   "version": 1,
+   "inputs": {
+    "layers": "image[]"
+   },
+   "params": {
+    "width": {
+     "type": "integer"
+    },
+    "height": {
+     "type": "integer"
+    }
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "judge": false,
+   "capability": null,
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "none"
+  },
+  {
+   "uses": "fx/image.key@1",
+   "name": "image.key",
+   "major": 1,
+   "version": 1,
+   "inputs": {
+    "image": "image"
+   },
+   "params": {
+    "color": {
+     "type": "string",
+     "default": "#00ff00"
+    }
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "judge": false,
+   "capability": null,
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "none"
+  },
+  {
+   "uses": "fx/image.mirror_repeat@1",
+   "name": "image.mirror_repeat",
+   "major": 1,
+   "version": 1,
+   "description": "Reflect a picture onto itself along x, y or both, so its edges repeat exactly.",
+   "inputs": {
+    "image": "image"
+   },
+   "params": {
+    "axis": {
+     "enum": [
+      "x",
+      "y",
+      "xy"
+     ],
+     "default": "x"
+    }
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "judge": false,
+   "capability": null,
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "python"
+  },
+  {
+   "uses": "fx/image.sheet@1",
+   "name": "image.sheet",
+   "major": 1,
+   "version": 1,
+   "inputs": {
+    "image": "image?",
+    "images": "image{}?"
+   },
+   "params": {
+    "columns": {
+     "type": "integer"
+    },
+    "rows": {
+     "type": "integer",
+     "x-fx-optional": true
+    }
+   },
+   "outputs": {
+    "image": "image/png?",
+    "cells": "image{}?"
+   },
+   "judge": false,
+   "capability": null,
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "none"
+  },
+  {
+   "uses": "fx/image.contact_sheet@1",
+   "name": "image.contact_sheet",
+   "major": 1,
+   "version": 1,
+   "inputs": {
+    "images": "image[]"
+   },
+   "params": {
+    "columns": {
+     "type": "integer",
+     "default": 4
+    }
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "judge": false,
+   "capability": null,
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "none"
+  },
+  {
+   "uses": "fx/video.probe@1",
+   "name": "video.probe",
+   "major": 1,
+   "version": 1,
+   "inputs": {
+    "video": "video"
+   },
+   "params": {},
+   "outputs": {
+    "report": "json"
+   },
+   "judge": false,
+   "capability": null,
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "none"
+  },
+  {
+   "uses": "fx/video.frames@1",
+   "name": "video.frames",
+   "major": 1,
+   "version": 1,
+   "inputs": {
+    "video": "video"
+   },
+   "params": {
+    "count": {
+     "type": "integer",
+     "default": 8
+    }
+   },
+   "outputs": {
+    "frames": "image[]"
+   },
+   "judge": false,
+   "capability": null,
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "none"
+  },
+  {
+   "uses": "fx/video.encode@1",
+   "name": "video.encode",
+   "major": 1,
+   "version": 1,
+   "inputs": {
+    "frames": "image[]"
+   },
+   "params": {
+    "fps": {
+     "type": "number",
+     "default": 12
+    }
+   },
+   "outputs": {
+    "video": "video/mp4"
+   },
+   "judge": false,
+   "capability": null,
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "none"
+  },
+  {
+   "uses": "fx/audio.normalize@1",
+   "name": "audio.normalize",
+   "major": 1,
+   "version": 1,
+   "inputs": {
+    "audio": "audio"
+   },
+   "params": {
+    "loudness_lufs": {
+     "type": "number",
+     "default": -16
+    }
+   },
+   "outputs": {
+    "audio": "audio"
+   },
+   "judge": false,
+   "capability": null,
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "none"
+  },
+  {
+   "uses": "fx/audio.trim@1",
+   "name": "audio.trim",
+   "major": 1,
+   "version": 1,
+   "inputs": {
+    "audio": "audio"
+   },
+   "params": {
+    "start_s": {
+     "type": "number",
+     "default": 0
+    },
+    "end_s": {
+     "type": "number",
+     "x-fx-optional": true
+    }
+   },
+   "outputs": {
+    "audio": "audio"
+   },
+   "judge": false,
+   "capability": null,
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "none"
+  },
+  {
+   "uses": "fx/audio.concat@1",
+   "name": "audio.concat",
+   "major": 1,
+   "version": 1,
+   "inputs": {
+    "clips": "audio[]"
+   },
+   "params": {
+    "gap_s": {
+     "type": "number",
+     "default": 0
+    }
+   },
+   "outputs": {
+    "audio": "audio"
+   },
+   "judge": false,
+   "capability": null,
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "none"
+  },
+  {
+   "uses": "fx/audio.mix@1",
+   "name": "audio.mix",
+   "major": 1,
+   "version": 1,
+   "inputs": {
+    "clips": "audio{}"
+   },
+   "params": {
+    "timeline": {
+     "type": "array"
+    }
+   },
+   "outputs": {
+    "audio": "audio"
+   },
+   "judge": false,
+   "capability": null,
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "none"
+  },
+  {
+   "uses": "fx/annotations.mask@1",
+   "name": "annotations.mask",
+   "major": 1,
+   "version": 1,
+   "inputs": {
+    "annotations": "annotations",
+    "image": "image"
+   },
+   "params": {
+    "tags": {
+     "type": "array",
+     "x-fx-optional": true
+    }
+   },
+   "outputs": {
+    "mask": "image/png"
+   },
+   "judge": false,
+   "capability": null,
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "none"
+  },
+  {
+   "uses": "fx/annotations.filter@1",
+   "name": "annotations.filter",
+   "major": 1,
+   "version": 1,
+   "inputs": {
+    "annotations": "annotations"
+   },
+   "params": {
+    "tags": {
+     "type": "array"
+    }
+   },
+   "outputs": {
+    "annotations": "annotations"
+   },
+   "judge": false,
+   "capability": null,
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "none"
+  },
+  {
+   "uses": "fx/select@1",
+   "name": "select",
+   "major": 1,
+   "version": 1,
+   "description": "fx/select: the first candidate that exists and was not rejected.",
+   "inputs": {},
+   "params": {
+    "first_of": {
+     "type": "array"
+    }
+   },
+   "outputs": {
+    "value": "file?"
+   },
+   "judge": false,
+   "capability": null,
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "engine"
+  },
+  {
+   "uses": "fx/json.merge@1",
+   "name": "json.merge",
+   "major": 1,
+   "version": 1,
+   "description": "Merge JSON objects in order; a later key wins.",
+   "inputs": {
+    "documents": "json[]"
+   },
+   "params": {},
+   "outputs": {
+    "json": "json"
+   },
+   "judge": false,
+   "capability": null,
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "python"
+  },
+  {
+   "uses": "fx/package@1",
+   "name": "package",
+   "major": 1,
+   "version": 1,
+   "description": "Lay results out as a folder by destination path, beside a manifest written in YAML.\n\nA destination with ``{key}`` takes a keyed collection, one file per key; any other takes\none value. A missing value (a step that did not run) leaves its file out.",
+   "inputs": {},
+   "params": {
+    "files": {
+     "type": "object"
+    },
+    "manifest": {
+     "type": "object",
+     "default": {}
+    }
+   },
+   "outputs": {
+    "files": "file{}",
+    "manifest": "json"
+   },
+   "judge": false,
+   "capability": null,
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "python"
+  },
+  {
+   "uses": "fx/files.copy@1",
+   "name": "files.copy",
+   "major": 1,
+   "version": 1,
+   "description": "Pass one file through unchanged: a stable name for something other steps made.",
+   "inputs": {
+    "file": "file"
+   },
+   "params": {},
+   "outputs": {
+    "file": "file"
+   },
+   "judge": false,
+   "capability": null,
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "python"
+  }
+ ]
+}

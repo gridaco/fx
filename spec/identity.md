@@ -68,7 +68,7 @@ A file's **kind** comes from its suffix, compared case-insensitively. It is not 
 
 - `width`, `height`: pixels of the first frame;
 - `has_alpha`: true when the encoding can carry transparency: an alpha channel, a PNG `tRNS` chunk, a WebP alpha flag, or a GIF transparent index;
-- `opaque`: true when `has_alpha` is false or every pixel's alpha is fully opaque.
+- `opaque`: true when `has_alpha` is false or every pixel of the first frame is fully opaque.
 
 Audio and video file facts are defined in `facts.md` when the runner lands. File facts enter an identity only through expressions that read them (`facts(x).width` in a `with:` value).
 
@@ -170,7 +170,7 @@ step_identity = digest({
   - optional params with no default, and inputs not given, are absent.
 
   A `with:` name that is neither an input nor a param of the type is a refusal while planning.
-- A string given to an input port that starts with `./` or `../` and holds no newline names a file, and becomes that file. The path is relative to the workflow's home: the folder of the nearest `fx.yaml` above the workflow file. An absolute path is refused.
+- A string given to an input port that starts with `./` or `../` and holds no newline names a file, and becomes that file. In a workflow the path is relative to the workflow's home, the folder of the nearest `fx.yaml` above the workflow file; in an inputs file it is relative to that file. It must resolve inside the home. An absolute path, or one that leaves the home, is refused.
 - `take` lists one number per regenerating level, outermost first: `[1]`, or `[2, 1]` for take 1 inside take 2 of a regenerating group.
 - The step's path, name and instance id are not part of it. Identical work in two places has one identity and runs once.
 - If `with_values` contains a pending value, the identity is `null` until the values it waits on exist.
