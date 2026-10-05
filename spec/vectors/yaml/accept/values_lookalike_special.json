@@ -1,0 +1,8 @@
+{
+  "longer": ".infinity",
+  "negative_nan": "-.nan",
+  "no_dot": "-inf",
+  "positive_nan": "+.NaN",
+  "word_inf": "inf",
+  "word_nan": "nan"
+}

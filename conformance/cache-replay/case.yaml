@@ -1,0 +1,13 @@
+# A paid call answered from the call cache, offline: the store holds a call record for
+# image.generate on img-a@acme with the step's exact request, so `run` without --live succeeds,
+# charges nothing and outputs the stored file. A second run of the same plan is answered by the
+# result cache. See README.md for how the call key was computed.
+steps:
+- argv: [run, case, --routes, routes.yaml, --run, runs/one]
+- argv: [project, runs/one]
+  save: project.json
+  json: true
+- argv: [run, case, --routes, routes.yaml, --run, runs/two]
+- argv: [project, runs/two]
+  save: project-two.json
+  json: true

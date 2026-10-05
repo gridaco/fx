@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-result-record-v1",
+  "title": "FX result record (fx-result-record-v1)",
+  "description": "What one step identity produced, kept at `results/<identity[:2]>/<identity>.json` in the store (store.md).",
+  "type": "object",
+  "required": [
+    "kind",
+    "identity",
+    "type",
+    "outputs",
+    "facts",
+    "read",
+    "cost_usd"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "kind": {
+      "const": "fx-result-record-v1"
+    },
+    "identity": {
+      "description": "The step identity (identity.md §8).",
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "type": {
+      "description": "The type identity (identity.md §6).",
+      "type": "string"
+    },
+    "outputs": {
+      "description": "Each output port's value: a file, a collection, a list, or none.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/output"
+      }
+    },
+    "facts": {
+      "description": "The node facts the body reported with `fact()` (identity.md §4), such as a judge's `verdict`. File facts are not stored; they are computed again from the bytes.",
+      "type": "object"
+    },
+    "read": {
+      "description": "The digest of every file the instance read: `<with name>/<index>`, each value's files in order. The record is trusted only when this equals what the instance reads now.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*/(?:0|[1-9][0-9]*)$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      }
+    },
+    "cost_usd": {
+      "description": "What the step's paid calls cost; null when it made none.",
+      "anyOf": [
+        {
+          "type": "number",
+          "minimum": 0
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "file": {
+      "type": "object",
+      "required": [
+        "digest",
+        "kind",
+        "name",
+        "size"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "kind": {
+          "description": "identity.md §4.",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "key": {
+          "description": "A collection item's key; absent when none.",
+          "type": "string"
+        }
+      }
+    },
+    "output": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "file"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "file": {
+              "$ref": "#/$defs/file"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "collection"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "collection": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "$ref": "#/$defs/output"
+                  }
+                ],
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "list"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "list": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/output"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "none"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "none": {
+              "const": true
+            }
+          }
+        }
+      ]
+    }
+  }
+}

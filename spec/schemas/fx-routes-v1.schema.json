@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-routes-v1",
+  "title": "FX route table (fx: routes/v1)",
+  "description": "Which `model@provider` serves a capability, what it costs, the features it supports, its pacing, and the contract that enters its fingerprint (identity.md §7). Tables combine in the order identity.md §7 gives: a later table's entry for the same capability and route replaces an earlier one.",
+  "type": "object",
+  "required": [
+    "fx",
+    "routes"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "fx": {
+      "const": "routes/v1"
+    },
+    "routes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "capability",
+          "route",
+          "price"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "capability": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$"
+          },
+          "route": {
+            "description": "`<model>@<provider>`, split at the last `@`. A table declares a route at most once per capability.",
+            "type": "string",
+            "pattern": "^.+@[a-z0-9._-]+$"
+          },
+          "price": {
+            "description": "What one call costs, low to high: per call, per second, or per thousand characters. Amounts are US dollars with at most 6 decimal places (identity.md §12). `0 <= low_usd <= high_usd`, and every tier lies within that range; a reader refuses a table that breaks either rule.",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "usd": {
+                "description": "Shorthand for `low_usd` and `high_usd` both set to this amount.",
+                "type": "number",
+                "minimum": 0
+              },
+              "low_usd": {
+                "description": "Default 0, or `usd`.",
+                "type": "number",
+                "minimum": 0
+              },
+              "high_usd": {
+                "description": "Default 0, or `usd`.",
+                "type": "number",
+                "minimum": 0
+              },
+              "unit": {
+                "description": "What the amounts are per. A call's length is its `text` (characters) or its `max_chars`; or its `duration` (seconds), or `duration_s`.",
+                "enum": [
+                  "call",
+                  "second",
+                  "1k_chars"
+                ],
+                "default": "call"
+              },
+              "max_units": {
+                "description": "For a length-priced route: the most units one call can carry, its worst case.",
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "by": {
+                "description": "The request setting whose value picks a tier, such as `resolution`. A call whose setting the plan does not know yet is priced at the whole range.",
+                "type": "string",
+                "minLength": 1
+              },
+              "tiers": {
+                "description": "A range per value of `by`, in the price's unit.",
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": {
+                  "type": "object",
+                  "required": [
+                    "low_usd",
+                    "high_usd"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "low_usd": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "high_usd": {
+                      "type": "number",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            },
+            "dependentRequired": {
+              "by": [
+                "tiers"
+              ],
+              "tiers": [
+                "by"
+              ]
+            },
+            "allOf": [
+              {
+                "description": "A length-priced route declares the most units one call carries.",
+                "if": {
+                  "required": [
+                    "unit"
+                  ],
+                  "properties": {
+                    "unit": {
+                      "enum": [
+                        "second",
+                        "1k_chars"
+                      ]
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "max_units"
+                  ]
+                }
+              },
+              {
+                "description": "`usd` stands alone.",
+                "if": {
+                  "required": [
+                    "usd"
+                  ]
+                },
+                "then": {
+                  "not": {
+                    "anyOf": [
+                      {
+                        "required": [
+                          "low_usd"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "high_usd"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          "features": {
+            "description": "What the route supports (`image_input`, `mask`, `alpha`, ...). A step that `requires` another is refused while planning.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          },
+          "concurrency": {
+            "description": "The most calls of this route at once.",
+            "type": "integer",
+            "minimum": 1
+          },
+          "requests_per_minute": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "contract": {
+            "description": "Settings that change what the route returns. Part of its fingerprint, so of every identity it serves.",
+            "type": "object"
+          }
+        }
+      }
+    }
+  }
+}

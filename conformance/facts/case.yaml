@@ -1,0 +1,11 @@
+# facts() over input files while planning: the image's width, height, bytes, has_alpha and
+# opaque, and the text file's bytes and kind, in an if: and in a rendered prompt. `flat` is
+# absent (the image is not opaque); `wider` reads facts of a file that does not exist yet, so its
+# identity is null. See README.md for how art.png was made.
+steps:
+- argv: [expand, case, --routes, routes.yaml, --inputs, inputs.yaml]
+  save: expand.json
+  json: true
+- argv: [identity, case, --routes, routes.yaml, --inputs, inputs.yaml]
+  save: identity.json
+  json: true

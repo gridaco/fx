@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-job-record-v1",
+  "title": "FX job record (fx-job-record-v1)",
+  "description": "A long provider job (a video, a rig) of one paid call, kept at `jobs/<key>.json` in the store (store.md) from before its request may leave until the call is answered.",
+  "type": "object",
+  "required": [
+    "kind",
+    "key",
+    "capability",
+    "route",
+    "request",
+    "take",
+    "state",
+    "handle"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "kind": {
+      "const": "fx-job-record-v1"
+    },
+    "key": {
+      "description": "The key of the call it answers (identity.md §9).",
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "capability": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$"
+    },
+    "route": {
+      "type": "object",
+      "required": [
+        "id",
+        "fingerprint"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "`<model>@<provider>`.",
+          "type": "string",
+          "pattern": "^.+@[a-z0-9._-]+$"
+        },
+        "fingerprint": {
+          "description": "identity.md §7.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "request": {
+      "description": "The canonical request (identity.md §9), exactly as keyed: files as `{\"file\": digest}`. It never holds a secret.",
+      "type": "object"
+    },
+    "take": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "minItems": 1
+    },
+    "state": {
+      "description": "`submitting`: a request may be on its way, and nobody can say whether the provider took it. `submitted`: the provider took it under `handle`. `settled`: the job ended without a result and nothing of it is outstanding.",
+      "enum": [
+        "submitting",
+        "submitted",
+        "settled"
+      ]
+    },
+    "handle": {
+      "description": "What collecting the job needs, such as the provider's job id. Never a credential or a signed URL.",
+      "type": [
+        "object",
+        "null"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "submitting"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "handle": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "submitted"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "handle": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  ]
+}

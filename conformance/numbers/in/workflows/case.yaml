@@ -1,0 +1,18 @@
+fx: workflow/v1
+id: case
+title: Numbers
+inputs:
+  n: { type: number }
+  count: { type: integer }
+  big: { type: number }
+  flag: { type: boolean }
+steps:
+  held:
+    uses: ./nodes/numbers.py#hold
+    with: { n: "${{ inputs.n }}" }
+  said:
+    uses: ./nodes/numbers.py#say
+    with:
+      text: "n=${{ inputs.n }} count=${{ inputs.count }} sum=${{ 0.1 + 0.2 }} whole=${{ 1.0 }} big=${{ inputs.big }} e16=${{ 10000000000000000.0 }} flag=${{ inputs.flag }}"
+outputs:
+  said: ${{ steps.said.outputs.text }}

@@ -1,0 +1,11 @@
+greeting: hello world
+version: 1.2.3
+label: v1
+size: 1024x1024
+kind: 3d
+pair: a:b
+url: https://acme.test/img-a?size=2
+hash_inside: a#b
+host: acme.test:8080
+dashed: -leading
+indicators_inside: x&y*z!w

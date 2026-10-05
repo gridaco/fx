@@ -1,0 +1,13 @@
+fx: workflow/v1
+id: case
+title: A workflow used as a step
+inputs:
+  names: { type: list, items: { type: string } }
+steps:
+  each:
+    for_each: ${{ inputs.names }}
+    key: ${{ item }}
+    uses: ./workflows/inner.yaml
+    with: { name: "${{ item }}" }
+outputs:
+  loud: ${{ steps.each.*.outputs.loud }}

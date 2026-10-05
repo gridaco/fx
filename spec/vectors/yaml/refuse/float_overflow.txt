@@ -1,0 +1,1 @@
+Values: a decimal float that overflows to infinity is refused.

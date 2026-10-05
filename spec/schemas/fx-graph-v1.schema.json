@@ -1,0 +1,464 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-graph-v1",
+  "title": "FX expanded graph (fx-graph-v1)",
+  "description": "Every step instance of a workflow with its type, values, routes, wiring, identity, state and price, and each node type's identity and source digests (`types`). `grida-fx expand` prints it, with `problems`; a run folder keeps it as plan.json (store.md §8), with `plan`, `steps`, `inputs` and `view_origins`.",
+  "type": "object",
+  "required": [
+    "kind",
+    "workflow",
+    "instances",
+    "pending",
+    "estimate"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "kind": {
+      "const": "fx-graph-v1"
+    },
+    "workflow": {
+      "type": "object",
+      "required": [
+        "id",
+        "title"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "maxLength": 96
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "file": {
+          "description": "Where the workflow came from: its project-relative POSIX path, or `<path>:<function>` for a builder (identity.md §10).",
+          "type": "string"
+        }
+      }
+    },
+    "plan": {
+      "description": "The plan digest (identity.md §10).",
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "steps": {
+      "description": "Each declared step, by its path, as a reader sees it.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "uses": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "view": {
+            "type": [
+              "boolean",
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "view_origins": {
+      "description": "Views are planned: `view_origins` from fx.yaml, recorded.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "inputs": {
+      "description": "The run's inputs as plain values (identity.md §3).",
+      "type": "object"
+    },
+    "types": {
+      "description": "Each distinct `uses` of the instances, as written, with its type identity (identity.md §6). A `uses` whose type could not be resolved is left out. A project type, with a version or without, also carries `source`: the digests behind its `fx-node-source-v1` object, so a checker recomputes `digest(source)` without running a node host. For a type without a version it is the identity after `source:`; for a versioned type it is what fx.lock must hold. A built-in type has no `source`.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/type_entry"
+      }
+    },
+    "instances": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "path",
+          "step",
+          "take",
+          "uses",
+          "type",
+          "with",
+          "routes",
+          "state",
+          "identity",
+          "phase",
+          "key",
+          "judges",
+          "judged_by",
+          "waiting_on",
+          "needs",
+          "reads",
+          "price"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "description": "The instance id (identity.md §11).",
+            "type": "string"
+          },
+          "path": {
+            "description": "The step path, with repeat keys: `entity['ada'].draw`.",
+            "type": "string"
+          },
+          "step": {
+            "description": "The declared step's path, without repeat keys.",
+            "type": "string"
+          },
+          "take": {
+            "description": "One take per regenerating level, outermost first.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "minItems": 1
+          },
+          "uses": {
+            "description": "The step's `uses`, as written.",
+            "type": "string"
+          },
+          "type": {
+            "description": "The type identity (identity.md §6); null when the type could not be resolved.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "with": {
+            "description": "The plain with-values (identity.md §3, §8). A value not known until something runs is `{\"pending\": \"<what it waits on>\"}`.",
+            "type": "object"
+          },
+          "routes": {
+            "description": "Each capability the type calls, with the route bound to it.",
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "route",
+                "fingerprint"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "route": {
+                  "type": "string",
+                  "pattern": "^.+@[a-z0-9._-]+$"
+                },
+                "fingerprint": {
+                  "description": "identity.md §7.",
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              }
+            }
+          },
+          "state": {
+            "description": "`planned`: will run. `maybe`: runs only if a condition known at run time holds. `absent`: will not run. `blocked`: something it reads failed. `failed`: refused while planning. `done`: already ran (a step `at: plan`).",
+            "enum": [
+              "planned",
+              "maybe",
+              "absent",
+              "blocked",
+              "failed",
+              "done"
+            ]
+          },
+          "identity": {
+            "description": "The step identity (identity.md §8); null while a with-value is pending.",
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "phase": {
+            "description": "1, or the phase a repeat over a run-time list starts.",
+            "type": "integer",
+            "minimum": 1
+          },
+          "key": {
+            "description": "A repeated item's key.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "judges": {
+            "description": "The instance this judge gives a verdict on.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "judged_by": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "waiting_on": {
+            "description": "Instances whose results it needs before its identity is known.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "needs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reads": {
+            "description": "The instances it reads or waits on: its upstream in the graph.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "price": {
+            "type": "object",
+            "required": [
+              "low_usd",
+              "high_usd"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "low_usd": {
+                "type": "number",
+                "minimum": 0
+              },
+              "high_usd": {
+                "type": "number",
+                "minimum": 0
+              }
+            }
+          },
+          "view": {
+            "description": "Views are planned, not implemented: the step's `view`, recorded.",
+            "type": [
+              "boolean",
+              "string"
+            ]
+          },
+          "reason": {
+            "description": "Why it is `absent`, `blocked` or `failed`.",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "pending": {
+      "description": "Repeats whose instances a later phase expands, with their worst case.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "max",
+          "phase",
+          "high_usd"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "max": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "phase": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "high_usd": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "estimate": {
+      "type": "object",
+      "required": [
+        "low_usd",
+        "high_usd",
+        "ceiling_usd"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "low_usd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "high_usd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "ceiling_usd": {
+          "description": "`--max-usd`, else the workflow's `budget`, else the project's; null when none.",
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "problems": {
+      "description": "Why the plan is refused; empty when it is not.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "where",
+          "message"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "where": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "relative_path": {
+      "description": "A POSIX path relative to its base: no leading `/`, no empty, `.` or `..` segment.",
+      "type": "string",
+      "pattern": "^[^/]+(?:/[^/]+)*$",
+      "not": {
+        "pattern": "(?:^|/)\\.\\.?(?:/|$)"
+      }
+    },
+    "type_entry": {
+      "type": "object",
+      "required": [
+        "identity"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "identity": {
+          "description": "`fx/<name>@<major>.<version>` for a built-in, `<path>#<attr>@<version>` for a versioned project type, `source:` and `digest(source)` for a project type without a version.",
+          "type": "string",
+          "anyOf": [
+            {
+              "pattern": "^fx/[^@]+@(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)$"
+            },
+            {
+              "pattern": "^[^./#][^#]*#[A-Za-z_][A-Za-z0-9_]*@(?:0|[1-9][0-9]*)$"
+            },
+            {
+              "pattern": "^source:[0-9a-f]{64}$"
+            }
+          ]
+        },
+        "source": {
+          "description": "The type's `fx-node-source-v1` object without its `kind` (identity.md §6): relative labels and resource paths, each mapped to a file digest. It never holds an absolute path.",
+          "type": "object",
+          "required": [
+            "files",
+            "resources"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "files": {
+              "description": "Each file of the source closure: its label (POSIX, relative to the project root or to the folder that contains a declared source package, the nearer one) to its file digest.",
+              "type": "object",
+              "minProperties": 1,
+              "propertyNames": {
+                "$ref": "#/$defs/relative_path"
+              },
+              "additionalProperties": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            },
+            "resources": {
+              "description": "Each declared resource: its path, POSIX and relative to the project root, to its file digest.",
+              "type": "object",
+              "propertyNames": {
+                "$ref": "#/$defs/relative_path"
+              },
+              "additionalProperties": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "identity": {
+            "pattern": "^fx/"
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "required": [
+            "source"
+          ]
+        }
+      },
+      "else": {
+        "required": [
+          "source"
+        ]
+      }
+    }
+  }
+}

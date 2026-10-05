@@ -1,0 +1,20 @@
+fx: workflow/v1
+id: case
+title: Template prompt
+inputs:
+  place: { type: string }
+  things: { type: list, items: { type: string } }
+  most: { type: integer, minimum: 1 }
+steps:
+  draw:
+    for_each: ${{ inputs.things }}
+    key: ${{ item }}
+    max: ${{ inputs.most }}
+    steps:
+      picture:
+        uses: fx/image.generate@1
+        with:
+          prompt: ./prompts/draw.md
+          vars: { thing: "${{ item }}", count: 2 }
+outputs:
+  images: ${{ steps.draw.*.picture.outputs.image }}

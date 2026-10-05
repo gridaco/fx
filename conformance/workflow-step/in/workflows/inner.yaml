@@ -1,0 +1,12 @@
+fx: workflow/v1
+id: inner
+title: Inner
+inputs:
+  name: { type: string }
+  suffix: { type: string, default: "!" }
+steps:
+  loud:
+    uses: ./nodes/cases.py#shout
+    with: { text: "${{ inputs.name }}${{ inputs.suffix }}" }
+outputs:
+  loud: ${{ steps.loud.outputs.text }}

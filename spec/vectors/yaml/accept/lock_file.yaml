@@ -1,0 +1,4 @@
+fx: lock/v1
+nodes:
+  "nodes/acme.py#tint@1": "2166e237877fb0c822e9db9e5ec66af1ac0029648b722c00c5e566bacd251337"
+  "nodes/acme.py#crop@2": "5e9e3130273225ea275c0b936a75b910df2603ea0e89ec7173e10fa48bb21567"

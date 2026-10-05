@@ -1,0 +1,11 @@
+steps:
+  - name: draw
+    takes: 3
+  - name: review
+    tags:
+      - fast
+      - cheap
+matrix:
+  size:
+  - 512
+  - 1024

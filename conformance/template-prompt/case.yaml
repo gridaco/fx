@@ -1,0 +1,23 @@
+# A prompt file rendered with the step's vars and the workflow's inputs, and a repeat whose
+# max: the plan evaluates; both are known while planning, so identities and prices are too.
+steps:
+- argv:
+  - expand
+  - case
+  - --routes
+  - routes.yaml
+  - --inputs
+  - inputs.yaml
+  save: expand.json
+  json: true
+  status: 0
+- argv:
+  - price
+  - case
+  - --routes
+  - routes.yaml
+  - --inputs
+  - inputs.yaml
+  save: price.json
+  json: true
+  status: 0

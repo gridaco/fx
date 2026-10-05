@@ -1,0 +1,41 @@
+[project]
+name = "grida"
+version = "0.1.0a1"
+description = "Grida FX for Python: author nodes and workflows, and drive the grida-fx engine."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/gridaco/fx"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "rfc8785>=0.1.4",
+    "jsonschema>=4.23",
+    "pyyaml>=6",
+]
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/grida"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "../tools", "../conformance"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.isort]
+# Conformance fixtures import their project's own `nodes` package.
+known-local-folder = ["nodes"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

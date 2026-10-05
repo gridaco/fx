@@ -1,0 +1,1 @@
+Values: an ambiguous plain scalar (yes, no, on, off in any letter case) is refused; quote it.

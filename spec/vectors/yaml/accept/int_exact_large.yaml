@@ -1,0 +1,4 @@
+# Integers beyond 2^53 - 1 that read without rounding: each is the canonical form of the
+# number it reads as.
+e16: 10000000000000000
+two_to_60: 1152921504606847000

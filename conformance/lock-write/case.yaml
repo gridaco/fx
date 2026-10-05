@@ -1,0 +1,13 @@
+# No fx.lock yet. `lock --check` names the unlocked versioned type and fails; `lock` writes
+# fx.lock with the source digest of nodes/n.py#pinned@2 (the unversioned echo is not locked);
+# then `lock --check` passes and the workflow plans. fx.lock is compared by meaning, as JSON.
+steps:
+- argv: [lock, --check]
+  status: 1
+  mentions: ["nodes/n.py#pinned@2"]
+- argv: [lock]
+- read: fx.lock
+  save: fx.lock.json
+  yaml: true
+- argv: [lock, --check]
+- argv: [expand, case, --routes, routes.yaml]

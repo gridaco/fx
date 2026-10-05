@@ -1,0 +1,15 @@
+fx: workflow/v1
+id: case
+title: A judge that regenerates
+steps:
+  draw:
+    uses: fx/image.generate@1
+    with: { prompt: a lantern }
+  check:
+    uses: ./nodes/cases.py#verdict
+    judges: draw
+    with: { subject: "${{ steps.draw.outputs.image }}", accept_take: 2 }
+    on_reject: { regenerate: { max: 3, then: fail } }
+  after:
+    uses: ./nodes/cases.py#shout
+    with: { text: "take ${{ steps.draw.take }}" }

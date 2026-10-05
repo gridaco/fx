@@ -1,0 +1,10 @@
+list: [a, 1, true, null, "x, y", 2.5]
+map: {a: 1, b: [2, 3], c: {d: e}}
+empty_list: []
+empty_map: {}
+nested: [[], {}, [{}]]
+spaced: [ a , b ]
+multi_line: [
+  one,
+  two
+]

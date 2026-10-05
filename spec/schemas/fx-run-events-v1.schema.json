@@ -1,0 +1,618 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-run-events-v1",
+  "title": "FX run record (fx-run-events-v1)",
+  "description": "One line of a run's events.jsonl, oldest first: a common envelope, then the event's own fields. Values are encoded as files (by digest), collections, lists, none, or plain values.",
+  "type": "object",
+  "required": [
+    "kind",
+    "event",
+    "invocation_id",
+    "plan",
+    "offset_ms"
+  ],
+  "properties": {
+    "kind": {
+      "const": "fx-run-events-v1"
+    },
+    "event": {
+      "enum": [
+        "run_started",
+        "run_finished",
+        "run_cancelled",
+        "phase_planned",
+        "node_started",
+        "node_finished",
+        "node_failed",
+        "node_skipped",
+        "node_retry",
+        "call",
+        "budget_reserved",
+        "budget_settled",
+        "budget_refused",
+        "problem"
+      ]
+    },
+    "invocation_id": {
+      "description": "One invocation of the command; a resumed run appends under a new one.",
+      "type": "string"
+    },
+    "plan": {
+      "description": "The plan digest (identity.md §10), the same as plan.json's `plan`.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "offset_ms": {
+      "description": "Milliseconds since the invocation started.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "id": {
+      "description": "The instance id.",
+      "type": "string"
+    },
+    "path": {
+      "type": "string"
+    },
+    "step": {
+      "type": "string"
+    },
+    "uses": {
+      "type": "string"
+    },
+    "take": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "minItems": 1
+    },
+    "identity": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "reads": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "routes": {
+      "description": "Each capability the instance calls, with its route id.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^.+@[a-z0-9._-]+$"
+      }
+    },
+    "with": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/encoded"
+      }
+    },
+    "cache": {
+      "enum": [
+        "hit",
+        "miss"
+      ]
+    },
+    "outputs": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/encoded"
+      }
+    },
+    "facts": {
+      "type": "object",
+      "description": "The node facts the body reported (identity.md §4). File facts are not listed; they are computed from the bytes."
+    },
+    "error": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "reason": {
+      "type": "string"
+    },
+    "blocked": {
+      "type": "boolean"
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "view": {
+      "description": "Views are planned.",
+      "type": "string"
+    },
+    "capability": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$"
+    },
+    "route": {
+      "type": "string",
+      "pattern": "^.+@[a-z0-9._-]+$"
+    },
+    "call": {
+      "description": "The call key (identity.md §9).",
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "cached": {
+      "type": "boolean"
+    },
+    "cost_usd": {
+      "anyOf": [
+        {
+          "type": "number",
+          "minimum": 0
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "node_id": {
+      "description": "What a budget hold is for: one paid call of an instance.",
+      "type": "string"
+    },
+    "amount_usd": {
+      "type": "number",
+      "minimum": 0
+    },
+    "charged_usd": {
+      "type": "number",
+      "minimum": 0
+    },
+    "needed_usd": {
+      "type": "number",
+      "minimum": 0
+    },
+    "remaining_usd": {
+      "type": "number",
+      "minimum": 0
+    },
+    "reported": {
+      "description": "Whether the provider reported the cost; when not, the whole hold is charged.",
+      "type": "boolean"
+    },
+    "ceiling_usd": {
+      "anyOf": [
+        {
+          "type": "number",
+          "minimum": 0
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "workflow": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "maxLength": 96
+    },
+    "resumed": {
+      "type": "boolean"
+    },
+    "estimate": {
+      "type": "object",
+      "required": [
+        "low_usd",
+        "high_usd"
+      ],
+      "properties": {
+        "low_usd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "high_usd": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "ok": {
+      "type": "boolean"
+    },
+    "incomplete": {
+      "type": "boolean"
+    },
+    "stopped": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "failed": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "phase": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "steps": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "high_usd": {
+      "type": "number",
+      "minimum": 0
+    },
+    "where": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "run_started"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "workflow",
+          "resumed",
+          "ceiling_usd",
+          "charged_usd",
+          "estimate"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "run_finished"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "ok",
+          "incomplete",
+          "stopped",
+          "charged_usd",
+          "failed",
+          "outputs"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "run_cancelled"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "reason",
+          "charged_usd"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "phase_planned"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "phase",
+          "steps",
+          "high_usd"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "node_started"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "id",
+          "path",
+          "step",
+          "take",
+          "identity",
+          "uses",
+          "reads",
+          "routes",
+          "with"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "node_finished"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "id",
+          "path",
+          "cache",
+          "outputs",
+          "facts"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "node_failed"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "id",
+          "path",
+          "error"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "node_skipped"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "id",
+          "path"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "node_retry"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "id",
+          "attempt",
+          "error"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "call"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "id",
+          "capability",
+          "route",
+          "call",
+          "cached",
+          "cost_usd"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "budget_reserved"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "node_id",
+          "amount_usd"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "budget_settled"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "node_id",
+          "charged_usd",
+          "reported"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "budget_refused"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "node_id",
+          "needed_usd",
+          "remaining_usd",
+          "ceiling_usd"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "problem"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "where",
+          "message"
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "file": {
+      "type": "object",
+      "required": [
+        "digest",
+        "kind",
+        "name",
+        "size"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "kind": {
+          "description": "identity.md §4.",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "key": {
+          "description": "A collection item's key; absent when none.",
+          "type": "string"
+        }
+      }
+    },
+    "encoded": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "file"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "file": {
+              "$ref": "#/$defs/file"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "collection"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "collection": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "$ref": "#/$defs/encoded"
+                  }
+                ],
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "list"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "list": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/encoded"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "none"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "none": {
+              "const": true
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "value"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "description": "A plain value (identity.md §3)."
+            }
+          }
+        }
+      ]
+    }
+  }
+}

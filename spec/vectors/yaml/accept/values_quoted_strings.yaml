@@ -1,0 +1,5 @@
+double: "a\tb\nc \"q\" \\ \u00e9"
+single: 'a\tb ''q'''
+empty_double: ""
+empty_single: ''
+padded: "  padded  "

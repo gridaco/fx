@@ -1,0 +1,1165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-node-protocol-v1",
+  "title": "FX node protocol v1: one JSON-RPC 2.0 message between the engine and a node host",
+  "description": "A message is a request, a notification, a response or an error response (spec/protocol.md). Each method's params are $defs/<method>_params and its result $defs/<method>_result, with dots in the method name written as underscores; a response's result is validated against the result definition of the request it answers.",
+  "oneOf": [
+    {"$ref": "#/$defs/request"},
+    {"$ref": "#/$defs/notification"},
+    {"$ref": "#/$defs/response"},
+    {"$ref": "#/$defs/error_response"}
+  ],
+  "$defs": {
+    "id": {
+      "description": "A request id: unique per sender for the session.",
+      "type": ["integer", "string"]
+    },
+    "request": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {"const": "2.0"},
+        "id": {"$ref": "#/$defs/id"},
+        "method": {
+          "enum": [
+            "initialize",
+            "shutdown",
+            "describe",
+            "build",
+            "run",
+            "tool.invoke",
+            "agent.check",
+            "capability",
+            "agent.run",
+            "fact",
+            "annotate",
+            "prompt.render",
+            "file.put"
+          ]
+        },
+        "params": {}
+      },
+      "required": ["jsonrpc", "id", "method"],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {"properties": {"method": {"const": "initialize"}}},
+          "then": {
+            "required": ["params"],
+            "properties": {"params": {"$ref": "#/$defs/initialize_params"}}
+          }
+        },
+        {
+          "if": {"properties": {"method": {"const": "shutdown"}}},
+          "then": {"properties": {"params": {"type": "null"}}}
+        },
+        {
+          "if": {"properties": {"method": {"const": "describe"}}},
+          "then": {
+            "required": ["params"],
+            "properties": {"params": {"$ref": "#/$defs/describe_params"}}
+          }
+        },
+        {
+          "if": {"properties": {"method": {"const": "build"}}},
+          "then": {
+            "required": ["params"],
+            "properties": {"params": {"$ref": "#/$defs/build_params"}}
+          }
+        },
+        {
+          "if": {"properties": {"method": {"const": "run"}}},
+          "then": {"required": ["params"], "properties": {"params": {"$ref": "#/$defs/run_params"}}}
+        },
+        {
+          "if": {"properties": {"method": {"const": "tool.invoke"}}},
+          "then": {
+            "required": ["params"],
+            "properties": {"params": {"$ref": "#/$defs/tool_invoke_params"}}
+          }
+        },
+        {
+          "if": {"properties": {"method": {"const": "agent.check"}}},
+          "then": {
+            "required": ["params"],
+            "properties": {"params": {"$ref": "#/$defs/agent_check_params"}}
+          }
+        },
+        {
+          "if": {"properties": {"method": {"const": "capability"}}},
+          "then": {
+            "required": ["params"],
+            "properties": {"params": {"$ref": "#/$defs/capability_params"}}
+          }
+        },
+        {
+          "if": {"properties": {"method": {"const": "agent.run"}}},
+          "then": {
+            "required": ["params"],
+            "properties": {"params": {"$ref": "#/$defs/agent_run_params"}}
+          }
+        },
+        {
+          "if": {"properties": {"method": {"const": "fact"}}},
+          "then": {
+            "required": ["params"],
+            "properties": {"params": {"$ref": "#/$defs/fact_params"}}
+          }
+        },
+        {
+          "if": {"properties": {"method": {"const": "annotate"}}},
+          "then": {
+            "required": ["params"],
+            "properties": {"params": {"$ref": "#/$defs/annotate_params"}}
+          }
+        },
+        {
+          "if": {"properties": {"method": {"const": "prompt.render"}}},
+          "then": {
+            "required": ["params"],
+            "properties": {"params": {"$ref": "#/$defs/prompt_render_params"}}
+          }
+        },
+        {
+          "if": {"properties": {"method": {"const": "file.put"}}},
+          "then": {
+            "required": ["params"],
+            "properties": {"params": {"$ref": "#/$defs/file_put_params"}}
+          }
+        }
+      ]
+    },
+    "notification": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {"const": "2.0"},
+        "method": {"enum": ["exit", "$/cancel", "progress"]},
+        "params": {}
+      },
+      "required": ["jsonrpc", "method"],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {"properties": {"method": {"const": "exit"}}},
+          "then": {"properties": {"params": {"type": "null"}}}
+        },
+        {
+          "if": {"properties": {"method": {"const": "$/cancel"}}},
+          "then": {
+            "required": ["params"],
+            "properties": {"params": {"$ref": "#/$defs/cancel_params"}}
+          }
+        },
+        {
+          "if": {"properties": {"method": {"const": "progress"}}},
+          "then": {
+            "required": ["params"],
+            "properties": {"params": {"$ref": "#/$defs/progress_params"}}
+          }
+        }
+      ]
+    },
+    "response": {
+      "description": "A successful answer. Validate result against $defs/<method>_result of the request it answers.",
+      "type": "object",
+      "properties": {"jsonrpc": {"const": "2.0"}, "id": {"$ref": "#/$defs/id"}, "result": {}},
+      "required": ["jsonrpc", "id", "result"],
+      "additionalProperties": false
+    },
+    "error_response": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {"const": "2.0"},
+        "id": {"anyOf": [{"$ref": "#/$defs/id"}, {"type": "null"}]},
+        "error": {"$ref": "#/$defs/error"}
+      },
+      "required": ["jsonrpc", "id", "error"],
+      "additionalProperties": false
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": {"$ref": "#/$defs/error_code"},
+        "message": {"type": "string", "minLength": 1},
+        "data": {"$ref": "#/$defs/error_data"}
+      },
+      "required": ["code", "message"],
+      "additionalProperties": false
+    },
+    "error_code": {
+      "description": "JSON-RPC's own codes, and FX's in -32000..-32099 (protocol.md section 7).",
+      "oneOf": [
+        {
+          "const": -32700,
+          "title": "parse_error",
+          "description": "JSON-RPC: the message is not valid JSON or not I-JSON."
+        },
+        {
+          "const": -32600,
+          "title": "invalid_request",
+          "description": "JSON-RPC: not a valid request, or sent before initialize."
+        },
+        {
+          "const": -32601,
+          "title": "method_not_found",
+          "description": "JSON-RPC: the receiver has no such method."
+        },
+        {
+          "const": -32602,
+          "title": "invalid_params",
+          "description": "JSON-RPC: the params do not match the method."
+        },
+        {
+          "const": -32000,
+          "title": "node_failure",
+          "description": "The body failed the node on purpose. Not retried."
+        },
+        {
+          "const": -32001,
+          "title": "node_error",
+          "description": "The body raised something unexpected. Retried only under retry: engine."
+        },
+        {
+          "const": -32002,
+          "title": "cancelled",
+          "description": "The request was cancelled. Not retried."
+        },
+        {
+          "const": -32003,
+          "title": "protocol_mismatch",
+          "description": "initialize: the two sides speak different protocols."
+        },
+        {
+          "const": -32004,
+          "title": "load_failed",
+          "description": "A module, attribute or builder function could not be loaded."
+        },
+        {
+          "const": -32005,
+          "title": "build_failed",
+          "description": "A builder raised, or returned something other than a workflow."
+        },
+        {
+          "const": -32010,
+          "title": "capability_undeclared",
+          "description": "The type does not declare this capability in calls."
+        },
+        {
+          "const": -32011,
+          "title": "over_bound",
+          "description": "The run already made as many calls as the type declared."
+        },
+        {
+          "const": -32012,
+          "title": "no_route",
+          "description": "No route, or no adapter, serves the capability for this instance."
+        },
+        {
+          "const": -32013,
+          "title": "not_live",
+          "description": "The call is not cached and the run is not live."
+        },
+        {
+          "const": -32014,
+          "title": "ceiling_exceeded",
+          "description": "The call's hold does not fit the run ceiling or a step budget."
+        },
+        {
+          "const": -32015,
+          "title": "capability_refused",
+          "description": "The adapter refused before sending anything; settled at $0."
+        },
+        {
+          "const": -32016,
+          "title": "call_failed",
+          "description": "Every attempt failed, each one settled, or a collected job ended without a result."
+        },
+        {
+          "const": -32017,
+          "title": "job_unsettled",
+          "description": "An earlier submission of this call has an unknown outcome."
+        },
+        {
+          "const": -32020,
+          "title": "agent_unfinished",
+          "description": "The agent did not answer within max_steps turns."
+        },
+        {
+          "const": -32021,
+          "title": "undeclared_resource",
+          "description": "prompt.render named a path the type did not declare."
+        },
+        {
+          "const": -32022,
+          "title": "expression_error",
+          "description": "A template could not be rendered."
+        },
+        {
+          "const": -32023,
+          "title": "outside_work_dir",
+          "description": "A work_path names nothing inside the run's work dir."
+        },
+        {
+          "const": -32024,
+          "title": "unknown_file",
+          "description": "A file digest the engine did not hand this run."
+        },
+        {
+          "const": -32099,
+          "title": "internal",
+          "description": "A fault in the engine or the host itself. Not retried."
+        }
+      ]
+    },
+    "error_data": {
+      "type": "object",
+      "properties": {
+        "facts": {
+          "$ref": "#/$defs/node_facts",
+          "description": "node_failure, node_error: node facts the body kept locally."
+        },
+        "marks": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/mark"},
+          "description": "node_failure, node_error: marks the body kept locally."
+        },
+        "exception": {
+          "type": "string",
+          "description": "node_error: the exception's type in the host language."
+        },
+        "traceback": {"type": "string", "description": "node_error: where it was raised, as text."},
+        "capability": {"type": "string"},
+        "route": {"type": "string", "description": "A route id, model@provider."},
+        "key": {"$ref": "#/$defs/digest"},
+        "needed_usd": {"type": "number", "minimum": 0},
+        "remaining_usd": {"type": "number"},
+        "engine_protocol": {"type": "string"},
+        "host_protocol": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "kind": {
+      "description": "A file kind (identity.md section 4) or a port's kind: a family, or a media type.",
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:/[a-z0-9.+-]+)?$"
+    },
+    "facts": {
+      "description": "File facts, facts(f): computed by the engine from a file's bytes, never by a host (identity.md section 4).",
+      "type": "object",
+      "properties": {
+        "bytes": {"type": "integer", "minimum": 0},
+        "kind": {"$ref": "#/$defs/kind"},
+        "width": {"type": "integer", "minimum": 0},
+        "height": {"type": "integer", "minimum": 0},
+        "has_alpha": {"type": "boolean"},
+        "opaque": {"type": "boolean"}
+      },
+      "required": ["bytes", "kind"]
+    },
+    "file_ref": {
+      "type": "object",
+      "properties": {
+        "digest": {"$ref": "#/$defs/digest"},
+        "kind": {"$ref": "#/$defs/kind"},
+        "size": {"type": "integer", "minimum": 0},
+        "name": {"type": "string"},
+        "key": {"type": ["string", "null"]},
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The file in the store. Read-only for the host."
+        },
+        "facts": {"$ref": "#/$defs/facts"}
+      },
+      "required": ["digest", "kind", "size", "name", "path", "facts"],
+      "additionalProperties": false
+    },
+    "file_value": {
+      "description": "A file inside a JSON value: its plain projection (identity.md section 3).",
+      "type": "object",
+      "properties": {"file": {"$ref": "#/$defs/digest"}},
+      "required": ["file"],
+      "additionalProperties": false
+    },
+    "data_marker": {
+      "description": "A reserved marker other than a file value (identity.md section 3).",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {"missing": {"const": true}},
+          "required": ["missing"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {"failed": {"type": "string"}},
+          "required": ["failed"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {"collection": {"type": "array"}},
+          "required": ["collection"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {"pending": {}},
+          "required": ["pending"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "plain_value": {
+      "description": "A JSON value a host sends that holds no reserved marker object at any depth, a file value included (identity.md section 3, protocol.md section 3.2).",
+      "not": {"anyOf": [{"$ref": "#/$defs/file_value"}, {"$ref": "#/$defs/data_marker"}]},
+      "items": {"$ref": "#/$defs/plain_value"},
+      "additionalProperties": {"$ref": "#/$defs/plain_value"}
+    },
+    "file_json_value": {
+      "description": "A JSON value a host sends where files are file values: it holds no reserved marker object at any depth other than a file value (protocol.md section 3.2).",
+      "not": {"$ref": "#/$defs/data_marker"},
+      "items": {"$ref": "#/$defs/file_json_value"},
+      "additionalProperties": {"$ref": "#/$defs/file_json_value"}
+    },
+    "node_facts": {
+      "description": "Node facts a body reports, by name. cost_usd is the engine's and is refused (protocol.md section 5.3).",
+      "type": "object",
+      "propertyNames": {"not": {"const": "cost_usd"}},
+      "additionalProperties": {"$ref": "#/$defs/plain_value"}
+    },
+    "staged_input": {
+      "oneOf": [
+        {"$ref": "#/$defs/file_ref"},
+        {
+          "type": "object",
+          "properties": {"list": {"type": "array", "items": {"$ref": "#/$defs/file_ref"}}},
+          "required": ["list"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "collection": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "prefixItems": [{"type": "string"}, {"$ref": "#/$defs/file_ref"}],
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
+          },
+          "required": ["collection"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "output_value": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "work_path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Relative to work_dir, POSIX."
+            },
+            "kind": {"$ref": "#/$defs/kind"}
+          },
+          "required": ["work_path"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {"file": {"$ref": "#/$defs/file_ref"}},
+          "required": ["file"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "port_output": {
+      "oneOf": [
+        {"$ref": "#/$defs/output_value"},
+        {
+          "type": "object",
+          "properties": {"list": {"type": "array", "items": {"$ref": "#/$defs/output_value"}}},
+          "required": ["list"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "collection": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "prefixItems": [{"type": "string"}, {"$ref": "#/$defs/output_value"}],
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
+          },
+          "required": ["collection"],
+          "additionalProperties": false
+        },
+        {"type": "null"}
+      ]
+    },
+    "mark": {
+      "description": "One annotation mark, as in fx-annotations-v1. Coordinates are fractions of the image, 0 to 1.",
+      "type": "object",
+      "properties": {
+        "shape": {"enum": ["point", "points", "box"]},
+        "at": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
+        "points": {
+          "type": "array",
+          "items": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
+          "minItems": 2
+        },
+        "box": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
+        "closed": {"type": "boolean"},
+        "label": {"type": "string"},
+        "color": {"type": "string"},
+        "tag": {"type": "string"}
+      },
+      "additionalProperties": {"$ref": "#/$defs/plain_value"},
+      "allOf": [
+        {
+          "if": {"properties": {"shape": {"const": "point"}}, "required": ["shape"]},
+          "then": {"required": ["at"]}
+        },
+        {
+          "if": {"properties": {"shape": {"const": "points"}}, "required": ["shape"]},
+          "then": {"required": ["points"]}
+        },
+        {
+          "if": {"properties": {"shape": {"const": "box"}}, "required": ["shape"]},
+          "then": {"required": ["box"]}
+        }
+      ]
+    },
+    "instance": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "identity.md section 11, e.g. draw#1."
+        },
+        "path": {"type": "string", "minLength": 1, "description": "The step path with repeat keys."},
+        "step": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The declared step path, without keys."
+        },
+        "key": {"type": ["string", "null"], "description": "The repeat key, or null."},
+        "take": {
+          "type": "array",
+          "items": {"type": "integer", "minimum": 1},
+          "minItems": 1,
+          "description": "One take number per regenerating level, outermost first (identity.md section 8). An SDK's single take is the last."
+        }
+      },
+      "required": ["id", "path", "step", "key", "take"],
+      "additionalProperties": false
+    },
+    "port": {
+      "description": "kind, kind[] (a list), kind{} (a keyed collection); a trailing ? is optional.",
+      "type": "string",
+      "pattern": "^(?:image|audio|video|model|text|json|annotations|file)(?:/[a-z0-9.+-]+)?(?:\\[\\]|\\{\\})?\\??$"
+    },
+    "param_schema": {
+      "description": "A JSON Schema (draft 2020-12) for one param, with FX's extension keywords x-fx-template and x-fx-optional, and the standard default.",
+      "type": "object",
+      "properties": {
+        "x-fx-template": {
+          "type": "boolean",
+          "description": "A string the engine renders as a template or prompt file."
+        },
+        "x-fx-optional": {"type": "boolean", "description": "May be left out with no default."},
+        "default": {"description": "Standard JSON Schema: filled in when the step leaves the param out."}
+      }
+    },
+    "type_spec": {
+      "type": "object",
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$"},
+        "description": {"type": "string"},
+        "inputs": {
+          "type": "object",
+          "propertyNames": {"pattern": "^[a-z][a-z0-9_]*$"},
+          "additionalProperties": {"$ref": "#/$defs/port"}
+        },
+        "params": {
+          "type": "object",
+          "propertyNames": {"pattern": "^[a-z][a-z0-9_]*$"},
+          "additionalProperties": {"$ref": "#/$defs/param_schema"}
+        },
+        "outputs": {
+          "type": "object",
+          "propertyNames": {"pattern": "^[a-z][a-z0-9_]*$"},
+          "additionalProperties": {"$ref": "#/$defs/port"}
+        },
+        "judge": {"type": "boolean"},
+        "calls": {
+          "type": "object",
+          "additionalProperties": {
+            "oneOf": [
+              {"type": "integer", "minimum": 1},
+              {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}
+            ]
+          }
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(?:[^/\\\\.][^/\\\\]*|\\.[^/\\\\.][^/\\\\]*|\\.\\.[^/\\\\]+)(?:/(?:[^/\\\\.][^/\\\\]*|\\.[^/\\\\.][^/\\\\]*|\\.\\.[^/\\\\]+))*$",
+            "description": "POSIX, relative to the project root, without ./ and without .. segments."
+          },
+          "uniqueItems": true
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]*(?:\\s*[<>=!~].*)?$",
+            "description": "A tool name, optionally followed by a version bound: blender>=4.2."
+          },
+          "uniqueItems": true
+        },
+        "view": {"type": ["string", "null"]},
+        "version": {"type": ["integer", "null"], "minimum": 0},
+        "retry": {"enum": ["service", "engine"]}
+      },
+      "required": [
+        "name",
+        "inputs",
+        "params",
+        "outputs",
+        "judge",
+        "calls",
+        "resources",
+        "tools",
+        "version",
+        "retry"
+      ],
+      "additionalProperties": false
+    },
+    "initialize_params": {
+      "type": "object",
+      "properties": {
+        "protocol": {"const": "fx-node-protocol-v1"},
+        "engine": {
+          "type": "object",
+          "properties": {"name": {"type": "string"}, "version": {"type": "string"}},
+          "required": ["name", "version"],
+          "additionalProperties": false
+        },
+        "project_root": {"type": "string", "minLength": 1},
+        "sources": {
+          "type": "array",
+          "items": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+          "description": "The project's declared source packages."
+        }
+      },
+      "required": ["protocol", "engine", "project_root", "sources"],
+      "additionalProperties": false
+    },
+    "initialize_result": {
+      "type": "object",
+      "properties": {
+        "protocol": {"type": "string", "minLength": 1},
+        "host": {
+          "type": "object",
+          "properties": {
+            "language": {"type": "string", "minLength": 1},
+            "version": {"type": "string"},
+            "sdk_version": {"type": "string"}
+          },
+          "required": ["language", "version", "sdk_version"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["protocol", "host"],
+      "additionalProperties": false
+    },
+    "shutdown_result": {"type": "null"},
+    "describe_params": {
+      "type": "object",
+      "properties": {
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "pattern": "^(?:[^/\\\\.][^/\\\\]*|\\.[^/\\\\.][^/\\\\]*|\\.\\.[^/\\\\]+)(?:/(?:[^/\\\\.][^/\\\\]*|\\.[^/\\\\.][^/\\\\]*|\\.\\.[^/\\\\]+))*$",
+                "description": "POSIX, relative to the project root, without ./ and without .. segments."
+              },
+              "attribute": {"type": "string", "minLength": 1}
+            },
+            "required": ["path"],
+            "additionalProperties": false
+          }
+        },
+        "builtins": {"type": "boolean"}
+      },
+      "required": ["targets", "builtins"],
+      "additionalProperties": false
+    },
+    "closure_entry": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "pattern": "^(?:[^/\\\\.][^/\\\\]*|\\.[^/\\\\.][^/\\\\]*|\\.\\.[^/\\\\]+)(?:/(?:[^/\\\\.][^/\\\\]*|\\.[^/\\\\.][^/\\\\]*|\\.\\.[^/\\\\]+))*$",
+          "description": "Relative to the project root or a source package's parent."
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Where the engine reads the file. Never recorded."
+        }
+      },
+      "required": ["label", "path"],
+      "additionalProperties": false
+    },
+    "describe_result": {
+      "type": "object",
+      "properties": {
+        "modules": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "pattern": "^(?:[^/\\\\.][^/\\\\]*|\\.[^/\\\\.][^/\\\\]*|\\.\\.[^/\\\\]+)(?:/(?:[^/\\\\.][^/\\\\]*|\\.[^/\\\\.][^/\\\\]*|\\.\\.[^/\\\\]+))*$",
+                    "description": "POSIX, relative to the project root, without ./ and without .. segments."
+                  },
+                  "types": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "attribute": {"type": "string", "minLength": 1},
+                        "spec": {"$ref": "#/$defs/type_spec"}
+                      },
+                      "required": ["attribute", "spec"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "closure": {
+                    "type": "array",
+                    "items": {"$ref": "#/$defs/closure_entry"},
+                    "minItems": 1
+                  }
+                },
+                "required": ["path", "types", "closure"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "pattern": "^(?:[^/\\\\.][^/\\\\]*|\\.[^/\\\\.][^/\\\\]*|\\.\\.[^/\\\\]+)(?:/(?:[^/\\\\.][^/\\\\]*|\\.[^/\\\\.][^/\\\\]*|\\.\\.[^/\\\\]+))*$",
+                    "description": "POSIX, relative to the project root, without ./ and without .. segments."
+                  },
+                  "attribute": {"type": "string"},
+                  "error": {"type": "string", "minLength": 1}
+                },
+                "required": ["path", "error"],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "builtins": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "uses": {
+                "type": "string",
+                "pattern": "^fx/[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*@[0-9]+$"
+              },
+              "spec": {
+                "allOf": [
+                  {"$ref": "#/$defs/type_spec"},
+                  {"properties": {"version": {"type": "integer"}}}
+                ]
+              }
+            },
+            "required": ["uses", "spec"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["modules", "builtins"],
+      "additionalProperties": false
+    },
+    "build_params": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^(?:[^/\\\\.][^/\\\\]*|\\.[^/\\\\.][^/\\\\]*|\\.\\.[^/\\\\]+)(?:/(?:[^/\\\\.][^/\\\\]*|\\.[^/\\\\.][^/\\\\]*|\\.\\.[^/\\\\]+))*$",
+          "description": "POSIX, relative to the project root, without ./ and without .. segments."
+        },
+        "function": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+        "arguments": {"type": "object", "additionalProperties": {"type": "string"}},
+        "cwd": {"type": "string", "minLength": 1}
+      },
+      "required": ["path", "function", "arguments", "cwd"],
+      "additionalProperties": false
+    },
+    "build_result": {
+      "type": "object",
+      "properties": {
+        "document": {
+          "description": "An fx-workflow-v1 document; the engine validates it against that schema.",
+          "type": "object",
+          "properties": {"fx": {"const": "workflow/v1"}},
+          "required": ["fx"]
+        },
+        "takes_anchor": {
+          "type": "string",
+          "pattern": "^(?:[^/\\\\.][^/\\\\]*|\\.[^/\\\\.][^/\\\\]*|\\.\\.[^/\\\\]+)(?:/(?:[^/\\\\.][^/\\\\]*|\\.[^/\\\\.][^/\\\\]*|\\.\\.[^/\\\\]+))*$",
+          "description": "POSIX, relative to the project root, without ./ and without .. segments."
+        }
+      },
+      "required": ["document", "takes_anchor"],
+      "additionalProperties": false
+    },
+    "run_params": {
+      "type": "object",
+      "properties": {
+        "run_id": {"type": "string", "minLength": 1},
+        "instance": {"$ref": "#/$defs/instance"},
+        "type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The type identity (identity.md section 6)."
+        },
+        "body": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "pattern": "^(?:[^/\\\\.][^/\\\\]*|\\.[^/\\\\.][^/\\\\]*|\\.\\.[^/\\\\]+)(?:/(?:[^/\\\\.][^/\\\\]*|\\.[^/\\\\.][^/\\\\]*|\\.\\.[^/\\\\]+))*$",
+                  "description": "POSIX, relative to the project root, without ./ and without .. segments."
+                },
+                "attribute": {"type": "string", "minLength": 1}
+              },
+              "required": ["path", "attribute"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "builtin": {
+                  "type": "string",
+                  "pattern": "^fx/[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*@[0-9]+$"
+                }
+              },
+              "required": ["builtin"],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "params": {"type": "object", "propertyNames": {"pattern": "^[a-z][a-z0-9_]*$"}},
+        "param_files": {
+          "description": "Files inside params, by RFC 6901 pointer into params; the value there is null.",
+          "type": "object",
+          "propertyNames": {"pattern": "^(/([^~/]|~[01])*)+$"},
+          "additionalProperties": {"$ref": "#/$defs/file_ref"}
+        },
+        "inputs": {
+          "type": "object",
+          "propertyNames": {"pattern": "^[a-z][a-z0-9_]*$"},
+          "additionalProperties": {"$ref": "#/$defs/staged_input"}
+        },
+        "work_dir": {"type": "string", "minLength": 1},
+        "resources": {"type": "object", "additionalProperties": {"type": "string", "minLength": 1}},
+        "tools": {
+          "description": "Each declared tool by its name without the version bound: its executable, or null when not found.",
+          "type": "object",
+          "propertyNames": {"pattern": "^[a-z0-9][a-z0-9_-]*$"},
+          "additionalProperties": {"type": ["string", "null"]}
+        },
+        "calls": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}},
+        "timeout_s": {"type": ["number", "null"], "exclusiveMinimum": 0}
+      },
+      "required": [
+        "run_id",
+        "instance",
+        "type",
+        "body",
+        "params",
+        "param_files",
+        "inputs",
+        "work_dir",
+        "resources",
+        "tools",
+        "calls",
+        "timeout_s"
+      ],
+      "additionalProperties": false
+    },
+    "run_result": {
+      "type": "object",
+      "properties": {
+        "outputs": {
+          "type": "object",
+          "propertyNames": {"pattern": "^[a-z][a-z0-9_]*$"},
+          "additionalProperties": {"$ref": "#/$defs/port_output"}
+        },
+        "facts": {"$ref": "#/$defs/node_facts"},
+        "marks": {"type": "array", "items": {"$ref": "#/$defs/mark"}}
+      },
+      "required": ["outputs"],
+      "additionalProperties": false
+    },
+    "tool_invoke_params": {
+      "type": "object",
+      "properties": {
+        "run_id": {"type": "string", "minLength": 1},
+        "agent_id": {"type": "string", "minLength": 1},
+        "call_id": {"type": ["string", "null"]},
+        "name": {"type": "string", "minLength": 1},
+        "arguments": {"type": "object"}
+      },
+      "required": ["run_id", "agent_id", "call_id", "name", "arguments"],
+      "additionalProperties": false
+    },
+    "tool_invoke_result": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "content": {},
+            "images": {"type": "array", "items": {"$ref": "#/$defs/file_value"}}
+          },
+          "required": ["content"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {"error": {"type": "string", "minLength": 1}},
+          "required": ["error"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "agent_check_params": {
+      "type": "object",
+      "properties": {
+        "run_id": {"type": "string", "minLength": 1},
+        "agent_id": {"type": "string", "minLength": 1},
+        "value": {}
+      },
+      "required": ["run_id", "agent_id", "value"],
+      "additionalProperties": false
+    },
+    "agent_check_result": {
+      "type": "object",
+      "properties": {"refusal": {"type": ["string", "null"]}},
+      "required": ["refusal"],
+      "additionalProperties": false
+    },
+    "cancel_params": {
+      "type": "object",
+      "properties": {"id": {"$ref": "#/$defs/id"}},
+      "required": ["id"],
+      "additionalProperties": false
+    },
+    "capability_params": {
+      "type": "object",
+      "properties": {
+        "run_id": {"type": "string", "minLength": 1},
+        "capability": {"type": "string", "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$"},
+        "request": {
+          "type": "object",
+          "$ref": "#/$defs/file_json_value",
+          "description": "The canonical request; files as file values."
+        }
+      },
+      "required": ["run_id", "capability", "request"],
+      "additionalProperties": false
+    },
+    "capability_result": {
+      "type": "object",
+      "properties": {
+        "key": {"$ref": "#/$defs/digest"},
+        "cached": {"type": "boolean"},
+        "cost_usd": {"type": ["number", "null"], "minimum": 0},
+        "files": {"type": "object", "additionalProperties": {"$ref": "#/$defs/file_ref"}},
+        "data": {}
+      },
+      "required": ["key", "cached", "cost_usd", "files", "data"],
+      "additionalProperties": false
+    },
+    "agent_tool": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$",
+          "not": {"const": "submit"}
+        },
+        "description": {"type": "string"},
+        "parameters": {"type": "object", "$ref": "#/$defs/plain_value"}
+      },
+      "required": ["name", "description", "parameters"],
+      "additionalProperties": false
+    },
+    "agent_run_params": {
+      "type": "object",
+      "properties": {
+        "run_id": {"type": "string", "minLength": 1},
+        "agent_id": {"type": "string", "minLength": 1},
+        "system": {"type": "string"},
+        "instructions": {"type": "string"},
+        "images": {"type": "array", "items": {"$ref": "#/$defs/file_value"}},
+        "tools": {"type": "array", "items": {"$ref": "#/$defs/agent_tool"}},
+        "max_steps": {"type": "integer", "minimum": 1},
+        "submit": {"type": ["object", "null"], "$ref": "#/$defs/plain_value"},
+        "check": {"type": "boolean"},
+        "recent_images": {"type": ["integer", "null"], "minimum": 0},
+        "max_tokens": {"type": ["integer", "null"], "minimum": 1}
+      },
+      "required": [
+        "run_id",
+        "agent_id",
+        "system",
+        "instructions",
+        "tools",
+        "max_steps",
+        "submit",
+        "check"
+      ],
+      "additionalProperties": false
+    },
+    "agent_message": {
+      "type": "object",
+      "properties": {
+        "role": {"enum": ["user", "assistant", "tool"]},
+        "content": {"type": "string"},
+        "images": {"type": "array", "items": {"$ref": "#/$defs/file_value"}},
+        "tool_calls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {"type": ["string", "null"]},
+              "name": {"type": "string"},
+              "arguments": {"type": "object"}
+            },
+            "required": ["name", "arguments"],
+            "additionalProperties": false
+          }
+        },
+        "name": {"type": "string"},
+        "tool_call_id": {"type": "string"}
+      },
+      "required": ["role", "content"],
+      "additionalProperties": false
+    },
+    "agent_run_result": {
+      "allOf": [
+        {
+          "type": "object",
+          "properties": {
+            "text": {"type": "string"},
+            "submitted": {},
+            "transcript": {"type": "array", "items": {"$ref": "#/$defs/agent_message"}},
+            "turns": {"type": "integer", "minimum": 0},
+            "cost_usd": {"type": "number", "minimum": 0}
+          },
+          "required": ["transcript", "turns", "cost_usd"],
+          "additionalProperties": false
+        },
+        {"oneOf": [{"required": ["text"]}, {"required": ["submitted"]}]}
+      ]
+    },
+    "fact_params": {
+      "type": "object",
+      "properties": {
+        "run_id": {"type": "string", "minLength": 1},
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "not": {"const": "cost_usd"},
+          "description": "A node fact's name. cost_usd is the engine's."
+        },
+        "value": {"$ref": "#/$defs/plain_value"}
+      },
+      "required": ["run_id", "name", "value"],
+      "additionalProperties": false
+    },
+    "fact_result": {"type": "object", "properties": {}, "additionalProperties": false},
+    "annotate_params": {
+      "type": "object",
+      "properties": {"run_id": {"type": "string", "minLength": 1}, "mark": {"$ref": "#/$defs/mark"}},
+      "required": ["run_id", "mark"],
+      "additionalProperties": false
+    },
+    "annotate_result": {"type": "object", "properties": {}, "additionalProperties": false},
+    "progress_params": {
+      "type": "object",
+      "properties": {
+        "run_id": {"type": "string", "minLength": 1},
+        "text": {"type": "string"},
+        "fraction": {"type": ["number", "null"], "minimum": 0, "maximum": 1}
+      },
+      "required": ["run_id", "text"],
+      "additionalProperties": false
+    },
+    "prompt_render_params": {
+      "type": "object",
+      "properties": {
+        "run_id": {"type": "string", "minLength": 1},
+        "path": {
+          "type": "string",
+          "pattern": "^(?:[^/\\\\.][^/\\\\]*|\\.[^/\\\\.][^/\\\\]*|\\.\\.[^/\\\\]+)(?:/(?:[^/\\\\.][^/\\\\]*|\\.[^/\\\\.][^/\\\\]*|\\.\\.[^/\\\\]+))*$",
+          "description": "POSIX, relative to the project root, without ./ and without .. segments."
+        },
+        "variables": {"type": "object", "$ref": "#/$defs/file_json_value"}
+      },
+      "required": ["run_id", "path", "variables"],
+      "additionalProperties": false
+    },
+    "prompt_render_result": {
+      "type": "object",
+      "properties": {"text": {"type": "string"}},
+      "required": ["text"],
+      "additionalProperties": false
+    },
+    "file_put_params": {
+      "type": "object",
+      "properties": {
+        "run_id": {"type": "string", "minLength": 1},
+        "work_path": {"type": "string", "minLength": 1},
+        "base64": {"type": "string", "contentEncoding": "base64"},
+        "json": {
+          "$ref": "#/$defs/plain_value",
+          "description": "Written as identity.md section 5, Writing JSON."
+        },
+        "kind": {"$ref": "#/$defs/kind"},
+        "name": {"type": "string", "minLength": 1}
+      },
+      "required": ["run_id"],
+      "additionalProperties": false,
+      "oneOf": [{"required": ["work_path"]}, {"required": ["base64"]}, {"required": ["json"]}]
+    },
+    "file_put_result": {"$ref": "#/$defs/file_ref"}
+  }
+}

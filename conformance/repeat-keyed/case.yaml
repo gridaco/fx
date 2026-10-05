@@ -1,0 +1,21 @@
+steps:
+- argv:
+  - expand
+  - case
+  - --routes
+  - routes.yaml
+  - --inputs
+  - inputs.yaml
+  save: expand.json
+  json: true
+  status: 0
+- argv:
+  - identity
+  - case
+  - --routes
+  - routes.yaml
+  - --inputs
+  - inputs.yaml
+  save: identity.json
+  json: true
+  status: 0

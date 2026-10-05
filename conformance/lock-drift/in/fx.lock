@@ -1,0 +1,4 @@
+# fx.lock: the source behind each versioned node type; commit it
+fx: lock/v1
+nodes:
+  "nodes/n.py#pinned@2": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"

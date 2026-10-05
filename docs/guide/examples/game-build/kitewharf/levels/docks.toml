@@ -1,0 +1,22 @@
+# The game's own level format: read by the game's code, never rewritten for FX.
+name = "The Docks"
+light = "low winter sun from the left, long blue shadows"
+
+[ground]
+material = "wet harbour planks over packed sand"
+span_m = 24
+
+[[pickups]]
+id = "lantern"
+look = "a small brass storm lantern"
+
+[[pickups]]
+id = "rope"
+look = "a coil of tarred rope"
+
+[sky]
+canvas = { width = 640, height = 360 }
+layers = [
+  { id = "far_cliffs", file = "../art/far_cliffs.png", order = 0, parallax = 0.2 },
+  { id = "near_masts", file = "../art/near_masts.png", order = 1, parallax = 0.7 },
+]

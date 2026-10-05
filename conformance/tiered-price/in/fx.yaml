@@ -1,0 +1,3 @@
+fx: project/v1
+routes:
+  video.generate: clip-a@acme

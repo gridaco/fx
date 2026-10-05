@@ -1,0 +1,34 @@
+# A project node type without a version is named by its source: `source:` and the digest of
+# its module, every project module it imports (nodes/helper.py) and its declared resources
+# (prompts/r.md). A type with a version is named `nodes/n.py#pinned@2`; its source matters only
+# to fx.lock. Editing the resource, then the imported helper, moves a#1 each time and never b#1:
+# the workflow `pinned` holds only b, and every step saving identity-pinned.json must print the
+# same bytes.
+steps:
+- argv: [expand, case, --routes, routes.yaml]
+  save: expand.json
+  json: true
+- argv: [identity, case, --routes, routes.yaml]
+  save: identity.json
+  json: true
+- argv: [identity, pinned, --routes, routes.yaml]
+  save: identity-pinned.json
+  json: true
+- files:
+    prompts/r.md: "Say it twice: ${{ text }}\n"
+  argv: [identity, case, --routes, routes.yaml]
+  save: identity-resource-edited.json
+  json: true
+- files:
+    nodes/helper.py: |
+      """A project module the node types import, so it is part of their source closure."""
+
+
+      def frame(text: str) -> str:
+          return f"<{text.strip()}>"
+  argv: [identity, case, --routes, routes.yaml]
+  save: identity-import-edited.json
+  json: true
+- argv: [identity, pinned, --routes, routes.yaml]
+  save: identity-pinned.json
+  json: true

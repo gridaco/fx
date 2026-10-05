@@ -1,0 +1,1 @@
+Encoding: one leading byte-order mark is allowed and ignored; a second is refused.

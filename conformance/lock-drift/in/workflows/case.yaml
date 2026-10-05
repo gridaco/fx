@@ -1,0 +1,10 @@
+fx: workflow/v1
+id: case
+title: Local node identity
+steps:
+  a:
+    uses: ./nodes/n.py#echo
+    with: { text: hello }
+  b:
+    uses: ./nodes/n.py#pinned
+    with: { text: hello }

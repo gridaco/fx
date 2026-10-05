@@ -1,0 +1,4 @@
+canvas: { width: 640, height: 360 }
+layers:
+  - { id: far_cliffs, file: ../art/far_cliffs.png, order: 0, parallax: 0.2 }
+  - { id: near_masts, file: ../art/near_masts.png, order: 1, parallax: 0.7, repeat: repaint }

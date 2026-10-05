@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-project-v1",
+  "title": "FX project file, fx.yaml (fx: project/v1)",
+  "description": "`fx.yaml` marks a project's root: where runs and the cache live, the default budget and routes, the route tables to load, and where node sources are.",
+  "type": "object",
+  "required": [
+    "fx"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "fx": {
+      "const": "project/v1"
+    },
+    "runs": {
+      "description": "The folder run folders go in, relative to the project root.",
+      "type": "string",
+      "minLength": 1,
+      "default": "runs"
+    },
+    "cache": {
+      "description": "The store (store.md), relative to the project root.",
+      "type": "string",
+      "minLength": 1,
+      "default": ".fx/cache"
+    },
+    "budget": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/budget"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "routes": {
+      "description": "The default route for each capability, used where a step names none. The object form also limits how many calls of the route run at once.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$"
+      },
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string",
+            "pattern": "^.+@[a-z0-9._-]+$"
+          },
+          {
+            "$ref": "#/$defs/route_default"
+          }
+        ]
+      }
+    },
+    "route_tables": {
+      "description": "Route table files (`fx: routes/v1`) to load, relative to the project root. The catalog is built from these tables, in this order (identity.md §7): the built-in default table, left out when any `--routes` file is given; then these tables, in their listed order; then each `--routes <file>`, in the order given. A later table's entry for the same capability and route replaces an earlier one, contract included. Two entries for the same capability and route within one table are refused.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true,
+      "default": []
+    },
+    "view_origins": {
+      "description": "Views are planned, not implemented: the origins a view may load from. Recorded in plan.json and otherwise ignored.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "sources": {
+      "description": "Python packages, beyond the project folder, whose modules count as the project's source: in the identity of node types without a version, and in what fx.lock guards.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "default": []
+    },
+    "nodes": {
+      "description": "The folder, inside the project, that holds its node modules: what `grida-fx lock` pins.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$",
+      "not": {
+        "pattern": "(?:^|/)\\.\\.(?:/|$)"
+      },
+      "default": "nodes"
+    }
+  },
+  "$defs": {
+    "budget": {
+      "type": "object",
+      "required": [
+        "max_usd"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "max_usd": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "route_default": {
+      "type": "object",
+      "required": [
+        "route"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "route": {
+          "type": "string",
+          "pattern": "^.+@[a-z0-9._-]+$"
+        },
+        "concurrency": {
+          "description": "Overrides the route table's concurrency for this route.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 1024
+        }
+      }
+    }
+  }
+}

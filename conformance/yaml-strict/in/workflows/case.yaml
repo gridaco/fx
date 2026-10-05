@@ -1,0 +1,12 @@
+fx: workflow/v1
+id: case
+title: Strict YAML
+inputs:
+  on: { type: string }
+  answer: { type: string }
+  code: { type: string }
+  when: { type: string }
+steps:
+  draw:
+    uses: fx/image.generate@1
+    with: { prompt: "on=${{ inputs.on }} answer=${{ inputs.answer }} code=${{ inputs.code }} when=${{ inputs.when }}" }

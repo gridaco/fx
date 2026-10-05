@@ -1,0 +1,69 @@
+# FX reads the strict YAML subset of spec/yaml.md, in every document it reads. A key named
+# `on` is the string "on"; quoted forms are strings; y, n and 0bad are strings. Each refusal is
+# exit 2 (unreadable input) and names the file; an ambiguous plain scalar (a YAML 1.1 boolean in
+# any letter case, a leading zero, a date, a sexagesimal or ratio like 16:9, .inf) is refused
+# with "quote it". Workflows are named by path so that the refused files under inputs/ and bad/
+# never take part in finding a workflow by id.
+steps:
+- argv: [expand, workflows/case.yaml, --routes, routes.yaml, --inputs, inputs/quoted.yaml]
+  save: expand-quoted.json
+  json: true
+- argv: [expand, workflows/case.yaml, --routes, routes.yaml, --inputs, inputs/plain.yaml]
+  save: expand-plain.json
+  json: true
+- argv: [expand, workflows/case.yaml, --routes, routes.yaml, --inputs, inputs/yes.yaml]
+  status: 2
+  mentions: ["yes.yaml", "quote it"]
+- argv: [expand, workflows/case.yaml, --routes, routes.yaml, --inputs, inputs/off.yaml]
+  status: 2
+  mentions: ["off.yaml", "quote it"]
+- argv: [expand, workflows/case.yaml, --routes, routes.yaml, --inputs, inputs/mixed-case.yaml]
+  status: 2
+  mentions: ["mixed-case.yaml", "quote it"]
+- argv: [expand, workflows/case.yaml, --routes, routes.yaml, --inputs, inputs/octal.yaml]
+  status: 2
+  mentions: ["octal.yaml", "quote it"]
+- argv: [expand, workflows/case.yaml, --routes, routes.yaml, --inputs, inputs/leading-zero.yaml]
+  status: 2
+  mentions: ["leading-zero.yaml", "quote it"]
+- argv: [expand, workflows/case.yaml, --routes, routes.yaml, --inputs, inputs/date.yaml]
+  status: 2
+  mentions: ["date.yaml", "quote it"]
+- argv: [expand, workflows/case.yaml, --routes, routes.yaml, --inputs, inputs/sexagesimal.yaml]
+  status: 2
+  mentions: ["sexagesimal.yaml", "quote it"]
+- argv: [expand, workflows/case.yaml, --routes, routes.yaml, --inputs, inputs/ratio.yaml]
+  status: 2
+  mentions: ["ratio.yaml", "quote it"]
+- argv: [expand, workflows/case.yaml, --routes, routes.yaml, --inputs, inputs/infinity.yaml]
+  status: 2
+  mentions: ["infinity.yaml", "quote it"]
+- argv: [expand, workflows/case.yaml, --routes, routes.yaml, --inputs, inputs/duplicate.yaml]
+  status: 2
+  mentions: ["duplicate.yaml"]
+- argv: [expand, workflows/case.yaml, --routes, routes.yaml, --inputs, inputs/anchor.yaml]
+  status: 2
+  mentions: ["anchor.yaml"]
+- argv: [expand, workflows/case.yaml, --routes, routes.yaml, --inputs, inputs/tag.yaml]
+  status: 2
+  mentions: ["tag.yaml"]
+- argv: [expand, bad/duplicate-step.yaml, --routes, routes.yaml]
+  status: 2
+  mentions: ["duplicate-step.yaml"]
+- argv: [expand, bad/yes-value.yaml, --routes, routes.yaml]
+  status: 2
+  mentions: ["yes-value.yaml", "quote it"]
+- argv: [expand, workflows/case.yaml, --routes, bad/routes-yes.yaml, --inputs, inputs/quoted.yaml]
+  status: 2
+  mentions: ["routes-yes.yaml", "quote it"]
+- files:
+    workflows/case.takes.yaml: "draw: { take: yes }\n"
+  argv: [expand, workflows/case.yaml, --routes, routes.yaml, --inputs, inputs/quoted.yaml]
+  status: 2
+  mentions: ["case.takes.yaml", "quote it"]
+- files:
+    workflows/case.takes.yaml: ""
+    fx.yaml: "fx: project/v1\nroutes:\n  image.generate: img-a@acme\n  image.generate: img-a@acme\n"
+  argv: [expand, workflows/case.yaml, --routes, routes.yaml, --inputs, inputs/quoted.yaml]
+  status: 2
+  mentions: ["fx.yaml"]

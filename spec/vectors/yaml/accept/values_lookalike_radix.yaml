@@ -1,0 +1,7 @@
+# Not 0x, 0o or 0b followed only by digits of that base: strings.
+bad: 0bad
+ops: 0ops
+prefix_only: 0x
+not_binary: 0b12
+not_octal: 0o8
+not_hex: 0xg1

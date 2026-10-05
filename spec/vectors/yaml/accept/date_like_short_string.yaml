@@ -1,0 +1,2 @@
+# A date with a one-digit month or day and no time is not a YAML 1.1 timestamp: a string.
+a: 2026-1-5

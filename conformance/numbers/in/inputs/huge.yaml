@@ -1,0 +1,6 @@
+# This integer literal would be rounded (to 12345678901234567000) if it were read as a number, so
+# it is refused where it is read (identity.md section 1).
+n: 1
+count: 12345678901234567891
+big: 1
+flag: true

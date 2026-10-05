@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-lock-v1",
+  "title": "FX lock file, fx.lock (fx: lock/v1)",
+  "description": "The source digest behind each versioned project node type (identity.md §6). Planning refuses a type whose source no longer matches its entry. A versioned type with no entry plans normally, and `grida-fx lock --check` reports it as unlocked. Written by `grida-fx lock`; commit it.",
+  "type": "object",
+  "required": [
+    "fx",
+    "nodes"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "fx": {
+      "const": "lock/v1"
+    },
+    "nodes": {
+      "description": "`<path>#<attr>@<version>` to `digest(source)`. `<path>` is POSIX, relative to the project root, without `./`.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[^./#][^#]*#[A-Za-z_][A-Za-z0-9_]*@(?:0|[1-9][0-9]*)$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      }
+    }
+  }
+}

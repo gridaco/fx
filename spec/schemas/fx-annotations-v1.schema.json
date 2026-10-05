@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-annotations-v1",
+  "title": "FX annotations (fx-annotations-v1)",
+  "description": "Marks on an image, in coordinates from 0 to 1 with the origin at the top left. What they mean is the prompt's. A mark with no shape is a note about the whole image. Marks may carry further fields.",
+  "type": "object",
+  "required": [
+    "kind",
+    "annotations"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "kind": {
+      "const": "fx-annotations-v1"
+    },
+    "annotations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "shape": {
+            "enum": [
+              "point",
+              "points",
+              "box"
+            ]
+          },
+          "at": {
+            "description": "`point`: `[x, y]`.",
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "points": {
+            "description": "`points`: `[[x, y], ...]`.",
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "minItems": 2
+          },
+          "closed": {
+            "description": "`points`: the last point joins the first.",
+            "type": "boolean"
+          },
+          "box": {
+            "description": "`box`: `[x0, y0, x1, y1]`.",
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "label": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string"
+          },
+          "tag": {
+            "type": "string"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "shape"
+              ],
+              "properties": {
+                "shape": {
+                  "const": "point"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "at"
+              ]
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "shape"
+              ],
+              "properties": {
+                "shape": {
+                  "const": "points"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "points"
+              ]
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "shape"
+              ],
+              "properties": {
+                "shape": {
+                  "const": "box"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "box"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}

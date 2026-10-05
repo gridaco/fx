@@ -1,0 +1,10 @@
+fx: workflow/v1
+id: case
+title: A declared resource that is missing
+steps:
+  fine:
+    uses: ./nodes/n.py#echo
+    with: { text: hello }
+  lost:
+    uses: ./nodes/n.py#lost
+    with: { text: hello }

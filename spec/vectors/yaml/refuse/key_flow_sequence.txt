@@ -1,0 +1,1 @@
+Not supported: a key that is itself a collection.

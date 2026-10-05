@@ -1,0 +1,21 @@
+# fx.lock holds a digest that nodes/n.py#pinned@2's source does not have: its source changed
+# and its version did not. Planning refuses the plan (a problem on step b), `lock --check` and a
+# plain `lock` refuse too, and `lock --same nodes/n.py#pinned` confirms the change. After that
+# the workflow plans, and fx.lock holds the real digest: the same document lock-write records.
+steps:
+- argv: [expand, case, --routes, routes.yaml]
+  status: 1
+  save: expand.json
+  json: true
+- argv: [lock, --check]
+  status: 1
+  mentions: ["nodes/n.py#pinned", "--same"]
+- argv: [lock]
+  status: 1
+  mentions: ["nodes/n.py#pinned", "--same"]
+- argv: [lock, --same, "nodes/n.py#pinned"]
+- argv: [lock, --check]
+- argv: [expand, case, --routes, routes.yaml]
+- read: fx.lock
+  save: fx.lock.json
+  yaml: true

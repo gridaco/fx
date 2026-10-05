@@ -1,0 +1,25 @@
+[workspace]
+members = ["crates/*"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0-alpha.1"
+edition = "2024"
+rust-version = "1.85"
+repository = "https://github.com/gridaco/fx"
+publish = false
+
+[workspace.dependencies]
+grida-fx-core = { path = "crates/grida-fx-core" }
+grida-fx-protocol = { path = "crates/grida-fx-protocol" }
+grida-fx-runtime = { path = "crates/grida-fx-runtime" }
+grida-fx-providers = { path = "crates/grida-fx-providers" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "warn"

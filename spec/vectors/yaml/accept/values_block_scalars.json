@@ -1,0 +1,9 @@
+{
+  "folded": "word one word two\nnew paragraph\n",
+  "folded_keep": "word one word two\n\n",
+  "folded_strip": "word one word two",
+  "last": "end",
+  "literal": "line one\nline two\n",
+  "literal_keep": "line one\nline two\n\n",
+  "literal_strip": "line one\nline two"
+}

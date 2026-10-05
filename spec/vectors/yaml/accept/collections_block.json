@@ -1,0 +1,21 @@
+{
+  "matrix": {
+    "size": [
+      512,
+      1024
+    ]
+  },
+  "steps": [
+    {
+      "name": "draw",
+      "takes": 3
+    },
+    {
+      "name": "review",
+      "tags": [
+        "fast",
+        "cheap"
+      ]
+    }
+  ]
+}

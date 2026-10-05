@@ -1,0 +1,1 @@
+Not supported: directives (%YAML, %TAG, and reserved ones such as %FOO).

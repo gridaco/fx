@@ -1,0 +1,24 @@
+literal: |
+  line one
+  line two
+literal_strip: |-
+  line one
+  line two
+literal_keep: |+
+  line one
+  line two
+
+folded: >
+  word one
+  word two
+
+  new paragraph
+
+folded_strip: >-
+  word one
+  word two
+folded_keep: >+
+  word one
+  word two
+
+last: end

@@ -1,0 +1,3 @@
+# A quoted "<<" is an ordinary key; only a plain << is a merge key.
+"<<": {size: 1024}
+image: {'<<': 1}

@@ -1,0 +1,37 @@
+{
+  "empty_list": [],
+  "empty_map": {},
+  "list": [
+    "a",
+    1,
+    true,
+    null,
+    "x, y",
+    2.5
+  ],
+  "map": {
+    "a": 1,
+    "b": [
+      2,
+      3
+    ],
+    "c": {
+      "d": "e"
+    }
+  },
+  "multi_line": [
+    "one",
+    "two"
+  ],
+  "nested": [
+    [],
+    {},
+    [
+      {}
+    ]
+  ],
+  "spaced": [
+    "a",
+    "b"
+  ]
+}

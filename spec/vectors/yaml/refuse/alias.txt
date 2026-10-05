@@ -1,0 +1,1 @@
+Not supported: anchors and aliases (&name, *name).

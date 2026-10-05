@@ -1,0 +1,6 @@
+"a b": 1
+'c': 2
+"": empty
+'it''s': quote
+"tab\there": escaped
+"on": quoted

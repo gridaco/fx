@@ -1,0 +1,4 @@
+# Digests are over raw bytes: fixtures and vectors must never be converted on checkout.
+spec/vectors/** -text
+conformance/** -text
+docs/guide/examples/** -text

@@ -1,0 +1,1 @@
+Values: a decimal integer is refused if reading it would round it.

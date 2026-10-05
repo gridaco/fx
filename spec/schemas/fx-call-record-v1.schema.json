@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-call-record-v1",
+  "title": "FX call record (fx-call-record-v1)",
+  "description": "A paid capability call's answer, kept at `calls/<key[:2]>/<key>.json` in the store (store.md). It holds the canonical request, so its key can be recomputed from the record alone.",
+  "type": "object",
+  "required": [
+    "kind",
+    "key",
+    "capability",
+    "route",
+    "request",
+    "take",
+    "files",
+    "data",
+    "cost_usd"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "kind": {
+      "const": "fx-call-record-v1"
+    },
+    "key": {
+      "description": "The call key (identity.md §9).",
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "capability": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$"
+    },
+    "route": {
+      "type": "object",
+      "required": [
+        "id",
+        "fingerprint"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "`<model>@<provider>`.",
+          "type": "string",
+          "pattern": "^.+@[a-z0-9._-]+$"
+        },
+        "fingerprint": {
+          "description": "identity.md §7.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "request": {
+      "description": "The canonical request (identity.md §9), exactly as keyed: files as `{\"file\": digest}`. It never holds a secret.",
+      "type": "object"
+    },
+    "take": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "minItems": 1
+    },
+    "files": {
+      "description": "The files the provider returned, by name.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "digest",
+          "kind",
+          "name",
+          "size"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "data": {
+      "description": "What else the call returned, as JSON; null when nothing."
+    },
+    "cost_usd": {
+      "description": "The cost the provider reported; null when it reported none.",
+      "anyOf": [
+        {
+          "type": "number",
+          "minimum": 0
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

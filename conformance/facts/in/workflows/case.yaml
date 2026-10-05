@@ -1,0 +1,19 @@
+fx: workflow/v1
+id: case
+title: Facts in expressions
+inputs:
+  note: { type: file, kind: text/plain }
+  art: { type: file, kind: image/png }
+steps:
+  describe:
+    if: ${{ facts(inputs.art).has_alpha }}
+    uses: fx/image.generate@1
+    with:
+      prompt: "${{ facts(inputs.art).width }}x${{ facts(inputs.art).height }}, ${{ facts(inputs.art).bytes }} bytes, opaque ${{ facts(inputs.art).opaque }}; ${{ facts(inputs.note).bytes }} bytes of ${{ facts(inputs.note).kind }}"
+  flat:
+    if: ${{ facts(inputs.art).opaque }}
+    uses: fx/image.generate@1
+    with: { prompt: never drawn }
+  wider:
+    uses: fx/image.generate@1
+    with: { prompt: "wider than ${{ facts(steps.describe.outputs.image).width }}" }

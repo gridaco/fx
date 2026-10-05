@@ -1,0 +1,1 @@
+Values: an ambiguous plain scalar (.inf with an optional sign, .nan without one, in any letter case) is refused; quote it.

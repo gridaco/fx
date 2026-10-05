@@ -1,0 +1,30 @@
+{
+ "kind": "fx-marker-vectors-v1",
+ "cases": [
+  {"name": "file_digest", "json": "{\"file\": \"c3f9c8c283a2b1f2f1896f27a01cbe3cddc0c9d93f752e4639035a0f5b36f6e8\"}", "refuse": true},
+  {"name": "file_digest_nested", "json": "{\"with\": {\"images\": [{\"file\": \"c3f9c8c283a2b1f2f1896f27a01cbe3cddc0c9d93f752e4639035a0f5b36f6e8\"}]}}", "refuse": true},
+  {"name": "file_digest_top_level_array", "json": "[1, {\"file\": \"c3f9c8c283a2b1f2f1896f27a01cbe3cddc0c9d93f752e4639035a0f5b36f6e8\"}]", "refuse": true},
+  {"name": "file_key_escaped", "json": "{\"\\u0066ile\": \"c3f9c8c283a2b1f2f1896f27a01cbe3cddc0c9d93f752e4639035a0f5b36f6e8\"}", "refuse": true},
+  {"name": "file_name_is_data", "json": "{\"file\": \"a.png\"}", "refuse": false},
+  {"name": "file_upper_hex_is_data", "json": "{\"file\": \"C3F9C8C283A2B1F2F1896F27A01CBE3CDDC0C9D93F752E4639035A0F5B36F6E8\"}", "refuse": false},
+  {"name": "file_63_hex_is_data", "json": "{\"file\": \"c3f9c8c283a2b1f2f1896f27a01cbe3cddc0c9d93f752e4639035a0f5b36f6e\"}", "refuse": false},
+  {"name": "file_with_a_second_member_is_data", "json": "{\"file\": \"c3f9c8c283a2b1f2f1896f27a01cbe3cddc0c9d93f752e4639035a0f5b36f6e8\", \"name\": \"a.png\"}", "refuse": false},
+  {"name": "missing_true", "json": "{\"missing\": true}", "refuse": true},
+  {"name": "missing_in_list", "json": "{\"first_of\": [{\"missing\": true}, \"b\"]}", "refuse": true},
+  {"name": "missing_false_is_data", "json": "{\"missing\": false}", "refuse": false},
+  {"name": "missing_one_is_data", "json": "{\"missing\": 1}", "refuse": false},
+  {"name": "missing_null_is_data", "json": "{\"missing\": null}", "refuse": false},
+  {"name": "failed_string", "json": "{\"failed\": \"draw#1\"}", "refuse": true},
+  {"name": "failed_empty_string", "json": "{\"failed\": \"\"}", "refuse": true},
+  {"name": "failed_number_is_data", "json": "{\"failed\": 1}", "refuse": false},
+  {"name": "collection_empty", "json": "{\"collection\": []}", "refuse": true},
+  {"name": "collection_pairs", "json": "{\"collection\": [[\"ada\", 1]]}", "refuse": true},
+  {"name": "collection_object_is_data", "json": "{\"collection\": {}}", "refuse": false},
+  {"name": "pending_string", "json": "{\"pending\": \"draw#1\"}", "refuse": true},
+  {"name": "pending_null", "json": "{\"pending\": null}", "refuse": true},
+  {"name": "pending_object", "json": "{\"x\": {\"pending\": {}}}", "refuse": true},
+  {"name": "pending_with_a_second_member_is_data", "json": "{\"pending\": 1, \"x\": 2}", "refuse": false},
+  {"name": "empty_object_is_data", "json": "{}", "refuse": false},
+  {"name": "marker_names_as_keys_are_data", "json": "{\"file\": {\"missing\": false}, \"failed\": 2}", "refuse": false}
+ ]
+}

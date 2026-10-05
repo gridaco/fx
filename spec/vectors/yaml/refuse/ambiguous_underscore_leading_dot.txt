@@ -1,0 +1,1 @@
+Values: an ambiguous plain scalar (anything that would be a number if its underscores were removed) is refused; quote it.

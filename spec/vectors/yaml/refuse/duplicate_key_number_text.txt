@@ -1,0 +1,1 @@
+Mapping keys: two equal keys in one mapping are refused.

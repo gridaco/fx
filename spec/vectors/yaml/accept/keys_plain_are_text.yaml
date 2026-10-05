@@ -1,0 +1,13 @@
+# Every plain key is its own text; none of these is a boolean, a number or null.
+on: push
+off: pull
+yes: one
+no: two
+1: first
+true: real
+null: nothing
+~: tilde
+1.5: one and a half
+2026-10-05: date-like
+0x1F: hex-like
+.inf: inf-like

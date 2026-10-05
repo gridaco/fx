@@ -1,0 +1,1 @@
+Values: an ambiguous plain scalar (0x, 0o or 0b followed by digits of that base, with an optional sign) is refused; quote it.

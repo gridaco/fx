@@ -1,0 +1,15 @@
+steps:
+- argv:
+  - run
+  - case
+  - --routes
+  - routes.yaml
+  - --inputs
+  - inputs.yaml
+  - --run
+  - runs/one
+- argv:
+  - project
+  - runs/one
+  save: project.json
+  json: true

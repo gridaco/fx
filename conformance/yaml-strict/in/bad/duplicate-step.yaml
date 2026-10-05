@@ -1,0 +1,10 @@
+fx: workflow/v1
+id: duplicate-step
+title: Two steps with one name
+steps:
+  draw:
+    uses: fx/image.generate@1
+    with: { prompt: first }
+  draw:
+    uses: fx/image.generate@1
+    with: { prompt: second }

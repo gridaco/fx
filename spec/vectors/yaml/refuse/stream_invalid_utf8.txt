@@ -1,0 +1,1 @@
+Encoding: a stream is UTF-8.

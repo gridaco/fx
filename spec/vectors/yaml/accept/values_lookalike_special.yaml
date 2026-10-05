@@ -1,0 +1,7 @@
+# .nan is never signed, and these are not .inf or .nan: strings.
+negative_nan: -.nan
+positive_nan: +.NaN
+word_inf: inf
+word_nan: nan
+longer: .infinity
+no_dot: -inf

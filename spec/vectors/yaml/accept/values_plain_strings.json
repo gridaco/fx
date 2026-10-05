@@ -1,0 +1,13 @@
+{
+  "dashed": "-leading",
+  "greeting": "hello world",
+  "hash_inside": "a#b",
+  "host": "acme.test:8080",
+  "indicators_inside": "x&y*z!w",
+  "kind": "3d",
+  "label": "v1",
+  "pair": "a:b",
+  "size": "1024x1024",
+  "url": "https://acme.test/img-a?size=2",
+  "version": "1.2.3"
+}

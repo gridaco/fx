@@ -1,0 +1,10 @@
+one_point_zero: 1.0
+leading_dot: .5
+trailing_dot: 5.
+exponent: 1e3
+negative_exponent: -1.5e-3
+upper_e: 2.5E+2
+small: 1e-7
+large: 6.02e23
+fraction: 0.25
+signed: +2.5

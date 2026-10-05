@@ -1,0 +1,21 @@
+fx: workflow/v1
+id: case
+title: Tiered price
+steps:
+  small:
+    uses: fx/video.generate@1
+    requires: [first_last_frame]
+    with:
+      prompt: a lantern sways
+      duration: 3
+      resolution: 360p
+  large:
+    uses: fx/video.generate@1
+    with:
+      prompt: a lantern sways
+      duration: 8
+      resolution: 4k
+  unknown:
+    uses: fx/video.generate@1
+    with:
+      prompt: a lantern sways

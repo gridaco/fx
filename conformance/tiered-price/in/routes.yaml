@@ -1,0 +1,14 @@
+fx: routes/v1
+routes:
+  - capability: video.generate
+    route: clip-a@acme
+    features: [first_last_frame]
+    price:
+      unit: second
+      max_units: 10
+      low_usd: 0.03
+      high_usd: 0.375
+      by: resolution
+      tiers:
+        360p: { low_usd: 0.03, high_usd: 0.0375 }
+        4k: { low_usd: 0.3, high_usd: 0.375 }

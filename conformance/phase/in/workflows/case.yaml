@@ -1,0 +1,15 @@
+fx: workflow/v1
+id: case
+title: A repeat over a step's output
+inputs:
+  script: { type: file, kind: text/plain }
+steps:
+  split:
+    uses: ./nodes/cases.py#lines
+    with: { text: "${{ inputs.script }}" }
+  draw:
+    for_each: ${{ steps.split.outputs.items.lines }}
+    key: ${{ item.id }}
+    max: 6
+    uses: fx/image.generate@1
+    with: { prompt: "${{ item.text }}" }

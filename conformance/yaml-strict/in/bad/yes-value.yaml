@@ -1,0 +1,7 @@
+fx: workflow/v1
+id: yes-value
+title: An ambiguous value in a workflow file
+steps:
+  draw:
+    uses: fx/image.generate@1
+    with: { prompt: yes }

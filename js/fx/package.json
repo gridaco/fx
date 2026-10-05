@@ -1,0 +1,17 @@
+{
+  "name": "@grida/fx",
+  "version": "0.1.0-alpha.1",
+  "description": "Grida FX for JavaScript: build workflows and drive the grida-fx engine.",
+  "private": true,
+  "type": "module",
+  "repository": { "type": "git", "url": "git+https://github.com/gridaco/fx.git", "directory": "js/fx" },
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0",
+    "typescript": "^5.6.0"
+  }
+}

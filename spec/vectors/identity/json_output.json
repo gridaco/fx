@@ -1,0 +1,19 @@
+{
+ "kind": "fx-json-output-vectors-v1",
+ "cases": [
+  {"name": "flat_object", "value_json": "{\"b\": 1, \"a\": \"x\", \"c\": true, \"d\": null}", "bytes_utf8": "{\n \"a\": \"x\",\n \"b\": 1,\n \"c\": true,\n \"d\": null\n}"},
+  {"name": "nested", "value_json": "{\"outer\": {\"list\": [1, [2, []], {}], \"empty\": {}}, \"z\": [[]]}", "bytes_utf8": "{\n \"outer\": {\n  \"empty\": {},\n  \"list\": [\n   1,\n   [\n    2,\n    []\n   ],\n   {}\n  ]\n },\n \"z\": [\n  []\n ]\n}"},
+  {"name": "top_level_array", "value_json": "[1, \"two\", false, null]", "bytes_utf8": "[\n 1,\n \"two\",\n false,\n null\n]"},
+  {"name": "empty_object", "value_json": "{}", "bytes_utf8": "{}"},
+  {"name": "empty_array", "value_json": "[]", "bytes_utf8": "[]"},
+  {"name": "scalar_string", "value_json": "\"plain\"", "bytes_utf8": "\"plain\""},
+  {"name": "scalar_number", "value_json": "2", "bytes_utf8": "2"},
+  {"name": "scalar_one_point_zero", "value_json": "1.0", "bytes_utf8": "1"},
+  {"name": "numbers", "value_json": "{\"half\": 0.5, \"one_point_zero\": 1.0, \"big\": 1e21, \"small\": 1e-7, \"e16\": 1e16, \"neg_zero\": -0.0, \"tenth_sum\": 0.30000000000000004, \"max_safe\": 9007199254740991, \"micro\": 0.000001}", "bytes_utf8": "{\n \"big\": 1e+21,\n \"e16\": 10000000000000000,\n \"half\": 0.5,\n \"max_safe\": 9007199254740991,\n \"micro\": 0.000001,\n \"neg_zero\": 0,\n \"one_point_zero\": 1,\n \"small\": 1e-7,\n \"tenth_sum\": 0.30000000000000004\n}"},
+  {"name": "decimals", "value_json": "{\"a\": 0.5, \"b\": -1.25, \"c\": 1234.5678, \"d\": 3, \"e\": [0.1, -7]}", "bytes_utf8": "{\n \"a\": 0.5,\n \"b\": -1.25,\n \"c\": 1234.5678,\n \"d\": 3,\n \"e\": [\n  0.1,\n  -7\n ]\n}"},
+  {"name": "unicode", "value_json": "{\"caf\\u00e9\": \"na\\u00efve\", \"emoji\": \"\\ud83d\\ude00\", \"\\u20ac\": \"euro\"}", "bytes_utf8": "{\n \"caf\u00e9\": \"na\u00efve\",\n \"emoji\": \"\ud83d\ude00\",\n \"\u20ac\": \"euro\"\n}"},
+  {"name": "keys_outside_the_bmp", "value_json": "{\"\\ufb33\": 1, \"\\ud83d\\ude00\": 2, \"\\u20ac\": 3, \"a\": 4}", "bytes_utf8": "{\n \"a\": 4,\n \"\u20ac\": 3,\n \"\ud83d\ude00\": 2,\n \"\ufb33\": 1\n}"},
+  {"name": "escapes", "value_json": "{\"text\": \"quote \\\" backslash \\\\ slash \\/ \\b\\f\\n\\r\\t \\u0000 \\u001f \\u007f \\u2028 \\u00e9\"}", "bytes_utf8": "{\n \"text\": \"quote \\\" backslash \\\\ slash / \\b\\f\\n\\r\\t \\u0000 \\u001f \u007f \u2028 \u00e9\"\n}"},
+  {"name": "escaped_keys", "value_json": "{\"a\\nb\": 1, \"\\\"\": 2, \"tab\\there\": [3]}", "bytes_utf8": "{\n \"\\\"\": 2,\n \"a\\nb\": 1,\n \"tab\\there\": [\n  3\n ]\n}"}
+ ]
+}

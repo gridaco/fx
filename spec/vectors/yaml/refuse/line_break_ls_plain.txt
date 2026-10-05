@@ -1,0 +1,1 @@
+Line breaks: U+0085, U+2028 and U+2029 are refused anywhere in a stream.

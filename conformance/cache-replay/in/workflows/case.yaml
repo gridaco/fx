@@ -1,0 +1,9 @@
+fx: workflow/v1
+id: case
+title: A paid call replayed from the cache
+steps:
+  draw:
+    uses: fx/image.generate@1
+    with: { prompt: a lantern }
+outputs:
+  image: ${{ steps.draw.outputs.image }}

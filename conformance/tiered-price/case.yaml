@@ -1,0 +1,13 @@
+# A route priced per second by a setting: each take is priced at its own tier, and a take whose
+# setting the plan cannot know yet at the dearest one.
+steps:
+- argv:
+  - price
+  - case
+  - --routes
+  - routes.yaml
+  - --inputs
+  - inputs.yaml
+  save: price.json
+  json: true
+  status: 0

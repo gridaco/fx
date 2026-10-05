@@ -1,6 +1,6 @@
 # Grida FX: overview
 
-> Working draft, 2026-10-05. Only decisions marked **ratified** have been agreed; everything else is a proposal.
+> Working draft, 2026-10-05. Only decisions marked **ratified** have been agreed; everything else is a proposal. The contracts live in [`spec/`](../../spec/); where this overview and `spec/` disagree, `spec/` wins.
 
 Grida FX is a workflow engine for generative asset pipelines. You write a workflow file whose steps are nodes, and FX does five things with it:
 
@@ -41,6 +41,9 @@ FX exists today as **gnode**, inside [softmarshmallow/stage-gen](https://github.
 | 5 | **Paid work needs a priced plan and a ceiling.** A workflow file can spend the user's money, so nothing paid runs without a priced plan and a `--max-usd` ceiling. | ratified |
 | 6 | **The workflow registry copies; it never references.**<br>• This repo later doubles as the default registry: `grida-fx add <item>` copies a workflow or node into the user's project (like shadcn registries or `npx skills`) and stamps where it came from.<br>• Nothing is fetched while a run is being planned.<br>• This comes after the first milestone. | ratified direction |
 | 7 | **The Grida umbrella comes last.** `grida fx` (in the `grida` CLI, with this repo as a submodule) hands off to the FX engine, and GG becomes a provider. | ratified |
+| 8 | **The standard library's node bodies stay in Python for milestone 1** (`grida.fx.std`, ported from gnode with Pillow). Milestone 2's replay can keep a cached paid call only if FX builds the same request gnode built, and a Rust image resize that differs from Pillow's by one byte changes every request downstream of it. The engine still owns `select` and every fact. Rust bodies come later, with a planned rekey. | in the approved plan |
+| 9 | **No third-party OpenAI client.** Adapters are thin clients on FX's own injected transport. The canonical request then *is* the wire body, and every exchange can be replayed in tests. (This settles D4.) | in the approved plan |
+| 10 | **Document versions restart at v1 in the `fx` namespace** (`fx: workflow/v1`, `fx-graph-v1`, …). "Identity v3" and "protocol v2" below are design names relative to gnode. Authored YAML documents carry `fx: <doc>/v1`; machine-written JSON carries `"kind": "fx-<doc>-v1"`. | in the approved plan |
 
 ## Names
 
@@ -49,9 +52,10 @@ FX exists today as **gnode**, inside [softmarshmallow/stage-gen](https://github.
 | Product | Grida FX | ratified |
 | Command | `grida-fx`; later `grida fx` hands off to it. A bare `fx` is taken: on npm it is antonmedv's JSON viewer, and the name is taken on PyPI and crates.io. | ratified |
 | JS SDK | `@grida/fx`: light, with the engine in per-platform optional packages (`@grida/fx-darwin-arm64`, …), as esbuild does | ratified |
-| Python SDK | import `grida.fx`, fixed from day one. The distribution is `grida` (already reserved; pre-releases `0.1.0aN`). Its per-platform wheels carry the engine binary as package data, with no console command. | proposal |
+| Python SDK | import `grida.fx`, fixed from day one. The distribution is `grida` (already reserved; pre-releases `0.1.0aN`). Its per-platform wheels carry the engine binary as package data, with no console command: Python users run the engine as `python -m grida.fx <verb>` or through the API, so they never need Node. | proposal |
 | Rust crates | `grida-fx`, `grida-fx-std`, `grida-fx-protocol`, … (free on crates.io) | proposal |
 | Project files | `fx.yaml`, `fx.lock`, `.fx/` | proposal |
+| Environment | `GRIDA_FX_PYTHON`, `GRIDA_FX_TOOL_<NAME>`; provider keys under their providers' usual names | proposal |
 | Built-in type namespace, schema ids | `fx/…`, `fx-…-v1` | proposal |
 
 ## Milestone 1: FX standalone, published as a preview
@@ -70,8 +74,8 @@ This milestone works only in this repo. The Python gnode stays in stage-gen, fro
   - number and YAML edge cases;
   - JCS vectors.
 
-**2. The offline core in Rust.**
-- **Scope:** workflow parsing, expressions, expansion, identity, planning, pricing, the routes document, and protocol v2 `describe` and `build`.
+**2. The offline core in Rust, with the Python describe host.**
+- **Scope:** workflow parsing, expressions, expansion, identity, planning, pricing, the routes document, and protocol v2 `describe` and `build`. Most conformance cases and every stage-gen workflow load Python node modules even to plan, so the Python host's `describe` and `build` arrive here, not in step 3.
 - **Gate:** checked against today's Python engine. With digests removed, the expanded graphs, prices and projections must match the Python output exactly. A small standalone script checks the digest formula, and the published JCS vectors check the canonical JSON.
 
 **3. The runner, the Python node host and the `grida.fx` SDK.**
@@ -83,14 +87,14 @@ This milestone works only in this repo. The Python gnode stays in stage-gen, fro
   - the event log;
   - the agent loop, prompt rendering and facts;
   - protocol v2 `run`.
-- **The SDK** is the authoring surface stage-gen uses today: `node`, `Ctx`, `tool`, `Group`, `StepRef` and `Workflow`, rehosted over the protocol.
+- **The SDK** is the authoring surface stage-gen uses today: `node`, `Ctx`, `tool`, `ToolReply`, `Group`, `StepRef`, `Workflow`, and `plan`, `run` and `run_async`, rehosted over the protocol. An import census of stage-gen settles the rest.
 - **Gate:**
   - every conformance case passes;
   - stage-gen's workflows and game pipelines plan and dry-run on the Rust engine, with their Python nodes and builders unchanged in shape.
 
 **4. Provider adapters.**
 - **Scope:** only the routes our workflows use: openrouter (images, structured output, agent turns, music), openai (images with native alpha), fal (images, video, background removal), tripo (mesh, rig) and elevenlabs (speech, sound effects).
-- **Text and agent calls** use an existing Rust client for OpenAI-compatible APIs. Cache keys come from FX's canonical request, never from the client's serialization.
+- **Text and agent calls** go through FX's own thin client (decision 9). Cache keys come from FX's canonical request.
 - **Prices:** FX ships a default route table with prices and capabilities, which users can override. Actual cost is settled from what the provider reports.
 - **Tests cost nothing to run:** each adapter is checked against an injected transport and synthetic exchange fixtures. CI has no keys and spends nothing.
 
@@ -122,35 +126,37 @@ Then comes one budgeted live smoke run per provider, each with the owner's go an
 - GG as a provider.
 - The `grida fx` umbrella.
 - Views (`grida-fx view`).
+- Standard-library node bodies in Rust, with a planned rekey (decision 8).
 
 ## Identity v3
 
-A read-only audit of gnode found that today's identity encodes how Python happens to behave. Paths below are in stage-gen.
+A read-only audit of gnode found that today's identity encodes how Python happens to behave. Paths below are in stage-gen. The normative definitions are [`spec/identity.md`](../../spec/identity.md) and [`spec/yaml.md`](../../spec/yaml.md).
 
 | Today | v3 |
 |---|---|
 | Canonical JSON relies on Python's number formatting (`values.py:24-31`). It writes `NaN` as invalid JSON, and treats `1` and `1.0` as different values. Expressions collapse whole floats to integers and print numbers into prompts with `str()` (`expr.py:660-682`). | [RFC 8785 (JCS)](https://www.rfc-editor.org/rfc/rfc8785) with I-JSON numbers: no NaN or infinity, integers within ±2^53, and `1` = `1.0`. Implementations exist for Rust, Python and JS. |
-| PyYAML parses YAML 1.1: `on` and `yes` become true, `017` becomes 15, dates become date objects, and the last of two duplicate keys silently wins. | A strict YAML 1.2 core subset. Duplicate keys, timestamps, non-string keys and ambiguous scalars are errors. |
-| The graph digest hashes a pydantic dump (`run.py:126-137`). | It hashes the normalized expanded-graph document. |
-| A step's identity includes upstream file digests only (`expand.py:1112-1123`). | A real Merkle chain: upstream step identities are part of it. |
+| PyYAML parses YAML 1.1: `on` and `yes` become true, `017` becomes 15, dates become date objects, and the last of two duplicate keys silently wins. | A strict YAML 1.2 core subset. Duplicate keys, timestamps, collections as keys and ambiguous scalars are errors; plain keys are always strings. |
+| The graph digest hashes a pydantic dump (`run.py:126-137`). | The plan digest hashes the authored workflow documents, the inputs, the takes, the type identities and the route fingerprints (`spec/identity.md` §10). |
+| A step's identity includes upstream file digests only (`expand.py:1112-1123`). | Kept: content addressing is already a Merkle structure over content, and it keeps everything downstream cached when an upstream rerun writes the same bytes. (The first draft proposed chaining upstream identities instead; see `spec/identity.md` §13.) |
 | File facts come from PIL, and from ffprobe if it happens to be installed, and they feed identity (`gnode_std/facts.py`). | The engine computes facts. Each one is specified and pinned by media fixtures. |
-| Call records keep no request (`store.py:240-250`). | Records keep the canonical request with secrets removed, so a future rekey can be computed. |
+| Call records keep no request (`store.py:240-250`). | Records keep the canonical request, so a future rekey can be computed. Requests never carry secrets: keys travel in the transport. |
 
-## Node protocol v2 (sketch)
+## Node protocol v2
 
-The v1 schema exists, but nothing serializes to it: a body's `ctx` holds live Python objects (`host.py:339-367`). v2 is the out-of-process version.
+The v1 schema exists, but nothing serializes to it: a body's `ctx` holds live Python objects (`host.py:339-367`). v2 is the out-of-process version, specified in [`spec/protocol.md`](../../spec/protocol.md). In outline:
 
-- **Session:** `initialize` exchanges protocol versions and capabilities.
+- **Session:** `initialize` exchanges protocol versions; `shutdown` and `exit` end it.
 - **Engine to host:**
-  - `describe`: the host returns node specs, plus its source closure as `(label, sha256)` pairs, and the engine computes the digest.
+  - `describe`: the host returns node specs, plus its source closure as `(label, path)` pairs. The engine reads and hashes the files.
   - `build`: a Python or TypeScript builder returns a workflow document.
-  - `run`: carries the instance, take, routes, staged read-only input paths and a work dir. Outputs come back by path.
-  - `tool.invoke` and `$/cancel`.
+  - `run`: carries the instance, its take, the params, staged read-only input files and a work dir. Outputs come back by path.
+  - `tool.invoke`, `agent.check` and `$/cancel`.
 - **Host to engine:** requests with ids, each answered by the engine:
   - `capability`;
   - `agent.run` (the engine runs the model loop);
   - `fact`, `annotate` and `progress`;
-  - `prompt.render`, using the engine's expression language.
+  - `prompt.render`, using the engine's expression language;
+  - `file.put`, which stores bytes or a JSON value and returns a file reference.
 
 ## Retry and billing (ratified)
 
@@ -169,7 +175,6 @@ Today the capability layer sends a paid request again up to 6 times and settles 
 | D1 | YAML | the strict subset (not exact PyYAML compatibility) |
 | D2 | Python distribution | `grida` itself (the alternative is `grida-fx`, which `grida` would later depend on) |
 | D3 | Crate names | the `grida-fx-*` prefix |
-| D4 | Rust client for OpenAI-compatible text and agent calls | to be picked in step 4, by evaluation |
 
 ## Verification, every step
 

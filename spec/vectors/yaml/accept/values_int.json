@@ -1,0 +1,8 @@
+{
+  "max_safe": 9007199254740991,
+  "min_safe": -9007199254740991,
+  "negative": -5,
+  "plain": 42,
+  "positive_sign": 5,
+  "zero": 0
+}

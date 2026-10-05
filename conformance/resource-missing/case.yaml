@@ -1,0 +1,8 @@
+# A declared resource that is not a file inside the project is a refusal while planning: a
+# problem on the step that uses the type (exit 1), never a crash. The other step still plans.
+steps:
+- argv: [expand, case, --routes, routes.yaml]
+  status: 1
+  mentions: ["prompts/missing.md"]
+  save: expand.json
+  json: true

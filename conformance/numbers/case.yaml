@@ -1,0 +1,21 @@
+# One number type: `1` and `1.0` are one value (identity.md section 1), so both inputs files give
+# identical identities (both steps save identity.json, and must print the same bytes), and an
+# integer input accepts 2.0. Numbers render in text in their JCS form (section 5): the run
+# writes `n=1 count=2 sum=0.30000000000000004 whole=1 big=1e+21 e16=10000000000000000 flag=true`.
+# e16 is the float literal 10000000000000000.0, which JCS writes as digits. The run names its
+# folder with --run, and writes the output `said` as outputs/said.txt (spec/store.md, "Run
+# folders"). An integer literal that reading would round (section 1), 12345678901234567891 in
+# inputs/huge.yaml, is refused as unreadable input (exit 2).
+steps:
+- argv: [identity, case, --routes, routes.yaml, --inputs, inputs/int.yaml]
+  save: identity.json
+  json: true
+- argv: [identity, case, --routes, routes.yaml, --inputs, inputs/float.yaml]
+  save: identity.json
+  json: true
+- argv: [run, case, --routes, routes.yaml, --inputs, inputs/float.yaml, --run, runs/one]
+- read: runs/one/outputs/said.txt
+  save: said.txt
+- argv: [identity, case, --routes, routes.yaml, --inputs, inputs/huge.yaml]
+  status: 2
+  mentions: ["huge.yaml"]

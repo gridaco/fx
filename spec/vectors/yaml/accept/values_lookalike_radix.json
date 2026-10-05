@@ -1,0 +1,8 @@
+{
+  "bad": "0bad",
+  "not_binary": "0b12",
+  "not_hex": "0xg1",
+  "not_octal": "0o8",
+  "ops": "0ops",
+  "prefix_only": "0x"
+}

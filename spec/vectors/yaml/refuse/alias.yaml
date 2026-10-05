@@ -1,0 +1,2 @@
+base: &size 512
+width: *size

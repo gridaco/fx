@@ -1,0 +1,69 @@
+{
+  "budget": {
+    "max_usd": 4.5
+  },
+  "description": "Draw a studio photo of every product, review each take against the brief, and keep the first accepted one.",
+  "fx": "workflow/v1",
+  "id": "studio-shots",
+  "inputs": {
+    "brief": {
+      "kind": "text/markdown",
+      "type": "file"
+    },
+    "products": {
+      "description": "Product names",
+      "items": {
+        "type": "string"
+      },
+      "type": "list"
+    },
+    "size": {
+      "default": "1024x1024",
+      "type": "string"
+    }
+  },
+  "outputs": {
+    "shots": "${{ steps.shot.outputs.image }}"
+  },
+  "steps": {
+    "shot": {
+      "for_each": "${{ inputs.products }}",
+      "key": "${{ item }}",
+      "max": 12,
+      "steps": {
+        "draw": {
+          "pick": "first_accepted",
+          "route": "img-a@acme",
+          "takes": 3,
+          "uses": "fx/image.generate@1",
+          "with": {
+            "background": "opaque",
+            "prompt": "A studio photo of ${{ item }} on a plain grey backdrop.",
+            "size": "${{ inputs.size }}"
+          }
+        },
+        "review": {
+          "if": "${{ facts(steps.draw.outputs.image).width >= 512 }}",
+          "judges": "draw",
+          "on_reject": {
+            "regenerate": {
+              "max": 2,
+              "then": "continue"
+            }
+          },
+          "route": "reviewer-a@acme",
+          "uses": "fx/vision.review@1",
+          "with": {
+            "criteria": [
+              "the product fills the frame",
+              "the backdrop is plain grey"
+            ],
+            "image": "${{ steps.draw.outputs.image }}",
+            "question": "./prompts/review.md"
+          }
+        }
+      }
+    }
+  },
+  "title": "Studio shots"
+}

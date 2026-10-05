@@ -1,0 +1,5 @@
+# A number is one value however it is written.
+a: 1
+b: 1.0
+c: 1e0
+d: 10e-1

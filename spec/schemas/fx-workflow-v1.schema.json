@@ -1,0 +1,936 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-workflow-v1",
+  "title": "FX workflow file (fx: workflow/v1)",
+  "description": "A workflow as authored. Values holding `${{ }}` stay strings here; the engine gives them meaning when it expands the workflow.",
+  "type": "object",
+  "required": [
+    "fx",
+    "id",
+    "title",
+    "steps"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "fx": {
+      "const": "workflow/v1"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "maxLength": 96
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "description": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "inputs": {
+      "description": "What a run is given.",
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/name"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/input"
+      }
+    },
+    "tables": {
+      "description": "Constant data, read in expressions as `tables.<name>`.",
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/name"
+      },
+      "additionalProperties": {}
+    },
+    "let": {
+      "description": "Named expressions, read as `let.<name>`.",
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/name"
+      },
+      "additionalProperties": {}
+    },
+    "budget": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/budget"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "assert": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/assertion"
+      }
+    },
+    "steps": {
+      "description": "The steps, by name.",
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/name"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/step"
+      },
+      "minProperties": 1
+    },
+    "outputs": {
+      "description": "What a run returns: expressions over steps and inputs.",
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/name"
+      },
+      "additionalProperties": {}
+    },
+    "view": {
+      "description": "Views are planned, not implemented: the value is recorded and otherwise ignored.",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "$defs": {
+    "name": {
+      "description": "A step, input, table or variable name: what follows `steps.` or `inputs.` in an expression.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "maxLength": 64
+    },
+    "input": {
+      "description": "One input declaration in the shorthand: a typed field, a `$ref` to another workflow's input, or a nested object (a mapping of fields with no `type`). `grida-fx schema` compiles it to JSON Schema, tagging file paths with `x-fx-file`.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/input_field"
+        },
+        {
+          "$ref": "#/$defs/input_ref"
+        },
+        {
+          "$ref": "#/$defs/input_object"
+        }
+      ]
+    },
+    "input_field": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "string",
+            "integer",
+            "number",
+            "boolean",
+            "file",
+            "files",
+            "list",
+            "map"
+          ]
+        },
+        "kind": {
+          "description": "`file` and `files`: the file kind, or kind family, the input accepts. Default `file`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "glob": {
+          "description": "`files`: the value is a glob pattern, expanded when inputs are read.",
+          "type": "boolean"
+        },
+        "items": {
+          "description": "`list`: its items.",
+          "$ref": "#/$defs/input"
+        },
+        "values": {
+          "description": "`map`: its values.",
+          "$ref": "#/$defs/input"
+        },
+        "optional": {
+          "description": "The input may be left out; it is then null.",
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        },
+        "default": {},
+        "enum": {
+          "type": "array",
+          "minItems": 1
+        },
+        "minimum": {
+          "type": "number"
+        },
+        "maximum": {
+          "type": "number"
+        },
+        "exclusive_minimum": {
+          "type": "number"
+        },
+        "exclusive_maximum": {
+          "type": "number"
+        },
+        "multiple_of": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "min_length": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_length": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "min_items": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_items": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unique_items": {
+          "type": "boolean"
+        },
+        "format": {
+          "type": "string"
+        },
+        "examples": {
+          "type": "array"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "list"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "items"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "items"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "map"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "values"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "values"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "file",
+                  "files"
+                ]
+              }
+            }
+          },
+          "else": {
+            "not": {
+              "required": [
+                "kind"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "files"
+              }
+            }
+          },
+          "else": {
+            "not": {
+              "required": [
+                "glob"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "input_ref": {
+      "type": "object",
+      "required": [
+        "$ref"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "$ref": {
+          "description": "Another workflow's input: `<file>#/<json pointer>`, the file relative to the workflow's home (the folder of the nearest fx.yaml above it), like every ./ path.",
+          "type": "string",
+          "pattern": "^[^#]+#/.*$"
+        },
+        "optional": {
+          "type": "boolean"
+        },
+        "default": {},
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "input_object": {
+      "description": "A nested object: each member is a field of it.",
+      "type": "object",
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "type"
+            ]
+          },
+          {
+            "required": [
+              "$ref"
+            ]
+          }
+        ]
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/input"
+      }
+    },
+    "budget": {
+      "type": "object",
+      "required": [
+        "max_usd"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "max_usd": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "assertion": {
+      "description": "A check made while planning, and again once what it reads exists.",
+      "type": "object",
+      "required": [
+        "check",
+        "message"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "check": {
+          "type": [
+            "string",
+            "boolean"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "on_fail": {
+          "enum": [
+            "fail",
+            "skip"
+          ],
+          "default": "fail"
+        }
+      }
+    },
+    "keep_best": {
+      "type": "object",
+      "required": [
+        "by",
+        "order"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "by": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order": {
+          "enum": [
+            "lowest",
+            "highest"
+          ]
+        }
+      }
+    },
+    "regeneration": {
+      "description": "Redo a judged step, or a group, as further takes. `max` counts every take, the first included. On a judge's `on_reject`, a rejection asks for the next take; on a group, `until` decides after each take.",
+      "type": "object",
+      "required": [
+        "max"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "max": {
+          "description": "Takes in all: a number, or an expression known while planning.",
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 12
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "then": {
+          "description": "What happens when every take was rejected.",
+          "anyOf": [
+            {
+              "enum": [
+                "fail",
+                "continue",
+                "skip"
+              ]
+            },
+            {
+              "type": "object",
+              "required": [
+                "keep_best"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "keep_best": {
+                  "$ref": "#/$defs/keep_best"
+                }
+              }
+            }
+          ],
+          "default": "fail"
+        },
+        "until": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "feedback": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "step": {
+      "description": "One step: a node type (`uses`) or a group (`steps`), maybe repeated.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "uses": {
+          "description": "The node type: `fx/<name>@<major>` (built-in), `./<path>#<attr>` (a project node), or `./<path>.yaml` (another workflow).",
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "steps": {
+          "description": "A group: its steps, run together.",
+          "anyOf": [
+            {
+              "type": "object",
+              "propertyNames": {
+                "$ref": "#/$defs/name"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/step"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "with": {
+          "description": "The type's inputs and params. Values holding `${{ }}` are expressions.",
+          "type": "object"
+        },
+        "if": {
+          "type": [
+            "string",
+            "boolean",
+            "null"
+          ]
+        },
+        "needs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/name"
+          }
+        },
+        "for_each": {
+          "description": "Repeat over a list: an expression or a literal list."
+        },
+        "as": {
+          "description": "The name each repeated item takes. Default `item`.",
+          "$ref": "#/$defs/name"
+        },
+        "key": {
+          "description": "An expression naming each repeated item, used in its path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "max": {
+          "description": "The most items a repeat may run: a number, or an expression known while planning. Required when the list comes from a step.",
+          "type": [
+            "integer",
+            "string",
+            "null"
+          ]
+        },
+        "matrix": {
+          "anyOf": [
+            {
+              "type": "object",
+              "propertyNames": {
+                "$ref": "#/$defs/name"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "judges": {
+          "description": "The step this judge step gives a verdict on.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/name"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "on_reject": {
+          "description": "On a judge: what a rejection does.",
+          "anyOf": [
+            {
+              "enum": [
+                "fail",
+                "continue",
+                "skip"
+              ]
+            },
+            {
+              "type": "object",
+              "required": [
+                "regenerate"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "regenerate": {
+                  "$ref": "#/$defs/regeneration"
+                }
+              }
+            }
+          ],
+          "default": "fail"
+        },
+        "regenerate": {
+          "description": "On a group: redo the whole group as further takes, `until` it is good.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/regeneration"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "takes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 24
+        },
+        "pick": {
+          "description": "Which of the `takes` downstream steps read.",
+          "anyOf": [
+            {
+              "enum": [
+                "manual",
+                "first_accepted"
+              ]
+            },
+            {
+              "type": "object",
+              "required": [
+                "best"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "best": {
+                  "$ref": "#/$defs/keep_best"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "assert": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/assertion"
+          }
+        },
+        "at": {
+          "description": "`plan`: a free, local, deterministic step that runs while planning.",
+          "enum": [
+            "plan",
+            null
+          ]
+        },
+        "budget": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/budget"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "concurrency": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 1024
+        },
+        "route": {
+          "description": "The `model@provider` serving the type's one paid capability.",
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^.+@[a-z0-9._-]+$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "requires": {
+          "description": "Features the route must support. A route without one is refused while planning.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "independent_of": {
+          "description": "Steps that must not share an underlying model with this one.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/name"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/name"
+              }
+            }
+          ]
+        },
+        "view": {
+          "description": "Views are planned, not implemented: the value is recorded in the graph and otherwise ignored.",
+          "type": [
+            "boolean",
+            "string"
+          ],
+          "default": false
+        },
+        "timeout": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "title": {
+          "description": "For readers; never part of what the step makes.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "uses"
+          ],
+          "properties": {
+            "uses": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "required": [
+            "steps"
+          ],
+          "properties": {
+            "steps": {
+              "type": "object"
+            }
+          }
+        }
+      ],
+      "allOf": [
+        {
+          "description": "A step repeats over `for_each` or `matrix`, not both.",
+          "not": {
+            "allOf": [
+              {
+                "required": [
+                  "for_each"
+                ],
+                "properties": {
+                  "for_each": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                }
+              },
+              {
+                "required": [
+                  "matrix"
+                ],
+                "properties": {
+                  "matrix": {
+                    "type": "object"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "description": "A group takes no `judges`, `takes`, `pick`, `route`, `at` or `with`, and its `regenerate` needs `until`. A node step's regeneration is written on its judge, as `on_reject: { regenerate: ... }`.",
+          "if": {
+            "required": [
+              "steps"
+            ],
+            "properties": {
+              "steps": {
+                "type": "object"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "judges": {
+                "type": "null"
+              },
+              "takes": {
+                "type": "null"
+              },
+              "pick": {
+                "type": "null"
+              },
+              "route": {
+                "type": "null"
+              },
+              "at": {
+                "type": "null"
+              },
+              "with": {
+                "maxProperties": 0
+              },
+              "regenerate": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "until"
+                    ],
+                    "properties": {
+                      "until": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "regenerate": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "description": "`on_reject` other than `fail` belongs on a judge.",
+          "if": {
+            "required": [
+              "on_reject"
+            ],
+            "properties": {
+              "on_reject": {
+                "not": {
+                  "const": "fail"
+                }
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "judges"
+            ],
+            "properties": {
+              "judges": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "description": "`pick` chooses among `takes`.",
+          "if": {
+            "required": [
+              "pick"
+            ],
+            "properties": {
+              "pick": {
+                "not": {
+                  "type": "null"
+                }
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "takes"
+            ],
+            "properties": {
+              "takes": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        {
+          "description": "An `at: plan` step is free, local and deterministic.",
+          "if": {
+            "required": [
+              "at"
+            ],
+            "properties": {
+              "at": {
+                "const": "plan"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "takes": {
+                "type": "null"
+              },
+              "judges": {
+                "type": "null"
+              },
+              "route": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "description": "A judge's regeneration ends on its own verdict; `until` is for groups.",
+          "not": {
+            "required": [
+              "on_reject"
+            ],
+            "properties": {
+              "on_reject": {
+                "type": "object",
+                "required": [
+                  "regenerate"
+                ],
+                "properties": {
+                  "regenerate": {
+                    "type": "object",
+                    "required": [
+                      "until"
+                    ],
+                    "properties": {
+                      "until": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

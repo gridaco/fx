@@ -1,0 +1,7 @@
+fx: workflow/v1
+id: pinned
+title: Only the versioned type
+steps:
+  b:
+    uses: ./nodes/n.py#pinned
+    with: { text: hello }

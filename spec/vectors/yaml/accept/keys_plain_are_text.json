@@ -1,0 +1,14 @@
+{
+  ".inf": "inf-like",
+  "0x1F": "hex-like",
+  "1": "first",
+  "1.5": "one and a half",
+  "2026-10-05": "date-like",
+  "no": "two",
+  "null": "nothing",
+  "off": "pull",
+  "on": "push",
+  "true": "real",
+  "yes": "one",
+  "~": "tilde"
+}

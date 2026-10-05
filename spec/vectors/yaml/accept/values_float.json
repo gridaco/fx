@@ -1,0 +1,12 @@
+{
+  "exponent": 1000,
+  "fraction": 0.25,
+  "large": 6.02e+23,
+  "leading_dot": 0.5,
+  "negative_exponent": -0.0015,
+  "one_point_zero": 1,
+  "signed": 2.5,
+  "small": 1e-7,
+  "trailing_dot": 5,
+  "upper_e": 250
+}

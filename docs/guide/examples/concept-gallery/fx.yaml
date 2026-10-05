@@ -1,0 +1,10 @@
+fx: project/v1
+budget:
+  max_usd: 12
+routes:
+  structured.generate: writer-llm@openrouter
+  structured.review: reviewer-llm@openrouter
+  image.generate: gpt-image-2@openai
+  vision.review: reviewer-vlm@openrouter
+route_tables:                   # the guide's illustrative prices, read after the built-in table
+  - ../routes.yaml

@@ -1,0 +1,6 @@
+# Plain scalars that are strings in every YAML version; y and n are not booleans, and 0bad is
+# not a binary number.
+on: y
+answer: n
+code: 0bad
+when: 5 October 2026

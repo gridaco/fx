@@ -1,0 +1,17 @@
+steps:
+- argv:
+  - expand
+  - case
+  - --routes
+  - routes.yaml
+  save: expand.json
+  json: true
+  status: 0
+- argv:
+  - price
+  - case
+  - --routes
+  - routes.yaml
+  save: price.json
+  json: true
+  status: 0

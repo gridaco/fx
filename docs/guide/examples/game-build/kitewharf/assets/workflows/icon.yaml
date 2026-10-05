@@ -1,0 +1,19 @@
+fx: workflow/v1
+id: icon
+title: One item icon
+inputs:
+  name: { type: string, description: "What the item is" }
+steps:
+  draw:
+    uses: fx/image.generate@1
+    with:
+      prompt: "A game pickup icon: ${{ inputs.name }}. Centred, readable at 64 px, no text."
+      size: 1024x1024
+      background: transparent
+  clean:
+    uses: fx/image.check_alpha@1
+    judges: draw
+    with: { image: "${{ steps.draw.outputs.image }}" }
+    on_reject: { regenerate: { max: 3, then: fail } }
+outputs:
+  icon: ${{ steps.draw.outputs.image }}

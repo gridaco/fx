@@ -1,0 +1,11 @@
+fx: workflow/v1
+id: case
+title: Matrix
+steps:
+  combo:
+    matrix: { eye: [open, shut], mouth: [smile, flat] }
+    uses: ./nodes/cases.py#shout
+    with: { text: "${{ matrix.eye }} ${{ matrix.mouth }}" }
+  all:
+    uses: ./nodes/cases.py#join
+    with: { parts: "${{ steps.combo.*.outputs.text }}" }

@@ -1,0 +1,46 @@
+# Studio shots for a small catalogue: one generated image per product,
+# three takes each, reviewed against a brief.
+fx: workflow/v1
+id: studio-shots
+title: Studio shots
+description: >-
+  Draw a studio photo of every product, review each take against the brief,
+  and keep the first accepted one.
+
+inputs:
+  products: { type: list, items: { type: string }, description: "Product names" }
+  brief:    { type: file, kind: text/markdown }
+  size:     { type: string, default: "1024x1024" }
+
+budget:
+  max_usd: 4.5
+
+steps:
+  shot:
+    for_each: ${{ inputs.products }}
+    key: ${{ item }}
+    max: 12
+    steps:
+      draw:
+        uses: fx/image.generate@1
+        route: img-a@acme
+        takes: 3
+        pick: first_accepted
+        with:
+          prompt: "A studio photo of ${{ item }} on a plain grey backdrop."
+          size: ${{ inputs.size }}
+          background: opaque
+
+      review:
+        uses: fx/vision.review@1
+        route: reviewer-a@acme
+        judges: draw
+        if: ${{ facts(steps.draw.outputs.image).width >= 512 }}
+        with:
+          image: ${{ steps.draw.outputs.image }}
+          question: ./prompts/review.md
+          criteria: [ "the product fills the frame", "the backdrop is plain grey" ]
+        on_reject: { regenerate: { max: 2, then: continue } }
+
+outputs:
+  shots: ${{ steps.shot.outputs.image }}

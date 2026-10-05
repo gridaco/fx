@@ -1,0 +1,7 @@
+{
+  "double": "a\tb\nc \"q\" \\ é",
+  "empty_double": "",
+  "empty_single": "",
+  "padded": "  padded  ",
+  "single": "a\\tb 'q'"
+}

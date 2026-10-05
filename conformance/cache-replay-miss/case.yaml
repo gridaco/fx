@@ -1,0 +1,6 @@
+# cache-replay without the cache: the call misses, and a paid call without --live is refused.
+# The run exits 1 and names the capability, the route and --live.
+steps:
+- argv: [run, case, --routes, routes.yaml, --run, runs/one]
+  status: 1
+  mentions: ["image.generate", "img-a@acme", "--live"]

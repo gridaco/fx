@@ -1,0 +1,1 @@
+Values: an ambiguous plain scalar (a sexagesimal number, with an optional sign) is refused; quote it.

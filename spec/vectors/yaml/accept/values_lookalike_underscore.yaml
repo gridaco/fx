@@ -1,0 +1,6 @@
+# Removing the underscores leaves no number: strings.
+alone: _
+snake: snake_case
+label: v1_2
+lead: _x1
+mixed: 1_a

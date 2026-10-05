@@ -1,0 +1,4 @@
+on: &word "on"
+answer: *word
+code: "017"
+when: "2026-10-05"

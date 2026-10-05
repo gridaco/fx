@@ -1,0 +1,30 @@
+fx: workflow/v1
+id: case
+title: Everything a plan refuses
+inputs:
+  names: { type: list, items: { type: string } }
+assert:
+  - check: ${{ len(inputs.names) < 2 }}
+    message: "at most one name"
+steps:
+  draw:
+    uses: fx/image.generate@1
+    requires: [mask]
+    with: { prompt: x }
+  write:
+    uses: fx/structured.generate@1
+    with: { prompt: x, schema: ./schema.json }
+  review:
+    uses: fx/vision.review@1
+    route: llm-a@other
+    independent_of: write
+    judges: write
+    with: { question: "right?" }
+  lost:
+    uses: fx/image.generate@1
+    route: img-z@nowhere
+    with: { prompt: x }
+  unbounded:
+    for_each: ${{ steps.write.outputs.json.items }}
+    uses: ./nodes/cases.py#shout
+    with: { text: "${{ item }}" }

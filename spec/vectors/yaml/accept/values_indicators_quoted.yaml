@@ -1,0 +1,7 @@
+anchor_like: "&name"
+alias_like: '*name'
+tag_like: "!!str"
+merge_like: "<<"
+directive_like: "%YAML"
+complex_like: "? a"
+comment_like: "# not a comment"

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-takes-v1",
+  "title": "FX takes file (<workflow id>.takes.yaml)",
+  "description": "The take each step path uses, written by `grida-fx reroll` and `grida-fx pick`; commit it. It has no discriminator: every top-level key is a step path, and `fx` is a legal step name.",
+  "type": "object",
+  "propertyNames": {
+    "type": "string",
+    "pattern": "^[a-z][a-z0-9_]*(?:\\['(?:[^'\\\\]|\\\\.)*'\\])*(?:\\.[a-z][a-z0-9_]*(?:\\['(?:[^'\\\\]|\\\\.)*'\\])*)*$",
+    "description": "A step path (identity.md §11): step names joined by `.`, each repeated step carrying its key in brackets and single quotes, with `\\` and `'` inside the quotes escaped by a backslash: `entity['ada'].draw`, `entity['it\\'s'].draw`."
+  },
+  "additionalProperties": {
+    "type": "object",
+    "required": [
+      "take"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "take": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "result": {
+        "description": "Written by `pick`: the file digest (identity.md §2) of the picked take's first output file, 64 lowercase hexadecimal characters with no prefix. A pick whose take no longer produces it is refused.",
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      }
+    }
+  }
+}

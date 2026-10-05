@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "required": ["prompt", "must_show", "must_avoid"],
+  "properties": {
+    "prompt": { "type": "string" },
+    "must_show": { "type": "string" },
+    "must_avoid": { "type": "string" }
+  }
+}

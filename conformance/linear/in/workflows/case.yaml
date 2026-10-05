@@ -1,0 +1,14 @@
+fx: workflow/v1
+id: case
+title: Linear
+inputs:
+  brief: { type: file, kind: text/plain }
+steps:
+  count:
+    uses: ./nodes/cases.py#lines
+    with: { text: "${{ inputs.brief }}" }
+  draw:
+    uses: fx/image.generate@1
+    with: { prompt: "A picture of ${{ len(steps.count.outputs.items.lines) }} lines" }
+outputs:
+  image: ${{ steps.draw.outputs.image }}

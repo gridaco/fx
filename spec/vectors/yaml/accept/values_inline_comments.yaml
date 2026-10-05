@@ -1,0 +1,3 @@
+count: 3 # three takes
+name: img-a   # the model
+tag: a#b # only the second is a comment
