@@ -1,0 +1,61 @@
+{
+ "instances": {
+  "joined#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": null
+   },
+   "path": "joined",
+   "state": "succeeded"
+  },
+  "loud['ada']#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": null
+   },
+   "path": "loud['ada']",
+   "state": "succeeded"
+  },
+  "loud['bo']#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": null
+   },
+   "path": "loud['bo']",
+   "state": "succeeded"
+  }
+ },
+ "run": {
+  "run_finished": {
+   "charged_usd": 0,
+   "event": "run_finished",
+   "failed": [],
+   "incomplete": false,
+   "ok": true,
+   "outputs": {
+    "all": {
+     "file": {
+      "digest": "d21bb7e08a12208b181c47742af69509002e4f3314ad820a5c5aa0631d8ce6f6",
+      "kind": "text/plain",
+      "name": "joined/text",
+      "size": 13
+     }
+    }
+   },
+   "plan": "260f8e849c21cfac43f8f650caed1e2b6c057aa602548f7fd401fa7fa9cfebf5",
+   "stopped": null
+  },
+  "run_started": {
+   "ceiling_usd": null,
+   "charged_usd": 0,
+   "estimate": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "event": "run_started",
+   "plan": "260f8e849c21cfac43f8f650caed1e2b6c057aa602548f7fd401fa7fa9cfebf5",
+   "resumed": false,
+   "workflow": "case"
+  }
+ }
+}

@@ -127,7 +127,7 @@ values, or a JSON Schema dict.
 | | |
 |---|---|
 | `ctx.read.image(name)`, `.json(name)`, `.text(name)`, `.annotations(name)`, `.bytes(name)` | read a declared input (`.image` returns PIL) |
-| `ctx.inputs[name]` | the file itself: `.path`, `.kind`, `.digest`, `.key`, `.facts` (its file facts, computed by FX: `bytes`, `kind`, and for images `width`, `height`, `has_alpha`, `opaque`) |
+| `ctx.inputs[name]` | the file itself: `.path`, `.kind`, `.digest`, `.key`, `.facts` (its file facts, computed by FX: `bytes`, `kind`, and for images `width`, `height`, `has_alpha`, `opaque`; for WAV audio `duration`; for MP4, WebM and Matroska video `width`, `height`, `fps`, `duration`, `frames`, `has_alpha`) |
 | `ctx.params` | your settings, typed |
 | `ctx.out.png(img)`, `.json(obj)`, `.text(s)`, `.bytes(data, kind)` | produce an output value to return. FX writes a JSON value itself, in one canonical layout, so every SDK writes the same bytes. |
 | `ctx.out.path(name)` then `ctx.out.file(path)` | for tools that write a file themselves: get a path, then return it |
@@ -173,8 +173,10 @@ async def layer_repaint(ctx: Ctx) -> dict:
   attempts, each one reserved, recorded and settled
   ([The workflow file](02-workflow-file.md#judges) has the three kinds of failure).
 - **Calling a provider your own way** (an HTTP API FX doesn't know) is possible. Declare
-  `retry="engine"` and FX runs your node again after an error, at most 6 runs in all; calls an
-  earlier run completed come from the cache. FX cannot price or hold a call it does not route, so
+  `retry="engine"` and FX runs your node again after it raises an exception, at most 6 runs in
+  all; calls an earlier run completed come from the cache. A node that failed with
+  `ctx.fail(...)`, through a paid call that failed or was refused, or by running past its
+  `timeout:` is never run again. FX cannot price or hold a call it does not route, so
   the plan and the ceiling don't see it; declaring its price is planned. Prefer a capability when
   one exists.
 - **Errors that won't change on retry** (an unknown voice, invalid settings) fail at once. They are

@@ -1,0 +1,236 @@
+{
+ "audio_first.mp4": {
+  "bytes": 5786,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 1,
+  "frames": 24,
+  "has_alpha": false
+ },
+ "audio_only.mp4": {
+  "bytes": 3295,
+  "kind": "video/mp4"
+ },
+ "edit_cut.mp4": {
+  "bytes": 4050,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 1.5,
+  "frames": 48,
+  "has_alpha": false
+ },
+ "empty_edit.mp4": {
+  "bytes": 2640,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 1,
+  "frames": 24,
+  "has_alpha": false
+ },
+ "faststart.mp4": {
+  "bytes": 2628,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 1,
+  "frames": 24,
+  "has_alpha": false
+ },
+ "fragmented.mp4": {
+  "bytes": 2639,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 1,
+  "frames": 24,
+  "has_alpha": false
+ },
+ "fragmented_moov_samples.mp4": {
+  "bytes": 3276,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 1,
+  "frames": 24,
+  "has_alpha": false
+ },
+ "fragmented_two.mp4": {
+  "bytes": 3263,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 1,
+  "frames": 24,
+  "has_alpha": false
+ },
+ "fragmented_zero_edit.mp4": {
+  "bytes": 3323,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 1,
+  "frames": 24,
+  "has_alpha": false
+ },
+ "garbage.mp4": {
+  "refused": "not an MP4 file (a box at byte 0 runs past the end of the file)"
+ },
+ "h264_24fps.mp4": {
+  "bytes": 4050,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 2,
+  "frames": 48,
+  "has_alpha": false
+ },
+ "h264_25fps_no_bframes.mp4": {
+  "bytes": 1811,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 25,
+  "duration": 0.4,
+  "frames": 10,
+  "has_alpha": false
+ },
+ "h264_2997.mp4": {
+  "bytes": 2835,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 29.97003,
+  "duration": 1.001,
+  "frames": 30,
+  "has_alpha": false
+ },
+ "h264_60fps.mp4": {
+  "bytes": 2460,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 60,
+  "duration": 0.5,
+  "frames": 30,
+  "has_alpha": false
+ },
+ "h264_66x50.mp4": {
+  "bytes": 2294,
+  "kind": "video/mp4",
+  "width": 66,
+  "height": 50,
+  "fps": 24,
+  "duration": 0.5,
+  "frames": 12,
+  "has_alpha": false
+ },
+ "h264_one_frame.mp4": {
+  "bytes": 1223,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 0.041667,
+  "frames": 1,
+  "has_alpha": false
+ },
+ "h264_timescale_600.mp4": {
+  "bytes": 2628,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 1,
+  "frames": 24,
+  "has_alpha": false
+ },
+ "h264_yuv444.mp4": {
+  "bytes": 2763,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 1,
+  "frames": 24,
+  "has_alpha": false
+ },
+ "mpeg4_part2.mp4": {
+  "bytes": 7578,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 1,
+  "frames": 24,
+  "has_alpha": false
+ },
+ "png_rgb.mp4": {
+  "bytes": 2141,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 0.125,
+  "frames": 3,
+  "has_alpha": false
+ },
+ "png_rgba.mp4": {
+  "bytes": 2276,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 0.125,
+  "frames": 3,
+  "has_alpha": true
+ },
+ "quicktime.mov": {
+  "bytes": 2579,
+  "kind": "file"
+ },
+ "rotated.mp4": {
+  "bytes": 4050,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 2,
+  "frames": 48,
+  "has_alpha": false
+ },
+ "sar_2_1.mp4": {
+  "bytes": 2628,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 1,
+  "frames": 24,
+  "has_alpha": false
+ },
+ "truncated.mp4": {
+  "refused": "not an MP4 file (a box at byte 40 runs past the end of the file)"
+ },
+ "vfr.mp4": {
+  "bytes": 2845,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 1.375,
+  "frames": 24,
+  "has_alpha": false
+ }
+}

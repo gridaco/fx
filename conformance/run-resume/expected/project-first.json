@@ -1,0 +1,53 @@
+{
+ "instances": {
+  "echoed#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": null
+   },
+   "path": "echoed",
+   "state": "succeeded"
+  },
+  "loud#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": null
+   },
+   "path": "loud",
+   "state": "succeeded"
+  }
+ },
+ "run": {
+  "run_finished": {
+   "charged_usd": 0,
+   "event": "run_finished",
+   "failed": [],
+   "incomplete": false,
+   "ok": true,
+   "outputs": {
+    "echoed": {
+     "file": {
+      "digest": "d398550cfd6aa695d21657f7c325c320589590344badc7c572189f94cb4298e8",
+      "kind": "text/plain",
+      "name": "echoed/text",
+      "size": 9
+     }
+    }
+   },
+   "plan": "4ccdf95e76076c8a843b52bbde8c05296f98ee924e3fee8521ec31c1e5cf94f3",
+   "stopped": null
+  },
+  "run_started": {
+   "ceiling_usd": null,
+   "charged_usd": 0,
+   "estimate": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "event": "run_started",
+   "plan": "4ccdf95e76076c8a843b52bbde8c05296f98ee924e3fee8521ec31c1e5cf94f3",
+   "resumed": false,
+   "workflow": "case"
+  }
+ }
+}

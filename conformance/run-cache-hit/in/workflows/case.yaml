@@ -1,0 +1,16 @@
+fx: workflow/v1
+id: case
+title: A plan run twice
+inputs:
+  names: { type: list, items: { type: string } }
+steps:
+  loud:
+    for_each: ${{ inputs.names }}
+    key: ${{ item }}
+    uses: ./nodes/cases.py#shout
+    with: { text: "${{ item }}" }
+  joined:
+    uses: ./nodes/cases.py#join
+    with: { parts: "${{ steps.loud.*.outputs.text }}" }
+outputs:
+  all: ${{ steps.joined.outputs.text }}

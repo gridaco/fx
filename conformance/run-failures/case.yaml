@@ -1,0 +1,41 @@
+# A failed step is a result, not an error, and the run goes on. `nope` fails on purpose
+# (`ctx.fail`, a `node_failure`) and keeps the node fact it reported before failing; `after`
+# reads its output and is skipped as blocked (`something it reads failed`); `bang` raises an
+# exception (a `node_error`, failed as `RuntimeError: kaboom y`), which its type does not ask to
+# run again. `ok` succeeds. The run is `failed`, names each failure and exits 1. `project` shows
+# each instance's state and error; `run_finished` lists the failures in the expansion's order
+# and carries the output that exists (`good`, also at `outputs/good.txt`) and the one that
+# failed as `{"value": {"failed": …}}`. The record itself (`events.json`, the run's
+# events.jsonl sorted) shows nope's `node_failed` with the fact `seen: x`, bang's with no
+# facts, and after's `node_skipped` with `blocked: true`; no `node_retry`. `inspect --verify`
+# counts the states, names the two failures and verifies the one file placed; it exits 0, since
+# it found nothing wrong with the folder.
+steps:
+- argv:
+  - run
+  - case
+  - --routes
+  - routes.yaml
+  - --run
+  - runs/one
+  status: 1
+  mentions:
+  - "result    failed   spent $0.00"
+  - "nope#1: refused on purpose"
+  - "bang#1: RuntimeError: kaboom y"
+  - "after#1: something it reads failed"
+- argv:
+  - project
+  - runs/one
+  save: project.json
+  json: true
+- read: runs/one/outputs/good.txt
+  save: good.txt
+- read: runs/one/events.jsonl
+  save: events.json
+  jsonl: true
+- argv:
+  - inspect
+  - runs/one
+  - --verify
+  save: inspect.txt

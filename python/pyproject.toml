@@ -4,7 +4,11 @@ version = "0.1.0a1"
 description = "Grida FX for Python: author nodes and workflows, and drive the grida-fx engine."
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    # The standard bodies (grida.fx.std) write pictures byte for byte as FX's predecessor did:
+    # every identity downstream depends on this exact Pillow build (docs/wg/overview.md, decision 8).
+    "pillow==12.3.0",
+]
 
 [project.urls]
 Repository = "https://github.com/gridaco/fx"

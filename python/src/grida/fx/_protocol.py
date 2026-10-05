@@ -30,6 +30,24 @@ PROTOCOL_MISMATCH = -32003
 LOAD_FAILED = -32004
 BUILD_FAILED = -32005
 INTERNAL = -32099
+#: Every code of section 7. An error a body lets propagate keeps its code only when it is one.
+ERROR_CODES = frozenset(
+    {
+        PARSE_ERROR,
+        INVALID_REQUEST,
+        METHOD_NOT_FOUND,
+        INVALID_PARAMS,
+        NODE_FAILURE,
+        NODE_ERROR,
+        CANCELLED,
+        PROTOCOL_MISMATCH,
+        LOAD_FAILED,
+        BUILD_FAILED,
+        *range(-32017, -32009),  # capability_undeclared .. job_unsettled
+        *range(-32024, -32019),  # agent_unfinished .. unknown_file
+        INTERNAL,
+    }
+)
 
 #: The longest header line read; a longer one breaks the transport.
 _MAX_HEADER_LINE = 8192

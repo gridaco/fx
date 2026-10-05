@@ -1228,7 +1228,7 @@ fn integrated_an_at_plan_step_with_a_runner() {
 fn integrated_make_plan_counts_cached_identities() {
     struct All;
     impl grida_fx_core::host::ResultCache for All {
-        fn has_result(&self, _: &str) -> bool {
+        fn has_result(&self, _: &grida_fx_core::expand::Instance) -> bool {
             true
         }
     }

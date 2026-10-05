@@ -1,0 +1,24 @@
+fx: workflow/v1
+id: case
+title: Media facts in expressions
+inputs:
+  voice: { type: file, kind: audio/wav }
+  clip: { type: file, kind: video/mp4 }
+steps:
+  describe:
+    if: ${{ facts(inputs.clip).fps > 24 && facts(inputs.voice).duration < facts(inputs.clip).duration }}
+    uses: fx/package@1
+    with:
+      files: { clip.mp4: "${{ inputs.clip }}" }
+      manifest:
+        seconds: ${{ facts(inputs.voice).duration }}
+        fps: ${{ facts(inputs.clip).fps }}
+        frames: ${{ facts(inputs.clip).frames }}
+        width: ${{ facts(inputs.clip).width }}
+        label: "${{ facts(inputs.clip).width }}x${{ facts(inputs.clip).height }}, ${{ facts(inputs.clip).frames }} frames at ${{ facts(inputs.clip).fps }} fps for ${{ facts(inputs.clip).duration }} s; voice ${{ facts(inputs.voice).duration }} s, ${{ facts(inputs.voice).bytes }} bytes of ${{ facts(inputs.voice).kind }}"
+  long_clip:
+    if: ${{ facts(inputs.clip).frames > 100 || facts(inputs.clip).has_alpha }}
+    uses: fx/package@1
+    with:
+      files: { clip.mp4: "${{ inputs.clip }}" }
+      manifest: { never: packed }

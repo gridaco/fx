@@ -1,0 +1,21 @@
+fx: workflow/v1
+id: case
+title: Failures are results
+inputs:
+  word: { type: string, default: hi }
+steps:
+  ok:
+    uses: ./nodes/fails.py#make
+    with: { text: "${{ inputs.word }}" }
+  nope:
+    uses: ./nodes/fails.py#refuse
+    with: { text: x }
+  after:
+    uses: ./nodes/fails.py#make
+    with: { text: "${{ steps.nope.outputs.text }}" }
+  bang:
+    uses: ./nodes/fails.py#boom
+    with: { text: y }
+outputs:
+  good: ${{ steps.ok.outputs.text }}
+  bad: ${{ steps.after.outputs.text }}

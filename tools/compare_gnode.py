@@ -1,9 +1,11 @@
-"""Compare grida-fx with the Python engine FX grew out of (overview.md, milestone 1 step 2 gate).
+"""Compare grida-fx with the Python engine FX grew out of (overview.md, milestone 1 gates).
 
-With digests removed, the expanded graphs and prices of grida-fx must match the Python engine's
-output exactly. This script runs both and diffs them. It uses the standard library and PyYAML only
-(through conformance/run.py, whose case format, minimal environment and process handling it
-shares) and never spends: both engines plan offline.
+With digests removed, the expanded graphs, identities and prices of grida-fx (step 2), and what
+its runs record and write (step 3), must match the Python engine's output exactly, except where
+FX decided otherwise on purpose. This script runs both and diffs them. It uses the standard
+library and PyYAML only (through conformance/run.py, whose case format, minimal environment and
+process handling it shares) and never spends: both engines plan and run offline, never with
+``--live``, and a paid call either replays from a store or is refused.
 
     FX_GNODE_REPO=/path/to/stage-gen uv run --project python python tools/compare_gnode.py \\
         --command target/debug/grida-fx [case ...]
@@ -11,8 +13,14 @@ shares) and never spends: both engines plan offline.
         --pair <gnode project dir> <fx project dir> --target <workflow> [--routes r.yaml] \\
         [--inputs i.yaml]
 
-Case mode (default: every case of FX's suite; else the cases named): for each step of the FX
-case's ``case.yaml`` whose verb is ``expand`` or ``price``, copy the ORIGINAL case project from
+Case mode (default: every case of FX's suite; else the cases named) compares a case in one of two
+ways. A case none of whose steps runs (no ``run``, ``reroll``, ``pick``, ``takes``, ``project``,
+``inspect`` or ``jobs`` step) is compared verb by verb, each step on its own (plan mode, below);
+any other case is compared step by step, every step in one copy of its project (run mode, after
+it).
+
+Plan mode: for each step of the FX case's ``case.yaml`` whose verb is ``expand``, ``price`` or
+``identity``, copy the ORIGINAL case project from
 ``$FX_GNODE_REPO/tests/conformance/<case>/in`` to a fresh temporary folder and run, there,
 ``uv run --project $FX_GNODE_REPO --no-sync gnode <verb> ...`` with ``GNODE_PLUGINS=std``
 (``--no-sync``: the gnode checkout's environment is used as it is and never written); copy FX's
@@ -26,12 +34,24 @@ the FX suite made to gnode's cases: a document's ``fx:`` key, ``fx/`` in ``uses`
 ``from grida.fx import``. What other earlier steps did (a lock written, a run) is not reproduced.
 Exit statuses must agree; both stdouts are parsed and normalised, then compared.
 
+Run mode: each engine gets one fresh copy of the case's project (gnode's original, or FX's
+ported) and runs every step of ``case.yaml`` in order in it, as the conformance runner does:
+``files`` written (mapped to gnode's names for gnode), then ``argv`` run (likewise mapped), then
+``read`` read. Every step that runs a command compares its exit status; every step that saves
+compares what it saves (its stdout, or the file it reads): JSON (``json: true``, or the stdout of
+``expand``, ``price``, ``identity`` and ``project``) after normalisation, anything else as text
+line by line (``$[<line>]``), the gnode side with FX's names (below). Absolute paths into either
+copy are made relative to it first, so gnode's ``run       /tmp/.../runs/one`` reads as FX's
+``run       runs/one``. A step's ``status`` and ``mentions`` in ``case.yaml`` pin FX; they are
+not checked here. A case that cannot run on gnode at all is listed in ``NOT_PORTED``.
+
 A case that gnode's suite lacks (FX wrote it after the move) is PORTED: gnode runs in a copy of
 FX's own ``in/`` with the same mapping applied to every file's name and text, and its lines say
 ``ported``. A case listed in ``NOT_PORTED`` is skipped with the reason given there.
 
-Pair mode runs ``expand`` and ``price`` with the same ``--target``, ``--routes`` and ``--inputs``
-(paths inside each project) in copies of two projects, without known differences. When a pair
+Pair mode runs ``expand``, ``price`` and ``identity`` with the same ``--target``, ``--routes``
+and ``--inputs`` (paths inside each project) in copies of two projects, without known
+differences. When a pair
 differs, the FX decisions that no case exercises (``UNCASED_DECISIONS``) are printed after it, so
 a difference can be checked against them before it is reported.
 
@@ -49,17 +69,31 @@ Normalisation (both sides):
   ``x-gnode-`` → ``x-fx-``, a document key ``gnode: <doc>/v1`` → ``fx: <doc>/v1``;
 - numbers compared as numbers (``1`` == ``1.0``; money, a ``*_usd`` member, within 1e-9; a
   boolean is never a number);
-- problems compared as a list of ``"where: message"`` strings, after the name mapping.
+- problems compared as a list of ``"where: message"`` strings, after the name mapping;
+- ``identity`` output (instance id to identity): each identity becomes ``"<digest>"``, so the
+  instance ids and whether each identity is known are compared;
+- ``project`` output (run mode): the plan digest (FX ``plan``, gnode ``graph_sha256``) and the
+  event envelope (``kind``, ``schema_version``, ``invocation_id``, ``offset_ms``,
+  ``duration_ms``) are dropped from its ``run`` events, gnode's ``run_canceled`` is
+  ``run_cancelled``, and gnode's instance errors get FX's names. Output files keep their
+  digests: both engines store the same bytes under the same digest;
+- text (run mode, gnode side): ``gnode run|reroll|pick|takes|jobs`` → ``grida-fx …`` and a kind
+  ``gnode-<name>-v<n>`` → ``fx-<name>-v<n>``, besides the names above.
 
 A difference is reported as ``<path>: <gnode> != <fx>``. Paths start at ``$`` (the document);
 a graph's instances are addressed by id (``$.instances[draw#1].state``), other list items by
 index, and the exit status is the path ``status``. Known, recorded differences (decisions FX took
-on purpose) are listed in ``KNOWN_DIFFERENCES`` with the case, the verb and a path; a difference
-at that path or under it is reported as ``known`` instead of failing. The path ``$`` is the
-document as a whole, printed by one engine only: it covers that difference and nothing under it.
+on purpose) are listed in ``KNOWN_DIFFERENCES`` with the case, what is compared (plan mode: the
+verb; run mode: the name a step saves, or ``step <n>`` for a step that saves nothing) and a path;
+a difference at that path or under it is reported as ``known`` instead of failing. In a known
+path, ``[*]`` stands for any one member or item (``$.instances[*].facts.cost_usd``). The path
+``$`` is the document as a whole, printed by one engine only: it covers that difference and
+nothing under it.
 
-Output: one line per case and verb (``<case> <verb>``, with ``(step <n>)`` when a case has two
-steps of that verb and ``(ported)`` for a ported case): ``same``, ``known (<n>)``, ``DIFFERS``
+Output: one line per comparison. Plan mode: ``<case> <verb>``, with ``(step <n>)`` when a case
+has two steps of that verb. Run mode: ``<case> <saved name>`` (``(step <n>)`` when two steps
+save that name), or ``<case> step <n> <verb>`` for a step that saves nothing. ``(ported)`` marks
+a ported case. Each says ``same``, ``known (<n>)``, ``DIFFERS``
 (followed by the differences that are not known and a unified diff of the normalised JSON) or
 ``SKIP <reason>`` (gnode missing, a case FX's suite lacks or one not ported, no step to compare).
 A known difference that no comparison found any more is noted. Exit 1 when any comparison
@@ -71,6 +105,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import difflib
+import hashlib
 import importlib.util
 import json
 import os
@@ -79,13 +114,22 @@ import shutil
 import sys
 import tempfile
 from collections.abc import Iterator
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
+
+import yaml
 
 REPO = Path(__file__).resolve().parents[1]
 CONFORMANCE = REPO / "conformance"
 GNODE_REPO_ENV = "FX_GNODE_REPO"
-VERBS = ("expand", "price")
+#: The verbs plan mode compares, each step on its own.
+VERBS = ("expand", "price", "identity")
+#: Verbs that read or write what an earlier step left behind (a run folder, a takes file, the
+#: store): a case with one is compared in run mode.
+RUN_VERBS = ("run", "reroll", "pick", "takes", "project", "inspect", "jobs")
+#: Verbs whose stdout is a JSON document that run mode normalises like plan mode's.
+JSON_VERBS = (*VERBS, "project")
 TIMEOUT_S = 120.0
 MONEY_TOLERANCE = 1e-9
 #: The path of an exit status difference; ``$`` is the root of the printed document.
@@ -100,6 +144,10 @@ SHOWN_STDERR = 2000
 COPY_IGNORED = ("__pycache__", ".git", ".venv", "node_modules", "target")
 #: FX file names, by the gnode name they were renamed from.
 GNODE_FILE_NAMES = {"fx.yaml": "gnode.yaml", "fx.lock": "gnode.lock"}
+#: What run mode drops from the run events a ``project`` document keeps: the plan digest under
+#: either engine's name, and the event envelope.
+PROJECT_DROPPED = ("plan", "graph_sha256", "kind", "schema_version", "invocation_id", "offset_ms")
+DIGEST_PATTERN = re.compile(r"[0-9a-f]{64}")
 
 
 def _load_conformance() -> Any:
@@ -117,27 +165,63 @@ conformance = _load_conformance()
 #: (case, verb, JSON path) of differences FX made on purpose, in the cases that show them. FX's
 #: decisions that no case exercises yet are in UNCASED_DECISIONS below.
 KNOWN_DIFFERENCES: list[tuple[str, str, str]] = [
-    # Until the runner lands, an at: plan step is a planning problem instead of running: exit 1.
-    ("at-plan", "expand", STATUS),
-    # The at: plan step stays planned, and the repeat over its output never expands.
-    ("at-plan", "expand", "$.instances"),
-    # That repeat waits on a list no run made yet, so it is pending.
-    ("at-plan", "expand", "$.pending"),
-    # The estimate holds the pending repeat instead of the expanded instances.
-    ("at-plan", "expand", "$.estimate"),
-    # The at: plan step's problem, and any that the unexpanded repeat brings.
-    ("at-plan", "expand", "$.problems"),
-    # The price of that plan exits 1 for the same problem.
-    ("at-plan", "price", STATUS),
-    # Its phases price the pending repeat instead of the expanded instances.
-    ("at-plan", "price", "$.phases"),
-    # So does its estimate.
-    ("at-plan", "price", "$.estimate"),
     # (ported) Lock drift is a problem on the step's declaration path (`b`), not on `uses`.
     ("lock-drift", "expand", "$.problems"),
     # (ported) A declared resource that is missing is a problem on the step's declaration path
     # (`lost`), and the step is absent; gnode stops with a traceback and prints no graph.
     ("resource-missing", "expand", ROOT),
+    # Run mode.
+    # (ported) A JSON output's whole numbers are written without `.0` (identity.md sections 1
+    # and 5): `"half": 2`, where gnode wrote Python's `2.0`; so the file's bytes, digest and size
+    # differ too.
+    ("run-local", "report.json", "$[2]"),
+    ("run-local", "project.json", "$.run.run_finished.outputs.report.file.digest"),
+    ("run-local", "project.json", "$.run.run_finished.outputs.report.file.size"),
+    # (ported) The engine writes marks as `fx-annotations-v1` and keeps the port's kind
+    # `annotations` for the file (store.md section 8); gnode wrote `gnode-annotations-v1` (the
+    # text compares the same once named) of kind `json`.
+    ("run-local", "project.json", "$.run.run_finished.outputs.marks.file"),
+    # (ported) A delivered key is made a safe path (store.md section 8, "Keys as paths"): `y z`
+    # is delivered as `y_z.txt`, where gnode wrote `y z.txt`.
+    ("run-deliver", "each-y_z.txt", ROOT),
+    # (ported) run_finished lists the failures in the expansion's order, so a run's record is
+    # the same every time; gnode listed them as they finished.
+    ("run-failures", "project.json", "$.run.run_finished.failed"),
+    ("run-failures", "events.json", "$[*].failed"),
+    # (ported) A node_retry event's error names the exception's type, as node_failed's does;
+    # gnode's held the bare message.
+    ("run-retry-engine", "events.json", "$[*].error"),
+    # (ported) A picked result is the bare digest (fx-takes-v1); gnode wrote `sha256:<digest>`.
+    ("run-takes", "takes-picked.txt", "$[0]"),
+    ("run-takes", "case.takes.yaml", "$[2]"),
+    # (ported) A step past its timeout fails with `ran past <n> seconds` and is never run again
+    # (protocol.md section 7); gnode ran a `retry="engine"` body six times, each failing as
+    # `TimeoutError: `.
+    ("run-timeout", "naps.txt", "$[0]"),
+    ("run-timeout", "project.json", '$.instances["nap#1"].error'),
+]
+# The engine always writes the node fact `cost_usd`, null when the step made no paid call
+# (protocol.md section 5.3); gnode wrote it only after an uncached call. So every projected
+# instance that succeeded has it, and so does every node_finished event.
+KNOWN_DIFFERENCES += [
+    ("run-failures", "events.json", "$[*].facts.cost_usd"),
+    ("run-retry-engine", "events.json", "$[*].facts.cost_usd"),
+]
+KNOWN_DIFFERENCES += [
+    (case, saved, "$.instances[*].facts.cost_usd")
+    for case, saved in (
+        ("at-plan-run", "project.json"),
+        ("run-cache-hit", "project-one.json"),
+        ("run-cache-hit", "project-two.json"),
+        ("run-failures", "project.json"),
+        ("run-local", "project.json"),
+        ("run-project", "project.json"),
+        ("run-resume", "project-first.json"),
+        ("run-resume", "project-resumed.json"),
+        ("run-retry-engine", "project.json"),
+        ("run-takes", "project-two.json"),
+        ("run-takes", "project-three.json"),
+    )
 ]
 
 #: FX decisions that no case exercises yet: a comparison cannot mark them known, so pair mode
@@ -167,16 +251,37 @@ NOT_PORTED: dict[str, str] = {
     # Every step refuses, or not, by FX's own strict YAML reader (yaml.md), where gnode reads
     # YAML 1.1: the statuses differ by decision, and the case's own expected statuses pin FX.
     "yaml-strict": "FX's strict YAML subset is its own (yaml.md); gnode reads YAML 1.1",
+    # The case seeds the project's store with an FX call record, under FX's call key and in FX's
+    # store layout (store.md section 9): gnode's store holds neither, so its run would refuse
+    # the paid call (which cache-replay-miss already compares).
+    "cache-replay": "its seeded store is FX's (store.md section 9); gnode's cannot read it",
+    # The case pins FX's one number type (identity.md sections 1, 5 and 13): gnode reads its
+    # inputs files as YAML 1.1, where `1e21` is a string, so no step plans. With inputs gnode
+    # can read (`1.0e+21`), `n: 1` and `n: 1.0` give gnode two identities, it renders
+    # `e16=1e+16`, and it accepts the integer that FX refuses: each a recorded change.
+    "numbers": "it pins FX's one number type (identity.md section 13); gnode reads YAML 1.1",
 }
 
 _ABSENT = object()
 _NOT_JSON = object()
+#: A step that saves nothing: only its exit status is compared.
+_NOTHING = object()
+
+
+def _special(value: Any) -> bool:
+    """Whether ``value`` is one of the markers above rather than a document."""
+    return value is _ABSENT or value is _NOT_JSON or value is _NOTHING
+
 
 # gnode's names in texts it prints, with FX's. A name is matched where it starts a word, so a
 # path such as src/gnode/... is left alone.
 _START = r"(?<![\w/.-])"
 _GNODE_NAMES: list[tuple[re.Pattern[str], str]] = [
-    (re.compile(_START + r"gnode (?=lock\b|nodes\b|takes mv\b)"), "grida-fx "),
+    (
+        re.compile(_START + r"gnode (?=lock\b|nodes\b|takes\b|run\b|reroll\b|pick\b|jobs\b)"),
+        "grida-fx ",
+    ),
+    (re.compile(_START + r"gnode-(?=[a-z]+(?:-[a-z]+)*-v\d)"), "fx-"),
     (re.compile(_START + r"gnode\.yaml\b"), "fx.yaml"),
     (re.compile(_START + r"gnode\.lock\b"), "fx.lock"),
     (re.compile(r"\bx-gnode-"), "x-fx-"),
@@ -448,6 +553,131 @@ def _scrubbed(value: Any, in_with: bool = False) -> Any:
     return value
 
 
+def normalise_identity(document: Any) -> Any:
+    """``identity`` output, instance id to identity, with every identity ``"<digest>"``."""
+    if not isinstance(document, dict):
+        return _scrubbed(document)
+    return {
+        ident: DIGEST if isinstance(value, str) and DIGEST_PATTERN.fullmatch(value) else value
+        for ident, value in document.items()
+    }
+
+
+def normalise_project(document: Any, side: str) -> Any:
+    """``project`` output: instance states and the run events it keeps, without the plan digest
+    and the event envelope; gnode's ``run_canceled`` and instance errors with FX's names."""
+    if side not in ("gnode", "fx"):
+        raise ValueError(f"side is gnode or fx, not {side!r}")
+    if not isinstance(document, dict):
+        return _scrubbed(document)
+    shaped = dict(document)
+    run = shaped.get("run")
+    if isinstance(run, dict):
+        events: dict[str, Any] = {}
+        for name, event in run.items():
+            if side == "gnode" and name == "run_canceled":
+                name = "run_cancelled"
+            if isinstance(event, dict):
+                event = {key: item for key, item in event.items() if key not in PROJECT_DROPPED}
+                if side == "gnode" and event.get("event") == "run_canceled":
+                    event["event"] = "run_cancelled"
+            events[name] = event
+        shaped["run"] = events
+    instances = shaped.get("instances")
+    if isinstance(instances, dict) and side == "gnode":
+        shaped["instances"] = {
+            ident: {
+                key: fx_names(item) if key == "error" and isinstance(item, str) else item
+                for key, item in entry.items()
+            }
+            if isinstance(entry, dict)
+            else entry
+            for ident, entry in instances.items()
+        }
+    return _scrubbed(shaped)
+
+
+def normalise_events(events: list[Any], side: str) -> list[Any]:
+    """A run's events (``jsonl: true``), each without the plan digest and the envelope, a step
+    identity as ``"<digest>"``, gnode's ``run_canceled`` as ``run_cancelled``, sorted as the
+    conformance suite sorts them."""
+    if side not in ("gnode", "fx"):
+        raise ValueError(f"side is gnode or fx, not {side!r}")
+    shaped: list[Any] = []
+    for event in events:
+        if isinstance(event, dict):
+            event = {
+                key: item
+                for key, item in event.items()
+                if key not in PROJECT_DROPPED and key != "duration_ms"
+            }
+            if side == "gnode" and event.get("event") == "run_canceled":
+                event["event"] = "run_cancelled"
+            if side == "gnode" and isinstance(event.get("error"), str):
+                event["error"] = fx_names(event["error"])
+            if isinstance(event.get("identity"), str):
+                event["identity"] = DIGEST
+        shaped.append(_scrubbed(event))
+    return sorted(shaped, key=lambda item: json.dumps(item, sort_keys=True))
+
+
+def normalised(verb: str | None, document: Any, side: str) -> Any:
+    """The comparable form of a JSON document a step printed or read; ``verb`` is the step's
+    verb (None for a file a step reads)."""
+    if verb in ("expand", "price"):
+        return normalise(document, side)
+    if verb == "identity":
+        return normalise_identity(document)
+    if verb == "project":
+        return normalise_project(document, side)
+    return _without_timings(_scrubbed(document))
+
+
+def _without_timings(value: Any) -> Any:
+    """Run-event timings dropped as the conformance suite drops them: from objects that carry an
+    ``event`` member, never from data such as ``with`` or ``outputs``."""
+    if isinstance(value, list):
+        return [_without_timings(item) for item in value]
+    if isinstance(value, dict):
+        drop = conformance.VOLATILE_KEYS if "event" in value else set()
+        return {
+            key: item if key in conformance.DATA_KEYS else _without_timings(item)
+            for key, item in value.items()
+            if key not in drop
+        }
+    return value
+
+
+def text_lines(raw: bytes, side: str) -> list[str]:
+    """A text a step printed or read, line by line; gnode's with FX's names. Bytes that are not
+    UTF-8 compare by their digest."""
+    if side not in ("gnode", "fx"):
+        raise ValueError(f"side is gnode or fx, not {side!r}")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return [f"sha256:{hashlib.sha256(raw).hexdigest()}"]
+    if side == "gnode":
+        text = fx_names(text)
+    return text.splitlines()
+
+
+def scrub_roots(raw: bytes, roots: list[Path]) -> bytes:
+    """``raw`` with absolute paths into a project copy made relative to it: ``<root>/x`` is
+    ``x`` and ``<root>`` alone is ``.``, for each spelling of the root (as made, and resolved
+    through symbolic links such as macOS's ``/tmp``)."""
+    spellings: list[str] = []
+    for root in roots:
+        for spelling in (str(root), str(root.resolve())):
+            if spelling not in spellings:
+                spellings.append(spelling)
+    # The longest spelling first, so a root never cuts another one short.
+    for spelling in sorted(spellings, key=len, reverse=True):
+        raw = raw.replace(spelling.encode("utf-8") + b"/", b"")
+        raw = re.sub(re.escape(spelling.encode("utf-8")) + rb"(?![\w./-])", b".", raw)
+    return raw
+
+
 # ---------------------------------------------------------------------------- comparing
 
 
@@ -558,6 +788,8 @@ def _shown(value: Any) -> str:
         return "(absent)"
     if value is _NOT_JSON:
         return "(no JSON)"
+    if value is _NOTHING:
+        return "(nothing saved)"
     text = json.dumps(value, ensure_ascii=False, sort_keys=True)
     return text if len(text) <= SHOWN_VALUE else text[: SHOWN_VALUE - 1] + "…"
 
@@ -570,9 +802,23 @@ def _is_known(case: str, verb: str, path: str) -> tuple[str, str, str] | None:
         if path == known_path:
             return known
         # $ is the document printed by one engine only, never everything in it.
-        if known_path != ROOT and path.startswith((known_path + ".", known_path + "[")):
+        if known_path in (ROOT, STATUS):
+            continue
+        if _known_pattern(known_path).match(path):
             return known
     return None
+
+
+#: One bracketed path segment: a quoted member name (which may hold ``]``) or an index or id.
+_SEGMENT = r'\[(?:"(?:[^"\\]|\\.)*"|[^\]]*)\]'
+
+
+def _known_pattern(known_path: str) -> re.Pattern[str]:
+    """A known path as a pattern that matches it and anything under it; ``[*]`` is any one
+    member or item."""
+    parts = known_path.split("[*]")
+    body = _SEGMENT.join(re.escape(part) for part in parts)
+    return re.compile(body + r"(?:$|[.\[])")
 
 
 def _parsed(stdout: str) -> Any:
@@ -626,25 +872,48 @@ class _Report:
         gnode: tuple[int, str, str],
         fx: tuple[int, str, str],
     ) -> None:
+        """A plan-mode comparison: both stdouts parsed as JSON and normalised for ``verb``."""
         g_status, g_out, g_err = gnode
         f_status, f_out, f_err = fx
         g_doc, f_doc = _parsed(g_out), _parsed(f_out)
+        if g_doc is not _NOT_JSON:
+            g_doc = normalised(verb, g_doc, "gnode")
+        if f_doc is not _NOT_JSON:
+            f_doc = normalised(verb, f_doc, "fx")
+        self.compare_documents(
+            label, case, verb, (g_status, g_doc, g_err), (f_status, f_doc, f_err)
+        )
+
+    def compare_documents(
+        self,
+        label: str,
+        case: str | None,
+        what: str,
+        gnode: tuple[int | None, Any, str],
+        fx: tuple[int | None, Any, str],
+    ) -> None:
+        """Compares two normalised documents (``_NOT_JSON`` for an output that is not JSON,
+        ``_NOTHING`` when a step saves nothing) and exit statuses (None when a step ran no
+        command); ``what`` names the comparison in ``KNOWN_DIFFERENCES``."""
+        g_status, g_doc, g_err = gnode
+        f_status, f_doc, f_err = fx
         found: list[tuple[str, str]] = []
         if g_status != f_status:
             found.append((STATUS, f"{STATUS}: {g_status} != {f_status}"))
         diff: list[str] = []
-        if g_doc is not _NOT_JSON and f_doc is not _NOT_JSON:
-            g_doc, f_doc = normalise(g_doc, "gnode"), normalise(f_doc, "fx")
+        if g_doc is _NOTHING and f_doc is _NOTHING:
+            pass
+        elif not _special(g_doc) and not _special(f_doc):
             found.extend(_differences(g_doc, f_doc))
             diff = list(difflib.unified_diff(_pretty(g_doc), _pretty(f_doc), "gnode", "grida-fx"))
-        elif (g_doc is _NOT_JSON) != (f_doc is _NOT_JSON):
+        elif g_doc is not f_doc:
             _differ(found, ROOT, g_doc, f_doc)
         unknown: list[str] = []
         known = 0
         if case is not None:
-            self.compared.add((case, verb))
+            self.compared.add((case, what))
         for path, line in found:
-            entry = _is_known(case, verb, path) if case is not None else None
+            entry = _is_known(case, what, path) if case is not None else None
             if entry is None:
                 unknown.append(line)
             else:
@@ -656,7 +925,7 @@ class _Report:
             for line in unknown:
                 print(f"  {line}")
             for side, document, stderr in (("gnode", g_doc, g_err), ("grida-fx", f_doc, f_err)):
-                if document is _NOT_JSON and stderr.strip():
+                if (document is _NOT_JSON or g_status != f_status) and stderr.strip():
                     print(f"  {side} said on stderr:")
                     for text in _clipped(stderr).splitlines():
                         print(f"    {text}")
@@ -730,12 +999,16 @@ def _run_cases(report: _Report, command: list[str], repo: Path, names: list[str]
             report.skip(name, f"not ported: {NOT_PORTED[name]}")
             continue
         try:
+            steps = conformance.load_case(fx_case)
             plan = _case_plan(fx_case)
         except conformance.CaseFailure as error:
             report.skip(name, str(error))
             continue
+        if is_run_case(steps):
+            _compare_run_case(report, command, repo, name, ported, steps)
+            continue
         if not plan:
-            report.skip(name, "no expand or price step")
+            report.skip(name, "no expand, price or identity step")
             continue
         verbs = [argv[0] for _, argv, _ in plan]
         for number, argv, files in plan:
@@ -753,6 +1026,142 @@ def _run_cases(report: _Report, command: list[str], repo: Path, names: list[str]
                 _timed_out(report, label, error)
                 continue
             report.compare(label, name, verb, gnode, fx)
+
+
+# ------------------------------------------------------------------------------- run mode
+
+
+@dataclass
+class StepRun:
+    """What one step of a run-mode case did on one engine."""
+
+    #: The exit status, or None when the step ran no command.
+    status: int | None
+    stderr: str
+    #: What the step saves: its stdout, or the file it reads (None: the file is absent).
+    saved: bytes | None
+
+
+def is_run_case(steps: list[dict[str, Any]]) -> bool:
+    """Whether a case's steps are compared in run mode: one of them runs or reads a run."""
+    return any(step.get("argv", [""])[0] in RUN_VERBS for step in steps)
+
+
+def run_gnode_steps(repo: Path, case_in: Path, steps: list[dict[str, Any]]) -> list[StepRun]:
+    """Runs every step of a case with gnode, in order, in one copy of ``case_in``."""
+    return _run_steps(_gnode_command(repo), case_in, steps, {"GNODE_PLUGINS": "std"}, "gnode")
+
+
+def run_fx_steps(command: list[str], case_in: Path, steps: list[dict[str, Any]]) -> list[StepRun]:
+    """Runs every step of a case with grida-fx, in order, in one copy of ``case_in``."""
+    return _run_steps(command, case_in, steps, conformance.passed_through(), "grida-fx")
+
+
+def _run_steps(
+    program: list[str],
+    case_in: Path,
+    steps: list[dict[str, Any]],
+    passed: dict[str, str],
+    label: str,
+) -> list[StepRun]:
+    """Each step as the conformance runner runs it, with gnode's names when ``label`` is
+    ``gnode``; absolute paths into the copy made relative in everything kept."""
+    gnode = label == "gnode"
+    ran: list[StepRun] = []
+    with tempfile.TemporaryDirectory(prefix="fx-compare-gnode-") as work:
+        project = Path(work) / "project"
+        home = Path(work) / "home"
+        home.mkdir()
+        shutil.copytree(case_in, project, ignore=shutil.ignore_patterns(*COPY_IGNORED))
+        env = conformance.step_environment(home, passed)
+        for number, step in enumerate(steps, 1):
+            files = dict(step.get("files", {}))
+            for relative, text in (gnode_files(files) if gnode else files).items():
+                target = conformance.project_path(project, relative, f"step {number} files")
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(text.encode("utf-8"))
+            status: int | None = None
+            stderr = b""
+            saved: bytes | None = None
+            if "argv" in step:
+                argv = [gnode_path(arg) if gnode else arg for arg in step["argv"]]
+                stdin = step["stdin"].encode("utf-8") if "stdin" in step else None
+                status, stdout, stderr = conformance.run_command(
+                    [*program, *argv], project, env, stdin, TIMEOUT_S, f"{label} {' '.join(argv)}"
+                )
+                saved = scrub_roots(stdout, [project])
+            if "read" in step:
+                relative = gnode_path(step["read"]) if gnode else step["read"]
+                path = conformance.project_path(project, relative, f"step {number} read")
+                saved = scrub_roots(path.read_bytes(), [project]) if path.is_file() else None
+            ran.append(
+                StepRun(
+                    status,
+                    scrub_roots(stderr, [project]).decode("utf-8", errors="replace"),
+                    saved,
+                )
+            )
+    return ran
+
+
+def step_document(step: dict[str, Any], ran: StepRun, side: str) -> Any:
+    """The comparable form of what a step saves: a normalised JSON document, or the lines of a
+    text; ``_NOTHING`` for a step that saves nothing, ``_ABSENT`` for a file it could not read."""
+    if "save" not in step:
+        return _NOTHING
+    if ran.saved is None:
+        return _ABSENT
+    verb = step["argv"][0] if "argv" in step and "read" not in step else None
+    if step.get("jsonl"):
+        try:
+            lines = ran.saved.decode("utf-8").split("\n")
+            return normalise_events([json.loads(line) for line in lines if line.strip()], side)
+        except (UnicodeDecodeError, ValueError):
+            return _NOT_JSON
+    if not (step.get("json") or step.get("yaml") or verb in JSON_VERBS):
+        return text_lines(ran.saved, side)
+    try:
+        text = ran.saved.decode("utf-8")
+        document = yaml.safe_load(text) if step.get("yaml") else json.loads(text)
+    except (UnicodeDecodeError, ValueError, yaml.YAMLError):
+        return _NOT_JSON
+    return normalised(verb, document, side)
+
+
+def _compare_run_case(
+    report: _Report,
+    command: list[str],
+    repo: Path,
+    name: str,
+    ported: bool,
+    steps: list[dict[str, Any]],
+) -> None:
+    gnode_case = repo / "tests" / "conformance" / name
+    fx_case = CONFORMANCE / name
+    try:
+        with _gnode_case_in(gnode_case, fx_case, ported) as original:
+            gnode = run_gnode_steps(repo, original, steps)
+        fx = run_fx_steps(command, fx_case / "in", steps)
+    except conformance.CaseFailure as error:
+        _timed_out(report, f"{name}" + (" (ported)" if ported else ""), error)
+        return
+    saves = [step.get("save") for step in steps]
+    for number, (step, g_ran, f_ran) in enumerate(zip(steps, gnode, fx, strict=True), 1):
+        if "argv" not in step and "save" not in step:
+            continue
+        save = step.get("save")
+        what = save if save else f"step {number}"
+        shown = save if save else f"step {number} {step['argv'][0]}"
+        notes = [f"step {number}"] if save and saves.count(save) > 1 else []
+        notes += ["ported"] if ported else []
+        label = f"{name} {shown}" + (f" ({', '.join(notes)})" if notes else "")
+        report.compare_documents(
+            label,
+            name,
+            what,
+            (g_ran.status, step_document(step, g_ran, "gnode"), g_ran.stderr),
+            (f_ran.status, step_document(step, f_ran, "fx"), f_ran.stderr),
+        )
 
 
 @contextlib.contextmanager

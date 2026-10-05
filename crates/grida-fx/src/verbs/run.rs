@@ -1,0 +1,777 @@
+//! `grida-fx run <target> [inputs] [--routes f]… [--arg n=v]… [--live] [--max-usd N]
+//! [--yes-up-to N] [--deliver OUTPUT=PATH]… [--run FOLDER]` (docs/guide/05-running.md;
+//! spec/store.md §8).
+//!
+//! 1. Arguments, before anything is read: `--max-usd` and `--yes-up-to` through `Usd::parse` (a
+//!    negative, non-finite or over-precise amount is a usage error, `<option> <text>: <reason>`,
+//!    exit 2); `--deliver` pairs split at the first `=` (`--deliver <pair>: write OUTPUT=PATH`
+//!    when either side is empty); workflow input flags as the planning verbs take them.
+//! 2. The planner; then every `--deliver` name is checked against the workflow's declared outputs
+//!    (`--deliver <pair>: name one of <sorted names, ", ">`, or `…: the workflow declares no
+//!    outputs`, exit 2) before anything is planned or run.
+//! 3. Plan through the engine ([`crate::engine::plan`]: `at: plan` steps run, `cached` is the
+//!    store's). A plan with problems prints the plan (`plan::render::render`) and exits 1
+//!    without creating a folder.
+//! 4. The folder: `--run` relative to the working directory, named as typed; else
+//!    `folder::new_folder` under the planning project's runs folder, named relative to the
+//!    working directory. The plan text is printed, then `runner::run` with the takes file
+//!    relative to the planning project (`plan.json` records it for `reroll` and `pick`).
+//! 5. `RunError::Refused` prints `refused: <message>` on stdout, exit 1; `RunError::Fatal` is an
+//!    error (exit 2). A cancelled run (Ctrl-C) exits 130 and prints nothing more.
+//! 6. The summary, each label padded to 10 columns: `run       <folder as named>`, `result    ok
+//!    | incomplete | failed   spent $<charged, 2 places>`, `failed    <id>: <error or "no reason
+//!    recorded">` per failure in order, `stopped   <message>`. An absolute path of the project,
+//!    the home or the store left in an error is shown relative to the project.
+//! 7. `--deliver`, after the run, request by request. First every request is matched with the
+//!    output's files (one file; else each file of a list, keyed collection or object, labelled
+//!    by its key, else by its position from 0, as spec/store.md §8 "One file or several" labels
+//!    `outputs/`): a one-file output given `{key}` (`--deliver <pair>: <name> is one file, so no
+//!    {key}`) or several files without it (`--deliver <pair>: name each element with {key}`) is
+//!    a usage error (exit 2) before any file is delivered. Then, in order: each file goes to
+//!    `<pattern>` with every `{key}` replaced by the label as a path (`folder::keyed_path`:
+//!    spec/store.md §8 "Keys as paths"), relative to the working directory; the store's copy is
+//!    checked against its digest, copied under a temporary name beside the target and renamed
+//!    over it, and printed `delivered <path as named>`; a target that already holds the same
+//!    bytes is left alone and not printed. An output with no file prints `missing   <name>: the
+//!    run did not produce it`.
+//! 8. Exit 0 when the run is ok and every requested output was delivered, else 1.
+
+use crate::cli::RunArgs;
+use crate::print::{labelled, print_line, shown_path};
+use grida_fx_core::project::{PlanRequest, Planner, make_planner};
+use grida_fx_core::registry::relative_inside;
+use grida_fx_core::val::{FileValue, Val};
+use grida_fx_core::{Error, ErrorKind};
+use grida_fx_runtime::engine::{Engine, scrub_paths};
+use grida_fx_runtime::folder::{keyed_path, new_folder};
+use grida_fx_runtime::runner::{self, RunError, RunOptions, RunOutcome};
+use grida_fx_runtime::store::Store;
+use indexmap::IndexMap;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+/// The exit status of a run a person interrupted.
+pub const INTERRUPTED: u8 = 130;
+
+/// What `{key}` stands for in a `--deliver` path.
+const KEY: &str = "{key}";
+
+/// Runs `grida-fx run`.
+pub fn run(args: &RunArgs) -> Result<u8, Error> {
+    let max_usd = args
+        .max_usd
+        .as_deref()
+        .map(|text| super::planning::amount("--max-usd", text))
+        .transpose()?;
+    let yes_up_to = args
+        .yes_up_to
+        .as_deref()
+        .map(|text| super::planning::amount("--yes-up-to", text))
+        .transpose()?;
+    let deliveries = args
+        .deliver
+        .iter()
+        .map(|pair| Delivery::parse(pair))
+        .collect::<Result<Vec<_>, _>>()?;
+    let cwd = super::planning::working_directory()?;
+    let request = PlanRequest {
+        target: args.target.clone(),
+        cwd: cwd.clone(),
+        input_files: args.inputs.clone(),
+        rest: args.rest.clone(),
+        arguments: crate::args::parse_arguments(&args.arg)?,
+        routes: args.routes.clone(),
+        max_usd,
+    };
+    let mut host = crate::print::host();
+    let mut planner = make_planner(&request, &mut host)?;
+    let declared: Vec<&str> = planner
+        .workflow
+        .workflow
+        .outputs
+        .keys()
+        .map(String::as_str)
+        .collect();
+    for delivery in &deliveries {
+        delivery.check_name(&declared)?;
+    }
+    let runtime = crate::engine::runtime()?;
+    let engine = crate::engine::engine_for(&runtime, &planner, args.live)?;
+    let ran = plan_and_run(
+        args,
+        &cwd,
+        &engine,
+        &mut planner,
+        &mut host,
+        yes_up_to,
+        &deliveries,
+    );
+    crate::engine::shutdown(&runtime, &engine);
+    ran
+}
+
+/// Steps 3–8 of the module doc.
+fn plan_and_run(
+    args: &RunArgs,
+    cwd: &Path,
+    engine: &Arc<Engine>,
+    planner: &mut Planner,
+    host: &mut grida_fx_runtime::host::PythonHost,
+    yes_up_to: Option<grida_fx_core::money::Usd>,
+    deliveries: &[Delivery],
+) -> Result<u8, Error> {
+    let plan = crate::engine::plan(engine, planner, host)?;
+    let text = grida_fx_core::plan::render::render(&plan, planner);
+    if !plan.ok() {
+        print_line(&text);
+        return Ok(1);
+    }
+    let (folder, label) = match &args.run {
+        Some(typed) => (cwd.join(typed), typed.clone()),
+        None => {
+            let folder = new_folder(&planner.project.runs_dir(), &planner.workflow.workflow.id);
+            let label = shown_path(&folder, cwd);
+            (folder, label)
+        }
+    };
+    print_line(&text);
+    let options = RunOptions {
+        folder,
+        label: label.clone(),
+        yes_up_to,
+        takes_file: takes_file(planner),
+    };
+    let outcome = match runner::run(Arc::clone(engine), planner, host, plan, options) {
+        Ok(outcome) => outcome,
+        Err(RunError::Refused(message)) => {
+            print_line(&format!("refused: {message}"));
+            return Ok(1);
+        }
+        Err(RunError::Fatal(error)) => return Err(error),
+    };
+    if outcome.cancelled {
+        return Ok(INTERRUPTED);
+    }
+    let scrub = Scrub::new(planner, &engine.store);
+    for line in summary(&label, &outcome, &scrub) {
+        print_line(&line);
+    }
+    let delivered = deliver(deliveries, &outcome.outputs, &engine.store, cwd)?;
+    Ok(u8::from(!(outcome.ok && delivered)))
+}
+
+/// The workflow's takes file, relative to the planning project (its file name when it lies
+/// outside it, which planning never makes).
+fn takes_file(planner: &Planner) -> String {
+    relative_inside(&planner.project.root, &planner.takes_path).unwrap_or_else(|| {
+        planner
+            .takes_path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    })
+}
+
+/// The summary lines (module doc, step 6).
+fn summary(label: &str, outcome: &RunOutcome, scrub: &Scrub) -> Vec<String> {
+    let result = if outcome.ok {
+        "ok"
+    } else if outcome.incomplete {
+        "incomplete"
+    } else {
+        "failed"
+    };
+    let mut lines = vec![
+        labelled("run", label),
+        labelled(
+            "result",
+            &format!("{result}   spent {}", outcome.charged.dollars_2()),
+        ),
+    ];
+    for (id, error) in &outcome.failed {
+        let error = error.as_deref().unwrap_or("no reason recorded");
+        lines.push(labelled("failed", &format!("{id}: {}", scrub.apply(error))));
+    }
+    if let Some(stopped) = &outcome.stopped {
+        lines.push(labelled("stopped", &scrub.apply(stopped)));
+    }
+    lines
+}
+
+/// Replaces the engine's private absolute paths in a message with labels relative to the
+/// planning project (`grida_fx_runtime::engine::scrub_paths`): `<project>/x` becomes `x` and the
+/// project itself `.`, the store and the home their project-relative path. The engine has
+/// already done so for its own roots; this is a safety net for the planning project's.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Scrub {
+    /// `(absolute path, label)`; the project root's label is `.`.
+    paths: Vec<(String, String)>,
+}
+
+impl Scrub {
+    fn new(planner: &Planner, store: &Store) -> Scrub {
+        let project = &planner.project.root;
+        let mut paths = vec![(project.display().to_string(), ".".to_string())];
+        for other in [store.root(), planner.home.root.as_path()] {
+            if other != project.as_path() {
+                paths.push((other.display().to_string(), shown_path(other, project)));
+            }
+        }
+        Scrub { paths }
+    }
+
+    fn apply(&self, text: &str) -> String {
+        scrub_paths(text, &self.paths)
+    }
+}
+
+/// One `--deliver OUTPUT=PATH` request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Delivery {
+    /// As given, for messages.
+    request: String,
+    name: String,
+    pattern: String,
+}
+
+impl Delivery {
+    fn parse(pair: &str) -> Result<Delivery, Error> {
+        match pair.split_once('=') {
+            Some((name, pattern)) if !name.is_empty() && !pattern.is_empty() => Ok(Delivery {
+                request: pair.to_string(),
+                name: name.to_string(),
+                pattern: pattern.to_string(),
+            }),
+            _ => Err(Error::usage(format!("--deliver {pair}: write OUTPUT=PATH"))),
+        }
+    }
+
+    /// Refuses a name the workflow does not declare.
+    fn check_name(&self, declared: &[&str]) -> Result<(), Error> {
+        if declared.contains(&self.name.as_str()) {
+            return Ok(());
+        }
+        if declared.is_empty() {
+            return Err(Error::usage(format!(
+                "--deliver {}: the workflow declares no outputs",
+                self.request
+            )));
+        }
+        let mut names = declared.to_vec();
+        names.sort_unstable();
+        Err(Error::usage(format!(
+            "--deliver {}: name one of {}",
+            self.request,
+            names.join(", ")
+        )))
+    }
+
+    /// Where each of the output's files goes: `(path as named, file)`. Errors are usage errors.
+    fn targets(&self, files: OutputFiles) -> Result<Vec<(String, FileValue)>, Error> {
+        let keyed = self.pattern.contains(KEY);
+        match files {
+            OutputFiles::One(_) if keyed => Err(Error::usage(format!(
+                "--deliver {}: {} is one file, so no {KEY}",
+                self.request, self.name
+            ))),
+            OutputFiles::One(file) => Ok(vec![(self.pattern.clone(), file)]),
+            OutputFiles::Several(files) if !keyed && files.len() > 1 => Err(Error::usage(format!(
+                "--deliver {}: name each element with {KEY}",
+                self.request
+            ))),
+            OutputFiles::Several(files) => Ok(files
+                .into_iter()
+                .map(|(label, file)| (self.pattern.replace(KEY, &keyed_path(&label)), file))
+                .collect()),
+        }
+    }
+}
+
+/// The files of one output value.
+#[derive(Debug, Clone, PartialEq)]
+enum OutputFiles {
+    /// The value is one file.
+    One(FileValue),
+    /// Each file of a list, keyed collection or object, with its label.
+    Several(Vec<(String, FileValue)>),
+}
+
+/// The files of an output, or `None` when it holds none.
+fn output_files(value: Option<&Val>) -> Option<OutputFiles> {
+    match value? {
+        Val::File(file) => Some(OutputFiles::One((**file).clone())),
+        other => {
+            let mut found = Vec::new();
+            collect_files(other, None, &mut found);
+            let labelled: Vec<(String, FileValue)> = found
+                .into_iter()
+                .enumerate()
+                .map(|(position, (key, file))| (key.unwrap_or_else(|| position.to_string()), file))
+                .collect();
+            (!labelled.is_empty()).then_some(OutputFiles::Several(labelled))
+        }
+    }
+}
+
+/// Every file a value holds, in order, with its key: the file's own when not empty, else the key
+/// of the collection item it is.
+fn collect_files(value: &Val, item_key: Option<&str>, out: &mut Vec<(Option<String>, FileValue)>) {
+    match value {
+        Val::File(file) => {
+            let key = file
+                .key
+                .as_deref()
+                .filter(|k| !k.is_empty())
+                .or(item_key.filter(|k| !k.is_empty()))
+                .map(str::to_string);
+            out.push((key, (**file).clone()));
+        }
+        Val::List(items) => {
+            for item in items {
+                collect_files(item, None, out);
+            }
+        }
+        Val::Collection(collection) => {
+            for (key, item) in &collection.items {
+                collect_files(item, Some(key), out);
+            }
+        }
+        Val::Object(members) => {
+            for item in members.values() {
+                collect_files(item, None, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// One step of delivering, planned before anything is written.
+enum Planned {
+    Copy { shown: String, file: FileValue },
+    Missing(String),
+}
+
+/// Delivers the requested outputs (module doc, step 7): `Ok(true)` when every output existed.
+fn deliver(
+    deliveries: &[Delivery],
+    outputs: &IndexMap<String, Val>,
+    store: &Store,
+    cwd: &Path,
+) -> Result<bool, Error> {
+    let planned = plan_deliveries(deliveries, outputs)?;
+    let mut complete = true;
+    for step in planned {
+        match step {
+            Planned::Missing(name) => {
+                complete = false;
+                print_line(&labelled(
+                    "missing",
+                    &format!("{name}: the run did not produce it"),
+                ));
+            }
+            Planned::Copy { shown, file } => {
+                let target = cwd.join(&shown);
+                if holds(&target, &file) {
+                    continue;
+                }
+                copy_from_store(store, &file, &target, &shown)?;
+                print_line(&labelled("delivered", &shown));
+            }
+        }
+    }
+    Ok(complete)
+}
+
+/// Matches every request with its files, refusing a pattern that does not fit, before anything
+/// is written.
+fn plan_deliveries(
+    deliveries: &[Delivery],
+    outputs: &IndexMap<String, Val>,
+) -> Result<Vec<Planned>, Error> {
+    let mut planned = Vec::new();
+    for delivery in deliveries {
+        match output_files(outputs.get(&delivery.name)) {
+            None => planned.push(Planned::Missing(delivery.name.clone())),
+            Some(files) => planned.extend(
+                delivery
+                    .targets(files)?
+                    .into_iter()
+                    .map(|(shown, file)| Planned::Copy { shown, file }),
+            ),
+        }
+    }
+    Ok(planned)
+}
+
+/// Whether `target` already holds the file's bytes.
+fn holds(target: &Path, file: &FileValue) -> bool {
+    let same_size = std::fs::metadata(target).is_ok_and(|m| m.is_file() && m.len() == file.size);
+    same_size
+        && std::fs::read(target)
+            .is_ok_and(|bytes| grida_fx_core::value::file_digest(&bytes) == file.digest)
+}
+
+/// Copies the store's copy of `file` to `target`: checked against its digest, written under a
+/// temporary name beside the target, flushed, and renamed over it. Errors name `shown`.
+fn copy_from_store(
+    store: &Store,
+    file: &FileValue,
+    target: &Path,
+    shown: &str,
+) -> Result<(), Error> {
+    let source = store.file_path(&file.digest)?;
+    if !store.has(&file.digest, file.size) || !store.verify(&file.digest)? {
+        return Err(Error::new(
+            ErrorKind::Io,
+            format!(
+                "{shown}: the store's copy of {} is missing or does not match its digest; run \
+                 again to make it",
+                file.name
+            ),
+        ));
+    }
+    let parent = target
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."));
+    std::fs::create_dir_all(&parent).map_err(|e| Error::io(shown, &e))?;
+    let base = target
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "delivered".into());
+    let temporary = parent.join(format!(".{base}.{}.part", std::process::id()));
+    let written = (|| -> std::io::Result<()> {
+        let mut reader = std::fs::File::open(&source)?;
+        let mut writer = std::fs::File::create(&temporary)?;
+        std::io::copy(&mut reader, &mut writer)?;
+        writer.flush()?;
+        writer.sync_all()?;
+        std::fs::rename(&temporary, target)
+    })();
+    written.map_err(|error| {
+        let _ = std::fs::remove_file(&temporary);
+        Error::io(shown, &error)
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use grida_fx_core::money::Usd;
+    use grida_fx_core::val::Collection;
+
+    fn file(digest: &str, key: Option<&str>) -> FileValue {
+        FileValue {
+            digest: digest.repeat(64),
+            kind: "text/plain".into(),
+            name: "x/text".into(),
+            size: 3,
+            key: key.map(str::to_string),
+            content: None,
+            location: None,
+        }
+    }
+
+    fn files(value: &Val) -> Option<OutputFiles> {
+        output_files(Some(value))
+    }
+
+    #[test]
+    fn deliver_pairs_need_a_name_and_a_path() {
+        let delivery = Delivery::parse("each=out/{key}.png").unwrap();
+        assert_eq!(delivery.name, "each");
+        assert_eq!(delivery.pattern, "out/{key}.png");
+        assert_eq!(
+            Delivery::parse("a=b=c").unwrap().pattern,
+            "b=c",
+            "split at the first ="
+        );
+        for pair in ["each", "=out.png", "each=", ""] {
+            let error = Delivery::parse(pair).unwrap_err();
+            assert_eq!(error.kind, ErrorKind::Usage);
+            assert_eq!(
+                error.message,
+                format!("--deliver {pair}: write OUTPUT=PATH")
+            );
+        }
+    }
+
+    #[test]
+    fn deliver_names_must_be_declared_outputs() {
+        let delivery = Delivery::parse("nosuch=x.txt").unwrap();
+        assert!(
+            Delivery::parse("one=x")
+                .unwrap()
+                .check_name(&["one"])
+                .is_ok()
+        );
+        let error = delivery.check_name(&["one", "each", "all"]).unwrap_err();
+        assert_eq!(error.kind, ErrorKind::Usage);
+        assert_eq!(
+            error.message,
+            "--deliver nosuch=x.txt: name one of all, each, one"
+        );
+        assert_eq!(
+            delivery.check_name(&[]).unwrap_err().message,
+            "--deliver nosuch=x.txt: the workflow declares no outputs"
+        );
+    }
+
+    #[test]
+    fn an_outputs_files_and_their_labels() {
+        assert_eq!(files(&Val::Null), None);
+        assert_eq!(files(&Val::Failed("a#1".into())), None);
+        assert_eq!(files(&Val::Str("x".into())), None);
+        assert_eq!(files(&Val::List(Vec::new())), None);
+        assert_eq!(output_files(None), None);
+        assert_eq!(
+            files(&Val::File(Box::new(file("a", Some("k"))))),
+            Some(OutputFiles::One(file("a", Some("k"))))
+        );
+        let collection = Val::Collection(Box::new(Collection {
+            items: vec![
+                ("x".into(), Val::File(Box::new(file("a", None)))),
+                ("y z".into(), Val::File(Box::new(file("b", Some("own"))))),
+                (
+                    "w".into(),
+                    Val::List(vec![Val::File(Box::new(file("c", None)))]),
+                ),
+                ("v".into(), Val::Null),
+            ],
+            verdicts: IndexMap::new(),
+        }));
+        let Some(OutputFiles::Several(found)) = files(&collection) else {
+            panic!("several files")
+        };
+        let labels: Vec<&str> = found.iter().map(|(label, _)| label.as_str()).collect();
+        assert_eq!(labels, ["x", "own", "2"]);
+        let list = Val::List(vec![
+            Val::File(Box::new(file("a", None))),
+            Val::Missing,
+            Val::File(Box::new(file("b", Some("")))),
+        ]);
+        let Some(OutputFiles::Several(found)) = files(&list) else {
+            panic!("several files")
+        };
+        let labels: Vec<&str> = found.iter().map(|(label, _)| label.as_str()).collect();
+        assert_eq!(labels, ["0", "1"]);
+    }
+
+    #[test]
+    fn a_pattern_must_fit_its_output() {
+        let one = OutputFiles::One(file("a", None));
+        let several = |n: usize| {
+            OutputFiles::Several(
+                (0..n)
+                    .map(|i| (i.to_string(), file(&i.to_string(), None)))
+                    .collect(),
+            )
+        };
+        let delivery = |pair: &str| Delivery::parse(pair).unwrap();
+        assert_eq!(
+            delivery("one=out/one.txt").targets(one.clone()).unwrap(),
+            [("out/one.txt".to_string(), file("a", None))]
+        );
+        assert_eq!(
+            delivery("one=out/{key}.txt")
+                .targets(one)
+                .unwrap_err()
+                .message,
+            "--deliver one=out/{key}.txt: one is one file, so no {key}"
+        );
+        assert_eq!(
+            delivery("each=out/all.txt")
+                .targets(several(2))
+                .unwrap_err()
+                .message,
+            "--deliver each=out/all.txt: name each element with {key}"
+        );
+        // A single element needs no {key}.
+        assert_eq!(
+            delivery("each=out/all.txt").targets(several(1)).unwrap(),
+            [("out/all.txt".to_string(), file("0", None))]
+        );
+    }
+
+    #[test]
+    fn keys_become_paths_inside_the_pattern() {
+        let several = OutputFiles::Several(vec![
+            ("x".into(), file("a", None)),
+            ("y z".into(), file("b", None)),
+            ("../up".into(), file("c", None)),
+            ("a/b".into(), file("d", None)),
+        ]);
+        let targets = Delivery::parse("each=out/{key}.txt")
+            .unwrap()
+            .targets(several)
+            .unwrap();
+        let shown: Vec<&str> = targets.iter().map(|(s, _)| s.as_str()).collect();
+        assert_eq!(
+            shown,
+            ["out/x.txt", "out/y_z.txt", "out/_/up.txt", "out/a/b.txt"]
+        );
+    }
+
+    #[test]
+    fn deliveries_are_checked_before_anything_is_written() {
+        let outputs: IndexMap<String, Val> = [
+            ("one".to_string(), Val::File(Box::new(file("a", None)))),
+            (
+                "each".to_string(),
+                Val::List(vec![
+                    Val::File(Box::new(file("b", None))),
+                    Val::File(Box::new(file("c", None))),
+                ]),
+            ),
+            ("bad".to_string(), Val::Failed("x#1".into())),
+        ]
+        .into_iter()
+        .collect();
+        let requests = |pairs: &[&str]| -> Vec<Delivery> {
+            pairs.iter().map(|p| Delivery::parse(p).unwrap()).collect()
+        };
+        // The second request does not fit: nothing is planned, so nothing is written.
+        let error = plan_deliveries(&requests(&["one=o.txt", "each=e.txt"]), &outputs)
+            .err()
+            .unwrap();
+        assert_eq!(
+            error.message,
+            "--deliver each=e.txt: name each element with {key}"
+        );
+        let planned = plan_deliveries(&requests(&["bad=b.txt", "one=o.txt"]), &outputs).unwrap();
+        assert!(matches!(&planned[0], Planned::Missing(name) if name == "bad"));
+        assert!(matches!(&planned[1], Planned::Copy { shown, .. } if shown == "o.txt"));
+        // Delivering a missing output prints its line and reports it.
+        let store = Store::open(Path::new("/nonexistent-store"));
+        let folder = tempfile::tempdir().unwrap();
+        assert!(!deliver(&requests(&["bad=b.txt"]), &outputs, &store, folder.path()).unwrap());
+        assert!(deliver(&[], &outputs, &store, folder.path()).unwrap());
+    }
+
+    #[test]
+    fn a_target_holding_the_same_bytes_is_left_alone() {
+        let folder = tempfile::tempdir().unwrap();
+        let target = folder.path().join("one.txt");
+        let bytes = b"abc";
+        let mut same = file("a", None);
+        same.digest = grida_fx_core::value::file_digest(bytes);
+        same.size = 3;
+        assert!(!holds(&target, &same));
+        std::fs::write(&target, bytes).unwrap();
+        assert!(holds(&target, &same));
+        std::fs::write(&target, b"abd").unwrap();
+        assert!(!holds(&target, &same));
+        std::fs::write(&target, b"abcd").unwrap();
+        assert!(!holds(&target, &same));
+    }
+
+    #[test]
+    fn a_delivered_file_is_a_writable_copy_of_the_stores() {
+        let folder = tempfile::tempdir().unwrap();
+        let store = Store::open(&folder.path().join("cache"));
+        let stored = store.put_bytes(b"ADA").unwrap();
+        let mut value = file("a", None);
+        value.digest = stored.digest.clone();
+        value.size = stored.size;
+        let outputs: IndexMap<String, Val> = [("one".to_string(), Val::File(Box::new(value)))]
+            .into_iter()
+            .collect();
+        let requests = vec![Delivery::parse("one=out/one.txt").unwrap()];
+        assert!(deliver(&requests, &outputs, &store, folder.path()).unwrap());
+        let target = folder.path().join("out/one.txt");
+        assert_eq!(std::fs::read(&target).unwrap(), b"ADA");
+        assert!(!std::fs::metadata(&target).unwrap().permissions().readonly());
+        // Again: the same bytes are left alone.
+        assert!(deliver(&requests, &outputs, &store, folder.path()).unwrap());
+    }
+
+    fn outcome() -> RunOutcome {
+        RunOutcome {
+            folder: PathBuf::from("/work/acme/runs/one"),
+            ok: false,
+            incomplete: false,
+            stopped: None,
+            charged: Usd(125_000),
+            failed: vec![
+                ("nope#1".into(), Some("refused on purpose".into())),
+                ("bang#1".into(), None),
+            ],
+            outputs: IndexMap::new(),
+            cancelled: false,
+        }
+    }
+
+    fn no_scrub() -> Scrub {
+        Scrub { paths: Vec::new() }
+    }
+
+    #[test]
+    fn the_summary_lines() {
+        assert_eq!(
+            summary("runs/one", &outcome(), &no_scrub()),
+            [
+                "run       runs/one",
+                "result    failed   spent $0.12",
+                "failed    nope#1: refused on purpose",
+                "failed    bang#1: no reason recorded",
+            ]
+        );
+        let stopped = RunOutcome {
+            incomplete: true,
+            failed: Vec::new(),
+            stopped: Some(
+                "phase 2 may cost up to $0.08, which takes the run past --yes-up-to 0.01; approve \
+                 it with a higher --yes-up-to"
+                    .into(),
+            ),
+            ..outcome()
+        };
+        let lines = summary("runs/one", &stopped, &no_scrub());
+        assert_eq!(lines[1], "result    incomplete   spent $0.12");
+        assert_eq!(
+            lines[2],
+            "stopped   phase 2 may cost up to $0.08, which takes the run past --yes-up-to 0.01; \
+             approve it with a higher --yes-up-to"
+        );
+        let ok = RunOutcome {
+            ok: true,
+            failed: Vec::new(),
+            charged: Usd(0),
+            ..outcome()
+        };
+        assert_eq!(
+            summary("runs/case/2026-10-06-1", &ok, &no_scrub()),
+            [
+                "run       runs/case/2026-10-06-1",
+                "result    ok   spent $0.00"
+            ]
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn private_paths_are_shown_relative_to_the_project() {
+        let scrub = Scrub {
+            paths: vec![
+                ("/work/acme/.fx/cache".into(), ".fx/cache".into()),
+                ("/work/shared".into(), "../shared".into()),
+                ("/work/acme".into(), ".".into()),
+            ],
+        };
+        assert_eq!(
+            scrub.apply(
+                "cannot read /work/acme/.fx/cache/work/r1/x.txt or /work/acme/nodes/n.py in \
+                 /work/acme, nor /work/shared/y"
+            ),
+            "cannot read .fx/cache/work/r1/x.txt or nodes/n.py in ., nor ../shared/y"
+        );
+        assert_eq!(scrub.apply("nothing private"), "nothing private");
+        // A longer name is another path; a sentence may end right after the root.
+        assert_eq!(
+            scrub.apply("/work/acme2/x and /x/work/acme/y in /work/acme."),
+            "/work/acme2/x and /x/work/acme/y in .."
+        );
+        assert_eq!(scrub.apply("(/work/acme)"), "(.)");
+    }
+}

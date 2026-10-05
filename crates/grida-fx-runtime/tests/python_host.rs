@@ -656,6 +656,71 @@ fn a_host_that_ignores_exit_is_killed() {
     assert!(!alive, "the host {pid} is still running");
 }
 
+#[test]
+fn a_host_on_the_engines_runtime() {
+    if !have_python3() {
+        return;
+    }
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .unwrap();
+    let fixture = Fixture::new("ok");
+    let mut host = fixture.host().with_handle(runtime.handle().clone());
+    host.open_project(&fixture.root, &[]).unwrap();
+    host.describe(&describe_params(&[("nodes/echo.py", None)]))
+        .unwrap();
+    host.build(&build_params("build", &fixture.root)).unwrap();
+    drop(host);
+    assert_eq!(
+        fixture.log(),
+        [
+            "initialize",
+            "describe",
+            "build",
+            "shutdown",
+            "exit",
+            "status 0"
+        ]
+    );
+}
+
+/// Called where blocking would panic (inside a runtime), the host blocks on a helper thread.
+#[test]
+fn a_host_called_inside_a_runtime_does_not_panic() {
+    if !have_python3() {
+        return;
+    }
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let fixture = Fixture::new("exit-in-describe");
+    runtime.block_on(async {
+        let mut host = fixture.host();
+        host.open_project(&fixture.root, &[]).unwrap();
+        assert_eq!(
+            unavailable(
+                host.describe(&describe_params(&[("nodes/echo.py", None)]))
+                    .unwrap_err()
+            ),
+            "the node host exited with status 4 while answering describe"
+        );
+    });
+    let fixture = Fixture::new("ok");
+    runtime.block_on(async {
+        let mut host = fixture.host();
+        host.open_project(&fixture.root, &[]).unwrap();
+        host.describe(&describe_params(&[("nodes/echo.py", None)]))
+            .unwrap();
+    });
+    assert_eq!(
+        fixture.log(),
+        ["initialize", "describe", "shutdown", "exit", "status 0"]
+    );
+}
+
 /// The interpreter for the real host: `GRIDA_FX_PYTHON`, else the repository's
 /// `python/.venv`.
 fn real_python() -> Option<PathBuf> {

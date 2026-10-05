@@ -16,7 +16,7 @@ kitewharf/                              # the game's repo
     workflows/icon.yaml                 # a plain workflow file, used as a step
     workflows/looping-parallax.yaml     # copied from the looping-parallax example
     nodes/plate.py                      # the game's own node type
-    nodes/seams.py, nodes/compose.py    # copied with looping-parallax
+    nodes/seams.py, nodes/compose.py    # copied with looping-parallax (pseudo-code: see there)
     prompts/plate.md, prompts/seam.md
 ```
 
@@ -136,10 +136,9 @@ Or from the game's own build script:
 from pathlib import Path
 
 from grida.fx import run
-from level_art import build
 
 for level in Path("../levels").glob("*.toml"):
-    result = run(build(str(level)), live=True, max_usd=5)
+    result = run("level_art.py:build", arguments={"level": str(level)}, live=True, max_usd=5)
     result.deliver(
         {
             "plate": f"../game/art/{level.stem}/ground.png",

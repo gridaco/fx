@@ -1,0 +1,67 @@
+# Takes between runs. The first run draws take 1 of `a` and `b`. `reroll runs/one a` writes
+# `a: {take: 2}` to `workflows/case.takes.yaml` (the takes file `runs/one/plan.json` names) and
+# prints the next command; `takes list` shows it. The second run, into a new folder, draws
+# `a#2` and runs `b` again on its text (`b` stays take 1: its input changed). `pick runs/one a 1`
+# goes back to take 1 and records its result's digest from runs/one's record; `takes list`
+# shows it, and the file is saved as the engine writes it (a header, then sorted entries). The
+# third run uses take 1 again: the pick's result matches what take 1 produces, so every step is
+# answered by the result cache. Digests are bare hex.
+steps:
+- argv:
+  - run
+  - case
+  - --routes
+  - routes.yaml
+  - --run
+  - runs/one
+- argv:
+  - reroll
+  - runs/one
+  - a
+  save: reroll.txt
+- argv:
+  - takes
+  - list
+  - case
+  save: takes-rerolled.txt
+- argv:
+  - run
+  - case
+  - --routes
+  - routes.yaml
+  - --run
+  - runs/two
+- read: runs/two/outputs/out.txt
+  save: out-two.txt
+- argv:
+  - project
+  - runs/two
+  save: project-two.json
+  json: true
+- argv:
+  - pick
+  - runs/one
+  - a
+  - "1"
+  save: pick.txt
+- argv:
+  - takes
+  - list
+  - case
+  save: takes-picked.txt
+- read: workflows/case.takes.yaml
+  save: case.takes.yaml
+- argv:
+  - run
+  - case
+  - --routes
+  - routes.yaml
+  - --run
+  - runs/three
+- read: runs/three/outputs/out.txt
+  save: out-three.txt
+- argv:
+  - project
+  - runs/three
+  save: project-three.json
+  json: true

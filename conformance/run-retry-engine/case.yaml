@@ -1,0 +1,29 @@
+# `retry="engine"`: the engine runs a body again after it raised (a `node_error`), at most six
+# runs in all. `flaky` counts its runs in the project's `count.txt` and raises on the first two:
+# the third run succeeds, so the counter reads 3 (nothing runs a fourth time) and the output
+# says `steady after 3 runs`. The run is ok; `project` shows the instance succeeded (its
+# `node_retry` events are not part of the projection). The record (`events.json`, the run's
+# events.jsonl sorted) holds one `node_started`, a `node_retry` for attempts 1 and 2, each with
+# the error that attempt raised (`RuntimeError: run 1 fails`), and one `node_finished`.
+steps:
+- argv:
+  - run
+  - case
+  - --routes
+  - routes.yaml
+  - --run
+  - runs/one
+  mentions:
+  - "result    ok   spent $0.00"
+- read: count.txt
+  save: count.txt
+- read: runs/one/outputs/text.txt
+  save: text.txt
+- argv:
+  - project
+  - runs/one
+  save: project.json
+  json: true
+- read: runs/one/events.jsonl
+  save: events.json
+  jsonl: true

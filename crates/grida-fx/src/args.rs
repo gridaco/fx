@@ -8,19 +8,25 @@
 //! abbreviation (FX decision). An input whose flag equals a verb option is shadowed by it.
 //!
 //! `--check`, `--json` and `--expect-cached` are options of `plan` only, as in the predecessor:
-//! after `expand`, `identity` or `price` they are workflow input flags like any other. Arguments
-//! of any other verb, and of no verb, all stay for clap.
+//! after `expand`, `identity` or `price` they are workflow input flags like any other. `run` takes
+//! the planning verbs' value options plus its own: `--yes-up-to`, `--deliver` and `--run` with a
+//! value, and the flag `--live`; `plan`'s flags are input flags after `run`. Arguments of any
+//! other verb, and of no verb, all stay for clap.
 
 use grida_fx_core::Error;
 use indexmap::IndexMap;
 use std::ffi::OsString;
 
 /// The verbs whose extra arguments are workflow input flags.
-const PLANNING_VERBS: [&str; 4] = ["plan", "expand", "identity", "price"];
+const PLANNING_VERBS: [&str; 5] = ["plan", "expand", "identity", "price", "run"];
 /// Options of every planning verb that take a value.
 const VALUE_OPTIONS: [&str; 4] = ["--inputs", "--routes", "--arg", "--max-usd"];
 /// Flags of `plan` alone.
 const PLAN_FLAGS: [&str; 3] = ["--check", "--json", "--expect-cached"];
+/// Options of `run` alone that take a value.
+const RUN_VALUE_OPTIONS: [&str; 3] = ["--yes-up-to", "--deliver", "--run"];
+/// Flags of `run` alone.
+const RUN_FLAGS: [&str; 1] = ["--live"];
 /// Help, for every verb.
 const HELP_FLAGS: [&str; 2] = ["-h", "--help"];
 
@@ -30,7 +36,11 @@ pub fn split_plan_args(argv: &[OsString]) -> (Vec<OsString>, Vec<String>) {
     let Some(verb) = verb.filter(|v| PLANNING_VERBS.contains(v)) else {
         return (argv.to_vec(), Vec::new());
     };
-    let plan_flags: &[&str] = if verb == "plan" { &PLAN_FLAGS } else { &[] };
+    let (own_values, own_flags): (&[&str], &[&str]) = match verb {
+        "plan" => (&[], &PLAN_FLAGS),
+        "run" => (&RUN_VALUE_OPTIONS, &RUN_FLAGS),
+        _ => (&[], &[]),
+    };
     let mut for_clap: Vec<OsString> = argv[..2].to_vec();
     let mut rest = Vec::new();
     let mut target_seen = false;
@@ -42,7 +52,7 @@ pub fn split_plan_args(argv: &[OsString]) -> (Vec<OsString>, Vec<String>) {
             continue;
         };
         let name = text.split_once('=').map_or(text, |(name, _)| name);
-        if VALUE_OPTIONS.contains(&name) {
+        if VALUE_OPTIONS.contains(&name) || own_values.contains(&name) {
             for_clap.push(argument.clone());
             if name == text {
                 // `--x v`: the value is the next argument, whatever it looks like.
@@ -50,7 +60,7 @@ pub fn split_plan_args(argv: &[OsString]) -> (Vec<OsString>, Vec<String>) {
                     for_clap.push(value.clone());
                 }
             }
-        } else if plan_flags.contains(&text) || HELP_FLAGS.contains(&text) {
+        } else if own_flags.contains(&text) || HELP_FLAGS.contains(&text) {
             for_clap.push(argument.clone());
         } else if !target_seen && !text.starts_with('-') {
             target_seen = true;
@@ -209,6 +219,100 @@ mod tests {
         let (for_clap, rest) = split(&[]);
         assert_eq!(for_clap, strings(&["grida-fx"]));
         assert!(rest.is_empty());
+    }
+
+    #[test]
+    fn run_keeps_its_own_options_and_gives_the_rest_to_the_workflow() {
+        let (for_clap, rest) = split(&[
+            "run",
+            "case",
+            "--name",
+            "Ada",
+            "--live",
+            "--max-usd",
+            "3",
+            "--yes-up-to",
+            "-1",
+            "--deliver",
+            "all=out/all.txt",
+            "--deliver=each=out/{key}.txt",
+            "--run",
+            "runs/one",
+            "--inputs=inputs.yaml",
+            "--loud=yes",
+        ]);
+        assert_eq!(
+            for_clap,
+            strings(&[
+                "grida-fx",
+                "run",
+                "case",
+                "--live",
+                "--max-usd",
+                "3",
+                "--yes-up-to",
+                "-1",
+                "--deliver",
+                "all=out/all.txt",
+                "--deliver=each=out/{key}.txt",
+                "--run",
+                "runs/one",
+                "--inputs=inputs.yaml",
+            ])
+        );
+        assert_eq!(rest, strings(&["--name", "Ada", "--loud=yes"]));
+    }
+
+    #[test]
+    fn plan_flags_are_input_flags_after_run_and_run_options_after_plan() {
+        let (for_clap, rest) = split(&["run", "case", "--check", "--json", "--live=yes"]);
+        assert_eq!(for_clap, strings(&["grida-fx", "run", "case"]));
+        assert_eq!(rest, strings(&["--check", "--json", "--live=yes"]));
+        let (for_clap, rest) = split(&["plan", "case", "--live", "--run", "r", "--deliver", "x"]);
+        assert_eq!(for_clap, strings(&["grida-fx", "plan", "case"]));
+        assert_eq!(rest, strings(&["--live", "--run", "r", "--deliver", "x"]));
+    }
+
+    #[test]
+    fn a_run_value_option_takes_the_next_argument_whatever_it_looks_like() {
+        let (for_clap, rest) = split(&["run", "--run", "--odd", "case", "--deliver", "--x=y"]);
+        assert_eq!(
+            for_clap,
+            strings(&[
+                "grida-fx",
+                "run",
+                "--run",
+                "--odd",
+                "case",
+                "--deliver",
+                "--x=y"
+            ])
+        );
+        assert!(rest.is_empty());
+        let (for_clap, rest) = split(&["run", "case", "--yes-up-to"]);
+        assert_eq!(
+            for_clap,
+            strings(&["grida-fx", "run", "case", "--yes-up-to"])
+        );
+        assert!(rest.is_empty());
+    }
+
+    #[test]
+    fn the_other_run_verbs_go_to_clap_whole() {
+        for argv in [
+            &["reroll", "runs/one", "draw", "--live"][..],
+            &["pick", "runs/one", "draw", "-1"],
+            &["takes", "list", "case", "--x"],
+            &["jobs", "--forget", "k"],
+            &["project", "runs/one"],
+            &["inspect", "case", "--verify", "--json"],
+        ] {
+            let (for_clap, rest) = split(argv);
+            let mut expected = vec!["grida-fx"];
+            expected.extend_from_slice(argv);
+            assert_eq!(for_clap, strings(&expected));
+            assert!(rest.is_empty(), "{argv:?}");
+        }
     }
 
     #[test]

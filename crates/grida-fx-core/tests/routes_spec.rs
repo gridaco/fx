@@ -1,6 +1,7 @@
 //! Money, routes, node specs, the built-in catalog, file kinds and file facts through the public
 //! API: identity.md §4, §6, §7, §12 and §14, protocol.md §4, and the conformance `facts` fixture.
 
+use grida_fx_core::ErrorKind;
 use grida_fx_core::builtins::{builtin, builtins};
 use grida_fx_core::docs::project::{Project, ProjectDoc};
 use grida_fx_core::facts::{ImageFacts, file_facts, image_facts};
@@ -9,7 +10,6 @@ use grida_fx_core::money::{Units, Usd};
 use grida_fx_core::routes::{PriceUnit, Route, RoutePrice, RouteTable, load_catalog};
 use grida_fx_core::spec::{BodyKind, NodeSpec, Port, Shape};
 use grida_fx_core::val::{Pending, Val};
-use grida_fx_core::{Error, ErrorKind};
 use grida_fx_protocol::TypeSpec;
 use indexmap::IndexMap;
 use serde_json::{Value, json};
@@ -20,18 +20,6 @@ fn repository(path: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join(path)
-}
-
-/// The result of a call that also runs another module. A module that is still a skeleton stub
-/// answers `ErrorKind::Todo`; the check is then skipped, and runs in full once it is implemented.
-fn unless_stubbed<T>(result: Result<T, Error>) -> Option<Result<T, Error>> {
-    match result {
-        Err(error) if error.kind == ErrorKind::Todo => {
-            eprintln!("skipped: {}", error.message);
-            None
-        }
-        other => Some(other),
-    }
 }
 
 fn route(capability: &str, model: &str, provider: &str, contract: Value) -> Route {
@@ -251,10 +239,7 @@ fn route_tables_from_documents() {
         {"capability": "image.generate", "route": "img-a@acme", "price": {"low_usd": 0.01, "high_usd": 0.04}, "features": ["alpha"]},
         {"capability": "image.edit", "route": "img-a@acme", "price": {"usd": 0.05}},
     ]});
-    let Some(read) = unless_stubbed(RouteTable::from_document(&document, "routes.yaml")) else {
-        return;
-    };
-    let mut catalog = read.unwrap();
+    let mut catalog = RouteTable::from_document(&document, "routes.yaml").unwrap();
     assert_eq!(catalog.entries.len(), 2);
     let later = json!({"fx": "routes/v1", "routes": [
         {"capability": "image.generate", "route": "img-a@acme", "price": {"usd": 0.02}, "contract": {"quality": "high"}},
@@ -317,13 +302,8 @@ fn catalogs_combine_in_order() {
         },
         has_file: true,
     };
-    let Some(read) = unless_stubbed(load_catalog(
-        &project,
-        &[(root.join("extra.yaml"), "extra.yaml".into())],
-    )) else {
-        return;
-    };
-    let catalog = read.unwrap();
+    let catalog =
+        load_catalog(&project, &[(root.join("extra.yaml"), "extra.yaml".into())]).unwrap();
     assert_eq!(catalog.entries.len(), 2);
     assert_eq!(
         catalog

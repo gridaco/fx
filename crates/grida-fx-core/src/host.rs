@@ -5,8 +5,9 @@
 //!   project without node modules never needs Python). Tests use [`FakeHost`].
 //! - [`PlanTimeRunner`]: runs an `at: plan` instance's body while planning. The step-3 runner implements it; in step 2 none exists and a plan that needs one gets
 //!   the problem `<step>: running an at: plan step is not available until the runner lands`.
-//! - [`ResultCache`]: whether the store holds a trusted result for a step identity (plan
-//!   `cached`, store.md §4). Step 2 has no store: [`NoCache`].
+//! - [`ResultCache`]: whether the store holds a trusted result for an instance (plan `cached`,
+//!   store.md §4: the identity and the instance's read set). The runtime's store implements it;
+//!   [`NoCache`] holds nothing.
 
 use crate::error::Error;
 use crate::expand::{Instance, NodeResult};
@@ -170,8 +171,9 @@ pub trait PlanTimeRunner {
 
 /// The store's result records, as planning sees them.
 pub trait ResultCache {
-    /// Whether a trusted result record exists for the step identity.
-    fn has_result(&self, identity: &str) -> bool;
+    /// Whether a trusted result record exists for the instance: its identity (known) and its read
+    /// set (spec/store.md §4).
+    fn has_result(&self, instance: &Instance) -> bool;
 }
 
 /// No store: nothing is cached.
@@ -179,7 +181,7 @@ pub trait ResultCache {
 pub struct NoCache;
 
 impl ResultCache for NoCache {
-    fn has_result(&self, _: &str) -> bool {
+    fn has_result(&self, _: &Instance) -> bool {
         false
     }
 }

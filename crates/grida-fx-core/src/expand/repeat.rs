@@ -143,14 +143,14 @@ impl Expander<'_> {
                 return (Listed::Absent, reads);
             }
         };
-        if let Some(limit) = self.max_limit(at.frame, &declared, &at.where_) {
-            if list.len() > limit as usize {
-                // Every item is still expanded.
-                self.problem(
-                    &format!("{}.for_each", at.where_),
-                    format!("{} items exceed max: {limit}", list.len()),
-                );
-            }
+        if let Some(limit) = self.max_limit(at.frame, &declared, &at.where_)
+            && list.len() > limit as usize
+        {
+            // Every item is still expanded.
+            self.problem(
+                &format!("{}.for_each", at.where_),
+                format!("{} items exceed max: {limit}", list.len()),
+            );
         }
         let mut seen = HashSet::new();
         let mut items = Vec::new();

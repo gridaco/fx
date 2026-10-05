@@ -1,0 +1,12 @@
+fx: workflow/v1
+id: case
+title: Takes chosen between runs
+steps:
+  a:
+    uses: ./nodes/takes.py#make
+    with: { text: hello }
+  b:
+    uses: ./nodes/takes.py#make
+    with: { text: "${{ steps.a.outputs.text }}" }
+outputs:
+  out: ${{ steps.b.outputs.text }}

@@ -1,13 +1,23 @@
-//! File facts (identity.md §4): values the engine computes from a file's bytes. A node host never
-//! computes them; the expression `facts(f)` reads them while planning, and every file ref sent to
-//! a host carries them (protocol.md §3.1).
+//! File facts (spec/facts.md defines every rule; identity.md §4 summarises them): values the
+//! engine computes from a file's bytes. A node host never computes them; the expression
+//! `facts(f)` reads them while planning, and every file ref sent to a host carries them
+//! (protocol.md §3.1).
 //!
-//! `facts(f)` always has `bytes` (the size) and `kind`. Images (`image/png`, `image/jpeg`,
-//! `image/webp`, `image/gif`) add `width`, `height` (first frame), `has_alpha` (an alpha channel,
-//! a PNG `tRNS` chunk, a WebP alpha flag, a GIF transparent index) and `opaque` (`has_alpha` false,
-//! or every pixel of the first frame fully opaque). Audio and video facts arrive with the runner.
-//! Decoders: `png`, `gif`, `image-webp`; JPEG dimensions from its SOF marker (JPEG has no alpha).
-//! Keys are written in this order: `bytes`, `kind`, `width`, `height`, `has_alpha`, `opaque`.
+//! `facts(f)` always has `bytes` (the size) and `kind` (spec/facts.md §1). Images (`image/png`,
+//! `image/jpeg`, `image/webp`, `image/gif`) add `width`, `height` (first frame), `has_alpha` (an
+//! alpha channel, a PNG `tRNS` chunk, a WebP alpha flag, a GIF transparent index) and `opaque`
+//! (`has_alpha` false, or every pixel of the first frame fully opaque) (§2). WAV audio adds
+//! `duration` ([`wav`], §3); MP4 video ([`mp4`], §4) and Matroska/WebM video ([`matroska`], §5)
+//! add `width`, `height`, `fps`, `duration`, `frames` and `has_alpha`. Decoders: `png`, `gif`,
+//! `image-webp`; JPEG dimensions from its SOF marker (JPEG has no alpha); audio and video
+//! containers are parsed natively, with no tool and no new dependency.
+//! Keys are written in this order: `bytes`, `kind`, then images `width`, `height`, `has_alpha`,
+//! `opaque`; WAV `duration`; video `width`, `height`, `fps`, `duration`, `frames`, `has_alpha`
+//! (each video member only when the container gives it). Numbers go through
+//! [`crate::value::number`], so a whole number is written as an integer (`24`, not `24.0`).
+//!
+//! Refusals: an image whose bytes do not decode, an MP4 or Matroska/WebM file whose structure
+//! does not parse. A WAV file is never refused; one this rule cannot read has no `duration`.
 //!
 //! Per format:
 //! - PNG: the header gives the size; `has_alpha` is a color type with alpha or a `tRNS` chunk.
@@ -18,6 +28,11 @@
 //! - WebP: the canvas size and the alpha flag; with alpha, the first frame is decoded and
 //!   `opaque` is every alpha at 255.
 //! - JPEG: the size from the first start-of-frame marker; never alpha.
+
+mod ffv1;
+pub mod matroska;
+pub mod mp4;
+pub mod wav;
 
 use serde_json::{Map, Value};
 use std::io::Cursor;
@@ -43,6 +58,12 @@ pub fn file_facts(bytes: &[u8], kind: &str) -> Result<Value, String> {
         facts.insert("has_alpha".into(), Value::from(image.has_alpha));
         facts.insert("opaque".into(), Value::from(image.opaque));
     }
+    if let Some(audio) = audio_facts(bytes, kind)? {
+        audio.insert_into(&mut facts);
+    }
+    if let Some(video) = video_facts(bytes, kind)? {
+        video.insert_into(&mut facts);
+    }
     Ok(Value::Object(facts))
 }
 
@@ -55,6 +76,86 @@ pub fn image_facts(bytes: &[u8], kind: &str) -> Result<Option<ImageFacts>, Strin
         "image/jpeg" => jpeg_facts(bytes).map(Some),
         _ => Ok(None),
     }
+}
+
+/// The audio facts of an audio kind's bytes (spec/facts.md); `Ok(None)` for other kinds, and for
+/// audio FX computes no facts of (`audio/mpeg`, `audio/ogg`).
+pub fn audio_facts(bytes: &[u8], kind: &str) -> Result<Option<wav::WavFacts>, String> {
+    match kind {
+        "audio/wav" => wav::wav_facts(bytes),
+        _ => Ok(None),
+    }
+}
+
+/// The video facts of a video kind's bytes (spec/facts.md); `Ok(None)` for other kinds.
+pub fn video_facts(bytes: &[u8], kind: &str) -> Result<Option<VideoFacts>, String> {
+    match kind {
+        "video/mp4" => mp4::mp4_facts(bytes),
+        "video/webm" | "video/x-matroska" => matroska::matroska_facts(bytes),
+        _ => Ok(None),
+    }
+}
+
+/// The facts of a video's first video track (spec/facts.md). A member the container does not
+/// give is `None` and left out of `facts(f)`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct VideoFacts {
+    pub width: u32,
+    pub height: u32,
+    /// Frames per second, rounded to 6 decimal places.
+    pub fps: Option<f64>,
+    /// Seconds, rounded to 6 decimal places.
+    pub duration: Option<f64>,
+    pub frames: Option<u64>,
+    pub has_alpha: Option<bool>,
+}
+
+impl VideoFacts {
+    /// Adds `width`, `height`, `fps`, `duration`, `frames`, `has_alpha`, in that order; a member
+    /// that is `None` is left out.
+    pub fn insert_into(&self, facts: &mut Map<String, Value>) {
+        facts.insert("width".into(), Value::from(self.width));
+        facts.insert("height".into(), Value::from(self.height));
+        let numbers = [
+            ("fps", self.fps),
+            ("duration", self.duration),
+            ("frames", self.frames.map(|frames| frames as f64)),
+        ];
+        for (name, number) in numbers {
+            if let Some(Ok(value)) = number.map(crate::value::number) {
+                facts.insert(name.into(), value);
+            }
+        }
+        if let Some(has_alpha) = self.has_alpha {
+            facts.insert("has_alpha".into(), Value::from(has_alpha));
+        }
+    }
+}
+
+/// `x` rounded to 6 decimal places, ties to even on its exact binary value (spec/facts.md §1):
+/// the shortest decimal of 6 places, read back.
+pub(crate) fn round6(x: f64) -> f64 {
+    format!("{x:.6}").parse().unwrap_or(x)
+}
+
+/// `units` of `1 / scale` seconds: `units` converted to binary64, divided by `scale`
+/// (spec/facts.md §1). `scale` is never 0.
+pub(crate) fn seconds(units: u128, scale: u64) -> f64 {
+    units as f64 / scale as f64
+}
+
+/// The image `has_alpha` (§2) of a video frame coded as a PNG picture: a color type with alpha
+/// or a `tRNS` chunk before the image data; `None` when its header does not decode.
+pub(crate) fn png_has_alpha(frame: &[u8]) -> Option<bool> {
+    let reader = png::Decoder::new(Cursor::new(frame)).read_info().ok()?;
+    let info = reader.info();
+    Some(
+        info.trns.is_some()
+            || matches!(
+                info.color_type,
+                png::ColorType::GrayscaleAlpha | png::ColorType::Rgba
+            ),
+    )
 }
 
 fn png_facts(bytes: &[u8]) -> Result<ImageFacts, String> {
@@ -255,6 +356,79 @@ mod tests {
 
     fn facts(bytes: &[u8], kind: &str) -> ImageFacts {
         image_facts(bytes, kind).unwrap().unwrap()
+    }
+
+    #[test]
+    fn video_facts_are_written_in_order_and_as_fx_numbers() {
+        let mut facts = Map::new();
+        VideoFacts {
+            width: 64,
+            height: 48,
+            fps: Some(24.0),
+            duration: Some(1.001),
+            frames: Some(30),
+            has_alpha: Some(false),
+        }
+        .insert_into(&mut facts);
+        let keys: Vec<_> = facts.keys().cloned().collect();
+        assert_eq!(
+            keys,
+            ["width", "height", "fps", "duration", "frames", "has_alpha"]
+        );
+        assert_eq!(facts["fps"].as_u64(), Some(24));
+        assert_eq!(facts["duration"].as_f64(), Some(1.001));
+        assert_eq!(facts["frames"].as_u64(), Some(30));
+        let mut sparse = Map::new();
+        VideoFacts {
+            width: 1,
+            height: 2,
+            fps: None,
+            duration: None,
+            frames: Some(0),
+            has_alpha: None,
+        }
+        .insert_into(&mut sparse);
+        assert_eq!(
+            Value::Object(sparse),
+            json!({"width": 1, "height": 2, "frames": 0})
+        );
+    }
+
+    #[test]
+    fn rounding_to_six_places_ties_to_even() {
+        assert_eq!(round6(1.0 / 128.0), 0.007812);
+        assert_eq!(round6(3.0 / 128.0), 0.023438);
+        assert_eq!(round6(1.0 / 44100.0), 0.000023);
+        assert_eq!(round6(1.0 / 3.0), 0.333333);
+        assert_eq!(round6(2.0), 2.0);
+        assert_eq!(seconds(30030, 30000), 1.001);
+    }
+
+    #[test]
+    fn audio_and_video_kinds_dispatch() {
+        assert_eq!(
+            file_facts(b"", "audio/wav").unwrap(),
+            json!({"bytes": 0, "kind": "audio/wav"})
+        );
+        // Other audio kinds have no facts of their own; neither has a video kind FX does not read.
+        assert_eq!(
+            file_facts(b"ID3", "audio/mpeg").unwrap(),
+            json!({"bytes": 3, "kind": "audio/mpeg"})
+        );
+        assert_eq!(
+            file_facts(b"x", "file").unwrap(),
+            json!({"bytes": 1, "kind": "file"})
+        );
+        assert_eq!(
+            file_facts(b"not a video", "video/mp4").unwrap_err(),
+            "not an MP4 file (a box at byte 0 runs past the end of the file)"
+        );
+        for kind in ["video/webm", "video/x-matroska"] {
+            assert_eq!(
+                file_facts(b"not a video", kind).unwrap_err(),
+                "not a Matroska or WebM file (it does not start with an EBML header)"
+            );
+        }
     }
 
     #[test]
@@ -600,7 +774,7 @@ mod tests {
         /// Writes `count` bits of `value`, least significant first (the VP8L bit order).
         fn put(&mut self, value: u32, count: u32) {
             for i in 0..count {
-                if self.used % 8 == 0 {
+                if self.used.is_multiple_of(8) {
                     self.bytes.push(0);
                 }
                 let bit = ((value >> i) & 1) as u8;

@@ -8,7 +8,8 @@ the repaint isn't seamless. Then give me a manifest and a preview frame."
 looping-parallax/
   fx.yaml
   workflows/looping-parallax.yaml
-  nodes/seams.py          # loops_already (judge), layer_repaint (paid), seam_check (judge)
+  nodes/seams.py          # loops_already (judge), layer_repaint (paid), seam_check (judge);
+                          #   the seam math is elided
   nodes/compose.py        # manifest + preview frame (the drawing is elided)
   prompts/seam.md
   inputs/harbor.yaml + art/*.png     # the pictures: ../draw_placeholders.py
@@ -20,6 +21,10 @@ From this folder (`fx.yaml` lists [`../routes.yaml`](../routes.yaml) under `rout
 grida-fx plan looping-parallax --inputs inputs/harbor.yaml
 grida-fx run  looping-parallax --inputs inputs/harbor.yaml --live --max-usd 2
 ```
+
+The node bodies are pseudo-code: they call helpers the example does not define
+(`wrap_seam_error`, `shift_seam_to_centre`, `draw_preview`, …). The workflow plans as shown;
+fill those in before a run, or its local steps fail with a `NameError`.
 
 ```
 looping-parallax  ·  1 phase

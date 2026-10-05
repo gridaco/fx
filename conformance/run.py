@@ -42,7 +42,20 @@ COMMAND_ENV = "GRIDA_FX_CONFORMANCE_COMMAND"
 DEFAULT_COMMAND = "grida-fx"
 DEFAULT_TIMEOUT_S = 60.0
 CASE_KEYS = {"steps", "invalid_inputs"}
-STEP_KEYS = {"argv", "status", "save", "json", "yaml", "read", "files", "stdin", "mentions"}
+STEP_KEYS = {
+    "argv",
+    "status",
+    "save",
+    "json",
+    "jsonl",
+    "yaml",
+    "read",
+    "files",
+    "stdin",
+    "mentions",
+}
+# The ways a saved text may be compared by meaning; a step uses at most one.
+FORMATS = ("json", "jsonl", "yaml")
 # Run-event members whose values differ between machines and invocations. They are dropped only
 # from run events (objects with an "event" member), never from the data under DATA_KEYS.
 VOLATILE_KEYS = {"offset_ms", "invocation_id", "duration_ms"}
@@ -268,13 +281,13 @@ def load_case(case: Path) -> list[dict[str, Any]]:
             not isinstance(save, str) or not save or "/" in save or save.startswith(".")
         ):
             raise CaseFailure(f"{where}: save is a plain file name")
-        for flag in ("json", "yaml"):
+        for flag in FORMATS:
             if not isinstance(step.get(flag, False), bool):
                 raise CaseFailure(f"{where}: {flag} is true or false")
             if flag in step and "save" not in step:
                 raise CaseFailure(f"{where}: {flag} needs save")
-        if step.get("json") and step.get("yaml"):
-            raise CaseFailure(f"{where}: json and yaml exclude each other")
+        if sum(bool(step.get(flag)) for flag in FORMATS) > 1:
+            raise CaseFailure(f"{where}: json, jsonl and yaml exclude each other")
         status = step.get("status", 0)
         if not isinstance(status, int) or isinstance(status, bool):
             raise CaseFailure(f"{where}: status is an integer")
@@ -336,6 +349,8 @@ def run_case(
         assert output is not None
         if step.get("json"):
             output = normalised_json(output, label)
+        elif step.get("jsonl"):
+            output = normalised_jsonl(output, label)
         elif step.get("yaml"):
             output = normalised_yaml(output, label)
         name = step["save"]
@@ -353,15 +368,37 @@ def normalised_json(raw: bytes, label: str) -> bytes:
     """JSON as the suite compares it: keys sorted, run-event timings dropped, numbers as values."""
 
     try:
-        value = json.loads(
-            raw.decode("utf-8"),
-            parse_constant=_refuse_constant,
-            parse_float=_finite,
-            parse_int=_exact_integer,
-        )
+        value = _loaded(raw.decode("utf-8"))
     except (UnicodeDecodeError, ValueError) as error:
         raise CaseFailure(f"{label}: not JSON: {error}\n{_shown(raw)}") from None
     return _dumped(value, label)
+
+
+def normalised_jsonl(raw: bytes, label: str) -> bytes:
+    """JSON Lines (a run's events.jsonl) as the suite compares it: each line normalised as JSON
+    is, and the lines sorted into one array, because the events of instances that run at the
+    same time may be written in any order."""
+
+    values: list[object] = []
+    try:
+        for number, line in enumerate(raw.decode("utf-8").split("\n"), 1):
+            if not line.strip():
+                continue
+            try:
+                values.append(_normal(_loaded(line)))
+            except ValueError as error:
+                raise ValueError(f"line {number}: {error}") from None
+    except (UnicodeDecodeError, ValueError) as error:
+        raise CaseFailure(f"{label}: not JSON Lines: {error}\n{_shown(raw)}") from None
+    values.sort(key=lambda value: json.dumps(value, sort_keys=True, separators=(",", ":")))
+    return _dumped(values, label)
+
+
+def _loaded(text: str) -> object:
+    """One JSON text as FX values: no NaN or infinities, no integer that reading would round."""
+    return json.loads(
+        text, parse_constant=_refuse_constant, parse_float=_finite, parse_int=_exact_integer
+    )
 
 
 def normalised_yaml(raw: bytes, label: str) -> bytes:

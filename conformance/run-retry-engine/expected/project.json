@@ -1,0 +1,45 @@
+{
+ "instances": {
+  "flaky#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": null
+   },
+   "path": "flaky",
+   "state": "succeeded"
+  }
+ },
+ "run": {
+  "run_finished": {
+   "charged_usd": 0,
+   "event": "run_finished",
+   "failed": [],
+   "incomplete": false,
+   "ok": true,
+   "outputs": {
+    "text": {
+     "file": {
+      "digest": "91cfcad59a5a866fe93011d39485cb1c0c99caf1cae64b7577f06c371a68e56b",
+      "kind": "text/plain",
+      "name": "flaky/text",
+      "size": 19
+     }
+    }
+   },
+   "plan": "caa43d0c93e82d42f8e875d76eb2cb6616ac28344b539744d0ba7d59e890afca",
+   "stopped": null
+  },
+  "run_started": {
+   "ceiling_usd": null,
+   "charged_usd": 0,
+   "estimate": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "event": "run_started",
+   "plan": "caa43d0c93e82d42f8e875d76eb2cb6616ac28344b539744d0ba7d59e890afca",
+   "resumed": false,
+   "workflow": "case"
+  }
+ }
+}

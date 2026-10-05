@@ -1,0 +1,6 @@
+case  ·  one
+state     failed   4 steps: 2 failed, 1 skipped, 1 succeeded
+spent     $0.00
+failed    nope#1: refused on purpose
+failed    bang#1: RuntimeError: kaboom y
+verified  1 files

@@ -1,0 +1,121 @@
+{
+ "data_before_fmt.wav": {
+  "bytes": 60,
+  "kind": "audio/wav"
+ },
+ "data_size_unknown.wav": {
+  "bytes": 60,
+  "kind": "audio/wav",
+  "duration": 268435.455875
+ },
+ "declared_longer.wav": {
+  "bytes": 44,
+  "kind": "audio/wav",
+  "duration": 2
+ },
+ "empty.wav": {
+  "bytes": 0,
+  "kind": "audio/wav"
+ },
+ "extensible_float.wav": {
+  "bytes": 84,
+  "kind": "audio/wav"
+ },
+ "extensible_pcm.wav": {
+  "bytes": 1832,
+  "kind": "audio/wav",
+  "duration": 0.01
+ },
+ "float.wav": {
+  "bytes": 60,
+  "kind": "audio/wav"
+ },
+ "mp3_named.wav": {
+  "bytes": 42,
+  "kind": "audio/wav"
+ },
+ "no_frames.wav": {
+  "bytes": 44,
+  "kind": "audio/wav",
+  "duration": 0
+ },
+ "odd_chunk.wav": {
+  "bytes": 856,
+  "kind": "audio/wav",
+  "duration": 0.05
+ },
+ "odd_chunk_unpadded.wav": {
+  "bytes": 855,
+  "kind": "audio/wav"
+ },
+ "one_frame.wav": {
+  "bytes": 46,
+  "kind": "audio/wav",
+  "duration": 2.3e-05
+ },
+ "partial_frame.wav": {
+  "bytes": 50,
+  "kind": "audio/wav",
+  "duration": 0.00025
+ },
+ "pcm16_44k.wav": {
+  "bytes": 2512,
+  "kind": "audio/wav",
+  "duration": 0.027982
+ },
+ "pcm16_48k_stereo.wav": {
+  "bytes": 3884,
+  "kind": "audio/wav",
+  "duration": 0.02
+ },
+ "pcm16_8k.wav": {
+  "bytes": 2044,
+  "kind": "audio/wav",
+  "duration": 0.125
+ },
+ "pcm24.wav": {
+  "bytes": 1484,
+  "kind": "audio/wav",
+  "duration": 0.005
+ },
+ "pcm8.wav": {
+  "bytes": 2044,
+  "kind": "audio/wav",
+  "duration": 0.5
+ },
+ "rate_zero.wav": {
+  "bytes": 60,
+  "kind": "audio/wav"
+ },
+ "rf64.wav": {
+  "bytes": 60,
+  "kind": "audio/wav"
+ },
+ "riff_size_cuts_data_header.wav": {
+  "bytes": 60,
+  "kind": "audio/wav"
+ },
+ "riff_size_unknown.wav": {
+  "bytes": 844,
+  "kind": "audio/wav",
+  "duration": 0.05
+ },
+ "three_hz.wav": {
+  "bytes": 46,
+  "kind": "audio/wav",
+  "duration": 0.333333
+ },
+ "truncated_fmt.wav": {
+  "bytes": 28,
+  "kind": "audio/wav"
+ },
+ "two_fmt_chunks.wav": {
+  "bytes": 868,
+  "kind": "audio/wav",
+  "duration": 0.025
+ },
+ "zero_channels.wav": {
+  "bytes": 60,
+  "kind": "audio/wav"
+ }
+}

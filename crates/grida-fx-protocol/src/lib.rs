@@ -13,6 +13,7 @@ pub mod run_types;
 pub mod types;
 
 pub use jsonrpc::{ErrorCode, Id, Message, RpcError};
+pub use run_types::*;
 pub use types::*;
 
 /// The protocol this engine speaks (protocol.md §2).

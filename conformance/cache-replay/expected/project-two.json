@@ -1,0 +1,45 @@
+{
+ "instances": {
+  "draw#1": {
+   "cache": "hit",
+   "facts": {
+    "cost_usd": null
+   },
+   "path": "draw",
+   "state": "succeeded"
+  }
+ },
+ "run": {
+  "run_finished": {
+   "charged_usd": 0,
+   "event": "run_finished",
+   "failed": [],
+   "incomplete": false,
+   "ok": true,
+   "outputs": {
+    "image": {
+     "file": {
+      "digest": "f3945de0c1182a1b279816f51ef2e79938d04957c7bfde94cd4bf2eb4c2170b4",
+      "kind": "image/png",
+      "name": "draw/image",
+      "size": 70
+     }
+    }
+   },
+   "plan": "605fa7140fde05b4b6a07193821178980cf6e10d6013b34767f7b62bcb12cda9",
+   "stopped": null
+  },
+  "run_started": {
+   "ceiling_usd": null,
+   "charged_usd": 0,
+   "estimate": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "event": "run_started",
+   "plan": "605fa7140fde05b4b6a07193821178980cf6e10d6013b34767f7b62bcb12cda9",
+   "resumed": false,
+   "workflow": "case"
+  }
+ }
+}

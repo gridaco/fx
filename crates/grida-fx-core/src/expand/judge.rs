@@ -183,14 +183,14 @@ impl Expander<'_> {
     /// Links a judge instance to the take it judges.
     pub(crate) fn link_judge(&mut self, judge_id: &str, subject_id: &str, where_: &str) {
         self.not_a_judge(judge_id, where_);
-        let Some(subject) = self.instances.get_mut(subject_id) else {
+        let Some(subject) = self.instance_mut(subject_id) else {
             return;
         };
         if !subject.judged_by.iter().any(|id| id == judge_id) {
             subject.judged_by.push(judge_id.to_string());
         }
         let (state, reason) = (subject.state, subject.reason.clone());
-        let Some(judge) = self.instances.get_mut(judge_id) else {
+        let Some(judge) = self.instance_mut(judge_id) else {
             return;
         };
         judge.judges = Some(subject_id.to_string());
@@ -245,7 +245,7 @@ impl Expander<'_> {
                 // A rejection that regenerates: the later take keeps its state.
                 None
             };
-            let Some(instance) = self.instances.get_mut(later) else {
+            let Some(instance) = self.instance_mut(later) else {
                 continue;
             };
             if let Some((state, reason)) = change {
@@ -258,7 +258,7 @@ impl Expander<'_> {
             }
             // The take's judges follow it, without a reason of their own.
             for judge_id in instance.judged_by.clone() {
-                if let Some(judge) = self.instances.get_mut(&judge_id)
+                if let Some(judge) = self.instance_mut(&judge_id)
                     && judge.state != State::Done
                 {
                     judge.state = state;

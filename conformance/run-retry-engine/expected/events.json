@@ -1,0 +1,100 @@
+[
+ {
+  "attempt": 1,
+  "error": "RuntimeError: run 1 fails",
+  "event": "node_retry",
+  "id": "flaky#1",
+  "kind": "fx-run-events-v1",
+  "plan": "caa43d0c93e82d42f8e875d76eb2cb6616ac28344b539744d0ba7d59e890afca"
+ },
+ {
+  "attempt": 2,
+  "error": "RuntimeError: run 2 fails",
+  "event": "node_retry",
+  "id": "flaky#1",
+  "kind": "fx-run-events-v1",
+  "plan": "caa43d0c93e82d42f8e875d76eb2cb6616ac28344b539744d0ba7d59e890afca"
+ },
+ {
+  "cache": "miss",
+  "event": "node_finished",
+  "facts": {
+   "cost_usd": null
+  },
+  "id": "flaky#1",
+  "kind": "fx-run-events-v1",
+  "outputs": {
+   "text": {
+    "file": {
+     "digest": "91cfcad59a5a866fe93011d39485cb1c0c99caf1cae64b7577f06c371a68e56b",
+     "kind": "text/plain",
+     "name": "flaky/text",
+     "size": 19
+    }
+   }
+  },
+  "path": "flaky",
+  "plan": "caa43d0c93e82d42f8e875d76eb2cb6616ac28344b539744d0ba7d59e890afca"
+ },
+ {
+  "ceiling_usd": null,
+  "charged_usd": 0,
+  "estimate": {
+   "high_usd": 0,
+   "low_usd": 0
+  },
+  "event": "run_started",
+  "kind": "fx-run-events-v1",
+  "plan": "caa43d0c93e82d42f8e875d76eb2cb6616ac28344b539744d0ba7d59e890afca",
+  "resumed": false,
+  "workflow": "case"
+ },
+ {
+  "charged_usd": 0,
+  "event": "run_finished",
+  "failed": [],
+  "incomplete": false,
+  "kind": "fx-run-events-v1",
+  "ok": true,
+  "outputs": {
+   "text": {
+    "file": {
+     "digest": "91cfcad59a5a866fe93011d39485cb1c0c99caf1cae64b7577f06c371a68e56b",
+     "kind": "text/plain",
+     "name": "flaky/text",
+     "size": 19
+    }
+   }
+  },
+  "plan": "caa43d0c93e82d42f8e875d76eb2cb6616ac28344b539744d0ba7d59e890afca",
+  "stopped": null
+ },
+ {
+  "event": "node_started",
+  "id": "flaky#1",
+  "identity": "780ce5ca812b47ec82a4d224b7b6f5bfa2bef826504969638c7c80f74c713e32",
+  "kind": "fx-run-events-v1",
+  "path": "flaky",
+  "plan": "caa43d0c93e82d42f8e875d76eb2cb6616ac28344b539744d0ba7d59e890afca",
+  "reads": [],
+  "routes": {},
+  "step": "flaky",
+  "take": [
+   1
+  ],
+  "uses": "./nodes/flaky.py#flaky",
+  "with": {
+   "text": {
+    "value": "steady"
+   }
+  }
+ },
+ {
+  "event": "phase_planned",
+  "high_usd": 0,
+  "kind": "fx-run-events-v1",
+  "phase": 1,
+  "plan": "caa43d0c93e82d42f8e875d76eb2cb6616ac28344b539744d0ba7d59e890afca",
+  "steps": 1
+ }
+]

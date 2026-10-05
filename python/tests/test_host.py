@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import importlib.metadata
 import io
 import itertools
@@ -21,6 +22,7 @@ from typing import Any
 import pytest
 from jsonschema import Draft202012Validator
 
+from grida.fx._errors import Cancelled, CeilingExceeded, EngineError
 from grida.fx._protocol import (
     PROTOCOL,
     ProtocolError,
@@ -30,6 +32,7 @@ from grida.fx._protocol import (
     read_message,
     write_message,
 )
+from grida.fx._session import Session
 from grida.fx.host import SAFE_PATH_MARK, Host
 
 REPO = Path(__file__).resolve().parents[2]
@@ -488,13 +491,22 @@ def test_requests_before_initialize_are_invalid(
 def test_an_unknown_method(project: Path, start: Callable[..., HostProcess]) -> None:
     host = start(project)
     host.initialize()
-    for method in ["no.such.method", "run", "tool.invoke"]:
+    for method in ["no.such.method", "capability", "file.put"]:
         answer = host.request(method, {})
         assert answer["error"]["code"] == -32601
         assert answer["error"]["message"] == f"the Python node host has no method {method}"
-    # Unknown notifications are ignored.
+    # The runner's methods are served (test_host_run.py): their params are checked here.
+    assert host.request("run", {})["error"] == {
+        "code": -32602,
+        "message": "run's run_id is a non-empty string",
+    }
+    for method in ["tool.invoke", "agent.check"]:
+        answer = host.request(method, {"run_id": "r1", "agent_id": "a"})
+        assert answer["error"] == {"code": -32602, "message": "no run r1 is pending on this host"}
+    # Unknown notifications, and a $/cancel that names nothing pending, are ignored.
     host.notify("$/cancel")
     host.notify("progress")
+    host.send({"jsonrpc": "2.0", "method": "$/cancel", "params": {"id": 1}})
     assert host.request("shutdown")["result"] is None
 
 
@@ -891,7 +903,7 @@ def test_a_source_package_enters_the_closure(
     ]
 
 
-def test_builtins_are_empty_until_the_runner(
+def test_builtins_are_declared_by_the_engine(
     project: Path, start: Callable[..., HostProcess]
 ) -> None:
     host = start(project)
@@ -1298,6 +1310,259 @@ def test_build_in_process_restores_the_working_directory(
     assert os.path.realpath(os.getcwd()) == os.path.realpath(project)
     assert result["takes_anchor"] == "builders/lib.py"
     assert result["document"]["id"] == "from-lib"
+
+
+# --- the session's requests to the engine (grida.fx._session) ---------------------------------
+
+
+class _Pipe(io.RawIOBase):
+    """A writer whose frames a test reads back."""
+
+    def __init__(self) -> None:
+        self.data = bytearray()
+        self.lock = threading.Lock()
+
+    def writable(self) -> bool:
+        return True
+
+    def write(self, data: Any) -> int:
+        with self.lock:
+            self.data += bytes(data)
+        return len(data)
+
+    def messages(self) -> list[dict[str, Any]]:
+        with self.lock:
+            stream = io.BytesIO(bytes(self.data))
+        found = []
+        while (body := read_message(stream)) is not None:
+            found.append(json.loads(body))
+        return found
+
+
+def _new_session() -> tuple[Session, _Pipe]:
+    pipe = _Pipe()
+    return Session(io.BytesIO(), pipe), pipe  # type: ignore[arg-type]
+
+
+def test_host_requests_are_numbered_and_resolved_by_their_answers() -> None:
+    session, pipe = _new_session()
+    first = session.request("r1", "fact", {"name": "a", "value": 1})
+    second = session.request("r1", "file.put", {"json": {"x": [1]}})
+    assert [message["id"] for message in pipe.messages()] == [1, 2]
+    assert pipe.messages()[0] == {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "fact",
+        "params": {"run_id": "r1", "name": "a", "value": 1},
+    }
+    for message in pipe.messages():
+        _valid(MESSAGE, message)
+    assert session.pending("r1") == 2
+    # Answers resolve futures in any order; the reader thread sets them itself.
+    assert session.deliver({"jsonrpc": "2.0", "id": 2, "result": {"digest": "d"}})
+    assert second.result(timeout=1) == {"digest": "d"}
+    assert not first.done()
+    assert session.deliver(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "error": {"code": -32014, "message": "no money", "data": {"remaining_usd": 0}},
+        }
+    )
+    with pytest.raises(CeilingExceeded, match="^no money$") as raised:
+        first.result(timeout=1)
+    assert raised.value.data == {"remaining_usd": 0}
+    assert session.pending("r1") == 0
+    # Answers to nothing pending are not delivered.
+    for request_id in (1, 3, True, None, [1], "1"):
+        assert not session.deliver({"jsonrpc": "2.0", "id": request_id, "result": {}})
+
+
+def test_malformed_answers_are_engine_errors() -> None:
+    session, _ = _new_session()
+    bad_error = session.request("r1", "fact", {"name": "a", "value": 1})
+    neither = session.request("r1", "fact", {"name": "b", "value": 1})
+    session.deliver({"jsonrpc": "2.0", "id": 1, "error": {"code": "x"}})
+    session.deliver({"jsonrpc": "2.0", "id": 2})
+    with pytest.raises(EngineError, match="fact with a malformed error") as raised:
+        bad_error.result(timeout=1)
+    assert raised.value.code == -32099
+    with pytest.raises(EngineError, match="neither a result nor an error"):
+        neither.result(timeout=1)
+
+
+def test_a_request_that_is_not_i_json_is_not_sent() -> None:
+    session, pipe = _new_session()
+    with pytest.raises(ValueError, match=r"^fact: at /value: nan is not a JSON number$"):
+        session.request("r1", "fact", {"name": "a", "value": float("nan")})
+    assert pipe.messages() == [] and session.pending("r1") == 0
+    assert session.request("r1", "fact", {"name": "a", "value": 1}) is not None
+    assert pipe.messages()[0]["id"] == 1
+
+
+def test_a_channel_blocks_until_the_reader_delivers() -> None:
+    session, pipe = _new_session()
+    channel = session.channel("r7")
+    results: list[Any] = []
+    worker = threading.Thread(target=lambda: results.append(channel.request("fact", {"x": 1})))
+    worker.start()
+    deadline = time.monotonic() + TIMEOUT
+    while not pipe.messages() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert worker.is_alive()
+    session.deliver({"jsonrpc": "2.0", "id": 1, "result": {}})
+    worker.join(TIMEOUT)
+    assert results == [{}]
+    channel.notify("progress", {"text": "half", "fraction": 0.5})
+    assert pipe.messages()[-1] == {
+        "jsonrpc": "2.0",
+        "method": "progress",
+        "params": {"run_id": "r7", "text": "half", "fraction": 0.5},
+    }
+
+    async def awaited() -> Any:
+        pending = asyncio.ensure_future(channel.request_async("fact", {"y": 2}))
+        await asyncio.sleep(0)
+        session.deliver({"jsonrpc": "2.0", "id": 2, "result": {"ok": True}})
+        return await pending
+
+    assert asyncio.run(awaited()) == {"ok": True}
+
+
+def test_settle_waits_for_answers_even_when_the_waiter_gave_up() -> None:
+    session, _ = _new_session()
+    channel = session.channel("r1")
+
+    async def scenario() -> list[str]:
+        order: list[str] = []
+        waiter = asyncio.ensure_future(channel.request_async("capability", {"capability": "x"}))
+        await asyncio.sleep(0)
+        waiter.cancel()  # the body stopped waiting; the request is still pending
+        settled = asyncio.ensure_future(session.settle("r1"))
+        await asyncio.sleep(0.05)
+        assert not settled.done()
+        order.append("answered")
+        session.deliver({"jsonrpc": "2.0", "id": 1, "result": {}})  # a late answer is harmless
+        await asyncio.wait_for(settled, TIMEOUT)
+        order.append("settled")
+        await asyncio.wait_for(session.settle("r2"), TIMEOUT)  # nothing pending for r2
+        return order
+
+    assert asyncio.run(scenario()) == ["answered", "settled"]
+
+
+def test_closing_the_session_fails_what_is_pending() -> None:
+    session, pipe = _new_session()
+    pending = session.request("r1", "fact", {"name": "a", "value": 1})
+    session.close()
+    with pytest.raises(Cancelled, match="the engine ended the session"):
+        pending.result(timeout=1)
+    later = session.request("r1", "fact", {"name": "b", "value": 1})
+    with pytest.raises(Cancelled):
+        later.result(timeout=1)
+    assert len(pipe.messages()) == 1
+    assert session.pending("r1") == 0
+
+
+def test_the_body_loop_runs_on_a_thread_of_its_own() -> None:
+    session, _ = _new_session()
+    loop = session.loop()
+    assert session.loop() is loop
+    names = asyncio.run_coroutine_threadsafe(_thread_name(), loop).result(TIMEOUT)
+    assert names == "grida.fx body loop"
+
+
+async def _thread_name() -> str:
+    return threading.current_thread().name
+
+
+# --- in-process: bodies of built-ins, and their outputs ----------------------------------------
+
+
+class _Recorder:
+    """A channel that answers ``file.put`` with a ref named after its params."""
+
+    def __init__(self) -> None:
+        self.puts: list[dict[str, Any]] = []
+
+    async def request_async(self, method: str, params: dict[str, Any]) -> Any:
+        assert method == "file.put"
+        self.puts.append(params)
+        return {"digest": "f" * 64, "kind": params["kind"], "size": 1, "name": params["name"]}
+
+
+def test_a_builtin_body_comes_from_grida_fx_std(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from grida.fx import std
+    from grida.fx._ctx import Ctx, InputFile
+    from grida.fx.host import _Refusal
+
+    def files_copy(ctx: Any) -> dict[str, Any]:
+        return {}
+
+    monkeypatch.setattr(
+        std, "body_of", lambda builtin: files_copy if builtin == "fx/files.copy@1" else None
+    )
+    host = Host(io.BytesIO(), io.BytesIO())
+    assert host._body({"builtin": "fx/files.copy@1"}) == (files_copy, None, "files.copy")
+    with pytest.raises(_Refusal) as refused:
+        host._body({"builtin": "fx/files.copy@2"})
+    assert refused.value.code == -32004
+    assert refused.value.message.endswith("has no body for fx/files.copy@2")
+    # A built-in's ports are the engine's: a dict on any of them is a keyed collection, and the
+    # engine checks the shape.
+    channel = _Recorder()
+    run = {
+        "instance": {"id": "pack#1", "path": "pack", "step": "pack", "key": None, "take": [1]},
+        "work_dir": str(tmp_path),
+    }
+    ctx = Ctx(run, channel)  # type: ignore[arg-type]
+    ref = {"digest": "a" * 64, "kind": "json", "size": 2, "name": "m.json", "path": "/s/a"}
+    outputs = asyncio.run(
+        host._outputs(
+            ctx,
+            None,
+            "package",
+            {"files": {"b/x.json": InputFile(ref), "a.txt": ctx.out.text("a")}, "none": None},
+        )
+    )
+    assert outputs == {
+        "files": {
+            "collection": [
+                ["b/x.json", {"file": ref}],
+                [
+                    "a.txt",
+                    {
+                        "file": {
+                            "digest": "f" * 64,
+                            "kind": "text/plain",
+                            "size": 1,
+                            "name": "pack/files[a.txt]",
+                        }
+                    },
+                ],
+            ]
+        },
+        "none": None,
+    }
+    assert channel.puts == [{"base64": "YQ==", "kind": "text/plain", "name": "pack/files[a.txt]"}]
+
+
+def test_a_failure_keeps_only_facts_and_marks_the_engine_can_read(tmp_path: Path) -> None:
+    from grida.fx._ctx import Ctx
+    from grida.fx.host import _kept
+
+    run = {
+        "instance": {"id": "a#1", "path": "a", "step": "a", "key": None, "take": [1]},
+        "work_dir": str(tmp_path),
+    }
+    ctx = Ctx(run, _Recorder())  # type: ignore[arg-type]
+    ctx.facts.update({"score": 1, "cost_usd": 3})
+    ctx.marks.append({"label": "x"})
+    assert _kept(ctx) == {"facts": {"score": 1}, "marks": [{"label": "x"}]}
+    ctx.facts["bad"] = float("nan")  # changed by hand: left out
+    assert _kept(ctx) == {"marks": [{"label": "x"}]}
 
 
 def _conformance_projects() -> list[Path]:

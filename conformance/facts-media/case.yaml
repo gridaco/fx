@@ -1,0 +1,12 @@
+# facts() of a WAV and an MP4 input while planning, in if: and in a free built-in step's with
+# values: the clip's fps, frames, width, height, duration and has_alpha, and the voice's duration,
+# bytes and kind. `describe` is planned (29.97003 fps, and the 0.125 s voice is shorter than the
+# 1.001 s clip) and its manifest holds the numbers as numbers and the label renders them in their
+# JCS form; `long_clip` is absent (30 frames, no alpha). See README.md for how the media was made.
+steps:
+- argv: [expand, case, --routes, routes.yaml, --inputs, inputs.yaml]
+  save: expand.json
+  json: true
+- argv: [identity, case, --routes, routes.yaml, --inputs, inputs.yaml]
+  save: identity.json
+  json: true

@@ -186,8 +186,12 @@ impl Expander<'_> {
     }
 
     /// Its instances' ids, then each child's (recursively), then each member's: expands every
-    /// member not yet expanded (`needs:` relies on it).
+    /// member not yet expanded (`needs:` relies on it). A node whose instances are still being
+    /// made gives those made so far.
     pub(crate) fn instance_ids(&mut self, id: ExpId) -> Vec<String> {
+        if self.is_instantiating(id) {
+            self.reached_under_way(id);
+        }
         let mut ids = self.exps[id.0].instances.clone();
         let children: Vec<ExpId> = self.exps[id.0]
             .children

@@ -1,0 +1,31 @@
+fx: workflow/v1
+id: case
+title: Local nodes of every output shape
+inputs:
+  word: { type: string, default: kite }
+steps:
+  said:
+    uses: ./nodes/local.py#say
+    with: { word: "${{ inputs.word }}" }
+  report:
+    uses: ./nodes/local.py#describe
+    with: { text: "${{ steps.said.outputs.text }}" }
+  parts:
+    uses: ./nodes/local.py#letters
+    with: { word: "${{ inputs.word }}" }
+  entries:
+    uses: ./nodes/local.py#index
+    with: { word: "${{ inputs.word }}" }
+  marks:
+    uses: ./nodes/local.py#mark
+    with: { subject: "${{ steps.said.outputs.text }}" }
+  check:
+    uses: ./nodes/local.py#check
+    judges: said
+    with: { subject: "${{ steps.said.outputs.text }}" }
+outputs:
+  said: ${{ steps.said.outputs.text }}
+  report: ${{ steps.report.outputs.report }}
+  parts: ${{ steps.parts.outputs.parts }}
+  entries: ${{ steps.entries.outputs.entries }}
+  marks: ${{ steps.marks.outputs.annotations }}

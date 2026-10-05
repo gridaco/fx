@@ -1,0 +1,14 @@
+fx: workflow/v1
+id: case
+title: A run continued in its folder
+inputs:
+  word: { type: string, default: kite }
+steps:
+  loud:
+    uses: ./nodes/words.py#shout
+    with: { text: "${{ inputs.word }}" }
+  echoed:
+    uses: ./nodes/words.py#twice
+    with: { text: "${{ steps.loud.outputs.text }}" }
+outputs:
+  echoed: ${{ steps.echoed.outputs.text }}

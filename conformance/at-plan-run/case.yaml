@@ -1,0 +1,24 @@
+# An `at: plan` step in a run. `split` runs while planning: its JSON output lists the script's
+# lines, so the plan already holds the keyed instances `loud['l0']` and `loud['l1']`, and its
+# own result is in the store before the run starts (the run does not start it again). The run
+# executes the keyed local steps and `joined`, which collects them: `outputs/all.txt` holds
+# `l0=A KITE|l1=THE WIND`. `project` shows the steps the run executed, all succeeded.
+steps:
+- argv:
+  - run
+  - case
+  - --routes
+  - routes.yaml
+  - --inputs
+  - inputs.yaml
+  - --run
+  - runs/one
+  mentions:
+  - "result    ok   spent $0.00"
+- argv:
+  - project
+  - runs/one
+  save: project.json
+  json: true
+- read: runs/one/outputs/all.txt
+  save: all.txt

@@ -1,0 +1,69 @@
+{
+ "instances": {
+  "after#1": {
+   "error": "something it reads failed",
+   "path": "after",
+   "state": "skipped"
+  },
+  "bang#1": {
+   "error": "RuntimeError: kaboom y",
+   "path": "bang",
+   "state": "failed"
+  },
+  "nope#1": {
+   "error": "refused on purpose",
+   "path": "nope",
+   "state": "failed"
+  },
+  "ok#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": null
+   },
+   "path": "ok",
+   "state": "succeeded"
+  }
+ },
+ "run": {
+  "run_finished": {
+   "charged_usd": 0,
+   "event": "run_finished",
+   "failed": [
+    "nope#1",
+    "after#1",
+    "bang#1"
+   ],
+   "incomplete": false,
+   "ok": false,
+   "outputs": {
+    "bad": {
+     "value": {
+      "failed": "after#1"
+     }
+    },
+    "good": {
+     "file": {
+      "digest": "8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4",
+      "kind": "text/plain",
+      "name": "ok/text",
+      "size": 2
+     }
+    }
+   },
+   "plan": "ad4d01a93d3cbab99482d48cd9d78c88148cb27f3bc5e1935f769193f47baf1b",
+   "stopped": null
+  },
+  "run_started": {
+   "ceiling_usd": null,
+   "charged_usd": 0,
+   "estimate": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "event": "run_started",
+   "plan": "ad4d01a93d3cbab99482d48cd9d78c88148cb27f3bc5e1935f769193f47baf1b",
+   "resumed": false,
+   "workflow": "case"
+  }
+ }
+}

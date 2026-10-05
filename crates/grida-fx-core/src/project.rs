@@ -406,12 +406,12 @@ pub(crate) fn read_lock_at(root: &Path) -> Result<LockFile> {
 pub fn make_planner(request: &PlanRequest, host: &mut dyn NodeHost) -> Result<Planner> {
     let cwd = request.cwd.as_path();
     // 0. A builder takes no input flags; refuse before running it.
-    if let Target::Builder { .. } = Target::parse(&request.target) {
-        if let Some(first) = request.rest.first() {
-            return Err(Error::usage(format!(
-                "unknown flag {first}; a builder takes its arguments as --arg"
-            )));
-        }
+    if let Target::Builder { .. } = Target::parse(&request.target)
+        && let Some(first) = request.rest.first()
+    {
+        return Err(Error::usage(format!(
+            "unknown flag {first}; a builder takes its arguments as --arg"
+        )));
     }
     // 1, 2. The planning project and the workflow.
     let loaded = load(&request.target, cwd, &request.arguments, host)?;

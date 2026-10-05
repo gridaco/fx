@@ -19,7 +19,8 @@ and answers:
   error), then report ``{path, types: [{attribute, spec}], closure: [{label, path}]}`` or
   ``{path, attribute?, error}`` with errors such as ``nodes/x.py failed to import:
   ModuleNotFoundError: No module named 'foo'`` and ``nodes/x.py: echo is not declared with
-  @node``. ``builtins: true`` reports the types of ``grida.fx.std`` (none in step 2).
+  @node``. ``builtins: true`` reports none: the engine declares every built-in, and runs the
+  bodies of ``grida.fx.std`` through ``run``.
 - ``build`` (section 5.2): with the working directory set to ``cwd``, load the builder file and
   call ``function(**arguments)``, then restore the working directory; ``load_failed`` (``no
   builder file …``, ``… has no function …``, import failures) and ``build_failed``
@@ -27,41 +28,81 @@ and answers:
   returned <type>, not a grida.fx.Workflow``); the result is
   ``{document, takes_anchor}``, the anchor the project-relative path of ``Workflow.source`` (or
   ``path`` when it is unknown or outside the project).
-- ``shutdown`` → ``null``; then the ``exit`` notification ends the process with status 0 (1 if no
-  ``shutdown`` came first). End of stdin ends the process. The process ends with ``os._exit``
-  once the protocol stream is flushed and closed, so a thread user code left running cannot keep
-  it alive.
+- ``run`` (section 5.3), one at a time (another while one is pending: ``-32600``; so are
+  ``describe`` and ``build``): the body is the project module's attribute (loaded once per session
+  as ``describe`` loads it; ``load_failed`` when it is missing or not declared with ``@node``) or
+  the ``grida.fx.std`` body of a built-in (``load_failed`` for one this host has no body for). It
+  gets a :class:`~grida.fx._ctx.Ctx` over the session's channel for the run; an ``async def``
+  body runs on the body loop, a ``def`` body in a worker thread (:mod:`grida.fx._session`). Its
+  outputs (``None`` is none) become output values (section 3.4): an ``InputFile`` or a
+  capability result's file by ``{"file": ref}``; an ``Output`` of a file under the work folder by
+  ``{"work_path", "kind"}``, any other ``Output`` stored with ``file.put`` first; a list as
+  ``{"list": …}``; a ``dict`` on a keyed port (or any port of a built-in, whose ports the engine
+  checks) as ``{"collection": [[key, value], …]}``. Anything else fails the node (``output <label>
+  is <type>; use ctx.out to make it``, ``<name> returned <type>, not its outputs``). The answer
+  is ``{outputs}`` (facts and marks reached the engine with ``fact`` and ``annotate``), sent only
+  once the engine has answered every request of the run. A ``NodeFailure`` is answered
+  ``node_failure`` with the body's ``facts`` and ``marks`` in ``data``; an ``EngineError`` the
+  body let propagate keeps its code and message; anything else is ``node_error`` with the
+  exception's own message (its type when it has none) and ``{exception, traceback, facts,
+  marks}``.
+- ``tool.invoke`` and ``agent.check`` (sections 5.4, 5.5) for an agent of the pending run, served
+  on the body loop by :class:`~grida.fx._agent.Agent` (an unknown run or agent: ``-32602``); a
+  tool's ``NodeFailure`` is answered ``node_failure``, a check's unexpected exception
+  ``node_error``.
+- ``$/cancel`` (section 5.6): for the pending run, sets ``ctx.cancelled`` (the body decides what
+  to do); for a pending ``tool.invoke`` or ``agent.check``, answers it ``cancelled`` at once and
+  cancels its task.
+- ``shutdown`` → ``null`` (a pending run still finishes and is answered); then the ``exit``
+  notification ends the process with status 0 (1 if no ``shutdown`` came first). End of stdin
+  ends the process. The process ends with ``os._exit`` once the protocol stream is flushed and
+  closed, so a thread user code left running cannot keep it alive.
 - an unknown method: ``-32601``; a host fault: ``internal``.
 
 The host also points descriptor 0 at the null device once it holds its own duplicate of stdin,
 so a program user code starts never reads protocol bytes. Messages the host writes name project
-files by their project-relative paths: the project root is cut from the texts of user errors.
-Whatever user code raises while a module loads or a builder runs (``KeyboardInterrupt`` and
-``asyncio.CancelledError`` included) is that module's error or that build's failure.
+files by their project-relative paths: the project root is cut from the texts of user errors
+(and from a ``node_error``'s traceback). Whatever user code raises while a module loads or a
+builder runs (``KeyboardInterrupt`` and ``asyncio.CancelledError`` included) is that module's
+error or that build's failure.
 """
 
 from __future__ import annotations
 
+import asyncio
+import concurrent.futures
 import hashlib
 import importlib.metadata
 import importlib.util
+import inspect
 import os
 import platform
 import re
 import sys
+import threading
 import traceback
+from collections.abc import Callable, Coroutine, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from grida.fx import std
+from grida.fx._agent import Agent
 from grida.fx._builder import Workflow
 from grida.fx._closure import ClosureError, source_closure
+from grida.fx._ctx import Ctx, InputFile, Output
+from grida.fx._errors import EngineError, NodeFailure
 from grida.fx._protocol import (
     BUILD_FAILED,
+    CANCELLED,
+    ERROR_CODES,
     INTERNAL,
     INVALID_PARAMS,
     INVALID_REQUEST,
     LOAD_FAILED,
     METHOD_NOT_FOUND,
+    NODE_ERROR,
+    NODE_FAILURE,
     PARSE_ERROR,
     PROTOCOL,
     PROTOCOL_MISMATCH,
@@ -69,9 +110,9 @@ from grida.fx._protocol import (
     check_value,
     parse_message,
     read_message,
-    write_message,
 )
-from grida.fx._spec import SpecError, spec_of
+from grida.fx._session import Session
+from grida.fx._spec import NodeSpec, SpecError, spec_of
 
 #: A project path on the wire: POSIX, relative, with no empty, ``.`` or ``..`` segment.
 _SEGMENT = r"(?:[^/\\.][^/\\]*|\.[^/\\.][^/\\]*|\.\.[^/\\]+)"
@@ -80,6 +121,25 @@ _SOURCE_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _FUNCTION = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 #: The ``PYTHONSAFEPATH`` value the engine sets when the user's environment has none.
 SAFE_PATH_MARK = "grida-fx"
+#: What a request handler returns when it answers later, from the body loop.
+_LATER = object()
+#: Frames a ``node_error`` traceback starts after: the SDK's own (not the bodies of
+#: ``grida.fx.std``), and the machinery that ran the body (the event loop, the worker thread).
+_SDK = os.path.dirname(os.path.abspath(__file__)) + os.sep
+_STD = os.path.join(os.path.dirname(os.path.abspath(__file__)), "std") + os.sep
+_MACHINERY = (
+    os.path.dirname(asyncio.__file__) + os.sep,
+    os.path.dirname(concurrent.futures.__file__) + os.sep,
+)
+
+
+@dataclass
+class _Run:
+    """The pending ``run``."""
+
+    request_id: Any
+    run_id: str
+    ctx: Ctx
 
 
 class _Refusal(Exception):
@@ -111,28 +171,37 @@ class Host:
         self._failures: dict[str, str] = {}
         #: The project root as the engine wrote it and as resolved, longest first: cut from texts.
         self._root_texts: list[str] = []
+        self.session = Session(reader, writer)
+        #: Guards the pending run and the requests served on the body loop.
+        self._lock = threading.Lock()
+        self._run: _Run | None = None
+        #: ``tool.invoke`` and ``agent.check`` requests being served: id -> (method, task).
+        self._serving: dict[Any, tuple[str, concurrent.futures.Future[None] | None]] = {}
 
     # -- the session -------------------------------------------------------------------------
 
     def serve(self) -> int:
         """Serves until ``exit`` or end of input; returns the exit status."""
-        while True:
-            try:
-                body = read_message(self.reader)
-            except ProtocolError as error:
-                _log(f"grida.fx.host: {error}")
-                self._send_error(None, PARSE_ERROR, str(error))
-                return 1
-            if body is None:
-                return 0 if self.shutting_down else 1
-            try:
-                message = parse_message(body)
-            except ProtocolError as error:
-                self._send_error(None, PARSE_ERROR, str(error))
-                continue
-            status = self._dispatch(message)
-            if status is not None:
-                return status
+        try:
+            while True:
+                try:
+                    body = read_message(self.reader)
+                except ProtocolError as error:
+                    _log(f"grida.fx.host: {error}")
+                    self._send_error(None, PARSE_ERROR, str(error))
+                    return 1
+                if body is None:
+                    return 0 if self.shutting_down else 1
+                try:
+                    message = parse_message(body)
+                except ProtocolError as error:
+                    self._send_error(None, PARSE_ERROR, str(error))
+                    continue
+                status = self._dispatch(message)
+                if status is not None:
+                    return status
+        finally:
+            self.session.close()
 
     def _dispatch(self, message: Any) -> int | None:
         """Handles one message; an exit status when the session ends."""
@@ -145,20 +214,23 @@ class Host:
             self._send_error(known_id, INVALID_REQUEST, 'a message carries "jsonrpc": "2.0"')
             return None
         if "method" not in message:
-            # A response to a request of this host's: it sends none in this version.
-            _log(f"grida.fx.host: ignored a response to id {request_id!r}")
+            # A response to one of this host's requests (a run's).
+            if not self.session.deliver(message):
+                _log(f"grida.fx.host: ignored a response to id {request_id!r}")
             return None
         method = message["method"]
         if not isinstance(method, str):
             self._send_error(known_id, INVALID_REQUEST, "a message's method is a string")
             return None
         if "id" not in message:
-            return self._notify(method)
+            return self._notify(method, message.get("params"))
         if known_id is None:
             self._send_error(None, INVALID_REQUEST, "a request id is an integer or a string")
             return None
         try:
-            result = self._request(method, message.get("params"))
+            result = self._request(method, message.get("params"), known_id)
+            if result is _LATER:
+                return None
         except _Refusal as refusal:
             self._send_error(known_id, refusal.code, refusal.message, refusal.data)
             return None
@@ -169,19 +241,26 @@ class Host:
         self._send_result(known_id, result)
         return None
 
-    def _notify(self, method: str) -> int | None:
+    def _notify(self, method: str, params: Any) -> int | None:
         if method == "exit":
             return 0 if self.shutting_down else 1
-        # `$/cancel` has nothing to stop while one job runs at a time and none is pending.
+        if method == "$/cancel":
+            self._cancel(params)
+        # Other notifications are ignored.
         return None
 
-    def _request(self, method: str, params: Any) -> Any:
+    def _request(self, method: str, params: Any, request_id: Any) -> Any:
         if method == "initialize":
             if self.initialized:
                 raise _Refusal(INVALID_REQUEST, "initialize was already answered")
             return self.initialize(_params(params))
         if not self.initialized:
             raise _Refusal(INVALID_REQUEST, f"{method} came before initialize")
+        # Part of the pending run, which shutdown lets finish.
+        if method == "tool.invoke":
+            return self.tool_invoke(request_id, _params(params))
+        if method == "agent.check":
+            return self.agent_check(request_id, _params(params))
         if self.shutting_down:
             raise _Refusal(INVALID_REQUEST, f"{method} came after shutdown")
         if method == "shutdown":
@@ -189,15 +268,19 @@ class Host:
                 raise _Refusal(INVALID_PARAMS, "shutdown takes no params")
             self.shutting_down = True
             return None
+        if method in ("describe", "build", "run") and self._pending_run() is not None:
+            raise _Refusal(INVALID_REQUEST, f"{method} came while a run is pending")
         if method == "describe":
             return self.describe(_params(params))
         if method == "build":
             return self.build(_params(params))
+        if method == "run":
+            return self.run(request_id, _params(params))
         raise _Refusal(METHOD_NOT_FOUND, f"the Python node host has no method {method}")
 
     def _send_result(self, request_id: Any, result: Any) -> None:
         try:
-            write_message(self.writer, {"jsonrpc": "2.0", "id": request_id, "result": result})
+            self.session.send({"jsonrpc": "2.0", "id": request_id, "result": result})
         except ValueError as error:
             self._send_error(
                 request_id, INTERNAL, f"the node host's answer is not an I-JSON value: {error}"
@@ -209,7 +292,24 @@ class Host:
         error: dict[str, Any] = {"code": code, "message": message or "error"}
         if data is not None:
             error["data"] = data
-        write_message(self.writer, {"jsonrpc": "2.0", "id": request_id, "error": error})
+        self.session.send({"jsonrpc": "2.0", "id": request_id, "error": error})
+
+    def _answer(
+        self, request_id: Any, result: Any = None, error: dict[str, Any] | None = None
+    ) -> None:
+        """Answers a request served on the body loop; a broken stream is logged (the engine
+        then sees the host exit)."""
+        try:
+            if error is None:
+                self._send_result(request_id, result)
+                return
+            try:
+                self._send_error(request_id, error["code"], error["message"], error.get("data"))
+            except ValueError:
+                # data that is not an I-JSON value (a body changed ctx.facts by hand): left out.
+                self._send_error(request_id, error["code"], error["message"])
+        except (OSError, ValueError) as broken:
+            _log(f"grida.fx.host: could not answer request {request_id!r}: {broken}")
 
     # -- initialize --------------------------------------------------------------------------
 
@@ -268,7 +368,7 @@ class Host:
                 raise _Refusal(INVALID_PARAMS, "a describe target's attribute is a name")
             checked.append((path, attribute))
         modules = [self._describe_target(path, attribute) for path, attribute in checked]
-        # The built-in bodies of grida.fx.std arrive with the runner: this host carries none yet.
+        # The engine declares every built-in; the bodies of grida.fx.std run through `run`.
         return {"modules": modules, "builtins": []}
 
     def _describe_target(self, path: str, attribute: str | None) -> dict[str, Any]:
@@ -385,6 +485,248 @@ class Host:
             raise _Refusal(BUILD_FAILED, f"{function}: {self._error_text(error)}") from None
         return built, document
 
+    # -- run ---------------------------------------------------------------------------------
+
+    def _pending_run(self) -> _Run | None:
+        with self._lock:
+            return self._run
+
+    def run(self, request_id: Any, params: dict[str, Any]) -> object:
+        """Starts the body of a ``run`` on the body loop; it answers the request when the body
+        is done (module docstring)."""
+        _check_run(params)
+        body, spec, name = self._body(params["body"])
+        state = _Run(
+            request_id, params["run_id"], Ctx(params, self.session.channel(params["run_id"]))
+        )
+        with self._lock:
+            if self._run is not None:
+                raise _Refusal(INVALID_REQUEST, "run came while a run is pending")
+            self._run = state
+        task = asyncio.run_coroutine_threadsafe(
+            self._execute(state, body, spec, name), self.session.loop()
+        )
+        task.add_done_callback(_log_escaped)
+        return _LATER
+
+    def _body(self, body: dict[str, Any]) -> tuple[Callable[..., Any], NodeSpec | None, str]:
+        """The body a ``run`` names, its declared spec (``None`` for a built-in, whose
+        declaration is the engine's), and the name its messages use."""
+        if "builtin" in body:
+            builtin = body["builtin"]
+            if not isinstance(builtin, str) or set(body) != {"builtin"}:
+                raise _Refusal(INVALID_PARAMS, "run's body is {path, attribute} or {builtin}")
+            function = std.body_of(builtin)
+            if function is None:
+                raise _Refusal(LOAD_FAILED, f"grida {_sdk_version()} has no body for {builtin}")
+            name = builtin.removeprefix("fx/").rsplit("@", 1)[0]
+            return function, spec_of(function), name
+        path = _project_path(body.get("path"), "run's body path")
+        attribute = body.get("attribute")
+        if not isinstance(attribute, str) or not attribute:
+            raise _Refusal(INVALID_PARAMS, "run's body attribute is a name")
+        try:
+            module, _ = self._load(path, f"no module file {path}")
+        except _LoadError as error:
+            raise _Refusal(LOAD_FAILED, str(error)) from None
+        try:
+            value = getattr(module, attribute, None)
+        except BaseException:
+            value = None
+        spec = spec_of(value)
+        if spec is None or not callable(value):
+            raise _Refusal(LOAD_FAILED, f"{path}: {attribute} is not declared with @node")
+        return value, spec, spec.name
+
+    async def _execute(
+        self, state: _Run, body: Callable[..., Any], spec: NodeSpec | None, name: str
+    ) -> None:
+        """Runs the body and answers the run, once the engine has answered every request of
+        the run (section 5.3)."""
+        ctx = state.ctx
+        result: dict[str, Any] | None = None
+        error: dict[str, Any] | None = None
+        try:
+            returned = await _call_body(body, ctx)
+            result = {"outputs": await self._outputs(ctx, spec, name, returned)}
+        except NodeFailure as failure:
+            error = {"code": NODE_FAILURE, "message": self._message(failure), "data": _kept(ctx)}
+        except EngineError as refused:
+            if refused.code in ERROR_CODES:
+                error = {"code": refused.code, "message": refused.message or type(refused).__name__}
+                if isinstance(refused.data, dict):
+                    error["data"] = refused.data
+            else:
+                error = self._node_error(refused, ctx)
+        except BaseException as raised:  # whatever the body raised is its node_error
+            error = self._node_error(raised, ctx)
+        try:
+            await self.session.settle(state.run_id)
+        except BaseException as broken:  # pragma: no cover - settling waits on futures only
+            _log(f"grida.fx.host: waiting for run {state.run_id}'s requests failed: {broken}")
+        with self._lock:
+            if self._run is state:
+                self._run = None
+        self._answer(state.request_id, result, error)
+
+    async def _outputs(
+        self, ctx: Ctx, spec: NodeSpec | None, name: str, returned: Any
+    ) -> dict[str, Any]:
+        """A body's outputs as output values (section 3.4)."""
+        if returned is None:
+            returned = {}
+        if not isinstance(returned, Mapping):
+            raise NodeFailure(f"{name} returned {type(returned).__name__}, not its outputs")
+        outputs: dict[str, Any] = {}
+        for port, value in returned.items():
+            if not isinstance(port, str):
+                raise NodeFailure(f"{name} returned an output named {port!r}, not a port name")
+            shape = None
+            if spec is not None and port in spec.outputs:
+                shape = spec.outputs[port].shape
+            outputs[port] = await self._port_output(ctx, port, shape, value)
+        return outputs
+
+    async def _port_output(self, ctx: Ctx, port: str, shape: str | None, value: Any) -> Any:
+        if value is None:
+            return None
+        if isinstance(value, list | tuple):
+            return {
+                "list": [
+                    await self._output_value(ctx, item, f"{port}[{index}]")
+                    for index, item in enumerate(value)
+                ]
+            }
+        if isinstance(value, Mapping) and shape in ("keyed", None):
+            items = []
+            for key, item in value.items():
+                if not isinstance(key, str):
+                    raise NodeFailure(f"output {port} has the key {key!r}, which is not a string")
+                items.append([key, await self._output_value(ctx, item, f"{port}[{key}]")])
+            return {"collection": items}
+        return await self._output_value(ctx, value, port)
+
+    async def _output_value(self, ctx: Ctx, item: Any, label: str) -> dict[str, Any]:
+        if isinstance(item, InputFile):
+            return {"file": item.ref}
+        if isinstance(item, Output):
+            if item.work_path is not None:
+                return {"work_path": item.work_path, "kind": item.kind}
+            return {"file": await ctx._put_async(item, f"{ctx.instance.path}/{label}")}
+        raise NodeFailure(f"output {label} is {type(item).__name__}; use ctx.out to make it")
+
+    def _message(self, error: BaseException) -> str:
+        return self._unrooted(str(error)) or type(error).__name__
+
+    def _node_error(self, error: BaseException, ctx: Ctx | None = None) -> dict[str, Any]:
+        """A ``node_error``: the exception's own message, with its type and traceback (and the
+        body's facts and marks) in ``data``. The engine names the failure ``<exception>:
+        <message>``, so the message does not repeat the type; an exception with no message
+        (``KeyboardInterrupt``) sends its type, since a message is never empty (section 7)."""
+        data: dict[str, Any] = {
+            "exception": type(error).__name__,
+            "traceback": self._traceback(error),
+        }
+        if ctx is not None:
+            data.update(_kept(ctx))
+        message = self._error_message(error) or type(error).__name__
+        return {"code": NODE_ERROR, "message": message, "data": data}
+
+    def _traceback(self, error: BaseException) -> str:
+        """Where ``error`` was raised, from the first frame of user code, with the project root
+        cut."""
+        frames = error.__traceback__
+        while frames is not None and _is_machinery(frames.tb_frame.f_code.co_filename):
+            frames = frames.tb_next
+        return self._unrooted("".join(traceback.format_exception(type(error), error, frames)))
+
+    # -- agents: tool.invoke, agent.check, $/cancel -------------------------------------------
+
+    def tool_invoke(self, request_id: Any, params: dict[str, Any]) -> object:
+        agent = self._agent(params)
+        call_id = params.get("call_id")
+        if "call_id" not in params or not (call_id is None or isinstance(call_id, str)):
+            raise _Refusal(INVALID_PARAMS, "tool.invoke's call_id is a string or null")
+        name = params.get("name")
+        if not isinstance(name, str) or not name:
+            raise _Refusal(INVALID_PARAMS, "tool.invoke's name is a tool's name")
+        arguments = params.get("arguments")
+        if not isinstance(arguments, dict):
+            raise _Refusal(INVALID_PARAMS, "tool.invoke's arguments are a JSON object")
+        self._serve(request_id, "tool.invoke", agent.serve_tool(name, arguments))
+        return _LATER
+
+    def agent_check(self, request_id: Any, params: dict[str, Any]) -> object:
+        agent = self._agent(params)
+        if "value" not in params:
+            raise _Refusal(INVALID_PARAMS, "agent.check needs the submitted value")
+        if not agent.has_check:
+            raise _Refusal(INVALID_PARAMS, f"agent {params['agent_id']} has no check")
+        self._serve(request_id, "agent.check", agent.serve_check(params["value"]))
+        return _LATER
+
+    def _agent(self, params: dict[str, Any]) -> Agent:
+        """The agent of the pending run that ``params`` names."""
+        run_id = params.get("run_id")
+        agent_id = params.get("agent_id")
+        state = self._pending_run()
+        if state is None or not isinstance(run_id, str) or state.run_id != run_id:
+            raise _Refusal(INVALID_PARAMS, f"no run {run_id} is pending on this host")
+        agent = state.ctx._agents.get(agent_id) if isinstance(agent_id, str) else None
+        if agent is None:
+            raise _Refusal(INVALID_PARAMS, f"run {run_id} has no agent {agent_id} running")
+        return agent
+
+    def _serve(
+        self, request_id: Any, method: str, work: Coroutine[Any, Any, dict[str, Any]]
+    ) -> None:
+        """Serves a ``tool.invoke`` or ``agent.check`` on the body loop."""
+        with self._lock:
+            self._serving[request_id] = (method, None)
+        task = asyncio.run_coroutine_threadsafe(
+            self._answer_served(request_id, method, work), self.session.loop()
+        )
+        task.add_done_callback(_log_escaped)
+        with self._lock:
+            if request_id in self._serving:
+                self._serving[request_id] = (method, task)
+
+    async def _answer_served(
+        self, request_id: Any, method: str, work: Coroutine[Any, Any, dict[str, Any]]
+    ) -> None:
+        result: dict[str, Any] | None = None
+        error: dict[str, Any] | None = None
+        try:
+            result = await work
+        except asyncio.CancelledError:
+            error = {"code": CANCELLED, "message": f"the engine cancelled {method}"}
+        except NodeFailure as failure:
+            error = {"code": NODE_FAILURE, "message": self._message(failure)}
+        except BaseException as raised:  # a check's (or a tool's) unexpected exception
+            error = self._node_error(raised)
+        with self._lock:
+            if self._serving.pop(request_id, None) is None:
+                return  # answered `cancelled` already
+        self._answer(request_id, result, error)
+
+    def _cancel(self, params: Any) -> None:
+        """``$/cancel {id}`` (section 5.6)."""
+        if not isinstance(params, dict) or not _valid_id(params.get("id")):
+            return
+        target = params["id"]
+        with self._lock:
+            state = self._run
+            if state is not None and state.request_id == target:
+                state.ctx.cancelled = True
+                return
+            served = self._serving.pop(target, None)
+        if served is None:
+            return
+        method, task = served
+        self._answer(target, error={"code": CANCELLED, "message": f"the engine cancelled {method}"})
+        if task is not None:
+            task.cancel()
+
     # -- modules -----------------------------------------------------------------------------
 
     def _root(self) -> Path:
@@ -425,13 +767,16 @@ class Host:
     def _error_text(self, error: BaseException) -> str:
         """``<Type>: <message>``, with the project root cut from paths in the message; ``<Type>``
         alone when the message is empty (``KeyboardInterrupt``), as Python prints it."""
-        if isinstance(error, SyntaxError) and error.filename:
-            message = f"{error.msg} ({self._unrooted(error.filename)}, line {error.lineno})"
-        else:
-            message = self._unrooted(str(error))
+        message = self._error_message(error)
         if not message:
             return type(error).__name__
         return f"{type(error).__name__}: {message}"
+
+    def _error_message(self, error: BaseException) -> str:
+        """The exception's message, with the project root cut from paths in it."""
+        if isinstance(error, SyntaxError) and error.filename:
+            return f"{error.msg} ({self._unrooted(error.filename)}, line {error.lineno})"
+        return self._unrooted(str(error))
 
     def _unrooted(self, text: str) -> str:
         """``text`` with every path under the project root made project-relative."""
@@ -452,6 +797,75 @@ def _project_path(value: Any, what: str) -> str:
             INVALID_PARAMS, f"{what} is a POSIX path relative to the project root, not {value!r}"
         )
     return value
+
+
+def _check_run(params: dict[str, Any]) -> None:
+    """Refuses ``run`` params that do not have the shape of section 5.3."""
+    run_id = params.get("run_id")
+    if not isinstance(run_id, str) or not run_id:
+        raise _Refusal(INVALID_PARAMS, "run's run_id is a non-empty string")
+    instance = params.get("instance")
+    take = instance.get("take") if isinstance(instance, dict) else None
+    if (
+        not isinstance(instance, dict)
+        or not all(isinstance(instance.get(field), str) for field in ("id", "path", "step"))
+        or not isinstance(instance.get("key", None), str | None)
+        or not isinstance(take, list)
+        or not take
+        or not all(isinstance(number, int) and not isinstance(number, bool) for number in take)
+    ):
+        raise _Refusal(INVALID_PARAMS, "run's instance is {id, path, step, key, take}")
+    if not isinstance(params.get("body"), dict):
+        raise _Refusal(INVALID_PARAMS, "run's body is {path, attribute} or {builtin}")
+    for field in ("params", "param_files", "inputs", "resources", "tools", "calls"):
+        if not isinstance(params.get(field), dict):
+            raise _Refusal(INVALID_PARAMS, f"run's {field} is a JSON object")
+    work_dir = params.get("work_dir")
+    if not isinstance(work_dir, str) or not work_dir or not os.path.isabs(work_dir):
+        raise _Refusal(INVALID_PARAMS, "run's work_dir is an absolute path")
+    timeout_s = params.get("timeout_s")
+    if isinstance(timeout_s, bool) or not isinstance(timeout_s, int | float | None):
+        raise _Refusal(INVALID_PARAMS, "run's timeout_s is a number of seconds or null")
+
+
+async def _call_body(body: Callable[..., Any], ctx: Ctx) -> Any:
+    """Runs a body: an ``async def`` on the body loop, a ``def`` in a worker thread."""
+    if inspect.iscoroutinefunction(body):
+        returned = await body(ctx)
+    else:
+        returned = await asyncio.to_thread(body, ctx)
+    if inspect.isawaitable(returned):
+        returned = await returned
+    return returned
+
+
+def _kept(ctx: Ctx) -> dict[str, Any]:
+    """The node facts and marks a body reported (``ctx.facts``, ``ctx.marks``), for a failure's
+    ``data``; either is left out when the body made it something that is not an I-JSON value."""
+    kept: dict[str, Any] = {}
+    facts = {name: value for name, value in ctx.facts.items() if name != "cost_usd"}
+    marks = list(ctx.marks)
+    for key, value in (("facts", facts), ("marks", marks)):
+        try:
+            check_value(value)
+        except ValueError:
+            continue
+        kept[key] = value
+    return kept
+
+
+def _is_machinery(filename: str) -> bool:
+    if filename.startswith(_SDK):
+        return not filename.startswith(_STD)
+    return filename.startswith(_MACHINERY)
+
+
+def _log_escaped(task: concurrent.futures.Future[None]) -> None:
+    """Logs what escaped a task the host scheduled on the body loop (none should)."""
+    if not task.cancelled() and task.exception() is not None:
+        error = task.exception()
+        assert error is not None
+        _log("".join(traceback.format_exception(error)))
 
 
 def _valid_id(value: Any) -> bool:

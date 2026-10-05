@@ -1,0 +1,166 @@
+{
+ "estimate": {
+  "ceiling_usd": null,
+  "high_usd": 0.12,
+  "low_usd": 0.03
+ },
+ "instances": [
+  {
+   "id": "split#1",
+   "identity": "81b5b43abf2ac93b67e6eedef519573519532be2f5934cc119ba4b5718ca9506",
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "split",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {},
+   "state": "done",
+   "step": "split",
+   "take": [
+    1
+   ],
+   "type": "nodes/cases.py#lines@1",
+   "uses": "./nodes/cases.py#lines",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "text": {
+     "file": "880553fca8fcea94e325ee2cfb48e5a985cc797f39a14cc6d3cedecfeb2ae4d2"
+    }
+   }
+  },
+  {
+   "id": "draw['l0']#1",
+   "identity": "d378c1822e24ab2d0e325e859ed63bbc20bb970d38f24c15264571c36a715705",
+   "judged_by": [],
+   "judges": null,
+   "key": "l0",
+   "needs": [],
+   "path": "draw['l0']",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.04,
+    "low_usd": 0.01
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+     "route": "img-a@acme"
+    }
+   },
+   "state": "planned",
+   "step": "draw",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "a",
+    "vars": {}
+   }
+  },
+  {
+   "id": "draw['l1']#1",
+   "identity": "0b6ae7e35793b4b90dcb4f9499ff7666f3759ca3b3170a3d4b08d7ee1887ef80",
+   "judged_by": [],
+   "judges": null,
+   "key": "l1",
+   "needs": [],
+   "path": "draw['l1']",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.04,
+    "low_usd": 0.01
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+     "route": "img-a@acme"
+    }
+   },
+   "state": "planned",
+   "step": "draw",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "b",
+    "vars": {}
+   }
+  },
+  {
+   "id": "draw['l2']#1",
+   "identity": "067dfff2500163172cc1287e4e6c1876af811c1dc1262fd0bc1af2a3d30ad2bb",
+   "judged_by": [],
+   "judges": null,
+   "key": "l2",
+   "needs": [],
+   "path": "draw['l2']",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.04,
+    "low_usd": 0.01
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+     "route": "img-a@acme"
+    }
+   },
+   "state": "planned",
+   "step": "draw",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "c",
+    "vars": {}
+   }
+  }
+ ],
+ "kind": "fx-graph-v1",
+ "pending": [],
+ "problems": [],
+ "types": {
+  "./nodes/cases.py#lines": {
+   "identity": "nodes/cases.py#lines@1",
+   "source": {
+    "files": {
+     "nodes/cases.py": "d34041da3235ac70a67a2748fbffc8cd8ab51dc12db3098472c52e2f40db0930"
+    },
+    "resources": {}
+   }
+  },
+  "fx/image.generate@1": {
+   "identity": "fx/image.generate@1.1"
+  }
+ },
+ "workflow": {
+  "file": "workflows/case.yaml",
+  "id": "case",
+  "title": "A list computed while planning"
+ }
+}

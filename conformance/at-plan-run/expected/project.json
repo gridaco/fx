@@ -1,0 +1,61 @@
+{
+ "instances": {
+  "joined#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": null
+   },
+   "path": "joined",
+   "state": "succeeded"
+  },
+  "loud['l0']#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": null
+   },
+   "path": "loud['l0']",
+   "state": "succeeded"
+  },
+  "loud['l1']#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": null
+   },
+   "path": "loud['l1']",
+   "state": "succeeded"
+  }
+ },
+ "run": {
+  "run_finished": {
+   "charged_usd": 0,
+   "event": "run_finished",
+   "failed": [],
+   "incomplete": false,
+   "ok": true,
+   "outputs": {
+    "all": {
+     "file": {
+      "digest": "725c101b40c3c87832a0b5d1b7e1b2a26b54a5e2f308ce4ae76f1b9bc932c95d",
+      "kind": "text/plain",
+      "name": "joined/text",
+      "size": 21
+     }
+    }
+   },
+   "plan": "97fc3503f3acc00b86cb951aefc54511a5aa29e8ebe7c791ea521bbf7baf7a13",
+   "stopped": null
+  },
+  "run_started": {
+   "ceiling_usd": null,
+   "charged_usd": 0,
+   "estimate": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "event": "run_started",
+   "plan": "97fc3503f3acc00b86cb951aefc54511a5aa29e8ebe7c791ea521bbf7baf7a13",
+   "resumed": false,
+   "workflow": "case"
+  }
+ }
+}

@@ -1,0 +1,53 @@
+{
+ "instances": {
+  "a#2": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": null
+   },
+   "path": "a",
+   "state": "succeeded"
+  },
+  "b#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": null
+   },
+   "path": "b",
+   "state": "succeeded"
+  }
+ },
+ "run": {
+  "run_finished": {
+   "charged_usd": 0,
+   "event": "run_finished",
+   "failed": [],
+   "incomplete": false,
+   "ok": true,
+   "outputs": {
+    "out": {
+     "file": {
+      "digest": "7eceee0e493e064990a34612e7bb6ecd7af2e3e41a760eda4ed6ac2b89ea969c",
+      "kind": "text/plain",
+      "name": "b/text",
+      "size": 21
+     }
+    }
+   },
+   "plan": "eda5f069571a1577080d3eef84643c09a67c222885d4708525c557e77021658f",
+   "stopped": null
+  },
+  "run_started": {
+   "ceiling_usd": null,
+   "charged_usd": 0,
+   "estimate": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "event": "run_started",
+   "plan": "eda5f069571a1577080d3eef84643c09a67c222885d4708525c557e77021658f",
+   "resumed": false,
+   "workflow": "case"
+  }
+ }
+}

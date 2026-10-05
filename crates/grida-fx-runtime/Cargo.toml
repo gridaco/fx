@@ -9,12 +9,21 @@ publish.workspace = true
 [dependencies]
 grida-fx-core.workspace = true
 grida-fx-protocol.workspace = true
+grida-fx-providers.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 indexmap.workspace = true
+sha2.workspace = true
+jsonschema.workspace = true
+tokio.workspace = true
+chrono.workspace = true
+base64.workspace = true
+unicode-general-category.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+grida-fx-providers = { workspace = true, features = ["testing"] }
+tokio = { workspace = true, features = ["test-util"] }
 
 [lints]
 workspace = true

@@ -1,0 +1,23 @@
+# A step's `timeout:` in seconds. `nap` sleeps 30 seconds under `timeout: 1` and never looks at
+# `ctx.cancelled`: the engine sends `$/cancel` after 1 second and ends the node host 5 seconds
+# later. The step fails with `ran past 1 seconds` and is not run again, although its type
+# declares `retry="engine"`: the body counted one run in `naps.txt`. The run exits 1, well before
+# the body would have woken; `project` shows the failure.
+steps:
+- argv:
+  - run
+  - case
+  - --routes
+  - routes.yaml
+  - --run
+  - runs/one
+  status: 1
+  mentions:
+  - "nap#1: ran past 1 seconds"
+- read: naps.txt
+  save: naps.txt
+- argv:
+  - project
+  - runs/one
+  save: project.json
+  json: true

@@ -120,8 +120,11 @@ your installation's route table has its own.
 grida-fx run workflows/icon.yaml --name "copper lantern" --live
 ```
 
-`--live` is required whenever a run may call a paid provider. Without it, FX refuses before
-spending anything. The run's folder holds its outputs; `grida-fx inspect` summarises it.
+`--live` is required whenever a run may call a paid provider. Without it nothing is spent: local
+steps still run, a paid call the cache already answered is replayed, and any other paid call
+fails its step (`image.generate on gpt-image-2@openai is a paid call; run with --live`). A live
+run also needs a ceiling, here the project's `budget:`. The run's folder holds its outputs;
+`grida-fx inspect` summarises it.
 
 ## Run it again
 

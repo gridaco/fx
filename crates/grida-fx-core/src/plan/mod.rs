@@ -215,16 +215,16 @@ pub fn make_plan(
     let mut problems = expansion.problems.clone();
     problems.extend(unavailable);
     for instance in expansion.ordered().filter(|i| i.at_plan) {
-        if let Some(result) = planner.results.get(&instance.id) {
-            if result.status == ResultStatus::Failed {
-                problems.push(Problem::new(
-                    instance.step.clone(),
-                    format!(
-                        "failed while planning: {}",
-                        result.error.as_deref().unwrap_or_default()
-                    ),
-                ));
-            }
+        if let Some(result) = planner.results.get(&instance.id)
+            && result.status == ResultStatus::Failed
+        {
+            problems.push(Problem::new(
+                instance.step.clone(),
+                format!(
+                    "failed while planning: {}",
+                    result.error.as_deref().unwrap_or_default()
+                ),
+            ));
         }
     }
     if runner.is_some() {
@@ -252,10 +252,8 @@ pub fn make_plan(
     let cached = expansion
         .ordered()
         .filter(|i| i.state.is_live())
-        .filter_map(|i| {
-            let identity = i.identity.as_deref()?;
-            cache.has_result(identity).then(|| i.id.clone())
-        })
+        .filter(|i| i.identity.is_some() && cache.has_result(i))
+        .map(|i| i.id.clone())
         .collect();
     Ok(Plan {
         expansion,

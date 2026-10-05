@@ -97,12 +97,13 @@ Each step is a mapping with these keys and no others:
 | `read` | path | a project file to save instead of stdout: something the command wrote (`fx.lock`, a run's `outputs/…`) |
 | `save` | file name | the file under `expected/` that this step's stdout (or its `read` file) is compared with; no `/`, and not starting with `.` |
 | `json` | boolean | compare the saved text as JSON (below) |
+| `jsonl` | boolean | compare the saved text as JSON Lines, such as a run's `events.jsonl` (below) |
 | `yaml` | boolean | compare the saved text as YAML, by converting it to JSON (below) |
 
 - A step needs `argv`, `read` or `files`. In one step, `files` are written first, then `argv`
   runs, then `read` is read.
-- `status`, `mentions` and `stdin` need `argv`. `read`, `json` and `yaml` need `save`, and
-  `save` needs `argv` or `read`. `json` and `yaml` exclude each other.
+- `status`, `mentions` and `stdin` need `argv`. `read`, `json`, `jsonl` and `yaml` need
+  `save`, and `save` needs `argv` or `read`. `json`, `jsonl` and `yaml` exclude each other.
 - Paths in `files`, `read` and `invalid_inputs` are POSIX and relative. They may not leave the
   project: no `..`, no absolute path, no backslash, no symbolic link out of it.
 - An unknown key, or a value of the wrong type, fails the case before any step runs.
@@ -118,8 +119,12 @@ file (`workflows/case.yaml`).
 | Command | What a case reads from it |
 |---|---|
 | `expand <target>`, `identity <target>`, `price <target>` | the expanded graph, each instance's identity, the price by phase, as JSON on stdout |
-| `run <target> --run <folder>` | a local run; no case passes `--live` |
+| `run <target> --run <folder> [--deliver <output>=<path>]…` | a local run in `<folder>`, or the continuation of the run that folder holds; its exit status and summary lines (`result    ok   spent $0.00`, `failed    <id>: <error>`, `refused: …`); the files it writes under the folder; with `--deliver`, the output files copied to `<path>` (`{key}` once per element) after the run. No case passes `--live` |
 | `project <folder>` | the run's record projected to its state, as JSON on stdout |
+| `inspect <folder> --verify` | the run's summary (state, counts, spend, failures) and the check of every file it placed, on stdout |
+| `reroll <folder> <step>` | the next take of a step path, written to the workflow's takes file; one line saying so and the next command, on stdout |
+| `pick <folder> <step> <take>` | a take chosen for a step path, with its result's digest, written to the takes file; one line on stdout |
+| `takes list <target>` | the takes file's entries, one line each (`<step>  take <n>[  <digest>]`), on stdout |
 | `lock [--check] [--same <type>]` | `fx.lock`, written or checked |
 
 Every case relies on these flags:
@@ -134,15 +139,25 @@ Every case relies on these flags:
   it: `project runs/one`, `read: runs/one/outputs/said.txt`. A run writes each workflow output
   under the folder's `outputs/` as `<name><suffix>`, where the suffix is that of the output's
   kind, as [store.md](../spec/store.md), "Run folders", specifies: the text output `said` is
-  `outputs/said.txt`.
+  `outputs/said.txt`. An output of several files, such as a list or a keyed collection, is a
+  folder with one file per element: `outputs/parts/0.txt`, `outputs/entries/first.txt`.
+- **`--deliver <output>=<path>`** copies an output after the run, to a path relative to the
+  current directory; `{key}` in the path stands for each element's key (or position), made a
+  safe path. An output the workflow does not declare is refused before anything runs.
+
+A node body in a case may keep a counter in a file in the project folder, the node host's
+working directory, so that a later step can read how often the body ran (`run-retry-engine`,
+`run-timeout`).
 
 ### Exit status
 
 | Status | Meaning |
 |---|---|
 | 0 | success |
-| 1 | the command read everything and refused or stopped: a planning problem the workflow author must fix (a problem in the plan, a stale `fx.lock`, a paid call without `--live`) |
-| 2 | unreadable or invalid input: a document outside the strict YAML subset, an inputs file that does not fit the workflow's inputs |
+| 1 | the command read everything and refused or stopped: a planning problem the workflow author must fix (a problem in the plan, a stale `fx.lock`), a run refused before it started (a folder that holds another plan), or a run that is not ok (a failed or skipped step, such as a paid call without `--live`) |
+| 2 | unreadable or invalid input: a document outside the strict YAML subset, an inputs file that does not fit the workflow's inputs, a command-line mistake (an output `--deliver` cannot name, a take out of bounds) |
+
+A run a person interrupts exits 130; no case does.
 
 ### Comparing
 
@@ -160,6 +175,11 @@ Every case relies on these flags:
   - An integral number below 1e21 is written as digits, as JCS writes it: `1`, `1.0` and `1e0`
     are one value, and `1e16` is `10000000000000000`.
   - The result is printed with sorted keys and an indent of 1.
+- **`jsonl: true`.** The text is JSON Lines, such as a run's `events.jsonl`
+  ([store.md](../spec/store.md) §8): each non-empty line is parsed and normalised as with
+  `json: true`, and the lines are sorted (by their compact form with sorted keys) into one
+  array, printed as JSON is. The events of instances that run at the same time may be written in
+  any order, so a case compares which events a run wrote, not their order.
 - **`yaml: true`.** The text is parsed as YAML and normalised as JSON is, so a written YAML
   document (`fx.lock`) is held to its meaning, not its layout.
 - **Stale files.** A file under `expected/` that no step saves fails the case.
@@ -201,10 +221,12 @@ alone.
 | Case | What it pins |
 |---|---|
 | `at-plan` | an `at: plan` step runs while planning, and a `for_each` over its output expands to keyed instances; its price |
+| `at-plan-run` | an `at: plan` step in a run: its keyed `for_each` of local steps runs, collected into one output; the `at: plan` step is not run again |
 | `cache-replay` | a paid call answered offline from a seeded call record, without `--live`; a second run answered from the result cache |
 | `cache-replay-miss` | the same project without a store: a paid call without `--live` is refused (exit 1), naming the capability, the route and `--live` |
 | `conditions-select` | `if:` on an input and on a judge's fact, `on_reject: continue`, and `fx/select@1` with `first_of` |
 | `facts` | `facts()` of input files (an image's size, alpha and opacity; a text file's size and kind) in `if:` and in a prompt; a fact of a file not made yet leaves an identity null |
+| `facts-media` | file facts of a WAV and an MP4 input (`duration`, `fps`, `frames`, `width`) in a free built-in step's `with:` and in `if:`, and the identities they give |
 | `group-regenerate` | a group with `regenerate: {max, until}`: nested take ids (`build.draw#2.1`) and `maybe` states |
 | `judge-regenerate` | a judge's `on_reject: {regenerate: {max: 3, then: fail}}`, priced as up to three calls |
 | `linear` | a file input's digest in a local step's identity, a pending value that leaves an identity null, and workflow outputs |
@@ -217,7 +239,15 @@ alone.
 | `refusals` | five planning problems in one plan (an assertion, a missing feature, `independent_of`, an unknown route, an unbounded repeat), exit 1 |
 | `repeat-keyed` | a keyed `for_each` over an input list, collected into one step |
 | `resource-missing` | a declared resource that is not in the project is a planning problem (exit 1), never a crash |
+| `run-cache-hit` | the same plan run into a second folder: every step is a result-cache hit, with the same output bytes |
+| `run-deliver` | `--deliver` of a one-file and a keyed output (keys made safe paths), left alone when unchanged; an undeclared output refused before the run (exit 2) |
+| `run-failures` | `ctx.fail` keeps its node facts (in the run's events), an exception is a `node_error`, a reader of a failed step is skipped as blocked; the run goes on, lists its failures in the expansion's order and exits 1 |
+| `run-local` | a local run of every output shape: text with node facts, JSON written by the engine, a list port, a keyed port, marks written as an `annotations` output, a judge's verdict; outputs and step files at their run-folder names, verified by `inspect --verify` |
 | `run-project` | a local run, then `project` of its record: cache misses, output digests, nothing charged |
+| `run-resume` | a second run into the same folder resumes it (`resumed: true`, nothing runs again); other inputs into that folder are refused (exit 1) |
+| `run-retry-engine` | `retry="engine"`: a body that raises twice runs a third time and succeeds, and no more; a `node_retry` event for each failed attempt |
+| `run-takes` | `reroll`, `pick` and `takes list` between runs: the takes file a run's plan names, the take each run draws, a picked result's digest checked by the next run |
+| `run-timeout` | a step past its `timeout:` fails with `ran past 1 seconds` and is not run again, even under `retry="engine"` (exit 1) |
 | `takes-pick` | `takes: 3` with `pick: first_accepted`, priced as three calls |
 | `template-prompt` | a prompt file rendered with `vars` and inputs, `max:` from an input, and steps nested in a repeat |
 | `tiered-price` | a route priced per second by a request setting: each take at its tier, an unknown setting at the dearest |

@@ -2,6 +2,8 @@
 
 The store is FX's cache. It keeps file bytes by content, step results by step identity, paid calls by call key, and the long provider jobs a run has submitted but not yet collected. It lives at the project's `cache` (default `.fx/cache`, set in `fx.yaml`), and every run of the project reads and writes it. The keys are defined in [identity.md](identity.md); the records' schemas are in [schemas/](schemas/). Each run also writes a run folder, which holds its record and links to the store's bytes (§8).
 
+The project that owns the store and the run folders is the **planning project**: the folder of the nearest `fx.yaml` at or above the workflow file when the command names the workflow by the path of its `.yaml` file, and at or above the current directory otherwise (a workflow id, a builder). A workflow's own project (its home, where its `./` paths and node modules are found) may be another one, for example a workflow found by id in a nested project; its runs still use the planning project's `cache` and `runs`.
+
 The words MUST, MUST NOT and SHOULD are used as in RFC 2119.
 
 ## 1. Layout
@@ -30,7 +32,7 @@ Every record is a JSON object whose `kind` names its schema. It is written as `c
 
 | Record | What it holds |
 |---|---|
-| result | What one step identity produced: its `outputs` by port, the `facts` the node reported, its `read` set, and `cost_usd` (null when the step made no paid call). |
+| result | What one step identity produced: its `outputs` by port, the `facts` the node reported, its `read` set, and `cost_usd`: what the run paid for the step's calls, null when it paid for none (calls answered from the cache cost nothing). |
 | call | One paid call's answer: the `files` and `data` the provider returned and `cost_usd` (null when the provider reported none), with the `capability`, `route` (id and fingerprint), canonical `request` and `take` it is keyed by. |
 | job | A long provider job of one call that is not answered yet: its `state` and `handle`, with the same key fields as the call record. |
 
@@ -97,7 +99,7 @@ A run keeps its record in a run folder, and links its results there from the sto
 <runs>/<workflow id>/<YYYY-MM-DD>-<n>/
 ```
 
-- `<runs>` is the project's `runs` folder from `fx.yaml` (default `runs`), relative to the project root.
+- `<runs>` is the planning project's `runs` folder from `fx.yaml` (default `runs`), relative to its root.
 - `<YYYY-MM-DD>` is the local date when the command starts.
 - `<n>` is the smallest integer from 1 for which nothing of that name exists yet.
 
@@ -116,7 +118,7 @@ A run keeps its record in a run folder, and links its results there from the sto
   outputs/<name><suffix>                             the workflow's declared outputs
 ```
 
-- **`plan.json`** is the fx-graph-v1 document that `grida-fx expand` prints, `types` included, with `plan` (the plan digest), `steps`, `inputs` and `view_origins` added. The first invocation writes it before any step runs, under a temporary name and then renamed (§6). Later invocations compare its `plan` and never rewrite it.
+- **`plan.json`** is the fx-graph-v1 document that `grida-fx expand` prints, `types` included, with `plan` (the plan digest), `steps`, `inputs` and `view_origins` added, and `takes_file`: the POSIX path of the workflow's takes file relative to the planning project's root, which `reroll` and `pick` write to. The first invocation writes it before any step runs, under a temporary name and then renamed (§6). Later invocations compare its `plan` and never rewrite it.
 - **`events.jsonl`** is the record, and the source of truth for every command that reads the run. Each line is one fx-run-events-v1 event, written as `canon(event)` and then one line feed (U+000A), oldest first. Each line is written whole and flushed before the run goes on. A resumed run appends lines under a new `invocation_id`. Lines are never rewritten or removed.
 - **`run.lock`** holds an exclusive operating-system file lock (`flock` on POSIX), taken without waiting, for as long as an invocation runs the folder. A second invocation that cannot take the lock is refused at once ("another invocation is running <folder>"). The lock ends with the process, so a crashed run leaves no stale lock. The file's content means nothing, and the file stays in place.
 - **`files/`** gets an instance's output files when it succeeds, whether it ran or came from the cache, before its `node_finished` event is written.
@@ -159,6 +161,6 @@ FX comes from the Python engine in stage-gen. Its store and run folders differ a
 | A settled job's record is deleted. | It MAY be kept, as `settled`. |
 | Records are written with Python's JSON encoder. | `canon(record)`, RFC 8785. |
 | Event lines are Python's compact JSON with sorted keys, and carry `schema_version` and `graph_sha256`. Cancelling writes `run_canceled`. | `canon(event)`. `kind` carries the version, `plan` holds the plan digest, and the event is `run_cancelled` (§8). |
-| `plan.json` is written with Python's JSON encoder and a trailing newline. After the run it is rewritten to add the absolute paths of the workflow and the project, a builder's arguments, and the input values. | fx-graph-v1, in the identity.md §5 "Writing JSON" format. It is written once and holds no absolute path (§8). |
+| `plan.json` is written with Python's JSON encoder and a trailing newline. After the run it is rewritten to add the absolute paths of the workflow and the project, a builder's arguments, and the input values. | fx-graph-v1, in the identity.md §5 "Writing JSON" format. It is written once and holds no absolute path (§8). It records the takes file by its project-relative path (`takes_file`), so `reroll` and `pick` find it without a path to the workflow. |
 | A run folder's suffix table has no entry for `image/gif`, `audio/ogg`, `text/yaml`, `text/toml`, `text/html` or `model/gltf+json`, so those files are placed without a suffix. | The first suffix that identity.md §4 lists for the kind (§8). |
 | A file is placed only when its name holds nothing or a file of another size, so a different file of the same size, such as a later take, is never placed. | A name is left alone only when it already holds the same bytes (§8). |

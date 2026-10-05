@@ -1,0 +1,20 @@
+fx: workflow/v1
+id: case
+title: A list computed while planning, then run
+inputs:
+  script: { type: file, kind: text/plain }
+steps:
+  split:
+    uses: ./nodes/cases.py#lines
+    at: plan
+    with: { text: "${{ inputs.script }}" }
+  loud:
+    for_each: ${{ steps.split.outputs.items.lines }}
+    key: ${{ item.id }}
+    uses: ./nodes/cases.py#shout
+    with: { text: "${{ item.text }}" }
+  joined:
+    uses: ./nodes/cases.py#join
+    with: { parts: "${{ steps.loud.*.outputs.text }}" }
+outputs:
+  all: ${{ steps.joined.outputs.text }}

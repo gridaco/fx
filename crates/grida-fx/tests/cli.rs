@@ -1,9 +1,10 @@
 //! The `grida-fx` command, run as a process in temporary projects.
 //!
-//! Tests whose name starts with `integrated_` plan, describe or lock a real project, so they hold
-//! the whole engine (documents, inputs, routes, expansion, planning) to the command line; the
-//! others pin the command line itself. No test needs Python: the projects here have no node
-//! modules.
+//! Tests whose name starts with `integrated_` plan, describe, lock or run a real project, so they
+//! hold the whole engine (documents, inputs, routes, expansion, planning, running) to the command
+//! line; the others pin the command line itself. No test needs Python: the projects here have no
+//! node modules, except the end-to-end runs of conformance projects, which skip without a Python
+//! that has the `grida` package (`GRIDA_FX_PYTHON`, else `python/.venv/bin/python`).
 
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
@@ -125,31 +126,6 @@ fn other_verbs_take_no_input_flags() {
     assert_eq!(status(&output), 2);
     let output = grida_fx(project.path(), &["lock", "--nosuch"]);
     assert_eq!(status(&output), 2);
-}
-
-#[test]
-fn verbs_of_the_runner_are_not_available_yet() {
-    let project = empty_project();
-    let cases: [(&str, &[&str]); 7] = [
-        ("run", &["case", "--live", "--run", "runs/one"]),
-        ("reroll", &["runs/one", "draw"]),
-        ("pick", &["runs/one", "draw", "2"]),
-        ("takes", &["list", "case"]),
-        ("jobs", &["--forget", "k0"]),
-        ("project", &["runs/one"]),
-        ("inspect", &[]),
-    ];
-    for (verb, args) in cases {
-        let mut argv = vec![verb];
-        argv.extend_from_slice(args);
-        let output = grida_fx(project.path(), &argv);
-        assert_eq!(status(&output), 2, "{verb}");
-        assert!(stdout(&output).is_empty(), "{verb}");
-        assert_eq!(
-            stderr(&output),
-            format!("grida-fx: {verb} is not available until the runner lands\n")
-        );
-    }
 }
 
 #[test]
@@ -595,4 +571,774 @@ fn integrated_a_long_chain_of_steps_plans_without_overflowing_the_stack() {
         "{}",
         stdout(&output)
     );
+}
+
+// ------------------------------------------------------------------------------- the run verbs
+
+/// A project whose workflow `case` draws one picture with a paid built-in and declares the
+/// outputs `image` and `again`; planning it needs no Python. `fx_yaml` is its project file.
+fn drawing_project(fx_yaml: &str) -> tempfile::TempDir {
+    let folder = tempfile::tempdir().unwrap();
+    let root = folder.path();
+    std::fs::write(root.join("fx.yaml"), fx_yaml).unwrap();
+    std::fs::write(
+        root.join("routes.yaml"),
+        "fx: routes/v1\nroutes:\n  - { capability: image.generate, route: img-a@acme, price: \
+         { low_usd: 0.01, high_usd: 0.04 } }\n",
+    )
+    .unwrap();
+    std::fs::create_dir(root.join("workflows")).unwrap();
+    std::fs::write(
+        root.join("workflows/case.yaml"),
+        "fx: workflow/v1\nid: case\ntitle: Case\ninputs:\n  prompt: { type: string, default: a \
+         kite }\nsteps:\n  draw:\n    uses: fx/image.generate@1\n    with: { prompt: \"${{ \
+         inputs.prompt }}\" }\noutputs:\n  image: ${{ steps.draw.outputs.image }}\n  again: ${{ \
+         steps.draw.outputs.image }}\n",
+    )
+    .unwrap();
+    folder
+}
+
+const ROUTED: &str = "fx: project/v1\nroutes:\n  image.generate: img-a@acme\n";
+
+#[test]
+fn run_help_names_its_options() {
+    let project = empty_project();
+    let output = grida_fx(project.path(), &["run", "--help"]);
+    assert_eq!(status(&output), 0);
+    let help = stdout(&output);
+    for option in [
+        "--live",
+        "--max-usd",
+        "--yes-up-to",
+        "--deliver",
+        "--run",
+        "--inputs",
+        "--routes",
+        "--arg",
+    ] {
+        assert!(help.contains(option), "{option}: {help}");
+    }
+    let output = grida_fx(project.path(), &["--help"]);
+    for verb in [
+        "run", "reroll", "pick", "takes", "jobs", "project", "inspect",
+    ] {
+        assert!(stdout(&output).contains(verb), "{verb}");
+    }
+}
+
+#[test]
+fn run_refuses_bad_amounts_before_anything_is_read_or_written() {
+    let project = drawing_project(ROUTED);
+    let cases: [(&[&str], &str); 5] = [
+        (&["--max-usd", "-1"], "--max-usd -1: -1 is negative"),
+        (&["--max-usd", "nan"], "--max-usd nan: "),
+        (
+            &["--yes-up-to", "-0.5"],
+            "--yes-up-to -0.5: -0.5 is negative",
+        ),
+        (&["--yes-up-to", "inf"], "--yes-up-to inf: "),
+        (
+            &["--yes-up-to", "0.0000001"],
+            "--yes-up-to 0.0000001: 0.0000001 has more than 6 decimal places",
+        ),
+    ];
+    for (extra, message) in cases {
+        let mut argv = vec!["run", "case", "--routes", "routes.yaml"];
+        argv.extend_from_slice(extra);
+        let output = grida_fx(project.path(), &argv);
+        assert_eq!(status(&output), 2, "{extra:?}");
+        assert!(stdout(&output).is_empty(), "{extra:?}");
+        assert!(
+            stderr(&output).starts_with(&format!("grida-fx: {message}")),
+            "{extra:?}: {}",
+            stderr(&output)
+        );
+    }
+    assert!(!project.path().join("runs").exists());
+    assert!(!project.path().join(".fx").exists());
+}
+
+#[test]
+fn integrated_run_checks_deliver_names_before_planning() {
+    let project = drawing_project(ROUTED);
+    let run = |extra: &[&str]| {
+        let mut argv = vec!["run", "case", "--routes", "routes.yaml"];
+        argv.extend_from_slice(extra);
+        grida_fx(project.path(), &argv)
+    };
+    let output = run(&["--deliver", "nosuch=out/x.png"]);
+    assert_eq!(status(&output), 2);
+    assert!(stdout(&output).is_empty());
+    assert_eq!(
+        stderr(&output),
+        "grida-fx: --deliver nosuch=out/x.png: name one of again, image\n"
+    );
+    for pair in ["image", "=out.png", "image="] {
+        let output = run(&["--deliver", pair]);
+        assert_eq!(status(&output), 2, "{pair}");
+        assert_eq!(
+            stderr(&output),
+            format!("grida-fx: --deliver {pair}: write OUTPUT=PATH\n")
+        );
+    }
+    // The workflow's own input flags still reach planning after run's options.
+    let output = run(&["--deliver", "image=out/x.png", "--nosuch", "1"]);
+    assert_eq!(status(&output), 2);
+    assert!(
+        stderr(&output).contains("unknown input flag --nosuch"),
+        "{}",
+        stderr(&output)
+    );
+    assert!(!project.path().join("runs").exists());
+    assert!(!project.path().join("out").exists());
+}
+
+#[test]
+fn integrated_a_refused_plan_runs_nothing() {
+    // No route serves image.generate: the plan has a problem, so no folder is made.
+    let project = drawing_project("fx: project/v1\n");
+    let output = grida_fx(
+        project.path(),
+        &[
+            "run",
+            "case",
+            "--routes",
+            "routes.yaml",
+            "--run",
+            "runs/one",
+        ],
+    );
+    assert_eq!(status(&output), 1, "{}", stderr(&output));
+    let text = stdout(&output);
+    assert!(text.starts_with("case  ·  1 phase\n"), "{text}");
+    assert!(
+        text.contains("\nrefused   draw.route: no route for image.generate"),
+        "{text}"
+    );
+    assert!(!text.contains("\nrun       "), "{text}");
+    assert!(!project.path().join("runs").exists());
+}
+
+#[test]
+fn pick_refuses_a_take_out_of_bounds_before_reading_the_run() {
+    let project = empty_project();
+    for (take, message) in [
+        ("0", "a take is 1 or more"),
+        ("-1", "a take is 1 or more"),
+        ("1001", "a take is at most 1000"),
+        ("2.5", "a take is a whole number, not 2.5"),
+        ("x", "a take is a whole number, not x"),
+    ] {
+        let output = grida_fx(project.path(), &["pick", "runs/one", "draw", take]);
+        assert_eq!(status(&output), 2, "{take}");
+        assert!(stdout(&output).is_empty());
+        assert_eq!(stderr(&output), format!("grida-fx: {message}\n"), "{take}");
+    }
+}
+
+#[test]
+fn reroll_and_pick_need_a_run_folder() {
+    let project = empty_project();
+    for argv in [
+        &["reroll", "runs/one", "draw"][..],
+        &["pick", "runs/one", "draw", "2"],
+        &["inspect", "runs/one"],
+    ] {
+        let output = grida_fx(project.path(), argv);
+        assert_eq!(status(&output), 2, "{argv:?}");
+        assert_eq!(
+            stderr(&output),
+            "grida-fx: runs/one is not a run folder\n",
+            "{argv:?}"
+        );
+    }
+    // A folder whose plan names no takes file was not started by `grida-fx run`.
+    let folder = project.path().join("runs/one");
+    std::fs::create_dir_all(&folder).unwrap();
+    std::fs::write(
+        folder.join("plan.json"),
+        r#"{"kind": "fx-graph-v1", "workflow": {"id": "case"}}"#,
+    )
+    .unwrap();
+    let output = grida_fx(project.path(), &["reroll", "runs/one", "draw"]);
+    assert_eq!(status(&output), 2);
+    assert_eq!(
+        stderr(&output),
+        "grida-fx: runs/one was not started by grida-fx run\n"
+    );
+}
+
+#[test]
+fn project_needs_a_log() {
+    let project = empty_project();
+    let output = grida_fx(project.path(), &["project", "runs/one"]);
+    assert_eq!(status(&output), 2);
+    assert!(stdout(&output).is_empty());
+    assert_eq!(
+        stderr(&output),
+        "grida-fx: runs/one/events.jsonl: no such file\n"
+    );
+}
+
+#[test]
+fn inspect_of_a_workflow_without_runs() {
+    let project = empty_project();
+    let output = grida_fx(project.path(), &["inspect", "case"]);
+    assert_eq!(status(&output), 2);
+    assert_eq!(
+        stderr(&output),
+        "grida-fx: no run folder case, and no runs of a workflow case here\n"
+    );
+}
+
+#[test]
+fn jobs_forget_needs_a_digest() {
+    let project = empty_project();
+    for key in ["k0", "../x", "ABCDEF"] {
+        let output = grida_fx(project.path(), &["jobs", "--forget", key]);
+        assert_eq!(status(&output), 2, "{key}");
+        assert_eq!(stderr(&output), format!("grida-fx: not a digest: {key}\n"));
+    }
+}
+
+/// `workflows/case.takes.yaml` of a drawing project.
+fn write_takes(project: &Path, text: &str) -> PathBuf {
+    let path = project.join("workflows/case.takes.yaml");
+    std::fs::write(&path, text).unwrap();
+    path
+}
+
+#[test]
+fn integrated_takes_list_sorts_by_step_path() {
+    let project = drawing_project(ROUTED);
+    let output = grida_fx(project.path(), &["takes", "list", "case"]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    assert!(stdout(&output).is_empty());
+    let digest = "5637c1b4a68923781eb2e9b563f97e0bf346245040371b2a3c3c2365798ba24d";
+    write_takes(
+        project.path(),
+        &format!("draw: {{ take: 3 }}\n\"a['x'].b\": {{ take: 1, result: \"{digest}\" }}\n"),
+    );
+    for target in ["case", "workflows/case.yaml"] {
+        let output = grida_fx(project.path(), &["takes", "list", target]);
+        assert_eq!(status(&output), 0, "{}", stderr(&output));
+        assert_eq!(
+            stdout(&output),
+            format!("a['x'].b  take 1  {digest}\ndraw  take 3\n")
+        );
+    }
+    let output = grida_fx(project.path(), &["takes", "list", "build.py:make"]);
+    assert_eq!(status(&output), 2);
+    let output = grida_fx(project.path(), &["takes", "list", "nosuch"]);
+    assert_eq!(status(&output), 2);
+    let output = grida_fx(project.path(), &["takes"]);
+    assert_eq!(status(&output), 2);
+}
+
+#[test]
+fn integrated_takes_mv_refusals_leave_the_file_alone() {
+    let project = drawing_project(ROUTED);
+    let text = "draw: { take: 3 }\nold: { take: 2 }\n";
+    let path = write_takes(project.path(), text);
+    for (old, new, message) in [
+        ("zz", "draw", "case.takes.yaml has no entry zz"),
+        ("old", "draw", "case.takes.yaml already has an entry draw"),
+        ("old", "Not A Path", "Not A Path is not a step path"),
+    ] {
+        let output = grida_fx(project.path(), &["takes", "mv", "case", old, new]);
+        assert_eq!(status(&output), 2, "{old} {new}");
+        assert_eq!(stderr(&output), format!("grida-fx: {message}\n"));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), text);
+    }
+}
+
+#[test]
+fn integrated_takes_mv_moves_an_entry() {
+    let project = drawing_project(ROUTED);
+    let path = write_takes(project.path(), "# mine\nold: { take: 2 }\n");
+    let output = grida_fx(project.path(), &["takes", "mv", "case", "old", "draw"]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    assert_eq!(stdout(&output), "case.takes.yaml: old is now draw\n");
+    let written = std::fs::read_to_string(&path).unwrap();
+    assert!(written.starts_with(
+        "# case.takes.yaml: written by `grida-fx reroll` and `grida-fx pick`; commit it\n"
+    ));
+    let output = grida_fx(project.path(), &["takes", "list", "case"]);
+    assert_eq!(stdout(&output), "draw  take 2\n");
+}
+
+/// A canonical event line with the envelope.
+fn event_line(event: &str, fields: Value) -> String {
+    let mut object = json!({
+        "kind": "fx-run-events-v1",
+        "event": event,
+        "invocation_id": "0123456789abcdef",
+        "plan": "a".repeat(64),
+        "offset_ms": 1,
+    });
+    for (key, value) in fields.as_object().unwrap() {
+        object[key] = value.clone();
+    }
+    let mut line = serde_json::to_string(&object).unwrap();
+    line.push('\n');
+    line
+}
+
+/// A run folder written by hand at `relative`, a run of `case` whose `draw` finished take 1 and
+/// whose `other` failed, with one placed file.
+fn hand_made_run(project: &Path, relative: &str) -> (PathBuf, String) {
+    let folder = project.join(relative);
+    std::fs::create_dir_all(folder.join("files/draw")).unwrap();
+    let bytes = b"PNG take 1";
+    std::fs::write(folder.join("files/draw/image.png"), bytes).unwrap();
+    let digest = digest_of(bytes);
+    std::fs::write(
+        folder.join("plan.json"),
+        r#"{"kind": "fx-graph-v1", "workflow": {"id": "case", "title": "Case"},
+            "takes_file": "workflows/case.takes.yaml",
+            "instances": [
+              {"id": "draw#1", "path": "draw", "step": "draw", "state": "planned"},
+              {"id": "other#1", "path": "other", "step": "other", "state": "planned"},
+              {"id": "gone#1", "path": "gone", "step": "gone", "state": "absent"}
+            ]}"#,
+    )
+    .unwrap();
+    let file = json!({"file": {"digest": digest, "kind": "image/png", "name": "draw/image",
+                               "size": bytes.len()}});
+    let log = [
+        event_line(
+            "run_started",
+            json!({"workflow": "case", "resumed": false, "ceiling_usd": null,
+                   "charged_usd": 0, "estimate": {"low_usd": 0, "high_usd": 0}}),
+        ),
+        event_line(
+            "node_started",
+            json!({"id": "draw#1", "path": "draw", "step": "draw", "take": [1],
+                   "identity": null, "uses": "fx/image.generate@1", "reads": [],
+                   "routes": {}, "with": {}}),
+        ),
+        event_line(
+            "node_finished",
+            json!({"id": "draw#1", "path": "draw", "cache": "miss", "outputs": {"image": file},
+                   "facts": {"cost_usd": 0.04}, "duration_ms": 5}),
+        ),
+        event_line(
+            "node_started",
+            json!({"id": "other#1", "path": "other", "step": "other", "take": [1],
+                   "identity": null, "uses": "fx/image.generate@1", "reads": [],
+                   "routes": {}, "with": {}}),
+        ),
+        event_line(
+            "node_failed",
+            json!({"id": "other#1", "path": "other", "error": "refused on purpose",
+                   "facts": {}, "duration_ms": 1}),
+        ),
+        event_line(
+            "run_finished",
+            json!({"ok": false, "incomplete": false, "stopped": null, "charged_usd": 0.04,
+                   "failed": ["other#1"], "outputs": {"image": file}}),
+        ),
+    ]
+    .concat();
+    std::fs::write(folder.join("events.jsonl"), log).unwrap();
+    (folder, digest)
+}
+
+/// The SHA-256 of some bytes, as the engine names files (the CLI crate has no hasher of its
+/// own, so the test asks the system's `shasum` or `sha256sum`).
+fn digest_of(bytes: &[u8]) -> String {
+    use std::io::Write as _;
+    let mut child = Command::new("shasum")
+        .args(["-a", "256"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .or_else(|_| {
+            Command::new("sha256sum")
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .spawn()
+        })
+        .expect("shasum or sha256sum");
+    child.stdin.take().unwrap().write_all(bytes).unwrap();
+    let output = child.wait_with_output().unwrap();
+    String::from_utf8(output.stdout).unwrap()[..64].to_string()
+}
+
+#[test]
+fn integrated_project_of_a_hand_written_log() {
+    let project = drawing_project(ROUTED);
+    let (_, digest) = hand_made_run(project.path(), "runs/one");
+    let output = grida_fx(project.path(), &["project", "runs/one"]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    let projected = parse(&stdout(&output));
+    assert_eq!(
+        projected["instances"],
+        json!({
+            "draw#1": {"state": "succeeded", "path": "draw", "cache": "miss",
+                       "facts": {"cost_usd": 0.04}},
+            "other#1": {"state": "failed", "path": "other", "error": "refused on purpose"},
+        })
+    );
+    let run = &projected["run"];
+    assert!(run["run_started"].get("kind").is_none());
+    assert_eq!(run["run_finished"]["plan"], "a".repeat(64));
+    assert_eq!(
+        run["run_finished"]["outputs"]["image"]["file"]["digest"],
+        digest
+    );
+    assert!(run.get("run_cancelled").is_none());
+    // A torn last line is not read.
+    let log = project.path().join("runs/one/events.jsonl");
+    let mut text = std::fs::read_to_string(&log).unwrap();
+    text.push_str("{\"kind\": \"fx-run-events-v1\", \"event\": \"node_st");
+    std::fs::write(&log, text).unwrap();
+    let again = grida_fx(project.path(), &["project", "runs/one"]);
+    assert_eq!(status(&again), 0, "{}", stderr(&again));
+    assert_eq!(parse(&stdout(&again)), projected);
+}
+
+#[test]
+fn integrated_inspect_of_a_hand_written_run() {
+    let project = drawing_project(ROUTED);
+    let (folder, digest) = hand_made_run(project.path(), "runs/case/one");
+    let expected = "case  ·  one\n\
+                    state     failed   2 steps: 1 failed, 1 succeeded\n\
+                    spent     $0.04\n\
+                    failed    other#1: refused on purpose\n";
+    for given in ["runs/case/one", "case"] {
+        let output = grida_fx(project.path(), &["inspect", given]);
+        assert_eq!(status(&output), 0, "{}", stderr(&output));
+        assert_eq!(stdout(&output), expected, "{given}");
+    }
+    let inspect = |extra: &[&str]| {
+        let mut argv = vec!["inspect", "runs/case/one"];
+        argv.extend_from_slice(extra);
+        grida_fx(project.path(), &argv)
+    };
+    let output = inspect(&["--verify"]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    assert!(stdout(&output).ends_with("verified  1 files\n"));
+    let output = grida_fx(project.path(), &["inspect", "case", "--json"]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    let document = parse(&stdout(&output));
+    assert_eq!(document["run"]["state"], "failed");
+    assert_eq!(document["run"]["folder"], "runs/case/one");
+    assert_eq!(
+        document["run"]["steps"][0]["files"],
+        json!([{"path": "files/draw/image.png", "digest": digest, "size": 10}])
+    );
+    std::fs::write(folder.join("files/draw/image.png"), b"PNG take 2").unwrap();
+    let output = inspect(&["--verify", "--json"]);
+    assert_eq!(status(&output), 1);
+    assert_eq!(
+        parse(&stdout(&output))["verification"],
+        json!({"verified": false,
+               "problems": ["draw#1: files/draw/image.png differs from its recorded digest"]})
+    );
+    std::fs::remove_file(folder.join("files/draw/image.png")).unwrap();
+    let output = inspect(&["--verify"]);
+    assert_eq!(status(&output), 1);
+    assert!(
+        stdout(&output).ends_with("differs   draw#1: files/draw/image.png is missing\n"),
+        "{}",
+        stdout(&output)
+    );
+}
+
+#[test]
+fn integrated_reroll_and_pick_over_a_hand_made_run() {
+    let project = drawing_project(ROUTED);
+    let (_, digest) = hand_made_run(project.path(), "runs/one");
+    let takes = project.path().join("workflows/case.takes.yaml");
+    let output = grida_fx(project.path(), &["reroll", "runs/one", "draw", "--live"]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    assert_eq!(
+        stdout(&output),
+        "case.takes.yaml: draw uses take 2 from now on\nnext      grida-fx run case --live\n"
+    );
+    let output = grida_fx(project.path(), &["takes", "list", "case"]);
+    assert_eq!(stdout(&output), "draw  take 2\n");
+    let output = grida_fx(project.path(), &["reroll", "runs/one", "zzz"]);
+    assert_eq!(status(&output), 2);
+    assert_eq!(stderr(&output), "grida-fx: runs/one never ran a step zzz\n");
+    let output = grida_fx(project.path(), &["pick", "runs/one", "draw", "1"]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    assert_eq!(stdout(&output), "case.takes.yaml: draw uses take 1\n");
+    let output = grida_fx(project.path(), &["takes", "list", "case"]);
+    assert_eq!(stdout(&output), format!("draw  take 1  {digest}\n"));
+    // A take that never finished here is picked without a result.
+    let output = grida_fx(project.path(), &["pick", "runs/one", "other", "7"]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    let output = grida_fx(project.path(), &["pick", "runs/one", "nosuch", "1"]);
+    assert_eq!(status(&output), 2);
+    assert_eq!(stderr(&output), "grida-fx: runs/one has no step nosuch\n");
+    let text = std::fs::read_to_string(&takes).unwrap();
+    assert!(text.starts_with("# case.takes.yaml: written by"), "{text}");
+    let output = grida_fx(project.path(), &["takes", "list", "case"]);
+    assert_eq!(
+        stdout(&output),
+        format!("draw  take 1  {digest}\nother  take 7\n")
+    );
+}
+
+/// A job record as the store writes it (fx-job-record-v1).
+fn job_record(key: &str, state: &str, take: &[u32]) -> String {
+    let handle = if state == "submitting" {
+        Value::Null
+    } else {
+        json!({"job": "j-1"})
+    };
+    serde_json::to_string(&json!({
+        "kind": "fx-job-record-v1",
+        "key": key,
+        "capability": "video.generate",
+        "route": {"id": "vid@acme", "fingerprint": "f".repeat(64)},
+        "request": {"prompt": "a kite"},
+        "take": take,
+        "state": state,
+        "handle": handle,
+    }))
+    .unwrap()
+}
+
+#[test]
+fn integrated_jobs_lists_and_forgets_job_records() {
+    let project = empty_project();
+    let output = grida_fx(project.path(), &["jobs"]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    assert!(stdout(&output).is_empty());
+    let jobs = project.path().join(".fx/cache/jobs");
+    std::fs::create_dir_all(&jobs).unwrap();
+    let (first, second) = ("1".repeat(64), "2".repeat(64));
+    std::fs::write(
+        jobs.join(format!("{second}.json")),
+        job_record(&second, "settled", &[2, 1]),
+    )
+    .unwrap();
+    std::fs::write(
+        jobs.join(format!("{first}.json")),
+        job_record(&first, "submitting", &[1]),
+    )
+    .unwrap();
+    let output = grida_fx(project.path(), &["jobs"]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    assert_eq!(
+        stdout(&output),
+        format!(
+            "{first}  submitting  video.generate on vid@acme, take 1\n\
+             {second}  settled  video.generate on vid@acme, take 2.1\n"
+        )
+    );
+    let output = grida_fx(project.path(), &["jobs", "--forget", &first]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    assert_eq!(
+        stdout(&output),
+        format!("forgot job {first}; its call is submitted again on the next run\n")
+    );
+    assert!(!jobs.join(format!("{first}.json")).exists());
+    let output = grida_fx(project.path(), &["jobs", "--forget", &first]);
+    assert_eq!(status(&output), 2);
+    assert_eq!(
+        stderr(&output),
+        format!("grida-fx: the cache holds no job {first}\n")
+    );
+    std::fs::write(jobs.join(format!("{first}.json")), "{not json").unwrap();
+    let output = grida_fx(project.path(), &["jobs"]);
+    assert_eq!(status(&output), 2);
+    assert!(
+        stderr(&output).contains(&format!("jobs/{first}.json")),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn integrated_a_live_run_needs_a_ceiling() {
+    let project = conformance_project("cache-replay");
+    let output = grida_fx(
+        project.path(),
+        &["run", "case", "--routes", "routes.yaml", "--live"],
+    );
+    assert_eq!(status(&output), 1, "{}", stderr(&output));
+    assert!(
+        stdout(&output).contains("\nrefused: a live run needs a ceiling"),
+        "{}",
+        stdout(&output)
+    );
+    assert!(!project.path().join("runs").exists());
+}
+
+#[test]
+fn integrated_run_replays_a_recorded_call_and_delivers_it() {
+    let project = conformance_project("cache-replay");
+    let stored = std::fs::read(project.path().join(
+        ".fx/cache/files/f3/f3945de0c1182a1b279816f51ef2e79938d04957c7bfde94cd4bf2eb4c2170b4",
+    ))
+    .unwrap();
+    let run = |extra: &[&str]| {
+        let mut argv = vec!["run", "case", "--routes", "routes.yaml"];
+        argv.extend_from_slice(extra);
+        grida_fx(project.path(), &argv)
+    };
+    let output = run(&["--run", "runs/one", "--deliver", "image=out/lantern.png"]);
+    assert_eq!(status(&output), 0, "{}{}", stdout(&output), stderr(&output));
+    let text = stdout(&output);
+    assert!(
+        text.ends_with(
+            "run       runs/one\nresult    ok   spent $0.00\ndelivered out/lantern.png\n"
+        ),
+        "{text}"
+    );
+    assert_eq!(
+        std::fs::read(project.path().join("out/lantern.png")).unwrap(),
+        stored
+    );
+    assert_eq!(
+        std::fs::read(project.path().join("runs/one/outputs/image.png")).unwrap(),
+        stored
+    );
+    // The same folder again resumes it; the delivered file holds the same bytes already.
+    let output = run(&["--run", "runs/one", "--deliver", "image=out/lantern.png"]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    assert!(
+        !stdout(&output).contains("delivered"),
+        "{}",
+        stdout(&output)
+    );
+    // A one-file output cannot be delivered per key.
+    let output = run(&["--run", "runs/one", "--deliver", "image=out/{key}.png"]);
+    assert_eq!(status(&output), 2);
+    assert_eq!(
+        stderr(&output),
+        "grida-fx: --deliver image=out/{key}.png: image is one file, so no {key}\n"
+    );
+    // Without --run, a new folder under the project's runs folder, named from here.
+    let output = run(&[]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    let line = stdout(&output)
+        .lines()
+        .find(|l| l.starts_with("run       "))
+        .unwrap()
+        .to_string();
+    let named = line.trim_start_matches("run       ");
+    assert!(named.starts_with("runs/case/"), "{named}");
+    assert!(named.ends_with("-1"), "{named}");
+    assert!(project.path().join(named).join("plan.json").is_file());
+    let plan =
+        parse(&std::fs::read_to_string(project.path().join(named).join("plan.json")).unwrap());
+    assert_eq!(plan["takes_file"], "workflows/case.takes.yaml");
+    // project and inspect read the run.
+    let output = grida_fx(project.path(), &["project", "runs/one"]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    let projected = parse(&stdout(&output));
+    assert_eq!(projected["instances"]["draw#1"]["state"], "succeeded");
+    assert_eq!(projected["run"]["run_started"]["resumed"], true);
+    let output = grida_fx(project.path(), &["inspect", "runs/one", "--verify"]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    assert!(
+        stdout(&output).ends_with("verified  1 files\n"),
+        "{}",
+        stdout(&output)
+    );
+}
+
+#[test]
+fn integrated_a_folder_of_another_plan_is_refused() {
+    let project = conformance_project("cache-replay");
+    let argv = [
+        "run",
+        "case",
+        "--routes",
+        "routes.yaml",
+        "--run",
+        "runs/one",
+    ];
+    let output = grida_fx(project.path(), &argv);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    let file = project.path().join("workflows/case.yaml");
+    let text = std::fs::read_to_string(&file).unwrap();
+    std::fs::write(
+        &file,
+        text.replace("title: A paid call", "title: Another paid call"),
+    )
+    .unwrap();
+    let output = grida_fx(project.path(), &argv);
+    assert_eq!(status(&output), 1, "{}", stderr(&output));
+    assert!(
+        stdout(&output).ends_with(
+            "refused: runs/one holds a run of another workflow or other inputs; choose a new \
+             folder\n"
+        ),
+        "{}",
+        stdout(&output)
+    );
+}
+
+/// The Python that hosts node bodies in end-to-end runs, when one is there.
+fn python_host() -> Option<PathBuf> {
+    if let Some(python) = std::env::var_os("GRIDA_FX_PYTHON").filter(|p| !p.is_empty()) {
+        return Some(PathBuf::from(python));
+    }
+    let venv = repository().join("python/.venv/bin/python");
+    venv.is_file().then_some(venv)
+}
+
+/// Runs `grida-fx` with a Python node host.
+fn grida_fx_with_python(cwd: &Path, python: &Path, args: &[&str]) -> Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_grida-fx"));
+    command.args(args).current_dir(cwd).env_clear();
+    if let Some(path) = std::env::var_os("PATH") {
+        command.env("PATH", path);
+    }
+    command
+        .env("HOME", cwd)
+        .env("NO_COLOR", "1")
+        .env("PYTHONDONTWRITEBYTECODE", "1")
+        .env("GRIDA_FX_PYTHON", python);
+    command.output().unwrap()
+}
+
+#[test]
+fn integrated_run_project_end_to_end() {
+    let Some(python) = python_host() else {
+        eprintln!("skipped: no Python with the grida package");
+        return;
+    };
+    let project = conformance_project("run-project");
+    let run = [
+        "run",
+        "case",
+        "--routes",
+        "routes.yaml",
+        "--inputs",
+        "inputs.yaml",
+        "--run",
+        "runs/one",
+    ];
+    let output = grida_fx_with_python(project.path(), &python, &run);
+    assert_eq!(status(&output), 0, "{}{}", stdout(&output), stderr(&output));
+    assert!(stdout(&output).ends_with("run       runs/one\nresult    ok   spent $0.00\n"));
+    assert_eq!(
+        std::fs::read_to_string(project.path().join("runs/one/outputs/all.txt")).unwrap(),
+        "ada=ADA|bo=BO"
+    );
+    let output = grida_fx_with_python(project.path(), &python, &["project", "runs/one"]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    let projected = parse(&stdout(&output));
+    for id in ["loud['ada']#1", "loud['bo']#1", "joined#1"] {
+        assert_eq!(projected["instances"][id]["state"], "succeeded", "{id}");
+        assert_eq!(projected["instances"][id]["cache"], "miss", "{id}");
+    }
+    // A second folder is answered by the result cache.
+    let mut again = run;
+    again[7] = "runs/two";
+    let output = grida_fx_with_python(project.path(), &python, &again);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    let output = grida_fx_with_python(project.path(), &python, &["project", "runs/two"]);
+    let projected = parse(&stdout(&output));
+    for id in ["loud['ada']#1", "loud['bo']#1", "joined#1"] {
+        assert_eq!(projected["instances"][id]["cache"], "hit", "{id}");
+    }
 }

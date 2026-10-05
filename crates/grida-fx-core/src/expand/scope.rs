@@ -237,13 +237,17 @@ impl Expander<'_> {
         let expansion = &self.exps[exp.0];
         match expansion.kind {
             ExpKind::Absent => Ok(Val::Missing),
-            ExpKind::Expanding => Err(ExprError::new("a step refers back to itself")),
+            ExpKind::Expanding => {
+                self.reached_under_way(exp);
+                Err(ExprError::new("a step refers back to itself"))
+            }
             ExpKind::Pending => Ok(match &expansion.token {
                 Some(token) => Val::Pending(Box::new(token.clone())),
                 None => Val::Missing,
             }),
             ExpKind::Node => {
                 if self.is_instantiating(exp) {
+                    self.reached_under_way(exp);
                     return Err(self.refers_back(exp));
                 }
                 let pinned =

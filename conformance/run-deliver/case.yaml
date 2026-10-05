@@ -1,0 +1,53 @@
+# `run --deliver OUTPUT=PATH` copies outputs once the run is done, to paths relative to the
+# working directory. The one-file output `one` goes to `out/one.txt`; each file of the keyed
+# output `each` goes to `out/each/{key}.txt`, its key made a safe path (`y z` becomes `y_z`,
+# spec/store.md section 8 "Keys as paths"). Running again into the same folder delivers again:
+# the files already hold the same bytes, so they are left alone and nothing is printed for them.
+# An output the workflow does not declare is refused before anything is planned or run (exit
+# 2), naming the outputs it has.
+steps:
+- argv:
+  - run
+  - case
+  - --routes
+  - routes.yaml
+  - --run
+  - runs/one
+  - --deliver
+  - one=out/one.txt
+  - --deliver
+  - "each=out/each/{key}.txt"
+  mentions:
+  - "delivered out/one.txt"
+  - "delivered out/each/x.txt"
+  - "delivered out/each/y_z.txt"
+- read: out/one.txt
+  save: one.txt
+- read: out/each/x.txt
+  save: each-x.txt
+- read: out/each/y_z.txt
+  save: each-y_z.txt
+- argv:
+  - run
+  - case
+  - --routes
+  - routes.yaml
+  - --run
+  - runs/one
+  - --deliver
+  - one=out/one.txt
+  - --deliver
+  - "each=out/each/{key}.txt"
+  save: deliver-again.txt
+- argv:
+  - run
+  - case
+  - --routes
+  - routes.yaml
+  - --run
+  - runs/two
+  - --deliver
+  - nosuch=out/x.txt
+  status: 2
+  mentions:
+  - "--deliver nosuch=out/x.txt: name one of each, one"

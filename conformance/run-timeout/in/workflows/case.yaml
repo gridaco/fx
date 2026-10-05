@@ -1,0 +1,8 @@
+fx: workflow/v1
+id: case
+title: A step past its timeout
+steps:
+  nap:
+    uses: ./nodes/slow.py#slow
+    timeout: 1
+    with: { seconds: 30 }

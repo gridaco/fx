@@ -388,35 +388,35 @@ impl Loader<'_> {
                     None => continue,
                 },
                 Node::Scalar(text, style) => {
-                    if let Some(Open::Mapping { map, key }) = stack.last_mut() {
-                        if key.is_none() {
-                            // A key is its text, whatever its style. An empty plain key
-                            // (`: v`) has no text: YAML 1.2 reads it as null, and YAML 1.1
-                            // readers refuse it.
-                            if style == TScalarStyle::Plain && text.is_empty() {
-                                return Err(self.error(
-                                    Some(at),
-                                    "empty_key",
-                                    "a key cannot be empty; write \"\" for the empty string".into(),
-                                ));
-                            }
-                            if style == TScalarStyle::Plain && text == "<<" {
-                                return Err(self.error(
-                                    Some(at),
-                                    "merge_key",
-                                    "merge keys are not supported".into(),
-                                ));
-                            }
-                            if map.contains_key(&text) {
-                                return Err(self.error(
-                                    Some(at),
-                                    "duplicate_key",
-                                    format!("duplicate key {}", py_repr_str(&text)),
-                                ));
-                            }
-                            *key = Some(text);
-                            continue;
+                    if let Some(Open::Mapping { map, key }) = stack.last_mut()
+                        && key.is_none()
+                    {
+                        // A key is its text, whatever its style. An empty plain key
+                        // (`: v`) has no text: YAML 1.2 reads it as null, and YAML 1.1
+                        // readers refuse it.
+                        if style == TScalarStyle::Plain && text.is_empty() {
+                            return Err(self.error(
+                                Some(at),
+                                "empty_key",
+                                "a key cannot be empty; write \"\" for the empty string".into(),
+                            ));
                         }
+                        if style == TScalarStyle::Plain && text == "<<" {
+                            return Err(self.error(
+                                Some(at),
+                                "merge_key",
+                                "merge keys are not supported".into(),
+                            ));
+                        }
+                        if map.contains_key(&text) {
+                            return Err(self.error(
+                                Some(at),
+                                "duplicate_key",
+                                format!("duplicate key {}", py_repr_str(&text)),
+                            ));
+                        }
+                        *key = Some(text);
+                        continue;
                     }
                     self.nesting(stack.len(), at)?;
                     if style != TScalarStyle::Plain {

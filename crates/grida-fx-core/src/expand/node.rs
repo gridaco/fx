@@ -40,6 +40,18 @@
 //! for its judges: it expands held judges first (`settle_judges`, from `chosen`), and a judge that
 //! reads that reader back is then a real cycle and refused. A held step lists its judges and
 //! targets later than gnode did. Inside a shadow (pricing a pending repeat) nothing is held.
+//!
+//! Holding must not turn a judge's own evidence into a cycle. In gnode's order a step's judges
+//! expand right after its instances, so a step a judge reads (`review` reading `renders`, which
+//! reads `measure`, which reads the judged `mesh`) is first reached inside the judge, while the
+//! judge is not linked yet, and reads the judged take as it is. A reader that began after the
+//! judges were held reaches them the other way round: it reads the step, the read settles the
+//! judges inside it, and a judge that reads that reader finds it under way. Such a settlement is
+//! a trial ([`Trial`]): when a judge reaches a step under way that began after the judges were
+//! held, everything the trial expanded is undone (`end_trial`), the judges stay held, and the
+//! reader reads the take unjudged, as it would inside the judge; the judges expand later and read
+//! it made. Only a reader already under way when the judges were held (it reached the judged step
+//! itself) waits for them while they read it: a real cycle, refused.
 
 use super::frame::{ExpId, ExpKind, FrameChanges, FrameId};
 use super::scope::TemplateScope;
@@ -102,6 +114,34 @@ pub(crate) struct Held {
     pub judges: bool,
     /// `independent_of` is still to check.
     pub independence: bool,
+    /// The number of step expansions when the work was held: one numbered from here on began
+    /// after it.
+    pub since: usize,
+}
+
+/// Held judges settled for a reader while steps that began after they were held are under way
+/// (`settle_judges`): the steps numbered `since..started`. A judge that reaches one of them
+/// (`reached`) reaches its own evidence, which only the order of expansion put first; the trial
+/// is then undone with what it kept. Step expansions, frames and views it made stay in their
+/// arenas, unreachable.
+#[derive(Debug)]
+pub(crate) struct Trial {
+    since: usize,
+    started: usize,
+    reached: bool,
+    /// How many instances existed when it began: one of those it changes is recorded first, in
+    /// `Expander::undo` from index `undo` on (`Expander::instance_mut`).
+    pub(crate) instances: usize,
+    undo: usize,
+    /// Held work, and the innermost read set (the only one that gains reads meanwhile).
+    held: Vec<Held>,
+    reads: Option<BTreeSet<String>>,
+    /// How long the lists it only appends to were.
+    pending: usize,
+    problems: usize,
+    scopes: usize,
+    types: usize,
+    workflows: usize,
 }
 
 impl Expander<'_> {
@@ -247,7 +287,7 @@ impl Expander<'_> {
     fn take_made(&mut self, at: &Position, plan: &NodePlan, into: ExpId, take: u32, id: String) {
         let where_ = at.where_.as_str();
         if self.frame(plan.context).maybe
-            && let Some(instance) = self.instances.get_mut(&id)
+            && let Some(instance) = self.instance_mut(&id)
             && instance.state == State::Planned
         {
             instance.state = State::Maybe;
@@ -261,7 +301,7 @@ impl Expander<'_> {
                 .cloned();
             match target {
                 Some(target) => {
-                    if let Some(instance) = self.instances.get_mut(&id) {
+                    if let Some(instance) = self.instance_mut(&id) {
                         instance.judge_policy = Some(at.declared.on_reject.clone());
                     }
                     self.link_judge(&id, &target, where_);
@@ -303,6 +343,7 @@ impl Expander<'_> {
             where_: where_.to_string(),
             judges: true,
             independence: !declared.independent_of.is_empty(),
+            since: self.exps.len(),
         };
         let judged_here = steps
             .iter()
@@ -394,12 +435,23 @@ impl Expander<'_> {
     }
 
     /// Expands the held judges of a node step now: something reads its result, which waits for
-    /// them. Reading it this way is a data read, so a judge that reads the reader back is a real
-    /// cycle and is refused.
+    /// them. Reading it this way is a data read, so a judge that reads back a reader that was
+    /// already under way when the judges were held is a real cycle and is refused. While a step
+    /// that began after that is under way, the judges are expanded on trial: if one reaches such
+    /// a step, the trial is undone and the judges stay held (module doc).
     pub(crate) fn settle_judges(&mut self, exp: ExpId) {
         let Some(index) = self.held.iter().position(|h| h.exp == exp && h.judges) else {
             return;
         };
+        let since = self.held[index].since;
+        let trial = self
+            .active
+            .iter()
+            .chain(&self.instantiating)
+            .any(|under_way| under_way.0 >= since);
+        if trial {
+            self.begin_trial(since);
+        }
         let tail = if self.held[index].independence {
             self.held[index].judges = false;
             self.held[index].clone()
@@ -408,7 +460,68 @@ impl Expander<'_> {
         };
         let escaped = self.escaped.take();
         self.node_judges(&tail);
+        if trial && let Some(trial) = self.trials.pop() {
+            self.end_trial(trial);
+        }
         self.escaped = escaped;
+    }
+
+    /// A step under way is read before it can be (a refusal, or a `needs:` that sees only the
+    /// instances made so far): every trial it began within has reached its own evidence.
+    pub(crate) fn reached_under_way(&mut self, exp: ExpId) {
+        for trial in &mut self.trials {
+            if (trial.since..trial.started).contains(&exp.0) {
+                trial.reached = true;
+            }
+        }
+    }
+
+    /// Starts a trial for judges held when `since` step expansions existed.
+    fn begin_trial(&mut self, since: usize) {
+        let trial = Trial {
+            since,
+            started: self.exps.len(),
+            reached: false,
+            instances: self.instances.len(),
+            undo: self.undo.len(),
+            held: self.held.clone(),
+            reads: self.read_sets.last().cloned(),
+            pending: self.pending.len(),
+            problems: self.problems.len(),
+            scopes: self.scopes.len(),
+            types: self.types.len(),
+            workflows: self.workflows.len(),
+        };
+        self.trials.push(trial);
+    }
+
+    /// Ends a trial: kept when no judge reached a step that began after the judges were held,
+    /// else undone, so everything it expanded expands again, for real, later.
+    fn end_trial(&mut self, trial: Trial) {
+        if !trial.reached {
+            // An enclosing trial may still need the records.
+            if self.trials.is_empty() {
+                self.undo.truncate(trial.undo);
+            }
+            return;
+        }
+        let records: Vec<(usize, Instance)> = self.undo.drain(trial.undo..).collect();
+        for (index, before) in records.into_iter().rev() {
+            if let Some((_, instance)) = self.instances.get_index_mut(index) {
+                *instance = before;
+            }
+        }
+        self.instances.truncate(trial.instances);
+        self.memo.retain(|_, expansion| expansion.0 < trial.started);
+        self.held = trial.held;
+        if let (Some(reads), Some(innermost)) = (trial.reads, self.read_sets.last_mut()) {
+            *innermost = reads;
+        }
+        self.pending.truncate(trial.pending);
+        self.problems.truncate(trial.problems);
+        self.scopes.truncate(trial.scopes);
+        self.types.truncate(trial.types);
+        self.workflows.truncate(trial.workflows);
     }
 
     /// One instance; returns its id.

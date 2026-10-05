@@ -1,0 +1,9 @@
+fx: workflow/v1
+id: case
+title: A body the engine runs again
+steps:
+  flaky:
+    uses: ./nodes/flaky.py#flaky
+    with: { text: steady }
+outputs:
+  text: ${{ steps.flaky.outputs.text }}

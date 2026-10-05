@@ -30,8 +30,6 @@ pub enum ErrorKind {
     Host,
     /// A command or feature that arrives with a later step ("not available until the runner lands").
     Unavailable,
-    /// A stub of the step-2 skeleton. Never reaches a user once integration is done.
-    Todo,
     /// A fault in the engine itself.
     Internal,
 }
@@ -52,11 +50,6 @@ impl Error {
             kind,
             message: message.into(),
         }
-    }
-
-    /// A stub of the skeleton: `what` names the function, as `"expand::frames"`.
-    pub fn todo(what: &str) -> Self {
-        Self::new(ErrorKind::Todo, format!("{what} is not implemented yet"))
     }
 
     pub fn usage(message: impl Into<String>) -> Self {

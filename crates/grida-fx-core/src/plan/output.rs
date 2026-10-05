@@ -111,10 +111,10 @@ pub fn instance_document(instance: &Instance) -> Value {
         "price": {"low_usd": usd(instance.low()), "high_usd": usd(instance.high())},
         "view": instance.view,
     });
-    if let (Some(reason), Value::Object(map)) = (&instance.reason, &mut document) {
-        if !reason.is_empty() {
-            map.insert("reason".into(), Value::String(reason.clone()));
-        }
+    if let (Some(reason), Value::Object(map)) = (&instance.reason, &mut document)
+        && !reason.is_empty()
+    {
+        map.insert("reason".into(), Value::String(reason.clone()));
     }
     document
 }

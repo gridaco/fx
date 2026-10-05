@@ -1,0 +1,53 @@
+# Running in a folder that already holds a run of the same plan continues it. The second `run`
+# into `runs/one` finds both steps finished in the record: it starts neither again, so their
+# entries in `project` still come from the first invocation, and its `run_started` says
+# `resumed: true`; it finishes ok with the same output. A run of other inputs (`--word other`)
+# into the same folder is a different plan: it is refused before anything runs (exit 1), and
+# the folder's record is left as it was (the last `project` saves the same bytes as the one
+# before it).
+steps:
+- argv:
+  - run
+  - case
+  - --routes
+  - routes.yaml
+  - --run
+  - runs/one
+- argv:
+  - project
+  - runs/one
+  save: project-first.json
+  json: true
+- argv:
+  - run
+  - case
+  - --routes
+  - routes.yaml
+  - --run
+  - runs/one
+  mentions:
+  - "result    ok   spent $0.00"
+- argv:
+  - project
+  - runs/one
+  save: project-resumed.json
+  json: true
+- read: runs/one/outputs/echoed.txt
+  save: echoed.txt
+- argv:
+  - run
+  - case
+  - --routes
+  - routes.yaml
+  - --run
+  - runs/one
+  - --word
+  - other
+  status: 1
+  mentions:
+  - "refused: runs/one holds a run of another workflow or other inputs; choose a new folder"
+- argv:
+  - project
+  - runs/one
+  save: project-resumed.json
+  json: true

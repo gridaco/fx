@@ -126,12 +126,12 @@ Every step field:
 | `takes:`, `pick:` | draw several takes now, and choose which one downstream steps get. See [Cost](04-cost-and-cache.md#takes). |
 | `assert:` | checks with your message. See *Assertions*. |
 | `at: plan` | run this free local step while planning. See *Running a step while planning*. |
-| `budget:` | a ceiling for this step, group or each instance, inside the run's ceiling |
-| `concurrency:` | at most this many instances of a repeat at once |
+| `budget:` | a ceiling for this step, group or each instance, inside the run's ceiling; a step inside several is held to the innermost one only |
+| `concurrency:` | at most this many instances of a repeated node step at once; on a repeated group or workflow step it does nothing yet |
 | `route:` | which model serves this step |
 | `requires:` | what the route must support (`image_input`, `mask`, `alpha` ...). The plan refuses others, offline. |
 | `independent_of:` | refuse a plan where this step and those share an underlying model, whatever the provider |
-| `timeout:` | wall-clock limit for this step |
+| `timeout:` | wall-clock limit for this step, in seconds: past it the step fails (`ran past <n> seconds`) and is not run again |
 
 ## Expressions
 
@@ -147,7 +147,7 @@ node.
 | text | `"A ${{ item.kind }} named ${{ item.name }}"` |
 | arithmetic and comparison | `facts(item.file).width * 2`, `item.parallax < 0.5`, `&&`, `\|\|`, `!` |
 | a fallback for nothing | `steps.repaint.outputs.image ?? item.file` |
-| file facts | `facts(inputs.poster).width`, `.height`, `.has_alpha`, `.opaque`, `.bytes`, `.kind` (audio and video facts are planned) |
+| file facts | `facts(inputs.poster).width`, `.height`, `.has_alpha`, `.opaque`, `.bytes`, `.kind`; a WAV's `.duration`; an MP4, WebM or Matroska video's `.width`, `.height`, `.fps`, `.duration`, `.frames`, `.has_alpha` ([facts.md](../../spec/facts.md)) |
 | functions | `lookup(map, key)`, `min`, `max`, `len`, `contains`, `concat(a, b)`, `join(list, ", ")`, `stem(file)`, `digest(value)`, `accepted(collection)` |
 
 **Rules:**
@@ -175,7 +175,6 @@ let:
     as: item
     key: ${{ item.id }}          # how instances are named: entity['harbor_keeper']
     max: 48                      # required when the list comes from a step: the cost ceiling
-    concurrency: 6               # optional
     steps:
       direct:
         uses: fx/structured.generate@1
@@ -188,6 +187,10 @@ let:
 - **Inside a group**, `steps.<name>` refers to the sibling in the same instance. A nested repeat
   sees the outer `as:` variable too.
 - **A group without a repeat** (just nested `steps:`) is addressed `steps.references.draw`.
+- **`concurrency: N`** on a repeated node step runs at most N of its instances at once. It does
+  nothing yet on a repeated group, such as `entity` here, or a repeated workflow step. To pace a
+  group's paid calls, limit their route in `fx.yaml`
+  ([Cost](04-cost-and-cache.md#budgets-inside-a-run)).
 - **`key:`** names instances, so takes and delivered files stay attached to the right item when
   the list changes.
   - **Without it,** the position is the name.
@@ -219,8 +222,10 @@ let:
 When the list comes from a step, FX can't know its length while planning. Such a repeat starts a
 new **phase**:
 - The plan prices the run up to `max`.
-- When the list exists, FX prices that phase exactly and continues. If it would break your
-  budget, it stops and asks.
+- When the list exists, FX prices that phase exactly (a `phase_planned` event in the run's
+  record) and continues. With `--yes-up-to`, it stops before a phase whose worst case would take
+  the run past that amount; running again with a higher one continues. The ceiling holds either
+  way: no paid call is made that could cross it.
 - You don't declare phases; they follow from the wiring.
 
 To avoid a phase, compute the list while planning (next section).
@@ -355,12 +360,14 @@ steps:
     key: ${{ item.id }}
     uses: ./workflows/voiced-scene.yaml
     budget: { max_usd: 3 }        # each scene, inside the run's --max-usd 30
-    concurrency: 3
 ```
 
-A step, group or repeat instance with a `budget:` starts only when its worst case fits what is left
-of the run. A shared ceiling therefore ends with finished scenes, not twelve half-voiced ones. See
-[Cost](04-cost-and-cache.md).
+Every paid call inside a scene reserves its worst case against the scene's budget and the run's
+ceiling, and a call that does not fit is not made: its step fails and the steps that need it are
+skipped. A step inside several budgets (a step with its own `budget:` inside a scene) is held to
+the innermost one and the run's ceiling only. Budgets admit calls, not whole scenes: a scene starts
+whatever is left, so a shared ceiling can end with a scene half done. See
+[Cost](04-cost-and-cache.md#budgets-inside-a-run).
 
 ## Outputs
 

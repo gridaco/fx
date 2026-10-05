@@ -1,0 +1,1 @@
+case.takes.yaml: a uses take 1

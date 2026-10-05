@@ -1,0 +1,53 @@
+# One local run of every output shape a node returns. `said` writes text and reports the node
+# fact `letters`; `report` returns `ctx.out.json`, whose bytes the engine writes in the JSON
+# layout of spec/identity.md section 5 (numbers in their JCS form: `half` is 2, `ratio` 0.5);
+# `parts` returns a list port of two files and `entries` a keyed port (`first`, `last`);
+# `marks` reports four marks with `ctx.annotate` and returns nothing, so the engine writes them
+# as its `annotations` output (`fx-annotations-v1`); `check` judges `said` and reports its
+# verdict and a fact. `project` shows every instance succeeded with its node facts and the
+# engine's `cost_usd: null`. The run folder holds each output at spec/store.md section 8's
+# names: `outputs/said.txt`, `outputs/report.json`, `outputs/parts/0.txt` and `1.txt`,
+# `outputs/entries/first.txt` and `last.txt`, `outputs/marks.json`; and each step's files under
+# `files/`: a port of several files as a folder (`files/parts/parts/1.txt`,
+# `files/entries/entries/last.txt`), a port of one file by its name (`files/report/report.json`).
+# `inspect --verify` summarises the run and rehashes the 7 files its steps placed under `files/`.
+steps:
+- argv:
+  - run
+  - case
+  - --routes
+  - routes.yaml
+  - --run
+  - runs/one
+  mentions:
+  - "result    ok   spent $0.00"
+- argv:
+  - project
+  - runs/one
+  save: project.json
+  json: true
+- read: runs/one/outputs/said.txt
+  save: said.txt
+- read: runs/one/outputs/report.json
+  save: report.json
+- read: runs/one/outputs/parts/0.txt
+  save: parts-0.txt
+- read: runs/one/outputs/parts/1.txt
+  save: parts-1.txt
+- read: runs/one/outputs/entries/first.txt
+  save: entries-first.txt
+- read: runs/one/outputs/entries/last.txt
+  save: entries-last.txt
+- read: runs/one/outputs/marks.json
+  save: marks.json
+- read: runs/one/files/parts/parts/1.txt
+  save: parts-1.txt
+- read: runs/one/files/entries/entries/last.txt
+  save: entries-last.txt
+- read: runs/one/files/report/report.json
+  save: report.json
+- argv:
+  - inspect
+  - runs/one
+  - --verify
+  save: inspect.txt

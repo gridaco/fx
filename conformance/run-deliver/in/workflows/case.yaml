@@ -1,0 +1,15 @@
+fx: workflow/v1
+id: case
+title: Outputs delivered
+steps:
+  solo:
+    uses: ./nodes/deliver.py#make
+    with: { text: solo }
+  each:
+    for_each: [x, "y z"]
+    key: ${{ item }}
+    uses: ./nodes/deliver.py#make
+    with: { text: "${{ item }}" }
+outputs:
+  one: ${{ steps.solo.outputs.text }}
+  each: ${{ steps.each.*.outputs.text }}

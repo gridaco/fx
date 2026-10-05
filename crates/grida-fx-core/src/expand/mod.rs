@@ -33,7 +33,10 @@
 //!   or through other workflows) reports `<uses> refers back to itself` at the step; `needs:`
 //!   cycles stay silent (gnode); a step's judges and `independent_of` targets, which it expands
 //!   for its own sake, are held while a step under way is unfinished, so they read that step as
-//!   pending where gnode read missing, and list after it (`node.rs`);
+//!   pending where gnode read missing, and list after it; held judges that a step begun later
+//!   settles by reading the judged step are expanded on trial, undone when they reach that
+//!   reader, which is their own evidence and reads the judged take unjudged, as in gnode
+//!   (`node.rs`);
 //! - at most [`MAX_CHAIN`] step expansions are under way inside each other (a chain of steps
 //!   reading each other): the next is refused, `the chain of steps reading each other is longer
 //!   than 2000`; the frames between two links are kept small (`expr::evaluate`);
@@ -346,6 +349,11 @@ pub(crate) struct Expander<'a> {
     pub(crate) active: Vec<ExpId>,
     /// Node-step work held while a step under way is unfinished, oldest first (`node.rs`).
     pub(crate) held: Vec<node::Held>,
+    /// Held judges being settled on trial, innermost last (`node.rs`).
+    pub(crate) trials: Vec<node::Trial>,
+    /// While a trial is under way: instances that existed before it, as they were before it
+    /// changed them (`(index, instance)`, oldest first).
+    pub(crate) undo: Vec<(usize, Instance)>,
     /// Shadow pricing under way (`repeat.rs`): nothing is held inside a shadow.
     pub(crate) shadowing: u32,
     /// Set by [`Expander::single`] when its `uses` did not resolve: the problem it reported.
@@ -378,6 +386,8 @@ impl<'a> Expander<'a> {
             instantiating: Vec::new(),
             active: Vec::new(),
             held: Vec::new(),
+            trials: Vec::new(),
+            undo: Vec::new(),
             shadowing: 0,
             escaped: None,
             workflow_roots: HashMap::new(),
@@ -465,6 +475,7 @@ impl<'a> Expander<'a> {
         let key = (scope, name.to_string());
         if let Some(&found) = self.memo.get(&key) {
             if self.exps[found.0].kind == frame::ExpKind::Expanding {
+                self.reached_under_way(found);
                 return Err(self.refers_back(found));
             }
             return Ok(found);
@@ -723,7 +734,7 @@ impl<'a> Expander<'a> {
             if assertion.on_fail == OnFail::Skip {
                 keep = false;
             }
-            if let Some(instance) = owner.and_then(|id| self.instances.get_mut(id)) {
+            if let Some(instance) = owner.and_then(|id| self.instance_mut(id)) {
                 instance.state = match assertion.on_fail {
                     OnFail::Fail => State::Failed,
                     OnFail::Skip => State::Absent,
@@ -805,6 +816,22 @@ impl<'a> Expander<'a> {
         reads.extend(read);
     }
 
+    /// An instance to change. During a trial (`node.rs`), one that existed before it is recorded
+    /// first, so the trial can be undone.
+    pub(crate) fn instance_mut(&mut self, id: &str) -> Option<&mut Instance> {
+        let index = self.instances.get_index_of(id)?;
+        if self
+            .trials
+            .last()
+            .is_some_and(|trial| index < trial.instances)
+        {
+            self.undo.push((index, self.instances[index].clone()));
+        }
+        self.instances
+            .get_index_mut(index)
+            .map(|(_, instance)| instance)
+    }
+
     /// Records a read of an existing result into the active read set.
     pub(crate) fn read(&mut self, id: &str) {
         if let Some(set) = self.read_sets.last_mut() {
@@ -818,10 +845,10 @@ impl<'a> Expander<'a> {
         for id in refs {
             // A value read from an `at: plan` step is known while planning: no new phase. Ids
             // that are no instance (a shadow's `<item>`) count for nothing.
-            if let Some(instance) = self.instances.get(id) {
-                if !instance.at_plan {
-                    phase = phase.max(instance.phase + 1);
-                }
+            if let Some(instance) = self.instances.get(id)
+                && !instance.at_plan
+            {
+                phase = phase.max(instance.phase + 1);
             }
         }
         phase

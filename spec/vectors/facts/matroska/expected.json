@@ -1,0 +1,108 @@
+{
+ "ffv1_level1_yuva.mkv": {
+  "bytes": 5449,
+  "kind": "video/x-matroska",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 0.25,
+  "frames": 6,
+  "has_alpha": true
+ },
+ "ffv1_yuv.mkv": {
+  "bytes": 6306,
+  "kind": "video/x-matroska",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 0.25,
+  "frames": 6,
+  "has_alpha": false
+ },
+ "ffv1_yuva.mkv": {
+  "bytes": 6533,
+  "kind": "video/x-matroska",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 0.25,
+  "frames": 6,
+  "has_alpha": true
+ },
+ "garbage.webm": {
+  "refused": "not a Matroska or WebM file (it does not start with an EBML header)"
+ },
+ "h264.mkv": {
+  "bytes": 2207,
+  "kind": "video/x-matroska",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 1,
+  "frames": 24,
+  "has_alpha": false
+ },
+ "png_rgb.mkv": {
+  "bytes": 3340,
+  "kind": "video/x-matroska",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 0.25,
+  "frames": 6,
+  "has_alpha": false
+ },
+ "png_rgba.mkv": {
+  "bytes": 3616,
+  "kind": "video/x-matroska",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 0.25,
+  "frames": 6,
+  "has_alpha": true
+ },
+ "png_rgba64.mkv": {
+  "bytes": 3127,
+  "kind": "video/x-matroska",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 0.125,
+  "frames": 3,
+  "has_alpha": true
+ },
+ "truncated.mkv": {
+  "refused": "not a Matroska or WebM file (an element at byte 40 runs past the end of the file)"
+ },
+ "vp9.webm": {
+  "bytes": 2706,
+  "kind": "video/webm",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 1,
+  "frames": 24,
+  "has_alpha": false
+ },
+ "vp9_5994.webm": {
+  "bytes": 1434,
+  "kind": "video/webm",
+  "width": 64,
+  "height": 48,
+  "fps": 59.94006,
+  "duration": 0.1,
+  "frames": 6,
+  "has_alpha": false
+ },
+ "vp9_alpha.webm": {
+  "bytes": 3448,
+  "kind": "video/webm",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 1,
+  "frames": 24,
+  "has_alpha": false
+ }
+}

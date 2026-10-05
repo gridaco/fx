@@ -1,0 +1,4 @@
+case  ·  one
+state     succeeded   6 steps: 6 succeeded
+spent     $0.00
+verified  7 files

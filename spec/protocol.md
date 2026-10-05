@@ -223,11 +223,11 @@ After the host answers, the engine:
 2. checks the result: no undeclared output port, every non-optional port present, each value's shape matching its port; no fact named `cost_usd`, which is the engine's (step 5), and no reserved marker in a fact or a mark (§3.2). A failed check fails the node, with `-32602` for a refused fact or mark, and it is not retried.
 3. writes `{"kind": "fx-annotations-v1", "annotations": marks}` as the `annotations` output when the type declares one, the body returned none, and there are marks.
 4. requires a judge's `verdict` node fact to be `accept` or `reject`.
-5. stores the output files, sets the node fact `cost_usd`, and writes the result record (`fx-result-record-v1`) under the step identity when that is known. The engine always writes `cost_usd` itself: what the run's paid calls cost, or `null` when it made none, the same value as the result record's `cost_usd` ([store.md](store.md) §3).
+5. stores the output files, sets the node fact `cost_usd`, and writes the result record (`fx-result-record-v1`) under the step identity when that is known. The engine always writes `cost_usd` itself for a node a host ran: what this run paid for the node's calls, or `null` when it paid for none (a call answered from the cache costs nothing and counts as none), the same value as the result record's `cost_usd` ([store.md](store.md) §3). `fx/select@1` and other engine types report no node facts.
 
 **Failure.** The host answers `run` with an error:
 - `node_failure` when the body failed on purpose (Python: `raise ctx.fail(…)` or `NodeFailure`);
-- `node_error` when it raised anything else, with the exception's type and traceback in `data`;
+- `node_error` when it raised anything else. The error's `message` is the exception's own text, which may be empty, and `data` carries the exception's type and traceback. The engine names the failure `<exception>: <message>`, or `<exception>` alone when the message is empty;
 - the error the engine answered one of the run's requests with, when the body let it propagate, with its code and message unchanged (`ceiling_exceeded`, `call_failed`, …).
 
 For `node_failure` and `node_error`, `data` MAY carry node `facts` and `marks` the body kept locally, under the same rules as a result's. The engine merges them as above, leaving out any that step 2 would refuse, so a failed node keeps its node facts and its own error.
@@ -266,15 +266,15 @@ Every request in this section carries the `run_id` of a pending `run`. A request
 
 A paid call: `{run_id, capability, request}`. `request` is the canonical request ([identity.md](identity.md) §9): JSON, with each file as a file value (§3.2). The engine:
 1. checks that the type declares the capability (`capability_undeclared`) and has calls left (`over_bound`). Cache hits count toward the bound.
-2. takes the instance's route for the capability (`no_route`, which also covers a route no adapter serves).
-3. computes the call key ([identity.md](identity.md) §9) and answers from the call cache when it can. This comes before the live check, so a dry run replays the calls it has already paid for.
-4. refuses with `not_live` when the run is not live: a dry run, or an `at: plan` step.
+2. takes the instance's route for the capability (`no_route`).
+3. checks the request's file values (§3.2) and computes the call key ([identity.md](identity.md) §9), then answers from the call cache when it can, billing nothing and removing a leftover job record with that key ([store.md](store.md) §5). This comes before the live check and the adapter check, so a dry run replays the calls it has already paid for, and a recorded call replays with no adapter at all: recorded calls replay offline ([store.md](store.md) §4).
+4. checks that the call can be sent: it refuses with `not_live` when the run is not live (a dry run, or an `at: plan` step), and then with `no_route` when no adapter serves the route.
 5. looks up the call's job record ([store.md](store.md) §5):
    - `submitting`: an earlier submission has an unknown outcome. The engine refuses with `job_unsettled`, and the message says to check the provider's dashboard and then run `grida-fx jobs --forget <key>`.
-   - `submitted`: the engine collects the job by its `handle`, with no new hold and no new submit, because the run that submitted it was charged its hold. An answered job goes on at step 8. A job that ends without a result leaves its record `settled` and fails the call with `call_failed`; a later run submits it anew.
+   - `submitted`: the engine collects the job by its `handle`, with no new hold and no new submit, because the run that submitted it was charged its hold. An answered job goes on at step 8. A job that ends without a result leaves its record `settled` and fails the call with `call_failed`; a later run submits it anew. An adapter that cannot collect jobs refuses with `job_unsettled`, as for `submitting`.
    - no record, or a `settled` one: the call goes on at step 6, as a new submission.
-6. reserves the route's high price under the run's ceiling and any step budget (`ceiling_exceeded`, with `needed_usd` and `remaining_usd` in `data`).
-7. makes the call as its only retry owner: at most 6 attempts, each reserved, recorded and settled. `capability_refused` means the adapter refused before anything was sent, settled at $0. `call_failed` means every attempt failed. A long job keeps its job record as [store.md](store.md) §5 describes.
+6. reserves, for each attempt, the route's high price for this request under the run's ceiling and any step budget, $0 included, so every attempt is recorded (`ceiling_exceeded`, with `needed_usd` and `remaining_usd` in `data`).
+7. makes the call as its only retry owner: at most 6 sends of the request in all, a resend after a send that provably was not received included; each attempt is reserved, recorded and settled. `capability_refused` means the adapter refused before anything was sent, settled at $0. `call_failed` means every attempt failed. A long job keeps its job record as [store.md](store.md) §5 describes.
 8. stores the files and the call record (`fx-call-record-v1`), and then removes the call's job record, if any.
 
 The result is `{key, cached, cost_usd, files: {name: file ref}, data}`. `cost_usd` is 0 on a hit and for a collected job, which bills nothing new, and `null` when the provider reported no cost (the engine then charged the whole hold).
@@ -305,6 +305,8 @@ The loop, which fixes every turn's request and therefore its call key:
    - Any other name goes to `tool.invoke`. The content is `text(content)` ([identity.md](identity.md) §5), or the error text.
 6. With `recent_images: n`, each request keeps only the newest n pictures across the transcript. A message that lost pictures has `\n[<k> older picture(s) not shown]` appended to its content.
 7. After `max_steps` turns with no answer, the request fails with `agent_unfinished`: `the agent did not finish within <n> turns`.
+
+Before its first turn, the engine refuses an `agent.run` with `-32602` when `max_steps` is 0, a tool is named `submit`, a tool's `parameters` or the `submit` schema holds a reserved marker (§3.2), or `submit` is not a JSON Schema (draft 2020-12). A reply whose data is not `{"text", "tool_calls"}` fails the request with `call_failed`; a missing or `null` `text` is `""`, missing or `null` `tool_calls` are none, a call without `arguments` has `{}`, and other members are not kept.
 
 The result is `{text}` or `{submitted}`, plus `transcript` (every message, unwindowed), `turns`, and `cost_usd` (the cost of the turns that were not cached).
 
@@ -345,9 +347,9 @@ Errors are JSON-RPC error objects, `{code, message, data?}`. `message` is a sent
 | -32003 | `protocol_mismatch` | host for `initialize` | The engine's protocol is not the host's; `data` has both | session fails |
 | -32004 | `load_failed` | host for `build`, `run` | A module, function or attribute could not be loaded | no |
 | -32005 | `build_failed` | host for `build` | The builder raised, or returned no `Workflow` | no; a planning problem |
-| -32010 | `capability_undeclared` | engine for `capability` | The type does not declare the capability in `calls` | no |
+| -32010 | `capability_undeclared` | engine for `capability`, `agent.run` | The type does not declare the capability in `calls` | no |
 | -32011 | `over_bound` | engine for `capability`, `agent.run` | The run already made as many calls as declared | no |
-| -32012 | `no_route` | engine for `capability`, `agent.run` | No route, or no adapter, serves the capability for this instance | no |
+| -32012 | `no_route` | engine for `capability`, `agent.run` | No route serves the capability for this instance, or no adapter serves the route of a call that must be sent | no |
 | -32013 | `not_live` | engine for `capability`, `agent.run` | The call is not cached and the run is not live | no |
 | -32014 | `ceiling_exceeded` | engine for `capability`, `agent.run` | The call's hold does not fit the run's ceiling or a step budget | no |
 | -32015 | `capability_refused` | engine for `capability`, `agent.run` | The adapter refused before sending anything; settled at $0 | no |

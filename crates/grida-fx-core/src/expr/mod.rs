@@ -40,11 +40,6 @@ impl ExprError {
         Self(message.into())
     }
 
-    /// A stub of the skeleton.
-    pub fn todo(what: &str) -> Self {
-        Self(format!("{what} is not implemented yet"))
-    }
-
     /// `this names a step; take its result, e.g. .outputs.image or .facts.verdict`.
     pub fn names_a_step() -> Self {
         Self::new("this names a step; take its result, e.g. .outputs.image or .facts.verdict")

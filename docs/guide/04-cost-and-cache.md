@@ -53,13 +53,21 @@ In general:
   --check` fails on any error, with no spend.
 - **Calls priced by length** (speech by characters, music by seconds) use the step's `max_chars` or
   `duration`, or the route's worst case, and show as a range.
-- **The ceiling is enforced, not advised.** Before every paid call FX reserves its worst-case
-  price. A call that would cross the ceiling is not made, and the run stops cleanly with everything
-  so far kept.
+- **The ceiling is enforced, not advised.** Before every paid call, and before every new attempt
+  of one, FX reserves its worst-case price, and settles the reservation at what the provider
+  reports once it answers. A call that would cross the ceiling is not made: the step that asked
+  for it fails, the steps that need that step are skipped, and the rest of the run goes on.
+  Everything finished is kept, and the run ends `failed`, naming each step that did not finish.
 - **The ceiling comes from** `--max-usd` if given, else the workflow's `budget:`, else
   `fx.yaml`.
-- **When a phase starts,** FX prints its exact price. `--yes-up-to 12` approves phases
-  automatically while the run's total stays under 12.
+- **A live run needs a ceiling.** `grida-fx run --live` with none of the three is refused before
+  anything is written.
+- **A later phase is priced exactly** once its list exists (a `phase_planned` event in the
+  run's record). Without `--yes-up-to` the run goes on, inside the ceiling. With `--yes-up-to 12`,
+  a later phase whose worst case would take the run's total past $12 does not start: the run ends
+  *incomplete* with `stopped   phase 2 may cost up to $…, which takes the run past --yes-up-to
+  12; approve it with a higher --yes-up-to`, and running again into the same folder with a higher
+  amount continues it. The first phase is never stopped this way: the plan already priced it.
 
 ## Budgets inside a run
 
@@ -68,18 +76,30 @@ In general:
     for_each: ${{ inputs.scenes }}
     uses: ./workflows/voiced-scene.yaml
     budget: { max_usd: 3 }        # each scene
-    concurrency: 3                # three scenes at a time
+  cue:
+    for_each: ${{ inputs.cues }}
+    uses: fx/music.generate@1
+    with: { prompt: "${{ item.prompt }}", duration: 45 }
+    concurrency: 3                # three cues at a time
 ```
 
 ```bash
 grida-fx run voiced-scenes --inputs inputs/scenes.yaml --live --max-usd 30
 ```
 
-- **Nested ceilings:** each scene has its own ceiling of 3, inside the run's 30.
-- **Admission:** a scene starts only when its worst case fits what is left. You end with finished
-  scenes, and the ones that didn't fit are reported as not started, not half done.
-- **Concurrency** limits how many run at once. `routes:` in `fx.yaml` can also limit each route
-  (`speech.generate: { route: …, concurrency: 4 }`), which keeps you under provider rate limits.
+- **Nested ceilings:** each scene has its own ceiling of 3, inside the run's 30. Every paid call
+  in a scene, and every new attempt of one, reserves its worst case against both; a call that
+  does not fit is not made, its step fails and the steps that need it are skipped.
+- **Only the innermost budget counts.** A step with its own `budget:` inside a scene is held to
+  that budget and the run's ceiling, not to the scene's as well.
+- **Budgets admit calls, not whole scenes.** A scene starts whatever is left, so a shared ceiling
+  can end with a scene half done. Its finished steps are kept, and a later run with more room
+  continues from them.
+- **Concurrency** limits how many instances of a repeated node step (`cue` here) run at once. On a
+  repeated group or workflow step, such as `scene`, it does nothing yet. `routes:` in `fx.yaml`
+  can limit each route instead (`speech.generate: { route: …, concurrency: 4 }`): at most that
+  many of its requests at once, whichever steps send them, which keeps you under provider rate
+  limits.
 
 ## Takes
 
@@ -129,9 +149,10 @@ grida-fx pick runs/voiced-scenes/2026-10-02-1 "scene['s04'].music" 3
   pictures. With a fresh cache, take 2 is drawn anew.
 - **The plan notes an entry whose step no longer exists** (you renamed it), and
   `grida-fx takes mv <workflow> old new` moves it.
-- **Planned:** noticing that a fresh cache drew a different result than the one you picked, and
-  warning when a picked step's request changed (a prompt edit, a new duration), instead of
-  quietly giving you an unseen take.
+- **A pick is checked.** When a picked step runs again and its take no longer produces the
+  result you picked (a fresh cache drew it anew, or its request changed: a prompt edit, a new
+  duration), the step fails with `take <n> of <path> no longer produces the picked result …;
+  pick a take again`, instead of quietly giving you an unseen take.
 - **Nested workflows:** the takes file of the workflow you ran holds every pick, with full paths
   (`"scene['s04'].line['l-3f9a'].speak"`). A standalone run of the inner workflow uses its own file.
 
@@ -149,9 +170,18 @@ If a run is interrupted (crash, Ctrl-C, power), run the same command again. Fini
 from the cache, and paid calls already answered are replayed from the record.
 
 A long provider job that was submitted but not collected (rigging, video) is collected, not
-submitted again. If FX can't tell whether a submission reached the provider, it stops rather than
-risk paying twice: check the provider's dashboard, then clear the job with
-`grida-fx jobs --forget <key>` so the next run submits it.
+submitted again. If FX can't tell whether a submission reached the provider, it fails that step
+rather than risk paying twice, and the rest of the run goes on: check the provider's dashboard,
+then clear the job with `grida-fx jobs --forget <key>` so the next run submits it.
+
+`grida-fx jobs` lists every job record in the cache, one line each (its key, its state, the
+capability and route, the take):
+
+- `submitting`: nobody can say whether the provider took it; the next run will not send it until
+  you forget it;
+- `submitted`: the provider took it; the next run collects it, billing nothing new;
+- `settled`: it ended without a result (the provider reported it failed); the next run submits the
+  call anew, as a new attempt.
 
 ## The cache
 

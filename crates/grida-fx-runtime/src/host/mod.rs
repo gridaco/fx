@@ -1,57 +1,68 @@
-//! Node hosts (protocol.md §1, §2): the Python host process and its session.
+//! Node hosts (spec/protocol.md §1, §2): host processes, their connections, the pool that runs
+//! bodies, and the planning host.
 //!
-//! [`PythonHost`] implements `grida_fx_core::host::NodeHost`. It starts the host lazily, on the
-//! first `describe` or `build`, so planning a project without node modules never needs Python:
-//! `<python> -P -m grida.fx.host` with its working directory at the project root, stdin/stdout
-//! piped for the protocol and stderr inherited (free-form log text). `-P` (Python 3.11 and later)
-//! keeps the working directory off `sys.path`, so a project module named like a standard library
-//! module or like `grida` cannot replace the host's own imports before `initialize` puts the root
-//! on `sys.path`. The engine also sets `PYTHONSAFEPATH` to [`SAFE_PATH_MARK`] when its own
-//! environment leaves it unset, for an interpreter wrapper that drops `-P`; the host removes that
-//! value before it loads user code, so programs user code starts see the user's environment.
+//! - [`connection`]: the asynchronous JSON-RPC connection, with requests in both directions;
+//! - [`process`]: one started, initialized host process ([`process::HostProcess`]);
+//! - [`pool`]: the hosts that run bodies, one job each;
+//! - [`locate`]: which interpreter hosts a project's nodes.
+//!
+//! [`PythonHost`] implements `grida_fx_core::host::NodeHost` for planning (`describe`, `build`).
+//! It starts the host lazily, on the first `describe` or `build`, so planning a project without
+//! node modules never needs Python: `<python> -P -m grida.fx.host` with its working directory at
+//! the project root, stdin/stdout piped for the protocol and stderr inherited (free-form log
+//! text). `-P` (Python 3.11 and later) keeps the working directory off `sys.path`, so a project
+//! module named like a standard library module or like `grida` cannot replace the host's own
+//! imports before `initialize` puts the root on `sys.path`. The engine also sets
+//! `PYTHONSAFEPATH` to [`SAFE_PATH_MARK`] when its own environment leaves it unset, for an
+//! interpreter wrapper that drops `-P`; the host removes that value before it loads user code,
+//! so programs user code starts see the user's environment.
 //!
 //! The engine sends `initialize`
 //! (`{protocol, engine: {name: "grida-fx", version}, project_root, sources}`), checks the
 //! answer's protocol (a mismatch, or a `protocol_mismatch` error, is
 //! `the project's grida <sdk_version> speaks <host protocol> and grida-fx <version> speaks
-//! fx-node-protocol-v1: upgrade grida` or `…: upgrade grida-fx`), then serves requests one at a
+//! fx-node-protocol-v1: upgrade grida` or `…: upgrade grida-fx`), then sends one request at a
 //! time. A host that cannot start is `HostFailure::Unavailable` with a sentence naming the
 //! interpreter and `GRIDA_FX_PYTHON`. Dropping the host sends `shutdown` then the `exit`
 //! notification and waits up to 5 seconds before killing it.
 //!
 //! The interpreter is the one given to [`PythonHost::with_python`], else
 //! [`locate::python_interpreter`] over the process environment. It is named in messages as the
-//! user would write it: a path inside the project relative to the project root. A host that
-//! failed to start, or broke the protocol, stays failed for its project: later calls give the
-//! same sentence without starting it again, until `open_project` names another project. A host
-//! request during `describe` or `build` is answered `-32601`.
+//! user would write it ([`label`]): a path inside the project relative to the project root. A
+//! host that failed to start, or broke the protocol, stays failed for its project: later calls
+//! give the same sentence without starting it again, until `open_project` names another
+//! project. A host request during `describe` or `build` is answered `-32601`.
 //!
-//! Tests: a fake host script (a small Python program written to a temp folder, run with
-//! `python3`) answering initialize/describe/build/shutdown; a host that exits early; a protocol
-//! mismatch. Skip the process tests when `python3` is not on PATH.
+//! `PythonHost` is synchronous: it runs its [`process::HostProcess`] on the runtime given to
+//! [`PythonHost::with_handle`], else on a current-thread runtime of its own built on first use,
+//! and blocks on each request. It must not be called from a thread that runs asynchronous tasks
+//! (a tokio worker, or inside `block_on`): when it is, it blocks on a helper thread instead of
+//! panicking, but the thread it was called from stays blocked meanwhile.
 
+pub mod connection;
 pub mod locate;
-pub mod session;
+pub mod pool;
+pub mod process;
 
+use connection::{Connection, ConnectionError, NoIncoming};
+use grida_fx_core::ENGINE_VERSION;
 use grida_fx_core::host::{HostFailure, NodeHost};
-use grida_fx_core::{ENGINE_NAME, ENGINE_VERSION};
 use grida_fx_protocol::{
-    BuildParams, BuildResult, DescribeParams, DescribeResult, EngineInfo, ErrorCode, ErrorData,
-    InitializeParams, InitializeResult, PROTOCOL, method,
+    BuildParams, BuildResult, DescribeParams, DescribeResult, InitializeResult, PROTOCOL, method,
 };
+use process::{HostProcess, HostSpec};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use session::{NoRequests, Session, SessionError};
-use std::io::BufReader;
+use std::future::Future;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, ExitStatus, Stdio};
-use std::sync::mpsc;
-use std::time::{Duration, Instant};
+use std::process::ExitStatus;
+use std::sync::Arc;
+use std::time::Duration;
 
-/// The interpreter's arguments: the host module, with the safe-path option (protocol.md §1).
+/// The interpreter's arguments: the host module, with the safe-path option (spec/protocol.md §1).
 const HOST_ARGS: [&str; 3] = ["-P", "-m", "grida.fx.host"];
 
-/// How long the engine waits for a host to answer `shutdown`, and then to exit after `exit`.
+/// How long the engine waits for a host to answer `shutdown` or `$/cancel`, and then to exit.
 const GRACE: Duration = Duration::from_secs(5);
 
 /// The `PYTHONSAFEPATH` value the engine sets for a host when its own environment has none; the
@@ -68,12 +79,16 @@ pub struct PythonHost {
     sources: Vec<String>,
     /// The interpreter, when the caller chose it; else [`locate::python_interpreter`].
     python: Option<PathBuf>,
-    child: Option<Child>,
-    session: Option<Session>,
+    process: Option<HostProcess>,
     /// What `initialize` answered.
     pub info: Option<InitializeResult>,
     /// Why the host of the open project cannot serve, once it failed to start or broke.
     failure: Option<String>,
+    /// The engine's runtime, when the command has one.
+    handle: Option<tokio::runtime::Handle>,
+    /// A runtime of the host's own, built on first use when it has no handle. Declared last: it
+    /// outlives the process.
+    runtime: Option<tokio::runtime::Runtime>,
 }
 
 impl PythonHost {
@@ -83,16 +98,24 @@ impl PythonHost {
             project_root: None,
             sources: Vec::new(),
             python: None,
-            child: None,
-            session: None,
+            process: None,
             info: None,
             failure: None,
+            handle: None,
+            runtime: None,
         }
     }
 
     /// Uses this interpreter instead of locating one.
     pub fn with_python(mut self, python: PathBuf) -> PythonHost {
         self.python = Some(python);
+        self
+    }
+
+    /// Runs the host on this runtime (the engine's) instead of one of its own. Give it before
+    /// the first request; the runtime must outlive the host, which is ended when dropped.
+    pub fn with_handle(mut self, handle: tokio::runtime::Handle) -> PythonHost {
+        self.handle = Some(handle);
         self
     }
 
@@ -128,124 +151,46 @@ impl PythonHost {
         })
     }
 
-    /// Starts the process and initializes the session, once.
-    fn start(&mut self) -> Result<&mut Session, HostFailure> {
-        if self.session.is_none() {
-            if let Some(failure) = &self.failure {
-                return Err(HostFailure::Unavailable(failure.clone()));
-            }
-            let Some(root) = self.project_root.clone() else {
-                return Err(HostFailure::Unavailable(
-                    "the node host has no project: open one before describe or build".into(),
-                ));
-            };
-            match self.launch(&root) {
-                Ok((child, session, info)) => {
-                    self.child = Some(child);
-                    self.session = Some(session);
-                    self.info = Some(info);
-                }
-                Err(message) => {
-                    self.failure = Some(message.clone());
-                    return Err(HostFailure::Unavailable(message));
-                }
-            }
+    /// Starts the process and initializes it, once; its connection.
+    fn start(&mut self) -> Result<Connection, HostFailure> {
+        if let Some(process) = &self.process {
+            return Ok(process.connection().clone());
         }
-        Ok(self.session.as_mut().expect("a started host has a session"))
-    }
-
-    /// Spawns `<python> -P -m grida.fx.host` and initializes it. Errors are sentences.
-    fn launch(&self, root: &Path) -> Result<(Child, Session, InitializeResult), String> {
+        if let Some(failure) = &self.failure {
+            return Err(HostFailure::Unavailable(failure.clone()));
+        }
+        let Some(root) = self.project_root.clone() else {
+            return Err(HostFailure::Unavailable(
+                "the node host has no project: open one before describe or build".into(),
+            ));
+        };
         let python = self
             .interpreter()
             .unwrap_or_else(|| PathBuf::from("python3"));
-        let shown = label(&python, root);
-        let Some(project_root) = root.to_str() else {
-            return Err(
-                "the project folder's path is not UTF-8, which the node protocol needs".into(),
-            );
-        };
-        let mut command = Command::new(program(&python));
-        command.args(HOST_ARGS).current_dir(root);
-        if std::env::var_os("PYTHONSAFEPATH").is_none_or(|value| value.is_empty()) {
-            command.env("PYTHONSAFEPATH", SAFE_PATH_MARK);
-        }
-        let mut child = command
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .map_err(|e| {
-                format!(
-                    "cannot start the Python node host with {shown}: {}; {PYTHON_ADVICE}",
-                    grida_fx_core::error::io_reason(&e)
-                )
-            })?;
-        let (Some(stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) else {
-            close(&mut child, None, false);
-            return Err(format!(
-                "cannot start the Python node host with {shown}: its streams are not piped"
-            ));
-        };
-        let mut session = Session::new(Box::new(BufReader::new(stdout)), Box::new(stdin));
-        let params = InitializeParams {
-            protocol: PROTOCOL.into(),
-            engine: EngineInfo {
-                name: ENGINE_NAME.into(),
-                version: ENGINE_VERSION.into(),
-            },
-            project_root: project_root.into(),
+        let spec = HostSpec {
+            label: label(&python, &root),
+            python,
+            project_root: root,
             sources: self.sources.clone(),
         };
-        let params = serde_json::to_value(&params).map_err(|e| e.to_string())?;
-        let answer = session.request(method::INITIALIZE, Some(params), &mut NoRequests);
-        let failure = match answer {
-            Ok(value) => match serde_json::from_value::<InitializeResult>(value) {
-                Ok(info) if info.protocol == PROTOCOL => return Ok((child, session, info)),
-                Ok(info) => mismatch(Some(&info.host.sdk_version), &info.protocol),
-                Err(e) => format!(
-                    "the Python node host ({shown}) answered initialize with something FX cannot read: {e}"
-                ),
-            },
-            Err(SessionError::Rpc(error)) if error.kind() == Some(ErrorCode::ProtocolMismatch) => {
-                let host_protocol = error
-                    .data
-                    .clone()
-                    .and_then(|data| serde_json::from_value::<ErrorData>(data).ok())
-                    .and_then(|data| data.host_protocol);
-                match host_protocol {
-                    Some(host_protocol) => mismatch(None, &host_protocol),
-                    None => format!(
-                        "the project's grida does not speak {PROTOCOL}, which grida-fx {ENGINE_VERSION} speaks: {}; upgrade grida",
-                        error.message
-                    ),
-                }
+        let started = self.block_on(HostProcess::start(&spec, Arc::new(NoIncoming)));
+        match started {
+            Ok(Ok(process)) => {
+                let connection = process.connection().clone();
+                self.info = Some(process.info().clone());
+                self.process = Some(process);
+                Ok(connection)
             }
-            Err(SessionError::Rpc(error)) => format!(
-                "the Python node host ({shown}) refused initialize: {}",
-                error.message
-            ),
-            Err(SessionError::Closed) => {
-                let status = close(&mut child, Some(session), false);
-                return Err(format!(
-                    "the Python node host ({shown}) exited{} before it answered initialize; {PYTHON_ADVICE}",
-                    exited_with(status)
-                ));
+            Ok(Err(message)) | Err(message) => {
+                self.failure = Some(message.clone());
+                Err(HostFailure::Unavailable(message))
             }
-            Err(error) => format!("the Python node host ({shown}) broke the protocol: {error}"),
-        };
-        // protocol.md §2: on a mismatch the engine reports both versions, then ends the host.
-        close(&mut child, Some(session), false);
-        Err(failure)
+        }
     }
 
-    /// Ends the session: `shutdown`, `exit`, wait (kill after 5 seconds). Idempotent.
+    /// Ends the host: `shutdown`, `exit`, wait (kill after 5 seconds). Idempotent.
     pub fn shutdown(&mut self) -> Result<(), HostFailure> {
-        let session = self.session.take();
-        if let Some(mut child) = self.child.take() {
-            let polite = session.as_ref().is_some_and(Session::is_open);
-            close(&mut child, session, polite);
-        }
+        self.end_process();
         Ok(())
     }
 
@@ -258,15 +203,18 @@ impl PythonHost {
         let params = serde_json::to_value(params).map_err(|e| {
             HostFailure::Unavailable(format!("the {method} request cannot be written: {e}"))
         })?;
-        let answer = self.start()?.request(method, Some(params), &mut NoRequests);
+        let connection = self.start()?;
+        let answer = self
+            .block_on(async move { connection.request(method, Some(params)).await })
+            .map_err(|message| self.broke(message))?;
         match answer {
             Ok(value) => serde_json::from_value(value).map_err(|e| {
                 self.broke(format!(
                     "the Python node host answered {method} with a result FX cannot read: {e}"
                 ))
             }),
-            Err(SessionError::Rpc(error)) => Err(HostFailure::Rpc(error)),
-            Err(SessionError::Closed) => {
+            Err(ConnectionError::Rpc(error)) => Err(HostFailure::Rpc(error)),
+            Err(ConnectionError::Closed) => {
                 let status = self.end_process();
                 let message = format!(
                     "the node host exited{} while answering {method}",
@@ -275,11 +223,8 @@ impl PythonHost {
                 self.failure = Some(message.clone());
                 Err(HostFailure::Unavailable(message))
             }
-            Err(SessionError::Protocol(message)) => Err(self.broke(format!(
+            Err(ConnectionError::Protocol(message)) => Err(self.broke(format!(
                 "the node host broke the protocol while answering {method}: {message}"
-            ))),
-            Err(SessionError::Io(e)) => Err(self.broke(format!(
-                "cannot talk to the node host while it answers {method}: {e}"
             ))),
         }
     }
@@ -291,12 +236,46 @@ impl PythonHost {
         HostFailure::Unavailable(message)
     }
 
-    /// Ends the process, politely when the session still works; its exit status when known.
+    /// Ends the process, politely when its connection still works; its exit status when known.
     fn end_process(&mut self) -> Option<ExitStatus> {
-        let session = self.session.take();
-        let mut child = self.child.take()?;
-        let polite = session.as_ref().is_some_and(Session::is_open);
-        close(&mut child, session, polite)
+        let process = self.process.take()?;
+        // Without a runtime to end it on, dropping the process kills it.
+        self.block_on(process.shutdown()).ok().flatten()
+    }
+
+    /// Runs `future` to completion on the host's runtime (module doc). Errors are sentences.
+    fn block_on<F>(&mut self, future: F) -> Result<F::Output, String>
+    where
+        F: Future + Send,
+        F::Output: Send,
+    {
+        if self.handle.is_none() && self.runtime.is_none() {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|e| {
+                    format!(
+                        "cannot start the runtime the node host needs: {}",
+                        grida_fx_core::error::io_reason(&e)
+                    )
+                })?;
+            self.runtime = Some(runtime);
+        }
+        let runtime = self.runtime.as_ref();
+        let handle = self.handle.as_ref();
+        // A runtime of its own is driven by its `block_on`; an engine handle by its workers.
+        let run = move || match (runtime, handle) {
+            (Some(runtime), _) => Some(runtime.block_on(future)),
+            (None, Some(handle)) => Some(handle.block_on(future)),
+            (None, None) => None,
+        };
+        let output = if tokio::runtime::Handle::try_current().is_err() {
+            run()
+        } else {
+            // Blocking inside a runtime would panic: block on a helper thread instead.
+            std::thread::scope(|scope| scope.spawn(run).join().ok().flatten())
+        };
+        output.ok_or_else(|| "the node host's runtime stopped".to_string())
     }
 }
 
@@ -337,6 +316,12 @@ impl NodeHost for PythonHost {
 impl Drop for PythonHost {
     fn drop(&mut self) {
         let _ = self.shutdown();
+        // Dropping a runtime blocks, which is refused inside another runtime.
+        if let Some(runtime) = self.runtime.take()
+            && tokio::runtime::Handle::try_current().is_ok()
+        {
+            runtime.shutdown_background();
+        }
     }
 }
 
@@ -344,16 +329,18 @@ impl Drop for PythonHost {
 /// working directory, since the host starts in the project root; a bare name is left for the
 /// `PATH` lookup. Symbolic links are kept (a virtual environment's `python` is one).
 fn program(python: &Path) -> PathBuf {
-    if python.is_relative() && python.components().count() > 1 {
-        if let Ok(absolute) = std::path::absolute(python) {
-            return absolute;
-        }
+    if python.is_relative()
+        && python.components().count() > 1
+        && let Ok(absolute) = std::path::absolute(python)
+    {
+        return absolute;
     }
     python.to_path_buf()
 }
 
-/// A path as messages name it: POSIX and relative to `root` inside it, else as given.
-fn label(path: &Path, root: &Path) -> String {
+/// A path as messages name it: POSIX and relative to `root` inside it, else as given (the
+/// interpreter's `HostSpec::label`).
+pub fn label(path: &Path, root: &Path) -> String {
     match path.strip_prefix(root) {
         Ok(inside) if !inside.as_os_str().is_empty() => inside
             .components()
@@ -364,7 +351,7 @@ fn label(path: &Path, root: &Path) -> String {
     }
 }
 
-/// The sentence for a host that speaks another protocol (protocol.md §2 "Version mismatch").
+/// The sentence for a host that speaks another protocol (spec/protocol.md §2 "Version mismatch").
 fn mismatch(sdk_version: Option<&str>, host_protocol: &str) -> String {
     let grida = match sdk_version {
         Some(version) if !version.is_empty() => format!("grida {version}"),
@@ -396,51 +383,6 @@ fn exited_with(status: Option<ExitStatus>) -> String {
     match status.and_then(|s| s.code()) {
         Some(code) => format!(" with status {code}"),
         None => String::new(),
-    }
-}
-
-/// Ends a host process. Politely: `shutdown` and `exit` are sent from a helper thread, so a
-/// host that never answers cannot hang the engine; the engine waits up to [`GRACE`] for that,
-/// then up to [`GRACE`] for the process to exit. Otherwise the session is dropped, which closes
-/// the host's input, and the process gets [`GRACE`] to exit. A host still running after that is
-/// killed. Returns the exit status when it is known.
-fn close(child: &mut Child, session: Option<Session>, polite: bool) -> Option<ExitStatus> {
-    let mut sent = true;
-    match session {
-        Some(mut session) if polite => {
-            let (done, finished) = mpsc::channel();
-            let spawned = std::thread::Builder::new()
-                .name("grida-fx-host-shutdown".into())
-                .spawn(move || {
-                    let _ = session.request(method::SHUTDOWN, None, &mut NoRequests);
-                    let _ = session.notify(method::EXIT, None);
-                    drop(session);
-                    let _ = done.send(());
-                });
-            sent = spawned.is_ok() && finished.recv_timeout(GRACE).is_ok();
-        }
-        other => drop(other),
-    }
-    if sent {
-        if let Some(status) = wait_for(child, GRACE) {
-            return Some(status);
-        }
-    }
-    let _ = child.kill();
-    child.wait().ok()
-}
-
-/// Waits for a process to exit, up to `limit`.
-fn wait_for(child: &mut Child, limit: Duration) -> Option<ExitStatus> {
-    let start = Instant::now();
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => return Some(status),
-            Ok(None) if start.elapsed() < limit => {
-                std::thread::sleep(Duration::from_millis(10));
-            }
-            _ => return None,
-        }
     }
 }
 
@@ -526,7 +468,7 @@ mod tests {
         );
         // The same project again keeps the host; nothing was started.
         host.open_project(dir.path(), &[]).unwrap();
-        assert!(host.child.is_none());
+        assert!(host.process.is_none());
     }
 
     #[test]

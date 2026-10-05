@@ -64,13 +64,13 @@ A file's **kind** comes from its suffix, compared case-insensitively. It is not 
 | `.html` | `text/html` | `.zip` | `file/zip` |
 | anything else | `file` | | |
 
-**File facts** are values the engine computes from a file's bytes. Node hosts never compute them. (A node body may also report its own values with `fact()`; those are *node facts*, part of the node's result.) `facts(f)` always has `bytes` (the size) and `kind`. Images (`image/png`, `image/jpeg`, `image/webp`, `image/gif`) add:
+**File facts** are values the engine computes from a file's bytes. Node hosts never compute them. (A node body may also report its own values with `fact()`; those are *node facts*, part of the node's result.) [facts.md](facts.md) defines every file fact, images included; the table above stays normative here, and the rest of this section is an informative summary. `facts(f)` always has `bytes` (the size) and `kind`. Images (`image/png`, `image/jpeg`, `image/webp`, `image/gif`) add:
 
 - `width`, `height`: pixels of the first frame;
 - `has_alpha`: true when the encoding can carry transparency: an alpha channel, a PNG `tRNS` chunk, a WebP alpha flag, or a GIF transparent index;
 - `opaque`: true when `has_alpha` is false or every pixel of the first frame is fully opaque.
 
-Audio and video file facts are defined in `facts.md` when the runner lands. File facts enter an identity only through expressions that read them (`facts(x).width` in a `with:` value).
+WAV audio (`audio/wav`) adds `duration`; MP4 (`video/mp4`) and Matroska or WebM video (`video/x-matroska`, `video/webm`) add `width`, `height`, `fps`, `duration`, `frames` and `has_alpha`, each only when the file gives it. A file whose bytes do not decode under its kind's rule is refused. File facts enter an identity only through expressions that read them (`facts(x).width` in a `with:` value).
 
 ## 5. Text
 
@@ -257,7 +257,7 @@ stage-gen's gnode computes identities differently. Every gnode digest changes, a
 | Text read from the cache uses universal newlines; inputs keep their line endings; a byte-order mark is kept. | One rule for every text read (§5). |
 | YAML 1.1 through PyYAML: `yes`/`on` become booleans, `017` becomes 15, dates become dates, duplicate keys silently overwrite. | The strict YAML subset in [yaml.md](yaml.md). |
 | `True == 1` in conditions. | Booleans are not numbers. |
-| Facts come from PIL, and from ffprobe when it happens to be installed. | The engine computes facts (§4). |
+| Facts come from PIL, and from ffprobe when it happens to be installed. | The engine computes facts itself, the same everywhere ([facts.md](facts.md) §7). |
 
 The overview's first draft proposed a "Merkle chain" in which upstream step identities enter downstream identities. FX keeps content addressing (§8) instead. Content addressing is already a Merkle structure over content. Unlike a chain of identities, it lets an upstream rerun that writes the same bytes keep everything downstream cached. A downstream identity that cannot be known until its upstream runs is inherent: the content does not exist yet.
 

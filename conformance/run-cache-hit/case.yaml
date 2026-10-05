@@ -1,0 +1,38 @@
+# The result cache across run folders. The first run, into `runs/one`, runs every step: each
+# `node_finished` says `cache: miss`. The same plan run into `runs/two` finds every step's
+# result in the project's store (same identity, same read set), so each says `cache: hit` and
+# no body runs. Both runs place the same output bytes (`all.txt` saved twice, which must
+# match), and both records carry the same plan digest.
+steps:
+- argv:
+  - run
+  - case
+  - --routes
+  - routes.yaml
+  - --inputs
+  - inputs.yaml
+  - --run
+  - runs/one
+- argv:
+  - project
+  - runs/one
+  save: project-one.json
+  json: true
+- argv:
+  - run
+  - case
+  - --routes
+  - routes.yaml
+  - --inputs
+  - inputs.yaml
+  - --run
+  - runs/two
+- argv:
+  - project
+  - runs/two
+  save: project-two.json
+  json: true
+- read: runs/one/outputs/all.txt
+  save: all.txt
+- read: runs/two/outputs/all.txt
+  save: all.txt

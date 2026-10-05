@@ -23,10 +23,11 @@ pub fn run(args: &NodesArgs) -> Result<u8, Error> {
     sorted.sort_by(|a, b| (&a.name, a.major).cmp(&(&b.name, b.major)));
     let mut catalog: Option<RouteTable> = None;
     for builtin in sorted {
-        if let Some(wanted) = &args.type_ {
-            if wanted != &builtin.name && wanted != &builtin.uses {
-                continue;
-            }
+        if let Some(wanted) = &args.type_
+            && wanted != &builtin.name
+            && wanted != &builtin.uses
+        {
+            continue;
         }
         let spec = &builtin.spec;
         print_line(&format!("{:34} {}", builtin.uses, spec.kind_word()));

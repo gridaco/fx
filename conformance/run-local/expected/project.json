@@ -1,0 +1,152 @@
+{
+ "instances": {
+  "check#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": null,
+    "verdict": "accept",
+    "words": 1
+   },
+   "path": "check",
+   "state": "succeeded"
+  },
+  "entries#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": null
+   },
+   "path": "entries",
+   "state": "succeeded"
+  },
+  "marks#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": null
+   },
+   "path": "marks",
+   "state": "succeeded"
+  },
+  "parts#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": null
+   },
+   "path": "parts",
+   "state": "succeeded"
+  },
+  "report#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": null
+   },
+   "path": "report",
+   "state": "succeeded"
+  },
+  "said#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": null,
+    "letters": 4
+   },
+   "path": "said",
+   "state": "succeeded"
+  }
+ },
+ "run": {
+  "run_finished": {
+   "charged_usd": 0,
+   "event": "run_finished",
+   "failed": [],
+   "incomplete": false,
+   "ok": true,
+   "outputs": {
+    "entries": {
+     "collection": [
+      [
+       "first",
+       {
+        "file": {
+         "digest": "8254c329a92850f6d539dd376f4816ee2764517da5e0235514af433164480d7a",
+         "key": "first",
+         "kind": "text/plain",
+         "name": "entries/entries[first]",
+         "size": 1
+        }
+       }
+      ],
+      [
+       "last",
+       {
+        "file": {
+         "digest": "3f79bb7b435b05321651daefd374cdc681dc06faa65e374e38337b88ca046dea",
+         "key": "last",
+         "kind": "text/plain",
+         "name": "entries/entries[last]",
+         "size": 1
+        }
+       }
+      ]
+     ]
+    },
+    "marks": {
+     "file": {
+      "digest": "0715998f9508d354360501325c736090efd830a37abb8c1b0e4944f37a216087",
+      "kind": "annotations",
+      "name": "marks/annotations",
+      "size": 509
+     }
+    },
+    "parts": {
+     "list": [
+      {
+       "file": {
+        "digest": "8254c329a92850f6d539dd376f4816ee2764517da5e0235514af433164480d7a",
+        "kind": "text/plain",
+        "name": "parts/parts[0]",
+        "size": 1
+       }
+      },
+      {
+       "file": {
+        "digest": "de7d1b721a1e0632b7cf04edf5032c8ecffa9f9a08492152b926f1a5a7e765d7",
+        "kind": "text/plain",
+        "name": "parts/parts[1]",
+        "size": 1
+       }
+      }
+     ]
+    },
+    "report": {
+     "file": {
+      "digest": "64539c5ef4a1962c983d42828570fe4ae3195a5bafeb6daf82c899901478fef9",
+      "kind": "json",
+      "name": "report/report",
+      "size": 125
+     }
+    },
+    "said": {
+     "file": {
+      "digest": "aa877fb15ca5e9b80bcab3dc3a758a96d4c8889bc19eb828f848ab720d99a7d7",
+      "kind": "text/plain",
+      "name": "said/text",
+      "size": 5
+     }
+    }
+   },
+   "plan": "4b411f1e30781e9d60d117075bf405daff03445ff1932346e4572d84503f9f98",
+   "stopped": null
+  },
+  "run_started": {
+   "ceiling_usd": null,
+   "charged_usd": 0,
+   "estimate": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "event": "run_started",
+   "plan": "4b411f1e30781e9d60d117075bf405daff03445ff1932346e4572d84503f9f98",
+   "resumed": false,
+   "workflow": "case"
+  }
+ }
+}

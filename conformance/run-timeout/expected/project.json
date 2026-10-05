@@ -1,0 +1,35 @@
+{
+ "instances": {
+  "nap#1": {
+   "error": "ran past 1 seconds",
+   "path": "nap",
+   "state": "failed"
+  }
+ },
+ "run": {
+  "run_finished": {
+   "charged_usd": 0,
+   "event": "run_finished",
+   "failed": [
+    "nap#1"
+   ],
+   "incomplete": false,
+   "ok": false,
+   "outputs": {},
+   "plan": "cbf2fe924b8df922563ec6cb73c8e0cdd4cd0347ecabc1e63b3d8c5edf91f92b",
+   "stopped": null
+  },
+  "run_started": {
+   "ceiling_usd": null,
+   "charged_usd": 0,
+   "estimate": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "event": "run_started",
+   "plan": "cbf2fe924b8df922563ec6cb73c8e0cdd4cd0347ecabc1e63b3d8c5edf91f92b",
+   "resumed": false,
+   "workflow": "case"
+  }
+ }
+}

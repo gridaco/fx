@@ -1574,4 +1574,396 @@ steps:
         problems(&expansion),
         ["build.j.with.accept_take: build.k refers back to itself"]
     );
+    // The same when the judges are settled on trial: e reaches d through its judge k, so d's
+    // judges are held while e is under way; n, begun after that, reads d and settles them; j
+    // reads e, which waits for j through n. e began before the judges were held: a real cycle.
+    let expansion = project.expand(
+        "\
+fx: workflow/v1
+id: case
+title: A real cycle through a trial
+steps:
+  e:
+    uses: ./nodes/cases.py#shout
+    with: { text: \"${{ steps.k.take }} ${{ steps.n.outputs.text }}\" }
+  d:
+    uses: ./nodes/cases.py#shout
+    with: { text: x }
+  k:
+    uses: ./nodes/cases.py#verdict
+    judges: d
+    with: { subject: \"${{ steps.d.outputs.text }}\", accept_take: 1 }
+  n:
+    uses: ./nodes/cases.py#join
+    with: { parts: { t: \"${{ steps.d.outputs.text }}\" } }
+  j:
+    uses: ./nodes/cases.py#verdict
+    judges: d
+    with: { subject: \"${{ steps.d.outputs.text }}\", accept_take: \"${{ steps.e.outputs.text }}\" }
+",
+    );
+    assert_eq!(
+        problems(&expansion),
+        ["j.with.accept_take: e refers back to itself"]
+    );
+    assert_eq!(ids(&expansion), ["d#1", "k#1", "j#1", "n#1", "e#1"]);
+    assert_eq!(
+        get(&expansion, "n#1").waiting_on(),
+        set(&["d#1", "j#1", "k#1"])
+    );
+}
+
+// --- a judge's evidence ----------------------------------------------------------------------
+//
+// A judge that judges the first step of a chain and reads its last reads its own evidence: the
+// chain reads the judged take as it is, never waiting for the judge. When the judge expands first
+// (a take whose `until` reads it) the chain is reached inside it. When a step outside reads the
+// group while its `until` waits, the next take's members expand in declaration order instead: the
+// judged step first, its judge held (the outside reader is unfinished), then the next member
+// reads the judged step, which settles the judge, which reads that member back. Both must plan
+// as stage-gen's engine plans them: no cycle, the same graph.
+
+/// A step joining one text, read from `SOURCE`.
+const JOIN: &str =
+    "{ uses: ./nodes/cases.py#join, with: { parts: { t: \"${{ steps.SOURCE.outputs.text }}\" } } }";
+
+/// A regenerating group: `STEPS`, then a judge of `one` reading `LAST`; `after` reads `LAST`.
+const EVIDENCE: &str = "\
+fx: workflow/v1
+id: case
+title: Evidence
+steps:
+  part:
+    steps:
+STEPS      review:
+        uses: ./nodes/cases.py#verdict
+        judges: one
+        with: { subject: \"${{ steps.LAST.outputs.text }}\", accept_take: 1 }
+    regenerate: { max: 2, until: \"${{ steps.review.facts.verdict == 'accept' }}\" }
+  after:
+    uses: ./nodes/cases.py#join
+    with: { parts: { t: \"${{ steps.part.LAST.outputs.text }}\" } }
+";
+
+const CHAIN: [&str; 5] = ["one", "two", "three", "four", "five"];
+
+/// [`EVIDENCE`] with a chain of `length` steps, each reading the one before.
+fn evidence_chain(length: usize) -> String {
+    let chain = &CHAIN[..length];
+    let mut steps =
+        String::from("      one: { uses: ./nodes/cases.py#shout, with: { text: x } }\n");
+    for pair in chain.windows(2) {
+        steps += &format!("      {}: {}\n", pair[1], JOIN.replace("SOURCE", pair[0]));
+    }
+    EVIDENCE
+        .replace("STEPS", &steps)
+        .replace("LAST", chain[length - 1])
+}
+
+/// The ids, as a set.
+fn id_set(ids: &[String]) -> BTreeSet<String> {
+    ids.iter().cloned().collect()
+}
+
+#[test]
+fn a_judge_reads_its_evidence_in_every_take() {
+    let project = Project::new();
+    // Two steps is the rigged character's `assemble`, three its `part` (and the smallest case
+    // reported), four and five longer chains.
+    for length in 2..=5 {
+        let expansion = project.expand(&evidence_chain(length));
+        assert!(
+            expansion.problems.is_empty(),
+            "{length}: {:?}",
+            problems(&expansion)
+        );
+        let chain = &CHAIN[..length];
+        let mut expected = Vec::new();
+        for take in 1..=2 {
+            for name in chain.iter().chain(&["review"]) {
+                expected.push(format!("part.{name}#{take}.1"));
+            }
+        }
+        expected.push("after#1".to_string());
+        assert_eq!(ids(&expansion), expected, "{length}");
+        for take in 1..=2 {
+            let id = |name: &str| format!("part.{name}#{take}.1");
+            // Each link reads the one before as it is, the judged take included.
+            for pair in chain.windows(2) {
+                assert_eq!(
+                    get(&expansion, &id(pair[1])).waiting_on(),
+                    id_set(&[id(pair[0])]),
+                    "{length}, take {take}"
+                );
+            }
+            let review = get(&expansion, &id("review"));
+            assert_eq!(review.judges, Some(id("one")), "{length}, take {take}");
+            assert_eq!(review.waiting_on(), id_set(&[id(chain[length - 1])]));
+            assert_eq!(get(&expansion, &id("one")).judged_by, [id("review")]);
+        }
+    }
+
+    // While running: take 2's judged step has a result, and its evidence reads it.
+    let mut project = Project::new();
+    project.result("part.one#2.1", made(&[("text", image("one"))], json!({})));
+    let expansion = project.expand(&evidence_chain(3));
+    assert!(expansion.problems.is_empty(), "{:?}", problems(&expansion));
+    let two = get(&expansion, "part.two#2.1");
+    assert_eq!(two.reads, set(&["part.one#2.1"]));
+    assert!(two.waiting_on().is_empty());
+    assert!(two.identity.is_some());
+    assert_eq!(
+        get(&expansion, "part.review#2.1").waiting_on(),
+        set(&["part.three#2.1"])
+    );
+}
+
+#[test]
+fn a_judge_reads_its_evidence_in_a_nested_regenerating_group() {
+    let project = Project::new();
+    let expansion = project.expand(
+        "\
+fx: workflow/v1
+id: case
+title: Nested
+steps:
+  outer:
+    steps:
+      part:
+        steps:
+          one: { uses: ./nodes/cases.py#shout, with: { text: x } }
+          two: { uses: ./nodes/cases.py#join, with: { parts: { t: \"${{ steps.one.outputs.text }}\" } } }
+          three: { uses: ./nodes/cases.py#join, with: { parts: { t: \"${{ steps.two.outputs.text }}\" } } }
+          review:
+            uses: ./nodes/cases.py#verdict
+            judges: one
+            with: { subject: \"${{ steps.three.outputs.text }}\", accept_take: 1 }
+        regenerate: { max: 2, until: \"${{ steps.review.facts.verdict == 'accept' }}\" }
+      done: { uses: ./nodes/cases.py#join, with: { parts: { t: \"${{ steps.part.three.outputs.text }}\" } } }
+      audit:
+        uses: ./nodes/cases.py#verdict
+        judges: done
+        with: { subject: \"${{ steps.done.outputs.text }}\", accept_take: 1 }
+    regenerate: { max: 2, until: \"${{ steps.audit.facts.verdict == 'accept' }}\" }
+  after: { uses: ./nodes/cases.py#join, with: { parts: { t: \"${{ steps.outer.done.outputs.text }}\" } } }
+",
+    );
+    assert!(expansion.problems.is_empty(), "{:?}", problems(&expansion));
+    let mut expected = Vec::new();
+    for outer in 1..=2 {
+        for inner in 1..=2 {
+            for name in ["one", "two", "three", "review"] {
+                expected.push(format!("outer.part.{name}#{outer}.{inner}.1"));
+            }
+        }
+        expected.push(format!("outer.done#{outer}.1"));
+        expected.push(format!("outer.audit#{outer}.1"));
+    }
+    expected.push("after#1".to_string());
+    assert_eq!(ids(&expansion), expected);
+    for outer in 1..=2 {
+        for inner in 1..=2 {
+            let id = |name: &str| format!("outer.part.{name}#{outer}.{inner}.1");
+            assert_eq!(
+                get(&expansion, &id("two")).waiting_on(),
+                id_set(&[id("one")])
+            );
+            assert_eq!(
+                get(&expansion, &id("three")).waiting_on(),
+                id_set(&[id("two")])
+            );
+            let review = get(&expansion, &id("review"));
+            assert_eq!(review.judges, Some(id("one")));
+            assert_eq!(review.waiting_on(), id_set(&[id("three")]));
+        }
+    }
+}
+
+#[test]
+fn a_judge_reads_its_evidence_in_the_rigged_character_shape() {
+    let project = Project::new();
+    // The guide's rigged character (docs/guide/examples/rigged-character), its types made local:
+    // parts that regenerate inside a build that regenerates, each part's review judging its mesh
+    // by renders of the measured mesh, and an assembly whose review judges the oriented mesh by
+    // its renders.
+    let expansion = project.expand(
+        "\
+fx: workflow/v1
+id: case
+title: Rigged
+steps:
+  body:
+    steps:
+      part:
+        for_each: [head, torso]
+        key: ${{ item }}
+        steps:
+          mesh: { uses: ./nodes/cases.py#shout, with: { text: \"${{ item }}\" } }
+          measure: { uses: ./nodes/cases.py#join, with: { parts: { m: \"${{ steps.mesh.outputs.text }}\" } } }
+          renders: { uses: ./nodes/cases.py#join, with: { parts: { m: \"${{ steps.measure.outputs.text }}\" } } }
+          review:
+            uses: ./nodes/cases.py#verdict
+            judges: mesh
+            with: { subject: \"${{ steps.renders.outputs.text }}\", accept_take: 1 }
+        regenerate: { max: 2, until: \"${{ steps.review.facts.verdict == 'accept' }}\" }
+      assemble:
+        steps:
+          orient: { uses: ./nodes/cases.py#join, with: { parts: \"${{ steps.part.*.measure.outputs.text }}\" } }
+          renders: { uses: ./nodes/cases.py#join, with: { parts: { o: \"${{ steps.orient.outputs.text }}\" } } }
+          review:
+            uses: ./nodes/cases.py#verdict
+            judges: orient
+            with: { subject: \"${{ steps.renders.outputs.text }}\", accept_take: 1 }
+        regenerate: { max: 2, until: \"${{ steps.review.facts.verdict == 'accept' }}\" }
+      rig: { uses: ./nodes/cases.py#join, with: { parts: { o: \"${{ steps.assemble.orient.outputs.text }}\" } } }
+      audit:
+        uses: ./nodes/cases.py#verdict
+        judges: rig
+        with: { subject: \"${{ steps.rig.outputs.text }}\", accept_take: 1 }
+    regenerate: { max: 2, until: \"${{ steps.audit.facts.verdict == 'accept' }}\" }
+  export: { uses: ./nodes/cases.py#join, with: { parts: { r: \"${{ steps.body.rig.outputs.text }}\" } } }
+  admit:
+    uses: ./nodes/cases.py#verdict
+    judges: export
+    with: { subject: \"${{ steps.export.outputs.text }}\", accept_take: 1 }
+",
+    );
+    assert!(expansion.problems.is_empty(), "{:?}", problems(&expansion));
+    let mut expected = Vec::new();
+    for build in 1..=2 {
+        for take in 1..=2 {
+            for role in ["head", "torso"] {
+                for name in ["mesh", "measure", "renders", "review"] {
+                    expected.push(format!("body.part['{role}'].{name}#{build}.{take}.1"));
+                }
+            }
+        }
+        for take in 1..=2 {
+            for name in ["orient", "renders", "review"] {
+                expected.push(format!("body.assemble.{name}#{build}.{take}.1"));
+            }
+        }
+        expected.push(format!("body.rig#{build}.1"));
+        expected.push(format!("body.audit#{build}.1"));
+    }
+    expected.extend(["export#1".to_string(), "admit#1".to_string()]);
+    assert_eq!(ids(&expansion), expected);
+    for build in 1..=2 {
+        for take in 1..=2 {
+            for role in ["head", "torso"] {
+                let id = |name: &str| format!("body.part['{role}'].{name}#{build}.{take}.1");
+                assert_eq!(
+                    get(&expansion, &id("measure")).waiting_on(),
+                    id_set(&[id("mesh")])
+                );
+                assert_eq!(
+                    get(&expansion, &id("renders")).waiting_on(),
+                    id_set(&[id("measure")])
+                );
+                let review = get(&expansion, &id("review"));
+                assert_eq!(review.judges, Some(id("mesh")));
+                assert_eq!(review.waiting_on(), id_set(&[id("renders")]));
+            }
+            let id = |name: &str| format!("body.assemble.{name}#{build}.{take}.1");
+            assert_eq!(
+                get(&expansion, &id("renders")).waiting_on(),
+                id_set(&[id("orient")])
+            );
+            let review = get(&expansion, &id("review"));
+            assert_eq!(review.judges, Some(id("orient")));
+            assert_eq!(review.waiting_on(), id_set(&[id("renders")]));
+        }
+    }
+}
+
+#[test]
+fn a_later_reader_waits_for_a_judge_unless_it_is_the_judges_evidence() {
+    let project = Project::new();
+    // The judge reads only the take it judges: `two` is no evidence, so in take 2 too it waits
+    // for the judge it settles.
+    let expansion = project.expand(
+        "\
+fx: workflow/v1
+id: case
+title: Not evidence
+steps:
+  part:
+    steps:
+      one: { uses: ./nodes/cases.py#shout, with: { text: x } }
+      two: { uses: ./nodes/cases.py#join, with: { parts: { t: \"${{ steps.one.outputs.text }}\" } } }
+      review:
+        uses: ./nodes/cases.py#verdict
+        judges: one
+        with: { subject: \"${{ steps.one.outputs.text }}\", accept_take: 1 }
+    regenerate: { max: 2, until: \"${{ steps.review.facts.verdict == 'accept' }}\" }
+  after: { uses: ./nodes/cases.py#join, with: { parts: { t: \"${{ steps.part.two.outputs.text }}\" } } }
+",
+    );
+    assert!(expansion.problems.is_empty(), "{:?}", problems(&expansion));
+    assert_eq!(
+        ids(&expansion),
+        [
+            "part.one#1.1",
+            "part.review#1.1",
+            "part.two#1.1",
+            "part.one#2.1",
+            "part.review#2.1",
+            "part.two#2.1",
+            "after#1"
+        ]
+    );
+    for take in 1..=2 {
+        assert_eq!(
+            get(&expansion, &format!("part.two#{take}.1")).waiting_on(),
+            set(&[
+                &format!("part.one#{take}.1"),
+                &format!("part.review#{take}.1")
+            ])
+        );
+    }
+
+    // Evidence named by `needs:` counts too: the judge needs `two`, which reads the judged take
+    // as it is, and needs all of it, not the instances made so far.
+    let expansion = project.expand(
+        "\
+fx: workflow/v1
+id: case
+title: Needs
+steps:
+  part:
+    steps:
+      one: { uses: ./nodes/cases.py#shout, with: { text: x } }
+      two: { uses: ./nodes/cases.py#join, with: { parts: { t: \"${{ steps.one.outputs.text }}\" } } }
+      review:
+        uses: ./nodes/cases.py#verdict
+        judges: one
+        needs: [two]
+        with: { subject: \"${{ steps.one.outputs.text }}\", accept_take: 1 }
+    regenerate: { max: 2, until: \"${{ steps.review.facts.verdict == 'accept' }}\" }
+  after: { uses: ./nodes/cases.py#join, with: { parts: { t: \"${{ steps.part.two.outputs.text }}\" } } }
+",
+    );
+    assert!(expansion.problems.is_empty(), "{:?}", problems(&expansion));
+    assert_eq!(
+        ids(&expansion),
+        [
+            "part.one#1.1",
+            "part.two#1.1",
+            "part.review#1.1",
+            "part.one#2.1",
+            "part.two#2.1",
+            "part.review#2.1",
+            "after#1"
+        ]
+    );
+    for take in 1..=2 {
+        assert_eq!(
+            get(&expansion, &format!("part.two#{take}.1")).waiting_on(),
+            set(&[&format!("part.one#{take}.1")])
+        );
+        assert_eq!(
+            get(&expansion, &format!("part.review#{take}.1")).needs,
+            [format!("part.two#{take}.1")]
+        );
+    }
 }

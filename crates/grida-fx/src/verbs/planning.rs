@@ -2,8 +2,10 @@
 //!
 //! Each: build a [`grida_fx_core::project::PlanRequest`] from the arguments (cwd = the process's
 //! working directory, canonical; `--max-usd` through `Usd::parse`), make the planner with a lazy
-//! Python host for the home project, make the plan with no plan-time runner (step 2) and
-//! `NoCache`, then print:
+//! Python host for the home project, then make the plan through the engine
+//! ([`crate::engine::plan`]): `at: plan` steps run on the plan-time runner, and `cached` is what
+//! the planning project's store holds. Planning never writes a run folder and never spends (an
+//! `at: plan` step is never paid). Then print:
 //! - `plan`: [`grida_fx_core::plan::render::render`] + `\n`, or with `--json` the graph; exit 1
 //!   with `--check` and problems; with `--expect-cached`, `not cached: <ids, ", " or "pending
 //!   repeats">` and exit 1 when anything live is uncached, unknown or pending;
@@ -13,9 +15,8 @@
 use crate::cli::PlanArgs;
 use crate::print::{print_json, print_line};
 use grida_fx_core::Error;
-use grida_fx_core::host::NoCache;
 use grida_fx_core::money::Usd;
-use grida_fx_core::plan::{Plan, make_plan, output, render};
+use grida_fx_core::plan::{Plan, output, render};
 use grida_fx_core::project::{PlanRequest, make_planner};
 use std::path::PathBuf;
 
@@ -33,7 +34,11 @@ pub fn run(verb: PlanVerb, args: &PlanArgs) -> Result<u8, Error> {
     let request = request(args)?;
     let mut host = crate::print::host();
     let mut planner = make_planner(&request, &mut host)?;
-    let plan = make_plan(&mut planner, &mut host, None, &NoCache)?;
+    let runtime = crate::engine::runtime()?;
+    let engine = crate::engine::engine_for(&runtime, &planner, false)?;
+    let plan = crate::engine::plan(&engine, &mut planner, &mut host);
+    crate::engine::shutdown(&runtime, &engine);
+    let plan = plan?;
     let refused = u8::from(!plan.ok());
     Ok(match verb {
         PlanVerb::Plan => {
@@ -43,11 +48,11 @@ pub fn run(verb: PlanVerb, args: &PlanArgs) -> Result<u8, Error> {
                 print_line(&render::render(&plan, &planner));
             }
             let mut status = if args.check { refused } else { 0 };
-            if args.expect_cached {
-                if let Some(line) = not_cached(&plan) {
-                    print_line(&line);
-                    status = 1;
-                }
+            if args.expect_cached
+                && let Some(line) = not_cached(&plan)
+            {
+                print_line(&line);
+                status = 1;
             }
             status
         }
@@ -84,7 +89,14 @@ fn request(args: &PlanArgs) -> Result<PlanRequest, Error> {
 /// `--max-usd`, read with the money rules (identity.md §12): a usage error when it is not an
 /// amount.
 fn max_usd(text: &str) -> Result<Usd, Error> {
-    Usd::parse(text).map_err(|reason| Error::usage(format!("--max-usd {text}: {reason}")))
+    amount("--max-usd", text)
+}
+
+/// An amount given to `option` (`--max-usd`, `--yes-up-to`), read with the money rules
+/// (identity.md §12): a negative, non-finite or over-precise amount is a usage error
+/// (`<option> <text>: <reason>`).
+pub(crate) fn amount(option: &str, text: &str) -> Result<Usd, Error> {
+    Usd::parse(text).map_err(|reason| Error::usage(format!("{option} {text}: {reason}")))
 }
 
 /// The process's working directory, absolute with symbolic links resolved.
@@ -263,5 +275,14 @@ mod tests {
         let error = max_usd("nan").unwrap_err();
         assert_eq!(error.kind, grida_fx_core::ErrorKind::Usage);
         assert!(error.message.starts_with("--max-usd nan: "), "{error}");
+        for text in ["-1", "inf", "1e400", "0.0000001", "x"] {
+            let error = amount("--yes-up-to", text).unwrap_err();
+            assert_eq!(error.kind, grida_fx_core::ErrorKind::Usage);
+            assert!(
+                error.message.starts_with(&format!("--yes-up-to {text}: ")),
+                "{error}"
+            );
+        }
+        assert_eq!(amount("--yes-up-to", "0.5").unwrap(), Usd(500_000));
     }
 }

@@ -1,0 +1,53 @@
+{
+ "instances": {
+  "a#1": {
+   "cache": "hit",
+   "facts": {
+    "cost_usd": null
+   },
+   "path": "a",
+   "state": "succeeded"
+  },
+  "b#1": {
+   "cache": "hit",
+   "facts": {
+    "cost_usd": null
+   },
+   "path": "b",
+   "state": "succeeded"
+  }
+ },
+ "run": {
+  "run_finished": {
+   "charged_usd": 0,
+   "event": "run_finished",
+   "failed": [],
+   "incomplete": false,
+   "ok": true,
+   "outputs": {
+    "out": {
+     "file": {
+      "digest": "afff2c113c07ac134a8b7d7ad4fc9e42f03ddf71cbf0d8fe4c7de28522c6ad80",
+      "kind": "text/plain",
+      "name": "b/text",
+      "size": 21
+     }
+    }
+   },
+   "plan": "8a1fa9996c72f5d12c02fdd27ebe85045225e60b719f49f0026b1643c5cdcfbb",
+   "stopped": null
+  },
+  "run_started": {
+   "ceiling_usd": null,
+   "charged_usd": 0,
+   "estimate": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "event": "run_started",
+   "plan": "8a1fa9996c72f5d12c02fdd27ebe85045225e60b719f49f0026b1643c5cdcfbb",
+   "resumed": false,
+   "workflow": "case"
+  }
+ }
+}

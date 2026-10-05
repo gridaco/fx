@@ -1,0 +1,61 @@
+{
+ "estimate": {
+  "ceiling_usd": null,
+  "high_usd": 0,
+  "low_usd": 0
+ },
+ "instances": [
+  {
+   "id": "describe#1",
+   "identity": "895e8ede1de7b278c018cfb1bd0321a7f7989dfe9f0c1d7e1669a32658e3dfd9",
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "describe",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {},
+   "state": "planned",
+   "step": "describe",
+   "take": [
+    1
+   ],
+   "type": "fx/package@1.1",
+   "uses": "fx/package@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "files": {
+     "clip.mp4": {
+      "file": "dc6118be05f87450cb663b9d42c66cb16d0e5fe2f5114c918c972db38fda589d"
+     }
+    },
+    "manifest": {
+     "fps": 29.97003,
+     "frames": 30,
+     "label": "64x48, 30 frames at 29.97003 fps for 1.001 s; voice 0.125 s, 2044 bytes of audio/wav",
+     "seconds": 0.125,
+     "width": 64
+    }
+   }
+  }
+ ],
+ "kind": "fx-graph-v1",
+ "pending": [],
+ "problems": [],
+ "types": {
+  "fx/package@1": {
+   "identity": "fx/package@1.1"
+  }
+ },
+ "workflow": {
+  "file": "workflows/case.yaml",
+  "id": "case",
+  "title": "Media facts in expressions"
+ }
+}

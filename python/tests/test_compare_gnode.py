@@ -491,12 +491,33 @@ def test_compare_documents_of_other_types() -> None:
 
 
 def test_a_known_path_covers_what_is_under_it() -> None:
-    entry = ("at-plan", "expand", "$.instances")
-    assert tool._is_known("at-plan", "expand", "$.instances") == entry
-    assert tool._is_known("at-plan", "expand", "$.instances[count#1].state") == entry
-    assert tool._is_known("at-plan", "expand", "$.instances_more") is None
-    assert tool._is_known("at-plan", "price", "$.instances") is None
-    assert tool._is_known("linear", "expand", "$.instances") is None
+    entry = ("lock-drift", "expand", "$.problems")
+    assert tool._is_known("lock-drift", "expand", "$.problems") == entry
+    assert tool._is_known("lock-drift", "expand", "$.problems[0]") == entry
+    assert tool._is_known("lock-drift", "expand", "$.problems_more") is None
+    assert tool._is_known("lock-drift", "price", "$.problems") is None
+    assert tool._is_known("linear", "expand", "$.problems") is None
+
+
+def test_a_known_path_may_stand_for_any_member(monkeypatch: pytest.MonkeyPatch) -> None:
+    entry = ("c", "project.json", "$.instances[*].facts.cost_usd")
+    monkeypatch.setattr(tool, "KNOWN_DIFFERENCES", [entry])
+    for path in (
+        "$.instances[a#1].facts.cost_usd",
+        "$.instances[\"loud['ada']#1\"].facts.cost_usd",
+        '$.instances["x\\"]#1"].facts.cost_usd.deeper',
+        "$.instances[0].facts.cost_usd[1]",
+    ):
+        assert tool._is_known("c", "project.json", path) == entry, path
+    for path in (
+        "$.instances[a#1].facts",
+        "$.instances[a#1].facts.words",
+        "$.instances.facts.cost_usd",
+        "$.instances[a#1][b].facts.cost_usd",
+        "$.instances[a#1].facts.cost_usd_more",
+    ):
+        assert tool._is_known("c", "project.json", path) is None, path
+    assert tool._is_known("c", "other.json", "$.instances[a#1].facts.cost_usd") is None
 
 
 def test_a_known_document_covers_nothing_inside_it() -> None:
@@ -532,10 +553,17 @@ def test_decisions_no_case_exercises_are_recorded(decision: str) -> None:
 
 
 def test_every_known_difference_names_a_case_of_the_suite() -> None:
-    for case, verb, path in tool.KNOWN_DIFFERENCES:
+    for case, what, path in tool.KNOWN_DIFFERENCES:
         assert (REPO / "conformance" / case / "case.yaml").is_file(), case
-        assert verb in tool.VERBS
-        assert path in (tool.STATUS, tool.ROOT) or path.startswith("$.")
+        steps = tool.conformance.load_case(REPO / "conformance" / case)
+        if tool.is_run_case(steps):
+            # Run mode: what a step saves, or `step <n>` for one that saves nothing.
+            names = {step["save"] for step in steps if "save" in step}
+            names |= {f"step {n}" for n, step in enumerate(steps, 1) if "argv" in step}
+            assert what in names, (case, what)
+        else:
+            assert what in tool.VERBS, (case, what)
+        assert path in (tool.STATUS, tool.ROOT) or path.startswith(("$.", "$[")), path
         assert case not in tool.NOT_PORTED
 
 
@@ -545,6 +573,7 @@ def test_every_known_difference_names_a_case_of_the_suite() -> None:
 def test_case_steps_of_linear() -> None:
     assert tool.case_steps(REPO / "conformance" / "linear") == [
         ["expand", *LINEAR_ARGS],
+        ["identity", *LINEAR_ARGS],
         ["price", *LINEAR_ARGS],
     ]
 
@@ -567,9 +596,10 @@ def test_case_steps_carry_earlier_files_forward(tmp_path: Path) -> None:
         "- files: { a.txt: two }\n"
         "- argv: [price, case]\n",
     )
-    assert tool.case_steps(case) == [["expand", "case"], ["price", "case"]]
+    assert tool.case_steps(case) == [["expand", "case"], ["identity", "case"], ["price", "case"]]
     assert tool._case_plan(case) == [
         (3, ["expand", "case"], {"a.txt": "one", "fx.yaml": "fx: project/v1"}),
+        (4, ["identity", "case"], {"a.txt": "one", "fx.yaml": "fx: project/v1"}),
         (6, ["price", "case"], {"a.txt": "two", "fx.yaml": "fx: project/v1"}),
     ]
 
@@ -745,8 +775,27 @@ def engines(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
         return run
 
+    def fake_steps(side: str) -> Any:
+        def run(_: Any, case_in: Path, steps: list[dict[str, Any]]) -> list[Any]:
+            case = case_in.parent.name if case_in.name == "in" else case_in.name
+            state["calls"].append((side, case, "steps"))
+            if case_in.is_dir():
+                state["projects"].append((side, case, sorted(_tree(case_in))))
+            if (side, case) in state["steps"]:
+                return state["steps"][(side, case)]
+            # By default every step exits 0 and saves an empty text: both engines alike.
+            return [
+                tool.StepRun(0 if "argv" in step else None, "", b"" if "save" in step else None)
+                for step in steps
+            ]
+
+        return run
+
     monkeypatch.setattr(tool, "_run_gnode", fake("gnode"))
     monkeypatch.setattr(tool, "_run_fx", fake("fx"))
+    monkeypatch.setattr(tool, "run_gnode_steps", fake_steps("gnode"))
+    monkeypatch.setattr(tool, "run_fx_steps", fake_steps("fx"))
+    state["steps"] = {}
     state["gnode"][("linear", "expand")] = (0, json.dumps(GNODE_LINEAR), "")
     state["gnode"][("linear", "price")] = (0, json.dumps(GNODE_LINEAR_PRICE), "")
     state["fx"][("linear", "expand")] = (0, json.dumps(FX_LINEAR), "")
@@ -759,15 +808,39 @@ def _main(*args: str) -> int:
 
 
 def test_main_reports_same(engines: dict[str, Any], capsys: pytest.CaptureFixture[str]) -> None:
+    identities = {"count#1": "a1" * 32, "draw#1": None}
+    engines["gnode"][("linear", "identity")] = (0, json.dumps(identities), "")
+    engines["fx"][("linear", "identity")] = (
+        0,
+        json.dumps({**identities, "count#1": "b2" * 32}),
+        "",
+    )
     assert _main("linear") == 0
     out = capsys.readouterr().out.splitlines()
-    assert out == ["linear expand: same", "linear price: same", "compare_gnode: 2 same"]
+    assert out == [
+        "linear expand: same",
+        "linear identity: same",
+        "linear price: same",
+        "compare_gnode: 3 same",
+    ]
     assert engines["calls"] == [
         ("gnode", "linear", ["expand", *LINEAR_ARGS]),
         ("fx", "linear", ["expand", *LINEAR_ARGS]),
+        ("gnode", "linear", ["identity", *LINEAR_ARGS]),
+        ("fx", "linear", ["identity", *LINEAR_ARGS]),
         ("gnode", "linear", ["price", *LINEAR_ARGS]),
         ("fx", "linear", ["price", *LINEAR_ARGS]),
     ]
+
+
+def test_identities_compare_by_whether_they_are_known(
+    engines: dict[str, Any], capsys: pytest.CaptureFixture[str]
+) -> None:
+    engines["gnode"][("linear", "identity")] = (0, json.dumps({"count#1": "a1" * 32}), "")
+    engines["fx"][("linear", "identity")] = (0, json.dumps({"count#1": None}), "")
+    assert _main("linear") == 1
+    out = capsys.readouterr().out.splitlines()
+    assert out[1:3] == ["linear identity: DIFFERS", '  $["count#1"]: "<digest>" != null']
 
 
 def test_main_compares_every_case_of_the_suite(
@@ -776,19 +849,23 @@ def test_main_compares_every_case_of_the_suite(
     _main()
     out = capsys.readouterr().out.splitlines()
     assert "linear expand: same" in out
-    assert "run-project: SKIP no expand or price step" in out
+    # A run case is compared step by step, in run mode.
+    assert "run-project step 1 run: same" in out
+    assert "run-local said.txt (ported): same" in out
+    assert "cache-replay-miss step 1 run (ported): same" in out
     assert "yaml-strict: SKIP not ported: " + tool.NOT_PORTED["yaml-strict"] in out
+    assert "numbers: SKIP not ported: " + tool.NOT_PORTED["numbers"] in out
     # The cases this gnode checkout lacks are ported, every one with a step to compare (here
     # both stand-ins print nothing for them, alike).
     assert "lock-drift expand (step 1, ported): same" in out
     assert "linear expand (ported): same" not in out
-    planned = {
-        case.parent.name
-        for case in (REPO / "conformance").glob("*/case.yaml")
-        if tool.case_steps(case.parent)
-    }
+    cases = [case.parent for case in (REPO / "conformance").glob("*/case.yaml")]
+    run = {case.name for case in cases if tool.is_run_case(tool.conformance.load_case(case))}
+    planned = {case.name for case in cases if tool.case_steps(case)} - run
     assert {"linear", "at-plan", "facts", "lock-drift"} <= planned
-    assert {case for _, case, _ in engines["calls"]} == planned - set(tool.NOT_PORTED)
+    assert {"run-project", "run-local", "run-takes", "numbers", "cache-replay-miss"} <= run
+    called = {case for _, case, _ in engines["calls"]}
+    assert called == (planned | run) - set(tool.NOT_PORTED)
 
 
 def test_main_reports_a_difference_with_a_diff(
@@ -807,7 +884,7 @@ def test_main_reports_a_difference_with_a_diff(
     ]
     assert "--- gnode" in lines and "+++ grida-fx" in lines
     assert '-   "state": "planned",' in lines and '+   "state": "blocked",' in lines
-    assert lines[-2:] == ["linear price: same", "compare_gnode: 1 same, 1 differs"]
+    assert lines[-2:] == ["linear price: same", "compare_gnode: 2 same, 1 differs"]
 
 
 def test_main_shows_why_an_engine_printed_nothing(
@@ -824,31 +901,34 @@ def test_main_shows_why_an_engine_printed_nothing(
 def test_main_reports_known_differences(
     engines: dict[str, Any], capsys: pytest.CaptureFixture[str]
 ) -> None:
-    gnode = gnode_linear()
-    fx = fx_linear()
-    fx["instances"][0]["state"] = "planned"
-    gnode["instances"][0]["state"] = "done"
-    fx["problems"] = [{"where": "count", "message": "running an at: plan step is not available"}]
-    engines["gnode"][("at-plan", "expand")] = (0, json.dumps(gnode), "")
-    engines["fx"][("at-plan", "expand")] = (1, json.dumps(fx), "")
-    engines["gnode"][("at-plan", "price")] = (0, json.dumps(GNODE_LINEAR_PRICE), "")
-    engines["fx"][("at-plan", "price")] = (0, json.dumps(FX_LINEAR_PRICE), "")
-    assert _main("at-plan") == 0
+    # lock-drift's first expand differs on its problems only, a known difference; its second
+    # prints the same graph on both engines, so that step's known difference is not found.
+    engines["gnode"][("lock-drift", "expand")] = (1, json.dumps(_lock_drift("uses")), "")
+    engines["fx"][("lock-drift", "expand")] = (1, json.dumps(_lock_drift("b")), "")
+    engines["gnode"][("resource-missing", "expand")] = (0, json.dumps(GNODE_LINEAR), "")
+    engines["fx"][("resource-missing", "expand")] = (0, json.dumps(FX_LINEAR), "")
+    assert _main("lock-drift", "resource-missing") == 0
     out = capsys.readouterr().out.splitlines()
-    assert out[:2] == ["at-plan expand: known (3)", "at-plan price: same"]
+    assert out[:3] == [
+        "lock-drift expand (step 1, ported): known (1)",
+        "lock-drift expand (step 6, ported): known (1)",
+        "resource-missing expand (ported): same",
+    ]
     # The known differences no comparison found any more are noted.
-    assert "note: the known difference at-plan price status was not found" in out
-    assert "note: the known difference at-plan expand status was not found" not in out
-    assert out[-1] == "compare_gnode: 1 same, 1 known"
+    assert "note: the known difference resource-missing expand $ was not found" in out
+    assert not any(line.startswith("note: the known difference lock-drift") for line in out)
+    assert out[-1] == "compare_gnode: 1 same, 2 known"
 
 
 def test_a_known_difference_does_not_cover_a_crash(
     engines: dict[str, Any], capsys: pytest.CaptureFixture[str]
 ) -> None:
-    engines["gnode"][("at-plan", "expand")] = (0, json.dumps(GNODE_LINEAR), "")
-    engines["fx"][("at-plan", "expand")] = (2, "", "grida-fx: boom\n")
-    assert _main("at-plan") == 1
-    assert "at-plan expand: DIFFERS" in capsys.readouterr().out
+    engines["gnode"][("lock-drift", "expand")] = (1, json.dumps(_lock_drift("uses")), "")
+    engines["fx"][("lock-drift", "expand")] = (2, "", "grida-fx: boom\n")
+    assert _main("lock-drift") == 1
+    out = capsys.readouterr().out
+    assert "lock-drift expand (step 1, ported): DIFFERS\n  status: 1 != 2" in out
+    assert "  grida-fx said on stderr:\n    grida-fx: boom" in out
 
 
 def test_main_skips_cases_it_cannot_compare(
@@ -974,7 +1054,13 @@ def test_main_pair_mode(
     flags = ["--routes", "routes.yaml", "--inputs", "inputs.yaml"]
     assert _main(*pair, *flags) == 0
     out = capsys.readouterr().out.splitlines()
-    assert out == ["pair expand: same", "pair price: same", "compare_gnode: 2 same"]
+    # Neither stand-in prints identities: both exit 2, alike.
+    assert out == [
+        "pair expand: same",
+        "pair price: same",
+        "pair identity: same",
+        "compare_gnode: 3 same",
+    ]
     assert engines["calls"][:2] == [
         ("gnode", "linear", ["expand", *LINEAR_ARGS]),
         ("fx", "fx-linear", ["expand", *LINEAR_ARGS]),
@@ -1006,7 +1092,7 @@ def test_a_pair_that_differs_is_shown_the_decisions_no_case_exercises(
     note = out.index(heading)
     listed = [*tool.UNCASED_DECISIONS, tool.SPEC_CHANGES]
     assert out[note + 1 : note + 1 + len(listed)] == [f"  - {entry}" for entry in listed]
-    assert out[-1] == "compare_gnode: 1 same, 1 differs"
+    assert out[-1] == "compare_gnode: 2 same, 1 differs"
 
 
 @pytest.mark.parametrize(
@@ -1024,6 +1110,308 @@ def test_main_refuses_mixed_modes(args: list[str]) -> None:
     assert refused.value.code == 2
 
 
+# --- run mode -----------------------------------------------------------------------------------
+
+# `project runs/one` of the run-project case, as each engine prints it (abbreviated).
+GNODE_PROJECT: dict[str, Any] = {
+    "instances": {
+        "joined#1": {"cache": "miss", "facts": {}, "path": "joined", "state": "succeeded"},
+        "bang#1": {"error": "gnode/x@1 failed; see gnode nodes", "path": "bang", "state": "failed"},
+    },
+    "run": {
+        "run_finished": {
+            "charged_usd": 0.0,
+            "event": "run_finished",
+            "failed": ["bang#1"],
+            "graph_sha256": "8d" * 32,
+            "invocation_id": "6ec40721facb4db5",
+            "offset_ms": 5,
+            "ok": False,
+            "outputs": {"all": {"file": {"digest": "d2" * 32, "kind": "text/plain"}}},
+        },
+        "run_canceled": {"event": "run_canceled", "charged_usd": 0.0, "graph_sha256": "8d" * 32},
+    },
+}
+FX_PROJECT: dict[str, Any] = {
+    "instances": {
+        "joined#1": {
+            "cache": "miss",
+            "facts": {"cost_usd": None},
+            "path": "joined",
+            "state": "succeeded",
+        },
+        "bang#1": {"error": "fx/x@1 failed; see grida-fx nodes", "path": "bang", "state": "failed"},
+    },
+    "run": {
+        "run_finished": {
+            "charged_usd": 0,
+            "event": "run_finished",
+            "failed": ["bang#1"],
+            "plan": "26" * 32,
+            "ok": False,
+            "outputs": {"all": {"file": {"digest": "d2" * 32, "kind": "text/plain"}}},
+        },
+        "run_cancelled": {"event": "run_cancelled", "charged_usd": 0, "plan": "26" * 32},
+    },
+}
+
+
+def test_projects_normalise_alike_but_for_the_engines_cost_fact() -> None:
+    gnode = tool.normalise_project(copy.deepcopy(GNODE_PROJECT), "gnode")
+    fx = tool.normalise_project(copy.deepcopy(FX_PROJECT), "fx")
+    assert gnode["run"]["run_cancelled"] == {"event": "run_cancelled", "charged_usd": 0}
+    assert "graph_sha256" not in gnode["run"]["run_finished"]
+    assert "plan" not in fx["run"]["run_finished"]
+    # Output digests stay: both engines store the same bytes under the same digest.
+    assert fx["run"]["run_finished"]["outputs"]["all"]["file"]["digest"] == "d2" * 32
+    assert tool.compare(gnode, fx) == ['$.instances["joined#1"].facts.cost_usd: (absent) != null']
+
+
+def test_fx_project_errors_keep_their_names() -> None:
+    fx = copy.deepcopy(FX_PROJECT)
+    fx["instances"]["bang#1"]["error"] = "see gnode nodes"
+    assert tool.normalise_project(fx, "fx")["instances"]["bang#1"]["error"] == "see gnode nodes"
+    with pytest.raises(ValueError):
+        tool.normalise_project({}, "other")
+
+
+def test_identities_normalise_to_whether_they_are_known() -> None:
+    assert tool.normalise_identity({"a#1": "ab" * 32, "b#1": None, "c#1": "not a digest"}) == {
+        "a#1": tool.DIGEST,
+        "b#1": None,
+        "c#1": "not a digest",
+    }
+
+
+def test_events_normalise_without_envelope_and_sorted() -> None:
+    gnode = [
+        {
+            "event": "node_retry",
+            "id": "a#1",
+            "attempt": 1,
+            "error": "see gnode nodes",
+            "kind": "gnode-run-events-v1",
+            "schema_version": 1,
+            "graph_sha256": "8d" * 32,
+            "invocation_id": "x",
+            "offset_ms": 3,
+        },
+        {"event": "node_started", "id": "a#1", "identity": "ab" * 32, "with": {"offset_ms": 1}},
+        {"event": "run_canceled", "charged_usd": 0.0, "duration_ms": 9},
+    ]
+    # Sorted by their compact text, as the conformance suite sorts them.
+    assert tool.normalise_events(gnode, "gnode") == [
+        {"attempt": 1, "error": "see grida-fx nodes", "event": "node_retry", "id": "a#1"},
+        {"charged_usd": 0, "event": "run_cancelled"},
+        # Data is never touched: a member of `with` may have any name.
+        {"event": "node_started", "id": "a#1", "identity": tool.DIGEST, "with": {"offset_ms": 1}},
+    ]
+    fx = [{"event": "run_cancelled", "kind": "fx-run-events-v1", "plan": "26" * 32}]
+    assert tool.normalise_events(fx, "fx") == [{"event": "run_cancelled"}]
+
+
+def test_texts_compare_by_line_with_fx_names() -> None:
+    reroll = b"case.takes.yaml: a uses take 2 from now on\nnext      gnode run case\n"
+    assert tool.text_lines(reroll, "gnode") == [
+        "case.takes.yaml: a uses take 2 from now on",
+        "next      grida-fx run case",
+    ]
+    header = b"# t.takes.yaml: written by `gnode reroll` and `gnode pick`; commit it\n"
+    assert tool.text_lines(header, "gnode") == [
+        "# t.takes.yaml: written by `grida-fx reroll` and `grida-fx pick`; commit it"
+    ]
+    assert tool.text_lines(b'{"kind": "gnode-annotations-v1"}', "gnode") == [
+        '{"kind": "fx-annotations-v1"}'
+    ]
+    # FX's own texts keep what they say.
+    assert tool.text_lines(b"next      gnode run case", "fx") == ["next      gnode run case"]
+    picture = b"\x89PNG\r\n\x1a\n\xff"
+    assert tool.text_lines(picture, "fx") == [
+        "sha256:" + __import__("hashlib").sha256(picture).hexdigest()
+    ]
+
+
+def test_absolute_paths_into_a_copy_are_made_relative(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    real = project.resolve()
+    raw = (
+        f"run       {project}/runs/one\n"
+        f"delivered {real}/out/x.txt\n"
+        f"in {project}\n"
+        f"kept {project}-other/x and {project}x\n"
+    ).encode()
+    assert tool.scrub_roots(raw, [project]).decode().splitlines() == [
+        "run       runs/one",
+        "delivered out/x.txt",
+        "in .",
+        f"kept {project}-other/x and {project}x",
+    ]
+
+
+def test_a_case_with_a_run_verb_is_a_run_case() -> None:
+    assert tool.is_run_case([{"argv": ["expand", "case"]}, {"argv": ["project", "runs/one"]}])
+    assert tool.is_run_case([{"files": {"a": "b"}}, {"argv": ["takes", "list", "case"]}])
+    assert not tool.is_run_case([{"argv": ["expand", "case"]}, {"argv": ["lock"]}])
+    assert not tool.is_run_case([{"files": {"a": "b"}}, {"read": "fx.lock", "save": "x"}])
+
+
+def test_what_a_step_saves_is_compared_by_its_kind() -> None:
+    def ran(saved: bytes | None) -> Any:
+        return tool.StepRun(0, "", saved)
+
+    project = json.dumps(FX_PROJECT).encode()
+    run = {"argv": ["run", "case"]}
+    assert tool.step_document(run, ran(b"run       runs/one\n"), "fx") is tool._NOTHING
+    saved_project = {"argv": ["project", "runs/one"], "save": "p.json"}
+    assert tool.step_document(saved_project, ran(project), "fx") == tool.normalise_project(
+        FX_PROJECT, "fx"
+    )
+    assert tool.step_document(saved_project, ran(b"oops"), "fx") is tool._NOT_JSON
+    read = {"read": "runs/one/outputs/said.txt", "save": "said.txt"}
+    assert tool.step_document(read, ran(b"one\ntwo\n"), "fx") == ["one", "two"]
+    assert tool.step_document(read, ran(None), "fx") is tool._ABSENT
+    # A file read with json: true is plain JSON, its run-event timings dropped.
+    report = {"read": "r.json", "save": "r.json", "json": True}
+    assert tool.step_document(report, ran(b'{"half": 2.0, "offset_ms": 1}'), "fx") == {
+        "half": 2,
+        "offset_ms": 1,
+    }
+    events = {"read": "runs/one/events.jsonl", "save": "events.json", "jsonl": True}
+    lines = b'{"event":"run_started","offset_ms":3}\n\n{"event":"node_started","id":"a#1"}\n'
+    assert tool.step_document(events, ran(lines), "fx") == [
+        {"event": "node_started", "id": "a#1"},
+        {"event": "run_started"},
+    ]
+    assert tool.step_document(events, ran(b"{not json\n"), "fx") is tool._NOT_JSON
+    lock = {"read": "fx.lock", "save": "fx.lock.json", "yaml": True}
+    assert tool.step_document(lock, ran(b"nodes:\n  a: 1.0\n"), "fx") == {"nodes": {"a": 1}}
+
+
+# A stand-in engine for run mode: keeps a counter in its project, so each step sees the last.
+STEP_PROBE = """\
+import json, os, sys
+from pathlib import Path
+counter = Path("count.txt")
+runs = int(counter.read_text()) + 1 if counter.exists() else 1
+counter.write_text(str(runs))
+Path("out").mkdir(exist_ok=True)
+Path("out", "seen.txt").write_text(f"{os.getcwd()}/runs/one")
+print(json.dumps({"argv": sys.argv[1:], "runs": runs, "where": os.getcwd(),
+                  "names": sorted(p.name for p in Path(".").iterdir())}))
+sys.exit(runs)
+"""
+
+
+def test_run_mode_runs_every_step_in_one_copy(tmp_path: Path) -> None:
+    case_in = tmp_path / "in"
+    case_in.mkdir()
+    (case_in / "fx.yaml").write_text("fx: project/v1\n", "utf-8")
+    script = tmp_path / "probe.py"
+    script.write_text(STEP_PROBE, "utf-8")
+    steps = [
+        {"argv": ["run", "case"]},
+        {"files": {"fx.lock": "fx: lock/v1\nnodes: {}\n"}, "argv": ["project", "fx.yaml"]},
+        {"read": "out/seen.txt", "save": "seen.txt"},
+        {"read": "out/missing.txt", "save": "missing.txt"},
+    ]
+    command = [sys.executable, str(script)]
+    fx = tool._run_steps(command, case_in, steps, {}, "grida-fx")
+    gnode = tool._run_steps(command, case_in, steps, {}, "gnode")
+    assert [ran.status for ran in fx] == [1, 2, None, None]
+    first, second = (json.loads(ran.saved) for ran in fx[:2])
+    # Every step runs in the same copy: the counter goes on, and nothing is left in the case.
+    assert first["runs"] == 1 and second["runs"] == 2
+    assert first["where"] == "." and second["argv"] == ["project", "fx.yaml"]
+    assert second["names"] == ["count.txt", "fx.lock", "fx.yaml", "out"]
+    assert fx[2].saved == b"runs/one" and fx[3].saved is None
+    # gnode gets its names: in the files written, the arguments and the paths read.
+    assert json.loads(gnode[1].saved)["argv"] == ["project", "gnode.yaml"]
+    assert json.loads(gnode[1].saved)["names"] == ["count.txt", "fx.yaml", "gnode.lock", "out"]
+    assert sorted(path.name for path in case_in.iterdir()) == ["fx.yaml"]
+
+
+def _project_steps(
+    gnode: dict[str, Any], fx: dict[str, Any], statuses: tuple[int, int] = (0, 0)
+) -> tuple[list[Any], list[Any]]:
+    """run-project's two steps (run, then project) as each engine did them."""
+    return (
+        [
+            tool.StepRun(statuses[0], "", b"run       runs/one\n"),
+            tool.StepRun(0, "", json.dumps(gnode).encode()),
+        ],
+        [
+            tool.StepRun(statuses[1], "", b"run       runs/one\n"),
+            tool.StepRun(0, "", json.dumps(fx).encode()),
+        ],
+    )
+
+
+def test_main_compares_a_run_case_step_by_step(
+    engines: dict[str, Any], capsys: pytest.CaptureFixture[str]
+) -> None:
+    gnode = {"instances": {"joined#1": {"facts": {}, "state": "succeeded"}}, "run": {}}
+    fx = {"instances": {"joined#1": {"facts": {"cost_usd": None}, "state": "succeeded"}}}
+    fx["run"] = {}
+    g_steps, f_steps = _project_steps(gnode, fx)
+    engines["steps"][("gnode", "run-project")] = g_steps
+    engines["steps"][("fx", "run-project")] = f_steps
+    assert _main("run-project") == 0
+    out = capsys.readouterr().out.splitlines()
+    # run-project is in gnode's suite: its original is run, not a port.
+    assert out == [
+        "run-project step 1 run: same",
+        "run-project project.json: known (1)",
+        "compare_gnode: 1 same, 1 known",
+    ]
+    assert engines["calls"] == [("gnode", "run-project", "steps"), ("fx", "run-project", "steps")]
+
+
+def test_main_reports_a_run_case_that_differs(
+    engines: dict[str, Any], capsys: pytest.CaptureFixture[str]
+) -> None:
+    gnode = {"instances": {"joined#1": {"state": "succeeded"}}}
+    fx = {"instances": {"joined#1": {"state": "failed", "error": "kaboom"}}}
+    g_steps, f_steps = _project_steps(gnode, fx, statuses=(0, 1))
+    f_steps[0] = tool.StepRun(1, "grida-fx: kaboom\n", b"")
+    engines["steps"][("gnode", "run-project")] = g_steps
+    engines["steps"][("fx", "run-project")] = f_steps
+    assert _main("run-project") == 1
+    out = capsys.readouterr().out.splitlines()
+    assert out[:4] == [
+        "run-project step 1 run: DIFFERS",
+        "  status: 0 != 1",
+        "  grida-fx said on stderr:",
+        "    grida-fx: kaboom",
+    ]
+    assert "run-project project.json: DIFFERS" in out
+    assert '  $.instances["joined#1"].state: "succeeded" != "failed"' in out
+    assert out[-1] == "compare_gnode: 2 differs"
+
+
+def test_steps_that_save_one_name_are_told_apart(
+    engines: dict[str, Any], capsys: pytest.CaptureFixture[str]
+) -> None:
+    # run-local saves parts-1.txt twice (an output and a step file), which must match.
+    assert _main("run-local") == 0
+    out = capsys.readouterr().out.splitlines()
+    assert "run-local parts-1.txt (step 6, ported): same" in out
+    assert "run-local parts-1.txt (step 10, ported): same" in out
+    assert "run-local step 1 run (ported): same" in out
+
+
+def test_a_run_case_that_times_out_differs(
+    engines: dict[str, Any], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def hangs(*_: Any) -> Any:
+        raise tool.conformance.CaseFailure("gnode run case timed out after 120 s")
+
+    monkeypatch.setattr(tool, "run_gnode_steps", hangs)
+    assert _main("run-local") == 1
+    out = capsys.readouterr().out.splitlines()
+    assert out[:2] == ["run-local (ported): DIFFERS", "  gnode run case timed out after 120 s"]
+
+
 # --- end to end ---------------------------------------------------------------------------------
 
 
@@ -1031,14 +1419,18 @@ def test_main_refuses_mixed_modes(args: list[str]) -> None:
     not os.environ.get("FX_GNODE_REPO") or not FX_BINARY.is_file(),
     reason="needs FX_GNODE_REPO and a built target/debug/grida-fx",
 )
-def test_linear_is_the_same_on_both_engines(
+def test_linear_and_run_project_compare_on_both_engines(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     if not os.environ.get("GRIDA_FX_PYTHON"):
         # This interpreter has the grida package: the Python host plans the case's node types.
         monkeypatch.setenv("GRIDA_FX_PYTHON", sys.executable)
-    status = tool.main(["--command", str(FX_BINARY), "linear"])
+    status = tool.main(["--command", str(FX_BINARY), "linear", "run-project"])
     out = capsys.readouterr().out
     assert status == 0, out
     assert "linear expand: same" in out
+    assert "linear identity: same" in out
     assert "linear price: same" in out
+    # A run: the same states, outputs and events, but for the engine's cost_usd fact.
+    assert "run-project step 1 run: same" in out
+    assert "run-project project.json: known (3)" in out

@@ -1,0 +1,2 @@
+case.takes.yaml: a uses take 2 from now on
+next      grida-fx run case
