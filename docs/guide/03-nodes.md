@@ -19,7 +19,7 @@ Every built-in type is declared, so a workflow using it plans and prices. A type
 | `speech.generate@1` | `text` (delivery as audio tags, `[whispering] ...`), `voice`, `stability`, `language_code`, `max_chars` → `audio` |
 | `sound.generate@1` | `prompt`, `duration`, `prompt_influence`, `loop` → `audio` |
 | `music.generate@1` | `prompt`, `duration` → `audio` |
-| `mesh.generate@1` | `views` (pictures by side: `front`, `back`, `left`, `right`), `face_limit`, `quad`, `texture`, `pbr` → `model` |
+| `mesh.generate@1` | `views` (pictures by side: `front` and at least one of `back`, `left`, `right`), `face_limit`, `quad`, `texture`, `pbr` → `model` |
 | `mesh.rig@1` | `model`, `rig_type`, `skeleton`, `allow_negative_check` → rigged `model` (binary glTF) |
 | `background.remove@1` | `image` → `image` with alpha (**planned**: FX can call fal for it, but ships no route yet; a route in your own table makes it run) |
 

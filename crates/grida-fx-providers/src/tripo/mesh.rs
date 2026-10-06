@@ -1,16 +1,18 @@
 //! Tripo `mesh.generate`: multiview to model (spec/providers.md §9.4).
 //!
-//! `submit`: refuse a bad request (no `front`, a view other than front/back/left/right, a view that
-//! is not PNG or JPEG, `face_limit` outside 48..25 000, no key); upload each view in the order
-//! front, back, left, right (`<view>.png` / `<view>.jpg`); then post
+//! `submit`: refuse a bad request (no `front`, a view other than front/back/left/right, `front`
+//! alone, a view that is not PNG or JPEG, `face_limit` outside 48..25 000, no key); upload each
+//! view in the order front, back, left, right (`<view>.png` / `<view>.jpg`); then post
 //! `POST /generation/multiview-to-model` once with `{"model", "quad", "texture", "pbr",
 //! "face_limit"?, "inputs": [{"front": token}, …]}`. The handle is `{"task_id"}`.
 //! `collect`: wait up to [`COLLECT_DEADLINE`]; download every model URL; keep the first FBX, else
 //! the first GLB, as file `model`; `data: {"facts": {"model_kind": <kind>}}`; cost from credits.
 //!
 //! Refusals come in the order of spec/providers.md §5: the route, the request's shape
-//! (spec/capabilities.md §7), the key, the values (views by name, `face_limit`), then the view
-//! files in the order front, back, left, right (each: its bytes, then its kind).
+//! (spec/capabilities.md §7), the key, the values (the view names, then their count, then
+//! `face_limit`), then the view files in the order front, back, left, right (each: its bytes, then
+//! its kind). A multiview task takes two views at least: Tripo refuses `front` alone only at the
+//! paid POST (HTTP 400, a failed call at the whole hold), so the adapter refuses it first, at $0.
 
 use super::TripoApi;
 use crate::BoxFuture;
@@ -144,8 +146,9 @@ impl TripoMesh {
     }
 }
 
-/// The value checks (spec/providers.md §5 step 4): the view names, and the body's parameters in
-/// wire order (`quad`, `texture`, `pbr`, then `face_limit` when given).
+/// The value checks (spec/providers.md §5 step 4): the view names, their count (`front` and at
+/// least one other), and the body's parameters in wire order (`quad`, `texture`, `pbr`, then
+/// `face_limit` when given).
 fn request_values(call: &CallRequest) -> Result<Values, String> {
     let views = match call.request.get("views") {
         Some(Value::Object(views)) if !views.is_empty() => views.clone(),
@@ -164,6 +167,10 @@ fn request_values(call: &CallRequest) -> Result<Values, String> {
         } else {
             format!("{taken}; not {}", unknown.join(", "))
         });
+    }
+    // Every name is known and one is `front`, so a single name is `front` alone.
+    if views.len() < 2 {
+        return Err("a multiview task takes front and at least one of back, left, right".into());
     }
     let flag = |name: &str, default: bool| {
         call.request

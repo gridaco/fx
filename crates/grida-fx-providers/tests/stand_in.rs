@@ -872,7 +872,10 @@ fn accepted_live(
         "mesh.generate" => {
             let mut builder = CallBuilder::new(capability, &route);
             let front = builder.file("image/png", &media::png(2, 2, Some(255)));
-            let call = builder.request(json!({"views": {"front": front}})).build();
+            let back = builder.file("image/png", &media::png(3, 3, Some(255)));
+            let call = builder
+                .request(json!({"views": {"front": front, "back": back}}))
+                .build();
             let data = json!({"facts": {"model_kind": "model/fbx"}});
             (
                 call,

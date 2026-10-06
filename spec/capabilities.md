@@ -207,7 +207,7 @@ A 3D model from views of one subject. A long job.
 | `quad` | boolean | optional | quad topology |
 | `texture` | boolean | optional | a textured model |
 | `pbr` | boolean | optional | PBR materials |
-| `views` | file{} | required | pictures by view name; the multiview route takes `front` (required), `back`, `left`, `right`, each PNG or JPEG |
+| `views` | file{} | required | pictures by view name; the multiview route takes `front` (required) and at least one of `back`, `left`, `right`, each PNG or JPEG |
 
 **Answer:** the file `model`, whose kind is `model/fbx` or `model/gltf-binary`, taken from its bytes. `data` is `{"facts": {"model_kind": <kind>}}`.
 

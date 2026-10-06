@@ -232,14 +232,27 @@ fn character_call() -> TestCall {
         .build()
 }
 
-/// A call with one front PNG view.
-fn front_call() -> TestCall {
+/// A call with front and back PNG views, the fewest a multiview task takes, and no settings.
+fn two_view_call() -> TestCall {
     let mut builder = builder();
     let front = builder.file("image/png", &front_png());
-    builder.request(json!({"views": {"front": front}})).build()
+    let back = builder.file("image/png", &back_png());
+    builder
+        .request(json!({"views": {"front": front, "back": back}}))
+        .build()
 }
 
-const FRONT_BODY: &str = r#"{"model":"P2-20260801","quad":false,"texture":true,"pbr":false,"inputs":[{"front":"tok1"}]}"#;
+/// The two-view call's uploads, in Tripo's order (front, back), then `rest`.
+fn after_uploads(rest: impl IntoIterator<Item = Exchange>) -> Vec<Exchange> {
+    let mut exchanges = vec![
+        upload("front.png", "image/png", &front_png(), "tok1"),
+        upload("back.png", "image/png", &back_png(), "tok2"),
+    ];
+    exchanges.extend(rest);
+    exchanges
+}
+
+const TWO_VIEW_BODY: &str = r#"{"model":"P2-20260801","quad":false,"texture":true,"pbr":false,"inputs":[{"front":"tok1"},{"back":"tok2"}]}"#;
 
 fn handle(task_id: &str) -> Value {
     json!({"task_id": task_id})
@@ -320,16 +333,14 @@ fn the_face_limit_bounds_are_inclusive() {
     for limit in [48, 25_000] {
         let mut b = builder();
         let front = b.file("image/png", &front_png());
+        let back = b.file("image/png", &back_png());
         let call = b
-            .request(json!({"views": {"front": front}, "face_limit": limit}))
+            .request(json!({"views": {"front": front, "back": back}, "face_limit": limit}))
             .build();
-        let h = harness(vec![
-            upload("front.png", "image/png", &front_png(), "tok1"),
-            post_expect(ExpectBody::JsonText(format!(
-                r#"{{"model":"P2-20260801","quad":false,"texture":true,"pbr":false,"face_limit":{limit},"inputs":[{{"front":"tok1"}}]}}"#
-            )))
-            .reply(ok(json!({"task_id": "task1"}))),
-        ]);
+        let h = harness(after_uploads([post_expect(ExpectBody::JsonText(format!(
+            r#"{{"model":"P2-20260801","quad":false,"texture":true,"pbr":false,"face_limit":{limit},"inputs":[{{"front":"tok1"}},{{"back":"tok2"}}]}}"#
+        )))
+        .reply(ok(json!({"task_id": "task1"})))]));
         assert!(
             matches!(h.submit(&call), Submitted::Accepted { .. }),
             "{limit}"
@@ -386,10 +397,23 @@ fn bad_requests_are_refused_before_anything_is_sent() {
         refused(with_views(&[], json!({})), test_keys()),
         "a mesh call needs its views, by name"
     );
+    // `front` alone: refused after the names and before `face_limit`.
+    let alone = "a multiview task takes front and at least one of back, left, right";
+    assert_eq!(
+        refused(with_views(&["front"], json!({})), test_keys()),
+        alone
+    );
+    assert_eq!(
+        refused(
+            with_views(&["front"], json!({"face_limit": 47})),
+            test_keys()
+        ),
+        alone
+    );
     for limit in [json!(47), json!(25_001), json!(-1)] {
         assert_eq!(
             refused(
-                with_views(&["front"], json!({"face_limit": limit})),
+                with_views(&["front", "back"], json!({"face_limit": limit})),
                 test_keys()
             ),
             "face_limit is 48 to 25000"
@@ -398,13 +422,16 @@ fn bad_requests_are_refused_before_anything_is_sent() {
     // The shape of the request (spec/capabilities.md §1, §7).
     assert_eq!(
         refused(
-            with_views(&["front"], json!({"face_limit": 10.5})),
+            with_views(&["front", "back"], json!({"face_limit": 10.5})),
             test_keys()
         ),
         "face_limit is a whole number"
     );
     assert_eq!(
-        refused(with_views(&["front"], json!({"seed": 7})), test_keys()),
+        refused(
+            with_views(&["front", "back"], json!({"seed": 7})),
+            test_keys()
+        ),
         "mesh.generate takes no member seed"
     );
     assert_eq!(
@@ -423,21 +450,36 @@ fn bad_requests_are_refused_before_anything_is_sent() {
         ),
         "views is files by name"
     );
-    // View files: kinds and bytes.
+    // View files: kinds and bytes, in the order front, back.
     for kind in ["image/gif", "image/webp"] {
         let mut b = builder();
         let front = b.file(kind, b"GIF89a....");
-        let call = b.request(json!({"views": {"front": front}})).build();
+        let back = b.file("image/png", &back_png());
+        let call = b
+            .request(json!({"views": {"front": front, "back": back}}))
+            .build();
         assert_eq!(
             refused(call, test_keys()),
             format!("the front view is {kind}; Tripo takes PNG or JPEG")
         );
     }
-    let unknown = json!({"file": "f".repeat(64)});
+    let mut b = builder();
+    let front = b.file("image/png", &png);
+    let back = b.file("image/gif", b"GIF89a....");
     assert_eq!(
         refused(
-            builder()
-                .request(json!({"views": {"front": unknown}}))
+            b.request(json!({"views": {"back": back, "front": front}}))
+                .build(),
+            test_keys()
+        ),
+        "the back view is image/gif; Tripo takes PNG or JPEG"
+    );
+    let unknown = json!({"file": "f".repeat(64)});
+    let mut b = builder();
+    let back = b.file("image/png", &back_png());
+    assert_eq!(
+        refused(
+            b.request(json!({"views": {"front": unknown, "back": back}}))
                 .build(),
             test_keys()
         ),
@@ -445,27 +487,31 @@ fn bad_requests_are_refused_before_anything_is_sent() {
     );
     // The key: missing or blank.
     assert_eq!(
-        refused(with_views(&["front"], json!({})), Keys::none()),
+        refused(with_views(&["front", "back"], json!({})), Keys::none()),
         "TRIPO_API_KEY is not set"
     );
     assert_eq!(
         refused(
-            with_views(&["front"], json!({})),
+            with_views(&["front", "back"], json!({})),
             Keys::from_pairs(&[(KeyName::Tripo, "   ")])
         ),
         "TRIPO_API_KEY is not set"
     );
     // The key is checked before the values (spec/providers.md §5).
-    assert_eq!(
-        refused(with_views(&["three_quarter"], json!({})), Keys::none()),
-        "TRIPO_API_KEY is not set"
-    );
+    for names in [&["three_quarter"][..], &["front"][..]] {
+        assert_eq!(
+            refused(with_views(names, json!({})), Keys::none()),
+            "TRIPO_API_KEY is not set"
+        );
+    }
     // The route's contract.
     let mut b = CallBuilder::new("mesh.generate", ROUTE).contract(json!({"adapter": "tripo-rig"}));
     let front = b.file("image/png", &png);
+    let back = b.file("image/png", &back_png());
     assert_eq!(
         refused(
-            b.request(json!({"views": {"front": front}})).build(),
+            b.request(json!({"views": {"front": front, "back": back}}))
+                .build(),
             test_keys()
         ),
         "P2-20260801@tripo is not a mesh.generate route this adapter serves"
@@ -477,16 +523,41 @@ fn bad_requests_are_refused_before_anything_is_sent() {
         "P2-20260801@tripo is not a mesh.generate route this adapter serves"
     );
     // A route without a contract is served.
-    let h = harness(vec![
-        upload("front.png", "image/png", &png, "tok1"),
-        post_expect(ExpectBody::JsonText(FRONT_BODY.into())).reply(ok(json!({"task_id": "t"}))),
-    ]);
+    let h = harness(after_uploads([post_expect(ExpectBody::JsonText(
+        TWO_VIEW_BODY.into(),
+    ))
+    .reply(ok(json!({"task_id": "t"})))]));
     let mut b = CallBuilder::new("mesh.generate", ROUTE);
     let front = b.file("image/png", &png);
+    let back = b.file("image/png", &back_png());
     assert!(matches!(
-        h.submit(&b.request(json!({"views": {"front": front}})).build()),
+        h.submit(
+            &b.request(json!({"views": {"front": front, "back": back}}))
+                .build()
+        ),
         Submitted::Accepted { .. }
     ));
+    h.done();
+}
+
+#[test]
+fn a_front_view_alone_is_refused_before_anything_is_sent() {
+    // spec/providers.md §5 step 4, §9.4 "Mesh": a multiview task takes front and at least one of
+    // back, left, right. Tripo refuses front alone only at the paid POST, so FX asks nothing: no
+    // upload, no task, $0.
+    let h = harness(Vec::new());
+    let mut b = builder();
+    let front = b.file("image/png", &front_png());
+    let call = b
+        .request(json!({"views": {"front": front}, "face_limit": 10000, "texture": true}))
+        .build();
+    assert_eq!(
+        h.submit(&call),
+        Submitted::Refused {
+            reason: "a multiview task takes front and at least one of back, left, right".into()
+        }
+    );
+    assert!(h.transport.requests().is_empty(), "no upload and no task");
     h.done();
 }
 
@@ -552,7 +623,7 @@ fn a_failed_upload_posts_no_task() {
     ];
     for (case, exchange) in not_received {
         let h = harness(vec![exchange]);
-        let outcome = h.submit(&front_call());
+        let outcome = h.submit(&two_view_call());
         assert!(
             matches!(&outcome, Submitted::NotReceived { .. }),
             "{case}: {outcome:?}"
@@ -560,7 +631,7 @@ fn a_failed_upload_posts_no_task() {
         assert_eq!(h.transport.requests().len(), 1, "{case}");
         h.done();
     }
-    let reason = |exchange: Exchange| match harness(vec![exchange]).submit(&front_call()) {
+    let reason = |exchange: Exchange| match harness(vec![exchange]).submit(&two_view_call()) {
         Submitted::NotReceived { reason, .. } | Submitted::Refused { reason } => reason,
         other => panic!("{other:?}"),
     };
@@ -590,7 +661,7 @@ fn a_failed_upload_posts_no_task() {
             HttpResponse::json(status, &json!({"code": 1, "message": "no"})),
         )]);
         assert_eq!(
-            h.submit(&front_call()),
+            h.submit(&two_view_call()),
             Submitted::Refused {
                 reason: format!("Tripo refused the upload with HTTP {status} (code 1)")
             }
@@ -602,7 +673,7 @@ fn a_failed_upload_posts_no_task() {
         upload_expect("front.png", "image/png", &png).fail(network_off()),
     ]);
     assert_eq!(
-        h.submit(&front_call()),
+        h.submit(&two_view_call()),
         Submitted::Refused {
             reason: "the Tripo upload was not sent: the network is off (GRIDA_FX_NETWORK=off)"
                 .into()
@@ -628,7 +699,7 @@ fn the_paid_post_is_sent_once_whatever_happens() {
     let uncertain = |detail: &str| Submitted::Uncertain {
         reason: format!("Tripo may have taken the task; it is not posted again ({detail})"),
     };
-    let post = || post_expect(ExpectBody::JsonText(FRONT_BODY.into()));
+    let post = || post_expect(ExpectBody::JsonText(TWO_VIEW_BODY.into()));
     let cases: Vec<(Exchange, Submitted)> = vec![
         (
             post().fail(not_sent()),
@@ -713,11 +784,8 @@ fn the_paid_post_is_sent_once_whatever_happens() {
         ),
     ];
     for (exchange, expected) in cases {
-        let h = harness(vec![
-            upload("front.png", "image/png", &front_png(), "tok1"),
-            exchange,
-        ]);
-        assert_eq!(h.submit(&front_call()), expected);
+        let h = harness(after_uploads([exchange]));
+        assert_eq!(h.submit(&two_view_call()), expected);
         let posts = h
             .methods_and_urls()
             .into_iter()
@@ -727,15 +795,12 @@ fn the_paid_post_is_sent_once_whatever_happens() {
         h.done();
     }
     for status in [400, 401, 403, 404, 422] {
-        let h = harness(vec![
-            upload("front.png", "image/png", &front_png(), "tok1"),
-            post().reply(HttpResponse::json(
-                status,
-                &json!({"code": 1, "message": "secret"}),
-            )),
-        ]);
+        let h = harness(after_uploads([post().reply(HttpResponse::json(
+            status,
+            &json!({"code": 1, "message": "secret"}),
+        ))]));
         assert_eq!(
-            h.submit(&front_call()),
+            h.submit(&two_view_call()),
             Submitted::Failed {
                 reason: format!("Tripo refused the task with HTTP {status} (code 1)"),
                 cost: None,
@@ -744,11 +809,11 @@ fn the_paid_post_is_sent_once_whatever_happens() {
         );
         h.done();
     }
-    let h = harness(vec![
-        upload("front.png", "image/png", &front_png(), "tok1"),
-        post().fail(network_off()),
-    ]);
-    assert!(matches!(h.submit(&front_call()), Submitted::Refused { .. }));
+    let h = harness(after_uploads([post().fail(network_off())]));
+    assert!(matches!(
+        h.submit(&two_view_call()),
+        Submitted::Refused { .. }
+    ));
     h.done();
 }
 
@@ -765,7 +830,7 @@ fn a_finished_mesh_is_downloaded_with_its_cost() {
         success("task1", json!({"pbr_model": STORAGE}), json!(125)),
         download(STORAGE, &fbx(1)),
     ]);
-    let answer = answered(h.collect(&front_call(), handle("task1")));
+    let answer = answered(h.collect(&two_view_call(), handle("task1")));
     assert_eq!(answer.files.len(), 1);
     assert_eq!(answer.files["model"].kind, "model/fbx");
     assert_eq!(answer.files["model"].bytes, fbx(1));
@@ -827,7 +892,7 @@ fn an_fbx_is_preferred_and_every_model_is_downloaded() {
         let mut exchanges = vec![success("task1", output.clone(), json!(125))];
         exchanges.extend(downloads);
         let h = harness(exchanges);
-        let answer = answered(h.collect(&front_call(), handle("task1")));
+        let answer = answered(h.collect(&two_view_call(), handle("task1")));
         assert_eq!(answer.files["model"].kind, kind, "{output}");
         assert_eq!(answer.files["model"].bytes, bytes, "{output}");
         assert_eq!(answer.data, json!({"facts": {"model_kind": kind}}));
@@ -841,7 +906,7 @@ fn a_task_tripo_ended_is_over() {
     for state in ["failed", "cancelled", "banned", "expired"] {
         let h = harness(vec![read("task1", "running"), read("task1", state)]);
         assert_eq!(
-            h.collect(&front_call(), handle("task1")),
+            h.collect(&two_view_call(), handle("task1")),
             Collected::Ended {
                 reason: format!("Tripo ended task task1 as {state}")
             }
@@ -879,7 +944,7 @@ fn a_task_still_running_at_the_deadline_stays_tripos() {
         test_keys(),
     );
     assert_eq!(
-        h.collect(&front_call(), handle("task1")),
+        h.collect(&two_view_call(), handle("task1")),
         Collected::Unreachable {
             reason: "Tripo task task1 is still running; collect it later".into()
         }
@@ -923,7 +988,7 @@ fn polls_that_fail_are_polls_that_saw_nothing() {
         success("task1", json!({"model": STORAGE}), json!(125)),
         download(STORAGE, &fbx(1)),
     ]);
-    let answer = answered(h.collect(&front_call(), handle("task1")));
+    let answer = answered(h.collect(&two_view_call(), handle("task1")));
     assert_eq!(answer.cost, Some(Usd(1_250_000)));
     assert_eq!(h.clock.sleeps().len(), 7);
     h.done();
@@ -939,7 +1004,7 @@ fn polls_that_fail_are_polls_that_saw_nothing() {
         test_keys(),
     );
     assert_eq!(
-        h.collect(&front_call(), handle("task1")),
+        h.collect(&two_view_call(), handle("task1")),
         Collected::Unreachable {
             reason: "Tripo task task1 could not be read; collect it later".into()
         }
@@ -957,7 +1022,7 @@ fn polls_that_fail_are_polls_that_saw_nothing() {
         test_keys(),
     );
     assert_eq!(
-        h.collect(&front_call(), handle("task1")),
+        h.collect(&two_view_call(), handle("task1")),
         Collected::Unreachable {
             reason: "Tripo task task1 is still running; collect it later".into()
         }
@@ -985,7 +1050,7 @@ fn polls_that_fail_are_polls_that_saw_nothing() {
     ] {
         let h = harness(vec![read("task1", "running"), exchange]);
         assert_eq!(
-            h.collect(&front_call(), handle("task1")),
+            h.collect(&two_view_call(), handle("task1")),
             Collected::Unreachable {
                 reason: reason.into()
             }
@@ -1009,7 +1074,7 @@ fn an_answer_about_another_task_or_an_unknown_status_is_unreachable() {
     ];
     for response in cases {
         let h = harness(vec![read_expect("task1").reply(response)]);
-        assert_eq!(h.collect(&front_call(), handle("task1")), unknown);
+        assert_eq!(h.collect(&two_view_call(), handle("task1")), unknown);
         h.done();
     }
 }
@@ -1073,7 +1138,7 @@ fn the_output_scan_decides_what_is_downloaded() {
     for (output, expected) in cases {
         let h = harness(vec![success("task1", output.clone(), json!(125))]);
         assert_eq!(
-            h.collect(&front_call(), handle("task1")),
+            h.collect(&two_view_call(), handle("task1")),
             expected,
             "{output}"
         );
@@ -1084,7 +1149,10 @@ fn the_output_scan_decides_what_is_downloaded() {
         read_expect("task1").reply(ok(json!({"task_id": "task1", "status": "success",
                                               "output": [STORAGE], "credits_consumed": 1}))),
     ]);
-    assert_eq!(h.collect(&front_call(), handle("task1")), ended(no_model));
+    assert_eq!(
+        h.collect(&two_view_call(), handle("task1")),
+        ended(no_model)
+    );
     h.done();
 
     // Accepted hosts and ports; one download per distinct URL; only model fields.
@@ -1114,7 +1182,7 @@ fn the_output_scan_decides_what_is_downloaded() {
         let mut exchanges = vec![success("task1", output.clone(), json!(125))];
         exchanges.extend(urls.iter().map(|url| download(url, &glb(1))));
         let h = harness(exchanges);
-        let answer = answered(h.collect(&front_call(), handle("task1")));
+        let answer = answered(h.collect(&two_view_call(), handle("task1")));
         assert_eq!(answer.files["model"].kind, "model/gltf-binary", "{output}");
         h.done();
     }
@@ -1127,7 +1195,7 @@ fn the_output_scan_decides_what_is_downloaded() {
         ),
         download("https://api.tripo3d.ai/m.glb", &glb(1)),
     ]);
-    assert_eq!(h.collect(&front_call(), handle("task1")), ended(outside));
+    assert_eq!(h.collect(&two_view_call(), handle("task1")), ended(outside));
     h.done();
 }
 
@@ -1199,7 +1267,7 @@ fn downloads_are_fetched_once_and_capped() {
             success("task1", json!({"model": signed}), json!(125)),
             exchange,
         ]);
-        let outcome = h.collect(&front_call(), handle("task1"));
+        let outcome = h.collect(&two_view_call(), handle("task1"));
         assert_eq!(outcome, expected);
         assert!(!format!("{outcome:?}").contains("signed-secret"));
         assert_eq!(h.transport.requests().len(), 2, "one GET per URL");
@@ -1235,7 +1303,7 @@ fn the_cost_is_the_finished_tasks_credits_rounded_up() {
             read_expect("task1").reply(ok(data)),
             download(STORAGE, &fbx(1)),
         ]);
-        let answer = answered(h.collect(&front_call(), handle("task1")));
+        let answer = answered(h.collect(&two_view_call(), handle("task1")));
         assert_eq!(answer.cost, cost, "{credits:?}");
         h.done();
     }
@@ -1249,7 +1317,7 @@ fn a_later_run_only_collects() {
         success("task7", json!({"model": STORAGE}), json!("2.5")),
         download(STORAGE, &fbx(7)),
     ]);
-    let answer = answered(h.collect(&front_call(), handle("task7")));
+    let answer = answered(h.collect(&two_view_call(), handle("task7")));
     assert_eq!(answer.cost, Some(Usd(25_000)));
     assert!(
         h.methods_and_urls()
@@ -1266,7 +1334,7 @@ fn a_later_run_only_collects() {
         json!({"task_id": ""}),
         json!(null),
     ] {
-        let outcome = block_on(offline_mesh(test_keys()).collect(&front_call(), &bad));
+        let outcome = block_on(offline_mesh(test_keys()).collect(&two_view_call(), &bad));
         assert_eq!(
             outcome,
             Collected::Unreachable {
@@ -1276,7 +1344,7 @@ fn a_later_run_only_collects() {
         );
     }
     // Without the key nothing is requested, and the job stays outstanding.
-    let outcome = block_on(offline_mesh(Keys::none()).collect(&front_call(), &handle("task7")));
+    let outcome = block_on(offline_mesh(Keys::none()).collect(&two_view_call(), &handle("task7")));
     assert_eq!(
         outcome,
         Collected::Unreachable {
@@ -1294,13 +1362,13 @@ fn a_later_run_only_collects() {
 #[test]
 fn the_key_never_reaches_a_reason_a_handle_or_data() {
     // Credential hygiene across a whole submit and collect.
-    let h = harness(vec![
-        upload("front.png", "image/png", &front_png(), "tok1"),
-        post_expect(ExpectBody::JsonText(FRONT_BODY.into())).reply(ok(json!({"task_id": "task1"}))),
+    let h = harness(after_uploads([
+        post_expect(ExpectBody::JsonText(TWO_VIEW_BODY.into()))
+            .reply(ok(json!({"task_id": "task1"}))),
         success("task1", json!({"model": STORAGE}), json!(125)),
         download(STORAGE, &fbx(1)),
-    ]);
-    let call = front_call();
+    ]));
+    let call = two_view_call();
     let Submitted::Accepted { handle } = h.submit(&call) else {
         panic!("not accepted");
     };
@@ -1312,7 +1380,7 @@ fn the_key_never_reaches_a_reason_a_handle_or_data() {
 
 #[test]
 fn a_refusal_names_only_tripos_integer_error_code() {
-    let post = || post_expect(ExpectBody::JsonText(FRONT_BODY.into()));
+    let post = || post_expect(ExpectBody::JsonText(TWO_VIEW_BODY.into()));
     for (body, named) in [
         (
             json!({"code": 2002, "message": "secret text", "suggestion": "secret"}),
@@ -1322,12 +1390,11 @@ fn a_refusal_names_only_tripos_integer_error_code() {
         (json!({"code": 1.5}), ""),
         (json!(["code", 2002]), ""),
     ] {
-        let h = harness(vec![
-            upload("front.png", "image/png", &front_png(), "tok1"),
-            post().reply(HttpResponse::json(400, &body)),
-        ]);
+        let h = harness(after_uploads(
+            [post().reply(HttpResponse::json(400, &body))],
+        ));
         assert_eq!(
-            h.submit(&front_call()),
+            h.submit(&two_view_call()),
             Submitted::Failed {
                 reason: format!("Tripo refused the task with HTTP 400{named}"),
                 cost: None,
@@ -1336,12 +1403,11 @@ fn a_refusal_names_only_tripos_integer_error_code() {
         );
         h.done();
     }
-    let h = harness(vec![
-        upload("front.png", "image/png", &front_png(), "tok1"),
-        post().reply(HttpResponse::new(400, b"not json".to_vec())),
-    ]);
+    let h = harness(after_uploads([
+        post().reply(HttpResponse::new(400, b"not json".to_vec()))
+    ]));
     assert_eq!(
-        h.submit(&front_call()),
+        h.submit(&two_view_call()),
         Submitted::Failed {
             reason: "Tripo refused the task with HTTP 400".into(),
             cost: None,

@@ -315,7 +315,7 @@ Each provider's section is normative for its adapters. Status rows override §4.
   - the poll interval: 5 s;
   - each model download: at most 150 000 000 bytes.
 - **Mesh.**
-  - Refused before sending, in this order: no views (`a mesh call needs its views, by name`); no `front`, or a view other than front, back, left or right (`a multiview task takes front and any of back, left, right`, followed by `; not <names>` listing the unknown names, sorted); a `face_limit` outside 48 to 25 000 (`face_limit is 48 to 25000`); then, in the order front, back, left, right, a view that is not PNG or JPEG (`the <view> view is <kind>; Tripo takes PNG or JPEG`) or has no bytes (§5 step 5).
+  - Refused before sending, in this order: no views (`a mesh call needs its views, by name`); no `front`, or a view other than front, back, left or right (`a multiview task takes front and any of back, left, right`, followed by `; not <names>` listing the unknown names, sorted); `front` alone (`a multiview task takes front and at least one of back, left, right`); a `face_limit` outside 48 to 25 000 (`face_limit is 48 to 25000`); then, in the order front, back, left, right, a view that is not PNG or JPEG (`the <view> view is <kind>; Tripo takes PNG or JPEG`) or has no bytes (§5 step 5).
   - The views are uploaded in the order front, back, left, right (part `file`, named `<view>.png` or `<view>.jpg`).
   - The paid body is `{model, quad, texture, pbr, face_limit?, inputs: [{"<view>": <token>}, …]}`, with `quad` false, `texture` true and `pbr` false when absent.
   - The handle is `{"task_id"}`.
