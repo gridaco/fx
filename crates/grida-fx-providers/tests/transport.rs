@@ -204,3 +204,90 @@ fn a_clients_reasons_hold_no_key_and_no_secret_shape() {
     );
     assert!(Keys::none().secrets().is_empty());
 }
+
+/// spec/providers.md §2 item 5: a download carries no credential, through the credential slot or
+/// as a header named like one, in any case; the provider lane may not set the credential's header
+/// by hand either. Each is refused before anything leaves.
+#[test]
+fn a_download_refuses_every_header_named_like_a_credential() {
+    use grida_fx_providers::transport::{
+        Credential, HttpRequest, Lane, Method, Phase, TransportErrorKind, check_request,
+    };
+    const SIGNED: &str = "https://files.example.test/out/a.png?X-Amz-Signature=deadbeef&e=1";
+    for (name, value) in [
+        ("authorization", "Key test-key-not-real-fal"),
+        ("Authorization", "Bearer test-key-not-real"),
+        ("proxy-authorization", "Basic dGVzdA=="),
+        ("xi-api-key", "test-key-not-real-el"),
+        ("X-API-Key", "test-key-not-real"),
+        ("cookie", "session=test-key-not-real"),
+        ("x-auth-token", "t"),
+        ("x-session-id", "s"),
+    ] {
+        let request = HttpRequest::new(Method::Get, SIGNED, Lane::Download).header(name, value);
+        let error = check_request(&request).expect_err(name);
+        assert_eq!(error.phase, Phase::NotSent, "{name}");
+        assert_eq!(error.kind, TransportErrorKind::Refused, "{name}");
+        assert_eq!(error.reason, "a download never carries a credential");
+    }
+    let accept = HttpRequest::new(Method::Get, SIGNED, Lane::Download).header("accept", "image/*");
+    assert_eq!(check_request(&accept), Ok(()));
+    let mut by_hand = HttpRequest::new(Method::Post, "https://api.example.test/v1", Lane::Provider)
+        .credential(Credential {
+            header: "xi-api-key",
+            prefix: "",
+            secret: grida_fx_providers::Secret::new("test-key-not-real"),
+        });
+    by_hand
+        .headers
+        .push(("XI-API-KEY".into(), "test-key-not-real".into()));
+    assert!(check_request(&by_hand).is_err());
+}
+
+/// `Debug` of a request or a response never shows a signed URL's path or query, a header's value,
+/// a credential or a body: a log line or a panic message may print one.
+#[test]
+fn requests_and_responses_debug_without_urls_values_or_bodies() {
+    use grida_fx_providers::transport::{Body, Credential, HttpRequest, Lane, Method};
+    let request = HttpRequest::new(
+        Method::Get,
+        "https://v3b.fal.media/files/acme/clip.mp4?X-Amz-Signature=deadbeefcafe0123",
+        Lane::Download,
+    )
+    .header("accept", "video/mp4");
+    let shown = format!("{request:?}");
+    assert!(!shown.contains("deadbeefcafe0123"), "{shown}");
+    assert!(!shown.contains("/files/acme"), "{shown}");
+    assert!(shown.contains("https://v3b.fal.media"), "{shown}");
+    assert!(shown.contains("\"accept\""), "{shown}");
+    assert!(!shown.contains("video/mp4"), "{shown}");
+    let posted = HttpRequest::new(
+        Method::Post,
+        "https://api.example.test/v1/x",
+        Lane::Provider,
+    )
+    .credential(Credential {
+        header: "authorization",
+        prefix: "Bearer ",
+        secret: grida_fx_providers::Secret::new("test-key-not-real-debug"),
+    })
+    .body(Body::Json(serde_json::json!({
+        "prompt": "a secret prompt",
+        "image": "data:image/png;base64,iVBORw0KGgo="
+    })));
+    let shown = format!("{posted:?}");
+    for hidden in ["test-key-not-real-debug", "a secret prompt", "iVBORw0KGgo"] {
+        assert!(!shown.contains(hidden), "{shown}");
+    }
+    let response = HttpResponse::new(
+        200,
+        br#"{"video":{"url":"https://v3b.fal.media/x?sig=1"}}"#.to_vec(),
+    )
+    .with_header("location", "https://v3b.fal.media/x?sig=1");
+    let shown = format!("{response:?}");
+    assert!(!shown.contains("sig=1"), "{shown}");
+    assert!(
+        shown.contains("200") && shown.contains("\"location\""),
+        "{shown}"
+    );
+}

@@ -125,6 +125,8 @@ impl Book {
 #[derive(Debug, Clone, PartialEq)]
 enum JobOp {
     Saved(JobState, Option<Value>),
+    /// Saved `submitting` with this note (spec/store.md §5).
+    Noted(String),
     Removed,
 }
 
@@ -158,7 +160,17 @@ impl JobBook for Jobs {
         assert_eq!(record.key, key());
         assert_eq!(record.capability, "video.generate");
         self.fails(&format!("jobs/{}.json", record.key))?;
-        lock(&self.ops).push(JobOp::Saved(record.state, record.handle.clone()));
+        let op = match &record.note {
+            Some(note) => {
+                assert_eq!(
+                    (record.state, &record.handle),
+                    (JobState::Submitting, &None)
+                );
+                JobOp::Noted(note.clone())
+            }
+            None => JobOp::Saved(record.state, record.handle.clone()),
+        };
+        lock(&self.ops).push(op);
         Ok(())
     }
 
@@ -357,6 +369,7 @@ fn job_fields() -> JobRecord {
         take: vec![1],
         state: JobState::Settled,
         handle: None,
+        note: None,
     }
 }
 
@@ -1151,6 +1164,53 @@ async fn an_uncertain_submit_keeps_submitting_and_settles_in_full() {
         outcome,
         Outcome::Unsettled("timed out after the request left".into())
     );
+    // The record stays `submitting`, now with the reason as its note (spec/store.md §5).
+    assert_eq!(
+        rig.jobs.ops(),
+        vec![
+            submitting(),
+            JobOp::Noted("timed out after the request left".into())
+        ]
+    );
+    assert_eq!(rig.book.settlements(), vec![(hold_name(1), None)]);
+    assert_eq!(fake.log().len(), 1, "never submitted again");
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_uncertain_submit_s_note_is_redacted_and_names_the_provider_s_job() {
+    let rig = Rig::new();
+    // A fake key in an OpenAI-like shape, which every redactor masks.
+    let fake = FakeAdapter::long_job(
+        vec![Submitted::Uncertain {
+            reason: "fal took the video job but returned no handle to collect it by \
+                     (request req-7); key sk-test-not-a-real-key-0000"
+                .into(),
+        }],
+        Vec::new(),
+    );
+    let outcome = submit_job(&fake, &rig.long()).await;
+    let note = "fal took the video job but returned no handle to collect it by (request req-7); \
+                key [redacted]";
+    assert_eq!(outcome, Outcome::Unsettled(note.into()));
+    assert_eq!(
+        rig.jobs.ops(),
+        vec![submitting(), JobOp::Noted(note.into())]
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_note_that_cannot_be_written_stops_the_run_and_settles_in_full() {
+    let mut rig = Rig::new();
+    rig.jobs.fail_at = Some(2);
+    let fake = FakeAdapter::long_job(
+        vec![Submitted::Uncertain {
+            reason: "timed out after the request left".into(),
+        }],
+        Vec::new(),
+    );
+    let outcome = submit_job(&fake, &rig.long()).await;
+    assert!(matches!(outcome, Outcome::Store(_)), "{outcome:?}");
+    // The record written before the submit stays `submitting`, without a note.
     assert_eq!(rig.jobs.ops(), vec![submitting()]);
     assert_eq!(rig.book.settlements(), vec![(hold_name(1), None)]);
     assert_eq!(fake.log().len(), 1, "never submitted again");

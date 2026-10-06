@@ -154,6 +154,7 @@ fn job(key: &str, state: JobState, handle: Option<Value>) -> JobRecord {
         take: vec![2, 1],
         state,
         handle,
+        note: None,
     }
 }
 
@@ -657,11 +658,62 @@ fn records_round_trip() {
             JobState::Settled,
             Some(json!({"request_id": "R1"})),
         ),
+        noted(&digest_of(5)),
     ] {
         assert_eq!(
             JobRecord::from_value(&record.to_value()),
             Ok(record.clone())
         );
+    }
+    // A note is written only when there is one.
+    let plain = job(&digest_of(5), JobState::Submitting, None).to_value();
+    assert!(plain.get("note").is_none(), "{plain}");
+    assert_eq!(
+        noted(&digest_of(5)).to_value()["note"],
+        json!("fal took the job but returned no handle (request req-7)")
+    );
+}
+
+/// A `submitting` record whose submit's outcome is unknown, with its note (spec/store.md §5).
+fn noted(key: &str) -> JobRecord {
+    JobRecord {
+        note: Some("fal took the job but returned no handle (request req-7)".into()),
+        ..job(key, JobState::Submitting, None)
+    }
+}
+
+#[test]
+fn job_records_match_their_schema() {
+    let schema: Value = serde_json::from_str(include_str!(
+        "../../../spec/schemas/fx-job-record-v1.schema.json"
+    ))
+    .unwrap();
+    let validator = jsonschema::validator_for(&schema).unwrap();
+    let handle = || Some(json!({"request_id": "R1"}));
+    for record in [
+        job(&digest_of(5), JobState::Submitting, None),
+        noted(&digest_of(5)),
+        job(&digest_of(5), JobState::Submitted, handle()),
+        job(&digest_of(5), JobState::Settled, None),
+        job(&digest_of(5), JobState::Settled, handle()),
+    ] {
+        let value = record.to_value();
+        let errors: Vec<String> = validator
+            .iter_errors(&value)
+            .map(|e| e.to_string())
+            .collect();
+        assert!(errors.is_empty(), "{value}: {errors:#?}");
+    }
+    // What the reader refuses of a note, the schema refuses too.
+    let mut settled = job(&digest_of(5), JobState::Settled, handle()).to_value();
+    settled["note"] = json!("a note");
+    let mut submitted = job(&digest_of(5), JobState::Submitted, handle()).to_value();
+    submitted["note"] = json!("a note");
+    let mut number = noted(&digest_of(5)).to_value();
+    number["note"] = json!(7);
+    for value in [settled, submitted, number] {
+        assert!(!validator.is_valid(&value), "{value}");
+        assert!(JobRecord::from_value(&value).is_err(), "{value}");
     }
 }
 
@@ -731,7 +783,7 @@ fn readers_refuse_what_the_schemas_refuse() {
         assert!(CallRecord::from_value(&value).is_err(), "{what}");
     }
 
-    let job_edits: [(&str, Edit); 6] = [
+    let job_edits: [(&str, Edit); 9] = [
         ("unknown member", |v| v["extra"] = json!(1)),
         ("missing handle", |v| {
             v.as_object_mut().unwrap().remove("handle");
@@ -742,6 +794,16 @@ fn readers_refuse_what_the_schemas_refuse() {
             v["handle"] = json!({"id": 1})
         }),
         ("take", |v| v["take"] = json!(1)),
+        ("note that is not text", |v| v["note"] = json!(null)),
+        ("note on a submitted record", |v| {
+            v["state"] = json!("submitted");
+            v["handle"] = json!({"id": 1});
+            v["note"] = json!("why");
+        }),
+        ("note on a settled record", |v| {
+            v["state"] = json!("settled");
+            v["note"] = json!("why");
+        }),
     ];
     for (what, edit) in job_edits {
         let mut value = job.clone();
@@ -1000,6 +1062,9 @@ fn job_records_move_through_their_states() {
     assert_eq!(store.load_job(&key), Ok(Some(submitting)));
     let path = store.root().join("jobs").join(format!("{key}.json"));
     assert!(!fs::metadata(&path).unwrap().permissions().readonly());
+    // An uncertain submit keeps the record `submitting`, with its note.
+    store.save_job(&noted(&key)).unwrap();
+    assert_eq!(store.load_job(&key), Ok(Some(noted(&key))));
 
     let submitted = job(&key, JobState::Submitted, Some(json!({"request_id": "R1"})));
     store.save_job(&submitted).unwrap();

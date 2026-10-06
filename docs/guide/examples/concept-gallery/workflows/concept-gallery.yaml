@@ -72,12 +72,12 @@ steps:
           schema: ./schemas/entity-direction.json
           vars: { entity: "${{ item }}", grammar: "${{ steps.grammar.outputs.json }}" }
 
-      draw:
-        uses: fx/image.generate@1
+      draw:                                   # drawn from the poster: an edit takes input pictures
+        uses: fx/image.edit@1
         with:
           prompt: ${{ steps.direct.outputs.json.prompt }}
           size: ${{ lookup(tables.size_by_mode, item.mode) }}
-          references: [ "${{ inputs.poster }}" ]
+          image: ${{ inputs.poster }}
 
       review:
         uses: fx/vision.review@1

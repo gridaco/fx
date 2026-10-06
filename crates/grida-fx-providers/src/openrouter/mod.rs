@@ -3,9 +3,10 @@
 //!
 //! Credential `authorization: Bearer <OPENROUTER_API_KEY>`; base `OPENROUTER_BASE_URL`, default
 //! `https://openrouter.ai/api/v1`. Every request is one JSON body (pictures as data URLs); no
-//! downloads, no multipart, no long jobs. Costs come from `usage.cost` ([`crate::wire::usd_ceil`]),
-//! the last SSE `usage` for music. Status classes, shared by the four adapters, are
-//! spec/providers.md §9.2's table, implemented once in [`classify`]; so are the contract check
+//! downloads, no multipart, no long jobs. Costs come from `usage` ([`usage_cost`]: `usage.cost`,
+//! plus the upstream inference on the user's own provider key), the last SSE `usage` for music.
+//! Status classes, shared by the four adapters, are spec/providers.md §9.2's table, implemented
+//! once in [`classify`]; so are the contract check
 //! (`serves`, `not_served`), the request-body cap (`body_exceeds`) and request ids in reasons
 //! (`with_request_id`).
 
@@ -94,9 +95,12 @@ pub fn classify(
                 retry_after: crate::adapter::retry_after(&response),
             }
         }
-        408 => Sent::NotReceived {
+        // OpenRouter's 408 means the request timed out there: it arrived, and the work may be
+        // done (spec/providers.md §9.2).
+        408 => Sent::Failed {
             reason,
-            retry_after: crate::adapter::retry_after(&response),
+            cost: None,
+            retryable: true,
         },
         503 if envelope => Sent::NotReceived {
             reason,
@@ -137,6 +141,28 @@ pub fn classify(
         },
         other => other,
     })
+}
+
+/// The cost a response's `usage` reports (spec/providers.md §9.2 "Cost"): `usage.cost`, rounded up
+/// (spec/providers.md §6). On a request that ran on the user's own provider key (BYOK: `is_byok`
+/// is true, or `cost_details.upstream_inference_cost` is given), `cost` is only OpenRouter's fee
+/// and the upstream provider bills the inference to the user's own account, so the cost is
+/// `cost` plus `upstream_inference_cost`, each rounded up. `None` when `cost` is missing or not a
+/// cost, and when a BYOK request's upstream cost is missing or not a cost: the engine then
+/// charges the whole hold, never less than the call may have cost.
+pub fn usage_cost(usage: Option<&Value>) -> Option<Usd> {
+    let usage = usage?.as_object()?;
+    let cost = crate::wire::usd_ceil(usage.get("cost")?)?;
+    let upstream = usage
+        .get("cost_details")
+        .and_then(|details| details.get("upstream_inference_cost"))
+        .filter(|value| !value.is_null());
+    let byok = usage.get("is_byok") == Some(&Value::Bool(true));
+    match upstream {
+        Some(upstream) => Some(cost + crate::wire::usd_ceil(upstream)?),
+        None if byok => None,
+        None => Some(cost),
+    }
 }
 
 static SAFE_NUMBER: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
@@ -265,7 +291,22 @@ mod tests {
     fn statuses_classify_per_the_table() {
         let envelope = json!({"error": {"code": 400, "message": "bad or-secret"}});
         assert!(matches!(sent(429, json!({})), Sent::NotReceived { .. }));
-        assert!(matches!(sent(408, json!({})), Sent::NotReceived { .. }));
+        for body in [
+            json!({}),
+            json!({"error": {"code": 408, "message": "timed out"}}),
+        ] {
+            assert!(
+                matches!(
+                    sent(408, body.clone()),
+                    Sent::Failed {
+                        cost: None,
+                        retryable: true,
+                        ..
+                    }
+                ),
+                "{body}"
+            );
+        }
         assert!(matches!(
             sent(503, envelope.clone()),
             Sent::NotReceived { .. }
@@ -385,6 +426,55 @@ mod tests {
         };
         assert_eq!(reason, "X was rate limited (HTTP 429); retry-after 20");
         assert_eq!(retry_after, Some(std::time::Duration::from_secs(20)));
+    }
+
+    /// classify C2: on the user's own provider key, `usage.cost` is OpenRouter's fee only; the
+    /// upstream inference is billed to the user's account and counts too.
+    #[test]
+    fn a_byok_cost_includes_the_upstream_inference() {
+        let cost = |usage: Value| usage_cost(Some(&usage));
+        assert_eq!(cost(json!({"cost": 0.05})), Some(Usd(50_000)));
+        assert_eq!(
+            cost(
+                json!({"cost": 0.05, "is_byok": false, "cost_details": {"upstream_inference_cost": null}})
+            ),
+            Some(Usd(50_000))
+        );
+        assert_eq!(
+            cost(json!({"cost": 0.05, "cost_details": {"upstream_inference_cost": 0}})),
+            Some(Usd(50_000)),
+            "a request on OpenRouter's own key reports 0 upstream"
+        );
+        assert_eq!(
+            cost(
+                json!({"cost": 0, "is_byok": true, "cost_details": {"upstream_inference_cost": 0.05}})
+            ),
+            Some(Usd(50_000))
+        );
+        assert_eq!(
+            cost(json!({"cost": 0.0025, "is_byok": true,
+                        "cost_details": {"upstream_inference_cost": 0.0500001}})),
+            Some(Usd(52_501)),
+            "each part rounded up, then added"
+        );
+        assert_eq!(
+            cost(json!({"cost": 0, "cost_details": {"upstream_inference_cost": 0.05}})),
+            Some(Usd(50_000)),
+            "an upstream cost counts without is_byok"
+        );
+        for unknown in [
+            json!({"cost": 0.0025, "is_byok": true}),
+            json!({"cost": 0.0025, "is_byok": true, "cost_details": {}}),
+            json!({"cost": 0.0025, "is_byok": true, "cost_details": {"upstream_inference_cost": null}}),
+            json!({"cost": 0.0025, "cost_details": {"upstream_inference_cost": "0.05"}}),
+            json!({"cost": 0.0025, "cost_details": {"upstream_inference_cost": -1}}),
+            json!({"is_byok": true, "cost_details": {"upstream_inference_cost": 0.05}}),
+            json!({"cost": null}),
+            json!("0.05"),
+        ] {
+            assert_eq!(cost(unknown.clone()), None, "{unknown}");
+        }
+        assert_eq!(usage_cost(None), None);
     }
 
     #[test]

@@ -236,7 +236,7 @@ alone.
 | `matrix` | a 2x2 `matrix` with dotted keys, collected into a `text{}` port |
 | `numbers` | `1` and `1.0` give one identity; numbers render in text in their JCS form; a run's output at `outputs/<name><suffix>`; an integer literal that reading would round is refused (exit 2) |
 | `phase` | a `for_each` over a step's output with `max:` makes a pending second phase, priced at its maximum |
-| `refusals` | five planning problems in one plan (an assertion, a missing feature, `independent_of`, an unknown route, an unbounded repeat), exit 1 |
+| `refusals` | six planning problems in one plan (an assertion, a feature under its old name, a missing feature, `independent_of`, an unknown route, an unbounded repeat), exit 1 |
 | `repeat-keyed` | a keyed `for_each` over an input list, collected into one step |
 | `resource-missing` | a declared resource that is not in the project is a planning problem (exit 1), never a crash |
 | `run-cache-hit` | the same plan run into a second folder: every step is a result-cache hit, with the same output bytes |

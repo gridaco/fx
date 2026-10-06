@@ -53,7 +53,7 @@ pub fn normalize_base_url(value: &str, label: &str) -> Result<String, String> {
     Ok(trimmed.to_string())
 }
 
-fn is_loopback(url: &url::Url) -> bool {
+pub(crate) fn is_loopback(url: &url::Url) -> bool {
     match url.host() {
         Some(url::Host::Domain(domain)) => domain
             .trim_end_matches('.')

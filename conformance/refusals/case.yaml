@@ -1,5 +1,5 @@
-# Five planning problems in one plan (an assertion, a missing feature, `independent_of`, an unknown
-# route, an unbounded repeat), exit 1.
+# Six planning problems in one plan (an assertion, a feature under its old name, a missing feature,
+# `independent_of`, an unknown route, an unbounded repeat), exit 1.
 steps:
 - argv:
   - expand

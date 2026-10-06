@@ -417,6 +417,9 @@ fn the_route_must_be_one_this_adapter_serves() {
         json!({"adapter": "gnode-openai-image-v1", "adapter_behavior": "1"}),
         json!({"adapter": "fx-openrouter-image-v1"}),
         json!({"adapter": ADAPTER, "adapter_behavior": "2"}),
+        // routes-caps F3: the behaviour is the text "1" (spec/providers.md §9.1, §10); the number
+        // 1 is another contract with another fingerprint, refused as OpenRouter refuses 3.
+        json!({"adapter": ADAPTER, "adapter_behavior": 1}),
     ] {
         let call = CallBuilder::new("image.generate", ROUTE)
             .contract(contract.clone())
@@ -436,20 +439,12 @@ fn the_route_must_be_one_this_adapter_serves() {
         refused(&call),
         "img-a@openai is not a background.remove route this adapter serves"
     );
-    // A route without a contract is served; the behaviour may be spelled as a number.
+    // A route without a contract is served.
     let bare = CallBuilder::new("image.generate", ROUTE)
         .request(json!({"prompt": "a kite"}))
         .build();
     assert_eq!(
         refused_with(Keys::none(), &bare),
-        "OPENAI_API_KEY is not set"
-    );
-    let numbered = CallBuilder::new("image.generate", ROUTE)
-        .contract(json!({"adapter": ADAPTER, "adapter_behavior": 1}))
-        .request(json!({"prompt": "a kite"}))
-        .build();
-    assert_eq!(
-        refused_with(Keys::none(), &numbered),
         "OPENAI_API_KEY is not set"
     );
 }
@@ -1003,10 +998,28 @@ fn rate_limits_are_not_received_and_quota_ends_the_call() {
         ));
         assert_eq!((cost, retryable), (Some(Usd::ZERO), false), "{error}");
     }
-    assert_eq!(
-        not_received(outcome(HttpResponse::new(408, Vec::new()))),
-        "OpenAI image generation returned HTTP 408"
-    );
+}
+
+/// classify C1: OpenAI's 408 is its own timeout, after the request arrived. The work may be done,
+/// so it is a billed, retryable failure (spec/providers.md §9.1), never a free resend.
+#[test]
+fn a_408_is_billed_and_retryable() {
+    for (response, reason) in [
+        (
+            HttpResponse::new(408, Vec::new()),
+            "OpenAI image generation returned HTTP 408",
+        ),
+        (
+            envelope(
+                408,
+                json!({"message": "Request timed out.", "type": "timeout"}),
+            )
+            .with_header("retry-after", "3"),
+            "OpenAI image generation returned HTTP 408: type=timeout",
+        ),
+    ] {
+        assert_eq!(failed(outcome(response)), (reason.to_string(), None, true));
+    }
 }
 
 #[test]

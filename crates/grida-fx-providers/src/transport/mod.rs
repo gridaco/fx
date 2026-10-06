@@ -8,7 +8,10 @@
 //! - it enforces the request's `timeout` (the whole exchange, connect to last body byte) and
 //!   `max_response_bytes` (counted on the bytes it reads, aborting as soon as the cap is crossed);
 //! - it attaches the request's [`Credential`] as one header, and refuses a credential on the
-//!   [`Lane::Download`] lane before anything leaves (a result URL is another host);
+//!   [`Lane::Download`] lane before anything leaves (a result URL is another host), whether in
+//!   the credential slot or as a header named like one ([`check_request`]);
+//! - it never lets a proxy see a credential (spec/providers.md §2 item 9): a plain `http` or
+//!   loopback request goes direct, and only `https` to a remote host may be tunnelled;
 //! - it reports a failure with its [`Phase`]: [`Phase::NotSent`] only when the request provably
 //!   never left (no connection was established: DNS, TCP connect, TLS handshake, connect or pool
 //!   timeout, or a refusal by the transport itself); every other failure is [`Phase::AfterSend`].
@@ -19,7 +22,9 @@
 //! request asserted) and [`replay::NoNetwork`] (panics on any send), behind feature `testing`.
 //!
 //! Credentials never appear in an error's `reason`, in `Debug` output or in a recorded fixture:
-//! [`Secret`] prints as `[redacted]`.
+//! [`Secret`] prints as `[redacted]`, and an [`HttpRequest`] or [`HttpResponse`] prints only its
+//! URL's origin, its header names and its body's size (a URL may be signed, a body may echo a
+//! key).
 
 pub mod http;
 pub mod multipart;
@@ -151,8 +156,9 @@ impl Part {
     }
 }
 
-/// One request (module doc).
-#[derive(Debug, Clone, PartialEq)]
+/// One request (module doc). Its `Debug` shows the URL's origin only, header names without
+/// their values, and the body's size: a URL may be signed, and a header may be a credential.
+#[derive(Clone, PartialEq)]
 pub struct HttpRequest {
     pub method: Method,
     /// The absolute URL. May be a signed download URL: never put it in a reason or a record.
@@ -168,6 +174,36 @@ pub struct HttpRequest {
     /// The most response body bytes read; more is [`TransportErrorKind::TooLarge`].
     pub max_response_bytes: u64,
     pub lane: Lane,
+}
+
+impl fmt::Debug for HttpRequest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let headers: Vec<&str> = self.headers.iter().map(|(name, _)| name.as_str()).collect();
+        f.debug_struct("HttpRequest")
+            .field("method", &self.method)
+            .field("origin", &self.origin())
+            .field("headers", &headers)
+            .field("credential", &self.credential)
+            .field("body", &BodySummary(&self.body))
+            .field("timeout", &self.timeout)
+            .field("max_response_bytes", &self.max_response_bytes)
+            .field("lane", &self.lane)
+            .finish()
+    }
+}
+
+/// A request's body as its `Debug` shows it: its form and size, never its content.
+struct BodySummary<'a>(&'a Body);
+
+impl fmt::Debug for BodySummary<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            Body::Empty => f.write_str("Empty"),
+            Body::Json(_) => f.write_str("Json(..)"),
+            Body::Bytes { bytes, .. } => write!(f, "Bytes({} bytes)", bytes.len()),
+            Body::Multipart(parts) => write!(f, "Multipart({} parts)", parts.len()),
+        }
+    }
 }
 
 impl HttpRequest {
@@ -224,12 +260,25 @@ impl HttpRequest {
     }
 }
 
-/// A response: status, headers (names lowercase, in order), and the whole body as read.
-#[derive(Debug, Clone, PartialEq, Default)]
+/// A response: status, headers (names lowercase, in order), and the whole body as read. Its
+/// `Debug` shows the status, header names and the body's size: a body or a `location` may hold a
+/// signed URL, and an error body may echo a key.
+#[derive(Clone, PartialEq, Default)]
 pub struct HttpResponse {
     pub status: u16,
     pub headers: Vec<(String, String)>,
     pub body: Vec<u8>,
+}
+
+impl fmt::Debug for HttpResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let headers: Vec<&str> = self.headers.iter().map(|(name, _)| name.as_str()).collect();
+        f.debug_struct("HttpResponse")
+            .field("status", &self.status)
+            .field("headers", &headers)
+            .field("body", &format_args!("{} bytes", self.body.len()))
+            .finish()
+    }
 }
 
 impl HttpResponse {
@@ -356,8 +405,30 @@ impl Transport for Offline {
     }
 }
 
+/// Whether a header name is a credential's, or named like one: `authorization`,
+/// `proxy-authorization`, `cookie`, and any name containing `auth`, `cookie`, `key`, `token`,
+/// `secret`, `session`, `credential`, `password` or `signature` (`xi-api-key`, `x-api-key`,
+/// `x-auth-token`). The download lane refuses them all (spec/providers.md §2 item 5).
+pub fn names_a_credential(name: &str) -> bool {
+    const PARTS: [&str; 9] = [
+        "auth",
+        "cookie",
+        "key",
+        "token",
+        "secret",
+        "session",
+        "credential",
+        "password",
+        "signature",
+    ];
+    let name = name.trim().to_ascii_lowercase();
+    PARTS.iter().any(|part| name.contains(part))
+}
+
 /// The checks every transport makes before anything leaves (spec/providers.md §2): an absolute
-/// `http`/`https` URL with a host and no userinfo, and no credential on the download lane.
+/// `http`/`https` URL with a host and no userinfo; on the download lane, no credential and no
+/// header named like one ([`names_a_credential`]); on the other lanes, no header that takes the
+/// credential's place.
 pub fn check_request(request: &HttpRequest) -> Result<(), TransportError> {
     let refused = |reason: &str| TransportError::not_sent(TransportErrorKind::Refused, reason);
     let url =
@@ -368,14 +439,20 @@ pub fn check_request(request: &HttpRequest) -> Result<(), TransportError> {
     if !url.username().is_empty() || url.password().is_some() {
         return Err(refused("a request's URL carries no credentials"));
     }
-    if request.lane == Lane::Download && request.credential.is_some() {
+    if request.lane == Lane::Download
+        && (request.credential.is_some()
+            || request
+                .headers
+                .iter()
+                .any(|(name, _)| names_a_credential(name)))
+    {
         return Err(refused("a download never carries a credential"));
     }
     if request.headers.iter().any(|(name, _)| {
         request
             .credential
             .as_ref()
-            .is_some_and(|c| c.header == name)
+            .is_some_and(|c| c.header.eq_ignore_ascii_case(name))
     }) {
         return Err(refused(
             "a credential header is set only through the credential",

@@ -175,12 +175,10 @@ struct Track {
 }
 
 impl Track {
-    /// The reported cost: the last `usage.cost` seen.
+    /// The reported cost: the last `usage` seen ([`super::usage_cost`]).
     fn cost(&self) -> Option<grida_fx_core::money::Usd> {
-        self.usage
-            .as_ref()
-            .and_then(|usage| usage.get("cost"))
-            .and_then(wire::usd_ceil)
+        let usage = self.usage.clone().map(Value::Object);
+        super::usage_cost(usage.as_ref())
     }
 
     /// Reads the response, as a stream or as one buffered object.

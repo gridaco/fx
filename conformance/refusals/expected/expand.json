@@ -161,7 +161,11 @@
    "where": "workflow.assert[0]"
   },
   {
-   "message": "img-a@acme does not support mask",
+   "message": "transparent_background is not an image.generate feature (spec/capabilities.md); FX calls it alpha",
+   "where": "draw.requires"
+  },
+  {
+   "message": "img-a@acme does not support exact_size",
    "where": "draw.requires"
   },
   {

@@ -776,3 +776,76 @@ fn a_rig_collect_ends_or_stays_outstanding_like_a_mesh() {
         }
     );
 }
+
+#[test]
+fn a_check_rig_type_that_is_not_a_plain_string_never_reaches_the_handle_or_the_answer() {
+    // spec/providers.md §7: a handle holds no signed URL; §4.4: an answer holds no provider URL.
+    let signed = format!("{STORAGE}/check.json?Signature=deadbeefcafe0123&Expires=1");
+    for returned in [
+        json!({"preview": signed}),
+        json!(signed),
+        json!(["biped"]),
+        json!(3),
+        json!("a long sentence from Tripo"),
+    ] {
+        let h = harness(vec![
+            upload(),
+            check_posted(),
+            checked(json!({"riggable": false, "rig_type": returned})),
+            rig_posted(RIG_BODY),
+            read("task2", "success", json!({"model": STORAGE}), json!(10)),
+            download(STORAGE, &glb(1)),
+        ]);
+        let call = rig_call(json!({"allow_negative_check": true}));
+        let Submitted::Accepted { handle } = h.submit(&call) else {
+            panic!("accepted for {returned}");
+        };
+        assert_eq!(
+            handle,
+            json!({"task_id": "task2",
+                   "check": {"task_id": "task1", "riggable": false, "rig_type": null},
+                   "advisory_override": true})
+        );
+        let Collected::Answered(answer) = h.collect(&call, handle) else {
+            panic!("answered for {returned}");
+        };
+        assert_eq!(
+            answer.data,
+            json!({"facts": {"riggable": false, "checked_rig_type": null,
+                             "advisory_override": true}})
+        );
+        h.done();
+    }
+
+    // A handle written with such a value is read back as null, too.
+    let h = harness(vec![
+        read("task2", "success", json!({"model": STORAGE}), json!(10)),
+        download(STORAGE, &glb(1)),
+    ]);
+    let handle = json!({"task_id": "task2",
+                        "check": {"task_id": "task1", "riggable": true,
+                                  "rig_type": {"preview": signed}},
+                        "advisory_override": true});
+    let Collected::Answered(answer) = h.collect(&rig_call(json!({})), handle) else {
+        panic!("not answered");
+    };
+    assert_eq!(answer.data["facts"]["checked_rig_type"], Value::Null);
+    assert!(!answer.data.to_string().contains("deadbeef"));
+    h.done();
+}
+
+#[test]
+fn a_model_url_is_fetched_byte_for_byte_as_tripo_gave_it() {
+    // A signed URL may cover its raw query: the adapter hands the transport Tripo's text.
+    let signed = "https://tripo-data.rg1.data.tripo3d.com/tcli_ab/m%2Bodel.glb?Policy=eyJ9&Signature=AbC~d_%2B%2F'z&Key-Pair-Id=K2ABC";
+    let h = harness(vec![
+        read("task2", "success", json!({"model": signed}), json!(10)),
+        download(signed, &glb(1)),
+    ]);
+    assert!(matches!(
+        h.collect(&rig_call(json!({})), plain_handle()),
+        Collected::Answered(_)
+    ));
+    assert_eq!(h.transport.requests()[1].url, signed);
+    h.done();
+}

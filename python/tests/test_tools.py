@@ -1112,3 +1112,152 @@ def test_check_spec_names_check_covers_contracts_not_prose(
     gate = check_spec.Gate()
     check_spec.check_names(gate)
     assert gate.failures == 1
+
+
+# --- tools/check_spec.py: the planner's feature vocabulary (k) ---------------------------------
+
+
+@pytest.fixture
+def vocabulary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Any, Path, Path]:
+    """check_spec with its spec folder and feature vocabulary copied into `tmp_path`."""
+    check_spec = _load_check_spec()
+    spec = tmp_path / "spec"
+    spec.mkdir()
+    for name in ("capabilities.md", "providers.md"):
+        (spec / name).write_bytes((REPO / "spec" / name).read_bytes())
+    features = tmp_path / "features.json"
+    features.write_bytes(check_spec.FEATURES.read_bytes())
+    monkeypatch.setattr(check_spec, "SPEC", spec)
+    monkeypatch.setattr(check_spec, "FEATURES", features)
+    return check_spec, spec, features
+
+
+def _check_vocabulary(check_spec: Any) -> int:
+    gate = check_spec.Gate()
+    check_spec.check_feature_vocabulary(gate)
+    return gate.failures
+
+
+def test_check_spec_feature_vocabulary_agrees_with_the_spec(
+    vocabulary: tuple[Any, Path, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    check_spec, _, _ = vocabulary
+    assert _check_vocabulary(check_spec) == 0, capsys.readouterr().out
+    assert "11 capabilities and 4 renamed features agree" in capsys.readouterr().out
+
+
+def _drop_pbr(table: dict[str, Any]) -> None:
+    table["capabilities"]["mesh.generate"].remove("pbr")
+
+
+def _twice(table: dict[str, Any]) -> None:
+    table["capabilities"]["sound.generate"].append("exact_duration")
+
+
+def _unknown_capability(table: dict[str, Any]) -> None:
+    table["capabilities"]["vision.review"] = []
+
+
+def _lacking_capability(table: dict[str, Any]) -> None:
+    del table["capabilities"]["background.remove"]
+
+
+def _renamed_to_nothing(table: dict[str, Any]) -> None:
+    table["renamed"]["masked_edit"] = "masks"
+
+
+def _renamed_but_still_a_feature(table: dict[str, Any]) -> None:
+    table["renamed"]["alpha"] = "alpha"
+
+
+def _renamed_but_never_dropped(table: dict[str, Any]) -> None:
+    table["renamed"]["old_alpha"] = "alpha"
+
+
+def _kind(table: dict[str, Any]) -> None:
+    table["kind"] = "fx-features-v2"
+
+
+@pytest.mark.parametrize(
+    ("tamper", "expected"),
+    [
+        (_drop_pbr, "mesh.generate: not its feature table (extra [], missing ['pbr'])"),
+        (_twice, "sound.generate: a feature is listed twice"),
+        (_unknown_capability, "vision.review: spec/capabilities.md has no section for it"),
+        (
+            _lacking_capability,
+            "background.remove: spec/capabilities.md defines it, the vocabulary lacks it",
+        ),
+        (_renamed_to_nothing, "renamed masked_edit: masks is no feature in spec/capabilities.md"),
+        (_renamed_but_still_a_feature, "renamed alpha: it is still a feature"),
+        (
+            _renamed_but_never_dropped,
+            "renamed old_alpha: spec/providers.md section 11 does not name it",
+        ),
+        (_kind, "kind is 'fx-features-v2', not 'fx-features-v1'"),
+    ],
+)
+def test_check_spec_feature_vocabulary_catches(
+    vocabulary: tuple[Any, Path, Path],
+    capsys: pytest.CaptureFixture[str],
+    tamper: Any,
+    expected: str,
+) -> None:
+    check_spec, _, features = vocabulary
+    table = json.loads(features.read_text("utf-8"))
+    tamper(table)
+    features.write_text(json.dumps(table), "utf-8")
+    assert _check_vocabulary(check_spec) == 1
+    assert expected in capsys.readouterr().out
+
+
+def test_check_spec_feature_vocabulary_follows_the_spec_text(
+    vocabulary: tuple[Any, Path, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    check_spec, spec, _ = vocabulary
+    # A feature row added to the spec, and a rename that section 11 no longer names.
+    capabilities = spec / "capabilities.md"
+    text = capabilities.read_text("utf-8")
+    row = "| `exact_duration` |"
+    assert text.count(row) == 1
+    capabilities.write_text(
+        text.replace(row, "| `loop_seamless` | the sound loops |\n" + row), "utf-8"
+    )
+    providers = spec / "providers.md"
+    providers.write_text(
+        providers.read_text("utf-8").replace("`data_url_reference_input`", "an alias"), "utf-8"
+    )
+    assert _check_vocabulary(check_spec) == 1
+    out = capsys.readouterr().out
+    assert "sound.generate: not its feature table (extra [], missing ['loop_seamless'])" in out
+    assert "renamed data_url_reference_input: spec/providers.md section 11 does not name it" in out
+
+
+@pytest.mark.parametrize(
+    ("content", "expected"),
+    [
+        (None, "missing"),
+        ('{"kind": "fx-features-v1"}', "not {kind, capabilities, renamed}"),
+        (
+            '{"kind": "fx-features-v1", "capabilities": {"a.b": "x"}, "renamed": {}}',
+            "capabilities is not {capability: [feature, ...]}",
+        ),
+        (
+            '{"kind": "fx-features-v1", "capabilities": {}, "renamed": {"a": 1}}',
+            "renamed is not {name: feature}",
+        ),
+    ],
+)
+def test_check_spec_feature_vocabulary_refuses_a_malformed_table(
+    vocabulary: tuple[Any, Path, Path],
+    capsys: pytest.CaptureFixture[str],
+    content: str | None,
+    expected: str,
+) -> None:
+    check_spec, _, features = vocabulary
+    if content is None:
+        features.unlink()
+    else:
+        features.write_text(content, "utf-8")
+    assert _check_vocabulary(check_spec) == 1
+    assert expected in capsys.readouterr().out

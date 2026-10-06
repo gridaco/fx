@@ -7,8 +7,9 @@
 //! 3. a data URL is decoded in place: its media type normalized the same way and equal to the
 //!    declared one when both exist, strict base64, at most the cap;
 //! 4. any other URL must pass [`super::is_fal_media_url`] before anything is requested; it is
-//!    added to the redactor, then fetched **once** on the download lane with only
-//!    `accept: image/*`, no credential, no redirect, the cap and the time left. A non-2xx answer
+//!    added to the redactor, then fetched **once**, at the URL exactly as fal gave it (FX does not
+//!    re-encode it), on the download lane with only `accept: image/*`, no credential, no redirect,
+//!    the cap and the time left. A non-2xx answer
 //!    is a failure; a `content-length`, when present, is a whole number within the cap; a
 //!    `content-type`, when present, normalizes to one of the route's types and agrees with the
 //!    declared one; the body is not empty;
@@ -125,7 +126,9 @@ async fn download(
             "{DOWNLOAD_LABEL} was not sent: the deadline has passed"
         )));
     }
-    let request = HttpRequest::new(Method::Get, target.as_str(), Lane::Download)
+    // The provider's text, byte for byte: the transport parses it as the check above did, so the
+    // host that was checked is the host that is asked.
+    let request = HttpRequest::new(Method::Get, url, Lane::Download)
         .header("accept", "image/*")
         .timeout(remaining)
         .max_response_bytes(rules.max_bytes);

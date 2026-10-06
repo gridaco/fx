@@ -11,7 +11,7 @@
 //! `Pictures the tools returned.`. Tools: `{"type": "function", "function": {"name",
 //! "description", "parameters": <strict schema>, "strict": true}}`. The answer is
 //! `data: {"text", "tool_calls": [{"id", "name", "arguments": <object>}]}`, `cost` from
-//! `usage.cost`; the engine checks its shape. Deadline 600 s.
+//! `usage` ([`super::usage_cost`]); the engine checks its shape. Deadline 600 s.
 //!
 //! `send`, in the order of spec/providers.md §5:
 //! 1. the contract (`structured::read_contract`, no `pictures` member);
@@ -20,7 +20,8 @@
 //! 4. values: each tool's name (`^[a-z][a-z0-9_]{0,63}$`), non-blank description and object
 //!    `parameters`; `max_tokens` at least 1; the transcript (known roles, text contents, an id on
 //!    every assistant call and every tool message, pictures as file values);
-//! 5. files: every picture, as a data URL (its kind when `image/*`, else `image/png`);
+//! 5. files: every picture, as a data URL of its kind. A file that is not `image/*` is refused
+//!    before any file is read: `messages[<i>].images[<j>] is <kind>, not a picture`;
 //! 6. a body over 200 MiB is refused; otherwise one exchange.
 //!
 //! Pictures are held while tool messages follow one another and are sent, before the next
@@ -112,17 +113,26 @@ fn content<'a>(entry: &'a Map<String, Value>, role: &str) -> Result<&'a str, Str
     }
 }
 
-/// A message's pictures as `image_url` parts; `picture` makes each one's URL.
+/// Makes a picture's URL from its file value and its place in the request
+/// (`messages[<i>].images[<j>]`).
+type Picture<'a> = dyn FnMut(&Value, &str) -> Result<String, String> + 'a;
+
+/// The pictures of message `index` as `image_url` parts; `picture` makes each one's URL.
 fn pictures(
     entry: &Map<String, Value>,
+    index: usize,
     policy: &RequestPolicy,
-    picture: &mut dyn FnMut(&Value) -> Result<String, String>,
+    picture: &mut Picture<'_>,
 ) -> Result<Vec<Value>, String> {
     match entry.get("images") {
         None | Some(Value::Null) => Ok(Vec::new()),
         Some(Value::Array(images)) if images.iter().all(capabilities::is_file_value) => images
             .iter()
-            .map(|image| picture(image).map(|url| policy.picture_part(url)))
+            .enumerate()
+            .map(|(j, image)| {
+                picture(image, &format!("messages[{index}].images[{j}]"))
+                    .map(|url| policy.picture_part(url))
+            })
             .collect(),
         Some(_) => Err("an agent message's images are a list of files".into()),
     }
@@ -183,14 +193,14 @@ fn wire_messages(
     system: &str,
     messages: &[Value],
     policy: &RequestPolicy,
-    picture: &mut dyn FnMut(&Value) -> Result<String, String>,
+    picture: &mut Picture<'_>,
 ) -> Result<Vec<Value>, String> {
     let mut out = Vec::new();
     if !system.is_empty() {
         out.push(json!({"role": "system", "content": system}));
     }
     let mut held: Vec<Value> = Vec::new();
-    for entry in messages {
+    for (index, entry) in messages.iter().enumerate() {
         let Some(entry) = entry.as_object() else {
             return Err("an agent transcript's messages are objects".into());
         };
@@ -202,7 +212,7 @@ fn wire_messages(
         match name {
             Some("user") => {
                 let text = content(entry, "user")?;
-                let images = pictures(entry, policy, picture)?;
+                let images = pictures(entry, index, policy, picture)?;
                 if images.is_empty() {
                     out.push(json!({"role": "user", "content": text}));
                 } else {
@@ -236,7 +246,7 @@ fn wire_messages(
                 };
                 let text = content(entry, "tool")?;
                 out.push(json!({"role": "tool", "tool_call_id": id, "content": text}));
-                held.extend(pictures(entry, policy, picture)?);
+                held.extend(pictures(entry, index, policy, picture)?);
             }
             _ => {
                 return Err(format!(
@@ -334,17 +344,21 @@ impl OpenRouterAgent {
         };
         let system = request.get("system").and_then(Value::as_str).unwrap_or("");
         let policy = &contract.policy;
-        wire_messages(system, list("messages"), policy, &mut |_| Ok(String::new()))?;
-        // 5. Files.
-        let messages = wire_messages(system, list("messages"), policy, &mut |value| {
+        wire_messages(system, list("messages"), policy, &mut |_, _| {
+            Ok(String::new())
+        })?;
+        // 5. Files: every picture's kind before any file is read, then the bytes.
+        wire_messages(system, list("messages"), policy, &mut |value, member| {
+            let file = wire::request_file(call, value, PICTURE)?;
+            if !file.kind.starts_with("image/") {
+                return Err(format!("{member} is {}, not a picture", file.kind));
+            }
+            Ok(String::new())
+        })?;
+        let messages = wire_messages(system, list("messages"), policy, &mut |value, _| {
             let file = wire::request_file(call, value, PICTURE)?;
             let bytes = wire::read_file(file, PICTURE)?;
-            let media = if file.kind.starts_with("image/") {
-                file.kind.as_str()
-            } else {
-                "image/png"
-            };
-            Ok(wire::data_url(media, &bytes))
+            Ok(wire::data_url(&file.kind, &bytes))
         })?;
         // The body (spec/providers.md §9.2).
         let mut body = Map::new();
@@ -422,7 +436,7 @@ impl RequestAdapter for OpenRouterAgent {
 mod tests {
     use super::*;
 
-    fn picture_url(value: &Value) -> Result<String, String> {
+    fn picture_url(value: &Value, _member: &str) -> Result<String, String> {
         Ok(format!(
             "data:image/png;base64,{}",
             value["file"].as_str().unwrap()

@@ -1,11 +1,11 @@
 # Route prices for the example projects: illustrative models, so the examples plan offline.
 fx: routes/v1
 routes:
-  - { capability: image.generate, route: gpt-image-2@openai, price: { low_usd: 0.04, high_usd: 0.30 }, features: [image_input, alpha] }
+  - { capability: image.generate, route: gpt-image-2@openai, price: { low_usd: 0.04, high_usd: 0.30 }, features: [alpha] }
   - { capability: image.edit, route: gpt-image-2@openai, price: { low_usd: 0.04, high_usd: 0.30 }, features: [image_input, mask, alpha] }
   - { capability: structured.generate, route: writer-llm@openrouter, price: { low_usd: 0.002, high_usd: 0.02 }, features: [image_input, structured_output] }
   - { capability: structured.generate, route: vision-llm-a@openrouter, price: { low_usd: 0.002, high_usd: 0.02 }, features: [image_input, structured_output] }
-  - { capability: structured.review, route: reviewer-llm@openrouter, price: { low_usd: 0.002, high_usd: 0.02 }, features: [image_input, structured_output] }
+  - { capability: structured.review, route: reviewer-llm@openrouter, price: { low_usd: 0.002, high_usd: 0.02 } }
   - { capability: vision.review, route: reviewer-vlm@openrouter, price: { low_usd: 0.003, high_usd: 0.03 }, features: [image_input] }
   - { capability: vision.review, route: vision-llm-b@openrouter, price: { low_usd: 0.003, high_usd: 0.03 }, features: [image_input] }
   - { capability: vision.annotate, route: vision-llm-b@openrouter, price: { low_usd: 0.003, high_usd: 0.03 }, features: [image_input] }

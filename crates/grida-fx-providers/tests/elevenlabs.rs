@@ -739,6 +739,53 @@ fn the_kind_is_the_normalized_content_type() {
     );
 }
 
+/// spec/providers.md §8: an ElevenLabs key (`sk_` and lowercase hex) is a valid media-type
+/// subtype, so a provider that echoes it in `content-type` makes it the answer's kind. The
+/// check's sentence quotes the kind, redacted; and the adapter a live run registers answers the
+/// retry owner with a redactor over every key of the invocation.
+#[test]
+fn a_key_echoed_in_the_content_type_never_reaches_the_check_s_sentence() {
+    const SHAPED: &str = "sk_0123456789abcdef0123456789abcdef0123456789abcdef";
+    let keys = Keys::from_pairs(&[(KeyName::ElevenLabs, SHAPED)]);
+    let transport = Arc::new(ReplayTransport::new(vec![
+        Expect::new(Method::Post, SOUND_URL, Lane::Provider)
+            .credential("xi-api-key", SHAPED)
+            .body(ExpectBody::Any)
+            .reply(
+                HttpResponse::new(200, MP3.to_vec())
+                    .with_header("content-type", &format!("audio/{SHAPED}")),
+            ),
+    ]));
+    let adapter = sound(transport.clone(), keys.clone());
+    let call = sound_call(json!({"prompt": "wooden door opens"}));
+    let answer = answer_of(block_on(adapter.send(&call)));
+    transport.assert_done();
+    assert_eq!(answer.files["audio"].kind, format!("audio/{SHAPED}"));
+    assert_eq!(
+        adapter.check(&call, &answer),
+        Err("requested mp3 but received audio/[redacted]".to_string())
+    );
+    let registered = grida_fx_providers::live::adapters(&setup(Arc::new(NoNetwork), keys));
+    let route = grida_fx_providers::RouteRef {
+        capability: "sound.generate".into(),
+        model: "eleven_text_to_sound_v2".into(),
+        provider: "elevenlabs".into(),
+        contract: sound_contract(),
+    };
+    let Some(Adapter::Request(live)) = registered.serving(&route) else {
+        panic!("sound.generate is served on elevenlabs");
+    };
+    assert_eq!(
+        live.check(&call, &answer),
+        Err("requested mp3 but received audio/[redacted]".to_string())
+    );
+    assert_eq!(
+        live.redactor()
+            .reason(&format!("the reply quoted {SHAPED}")),
+        "the reply quoted [redacted]"
+    );
+}
+
 #[test]
 fn checks_refuse_empty_and_mislabelled_audio_in_order() {
     let sound = sound(Arc::new(NoNetwork), test_keys());

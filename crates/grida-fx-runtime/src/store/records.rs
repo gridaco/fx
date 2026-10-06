@@ -501,6 +501,10 @@ pub struct JobRecord {
     pub state: JobState,
     /// `None` while `submitting`; an object once `submitted`.
     pub handle: Option<Value>,
+    /// Why a `submitting` record's submit has an unknown outcome: the redacted reason, naming the
+    /// provider's job id when one was returned (spec/store.md §5). Only a `submitting` record
+    /// carries one.
+    pub note: Option<String>,
 }
 
 impl JobRecord {
@@ -514,6 +518,9 @@ impl JobRecord {
         map.insert("take".into(), take_value(&self.take));
         map.insert("state".into(), Value::from(self.state.as_str()));
         map.insert("handle".into(), self.handle.clone().unwrap_or(Value::Null));
+        if let Some(note) = &self.note {
+            map.insert("note".into(), Value::from(note.as_str()));
+        }
         Value::Object(map)
     }
 
@@ -534,7 +541,7 @@ impl JobRecord {
                 "state",
                 "handle",
             ],
-            &[],
+            &["note"],
         )?;
         let state = map["state"]
             .as_str()
@@ -561,6 +568,16 @@ impl JobRecord {
                 ));
             }
         };
+        let note = match (map.get("note"), state) {
+            (None, _) => None,
+            (Some(Value::String(note)), JobState::Submitting) => Some(note.clone()),
+            (Some(Value::String(_)), state) => {
+                return Err(format!("{what} is {} and has a note", state.as_str()));
+            }
+            (Some(other), _) => {
+                return Err(format!("the note of {what} is {}, not text", word(other)));
+            }
+        };
         Ok(JobRecord {
             key: digest_member(map, "key", what)?,
             capability: capability_member(map, what)?,
@@ -569,6 +586,7 @@ impl JobRecord {
             take: take_member(map, what)?,
             state,
             handle,
+            note,
         })
     }
 }

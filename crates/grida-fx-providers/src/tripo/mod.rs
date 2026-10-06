@@ -17,12 +17,18 @@
 //!   transport refused itself (the network turned off); every other failure is `NotReceived`;
 //! - the paid POST: `not_sent` and 429 are `NotReceived`; 400, 401, 403, 404 and 422 are
 //!   `Failed { cost: None, retryable: false }`; anything else that is not a usable task id is
-//!   `Uncertain`;
+//!   `Uncertain`, and when Tripo returned a task id that is a safe field
+//!   (`^[A-Za-z0-9_.:-]{1,96}$`) but not one FX collects, the reason names it so a person can find
+//!   the task;
 //! - collecting: a status read that fails is a poll that saw nothing, except a credential or proxy
 //!   problem (401, 403, a 3xx) or a transport refusal, which end polling at once as `Unreachable`;
 //!   a terminal status other than `success`, an unusable output and a file of the wrong kind are
 //!   `Ended`; still running at the deadline, an answer about another task, an unknown status and a
 //!   download that fails or is over the cap are `Unreachable`.
+//!
+//! A model URL is downloaded at Tripo's text, byte for byte; the riggability check's `rig_type`
+//! reaches a handle or an answer only as a short plain string, else `null`; and a [`Task`]'s
+//! `Debug` withholds its output's values, which are signed URLs.
 
 pub mod mesh;
 pub mod rig;
@@ -98,12 +104,23 @@ pub struct TripoApi {
     pub clock: Arc<dyn Clock>,
 }
 
-/// One status read of a task (spec/providers.md §9.4 "Tasks").
-#[derive(Debug, Clone, PartialEq)]
+/// One status read of a task (spec/providers.md §9.4 "Tasks"). Its `Debug` names the output's
+/// members but never their values, which hold signed model URLs (spec/providers.md §8).
+#[derive(Clone, PartialEq)]
 pub struct Task {
     pub status: String,
     pub output: Map<String, Value>,
     pub credits_consumed: Option<Value>,
+}
+
+impl std::fmt::Debug for Task {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Task")
+            .field("status", &self.status)
+            .field("output", &self.output.keys().collect::<Vec<_>>())
+            .field("credits_consumed", &self.credits_consumed)
+            .finish()
+    }
 }
 
 /// How waiting for a task ended.
@@ -395,7 +412,8 @@ impl TripoApi {
     }
 
     /// Posts a paid task exactly once (spec/providers.md §9.4 "Paid POST") and returns its task
-    /// id, or the outcome the submit reports.
+    /// id, or the outcome the submit reports. An `Uncertain` after a 200 names the task id Tripo
+    /// returned when it is a safe field, so a person can find the task.
     pub(crate) async fn post_task(&self, path: &str, body: Value) -> Result<String, Submitted> {
         let credential = self.credential().map_err(|reason| self.refused(&reason))?;
         let request = HttpRequest::new(Method::Post, self.client.url(path), Lane::Provider)
@@ -435,6 +453,12 @@ impl TripoApi {
         let data = Self::data(&response).map_err(|reason| uncertain(&reason))?;
         match data.get("task_id") {
             Some(Value::String(id)) if TASK_ID.is_match(id) => Ok(id.clone()),
+            Some(Value::String(id)) if SAFE_FIELD.is_match(id) => Err(uncertain(&format!(
+                "Tripo's answer names task {id}, which is not a task id FX collects"
+            ))),
+            Some(Value::String(id)) if !id.trim().is_empty() => {
+                Err(uncertain("Tripo's answer has a malformed task id"))
+            }
             _ => Err(uncertain("Tripo's answer has no task id")),
         }
     }
@@ -581,6 +605,16 @@ pub(crate) fn credits_cost(credits: Option<&Value>) -> Option<Usd> {
         _ => return None,
     };
     crate::wire::decimal_micros_ceil(&text, MICROS_PER_CREDIT)
+}
+
+/// A value from Tripo kept in a handle or an answer's `data`: a short plain string
+/// (`^[A-Za-z0-9_.:-]{1,96}$`) as is; anything else is `null`, since a handle and an answer never
+/// hold a provider URL or other free text (spec/providers.md §4.4, §7).
+pub(crate) fn plain_or_null(value: &Value) -> Value {
+    match value {
+        Value::String(text) if SAFE_FIELD.is_match(text) => value.clone(),
+        _ => Value::Null,
+    }
 }
 
 /// A value from Tripo shown in a reason: `null`, a boolean, or a short plain string as JSON;
@@ -867,6 +901,38 @@ mod tests {
             assert_eq!(credits_cost(Some(&credits)), cost, "{credits}");
         }
         assert_eq!(credits_cost(None), None);
+    }
+
+    #[test]
+    fn only_plain_strings_are_kept() {
+        assert_eq!(plain_or_null(&json!("quadruped")), json!("quadruped"));
+        for other in [
+            json!(null),
+            json!(true),
+            json!(3),
+            json!("has spaces"),
+            json!("https://tripo-data.rg1.data.tripo3d.com/a.json?Signature=1"),
+            json!({"preview": "x"}),
+            json!(["biped"]),
+            json!("x".repeat(97)),
+        ] {
+            assert_eq!(plain_or_null(&other), Value::Null, "{other}");
+        }
+    }
+
+    #[test]
+    fn a_task_debug_withholds_output_values() {
+        let task = Task {
+            status: "success".into(),
+            output: object(
+                json!({"model": "https://tripo-data.rg1.data.tripo3d.com/m.glb?Signature=s3cr3t"}),
+            ),
+            credits_consumed: Some(json!(30)),
+        };
+        let shown = format!("{:?}", Waited::Done(task));
+        assert!(!shown.contains("s3cr3t"), "{shown}");
+        assert!(!shown.contains("https://"), "{shown}");
+        assert!(shown.contains("\"model\""), "{shown}");
     }
 
     #[test]

@@ -8,7 +8,8 @@
 //! price has been recorded).
 //!
 //! Refused before sending, in this order: another route's contract; a request that does not fit
-//! `background.remove`; no `FAL_KEY`; an `image` with no bytes. Statuses are the run host's, as for
+//! `background.remove`; no `FAL_KEY`; an `image` that is not an `image/*` file (`image is <kind>,
+//! not a picture`) or has no bytes. Statuses are the run host's, as for
 //! images (spec/providers.md §9.3). The answer may declare PNG, WebP or GIF; `width`, `height` and
 //! `mask_image` are not read.
 
@@ -58,14 +59,10 @@ impl FalBackground {
         }
         crate::capabilities::check_request(&call.route.capability, &call.request)?;
         let credential = client.credential(super::CREDENTIAL_HEADER, super::CREDENTIAL_PREFIX)?;
-        let file = crate::wire::request_file(call, &call.request["image"], "image")?;
-        let bytes = crate::wire::read_file(file, "image")?;
+        let image = super::picture(call, &call.request["image"], "image")?;
 
         let mut body = Map::new();
-        body.insert(
-            "image_url".into(),
-            Value::String(super::picture_url(&file.kind, &bytes)),
-        );
+        body.insert("image_url".into(), Value::String(image));
         body.insert("model".into(), json!("General Use (Light)"));
         body.insert("operating_resolution".into(), json!("1024x1024"));
         body.insert("output_mask".into(), json!(false));

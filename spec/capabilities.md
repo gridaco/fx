@@ -12,11 +12,12 @@ How a provider's adapter turns a request into an exchange, and how it is billed,
 **Requests.**
 - A request is a JSON object: the **canonical request** ([identity.md](identity.md) §9). Files are file values (`{"file": "<digest>"}`, [protocol.md](protocol.md) §3.2).
 - A body's `ctx` call sends whatever members it gives. A paid built-in sends its params, without `vars`, then its input ports (§14). The member tables below list the members in that order; `agent.turn`, which no built-in sends, in the order of [protocol.md](protocol.md) §6.2.
+- A paid built-in leaves out a param the step did not give and that has no default, and an input port without a value: neither is a member of the request. A param whose value is missing or `null` goes as `null` (§14; [protocol.md](protocol.md) §5.3 `params`). Absent and `null` are different requests, and so different call keys ([identity.md](identity.md) §9).
 - Every adapter MUST check a request against its capability right after its route's contract, before anything else ([providers.md](providers.md) §5), with these sentences:
   - A request that is not an object: `a request for <capability> is a JSON object`.
   - A member the capability does not define is refused: `<capability> takes no member <name>`.
   - Then each member, in the table's order:
-    - A member whose value is `null` is absent. It stays in the call key, but no adapter reads it. A paid built-in sends a missing optional param as `null`.
+    - A member whose value is `null` is absent. It stays in the call key, but no adapter reads it.
     - A required member that is absent: `<capability> needs <name>`.
     - A member of the wrong type: `<name> is <type>`. The type words are `text`, `a number`, `a whole number`, `true or false`, `an object`, `a list`, `a file`, `a list of files`, `files by name`, and `a JSON file or object`.
 - Checks on a member's value beyond its type are the route's, in [providers.md](providers.md) §9: non-blank text, ranges, enumerations, sizes, counts.
@@ -36,9 +37,9 @@ In the tables below, a member's type is one of:
   - each member of `data.facts` becomes a node fact, and a string `data.verdict` becomes the fact `verdict`.
 
 **Features.**
-- A route declares the features it supports, in its table entry. A step that `requires` a feature its route lacks is refused while planning ([identity.md](identity.md) §7).
+- A route declares the features it supports, in its table entry ([identity.md](identity.md) §7). A step's `requires:` names features of the capabilities its type calls. A name that is a feature of none of them is refused while planning: `<name> is not a(n) <capability>[ or <capability>] feature (spec/capabilities.md)`, followed by `; FX calls it <feature>` for a name FX's predecessor used ([providers.md](providers.md) §11). A capability without a section here (§13, or a project's own) is not checked this way. A known feature the step's route lacks is refused as `<route> does not support <features>`.
 - Each capability's section lists its features. Only those names have a meaning for it. A route in the built-in table ([providers.md](providers.md) §10) MUST declare only names from its capability's list, and only what its adapter honours.
-- A few image features describe the provider's model and change nothing FX sends: every route FX ships asks for PNG and sends pictures inline, whatever `jpeg_output`, `webp_output` or `hosted_url_reference_input` say.
+- A few image features describe the provider's model and change nothing FX sends, whatever `jpeg_output`, `webp_output` or `hosted_url_reference_input` say. Every route FX ships sends pictures inline. A route whose provider takes an output format (OpenAI, fal) asks for PNG; OpenRouter's image endpoint takes none, so its routes ask for nothing. Every route's check refuses an answer that is not a PNG (§2).
 
 ## 2. `image.generate`
 
@@ -73,7 +74,7 @@ A picture from a prompt.
 | `flexible_size` | `size` may be absent or `auto` |
 | `image_input` | the route takes input pictures: `references` |
 | `hosted_url_reference_input` | the provider can also fetch input pictures by URL; FX always sends them inline |
-| `png_output` | the model can encode PNG, which every route FX ships asks for |
+| `png_output` | the model can encode PNG: every route FX ships needs a PNG answer (check 1), and asks for one where its provider takes an output format |
 | `jpeg_output` | the model can encode JPEG |
 | `webp_output` | the model can encode WebP |
 | `maximum_quality` | the route asks for the model's highest quality |
@@ -307,7 +308,8 @@ FX ships an adapter for it on fal, but the built-in route table has no route for
 The paid built-ins (`fx/<capability>@1`) send the requests above:
 - every param except `vars`, then every input port, in the order the member tables list them;
 - each name a member of its capability, with a type the member admits;
-- a missing optional param as `null`.
+- not a param the step left out and that has no default, and not an input port without a value: these are absent from the request;
+- a param whose value is missing or `null` as `null`, which an adapter reads as absent (§1).
 
 A member is required exactly when the built-in requires it: an input port without `?`, or a param with no `default` that is not `x-fx-optional`. Each output port of a built-in names a file of its capability's answer, or is the `json` output that takes `data.json`.
 

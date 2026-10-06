@@ -96,19 +96,29 @@ fn the_body_carries_the_fixed_members_in_order() {
 }
 
 #[test]
-fn a_picture_of_no_image_kind_goes_as_png() {
-    let source = b"opaque store bytes".to_vec();
-    let call = call_with("application/octet-stream", &source);
+fn a_file_that_is_not_a_picture_is_refused_before_sending() {
+    for (kind, bytes) in [
+        ("application/octet-stream", b"opaque store bytes".to_vec()),
+        ("model/gltf-binary", media::GLB.to_vec()),
+        ("text/plain", b"a note".to_vec()),
+    ] {
+        assert_eq!(
+            refused(&call_with(kind, &bytes), test_keys()),
+            format!("image is {kind}, not a picture")
+        );
+    }
+    // Any picture kind goes under its own kind.
+    let webp = b"RIFF\x00\x00\x00\x00WEBPVP8 ".to_vec();
     let transport =
         Arc::new(ReplayTransport::new(vec![post().reply(HttpResponse::json(
         200,
         &json!({"data": {"image": {"url": data_url("image/png", &media::png(1, 1, Some(0)))}}}),
     ))]));
-    answered(send(&transport, &call));
+    answered(send(&transport, &call_with("image/webp", &webp)));
     let Body::Json(body) = &transport.requests()[0].body else {
         panic!("a JSON body")
     };
-    assert_eq!(body["image_url"], json!(data_url("image/png", &source)));
+    assert_eq!(body["image_url"], json!(data_url("image/webp", &webp)));
 }
 
 #[test]

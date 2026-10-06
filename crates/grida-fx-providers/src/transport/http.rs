@@ -3,11 +3,19 @@
 //! constructs it, and nothing else in the engine reaches the network.
 //!
 //! Contract (the module doc of [`super`] holds the rules every transport keeps):
-//! - two `reqwest::Client`s: one for the provider and upload lanes, whose default headers are
-//!   `user-agent` ([`HttpConfig::user_agent`]) and reqwest's fixed `accept: */*` (which a request
-//!   setting `accept` replaces), and one for the download lane with only that `accept: */*`;
-//!   neither has a cookie store (reqwest is built without one), neither keeps an idle connection
-//!   (each exchange opens its own, so nothing is ever resent on a stale one);
+//! - `reqwest::Client`s for two kinds of lane: the provider and upload lanes, whose default
+//!   headers are `user-agent` ([`HttpConfig::user_agent`]) and reqwest's fixed `accept: */*`
+//!   (which a request setting `accept` replaces), and the download lane with only that
+//!   `accept: */*`; none has a cookie store (reqwest is built without one), none keeps an idle
+//!   connection (each exchange opens its own, so nothing is ever resent on a stale one);
+//! - **proxies** (spec/providers.md §2 item 9): each lane has a client that uses the proxies the
+//!   environment names (`HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`, as reqwest reads them) and a
+//!   direct one that uses none. A request goes direct when its URL is plain `http` or its host is
+//!   a loopback host (the private `direct`): a proxy would read a plain request, credential
+//!   included, in clear text, and through a proxy a loopback host would be the proxy's own
+//!   machine, not this one. Every other request is `https` to a remote host: through a proxy it
+//!   is tunnelled (`CONNECT`), so the proxy sees the host and port, and the request stays
+//!   encrypted end to end;
 //! - `redirect::Policy::none()`, no retries (reqwest's own retry of protocol NACKs is turned
 //!   off), `accept-encoding: identity` on every request (the adapter reads the entity as sent), a
 //!   connect timeout ([`HttpConfig::connect_timeout`], 30 s by default) inside the request's
@@ -59,87 +67,18 @@ impl Default for HttpConfig {
 #[derive(Debug)]
 pub struct HttpTransport {
     config: HttpConfig,
-    /// The provider and upload lanes.
-    api: reqwest::Client,
-    /// The download lane.
-    download: reqwest::Client,
+    clients: Clients,
 }
 
 impl HttpTransport {
     /// Builds the clients. Fails only when TLS cannot be set up.
     pub fn new(config: HttpConfig) -> Result<HttpTransport, String> {
-        let user_agent = HeaderValue::from_str(&config.user_agent)
-            .map_err(|_| "the transport's user-agent is not a valid header value".to_string())?;
-        let api = client_builder(&config)
-            .user_agent(user_agent)
-            .build()
-            .map_err(|_| "the HTTP client could not be set up (TLS)".to_string())?;
-        let download = client_builder(&config)
-            .build()
-            .map_err(|_| "the HTTP client could not be set up (TLS)".to_string())?;
-        Ok(HttpTransport {
-            config,
-            api,
-            download,
-        })
+        let clients = Clients::new(&config)?;
+        Ok(HttpTransport { config, clients })
     }
 
     pub fn config(&self) -> &HttpConfig {
         &self.config
-    }
-
-    /// The exchange (module doc).
-    async fn exchange(&self, request: HttpRequest) -> Result<HttpResponse, TransportError> {
-        super::check_request(&request)?;
-        let prepared = prepare(&request)?;
-        let origin = request.origin();
-        let url = reqwest::Url::parse(&request.url).map_err(|_| {
-            TransportError::not_sent(
-                TransportErrorKind::Refused,
-                "the request's URL does not parse",
-            )
-        })?;
-        let method = match request.method {
-            Method::Get => reqwest::Method::GET,
-            Method::Post => reqwest::Method::POST,
-        };
-        let client = match request.lane {
-            Lane::Provider | Lane::Upload => &self.api,
-            Lane::Download => &self.download,
-        };
-        let mut builder = client
-            .request(method, url)
-            .headers(prepared.headers)
-            .timeout(request.timeout);
-        if let Some(body) = prepared.body {
-            builder = builder.body(body);
-        }
-        let mut response = builder.send().await.map_err(|error| {
-            send_error(
-                Failure {
-                    builder: error.is_builder(),
-                    connect: error.is_connect(),
-                    timeout: error.is_timeout(),
-                },
-                &origin,
-                request.timeout,
-            )
-        })?;
-        check_declared_length(response.content_length(), request.max_response_bytes)?;
-        let status = response.status().as_u16();
-        let headers = response_headers(response.headers());
-        let body = read_capped(
-            &mut response,
-            request.max_response_bytes,
-            &origin,
-            request.timeout,
-        )
-        .await?;
-        Ok(HttpResponse {
-            status,
-            headers,
-            body,
-        })
     }
 }
 
@@ -148,11 +87,108 @@ impl Transport for HttpTransport {
         &'a self,
         request: HttpRequest,
     ) -> BoxFuture<'a, Result<HttpResponse, TransportError>> {
-        Box::pin(self.exchange(request))
+        Box::pin(exchange(&self.clients, request))
     }
 }
 
-/// What both clients share (module doc).
+/// The clients of the module doc: per kind of lane, one through the environment's proxies and
+/// one direct.
+#[derive(Debug)]
+struct Clients {
+    /// The provider and upload lanes.
+    api: reqwest::Client,
+    api_direct: reqwest::Client,
+    /// The download lane.
+    download: reqwest::Client,
+    download_direct: reqwest::Client,
+}
+
+impl Clients {
+    fn new(config: &HttpConfig) -> Result<Clients, String> {
+        let user_agent = HeaderValue::from_str(&config.user_agent)
+            .map_err(|_| "the transport's user-agent is not a valid header value".to_string())?;
+        let build = |builder: reqwest::ClientBuilder| {
+            builder
+                .build()
+                .map_err(|_| "the HTTP client could not be set up (TLS)".to_string())
+        };
+        Ok(Clients {
+            api: build(client_builder(config).user_agent(user_agent.clone()))?,
+            api_direct: build(client_builder(config).user_agent(user_agent).no_proxy())?,
+            download: build(client_builder(config))?,
+            download_direct: build(client_builder(config).no_proxy())?,
+        })
+    }
+
+    /// The client a request to `url` on `lane` goes through (module doc).
+    fn of(&self, lane: Lane, url: &reqwest::Url) -> &reqwest::Client {
+        match (lane, direct(url)) {
+            (Lane::Provider | Lane::Upload, false) => &self.api,
+            (Lane::Provider | Lane::Upload, true) => &self.api_direct,
+            (Lane::Download, false) => &self.download,
+            (Lane::Download, true) => &self.download_direct,
+        }
+    }
+}
+
+/// Whether a request to `url` goes straight to its host, never through a proxy: a URL that is not
+/// `https`, or a loopback host (`localhost`, a loopback IP) (module doc).
+fn direct(url: &reqwest::Url) -> bool {
+    url.scheme() != "https" || crate::wire::is_loopback(url)
+}
+
+/// The exchange (module doc).
+async fn exchange(clients: &Clients, request: HttpRequest) -> Result<HttpResponse, TransportError> {
+    super::check_request(&request)?;
+    let prepared = prepare(&request)?;
+    let origin = request.origin();
+    let url = reqwest::Url::parse(&request.url).map_err(|_| {
+        TransportError::not_sent(
+            TransportErrorKind::Refused,
+            "the request's URL does not parse",
+        )
+    })?;
+    let method = match request.method {
+        Method::Get => reqwest::Method::GET,
+        Method::Post => reqwest::Method::POST,
+    };
+    let client = clients.of(request.lane, &url);
+    let mut builder = client
+        .request(method, url)
+        .headers(prepared.headers)
+        .timeout(request.timeout);
+    if let Some(body) = prepared.body {
+        builder = builder.body(body);
+    }
+    let mut response = builder.send().await.map_err(|error| {
+        send_error(
+            Failure {
+                builder: error.is_builder(),
+                connect: error.is_connect(),
+                timeout: error.is_timeout(),
+            },
+            &origin,
+            request.timeout,
+        )
+    })?;
+    check_declared_length(response.content_length(), request.max_response_bytes)?;
+    let status = response.status().as_u16();
+    let headers = response_headers(response.headers());
+    let body = read_capped(
+        &mut response,
+        request.max_response_bytes,
+        &origin,
+        request.timeout,
+    )
+    .await?;
+    Ok(HttpResponse {
+        status,
+        headers,
+        body,
+    })
+}
+
+/// What every client shares (module doc).
 fn client_builder(config: &HttpConfig) -> reqwest::ClientBuilder {
     reqwest::Client::builder()
         .use_rustls_tls()
@@ -709,6 +745,192 @@ mod tests {
                 ("x-latin", "é")
             ])
         );
+    }
+
+    #[test]
+    fn plain_and_loopback_urls_go_direct() {
+        let direct = |url: &str| direct(&reqwest::Url::parse(url).expect("a URL"));
+        for url in [
+            "http://localhost:8080/v1",
+            "http://127.0.0.1:9/v1",
+            "http://[::1]:9/v1",
+            "https://localhost/v1",
+            "https://LOCALHOST./v1",
+            "https://127.0.0.2/v1",
+            "http://api.example.test/v1",
+        ] {
+            assert!(direct(url), "{url}");
+        }
+        for url in [
+            "https://api.example.test/v1",
+            "https://openrouter.ai/api/v1",
+            "https://v3b.fal.media/files/a.mp4?sig=1",
+            "https://localhost.example.test/v1",
+        ] {
+            assert!(!direct(url), "{url}");
+        }
+    }
+
+    /// The environment variable that tells [`proxy_policy_child`] where to send.
+    const CHILD_TARGET: &str = "GRIDA_FX_TEST_PROXY_TARGET";
+
+    /// A listener on 127.0.0.1 that answers every request it reads with `204`, and keeps what it
+    /// read, until `stop` is set.
+    fn spy(
+        listener: std::net::TcpListener,
+        stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    ) -> std::thread::JoinHandle<Vec<String>> {
+        use std::io::{Read, Write};
+        use std::sync::atomic::Ordering;
+        listener
+            .set_nonblocking(true)
+            .expect("a nonblocking listener");
+        std::thread::spawn(move || {
+            let mut seen = Vec::new();
+            while !stop.load(Ordering::SeqCst) {
+                let Ok((mut stream, _)) = listener.accept() else {
+                    std::thread::sleep(Duration::from_millis(5));
+                    continue;
+                };
+                stream.set_nonblocking(false).expect("a blocking stream");
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .expect("a read timeout");
+                let mut read = Vec::new();
+                let mut buffer = [0u8; 4096];
+                while let Ok(n) = stream.read(&mut buffer) {
+                    if n == 0 {
+                        break;
+                    }
+                    read.extend_from_slice(&buffer[..n]);
+                    let text = String::from_utf8_lossy(&read).to_string();
+                    if let Some(end) = text.find("\r\n\r\n") {
+                        let length = text[..end]
+                            .lines()
+                            .find_map(|line| {
+                                let (name, value) = line.split_once(':')?;
+                                name.eq_ignore_ascii_case("content-length")
+                                    .then(|| value.trim().parse::<usize>().ok())?
+                            })
+                            .unwrap_or(0);
+                        if read.len() >= end + 4 + length {
+                            break;
+                        }
+                    }
+                }
+                let _ = stream.write_all(
+                    b"HTTP/1.1 204 No Content\r\ncontent-length: 0\r\nconnection: close\r\n\r\n",
+                );
+                seen.push(String::from_utf8_lossy(&read).to_string());
+            }
+            seen
+        })
+    }
+
+    /// spec/providers.md §2 item 9, end to end on loopback only: this test runs
+    /// [`proxy_policy_child`] in a process of its own whose `HTTP_PROXY` and `ALL_PROXY` name a listener here (the
+    /// "proxy"), and another listener here plays the provider at a plain `http` loopback URL, as
+    /// a local gateway would. The child first sends one request through a proxied client, to show
+    /// the proxy variables are in force; then FX's exchange sends a credentialed request to the
+    /// same URL. Only the first may reach the proxy; the credential goes straight to the
+    /// provider. Nothing leaves 127.0.0.1, and the default transport itself is never built: the
+    /// child builds the clients and calls the exchange.
+    #[test]
+    fn a_proxy_in_the_environment_never_sees_a_plain_or_loopback_request() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let proxy = std::net::TcpListener::bind("127.0.0.1:0").expect("a loopback listener");
+        let provider = std::net::TcpListener::bind("127.0.0.1:0").expect("a loopback listener");
+        let proxy_url = format!("http://{}", proxy.local_addr().expect("an address"));
+        let provider_url = format!("http://{}", provider.local_addr().expect("an address"));
+        let stop = Arc::new(AtomicBool::new(false));
+        let proxy_seen = spy(proxy, Arc::clone(&stop));
+        let provider_seen = spy(provider, Arc::clone(&stop));
+        let child = std::process::Command::new(std::env::current_exe().expect("the test binary"))
+            .args([
+                "transport::http::tests::proxy_policy_child",
+                "--exact",
+                "--ignored",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env_remove("NO_PROXY")
+            .env_remove("no_proxy")
+            .env_remove("REQUEST_METHOD")
+            .env("HTTP_PROXY", &proxy_url)
+            .env("http_proxy", &proxy_url)
+            .env("ALL_PROXY", &proxy_url)
+            .env("all_proxy", &proxy_url)
+            .env(CHILD_TARGET, &provider_url)
+            .output()
+            .expect("the child ran");
+        stop.store(true, Ordering::SeqCst);
+        let proxy_seen = proxy_seen.join().expect("the proxy listener");
+        let provider_seen = provider_seen.join().expect("the provider listener");
+        let stdout = String::from_utf8_lossy(&child.stdout);
+        assert!(
+            child.status.success() && stdout.contains("1 passed"),
+            "the child failed: {stdout}{}",
+            String::from_utf8_lossy(&child.stderr)
+        );
+        assert_eq!(proxy_seen.len(), 1, "only the control: {proxy_seen:?}");
+        assert!(
+            proxy_seen[0].starts_with("GET http://127.0.0.1:"),
+            "{proxy_seen:?}"
+        );
+        assert!(proxy_seen[0].contains("/control"), "{proxy_seen:?}");
+        assert!(
+            !proxy_seen[0].to_ascii_lowercase().contains("authorization"),
+            "{proxy_seen:?}"
+        );
+        assert_eq!(provider_seen.len(), 1, "{provider_seen:?}");
+        assert!(
+            provider_seen[0].starts_with("POST /v1/images/generations HTTP/1.1"),
+            "{provider_seen:?}"
+        );
+        assert!(
+            provider_seen[0]
+                .to_ascii_lowercase()
+                .contains("authorization: bearer test-key-not-real-proxy"),
+            "{provider_seen:?}"
+        );
+    }
+
+    /// The child of [`a_proxy_in_the_environment_never_sees_a_plain_or_loopback_request`]; does
+    /// nothing unless [`CHILD_TARGET`] names a loopback URL.
+    #[test]
+    #[ignore = "run by a_proxy_in_the_environment_never_sees_a_plain_or_loopback_request"]
+    fn proxy_policy_child() {
+        let Ok(target) = std::env::var(CHILD_TARGET) else {
+            return;
+        };
+        let parsed = reqwest::Url::parse(&target).expect("a URL");
+        assert!(crate::wire::is_loopback(&parsed), "loopback only");
+        let clients = Clients::new(&HttpConfig::default()).expect("the clients");
+        crate::testing::block_on(async {
+            let control = clients
+                .api
+                .get(format!("{target}/control"))
+                .timeout(Duration::from_secs(10))
+                .send()
+                .await
+                .expect("the proxied control request");
+            assert_eq!(control.status().as_u16(), 204);
+            let request = HttpRequest::new(
+                Method::Post,
+                format!("{target}/v1/images/generations"),
+                Lane::Provider,
+            )
+            .credential(Credential {
+                header: "authorization",
+                prefix: "Bearer ",
+                secret: Secret::new("test-key-not-real-proxy"),
+            })
+            .body(Body::Json(json!({"model": "img-a"})))
+            .timeout(Duration::from_secs(10));
+            let response = exchange(&clients, request).await.expect("the exchange");
+            assert_eq!(response.status, 204);
+        });
     }
 
     #[test]

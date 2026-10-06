@@ -182,7 +182,8 @@ rather than risk paying twice, and the rest of the run goes on: check the provid
 then clear the job with `grida-fx jobs --forget <key>` so the next run submits it.
 
 `grida-fx jobs` lists every job record in the cache, one line each (its key, its state, the
-capability and route, the take):
+capability and route, the take, and why a submission could not be confirmed, with the provider's
+job id when it returned one, so you can find the job on its dashboard):
 
 - `submitting`: nobody can say whether the provider took it; the next run will not send it until
   you forget it;

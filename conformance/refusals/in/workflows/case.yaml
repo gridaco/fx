@@ -9,7 +9,7 @@ assert:
 steps:
   draw:
     uses: fx/image.generate@1
-    requires: [mask]
+    requires: [exact_size, transparent_background]
     with: { prompt: x }
   write:
     uses: fx/structured.generate@1

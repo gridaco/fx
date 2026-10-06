@@ -1363,13 +1363,19 @@ fn integrated_jobs_lists_and_forgets_job_records() {
         job_record(&first, "submitting", &[1]),
     )
     .unwrap();
+    let third = "3".repeat(64);
+    let mut noted: Value = serde_json::from_str(&job_record(&third, "submitting", &[1])).unwrap();
+    noted["note"] = json!("fal took the job but returned no handle (request req-7)");
+    std::fs::write(jobs.join(format!("{third}.json")), noted.to_string()).unwrap();
     let output = grida_fx(project.path(), &["jobs"]);
     assert_eq!(status(&output), 0, "{}", stderr(&output));
     assert_eq!(
         stdout(&output),
         format!(
             "{first}  submitting  video.generate on vid@acme, take 1\n\
-             {second}  settled  video.generate on vid@acme, take 2.1\n"
+             {second}  settled  video.generate on vid@acme, take 2.1\n\
+             {third}  submitting  video.generate on vid@acme, take 1  fal took the job but \
+             returned no handle (request req-7)\n"
         )
     );
     let output = grida_fx(project.path(), &["jobs", "--forget", &first]);

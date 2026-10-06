@@ -133,25 +133,25 @@ pub fn classify(
 
 /// The checks after an answer (module doc), with `label` in the empty-audio sentence:
 /// `<label> returned no audio data`, `requested mp3 but received <kind>`, `audio bytes do not
-/// match declared media type audio/mpeg`, in that order.
-pub fn check_audio(label: &str, answer: &Answer) -> Result<(), String> {
+/// match declared media type audio/mpeg`, in that order. The kind comes from the provider's
+/// `content-type`, which may echo anything, a key included: every sentence goes through the
+/// client's redactor (spec/providers.md §8).
+pub fn check_audio(client: &Client, label: &str, answer: &Answer) -> Result<(), String> {
     let Some(audio) = answer
         .files
         .get(AUDIO_FILE)
         .filter(|file| !file.bytes.is_empty())
     else {
-        return Err(format!("{label} returned no audio data"));
+        return Err(client.reason(&format!("{label} returned no audio data")));
     };
     if audio.kind != AUDIO_KIND {
-        return Err(format!(
-            "requested mp3 but received {}",
-            crate::redact::bounded(&audio.kind, MAX_KIND_CHARS)
-        ));
+        let kind = crate::redact::bounded(&client.redactor.redact(&audio.kind), MAX_KIND_CHARS);
+        return Err(client.reason(&format!("requested mp3 but received {kind}")));
     }
     if !wire::matches_signature(AUDIO_KIND, &audio.bytes) {
-        return Err(format!(
+        return Err(client.reason(&format!(
             "audio bytes do not match declared media type {AUDIO_KIND}"
-        ));
+        )));
     }
     Ok(())
 }

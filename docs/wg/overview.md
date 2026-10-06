@@ -105,11 +105,13 @@ This milestone works only in this repo. The Python gnode stays in stage-gen, fro
 
 ## Milestone 2: stage-gen moves onto FX
 
-stage-gen is the acceptance test. Its workflow files and Python node bodies stay as they are. What changes:
+stage-gen is the acceptance test. Its workflow files and Python node bodies stay as they are, but for the names below. What changes:
 
 - imports become `from grida.fx import …`;
 - file names become `fx.yaml` and its siblings;
 - the command becomes `grida-fx`;
+- feature names in `requires:`, in workflow files and in builder code, move to FX's vocabulary ([capabilities.md](../../spec/capabilities.md)): `transparent_background` → `alpha`, `masked_edit` → `mask`, `reference_images` → `image_input` and `data_url_reference_input` → `image_input` ([providers.md](../../spec/providers.md) §11). The planner refuses the old names and names FX's;
+- a builder's takes file is renamed from `<builder module>.takes.yaml` to `<workflow id>.takes.yaml`, in the folder of the module that constructed the `Workflow` ([protocol.md](../../spec/protocol.md) §10);
 - two direct provider calls in its games move to capabilities.
 
 Its paid cache is migrated by **replay**:

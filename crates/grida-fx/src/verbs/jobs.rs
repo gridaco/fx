@@ -2,9 +2,12 @@
 //!
 //! The store is the cache of the project found from the working directory. Lists its job records
 //! (`Store::jobs`, sorted by key), one line each: `<key>  <state>  <capability> on <route id>,
-//! take <take joined by .>`; `settled` records are listed too (a settled job is submitted anew
-//! by the next run, and its record may be removed at any time). An empty or missing `jobs/`
-//! prints nothing. An unreadable record is an error (exit 2) naming `jobs/<key>.json`.
+//! take <take joined by .>`, then, for a `submitting` record with a note, `  <note>`: why its
+//! submit's outcome is unknown, naming the provider's job id when one was returned (spec/store.md
+//! §5), its control characters and runs of whitespace shown as one space. `settled` records are
+//! listed too (a settled job is submitted anew by the next run, and its record may be removed at
+//! any time). An empty or missing `jobs/` prints nothing. An unreadable record is an error (exit
+//! 2) naming `jobs/<key>.json`.
 //!
 //! `--forget <key>`: the key must be 64 lowercase hex (`not a digest: <key>`, exit 2, checked
 //! before the store is touched); no such record: `the cache holds no job <key>` (exit 2); else the
@@ -59,13 +62,25 @@ fn job_line(job: &JobRecord) -> String {
         .map(u32::to_string)
         .collect::<Vec<_>>()
         .join(".");
-    format!(
+    let mut line = format!(
         "{}  {}  {} on {}, take {take}",
         job.key,
         job.state.as_str(),
         job.capability,
         job.route.id
-    )
+    );
+    if let Some(note) = &job.note {
+        // One line, whatever the record holds.
+        let words: Vec<&str> = note
+            .split(|c: char| c.is_whitespace() || c.is_control())
+            .filter(|word| !word.is_empty())
+            .collect();
+        if !words.is_empty() {
+            line.push_str("  ");
+            line.push_str(&words.join(" "));
+        }
+    }
+    line
 }
 
 #[cfg(test)]
@@ -87,6 +102,7 @@ mod tests {
             take: vec![2, 1],
             state: JobState::Submitting,
             handle: None,
+            note: None,
         };
         assert_eq!(
             job_line(&job),
@@ -102,6 +118,41 @@ mod tests {
             ..job
         };
         assert!(job_line(&settled).ends_with("  settled  video.generate on vid@acme, take 1"));
+    }
+
+    #[test]
+    fn a_job_line_shows_why_a_submit_is_uncertain() {
+        let job = JobRecord {
+            key: "1".repeat(64),
+            capability: "video.generate".into(),
+            route: RouteEntry {
+                id: "vid@acme".into(),
+                fingerprint: "f".repeat(64),
+            },
+            request: json!({"prompt": "a kite"}),
+            take: vec![1],
+            state: JobState::Submitting,
+            handle: None,
+            note: Some("fal took the job but returned no handle (request req-7)".into()),
+        };
+        assert_eq!(
+            job_line(&job),
+            format!(
+                "{}  submitting  video.generate on vid@acme, take 1  fal took the job but \
+                 returned no handle (request req-7)",
+                "1".repeat(64)
+            )
+        );
+        let spread = JobRecord {
+            note: Some(" two\nlines\u{7}and\t a tab ".into()),
+            ..job.clone()
+        };
+        assert!(job_line(&spread).ends_with("take 1  two lines and a tab"));
+        let blank = JobRecord {
+            note: Some(" \n ".into()),
+            ..job
+        };
+        assert!(job_line(&blank).ends_with("take 1"));
     }
 
     #[test]

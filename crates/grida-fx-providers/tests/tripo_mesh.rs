@@ -692,6 +692,19 @@ fn the_paid_post_is_sent_once_whatever_happens() {
         ),
         (
             post().reply(ok(json!({"task_id": "t".repeat(129)}))),
+            uncertain("Tripo's answer has a malformed task id"),
+        ),
+        // Tripo took the task: a person can find it by the id, when that is a safe field.
+        (
+            post().reply(ok(json!({"task_id": "abc.123"}))),
+            uncertain("Tripo's answer names task abc.123, which is not a task id FX collects"),
+        ),
+        (
+            post().reply(ok(json!({"task_id": format!("https://tripo-data.rg1.data.tripo3d.com/x?Signature={KEY}")}))),
+            uncertain("Tripo's answer has a malformed task id"),
+        ),
+        (
+            post().reply(ok(json!({"task_id": 7}))),
             uncertain("Tripo's answer has no task id"),
         ),
         (

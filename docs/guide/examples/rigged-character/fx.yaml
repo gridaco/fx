@@ -3,6 +3,7 @@ budget:
   max_usd: 27
 routes:
   image.generate: gpt-image-2@openai
+  image.edit: gpt-image-2@openai
   agent.turn: writer-llm@openrouter
   vision.review: reviewer-vlm@openrouter
 route_tables:                   # the guide's illustrative prices, read after the built-in table

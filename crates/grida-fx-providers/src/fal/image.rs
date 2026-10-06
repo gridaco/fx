@@ -14,7 +14,8 @@
 //! a request that does not fit its capability; no `FAL_KEY`; a blank prompt or one over
 //! [`MAX_PROMPT_CHARS`]; a `background` other than `auto`, `opaque` or `transparent`; references
 //! on a generate; more than [`MAX_PICTURES`] pictures on an edit; a `size` that is not `auto` or
-//! `WxH` inside the GPT Image envelope; a file with no bytes.
+//! `WxH` inside the GPT Image envelope; then, in the order `image`, `references[<i>]`, `mask`, a
+//! picture that is not an `image/*` file (`<member> is <kind>, not a picture`) or has no bytes.
 
 use super::FalClients;
 use super::output::{self, Rules};
@@ -116,13 +117,21 @@ impl FalImages {
         body.insert("background".into(), json!(background));
         body.insert("output_format".into(), json!("png"));
         if edit {
-            let mut urls = vec![picture(call, &request["image"], "image")?];
+            let mut urls = vec![Value::String(super::picture(
+                call,
+                &request["image"],
+                "image",
+            )?)];
             for (i, reference) in references.iter().enumerate() {
-                urls.push(picture(call, reference, &format!("references[{i}]"))?);
+                let member = format!("references[{i}]");
+                urls.push(Value::String(super::picture(call, reference, &member)?));
             }
             body.insert("image_urls".into(), Value::Array(urls));
             if let Some(mask) = request.get("mask").filter(|m| !m.is_null()) {
-                body.insert("mask_url".into(), picture(call, mask, "mask")?);
+                body.insert(
+                    "mask_url".into(),
+                    Value::String(super::picture(call, mask, "mask")?),
+                );
             }
         }
 
@@ -211,13 +220,6 @@ fn image_size(size: Option<&Value>) -> Result<Option<Value>, String> {
             _ => Err("fal image size must be auto or WIDTHxHEIGHT".into()),
         },
     }
-}
-
-/// A request picture as a data URL (step 5 of spec/providers.md §5).
-fn picture(call: &CallRequest, value: &Value, member: &str) -> Result<Value, String> {
-    let file = crate::wire::request_file(call, value, member)?;
-    let bytes = crate::wire::read_file(file, member)?;
-    Ok(Value::String(super::picture_url(&file.kind, &bytes)))
 }
 
 impl RequestAdapter for FalImages {

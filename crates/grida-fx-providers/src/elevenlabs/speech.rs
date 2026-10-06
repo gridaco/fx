@@ -71,7 +71,7 @@ impl RequestAdapter for ElevenLabsSpeech {
     }
 
     fn check(&self, _call: &CallRequest, answer: &Answer) -> Result<(), String> {
-        super::check_audio(LABEL, answer)
+        super::check_audio(&self.client, LABEL, answer)
     }
 }
 

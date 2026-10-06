@@ -3,7 +3,8 @@
 //!
 //! Credential `authorization: Key <FAL_KEY>`, attached only to requests to the run host
 //! (`FAL_BASE_URL`, default `https://fal.run`) and the queue host (`https://queue.fal.run`), never
-//! to a result download. Pictures go inline as data URLs (no multipart, no uploads). Every adapter
+//! to a result download. Pictures go inline as data URLs under their own `image/*` kind (no
+//! multipart, no uploads); a file of another kind is refused before sending. Every adapter
 //! first refuses a route whose `contract.adapter` is present and is not its own (§9.3), since the
 //! registry is keyed by provider, not model.
 //!
@@ -34,8 +35,9 @@ pub fn is_fal_media_url(url: &str) -> bool {
     fal_media_url(url).is_some()
 }
 
-/// The parsed URL when it passes [`is_fal_media_url`]. A download goes to this URL's
-/// serialization, so what was checked is what is fetched.
+/// The parsed URL when it passes [`is_fal_media_url`]. A download sends the provider's text as
+/// given; the transport parses it with the same parser, so the host checked here is the host
+/// asked.
 pub(crate) fn fal_media_url(url: &str) -> Option<url::Url> {
     let parsed = url::Url::parse(url).ok()?;
     if parsed.scheme() != "https"
@@ -144,14 +146,27 @@ pub(crate) fn reported_cost(payload: &Map<String, Value>) -> Option<Usd> {
         .and_then(crate::wire::usd_ceil)
 }
 
-/// A picture as a data URL: the file's kind when it is an image kind, else `image/png`.
-pub(crate) fn picture_url(kind: &str, bytes: &[u8]) -> String {
-    let media = if kind.starts_with("image/") {
-        kind
-    } else {
-        "image/png"
-    };
-    crate::wire::data_url(media, bytes)
+/// A request picture as a data URL, under its own kind (step 5 of spec/providers.md §5): a file the
+/// call carries (`<member> has no bytes to send`), of an `image/*` kind (`<member> is <kind>, not
+/// a picture`), whose store copy reads and is not empty. A file of another kind is refused before
+/// anything leaves rather than sent under a picture's label, since fal may take a paid job it then
+/// ends without a result.
+pub(crate) fn picture(call: &CallRequest, value: &Value, member: &str) -> Result<String, String> {
+    let file = crate::wire::request_file(call, value, member)?;
+    if !file.kind.starts_with("image/") {
+        return Err(format!("{member} is {}, not a picture", file.kind));
+    }
+    let bytes = crate::wire::read_file(file, member)?;
+    Ok(crate::wire::data_url(&file.kind, &bytes))
+}
+
+/// Whether `text` is a provider id a handle or a reason may hold (spec/providers.md §7, §8):
+/// `^[A-Za-z0-9_.:-]{1,96}$`.
+pub(crate) fn is_safe_id(text: &str) -> bool {
+    (1..=96).contains(&text.len())
+        && text
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"_.:-".contains(&b))
 }
 
 /// The wait a 408 or 429 asks for: the shared parser (spec/providers.md §4.3).
@@ -383,14 +398,29 @@ mod tests {
         let nested = json!({"data": {"usage": {"cost": 0.4}}});
         assert_eq!(reported_cost(nested.as_object().unwrap()), None);
         assert_eq!(endpoint(" /fal-ai/birefnet/v2/ "), "fal-ai/birefnet/v2");
-        assert_eq!(
-            picture_url("application/octet-stream", b"hello"),
-            "data:image/png;base64,aGVsbG8="
-        );
-        assert_eq!(
-            picture_url("image/webp", b"hello"),
-            "data:image/webp;base64,aGVsbG8="
-        );
+    }
+
+    #[test]
+    fn safe_ids_are_short_plain_tokens() {
+        for good in [
+            "req-1",
+            "764cabcf-b745-4b3e-ae38-1200304cf45b",
+            "a.b:c_d",
+            &"x".repeat(96),
+        ] {
+            assert!(is_safe_id(good), "{good}");
+        }
+        for bad in [
+            "",
+            &"x".repeat(97),
+            "a b",
+            "a/b",
+            "https://v3b.fal.media/a?X-Amz-Signature=1",
+            "é",
+            "a\nb",
+        ] {
+            assert!(!is_safe_id(bad), "{bad}");
+        }
     }
 
     #[test]

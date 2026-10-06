@@ -65,8 +65,9 @@ pub const MAX_INPUT_IMAGES: usize = 16;
 /// The route contract's `adapter` this adapter serves (spec/providers.md §5 step 1, §9.1).
 pub const ADAPTER: &str = "fx-openai-image-v1";
 
-/// The route contract's `adapter_behavior` this adapter serves. The table may spell it as the
-/// text `"1"` or the number `1`; both name the same behaviour.
+/// The route contract's `adapter_behavior` this adapter serves: the text `"1"`, as every image
+/// route carries it (spec/providers.md §10). The number `1` is another contract, with another
+/// fingerprint, and is not served.
 pub const ADAPTER_BEHAVIOR: &str = "1";
 
 /// The variable a redirect points at (spec/providers.md §3, §4.3).
@@ -178,7 +179,12 @@ impl OpenAiImages {
         let said = wire::status_reason(LABEL, status, detail.as_deref());
         let error = ErrorFields::of(&response.body);
         match status {
-            408 => not_received(reason(said), crate::adapter::retry_after(response)),
+            // OpenAI's 408 is its own timeout: the request arrived, and the work may be done.
+            408 => Sent::Failed {
+                reason: reason(said),
+                cost: None,
+                retryable: true,
+            },
             429 if error.is_quota() => Sent::Failed {
                 reason: reason(said),
                 cost: Some(Usd::ZERO),
@@ -293,15 +299,19 @@ fn served(route: &RouteRef) -> Result<bool, String> {
     if route.provider != "openai" {
         return Err(refused());
     }
-    let adapter_ok = match route.contract.get("adapter") {
+    let contract = match &route.contract {
+        Value::Null => return Ok(edit),
+        Value::Object(contract) => contract,
+        _ => return Err(refused()),
+    };
+    let adapter_ok = match contract.get("adapter") {
         None | Some(Value::Null) => true,
         Some(Value::String(adapter)) => adapter == ADAPTER,
         Some(_) => false,
     };
-    let behavior_ok = match route.contract.get("adapter_behavior") {
+    let behavior_ok = match contract.get("adapter_behavior") {
         None | Some(Value::Null) => true,
         Some(Value::String(behavior)) => behavior == ADAPTER_BEHAVIOR,
-        Some(Value::Number(behavior)) => behavior.to_string() == ADAPTER_BEHAVIOR,
         Some(_) => false,
     };
     if adapter_ok && behavior_ok {
@@ -537,8 +547,12 @@ mod tests {
             served(&route(
                 "image.edit",
                 "openai",
-                json!({"adapter": null, "adapter_behavior": 1})
+                json!({"adapter": null, "adapter_behavior": null})
             )),
+            Ok(true)
+        );
+        assert_eq!(
+            served(&route("image.edit", "openai", Value::Null)),
             Ok(true)
         );
         for (capability, provider, contract) in [
@@ -554,7 +568,12 @@ mod tests {
             ),
             ("image.generate", "openai", json!({"adapter": 1})),
             ("image.generate", "openai", json!({"adapter_behavior": "2"})),
+            // routes-caps F3: the behaviour is the text "1", as OpenRouter's is the text "3".
+            ("image.generate", "openai", json!({"adapter_behavior": 1})),
+            ("image.generate", "openai", json!({"adapter_behavior": 1.0})),
             ("image.generate", "openai", json!({"adapter_behavior": 1.5})),
+            ("image.generate", "openai", json!([])),
+            ("image.generate", "openai", json!("fx-openai-image-v1")),
             (
                 "image.generate",
                 "openai",

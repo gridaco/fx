@@ -1116,7 +1116,7 @@ inputs:
 steps:
   draw:
     uses: fx/image.generate@1
-    requires: [mask]
+    requires: [exact_size, mask]
     with: { prompt: x }
   write:
     uses: fx/structured.generate@1
@@ -1136,7 +1136,9 @@ steps:
     assert_eq!(
         problems(&expansion),
         vec![
-            "draw.requires: img-a@acme does not support mask",
+            // mask is image.edit's: image.generate does not define it.
+            "draw.requires: mask is not an image.generate feature (spec/capabilities.md)",
+            "draw.requires: img-a@acme does not support exact_size",
             "review.independent_of: shares the model llm-a with write; route one of them to a \
              different model",
             "lost.route: no route img-z@nowhere serves image.generate (known routes: img-a@acme)",
@@ -1249,6 +1251,52 @@ steps:
         vec![2, 7]
     );
     usd(27_000, 94_000, b);
+}
+
+#[test]
+fn a_feature_the_capability_does_not_define_is_refused_as_unknown() {
+    let project = Project::new();
+    project.file("pic.png", b"png");
+    let expansion = project.expand(
+        "\
+fx: workflow/v1
+id: case
+title: Feature names
+steps:
+  cutout:
+    uses: fx/image.generate@1
+    requires: [transparent_background]
+    with: { prompt: x, background: transparent }
+  patch:
+    uses: fx/image.edit@1
+    route: img-a@acme
+    requires: [masked_edit, mask]
+    with: { image: ./pic.png, prompt: x }
+  both:
+    uses: ./nodes/cases.py#paid
+    requires: [reference_images, alpha, glow]
+",
+    );
+    // A name no capability the type calls defines is refused as such, once, with FX's name for
+    // the predecessor's (spec/providers.md §11); a known feature a route lacks is the route's.
+    assert_eq!(
+        problems(&expansion),
+        vec![
+            "cutout.requires: transparent_background is not an image.generate feature \
+             (spec/capabilities.md); FX calls it alpha",
+            "patch.requires: masked_edit is not an image.edit feature (spec/capabilities.md); FX \
+             calls it mask",
+            "both.requires: glow is not an image.generate or structured.generate feature \
+             (spec/capabilities.md)",
+            "both.requires: reference_images is not an image.generate or structured.generate \
+             feature (spec/capabilities.md); FX calls it image_input",
+            "both.requires: llm-a@acme does not support alpha",
+        ]
+    );
+    // Routes stay bound and priced, as for a missing feature.
+    usd(10_000, 40_000, get(&expansion, "cutout#1"));
+    usd(20_000, 50_000, get(&expansion, "patch#1"));
+    assert_eq!(get(&expansion, "both#1").routes.len(), 2);
 }
 
 #[test]

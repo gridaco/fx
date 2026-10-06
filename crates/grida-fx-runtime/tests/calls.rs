@@ -1155,6 +1155,7 @@ async fn a_recorded_call_replays_offline_without_adapters() {
             take: vec![1],
             state: JobState::Submitting,
             handle: None,
+            note: None,
         })
         .unwrap();
     let services = Services::planning(Arc::clone(&engine));
@@ -1427,7 +1428,74 @@ fn job_record(state: JobState, handle: Option<Value>) -> JobRecord {
         take: vec![1],
         state,
         handle,
+        note: None,
     }
+}
+
+#[tokio::test]
+async fn an_uncertain_submit_s_reason_is_kept_for_the_next_run() {
+    let reason = "fal took the video job but returned no handle to collect it by (request req-7)";
+    let dir = tempfile::tempdir().unwrap();
+    let fake = FakeAdapter::long_job(
+        vec![Submitted::Uncertain {
+            reason: reason.into(),
+        }],
+        Vec::new(),
+    );
+    let mut adapters = Adapters::new();
+    adapters.register("image.generate", "acme", fake.as_job());
+    let engine_ = engine(dir.path(), adapters, true);
+    let site = site(vec![img_a()], &[("image.generate", 5)]);
+    let files = RunFiles::new();
+    let call_once = |services: Arc<Services>| {
+        let site = &site;
+        let files = &files;
+        async move {
+            rpc(call(
+                &services,
+                site,
+                &CallCounter::new(),
+                files,
+                "image.generate",
+                lantern_request(),
+            )
+            .await)
+        }
+    };
+    let message = format!(
+        "image.generate on img-a@acme (take 1) was being submitted when a run stopped, and \
+         nobody can say whether the provider took it. Check the provider's dashboard, then run \
+         grida-fx jobs --forget {LANTERN_KEY} to submit it again"
+    );
+
+    // The run that submitted it: the adapter's reason, and the record keeps it as its note.
+    let error = call_once(live(Arc::clone(&engine_), Some(Usd(1_000_000)))).await;
+    assert_eq!(error.code, ErrorCode::JobUnsettled.code());
+    assert_eq!(error.message, message);
+    assert_eq!(error.data.as_ref().unwrap()["reason"], json!(reason));
+    let record = engine_.store.load_job(LANTERN_KEY).unwrap().unwrap();
+    assert_eq!(record.state, JobState::Submitting);
+    assert_eq!(record.handle, None);
+    assert_eq!(record.note.as_deref(), Some(reason));
+    assert_eq!(fake.log().len(), 1);
+
+    // A later run stops for a person, with the same reason, and submits nothing.
+    let error = call_once(live(Arc::clone(&engine_), Some(Usd(1_000_000)))).await;
+    assert_eq!(error.code, ErrorCode::JobUnsettled.code());
+    assert_eq!(error.message, message);
+    let data = error.data.unwrap();
+    assert_eq!(data["reason"], json!(reason));
+    assert_eq!(data["key"], json!(LANTERN_KEY));
+    assert_eq!(fake.log().len(), 1, "never submitted again");
+
+    // A record written before a submit that never returned has no note, and no reason.
+    engine_
+        .store
+        .save_job(&job_record(JobState::Submitting, None))
+        .unwrap();
+    let error = call_once(live(Arc::clone(&engine_), Some(Usd(1_000_000)))).await;
+    assert_eq!(error.code, ErrorCode::JobUnsettled.code());
+    assert!(error.data.unwrap().get("reason").is_none());
 }
 
 #[tokio::test]

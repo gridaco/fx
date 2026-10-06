@@ -506,7 +506,12 @@ fn statuses_classify_per_spec() {
     let cases: Vec<(u16, Value, &str)> = vec![
         (429, json!({}), "not_received"),
         (503, envelope.clone(), "not_received"),
-        (408, json!({}), "not_received"),
+        (408, json!({}), "retry"),
+        (
+            408,
+            json!({"error": {"code": 408, "message": "timed out"}}),
+            "retry",
+        ),
         (400, envelope.clone(), "zero"),
         (401, envelope.clone(), "zero"),
         (402, envelope.clone(), "zero"),

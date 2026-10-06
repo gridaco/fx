@@ -5,7 +5,9 @@
 //! [`CHECK_DEADLINE`]; a doubted model (`riggable` not true, or `rig_type` not the requested one) is
 //! refused unless `allow_negative_check` is true; then post `POST /animations/rig` once with
 //! `{"input", "model", "rig_type", "spec": <skeleton>, "out_format": "glb"}`. The handle is
-//! `{"task_id", "check": {"task_id", "riggable", "rig_type"}, "advisory_override"}`.
+//! `{"task_id", "check": {"task_id", "riggable", "rig_type"}, "advisory_override"}`, where the
+//! check's `rig_type` is kept only when it is a short plain string (`^[A-Za-z0-9_.:-]{1,96}$`),
+//! else `null`, so a handle and an answer never carry a provider URL.
 //! `collect`: wait up to [`COLLECT_DEADLINE`]; exactly one GLB among the downloads, as file
 //! `model`; `data: {"facts": {"riggable", "checked_rig_type", "advisory_override"}}` from the
 //! handle; cost from the rig task's credits.
@@ -89,16 +91,14 @@ impl TripoRig {
             Some(Value::Bool(riggable)) => *riggable,
             _ => return api.not_received("Tripo's riggability check answered without a verdict"),
         };
-        let checked_rig_type = checked
-            .output
-            .get("rig_type")
-            .cloned()
-            .unwrap_or(Value::Null);
+        let returned_rig_type = checked.output.get("rig_type").unwrap_or(&Value::Null);
+        // Only a short plain string goes into the handle (and later the answer's facts).
+        let checked_rig_type = super::plain_or_null(returned_rig_type);
         let doubted = !riggable || checked_rig_type != Value::String(rig_type.clone());
         if doubted && !allowed {
             return api.refused(&format!(
                 "Tripo's check doubts this model (riggable={riggable}, rig_type={})",
-                super::shown(&checked_rig_type)
+                super::shown(returned_rig_type)
             ));
         }
 
@@ -151,8 +151,7 @@ impl TripoRig {
             .unwrap_or(Value::Null);
         let checked_rig_type = check
             .and_then(|c| c.get("rig_type"))
-            .cloned()
-            .unwrap_or(Value::Null);
+            .map_or(Value::Null, super::plain_or_null);
         let advisory_override = handle
             .get("advisory_override")
             .and_then(Value::as_bool)

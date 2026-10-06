@@ -75,6 +75,8 @@ A capability whose provider job outlives one request (a video, a rig) keeps a jo
 | `submitted` | once the provider acknowledged the job, with the `handle` that collecting needs | Collects the job by its handle, and never submits it again. Collecting bills nothing new: the run that submitted it was charged its hold. |
 | `settled` | when the job ended without a result and nothing of it is outstanding, such as a job the provider reported failed | Submits the call anew, as a new attempt. |
 
+A `submitting` record MAY carry `note`: when the submit's outcome is unknown, the redacted reason, which names the provider's job id when one was returned, so a person can find the job. No other record carries one. `grida-fx jobs` shows it, and a later run's `job_unsettled` carries it as `reason` in `data`.
+
 Once the call is answered, its call record is published and then its job record is removed. A trusted call record also removes a leftover job record with its key. A `settled` record MAY be removed at any time.
 
 ## 6. Writing

@@ -9,6 +9,7 @@
 //! keys travel in the transport (step 4).
 
 use crate::BoxFuture;
+use crate::redact::Redactor;
 use crate::transport::HttpResponse;
 use grida_fx_core::money::Usd;
 use indexmap::IndexMap;
@@ -297,6 +298,15 @@ pub trait RequestAdapter: Send + Sync {
     fn check(&self, _call: &CallRequest, _answer: &Answer) -> Result<(), String> {
         Ok(())
     }
+
+    /// The redactor every reason of this adapter's calls passes through last (spec/providers.md
+    /// §8). The engine's retry owner redacts with it each reason it reports: the adapter's own,
+    /// its check's, and the engine's checks of the answer. A live invocation's adapters answer
+    /// with the redactor over every key of the invocation ([`crate::live::adapters`]); the
+    /// default masks the known secret shapes only.
+    fn redactor(&self) -> Redactor {
+        Redactor::default()
+    }
 }
 
 /// An adapter for long provider jobs (a video, a rig): submitted once, collected by handle.
@@ -311,6 +321,11 @@ pub trait LongJob: Send + Sync {
     /// As [`RequestAdapter::check`], on a collected answer.
     fn check(&self, _call: &CallRequest, _answer: &Answer) -> Result<(), String> {
         Ok(())
+    }
+
+    /// As [`RequestAdapter::redactor`].
+    fn redactor(&self) -> Redactor {
+        Redactor::default()
     }
 }
 
@@ -506,6 +521,17 @@ mod tests {
         let answer = Answer::new(json!({"bad": true}), None);
         assert_eq!(RequestAdapter::check(&Silent, &call, &answer), Ok(()));
         assert_eq!(LongJob::check(&Silent, &call, &answer), Ok(()));
+        // The default redactor knows no key, only the known secret shapes.
+        for redactor in [
+            RequestAdapter::redactor(&Silent),
+            LongJob::redactor(&Silent),
+        ] {
+            assert_eq!(
+                redactor.reason("used sk-proj-AbCdEf123456"),
+                "used [redacted]"
+            );
+            assert_eq!(redactor.reason("used acme-key-1"), "used acme-key-1");
+        }
         assert_eq!(
             format!("{:?}", Adapter::Request(Arc::new(Silent))),
             "Adapter::Request"

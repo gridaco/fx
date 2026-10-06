@@ -145,7 +145,7 @@ fn the_submit_body_holds_both_frames_and_an_integer_duration() {
     let first_bytes = media::png(2, 2, Some(255));
     let last_bytes = media::png(3, 3, None);
     let first = builder.file("image/png", &first_bytes);
-    let last = builder.file("application/octet-stream", &last_bytes);
+    let last = builder.file("image/webp", &last_bytes);
     let call = builder
         .request(
             json!({"prompt": "A lantern sways.", "first_frame": first, "last_frame": last,
@@ -153,7 +153,7 @@ fn the_submit_body_holds_both_frames_and_an_integer_duration() {
         )
         .build();
     let body = json!({"prompt": "A lantern sways.", "image_url": data_url("image/png", &first_bytes),
-                      "end_image_url": data_url("image/png", &last_bytes),
+                      "end_image_url": data_url("image/webp", &last_bytes),
                       "aspect_ratio": "16:9", "resolution": "1080p", "duration": 5});
     let answer = json!({"request_id": "req-1", "status_url": STATUS_URL, "response_url": RESPONSE_URL,
                         "cancel_url": format!("{RESPONSE_URL}/cancel")});
@@ -277,6 +277,24 @@ fn submit_refusals_send_nothing() {
         let call = call(request.clone());
         assert_eq!(refused(&call, test_keys()), sentence, "{request}");
     }
+    // A frame that is not a picture is refused, not sent under a picture's label.
+    for (member, kind) in [
+        ("first_frame", "text/plain"),
+        ("first_frame", "model/gltf-binary"),
+        ("last_frame", "application/octet-stream"),
+        ("last_frame", "audio/mpeg"),
+    ] {
+        let mut builder = CallBuilder::new("video.generate", ROUTE);
+        let first = builder.file("image/png", &media::png(2, 2, Some(255)));
+        let other = builder.file(kind, b"First line of a note, or other bytes");
+        let mut request = json!({"prompt": "p", "first_frame": first, "duration": 3});
+        request[member] = other;
+        let call = builder.request(request).build();
+        assert_eq!(
+            refused(&call, test_keys()),
+            format!("{member} is {kind}, not a picture")
+        );
+    }
     let foreign = CallBuilder::new("video.generate", ROUTE)
         .contract(json!({"adapter": "fal-run"}))
         .request(json!({"prompt": ""}))
@@ -309,10 +327,15 @@ fn submit_statuses_follow_the_queue_table() {
     let foreign = json!({"request_id": "req-1",
                          "status_url": "https://queue.fal.run.evil.example/x/requests/req-1/status",
                          "response_url": RESPONSE_URL});
-    let queried = json!({"request_id": "req-1", "status_url": format!("{STATUS_URL}?x=1"),
+    let queried = json!({"request_id": "req-1", "status_url": format!("{STATUS_URL}?logs=1"),
                          "response_url": RESPONSE_URL});
+    let signed_query = json!({"request_id": "req-1",
+                              "status_url": format!("{STATUS_URL}?X-Amz-Signature=deadbeef"),
+                              "response_url": RESPONSE_URL});
     let missing = json!({"request_id": "req-1", "status_url": STATUS_URL});
     let blank = json!({"request_id": " ", "status_url": STATUS_URL, "response_url": RESPONSE_URL});
+    let unsafe_id = json!({"request_id": "https://v3b.fal.media/x?X-Amz-Signature=deadbeef",
+                           "status_url": STATUS_URL, "response_url": RESPONSE_URL});
     let detail = br#"{"detail": [{"ctx": {"le": 10}}]}"#.to_vec();
     let not_received = |reason: &str| Submitted::not_received(reason);
     let waiting = |reason: &str, seconds: u64| Submitted::NotReceived {
@@ -369,10 +392,33 @@ fn submit_statuses_follow_the_queue_table() {
             uncertain(no_handle),
         ),
         (post().reply(ok(json!([1]))), uncertain(no_handle)),
-        (post().reply(ok(missing)), uncertain(no_handle)),
+        // fal took the job: the reason names the request id it returned, when that is safe.
+        (
+            post().reply(ok(missing)),
+            uncertain(&format!("{no_handle} (request req-1)")),
+        ),
+        (
+            post().reply(ok(foreign)),
+            uncertain(&format!("{outside} (request req-1)")),
+        ),
+        (
+            post().reply(ok(signed_query)),
+            uncertain(&format!("{outside} (request req-1)")),
+        ),
         (post().reply(ok(blank)), uncertain(no_handle)),
-        (post().reply(ok(foreign)), uncertain(outside)),
-        (post().reply(ok(queried)), uncertain(outside)),
+        (post().reply(ok(unsafe_id.clone())), uncertain(no_handle)),
+        (
+            post().reply(ok(unsafe_id).with_header("x-request-id", "req_hdr")),
+            uncertain(&format!("{no_handle} (request req_hdr)")),
+        ),
+        (
+            post().reply(ok(queried)),
+            Submitted::Accepted {
+                handle: json!({"request_id": "req-1",
+                               "status_path": "google/gemini-omni-flash/requests/req-1/status?logs=1",
+                               "response_path": "google/gemini-omni-flash/requests/req-1"}),
+            },
+        ),
         (
             post().reply(
                 HttpResponse::new(302, Vec::new()).with_header("location", "https://x.test"),
@@ -691,10 +737,6 @@ fn result_reads() {
             Ok("fal output video url must be https"),
         ),
         (
-            ok(json!({"video": {"url": VIDEO_URL, "content_type": "video/webm"}})),
-            Ok("fal video media type must be MP4"),
-        ),
-        (
             HttpResponse::new(404, Vec::new()),
             Ok("fal video job result returned HTTP 404"),
         ),
@@ -723,12 +765,6 @@ fn downloads_that_end_or_stop_collecting() {
     let cases: Vec<(Exchange, Result<String, &str>)> = vec![
         (
             Expect::download(VIDEO_URL).reply(
-                HttpResponse::new(200, CLIP.to_vec()).with_header("content-type", "video/webm"),
-            ),
-            Ok("fal video media type must be MP4".into()),
-        ),
-        (
-            Expect::download(VIDEO_URL).reply(
                 HttpResponse::new(302, Vec::new()).with_header("location", "https://x.test/a.mp4"),
             ),
             Err("fal output video download returned HTTP 302"),
@@ -740,6 +776,13 @@ fn downloads_that_end_or_stop_collecting() {
         (
             Expect::download(VIDEO_URL).reply(HttpResponse::new(410, Vec::new())),
             Ok("fal output video download returned HTTP 410".into()),
+        ),
+        (
+            Expect::download(VIDEO_URL).reply(
+                HttpResponse::new(200, b"\x1a\x45\xdf\xa3 webm".to_vec())
+                    .with_header("content-type", "video/mp4"),
+            ),
+            Ok("fal output video is not an MP4 file".into()),
         ),
         (
             Exchange {
@@ -789,18 +832,6 @@ fn downloads_that_end_or_stop_collecting() {
         }
     }
 
-    // Declared nowhere: neither the result nor the header names a type.
-    let clock = Arc::new(FakeClock::new());
-    let transport = Arc::new(ReplayTransport::new(vec![
-        completed(),
-        result_get().reply(ok(json!({"video": {"url": VIDEO_URL}}))),
-        Expect::download(VIDEO_URL).reply(HttpResponse::new(200, CLIP.to_vec())),
-    ]));
-    assert_eq!(
-        ended(collect(&transport, &clock, &call(json!({})))),
-        "fal output video media type is missing"
-    );
-
     // The bytes start like an MP4 but carry no movie.
     let clock = Arc::new(FakeClock::new());
     let transport = Arc::new(ReplayTransport::new(vec![
@@ -818,24 +849,171 @@ fn downloads_that_end_or_stop_collecting() {
 }
 
 #[test]
-fn failed_downloads_are_read_again_within_the_deadline() {
+fn the_bytes_decide_the_kind_not_the_headers() {
+    // A valid MP4 is answered whatever its content-type header or declared type says: §9.3 ends
+    // a job only when the bytes are not MP4.
+    let results = [
+        json!({"video": {"url": VIDEO_URL}}),
+        json!({"video": {"url": VIDEO_URL, "content_type": "video/webm"}}),
+        json!({"video": {"url": VIDEO_URL, "content_type": "application/octet-stream"}}),
+        json!({"video": {"url": VIDEO_URL, "content_type": 7}}),
+    ];
+    let headers = [
+        None,
+        Some("application/octet-stream"),
+        Some("binary/octet-stream"),
+        Some("video/quicktime"),
+        Some("text/html"),
+        Some(""),
+    ];
+    for result in &results {
+        for header in headers {
+            let mut reply = HttpResponse::new(200, CLIP.to_vec());
+            if let Some(header) = header {
+                reply = reply.with_header("content-type", header);
+            }
+            let clock = Arc::new(FakeClock::new());
+            let transport = Arc::new(ReplayTransport::new(vec![
+                completed(),
+                result_get().reply(ok(result.clone())),
+                Expect::download(VIDEO_URL).reply(reply),
+            ]));
+            let Collected::Answered(answer) = collect(&transport, &clock, &call(json!({}))) else {
+                panic!("an answer for {result} with {header:?}")
+            };
+            assert_eq!(answer.files["video"].kind, "video/mp4");
+            assert_eq!(answer.files["video"].bytes, CLIP);
+        }
+    }
+}
+
+#[test]
+fn a_failed_download_is_unreachable_and_made_once() {
+    // spec/providers.md §8: a result file is fetched once per collect. A failure a later collect
+    // may not repeat leaves the job `submitted`; the next collect reads the result again.
+    let cases: Vec<(Exchange, &str)> = vec![
+        (
+            Expect::download(VIDEO_URL).reply(HttpResponse::new(503, Vec::new())),
+            "fal output video download returned HTTP 503",
+        ),
+        (
+            Expect::download(VIDEO_URL).reply(HttpResponse::new(502, Vec::new())),
+            "fal output video download returned HTTP 502",
+        ),
+        (
+            Expect::download(VIDEO_URL).fail(TransportError::after_send(
+                TransportErrorKind::Other,
+                "connection reset",
+            )),
+            "fal output video download failed: connection reset",
+        ),
+        (
+            Expect::download(VIDEO_URL).fail(TransportError::not_sent(
+                TransportErrorKind::Connect,
+                "connection refused",
+            )),
+            "fal output video download failed: connection refused",
+        ),
+        (
+            Expect::download(VIDEO_URL).reply(HttpResponse::new(429, Vec::new())),
+            "fal output video download returned HTTP 429",
+        ),
+        (
+            Expect::download(VIDEO_URL).reply(HttpResponse::new(408, Vec::new())),
+            "fal output video download returned HTTP 408",
+        ),
+        (
+            Expect::download(VIDEO_URL).reply(HttpResponse::new(101, Vec::new())),
+            "fal output video download returned HTTP 101",
+        ),
+    ];
+    for (download, sentence) in cases {
+        let clock = Arc::new(FakeClock::new());
+        let transport = Arc::new(ReplayTransport::new(vec![completed(), result(), download]));
+        assert_eq!(
+            unreachable(collect(&transport, &clock, &call(json!({})))),
+            sentence
+        );
+        let downloads = transport
+            .requests()
+            .iter()
+            .filter(|request| request.lane == Lane::Download)
+            .count();
+        assert_eq!(downloads, 1, "{sentence}");
+        assert!(clock.sleeps().is_empty(), "{sentence}");
+    }
+}
+
+#[test]
+fn a_video_url_is_fetched_byte_for_byte_and_never_quoted() {
+    let signed = "https://v3b.fal.media/files/clip.mp4?k='x'&X-Amz-Signature=deadbeef";
     let clock = Arc::new(FakeClock::new());
     let transport = Arc::new(ReplayTransport::new(vec![
         completed(),
-        result(),
-        Expect::download(VIDEO_URL).reply(HttpResponse::new(503, Vec::new())),
-        Expect::download(VIDEO_URL).fail(TransportError::after_send(
-            TransportErrorKind::Other,
-            "connection reset",
-        )),
-        Expect::download(VIDEO_URL).reply(HttpResponse::new(429, Vec::new())),
-        Expect::download(VIDEO_URL).reply(clip_reply()),
+        result_get().reply(ok(json!({"video": {"url": signed}}))),
+        Expect::download(signed).reply(HttpResponse::new(200, CLIP.to_vec())),
     ]));
     assert!(matches!(
         collect(&transport, &clock, &call(json!({}))),
         Collected::Answered(_)
     ));
-    assert_eq!(clock.sleeps().len(), 3);
+    assert_eq!(transport.requests()[2].url, signed);
+
+    // A failure's reason names neither the URL nor its parsed form.
+    let clock = Arc::new(FakeClock::new());
+    let transport = Arc::new(ReplayTransport::new(vec![
+        completed(),
+        result_get().reply(ok(json!({"video": {"url": signed}}))),
+        Expect::download(signed).fail(TransportError::after_send(
+            TransportErrorKind::Other,
+            "error sending request for url (https://v3b.fal.media/files/clip.mp4?k=%27x%27&X-Amz-Signature=deadbeef)",
+        )),
+    ]));
+    let reason = unreachable(collect(&transport, &clock, &call(json!({}))));
+    assert!(!reason.contains("deadbeef"), "{reason}");
+    assert!(!reason.contains("v3b.fal.media/files"), "{reason}");
+}
+
+#[test]
+fn a_queue_reference_with_a_plain_query_is_collected() {
+    let clock = Arc::new(FakeClock::new());
+    let status = format!("{STATUS_URL}?logs=1");
+    let transport = Arc::new(ReplayTransport::new(vec![
+        Expect::get(&status)
+            .credential("authorization", "Key test-fal-key")
+            .reply(ok(json!({"status": "COMPLETED", "request_id": "req-1"}))),
+        result(),
+        Expect::download(VIDEO_URL).reply(clip_reply()),
+    ]));
+    let mut queried = handle();
+    queried["status_path"] = json!("google/gemini-omni-flash/requests/req-1/status?logs=1");
+    let collected = block_on(video(&transport, &clock).collect(&call(json!({})), &queried));
+    transport.assert_done();
+    assert!(matches!(collected, Collected::Answered(_)));
+}
+
+#[test]
+fn a_key_straddling_the_cut_of_a_job_error_is_redacted_whole() {
+    let clock = Arc::new(FakeClock::new());
+    let error = format!("x{}yyyyyyyyy{KEY}", " ".repeat(470));
+    let error_type = format!("{}ab{KEY}", "ab. ".repeat(22));
+    let transport = Arc::new(ReplayTransport::new(vec![
+        status_get().reply(ok(
+            json!({"status": "FAILED", "request_id": "req-1", "error": error}),
+        )),
+        status_get().reply(ok(
+            json!({"status": "FAILED", "request_id": "req-1", "error": "boom",
+                                     "error_type": error_type}),
+        )),
+    ]));
+    let adapter = video(&transport, &clock);
+    let call = call(json!({}));
+    let first = ended(block_on(adapter.collect(&call, &handle())));
+    assert_eq!(first, "fal video job failed: x yyyyyyyyy[redacted]");
+    let second = ended(block_on(adapter.collect(&call, &handle())));
+    assert!(!second.contains(&KEY[..6]), "{second}");
+    assert!(second.contains("ab[redacted]"), "{second}");
+    transport.assert_done();
 }
 
 #[test]
@@ -857,8 +1035,13 @@ fn handles_this_adapter_did_not_write_request_nothing() {
         path("/google/gemini-omni-flash/requests/req-1/status"),
         path(STATUS_URL),
         path("google/../../admin"),
-        path("google/requests/req-1/status?x=1"),
+        path("google/requests/req-1/status?token=abc"),
+        path("google/requests/req-1/status?x=%2F"),
         path("google/requests/req-1/status#f"),
+        path("google/requests/req-1/status?x=1#f"),
+        json!({"request_id": "https://v3b.fal.media/x?sig=1", "status_path": "a/status",
+               "response_path": "a"}),
+        json!({"request_id": "req 1", "status_path": "a/status", "response_path": "a"}),
         path("google\\requests\\req-1"),
         path("google/%2e%2e/admin"),
     ];

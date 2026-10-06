@@ -9,9 +9,9 @@
 //! `title` (else `answer`). Text context files are appended to the prompt as
 //! `--- context <i> ---\n<text>`. The answer's value (`message.parsed`, else the JSON text of
 //! `message.content`, unwrapped from `completionState`) is `data: {"json": <value>}`; `cost` from
-//! `usage.cost`. `check`: the value against the request's **original** schema (draft 2020-12;
-//! `format` not asserted), refused as `<path>: <message>`. Deadline 900 s for
-//! `openai/gpt-6-astra`, 1800 s otherwise.
+//! `usage` ([`super::usage_cost`]). `check`: the value against the request's **original**
+//! schema (draft 2020-12; `format` not asserted), refused as `<path>: <message>`. Deadline 900 s
+//! for `openai/gpt-6-astra`, 1800 s otherwise.
 //!
 //! `send`, in the order of spec/providers.md §5:
 //! 1. the contract (`read_contract`): `adapter` and `adapter_behavior`, when present, are this
@@ -27,7 +27,7 @@
 //!
 //! Non-2xx and transport outcomes are [`super::classify`]'s (a transport's own refusal is
 //! `Refused`, spec/providers.md §4.2). A 2xx that does not become an answer is
-//! `Failed { cost: <usage.cost when the body parsed>, retryable: true }` (§4.4).
+//! `Failed { cost: <the usage's cost when the body parsed>, retryable: true }` (§4.4).
 
 use super::schema;
 use crate::BoxFuture;
@@ -345,11 +345,9 @@ pub(super) fn message_text(content: Option<&Value>) -> String {
     }
 }
 
-/// `usage.cost`, rounded up (spec/providers.md §6).
+/// The cost `usage` reports ([`super::usage_cost`]).
 pub(super) fn reported_cost(body: &Map<String, Value>) -> Option<Usd> {
-    body.get("usage")
-        .and_then(|usage| usage.get("cost"))
-        .and_then(wire::usd_ceil)
+    super::usage_cost(body.get("usage"))
 }
 
 /// A structural failure of a 2xx (spec/providers.md §4.4): billed, retryable.

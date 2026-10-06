@@ -31,9 +31,12 @@
 //! 7. the job record: unreadable stops the run ([`CallError::Store`]); `submitting` is
 //!    `job_unsettled`: `<capability> on <route id> (take <take>) was being submitted when a run
 //!    stopped, and nobody can say whether the provider took it. Check the provider's dashboard,
-//!    then run grida-fx jobs --forget <key> to submit it again`; `submitted` is collected
-//!    (`retry::collect_job`; only a long-job adapter can collect, so a plain adapter meeting a
-//!    `submitted` record is `job_unsettled` too); none or `settled` is a new submission.
+//!    then run grida-fx jobs --forget <key> to submit it again`, with the record's `note` (why
+//!    the submit's outcome is unknown, spec/store.md §5) as `reason` in `data` when it has one;
+//!    `submitted` is collected (`retry::collect_job`; only a long-job adapter can collect, so a
+//!    plain adapter meeting a `submitted` record is `job_unsettled` too); none or `settled` is a
+//!    new submission. A submit of this run whose outcome is unknown is `job_unsettled` with the
+//!    same message and the adapter's redacted reason as `reason` in `data`.
 //! 8. the hold: the route's high price for this request (`Route::cost` over the request's members
 //!    as values), reserved per attempt by the retry owner under the run's ceiling and the
 //!    instance's step budgets.
@@ -662,7 +665,14 @@ impl Lead<'_> {
             Ok(Some(record)) => match record.state {
                 JobState::Settled => None,
                 JobState::Submitting => {
-                    return Err(known.error(ErrorCode::JobUnsettled, unsettled_text));
+                    let mut data = known.data();
+                    if let Some(note) = record.note {
+                        data.insert("reason".into(), Value::from(note));
+                    }
+                    return Err(CallError::Rpc(
+                        RpcError::new(ErrorCode::JobUnsettled, unsettled_text)
+                            .with_data(Value::Object(data)),
+                    ));
                 }
                 JobState::Submitted => match (&adapter, record.handle) {
                     (Adapter::Job(_), Some(handle)) => Some(handle),
@@ -710,6 +720,7 @@ impl Lead<'_> {
             take: site.takes.clone(),
             state: JobState::Submitting,
             handle: None,
+            note: None,
         };
         let tally = Tally {
             ledger,

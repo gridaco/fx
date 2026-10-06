@@ -18,8 +18,8 @@
 //! Answer: `data` must hold exactly one object whose `b64_json` is strict base64 (a `url` is never
 //! fetched). Its kind is `media_type` when that member is present (a parameter-free PNG, JPEG or
 //! WebP; `image/jpg`, `null` and anything else are refused), else sniffed from the bytes. The
-//! answer is file `image` with that kind, `data: null`, and `cost` from `usage.cost`
-//! (spec/providers.md §6). A 2xx that cannot become an answer is `Failed { cost, retryable:
+//! answer is file `image` with that kind, `data: null`, and `cost` from `usage`
+//! ([`super::usage_cost`]). A 2xx that cannot become an answer is `Failed { cost, retryable:
 //! true }`, with the reported cost when the body parsed (spec/providers.md §4.4).
 //! `revised_prompt` is ignored. Deadline 600 s; response cap 64 MiB. `check`:
 //! [`crate::wire::check_image`].
@@ -192,10 +192,7 @@ impl OpenRouterImages {
             Ok(payload) => payload,
             Err(reason) => return failed(reason, None),
         };
-        let cost = payload
-            .get("usage")
-            .and_then(|usage| usage.get("cost"))
-            .and_then(wire::usd_ceil);
+        let cost = super::usage_cost(payload.get("usage"));
         let item = match payload.get("data") {
             Some(Value::Array(items)) if items.len() == 1 => items[0].as_object(),
             _ => None,

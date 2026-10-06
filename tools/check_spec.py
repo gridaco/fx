@@ -31,7 +31,11 @@ It prints one line per check and exits non-zero when any check fails:
       a paid built-in's of the standard library (or agent.turn, the engine's own); every feature
       is in its capability's feature table; every contract's adapter is one providers.md
       section 9 names; and the guide's table of built-in routes (docs/guide/05-running.md) lists
-      every route under its capability with the table's prices.
+      every route under its capability with the table's prices;
+  (k) the planner's feature vocabulary (crates/grida-fx-core/src/expand/features.json) lists, for
+      every capability section of spec/capabilities.md and no other, exactly its feature table;
+      and each name it renames is one spec/providers.md section 11 drops, is a feature of no
+      capability, and becomes a feature of one.
 """
 
 from __future__ import annotations
@@ -57,6 +61,7 @@ GUIDE = REPO / "docs" / "guide"
 GUIDE_EXAMPLES = GUIDE / "examples"
 DEFAULT_ROUTES = REPO / "crates" / "grida-fx-providers" / "routes" / "default.yaml"
 STD_CATALOG = REPO / "crates" / "grida-fx-core" / "src" / "builtins" / "catalog.json"
+FEATURES = REPO / "crates" / "grida-fx-core" / "src" / "expand" / "features.json"
 
 DRAFT_2020_12 = "https://json-schema.org/draft/2020-12/schema"
 SCHEMA_ID_PREFIX = "urn:grida-fx:schema:"
@@ -688,6 +693,74 @@ def check_default_routes(gate: Gate, schemas: dict[str, Any]) -> None:
     gate.result("j", f"{rel(guide)}: the built-in routes and their prices", problems)
 
 
+def _providers_changes(text: str) -> str:
+    """spec/providers.md section 11, the changes from the engine FX came from."""
+    start = text.find("\n## 11. ")
+    if start < 0:
+        return ""
+    end = text.find("\n## ", start + 1)
+    return text[start : end if end >= 0 else len(text)]
+
+
+def check_feature_vocabulary(gate: Gate) -> None:
+    subject = rel(FEATURES)
+    if not FEATURES.is_file():
+        gate.result("k", subject, ["missing"])
+        return
+    try:
+        table = digest.read_json_file(FEATURES)
+    except digest.RefusedInput as error:
+        gate.result("k", subject, [str(error).replace(str(FEATURES), subject)])
+        return
+    problems: list[str] = []
+    if not isinstance(table, dict) or set(table) != {"kind", "capabilities", "renamed"}:
+        gate.result("k", subject, ["not {kind, capabilities, renamed}"])
+        return
+    if table["kind"] != "fx-features-v1":
+        problems.append(f"kind is {table['kind']!r}, not 'fx-features-v1'")
+    capabilities = table["capabilities"]
+    renamed = table["renamed"]
+    if not isinstance(capabilities, dict) or not all(
+        isinstance(features, list) and all(isinstance(f, str) for f in features)
+        for features in capabilities.values()
+    ):
+        gate.result("k", subject, ["capabilities is not {capability: [feature, ...]}"])
+        return
+    if not isinstance(renamed, dict) or not all(isinstance(v, str) for v in renamed.values()):
+        gate.result("k", subject, ["renamed is not {name: feature}"])
+        return
+    sections = _capability_features((SPEC / "capabilities.md").read_text(encoding="utf-8"))
+    for capability in sorted(set(sections) - set(capabilities)):
+        problems.append(f"{capability}: spec/capabilities.md defines it, the vocabulary lacks it")
+    for capability in sorted(set(capabilities) - set(sections)):
+        problems.append(f"{capability}: spec/capabilities.md has no section for it")
+    for capability in sorted(set(sections) & set(capabilities)):
+        listed = capabilities[capability]
+        if len(set(listed)) != len(listed):
+            problems.append(f"{capability}: a feature is listed twice")
+        if set(listed) != sections[capability]:
+            extra = sorted(set(listed) - sections[capability])
+            lacking = sorted(sections[capability] - set(listed))
+            problems.append(
+                f"{capability}: not its feature table (extra {extra}, missing {lacking})"
+            )
+    every = {feature for features in sections.values() for feature in features}
+    changes = _providers_changes((SPEC / "providers.md").read_text(encoding="utf-8"))
+    for old, new in sorted(renamed.items()):
+        if f"`{old}`" not in changes:
+            problems.append(f"renamed {old}: spec/providers.md section 11 does not name it")
+        if old in every:
+            problems.append(f"renamed {old}: it is still a feature in spec/capabilities.md")
+        if new not in every:
+            problems.append(f"renamed {old}: {new} is no feature in spec/capabilities.md")
+    gate.result(
+        "k",
+        f"{subject}: {len(capabilities)} capabilities and {len(renamed)} renamed features agree "
+        "with spec/capabilities.md and spec/providers.md section 11",
+        problems,
+    )
+
+
 def main() -> int:
     gate = Gate()
     schemas = load_schemas(gate)
@@ -700,6 +773,7 @@ def main() -> int:
     check_expected_graphs(gate)
     check_identity_cross(gate)
     check_default_routes(gate, schemas)
+    check_feature_vocabulary(gate)
     if gate.failures:
         print(f"{gate.failures} checks failed")
         return 1

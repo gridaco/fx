@@ -128,11 +128,11 @@ fn edit_sends_image_then_references_then_the_mask() {
     let mut builder = CallBuilder::new("image.edit", ROUTE).contract(contract());
     let first = media::png(2, 2, Some(255));
     let second = media::JPEG_HEAD.to_vec();
-    let third = b"opaque bytes of no image kind".to_vec();
+    let third = b"RIFF\x00\x00\x00\x00WEBPVP8 ".to_vec();
     let mask = media::png(2, 2, Some(0));
     let image_file = builder.file("image/png", &first);
     let jpeg_file = builder.file("image/jpeg", &second);
-    let other_file = builder.file("application/octet-stream", &third);
+    let other_file = builder.file("image/webp", &third);
     let mask_file = builder.file("image/png", &mask);
     let call = builder
         .request(
@@ -144,7 +144,7 @@ fn edit_sends_image_then_references_then_the_mask() {
     let body = json!({"prompt": "Paint the sky.", "num_images": 1, "image_size": "auto",
                       "quality": "max", "background": "opaque", "output_format": "png",
                       "image_urls": [data_url("image/png", &first), data_url("image/jpeg", &second),
-                                     data_url("image/png", &third)],
+                                     data_url("image/webp", &third)],
                       "mask_url": data_url("image/png", &mask)});
     let (_, url) = data_png(2, 2);
     let transport =
@@ -283,6 +283,52 @@ fn refusals_send_nothing() {
     for (capability, request, sentence) in cases {
         let call = CallBuilder::new(capability, ROUTE).request(request).build();
         assert_eq!(refused(&call), sentence, "{capability} {}", call.request);
+    }
+}
+
+#[test]
+fn files_that_are_not_pictures_are_refused_before_sending() {
+    // Each picture member in the order image, references[<i>], mask; the first non-picture wins.
+    // Distinct bytes per file: the call's files are keyed by digest.
+    let edit = |image: &str, references: &[&str], mask: Option<&str>| {
+        let mut builder = CallBuilder::new("image.edit", ROUTE).contract(contract());
+        let mut next = 0u32;
+        let mut file = |kind: &str| {
+            next += 1;
+            builder.file(kind, &media::png(next, 1, Some(255)))
+        };
+        let image = file(image);
+        let references: Vec<Value> = references.iter().map(|kind| file(kind)).collect();
+        let mut request = json!({"prompt": "p", "image": image, "references": references});
+        if let Some(kind) = mask {
+            request["mask"] = file(kind);
+        }
+        builder.request(request).build()
+    };
+    let cases = [
+        (
+            edit("model/gltf-binary", &[], None),
+            "image is model/gltf-binary, not a picture",
+        ),
+        (
+            edit(
+                "image/png",
+                &["image/jpeg", "text/plain"],
+                Some("image/png"),
+            ),
+            "references[1] is text/plain, not a picture",
+        ),
+        (
+            edit("image/png", &[], Some("application/octet-stream")),
+            "mask is application/octet-stream, not a picture",
+        ),
+        (
+            edit("audio/mpeg", &["text/plain"], Some("file")),
+            "image is audio/mpeg, not a picture",
+        ),
+    ];
+    for (call, sentence) in cases {
+        assert_eq!(refused(&call), sentence);
     }
 }
 
@@ -456,6 +502,29 @@ fn a_hosted_answer_is_downloaded_once_with_only_accept() {
     assert_eq!(download.max_response_bytes, image::MAX_OUTPUT_BYTES);
     assert!(download.timeout <= image::DEADLINE && download.timeout > Duration::from_secs(590));
     assert!(requests[0].credential.is_some());
+}
+
+#[test]
+fn a_hosted_url_is_fetched_byte_for_byte_as_fal_gave_it() {
+    // A signed URL may cover its raw query: FX hands the transport the provider's text, so `'`
+    // is not re-encoded as `%27`, and an upper-case host or `:443` stays as fal wrote it.
+    let png = media::png(2, 2, Some(255));
+    for hosted in [
+        "https://v3b.fal.media/files/output.png?k='x'&sig=a%2Fb~c",
+        "https://V3B.FAL.MEDIA:443/files/output.png",
+    ] {
+        let transport = Arc::new(ReplayTransport::new(vec![
+            post_any(GENERATE_URL).reply(HttpResponse::json(
+                200,
+                &json!({"images": [{"url": hosted}]}),
+            )),
+            Expect::download(hosted)
+                .header("accept", "image/*")
+                .reply(HttpResponse::new(200, png.clone())),
+        ]));
+        answered(send(&transport, &generate(json!({"prompt": "p"}))));
+        assert_eq!(transport.requests()[1].url, hosted);
+    }
 }
 
 #[test]

@@ -236,11 +236,10 @@ fn a2_the_text_model_route_sends_the_provider_defaults() {
     let picture = media::png(2, 2, Some(255));
     let mut builder = CallBuilder::new("agent.turn", TEXT_ROUTE).contract(text_contract());
     let image = builder.file("image/png", &picture);
-    let odd = builder.file("application/octet-stream", b"opaque bytes");
     let call = builder
         .request(json!({
             "system": "Place the props.",
-            "messages": [{"role": "user", "content": "Here.", "images": [image, odd]}],
+            "messages": [{"role": "user", "content": "Here.", "images": [image]}],
             "tools": [render_tool()],
             "tool_choice": "something else",
             "max_tokens": null
@@ -252,8 +251,7 @@ fn a2_the_text_model_route_sends_the_provider_defaults() {
             {"role": "system", "content": "Place the props."},
             {"role": "user", "content": [
                 {"type": "text", "text": "Here."},
-                {"type": "image_url", "image_url": {"url": wire::data_url("image/png", &picture)}},
-                {"type": "image_url", "image_url": {"url": wire::data_url("image/png", b"opaque bytes")}}
+                {"type": "image_url", "image_url": {"url": wire::data_url("image/png", &picture)}}
             ]}
         ],
         "tools": [{"type": "function", "function": {
@@ -525,6 +523,44 @@ fn refusals_come_in_order_and_send_nothing() {
         test_keys(),
         "an agent picture has no bytes to send",
     );
+}
+
+/// wire-diff WD-1 (spec/providers.md §9.2 "Agent turns"): a picture that is not an `image/*`
+/// file is refused before anything is sent, naming its place in the transcript, instead of
+/// going out labelled `image/png`. Kinds are judged before any file is read.
+#[test]
+fn a_file_that_is_not_a_picture_is_refused_before_sending() {
+    let request = |messages: Value| json!({"system": "", "tool_choice": "auto", "tools": [], "messages": messages});
+    for case in 0..3 {
+        let mut builder = CallBuilder::new("agent.turn", TEXT_ROUTE).contract(text_contract());
+        let picture = builder.file("image/png", &media::png(2, 2, None));
+        let glb = builder.file("model/gltf-binary", b"glTF\x02\x00\x00\x00");
+        let text = builder.file("text/plain", b"First frame notes");
+        let missing = json!({"file": "f".repeat(64)});
+        let (messages, reason) = match case {
+            0 => (
+                json!([{"role": "user", "content": "x", "images": [picture, glb]}]),
+                "messages[0].images[1] is model/gltf-binary, not a picture",
+            ),
+            1 => (
+                json!([
+                    {"role": "user", "content": "x"},
+                    {"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "look", "arguments": "{}"}]},
+                    {"role": "tool", "tool_call_id": "c1", "content": "seen", "images": [text]}
+                ]),
+                "messages[2].images[0] is text/plain, not a picture",
+            ),
+            _ => (
+                json!([
+                    {"role": "user", "content": "x", "images": [glb]},
+                    {"role": "user", "content": "y", "images": [missing]}
+                ]),
+                "messages[0].images[0] is model/gltf-binary, not a picture",
+            ),
+        };
+        let call = builder.request(request(messages)).build();
+        assert_refused(&call, test_keys(), reason);
+    }
 }
 
 // ---------------------------------------------------------------------------------------------

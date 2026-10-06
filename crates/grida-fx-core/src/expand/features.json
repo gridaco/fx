@@ -1,0 +1,74 @@
+{
+ "kind": "fx-features-v1",
+ "capabilities": {
+  "image.generate": [
+   "text_to_image",
+   "alpha",
+   "opaque_background",
+   "auto_background",
+   "exact_size",
+   "custom_exact_size",
+   "flexible_size",
+   "image_input",
+   "hosted_url_reference_input",
+   "png_output",
+   "jpeg_output",
+   "webp_output",
+   "maximum_quality",
+   "authored_prompt_passthrough"
+  ],
+  "image.edit": [
+   "alpha",
+   "opaque_background",
+   "auto_background",
+   "exact_size",
+   "custom_exact_size",
+   "flexible_size",
+   "image_input",
+   "hosted_url_reference_input",
+   "png_output",
+   "jpeg_output",
+   "webp_output",
+   "maximum_quality",
+   "authored_prompt_passthrough",
+   "mask"
+  ],
+  "structured.generate": [
+   "structured_output",
+   "image_input"
+  ],
+  "agent.turn": [
+   "tool_use",
+   "image_input"
+  ],
+  "video.generate": [
+   "first_last_frame"
+  ],
+  "mesh.generate": [
+   "multiview",
+   "textured_mesh",
+   "quad",
+   "pbr"
+  ],
+  "mesh.rig": [
+   "biped",
+   "glb_input",
+   "rig_check"
+  ],
+  "music.generate": [],
+  "sound.generate": [
+   "exact_duration"
+  ],
+  "speech.generate": [
+   "audio_tags",
+   "stability"
+  ],
+  "background.remove": []
+ },
+ "renamed": {
+  "transparent_background": "alpha",
+  "masked_edit": "mask",
+  "reference_images": "image_input",
+  "data_url_reference_input": "image_input"
+ }
+}

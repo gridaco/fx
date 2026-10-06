@@ -70,6 +70,12 @@ provider at another address, such as a proxy). A key that is missing refuses onl
 need it, before anything is sent and for nothing: the step fails, refused with `OPENAI_API_KEY is
 not set`. Without `--live` no key is used.
 
+**Proxies.** A live run sends `https` requests through the proxy your environment names
+(`HTTPS_PROXY` or `ALL_PROXY`, minus the hosts in `NO_PROXY`), tunnelled, so the proxy never reads
+a key. Requests to `localhost` or a loopback address, the only hosts a plain `http` base URL may
+name, are never proxied: they go straight there, and `HTTP_PROXY` is not used
+([providers.md §2](../../spec/providers.md#2-the-transport)).
+
 **The `.env` file.** A variable set (and not blank) in the environment wins. Otherwise FX reads it
 from the `.env` file of the project you run from, if there is one, and only those nine names: a
 line naming anything else is skipped without being read. A line is `NAME=value` (an `export`
@@ -205,7 +211,9 @@ not run again, even under `retry="engine"`.
   `<step-path>  take <n>[  <digest>]`; `takes mv <target> <old> <new>` moves an entry to a step's
   new path and refuses to overwrite another entry. Neither takes a builder target.
 - **`grida-fx jobs`:** the cache's long provider jobs, one line each: `<key>  <state>  <capability>
-  on <route>, take <n>`. `--forget <key>` removes one, so the next run submits its call anew.
+  on <route>, take <n>`. A `submitting` job FX could not confirm ends with why, naming the
+  provider's job id when it returned one. `--forget <key>` removes one, so the next run submits
+  its call anew.
 
 ## Delivering outputs
 

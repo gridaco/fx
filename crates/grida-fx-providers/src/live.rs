@@ -8,11 +8,17 @@
 //! `grida-fx doctor` reports per route, over a registry built on [`offline_setup`]: doctor never
 //! constructs anything that could reach the network.
 
+use crate::BoxFuture;
+use crate::adapter::{
+    Adapter, Answer, CallRequest, Collected, LongJob, RequestAdapter, RouteRef, Sent, Submitted,
+};
 use crate::clock::SystemClock;
 use crate::keys::{KeyName, Keys};
+use crate::redact::Redactor;
 use crate::registry::Adapters;
 use crate::setup::{Endpoints, Setup};
 use crate::transport::http::{HttpConfig, HttpTransport};
+use serde_json::Value;
 use std::sync::Arc;
 
 /// The providers this crate serves, in the order `doctor` lists them.
@@ -63,15 +69,82 @@ pub fn offline_setup(keys: Keys) -> Setup {
     }
 }
 
-/// Every provider's adapters over `setup`.
+/// Every provider's adapters over `setup`, in registration order, each answering
+/// [`RequestAdapter::redactor`] (or [`LongJob::redactor`]) with [`Setup::redactor`]: every key of
+/// the invocation. The engine's retry owner redacts each reason it reports with it, so a check's
+/// sentence, or the engine's own, never shows a key whichever adapter it came from
+/// (spec/providers.md §8).
 pub fn adapters(setup: &Setup) -> Adapters {
+    let mut registered = Adapters::new();
+    crate::openai::register(&mut registered, setup);
+    crate::openrouter::register(&mut registered, setup);
+    crate::fal::register(&mut registered, setup);
+    crate::tripo::register(&mut registered, setup);
+    crate::elevenlabs::register(&mut registered, setup);
+    let redactor = setup.redactor();
     let mut adapters = Adapters::new();
-    crate::openai::register(&mut adapters, setup);
-    crate::openrouter::register(&mut adapters, setup);
-    crate::fal::register(&mut adapters, setup);
-    crate::tripo::register(&mut adapters, setup);
-    crate::elevenlabs::register(&mut adapters, setup);
+    for (capability, provider) in registered.served() {
+        let route = RouteRef {
+            capability: capability.clone(),
+            model: String::new(),
+            provider: provider.clone(),
+            contract: Value::Null,
+        };
+        let Some(adapter) = registered.serving(&route) else {
+            continue;
+        };
+        let redacting = match adapter {
+            Adapter::Request(inner) => Adapter::Request(Arc::new(Redacting {
+                inner: Arc::clone(inner),
+                redactor: redactor.clone(),
+            })),
+            Adapter::Job(inner) => Adapter::Job(Arc::new(Redacting {
+                inner: Arc::clone(inner),
+                redactor: redactor.clone(),
+            })),
+        };
+        adapters.register(&capability, &provider, redacting);
+    }
     adapters
+}
+
+/// An adapter as registered, answering [`RequestAdapter::redactor`] with the invocation's
+/// ([`adapters`]); everything else is the adapter's own.
+struct Redacting<A: ?Sized> {
+    inner: Arc<A>,
+    redactor: Redactor,
+}
+
+impl RequestAdapter for Redacting<dyn RequestAdapter> {
+    fn send<'a>(&'a self, call: &'a CallRequest) -> BoxFuture<'a, Sent> {
+        self.inner.send(call)
+    }
+
+    fn check(&self, call: &CallRequest, answer: &Answer) -> Result<(), String> {
+        self.inner.check(call, answer)
+    }
+
+    fn redactor(&self) -> Redactor {
+        self.redactor.clone()
+    }
+}
+
+impl LongJob for Redacting<dyn LongJob> {
+    fn submit<'a>(&'a self, call: &'a CallRequest) -> BoxFuture<'a, Submitted> {
+        self.inner.submit(call)
+    }
+
+    fn collect<'a>(&'a self, call: &'a CallRequest, handle: &'a Value) -> BoxFuture<'a, Collected> {
+        self.inner.collect(call, handle)
+    }
+
+    fn check(&self, call: &CallRequest, answer: &Answer) -> Result<(), String> {
+        self.inner.check(call, answer)
+    }
+
+    fn redactor(&self) -> Redactor {
+        self.redactor.clone()
+    }
 }
 
 /// Whether a route can be sent (doctor's `routes` lines).
@@ -121,6 +194,39 @@ mod tests {
             );
         }
         assert!(adapters.serves("background.remove", "fal"));
+    }
+
+    #[test]
+    fn every_adapter_redacts_with_every_key_of_the_invocation() {
+        let keys = Keys::from_pairs(&[
+            (KeyName::OpenAi, "openai-test-key-0123"),
+            (KeyName::Tripo, "tripo-test-key-0123"),
+        ]);
+        let plain = adapters(&setup(Keys::none()));
+        let adapters = adapters(&setup(keys));
+        assert_eq!(
+            adapters.served(),
+            plain.served(),
+            "the same routes, in order"
+        );
+        for (capability, provider) in adapters.served() {
+            let route = RouteRef {
+                capability: capability.clone(),
+                model: "m".into(),
+                provider: provider.clone(),
+                contract: Value::Null,
+            };
+            let redactor = match adapters.serving(&route) {
+                Some(Adapter::Request(adapter)) => adapter.redactor(),
+                Some(Adapter::Job(adapter)) => adapter.redactor(),
+                None => panic!("{capability} on {provider} is served"),
+            };
+            assert_eq!(
+                redactor.reason("x openai-test-key-0123 tripo-test-key-0123"),
+                "x [redacted] [redacted]",
+                "{capability} on {provider}"
+            );
+        }
     }
 
     #[test]

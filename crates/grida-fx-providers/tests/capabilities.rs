@@ -199,8 +199,26 @@ fn what_a_paid_builtin_sends_passes_the_capability_check() {
             continue;
         }
         let sent = sent_by(builtin);
-        // Only the required members; a missing optional param goes as null.
+        // Only the required members: a param the step left out with no default, and an input
+        // port with no value, are absent from the request (spec/capabilities.md §1, §14).
         let least: Map<String, Value> = sent
+            .iter()
+            .filter(|s| s.required)
+            .map(|s| {
+                let ty =
+                    s.ty.as_ref()
+                        .unwrap_or_else(|reason| panic!("{} {}: {reason}", builtin.uses, s.name));
+                (s.name.clone(), sample(*ty))
+            })
+            .collect();
+        assert_eq!(
+            check_request(name, &Value::Object(least.clone())),
+            Ok(()),
+            "{}",
+            builtin.uses
+        );
+        // A param whose value is missing or null goes as `null`, which counts as absent.
+        let nulls: Map<String, Value> = sent
             .iter()
             .map(|s| {
                 let value = match (&s.ty, s.required) {
@@ -211,7 +229,7 @@ fn what_a_paid_builtin_sends_passes_the_capability_check() {
             })
             .collect();
         assert_eq!(
-            check_request(name, &Value::Object(least.clone())),
+            check_request(name, &Value::Object(nulls)),
             Ok(()),
             "{}",
             builtin.uses
@@ -453,6 +471,54 @@ fn every_feature_list_is_the_capability_s_features() {
         };
         let expected: Vec<String> = capability.features.iter().map(|f| f.to_string()).collect();
         assert_eq!(found, expected, "§{} {}", section.number, capability.name);
+    }
+}
+
+/// The planner keeps its own copy of the feature vocabulary (core cannot import this crate):
+/// `grida_fx_core::expand::bind::capability_features`, read from
+/// `crates/grida-fx-core/src/expand/features.json`. The two copies never drift.
+#[test]
+fn the_planner_s_feature_vocabulary_is_this_table() {
+    use grida_fx_core::expand::bind::{capability_features, renamed_feature};
+    for capability in CAPABILITIES {
+        let planner: Option<Vec<&str>> = capability_features(capability.name)
+            .map(|features| features.iter().map(String::as_str).collect());
+        assert_eq!(
+            planner.as_deref(),
+            Some(capability.features),
+            "{}: features.json against capabilities::CAPABILITIES",
+            capability.name
+        );
+    }
+    // The planner knows no capability this table lacks: the judges' have no vocabulary (§13).
+    for name in WITHOUT_ADAPTER {
+        assert!(capability(name).is_none(), "{name}");
+        assert_eq!(capability_features(name), None, "{name}");
+    }
+    let core: Value = serde_json::from_str(grida_fx_core::expand::bind::FEATURES_JSON).unwrap();
+    let listed: BTreeSet<&str> = core["capabilities"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    let ours: BTreeSet<&str> = CAPABILITIES.iter().map(|c| c.name).collect();
+    assert_eq!(listed, ours);
+    // A renamed feature is FX's name for a feature of some capability, and no longer a feature.
+    for (old, new) in core["renamed"].as_object().unwrap() {
+        assert_eq!(renamed_feature(old), new.as_str());
+        assert!(
+            CAPABILITIES
+                .iter()
+                .all(|c| !c.features.contains(&old.as_str())),
+            "{old} is still a feature"
+        );
+        assert!(
+            CAPABILITIES
+                .iter()
+                .any(|c| c.features.contains(&new.as_str().unwrap())),
+            "{new} is no feature"
+        );
     }
 }
 

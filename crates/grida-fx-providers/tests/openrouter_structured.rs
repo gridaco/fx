@@ -141,6 +141,45 @@ fn s1_the_text_model_sends_a_plain_question() {
     );
 }
 
+/// classify C2 (spec/providers.md §9.2 "Cost"): a request OpenRouter ran on the user's own
+/// provider key reports only its fee as `usage.cost`; the upstream charge counts too, and a BYOK
+/// answer without it is charged the whole hold. A structural failure bills the same way.
+#[test]
+fn a_byok_answer_counts_the_upstream_inference() {
+    let schema = colour_schema();
+    let request = json!({"prompt": "Name a colour.", "schema": schema});
+    let red = json!({"role": "assistant", "content": "{\"name\": \"red\"}"});
+    for (usage, cost) in [
+        (
+            json!({"cost": 0, "is_byok": true, "cost_details": {"upstream_inference_cost": 0.05}}),
+            Some(Usd(50_000)),
+        ),
+        (
+            json!({"cost": 0.0025, "is_byok": true, "cost_details": {"upstream_inference_cost": 0.05}}),
+            Some(Usd(52_500)),
+        ),
+        (json!({"cost": 0.0025, "is_byok": true}), None),
+    ] {
+        let transport = replay(vec![
+            expect(ExpectBody::Any).reply(completion(red.clone(), usage.clone())),
+            expect(ExpectBody::Any).reply(completion(json!({"role": "assistant"}), usage.clone())),
+        ]);
+        let adapter = adapter_over(transport.clone(), test_keys());
+        let call = call(TEXT_ROUTE, text_contract(), request.clone());
+        assert_eq!(answered(send(&adapter, &call)).cost, cost, "{usage}");
+        let Sent::Failed {
+            cost: failed_cost,
+            retryable: true,
+            ..
+        } = send(&adapter, &call)
+        else {
+            panic!("a reply without content is a structural failure");
+        };
+        assert_eq!(failed_cost, cost, "{usage}");
+        transport.assert_done();
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // S2 and S3: one 2400x3000 RGBA picture, unchanged on astra, reduced on the text model
 

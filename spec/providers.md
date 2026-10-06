@@ -19,15 +19,16 @@ Adapters are thin clients over one injected transport. The transport MUST make *
 2. **No redirects.** A 3xx response is returned as a status. Following one could carry a credential to another host.
 3. **One deadline per exchange**, set by the adapter, from connecting to the last byte of the response.
 4. **A response cap**, set by the adapter. The transport counts the bytes it reads and fails the exchange as soon as the cap is crossed; a `content-length` above the cap fails before reading. Content is requested with `accept-encoding: identity`.
-5. **Lanes.** Each request names its lane: `provider` (the provider's API), `upload` (files sent to the provider's API) or `download` (a result file at a URL the provider returned). A credential travels only on the provider and upload lanes; a download carries no credential, no cookie and no header the adapter did not set. A request that breaks this is refused before it leaves.
+5. **Lanes.** Each request names its lane: `provider` (the provider's API), `upload` (files sent to the provider's API) or `download` (a result file at a URL the provider returned). A credential travels only on the provider and upload lanes; a download carries no credential, no cookie and no header the adapter did not set. On the download lane, a header named like a credential is refused as one: `authorization`, `proxy-authorization`, `cookie`, and any name containing `auth`, `cookie`, `key`, `token`, `secret`, `session`, `credential`, `password` or `signature`. On the other lanes, the credential's header is set only through the credential slot. A request that breaks this is refused before it leaves (`a download never carries a credential`).
 6. **Credentials are attached by the transport** from the request's credential slot (`authorization: Bearer …`, `authorization: Key …`, `xi-api-key: …`). They are never part of the canonical request, a record, an event, a log line, a fixture or an error.
 7. **Failures carry their phase.**
    - `not_sent`: the request provably never left. No connection was made (DNS, TCP connect, TLS handshake, a connect or pool timeout), or the transport refused it itself (a URL it cannot use, a credential on the download lane, the network turned off).
    - `after_send`: anything else. A reset, a read timeout, a truncated body and a response over the cap all are `after_send`.
    - A transport that cannot tell reports `after_send`.
 8. **The network can be turned off.** With `GRIDA_FX_NETWORK=off`, a live invocation's transport refuses every exchange before it leaves (`not_sent`, refused). Tests of live paths use it; nothing is sent.
+9. **Proxies never see a credential.** A request whose URL is plain `http`, or whose host is a loopback host (`localhost`, a loopback IP), goes straight to its host, whatever the environment's proxy settings say: a proxy would read a plain request, credential included, in clear text, and a loopback host is this machine, not the proxy's. Any other request is `https` to a remote host, and honours the proxy settings of the environment (`HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`; `HTTP_PROXY` names a proxy for plain `http` only, so it never applies). Through a proxy it is tunnelled (`CONNECT`): the proxy sees the host and port, and the request stays encrypted to the provider. These variables are the transport's; they are not keys or endpoints (§3).
 
-The default transport is HTTP over rustls. Besides what the request sets, it sends `accept-encoding: identity`, `accept: */*` unless the request sets `accept`, and a `user-agent` on the provider and upload lanes. Tests use a replay transport that plays synthetic exchanges and asserts every request, or one that fails any send. The default transport MUST NOT be constructed in a test.
+The default transport is HTTP over rustls. Besides what the request sets, it sends `accept-encoding: identity`, `accept: */*` unless the request sets `accept`, and a `user-agent` on the provider and upload lanes. Tests use a replay transport that plays synthetic exchanges and asserts every request, or one that fails any send. The default transport MUST NOT be constructed in a test. A request, a response or a credential printed for debugging shows no URL path or query, no header value, no body and no key.
 
 ## 3. Keys and endpoints
 
@@ -126,7 +127,7 @@ A long job (a video, a mesh, a rig) is submitted once and then collected by its 
 - Then the **paid request** is sent exactly once. Its outcome follows §4.2 and §4.3:
   - `Accepted { handle }` when the provider took the job;
   - `NotReceived`, `Refused` or `Failed` when it provably did not, or refused it;
-  - `Uncertain` when nobody can say whether it took the job. The job record then stays `submitting`, the hold is charged in full, and the next run stops for a person (`job_unsettled`).
+  - `Uncertain` when nobody can say whether it took the job. The job record then stays `submitting`, with the redacted reason as its `note` ([store.md](store.md) §5), the hold is charged in full, and the next run stops for a person (`job_unsettled`).
 - **The handle holds only what collecting needs**: the provider's job id, paths relative to a fixed base, and facts the answer must report later. It MUST NOT hold a host name, a signed URL, an upload token or a credential.
 
 **Collect.**
@@ -141,7 +142,7 @@ A long job (a video, a mesh, a rig) is submitted once and then collected by its 
   | Still running at the deadline, or every read failed until it | `Unreachable` | stays `submitted`; a later run collects again |
   | An answer about another job, or an unknown status | `Unreachable` | stays `submitted` |
   | A handle that is not one the adapter wrote | `Unreachable`, and nothing is requested | stays `submitted` |
-  | A download that fails in a way a later collect may not repeat (a transport failure, a 5xx, an expired URL the provider will issue again) | `Unreachable` | stays `submitted` |
+  | A download that fails in a way a later collect may not repeat (a transport failure, a 408, a 429, a 5xx, an expired URL the provider will issue again) | `Unreachable` | stays `submitted` |
   | A credential or proxy problem (401, 403, a 3xx) | `Unreachable` | stays `submitted` |
 
   Settling a job that may still be running would invite a second paid submit, so whenever it is not clear that the job is over, the outcome is `Unreachable`.
@@ -150,14 +151,15 @@ A long job (a video, a mesh, a rig) is submitted once and then collected by its 
 ## 8. Downloads and reasons
 
 **Downloads.**
-- A result file at a URL MUST be fetched **once** per send or collect, on the download lane: no credential, no redirects, the response cap of §9, and the provider's host allowlist where §9 gives one.
+- A result file at a URL MUST be fetched **once** per send or collect, at the URL exactly as the provider gave it, on the download lane: no credential, no redirects, the response cap of §9, and the provider's host allowlist where §9 gives one. A failed fetch is not repeated within that send or collect. An adapter does not re-serialize the URL; it parses it only to check it. The default transport sends the URL as the WHATWG URL parser (Rust `url` crate, via reqwest, which has no raw-URI path) serializes it: in an http(s) query, controls, space, `"`, `<`, `>`, `'` and non-ASCII are percent-encoded; existing `%XX` escapes are kept; a default port is dropped, the host is lowercased, and `.`/`..` path segments are resolved.
 - A download URL may be signed. It MUST NOT be kept in an answer's `data`, a handle, a record, an event or a reason. Adapters add it to the redactor before using it.
 - A data URL in an answer is decoded in place; nothing is downloaded.
 
 **Reasons.**
 - Every sentence an adapter reports MUST be built from fixed text and allowlisted fields. Examples: `<label> returned HTTP <n>`, `: <safe detail>` (at most 720 characters), a request id that matches `^[A-Za-z0-9_.:-]{1,96}$`, and the bounded `type`/`code`/`param` of an OpenAI-style error envelope.
 - It MUST NOT hold a key, an authorization header, a signed URL, an upload token, a data URL, a prompt or a response body.
-- Every reason passes through redaction last. Each configured key and each added secret becomes `[redacted]`; known secret shapes are masked (data-URL payloads, base64 members such as `b64_json`, base64 runs of 80 or more characters, `sk-…` keys, `authorization` values, `api_key`/`token`/`secret`/`credential` members, URL queries). Whitespace is collapsed, and the result is cut to 500 characters ending in `…`.
+- Every reason passes through redaction last. Each configured key and each added secret becomes `[redacted]`; known secret shapes are masked (data-URL payloads, base64 members such as `b64_json`, base64 runs of 80 or more characters, `sk-…` keys, `authorization` values, `api_key`/`token`/`secret`/`credential` members, URL queries). Whitespace is collapsed, and the result is cut to 500 characters ending in `…`. Text is redacted before it is cut, so a cut never leaves part of a secret.
+- The engine's retry owner redacts once more every reason it reports (`capability_refused`, `call_failed`, `job_unsettled`), with a redactor over every key of the invocation: the adapter's own sentence, its check's, and the engine's checks of the answer, which may quote what the provider sent back (a `content-type`, a value the schema refused).
 - `<label>` is the provider and the call, such as `OpenAI image generation` or `fal video submission`. Each adapter's labels are listed in §9.
 
 ## 9. Providers
@@ -166,7 +168,7 @@ Each provider's section is normative for its adapters. Status rows override §4.
 
 ### 9.1 OpenAI
 
-- **Capabilities:** `image.generate` (`POST {base}/images/generations`, JSON) and `image.edit` (`POST {base}/images/edits`, multipart). One request per send. Contract `adapter`: `fx-openai-image-v1`, behaviour `"1"`.
+- **Capabilities:** `image.generate` (`POST {base}/images/generations`, JSON) and `image.edit` (`POST {base}/images/edits`, multipart). One request per send. Contract `adapter`: `fx-openai-image-v1`, behaviour `"1"`, the string: the number `1` is another contract, with another fingerprint, and is refused (§5 step 1), as OpenRouter's image adapter refuses the number `3`.
 - **Credential:** `authorization: Bearer <OPENAI_API_KEY>`.
 - **Limits:** deadline 600 s per send; response cap 64 MiB.
 - **Wire.** Always `n: 1`, `output_format: png`, `quality: max`, `moderation: low`, and `background` (including `auto`). `size` only when given (including `auto`). Never `input_fidelity` (the model refuses it), `response_format`, `seed` or `stream`.
@@ -183,6 +185,7 @@ Each provider's section is normative for its adapters. Status rows override §4.
 - **Answer.** `data[0].b64_json` is the one image. It must be strict base64, else the send is a structural failure; a `url` instead is a structural failure too, never fetched. Whether the bytes are a PNG is the check's judgement ([capabilities.md](capabilities.md) §2, check 1). The answer is file `image` (`image/png`) and `data: null`. Cost: `None`, since OpenAI reports token usage but no cost.
 - **Check:** the image checks of [capabilities.md](capabilities.md) §2.
 - **Statuses (overrides of §4.3):**
+  - **408:** `Failed { cost: None, retryable: true }`. OpenAI's 408 is its own timeout, after the request arrived, so the image may have been drawn: the attempt is billed, and a new attempt may follow.
   - **4xx other than 408 and 429:** `Failed { cost: Some(0), retryable: false }`. OpenAI does not bill a request it rejects.
   - **429 with `error.code` or `error.type` `insufficient_quota`:** `Failed { cost: Some(0), retryable: false }`. The quota is exhausted, so the call ends.
   - **Any other 429:** `NotReceived` (§4.3); a `retry-after` that is a plain number of seconds is named in the reason (`; retry-after <n>`).
@@ -227,13 +230,14 @@ Each provider's section is normative for its adapters. Status rows override §4.
 - **Structured output.**
   - The schema is a `json` file or an inline object. It is sent after local `$ref` inlining and strict canonicalization: `default` and the assertions strict mode refuses are dropped at schema positions, and `required` lists every property and `additionalProperties` is false. Schema positions are the root and, below a schema, each value of `properties`, `$defs`, `definitions` and `dependentSchemas`; `items`, `prefixItems`, `additionalItems`, `allOf`, `anyOf` and `oneOf`; `additionalProperties` when an object; `not`, `if`, `then`, `else` and `contains`. A property named like an assertion (`format`) is not one.
   - Refused before sending, in this order: a blank `prompt` (`a structured call needs its prompt as text`); a `matte` that is not `#rgb`, `#rrggbb` or `#rrggbbaa` (`matte <v> is not a colour`); a `max_tokens` below 1 (`max_tokens must be at least 1`) or above 2^53 − 1; a schema whose local references are unknown (`unknown local schema reference: <ref>`), cyclic (`cyclic local schema reference: <ref>`) or expand past a million values (`local schema references expand to more than 1000000 values`), or that does not compile (`a structured call's schema is not a JSON Schema (draft 2020-12)`); a schema file that is empty, not JSON or not an object (`schema has no bytes to send`, `a structured call's schema is not a JSON file`, `a structured call's schema is a JSON object`); a context file that is empty, not UTF-8 text or a picture that does not decode (`context <i> has no bytes to send`, `context <i> is not UTF-8 text`, `context <i> is not a decodable <kind>`); a body over 200 MiB (`request body exceeds 200 MiB`).
-  - Text context files are appended to the prompt as `--- context <i> ---\n<text>`.
+  - The response format's `json_schema.name` is the schema's `title` with every character but ASCII letters and digits written `_`, cut to 64 characters, else `answer`.
+  - Text context files are appended to the prompt as `--- context <i> ---\n<text>`, where `<i>` counts every context file from 1, pictures included, and the text is sent as read.
   - The answer is `message.parsed`, else the JSON text of `message.content` (NaN and Infinity are refused; for a repeated member, the last value wins), unwrapped from `completionState` wrappers. Its `data` is `{"json": <value>}`.
   - The check validates the value against the request's original schema (draft 2020-12, `format` not asserted). It refuses with `<path>: <message>` for the error at the smallest instance path.
 - **Agent turns.**
-  - The engine's transcript maps to chat messages. Tool messages drop `name`, and their pictures are regrouped into a following user message `Pictures the tools returned.`.
+  - The engine's transcript maps to chat messages. Tool messages drop `name`, and their pictures are regrouped into a following user message `Pictures the tools returned.`. Each picture goes as a data URL of its own kind.
   - An assistant's `arguments` string is sent byte for byte.
-  - Refused before sending: a call without an id (`a tool call without an id cannot be sent`); a tool message without `tool_call_id` (`a tool message without a tool_call_id cannot be sent`); a message whose role is not `user`, `assistant` or `tool` (`an agent transcript has no '<role>' messages`); a tool name that does not match `^[a-z][a-z0-9_]{0,63}$` (`tool name "<n>" must be lower_snake_case, at most 64 characters`); a blank description (`tool <name> must carry a description`); parameters that are not a schema object (`tool <name> parameters must be a JSON Schema object`); a picture without bytes (`an agent picture has no bytes to send`); a `max_tokens` below 1; a body over 200 MiB. An empty id counts as none.
+  - Refused before sending: a call without an id (`a tool call without an id cannot be sent`); a tool message without `tool_call_id` (`a tool message without a tool_call_id cannot be sent`); a message whose role is not `user`, `assistant` or `tool` (`an agent transcript has no '<role>' messages`); a tool name that does not match `^[a-z][a-z0-9_]{0,63}$` (`tool name "<n>" must be lower_snake_case, at most 64 characters`); a blank description (`tool <name> must carry a description`); parameters that are not a schema object (`tool <name> parameters must be a JSON Schema object`); a picture that is not an `image/*` file (`messages[<i>].images[<j>] is <kind>, not a picture`, counted from 0; the kinds of every picture are judged before any file is read); a picture without bytes (`an agent picture has no bytes to send`); a `max_tokens` below 1; a body over 200 MiB. An empty id counts as none.
   - The answer is `data: {"text", "tool_calls": [{"id", "name", "arguments": <object>}]}`.
 - **Music.** The prompt is the only input; `duration` stays in the call key but is not sent.
   - Refused before sending: a blank prompt (`a music call needs its prompt as text`) and a body over 200 MiB.
@@ -241,7 +245,9 @@ Each provider's section is normative for its adapters. Status rows override §4.
   - An empty body, an event that is not a JSON object, a stream with no events, an SSE error event, no audio, conflicting media types, or audio that is not MP3 is a structural failure.
   - The answer is file `audio`, checked against the MP3 signature.
 - **Cost:** `usage.cost` (§6). For music, the last `usage` seen wins, an error event's included.
+  - **A request on the user's own provider key (BYOK)**, which `usage.is_byok: true` or a non-null `usage.cost_details.upstream_inference_cost` shows: `usage.cost` is then OpenRouter's fee only, and the provider bills the inference to the user's own account. The cost is `cost` plus `upstream_inference_cost`, each rounded up (§6), so a ceiling counts what the call cost in all. A BYOK answer whose upstream cost is missing, `null` or not a cost reports `None`, and the engine charges the whole hold. Without BYOK, OpenRouter reports the upstream cost as `0` or `null`, and the cost is `cost`.
 - **Statuses (overrides of §4.3):**
+  - **408:** `Failed { cost: None, retryable: true }`, with or without an envelope. OpenRouter's 408 means the request timed out there, after it arrived, so the provider may have done the work: the attempt is billed, and a new attempt may follow.
   - **4xx other than 408 and 429, with an OpenRouter error envelope (`{"error": {...}}`):** `Failed { cost: Some(0), retryable: false }`. OpenRouter documents that an error status generates nothing and is not charged. Without an envelope, the cost is `None`.
   - **503 with an error envelope:** `NotReceived`. No provider meets the routing requirements yet. Without an envelope, a 503 follows §4.3.
 - **Reasons:** the labels are `OpenRouter image generation`, `OpenRouter structured generation`, `OpenRouter tool loop` and `OpenRouter music generation`, each with the safe detail of the error envelope, which unwraps `error.metadata.raw`.
@@ -259,22 +265,24 @@ Each provider's section is normative for its adapters. Status rows override §4.
     - a bad `background`: `background must be auto, opaque or transparent`;
     - references on a generate: `fal image generation takes no references`;
     - more than 16 pictures: `fal image edits support at most 16 input references`;
-    - a `size` that is not `auto` or `WxH` (`fal image size must be auto or WIDTHxHEIGHT`), or outside the envelope of §9.1, with sentences starting `fal image size`.
-  - The body is `{prompt, num_images: 1, image_size?, quality: max, background, output_format: png, image_urls?, mask_url?}`. `image_size` is `"auto"` or `{width, height}`, and pictures are data URLs.
-  - The answer is `root.images[0]`, where `root` is the payload's `data` when that is an object, else the payload. It is either a data URL, or a URL on `fal.media` or a subdomain of it (https, port 443, no userinfo, no fragment) downloaded once with `accept: image/*`. Any other URL is refused before a request. The download is at most 64 MiB.
+    - a `size` that is not `auto` or `WxH` (`fal image size must be auto or WIDTHxHEIGHT`), or outside the envelope of §9.1, with sentences starting `fal image size`;
+    - then, in the order `image`, `references[<i>]` (counted from 0), `mask`: a picture that is not an `image/*` file: `<member> is <kind>, not a picture`.
+  - The body is `{prompt, num_images: 1, image_size?, quality: max, background, output_format: png, image_urls?, mask_url?}`. `image_size` is `"auto"` or `{width, height}`, and pictures are data URLs under their own kind.
+  - The answer is `root.images[0]`, where `root` is the payload's `data` when that is an object, else the payload. It is either a data URL, or a URL on `fal.media` or a subdomain of it (https, port 443, no userinfo, no fragment) downloaded once, at the URL exactly as fal gave it, with `accept: image/*`. Any other URL is refused before a request. The download is at most 64 MiB.
   - The deadline is 600 s for the POST and the download together.
 - **Video.**
   - Refused before sending, in this order:
     - a blank prompt (`a clip needs its prompt as text`), or one over 20 000 characters (`the prompt is longer than 20000 characters`);
     - no `first_frame`: `this route draws from a first frame`;
     - a `duration` that is not a whole number from 3 to 10: `this route draws whole seconds from 3 to 10, not <duration>`;
-    - a `resolution` (default `720p`) not among `360p`, `720p`, `1080p`, `4k`, or an `aspect_ratio` (default `9:16`) not `9:16` or `16:9`: `this route draws no <resolution> clip at <aspect_ratio>`.
+    - a `resolution` (default `720p`) not among `360p`, `720p`, `1080p`, `4k`, or an `aspect_ratio` (default `9:16`) not `9:16` or `16:9`: `this route draws no <resolution> clip at <aspect_ratio>`;
+    - then `first_frame` and `last_frame`, each when it is not an `image/*` file: `<member> is <kind>, not a picture`.
   - The submit body is `{prompt, image_url, end_image_url?, aspect_ratio, resolution, duration}`, with `duration` a JSON integer.
-  - The handle is `{"request_id", "status_path", "response_path"}`: the returned URLs minus `{queue}/`. URLs outside the queue base are `Uncertain`.
-  - `collect` polls `status_path` every 5 s for at most 1500 s. Each read is bounded by the smaller of the time left and 60 s. It then reads `response_path`, then downloads `video.url` (https, no credential, at most 512 MiB).
+  - The handle is `{"request_id", "status_path", "response_path"}`: the returned URLs minus `{queue}/`, kept byte for byte. A path is non-empty segments of `A-Z a-z 0-9 . _ ~ + = , @ -`, none of them `.` or `..`. It may end in `?` and a plain query: `name` or `name=value` pairs joined by `&`. A name is 1–64 of `A-Z a-z 0-9 . _ ~ -`; a value is up to 256 of those plus `+ , : @`. A name holding `auth`, `credential`, `expires`, `key`, `password`, `policy`, `secret`, `session`, `sig` or `token`, or starting `x-amz-` or `x-goog-`, is not kept. The whole reference is at most 1024 characters. `request_id` matches `^[A-Za-z0-9_.:-]{1,96}$`. A 2xx without such a `request_id` and two such URLs under the queue base is `Uncertain`. Its reason ends `(request <id>)` when the body's `request_id`, else the response's request-id header, is a safe id (§8).
+  - `collect` polls `status_path` every 5 s for at most 1500 s. Each read is bounded by the smaller of the time left and 60 s. It then reads `response_path`, then downloads `video.url` once, at the URL exactly as fal gave it (https, no credential, at most 512 MiB). The bytes decide: the file is the clip when it carries the MP4 signature and an MP4 video track. A `content-type` header and the result's `content_type` are not read. The status and result reads are GETs with the credential and no `content-type`.
   - The answer is file `video` (`video/mp4`) with `data: {"facts": {"width", "height", "duration_seconds", "fps"}}`.
   - The check compares the clip's size and duration with the request. The size has a short side of 360, 720, 1080 or 2160, oriented by the aspect ratio. The duration must be within `1/fps + 0.01` s of the request.
-- **Background removal.** The body is `{image_url, model: "General Use (Light)", operating_resolution: "1024x1024", output_mask: false, refine_foreground: true, output_format: png, mask_only: false, sync_mode: true}`. The answer is `root.image`: a data URL, or a `fal.media` URL as for images. It is file `image`, checked as a PNG. The deadline is 300 s.
+- **Background removal.** Refused before sending: an `image` that is not an `image/*` file: `image is <kind>, not a picture`. The body is `{image_url, model: "General Use (Light)", operating_resolution: "1024x1024", output_mask: false, refine_foreground: true, output_format: png, mask_only: false, sync_mode: true}`. The answer is `root.image`: a data URL, or a `fal.media` URL as for images, downloaded with `accept: image/*` (a URL on any other host is never fetched, and the send fails as §4.4 says). It is file `image`, checked as a PNG. The deadline is 300 s.
 - **Cost:** `usage.cost` at the payload's top level (§6), else `None`.
 - **Statuses on the run host (overrides of §4.3):**
   - **4xx other than 408 and 429:** `Failed { cost: Some(0), retryable: false }`. fal validates a request before running it, and does not bill a refusal.
@@ -283,11 +291,12 @@ Each provider's section is normative for its adapters. Status rows override §4.
   - **500, 502 and 503:** `NotReceived`. fal answers these without taking the job.
   - **504 and other 5xx:** `Uncertain`.
 - **Collect statuses:**
-  - A status read of 404, 410 or another 4xx (not 401, 403 or 408), or a status with a truthy `error`, is `Ended`. Its reason gives the cut `error_type` and error text. A 408 is a failed read, and polling goes on.
-  - A 401, 403 or 3xx is `Unreachable`.
-  - A status that names another `request_id`, or a download the transport refuses, is `Unreachable`.
-  - A download of a 4xx other than 401 and 403 is `Ended`, and so is a download that is not MP4 or is over the cap.
+  - A status read of 404, 410 or another 4xx (not 401, 403, 408 or 429), or a status with a truthy `error`, is `Ended`. Its reason gives `error_type` and the error text, each redacted before it is cut (to 100 and 500 characters).
+  - A 408, a 429, a 5xx, a transport failure or a body that is not a JSON object is a failed status or result read, and polling goes on.
+  - A 401, 403 or 3xx on a status or result read is `Unreachable`, and so is a status that names another `request_id`.
+  - The download is made once per collect (§8). A transport failure, a refusal by the transport, a 3xx, 401, 403, 408, 429, a 5xx or another status outside 2xx and 4xx is `Unreachable`; a later collect reads the result and downloads again. Another 4xx is `Ended`, and so is a body that is empty, over the cap or not MP4 by its bytes, or a clip with no video stream.
   - A handle that is not one the adapter wrote (`a fal video job handle is not one this adapter wrote`) is `Unreachable`, and nothing is requested.
+  - A fal job that may still be running is never settled.
 - **Reasons:** the labels are `fal image generation`, `fal output image download`, `fal video submission`, `fal video job status`, `fal video job result`, `fal output video download` and `fal background removal`. Response bodies are never quoted, except the bounded `error_type` and error of a failed job.
 
 ### 9.4 Tripo
@@ -313,7 +322,7 @@ Each provider's section is normative for its adapters. Status rows override §4.
   - The model is uploaded as `unrigged.glb`.
   - The check task must succeed with a boolean `riggable`. A doubted model, where `riggable` is not true or the check's `rig_type` differs from the request's (default `biped`), is refused unless `allow_negative_check` is true.
   - The paid body is `{input, model, rig_type, spec: <skeleton, default mixamo>, out_format: glb}`.
-  - The handle is `{"task_id", "check": {"task_id", "riggable", "rig_type"}, "advisory_override"}`.
+  - The handle is `{"task_id", "check": {"task_id", "riggable", "rig_type"}, "advisory_override"}`. The handle's `check.rig_type` is the check's `rig_type` when it is a string matching `^[A-Za-z0-9_.:-]{1,96}$`, else `null`. The answer's `checked_rig_type` is read from the handle the same way.
 - **Free phase:**
   - 400, 401, 403, 404, 413, 415 and 422 are `Refused`, and so is a check task that ends without success;
   - every other failure is `NotReceived`: a transport failure, 429, 5xx, an unreadable envelope, a missing token or task id, a check still running at its deadline, or a non-boolean `riggable`.
@@ -322,10 +331,11 @@ Each provider's section is normative for its adapters. Status rows override §4.
   - `not_sent` otherwise, and 429: `NotReceived`;
   - 400, 401, 403, 404 and 422: `Failed { cost: None, retryable: false }`. Tripo has not documented that a refused task is unbilled;
   - `after_send`, 3xx, 408, 5xx, any other status, an unreadable envelope, and a missing or malformed task id: `Uncertain`. The reason adds the cause in brackets (`Tripo may have taken the task; it is not posted again (<cause>)`).
+  - A task id matches `^[A-Za-z0-9_-]{1,128}$`. An `Uncertain` for a 200 whose task id is a string matching `^[A-Za-z0-9_.:-]{1,96}$` names it: `Tripo's answer names task <id>, which is not a task id FX collects`. Any other non-blank string gives `Tripo's answer has a malformed task id`; none gives `Tripo's answer has no task id`.
 - **Tasks.**
   - `GET /tasks/<id>` must answer for the same task id, with a status of `queued`, `running`, `success`, `failed`, `cancelled`, `banned` or `expired`.
   - Model URLs are the `https://` strings under object keys (arrays are not entered; keys match `[A-Za-z0-9_]+`) whose path names `model` or `mesh`. There are 1 to 8 distinct URLs, each at most 20 480 characters with no control character.
-  - Downloads go only to `tripo3d.ai`, its subdomains, and `tripo-data.rg1.data.tripo3d.com` (https, port 443, no userinfo). Each file is sniffed: `glTF` is GLB, `Kaydara FBX Binary` is FBX, and anything else ends the job.
+  - Downloads go only to `tripo3d.ai`, its subdomains, and `tripo-data.rg1.data.tripo3d.com` (https, port 443, no userinfo). Each model is downloaded at Tripo's URL, byte for byte. Each file is sniffed: `glTF` is GLB, `Kaydara FBX Binary` is FBX, and anything else ends the job.
   - A mesh answer keeps the first FBX, else the first GLB, as file `model`, with `data: {"facts": {"model_kind"}}`.
   - A rig answer needs exactly one GLB, as file `model`, with `data: {"facts": {"riggable", "checked_rig_type", "advisory_override"}}` taken from the handle.
 - **Collect:**
@@ -352,7 +362,7 @@ Each provider's section is normative for its adapters. Status rows override §4.
   - not empty: `<label> returned no audio data`;
   - an MP3: `requested mp3 but received <kind>`;
   - the MP3 signature: `audio bytes do not match declared media type audio/mpeg`.
-- **Statuses:** §4.3 as written. A 4xx other than 408 and 429 costs `None`.
+- **Statuses:** §4.3 as written: a 408 is `NotReceived` (ElevenLabs did not read the whole request), and a 4xx other than 408 and 429 costs `None`.
 - **Reasons:** the labels are `ElevenLabs sound generation` and `ElevenLabs speech generation`. The error body's `detail.message` is never quoted.
 
 ## 10. The built-in route table
@@ -363,7 +373,7 @@ FX ships a default route table, embedded in `grida-fx`. It is the first table of
 - **Prices are planning allowances** in US dollars, not provider quotes. What a call costs is settled from what the provider reports, or else from the whole hold (§6). The video route is priced per second, in tiers by `resolution`.
 - **Contracts are identity.** Each contract object enters its route fingerprint, and so every cache key the route serves. Changing a contract changes every key under it.
   - A contract's `adapter` is the name §9 gives the adapter that serves the route, and its `adapter_behavior` is the behaviour §9 names, where §9 names one.
-  - The image routes carry `adapter_behavior` as a string (`"1"`, `"3"`), and every other route carries it as the integer `1`.
+  - The image routes carry `adapter_behavior` as a string (`"1"`, `"3"`), and every other route carries it as the integer `1`. Each adapter serves its behaviour only as spelled here: the string and the number are different contracts, with different fingerprints.
   - The two `openai/gpt-6-astra` routes carry the `request_policy` of §9.2, and the structured one also `pictures: unchanged`.
 - **Features** are the names [capabilities.md](capabilities.md) lists for each capability, and a route declares only what its adapter honours. So the OpenRouter image routes declare neither `alpha` nor `mask`, and no `image.generate` route declares `image_input`, since every one refuses references (§9).
 - **Pacing is not identity.** The OpenAI and OpenRouter image routes declare `requests_per_minute: 150`, which the engine applies per route. The Tripo routes and the video route declare `concurrency: 1`. The structured routes declare `concurrency: 4`, and the `openai/gpt-6-astra` agent route declares `concurrency: 1`.
@@ -378,9 +388,28 @@ FX ships a default route table, embedded in `grida-fx`. It is the first table of
 - **A rate-limited send waits as long as the provider asks**, up to 60 s (§4.3). Before, `retry-after` was never read.
 - **Tripo jobs are no longer forgotten.** Before, a Tripo job still running at the deadline, or with a malformed status, was settled, and the next run paid again. Now it is `Unreachable` and stays `submitted`.
 - **A provably unsent Tripo task post is `NotReceived`.** Before, it stopped the next run for a person.
-- **The fal handle holds paths.** Before, it held absolute URLs. A failed status read during a fal collect no longer settles the job.
+- **The fal handle holds paths**, with a plain query kept, and a `request_id` that is a safe id. Before, it held absolute URLs and any `request_id`. A failed status read during a fal collect no longer settles the job.
 - **Downloads are capped.** Video, background and Tripo downloads have size caps, and every download refuses redirects and carries no credential.
 - **Music cost is read.** OpenRouter music now reads `usage.cost`; before, every call was charged its whole hold.
 - **A malformed `revised_prompt` no longer fails a paid image.**
 - **Answers no longer carry `attempts`**, request ids or usage. Structured output answers `{"json": value}`.
-- **Route contracts and features use FX's names.** The image routes' contracts name FX's adapters (`fx-openai-image-v1`, `fx-openrouter-image-v1`, `fx-fal-image-v1`), so their fingerprints differ from the predecessor's. The predecessor's `route_id` and `surface` members, which no adapter reads, are dropped. A feature has one name: the aliases `masked_edit`, `transparent_background`, `reference_images` and `data_url_reference_input` are gone, and the OpenRouter `image.generate` route no longer claims to take input pictures.
+- **A request timed out at OpenAI or OpenRouter (408) is billed.** It arrived, and the provider may have done the work: `Failed { cost: None, retryable: true }` (§9.1, §9.2), never a free resend.
+- **OpenRouter BYOK costs count the upstream charge** (§9.2). Before, only `usage.cost` was read, OpenRouter's fee alone, so a ceiling saw $0 for paid upstream work.
+- **Proxies never carry a credential in clear text** (§2 item 9). Before, the environment's `HTTP_PROXY` also took plain `http` requests to a loopback base URL, key included.
+- **A download refuses any header named like a credential** (§2 item 5), not only the credential slot.
+- **Agent turns refuse a file that is not a picture** (§9.2). Before, it was sent as `image/png`.
+- **Structured output's schema `name`** is the schema's `title` with every character but ASCII letters and digits written `_`, at most 64 characters, else `answer`. Before, it was the title, else the schema file's stem, and non-ASCII letters were kept (`Café plan` was `Café_plan`, and is now `Caf__plan`).
+- **Structured output's text context** is appended under `--- context <i> ---`, where `<i>` counts every context file from 1, pictures included, and the text goes as read, `\r\n` included. Before, the header was `--- <file name> ---`, and CRLF became LF.
+- **Strict schemas are canonicalized at schema positions only** (§9.2). A property named `format`, `default`, `pattern` or `properties`, and the contents of `enum` and `const`, are kept. Before, they were deleted wherever they occurred, and `required` could list properties the schema no longer had.
+- **Reduced structured pictures are scaled from their full depth.** A 16-bit picture is scaled as such; before, it was clipped to white. The Lanczos filters differ by under 1/255 in mean.
+- **`null` counts as absent** ([capabilities.md](capabilities.md) §1). Tripo's `texture: null` sends `true`, the default, where the predecessor sent `false`; fal video's `aspect_ratio: null` draws at `9:16`, where the predecessor refused.
+- **fal requests carry only the headers they need.** The queue's status and result reads carry no `content-type`, and a background-removal result is downloaded with `accept: image/*`, not `*/*`.
+- **fal result hosts are held to §9.3.** A background-removal result is downloaded only from `fal.media` (before, from any host), and a video only over `https` (before, `http` too).
+- **`ELEVENLABS_BASE_URL` is honoured** (§3). Before, the ElevenLabs routes always went to the default base.
+- **fal pictures must be pictures.** A file that is not `image/*` is refused before sending, at $0, for images, video frames and background removal. Before, it was sent labelled `image/png`.
+- **fal clips are judged by their bytes**, not by `content-type`. Before, a valid MP4 served as octet-stream, or with no type, was ended and paid for again.
+- **A fal clip download is made once per collect;** a failure leaves the job `submitted`.
+- **A Tripo check `rig_type` is kept only as a short plain string**, else `null`.
+- **An Uncertain submit names the provider's job id** when it is safe, and its job record keeps the reason as its `note` ([store.md](store.md) §5), so `grida-fx jobs` and a later run's `job_unsettled` show it. Before, the job record kept nothing and a later run could not say which job to look for.
+- **Provider URLs reach the transport as given;** the default transport sends `'` in a query as `%27` (httpx sent it as is).
+- **Route contracts and features use FX's names.** The image routes' contracts name FX's adapters (`fx-openai-image-v1`, `fx-openrouter-image-v1`, `fx-fal-image-v1`), so their fingerprints differ from the predecessor's. The predecessor's `route_id` and `surface` members, which no adapter reads, are dropped. A feature has one name: the aliases `masked_edit`, `transparent_background`, `reference_images` and `data_url_reference_input` are gone, and the OpenRouter `image.generate` route no longer claims to take input pictures. A step that still requires an alias is refused while planning as no feature of its capability, naming FX's: `alpha`, `mask`, `image_input`.

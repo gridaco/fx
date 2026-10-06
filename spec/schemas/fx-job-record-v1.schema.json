@@ -74,6 +74,10 @@
         "object",
         "null"
       ]
+    },
+    "note": {
+      "description": "Only on a `submitting` record whose submit's outcome is unknown: the redacted reason, which names the provider's job id when one was returned (store.md §5). Never a credential or a signed URL.",
+      "type": "string"
     }
   },
   "allOf": [
@@ -106,6 +110,25 @@
           "handle": {
             "type": "object"
           }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "enum": [
+              "submitted",
+              "settled"
+            ]
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "required": [
+            "note"
+          ]
         }
       }
     }

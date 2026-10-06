@@ -22,7 +22,7 @@ steps:
   references:
     steps:
       draw:
-        uses: ./nodes/agents.py#draw_references       # an agent that calls image.generate as a tool
+        uses: ./nodes/agents.py#draw_references       # an agent that draws pictures as a tool
         with: { brief: "${{ inputs.brief }}" }
       review:
         uses: fx/vision.review@1

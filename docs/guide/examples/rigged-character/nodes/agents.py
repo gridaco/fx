@@ -8,8 +8,12 @@ from grida.fx import Ctx, node, tool
 @tool
 async def generate_image(ctx: Ctx, prompt: str, view: str) -> str:
     """Draw one view of the character (sheet, front or back). Returns its handle."""
-    refs = [ctx.state[v] for v in ("sheet",) if v in ctx.state and view != "sheet"]
-    result = await ctx.image_generate(prompt=prompt, references=refs, size="1024x1536")
+    if view == "sheet":
+        result = await ctx.image_generate(prompt=prompt, size="1024x1536")
+    elif "sheet" not in ctx.state:
+        return "draw the sheet first"  # front and back are drawn from it
+    else:  # an edit takes input pictures: the view is drawn from the sheet
+        result = await ctx.image_edit(prompt=prompt, image=ctx.state["sheet"], size="1024x1536")
     ctx.state[view] = result.image
     return f"drew {view}"
 
@@ -17,7 +21,8 @@ async def generate_image(ctx: Ctx, prompt: str, view: str) -> str:
 @node(
     "draw_references",
     inputs={"brief": "text"},
-    calls={"agent.turn": 12, "image.generate": 3},  # the most it may spend: priced by the plan
+    # the most it may spend, priced by the plan: the sheet, then front and back from it
+    calls={"agent.turn": 12, "image.generate": 1, "image.edit": 2},
     resources=["prompts/reference-agent.md"],
     outputs={"sheet": "image/png", "front": "image/png", "back": "image/png"},
 )

@@ -68,7 +68,11 @@ Normalisation (both sides):
 - names (gnode side only, so FX can never hide a gnode name it prints): ``gnode/`` → ``fx/`` in
   ``uses``, problems and reasons, ``gnode.yaml`` → ``fx.yaml``, ``gnode.lock`` → ``fx.lock``,
   ``gnode lock`` / ``see gnode nodes`` / ``gnode takes mv`` → ``grida-fx …``,
-  ``x-gnode-`` → ``x-fx-``, a document key ``gnode: <doc>/v1`` → ``fx: <doc>/v1``;
+  ``x-gnode-`` → ``x-fx-``, a document key ``gnode: <doc>/v1`` → ``fx: <doc>/v1``, and the
+  predecessor's feature names in a ``<route> does not support <features>`` refusal → FX's
+  (``transparent_background`` → ``alpha``, ``masked_edit`` → ``mask``, ``reference_images`` and
+  ``data_url_reference_input`` → ``image_input``, as the planner's ``features.json`` renames
+  them; spec/providers.md section 11), the list sorted again without repeats;
 - numbers compared as numbers (``1`` == ``1.0``; money, a ``*_usd`` member, within 1e-9; a
   boolean is never a number);
 - problems compared as a list of ``"where: message"`` strings, after the name mapping;
@@ -150,6 +154,9 @@ GNODE_FILE_NAMES = {"fx.yaml": "gnode.yaml", "fx.lock": "gnode.lock"}
 #: either engine's name, and the event envelope.
 PROJECT_DROPPED = ("plan", "graph_sha256", "kind", "schema_version", "invocation_id", "offset_ms")
 DIGEST_PATTERN = re.compile(r"[0-9a-f]{64}")
+#: The planner's feature vocabulary, whose ``renamed`` maps each feature name the predecessor
+#: used to FX's (spec/providers.md section 11).
+FEATURES = REPO / "crates" / "grida-fx-core" / "src" / "expand" / "features.json"
 
 
 def _load_conformance() -> Any:
@@ -169,6 +176,11 @@ conformance = _load_conformance()
 KNOWN_DIFFERENCES: list[tuple[str, str, str]] = [
     # (ported) Lock drift is a problem on the step's declaration path (`b`), not on `uses`.
     ("lock-drift", "expand", "$.problems"),
+    # A `requires:` name that is not a feature of the step's capability (spec/capabilities.md)
+    # is refused as such: `mask is not an image.generate feature (spec/capabilities.md)`, where
+    # gnode said `img-a@acme does not support mask`; a name the predecessor used gets `; FX calls
+    # it <feature>`.
+    ("refusals", "expand", "$.problems"),
     # (ported) A declared resource that is missing is a problem on the step's declaration path
     # (`lost`), and the step is absent; gnode stops with a traceback and prints no graph.
     ("resource-missing", "expand", ROOT),
@@ -244,6 +256,10 @@ UNCASED_DECISIONS: tuple[str, ...] = (
     "a negative duration or max_chars is no length: the call is priced as of unknown length",
     "join, contains, min/max, digest, == and text over a list or object that holds a pending "
     "value are pending, so a pending token never ends up inside a known value",
+    "a requires: name the predecessor used (transparent_background, masked_edit, "
+    "reference_images, data_url_reference_input) is refused as not a feature of the capability, "
+    "naming FX's (alpha, mask, image_input), even when the route declares it; rename it in the "
+    "project (spec/providers.md section 11)",
     # Run mode: decisions of the runner (protocol.md section 5.3, store.md section 8).
     "a step that needs: a regenerating step runs once that step's takes are decided "
     "(gnode never runs it)",
@@ -474,11 +490,29 @@ def _gnode_text(path: str, text: str) -> str:
     return text
 
 
+def _renamed_features() -> dict[str, str]:
+    """FX's name for each feature the predecessor named otherwise (``features.json``)."""
+    renamed = json.loads(FEATURES.read_text(encoding="utf-8"))["renamed"]
+    assert isinstance(renamed, dict), FEATURES
+    return {str(old): str(new) for old, new in renamed.items()}
+
+
+RENAMED_FEATURES = _renamed_features()
+# A route's refusal of the features it lacks, which the planner lists sorted: the list ends the
+# line, so another sentence that only starts the same way is left alone.
+_UNSUPPORTED = re.compile(r"(?m)(?<= does not support )[a-z0-9_]+(?:, [a-z0-9_]+)*$")
+
+
+def _fx_features(found: re.Match[str]) -> str:
+    names = {RENAMED_FEATURES.get(name, name) for name in found.group(0).split(", ")}
+    return ", ".join(sorted(names))
+
+
 def fx_names(text: str) -> str:
     """A text gnode printed, with FX's names for gnode's."""
     for pattern, replacement in _GNODE_NAMES:
         text = pattern.sub(replacement, text)
-    return text
+    return _UNSUPPORTED.sub(_fx_features, text)
 
 
 # --------------------------------------------------------------------------- normalising

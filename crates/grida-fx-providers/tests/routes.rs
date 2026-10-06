@@ -472,6 +472,52 @@ fn features_say_what_the_adapters_honour() {
     }
 }
 
+/// routes-caps F4: the guide's example table (docs/guide/examples/routes.yaml) plans offline, so
+/// a feature it declares that FX's adapter refuses would plan a step that a live run refuses. Its
+/// routes on providers FX serves declare only names their capability defines, and only what the
+/// adapter honours; `structured.review` has no features (spec/capabilities.md §13).
+#[test]
+fn the_guide_s_example_table_declares_only_what_fx_honours() {
+    let path = format!(
+        "{}/../../docs/guide/examples/routes.yaml",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let text = std::fs::read(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+    let document =
+        grida_fx_core::yaml::load(&text, "routes.yaml").expect("the guide's table loads");
+    let guide = RouteTable::from_document(&document, "routes.yaml").expect("the guide's table");
+    let registry = registry();
+    for route in guide.entries.values() {
+        let id = route.id();
+        if let Some(capability) = capability(&route.capability) {
+            for feature in &route.features {
+                assert!(
+                    capability.features.contains(&feature.as_str()),
+                    "{} {id}: {feature} is not one of its features",
+                    route.capability
+                );
+            }
+        }
+        if !registry.serves(&route.capability, &route.provider) {
+            continue;
+        }
+        // Every image.generate adapter of FX refuses references (spec/providers.md §9).
+        if route.capability == "image.generate" {
+            assert!(!route.features.contains("image_input"), "{id}");
+        }
+        // OpenRouter's image adapter refuses a mask and a transparent background (§9.2).
+        if route.provider == "openrouter" && route.capability.starts_with("image.") {
+            assert!(!route.features.contains("alpha"), "{id}");
+            assert!(!route.features.contains("mask"), "{id}");
+        }
+    }
+    for route in guide.entries.values() {
+        if route.capability == "structured.review" {
+            assert!(route.features.is_empty(), "{}", route.id());
+        }
+    }
+}
+
 #[test]
 fn pacing_is_declared_where_spec_providers_10_says() {
     for route in table().entries.values() {

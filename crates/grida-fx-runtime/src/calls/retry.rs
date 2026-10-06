@@ -43,7 +43,9 @@
 //! before the submit may leave; then
 //! - `NotReceived`: resend the submit (sends left), else remove the record, settle $0, `Failed`;
 //! - `Refused`: remove the record, settle $0, `Refused`;
-//! - `Uncertain`: the record stays `submitting`, settle in full, `Unsettled` (`job_unsettled`);
+//! - `Uncertain`: the record stays `submitting` and keeps the redacted reason as its `note`
+//!   (naming the provider's job id when one was returned, so a person can find the job after the
+//!   run; spec/store.md §5), settle in full, `Unsettled` (`job_unsettled`);
 //! - `Failed`: the record becomes `settled`, settle as billed, new attempt when retryable;
 //! - `Accepted { handle }`: the record becomes `submitted` with the handle, then the job is
 //!   collected under the same hold ([`collect_job`] rules, but the hold is settled: the reported
@@ -56,6 +58,12 @@
 //! removes the job record; a check that refuses the answer settles the record and fails the call;
 //! `Ended` → the record becomes `settled`, `Failed`; `Unreachable` → the record stays
 //! `submitted`, `Failed`; cancelled → the record stays `submitted`, `Cancelled`.
+//!
+//! **Reasons.** Every reason an outcome carries (`Refused`, `Failed`, `Unsettled`) passes through
+//! the adapter's redactor last (`RequestAdapter::redactor`, `LongJob::redactor`; spec/providers.md
+//! §8): a live invocation's adapters redact every key of the invocation. That covers the adapter's
+//! own sentences, its check's, and the engine's checks of the answer, which may quote what the
+//! provider sent back.
 //!
 //! Every hold emits `budget_reserved` and `budget_settled` through the ledger. The owner never
 //! writes a call record and never emits an event itself; the call path does both, after
@@ -85,6 +93,7 @@ use crate::ledger::{Hold, Ledger, NotReserved, Refusal, Scopes};
 use crate::store::records::{JobRecord, JobState};
 use crate::store::{Store, StoreError};
 use grida_fx_core::money::Usd;
+use grida_fx_providers::redact::Redactor;
 use grida_fx_providers::{
     Answer, BoxFuture, CallRequest, Collected, LongJob, RequestAdapter, Sent, Submitted,
 };
@@ -230,6 +239,10 @@ pub enum Outcome {
 
 /// Makes a plain call (module doc).
 pub async fn send_plain(adapter: &dyn RequestAdapter, attempts: &Attempts<'_>) -> Outcome {
+    redacted(plain(adapter, attempts).await, &adapter.redactor())
+}
+
+async fn plain(adapter: &dyn RequestAdapter, attempts: &Attempts<'_>) -> Outcome {
     let route_id = attempts.call.route.id();
     let mut call = attempts.call.clone();
     let mut sends = 0;
@@ -319,6 +332,10 @@ pub async fn send_plain(adapter: &dyn RequestAdapter, attempts: &Attempts<'_>) -
 
 /// Submits a long job and collects it (module doc).
 pub async fn submit_job(adapter: &dyn LongJob, attempts: &Attempts<'_>) -> Outcome {
+    redacted(submit(adapter, attempts).await, &adapter.redactor())
+}
+
+async fn submit(adapter: &dyn LongJob, attempts: &Attempts<'_>) -> Outcome {
     let Some(fields) = attempts.job.as_ref() else {
         return no_job_fields(&attempts.call);
     };
@@ -379,7 +396,13 @@ pub async fn submit_job(adapter: &dyn LongJob, attempts: &Attempts<'_>) -> Outco
                 return attempts.unsent(fields, hold, Outcome::Refused(reason));
             }
             Some(Submitted::Uncertain { reason }) => {
+                // The note is written redacted, before the hold is settled (spec/store.md §5).
+                let reason = adapter.redactor().reason(&reason);
+                let saved = attempts.note(fields, &reason);
                 attempts.settle(hold, None);
+                if let Err(error) = saved {
+                    return Outcome::Store(error);
+                }
                 return Outcome::Unsettled(reason);
             }
             Some(Submitted::Failed {
@@ -419,6 +442,13 @@ pub async fn collect_job(
     attempts: &Attempts<'_>,
     handle: &Value,
 ) -> Outcome {
+    redacted(
+        collect(adapter, attempts, handle).await,
+        &adapter.redactor(),
+    )
+}
+
+async fn collect(adapter: &dyn LongJob, attempts: &Attempts<'_>, handle: &Value) -> Outcome {
     let Some(fields) = attempts.job.as_ref() else {
         return no_job_fields(&attempts.call);
     };
@@ -538,6 +568,18 @@ async fn race<T>(request: BoxFuture<'_, T>, cancel: &Cancel) -> Option<T> {
     }
 }
 
+/// `outcome` with its reason passed through `redactor` (module doc, "Reasons"): a sentence from
+/// the adapter, its check, or the engine's checks of the answer, which may quote what the provider
+/// answered.
+fn redacted(outcome: Outcome, redactor: &Redactor) -> Outcome {
+    match outcome {
+        Outcome::Refused(reason) => Outcome::Refused(redactor.reason(&reason)),
+        Outcome::Failed(reason) => Outcome::Failed(redactor.reason(&reason)),
+        Outcome::Unsettled(reason) => Outcome::Unsettled(redactor.reason(&reason)),
+        other => other,
+    }
+}
+
 /// A reservation that opened no hold: `Ceiling` when refused, `Unrecorded` when the log failed.
 fn not_reserved(not: NotReserved) -> Outcome {
     match not {
@@ -636,6 +678,18 @@ impl Attempts<'_> {
         self.jobs.save_job(&JobRecord {
             state,
             handle: handle.cloned(),
+            note: None,
+            ..fields.clone()
+        })
+    }
+
+    /// Keeps the job record `submitting` with `note`, the redacted reason its submit's outcome is
+    /// unknown (spec/store.md §5).
+    fn note(&self, fields: &JobRecord, note: &str) -> Result<(), StoreError> {
+        self.jobs.save_job(&JobRecord {
+            state: JobState::Submitting,
+            handle: None,
+            note: Some(note.to_string()),
             ..fields.clone()
         })
     }
@@ -707,6 +761,299 @@ mod tests {
         assert_eq!(
             backoff.pause(5, Some(Duration::ZERO)),
             Duration::from_secs(8)
+        );
+    }
+
+    // --- Reasons are redacted with the adapter's redactor (module doc, "Reasons") ------------
+
+    use crate::store::records::RouteEntry;
+    use grida_fx_providers::{KeyName, Keys, RouteRef};
+    use serde_json::json;
+
+    /// A fake provider key, shaped as a media-type subtype the way a real key can be.
+    const KEY: &str = "test-key-not-real-el-0123456789abcdef";
+
+    /// Answers what it is given, echoing the key: in a check's sentence (the content type it
+    /// quotes) and in the sentence the engine's own check refuses with. Its redactor knows the
+    /// key, as a live invocation's adapters do.
+    struct Echo {
+        sent: Sent,
+        submitted: Submitted,
+    }
+
+    impl Echo {
+        fn redactor_of_the_invocation() -> Redactor {
+            Redactor::new(Keys::from_pairs(&[(KeyName::ElevenLabs, KEY)]).secrets())
+        }
+    }
+
+    impl RequestAdapter for Echo {
+        fn send<'a>(&'a self, _call: &'a CallRequest) -> BoxFuture<'a, Sent> {
+            let sent = self.sent.clone();
+            Box::pin(async move { sent })
+        }
+
+        fn check(&self, _call: &CallRequest, answer: &Answer) -> Result<(), String> {
+            match answer.files.get("audio") {
+                Some(audio) if audio.kind != "audio/mpeg" => {
+                    Err(format!("requested mp3 but received {}", audio.kind))
+                }
+                _ => Ok(()),
+            }
+        }
+
+        fn redactor(&self) -> Redactor {
+            Echo::redactor_of_the_invocation()
+        }
+    }
+
+    impl LongJob for Echo {
+        fn submit<'a>(&'a self, _call: &'a CallRequest) -> BoxFuture<'a, Submitted> {
+            let submitted = self.submitted.clone();
+            Box::pin(async move { submitted })
+        }
+
+        fn collect<'a>(
+            &'a self,
+            _call: &'a CallRequest,
+            _handle: &'a Value,
+        ) -> BoxFuture<'a, Collected> {
+            Box::pin(async move {
+                Collected::Ended {
+                    reason: format!("the job failed: {KEY}"),
+                }
+            })
+        }
+
+        fn redactor(&self) -> Redactor {
+            Echo::redactor_of_the_invocation()
+        }
+    }
+
+    struct Book;
+
+    impl HoldBook for Book {
+        fn reserve(
+            &self,
+            node_id: String,
+            amount: Usd,
+            _scopes: &Scopes,
+        ) -> Result<Hold, NotReserved> {
+            Ok(Hold {
+                node_id,
+                amount,
+                scopes: Vec::new(),
+            })
+        }
+
+        fn settle(&self, hold: Hold, reported: Option<Usd>) -> Usd {
+            reported.unwrap_or(hold.amount)
+        }
+    }
+
+    impl JobBook for Book {
+        fn save_job(&self, _record: &JobRecord) -> Result<(), StoreError> {
+            Ok(())
+        }
+
+        fn remove_job(&self, _key: &str) -> Result<(), StoreError> {
+            Ok(())
+        }
+    }
+
+    impl Admission for Book {
+        fn admit<'a>(
+            &'a self,
+            _route_id: &'a str,
+            _limit: Option<u32>,
+            _rpm: Option<u32>,
+            _cancel: &'a Cancel,
+        ) -> BoxFuture<'a, Option<Slot>> {
+            Box::pin(async { Some(Slot::free()) })
+        }
+    }
+
+    fn call() -> CallRequest {
+        CallRequest {
+            route: RouteRef {
+                capability: "sound.generate".into(),
+                model: "sfx-a".into(),
+                provider: "acme".into(),
+                contract: json!({}),
+            },
+            request: json!({"prompt": "a door"}),
+            files: indexmap::IndexMap::new(),
+            take: vec![1],
+            key: "a".repeat(64),
+            attempt: 1,
+        }
+    }
+
+    fn job() -> JobRecord {
+        JobRecord {
+            key: "a".repeat(64),
+            capability: "sound.generate".into(),
+            route: RouteEntry {
+                id: "sfx-a@acme".into(),
+                fingerprint: "0".repeat(64),
+            },
+            request: json!({}),
+            take: vec![1],
+            state: JobState::Submitting,
+            handle: None,
+            note: None,
+        }
+    }
+
+    /// What one call's attempts borrow.
+    struct Rig {
+        cancel: Cancel,
+        scopes: Scopes,
+        hold_name: Box<dyn Fn() -> String + Sync>,
+    }
+
+    impl Rig {
+        fn new() -> Rig {
+            let names = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+            Rig {
+                cancel: Cancel::new(),
+                scopes: Vec::new(),
+                hold_name: Box::new(move || {
+                    let n = names.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    format!("call/inv.{n}")
+                }),
+            }
+        }
+
+        /// The attempts of one call; `check` is the engine's own check.
+        fn attempts<'a>(
+            &'a self,
+            job: Option<JobRecord>,
+            check: Option<&'a AnswerCheck<'a>>,
+        ) -> Attempts<'a> {
+            Attempts {
+                call: call(),
+                hold: Usd(40_000),
+                scopes: &self.scopes,
+                hold_name: &*self.hold_name,
+                limit: None,
+                rpm: None,
+                book: &Book,
+                jobs: &Book,
+                pacing: &Book,
+                cancel: &self.cancel,
+                backoff: Backoff {
+                    initial: Duration::ZERO,
+                    ..Backoff::default()
+                },
+                job,
+                check,
+            }
+        }
+    }
+
+    fn block_on<F: std::future::Future>(future: F) -> F::Output {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("a runtime")
+            .block_on(future)
+    }
+
+    fn mp3_declared_as(kind: &str) -> Sent {
+        Sent::Answered(Answer::new(Value::Null, None).with_file("audio", kind, b"ID3".to_vec()))
+    }
+
+    fn adapter(sent: Sent) -> Echo {
+        Echo {
+            sent,
+            submitted: Submitted::Refused {
+                reason: String::new(),
+            },
+        }
+    }
+
+    #[test]
+    fn a_check_that_quotes_a_key_is_redacted() {
+        let echo = adapter(mp3_declared_as(&format!("audio/{KEY}")));
+        let rig = Rig::new();
+        let outcome = block_on(send_plain(&echo, &rig.attempts(None, None)));
+        assert_eq!(
+            outcome,
+            Outcome::Failed("requested mp3 but received audio/[redacted]".into())
+        );
+    }
+
+    #[test]
+    fn the_engine_check_and_the_adapter_reasons_are_redacted() {
+        let echo = adapter(mp3_declared_as("audio/mpeg"));
+        let engine: &AnswerCheck<'_> = &|_answer| Err(format!("the reply names {KEY}"));
+        let rig = Rig::new();
+        let outcome = block_on(send_plain(&echo, &rig.attempts(None, Some(engine))));
+        assert_eq!(
+            outcome,
+            Outcome::Failed("the reply names [redacted]".into())
+        );
+        for (sent, expected) in [
+            (
+                Sent::Refused {
+                    reason: format!("refused {KEY}"),
+                },
+                Outcome::Refused("refused [redacted]".into()),
+            ),
+            (
+                Sent::Failed {
+                    reason: format!("failed {KEY}"),
+                    cost: None,
+                    retryable: false,
+                },
+                Outcome::Failed("failed [redacted]".into()),
+            ),
+            (
+                Sent::NotReceived {
+                    reason: format!("not received {KEY}"),
+                    retry_after: None,
+                },
+                Outcome::Failed("not received [redacted]".into()),
+            ),
+        ] {
+            let echo = adapter(sent);
+            let outcome = block_on(send_plain(&echo, &rig.attempts(None, None)));
+            assert_eq!(outcome, expected);
+        }
+    }
+
+    #[test]
+    fn long_job_reasons_are_redacted() {
+        let uncertain = Echo {
+            sent: Sent::not_received(""),
+            submitted: Submitted::Uncertain {
+                reason: format!("may have taken it {KEY}"),
+            },
+        };
+        let rig = Rig::new();
+        let outcome = block_on(submit_job(&uncertain, &rig.attempts(Some(job()), None)));
+        assert_eq!(
+            outcome,
+            Outcome::Unsettled("may have taken it [redacted]".into())
+        );
+        let accepted = Echo {
+            sent: Sent::not_received(""),
+            submitted: Submitted::Accepted { handle: json!({}) },
+        };
+        let outcome = block_on(submit_job(&accepted, &rig.attempts(Some(job()), None)));
+        assert_eq!(
+            outcome,
+            Outcome::Failed("the job failed: [redacted]".into())
+        );
+        let outcome = block_on(collect_job(
+            &accepted,
+            &rig.attempts(Some(job()), None),
+            &json!({}),
+        ));
+        assert_eq!(
+            outcome,
+            Outcome::Failed("the job failed: [redacted]".into())
         );
     }
 }

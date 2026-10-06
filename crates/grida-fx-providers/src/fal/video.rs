@@ -1,36 +1,44 @@
 //! fal video: a queue long job (spec/providers.md §9.3, §7).
 //!
 //! `submit`: one `POST {queue}/<model>` with `{"prompt", "image_url", "end_image_url"?,
-//! "aspect_ratio", "resolution", "duration"}` (`duration` a JSON integer); a 2xx with `request_id`,
-//! `status_url` and `response_url` both under the queue base becomes the handle
-//! `{"request_id", "status_path", "response_path"}` (the URLs minus `{queue}/`; never a host name).
-//! Contract `adapter` must be `fal-queue` when present.
+//! "aspect_ratio", "resolution", "duration"}` (`duration` a JSON integer); a 2xx with a
+//! `request_id` that is a safe id (`^[A-Za-z0-9_.:-]{1,96}$`), and `status_url` and
+//! `response_url` both under the queue base, becomes the handle `{"request_id", "status_path",
+//! "response_path"}` (the URLs minus `{queue}/`, a plain query kept; never a host name). Contract
+//! `adapter` must be `fal-queue` when present.
 //!
 //! `collect`: polls `GET {queue}/<status_path>` every [`POLL`] until `COMPLETED` (or a truthy
-//! `error`), then `GET {queue}/<response_path>`, then downloads `video.url` (https, no credential,
-//! at most [`MAX_VIDEO_BYTES`]); all within [`COLLECT_DEADLINE`] from the start of `collect`, each
-//! GET bounded by min(remaining, 60 s), sleeping through the injected [`Clock`]. The answer is file
-//! `video` (`video/mp4`) and `data: {"facts": {"width", "height", "duration_seconds", "fps"}}` from
-//! the clip's file facts; `cost` from the result's top-level `usage.cost`. `check`: the clip's size
-//! and duration against the request (spec/providers.md §9.3).
+//! `error`), then `GET {queue}/<response_path>`, then downloads `video.url` **once** (https, no
+//! credential, the URL exactly as fal gave it, at most [`MAX_VIDEO_BYTES`]); all within
+//! [`COLLECT_DEADLINE`] from the start of `collect`, each status or result read bounded by
+//! min(remaining, 60 s), sleeping through the injected [`Clock`]. The answer is file `video`
+//! (`video/mp4`) and `data: {"facts": {"width", "height", "duration_seconds", "fps"}}` from the
+//! clip's file facts; `cost` from the result's top-level `usage.cost`. `check`: the clip's size and
+//! duration against the request (spec/providers.md §9.3).
 //!
 //! Submit refusals, in this order (spec/providers.md §5, §9.3): another route's contract; a request
 //! that does not fit `video.generate`; no `FAL_KEY`; a blank prompt, or one over
 //! [`MAX_PROMPT_CHARS`]; no `first_frame`; a `duration` that is not a whole number from 3 to 10; a
-//! `resolution` (default `720p`) or `aspect_ratio` (default `9:16`) the route does not draw; a frame
-//! with no bytes.
+//! `resolution` (default `720p`) or `aspect_ratio` (default `9:16`) the route does not draw; then
+//! `first_frame` and `last_frame`, each when it is not an `image/*` file (`<member> is <kind>, not a
+//! picture`) or has no bytes.
 //!
 //! Submit statuses: 4xx other than 408 and 429 is `Failed { Some(0), false }`; 408, 429, 500, 502
 //! and 503 are `NotReceived`; any other status, a 2xx without a usable handle, or a handle outside
 //! the queue is `Uncertain`. A transport refusal is `Refused`, `not_sent` is `NotReceived`, and
-//! `after_send` is `Uncertain`.
+//! `after_send` is `Uncertain`. An `Uncertain` after a 2xx names the job fal returned (`(request
+//! <id>)`, the body's `request_id`, else the response's request-id header, when it is a safe id),
+//! so a person can find the job.
 //!
 //! Collect outcomes (spec/providers.md §7): a handle this adapter did not write is `Unreachable`
-//! with nothing requested. Failed reads (a transport failure, 408, 429, a 5xx, a body that is not a
-//! JSON object) are polls that saw nothing. A 401, 403 or 3xx is `Unreachable`; another 4xx is
-//! `Ended`; a status with a truthy `error` is `Ended`; the deadline is `Unreachable`. A result
-//! without an https video, a download of the wrong type, over the cap or not MP4, or a clip with
-//! no video stream is `Ended`.
+//! with nothing requested. Failed status and result reads (a transport failure, 408, 429, a 5xx, a
+//! body that is not a JSON object) are polls that saw nothing. A 401, 403 or 3xx is `Unreachable`;
+//! another 4xx is `Ended`; a status with a truthy `error` is `Ended`; the deadline is
+//! `Unreachable`. A result without an https video is `Ended`. The download is made once: a
+//! transport failure, a 3xx, 401, 403, 408, 429, a 5xx or another status outside 2xx and 4xx is
+//! `Unreachable` (a later collect reads the result and downloads again); another 4xx, a body over
+//! the cap, empty or without the MP4 signature, or a clip with no video stream is `Ended`. The
+//! bytes decide the kind: a `content-type` header and the result's `content_type` are not read.
 
 use super::FalClients;
 use crate::BoxFuture;
@@ -294,7 +302,8 @@ struct Job {
 }
 
 impl Job {
-    /// The handle when it is exactly one this adapter writes, else `None`.
+    /// The handle when it is exactly one this adapter writes, else `None`: a safe `request_id`, and
+    /// two queue references ([`is_queue_ref`]).
     fn from_handle(handle: &Value) -> Option<Job> {
         let members = handle.as_object()?;
         if members.len() != 3 {
@@ -312,8 +321,58 @@ impl Job {
             status_path: text("status_path")?,
             response_path: text("response_path")?,
         };
-        (is_queue_path(&job.status_path) && is_queue_path(&job.response_path)).then_some(job)
+        (super::is_safe_id(&job.request_id)
+            && is_queue_ref(&job.status_path)
+            && is_queue_ref(&job.response_path))
+        .then_some(job)
     }
+}
+
+/// What a handle may hold of a queue URL: a [`is_queue_path`], then optionally `?` and a
+/// [`is_plain_query`], at most [`MAX_PATH_CHARS`] in all. It is kept byte for byte.
+fn is_queue_ref(reference: &str) -> bool {
+    if reference.len() > MAX_PATH_CHARS {
+        return false;
+    }
+    match reference.split_once('?') {
+        Some((path, query)) => is_queue_path(path) && is_plain_query(query),
+        None => is_queue_path(reference),
+    }
+}
+
+/// A query a handle may keep (`logs=1`): empty, or `&`-joined pairs `name` or `name=value`, where
+/// a name is 1 to 64 of `A-Z a-z 0-9 . _ ~ -` and a value is up to 256 of those and `+ , : @`.
+/// No percent-encoding, `/`, `?`, `#` or `=` in a value, and no name that reads as a credential or
+/// a signature (one holding `auth`, `credential`, `expires`, `key`, `password`, `policy`,
+/// `secret`, `session`, `sig` or `token`, or starting `x-amz-` or `x-goog-`), since a handle never
+/// holds a signed URL (spec/providers.md §7).
+fn is_plain_query(query: &str) -> bool {
+    const SECRET_WORDS: [&str; 10] = [
+        "auth",
+        "credential",
+        "expires",
+        "key",
+        "password",
+        "policy",
+        "secret",
+        "session",
+        "sig",
+        "token",
+    ];
+    let name_char = |c: char| c.is_ascii_alphanumeric() || "._~-".contains(c);
+    let value_char = |c: char| name_char(c) || "+,:@".contains(c);
+    query.is_empty()
+        || query.split('&').all(|pair| {
+            let (name, value) = pair.split_once('=').unwrap_or((pair, ""));
+            let lower = name.to_ascii_lowercase();
+            (1..=64).contains(&name.len())
+                && name.chars().all(name_char)
+                && value.len() <= 256
+                && value.chars().all(value_char)
+                && !SECRET_WORDS.iter().any(|word| lower.contains(word))
+                && !lower.starts_with("x-amz-")
+                && !lower.starts_with("x-goog-")
+        })
 }
 
 /// A path under the queue base a handle may hold: relative, non-empty segments that are not `.`
@@ -332,7 +391,8 @@ fn is_queue_path(path: &str) -> bool {
         })
 }
 
-/// The handle of a 2xx submit answer (module doc), or the `Uncertain` sentence.
+/// The handle of a 2xx submit answer (module doc), or the `Uncertain` sentence. A `request_id`
+/// that is not a safe id is no handle: it would go into the job record (spec/providers.md §7).
 fn handle_of(queue_base: &str, body: &[u8]) -> Result<Value, String> {
     let no_handle = || "fal took the video job but returned no handle to collect it by".to_string();
     let payload = crate::wire::json_object(body, SUBMIT_LABEL).map_err(|_| no_handle())?;
@@ -347,10 +407,13 @@ fn handle_of(queue_base: &str, body: &[u8]) -> Result<Value, String> {
     else {
         return Err(no_handle());
     };
+    if !super::is_safe_id(request_id) {
+        return Err(no_handle());
+    }
     let prefix = format!("{queue_base}/");
     let path = |url: &str| {
         url.strip_prefix(&prefix)
-            .filter(|path| is_queue_path(path))
+            .filter(|reference| is_queue_ref(reference))
             .map(str::to_string)
             .ok_or_else(|| "a fal video job handle points outside fal's queue".to_string())
     };
@@ -382,9 +445,9 @@ impl FalVideo {
         crate::capabilities::check_request(&call.route.capability, &call.request)?;
         let credential = client.credential(super::CREDENTIAL_HEADER, super::CREDENTIAL_PREFIX)?;
         let clip = clip(&call.request)?;
-        let first = frame(call, clip.first_frame, "first_frame")?;
+        let first = super::picture(call, clip.first_frame, "first_frame")?;
         let last = match clip.last_frame {
-            Some(frame_value) => Some(frame(call, frame_value, "last_frame")?),
+            Some(frame) => Some(super::picture(call, frame, "last_frame")?),
             None => None,
         };
 
@@ -433,7 +496,10 @@ impl FalVideo {
         match status {
             200..=299 => match handle_of(&client.base, &response.body) {
                 Ok(handle) => Submitted::Accepted { handle },
-                Err(sentence) => uncertain(&sentence),
+                Err(sentence) => match returned_id(response) {
+                    Some(id) => uncertain(&format!("{sentence} (request {id})")),
+                    None => uncertain(&sentence),
+                },
             },
             408 => super::submit_not_received(client, &text, super::retry_after(response)),
             429 => super::submit_not_received(
@@ -486,7 +552,7 @@ impl FalVideo {
                     }
                     if status.get("error").is_some_and(super::truthy) {
                         return Collected::Ended {
-                            reason: client.reason(&job_error(&status)),
+                            reason: client.reason(&job_error(&status, &client.redactor)),
                         };
                     }
                     if status.get("status").and_then(Value::as_str) == Some("COMPLETED") {
@@ -515,15 +581,15 @@ impl FalVideo {
             }
         };
         let cost = super::reported_cost(&result);
-        let (url, declared) = match result_video(super::answer_root(&result)) {
-            Ok(video) => video,
+        let url = match result_video(super::answer_root(&result)) {
+            Ok(url) => url,
             Err(sentence) => {
                 return Collected::Ended {
                     reason: client.reason(&sentence),
                 };
             }
         };
-        self.download(&url, declared, deadline, cost).await
+        self.download(url, deadline, cost).await
     }
 
     /// One authorized GET of a status or result (module doc: failed reads are polls that saw
@@ -575,70 +641,47 @@ impl FalVideo {
         Ok(())
     }
 
-    /// The clip download and its answer (module doc). Failed downloads that a later read may not
-    /// repeat (a transport failure, 408, 429, a 5xx) are read again within the deadline.
-    async fn download(
-        &self,
-        url: &url::Url,
-        declared: Option<&'static str>,
-        deadline: Duration,
-        cost: Option<Usd>,
-    ) -> Collected {
+    /// The clip download, made once, and its answer (module doc). A failure a later collect may
+    /// not repeat is `Unreachable`: the record stays `submitted`, and the next collect reads the
+    /// result again and downloads once more. The bytes decide what the file is.
+    async fn download(&self, url: &str, deadline: Duration, cost: Option<Usd>) -> Collected {
         let client = &self.clients.queue;
-        let redactor = client.redactor.with(url.as_str());
+        let mut redactor = client.redactor.with(url);
+        if let Ok(parsed) = url::Url::parse(url) {
+            redactor = redactor.with(parsed.as_str());
+        }
         let ended = |text: &str| Collected::Ended {
             reason: redactor.reason(text),
         };
         let unreachable = |text: &str| Collected::Unreachable {
             reason: redactor.reason(text),
         };
-        let response = loop {
-            let remaining = deadline.saturating_sub(self.clock.now());
-            if remaining.is_zero() {
-                return outstanding(client);
-            }
-            let request = HttpRequest::new(Method::Get, url.as_str(), Lane::Download)
-                .timeout(remaining)
-                .max_response_bytes(MAX_VIDEO_BYTES);
-            match client.send(request).await {
-                Err(error) if error.kind == TransportErrorKind::TooLarge => {
-                    return ended(&format!("{DOWNLOAD_LABEL} failed: {}", error.reason));
-                }
-                Err(error) if error.kind == TransportErrorKind::Refused => {
-                    return unreachable(&format!(
-                        "{DOWNLOAD_LABEL} was not sent: {}",
-                        error.reason
-                    ));
-                }
-                Err(_) => {}
-                Ok(response) => match response.status {
-                    200..=299 => break response,
-                    408 | 429 | 500..=599 => {}
-                    300..=399 | 401 | 403 => {
-                        return unreachable(&super::status_text(DOWNLOAD_LABEL, &response));
-                    }
-                    400..=499 => return ended(&super::status_text(DOWNLOAD_LABEL, &response)),
-                    _ => {}
-                },
-            }
-            if let Err(collected) = self.wait(deadline).await {
-                return collected;
-            }
-        };
-        let header = match response.header("content-type").map(str::trim) {
-            None | Some("") => None,
-            Some(value) => match mp4_type(value) {
-                Some(kind) => Some(kind),
-                None => return ended("fal video media type must be MP4"),
-            },
-        };
-        if let (Some(declared), Some(header)) = (declared, header)
-            && declared != header
-        {
-            return ended("fal output download media type does not match response metadata");
+        let remaining = deadline.saturating_sub(self.clock.now());
+        if remaining.is_zero() {
+            return outstanding(client);
         }
-        if declared.or(header).is_none() {
-            return ended("fal output video media type is missing");
+        // The provider's text, byte for byte (spec/providers.md §8).
+        let request = HttpRequest::new(Method::Get, url, Lane::Download)
+            .timeout(remaining)
+            .max_response_bytes(MAX_VIDEO_BYTES);
+        let response = match client.send(request).await {
+            Ok(response) => response,
+            Err(error) if error.kind == TransportErrorKind::TooLarge => {
+                return ended(&format!("{DOWNLOAD_LABEL} failed: {}", error.reason));
+            }
+            Err(error) if error.kind == TransportErrorKind::Refused => {
+                return unreachable(&format!("{DOWNLOAD_LABEL} was not sent: {}", error.reason));
+            }
+            Err(error) => {
+                return unreachable(&format!("{DOWNLOAD_LABEL} failed: {}", error.reason));
+            }
+        };
+        match response.status {
+            200..=299 => {}
+            400..=499 if !matches!(response.status, 401 | 403 | 408 | 429) => {
+                return ended(&super::status_text(DOWNLOAD_LABEL, &response));
+            }
+            _ => return unreachable(&super::status_text(DOWNLOAD_LABEL, &response)),
         }
         let bytes = response.body;
         if bytes.is_empty() {
@@ -665,53 +708,53 @@ impl FalVideo {
     }
 }
 
-/// `video/mp4` when `value` normalizes to it.
-fn mp4_type(value: &str) -> Option<&'static str> {
-    (crate::wire::normalize_media_type(value, "video").ok()? == "video/mp4").then_some("video/mp4")
-}
-
-/// The result's video: an https URL with a host and no userinfo, and its declared type (`MP4`
-/// when present). Otherwise the `Ended` sentence.
-fn result_video(root: &Map<String, Value>) -> Result<(url::Url, Option<&'static str>), String> {
+/// The result's video URL, as fal gave it, when it is https with a host and no userinfo.
+/// Otherwise the `Ended` sentence. A declared `content_type` is not read: the bytes decide.
+fn result_video(root: &Map<String, Value>) -> Result<&str, String> {
     let Some(Value::Object(video)) = root.get("video") else {
         return Err(format!("{RESULT_LABEL} carries no video"));
     };
     let url = match video.get("url") {
-        Some(Value::String(url)) if !url.trim().is_empty() => url,
+        Some(Value::String(url)) if !url.trim().is_empty() => url.as_str(),
         _ => return Err("fal output video url must be non-empty".into()),
     };
-    let https = url::Url::parse(url).ok().filter(|parsed| {
+    let https = url::Url::parse(url).ok().is_some_and(|parsed| {
         parsed.scheme() == "https"
             && parsed.host_str().is_some()
             && parsed.username().is_empty()
             && parsed.password().is_none()
     });
-    let Some(parsed) = https else {
+    if !https {
         return Err("fal output video url must be https".into());
-    };
-    let declared = match video.get("content_type") {
-        Some(Value::String(value)) if !value.trim().is_empty() => match mp4_type(value) {
-            Some(kind) => Some(kind),
-            None => return Err("fal video media type must be MP4".into()),
-        },
-        _ => None,
-    };
-    Ok((parsed, declared))
+    }
+    Ok(url)
 }
 
-/// `fal video job failed (<error_type>): <error>`, the error cut to 500 characters.
-fn job_error(status: &Map<String, Value>) -> String {
+/// The job id a 2xx submit answer names, for an `Uncertain` reason: the body's `request_id` when
+/// it is a safe id, else the response's request-id header ([`crate::wire::request_id`]).
+fn returned_id(response: &HttpResponse) -> Option<String> {
+    crate::wire::json_object(&response.body, SUBMIT_LABEL)
+        .ok()
+        .and_then(|payload| match payload.get("request_id") {
+            Some(Value::String(id)) if super::is_safe_id(id) => Some(id.clone()),
+            _ => None,
+        })
+        .or_else(|| crate::wire::request_id(response))
+}
+
+/// `fal video job failed (<error_type>): <error>`. Each provider text is redacted **first**, then
+/// collapsed and cut (the error to 500 characters, `error_type` to 100), so a key that straddles
+/// a cut is still removed whole (spec/providers.md §8).
+fn job_error(status: &Map<String, Value>, redactor: &crate::redact::Redactor) -> String {
+    let cut = |text: &str, max: usize| crate::redact::bounded(&redactor.redact(text), max);
     let error = match status.get("error") {
         Some(Value::String(text)) => text.clone(),
         Some(other) => other.to_string(),
         None => String::new(),
     };
-    let error: String = error.chars().take(500).collect();
+    let error = cut(&error, 500);
     match status.get("error_type").and_then(Value::as_str) {
-        Some(kind) => {
-            let kind: String = kind.chars().take(100).collect();
-            format!("fal video job failed ({kind}): {error}")
-        }
+        Some(kind) => format!("fal video job failed ({}): {error}", cut(kind, 100)),
         None => format!("fal video job failed: {error}"),
     }
 }
@@ -740,13 +783,6 @@ fn submit_transport(client: &Client, error: &TransportError) -> Submitted {
             )),
         },
     }
-}
-
-/// A frame as a data URL (step 5 of spec/providers.md §5).
-fn frame(call: &CallRequest, value: &Value, member: &str) -> Result<String, String> {
-    let file = crate::wire::request_file(call, value, member)?;
-    let bytes = crate::wire::read_file(file, member)?;
-    Ok(super::picture_url(&file.kind, &bytes))
 }
 
 impl LongJob for FalVideo {
@@ -872,6 +908,43 @@ mod tests {
     }
 
     #[test]
+    fn queue_refs_keep_a_plain_query_only() {
+        for good in [
+            "google/gemini-omni-flash/requests/req-1/status",
+            "google/gemini-omni-flash/requests/req-1/status?logs=1",
+            "a?logs=1&verbose",
+            "a?x=a+b,c:d@e",
+            "a?",
+        ] {
+            assert!(is_queue_ref(good), "{good}");
+        }
+        for bad in [
+            "a?x=%2F",
+            "a?x=1#f",
+            "a?x=a/b",
+            "a?x=1?y=2",
+            "a?x=1=2",
+            "a?x=1&&y=2",
+            "a?=1",
+            "a?token=abc",
+            "a?X-Amz-Signature=deadbeef",
+            "a?Expires=1",
+            "a?api_key=1",
+            "a?x-goog-date=1",
+            "a?Signature=1",
+            "a?x='y'",
+            "a/../b?x=1",
+            "/a?x=1",
+        ] {
+            assert!(!is_queue_ref(bad), "{bad}");
+        }
+        assert!(!is_queue_ref(&format!(
+            "a?x={}",
+            "1".repeat(MAX_PATH_CHARS)
+        )));
+    }
+
+    #[test]
     fn handles_are_paths_under_the_queue() {
         let base = "https://queue.fal.run";
         let body = json!({
@@ -939,17 +1012,31 @@ mod tests {
 
     #[test]
     fn job_errors_are_cut() {
+        let redactor = crate::redact::Redactor::new(Vec::new());
         let status = json!({"status": "COMPLETED", "error": "boom ".repeat(200), "error_type": "model_error"});
-        let reason = job_error(status.as_object().unwrap());
+        let reason = job_error(status.as_object().unwrap(), &redactor);
         assert!(reason.starts_with("fal video job failed (model_error): boom boom"));
+        assert!(reason.ends_with('…'), "{reason}");
         assert_eq!(
             reason.chars().count(),
             "fal video job failed (model_error): ".chars().count() + 500
         );
         let untyped = json!({"error": {"detail": "x"}, "error_type": 7});
         assert_eq!(
-            job_error(untyped.as_object().unwrap()),
+            job_error(untyped.as_object().unwrap(), &redactor),
             r#"fal video job failed: {"detail":"x"}"#
         );
+    }
+
+    #[test]
+    fn a_key_straddling_a_cut_is_redacted_whole() {
+        let key = "test-fal-key-0123456789abcdef";
+        let redactor = crate::redact::Redactor::new(vec![crate::keys::Secret::new(key)]);
+        let error = format!("x{}yyyyyyyyy{key}", " ".repeat(470));
+        let error_type = format!("{}ab{key}", "ab. ".repeat(22));
+        let status = json!({"error": error, "error_type": error_type});
+        let reason = job_error(status.as_object().unwrap(), &redactor);
+        assert!(!reason.contains(&key[..8]), "{reason}");
+        assert!(reason.contains("yyyyyyyyy[redacted]"), "{reason}");
     }
 }

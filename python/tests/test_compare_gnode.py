@@ -342,6 +342,23 @@ GNODE_PROBLEMS = [
         "a workflow file starts with gnode: workflow/v1",
         "uses: a workflow file starts with fx: workflow/v1",
     ),
+    # The predecessor's feature names, as FX's planner renames them (spec/providers.md
+    # section 11): the list is sorted again, without repeats.
+    (
+        "draw.requires",
+        "img-a@acme does not support transparent_background",
+        "draw.requires: img-a@acme does not support alpha",
+    ),
+    (
+        "patch.requires",
+        "img-a@acme does not support exact_size, masked_edit, reference_images",
+        "patch.requires: img-a@acme does not support exact_size, image_input, mask",
+    ),
+    (
+        "patch.requires",
+        "img-a@acme does not support data_url_reference_input, image_input, reference_images",
+        "patch.requires: img-a@acme does not support image_input",
+    ),
 ]
 
 
@@ -349,6 +366,48 @@ GNODE_PROBLEMS = [
 def test_gnode_problems_read_with_fx_names(where: str, message: str, expected: str) -> None:
     normal = tool.normalise({"problems": [{"where": where, "message": message}]}, "gnode")
     assert normal["problems"] == [expected]
+
+
+def test_the_feature_renames_are_the_planners() -> None:
+    vocabulary = json.loads(
+        (REPO / "crates/grida-fx-core/src/expand/features.json").read_text("utf-8")
+    )
+    assert (
+        tool.RENAMED_FEATURES
+        == vocabulary["renamed"]
+        == {
+            "transparent_background": "alpha",
+            "masked_edit": "mask",
+            "reference_images": "image_input",
+            "data_url_reference_input": "image_input",
+        }
+    )
+
+
+def test_feature_names_are_renamed_in_a_refusal_of_features_only() -> None:
+    # The plan's text says it as the problems do.
+    line = "  refused   cut.requires: img-a@acme does not support transparent_background\n"
+    assert tool.fx_names(line) == "  refused   cut.requires: img-a@acme does not support alpha\n"
+    # An input that happens to share a name, or another sentence, is left alone.
+    for text in [
+        "reference_images: { type: integer, minimum: 1 }",
+        "inputs.limits.reference_images is 7",
+        "OpenRouter image generation does not support transparent backgrounds",
+        "img-a@acme does not support transparent_background here",
+    ]:
+        assert tool.fx_names(text) == text
+
+
+def test_fx_feature_refusals_are_never_renamed() -> None:
+    # FX must use FX's feature names itself: an old name in its output is a difference.
+    fx = fx_linear()
+    fx["problems"] = [{"where": "a.requires", "message": "m@p does not support masked_edit"}]
+    gnode = gnode_linear()
+    gnode["problems"] = [{"where": "a.requires", "message": "m@p does not support masked_edit"}]
+    assert tool.compare(tool.normalise(gnode, "gnode"), tool.normalise(fx, "fx")) == [
+        '$.problems[0]: "a.requires: m@p does not support mask" != '
+        '"a.requires: m@p does not support masked_edit"'
+    ]
 
 
 def test_fx_names_in_other_texts() -> None:
@@ -530,6 +589,14 @@ def test_a_known_document_covers_nothing_inside_it() -> None:
     assert tool._is_known("resource-missing", "expand", tool.STATUS) is None
 
 
+def test_an_unknown_feature_is_known_on_the_refusals_problems_only() -> None:
+    entry = ("refusals", "expand", "$.problems")
+    assert entry in tool.KNOWN_DIFFERENCES
+    assert tool._is_known("refusals", "expand", "$.problems[1]") == entry
+    assert tool._is_known("refusals", "expand", tool.STATUS) is None
+    assert tool._is_known("refusals", "expand", "$.instances[draw#1].routes") is None
+
+
 def test_lock_drift_is_known_on_its_problems_only() -> None:
     entry = ("lock-drift", "expand", "$.problems")
     assert entry in tool.KNOWN_DIFFERENCES
@@ -546,6 +613,7 @@ def test_lock_drift_is_known_on_its_problems_only() -> None:
         "a negative call bound",
         "a negative duration or max_chars is no length",
         "join, contains, min/max, digest, == and text over a list or object that holds a pending",
+        "a requires: name the predecessor used",
     ],
 )
 def test_decisions_no_case_exercises_are_recorded(decision: str) -> None:
