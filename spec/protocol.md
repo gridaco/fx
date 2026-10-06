@@ -715,7 +715,7 @@ The Python engine FX grew out of ran bodies in its own process and handed them l
 | A timeout cannot stop a body running in a thread | A host that ignores `$/cancel` is ended |
 | A param holding a file that is neither text nor JSON arrives as a live object | `param_files` |
 | `NodeFailure`, `CapabilityError` and other exceptions | Error codes, each saying whether the node may run again |
-| A builder's takes file is `<builder module>.takes.yaml`, next to the builder file | `<workflow id>.takes.yaml` in the folder of the module that constructed the `Workflow` (§5.2), since one builder module may build several workflows. Milestone 2 renames such takes files. |
+| A builder's takes file is `<builder module>.takes.yaml`, next to the builder file | `<workflow id>.takes.yaml` in the folder of the module that constructed the `Workflow` (§5.2), since one builder module may build several workflows. A project moving to FX renames such takes files. |
 | A schema refusal of a submitted value is the jsonschema validator's message | FX's own text per failed keyword (§6.2) |
 | A transcript's tool call holds `arguments` as an object | Its canonical JSON text, as provider APIs carry it (§6.2) |
 | `Agent.transcript` carries over from one run to the next | A new transcript per `agent.run`, and the transcript so far in the data of an error that ends a loop (§6.2) |

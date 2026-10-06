@@ -16,7 +16,7 @@ Guardrails for working in this repository. [README.md](README.md) says what FX i
 | `python/` | The `grida` distribution; FX is `grida.fx`. |
 | `js/` | `@grida/fx` and its per-platform engine packages. |
 | `examples/` | Projects written the way a user would. CI plans every one and runs every runnable one offline through the SDK, from a fresh build (rigged-character only plans). |
-| `tools/` | What runs outside the engine: the spec gate, the independent digest checker, the comparison with stage-gen's engine, packaging, `build_engine.py` (the engine into a checkout's SDK) and `check_examples.py`. |
+| `tools/` | What runs outside the engine: the spec gate, the independent digest checker, packaging, `build_engine.py` (the engine into a checkout's SDK) and `check_examples.py`. |
 
 ## Rules
 

@@ -243,7 +243,7 @@ A repeated step's path carries its key in brackets, quoted: `entity['ada'].draw#
 
 ## 13. Changes from gnode
 
-stage-gen's gnode computes identities differently. Every gnode digest changes, and milestone 2 migrates the paid cache by replay. The differences:
+stage-gen's gnode computed identities differently. Every gnode digest changes, and no gnode record is migrated: stage-gen moved to FX with an empty cache ([store.md](store.md) §9). The differences:
 
 | gnode | FX |
 |---|---|

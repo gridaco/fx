@@ -173,11 +173,11 @@ These names are for reading, and they are not identities. Two step paths or keys
 
 ## 9. Changes from stage-gen's engine
 
-FX comes from the Python engine in stage-gen. Its store and run folders differ as follows.
+FX comes from the Python engine stage-gen ran on until it moved onto FX. That engine's store and run folders differed as follows.
 
 | stage-gen | FX |
 |---|---|
-| The store sits in a folder named after the old engine, and its records carry the old engine's kinds. | `.fx/cache`, with `fx-result-record-v1`, `fx-call-record-v1` and `fx-job-record-v1`. An old record is absent to FX; milestone 2 migrates the paid cache by replay. |
+| The store sits in a folder named after the old engine, and its records carry the old engine's kinds. | `.fx/cache`, with `fx-result-record-v1`, `fx-call-record-v1` and `fx-job-record-v1`. An old record is absent to FX, and none is migrated: it keeps no request (next row), so its FX key cannot be computed from it. A project that moves to FX starts with an empty cache. |
 | A call record keeps only `kind`, `key`, `files`, `data` and `cost_usd`. | It also keeps `capability`, `route`, `request` and `take`, so its key can be recomputed (§3). |
 | A job record's `route` is an id and its `take` an integer, and it keeps no request. | `route` is `{id, fingerprint}`, `take` is a list, and the request is kept. |
 | A settled job's record is deleted. | It MAY be kept, as `settled`. |

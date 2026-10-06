@@ -1,6 +1,6 @@
 # Grida FX: overview
 
-> Working draft, 2026-10-05. Only decisions marked **ratified** have been agreed; everything else is a proposal. The contracts live in [`spec/`](../../spec/); where this overview and `spec/` disagree, `spec/` wins.
+> Working draft, 2026-10-07. Only decisions marked **ratified** have been agreed; everything else is a proposal. The contracts live in [`spec/`](../../spec/); where this overview and `spec/` disagree, `spec/` wins.
 
 Grida FX is a workflow engine for generative asset pipelines. You write a workflow file whose steps are nodes, and FX does five things with it:
 
@@ -14,9 +14,9 @@ FX is a standalone product, made by Grida. Think of the Vercel AI SDK without it
 
 ## Where it comes from
 
-FX exists today as **gnode**, inside [softmarshmallow/stage-gen](https://github.com/softmarshmallow/stage-gen). The table covers the Python code (about 21,500 lines) and the material around it.
+FX grew out of **gnode**, the Python engine inside [softmarshmallow/stage-gen](https://github.com/softmarshmallow/stage-gen). Milestone 2 moved stage-gen onto FX and deleted gnode; stage-gen `bb784832` is its last state. The table covers gnode as FX began: the Python code (about 21,500 lines) and the material around it.
 
-| What | Where in stage-gen | Lines |
+| What | Where it was in stage-gen | Lines |
 |---|---|---|
 | Workflow engine: documents, expansion, planning, runner, store, command line | `src/gnode/workflow/` | 10,100 |
 | Capability specs and services (image, video, audio, mesh, structured, tool loop, …) | `src/gnode/modalities/` | 3,700 |
@@ -41,10 +41,11 @@ FX exists today as **gnode**, inside [softmarshmallow/stage-gen](https://github.
 | 5 | **Paid work needs a priced plan and a ceiling.** A workflow file can spend the user's money, so nothing paid runs without a priced plan and a `--max-usd` ceiling. | ratified |
 | 6 | **The workflow registry copies; it never references.**<br>• This repo later doubles as the default registry: `grida-fx add <item>` copies a workflow or node into the user's project (like shadcn registries or `npx skills`) and stamps where it came from.<br>• Nothing is fetched while a run is being planned.<br>• This comes after the first milestone. | ratified direction |
 | 7 | **The Grida umbrella comes last.** `grida fx` (in the `grida` CLI, with this repo as a submodule) hands off to the FX engine, and GG becomes a provider. | ratified |
-| 8 | **The standard library's node bodies stay in Python for milestone 1** (`grida.fx.std`, ported from gnode with Pillow). Milestone 2's replay can keep a cached paid call only if FX builds the same request gnode built, and a Rust image resize that differs from Pillow's by one byte changes every request downstream of it. The engine still owns `select` and every fact. Rust bodies come later, with a planned rekey. | in the approved plan |
+| 8 | **The standard library's node bodies stay in Python for milestone 1** (`grida.fx.std`, ported from gnode with Pillow). The reason was milestone 2's planned replay: it could keep a cached paid call only if FX built the same request gnode built, and a Rust image resize that differs from Pillow's by one byte changes every request downstream of it. The replay was dropped (decision 12), and the bodies stay in Python until Rust bodies come, with a planned rekey. The engine still owns `select` and every fact. | in the approved plan |
 | 9 | **No third-party OpenAI client.** Adapters are thin clients on FX's own injected transport. The canonical request then *is* the wire body, and every exchange can be replayed in tests. (This settles D4.) | in the approved plan |
 | 10 | **Document versions restart at v1 in the `fx` namespace** (`fx: workflow/v1`, `fx-graph-v1`, …). "Identity v3" and "protocol v2" below are design names relative to gnode. Authored YAML documents carry `fx: <doc>/v1`; machine-written JSON carries `"kind": "fx-<doc>-v1"`. | in the approved plan |
 | 11 | **FX runs from a clone until it is published, and publishing waits for trusted publishing.**<br>• Publishing waits until the owner sets up trusted publishing (OIDC). npm sets that up only on a package that already exists, so [RELEASING.md](../../RELEASING.md)'s first-publish step is revisited then.<br>• Until then, `tools/build_engine.py` builds the engine into a checkout's Python SDK, and [examples/](../../examples/) prove that path in CI.<br>• stage-gen takes this repository as a submodule at `third_party/fx`, with a path dependency on its `python/`, and FX can be changed in place there. Detaching later changes that dependency line, not stage-gen's imports. | the owner's direction (2026-10-06) |
+| 12 | **No cache replay.** stage-gen moves onto FX with an empty cache, and gnode is deleted in the same step, with no period of running both engines. This replaces the replay milestone 2 first planned; [milestone 2](#milestone-2-stage-gen-moves-onto-fx) says why. | the owner's decision (2026-10-06) |
 
 ## Names
 
@@ -78,7 +79,7 @@ This milestone works only in this repo. The Python gnode stays in stage-gen, fro
 
 **2. The offline core in Rust, with the Python describe host.**
 - **Scope:** workflow parsing, expressions, expansion, identity, planning, pricing, the routes document, and protocol v2 `describe` and `build`. Most conformance cases and every stage-gen workflow load Python node modules even to plan, so the Python host's `describe` and `build` arrive here, not in step 3.
-- **Gate:** checked against today's Python engine. With digests removed, the expanded graphs, prices and projections must match the Python output exactly. A small standalone script checks the digest formula, and the published JCS vectors check the canonical JSON.
+- **Gate:** checked against gnode, the Python engine, with `tools/compare_gnode.py` (deleted with gnode in milestone 2). With digests removed, the expanded graphs, prices and projections must match the Python output exactly. A small standalone script checks the digest formula, and the published JCS vectors check the canonical JSON.
 - **Status:** done (`315f378`).
 
 **3. The runner, the Python node host and the `grida.fx` SDK.**
@@ -111,23 +112,53 @@ This milestone works only in this repo. The Python gnode stays in stage-gen, fro
 
 ## Milestone 2: stage-gen moves onto FX
 
-stage-gen is the acceptance test. Its workflow files and Python node bodies stay as they are, but for the names below. What changes:
+stage-gen is the acceptance test. Its workflow files and Python node bodies stayed as they were, but for the names below.
 
-- FX arrives as a submodule at `third_party/fx` (decision 11): `grida` is a path dependency on `third_party/fx/python`, stage-gen's gates build the engine with `tools/build_engine.py`, its pre-push hook checks the submodule out, and its own linters skip it;
-- imports become `from grida.fx import …`;
-- file names become `fx.yaml` and its siblings;
-- the command becomes `grida-fx`;
-- feature names in `requires:`, in workflow files and in builder code, move to FX's vocabulary ([capabilities.md](../../spec/capabilities.md)): `transparent_background` → `alpha`, `masked_edit` → `mask`, `reference_images` → `image_input` and `data_url_reference_input` → `image_input` ([providers.md](../../spec/providers.md) §11). The planner refuses the old names and names FX's;
+**Status:** stage-gen runs on FX, and gnode is deleted (FX `f4e7dea`, stage-gen `f499c35d`). Every workflow and game plans on FX at gnode's prices, with only digests moved, and its tests run whole workflows offline with stand-ins. The live smoke runs remain (below).
+
+What changed:
+
+- FX is a submodule at `third_party/fx` (decision 11): `grida` is a path dependency on `third_party/fx/python`, stage-gen's gates build the engine with `tools/build_engine.py` (its pre-push hook from the pinned commit), and its own linters skip it;
+- imports are `from grida.fx import …`;
+- project files are `fx.yaml` and `fx.lock`. stage-gen's root `fx.yaml` finds its workflows by id through `workflows:`, and each workflow home and game keeps its own routes;
+- workflow files start with `fx: workflow/v1`, and built-in types are `fx/<name>@1`;
+- the command is `python -m grida.fx`, since the `grida` distribution has no console command (Names);
+- feature names in `requires:`, in workflow files and in builder code, moved to FX's vocabulary ([capabilities.md](../../spec/capabilities.md)): `transparent_background` → `alpha`, `masked_edit` → `mask`, `reference_images` → `image_input` and `data_url_reference_input` → `image_input` ([providers.md](../../spec/providers.md) §11). The planner refuses the old names and names FX's;
 - a builder's takes file is renamed from `<builder module>.takes.yaml` to `<workflow id>.takes.yaml`, in the folder of the module that constructed the `Workflow` ([protocol.md](../../spec/protocol.md) §10);
-- two direct provider calls in its games move to capabilities;
-- FX gains what stage-gen's tests and layout need, each a public feature that makes sense without it: **stand-in answers** (`grida-fx run --stand-in`, `grida.fx.run(…, stand_in=…)`), which answer a run's paid calls offline with a test's function, held to a provider's checks and billed at nothing ([protocol.md](../../spec/protocol.md) §5.7); **workflow search folders** (`workflows:` in `fx.yaml`), so a project finds by id the workflows kept in nested projects ([store.md](../../spec/store.md)); and **`RunResult.failures`**, each failed or skipped instance with its message and error code.
+- the direct provider calls outside a workflow went: a game's voice preparation is an FX workflow with one `speech.generate` step per line; another game's live design command was dead, since its pipeline already ran that loop as workflow steps, and is deleted; and the concept tool is now a skill that users install, which draws with a one-step FX workflow on the user's own key;
+- FX gained what stage-gen's tests and layout need, each a public feature that makes sense without it: **stand-in answers** (`grida-fx run --stand-in`, `grida.fx.run(…, stand_in=…)`), which answer a run's paid calls offline with a test's function, held to a provider's checks and billed at nothing ([protocol.md](../../spec/protocol.md) §5.7); **workflow search folders** (`workflows:` in `fx.yaml`), so a project finds by id the workflows kept in nested projects ([store.md](../../spec/store.md)); and **`RunResult.failures`**, each failed or skipped instance with its message and error code.
 
-Its paid cache is migrated by **replay**:
-- Each recorded workflow runs against the cache, and every call computes its old key (with the Python gnode) and its new key (with FX). Each hit is copied under the new key at $0.
-- Old call records don't store their request, so replay is the only way, and it needs the Python gnode still present. Delete gnode only after the replay.
-- Agent-turn keys change shape and cannot be migrated. The replay prices what would be billed again; that is accepted.
+**Where gnode's names went.** Leaving out gnode's own tests, stage-gen imported 159 names from gnode, and `grida.fx` had 17 of them. The other 142, imported in 116 files, had no FX equivalent:
 
-Then comes one budgeted live smoke run per provider, each with the owner's go and a cap. After that, FX leaves preview.
+| Names | Where they went |
+|---|---|
+| Plain utilities: contract models, atomic writes and path confinement, media signature checks and inspection, provenance sidecars | Kept, and moved into stage-gen: `stage_gen.contracts`, `stage_gen.fs`, `stage_gen.media`, `stage_gen.provenance` |
+| Provider services, requests, backends, retries and cancellation (about 60 names) | Deleted. FX's adapters and its engine, the one retry owner, do that work. |
+| The route-policy layer and stage-gen's gnode plugin: a model policy snapshot, re-checks of a chosen route, model overrides from the environment | Deleted. FX's built-in route table and each project's own routes (in `fx.yaml`, or a routes document) choose the route, and the planner refuses a route that lacks a required feature. |
+| Run records, run views and the dashboard (`gnode view`) | Moved into stage-gen, which projects FX run folders into its own run-view contract; `scripts/view.py` replaces `gnode view`. |
+| The engine test harness: injected services, and stand-ins for runs and call records | Replaced by stand-in answers. |
+| The catalog, graph contracts and documented commands (`describe`, planning internals, the command-line parser) | stage-gen helpers over `grida.fx.plan(…).document`, and `python -m grida.fx --help`. |
+
+gnode's tests, conformance suite, guide and schemas left with it; the suite and the guide had moved here in milestone 1. stage-gen's live provider tests went too, since they tested the Python adapters FX replaces.
+
+**The paid cache is not migrated** (decision 12). The plan was a replay: run each recorded workflow against gnode's cache, compute each call's old key with gnode and its new key with FX, and copy each hit under the new key at $0. The owner decided against it, and FX started with an empty cache:
+
+- gnode's call records keep no request, so a replay needed gnode running beside FX, and gnode could go only after it. Without one, the switch was a single step, with no period of running both engines.
+- What a replay could keep was small: about $20–30 of game image calls, billed again when those games are next rebuilt, and that rebuild draws new art anyway.
+- The largest block, $108 of one workflow's spike calls, could not move at all: they begin with agent turns, whose keys change shape, and every later call depends on them.
+- gnode's runs stay in stage-gen's `out/`, and its run viewer no longer lists them.
+
+**Next:** one budgeted live smoke run per provider, each with the owner's go and a cap:
+
+| Provider | Capabilities checked |
+|---|---|
+| OpenAI | `image.edit` |
+| OpenRouter | `structured.generate`, `image.edit`, `agent.turn`, `music.generate` |
+| fal | `video.generate` |
+| Tripo | `mesh.generate`, `mesh.rig` |
+| ElevenLabs | `sound.generate`, `speech.generate` |
+
+After that, FX leaves preview. Publishing still waits for trusted publishing (decision 11).
 
 ## Later
 
@@ -140,9 +171,9 @@ Then comes one budgeted live smoke run per provider, each with the owner's go an
 
 ## Identity v3
 
-A read-only audit of gnode found that today's identity encodes how Python happens to behave. Paths below are in stage-gen. The normative definitions are [`spec/identity.md`](../../spec/identity.md) and [`spec/yaml.md`](../../spec/yaml.md).
+A read-only audit of gnode found that its identity encoded how Python happens to behave. Paths below were in stage-gen's gnode (last at `bb784832`). The normative definitions are [`spec/identity.md`](../../spec/identity.md) and [`spec/yaml.md`](../../spec/yaml.md).
 
-| Today | v3 |
+| gnode | v3 |
 |---|---|
 | Canonical JSON relies on Python's number formatting (`values.py:24-31`). It writes `NaN` as invalid JSON, and treats `1` and `1.0` as different values. Expressions collapse whole floats to integers and print numbers into prompts with `str()` (`expr.py:660-682`). | [RFC 8785 (JCS)](https://www.rfc-editor.org/rfc/rfc8785) with I-JSON numbers: no NaN or infinity, integers within ±2^53, and `1` = `1.0`. Implementations exist for Rust, Python and JS. |
 | PyYAML parses YAML 1.1: `on` and `yes` become true, `017` becomes 15, dates become date objects, and the last of two duplicate keys silently wins. | A strict YAML 1.2 core subset. Duplicate keys, timestamps, collections as keys and ambiguous scalars are errors; plain keys are always strings. |
@@ -153,7 +184,7 @@ A read-only audit of gnode found that today's identity encodes how Python happen
 
 ## Node protocol v2
 
-The v1 schema exists, but nothing serializes to it: a body's `ctx` holds live Python objects (`host.py:339-367`). v2 is the out-of-process version, specified in [`spec/protocol.md`](../../spec/protocol.md). In outline:
+gnode's v1 schema existed, but nothing serialized to it: a body's `ctx` held live Python objects (`host.py:339-367`). v2 is the out-of-process version, specified in [`spec/protocol.md`](../../spec/protocol.md). In outline:
 
 - **Session:** `initialize` exchanges protocol versions; `shutdown` and `exit` end it.
 - **Engine to host:**
@@ -170,7 +201,7 @@ The v1 schema exists, but nothing serializes to it: a body's `ctx` holds live Py
 
 ## Retry and billing (ratified)
 
-Today the capability layer sends a paid request again up to 6 times and settles only the last attempt's cost, so earlier attempts that billed are never counted (`retry.py:36`, `host.py:934-939`). In FX:
+gnode's capability layer sent a paid request again up to 6 times and settled only the last attempt's cost, so earlier attempts that billed were never counted (`retry.py:36`, `host.py:934-939`). In FX:
 
 - **One retry owner:** the engine. Transports never retry.
 - **When a request may be resent:** only when it provably was not received. That means the connection or send failed, or the provider says it took nothing.
@@ -191,8 +222,8 @@ Today the capability layer sends a paid request again up to 6 times and settles 
 - **This repo:**
   - `cargo fmt`, `clippy` and `test`;
   - the conformance suite against `grida-fx`;
-  - the comparison against stage-gen's Python engine (steps 2–3);
+  - the comparison against gnode (milestone 1, steps 2–3; its tool left with gnode);
   - adapter fixtures (step 4);
   - an installed-package check per platform (step 5).
-- **stage-gen (milestone 2):** `uv run python scripts/check.py`, its `VERIFICATION.md` gates and the clean-worktree pre-push hook, and a replay at $0.
+- **stage-gen (milestone 2):** `uv run python scripts/check.py`, its `VERIFICATION.md` gates and the clean-worktree pre-push hook. Every workflow and game plans on FX at gnode's prices and runs whole with stand-ins.
 - **Spending:** none in milestone 1. Paid runs in milestone 2 each need the owner's go and a cap.
