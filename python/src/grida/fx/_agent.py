@@ -21,7 +21,10 @@ The engine runs the model loop; the body declares the tools and the check:
 - :class:`Agent` (``ctx.agent(...)``): ``await agent.run(instructions, *, max_steps, images=(),
   submit=None, check=None)`` sends ``agent.run`` and serves ``tool.invoke`` and ``agent.check``
   for it; returns the text, or the submitted value. Each ``run`` starts a fresh transcript;
-  ``agent.transcript`` holds the last one. ``check(value)`` refuses by raising ``ValueError`` or
+  ``agent.transcript`` holds the last one, also when the run ended with an error after its loop
+  started (the engine sends it in the error's ``data.transcript``), so a body that catches the
+  failure can read what the agent tried. In the transcript a tool call's ``arguments`` is the
+  JSON text of the object the model gave. ``check(value)`` refuses by raising ``ValueError`` or
   ``NodeFailure``.
 
 Pictures leave the host as file values (section 3.2): a data URL is decoded and stored with
@@ -242,6 +245,7 @@ class Agent:
         try:
             result = await ctx.channel.request_async("agent.run", params)
         except EngineError as error:
+            self.transcript = _transcript_of(error.data)
             ended_by = self._ended_by
             if ended_by is not None and error.code in (NODE_FAILURE, NODE_ERROR):
                 raise ended_by from None
@@ -403,6 +407,15 @@ def _plain(value: Any) -> Any:
     if isinstance(value, list | tuple):
         return [_plain(item) for item in value]
     return value
+
+
+def _transcript_of(data: Any) -> list[dict[str, Any]]:
+    """The transcript an ``agent.run`` error carries in ``data.transcript``, else none."""
+    if isinstance(data, Mapping):
+        transcript = data.get("transcript")
+        if isinstance(transcript, list):
+            return list(transcript)
+    return []
 
 
 def _is_file_value(value: Mapping[str, Any]) -> bool:

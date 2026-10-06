@@ -38,7 +38,7 @@ import wave
 import zlib
 from collections.abc import Callable, Iterator
 from fractions import Fraction
-from math import gcd
+from math import floor, gcd
 from pathlib import Path
 from typing import Any
 
@@ -158,8 +158,15 @@ def _fields(data: bytes, box: tuple[int, int], offset: int, fmt: str, kind: str)
     return struct.unpack_from(fmt, data, s + offset)
 
 
+def _timescale(data: bytes, box: tuple[int, int], kind: str) -> int:
+    """The timescale of an mvhd or mdhd box (content offset 20 in version 1, else 12)."""
+
+    (version,) = _fields(data, box, 0, ">B", kind)
+    return _fields(data, box, 20 if version == 1 else 12, ">I", kind)[0]
+
+
 def _scale_and_duration(data: bytes, box: tuple[int, int], kind: str) -> tuple[int, int, int]:
-    """(timescale, duration, the duration that means unknown) of an mvhd or mdhd box."""
+    """(timescale, duration, the duration that means unknown) of an mdhd box."""
 
     (version,) = _fields(data, box, 0, ">B", kind)
     if version == 1:
@@ -170,36 +177,102 @@ def _scale_and_duration(data: bytes, box: tuple[int, int], kind: str) -> tuple[i
 
 
 class Rate:
-    """The sample-duration runs of a track (spec/facts.md 4.3)."""
+    """The sample durations of a track (spec/facts.md 4.3): their sum, and the runs of those above
+    0 that its frame rate is read from."""
 
     def __init__(self) -> None:
-        self.runs = 0
-        self.first = 0
-        self.last_delta = 0
-        self.last_count = 0
-        self.divisor = 0
         self.total = 0
+        self.runs: list[list[int]] = []
 
     def add(self, count: int, delta: int) -> None:
-        if count == 0:
-            return
         self.total += count * delta
-        if self.runs and delta == self.last_delta:
-            self.last_count += count
+        if not count or not delta:
             return
-        self.runs += 1
-        if self.runs == 1:
-            self.first = delta
-        self.last_delta = delta
-        self.last_count = count
-        self.divisor = gcd(self.divisor, delta)
+        if self.runs and self.runs[-1][1] == delta:
+            self.runs[-1][0] += count
+        else:
+            self.runs.append([count, delta])
 
-    def delta(self) -> int:
-        if self.runs == 0:
-            return 0
-        if self.runs == 1 or (self.runs == 2 and self.last_count == 1):
-            return self.first
-        return self.divisor
+    def fps(self, scale: int) -> float | None:
+        samples = sum(count for count, _ in self.runs)
+        if not scale or not samples:
+            return None
+        first = self.runs[0][1]
+        if samples == 1:
+            return ratio(scale, first)
+        runs = [list(run) for run in self.runs]
+        # The last duration says only when the track ends.
+        runs[-1][0] -= 1
+        if not runs[-1][0]:
+            runs.pop()
+        if samples - 1 >= 2:
+            second = runs[0][1] if runs[0][0] > 1 else runs[1][1]
+            if 2 * abs(first - second) > second:
+                runs[0][0] -= 1
+                if not runs[0][0]:
+                    runs.pop(0)
+        count = sum(c for c, _ in runs)
+        if count >= 2**64:
+            return None
+        total = sum(c * d for c, d in runs)
+        smallest = min(d for _, d in runs)
+        divisor = 0
+        for _, d in runs:
+            divisor = gcd(divisor, d)
+        if smallest == divisor:
+            return ratio(scale, smallest)
+        return rounded_rate(scale, count, total, divisor)
+
+
+def ratio(p: int, q: int) -> float:
+    """p/q with each converted to binary64 and divided, rounded to 6 places (spec/facts.md 1)."""
+
+    return round6(float(p) / float(q))
+
+
+def rounded_rate(scale: int, count: int, total: int, grid: int) -> float:
+    """The rate of `count` durations summing to `total` that are a constant rate rounded to a grid
+    of `grid` units (spec/facts.md 4.3): of the rates strictly between scale*count/(total+grid)
+    and scale*count/(total-grid), the whole number nearest scale*count/total, else the multiple of
+    1000/1001 nearest it, else the fraction with the smallest denominator."""
+
+    units = scale * count
+    low, high = total + grid, total - grid
+    whole = _nearest_whole(units, total, low, high)
+    if whole is not None:
+        return ratio(whole, 1)
+    k = _nearest_whole(units * 1001, total * 1000, low * 1000, high * 1000)
+    if k is not None:
+        return ratio(1000 * k, 1001)
+    p, q = _simplest(Fraction(units, low), Fraction(units, high))
+    return ratio(p, q)
+
+
+def _nearest_whole(n: int, mid: int, low: int, high: int) -> int | None:
+    """The whole number strictly between n/low and n/high nearest n/mid, the smaller of two
+    equally near; None when there is none. n/mid lies between the bounds, so the nearest whole
+    number inside is one of the two around it."""
+
+    lo, hi, mean = Fraction(n, low), Fraction(n, high), Fraction(n, mid)
+    inside = [k for k in (floor(mean), floor(mean) + 1) if lo < k < hi]
+    return min(inside, key=lambda k: (abs(k - mean), k)) if inside else None
+
+
+def _simplest(lo: Fraction, hi: Fraction) -> tuple[int, int]:
+    """The fraction with the smallest denominator strictly between lo and hi (0 <= lo < hi),
+    as (numerator, denominator): the smallest whole number above lo when it lies below hi, else
+    the whole part k of lo followed by the simplest fraction between the reciprocals of what is
+    left over."""
+
+    whole = floor(lo) + 1
+    if whole < hi:
+        return whole, 1
+    k = floor(lo)
+    if lo == k:
+        m = floor(1 / (hi - k)) + 1
+        return k * m + 1, m
+    p, q = _simplest(1 / (hi - k), 1 / (lo - k))
+    return k * p + q, p
 
 
 def png_has_alpha(frame: bytes) -> bool | None:
@@ -257,12 +330,12 @@ def _mp4(data: bytes) -> dict[str, Any]:
             moofs.append((s, e))
     if moov is None:
         raise Refusal("it has no moov box")
-    movie_scale = None
+    mvhd = None
     mvex = None
     video = None
     for kind, s, e in _boxes(data, *moov, False):
-        if kind == b"mvhd" and movie_scale is None:
-            movie_scale = _scale_and_duration(data, (s, e), "mvhd")[0]
+        if kind == b"mvhd" and mvhd is None:
+            mvhd = (s, e)
         elif kind == b"mvex" and mvex is None:
             mvex = (s, e)
         elif kind == b"trak" and video is None:
@@ -291,6 +364,16 @@ def _mp4(data: bytes) -> dict[str, Any]:
         raise Refusal("its video sample entry is too short")
     width, height = struct.unpack_from(">HH", data, es + 24)
 
+    has_alpha = None
+    png = fourcc == b"png "
+    if fourcc in NO_ALPHA_ENTRIES:
+        has_alpha = False
+    elif fourcc == b"mp4v":
+        object_type = _object_type(data, es + 78, ee)
+        if object_type in NO_ALPHA_OBJECTS:
+            has_alpha = False
+        png = object_type == PNG_OBJECT
+
     rate = Rate()
     if b"stts" in stbl:
         (count,) = _fields(data, stbl[b"stts"], 4, ">I", "stts")
@@ -300,7 +383,8 @@ def _mp4(data: bytes) -> dict[str, Any]:
     first_size = None
     if b"stsz" in stbl:
         size, frames = _fields(data, stbl[b"stsz"], 4, ">II", "stsz")
-        if frames:
+        # The table's first entry is read only for a PNG track's first sample (4.4).
+        if png and frames:
             first_size = size or _fields(data, stbl[b"stsz"], 12, ">I", "stsz")[0]
     elif b"stz2" in stbl:
         (frames,) = _fields(data, stbl[b"stz2"], 8, ">I", "stz2")
@@ -330,26 +414,20 @@ def _mp4(data: bytes) -> dict[str, Any]:
         units = media_duration
     else:
         units = rate.total
-    edits = _edits(data, children, scale, movie_scale)
+    edits = _edits(data, children, scale, mvhd)
     if edits is not None:
         units = min(units, edits)
 
     facts: dict[str, Any] = {"width": width, "height": height}
-    delta = rate.delta()
-    if scale and delta:
-        facts["fps"] = round6(scale / delta)
+    fps = rate.fps(scale)
+    if fps is not None:
+        facts["fps"] = fps
     if scale:
         facts["duration"] = round6(float(units) / scale)
     facts["frames"] = frames
-    png = fourcc == b"png "
-    if fourcc in NO_ALPHA_ENTRIES:
-        facts["has_alpha"] = False
-    elif fourcc == b"mp4v":
-        object_type = _object_type(data, es + 78, ee)
-        if object_type in NO_ALPHA_OBJECTS:
-            facts["has_alpha"] = False
-        png = object_type == PNG_OBJECT
-    if png and first_size is not None:
+    if has_alpha is not None:
+        facts["has_alpha"] = has_alpha
+    if first_size is not None:
         offset = None
         if b"stco" in stbl:
             (n,) = _fields(data, stbl[b"stco"], 4, ">I", "stco")
@@ -426,11 +504,18 @@ def _video_trak(data: bytes, s: int, e: int) -> dict[str, Any] | None:
 
 
 def _edits(
-    data: bytes, children: dict[bytes, tuple[int, int]], scale: int, movie_scale: int | None
+    data: bytes,
+    children: dict[bytes, tuple[int, int]],
+    scale: int,
+    mvhd: tuple[int, int] | None,
 ) -> int | None:
-    """The non-empty edits' durations rescaled to the media timescale, or None."""
+    """The non-empty edits' durations rescaled to the media timescale, or None. mvhd's timescale
+    is read only here, for a track with an edts; its duration never (4.3)."""
 
-    if b"edts" not in children or not movie_scale:
+    if b"edts" not in children or mvhd is None:
+        return None
+    movie_scale = _timescale(data, mvhd, "mvhd")
+    if not movie_scale:
         return None
     edts = _first_children(data, *children[b"edts"])
     if b"elst" not in edts:
@@ -525,6 +610,7 @@ NO_ALPHA_CODECS = {
     "V_MPEG1",
     "V_MPEG2",
     "V_THEORA",
+    "V_MJPEG",
 }
 PNG_FOURCCS = {b"MPNG", b"PNG1", b"png "}
 
@@ -1109,6 +1195,10 @@ DIFFERENCES = {
     "matroska/garbage.webm": "ffprobe failed and it gave no facts; FX refuses (facts.md 5.1)",
     "matroska/vp9_5994.webm": "ffmpeg's 19001/317 (59.940063); FX's 60000/1001 (facts.md 5.2)",
     "matroska/png_rgba64.mkv": "rgba64be was not in its list of formats; FX reads the PNG (5.3)",
+    "matroska/block_track_zero.mkv": "ffprobe skipped the broken block; FX refuses (5.2)",
+    "mp4/mvhd_no_timescale.mp4": "ffprobe read past the mvhd; FX needs its timescale (4.1, 4.3)",
+    "mp4/stsd_count_zero.mp4": "ffprobe found no codec and gave no facts; FX refuses (4.2)",
+    "mp4/stsz_no_table.mp4": "ffprobe read one packet; FX reads only the sample count (4.3)",
 }
 
 
@@ -1312,6 +1402,69 @@ VIDEO_FIXTURES: list[tuple[str, tuple[str, ...]]] = [
     ("mp4/png_rgba.mp4", (*lavfi(TESTSRC), "-frames:v", "3", "-c:v", "png", "-pix_fmt", "rgba")),
     ("mp4/png_rgb.mp4", (*lavfi(TESTSRC), "-frames:v", "3", "-c:v", "png", "-pix_fmt", "rgb24")),
     ("mp4/quicktime.mov", (*lavfi(TESTSRC), "-frames:v", "24", *X264)),
+    # Constant rates whose timestamps are rounded to the timescale (facts.md 4.3).
+    (
+        "mp4/h264_ts1000_24fps.mp4",
+        (*lavfi(TESTSRC), "-frames:v", "48", *X264, "-video_track_timescale", "1000"),
+    ),
+    (
+        "mp4/h264_ts1000_2997.mp4",
+        (
+            *lavfi("testsrc=size=64x48:rate=30000/1001"),
+            "-frames:v",
+            "120",
+            *X264,
+            "-video_track_timescale",
+            "1000",
+        ),
+    ),
+    (
+        "mp4/h264_ts1000000_30fps.mp4",
+        (
+            *lavfi("testsrc=size=64x48:rate=30"),
+            "-frames:v",
+            "31",
+            *X264,
+            "-video_track_timescale",
+            "1000000",
+        ),
+    ),
+    (
+        "mp4/h264_ts90000_5994.mp4",
+        (
+            *lavfi("testsrc=size=64x48:rate=60000/1001"),
+            "-frames:v",
+            "60",
+            *X264,
+            "-video_track_timescale",
+            "90000",
+        ),
+    ),
+    ("mp4/ismv.mp4", (*lavfi(TESTSRC), "-frames:v", "24", *X264, "-f", "ismv")),
+    (
+        "mp4/fragmented_av.mp4",
+        (
+            *SINE,
+            *lavfi(TESTSRC),
+            "-map",
+            "0:a",
+            "-map",
+            "1:v",
+            "-frames:v",
+            "24",
+            "-t",
+            "1",
+            *X264,
+            *AAC,
+            "-g",
+            "12",
+            "-movflags",
+            "+frag_keyframe+empty_moov",
+        ),
+    ),
+    ("work/ms30.mkv", (*lavfi("testsrc=size=64x48:rate=30"), "-frames:v", "30", *X264)),
+    ("mp4/remux_ms.mp4", ("-i", "@work/ms30.mkv", "-c", "copy")),
+    ("mp4/mjpeg.mp4", (*lavfi(TESTSRC), "-frames:v", "3", "-c:v", "mjpeg")),
     ("matroska/h264.mkv", (*lavfi(TESTSRC), "-frames:v", "24", *X264)),
     (
         "matroska/vp9.webm",
@@ -1357,14 +1510,139 @@ VIDEO_FIXTURES: list[tuple[str, tuple[str, ...]]] = [
         "matroska/png_rgb.mkv",
         (*lavfi(TESTSRC), "-frames:v", "6", "-c:v", "png", "-pix_fmt", "rgb24"),
     ),
+    ("matroska/mjpeg.mkv", (*lavfi(TESTSRC), "-frames:v", "3", "-c:v", "mjpeg")),
 ]
+# Paths under work/ are made only for later fixtures to read ("@work/…"), and never kept.
+WORK = "work/"
 
-# Fixtures cut from or written instead of an encoder's output.
+
+def _box_at(data: bytes, path: tuple[bytes, ...]) -> tuple[int, int, int]:
+    """(start, content start, end) of the first box of each type along `path`, from the top."""
+
+    start, content, end = 0, 0, len(data)
+    for kind in path:
+        at, limit = content, end
+        while True:
+            size, found = struct.unpack_from(">I4s", data, at)
+            header = 16 if size == 1 else 8
+            if size == 1:
+                size = struct.unpack_from(">Q", data, at + 8)[0]
+            elif size == 0:
+                size = limit - at
+            if found == kind:
+                start, content, end = at, at + header, at + size
+                break
+            at += size
+    return start, content, end
+
+
+def _cut_box(data: bytes, path: tuple[bytes, ...], keep: int) -> bytes:
+    """`data` with the box at `path` cut to its first `keep` bytes of content and a `free` box
+    after it in the bytes it gave up, so that no other size or offset changes."""
+
+    start, content, end = _box_at(data, path)
+    assert content - start == 8, "an 8-byte box header"
+    lost = end - content - keep
+    assert lost >= 8, "room for the free box"
+    cut = struct.pack(">I", 8 + keep) + data[start + 4 : content] + data[content : content + keep]
+    return data[:start] + cut + struct.pack(">I", lost) + b"free" + bytes(lost - 8) + data[end:]
+
+
+def _patched(data: bytes, at: int, new: bytes) -> bytes:
+    return data[:at] + new + data[at + len(new) :]
+
+
+STBL = (b"moov", b"trak", b"mdia", b"minf", b"stbl")
+
+
+def _matroska_element(data: bytes, path: tuple[int, ...]) -> tuple[int, int, int]:
+    """(start, content start, end) of the first element of each ID along `path` below the
+    Segment (a Cluster of unknown size is not followed)."""
+
+    _, content, size = _element(data, 0, len(data))
+    at = content + size
+    while True:
+        eid, content, size = _element(data, at, len(data))
+        if eid == SEGMENT:
+            break
+        at = content + size
+    end = len(data) if size is None else content + size
+    start = at
+    for want in path:
+        at, limit = content, end
+        while True:
+            eid, child, size = _element(data, at, limit)
+            if eid == want:
+                start, content, end = at, child, child + size
+                break
+            at = child + size
+    return start, content, end
+
+
+def _video_codec_private(data: bytes) -> tuple[int, int, int]:
+    """(start, content start, end) of the video track's CodecPrivate."""
+
+    _, content, end = _matroska_element(data, (TRACKS,))
+    for eid, cs, ce in _children(data, content, end):
+        if eid == TRACK_ENTRY and _track_entry(data, cs, ce).get("type") == 1:
+            at = cs
+            while at < ce:
+                child, child_content, size = _element(data, at, ce)
+                if child == 0x63A2:
+                    return at, child_content, child_content + size
+                at = child_content + size
+    raise ValueError("no CodecPrivate")
+
+
+def _private_cut_to_20(data: bytes) -> bytes:
+    """png_rgba.mkv with its 40-byte BITMAPINFOHEADER cut to its first 20 bytes and a Void
+    element in the 20 bytes it gave up."""
+
+    start, content, end = _video_codec_private(data)
+    assert end - content == 40 and content - start == 3, "a 40-byte private with a 1-byte size"
+    private = b"\x63\xa2\x94" + data[content : content + 20]
+    void = b"\xec\x92" + bytes(18)
+    return data[:start] + private + void + data[end:]
+
+
+def _first_block_track_zero(data: bytes) -> bytes:
+    """h264.mkv with the track number of its first SimpleBlock starting with a 0 byte."""
+
+    _, content, _ = _matroska_element(data, (CLUSTER, SIMPLE_BLOCK))
+    assert data[content] == 0x81, "a 1-byte track number"
+    return _patched(data, content, b"\x00")
+
+
+# Fixtures cut from, written over or written instead of an encoder's output.
 DERIVED: dict[str, Callable[[dict[str, bytes]], bytes]] = {
     "mp4/truncated.mp4": lambda made: made["mp4/h264_24fps.mp4"][:2000],
     "mp4/garbage.mp4": lambda made: b"not a video",
+    # A version 0 mvhd that ends after its timescale, or before it.
+    "mp4/mvhd_short.mp4": lambda made: _cut_box(
+        made["mp4/h264_25fps_no_bframes.mp4"], (b"moov", b"mvhd"), 16
+    ),
+    "mp4/mvhd_short_audio.mp4": lambda made: _cut_box(
+        made["mp4/audio_only.mp4"], (b"moov", b"mvhd"), 16
+    ),
+    "mp4/mvhd_no_timescale.mp4": lambda made: _cut_box(
+        made["mp4/h264_25fps_no_bframes.mp4"], (b"moov", b"mvhd"), 12
+    ),
+    # An H.264 track whose stsz has a sample size of 0 and its count but no table.
+    "mp4/stsz_no_table.mp4": lambda made: _cut_box(
+        made["mp4/h264_25fps_no_bframes.mp4"], (*STBL, b"stsz"), 12
+    ),
+    # An stsd whose entry count is 0, its sample entry still there.
+    "mp4/stsd_count_zero.mp4": lambda made: _patched(
+        made["mp4/h264_25fps_no_bframes.mp4"],
+        _box_at(made["mp4/h264_25fps_no_bframes.mp4"], (*STBL, b"stsd"))[1] + 4,
+        bytes(4),
+    ),
     "matroska/truncated.mkv": lambda made: made["matroska/h264.mkv"][:1500],
     "matroska/garbage.webm": lambda made: b"not a video",
+    "matroska/png_private20.mkv": lambda made: _private_cut_to_20(made["matroska/png_rgba.mkv"]),
+    "matroska/block_track_zero.mkv": lambda made: _first_block_track_zero(
+        made["matroska/h264.mkv"]
+    ),
 }
 
 
@@ -1458,7 +1736,8 @@ def main(argv: list[str] | None = None) -> int:
                 return 2
         files = {f"wav/{name}": data for name, data in wav_fixtures().items()}
         with tempfile.TemporaryDirectory(prefix="fx-fixtures-") as work:
-            files.update(make_video(Path(work)))
+            made = make_video(Path(work))
+        files.update({path: data for path, data in made.items() if not path.startswith(WORK)})
         write_folders(files)
         problems = cross_check(files) + check()
     for problem in problems:

@@ -2,8 +2,9 @@
 //! `run`'s params.
 //!
 //! - [`file_ref`]: `{digest, kind, size, name, key?, path, facts}`; `path` is the store copy;
-//!   `facts` are `grida_fx_core::facts::file_facts` of the bytes (a file whose facts cannot be
-//!   computed, such as a broken image, is staged with `bytes` and `kind` only, and the reason is
+//!   `facts` are the file's facts (`grida_fx_core::facts::read_ref_facts`, which reads only what
+//!   the kind's rule names, never a whole video; a file whose facts are refused, such as a broken
+//!   image, is staged with `bytes` and `kind` only, spec/protocol.md §3.1, and the reason is
 //!   logged, never fatal here: planning already refused what an expression read). Every ref
 //!   handed out is also put in the run's [`RunFiles`].
 //! - inputs (§3.3): for each declared input present in `with` and not null or missing: one file
@@ -57,14 +58,20 @@ pub fn file_ref(store: &Store, file: &FileValue, files: &RunFiles) -> Result<Fil
             file.name
         )
     })?;
-    let bytes = std::fs::read(&path).map_err(|error| {
+    let read = grida_fx_core::facts::read_ref_facts(&path, &file.kind).map_err(|error| {
         format!(
             "cannot read {} from the store: {}",
             file.name,
             io_reason(&error)
         )
     })?;
-    let facts = facts_of(&bytes, file);
+    if let Some(reason) = &read.refused {
+        eprintln!(
+            "warning: {}: its file facts cannot be read ({reason}); the body gets its size and kind only",
+            file.name
+        );
+    }
+    let facts: IndexMap<String, Value> = read.facts.into_iter().collect();
     let mut handed = file.clone();
     handed.location = Some(path);
     files.insert(&handed);
@@ -77,28 +84,6 @@ pub fn file_ref(store: &Store, file: &FileValue, files: &RunFiles) -> Result<Fil
         path: path_text,
         facts,
     })
-}
-
-/// The file facts of a staged file; `bytes` and `kind` only when the rest cannot be computed.
-fn facts_of(bytes: &[u8], file: &FileValue) -> IndexMap<String, Value> {
-    match grida_fx_core::facts::file_facts(bytes, &file.kind) {
-        Ok(Value::Object(map)) => map.into_iter().collect(),
-        Ok(_) => basic_facts(bytes, file),
-        Err(reason) => {
-            eprintln!(
-                "warning: {}: its file facts cannot be read ({reason}); the body gets its size and kind only",
-                file.name
-            );
-            basic_facts(bytes, file)
-        }
-    }
-}
-
-fn basic_facts(bytes: &[u8], file: &FileValue) -> IndexMap<String, Value> {
-    IndexMap::from([
-        ("bytes".to_string(), Value::from(bytes.len() as u64)),
-        ("kind".to_string(), Value::from(file.kind.as_str())),
-    ])
 }
 
 /// `run`'s params for one attempt (module doc).

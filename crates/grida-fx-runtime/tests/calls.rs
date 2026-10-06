@@ -802,6 +802,23 @@ async fn a_cancelled_run_answers_cancelled() {
 }
 
 #[tokio::test]
+async fn a_run_its_lease_stopped_answers_cancelled() {
+    // What the lease does at a step's deadline, before it sends `$/cancel`.
+    let run = planning_run();
+    run.handler.stop();
+    assert!(run.handler.cancel.is_cancelled());
+    let error = ask(
+        &run.handler,
+        "fact",
+        json!({"run_id": "inv-1", "name": "late", "value": 1}),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error.code, ErrorCode::Cancelled.code());
+    assert!(run.handler.facts().is_empty());
+}
+
+#[tokio::test]
 async fn prompts_render_over_the_params_with_variables_on_top() {
     let run = planning_run();
     let h = &run.handler;
@@ -920,14 +937,34 @@ async fn file_puts_are_refused_before_anything_is_stored() {
         error.message,
         "json.a: an object holding only `missing` in this shape is reserved for FX's own values"
     );
-    let error = ask(
-        h,
-        "file.put",
-        json!({"run_id": "inv-1", "base64": "AAE=", "json": 1}),
-    )
-    .await
-    .unwrap_err();
-    assert_eq!(error.code, ErrorCode::InvalidParams.code());
+    // Exactly one source, members it takes, and text where text belongs: each said as a
+    // sentence, never as the reader's own text.
+    for (params, message) in [
+        (
+            json!({"run_id": "inv-1", "base64": "AAE=", "json": 1}),
+            "file.put takes exactly one of work_path, base64, json",
+        ),
+        (
+            json!({"run_id": "inv-1", "kind": "json"}),
+            "file.put takes exactly one of work_path, base64, json",
+        ),
+        (
+            json!({"run_id": "inv-1", "base64": "AAE=", "colour": "red"}),
+            "file.put: colour is not one of its fields",
+        ),
+        (
+            json!({"run_id": "inv-1", "work_path": 3}),
+            "file.put: work_path is text",
+        ),
+        (
+            json!({"run_id": "inv-1", "base64": "AAE=", "kind": 3}),
+            "file.put: it holds the number 3 where text belongs",
+        ),
+    ] {
+        let error = ask(h, "file.put", params.clone()).await.unwrap_err();
+        assert_eq!(error.code, ErrorCode::InvalidParams.code(), "{params}");
+        assert_eq!(error.message, message, "{params}");
+    }
     let error = ask(
         h,
         "file.put",
@@ -1002,6 +1039,28 @@ async fn agent_pictures_must_be_files_the_run_was_handed() {
         error.message,
         "caption calls agent.turn without declaring it"
     );
+    // The loop had started: the error carries the transcript so far, for the body to read.
+    assert_eq!(
+        error.data.as_ref().unwrap()["transcript"],
+        json!([{"role": "user", "content": "i"}])
+    );
+    assert_eq!(
+        error.data.as_ref().unwrap()["capability"],
+        json!("agent.turn")
+    );
+    // Refused before the first turn: no transcript.
+    let error = ask(
+        &run.handler,
+        "agent.run",
+        json!({
+            "run_id": "inv-1", "agent_id": "a1", "system": "s", "instructions": "i",
+            "tools": [], "max_steps": 0, "submit": null, "check": false
+        }),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error.code, ErrorCode::InvalidParams.code());
+    assert_eq!(error.data, None);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1639,6 +1698,89 @@ async fn only_the_engines_own_faults_stop_the_run() {
         fault.starts_with(&format!("the store's files/{}/{digest}: ", &digest[..2])),
         "{fault}"
     );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_work_file_the_engine_cannot_read_is_the_bodys_not_the_stores() {
+    use std::os::unix::fs::PermissionsExt;
+    let run = planning_run();
+    let secret = run.work.join("secret.txt");
+    std::fs::write(&secret, b"hidden").unwrap();
+    std::fs::set_permissions(&secret, std::fs::Permissions::from_mode(0o000)).unwrap();
+    if std::fs::read(&secret).is_ok() {
+        eprintln!("skipped: this user reads files whatever their mode");
+        return;
+    }
+    let error = ask(
+        &run.handler,
+        "file.put",
+        json!({"run_id": "inv-1", "work_path": "secret.txt"}),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error.code, ErrorCode::InvalidParams.code());
+    assert_eq!(error.message, "cannot read secret.txt: permission denied");
+    // The request failed; the run has no fault, so it goes on.
+    assert_eq!(run.handler.fault(), None);
+    std::fs::set_permissions(&secret, std::fs::Permissions::from_mode(0o644)).unwrap();
+}
+
+#[tokio::test]
+async fn facts_and_marks_the_record_cannot_hold_are_refused() {
+    let run = planning_run();
+    let h = &run.handler;
+    let nested = |depth: usize| {
+        let mut value = json!(1);
+        for _ in 0..depth {
+            value = json!([value]);
+        }
+        value
+    };
+    let depth = grida_fx_runtime::events::VALUE_DEPTH;
+    assert_eq!(
+        ask(
+            h,
+            "fact",
+            json!({"run_id": "inv-1", "name": "deep", "value": nested(depth)})
+        )
+        .await,
+        Ok(json!({}))
+    );
+    let error = ask(
+        h,
+        "fact",
+        json!({"run_id": "inv-1", "name": "deeper", "value": nested(depth + 1)}),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error.code, ErrorCode::InvalidParams.code());
+    assert_eq!(
+        error.message,
+        format!(
+            "fact deeper is nested deeper than {depth} levels, which the run's record cannot hold"
+        )
+    );
+    let error = ask(
+        h,
+        "annotate",
+        json!({"run_id": "inv-1", "mark": {"label": "x", "extra": nested(depth)}}),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error.code, ErrorCode::InvalidParams.code());
+    assert_eq!(
+        error.message,
+        format!("mark is nested deeper than {depth} levels, which the run's record cannot hold")
+    );
+    assert_eq!(h.facts().keys().collect::<Vec<_>>(), ["deep"]);
+    assert!(h.marks().is_empty());
+    // Params FX cannot read are told as a sentence.
+    let error = ask(h, "fact", json!({"run_id": "inv-1", "name": "n"}))
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, ErrorCode::InvalidParams.code());
+    assert_eq!(error.message, "fact: it has no value");
 }
 
 #[tokio::test]

@@ -11,6 +11,10 @@
 //!   failed, reason (default `something it reads failed`), event `node_skipped {reason, blocked:
 //!   true}`; `failed` (a run-time assertion) → failed, event `node_failed {error}` (default `an
 //!   assertion failed`). Both count as failures of this invocation.
+//! - [`overturned`]: instances in listing order that are not running, whose result succeeded, and
+//!   whose state a run-time assertion has since turned `failed` (it read a result that came in
+//!   after the step ran): failed, event `node_failed {error}` with the assertion's message. The
+//!   runner also stops a running instance whose state turns `failed` ([`assertion_failed`]).
 //! - [`Gate`]: phases of live instances in order, minus approved ones; a phase whose members hold
 //!   a pending value that waits on nothing is skipped (not yet priceable); else its `high` is its
 //!   unfinished live members' high plus its pending repeats' high, `phase_planned {phase, steps,
@@ -23,7 +27,7 @@
 //!   it still waits on).
 
 use crate::events::Event;
-use grida_fx_core::expand::{Expansion, Instance, NodeResult, State};
+use grida_fx_core::expand::{Expansion, Instance, NodeResult, ResultStatus, State};
 use grida_fx_core::money::Usd;
 use grida_fx_core::val::Val;
 use indexmap::IndexMap;
@@ -211,6 +215,50 @@ pub fn settle(
                 })
             }
             _ => None,
+        })
+        .collect()
+}
+
+/// The assertion message of an instance whose state is `failed` (module doc).
+pub fn assertion_failed(instance: &Instance) -> Option<String> {
+    (instance.state == State::Failed).then(|| {
+        instance
+            .reason
+            .clone()
+            .unwrap_or_else(|| "an assertion failed".to_string())
+    })
+}
+
+/// Succeeded instances a later assertion failed (module doc).
+pub fn overturned(
+    expansion: &Expansion,
+    results: &IndexMap<String, NodeResult>,
+    running: &HashSet<String>,
+) -> Vec<Settled> {
+    expansion
+        .ordered()
+        .filter(|i| !running.contains(&i.id))
+        .filter(|i| {
+            results
+                .get(&i.id)
+                .is_some_and(|result| result.status == ResultStatus::Succeeded)
+        })
+        .filter_map(|instance| {
+            let error = assertion_failed(instance)?;
+            Some(Settled {
+                id: instance.id.clone(),
+                result: NodeResult {
+                    facts: results[&instance.id].facts.clone(),
+                    ..crate::executor::failed(&error)
+                },
+                event: Event::NodeFailed {
+                    id: instance.id.clone(),
+                    path: instance.path.clone(),
+                    error: Some(error),
+                    facts: None,
+                    duration_ms: None,
+                },
+            })
         })
         .collect()
 }

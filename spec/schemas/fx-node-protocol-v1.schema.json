@@ -1061,7 +1061,7 @@
             "properties": {
               "id": {"type": ["string", "null"]},
               "name": {"type": "string"},
-              "arguments": {"type": "object"}
+              "arguments": {"type": "string"}
             },
             "required": ["name", "arguments"],
             "additionalProperties": false

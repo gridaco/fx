@@ -28,7 +28,8 @@ arguments.
 problems, a run refused before it started (a live run without a ceiling, a folder that holds
 another plan), a run that is not ok, an output that `--deliver` did not find. `2` for unreadable
 input or a command-line mistake, with `grida-fx: <message>` on stderr. `130` when you interrupt a
-run (Ctrl-C): what finished is kept ([Resuming](04-cost-and-cache.md#resuming)).
+command (Ctrl-C, or SIGTERM) at any point, planning included: node hosts end with it, and what a
+run finished is kept ([Resuming](04-cost-and-cache.md#resuming)).
 
 **Route tables.** Routes and their prices come from FX's built-in table, then the tables `fx.yaml`
 lists under `route_tables`, then each `--routes` file in the order given. A later table's entry
@@ -72,11 +73,15 @@ runs/concept-gallery/2026-10-02-1/
   events.jsonl       # everything that happened, in order (the record)
   plan.json          # the plan the run started from: workflow, inputs, every step instance
   outputs/           # the declared outputs, by name and key
-  files/             # every step's results, by step path
+  files/             # every step's results: one folder per step path and take
 ```
 
 - **Where:** `runs/<workflow id>/<date>-<n>/` in the project you run from, a new folder each
   time; `--run <folder>` names one instead, relative to where you are.
+- **`files/` has one folder per take:** `files/<step>/` holds take 1, and any other take has a
+  folder of its own, its take numbers after `#` (`files/draw#2/`, `files/entity__ada__.draw#1.3/`
+  for a take inside a regenerating group). Every take a run made is there, and
+  `inspect --verify` checks each one.
 - **`events.jsonl` is the source of truth** (an `fx-run-events-v1` log); `inspect` and `project`
   are built from it. `plan.json` is the same `fx-graph-v1` document `grida-fx expand` prints, and
   names the takes file `reroll` and `pick` write.

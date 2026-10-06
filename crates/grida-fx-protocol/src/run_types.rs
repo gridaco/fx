@@ -296,7 +296,7 @@ pub enum AgentRole {
     Tool,
 }
 
-/// A tool call in an assistant message.
+/// A tool call in an assistant message of the transcript (protocol.md §6.2 step 3).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AgentToolCall {
@@ -308,7 +308,10 @@ pub struct AgentToolCall {
     )]
     pub id: Option<Value>,
     pub name: String,
-    pub arguments: IndexMap<String, Value>,
+    /// The canonical JSON text (identity.md §2) of the object the model gave, as provider APIs
+    /// carry it, so what the model wrote never reads as a file value or a reserved marker. The
+    /// tool itself is dispatched with the object ([`ToolInvokeParams::arguments`]).
+    pub arguments: String,
 }
 
 /// One transcript message (protocol.md §6.2).
@@ -576,9 +579,9 @@ mod tests {
         let messages = json!([
             {"role": "user", "content": "go"},
             {"role": "assistant", "content": "", "tool_calls": [
-                {"id": null, "name": "look", "arguments": {}},
-                {"name": "look", "arguments": {}},
-                {"id": "c1", "name": "submit", "arguments": {"a": 1}}
+                {"id": null, "name": "look", "arguments": "{}"},
+                {"name": "look", "arguments": "{}"},
+                {"id": "c1", "name": "submit", "arguments": "{\"a\":1}"}
             ]},
             {"role": "tool", "name": "look", "tool_call_id": "c1", "content": "x", "images": [{"file": "ab"}]}
         ]);
@@ -594,6 +597,9 @@ mod tests {
         let calls = text.transcript[1].tool_calls.as_ref().unwrap();
         assert_eq!(calls[0].id, Some(Value::Null));
         assert_eq!(calls[1].id, None);
+        assert_eq!(calls[2].arguments, "{\"a\":1}");
+        // A transcript's arguments are text: an object there is refused.
+        refused::<AgentToolCall>(json!({"name": "look", "arguments": {"a": 1}}));
         let submitted = round_trip::<AgentRunResult>(json!({
             "submitted": null, "transcript": [], "turns": 1, "cost_usd": 0.0
         }));

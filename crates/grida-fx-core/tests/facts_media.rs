@@ -3,13 +3,17 @@
 //! Every folder under `spec/vectors/facts/` holds media files and an `expected.json` that maps
 //! each file name to its facts (members in their written order) or to `{"refused": "<message>"}`.
 //! `tools/make_fixtures.py` made the files and reads them back the same way in Python; this test
-//! holds the engine to the same values, exactly.
+//! holds the engine to the same values, exactly, whether it reads them from bytes in memory or
+//! from the file, and checks that reading a file for its facts reads only what the rules name.
 
-use grida_fx_core::facts::file_facts;
+use grida_fx_core::facts::{
+    FactsError, RefFacts, file_facts, read_file_facts, read_ref_facts, reader_facts,
+};
 use grida_fx_core::kinds::kind_of;
 use grida_fx_core::value::parse_json;
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::collections::BTreeSet;
+use std::io::{self, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 fn root() -> PathBuf {
@@ -67,6 +71,15 @@ fn every_fixture_has_its_expected_facts() {
             let bytes = std::fs::read(folder.join(name)).unwrap();
             let got = file_facts(&bytes, kind_of(name));
             let label = format!("{}/{name}", folder.file_name().unwrap().to_string_lossy());
+            // Read from the file, the facts are the same.
+            let from_file = read_file_facts(&folder.join(name), kind_of(name));
+            match (&got, from_file) {
+                (Ok(facts), Ok(read)) => assert_eq!(facts, &read, "{label}: read from the file"),
+                (Err(error), Err(FactsError::Refused(reason))) => {
+                    assert_eq!(error, &reason, "{label}: read from the file")
+                }
+                (got, read) => panic!("{label}: {got:?} in memory, {read:?} from the file"),
+            }
             match (want.get("refused").and_then(Value::as_str), got) {
                 (Some(reason), Err(error)) => assert_eq!(error, reason, "{label}"),
                 (Some(reason), Ok(facts)) => {
@@ -171,4 +184,177 @@ fn noise_never_panics() {
             let _ = file_facts(&bytes, kind);
         }
     }
+}
+
+/// A file of `len` bytes that holds `pieces` at their offsets and zeros everywhere else, and
+/// counts the bytes read from it.
+struct Sparse {
+    len: u64,
+    pieces: Vec<(u64, Vec<u8>)>,
+    at: u64,
+    read: u64,
+}
+
+impl Sparse {
+    fn new(len: u64, pieces: Vec<(u64, Vec<u8>)>) -> Self {
+        Sparse {
+            len,
+            pieces,
+            at: 0,
+            read: 0,
+        }
+    }
+}
+
+impl Read for Sparse {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let count = (self.len.saturating_sub(self.at)).min(buf.len() as u64) as usize;
+        for (i, byte) in buf[..count].iter_mut().enumerate() {
+            let at = self.at + i as u64;
+            *byte = self
+                .pieces
+                .iter()
+                .find(|(start, piece)| at >= *start && at - start < piece.len() as u64)
+                .map_or(0, |(start, piece)| piece[(at - start) as usize]);
+        }
+        self.at += count as u64;
+        self.read += count as u64;
+        Ok(count)
+    }
+}
+
+impl Seek for Sparse {
+    fn seek(&mut self, to: SeekFrom) -> io::Result<u64> {
+        self.at = match to {
+            SeekFrom::Start(at) => at,
+            SeekFrom::End(delta) => self.len.checked_add_signed(delta).unwrap(),
+            SeekFrom::Current(delta) => self.at.checked_add_signed(delta).unwrap(),
+        };
+        Ok(self.at)
+    }
+}
+
+/// The facts of a sparse file, and the bytes reading them took.
+fn sparse_facts(file: Sparse, kind: &str) -> (Value, u64) {
+    let mut file = file;
+    let facts = reader_facts(&mut file, kind).unwrap();
+    (facts, file.read)
+}
+
+const TIB: u64 = 1 << 40;
+
+/// spec/facts.md §1: facts read the boxes and elements their rules name, never a whole file. A
+/// 1 TiB `mdat`, `data` chunk or block costs no more to read past than a small one.
+#[test]
+fn facts_read_only_what_their_rules_name() {
+    // An MP4 whose moov comes first, then a 64-bit mdat of 1 TiB.
+    let fixture = std::fs::read(root().join("mp4/faststart.mp4")).unwrap();
+    let mdat = fixture.windows(4).position(|w| w == b"mdat").unwrap() - 4;
+    let mut head = fixture[..mdat].to_vec();
+    head.extend([0, 0, 0, 1]);
+    head.extend(b"mdat");
+    head.extend((TIB + 16).to_be_bytes());
+    let len = mdat as u64 + TIB + 16;
+    let (facts, read) = sparse_facts(Sparse::new(len, vec![(0, head)]), "video/mp4");
+    assert_eq!(
+        facts,
+        json!({"bytes": len, "kind": "video/mp4", "width": 64, "height": 48, "fps": 24,
+               "duration": 1, "frames": 24, "has_alpha": false})
+    );
+    assert!(read <= 2 * 64 * 1024, "{read} bytes read");
+
+    // A WAV of 1 TiB whose data chunk declares the most it can: only the chunk headers are read.
+    let wav = std::fs::read(root().join("wav/pcm16_8k.wav")).unwrap();
+    let data = wav.windows(4).position(|w| w == b"data").unwrap();
+    let mut header = wav[..data + 8].to_vec();
+    header[4..8].copy_from_slice(&u32::MAX.to_le_bytes());
+    header[data + 4..data + 8].copy_from_slice(&u32::MAX.to_le_bytes());
+    let (facts, read) = sparse_facts(Sparse::new(TIB, vec![(0, header)]), "audio/wav");
+    assert_eq!(
+        facts,
+        json!({"bytes": TIB, "kind": "audio/wav", "duration": 268435.455875})
+    );
+    assert!(read <= 64 * 1024, "{read} bytes read");
+
+    // A Matroska file whose first block holds 1 TiB of frame data: only its header is read.
+    let element = |id: &[u8], content: &[u8]| {
+        let mut out = id.to_vec();
+        out.push(0x01);
+        out.extend(&(content.len() as u64).to_be_bytes()[1..]);
+        out.extend(content);
+        out
+    };
+    let uint = |id: &[u8], value: u64| element(id, &value.to_be_bytes());
+    let ebml = element(&[0x1A, 0x45, 0xDF, 0xA3], &element(&[0x42, 0x82], b"webm"));
+    let info = element(
+        &[0x15, 0x49, 0xA9, 0x66],
+        &[
+            uint(&[0x2A, 0xD7, 0xB1], 1_000_000),
+            element(&[0x44, 0x89], &1000f64.to_be_bytes()),
+        ]
+        .concat(),
+    );
+    let video = element(&[0xE0], &[uint(&[0xB0], 64), uint(&[0xBA], 48)].concat());
+    let entry = [
+        uint(&[0xD7], 1),
+        uint(&[0x83], 1),
+        element(&[0x86], b"V_VP9"),
+        uint(&[0x23, 0xE3, 0x83], 41_666_666),
+        video,
+    ]
+    .concat();
+    let tracks = element(&[0x16, 0x54, 0xAE, 0x6B], &element(&[0xAE], &entry));
+    // An unknown-size Segment and Cluster, then a SimpleBlock of 1 TiB.
+    let mut head = ebml;
+    head.extend([0x18, 0x53, 0x80, 0x67, 0xFF]);
+    head.extend(info);
+    head.extend(tracks);
+    head.extend([0x1F, 0x43, 0xB6, 0x75, 0xFF]);
+    head.extend([0xA3, 0x01]);
+    head.extend(&TIB.to_be_bytes()[1..]);
+    head.extend([0x81, 0, 0, 0x80]);
+    let len = head.len() as u64 - 4 + TIB;
+    let (facts, read) = sparse_facts(Sparse::new(len, vec![(0, head)]), "video/webm");
+    assert_eq!(
+        facts,
+        json!({"bytes": len, "kind": "video/webm", "width": 64, "height": 48, "fps": 24,
+               "duration": 1, "frames": 1, "has_alpha": false})
+    );
+    assert!(read <= 64 * 1024, "{read} bytes read");
+}
+
+/// protocol.md §3.1: a file ref of a file whose facts are refused carries `bytes` and `kind`
+/// only; the reason comes beside them, for the engine to log.
+#[test]
+fn ref_facts_of_a_refused_file_are_its_size_and_kind() {
+    let refused = root().join("mp4/truncated.mp4");
+    assert_eq!(
+        read_ref_facts(&refused, "video/mp4").unwrap(),
+        RefFacts {
+            facts: json!({"bytes": 2000, "kind": "video/mp4"})
+                .as_object()
+                .unwrap()
+                .clone(),
+            refused: Some(
+                "not an MP4 file (a box at byte 40 runs past the end of the file)".into()
+            ),
+        }
+    );
+    // An audio-only MP4 has the same members, and no refusal.
+    let audio = read_ref_facts(&root().join("mp4/audio_only.mp4"), "video/mp4").unwrap();
+    assert_eq!(audio.facts.keys().collect::<Vec<_>>(), ["bytes", "kind"]);
+    assert_eq!(audio.refused, None);
+    // A file that decodes carries all of its facts.
+    let clip = root().join("mp4/h264_2997.mp4");
+    let facts = read_ref_facts(&clip, "video/mp4").unwrap();
+    assert_eq!(
+        Value::Object(facts.facts),
+        read_file_facts(&clip, "video/mp4").unwrap()
+    );
+    // A file that cannot be read is an error, not a refusal.
+    assert!(read_ref_facts(&root().join("mp4/missing.mp4"), "video/mp4").is_err());
+    assert!(matches!(
+        read_file_facts(&root().join("mp4/missing.mp4"), "video/mp4"),
+        Err(FactsError::Io(_))
+    ));
 }

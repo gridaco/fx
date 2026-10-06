@@ -27,9 +27,21 @@
 //!   An amount that is not a non-negative number reads as 0.
 //! - Hold ids ([`hold_id`]): `<instance id>/<invocation id>.<n>`, unique in the folder.
 //!
-//! Events are written only when a log is attached; a failure to write one is not the ledger's to
-//! report (the runner checks the log itself). Every amount is exact: [`Usd`] micro-dollars. A
-//! ceiling is never negative (refused while parsing `--max-usd`).
+//! **What the log does not hold did not happen.** Events are written only when a log is attached,
+//! and every one is written under the ledger's lock, so the log's order of reservations and
+//! settlements is the ledger's. A reservation whose `budget_reserved` (or `budget_refused`) cannot
+//! be written opens no hold: [`Ledger::reserve_recorded`] answers [`NotReserved::Unrecorded`],
+//! and the call is refused before anything is sent. A settlement whose `budget_settled` cannot be
+//! written still charges the run (the provider was paid), and [`Ledger::settle_recorded`] answers
+//! [`Unrecorded`]. Either way the ledger keeps the first such failure ([`Ledger::fault`]): from
+//! then on every reservation is refused as unrecorded, since the log can no longer be trusted to
+//! hold what is spent; a resumed run then charges every hold whose settlement is missing in full.
+//! The call path turns an unrecorded reservation or settlement into an engine fault that stops the
+//! run. [`Ledger::reserve`] and [`Ledger::settle`] are the same without the distinction (an
+//! unrecorded reservation is a [`Refusal`] whose message is the failure).
+//!
+//! Every amount is exact: [`Usd`] micro-dollars. A ceiling is never negative (refused while parsing
+//! `--max-usd`).
 
 use crate::events::{Event, EventLog};
 use grida_fx_core::money::Usd;
@@ -57,11 +69,30 @@ pub struct Refusal {
     pub message: String,
 }
 
+/// Why [`Ledger::reserve_recorded`] opened no hold.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NotReserved {
+    /// The ceiling or a step budget refused it (`ceiling_exceeded`).
+    Refused(Refusal),
+    /// The log could not record it, or an earlier event (module doc): an engine fault.
+    Unrecorded(String),
+}
+
+/// A settlement the log could not record (module doc): the run was charged `charged` all the
+/// same.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Unrecorded {
+    pub charged: Usd,
+    pub reason: String,
+}
+
 #[derive(Debug, Default)]
 struct State {
     charged: Usd,
     open: indexmap::IndexMap<String, Hold>,
     scope_spent: indexmap::IndexMap<String, Usd>,
+    /// The first event the log could not write (module doc).
+    fault: Option<String>,
 }
 
 impl State {
@@ -141,76 +172,122 @@ impl Ledger {
         }
     }
 
-    /// Reserves `amount` for `node_id` under the ceiling and `scopes` (module doc).
+    /// Reserves `amount` for `node_id` under the ceiling and `scopes` (module doc). An
+    /// unrecorded reservation is refused too, with the failure as the refusal's message.
     pub fn reserve(&self, node_id: String, amount: Usd, scopes: &Scopes) -> Result<Hold, Refusal> {
+        let needed = non_negative(amount);
+        self.reserve_recorded(node_id, amount, scopes)
+            .map_err(|not| match not {
+                NotReserved::Refused(refusal) => refusal,
+                NotReserved::Unrecorded(message) => Refusal {
+                    needed,
+                    remaining: Usd::ZERO,
+                    message,
+                },
+            })
+    }
+
+    /// Reserves `amount` for `node_id` under the ceiling and `scopes` (module doc); a hold is
+    /// opened only once its `budget_reserved` is written.
+    pub fn reserve_recorded(
+        &self,
+        node_id: String,
+        amount: Usd,
+        scopes: &Scopes,
+    ) -> Result<Hold, NotReserved> {
         let amount = non_negative(amount);
         let mut state = self.lock();
+        if let Some(fault) = &state.fault {
+            return Err(NotReserved::Unrecorded(fault.clone()));
+        }
         if state.open.contains_key(&node_id) {
             // Hold ids are unique by construction; a second hold under one id would lose the
             // first one's amount, so it is refused before anything is sent.
-            return Err(Refusal {
+            return Err(NotReserved::Refused(Refusal {
                 needed: amount,
                 remaining: Usd::ZERO,
                 message: format!("{node_id} already holds a reservation"),
-            });
+            }));
         }
+        let mut refusal = None;
         if let Some(ceiling) = self.ceiling {
             let remaining = minus(ceiling, state.charged + state.held());
             if amount > remaining {
-                self.emit(Event::BudgetRefused {
-                    node_id: node_id.clone(),
-                    needed_usd: amount,
-                    remaining_usd: remaining,
-                    ceiling_usd: Some(ceiling),
-                });
-                return Err(Refusal {
-                    needed: amount,
+                refusal = Some((
                     remaining,
-                    message: format!(
+                    ceiling,
+                    format!(
                         "run ceiling reached: {node_id} needs up to ${} and ${} is left",
                         dollars_4(amount),
                         dollars_4(remaining)
                     ),
-                });
+                ));
             }
         }
-        for (owner, max) in scopes {
-            let max = non_negative(*max);
-            let remaining = minus(max, state.scope_used(owner));
-            if amount > remaining {
-                self.emit(Event::BudgetRefused {
-                    node_id: node_id.clone(),
-                    needed_usd: amount,
-                    remaining_usd: remaining,
-                    ceiling_usd: Some(max),
-                });
-                return Err(Refusal {
-                    needed: amount,
-                    remaining,
-                    message: format!(
-                        "step budget of {owner} reached: {node_id} needs up to ${} and ${} is left",
-                        dollars_4(amount),
-                        dollars_4(remaining)
-                    ),
-                });
+        if refusal.is_none() {
+            for (owner, max) in scopes {
+                let max = non_negative(*max);
+                let remaining = minus(max, state.scope_used(owner));
+                if amount > remaining {
+                    refusal = Some((
+                        remaining,
+                        max,
+                        format!(
+                            "step budget of {owner} reached: {node_id} needs up to ${} and ${} \
+                             is left",
+                            dollars_4(amount),
+                            dollars_4(remaining)
+                        ),
+                    ));
+                    break;
+                }
             }
+        }
+        if let Some((remaining, ceiling, message)) = refusal {
+            let event = Event::BudgetRefused {
+                node_id,
+                needed_usd: amount,
+                remaining_usd: remaining,
+                ceiling_usd: Some(ceiling),
+            };
+            if let Err(fault) = self.emit(&mut state, &event) {
+                return Err(NotReserved::Unrecorded(fault));
+            }
+            return Err(NotReserved::Refused(Refusal {
+                needed: amount,
+                remaining,
+                message,
+            }));
+        }
+        let event = Event::BudgetReserved {
+            node_id: node_id.clone(),
+            amount_usd: amount,
+        };
+        if let Err(fault) = self.emit(&mut state, &event) {
+            // Nothing may be sent for a hold the log does not hold.
+            return Err(NotReserved::Unrecorded(fault));
         }
         let hold = Hold {
             node_id: node_id.clone(),
             amount,
             scopes: scopes.iter().map(|(owner, _)| owner.clone()).collect(),
         };
-        state.open.insert(node_id.clone(), hold.clone());
-        self.emit(Event::BudgetReserved {
-            node_id,
-            amount_usd: amount,
-        });
+        state.open.insert(node_id, hold.clone());
         Ok(hold)
     }
 
     /// Settles a hold at the reported cost, or in full when `None` (module doc). Returns what was
-    /// charged.
+    /// charged, recorded or not.
     pub fn settle(&self, hold: Hold, reported: Option<Usd>) -> Usd {
+        match self.settle_recorded(hold, reported) {
+            Ok(charged) => charged,
+            Err(unrecorded) => unrecorded.charged,
+        }
+    }
+
+    /// Settles a hold at the reported cost, or in full when `None` (module doc): what was
+    /// charged, or [`Unrecorded`] when its `budget_settled` could not be written.
+    pub fn settle_recorded(&self, hold: Hold, reported: Option<Usd>) -> Result<Usd, Unrecorded> {
         let reported = reported.map(non_negative);
         let mut state = self.lock();
         let open = state.open.shift_remove(&hold.node_id);
@@ -218,16 +295,24 @@ impl Ledger {
             (Some(_), Some(cost)) => cost,
             (Some(open), None) => open.amount,
             (None, Some(cost)) if cost > Usd::ZERO => cost,
-            (None, _) => return Usd::ZERO,
+            (None, _) => return Ok(Usd::ZERO),
         };
         let scopes = open.map_or(hold.scopes, |open| open.scopes);
         state.charge(charged, &scopes);
-        self.emit(Event::BudgetSettled {
+        let event = Event::BudgetSettled {
             node_id: hold.node_id,
             charged_usd: charged,
             reported: reported.is_some(),
-        });
-        charged
+        };
+        match self.emit(&mut state, &event) {
+            Ok(()) => Ok(charged),
+            Err(reason) => Err(Unrecorded { charged, reason }),
+        }
+    }
+
+    /// The first event this ledger could not write, if any (module doc).
+    pub fn fault(&self) -> Option<String> {
+        self.lock().fault.clone()
     }
 
     pub fn ceiling(&self) -> Option<Usd> {
@@ -248,14 +333,32 @@ impl Ledger {
         self.state.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// Writes an event when a log is attached. Called with the state locked, so the log's order
-    /// of reservations and settlements is the ledger's.
-    fn emit(&self, event: Event) {
-        if let Some(log) = &self.events {
-            // A failed write is the runner's to notice (it checks the log); the ledger's
-            // arithmetic does not depend on it.
-            let _ = log.emit(&event);
-        }
+    /// Writes an event when a log is attached, with the state locked so the log's order of
+    /// reservations and settlements is the ledger's. A failure is kept as the ledger's fault
+    /// (the first one wins) and returned as a sentence.
+    fn emit(&self, state: &mut State, event: &Event) -> Result<(), String> {
+        let Some(log) = &self.events else {
+            return Ok(());
+        };
+        log.emit(event).map_err(|error| {
+            let reason = format!(
+                "the run's events.jsonl could not record {} of {}: {error}",
+                event.name(),
+                held_by(event)
+            );
+            state.fault.get_or_insert_with(|| reason.clone());
+            reason
+        })
+    }
+}
+
+/// The hold a budget event names.
+fn held_by(event: &Event) -> &str {
+    match event {
+        Event::BudgetReserved { node_id, .. }
+        | Event::BudgetSettled { node_id, .. }
+        | Event::BudgetRefused { node_id, .. } => node_id,
+        _ => "a hold",
     }
 }
 

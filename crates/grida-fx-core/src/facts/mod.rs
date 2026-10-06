@@ -17,7 +17,15 @@
 //! [`crate::value::number`], so a whole number is written as an integer (`24`, not `24.0`).
 //!
 //! Refusals: an image whose bytes do not decode, an MP4 or Matroska/WebM file whose structure
-//! does not parse. A WAV file is never refused; one this rule cannot read has no `duration`.
+//! does not parse. A WAV file is never refused; one this rule cannot read has no `duration`. A
+//! file ref (protocol.md §3.1) of a refused file carries `bytes` and `kind` only
+//! ([`read_ref_facts`]).
+//!
+//! Reading: every reader asks a window of the file for the ranges its rules name (the private
+//! `source` module), so facts never need the whole file in memory: [`read_file_facts`] reads a
+//! file on disk, [`reader_facts`] anything that reads and seeks, and [`file_facts`] bytes already
+//! in memory. A video's frames other than the one its `has_alpha` looks at, and a WAV's samples,
+//! are never read.
 //!
 //! Per format:
 //! - PNG: the header gives the size; `has_alpha` is a color type with alpha or a `tRNS` chunk.
@@ -32,10 +40,15 @@
 mod ffv1;
 pub mod matroska;
 pub mod mp4;
+mod source;
 pub mod wav;
 
 use serde_json::{Map, Value};
-use std::io::Cursor;
+use source::{Fail, Source};
+use std::fmt;
+use std::fs::File;
+use std::io::{self, BufRead, Cursor, Read, Seek};
+use std::path::Path;
 
 /// The image facts of one picture.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,35 +59,149 @@ pub struct ImageFacts {
     pub opaque: bool,
 }
 
-/// The file facts of `bytes` of the given kind, as an object. An image whose bytes do not decode
+/// Why a file's facts could not be read.
+#[derive(Debug)]
+pub enum FactsError {
+    /// The bytes do not decode under the kind's rule (spec/facts.md §1): the reason, starting
+    /// with its kind's prefix (`not an MP4 file (…)`).
+    Refused(String),
+    /// Reading the file failed.
+    Io(io::Error),
+}
+
+impl fmt::Display for FactsError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FactsError::Refused(reason) => f.write_str(reason),
+            FactsError::Io(error) => write!(f, "{error}"),
+        }
+    }
+}
+
+impl std::error::Error for FactsError {}
+
+/// The facts a file ref carries (protocol.md §3.1).
+#[derive(Debug, Clone, PartialEq)]
+pub struct RefFacts {
+    /// `facts(f)`; for a refused file, `bytes` and `kind` only.
+    pub facts: Map<String, Value>,
+    /// Why the file's facts are refused, when they are.
+    pub refused: Option<String>,
+}
+
+/// The file facts of `bytes` of the given kind, as an object. A file whose bytes do not decode
 /// is refused with a sentence (`"<reason>"`); the caller prefixes the file name.
 pub fn file_facts(bytes: &[u8], kind: &str) -> Result<Value, String> {
+    reader_facts(Cursor::new(bytes), kind).map_err(|error| error.to_string())
+}
+
+/// The file facts of the file at `path`, of the given kind. Only what the kind's rule names is
+/// read (spec/facts.md §1): a video's headers, tables and the frame it looks at, never the whole
+/// file.
+pub fn read_file_facts(path: &Path, kind: &str) -> Result<Value, FactsError> {
+    reader_facts(File::open(path).map_err(FactsError::Io)?, kind)
+}
+
+/// The file facts of what `reader` holds, of the given kind; its size is where it ends.
+pub fn reader_facts<R: Read + Seek>(reader: R, kind: &str) -> Result<Value, FactsError> {
+    let mut source = Source::new(reader).map_err(FactsError::Io)?;
     let mut facts = Map::new();
-    facts.insert("bytes".into(), Value::from(bytes.len() as u64));
+    facts.insert("bytes".into(), Value::from(source.len()));
     facts.insert("kind".into(), Value::from(kind));
-    if let Some(image) = image_facts(bytes, kind)? {
-        facts.insert("width".into(), Value::from(image.width));
-        facts.insert("height".into(), Value::from(image.height));
-        facts.insert("has_alpha".into(), Value::from(image.has_alpha));
-        facts.insert("opaque".into(), Value::from(image.opaque));
-    }
-    if let Some(audio) = audio_facts(bytes, kind)? {
-        audio.insert_into(&mut facts);
-    }
-    if let Some(video) = video_facts(bytes, kind)? {
-        video.insert_into(&mut facts);
+    let failed = |fail: Fail| match fail {
+        Fail::Refused(reason) => FactsError::Refused(reason),
+        Fail::Io(error) => FactsError::Io(error),
+    };
+    match kind {
+        "image/png" | "image/gif" | "image/webp" | "image/jpeg" => {
+            let image = source_image_facts(&mut source, kind).map_err(failed)?;
+            facts.insert("width".into(), Value::from(image.width));
+            facts.insert("height".into(), Value::from(image.height));
+            facts.insert("has_alpha".into(), Value::from(image.has_alpha));
+            facts.insert("opaque".into(), Value::from(image.opaque));
+        }
+        "audio/wav" => {
+            if let Some(audio) = wav::read(&mut source).map_err(FactsError::Io)? {
+                audio.insert_into(&mut facts);
+            }
+        }
+        "video/mp4" => {
+            if let Some(video) = mp4::read(&mut source).map_err(failed)? {
+                video.insert_into(&mut facts);
+            }
+        }
+        "video/webm" | "video/x-matroska" => {
+            if let Some(video) = matroska::read(&mut source).map_err(failed)? {
+                video.insert_into(&mut facts);
+            }
+        }
+        _ => {}
     }
     Ok(Value::Object(facts))
 }
 
+/// The facts a file ref carries (protocol.md §3.1) for the file at `path`: `facts(f)`, or for a
+/// file whose facts are refused, `bytes` and `kind` only, with the reason beside them. An error
+/// is a failure to read the file.
+pub fn read_ref_facts(path: &Path, kind: &str) -> io::Result<RefFacts> {
+    ref_facts(File::open(path)?, kind)
+}
+
+/// [`read_ref_facts`] of what `reader` holds.
+pub fn ref_facts<R: Read + Seek>(mut reader: R, kind: &str) -> io::Result<RefFacts> {
+    let len = reader.seek(io::SeekFrom::End(0))?;
+    match reader_facts(reader, kind) {
+        Ok(Value::Object(facts)) => Ok(RefFacts {
+            facts,
+            refused: None,
+        }),
+        Ok(_) => unreachable!("facts are an object"),
+        Err(FactsError::Refused(reason)) => {
+            let mut facts = Map::new();
+            facts.insert("bytes".into(), Value::from(len));
+            facts.insert("kind".into(), Value::from(kind));
+            Ok(RefFacts {
+                facts,
+                refused: Some(reason),
+            })
+        }
+        Err(FactsError::Io(error)) => Err(error),
+    }
+}
+
 /// The image facts of an image kind's bytes; `Ok(None)` for kinds that are not images.
 pub fn image_facts(bytes: &[u8], kind: &str) -> Result<Option<ImageFacts>, String> {
-    match kind {
-        "image/png" => png_facts(bytes).map(Some),
-        "image/gif" => gif_facts(bytes).map(Some),
-        "image/webp" => webp_facts(bytes).map(Some),
-        "image/jpeg" => jpeg_facts(bytes).map(Some),
-        _ => Ok(None),
+    if !matches!(
+        kind,
+        "image/png" | "image/gif" | "image/webp" | "image/jpeg"
+    ) {
+        return Ok(None);
+    }
+    let mut source = Source::new(Cursor::new(bytes)).map_err(|error| error.to_string())?;
+    source_image_facts(&mut source, kind)
+        .map(Some)
+        .map_err(|fail| match fail {
+            Fail::Refused(reason) => reason,
+            Fail::Io(error) => error.to_string(),
+        })
+}
+
+/// The image facts of an image read through `source`. A decoder's error is a refusal, unless
+/// reading the file failed under it.
+fn source_image_facts<R: Read + Seek>(
+    source: &mut Source<R>,
+    kind: &str,
+) -> Result<ImageFacts, Fail> {
+    let len = source.len();
+    let result = match kind {
+        "image/png" => png_facts(source.range(0, len)),
+        "image/gif" => gif_facts(source.range(0, len)),
+        "image/webp" => webp_facts(source.range(0, len)),
+        _ => return jpeg_facts(source),
+    };
+    match source.take_failure() {
+        Some(error) => Err(Fail::Io(error)),
+        None => result.map_err(Fail::Refused),
     }
 }
 
@@ -146,8 +273,8 @@ pub(crate) fn seconds(units: u128, scale: u64) -> f64 {
 
 /// The image `has_alpha` (§2) of a video frame coded as a PNG picture: a color type with alpha
 /// or a `tRNS` chunk before the image data; `None` when its header does not decode.
-pub(crate) fn png_has_alpha(frame: &[u8]) -> Option<bool> {
-    let reader = png::Decoder::new(Cursor::new(frame)).read_info().ok()?;
+pub(crate) fn png_has_alpha<R: BufRead + Seek>(frame: R) -> Option<bool> {
+    let reader = png::Decoder::new(frame).read_info().ok()?;
     let info = reader.info();
     Some(
         info.trns.is_some()
@@ -158,9 +285,9 @@ pub(crate) fn png_has_alpha(frame: &[u8]) -> Option<bool> {
     )
 }
 
-fn png_facts(bytes: &[u8]) -> Result<ImageFacts, String> {
+fn png_facts<R: BufRead + Seek>(picture: R) -> Result<ImageFacts, String> {
     let refused = |error: png::DecodingError| format!("not a PNG picture ({error})");
-    let mut decoder = png::Decoder::new(Cursor::new(bytes));
+    let mut decoder = png::Decoder::new(picture);
     decoder.set_transformations(png::Transformations::EXPAND);
     let mut reader = decoder.read_info().map_err(refused)?;
     let info = reader.info();
@@ -213,11 +340,11 @@ fn png_facts(bytes: &[u8]) -> Result<ImageFacts, String> {
     })
 }
 
-fn gif_facts(bytes: &[u8]) -> Result<ImageFacts, String> {
+fn gif_facts<R: Read>(picture: R) -> Result<ImageFacts, String> {
     let refused = |error: gif::DecodingError| format!("not a GIF picture ({error})");
     let mut options = gif::DecodeOptions::new();
     options.set_color_output(gif::ColorOutput::Indexed);
-    let mut decoder = options.read_info(Cursor::new(bytes)).map_err(refused)?;
+    let mut decoder = options.read_info(picture).map_err(refused)?;
     let (width, height) = (u32::from(decoder.width()), u32::from(decoder.height()));
     let frame = decoder
         .read_next_frame()
@@ -235,9 +362,9 @@ fn gif_facts(bytes: &[u8]) -> Result<ImageFacts, String> {
     })
 }
 
-fn webp_facts(bytes: &[u8]) -> Result<ImageFacts, String> {
+fn webp_facts<R: BufRead + Seek>(picture: R) -> Result<ImageFacts, String> {
     let refused = |error: image_webp::DecodingError| format!("not a WebP picture ({error})");
-    let mut decoder = image_webp::WebPDecoder::new(Cursor::new(bytes)).map_err(refused)?;
+    let mut decoder = image_webp::WebPDecoder::new(picture).map_err(refused)?;
     let (width, height) = decoder.dimensions();
     let has_alpha = decoder.has_alpha();
     if !has_alpha {
@@ -262,9 +389,9 @@ fn webp_facts(bytes: &[u8]) -> Result<ImageFacts, String> {
     })
 }
 
-fn jpeg_facts(bytes: &[u8]) -> Result<ImageFacts, String> {
-    let (width, height) =
-        jpeg_size(bytes).map_err(|reason| format!("not a JPEG picture ({reason})"))?;
+fn jpeg_facts<R: Read + Seek>(source: &mut Source<R>) -> Result<ImageFacts, Fail> {
+    let (width, height) = jpeg_size(source)?
+        .map_err(|reason| Fail::Refused(format!("not a JPEG picture ({reason})")))?;
     Ok(ImageFacts {
         width,
         height,
@@ -274,50 +401,63 @@ fn jpeg_facts(bytes: &[u8]) -> Result<ImageFacts, String> {
 }
 
 /// The width and height in a JPEG's first start-of-frame segment (`SOF0`–`SOF15` but `DHT`,
-/// `JPG` and `DAC`), found by walking the marker segments from the start-of-image marker.
-fn jpeg_size(bytes: &[u8]) -> Result<(u32, u32), &'static str> {
-    if bytes.len() < 2 || bytes[0] != 0xFF || bytes[1] != 0xD8 {
-        return Err("no start-of-image marker");
+/// `JPG` and `DAC`), found by walking the marker segments from the start-of-image marker. The
+/// outer error is a failure to read the file; the inner one the reason the picture is refused.
+fn jpeg_size<R: Read + Seek>(
+    source: &mut Source<R>,
+) -> io::Result<Result<(u32, u32), &'static str>> {
+    let len = source.len();
+    let byte = |source: &mut Source<R>, at: u64| -> io::Result<Option<u8>> {
+        if at >= len {
+            return Ok(None);
+        }
+        source.byte(at).map(Some)
+    };
+    if byte(source, 0)? != Some(0xFF) || byte(source, 1)? != Some(0xD8) {
+        return Ok(Err("no start-of-image marker"));
     }
-    let mut at = 2;
+    let mut at: u64 = 2;
     loop {
         // Markers may be preceded by any number of 0xFF fill bytes.
-        if bytes.get(at) != Some(&0xFF) {
-            return Err("a marker is missing");
+        if byte(source, at)? != Some(0xFF) {
+            return Ok(Err("a marker is missing"));
         }
-        while bytes.get(at) == Some(&0xFF) {
+        while byte(source, at)? == Some(0xFF) {
             at += 1;
         }
-        let marker = *bytes.get(at).ok_or("it ends before its frame header")?;
+        let Some(marker) = byte(source, at)? else {
+            return Ok(Err("it ends before its frame header"));
+        };
         at += 1;
         match marker {
             // Markers that stand alone: TEM, RST0–RST7, SOI.
             0x01 | 0xD0..=0xD8 => continue,
-            0xD9 | 0xDA => return Err("it has no frame header"),
+            0xD9 | 0xDA => return Ok(Err("it has no frame header")),
             _ => {}
         }
-        let length = match bytes.get(at..at + 2) {
-            Some(&[high, low]) => usize::from(u16::from_be_bytes([high, low])),
-            _ => return Err("it ends before its frame header"),
+        let (Some(high), Some(low)) = (byte(source, at)?, byte(source, at + 1)?) else {
+            return Ok(Err("it ends before its frame header"));
         };
+        let length = u64::from(u16::from_be_bytes([high, low]));
         if length < 2 {
-            return Err("a segment has a bad length");
+            return Ok(Err("a segment has a bad length"));
         }
         let is_frame = matches!(marker, 0xC0..=0xCF) && !matches!(marker, 0xC4 | 0xC8 | 0xCC);
         if is_frame {
             // length (2), precision (1), height (2), width (2)
-            let segment = bytes
-                .get(at..at + 7)
-                .ok_or("it ends inside its frame header")?;
-            if length < 7 {
-                return Err("its frame header is too short");
+            if at + 7 > len {
+                return Ok(Err("it ends inside its frame header"));
             }
+            if length < 7 {
+                return Ok(Err("its frame header is too short"));
+            }
+            let segment = source.bytes(at, 7)?;
             let height = u32::from(u16::from_be_bytes([segment[3], segment[4]]));
             let width = u32::from(u16::from_be_bytes([segment[5], segment[6]]));
             if width == 0 || height == 0 {
-                return Err("its frame header has no size");
+                return Ok(Err("its frame header has no size"));
             }
-            return Ok((width, height));
+            return Ok(Ok((width, height)));
         }
         at += length;
     }

@@ -12,12 +12,34 @@
 
 /// More bytes than this read past the end make a header invalid (as in ffmpeg's decoder).
 const MAX_OVERREAD: u32 = 2;
+/// The first bytes of a frame that are enough to read its key-frame header: every bit the
+/// decoder takes reads at most one byte, a value takes at most 65 bits, and a header has fewer
+/// than 270 values, so it never reaches 18 KiB into a frame.
+pub(super) const FRAME_HEADER_BYTES: usize = 64 * 1024;
+
+/// The first bytes of a frame (at most [`FRAME_HEADER_BYTES`]) and the frame's whole length.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Frame<'a> {
+    pub(super) start: &'a [u8],
+    pub(super) len: u64,
+}
+
+impl<'a> Frame<'a> {
+    /// A frame held whole.
+    #[cfg(test)]
+    fn whole(bytes: &'a [u8]) -> Self {
+        Frame {
+            start: bytes,
+            len: bytes.len() as u64,
+        }
+    }
+}
 
 /// The transparency flag from a configuration record (version 2 or 3), or, without one, from
 /// the first frame's key-frame header (version 0 or 1).
-pub(super) fn has_alpha(record: &[u8], first_frame: Option<&[u8]>) -> Option<bool> {
+pub(super) fn has_alpha(record: &[u8], first_frame: Option<Frame<'_>>) -> Option<bool> {
     if !record.is_empty() {
-        let mut coder = RangeDecoder::new(record);
+        let mut coder = RangeDecoder::new(record, record.len());
         let mut states = [128u8; 32];
         let version = coder.symbol(&mut states, false)?;
         if !matches!(version, 2 | 3) || (version == 3 && (record.len() < 4 || crc32(record) != 0)) {
@@ -25,8 +47,9 @@ pub(super) fn has_alpha(record: &[u8], first_frame: Option<&[u8]>) -> Option<boo
         }
         return header(&mut coder, &mut states, version);
     }
-    let frame = first_frame.filter(|frame| !frame.is_empty())?;
-    let mut coder = RangeDecoder::new(frame);
+    let frame = first_frame.filter(|frame| frame.len > 0)?;
+    let len = usize::try_from(frame.len).unwrap_or(usize::MAX);
+    let mut coder = RangeDecoder::new(frame.start, len);
     let mut key_state = [128u8; 1];
     if !coder.bit(&mut key_state, 0) {
         return None;
@@ -60,7 +83,7 @@ fn header(coder: &mut RangeDecoder, states: &mut [u8; 32], version: i64) -> Opti
     coder.symbol(states, false)?; // log2_h_chroma_subsample
     coder.symbol(states, false)?; // log2_v_chroma_subsample
     let transparency = coder.bit(states, 0);
-    (coder.overread <= MAX_OVERREAD).then_some(transparency)
+    (coder.overread <= MAX_OVERREAD && !coder.short).then_some(transparency)
 }
 
 /// The CRC-32 FFV1 protects its records with: polynomial 0x04C11DB7, most significant bit first,
@@ -80,7 +103,8 @@ fn crc32(bytes: &[u8]) -> u32 {
     crc
 }
 
-/// FFV1's binary range decoder (RFC 9043 §3.8.1).
+/// FFV1's binary range decoder (RFC 9043 §3.8.1) over the first bytes of a stream `end` bytes
+/// long.
 struct RangeDecoder<'a> {
     bytes: &'a [u8],
     at: usize,
@@ -88,25 +112,29 @@ struct RangeDecoder<'a> {
     low: u32,
     range: u32,
     overread: u32,
+    /// A byte within `end` but past the bytes held was needed (never, for a header: see
+    /// [`FRAME_HEADER_BYTES`]).
+    short: bool,
     one_state: [u8; 256],
     zero_state: [u8; 256],
 }
 
 impl<'a> RangeDecoder<'a> {
-    fn new(bytes: &'a [u8]) -> Self {
+    fn new(bytes: &'a [u8], end: usize) -> Self {
         let (one_state, zero_state) = default_states();
         let mut coder = RangeDecoder {
             bytes,
             at: 2,
-            end: bytes.len(),
+            end,
             low: 0,
             range: 0xFF00,
             overread: 0,
+            short: false,
             one_state,
             zero_state,
         };
         match bytes {
-            [high, low, ..] => coder.low = u32::from(*high) << 8 | u32::from(*low),
+            [high, low, ..] if end >= 2 => coder.low = u32::from(*high) << 8 | u32::from(*low),
             _ => coder.overread = 2,
         }
         if coder.low >= 0xFF00 {
@@ -134,7 +162,10 @@ impl<'a> RangeDecoder<'a> {
             self.low <<= 8;
             if self.at < self.end {
                 // A broken stream can push `low` past `range`; it then only has to stay bounded.
-                self.low = self.low.wrapping_add(u32::from(self.bytes[self.at]));
+                match self.bytes.get(self.at) {
+                    Some(&byte) => self.low = self.low.wrapping_add(u32::from(byte)),
+                    None => self.short = true,
+                }
                 self.at += 1;
             } else {
                 self.overread += 1;
@@ -258,20 +289,29 @@ mod tests {
         // The first bytes of key frames ffmpeg wrote: version 1 yuva420p and yuv420p, and
         // version 0 yuva420p.
         assert_eq!(
-            has_alpha(&[], Some(&hex("9aeca1a4067dfbd89ac4df02026053c9"))),
+            has_alpha(
+                &[],
+                Some(Frame::whole(&hex("9aeca1a4067dfbd89ac4df02026053c9")))
+            ),
             Some(true)
         );
         assert_eq!(
-            has_alpha(&[], Some(&hex("9aec87309a496df656689957fd954a81"))),
+            has_alpha(
+                &[],
+                Some(Frame::whole(&hex("9aec87309a496df656689957fd954a81")))
+            ),
             Some(false)
         );
         assert_eq!(
-            has_alpha(&[], Some(&hex("f50803553d9a57361bf6bcf4914448e6"))),
+            has_alpha(
+                &[],
+                Some(Frame::whole(&hex("f50803553d9a57361bf6bcf4914448e6")))
+            ),
             Some(true)
         );
         // A version 3 record is not a frame header, and an empty frame has none.
-        assert_eq!(has_alpha(&[], Some(&hex(YUV420P))), None);
-        assert_eq!(has_alpha(&[], Some(&[])), None);
+        assert_eq!(has_alpha(&[], Some(Frame::whole(&hex(YUV420P)))), None);
+        assert_eq!(has_alpha(&[], Some(Frame::whole(&[]))), None);
         assert_eq!(has_alpha(&[], None), None);
     }
 

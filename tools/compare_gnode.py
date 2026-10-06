@@ -53,7 +53,9 @@ Pair mode runs ``expand``, ``price`` and ``identity`` with the same ``--target``
 and ``--inputs`` (paths inside each project) in copies of two projects, without known
 differences. When a pair
 differs, the FX decisions that no case exercises (``UNCASED_DECISIONS``) are printed after it, so
-a difference can be checked against them before it is reported.
+a difference can be checked against them before it is reported. Defects FX keeps from gnode
+for now, the same in both engines and so never shown by a comparison, are in
+``SHARED_DEFECTS``.
 
 Normalisation (both sides):
 - drop ``plan``, ``graph_sha256``, every ``fingerprint`` and the ``types`` map; an instance's
@@ -242,6 +244,31 @@ UNCASED_DECISIONS: tuple[str, ...] = (
     "a negative duration or max_chars is no length: the call is priced as of unknown length",
     "join, contains, min/max, digest, == and text over a list or object that holds a pending "
     "value are pending, so a pending token never ends up inside a known value",
+    # Run mode: decisions of the runner (protocol.md section 5.3, store.md section 8).
+    "a step that needs: a regenerating step runs once that step's takes are decided "
+    "(gnode never runs it)",
+    "a step that reads a blocked step is skipped as blocked in turn (node_skipped)",
+    "node_failed keeps the facts a node_error reported",
+    "a body that reports the fact cost_usd is refused: the engine writes it",
+    "timeout: bounds an at: plan step too",
+    'ctx.fail("") fails with "NodeFailure"',
+    "an engine error a body let propagate fails with its own class (NotLive, CallFailed, ...) "
+    "and message, without gnode's calls= hint",
+    "a refusal names the run folder as typed (runs/one)",
+    "the plan digest holds the type identities, so a run whose unversioned type changed is "
+    "refused in the same folder",
+    "a picked take whose result changed fails the step",
+    "a body's stdout is not echoed",
+    "each take of a step is placed in a folder of its own, files/<step>#<takes>/ (gnode placed "
+    "every take at files/<step>/)",
+    "a run-time assertion over a result that arrives after its step ran fails that step",
+)
+
+#: Defects FX keeps from gnode for now, the same in both engines (so no comparison shows them).
+SHARED_DEFECTS: tuple[str, ...] = (
+    "a judge's facts read from outside its step (steps.<judge>.facts) are the last take's, not "
+    "those of the take the judged step's reference resolves to (the kept or picked one)",
+    "a workflow-level assert: over a value only the run produces is never checked",
 )
 #: Where the spec lists its own changes (one number type, booleans not numbers, strict YAML, ...).
 SPEC_CHANGES = "and the changes spec/identity.md section 13 lists"
@@ -599,7 +626,8 @@ def normalise_project(document: Any, side: str) -> Any:
 
 def normalise_events(events: list[Any], side: str) -> list[Any]:
     """A run's events (``jsonl: true``), each without the plan digest and the envelope, a step
-    identity as ``"<digest>"``, gnode's ``run_canceled`` as ``run_cancelled``, sorted as the
+    identity as ``"<digest>"``, gnode's ``run_canceled`` as ``run_cancelled`` and its ``error``
+    and ``uses`` with FX's names (``gnode/select@1`` is ``fx/select@1``), sorted as the
     conformance suite sorts them."""
     if side not in ("gnode", "fx"):
         raise ValueError(f"side is gnode or fx, not {side!r}")
@@ -613,8 +641,10 @@ def normalise_events(events: list[Any], side: str) -> list[Any]:
             }
             if side == "gnode" and event.get("event") == "run_canceled":
                 event["event"] = "run_cancelled"
-            if side == "gnode" and isinstance(event.get("error"), str):
-                event["error"] = fx_names(event["error"])
+            if side == "gnode":
+                for name in ("error", "uses"):
+                    if isinstance(event.get(name), str):
+                        event[name] = fx_names(event[name])
             if isinstance(event.get("identity"), str):
                 event["identity"] = DIGEST
         shaped.append(_scrubbed(event))

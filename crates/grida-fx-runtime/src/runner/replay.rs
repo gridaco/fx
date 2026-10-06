@@ -5,7 +5,8 @@
 //! store) when every file is present; `node_failed` and `node_skipped` forget it. Failed and
 //! skipped steps are therefore decided again, and a step whose file left the store runs again.
 //! Replayed results emit nothing new and their files are not placed again. Replay is keyed by
-//! instance id; the plan digest check (`folder::check_plan`) already guarantees the same plan.
+//! instance id: every event it reads is of this plan, since the runner refuses a folder whose
+//! `plan.json`, or any of whose events, names another plan (both read under `run.lock`).
 //!
 //! A `node_finished` event whose outputs do not decode (a file missing from the store, a member
 //! that is not an encoded value) is skipped. Its facts are the event's `facts` object, empty when

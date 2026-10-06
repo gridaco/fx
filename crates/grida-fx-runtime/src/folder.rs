@@ -11,22 +11,27 @@
 //!
 //! - Where: `--run <folder>` relative to the working directory, else
 //!   `<runs>/<workflow id>/<YYYY-MM-DD>-<n>` with the local date when the command starts and the
-//!   smallest free `n` from 1 ([`new_folder`]).
+//!   smallest free `n` from 1 ([`new_folder`]), claimed by making it: two invocations starting at
+//!   once never get the same new folder.
 //! - [`check_plan`]: a folder whose `plan.json` records another plan digest is refused before
 //!   anything runs: `<folder> holds a run of another workflow or other inputs; choose a new
-//!   folder` (`<folder>` as the user typed it, or relative to the working directory).
+//!   folder` (`<folder>` as the user typed it, or relative to the working directory). The runner
+//!   checks it once it holds the lock, so no other invocation can write `plan.json` in between.
 //! - [`RunFolder::lock`]: `run.lock` locked without waiting (`File::try_lock`); held until the
 //!   value drops. Refused at once with `another invocation is running <folder>`.
+//! - [`RunFolder::sweep`]: what a killed invocation left half placed (temporary names) is removed
+//!   by the next one that holds the lock.
 //! - [`plan_document`]: the graph document `grida-fx expand` prints, with `plan`, `steps` (every
 //!   declared step by its path: `{title, description, uses, view}`), `inputs` (plain) and
 //!   `view_origins` added, plus `takes_file` (the project-relative path of the workflow's takes
 //!   file, which `reroll` and `pick` write; spec/store.md §8 records it). Written with
 //!   `value::write_json` under a temporary name and renamed (`store::atomic_write`), once.
 //! - Placing ([`RunFolder::place`]): a hard link to the store's copy, or a copy where linking
-//!   fails, under a temporary name in the destination folder, renamed over the final name; a name
-//!   that already holds the same bytes is left alone (compared by size, then by digest).
-//! - Names ([`safe_name`], [`keyed_path`], [`named`]): store.md §8 "Names"; labels and the "one
-//!   file or several" rule in [`step_files`] and [`output_files`].
+//!   fails, under a temporary name in the destination folder (`.<16 hex>.part`, short enough to
+//!   fit wherever the final name fits), renamed over the final name; a name that already holds
+//!   the same bytes is left alone (compared by size, then by digest).
+//! - Names ([`safe_name`], [`keyed_path`], [`named`], [`step_folder`], [`capped`]): store.md §8
+//!   "Names"; labels and the "one file or several" rule in [`step_files`] and [`output_files`].
 //!
 //! Messages name the folder by its label and files by their place in it, never by an absolute
 //! path.
@@ -114,11 +119,11 @@ impl RunFolder {
         {
             return Ok(());
         }
-        let (Some(parent), Some(name)) = (target.parent(), target.file_name()) else {
+        let (Some(parent), Some(_)) = (target.parent(), target.file_name()) else {
             return Err(invalid(relative));
         };
         std::fs::create_dir_all(parent)?;
-        let temporary = parent.join(temporary_name(&name.to_string_lossy()));
+        let temporary = parent.join(temporary_name());
         let _ = std::fs::remove_file(&temporary);
         let put = std::fs::hard_link(source, &temporary)
             .or_else(|_| copy_read_only(source, &temporary))
@@ -127,6 +132,28 @@ impl RunFolder {
             let _ = std::fs::remove_file(&temporary);
         }
         put
+    }
+
+    /// Removes what an earlier invocation left half placed: every file under the folder whose
+    /// name is a temporary one ([`is_temporary_name`]). Only the invocation holding the lock
+    /// places anything here, so none of them is being written. Best effort.
+    pub fn sweep(&self) {
+        let mut folders = vec![self.path.clone()];
+        while let Some(folder) = folders.pop() {
+            let Ok(entries) = std::fs::read_dir(&folder) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let Ok(kind) = entry.file_type() else {
+                    continue;
+                };
+                if kind.is_dir() {
+                    folders.push(entry.path());
+                } else if is_temporary_name(&entry.file_name().to_string_lossy()) {
+                    let _ = std::fs::remove_file(entry.path());
+                }
+            }
+        }
     }
 
     /// `relative` as a path under the folder; refused when it is empty, absolute or could leave
@@ -150,12 +177,49 @@ fn invalid(relative: &str) -> std::io::Error {
     )
 }
 
-/// A temporary name in the destination folder: hidden, never a digest, unique in the process so
-/// two tasks placing at once do not share one.
-fn temporary_name(name: &str) -> String {
+/// The most bytes one name may hold on the file systems FX writes to (`NAME_MAX`).
+pub const NAME_BYTES: usize = 255;
+
+/// A temporary name in the destination folder: `.<16 hex>.part`, hidden, never a digest, unique
+/// in the process so two tasks placing at once do not share one, and short (22 bytes), so it fits
+/// wherever the final name does.
+fn temporary_name() -> String {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-    format!(".{name}.{}-{n}.part", std::process::id())
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_nanos());
+    let seed = format!("{}:{n}:{nanos}", std::process::id());
+    let digest = grida_fx_core::value::sha256_hex(seed.as_bytes());
+    format!(".{}.part", &digest[..16])
+}
+
+/// Whether a name is a temporary one: `.<16 lowercase hex>.part`, or the longer
+/// `.<name>.<pid>-<n>.part` earlier engines used.
+pub fn is_temporary_name(name: &str) -> bool {
+    let Some(inner) = name
+        .strip_prefix('.')
+        .and_then(|rest| rest.strip_suffix(".part"))
+    else {
+        return false;
+    };
+    let hex = |text: &str| {
+        text.bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    };
+    if inner.len() == 16 && hex(inner) {
+        return true;
+    }
+    // `<name>.<pid>-<n>`.
+    inner.rsplit_once('.').is_some_and(|(stem, tail)| {
+        !stem.is_empty()
+            && tail.split_once('-').is_some_and(|(pid, n)| {
+                !pid.is_empty()
+                    && !n.is_empty()
+                    && pid.bytes().all(|b| b.is_ascii_digit())
+                    && n.bytes().all(|b| b.is_ascii_digit())
+            })
+    })
 }
 
 /// A copy where a link cannot be made (another file system): read-only, like the store's bytes.
@@ -208,16 +272,23 @@ fn digest_of(path: &Path) -> std::io::Result<String> {
         .collect())
 }
 
-/// `<runs>/<workflow id>/<YYYY-MM-DD>-<n>` (module doc); touches nothing.
-pub fn new_folder(runs: &Path, workflow_id: &str) -> PathBuf {
+/// Makes and returns a new folder `<runs>/<workflow id>/<YYYY-MM-DD>-<n>` (module doc): the
+/// smallest `n` from 1 whose name holds nothing, claimed by making the folder (never one that
+/// exists), so an invocation starting at the same moment takes the next `n`.
+pub fn new_folder(runs: &Path, workflow_id: &str) -> std::io::Result<PathBuf> {
     let base = runs.join(workflow_id);
+    std::fs::create_dir_all(&base)?;
     let date = local_date();
     let mut n: u64 = 1;
     loop {
         let candidate = base.join(format!("{date}-{n}"));
         // Anything of that name counts, a dangling link included.
         if std::fs::symlink_metadata(&candidate).is_err() {
-            return candidate;
+            match std::fs::create_dir(&candidate) {
+                Ok(()) => return Ok(candidate),
+                Err(error) if error.kind() == ErrorKind::AlreadyExists => {}
+                Err(error) => return Err(error),
+            }
         }
         n += 1;
     }
@@ -381,15 +452,104 @@ pub fn named(label: &str, kind: &str) -> String {
     }
 }
 
-/// The files of a succeeded instance's outputs and where they go: `(relative path, digest)`.
-pub fn step_files(path: &str, outputs: &indexmap::IndexMap<String, Val>) -> Vec<(String, String)> {
+/// A step's folder name under `files/` (spec/store.md §8 "Names"): [`safe_name`] of the instance
+/// path, and, when its takes are not `[1]`, `#` and the takes joined by `.` (`draw#2`,
+/// `entity__ada__.draw#1.3`), so two takes of one step never share a folder. Not capped yet
+/// ([`capped`] does that with the rest of the path).
+pub fn step_folder(path: &str, takes: &[u32]) -> String {
     let step = safe_name(path);
+    if takes == [1] {
+        return step;
+    }
+    let takes: Vec<String> = takes.iter().map(u32::to_string).collect();
+    format!("{step}#{}", takes.join("."))
+}
+
+/// The takes of an instance id (`<path>#<t1>.<t2>…`, spec/identity.md §11); `[1]` when the id
+/// carries none that read as numbers.
+pub fn takes_of_id(id: &str) -> Vec<u32> {
+    id.rsplit_once('#')
+        .and_then(|(_, takes)| {
+            takes
+                .split('.')
+                .map(|take| take.parse::<u32>().ok())
+                .collect::<Option<Vec<u32>>>()
+        })
+        .filter(|takes| !takes.is_empty())
+        .unwrap_or_else(|| vec![1])
+}
+
+/// Where one output file of a step goes (module doc): `files/<step folder>/<port><suffix>` for a
+/// port's only file, else `files/<step folder>/<port>/<label><suffix>`; capped ([`capped`]).
+pub fn step_file_path(step_folder: &str, port: &str, label: Option<&str>, kind: &str) -> String {
+    let label = match label {
+        None => port.to_string(),
+        Some(label) => format!("{port}/{label}"),
+    };
+    capped(
+        &format!("files/{step_folder}/{}", named(&label, kind)),
+        kind,
+    )
+}
+
+/// A relative path with every segment cut to fit one name (spec/store.md §8 "Names"): a segment
+/// longer than [`NAME_BYTES`] keeps its first bytes (whole characters), then `~` and the first 16
+/// hex characters of the SHA-256 of the whole segment, then, on the last segment, the kind's
+/// suffix it ended with: `~` is never part of a converted name, so a cut name cannot be another
+/// one's whole name.
+pub fn capped(relative: &str, kind: &str) -> String {
+    let suffix = suffix_of_kind(kind);
+    let segments: Vec<&str> = relative.split('/').collect();
+    let last = segments.len().saturating_sub(1);
+    segments
+        .iter()
+        .enumerate()
+        .map(|(index, segment)| {
+            let kept = if index == last && !suffix.is_empty() {
+                suffix
+            } else {
+                ""
+            };
+            cap_segment(segment, kept)
+        })
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+/// One segment cut to [`NAME_BYTES`] (see [`capped`]), keeping `suffix` when it ends with it.
+fn cap_segment(segment: &str, suffix: &str) -> String {
+    if segment.len() <= NAME_BYTES {
+        return segment.to_string();
+    }
+    let suffix = if segment.ends_with(suffix) {
+        suffix
+    } else {
+        ""
+    };
+    let stem = &segment[..segment.len() - suffix.len()];
+    let digest = grida_fx_core::value::sha256_hex(segment.as_bytes());
+    let room = NAME_BYTES - 1 - 16 - suffix.len();
+    let mut cut = room.min(stem.len());
+    while !stem.is_char_boundary(cut) {
+        cut -= 1;
+    }
+    format!("{}~{}{suffix}", &stem[..cut], &digest[..16])
+}
+
+/// The files of a succeeded instance's outputs and where they go: `(relative path, digest)`.
+/// `takes` are the instance's ([`step_folder`]).
+pub fn step_files(
+    path: &str,
+    takes: &[u32],
+    outputs: &indexmap::IndexMap<String, Val>,
+) -> Vec<(String, String)> {
+    let step = step_folder(path, takes);
     let mut placed = Vec::new();
     for (port, value) in outputs {
         let files = files_of(value);
         if let [(file, _)] = files.as_slice() {
             placed.push((
-                format!("files/{step}/{}", named(port, &file.kind)),
+                step_file_path(&step, port, None, &file.kind),
                 file.digest.clone(),
             ));
             continue;
@@ -397,10 +557,7 @@ pub fn step_files(path: &str, outputs: &indexmap::IndexMap<String, Val>) -> Vec<
         for (index, (file, key)) in files.iter().enumerate() {
             let label = label_of(*key, index);
             placed.push((
-                format!(
-                    "files/{step}/{}",
-                    named(&format!("{port}/{label}"), &file.kind)
-                ),
+                step_file_path(&step, port, Some(&label), &file.kind),
                 file.digest.clone(),
             ));
         }
@@ -412,7 +569,7 @@ pub fn step_files(path: &str, outputs: &indexmap::IndexMap<String, Val>) -> Vec<
 pub fn output_files(name: &str, value: &Val) -> Vec<(String, String)> {
     if let Val::File(file) = value {
         return vec![(
-            format!("outputs/{}", named(name, &file.kind)),
+            capped(&format!("outputs/{}", named(name, &file.kind)), &file.kind),
             file.digest.clone(),
         )];
     }
@@ -422,7 +579,10 @@ pub fn output_files(name: &str, value: &Val) -> Vec<(String, String)> {
         .map(|(index, (file, key))| {
             let label = label_of(key, index);
             (
-                format!("outputs/{}", named(&format!("{name}/{label}"), &file.kind)),
+                capped(
+                    &format!("outputs/{}", named(&format!("{name}/{label}"), &file.kind)),
+                    &file.kind,
+                ),
                 file.digest.clone(),
             )
         })
@@ -483,12 +643,33 @@ mod tests {
     use super::*;
 
     #[test]
-    fn temporary_names_are_hidden_and_never_a_digest() {
-        let a = temporary_name("hero.png");
-        let b = temporary_name("hero.png");
-        assert!(a.starts_with(".hero.png.") && a.ends_with(".part"));
+    fn temporary_names_are_hidden_short_and_never_a_digest() {
+        let a = temporary_name();
+        let b = temporary_name();
+        assert!(a.starts_with('.') && a.ends_with(".part"), "{a}");
+        assert_eq!(a.len(), 22);
         assert_ne!(a, b);
         assert!(!is_digest(&a));
+        assert!(is_temporary_name(&a));
+    }
+
+    #[test]
+    fn temporary_names_are_told_from_others() {
+        assert!(is_temporary_name(".0123456789abcdef.part"));
+        assert!(is_temporary_name(".blob.11366-4.part"));
+        assert!(is_temporary_name(".hero.png.2-0.part"));
+        for name in [
+            "hero.png",
+            ".0123456789ABCDEF.part",
+            ".0123456789abcde.part",
+            ".blob.part",
+            ".blob.x-1.part",
+            ".blob.1-.part",
+            "0123456789abcdef.part",
+            ".blob.1-2.parts",
+        ] {
+            assert!(!is_temporary_name(name), "{name}");
+        }
     }
 
     #[test]

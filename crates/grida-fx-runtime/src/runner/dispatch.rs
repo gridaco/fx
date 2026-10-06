@@ -11,15 +11,17 @@
 //!    digest fails with `take <n> of <path> no longer produces the picked result <digest>; pick a
 //!    take again`. The first output file is the one `grida-fx pick` records: the value of the
 //!    first port, in canonical member order, whose value is one file;
-//! 4. succeeded: place each output file under `files/` (`folder::step_files`, `RunFolder::place`)
-//!    and emit `node_finished {id, path, cache, outputs: encoded, facts, duration_ms}`;
+//! 4. succeeded: place each output file under `files/` (`folder::step_files`, `RunFolder::place`:
+//!    the step's folder names its take when it has more than one) and emit `node_finished {id,
+//!    path, cache, outputs: encoded, facts, duration_ms}`;
 //!    skipped (a select with no candidate): `node_skipped {id, path, error, facts, duration_ms}`;
 //!    failed: `node_failed {id, path, error, facts, duration_ms}`. `duration_ms` covers every
 //!    attempt.
 //! 5. report [`Done`] to the loop. An attempt's `stop` is passed on; the loop stops the run.
 //!
-//! When `cancel` fires the attempt in flight is stopped by the executor; the dispatcher emits no
-//! terminal event for it (the run emits `run_cancelled`), and starts no new attempt. An attempt
+//! When `cancel` fires (the run is stopped, or the scheduler stops this one instance) the attempt
+//! in flight is stopped by the executor; the dispatcher emits no terminal event for it (the run
+//! emits `run_cancelled`, or the scheduler the instance's own), and starts no new attempt. An attempt
 //! that succeeded (or a select that skipped) before it noticed is kept as usual: only a failed
 //! attempt under a fired `cancel` counts as cancelled.
 //!
@@ -134,7 +136,8 @@ pub async fn dispatch(
     }
     let terminal = match result.status {
         ResultStatus::Succeeded => {
-            for (relative, digest) in crate::folder::step_files(&job.path, &result.outputs) {
+            let placed = crate::folder::step_files(&job.path, &job.takes, &result.outputs);
+            for (relative, digest) in placed {
                 let placed = super::place_file(&services.engine.store, &folder, &relative, &digest);
                 if let Err(sentence) = placed {
                     return Done::stopped(&job.id, result, sentence);

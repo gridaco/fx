@@ -9,7 +9,8 @@
 use grida_fx_core::money::Usd;
 use grida_fx_core::plan::make_plan;
 use grida_fx_core::project::{PlanRequest, make_planner};
-use grida_fx_providers::Adapters;
+use grida_fx_providers::fake::FakeAdapter;
+use grida_fx_providers::{Adapter, Adapters, Answer, BoxFuture, CallRequest, RequestAdapter, Sent};
 use grida_fx_runtime::engine::Engine;
 use grida_fx_runtime::events::read_events_tolerant;
 use grida_fx_runtime::folder::RunFolder;
@@ -39,6 +40,7 @@ fn real_python() -> Option<PathBuf> {
 
 const NODES: &str = r#"# Node types the runner tests use: small, local and deterministic.
 
+import asyncio
 import time
 
 from grida.fx import Ctx, node
@@ -47,6 +49,11 @@ from grida.fx import Ctx, node
 @node("shout", params={"text": str}, outputs={"text": "text"}, version=1)
 def shout(ctx: Ctx) -> dict:
     return {"text": ctx.out.text(ctx.params["text"].upper())}
+
+
+@node("upper", inputs={"text": "text"}, outputs={"text": "text"}, version=1)
+def upper(ctx: Ctx) -> dict:
+    return {"text": ctx.out.text(ctx.read.text("text").upper())}
 
 
 @node("join", inputs={"parts": "text{}"}, outputs={"text": "text"}, version=1)
@@ -97,6 +104,49 @@ def verdict(ctx: Ctx) -> dict:
 @node("needs_tool", outputs={"text": "text"}, tools=["fx-runner-test-missing-tool>=1"], version=1)
 def needs_tool(ctx: Ctx) -> dict:
     return {"text": ctx.out.text("never")}
+
+
+@node("flag", params={"value": str, "delay": float}, outputs={"text": "text"}, version=1)
+def flag(ctx: Ctx) -> dict:
+    time.sleep(ctx.params["delay"])
+    ctx.fact("flag", ctx.params["value"])
+    return {"text": ctx.out.text(ctx.params["value"])}
+
+
+@node(
+    "wraps",
+    params={"prompt": str},
+    outputs={"image": "image"},
+    calls={"image.generate": 1},
+    version=1,
+    retry="engine",
+)
+async def wraps(ctx: Ctx) -> dict:
+    try:
+        made = await ctx.image_generate(prompt=ctx.params["prompt"])
+    except Exception as error:
+        raise RuntimeError(f"generation failed: {error}")
+    return {"image": made.files["image"]}
+
+
+@node("paid_slowly", params={"prompt": str}, outputs={"image": "image"}, calls={"image.generate": 1}, version=1)
+async def paid_slowly(ctx: Ctx) -> dict:
+    made = await ctx.image_generate(prompt=ctx.params["prompt"])
+    return {"image": made.files["image"]}
+
+
+@node("asks_late", params={"prompt": str}, outputs={"image": "image"}, calls={"image.generate": 1}, version=1)
+async def asks_late(ctx: Ctx) -> dict:
+    while not ctx.cancelled:
+        await asyncio.sleep(0.02)
+    made = await ctx.image_generate(prompt=ctx.params["prompt"])
+    return {"image": made.files["image"]}
+
+
+@node("taken", params={"text": str}, outputs={"text": "text"}, version=1)
+def taken(ctx: Ctx) -> dict:
+    takes = ".".join(map(str, ctx.instance.takes))
+    return {"text": ctx.out.text(f"take {takes}: {ctx.params['text']}")}
 "#;
 
 const ROUTES: &str = "fx: routes/v1\nroutes:\n  - { capability: image.generate, route: img-a@acme, \
@@ -165,6 +215,10 @@ struct Invocation<'a> {
     folder: &'a str,
     yes_up_to: Option<&'a str>,
     live: bool,
+    /// `--max-usd`.
+    max_usd: Option<&'a str>,
+    /// The adapter serving `image.generate` on `acme`.
+    adapter: Option<Adapter>,
 }
 
 impl Default for Invocation<'_> {
@@ -175,6 +229,8 @@ impl Default for Invocation<'_> {
             folder: "runs/one",
             yes_up_to: None,
             live: false,
+            max_usd: None,
+            adapter: None,
         }
     }
 }
@@ -201,10 +257,14 @@ fn run_in(
         rest: Vec::new(),
         arguments: Default::default(),
         routes: vec!["routes.yaml".to_string()],
-        max_usd: None,
+        max_usd: invocation.max_usd.map(|text| Usd::parse(text).unwrap()),
     };
     let mut host = PythonHost::new().with_python(python.clone());
     let mut planner = make_planner(&request, &mut host).unwrap();
+    let mut adapters = Adapters::new();
+    if let Some(adapter) = invocation.adapter {
+        adapters.register("image.generate", "acme", adapter);
+    }
     let engine = Arc::new(Engine::new(
         runtime.handle().clone(),
         HostSpec {
@@ -215,7 +275,7 @@ fn run_in(
         },
         &planner.project.cache_dir(),
         2,
-        Adapters::new(),
+        adapters,
         invocation.live,
     ));
     let mut plan_time = PlanTime::new(Arc::clone(&engine));
@@ -886,6 +946,17 @@ fn a_live_run_without_a_ceiling_is_refused() {
 #[test]
 fn ctrl_c_cancels_the_run() {
     let _serial = serial();
+    // Ctrl-C, and SIGTERM the same way.
+    for signal in ["-INT", "-TERM"] {
+        if !cancelled_by(signal) {
+            return;
+        }
+    }
+}
+
+/// Runs a slow step and sends this process `signal` once it started; `false` when there is no
+/// Python to host nodes.
+fn cancelled_by(signal: &'static str) -> bool {
     let project = Project::new(&[(
         "case",
         "fx: workflow/v1\nid: case\ntitle: Slow\nsteps:\n  wait:\n    uses: \
@@ -903,7 +974,7 @@ fn ctrl_c_cancels_the_run() {
                 std::thread::sleep(Duration::from_millis(200));
                 let pid = std::process::id().to_string();
                 std::process::Command::new("kill")
-                    .args(["-INT", &pid])
+                    .args([signal, &pid])
                     .status()
                     .unwrap();
                 return;
@@ -914,10 +985,10 @@ fn ctrl_c_cancels_the_run() {
     });
     let begin = Instant::now();
     let Some(outcome) = run_in(&project, Invocation::default(), Some(interrupt)) else {
-        return;
+        return false;
     };
     let outcome = outcome.unwrap();
-    assert!(outcome.cancelled && !outcome.ok);
+    assert!(outcome.cancelled && !outcome.ok, "{signal}");
     assert!(outcome.outputs.is_empty());
     assert!(begin.elapsed() < Duration::from_secs(25));
     let events = project.events("runs/one");
@@ -930,4 +1001,440 @@ fn ctrl_c_cancels_the_run() {
             .any(|n| n == "run_finished" || n == "node_finished" || n == "node_failed")
     );
     assert!(!project.root.join("runs/one/outputs").exists());
+    true
+}
+
+// ------------------------------------------------------------------ paid calls and the end of a run
+
+/// An adapter that answers $0.01 with a one-byte image after `delay`, counting its sends.
+struct Slow {
+    delay: Duration,
+    sends: Arc<std::sync::atomic::AtomicU32>,
+}
+
+impl RequestAdapter for Slow {
+    fn send<'a>(&'a self, _call: &'a CallRequest) -> BoxFuture<'a, Sent> {
+        self.sends.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Box::pin(async move {
+            tokio::time::sleep(self.delay).await;
+            Sent::Answered(Answer::new(json!({}), Some(Usd(10_000))).with_file(
+                "image",
+                "image/png",
+                vec![1],
+            ))
+        })
+    }
+}
+
+fn budget(events: &[Value]) -> Vec<String> {
+    events
+        .iter()
+        .filter_map(|e| match e["event"].as_str()? {
+            name @ ("budget_reserved" | "budget_settled" | "node_failed" | "run_finished") => {
+                Some(name.to_string())
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_paid_call_left_by_a_timeout_settles_before_the_run_ends() {
+    let _serial = serial();
+    for uses in ["fx/image.generate@1", "./nodes/cases.py#paid_slowly"] {
+        let project = Project::new(&[(
+            "case",
+            &format!(
+                "fx: workflow/v1\nid: case\ntitle: A timeout\nsteps:\n  draw:\n    uses: \
+                 {uses}\n    timeout: 0.5\n    with: {{ prompt: lantern }}\n"
+            ),
+        )]);
+        let sends = Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let slow = Slow {
+            delay: Duration::from_millis(1500),
+            sends: Arc::clone(&sends),
+        };
+        let Some(outcome) = run_in(
+            &project,
+            Invocation {
+                live: true,
+                max_usd: Some("1"),
+                adapter: Some(Adapter::Request(Arc::new(slow))),
+                ..Invocation::default()
+            },
+            None,
+        ) else {
+            return;
+        };
+        let outcome = outcome.unwrap();
+        assert_eq!(
+            outcome.failed,
+            [(
+                "draw#1".to_string(),
+                Some("ran past 0.5 seconds".to_string())
+            )],
+            "{uses}"
+        );
+        // The call the step left went on, settled, and was counted before the run ended.
+        assert_eq!(outcome.charged, Usd(10_000), "{uses}");
+        let events = project.events("runs/one");
+        assert_eq!(
+            budget(&events),
+            [
+                "budget_reserved",
+                "node_failed",
+                "budget_settled",
+                "run_finished"
+            ],
+            "{uses}"
+        );
+        assert_eq!(events.last().unwrap()["charged_usd"], json!(0.01));
+        // Its answer is in the call cache: running again sends nothing and pays nothing more.
+        let fake = FakeAdapter::plain(Vec::new());
+        let again = run_in(
+            &project,
+            Invocation {
+                live: true,
+                max_usd: Some("1"),
+                adapter: Some(fake.as_request()),
+                ..Invocation::default()
+            },
+            None,
+        )
+        .unwrap()
+        .unwrap();
+        assert!(again.ok, "{uses}: {again:?}");
+        assert!(fake.log().is_empty());
+        assert_eq!(again.charged, Usd(10_000));
+        assert_eq!(sends.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+}
+
+#[test]
+fn a_body_past_its_deadline_can_make_no_paid_call() {
+    let _serial = serial();
+    let project = Project::new(&[(
+        "case",
+        "fx: workflow/v1\nid: case\ntitle: Late\nsteps:\n  draw:\n    uses: \
+         ./nodes/cases.py#asks_late\n    timeout: 0.5\n    with: { prompt: lantern }\n",
+    )]);
+    let fake = FakeAdapter::plain(Vec::new());
+    let Some(outcome) = run_in(
+        &project,
+        Invocation {
+            live: true,
+            max_usd: Some("1"),
+            adapter: Some(fake.as_request()),
+            ..Invocation::default()
+        },
+        None,
+    ) else {
+        return;
+    };
+    let outcome = outcome.unwrap();
+    assert_eq!(
+        outcome.failed,
+        [(
+            "draw#1".to_string(),
+            Some("ran past 0.5 seconds".to_string())
+        )]
+    );
+    assert!(fake.log().is_empty());
+    let events = project.events("runs/one");
+    assert!(named(&events, "budget_reserved").is_empty());
+    assert_eq!(outcome.charged, Usd(0));
+}
+
+#[test]
+fn reruns_of_a_body_never_send_a_call_that_failed_again() {
+    let _serial = serial();
+    let project = Project::new(&[(
+        "case",
+        "fx: workflow/v1\nid: case\ntitle: Reruns\nsteps:\n  draw:\n    uses: \
+         ./nodes/cases.py#wraps\n    with: { prompt: lantern }\n",
+    )]);
+    let failing = FakeAdapter::plain(
+        (0..10)
+            .map(|_| Sent::Failed {
+                reason: "provider 400".into(),
+                cost: None,
+                retryable: false,
+            })
+            .collect(),
+    );
+    let Some(outcome) = run_in(
+        &project,
+        Invocation {
+            live: true,
+            max_usd: Some("1"),
+            adapter: Some(failing.as_request()),
+            ..Invocation::default()
+        },
+        None,
+    ) else {
+        return;
+    };
+    let outcome = outcome.unwrap();
+    assert!(!outcome.ok);
+    let events = project.events("runs/one");
+    // Six runs of the body, one request sent and paid for.
+    assert_eq!(named(&events, "node_retry").len(), 5);
+    assert_eq!(failing.log().len(), 1);
+    assert_eq!(named(&events, "budget_reserved").len(), 1);
+    assert_eq!(outcome.charged, Usd(40_000));
+}
+
+// ------------------------------------------------------------------ run-time assertions
+
+/// A step asserting over another step's fact: `flagger` reports `flag: no` after `delay`
+/// seconds, and `strict` runs `work`.
+fn asserted(delay: &str, work: &str) -> String {
+    format!(
+        "fx: workflow/v1
+id: case
+title: A run-time assertion
+steps:
+  flagger:
+    uses: ./nodes/cases.py#flag
+    with: {{ value: \"no\", delay: {delay} }}
+  strict:
+    uses: ./nodes/cases.py#{work}
+    with: {{ text: s }}
+    assert:
+      - check: ${{{{ steps.flagger.facts.flag == 'yes' }}}}
+        message: \"flag is ${{{{ steps.flagger.facts.flag }}}}\"
+  after:
+    uses: ./nodes/cases.py#shout
+    with: {{ text: \"${{{{ steps.strict.outputs.text }}}}\" }}
+"
+    )
+}
+
+#[test]
+fn an_assertion_decided_after_its_step_ran_fails_the_step() {
+    let _serial = serial();
+    // `strict` either ends before `flagger` reports (`shout`) or is still running (`slow`).
+    for (delay, work) in [("0.6", "shout"), ("0", "slow")] {
+        let project = Project::new(&[("case", &asserted(delay, work))]);
+        let Some(outcome) = run_in(&project, Invocation::default(), None) else {
+            return;
+        };
+        let outcome = outcome.unwrap();
+        assert!(!outcome.ok, "{work}");
+        assert_eq!(
+            outcome.failed.first(),
+            Some(&("strict#1".to_string(), Some("flag is no".to_string()))),
+            "{work}: {:?}",
+            outcome.failed
+        );
+        let events = project.events("runs/one");
+        let last = events
+            .iter()
+            .rev()
+            .find(|e| e["id"] == json!("strict#1"))
+            .unwrap();
+        assert_eq!(last["event"], json!("node_failed"), "{work}");
+        assert_eq!(last["error"], json!("flag is no"));
+        // Resuming keeps the failure: the step's result is the assertion's.
+        let again = run_in(&project, Invocation::default(), None)
+            .unwrap()
+            .unwrap();
+        assert!(
+            again
+                .failed
+                .iter()
+                .any(|(id, error)| id == "strict#1" && error.as_deref() == Some("flag is no")),
+            "{work}: {:?}",
+            again.failed
+        );
+    }
+}
+
+#[test]
+fn a_step_whose_assertion_skips_it_is_held_and_its_readers_never_run() {
+    let _serial = serial();
+    // `lenient` reads nothing through `with:`; only its assertion waits for `flagger`, which
+    // reports late. Dispatched at once, `lenient` and `after` would both have run.
+    let project = Project::new(&[(
+        "case",
+        "fx: workflow/v1
+id: case
+title: A run-time assertion that skips its step
+steps:
+  flagger:
+    uses: ./nodes/cases.py#flag
+    with: { value: \"no\", delay: 0.4 }
+  lenient:
+    uses: ./nodes/cases.py#shout
+    with: { text: l }
+    assert:
+      - check: ${{ steps.flagger.facts.flag == 'yes' }}
+        message: \"flag is ${{ steps.flagger.facts.flag }}\"
+        on_fail: skip
+  after:
+    uses: ./nodes/cases.py#upper
+    with: { text: \"${{ steps.lenient.outputs.text }}\" }
+",
+    )]);
+    let Some(outcome) = run_in(&project, Invocation::default(), None) else {
+        return;
+    };
+    let outcome = outcome.unwrap();
+    assert!(outcome.ok, "{outcome:?}");
+    let events = project.events("runs/one");
+    let started: Vec<&str> = named(&events, "node_started")
+        .iter()
+        .filter_map(|e| e["id"].as_str())
+        .collect();
+    assert_eq!(started, ["flagger#1"], "{outcome:?}");
+    for id in ["lenient#1", "after#1"] {
+        assert!(
+            !events
+                .iter()
+                .any(|e| e["id"] == json!(id) && e["event"] == json!("node_finished")),
+            "{id} ran: {outcome:?}"
+        );
+    }
+}
+
+// ------------------------------------------------------------------ the record and the folder
+
+#[test]
+fn every_take_of_a_step_is_placed_where_inspect_finds_it() {
+    let _serial = serial();
+    let project = Project::new(&[(
+        "case",
+        "fx: workflow/v1
+id: case
+title: Takes
+steps:
+  draw:
+    uses: ./nodes/cases.py#taken
+    with: { text: lantern }
+  check:
+    uses: ./nodes/cases.py#verdict
+    judges: draw
+    with: { subject: \"${{ steps.draw.outputs.text }}\", accept_take: 2 }
+    on_reject: { regenerate: { max: 3, then: fail } }
+outputs:
+  kept: ${{ steps.draw.outputs.text }}
+",
+    )]);
+    let Some(outcome) = run_in(&project, Invocation::default(), None) else {
+        return;
+    };
+    let outcome = outcome.unwrap();
+    assert!(outcome.ok, "{outcome:?}");
+    let events = project.events("runs/one");
+    let finished: Vec<&Value> = named(&events, "node_finished")
+        .into_iter()
+        .filter(|e| e["path"] == json!("draw"))
+        .collect();
+    assert_eq!(finished.len(), 2);
+    for event in finished {
+        let id = event["id"].as_str().unwrap();
+        let takes = grida_fx_runtime::folder::takes_of_id(id);
+        let folder = grida_fx_runtime::folder::step_folder("draw", &takes);
+        let digest = event["outputs"]["text"]["file"]["digest"].as_str().unwrap();
+        let bytes = std::fs::read(
+            project
+                .root
+                .join("runs/one/files")
+                .join(&folder)
+                .join("text.txt"),
+        )
+        .unwrap();
+        assert_eq!(grida_fx_core::value::file_digest(&bytes), digest, "{id}");
+    }
+    assert!(
+        project
+            .root
+            .join("runs/one/files/draw#2/text.txt")
+            .is_file()
+    );
+}
+
+#[test]
+fn a_folder_with_another_plans_events_is_refused() {
+    let _serial = serial();
+    let project = Project::new(&[("case", CASE)]);
+    let Some(first) = run_in(
+        &project,
+        Invocation {
+            inputs: &["inputs.yaml"],
+            ..Invocation::default()
+        },
+        None,
+    ) else {
+        return;
+    };
+    assert!(first.unwrap().ok);
+    // The record names another plan (as an invocation racing this one would have left it).
+    let events = project.root.join("runs/one/events.jsonl");
+    let text = std::fs::read_to_string(&events).unwrap();
+    let digest = project.events("runs/one")[0]["plan"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let first_line = text
+        .lines()
+        .next()
+        .unwrap()
+        .replace(&digest, &"0".repeat(64));
+    std::fs::write(&events, format!("{first_line}\n{text}")).unwrap();
+    let refused = run_in(
+        &project,
+        Invocation {
+            inputs: &["inputs.yaml"],
+            ..Invocation::default()
+        },
+        None,
+    )
+    .unwrap();
+    assert_eq!(
+        refused,
+        Err(RunError::Refused(
+            "runs/one holds a run of another workflow or other inputs; choose a new folder".into()
+        ))
+    );
+}
+
+#[test]
+fn a_torn_last_line_is_left_out_and_the_run_goes_on() {
+    let _serial = serial();
+    let project = Project::new(&[("case", CASE)]);
+    let Some(first) = run_in(
+        &project,
+        Invocation {
+            inputs: &["inputs.yaml"],
+            ..Invocation::default()
+        },
+        None,
+    ) else {
+        return;
+    };
+    assert!(first.unwrap().ok);
+    let events = project.root.join("runs/one/events.jsonl");
+    let mut text = std::fs::read_to_string(&events).unwrap();
+    let lines = text.lines().count();
+    text.push_str("{\"kind\":\"fx-run-events-v1\",\"event\":\"node_sta");
+    std::fs::write(&events, text).unwrap();
+    let again = run_in(
+        &project,
+        Invocation {
+            inputs: &["inputs.yaml"],
+            ..Invocation::default()
+        },
+        None,
+    )
+    .unwrap()
+    .unwrap();
+    assert!(again.ok);
+    let after = project.events("runs/one");
+    assert!(after.len() > lines);
+    let text = std::fs::read_to_string(&events).unwrap();
+    assert!(
+        text.lines()
+            .all(|line| serde_json::from_str::<Value>(line).is_ok())
+    );
 }

@@ -14,8 +14,12 @@
 //!    without creating a folder.
 //! 4. The folder: `--run` relative to the working directory, named as typed; else
 //!    `folder::new_folder` under the planning project's runs folder, named relative to the
-//!    working directory. The plan text is printed, then `runner::run` with the takes file
-//!    relative to the planning project (`plan.json` records it for `reroll` and `pick`).
+//!    working directory: it makes the folder, so invocations starting at once never share one
+//!    (one that cannot be made is an error, exit 2). The refusals that need no folder
+//!    (`runner::refused`) come first, so a refused run makes none, and a run refused after the
+//!    folder was made, before it wrote anything there, removes it again. The plan text is
+//!    printed, then `runner::run` with the takes file relative to the planning project
+//!    (`plan.json` records it for `reroll` and `pick`).
 //! 5. `RunError::Refused` prints `refused: <message>` on stdout, exit 1; `RunError::Fatal` is an
 //!    error (exit 2). A cancelled run (Ctrl-C) exits 130 and prints nothing more.
 //! 6. The summary, each label padded to 10 columns: `run       <folder as named>`, `result    ok
@@ -127,22 +131,39 @@ fn plan_and_run(
         print_line(&text);
         return Ok(1);
     }
-    let (folder, label) = match &args.run {
-        Some(typed) => (cwd.join(typed), typed.clone()),
+    if let Some(message) = runner::refused(&plan, engine.live) {
+        // Before any folder is made.
+        print_line(&text);
+        print_line(&format!("refused: {message}"));
+        return Ok(1);
+    }
+    let (folder, label, made) = match &args.run {
+        Some(typed) => (cwd.join(typed), typed.clone(), false),
         None => {
-            let folder = new_folder(&planner.project.runs_dir(), &planner.workflow.workflow.id);
+            let runs = planner.project.runs_dir();
+            let folder = new_folder(&runs, &planner.workflow.workflow.id).map_err(|error| {
+                Error::io(
+                    &shown_path(&runs.join(&planner.workflow.workflow.id), cwd),
+                    &error,
+                )
+            })?;
             let label = shown_path(&folder, cwd);
-            (folder, label)
+            (folder, label, true)
         }
     };
     print_line(&text);
     let options = RunOptions {
-        folder,
+        folder: folder.clone(),
         label: label.clone(),
         yes_up_to,
         takes_file: takes_file(planner),
     };
-    let outcome = match runner::run(Arc::clone(engine), planner, host, plan, options) {
+    let ran = runner::run(Arc::clone(engine), planner, host, plan, options);
+    if made && ran.is_err() {
+        // Refused before anything was written: the new folder goes again (only while empty).
+        let _ = std::fs::remove_dir(&folder);
+    }
+    let outcome = match ran {
         Ok(outcome) => outcome,
         Err(RunError::Refused(message)) => {
             print_line(&format!("refused: {message}"));

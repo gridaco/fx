@@ -1132,6 +1132,42 @@ steps:
 }
 
 #[test]
+fn a_pending_assertion_holds_its_step_until_it_can_be_decided() {
+    let mut case = Case::new(&[(
+        "case",
+        r#"fx: workflow/v1
+id: case
+title: Run-time assertions
+steps:
+  probe:
+    uses: ./nodes/cases.py#shout
+    with: { text: p }
+  lenient:
+    uses: ./nodes/cases.py#shout
+    with: { text: l }
+    assert:
+      - check: ${{ steps.probe.outputs.text == 'yes' }}
+        message: "probe said ${{ steps.probe.outputs.text }}"
+        on_fail: skip
+"#,
+    )]);
+    let expansion = case.expand("case");
+    assert_eq!(problems(&expansion), []);
+    // The check waits for probe, so lenient is held until probe has run; nothing its `with:`
+    // reads would have held it.
+    let lenient = instance(&expansion, "lenient#1");
+    assert_eq!(lenient.state, State::Planned);
+    assert_eq!(lenient.reads, set(&["probe#1"]));
+    assert_eq!(lenient.inputs_from(), set(&["probe#1"]));
+
+    case.done("probe#1", &[("text", Val::Str("no".into()))]);
+    // Decided: the check failed and says skip, so the step is left out.
+    let expansion = case.expand("case");
+    assert_eq!(problems(&expansion), []);
+    assert_eq!(ids(&expansion), ["probe#1"]);
+}
+
+#[test]
 fn a_regenerating_group_lists_its_takes() {
     let case = Case::new(&[(
         "case",

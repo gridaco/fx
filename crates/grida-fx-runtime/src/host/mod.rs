@@ -33,6 +33,10 @@
 //! give the same sentence without starting it again, until `open_project` names another
 //! project. A host request during `describe` or `build` is answered `-32601`.
 //!
+//! A host that exits while answering is seen to exit by its process, not by the end of its output
+//! (a process it forked may hold the pipes): `the node host exited with status <n> while
+//! answering describe`, or `… was killed by signal 11 (SIGSEGV) …` ([`exit_text`]).
+//!
 //! `PythonHost` is synchronous: it runs its [`process::HostProcess`] on the runtime given to
 //! [`PythonHost::with_handle`], else on a current-thread runtime of its own built on first use,
 //! and blocks on each request. It must not be called from a thread that runs asynchronous tasks
@@ -50,6 +54,7 @@ use grida_fx_core::host::{HostFailure, NodeHost};
 use grida_fx_protocol::{
     BuildParams, BuildResult, DescribeParams, DescribeResult, InitializeResult, PROTOCOL, method,
 };
+pub use process::end_every_host;
 use process::{HostProcess, HostSpec};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -194,31 +199,52 @@ impl PythonHost {
         Ok(())
     }
 
-    /// Sends one request of the engine's and reads its result.
+    /// Sends one request of the engine's and reads its result, or sees the host exit.
     fn call<P, R>(&mut self, method: &str, params: &P) -> Result<R, HostFailure>
     where
         P: Serialize,
         R: DeserializeOwned,
     {
         let params = serde_json::to_value(params).map_err(|e| {
-            HostFailure::Unavailable(format!("the {method} request cannot be written: {e}"))
+            HostFailure::Unavailable(format!(
+                "the {method} request cannot be written: {}",
+                read_reason(&e)
+            ))
         })?;
-        let connection = self.start()?;
-        let answer = self
-            .block_on(async move { connection.request(method, Some(params)).await })
-            .map_err(|message| self.broke(message))?;
+        self.start()?;
+        let Some(mut process) = self.process.take() else {
+            return Err(HostFailure::Unavailable(
+                "the node host is not running".into(),
+            ));
+        };
+        let asked = self.block_on(async move {
+            let connection = process.connection().clone();
+            let request = connection.request(method, Some(params));
+            tokio::pin!(request);
+            let answer = process.answer_or_exit(request, GRACE).await;
+            (process, answer)
+        });
+        let answer = match asked {
+            Ok((process, answer)) => {
+                self.process = Some(process);
+                answer
+            }
+            // The process was dropped with the request, which killed it.
+            Err(message) => return Err(self.broke(message)),
+        };
         match answer {
             Ok(value) => serde_json::from_value(value).map_err(|e| {
                 self.broke(format!(
-                    "the Python node host answered {method} with a result FX cannot read: {e}"
+                    "the Python node host answered {method} with a result FX cannot read: {}",
+                    read_reason(&e)
                 ))
             }),
             Err(ConnectionError::Rpc(error)) => Err(HostFailure::Rpc(error)),
             Err(ConnectionError::Closed) => {
                 let status = self.end_process();
                 let message = format!(
-                    "the node host exited{} while answering {method}",
-                    exited_with(status)
+                    "the node host {} while answering {method}",
+                    exit_text(status)
                 );
                 self.failure = Some(message.clone());
                 Err(HostFailure::Unavailable(message))
@@ -378,12 +404,167 @@ fn upgrade(host_protocol: &str) -> &'static str {
     }
 }
 
-/// ` with status <n>`, or nothing when the status is not known.
-fn exited_with(status: Option<ExitStatus>) -> String {
-    match status.and_then(|s| s.code()) {
-        Some(code) => format!(" with status {code}"),
-        None => String::new(),
+/// How a host ended, for a sentence that starts `the node host`: `exited with status 3`, `was
+/// killed by signal 11 (SIGSEGV)`, or `exited` when the status is not known.
+pub fn exit_text(status: Option<ExitStatus>) -> String {
+    let Some(status) = status else {
+        return "exited".into();
+    };
+    if let Some(code) = status.code() {
+        return format!("exited with status {code}");
     }
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        if let Some(signal) = status.signal() {
+            return match signal_name(signal) {
+                Some(name) => format!("was killed by signal {signal} ({name})"),
+                None => format!("was killed by signal {signal}"),
+            };
+        }
+    }
+    "exited".into()
+}
+
+/// The name of a signal by its number on this platform, for the signals a process commonly dies
+/// of.
+#[cfg(unix)]
+fn signal_name(signal: i32) -> Option<&'static str> {
+    let name = match signal {
+        1 => "SIGHUP",
+        2 => "SIGINT",
+        3 => "SIGQUIT",
+        4 => "SIGILL",
+        5 => "SIGTRAP",
+        6 => "SIGABRT",
+        8 => "SIGFPE",
+        9 => "SIGKILL",
+        11 => "SIGSEGV",
+        13 => "SIGPIPE",
+        14 => "SIGALRM",
+        15 => "SIGTERM",
+        24 => "SIGXCPU",
+        25 => "SIGXFSZ",
+        _ => return platform_signal_name(signal),
+    };
+    Some(name)
+}
+
+/// The signals whose numbers differ between Linux and the BSDs.
+#[cfg(all(unix, any(target_os = "linux", target_os = "android")))]
+fn platform_signal_name(signal: i32) -> Option<&'static str> {
+    match signal {
+        7 => Some("SIGBUS"),
+        10 => Some("SIGUSR1"),
+        12 => Some("SIGUSR2"),
+        31 => Some("SIGSYS"),
+        _ => None,
+    }
+}
+
+/// The signals whose numbers differ between Linux and the BSDs.
+#[cfg(all(unix, not(any(target_os = "linux", target_os = "android"))))]
+fn platform_signal_name(signal: i32) -> Option<&'static str> {
+    match signal {
+        10 => Some("SIGBUS"),
+        12 => Some("SIGSYS"),
+        30 => Some("SIGUSR1"),
+        31 => Some("SIGUSR2"),
+        _ => None,
+    }
+}
+
+/// Why a value could not be read, as a sentence for a person: what the reader found where it
+/// expected what, without the reader's type names, quoting or positions (`it holds a list where
+/// an object belongs`, `it has no outputs`, `it has none of the shapes FX reads there`).
+pub fn read_reason(error: &serde_json::Error) -> String {
+    let text = error.to_string();
+    let text = match text.rfind(" at line ") {
+        Some(at) if text[at..].contains(" column ") => &text[..at],
+        _ => text.as_str(),
+    };
+    let found_where = |rest: &str| {
+        rest.split_once(", expected ").map(|(found, expected)| {
+            format!(
+                "it holds {} where {} belongs",
+                found_text(found),
+                expected_text(expected)
+            )
+        })
+    };
+    if let Some(sentence) = text.strip_prefix("invalid type: ").and_then(found_where) {
+        return sentence;
+    }
+    if let Some(sentence) = text.strip_prefix("invalid value: ").and_then(found_where) {
+        return sentence;
+    }
+    if let Some(name) = text.strip_prefix("missing field ") {
+        return format!("it has no {}", unquote(name));
+    }
+    if let Some(rest) = text.strip_prefix("unknown field ") {
+        let name = rest.split(", ").next().unwrap_or(rest);
+        return format!("{} is not one of its fields", unquote(name));
+    }
+    if let Some(rest) = text.strip_prefix("unknown variant ") {
+        let name = rest.split(", expected").next().unwrap_or(rest);
+        return format!("{} is not one of the values it takes", unquote(name));
+    }
+    if let Some(name) = text.strip_prefix("duplicate field ") {
+        return format!("it names {} twice", unquote(name));
+    }
+    if text.starts_with("invalid length ") {
+        return "it holds the wrong number of items".into();
+    }
+    if text.starts_with("data did not match any variant of untagged enum") {
+        return "it has none of the shapes FX reads there".into();
+    }
+    text.replace('`', "")
+}
+
+/// What a reader found, in the words of JSON (see [`read_reason`]).
+fn found_text(found: &str) -> String {
+    let number = |rest: &str| format!("the number {}", unquote(rest));
+    match found {
+        "sequence" => "a list".into(),
+        "map" => "an object".into(),
+        "null" | "unit value" | "unit" | "Option value" => "null".into(),
+        _ => {
+            if let Some(rest) = found.strip_prefix("string ") {
+                format!("the text {rest}")
+            } else if let Some(rest) = found.strip_prefix("integer ") {
+                number(rest)
+            } else if let Some(rest) = found.strip_prefix("floating point ") {
+                number(rest)
+            } else if let Some(rest) = found.strip_prefix("boolean ") {
+                unquote(rest)
+            } else {
+                unquote(found)
+            }
+        }
+    }
+}
+
+/// What a reader expected, in the words of JSON (see [`read_reason`]).
+fn expected_text(expected: &str) -> String {
+    match expected {
+        "a map" | "a JSON object" => "an object".into(),
+        "a sequence" => "a list".into(),
+        "a string" | "a borrowed string" | "a character" | "a char" => "text".into(),
+        "a boolean" => "true or false".into(),
+        "unit" => "null".into(),
+        "u8" | "u16" | "u32" | "u64" | "u128" | "usize" | "i8" | "i16" | "i32" | "i64" | "i128"
+        | "isize" => "a whole number".into(),
+        "f32" | "f64" => "a number".into(),
+        _ if expected.starts_with("struct ") => "an object".into(),
+        _ if expected.starts_with("a tuple") => "a list".into(),
+        _ if expected.starts_with("enum ") => "one of the values it takes".into(),
+        _ => unquote(expected),
+    }
+}
+
+/// A name without serde's backticks.
+fn unquote(text: &str) -> String {
+    text.replace('`', "")
 }
 
 #[cfg(test)]
@@ -410,6 +591,98 @@ mod tests {
         );
         assert!(mismatch(None, "something-else").ends_with(": upgrade grida"));
         assert!(mismatch(Some(""), "fx-node-protocol-v12").ends_with(": upgrade grida-fx"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn exits_and_signals_are_sentences() {
+        use std::os::unix::process::ExitStatusExt;
+        // A wait status: the exit code in the second byte, else the signal in the low bits.
+        let exited = |code: i32| Some(ExitStatus::from_raw(code << 8));
+        let killed = |signal: i32| Some(ExitStatus::from_raw(signal));
+        assert_eq!(exit_text(exited(3)), "exited with status 3");
+        assert_eq!(exit_text(exited(0)), "exited with status 0");
+        assert_eq!(exit_text(killed(11)), "was killed by signal 11 (SIGSEGV)");
+        assert_eq!(exit_text(killed(9)), "was killed by signal 9 (SIGKILL)");
+        assert_eq!(exit_text(killed(6)), "was killed by signal 6 (SIGABRT)");
+        assert_eq!(exit_text(killed(15)), "was killed by signal 15 (SIGTERM)");
+        assert!(exit_text(killed(10)).starts_with("was killed by signal 10 (SIG"));
+        assert_eq!(exit_text(killed(64)), "was killed by signal 64");
+        assert_eq!(exit_text(None), "exited");
+    }
+
+    #[test]
+    fn reasons_read_as_sentences() {
+        use serde::Deserialize;
+        #[derive(Debug, Deserialize)]
+        #[serde(deny_unknown_fields)]
+        #[allow(dead_code)]
+        struct Shape {
+            modules: Vec<String>,
+            count: u32,
+            kind: Kind,
+        }
+        #[derive(Debug, Deserialize)]
+        #[serde(rename_all = "lowercase")]
+        #[allow(dead_code)]
+        enum Kind {
+            One,
+        }
+        #[derive(Debug, Deserialize)]
+        #[serde(untagged)]
+        #[allow(dead_code)]
+        enum Either {
+            Text(String),
+            Number(u32),
+        }
+        let reason = |value: serde_json::Value| {
+            read_reason(&serde_json::from_value::<Shape>(value).unwrap_err())
+        };
+        assert_eq!(
+            reason(serde_json::json!(5)),
+            "it holds the number 5 where an object belongs"
+        );
+        assert_eq!(
+            reason(serde_json::json!([])),
+            "it holds the wrong number of items"
+        );
+        assert_eq!(
+            reason(serde_json::json!({"modules": "none", "count": 1, "kind": "one"})),
+            "it holds the text \"none\" where a list belongs"
+        );
+        assert_eq!(
+            reason(serde_json::json!({"modules": [], "count": -1, "kind": "one"})),
+            "it holds the number -1 where a whole number belongs"
+        );
+        assert_eq!(
+            reason(serde_json::json!({"modules": [], "kind": "one"})),
+            "it has no count"
+        );
+        assert_eq!(
+            reason(serde_json::json!({"modules": [], "count": 1, "kind": "one", "x": 1})),
+            "x is not one of its fields"
+        );
+        assert_eq!(
+            reason(serde_json::json!({"modules": [], "count": 1, "kind": "two"})),
+            "two is not one of the values it takes"
+        );
+        assert_eq!(
+            read_reason(&serde_json::from_value::<Either>(serde_json::json!([1])).unwrap_err()),
+            "it has none of the shapes FX reads there"
+        );
+        assert_eq!(
+            read_reason(&serde_json::from_str::<Shape>("{\"modules\": true}").unwrap_err()),
+            "it holds true where a list belongs"
+        );
+        for text in ["[]", "{\"modules\": null}", "{\"modules\": [1.5]}"] {
+            let reason = read_reason(&serde_json::from_str::<Shape>(text).unwrap_err());
+            assert!(
+                !reason.contains('`')
+                    && !reason.contains(" at line ")
+                    && !reason.contains("struct"),
+                "{reason}"
+            );
+        }
     }
 
     #[test]

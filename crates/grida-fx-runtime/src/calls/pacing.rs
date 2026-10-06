@@ -11,7 +11,12 @@
 //! Both wait cancellably: a cancelled wait returns `None` and holds no slot. A start it had
 //! already been given under `requests_per_minute` stays taken, so the next request on the route
 //! waits as if it had been sent.
+//!
+//! [`Pacing`] is the one piece of call state every invocation has (`Services::pacing`), so it also
+//! carries the invocation's [`Flights`]: its calls in flight by key, the keys that ended for good,
+//! and how many calls are running (`super::flights`).
 
+use super::flights::Flights;
 use crate::engine::Cancel;
 use grida_fx_providers::BoxFuture;
 use std::collections::HashMap;
@@ -20,11 +25,12 @@ use std::time::Duration;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio::time::Instant;
 
-/// The pacing state of one invocation.
+/// The pacing state of one invocation, and its calls (module doc).
 #[derive(Debug, Default)]
 pub struct Pacing {
     slots: Mutex<HashMap<String, Arc<Semaphore>>>,
     next_start: Mutex<HashMap<String, Instant>>,
+    flights: Arc<Flights>,
 }
 
 /// A held route slot; dropping it frees the slot.
@@ -68,6 +74,11 @@ impl Admission for Pacing {
 impl Pacing {
     pub fn new() -> Pacing {
         Pacing::default()
+    }
+
+    /// The invocation's calls (module doc).
+    pub fn flights(&self) -> &Arc<Flights> {
+        &self.flights
     }
 
     /// Waits for a slot of `route_id` (no limit: at once) and then for its next start under

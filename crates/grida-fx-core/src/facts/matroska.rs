@@ -13,9 +13,14 @@
 //!
 //! An EBML stream that does not parse is refused with `not a Matroska or WebM file (<reason>)`.
 //! Every size is checked against the bytes present before it is used; nothing is allocated from
-//! a declared size, and elements are only descended into at the levels these facts need.
+//! a declared size, and elements are only descended into at the levels these facts need. Of a
+//! block only its header is read (track number, timecode, flags and lace sizes), and of the
+//! first frame only what its codec's rule reads, so the frames themselves are never read.
 
-use super::{VideoFacts, ffv1, png_has_alpha, round6};
+use super::ffv1::{self, FRAME_HEADER_BYTES, Frame};
+use super::source::{Fail, Source};
+use super::{VideoFacts, png_has_alpha, round6};
+use std::io::{self, Cursor, Read, Seek};
 
 const EBML: u32 = 0x1A45_DFA3;
 const DOC_TYPE: u32 = 0x4282;
@@ -52,7 +57,7 @@ const LEVEL_ONE: [u32; 10] = [
     SEGMENT,
 ];
 /// Codecs that never decode with alpha.
-const NO_ALPHA_CODECS: [&str; 11] = [
+const NO_ALPHA_CODECS: [&str; 12] = [
     "V_VP8",
     "V_VP9",
     "V_AV1",
@@ -64,15 +69,35 @@ const NO_ALPHA_CODECS: [&str; 11] = [
     "V_MPEG1",
     "V_MPEG2",
     "V_THEORA",
+    "V_MJPEG",
 ];
 /// `BITMAPINFOHEADER` compression codes of PNG in `V_MS/VFW/FOURCC`.
 const PNG_FOURCCS: [&[u8; 4]; 3] = [b"MPNG", b"PNG1", b"png "];
+/// The size of a `BITMAPINFOHEADER`, the least `CodecPrivate` of `V_MS/VFW/FOURCC` that is read.
+const BITMAP_INFO: u64 = 40;
+/// The most bytes of a string element kept: more than any `DocType` or `CodecID` compared.
+const TEXT_BYTES: usize = 64;
+/// The bytes of a string element read at a time.
+const TEXT_WINDOW: u64 = 64 * 1024;
 /// The largest denominator of a frame rate read from `DefaultDuration` (spec/facts.md §5.2).
 const RATE_DENOMINATOR: u128 = 1001;
 
 /// The facts of `bytes` read as Matroska or WebM (module doc).
 pub fn matroska_facts(bytes: &[u8]) -> Result<Option<VideoFacts>, String> {
-    read(bytes).map_err(|reason| format!("not a Matroska or WebM file ({reason})"))
+    let mut source = Source::new(Cursor::new(bytes)).map_err(|error| error.to_string())?;
+    read(&mut source).map_err(|fail| match fail {
+        Fail::Refused(reason) => reason,
+        Fail::Io(error) => error.to_string(),
+    })
+}
+
+/// The facts of a Matroska or WebM file read through `source` (module doc); a refusal's reason
+/// carries its prefix.
+pub(crate) fn read<R: Read + Seek>(source: &mut Source<R>) -> Result<Option<VideoFacts>, Fail> {
+    segment(source).map_err(|fail| match fail {
+        Fail::Refused(reason) => Fail::Refused(format!("not a Matroska or WebM file ({reason})")),
+        io => io,
+    })
 }
 
 /// Why a variable-size integer could not be read.
@@ -81,25 +106,39 @@ enum VintError {
     Short,
     /// Its first byte is 0.
     Invalid,
+    /// Reading the file failed.
+    Io(io::Error),
+}
+
+impl From<io::Error> for VintError {
+    fn from(error: io::Error) -> Self {
+        VintError::Io(error)
+    }
 }
 
 /// `(value without its marker, length, every value bit set)` of the variable-size integer at
 /// `at`, which must end by `end`.
-fn vint(file: &[u8], at: usize, end: usize) -> Result<(u64, usize, bool), VintError> {
+fn vint<R: Read + Seek>(
+    source: &mut Source<R>,
+    at: u64,
+    end: u64,
+) -> Result<(u64, u64, bool), VintError> {
     if at >= end {
         return Err(VintError::Short);
     }
-    let first = file[at];
+    let first = source.byte(at)?;
     if first == 0 {
         return Err(VintError::Invalid);
     }
-    let length = first.leading_zeros() as usize + 1;
+    let length = u64::from(first.leading_zeros()) + 1;
     if at + length > end {
         return Err(VintError::Short);
     }
     let mut value = u64::from(first) & (0xFF >> length);
-    for &byte in &file[at + 1..at + length] {
-        value = value << 8 | u64::from(byte);
+    if length > 1 {
+        for &byte in source.bytes(at + 1, (length - 1) as usize)? {
+            value = value << 8 | u64::from(byte);
+        }
     }
     let all_ones = value == (1u64 << (7 * length)) - 1;
     Ok((value, length, all_ones))
@@ -110,36 +149,35 @@ fn vint(file: &[u8], at: usize, end: usize) -> Result<(u64, usize, bool), VintEr
 #[derive(Debug, Clone, Copy)]
 struct Header {
     id: u32,
-    at: usize,
-    content: usize,
+    at: u64,
+    content: u64,
     size: Option<u64>,
 }
 
-fn header(file: &[u8], at: usize, end: usize) -> Result<Header, String> {
+fn header<R: Read + Seek>(source: &mut Source<R>, at: u64, end: u64) -> Result<Header, Fail> {
     let cut = || format!("an element header at byte {at} is cut short");
     if at >= end {
-        return Err(cut());
+        return Err(cut().into());
     }
-    let first = file[at];
+    let first = source.byte(at)?;
     if first & 0xF0 == 0 {
-        return Err(format!("an element ID at byte {at} is not valid"));
+        return Err(format!("an element ID at byte {at} is not valid").into());
     }
-    let length = first.leading_zeros() as usize + 1;
+    let length = u64::from(first.leading_zeros()) + 1;
     if at + length > end {
-        return Err(cut());
+        return Err(cut().into());
     }
-    let id = file[at..at + length]
+    let id = source
+        .bytes(at, length as usize)?
         .iter()
         .fold(0u32, |id, &byte| id << 8 | u32::from(byte));
-    let (size, size_length, unknown) = match vint(file, at + length, end) {
+    let (size, size_length, unknown) = match vint(source, at + length, end) {
         Ok(read) => read,
-        Err(VintError::Short) => return Err(cut()),
+        Err(VintError::Short) => return Err(cut().into()),
         Err(VintError::Invalid) => {
-            return Err(format!(
-                "an element size at byte {} is not valid",
-                at + length
-            ));
+            return Err(format!("an element size at byte {} is not valid", at + length).into());
         }
+        Err(VintError::Io(error)) => return Err(error.into()),
     };
     Ok(Header {
         id,
@@ -149,110 +187,72 @@ fn header(file: &[u8], at: usize, end: usize) -> Result<Header, String> {
     })
 }
 
-/// An element with its extent: `file[content..end]`.
+/// An element with its extent: `content..end`.
 #[derive(Debug, Clone, Copy)]
 struct Element {
     id: u32,
-    content: usize,
-    end: usize,
+    content: u64,
+    end: u64,
 }
 
-/// The elements of known size laid end to end in `file[at..end]`; the first that does not fit
-/// is an error and ends the walk.
-struct Children<'a> {
-    file: &'a [u8],
-    at: usize,
-    end: usize,
+/// A walk over the elements of known size laid end to end in `at..end`; the first that does not
+/// fit is an error and ends the walk. In a Segment (`segment`), a Cluster may have an unknown
+/// size: it then ends where the next level-1 element starts, or at the end of the Segment.
+struct Children {
+    at: u64,
+    end: u64,
+    segment: bool,
     failed: bool,
 }
 
-impl<'a> Children<'a> {
-    fn of(file: &'a [u8], parent: Element) -> Self {
+impl Children {
+    fn of(parent: Element) -> Self {
         Children {
-            file,
             at: parent.content,
             end: parent.end,
+            segment: false,
             failed: false,
         }
     }
 
-    fn read(&mut self) -> Result<Element, String> {
-        let header = header(self.file, self.at, self.end)?;
-        let Some(size) = header.size else {
-            return Err(format!(
-                "an element at byte {} has an unknown size",
-                header.at
-            ));
-        };
-        let end = fits(header, size, self.end, "its parent")?;
-        self.at = end;
-        Ok(Element {
-            id: header.id,
-            content: header.content,
+    fn of_segment(start: u64, end: u64) -> Self {
+        Children {
+            at: start,
             end,
-        })
+            segment: true,
+            failed: false,
+        }
     }
-}
 
-impl Iterator for Children<'_> {
-    type Item = Result<Element, String>;
-
-    fn next(&mut self) -> Option<Self::Item> {
+    fn next<R: Read + Seek>(&mut self, source: &mut Source<R>) -> Option<Result<Element, Fail>> {
         if self.failed || self.at >= self.end {
             return None;
         }
-        let result = self.read();
+        let result = self.read(source);
         self.failed = result.is_err();
         Some(result)
     }
-}
 
-/// The end of an element of `size` that must end by `limit`, or `runs past the end of <what>`.
-fn fits(header: Header, size: u64, limit: usize, what: &str) -> Result<usize, String> {
-    let room = (limit - header.content) as u64;
-    if size > room {
-        return Err(format!(
-            "an element at byte {} runs past the end of {what}",
-            header.at
-        ));
-    }
-    // `size <= room`, so it fits in a usize.
-    Ok(header.content + size as usize)
-}
-
-/// The children of a Segment, like [`Children`] except that a Cluster may have an unknown size:
-/// it then ends where the next level-1 element starts, or at the end of the Segment.
-struct SegmentChildren<'a> {
-    file: &'a [u8],
-    at: usize,
-    end: usize,
-    failed: bool,
-}
-
-impl SegmentChildren<'_> {
-    fn read(&mut self) -> Result<Element, String> {
-        let header = header(self.file, self.at, self.end)?;
+    fn read<R: Read + Seek>(&mut self, source: &mut Source<R>) -> Result<Element, Fail> {
+        let header = header(source, self.at, self.end)?;
         let end = match header.size {
             Some(size) => fits(header, size, self.end, "its parent")?,
-            None if header.id == CLUSTER => {
+            None if self.segment && header.id == CLUSTER => {
                 let mut stop = header.content;
                 while stop < self.end {
-                    let child = self::header(self.file, stop, self.end)?;
+                    let child = self::header(source, stop, self.end)?;
                     if LEVEL_ONE.contains(&child.id) {
                         break;
                     }
                     let Some(size) = child.size else {
-                        return Err(format!("an element at byte {stop} has an unknown size"));
+                        return Err(format!("an element at byte {stop} has an unknown size").into());
                     };
                     stop = fits(child, size, self.end, "its parent")?;
                 }
                 stop
             }
             None => {
-                return Err(format!(
-                    "an element at byte {} has an unknown size",
-                    header.at
-                ));
+                return Err(format!("an element at byte {} has an unknown size", header.at).into());
             }
         };
         self.at = end;
@@ -264,95 +264,115 @@ impl SegmentChildren<'_> {
     }
 }
 
-impl Iterator for SegmentChildren<'_> {
-    type Item = Result<Element, String>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.failed || self.at >= self.end {
-            return None;
-        }
-        let result = self.read();
-        self.failed = result.is_err();
-        Some(result)
+/// The end of an element of `size` that must end by `limit`, or `runs past the end of <what>`.
+fn fits(header: Header, size: u64, limit: u64, what: &str) -> Result<u64, Fail> {
+    let room = limit - header.content;
+    if size > room {
+        return Err(format!(
+            "an element at byte {} runs past the end of {what}",
+            header.at
+        )
+        .into());
     }
+    Ok(header.content + size)
 }
 
-fn uint(file: &[u8], element: Element) -> Result<u64, String> {
-    let bytes = &file[element.content..element.end];
-    if bytes.len() > 8 {
+fn content<R: Read + Seek>(source: &mut Source<R>, element: Element) -> Result<Vec<u8>, Fail> {
+    let len = (element.end - element.content) as usize;
+    Ok(source.bytes(element.content, len)?.to_vec())
+}
+
+fn uint<R: Read + Seek>(source: &mut Source<R>, element: Element) -> Result<u64, Fail> {
+    let len = element.end - element.content;
+    if len > 8 {
         return Err(format!(
             "an integer at byte {} is longer than 8 bytes",
             element.content
-        ));
+        )
+        .into());
     }
-    Ok(bytes
+    Ok(source
+        .bytes(element.content, len as usize)?
         .iter()
         .fold(0u64, |value, &byte| value << 8 | u64::from(byte)))
 }
 
-fn float(file: &[u8], element: Element) -> Result<f64, String> {
-    let bytes = &file[element.content..element.end];
-    match bytes.len() {
-        0 => Ok(0.0),
-        4 => Ok(f64::from(f32::from_be_bytes([
-            bytes[0], bytes[1], bytes[2], bytes[3],
-        ]))),
-        8 => {
+fn float<R: Read + Seek>(source: &mut Source<R>, element: Element) -> Result<f64, Fail> {
+    let len = element.end - element.content;
+    if !matches!(len, 0 | 4 | 8) {
+        return Err(format!("a float at byte {} is {len} bytes long", element.content).into());
+    }
+    let bytes = source.bytes(element.content, len as usize)?;
+    Ok(match bytes.len() {
+        0 => 0.0,
+        4 => f64::from(f32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])),
+        _ => {
             let mut array = [0; 8];
             array.copy_from_slice(bytes);
-            Ok(f64::from_be_bytes(array))
+            f64::from_be_bytes(array)
         }
-        n => Err(format!(
-            "a float at byte {} is {n} bytes long",
-            element.content
-        )),
+    })
+}
+
+/// A string element's bytes without trailing NUL padding, cut to [`TEXT_BYTES`]: every name a
+/// string is compared with is shorter, so a longer one compares as it would whole. The element
+/// is read a window at a time, so a long one is never held.
+fn text<R: Read + Seek>(source: &mut Source<R>, element: Element) -> Result<Vec<u8>, Fail> {
+    let mut kept = Vec::new();
+    let mut length = 0;
+    let mut at = element.content;
+    while at < element.end {
+        let count = (element.end - at).min(TEXT_WINDOW) as usize;
+        let chunk = source.bytes(at, count)?;
+        if let Some(last) = chunk.iter().rposition(|&b| b != 0) {
+            length = at - element.content + last as u64 + 1;
+        }
+        let room = TEXT_BYTES.saturating_sub(kept.len());
+        kept.extend(&chunk[..room.min(chunk.len())]);
+        at += count as u64;
     }
+    kept.truncate(length.min(TEXT_BYTES as u64) as usize);
+    Ok(kept)
 }
 
-/// A string element's bytes without trailing NUL padding.
-fn text(file: &[u8], element: Element) -> &[u8] {
-    let bytes = &file[element.content..element.end];
-    let len = bytes.iter().rposition(|&b| b != 0).map_or(0, |i| i + 1);
-    &bytes[..len]
-}
-
-/// What the facts need from a `TrackEntry`; the first of each element counts.
+/// What the facts need from a `TrackEntry`; the first of each element counts. The
+/// `CodecPrivate` is kept as an element, read only when the codec's rule needs it.
 #[derive(Debug, Default)]
-struct Track<'a> {
+struct Track {
     number: Option<u64>,
     kind: Option<u64>,
-    codec: Option<&'a [u8]>,
-    private: Option<&'a [u8]>,
+    codec: Option<Vec<u8>>,
+    private: Option<Element>,
     default_duration: Option<u64>,
     video: bool,
     width: Option<u64>,
     height: Option<u64>,
 }
 
-fn track_entry(file: &[u8], entry: Element) -> Result<Track<'_>, String> {
+fn track_entry<R: Read + Seek>(source: &mut Source<R>, entry: Element) -> Result<Track, Fail> {
     let mut track = Track::default();
-    for child in Children::of(file, entry) {
+    let mut children = Children::of(entry);
+    while let Some(child) = children.next(source) {
         let child = child?;
         match child.id {
-            TRACK_NUMBER if track.number.is_none() => track.number = Some(uint(file, child)?),
-            TRACK_TYPE if track.kind.is_none() => track.kind = Some(uint(file, child)?),
-            CODEC_ID if track.codec.is_none() => track.codec = Some(text(file, child)),
-            CODEC_PRIVATE if track.private.is_none() => {
-                track.private = Some(&file[child.content..child.end]);
-            }
+            TRACK_NUMBER if track.number.is_none() => track.number = Some(uint(source, child)?),
+            TRACK_TYPE if track.kind.is_none() => track.kind = Some(uint(source, child)?),
+            CODEC_ID if track.codec.is_none() => track.codec = Some(text(source, child)?),
+            CODEC_PRIVATE if track.private.is_none() => track.private = Some(child),
             DEFAULT_DURATION if track.default_duration.is_none() => {
-                track.default_duration = Some(uint(file, child)?);
+                track.default_duration = Some(uint(source, child)?);
             }
             VIDEO if !track.video => {
                 track.video = true;
-                for item in Children::of(file, child) {
+                let mut items = Children::of(child);
+                while let Some(item) = items.next(source) {
                     let item = item?;
                     match item.id {
                         PIXEL_WIDTH if track.width.is_none() => {
-                            track.width = Some(uint(file, item)?);
+                            track.width = Some(uint(source, item)?);
                         }
                         PIXEL_HEIGHT if track.height.is_none() => {
-                            track.height = Some(uint(file, item)?);
+                            track.height = Some(uint(source, item)?);
                         }
                         _ => {}
                     }
@@ -364,12 +384,12 @@ fn track_entry(file: &[u8], entry: Element) -> Result<Track<'_>, String> {
     Ok(track)
 }
 
-fn read(file: &[u8]) -> Result<Option<VideoFacts>, String> {
-    let end = file.len();
-    if file.get(0..4) != Some(EBML.to_be_bytes().as_slice()) {
+fn segment<R: Read + Seek>(source: &mut Source<R>) -> Result<Option<VideoFacts>, Fail> {
+    let end = source.len();
+    if end < 4 || source.bytes(0, 4)? != EBML.to_be_bytes().as_slice() {
         return Err("it does not start with an EBML header".into());
     }
-    let ebml = header(file, 0, end)?;
+    let ebml = header(source, 0, end)?;
     let Some(size) = ebml.size else {
         return Err("an element at byte 0 has an unknown size".into());
     };
@@ -378,11 +398,12 @@ fn read(file: &[u8]) -> Result<Option<VideoFacts>, String> {
         content: ebml.content,
         end: fits(ebml, size, end, "the file")?,
     };
-    let mut doc_type: &[u8] = b"matroska";
-    for child in Children::of(file, ebml) {
+    let mut doc_type = b"matroska".to_vec();
+    let mut children = Children::of(ebml);
+    while let Some(child) = children.next(source) {
         let child = child?;
         if child.id == DOC_TYPE {
-            doc_type = text(file, child);
+            doc_type = text(source, child)?;
             break;
         }
     }
@@ -392,11 +413,11 @@ fn read(file: &[u8]) -> Result<Option<VideoFacts>, String> {
     let mut at = ebml.end;
     let mut segment = None;
     while at < end {
-        let header = header(file, at, end)?;
+        let header = header(source, at, end)?;
         let stop = match header.size {
             Some(size) => fits(header, size, end, "the file")?,
             None if header.id == SEGMENT => end,
-            None => return Err(format!("an element at byte {at} has an unknown size")),
+            None => return Err(format!("an element at byte {at} has an unknown size").into()),
         };
         if header.id == SEGMENT {
             segment = Some((header.content, stop));
@@ -405,35 +426,32 @@ fn read(file: &[u8]) -> Result<Option<VideoFacts>, String> {
         at = stop;
     }
     let (start, stop) = segment.ok_or("it has no Segment")?;
-    let segment_children = || SegmentChildren {
-        file,
-        at: start,
-        end: stop,
-        failed: false,
-    };
 
     let mut scale = None;
     let mut duration = None;
     let mut track = None;
     let (mut seen_info, mut seen_tracks) = (false, false);
-    for element in segment_children() {
+    let mut elements = Children::of_segment(start, stop);
+    while let Some(element) = elements.next(source) {
         let element = element?;
         if element.id == INFO && !seen_info {
             seen_info = true;
-            for child in Children::of(file, element) {
+            let mut children = Children::of(element);
+            while let Some(child) = children.next(source) {
                 let child = child?;
                 match child.id {
-                    TIMECODE_SCALE if scale.is_none() => scale = Some(uint(file, child)?),
-                    DURATION if duration.is_none() => duration = Some(float(file, child)?),
+                    TIMECODE_SCALE if scale.is_none() => scale = Some(uint(source, child)?),
+                    DURATION if duration.is_none() => duration = Some(float(source, child)?),
                     _ => {}
                 }
             }
         } else if element.id == TRACKS && !seen_tracks {
             seen_tracks = true;
-            for child in Children::of(file, element) {
+            let mut children = Children::of(element);
+            while let Some(child) = children.next(source) {
                 let child = child?;
                 if child.id == TRACK_ENTRY {
-                    let entry = track_entry(file, child)?;
+                    let entry = track_entry(source, child)?;
                     if entry.kind == Some(1) {
                         track = Some(entry);
                         break;
@@ -454,33 +472,36 @@ fn read(file: &[u8]) -> Result<Option<VideoFacts>, String> {
     let (width, height) = (pixels(width)?, pixels(height)?);
 
     let mut frames: u64 = 0;
-    let mut first_frame: Option<&[u8]> = None;
-    for element in segment_children() {
+    let mut first_frame: Option<(u64, u64)> = None;
+    let mut elements = Children::of_segment(start, stop);
+    while let Some(element) = elements.next(source) {
         let element = element?;
         if element.id != CLUSTER {
             continue;
         }
-        for child in Children::of(file, element) {
+        let mut children = Children::of(element);
+        while let Some(child) = children.next(source) {
             let child = child?;
-            let mut count_block = |block: Element| -> Result<(), String> {
-                let (number, count, frame) = block_frames(file, block)?;
-                if Some(number) == track.number {
-                    frames = frames.saturating_add(count);
-                    first_frame.get_or_insert(frame);
-                }
-                Ok(())
-            };
+            let mut blocks = Vec::new();
             match child.id {
-                SIMPLE_BLOCK => count_block(child)?,
+                SIMPLE_BLOCK => blocks.push(child),
                 BLOCK_GROUP => {
-                    for item in Children::of(file, child) {
+                    let mut items = Children::of(child);
+                    while let Some(item) = items.next(source) {
                         let item = item?;
                         if item.id == BLOCK {
-                            count_block(item)?;
+                            blocks.push(item);
                         }
                     }
                 }
                 _ => {}
+            }
+            for block in blocks {
+                let (number, count, frame) = block_frames(source, block)?;
+                if Some(number) == track.number {
+                    frames = frames.saturating_add(count);
+                    first_frame.get_or_insert(frame);
+                }
             }
         }
     }
@@ -491,13 +512,14 @@ fn read(file: &[u8]) -> Result<Option<VideoFacts>, String> {
         .and_then(frame_rate)
         .map(round6);
     let duration = duration.and_then(|value| seconds(value, scale.unwrap_or(1_000_000)));
+    let has_alpha = codec_alpha(source, &track, first_frame)?;
     Ok(Some(VideoFacts {
         width,
         height,
         fps,
         duration,
         frames: Some(frames),
-        has_alpha: codec_alpha(&track, first_frame),
+        has_alpha,
     }))
 }
 
@@ -565,46 +587,57 @@ fn gcd(mut a: u128, mut b: u128) -> u128 {
     a
 }
 
-/// `(track number, frames, the first frame's bytes)` of a SimpleBlock or Block.
-fn block_frames(file: &[u8], block: Element) -> Result<(u64, u64, &[u8]), String> {
-    laced(file, block).map_err(|error| match error {
-        VintError::Short => format!("a block at byte {} is too short", block.content),
-        VintError::Invalid => format!("a block at byte {} is not valid", block.content),
+/// `(track number, frames, the first frame's extent)` of a SimpleBlock or Block, from its header
+/// alone.
+fn block_frames<R: Read + Seek>(
+    source: &mut Source<R>,
+    block: Element,
+) -> Result<(u64, u64, (u64, u64)), Fail> {
+    laced(source, block).map_err(|error| match error {
+        VintError::Short => format!("a block at byte {} is too short", block.content).into(),
+        VintError::Invalid => format!("a block at byte {} is not valid", block.content).into(),
+        VintError::Io(error) => error.into(),
     })
 }
 
-fn laced(file: &[u8], block: Element) -> Result<(u64, u64, &[u8]), VintError> {
+fn laced<R: Read + Seek>(
+    source: &mut Source<R>,
+    block: Element,
+) -> Result<(u64, u64, (u64, u64)), VintError> {
     let end = block.end;
-    let (number, length, _) = vint(file, block.content, end)?;
+    let (number, length, _) = vint(source, block.content, end)?;
     // The track number, a 16-bit timecode and the flags.
     let mut at = block.content + length + 3;
     if at > end {
         return Err(VintError::Short);
     }
-    let lacing = (file[at - 1] >> 1) & 3;
+    let lacing = (source.byte(at - 1)? >> 1) & 3;
     if lacing == 0 {
-        return Ok((number, 1, &file[at..end]));
+        return Ok((number, 1, (at, end)));
     }
     if at >= end {
         return Err(VintError::Short);
     }
-    let count = u64::from(file[at]) + 1;
+    let count = u64::from(source.byte(at)?) + 1;
     at += 1;
     if count == 1 {
-        return Ok((number, 1, &file[at..end]));
+        return Ok((number, 1, (at, end)));
     }
     let first = match lacing {
         // Fixed-size lacing: every frame the same size.
-        2 => (end - at) / count as usize,
+        2 => (end - at) / count,
         // Xiph lacing: each size but the last is a run of 255s and a byte below 255.
         1 => {
             let mut first = None;
             for _ in 1..count {
-                let mut size = 0usize;
+                let mut size = 0u64;
                 loop {
-                    let byte = *file.get(at).filter(|_| at < end).ok_or(VintError::Short)?;
+                    if at >= end {
+                        return Err(VintError::Short);
+                    }
+                    let byte = source.byte(at)?;
                     at += 1;
-                    size += usize::from(byte);
+                    size += u64::from(byte);
                     if byte != 255 {
                         break;
                     }
@@ -615,46 +648,86 @@ fn laced(file: &[u8], block: Element) -> Result<(u64, u64, &[u8]), VintError> {
         }
         // EBML lacing: the first size, then the others as signed differences.
         _ => {
-            let (first, length, _) = vint(file, at, end)?;
+            let (first, length, _) = vint(source, at, end)?;
             at += length;
             for _ in 2..count {
-                let (_, length, _) = vint(file, at, end)?;
+                let (_, length, _) = vint(source, at, end)?;
                 at += length;
             }
-            usize::try_from(first).unwrap_or(usize::MAX)
+            first
         }
     };
     let stop = at.saturating_add(first).min(end);
-    Ok((number, count, &file[at..stop]))
+    Ok((number, count, (at, stop)))
 }
 
-/// `has_alpha` by codec (spec/facts.md §5.4); `None` for codecs the table does not name.
-fn codec_alpha(track: &Track<'_>, first_frame: Option<&[u8]>) -> Option<bool> {
-    let codec = track.codec.unwrap_or_default();
-    let private = track.private.unwrap_or_default();
+/// `has_alpha` by codec (spec/facts.md §5.3); `None` for codecs the table does not name. The
+/// `CodecPrivate` and the first frame are read only for the codecs whose rule reads them.
+fn codec_alpha<R: Read + Seek>(
+    source: &mut Source<R>,
+    track: &Track,
+    first_frame: Option<(u64, u64)>,
+) -> Result<Option<bool>, Fail> {
+    let codec = track.codec.as_deref().unwrap_or_default();
     if NO_ALPHA_CODECS.iter().any(|name| name.as_bytes() == codec) {
-        return Some(false);
+        return Ok(Some(false));
     }
+    let private_len = track.private.map_or(0, |p| p.end - p.content);
     match codec {
-        b"V_FFV1" => ffv1::has_alpha(private, first_frame),
-        b"V_MS/VFW/FOURCC" if private.len() >= 40 => {
+        b"V_FFV1" => {
+            let record = match track.private {
+                Some(private) => content(source, private)?,
+                None => Vec::new(),
+            };
+            ffv1_alpha(source, &record, first_frame)
+        }
+        b"V_MS/VFW/FOURCC" if private_len >= BITMAP_INFO => {
+            // `private_len` is above 0, so there is a CodecPrivate.
+            let private = track.private.ok_or("a CodecPrivate went missing")?;
             // BITMAPINFOHEADER: biSize (4) … biCompression at 16.
-            let fourcc = &private[16..20];
-            if PNG_FOURCCS.iter().any(|png| png.as_slice() == fourcc) {
-                first_frame.and_then(png_has_alpha)
-            } else if fourcc == b"FFV1" {
-                let size = u32::from_le_bytes([private[0], private[1], private[2], private[3]]);
-                let extra = usize::try_from(size)
-                    .ok()
-                    .filter(|&size| (40..=private.len()).contains(&size))
-                    .map_or(&[][..], |size| &private[size..]);
-                ffv1::has_alpha(extra, first_frame)
+            let header = source.bytes(private.content, BITMAP_INFO as usize)?;
+            let size = u64::from(u32::from_le_bytes([
+                header[0], header[1], header[2], header[3],
+            ]));
+            let fourcc = [header[16], header[17], header[18], header[19]];
+            if PNG_FOURCCS.iter().any(|png| **png == fourcc) {
+                Ok(match first_frame {
+                    Some((start, stop)) => png_has_alpha(source.range(start, stop)),
+                    None => None,
+                })
+            } else if &fourcc == b"FFV1" {
+                let extra = if (BITMAP_INFO..=private_len).contains(&size) {
+                    let len = (private_len - size) as usize;
+                    source.bytes(private.content + size, len)?.to_vec()
+                } else {
+                    Vec::new()
+                };
+                ffv1_alpha(source, &extra, first_frame)
             } else {
-                None
+                Ok(None)
             }
         }
-        _ => None,
+        _ => Ok(None),
     }
+}
+
+/// The FFV1 transparency flag of a configuration record, or without one of the first frame,
+/// of which only its first bytes are read.
+fn ffv1_alpha<R: Read + Seek>(
+    source: &mut Source<R>,
+    record: &[u8],
+    first_frame: Option<(u64, u64)>,
+) -> Result<Option<bool>, Fail> {
+    if !record.is_empty() {
+        return Ok(ffv1::has_alpha(record, None));
+    }
+    let Some((start, stop)) = first_frame else {
+        return Ok(ffv1::has_alpha(record, None));
+    };
+    let len = stop - start;
+    let held = len.min(FRAME_HEADER_BYTES as u64) as usize;
+    let bytes = source.bytes(start, held)?.to_vec();
+    Ok(ffv1::has_alpha(record, Some(Frame { start: &bytes, len })))
 }
 
 #[cfg(test)]
@@ -698,6 +771,8 @@ mod tests {
     struct Clip {
         doc_type: &'static str,
         codec: &'static str,
+        /// The CodecID's bytes, in place of `codec`.
+        codec_bytes: Option<Vec<u8>>,
         private: Option<Vec<u8>>,
         default_duration: Option<u64>,
         info: Vec<u8>,
@@ -711,6 +786,7 @@ mod tests {
             Clip {
                 doc_type: "webm",
                 codec,
+                codec_bytes: None,
                 private: None,
                 default_duration: Some(41_666_666),
                 info: [
@@ -735,7 +811,10 @@ mod tests {
             entry = [
                 uint_element(TRACK_NUMBER, 1),
                 uint_element(TRACK_TYPE, self.video_type),
-                element(CODEC_ID, self.codec.as_bytes()),
+                element(
+                    CODEC_ID,
+                    self.codec_bytes.as_deref().unwrap_or(self.codec.as_bytes()),
+                ),
             ]
             .concat();
             if let Some(private) = &self.private {
@@ -918,14 +997,15 @@ mod tests {
     fn first_frames_of_laced_blocks() {
         let block = |content: &[u8]| {
             let bytes = element(SIMPLE_BLOCK, content);
-            let header = header(&bytes, 0, bytes.len()).unwrap();
+            let mut source = Source::new(Cursor::new(&bytes)).unwrap();
+            let header = header(&mut source, 0, bytes.len() as u64).unwrap();
             let element = Element {
                 id: SIMPLE_BLOCK,
                 content: header.content,
-                end: bytes.len(),
+                end: bytes.len() as u64,
             };
-            let (_, count, frame) = block_frames(&bytes, element).unwrap();
-            (count, frame.to_vec())
+            let (_, count, (start, stop)) = block_frames(&mut source, element).unwrap();
+            (count, bytes[start as usize..stop as usize].to_vec())
         };
         assert_eq!(block(&[0x81, 0, 0, 0x80, 1, 2, 3]), (1, vec![1, 2, 3]));
         assert_eq!(block(&[0x81, 0, 0, 0x82, 1, 2, 7, 8, 9]), (2, vec![7, 8]));
@@ -936,6 +1016,29 @@ mod tests {
         assert_eq!(
             block(&[0x81, 0, 0, 0x86, 1, 0x82, 4, 5, 6]),
             (2, vec![4, 5])
+        );
+    }
+
+    #[test]
+    fn a_variable_size_integer_starting_with_zero_refuses_its_block() {
+        // spec/facts.md §5.3: a block's track number, or an EBML lace size, whose first byte is
+        // 0 is not valid; one that runs past the block is too short.
+        let refused = |block: &[u8]| {
+            let mut clip = Clip::new("V_VP9");
+            clip.clusters = element(CLUSTER, &element(SIMPLE_BLOCK, block));
+            matroska_facts(&clip.bytes()).unwrap_err()
+        };
+        assert!(
+            refused(&[0x00, 0x81, 0, 0, 0x80, 1]).ends_with("is not valid)"),
+            "track number"
+        );
+        assert!(
+            refused(&[0x81, 0, 0, 0x86, 2, 0x82, 0x00, 0x81, 1, 2, 3]).ends_with("is not valid)"),
+            "EBML lace size"
+        );
+        assert!(
+            refused(&[0x81, 0, 0, 0x86, 2, 0x82, 0x40]).ends_with("is too short)"),
+            "EBML lace size cut short"
         );
     }
 
@@ -1005,10 +1108,10 @@ mod tests {
             chunk(b"IDAT", &[0x78, 0x01]);
             out
         };
-        let clip = |frame: Vec<u8>| {
+        let clip_with = |private_len: usize, frame: Vec<u8>| {
             let mut clip = Clip::new("V_MS/VFW/FOURCC");
-            let mut header = vec![0; 40];
-            header[..4].copy_from_slice(&40u32.to_le_bytes());
+            let mut header = vec![0; private_len];
+            header[..4].copy_from_slice(&(private_len as u32).to_le_bytes());
             header[16..20].copy_from_slice(b"MPNG");
             clip.private = Some(header);
             let mut block = vec![0x81, 0, 0, 0x80];
@@ -1016,9 +1119,14 @@ mod tests {
             clip.clusters = element(CLUSTER, &element(SIMPLE_BLOCK, &block));
             facts(&clip.bytes()).has_alpha
         };
+        let clip = |frame: Vec<u8>| clip_with(40, frame);
         assert_eq!(clip(png(6, false)), Some(true));
         assert_eq!(clip(png(2, false)), Some(false));
         assert_eq!(clip(png(2, true)), Some(true));
+        // A CodecPrivate shorter than a whole BITMAPINFOHEADER (40 bytes) names no codec, even
+        // when bytes 16-19 say MPNG (spec/facts.md §5.3).
+        assert_eq!(clip_with(20, png(6, false)), None);
+        assert_eq!(clip_with(39, png(6, false)), None);
     }
 
     /// The CRC-32 of PNG chunks (reflected, polynomial 0xEDB88320).
@@ -1117,8 +1225,31 @@ mod tests {
     }
 
     #[test]
+    fn long_strings_compare_as_they_would_whole() {
+        // A CodecID padded with NUL bytes past what is kept is still V_VP9; one with more text
+        // after what is kept is not.
+        let with_codec = |codec: Vec<u8>| {
+            let mut clip = Clip::new("V_VP9");
+            clip.codec_bytes = Some(codec);
+            facts(&clip.bytes()).has_alpha
+        };
+        let mut padded = b"V_VP9".to_vec();
+        padded.extend([0; 200_000]);
+        assert_eq!(with_codec(padded.clone()), Some(false));
+        *padded.last_mut().unwrap() = b'x';
+        assert_eq!(with_codec(padded), None);
+        let mut long = vec![b'V'; TEXT_BYTES + 1];
+        assert_eq!(with_codec(long.clone()), None);
+        long.truncate(5);
+        assert_eq!(with_codec(long), None);
+    }
+
+    #[test]
     fn vints() {
-        let read = |bytes: &[u8]| vint(bytes, 0, bytes.len()).ok();
+        let read = |bytes: &[u8]| {
+            let mut source = Source::new(Cursor::new(bytes)).unwrap();
+            vint(&mut source, 0, bytes.len() as u64).ok()
+        };
         assert_eq!(read(&[0x81]), Some((1, 1, false)));
         assert_eq!(read(&[0x40, 0x02]), Some((2, 2, false)));
         assert_eq!(read(&[0xFF]), Some((127, 1, true)));

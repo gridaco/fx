@@ -368,6 +368,44 @@ def test_engine_errors_reach_the_body(ctx: Ctx) -> None:
     with pytest.raises(AgentUnfinished, match="did not finish within 2 turns"):
         asyncio.run(agent.run("go", max_steps=2))
     assert ctx._agents == {}
+    assert agent.transcript == []
+
+
+TRIED = [
+    {"role": "user", "content": "go"},
+    {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [{"id": "c1", "name": "look", "arguments": '{"what":"x"}'}],
+    },
+    {"role": "tool", "name": "look", "tool_call_id": "c1", "content": "saw x x1"},
+]
+
+
+def test_a_failed_run_keeps_the_transcript_it_got_to(ctx: Ctx) -> None:
+    async def unfinished(params: dict[str, Any]) -> Any:
+        raise engine_error(-32020, "the agent did not finish within 1 turns", {"transcript": TRIED})
+
+    channel_of(ctx).agent_run = unfinished
+    agent = ctx.agent(system="s", tools=[look])
+    agent.transcript = [{"role": "user", "content": "an earlier run"}]
+    try:
+        asyncio.run(agent.run("go", max_steps=1))
+    except AgentUnfinished as error:
+        assert error.data == {"transcript": TRIED}
+    else:
+        raise AssertionError("the run did not fail")
+    # A body that catches the failure reads what the agent tried.
+    assert agent.transcript == TRIED
+
+    # An error without a transcript (refused before the first turn) leaves none.
+    async def refused(params: dict[str, Any]) -> Any:
+        raise engine_error(-32602, "an agent takes at least 1 step (max_steps)")
+
+    channel_of(ctx).agent_run = refused
+    with pytest.raises(EngineError):
+        asyncio.run(agent.run("go", max_steps=1))
+    assert agent.transcript == []
 
 
 # --- tool.invoke ------------------------------------------------------------------------------
@@ -492,8 +530,8 @@ def test_a_tool_failure_ends_the_loop_with_the_tools_own_error(ctx: Ctx) -> None
         try:
             await agent.serve_tool("fails", {})
         except NodeFailure as failure:
-            # The engine answers agent.run with the tool's node_failure.
-            raise engine_error(-32000, str(failure)) from None
+            # The engine answers agent.run with the tool's node_failure, and the transcript.
+            raise engine_error(-32000, str(failure), {"transcript": TRIED}) from None
         raise AssertionError("the tool did not fail")
 
     channel_of(ctx).agent_run = engine
@@ -502,6 +540,7 @@ def test_a_tool_failure_ends_the_loop_with_the_tools_own_error(ctx: Ctx) -> None
         asyncio.run(agent.run("go", max_steps=3))
     assert not isinstance(raised.value, EngineError)
     assert "in fails" in "".join(traceback.format_tb(raised.value.__traceback__))
+    assert agent.transcript == TRIED
 
 
 # --- agent.check ------------------------------------------------------------------------------

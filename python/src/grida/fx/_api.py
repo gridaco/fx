@@ -69,6 +69,9 @@ _USAGE_OR_ERROR = 2
 _CANCELLED = 130
 #: How long a stopped engine gets to finish after its interrupt, before it is killed.
 _STOP_GRACE_S = 10.0
+#: How long the engine's pipes are still read once it has exited: what it wrote is already there,
+#: and a process a node body started may hold them open for as long as it runs.
+_DRAIN_S = 0.5
 _DIGEST = re.compile(r"[0-9a-f]{64}")
 _PROJECT_FILE = "fx.yaml"
 _DEFAULT_CACHE = ".fx/cache"
@@ -587,27 +590,67 @@ class _Exit:
     stderr: str
 
 
+class _Protocol(asyncio.subprocess.SubprocessStreamProtocol):
+    """The stream protocol, also telling when the binary itself has exited. ``Process.wait`` and
+    ``Process.communicate`` wait for its pipes to close as well, and a process a node body started
+    in a session of its own (which outlives its host on purpose) keeps them open."""
+
+    def __init__(self, loop: asyncio.AbstractEventLoop) -> None:
+        super().__init__(limit=2**16, loop=loop)
+        self.exited: asyncio.Future[None] = loop.create_future()
+
+    def process_exited(self) -> None:
+        super().process_exited()
+        if not self.exited.done():
+            self.exited.set_result(None)
+
+
+async def _read_into(stream: asyncio.StreamReader | None, sink: bytearray) -> None:
+    if stream is None:
+        return
+    while chunk := await stream.read(1 << 16):
+        sink.extend(chunk)
+
+
 async def _call(args: Sequence[str], cwd: Path) -> _Exit:
     """Runs the binary with ``args`` in ``cwd``. Cancelled, it interrupts the engine (which stops
-    the run as Ctrl-C would) and kills it if it has not ended a while later."""
+    the run as Ctrl-C would) and kills it if it has not ended a while later. Its output is what it
+    wrote until it exited: the call ends with the binary, not with the last holder of its pipes."""
     options: dict[str, Any] = {}
     if os.name == "posix":
         # Its own session: a Ctrl-C at the terminal reaches it once, through this function.
         options["start_new_session"] = True
-    process = await asyncio.create_subprocess_exec(
+    loop = asyncio.get_running_loop()
+    transport, protocol = await loop.subprocess_exec(
+        lambda: _Protocol(loop),
         str(binary()),
         *args,
         cwd=cwd,
         stdin=subprocess.DEVNULL,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         **options,
     )
+    process = asyncio.subprocess.Process(transport, protocol, loop)
+    stdout, stderr = bytearray(), bytearray()
+    readers = [
+        asyncio.ensure_future(_read_into(process.stdout, stdout)),
+        asyncio.ensure_future(_read_into(process.stderr, stderr)),
+    ]
     try:
-        stdout, stderr = await process.communicate()
-    except BaseException:
-        await _stop(process)
-        raise
+        try:
+            await asyncio.shield(protocol.exited)
+        except BaseException:
+            await _stop(process, protocol.exited)
+            raise
+        # What the binary wrote before it exited is in the pipes; read it, then stop reading.
+        await asyncio.wait(readers, timeout=_DRAIN_S)
+    finally:
+        for reader in readers:
+            reader.cancel()
+        await asyncio.wait(readers)
+        # Closing our ends kills nothing: the binary has exited.
+        transport.close()
     return _Exit(
         process.returncode if process.returncode is not None else -1,
         stdout.decode("utf-8", "replace"),
@@ -615,8 +658,10 @@ async def _call(args: Sequence[str], cwd: Path) -> _Exit:
     )
 
 
-async def _stop(process: asyncio.subprocess.Process) -> None:
-    if process.returncode is not None:
+async def _stop(process: asyncio.subprocess.Process, exited: asyncio.Future[None]) -> None:
+    """Interrupts the engine, as Ctrl-C would, and kills it if it has not exited a while later.
+    Its pipes are read meanwhile, so it never waits on them."""
+    if exited.done():
         return
     with contextlib.suppress(ProcessLookupError):
         if os.name == "posix":
@@ -624,11 +669,11 @@ async def _stop(process: asyncio.subprocess.Process) -> None:
         else:
             process.terminate()
     try:
-        await asyncio.wait_for(process.communicate(), _STOP_GRACE_S)
+        await asyncio.wait_for(asyncio.shield(exited), _STOP_GRACE_S)
     except TimeoutError:
         with contextlib.suppress(ProcessLookupError):
             process.kill()
-        await process.wait()
+        await asyncio.shield(exited)
     except BaseException:
         # Stopped again while waiting: end it now.
         with contextlib.suppress(ProcessLookupError):

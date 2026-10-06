@@ -83,6 +83,7 @@ Once the call is answered, its call record is published and then its job record 
 - **Bytes first.** A record is published only after every file it names: a call record after its files, a result record after its output files. A job record is removed only after the call record is published. A crash therefore never leaves a record whose bytes are missing.
 - **No rewrites.** A file that is present is not written again.
 - **Concurrent writers.** Two writers of one name each publish a whole record; the last rename wins, and either is a valid record.
+- **Leftovers.** A writer that stopped (a killed run) may leave a temporary file behind. A temporary name is never read as a record, and a run removes the temporary files it finds in the store once they are an hour old, since one that is still being written is changed far more often. An engine that keeps scratch space under the store root (work dirs) removes what an invocation that no longer runs left there.
 
 ## 7. What a record never holds
 
@@ -101,11 +102,11 @@ A run keeps its record in a run folder, and links its results there from the sto
 
 - `<runs>` is the planning project's `runs` folder from `fx.yaml` (default `runs`), relative to its root.
 - `<YYYY-MM-DD>` is the local date when the command starts.
-- `<n>` is the smallest integer from 1 for which nothing of that name exists yet.
+- `<n>` is the smallest integer from 1 for which nothing of that name exists yet. The engine claims the name by making the folder, an operation that fails when the name exists: an invocation that finds it taken meanwhile tries the next `n`, so invocations starting at once never share a new folder. A run refused before it wrote anything removes the folder again.
 
 `grida-fx inspect` also takes a workflow id in place of a folder: that workflow's newest run under `<runs>/<workflow id>/`, the folder whose `plan.json` was written last.
 
-**Resuming.** Running in a folder that already holds a run continues it. Finished steps come back from the record and the store, and answered calls replay without being billed. A folder whose `plan.json` records a different plan digest ([identity.md](identity.md) §10) is refused before anything runs, with the advice to choose a new folder.
+**Resuming.** Running in a folder that already holds a run continues it. Finished steps come back from the record and the store, and answered calls replay without being billed. A folder whose `plan.json` records a different plan digest ([identity.md](identity.md) §10), or whose `events.jsonl` holds an event with another `plan`, is refused before anything runs, with the advice to choose a new folder. The engine reads both only once it holds `run.lock`, so no other invocation writes the folder between the check and the run.
 
 **Layout.**
 
@@ -119,13 +120,13 @@ A run keeps its record in a run folder, and links its results there from the sto
 ```
 
 - **`plan.json`** is the fx-graph-v1 document that `grida-fx expand` prints, `types` included, with `plan` (the plan digest), `steps`, `inputs` and `view_origins` added, and `takes_file`: the POSIX path of the workflow's takes file relative to the planning project's root, which `reroll` and `pick` write to. The first invocation writes it before any step runs, under a temporary name and then renamed (§6). Later invocations compare its `plan` and never rewrite it.
-- **`events.jsonl`** is the record, and the source of truth for every command that reads the run. Each line is one fx-run-events-v1 event, written as `canon(event)` and then one line feed (U+000A), oldest first. Each line is written whole and flushed before the run goes on. A resumed run appends lines under a new `invocation_id`. Lines are never rewritten or removed.
+- **`events.jsonl`** is the record, and the source of truth for every command that reads the run. Each line is one fx-run-events-v1 event, written as `canon(event)` and then one line feed (U+000A), oldest first. Each line is written whole and flushed before the run goes on, in one write. A line that cannot be written whole (a full disk can take part of one) MUST NOT stay: the engine cuts the file back to its length before the line, writes nothing more if it cannot, and stops the run, so no line ever follows part of a line. A last line without its line feed is a line an invocation began and never finished (it was killed): readers leave it out, and the next invocation cuts it off, says so, and appends after it. A resumed run appends lines under a new `invocation_id`. Lines are never rewritten or removed otherwise. Every line reads back as JSON ([identity.md](identity.md) §2, nested at most 512 deep): a node fact or mark nested deeper than 509 fails its node ([protocol.md](protocol.md) §5.3), and an encoded list (fx-run-events-v1 `encoded`) nested so deep that its `{"list": …}` levels would pass that is written once as `{"value": <its plain JSON>}`, which reads back as the same list.
 - **`run.lock`** holds an exclusive operating-system file lock (`flock` on POSIX), taken without waiting, for as long as an invocation runs the folder. A second invocation that cannot take the lock is refused at once ("another invocation is running <folder>"). The lock ends with the process, so a crashed run leaves no stale lock. The file's content means nothing, and the file stays in place.
-- **`files/`** gets an instance's output files when it succeeds, whether it ran or came from the cache, before its `node_finished` event is written.
+- **`files/`** gets an instance's output files when it succeeds, whether it ran or came from the cache, before its `node_finished` event is written. Each take of a step has a folder of its own (`<step>` below), so `files/` holds every take's files and `inspect --verify` checks each against its record.
 - **`outputs/`** gets the workflow's declared outputs at the end of each invocation, before `run_finished`. An incomplete run places the outputs that exist. An output that holds no file, such as a plain value, has no entry here; its value is in the `run_finished` event.
 - `views/` is reserved for views, which are planned and not part of this version.
 
-**Placing a file.** A file in `files/` or `outputs/` is a hard link to the store's copy (§2), or a copy of it where linking fails, for example across file systems. It is placed like a store write (§6): written under a temporary name in its destination folder, then renamed over its final name. A name that already holds the same bytes is left alone, so a resumed run does not place it again. Any other file there is replaced. Placed files share bytes with the store, so nothing may edit them in place.
+**Placing a file.** A file in `files/` or `outputs/` is a hard link to the store's copy (§2), or a copy of it where linking fails, for example across file systems. It is placed like a store write (§6): written under a temporary name in its destination folder, then renamed over its final name. The temporary name is `.<16 lowercase hex>.part`, 22 bytes, so it fits wherever the final name fits. A name that already holds the same bytes is left alone, so a resumed run does not place it again. Any other file there is replaced. Placed files share bytes with the store, so nothing may edit them in place. An invocation that holds `run.lock` removes the temporary names an earlier, killed invocation left in the folder.
 
 **Names.**
 - `<step>` is the instance's step path, repeat keys included, as one folder name:
@@ -133,7 +134,7 @@ A run keeps its record in a run folder, and links its results there from the sto
   - leading and trailing `_` are then removed;
   - an empty result becomes `step`.
 
-  So `entity['ada'].draw` becomes `entity__ada__.draw`.
+  So `entity['ada'].draw` becomes `entity__ada__.draw`. When the instance's take list is not `[1]` (a regenerated step, or one with several takes), `#` and its takes joined by `.` follow: `draw#2`, `entity__ada__.draw#1.3`.
 - `<port>` is the output port's name, and `<name>` the declared output's name.
 - `<suffix>` is the first suffix that [identity.md](identity.md) §4 lists for the file's kind: `.jpg` for `image/jpeg`, `.json` for `json`. The kind `annotations` takes `.json`. Every other kind, `file` included, takes no suffix. The suffix is not added again when the name already ends with it, compared case-sensitively: a key `hero.png` gives `hero.png`, not `hero.png.png`.
 
@@ -142,6 +143,8 @@ A run keeps its record in a run folder, and links its results there from the sto
 - **Outputs.** An output whose value is one file, and not a list or a keyed collection, gives `outputs/<name><suffix>`. Any other output gives `outputs/<name>/<label><suffix>` for each of its files, even when there is only one.
 - **Labels.** A file's `<label>` is its key when it has a non-empty one: the key of its item in a keyed collection, whether a node's keyed output or a repeat's instances (the key text, [identity.md](identity.md) §11). Otherwise it is the file's position among the value's files, counted from 0.
 - **Keys as paths.** A key is split at `/`. Each segment that is empty, `.` or `..` becomes `_`. Every other segment is converted as `<step>` is. The segments are joined again with `/`. A key with `/` therefore makes folders, and no key leaves `<port>/` or `<name>/`.
+
+- **Length.** Each segment of a placed path (`<step>`, `<port>`, `<name>`, each key segment, the file name with its suffix) holds at most 255 bytes of UTF-8, what file systems take for one name. A longer segment keeps its first bytes (whole characters), followed by `~`, the first 16 lowercase hex characters of the SHA-256 of the whole segment, and, for the file name, the suffix it ended with, 255 bytes in all. `~` never appears in a converted segment, so a cut name is never another segment's whole name.
 
 These names are for reading, and they are not identities. Two step paths or keys can map to one name: `a b` and `a_b`, or two names that differ only in letter case on a case-insensitive file system. Only one of the files then sits at that name. `events.jsonl` names every file by digest.
 
@@ -164,3 +167,8 @@ FX comes from the Python engine in stage-gen. Its store and run folders differ a
 | `plan.json` is written with Python's JSON encoder and a trailing newline. After the run it is rewritten to add the absolute paths of the workflow and the project, a builder's arguments, and the input values. | fx-graph-v1, in the identity.md §5 "Writing JSON" format. It is written once and holds no absolute path (§8). It records the takes file by its project-relative path (`takes_file`), so `reroll` and `pick` find it without a path to the workflow. |
 | A run folder's suffix table has no entry for `image/gif`, `audio/ogg`, `text/yaml`, `text/toml`, `text/html` or `model/gltf+json`, so those files are placed without a suffix. | The first suffix that identity.md §4 lists for the kind (§8). |
 | A file is placed only when its name holds nothing or a file of another size, so a different file of the same size, such as a later take, is never placed. | A name is left alone only when it already holds the same bytes (§8). |
+| Every take of a step is placed at `files/<step>/`, so the folder holds one take, and `inspect --verify` fails on a healthy run with several takes. | Each take has its own folder, `<step>#<takes>` when its take list is not `[1]` (§8). |
+| A name longer than a file system takes, or a temporary name longer than the final one, cannot be placed, and the run never completes. | Segments are cut to 255 bytes with a digest, and temporary names are 22 bytes (§8). |
+| Two invocations started at once may pick the same new folder. | A new folder is claimed by making it (§8). |
+| A failed event write can leave part of a line, followed by later lines, and the folder can no longer be resumed. | A line is written whole or not at all, and a torn last line is cut off by the next invocation (§8). |
+| What a killed run leaves (work dirs, temporary files) stays. | A later run removes it (§6, §8). |

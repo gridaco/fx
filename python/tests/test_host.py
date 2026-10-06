@@ -1286,8 +1286,47 @@ def test_check_value_names_where() -> None:
         check_value({"a": {1}})
     looped: dict[str, Any] = {}
     looped["self"] = looped
-    with pytest.raises(ValueError, match="the value nests too deeply, or holds itself"):
+    with pytest.raises(ValueError, match="^at /self: the value holds itself$"):
         check_value(looped)
+    shared = [1]
+    check_value({"a": shared, "b": [shared, (shared,)]})
+
+
+def _nested(levels: int) -> list[Any]:
+    value: list[Any] = []
+    for _ in range(levels - 1):
+        value = [value]
+    return value
+
+
+def test_check_value_refuses_what_the_engine_cannot_read() -> None:
+    # The engine's reader takes a value inside at most 512 lists and objects of its message.
+    check_value(_nested(513))  # the innermost list, empty, sits inside 512
+    check_value([_nested(512)])
+    with pytest.raises(
+        ValueError, match="^at /0/0/0/0/…: the value nests deeper than the 512 levels"
+    ):
+        check_value(_nested(514))
+    with pytest.raises(ValueError, match="the value nests deeper than the 512 levels"):
+        check_value([[1]], depth=511)
+    check_value([[]], depth=511)
+    # A request's params sit one level inside the message.
+    check_value({"value": _nested(511)}, depth=1)
+    with pytest.raises(ValueError, match="nests deeper"):
+        check_value({"value": _nested(512)}, depth=1)
+
+
+def test_a_request_the_engine_cannot_read_is_refused_before_it_is_sent() -> None:
+    written = io.BytesIO()
+    session = Session(io.BytesIO(), written)
+    with pytest.raises(ValueError, match="^fact: at /value/0/0/0/…: the value nests deeper"):
+        session.request("r1", "fact", {"name": "x", "value": _nested(600)})
+    assert written.getvalue() == b""
+    assert session.pending("r1") == 0
+    # The deepest value that fits is sent, and the engine's reader takes it.
+    session.request("r1", "fact", {"name": "x", "value": _nested(511)})
+    body = written.getvalue().split(b"\r\n\r\n", 1)[1]
+    assert parse_message(body)["params"]["name"] == "x"
 
 
 def test_build_in_process_restores_the_working_directory(

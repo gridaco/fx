@@ -60,11 +60,17 @@ and answers:
 - an unknown method: ``-32601``; a host fault: ``internal``.
 
 The host also points descriptor 0 at the null device once it holds its own duplicate of stdin,
-so a program user code starts never reads protocol bytes. Messages the host writes name project
-files by their project-relative paths: the project root is cut from the texts of user errors
-(and from a ``node_error``'s traceback). Whatever user code raises while a module loads or a
-builder runs (``KeyboardInterrupt`` and ``asyncio.CancelledError`` included) is that module's
-error or that build's failure.
+so a program user code starts never reads protocol bytes. A process forked from the host (a
+body's ``os.fork()``, ``multiprocessing`` with the fork start method) gets the null device in
+place of both protocol streams: it can neither write into the protocol nor keep the engine's pipes
+open after the host has gone. When the engine that started the host is gone (the host's parent
+changed: the engine was killed, so no end of input may ever be read while user code keeps the
+host busy), the host ends at once, with its process group when it leads one (the engine starts
+each host as the leader of a group of its own), so nothing a body started outlives the engine.
+Messages the host writes name project files by their project-relative paths: the project root
+is cut from the texts of user errors (and from a ``node_error``'s traceback). Whatever user code
+raises while a module loads or a builder runs (``KeyboardInterrupt`` and
+``asyncio.CancelledError`` included) is that module's error or that build's failure.
 """
 
 from __future__ import annotations
@@ -78,8 +84,10 @@ import inspect
 import os
 import platform
 import re
+import signal
 import sys
 import threading
+import time
 import traceback
 from collections.abc import Callable, Coroutine, Mapping
 from dataclasses import dataclass
@@ -908,6 +916,52 @@ def _protect_stdin() -> BinaryIO:
     return os.fdopen(protocol, "rb")
 
 
+def _detach_forks(*streams: BinaryIO) -> None:
+    """Points the protocol streams of every process forked from this one at the null device
+    (module docstring). The descriptors stay open, so the stream objects the child inherits never
+    write into a file it opens later."""
+    descriptors = [stream.fileno() for stream in streams]
+
+    def after_in_child() -> None:
+        null = os.open(os.devnull, os.O_RDWR)
+        try:
+            for descriptor in descriptors:
+                os.dup2(null, descriptor, inheritable=False)
+        finally:
+            os.close(null)
+
+    os.register_at_fork(after_in_child=after_in_child)
+
+
+#: How often the host checks that the engine that started it still runs, in seconds.
+ENGINE_CHECK_INTERVAL = 1.0
+
+
+def _watch_engine(interval: float = ENGINE_CHECK_INTERVAL) -> None:
+    """Ends the host when its parent changes: the engine is gone (module docstring)."""
+    engine = os.getppid()
+
+    def watch() -> None:
+        while True:
+            time.sleep(interval)
+            if os.getppid() != engine:
+                _abandoned()
+
+    threading.Thread(target=watch, name="grida.fx engine watch", daemon=True).start()
+
+
+def _abandoned() -> None:
+    """Ends a host whose engine is gone: its process group with it when it leads one."""
+    _log("grida.fx.host: the engine that started this host is gone; ending")
+    killpg = getattr(os, "killpg", None)
+    if killpg is not None and os.getpgrp() == os.getpid():
+        try:
+            killpg(os.getpid(), signal.SIGKILL)
+        except OSError:
+            pass
+    _end(1)
+
+
 def _forget_safe_path_mark() -> None:
     """Removes the ``PYTHONSAFEPATH`` the engine set, so programs user code starts inherit the
     user's environment; a value the user set stays."""
@@ -921,6 +975,8 @@ def main() -> int:
     _forget_safe_path_mark()
     writer = protect_stdout()
     reader = _protect_stdin()
+    _detach_forks(reader, writer)
+    _watch_engine()
     try:
         return Host(reader, writer).serve()
     except BrokenPipeError:

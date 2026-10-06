@@ -86,6 +86,22 @@ impl FileValue {
         };
         std::fs::read(location).map_err(|e| format!("cannot read {}: {}", self.name, io_reason(&e)))
     }
+
+    /// `facts(f)` (spec/facts.md), read from the local copy: only what the kind's rule names is
+    /// read, never the whole file. A refusal is the rule's sentence; the caller names the file.
+    pub fn file_facts(&self) -> Result<serde_json::Value, String> {
+        let Some(location) = &self.location else {
+            return Err(format!("{} has no local copy", self.name));
+        };
+        crate::facts::read_file_facts(std::path::Path::new(location), &self.kind).map_err(|error| {
+            match error {
+                crate::facts::FactsError::Io(e) => {
+                    format!("cannot read {}: {}", self.name, io_reason(&e))
+                }
+                crate::facts::FactsError::Refused(reason) => reason,
+            }
+        })
+    }
 }
 
 /// A judged take's verdict as the expander knows it.

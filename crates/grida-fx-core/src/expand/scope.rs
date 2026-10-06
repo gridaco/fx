@@ -167,10 +167,7 @@ fn file_facts(value: &Val) -> Result<Val, ExprError> {
             value.kind_word()
         )));
     };
-    let bytes = file
-        .read_bytes()
-        .map_err(|reason| ExprError::new(format!("{}: {reason}", file.name)))?;
-    crate::facts::file_facts(&bytes, &file.kind)
+    file.file_facts()
         .map(|facts| Val::from_json(&facts))
         .map_err(|reason| ExprError::new(format!("{}: {reason}", file.name)))
 }

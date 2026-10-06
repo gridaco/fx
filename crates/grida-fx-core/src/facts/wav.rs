@@ -9,8 +9,10 @@
 //! WAV facts are never refused. Rounding is to 6 decimal places, ties to even, on the correctly
 //! rounded quotient.
 
+use super::source::Source;
 use super::{round6, seconds};
 use serde_json::{Map, Value};
+use std::io::{self, Cursor, Read, Seek};
 
 /// `WAVE_FORMAT_PCM`.
 const PCM: u16 = 1;
@@ -22,6 +24,8 @@ const PCM_SUBFORMAT: [u8; 16] = [
 ];
 /// Where the RIFF body (`WAVE` and the chunks) starts.
 const BODY: u64 = 8;
+/// The bytes of a `fmt ` chunk the rule reads: its fields and an extensible sub-format.
+const FORMAT_BYTES: u64 = 40;
 
 /// The facts of a WAV file.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -41,7 +45,14 @@ impl WavFacts {
 /// The facts of `bytes` read as WAV (module doc); `Ok(None)` when it has no duration. Never an
 /// error: a file this rule cannot read has no duration (spec/facts.md §3).
 pub fn wav_facts(bytes: &[u8]) -> Result<Option<WavFacts>, String> {
-    Ok(duration(bytes).map(|duration| WavFacts { duration }))
+    let mut source = Source::new(Cursor::new(bytes)).map_err(|error| error.to_string())?;
+    read(&mut source).map_err(|error| error.to_string())
+}
+
+/// The facts of a WAV file read through `source`: only its chunk headers and its `fmt ` fields.
+/// An error is a failure to read the file, never a refusal.
+pub(crate) fn read<R: Read + Seek>(source: &mut Source<R>) -> io::Result<Option<WavFacts>> {
+    Ok(duration(source)?.map(|duration| WavFacts { duration }))
 }
 
 /// What a `fmt ` chunk says.
@@ -52,46 +63,75 @@ struct Format {
     frame_size: u64,
 }
 
-fn duration(bytes: &[u8]) -> Option<f64> {
-    if bytes.get(0..4)? != b"RIFF" {
-        return None;
+/// `count` bytes at `at`, or `None` when the file ends first.
+fn bytes<R: Read + Seek>(
+    source: &mut Source<R>,
+    at: u64,
+    count: usize,
+) -> io::Result<Option<Vec<u8>>> {
+    if at.saturating_add(count as u64) > source.len() {
+        return Ok(None);
+    }
+    Ok(Some(source.bytes(at, count)?.to_vec()))
+}
+
+fn duration<R: Read + Seek>(source: &mut Source<R>) -> io::Result<Option<f64>> {
+    let Some(head) = bytes(source, 0, 12)? else {
+        return Ok(None);
+    };
+    if &head[0..4] != b"RIFF" {
+        return Ok(None);
     }
     // Offsets below are relative to the body, which the RIFF size bounds; reading also stops at
     // the end of the file.
-    let declared = u64::from(le32(bytes, 4)?);
-    if declared < 4 || bytes.get(8..12)? != b"WAVE" {
-        return None;
+    let declared = u64::from(u32::from_le_bytes([head[4], head[5], head[6], head[7]]));
+    if declared < 4 || &head[8..12] != b"WAVE" {
+        return Ok(None);
     }
     let mut format: Option<Format> = None;
     let mut at: u64 = 4;
     loop {
         // A chunk header lies wholly inside the declared body and the file, or the walk ends.
         if at + 8 > declared {
-            return None;
+            return Ok(None);
         }
-        let header = slice(bytes, BODY + at, BODY + at + 8)?;
-        let id = &header[0..4];
-        let size = u64::from(le32(header, 4)?);
+        let Some(header) = bytes(source, BODY + at, 8)? else {
+            return Ok(None);
+        };
+        let size = u64::from(u32::from_le_bytes([
+            header[4], header[5], header[6], header[7],
+        ]));
         let content = at + 8;
-        if id == b"data" {
-            let format = format?;
+        if &header[0..4] == b"data" {
+            let Some(format) = format else {
+                return Ok(None);
+            };
             if format.rate == 0 {
-                return None;
+                return Ok(None);
             }
             let frames = size / format.frame_size;
-            return Some(round6(seconds(u128::from(frames), u64::from(format.rate))));
+            return Ok(Some(round6(seconds(
+                u128::from(frames),
+                u64::from(format.rate),
+            ))));
         }
-        if id == b"fmt " {
-            // The chunk's content as far as its size, the body and the file allow.
+        if &header[0..4] == b"fmt " {
+            // The chunk's content as far as its size, the body and the file allow; only its
+            // first 40 bytes are read.
             let end = (content + size).min(declared);
-            let available = (BODY + end).min(bytes.len() as u64);
+            let available = (BODY + end).min(source.len());
             let start = (BODY + content).min(available);
-            format = Some(read_format(slice(bytes, start, available)?)?);
+            let count = (available - start).min(FORMAT_BYTES) as usize;
+            let fields = source.bytes(start, count)?.to_vec();
+            let Some(read) = read_format(&fields) else {
+                return Ok(None);
+            };
+            format = Some(read);
         }
         // The next chunk, after one pad byte when the size is odd, must start inside the body.
         let next = content + size + (size & 1);
         if next > declared {
-            return None;
+            return Ok(None);
         }
         at = next;
     }
@@ -116,10 +156,6 @@ fn read_format(content: &[u8]) -> Option<Format> {
     let width = u64::from(bits).div_ceil(8);
     let frame_size = u64::from(channels) * width;
     (frame_size != 0).then_some(Format { rate, frame_size })
-}
-
-fn slice(bytes: &[u8], start: u64, end: u64) -> Option<&[u8]> {
-    bytes.get(usize::try_from(start).ok()?..usize::try_from(end).ok()?)
 }
 
 fn le16(bytes: &[u8], at: usize) -> Option<u16> {

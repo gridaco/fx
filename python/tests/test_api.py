@@ -10,8 +10,10 @@ engine.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -50,6 +52,17 @@ if args and args[0] == "run":
         Path(folder).mkdir(parents=True, exist_ok=True)
         lines = "".join(json.dumps(event) + "\n" for event in reply["events"])
         (Path(folder) / "events.jsonl").write_text(lines + reply.get("torn", ""))
+if "linger" in reply:
+    # A process of its own session that keeps this one's stdout and stderr open, as a process a
+    # node body started does.
+    import subprocess
+    child = subprocess.Popen(
+        [sys.executable, "-c", f"import time; time.sleep({reply['linger']})"],
+        stdin=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    with log.open("a") as out:
+        out.write(json.dumps({"lingering": child.pid}) + "\n")
 if "sleep" in reply:
     def interrupted(signum, frame):
         with log.open("a") as out:
@@ -719,6 +732,25 @@ def test_cancelling_a_run_interrupts_the_engine(fake: Fake, project: Path) -> No
 
     asyncio.run(cancel())
     assert {"interrupted": True} in fake.calls
+
+
+def test_a_process_that_keeps_the_engines_pipes_does_not_hold_the_run(
+    fake: Fake, project: Path
+) -> None:
+    fake.runs(linger=60)
+    started = time.monotonic()
+    try:
+        result = fx.run("gallery", cwd=project, run_dir="runs/a")
+        elapsed = time.monotonic() - started
+    finally:
+        for call in fake.calls:
+            if "lingering" in call:
+                with contextlib.suppress(ProcessLookupError):
+                    os.kill(call["lingering"], signal.SIGKILL)
+    assert any("lingering" in call for call in fake.calls)
+    # The engine's summary was read, and the call ended with the engine, not with the process.
+    assert result.failed == ["poster#1"]
+    assert elapsed < 20
 
 
 # ------------------------------------------------------------------------------------------------

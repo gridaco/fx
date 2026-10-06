@@ -4,11 +4,11 @@
 //! Exit status: 0 success; 1 the command read everything and refused or stopped (planning
 //! problems, a stale fx.lock, a missing tool in `doctor`, a run refused before it started, a run
 //! that is not ok, an output `--deliver` could not find, files `inspect --verify` found changed);
-//! 2 unreadable or invalid input and usage errors (clap's own errors exit 2 too); 130 a run a
-//! person interrupted (Ctrl-C). An [`grida_fx_core::Error`] prints `grida-fx: <message>` on
-//! stderr. Results, and the refusals that are part of a run's story (`refused: …`, `missing …`),
-//! go to stdout. The run verbs (`run`, `reroll`, `pick`, `takes`, `jobs`, `project`, `inspect`)
-//! are in [`crate::verbs`].
+//! 2 unreadable or invalid input and usage errors (clap's own errors exit 2 too); 130 a command
+//! that was interrupted (Ctrl-C or SIGTERM). An [`grida_fx_core::Error`] prints `grida-fx:
+//! <message>` on stderr. Results, and the refusals that are part of a run's story (`refused: …`,
+//! `missing …`), go to stdout. The run verbs (`run`, `reroll`, `pick`, `takes`, `jobs`,
+//! `project`, `inspect`) are in [`crate::verbs`].
 //!
 //! The planning verbs (`plan`, `expand`, `identity`, `price`) and `run` take workflow input flags
 //! after their own options; [`crate::args::split_plan_args`] separates the two before clap sees
@@ -19,6 +19,10 @@
 //! (`--inputs`, `--routes`, `--arg`, `--same`, `--deliver`) still collect every value.
 //! `--max-usd`, `--yes-up-to` and `pick`'s take accept a negative number as their value, so FX's
 //! own message refuses it.
+//!
+//! Once the command line is parsed, SIGINT and SIGTERM are taken by [`crate::interrupt`] for the
+//! whole command, so an interrupted command ends the node hosts it started; when the command ends
+//! any host still running is ended with its process group.
 //!
 //! A verb runs on a thread of its own with a [`VERB_STACK`] stack: expansion, expressions and
 //! values recurse as deep as the documents nest, and the main thread's few megabytes overflow on a
@@ -262,7 +266,14 @@ pub fn main(argv: Vec<OsString>) -> ExitCode {
             return ExitCode::from(u8::try_from(error.exit_code()).unwrap_or(2));
         }
     };
-    match on_big_stack(move || dispatch(cli.verb, rest)) {
+    crate::interrupt::install();
+    if matches!(cli.verb, Verb::Run(_)) {
+        crate::interrupt::expect_runner();
+    }
+    let ran = on_big_stack(move || dispatch(cli.verb, rest));
+    // A host the verb did not end (none should be left) goes with what it started.
+    grida_fx_runtime::host::end_every_host();
+    match ran {
         Ok(status) => ExitCode::from(status),
         Err(error) => {
             print_error(&error);

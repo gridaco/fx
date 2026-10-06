@@ -3,6 +3,7 @@
 mod args;
 mod cli;
 mod engine;
+mod interrupt;
 mod print;
 mod verbs;
 

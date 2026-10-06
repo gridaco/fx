@@ -679,17 +679,17 @@ fn every_type_validates_against_its_definition() {
                 AgentToolCall {
                     id: Some(json!("c1")),
                     name: "look".into(),
-                    arguments: IndexMap::new(),
+                    arguments: "{}".into(),
                 },
                 AgentToolCall {
                     id: Some(Value::Null),
                     name: "look".into(),
-                    arguments: map(vec![("x", json!(0.5))]),
+                    arguments: "{\"x\":0.5}".into(),
                 },
                 AgentToolCall {
                     id: None,
                     name: "submit".into(),
-                    arguments: map(vec![("x", json!(1))]),
+                    arguments: "{\"x\":1}".into(),
                 },
             ]),
             name: None,
@@ -976,6 +976,12 @@ fn schema_and_serde_refuse_the_same_shapes() {
     s.refused::<AgentRunResult>(
         "agent_run_result",
         json!({"transcript": [], "turns": 1, "cost_usd": 0}),
+    );
+    // A transcript's tool call carries its arguments as text, never as the object.
+    s.refused::<AgentMessage>(
+        "agent_message",
+        json!({"role": "assistant", "content": "",
+               "tool_calls": [{"name": "look", "arguments": {"x": 1}}]}),
     );
     s.refused::<AgentCheckResult>("agent_check_result", json!({}));
     s.refused::<ToolInvokeResult>("tool_invoke_result", json!({"content": 1, "error": "e"}));

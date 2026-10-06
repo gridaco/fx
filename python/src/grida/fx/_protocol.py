@@ -6,7 +6,9 @@ Messages are JSON-RPC 2.0; every message must be I-JSON (no NaN or infinity: dum
 
 The I-JSON domain is ``spec/identity.md`` section 1: finite numbers, integer literals that read
 without rounding (the literal is the canonical form of the number it reads as), strings without
-lone surrogates, and objects whose keys are strings, unique within the object.
+lone surrogates, and objects whose keys are strings, unique within the object. A message also
+nests no deeper than the engine reads: no value inside more than :data:`MAX_DEPTH` lists and
+objects, the message itself counted.
 """
 
 from __future__ import annotations
@@ -48,6 +50,10 @@ ERROR_CODES = frozenset(
         INTERNAL,
     }
 )
+
+#: The deepest a value may sit in a message: inside at most this many lists and objects, the
+#: message's own object counted (the engine's reader refuses anything deeper).
+MAX_DEPTH = 512
 
 #: The longest header line read; a longer one breaks the transport.
 _MAX_HEADER_LINE = 8192
@@ -139,17 +145,20 @@ def parse_message(body: bytes) -> Any:
     return value
 
 
-def check_value(value: Any, where: str = "") -> None:
+def check_value(value: Any, where: str = "", depth: int = 0) -> None:
     """Raises ``ValueError`` unless ``value`` is an I-JSON value built from ``dict``, ``list``,
-    ``tuple``, ``str``, ``int``, ``float``, ``bool`` and ``None``. The message names where, as a
-    JSON pointer below ``where``."""
+    ``tuple``, ``str``, ``int``, ``float``, ``bool`` and ``None`` that the engine can read where it
+    goes: ``depth`` is how many lists and objects of its message hold it (0 for a whole message;
+    1 for a request's params), and nothing in it may sit deeper than :data:`MAX_DEPTH`. A value
+    that holds itself is refused. The message names where, as a JSON pointer below ``where``."""
     try:
-        _check(value, where)
+        _check(value, where, depth, set())
     except RecursionError:
-        raise ValueError(f"{_at(where)}the value nests too deeply, or holds itself") from None
+        raise ValueError(f"{_at(where)}the value nests too deeply") from None
 
 
-def _check(value: Any, where: str) -> None:
+def _check(value: Any, where: str, depth: int, holding: set[int]) -> None:
+    """``holding``: the ids of the lists and objects ``value`` sits in."""
     if value is None or isinstance(value, bool):
         return
     if isinstance(value, str):
@@ -164,19 +173,27 @@ def _check(value: Any, where: str) -> None:
         if value != value or value in (float("inf"), float("-inf")):
             raise ValueError(f"{_at(where)}{value!r} is not a JSON number")
         return
+    if not isinstance(value, dict | list | tuple):
+        raise ValueError(f"{_at(where)}a {type(value).__name__} is not a JSON value")
+    if id(value) in holding:
+        raise ValueError(f"{_at(_short_pointer(where))}the value holds itself")
+    if value and depth >= MAX_DEPTH:
+        raise ValueError(
+            f"{_at(_short_pointer(where))}the value nests deeper than the {MAX_DEPTH} levels "
+            "the engine reads"
+        )
+    holding.add(id(value))
     if isinstance(value, dict):
         for key, item in value.items():
             if not isinstance(key, str):
                 raise ValueError(f"{_at(where)}the key {key!r} is not a string")
             if _SURROGATE.search(key):
                 raise ValueError(f"{_at(where)}a key holds a lone surrogate")
-            _check(item, f"{where}/{_pointer(key)}")
-        return
-    if isinstance(value, list | tuple):
+            _check(item, f"{where}/{_pointer(key)}", depth + 1, holding)
+    else:
         for index, item in enumerate(value):
-            _check(item, f"{where}/{index}")
-        return
-    raise ValueError(f"{_at(where)}a {type(value).__name__} is not a JSON value")
+            _check(item, f"{where}/{index}", depth + 1, holding)
+    holding.discard(id(value))
 
 
 class ProtocolError(Exception):
@@ -185,6 +202,14 @@ class ProtocolError(Exception):
 
 def _at(where: str) -> str:
     return f"at {where}: " if where else ""
+
+
+def _short_pointer(where: str, keep: int = 4) -> str:
+    """A JSON pointer cut to its first ``keep`` segments (``/value/0/0/0/…``)."""
+    segments = where.split("/")[1:]
+    if len(segments) <= keep:
+        return where
+    return "/" + "/".join(segments[:keep]) + "/…"
 
 
 def _pointer(key: str) -> str:

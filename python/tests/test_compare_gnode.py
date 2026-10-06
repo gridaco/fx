@@ -1183,6 +1183,27 @@ def test_identities_normalise_to_whether_they_are_known() -> None:
     }
 
 
+def test_gnode_events_name_built_in_steps_as_fx_does() -> None:
+    gnode = [{"event": "node_started", "id": "pick#1", "uses": "gnode/select@1"}]
+    assert tool.normalise_events(gnode, "gnode") == [
+        {"event": "node_started", "id": "pick#1", "uses": "fx/select@1"}
+    ]
+    # FX's own names are never touched.
+    fx = [{"event": "node_started", "id": "pick#1", "uses": "./nodes/gnode/a.py#b"}]
+    assert tool.normalise_events(fx, "fx") == fx
+
+
+@pytest.mark.parametrize(
+    "defect",
+    [
+        "a judge's facts read from outside its step",
+        "a workflow-level assert: over a value only the run produces is never checked",
+    ],
+)
+def test_defects_both_engines_share_are_recorded(defect: str) -> None:
+    assert any(entry.startswith(defect) for entry in tool.SHARED_DEFECTS)
+
+
 def test_events_normalise_without_envelope_and_sorted() -> None:
     gnode = [
         {

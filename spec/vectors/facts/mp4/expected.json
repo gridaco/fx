@@ -53,6 +53,16 @@
   "frames": 24,
   "has_alpha": false
  },
+ "fragmented_av.mp4": {
+  "bytes": 6565,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 1.044678,
+  "frames": 24,
+  "has_alpha": false
+ },
  "fragmented_moov_samples.mp4": {
   "bytes": 3276,
   "kind": "video/mp4",
@@ -156,6 +166,46 @@
   "frames": 24,
   "has_alpha": false
  },
+ "h264_ts1000000_30fps.mp4": {
+  "bytes": 3046,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 30,
+  "duration": 1.033333,
+  "frames": 31,
+  "has_alpha": false
+ },
+ "h264_ts1000_24fps.mp4": {
+  "bytes": 4298,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 2,
+  "frames": 48,
+  "has_alpha": false
+ },
+ "h264_ts1000_2997.mp4": {
+  "bytes": 8460,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 29.97003,
+  "duration": 4.004,
+  "frames": 120,
+  "has_alpha": false
+ },
+ "h264_ts90000_5994.mp4": {
+  "bytes": 4141,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 59.94006,
+  "duration": 1.001011,
+  "frames": 60,
+  "has_alpha": false
+ },
  "h264_yuv444.mp4": {
   "bytes": 2763,
   "kind": "video/mp4",
@@ -164,6 +214,26 @@
   "fps": 24,
   "duration": 1,
   "frames": 24,
+  "has_alpha": false
+ },
+ "ismv.mp4": {
+  "bytes": 2755,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 1,
+  "frames": 24,
+  "has_alpha": false
+ },
+ "mjpeg.mp4": {
+  "bytes": 7230,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 0.125,
+  "frames": 3,
   "has_alpha": false
  },
  "mpeg4_part2.mp4": {
@@ -175,6 +245,23 @@
   "duration": 1,
   "frames": 24,
   "has_alpha": false
+ },
+ "mvhd_no_timescale.mp4": {
+  "refused": "not an MP4 file (its mvhd box is too short)"
+ },
+ "mvhd_short.mp4": {
+  "bytes": 1811,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 25,
+  "duration": 0.4,
+  "frames": 10,
+  "has_alpha": false
+ },
+ "mvhd_short_audio.mp4": {
+  "bytes": 3295,
+  "kind": "video/mp4"
  },
  "png_rgb.mp4": {
   "bytes": 2141,
@@ -200,6 +287,16 @@
   "bytes": 2579,
   "kind": "file"
  },
+ "remux_ms.mp4": {
+  "bytes": 3000,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 30,
+  "duration": 1,
+  "frames": 30,
+  "has_alpha": false
+ },
  "rotated.mp4": {
   "bytes": 4050,
   "kind": "video/mp4",
@@ -218,6 +315,19 @@
   "fps": 24,
   "duration": 1,
   "frames": 24,
+  "has_alpha": false
+ },
+ "stsd_count_zero.mp4": {
+  "refused": "not an MP4 file (its video track has no sample entry)"
+ },
+ "stsz_no_table.mp4": {
+  "bytes": 1811,
+  "kind": "video/mp4",
+  "width": 64,
+  "height": 48,
+  "fps": 25,
+  "duration": 0.4,
+  "frames": 10,
   "has_alpha": false
  },
  "truncated.mp4": {

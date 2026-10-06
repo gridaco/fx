@@ -4,18 +4,21 @@
 //! | method | answer |
 //! |---|---|
 //! | `capability` | `calls::call` with the job's call site, the run's counter and files; the result `{key, cached, cost_usd, files: {name: file ref}, data}` (refs staged with facts, put in the run's files) |
-//! | `agent.run` | `agent::run_agent` with this handler's turns (`agent.turn` through `calls::call`) and the leased host's connection for `tool.invoke` and `agent.check` (both carry `run_id` and `agent_id`); images and tool pictures as file values the run was handed |
-//! | `fact` | `{}`; refused with `-32602` for `cost_usd` or a reserved marker; recorded at once, in order |
-//! | `annotate` | `{}`; refused with `-32602` for a malformed mark (a shape without its geometry, coordinates outside 0..1, `points` with fewer than 2 points) or a reserved marker; recorded at once |
+//! | `agent.run` | `agent::run_agent_into` with this handler's turns (`agent.turn` through `calls::call`) and the leased host's connection for `tool.invoke` and `agent.check` (both carry `run_id` and `agent_id`); images and tool pictures as file values the run was handed; an error that ends a loop that had started carries the transcript so far in `data.transcript` |
+//! | `fact` | `{}`; refused with `-32602` for `cost_usd`, a reserved marker, or a value nested deeper than `events::VALUE_DEPTH` (which the run's record could not hold); recorded at once, in order |
+//! | `annotate` | `{}`; refused with `-32602` for a malformed mark (a shape without its geometry, coordinates outside 0..1, `points` with fewer than 2 points), a reserved marker, or a mark nested deeper than `events::VALUE_DEPTH`; recorded at once |
 //! | `progress` (notification) | shown on stderr as `<instance id>: <text>[ (<n>%)]` |
 //! | `prompt.render` | `path` must be one of the type's resources exactly (`undeclared_resource`); the file is decoded (`text::decode_text`), its comments removed (`text::prompt_text`), and rendered (`grida_fx_core::expr`) over the run's params with `variables` on top (file values become files the run was handed); an unknown name or a bad template is `expression_error` |
-//! | `file.put` | `work_path` (inside the work dir, an existing file: else `outside_work_dir`), `base64` (RFC 4648 with padding: else `-32602`) or `json` (no reserved marker; written as spec/identity.md §5 "Writing JSON"); `kind` defaults to the suffix rule, `json`, `file`; the result is the stored file's ref |
+//! | `file.put` | exactly one of `work_path` (inside the work dir, an existing file: else `outside_work_dir`), `base64` (RFC 4648 with padding: else `-32602`) or `json` (no reserved marker; written as spec/identity.md §5 "Writing JSON"), else `-32602` `file.put takes exactly one of work_path, base64, json`; `kind` defaults to the suffix rule, `json`, `file`; the result is the stored file's ref |
 //!
 //! Every request names this run (`run_id`, else `-32602`); a method the engine does not serve is
-//! `-32601`. After the run has ended ([`RunHandler::close`]) or was cancelled, requests are
+//! `-32601`. Params FX cannot read are `-32602` `<method>: <why>`, the why a sentence
+//! (`host::read_reason`), never the reader's own text. After the run has ended ([`RunHandler::close`]) or was cancelled, requests are
 //! answered `cancelled`, while a paid call already in flight still completes and settles: each
 //! `capability` request, and each agent turn, runs its call on a task of its own, and the run's
-//! cancellation answers the host without waiting for it.
+//! cancellation answers the host without waiting for it. The call counts as running from before
+//! its task is spawned (`Services::track_call`), so the invocation waits for it before it ends
+//! (`Services::calls_settled`).
 //!
 //! Smaller rules:
 //! - `fact` refuses an empty name; a fact reported again keeps its first place with the later
@@ -31,19 +34,20 @@
 //!   error. Other `internal` answers (a resource that cannot be read, a host that answered
 //!   `tool.invoke` or `agent.check` with something FX cannot read) fail only the request.
 //! - `file.put` names the stored file by the work path's last segment, else `file`; an empty
-//!   `kind` is refused with `-32602`. A `work_path` is POSIX and relative; `.` segments are
+//!   `kind` is refused with `-32602`. A work file that cannot be read, or that changes while it
+//!   is stored, is the body's doing, not a fault: the request is refused with `-32602`. A `work_path` is POSIX and relative; `.` segments are
 //!   ignored, `..`, `\` and an absolute path are refused, and the file it names (after links) must
 //!   lie inside the work dir.
 
-use crate::agent::{AGENT_TURN, AgentBody, AgentError, TurnCaller, run_agent};
+use crate::agent::{AGENT_TURN, AgentBody, AgentError, TurnCaller, run_agent_into};
 use crate::calls::{self, CallAnswer, CallCounter, CallError, file_value_digest, file_values};
 use crate::engine::{Cancel, RunFiles, Services};
 use crate::executor::InstanceJob;
 use crate::executor::stage::file_ref;
 use crate::host::connection::{Connection, ConnectionError};
 use crate::host::pool::RunRequests;
-use crate::store::Store;
 use crate::store::records::FileEntry;
+use crate::store::{Store, StoreError};
 use base64::Engine as _;
 use grida_fx_core::expr::{self, ExprError, Scope};
 use grida_fx_core::kinds::{is_json, is_text, kind_of};
@@ -234,11 +238,15 @@ impl RunHandler {
             cancel: self.cancel.clone(),
             files: Arc::clone(&self.files),
         };
-        let result = run_agent(&params, &turns, &body)
+        let mut transcript = Vec::new();
+        let result = run_agent_into(&params, &turns, &body, &mut transcript)
             .await
-            .map_err(|error| match error {
-                AgentError::Call(error) => self.call_failed(error),
-                AgentError::Rpc(error) => error,
+            .map_err(|error| {
+                let error = match error {
+                    AgentError::Call(error) => self.call_failed(error),
+                    AgentError::Rpc(error) => error,
+                };
+                with_transcript(error, &transcript)
             })?;
         to_json(&result)
     }
@@ -259,8 +267,9 @@ impl RunHandler {
                 "cost_usd is the engine's own fact; name yours otherwise",
             ));
         }
-        check_markers(&params.value, &format!("fact {}", params.name))
-            .map_err(|refused| invalid(refused.message))?;
+        let what = format!("fact {}", params.name);
+        check_markers(&params.value, &what).map_err(|refused| invalid(refused.message))?;
+        crate::events::check_depth(&params.value, &what).map_err(invalid)?;
         self.facts
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -274,6 +283,7 @@ impl RunHandler {
         check_mark(&params.mark).map_err(invalid)?;
         let raw = to_json(&params.mark)?;
         check_markers(&raw, "mark").map_err(|refused| invalid(refused.message))?;
+        crate::events::check_depth(&raw, "mark").map_err(invalid)?;
         self.marks
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -324,12 +334,17 @@ impl RunHandler {
 
     /// `file.put` (spec/protocol.md §6.7).
     fn file_put(&self, params: Value) -> Result<Value, RpcError> {
-        let params: FilePutParams = read(method::FILE_PUT, params)?;
+        let params = file_put_params(params)?;
         if params.kind.as_deref() == Some("") {
             return Err(invalid("a file's kind is not empty"));
         }
         let store = &self.services.engine.store;
-        let stored_error = |error: crate::store::StoreError| self.faulted(error.to_string());
+        // A source that cannot be read, or that changes while it is stored, is the body's: the
+        // request is refused. Only the store's own faults stop the run.
+        let stored_error = |error: StoreError| match error {
+            StoreError::Source(sentence) => invalid(sentence),
+            other => self.faulted(other.to_string()),
+        };
         let (stored, kind, name) = match &params.source {
             FilePutSource::WorkPath { work_path } => {
                 let path = work_file(&self.work_dir, work_path)?;
@@ -395,6 +410,12 @@ impl RunRequests for RunHandler {
             self.progress(params);
         }
     }
+
+    /// The run's deadline passed, or it was stopped: later requests are answered `cancelled`,
+    /// and a paid call in flight goes on on its own task and settles.
+    fn stop(&self) {
+        self.cancel.cancel();
+    }
 }
 
 /// Everything a paid call of one run takes onto its own task.
@@ -407,15 +428,36 @@ struct Paid {
     cancel: Cancel,
 }
 
+/// An error that ended an agent loop, with the transcript so far in `data.transcript` once the
+/// loop had started (module doc); data that is not an object is left as it is.
+fn with_transcript(
+    mut error: RpcError,
+    transcript: &[grida_fx_protocol::AgentMessage],
+) -> RpcError {
+    if transcript.is_empty() {
+        return error;
+    }
+    let Ok(messages) = serde_json::to_value(transcript) else {
+        return error;
+    };
+    if let Value::Object(data) = error.data.get_or_insert_with(|| Value::Object(Map::new())) {
+        data.insert("transcript".into(), messages);
+    }
+    error
+}
+
 /// Runs a paid call on a task of its own and waits for it, or for the run to be cancelled
-/// (module doc): the call goes on and settles either way.
+/// (module doc): the call goes on and settles either way, counted as running from before its
+/// task is spawned.
 async fn spawn_call(
     paid: Paid,
     capability: String,
     request: Value,
 ) -> Result<CallAnswer, CallError> {
     let cancel = paid.cancel.clone();
+    let running = paid.services.track_call();
     let task = tokio::spawn(async move {
+        let _running = running;
         calls::call(
             &paid.services,
             &paid.site,
@@ -472,7 +514,8 @@ impl HostBody {
             })?;
         serde_json::from_value(answer).map_err(|error| {
             internal(format!(
-                "the node host answered {method} with something else: {error}"
+                "the node host answered {method} with something else: {}",
+                crate::host::read_reason(&error)
             ))
         })
     }
@@ -541,14 +584,51 @@ fn expression_error(message: impl Into<String>) -> RpcError {
     RpcError::new(ErrorCode::ExpressionError, message)
 }
 
-/// Reads typed params; a mismatch is `-32602`.
+/// Reads typed params; a mismatch is `-32602`, said as a sentence (`host::read_reason`).
 fn read<T: DeserializeOwned>(method: &str, params: Value) -> Result<T, RpcError> {
-    serde_json::from_value(params).map_err(|error| invalid(format!("{method}: {error}")))
+    serde_json::from_value(params)
+        .map_err(|error| invalid(format!("{method}: {}", crate::host::read_reason(&error))))
+}
+
+/// The sources of `file.put`: a request gives exactly one.
+const FILE_PUT_SOURCES: [&str; 3] = ["work_path", "base64", "json"];
+
+/// Reads `file.put` params: exactly one source (module doc), then as [`read`] reads them.
+fn file_put_params(params: Value) -> Result<FilePutParams, RpcError> {
+    if let Value::Object(members) = &params {
+        let sources = FILE_PUT_SOURCES
+            .iter()
+            .filter(|name| members.contains_key(**name))
+            .count();
+        if sources != 1 {
+            return Err(invalid(
+                "file.put takes exactly one of work_path, base64, json",
+            ));
+        }
+        let known = |name: &str| {
+            FILE_PUT_SOURCES.contains(&name) || matches!(name, "run_id" | "kind" | "name")
+        };
+        if let Some(name) = members.keys().find(|name| !known(name)) {
+            return Err(invalid(format!(
+                "file.put: {name} is not one of its fields"
+            )));
+        }
+        for name in ["work_path", "base64"] {
+            if members.get(name).is_some_and(|value| !value.is_string()) {
+                return Err(invalid(format!("file.put: {name} is text")));
+            }
+        }
+    }
+    read(method::FILE_PUT, params)
 }
 
 fn to_json<T: serde::Serialize>(value: &T) -> Result<Value, RpcError> {
-    serde_json::to_value(value)
-        .map_err(|error| internal(format!("the engine could not write its answer: {error}")))
+    serde_json::to_value(value).map_err(|error| {
+        internal(format!(
+            "the engine could not write its answer: {}",
+            crate::host::read_reason(&error)
+        ))
+    })
 }
 
 /// `unknown_file` unless the run was handed `digest`.
@@ -746,10 +826,7 @@ impl Scope for PromptScope<'_> {
                 value.kind_word()
             )));
         };
-        let bytes = file
-            .read_bytes()
-            .map_err(|reason| ExprError::new(format!("{}: {reason}", file.name)))?;
-        grida_fx_core::facts::file_facts(&bytes, &file.kind)
+        file.file_facts()
             .map(|facts| Val::from_json(&facts))
             .map_err(|reason| ExprError::new(format!("{}: {reason}", file.name)))
     }

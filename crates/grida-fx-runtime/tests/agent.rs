@@ -267,10 +267,11 @@ async fn each_turn_sends_the_transcript_the_tools_and_the_choice() {
         requests[1]["messages"],
         json!([
             {"role": "user", "content": "do it"},
+            // A call's arguments travel as the canonical JSON text of the object.
             {"role": "assistant", "content": "thinking", "tool_calls": [
-                {"id": "c1", "name": "look", "arguments": {"what": "x"}},
-                {"id": null, "name": "nope", "arguments": {}},
-                {"id": "c3", "name": "look", "arguments": {"what": "boom"}}
+                {"id": "c1", "name": "look", "arguments": "{\"what\":\"x\"}"},
+                {"id": null, "name": "nope", "arguments": "{}"},
+                {"id": "c3", "name": "look", "arguments": "{\"what\":\"boom\"}"}
             ]},
             {"role": "tool", "name": "look", "tool_call_id": "c1", "content": "{\"f\":1,\"n\":1,\"saw\":\"x\"}"},
             {"role": "tool", "name": "nope", "content": "no tool named nope"},
@@ -310,7 +311,7 @@ async fn each_turn_sends_the_transcript_the_tools_and_the_choice() {
     assert_eq!(
         serde_json::to_value(&result.transcript[5]).unwrap(),
         json!({"role": "assistant", "content": "", "tool_calls": [
-            {"id": "c4", "name": "submit", "arguments": {"answer": "good"}}
+            {"id": "c4", "name": "submit", "arguments": "{\"answer\":\"good\"}"}
         ]})
     );
 }
@@ -545,7 +546,7 @@ async fn recent_images_keep_the_newest_pictures_in_each_request() {
                 {"file": format!("{:064x}", 2)}
             ]},
             {"role": "assistant", "content": "", "tool_calls": [
-                {"id": "c1", "name": "look", "arguments": {"what": "pic"}}
+                {"id": "c1", "name": "look", "arguments": "{\"what\":\"pic\"}"}
             ]},
             {"role": "tool", "name": "look", "tool_call_id": "c1", "content": "here", "images": [
                 {"file": format!("{:064x}", 3)}
@@ -690,7 +691,7 @@ async fn a_lenient_reply_reads_missing_members_as_empty() {
         serde_json::to_value(&result.transcript).unwrap(),
         json!([
             {"role": "user", "content": "do it"},
-            {"role": "assistant", "content": "", "tool_calls": [{"name": "nope", "arguments": {}}]},
+            {"role": "assistant", "content": "", "tool_calls": [{"name": "nope", "arguments": "{}"}]},
             {"role": "tool", "name": "nope", "content": "no tool named nope"},
             {"role": "assistant", "content": "", "tool_calls": []}
         ])

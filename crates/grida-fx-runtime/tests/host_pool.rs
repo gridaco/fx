@@ -126,6 +126,19 @@ def run(message):
             serve(other)
     elif mode == "exit":
         sys.exit(7)
+    elif mode == "fork-exit":
+        child = os.fork()
+        if child == 0:
+            time.sleep(30)
+            os._exit(0)
+        with open("forked-%d.txt" % PID, "w") as f:
+            f.write(str(child))
+        os._exit(3)
+    elif mode == "leave-child":
+        child = subprocess.Popen(["sleep", "60"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+        with open("left-%d.txt" % PID, "w") as f:
+            f.write(str(child.pid))
+        answer(message, {"outputs": {}, "facts": {"pid": PID}})
     elif mode == "fail":
         fail(message, -32000, "the body failed on purpose")
     elif mode == "garbage":
@@ -310,6 +323,8 @@ impl RunRequests for Requests {
     fn notify(&self, method: String, params: Value) {
         self.notes.lock().unwrap().push((method, params));
     }
+
+    fn stop(&self) {}
 }
 
 /// Runs one `run` on a lease with fresh requests.
@@ -610,6 +625,91 @@ async fn a_host_that_exits_during_a_run() {
         .await,
     );
     assert_eq!(fixture.started(), 2);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_host_whose_fork_keeps_its_pipes_is_seen_to_exit() {
+    if !have_python3() {
+        return;
+    }
+    let fixture = Fixture::new();
+    let pool = fixture.pool(1);
+    let mut lease = pool.lease().await.unwrap();
+    let start = Instant::now();
+    // No timeout: only the process's exit can end the run.
+    let reply = run(
+        &mut lease,
+        "inv-1",
+        json!({"mode": "fork-exit"}),
+        &Cancel::new(),
+        None,
+    )
+    .await;
+    let took = start.elapsed();
+    let RunReply::Exited(status) = reply else {
+        panic!("{reply:?}")
+    };
+    assert_eq!(status.and_then(|status| status.code()), Some(3));
+    assert!(took < Duration::from_secs(5), "{took:?}");
+    // The fork went with the host's group.
+    let forked = std::fs::read_dir(&fixture.root)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .find(|path| {
+            path.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("forked-")
+        })
+        .unwrap();
+    let forked = std::fs::read_to_string(forked).unwrap();
+    assert!(gone(&forked).await, "the forked child {forked} survived");
+
+    // With a timeout the exit is still what is reported.
+    drop(lease);
+    let mut lease = pool.lease().await.unwrap();
+    let reply = run(
+        &mut lease,
+        "inv-2",
+        json!({"mode": "fork-exit"}),
+        &Cancel::new(),
+        Some(Duration::from_secs(20)),
+    )
+    .await;
+    assert!(
+        matches!(&reply, RunReply::Exited(Some(status)) if status.code() == Some(3)),
+        "{reply:?}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn what_a_body_leaves_behind_ends_with_its_host() {
+    if !have_python3() {
+        return;
+    }
+    let fixture = Fixture::new();
+    let pool = fixture.pool(1);
+    let mut lease = pool.lease().await.unwrap();
+    let pid = pid_of(
+        &run(
+            &mut lease,
+            "inv-1",
+            json!({"mode": "leave-child"}),
+            &Cancel::new(),
+            None,
+        )
+        .await,
+    );
+    let left = std::fs::read_to_string(fixture.root.join(format!("left-{pid}.txt"))).unwrap();
+    drop(lease);
+    // Kept while its host serves the pool.
+    assert!(alive(&left));
+    pool.shutdown().await;
+    assert_eq!(
+        fixture.log(pid),
+        ["initialize", "run", "shutdown", "exit", "status 0"]
+    );
+    assert!(gone(&left).await, "{left} outlived its host");
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -202,7 +202,9 @@ pub struct Services {
 }
 
 impl Services {
-    /// The services of planning: not live whatever the engine says, no ledger, no events.
+    /// The services of planning: not live whatever the engine says, no ledger, no events. The
+    /// invocation id is `plan-<16 hex>`, new each time, so the work dirs of two commands planning
+    /// at once never meet.
     pub fn planning(engine: Arc<Engine>) -> Services {
         Services {
             engine,
@@ -210,7 +212,7 @@ impl Services {
             events: None,
             pacing: Arc::new(Pacing::new()),
             cancel: Cancel::new(),
-            invocation_id: "plan".into(),
+            invocation_id: format!("plan-{}", crate::events::new_invocation_id()),
             runs: std::sync::atomic::AtomicU64::new(0),
             holds: std::sync::atomic::AtomicU64::new(0),
         }
@@ -236,6 +238,13 @@ impl Services {
         }
     }
 
+    /// Claims this invocation's work dirs before the first one is made (`Store::claim_work`), so
+    /// another invocation's sweep leaves them alone; best effort (without a claim, a sweep takes
+    /// them only once they are an hour old). The claim lasts until the services drop.
+    pub fn claim_work(&self) {
+        let _ = self.engine.store.claim_work(&self.invocation_id);
+    }
+
     /// Whether uncached paid calls may be sent: the engine is live and this is a run.
     pub fn live(&self) -> bool {
         self.engine.live && self.ledger.is_some()
@@ -254,6 +263,12 @@ impl Services {
     pub fn next_run_id(&self) -> String {
         let n = self.runs.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
         format!("{}-{n}", self.invocation_id)
+    }
+}
+
+impl Drop for Services {
+    fn drop(&mut self) {
+        self.engine.store.release_work(&self.invocation_id);
     }
 }
 

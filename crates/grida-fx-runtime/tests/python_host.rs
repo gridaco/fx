@@ -24,6 +24,7 @@ const FAKE_HOST: &str = r#"
 import json
 import os
 import platform
+import signal
 import sys
 import time
 
@@ -149,6 +150,16 @@ def main():
         elif method == "describe":
             if MODE == "exit-in-describe":
                 sys.exit(4)
+            if MODE == "killed-in-describe":
+                os.kill(os.getpid(), signal.SIGTERM)
+            if MODE == "fork-in-describe":
+                child = os.fork()
+                if child == 0:
+                    time.sleep(30)
+                    os._exit(0)
+                with open("forked.txt", "w") as f:
+                    f.write(str(child))
+                os._exit(4)
             if MODE == "garbage":
                 PROTOCOL_OUT.write(b"Content-Length: 9\r\n\r\nnot json!")
                 PROTOCOL_OUT.flush()
@@ -555,6 +566,58 @@ fn a_host_that_exits_during_describe() {
         failure
     );
     assert_eq!(fixture.log(), ["initialize", "describe"]);
+}
+
+#[test]
+fn a_host_killed_by_a_signal_says_which() {
+    if !have_python3() {
+        return;
+    }
+    let fixture = Fixture::new("killed-in-describe");
+    let mut host = fixture.host();
+    host.open_project(&fixture.root, &[]).unwrap();
+    let failure = host
+        .describe(&describe_params(&[("nodes/echo.py", None)]))
+        .unwrap_err();
+    assert_eq!(
+        unavailable(failure),
+        "the node host was killed by signal 15 (SIGTERM) while answering describe"
+    );
+}
+
+#[test]
+fn a_host_whose_fork_keeps_its_pipes_is_seen_to_exit() {
+    if !have_python3() {
+        return;
+    }
+    let fixture = Fixture::new("fork-in-describe");
+    let mut host = fixture.host();
+    host.open_project(&fixture.root, &[]).unwrap();
+    let start = Instant::now();
+    let failure = host
+        .describe(&describe_params(&[("nodes/echo.py", None)]))
+        .unwrap_err();
+    let took = start.elapsed();
+    assert_eq!(
+        unavailable(failure),
+        "the node host exited with status 4 while answering describe"
+    );
+    assert!(took < Duration::from_secs(5), "{took:?}");
+    let forked = std::fs::read_to_string(fixture.root.join("forked.txt")).unwrap();
+    let mut gone = false;
+    for _ in 0..300 {
+        gone = !Command::new("kill")
+            .args(["-0", forked.trim()])
+            .stderr(std::process::Stdio::null())
+            .status()
+            .unwrap()
+            .success();
+        if gone {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(gone, "the forked child {forked} survived");
 }
 
 #[test]

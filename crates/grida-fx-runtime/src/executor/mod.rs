@@ -24,9 +24,14 @@
 //!      kept, retryable under `retry: engine`;
 //!    - an engine error the body let propagate (`ceiling_exceeded`, `call_failed`, …): failed with
 //!      its message, not retried;
-//!    - timed out: failed `ran past <n> seconds` (`n` in JCS form), not retried;
-//!    - the host exited: failed `the node host exited with status <n>` (or `…exited` when unknown),
-//!      retryable under `retry: engine`.
+//!    - timed out: failed `ran past <n> seconds` (`n` in JCS form), not retried; from the
+//!      deadline on, the run's requests are answered `cancelled` (a paid call in flight goes on
+//!      and settles), and whatever the host answers then, other than a result, is the timeout;
+//!    - the host exited: failed `the node host exited with status <n>`, `the node host was killed
+//!      by signal <n> (<NAME>)`, or `the node host exited` when unknown (`host::exit_text`),
+//!      retryable under `retry: engine`;
+//!    - a reply FX cannot read: failed `the node host answered run with something FX cannot
+//!      read: <what>` (`accept::unreadable_result`).
 //! 6. **Judges** (§5.3 step 4): a judge whose `verdict` fact is not `accept` or `reject` fails with
 //!    `<type name> is a judge and reported no verdict`.
 //! 7. **Facts and the record** (§5.3 step 5): the engine sets the fact `cost_usd` (the run's paid
@@ -365,11 +370,13 @@ async fn paid_builtin(
             Arc::clone(&counter),
             Arc::clone(&files),
         );
-        services
-            .engine
-            .handle
-            .clone()
-            .spawn(async move { capability_node::run(&services, &job, &counter, &files).await })
+        // Counted as running before the task first runs, so a run that ends meanwhile waits for
+        // it (`Services::calls_settled`).
+        let running = services.track_call();
+        services.engine.handle.clone().spawn(async move {
+            let _running = running;
+            capability_node::run(&services, &job, &counter, &files).await
+        })
     };
     let joined = tokio::select! {
         joined = task => joined,
@@ -404,6 +411,7 @@ async fn host_run(services: &Arc<Services>, job: &Arc<InstanceJob>, cancel: &Can
         return Attempt::ran(failed(STOPPED));
     }
     let run_id = services.next_run_id();
+    services.claim_work();
     let work_dir = store.work_root().join(&run_id);
     if let Err(error) = fresh_dir(&work_dir) {
         return Attempt::stopping(
@@ -438,6 +446,11 @@ async fn run_on_host(
         Ok(lease) => lease,
         Err(message) => return Attempt::ran(failed(&message)),
     };
+    // The run's requests end at its deadline as they do when it is stopped (module doc,
+    // "Stopping"): the lease stops them (`RunRequests::stop` cancels this token) before it sends
+    // `$/cancel`. From then on they are answered `cancelled`, and a paid call in flight goes on
+    // on its own task and settles.
+    let requests_cancel = cancel.child();
     let handler = Arc::new(requests::RunHandler::new(
         Arc::clone(services),
         Arc::clone(job),
@@ -445,22 +458,30 @@ async fn run_on_host(
         work_dir.to_path_buf(),
         Arc::clone(&files),
         lease.host().connection().clone(),
-        cancel.clone(),
+        requests_cancel.clone(),
     ));
+    let timeout = timeout_of(job);
     let reply = lease
         .run(
             &params,
             Arc::clone(&handler) as Arc<dyn RunRequests>,
             cancel,
-            timeout_of(job),
+            timeout,
         )
         .await;
     handler.close();
     drop(lease);
+    // Past the deadline, whatever the host answered other than a result is the timeout.
+    let timed_out = requests_cancel.is_cancelled() && !cancel.is_cancelled();
+    let reply = match reply {
+        RunReply::Result(value) => RunReply::Result(value),
+        _ if timed_out => RunReply::TimedOut,
+        other => other,
+    };
     let reported = handler.facts();
     let marks = handler.marks();
     let mut attempt = match reply {
-        RunReply::Result(value) => match serde_json::from_value::<RunResult>(value) {
+        RunReply::Result(value) => match serde_json::from_value::<RunResult>(value.clone()) {
             Ok(result) => {
                 match accept::accept_or_stop(
                     job, &result, &reported, &marks, work_dir, store, &files,
@@ -479,7 +500,10 @@ async fn run_on_host(
                 }
             }
             Err(error) => Attempt::ran(failure(
-                format!("the node host answered run with something FX cannot read: {error}"),
+                format!(
+                    "the node host answered run with something FX cannot read: {}",
+                    accept::unreadable_result(&value, &error)
+                ),
                 failure_facts(&reported, None),
             )),
         },
@@ -489,10 +513,7 @@ async fn run_on_host(
             Attempt::ran(failure(STOPPED.into(), failure_facts(&reported, None)))
         }
         RunReply::Exited(status) => {
-            let message = match status.and_then(|s| s.code()) {
-                Some(code) => format!("the node host exited with status {code}"),
-                None => "the node host exited".to_string(),
-            };
+            let message = format!("the node host {}", crate::host::exit_text(status));
             Attempt {
                 retryable: true,
                 ..Attempt::ran(failure(message, failure_facts(&reported, None)))
@@ -704,9 +725,11 @@ fn adopt_file(store: &Store, file: &FileValue) -> Result<FileValue, Unadopted> {
             file.name
         )));
     }
-    let stored = store
-        .adopt(file)
-        .map_err(|error| Unadopted::Store(error.to_string()))?;
+    let stored = store.adopt(file).map_err(|error| match error {
+        // The file the plan named, not the store: the attempt fails.
+        crate::store::StoreError::Source(sentence) => Unadopted::Failed(sentence),
+        other => Unadopted::Store(other.to_string()),
+    })?;
     if stored.digest != file.digest {
         return Err(Unadopted::Failed(format!(
             "{} changed after the run was planned",

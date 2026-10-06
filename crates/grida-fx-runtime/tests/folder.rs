@@ -8,8 +8,9 @@ use grida_fx_core::project::{PlanRequest, make_planner};
 use grida_fx_core::val::{Collection, FileValue, Val};
 use grida_fx_core::value::{file_digest, write_json};
 use grida_fx_runtime::folder::{
-    FolderRefused, RunFolder, check_plan, keyed_path, local_date, named, new_folder, output_files,
-    plan_document, recorded_plan, safe_name, step_files,
+    FolderRefused, NAME_BYTES, RunFolder, capped, check_plan, keyed_path, local_date, named,
+    new_folder, output_files, plan_document, recorded_plan, safe_name, step_files, step_folder,
+    takes_of_id,
 };
 use indexmap::IndexMap;
 use serde_json::{Value, json};
@@ -132,7 +133,7 @@ fn a_port_with_one_file_is_named_after_the_port() {
         ("nothing".to_string(), Val::Null),
     ]);
     assert_eq!(
-        paths(step_files("entity['ada'].draw", &outputs)),
+        paths(step_files("entity['ada'].draw", &[1], &outputs)),
         [pair("files/entity__ada__.draw/image.png", PNG)]
     );
 }
@@ -161,7 +162,7 @@ fn a_port_with_several_files_gets_a_folder() {
         ),
     ]);
     assert_eq!(
-        step_files("m", &outputs),
+        step_files("m", &[1], &outputs),
         [
             pair("files/m/seq/0.json", JPG),
             pair("files/m/seq/1.txt", TXT),
@@ -180,7 +181,7 @@ fn a_keyed_collection_with_one_item_is_one_file_of_a_step() {
         collection(vec![("ada", file(PNG, "image/png", Some("ada")))]),
     )]);
     assert_eq!(
-        step_files("draw", &outputs),
+        step_files("draw", &[1], &outputs),
         [pair("files/draw/items.png", PNG)]
     );
 }
@@ -198,7 +199,7 @@ fn keys_with_slashes_and_dots_stay_under_the_port() {
         ]),
     )]);
     assert_eq!(
-        step_files("s", &outputs),
+        step_files("s", &[1], &outputs),
         [
             pair("files/s/items/a/b.png", PNG),
             pair("files/s/items/_/up.png", PNG),
@@ -278,25 +279,142 @@ fn a_new_folder_takes_the_smallest_free_number() {
     } else {
         c.is_ascii_digit()
     }));
-    let first = new_folder(&runs, "case");
+    let first = new_folder(&runs, "case").unwrap();
     assert_eq!(first, runs.join("case").join(format!("{date}-1")));
-    assert!(!runs.exists(), "choosing a folder touches nothing");
-    std::fs::create_dir_all(&first).unwrap();
-    std::fs::create_dir_all(runs.join("case").join(format!("{date}-3"))).unwrap();
-    assert_eq!(
-        new_folder(&runs, "case"),
-        runs.join("case").join(format!("{date}-2"))
+    assert!(
+        first.is_dir(),
+        "the new folder is made, so nobody else takes it"
     );
+    std::fs::create_dir_all(runs.join("case").join(format!("{date}-3"))).unwrap();
+    let second = new_folder(&runs, "case").unwrap();
+    assert_eq!(second, runs.join("case").join(format!("{date}-2")));
     // A plain file of that name is taken too.
-    std::fs::write(runs.join("case").join(format!("{date}-2")), b"").unwrap();
+    std::fs::remove_dir(&second).unwrap();
+    std::fs::write(&second, b"").unwrap();
     assert_eq!(
-        new_folder(&runs, "case"),
+        new_folder(&runs, "case").unwrap(),
         runs.join("case").join(format!("{date}-4"))
     );
     assert_eq!(
-        new_folder(&runs, "other"),
+        new_folder(&runs, "other").unwrap(),
         runs.join("other").join(format!("{date}-1"))
     );
+}
+
+#[test]
+fn invocations_starting_at_once_never_share_a_new_folder() {
+    let dir = tempfile::tempdir().unwrap();
+    let runs = dir.path().join("runs");
+    let made: Vec<std::path::PathBuf> = std::thread::scope(|scope| {
+        let workers: Vec<_> = (0..16)
+            .map(|_| scope.spawn(|| new_folder(&runs, "case").unwrap()))
+            .collect();
+        workers.into_iter().map(|w| w.join().unwrap()).collect()
+    });
+    let distinct: std::collections::BTreeSet<_> = made.iter().collect();
+    assert_eq!(distinct.len(), 16, "{made:?}");
+}
+
+// ------------------------------------------------------------------ takes and long names
+
+#[test]
+fn each_take_of_a_step_has_a_folder_of_its_own() {
+    let outputs = IndexMap::from([("text".to_string(), file(TXT, "text/plain", None))]);
+    assert_eq!(
+        step_files("draw", &[1], &outputs),
+        [pair("files/draw/text.txt", TXT)]
+    );
+    assert_eq!(
+        step_files("draw", &[2], &outputs),
+        [pair("files/draw#2/text.txt", TXT)]
+    );
+    assert_eq!(
+        step_files("entity['ada'].draw", &[1, 3], &outputs),
+        [pair("files/entity__ada__.draw#1.3/text.txt", TXT)]
+    );
+    assert_eq!(step_folder("draw", &[1, 1]), "draw#1.1");
+    assert_eq!(takes_of_id("draw#2"), [2]);
+    assert_eq!(takes_of_id("entity['a#b'].draw#1.3"), [1, 3]);
+    assert_eq!(takes_of_id("draw"), [1]);
+}
+
+#[test]
+fn names_too_long_for_a_file_system_are_cut_with_a_digest() {
+    let key = "k".repeat(300);
+    let outputs = IndexMap::from([(
+        "items".to_string(),
+        collection(vec![
+            (key.as_str(), file(PNG, "image/png", Some(key.as_str()))),
+            ("short", file(TXT, "text/plain", Some("short"))),
+        ]),
+    )]);
+    let placed = step_files(&"s".repeat(400), &[1], &outputs);
+    for (path, _) in &placed {
+        for segment in path.split('/') {
+            assert!(segment.len() <= NAME_BYTES, "{segment}");
+        }
+    }
+    let long = &placed[0].0;
+    let name = long.rsplit('/').next().unwrap();
+    assert_eq!(name.len(), NAME_BYTES);
+    assert!(name.ends_with(".png") && name.contains('~'), "{name}");
+    assert!(name.starts_with("kkkk"));
+    // Names that fit are left as they are; a cut is the same every time and differs per name.
+    assert!(placed[1].0.ends_with("/items/short.txt"));
+    assert_eq!(capped(long, "image/png"), *long);
+    assert_ne!(
+        capped(&format!("files/s/{}", "a".repeat(300)), "file"),
+        capped(&format!("files/s/{}b", "a".repeat(299)), "file")
+    );
+    // A name of exactly the limit is kept; one byte more is cut, at a character boundary.
+    let exact = "é".repeat(127) + "x";
+    assert_eq!(exact.len(), NAME_BYTES);
+    assert_eq!(capped(&exact, "file"), exact);
+    let over = "é".repeat(128);
+    let cut = capped(&over, "file");
+    assert!(cut.len() <= NAME_BYTES && cut.contains('~'), "{cut}");
+}
+
+#[test]
+fn a_name_that_fits_is_placed_however_long() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let source = store.path().join(TXT);
+    std::fs::write(&source, b"x").unwrap();
+    let folder = RunFolder::lock(&dir.path().join("run"), "runs/three").unwrap();
+    // The longest name a file system takes: the temporary name used to place it is shorter.
+    let name = format!("files/s/{}", "k".repeat(NAME_BYTES));
+    folder.place(&name, &source).unwrap();
+    assert_eq!(std::fs::read(folder.path.join(&name)).unwrap(), b"x");
+}
+
+#[test]
+fn what_a_killed_invocation_half_placed_is_swept() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("run");
+    let folder = RunFolder::lock(&path, "runs/one").unwrap();
+    std::fs::create_dir_all(path.join("files/big__b2")).unwrap();
+    std::fs::create_dir_all(path.join("outputs/all")).unwrap();
+    let left = [
+        path.join("files/big__b2/.blob.11366-4.part"),
+        path.join("outputs/all/.0123456789abcdef.part"),
+        path.join(".fedcba9876543210.part"),
+    ];
+    let kept = [
+        path.join("files/big__b2/blob"),
+        path.join("outputs/all/.hidden.part"),
+        path.join("events.jsonl"),
+    ];
+    for file in left.iter().chain(&kept) {
+        std::fs::write(file, b"x").unwrap();
+    }
+    folder.sweep();
+    for file in &left {
+        assert!(!file.exists(), "{}", file.display());
+    }
+    for file in &kept {
+        assert!(file.exists(), "{}", file.display());
+    }
 }
 
 // ------------------------------------------------------------------ the lock

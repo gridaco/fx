@@ -17,7 +17,8 @@ engine sends ``tool.invoke``, ``agent.check`` and ``$/cancel`` for the same run.
 - **Host requests** are numbered from 1. :meth:`Channel.request` blocks the calling thread
   (any thread: the loop thread too, since the reader resolves futures itself);
   :meth:`Channel.request_async` awaits on the loop. An error answer raises the
-  :class:`~grida.fx._errors.EngineError` of its code.
+  :class:`~grida.fx._errors.EngineError` of its code. Params the engine could not read (outside
+  I-JSON, or nested deeper than its reader goes) raise ``ValueError`` and nothing is sent.
 - A ``run`` is answered only after its own requests are answered (section 5.3).
 
 When the session ends (end of input, ``exit``, a broken frame), :meth:`Session.close` fails every
@@ -194,8 +195,10 @@ def _serve_loop(loop: asyncio.AbstractEventLoop) -> None:
 
 
 def _check(method: str, params: dict[str, Any]) -> None:
+    """Refuses params the engine could not read: outside I-JSON, or nested deeper than it reads
+    (params sit one level inside their message)."""
     try:
-        check_value(params)
+        check_value(params, depth=1)
     except ValueError as error:
         raise ValueError(f"{method}: {error}") from None
 

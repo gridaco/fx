@@ -13,16 +13,30 @@
 //! plain(v)}` (a failed upstream result is `{"value": {"failed": id}}`). Money is a JSON number
 //! of dollars.
 //!
+//! Writing ([`EventLog::emit`]): a line is written whole or not at all. Each line goes out in one
+//! write; when the write fails (a full disk can take part of a line), the file is cut back to the
+//! length it had before the line, so no later line ever follows a fragment. A log whose cut fails
+//! is broken: every later write fails without writing. A line its reader could not read back (a
+//! value nested deeper than `value::MAX_DEPTH`) is refused before anything is written. Every
+//! failure is kept ([`EventLog::fault`], the first one): the runner stops the run as an engine
+//! fault whoever wrote the event, so a run never goes on with a record that lacks a line.
+//!
 //! Reading: [`read_events`] (the runner, resuming) repairs a torn tail: when the file does not end
-//! with a line feed it is truncated just after the last one; any other line that is not an I-JSON
-//! object is an error naming its line number. [`read_events_tolerant`] (`project`, `inspect`)
-//! stops at the first line it cannot read and never writes.
+//! with a line feed it is truncated just after the last one (an invocation was killed in the
+//! middle of a line, or its log broke there; [`read_events_noting`] says when it did); any other
+//! line that is not an I-JSON object is an error naming its line number.
+//! [`read_events_tolerant`] (`project`, `inspect`) leaves out a torn tail, stops at the first
+//! line it cannot read and never writes.
+//!
+//! Encoding keeps every event readable: a list nested so deep that its per-level encoding would
+//! pass `value::MAX_DEPTH` is written once as `{"value": plain}` when it holds no file, which
+//! [`decode`] reads back as the same list.
 
 use crate::store::Store;
 use crate::store::records::FileEntry;
 use grida_fx_core::money::Usd;
 use grida_fx_core::val::{Collection, Val};
-use grida_fx_core::value::{canon, is_digest, parse_json, sha256_hex};
+use grida_fx_core::value::{MAX_DEPTH, canon, is_digest, parse_json, sha256_hex};
 use indexmap::IndexMap;
 use serde_json::{Map, Value};
 use std::fs::{File, OpenOptions};
@@ -411,7 +425,7 @@ fn object_of(members: &IndexMap<String, Value>) -> Value {
 
 /// An open `events.jsonl`, shared by every task of an invocation.
 pub struct EventLog {
-    file: Mutex<File>,
+    writer: Mutex<Writer>,
     invocation_id: String,
     plan: String,
     opened: Instant,
@@ -437,26 +451,50 @@ impl EventLog {
             options.mode(0o600);
         }
         let file = options.open(path)?;
+        let length = file.metadata()?.len();
         Ok(EventLog {
-            file: Mutex::new(file),
+            writer: Mutex::new(Writer {
+                file: Box::new(file),
+                length,
+                broken: None,
+                fault: None,
+            }),
             invocation_id: invocation_id.to_string(),
             plan: plan.to_string(),
             opened: Instant::now(),
         })
     }
 
-    /// Writes one event with its envelope: one `canon` line, flushed.
+    /// Writes one event with its envelope: one `canon` line, flushed, whole or not at all
+    /// (module doc).
     pub fn emit(&self, event: &Event) -> std::io::Result<()> {
-        let line = self.line(event);
-        let mut file = self.file.lock().unwrap_or_else(|e| e.into_inner());
-        // One write of the whole line (O_APPEND), so concurrent tasks never interleave lines.
-        file.write_all(line.as_bytes())?;
-        file.flush()
+        let record = self.record(event);
+        let mut writer = self.writer.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(broken) = &writer.broken {
+            return Err(std::io::Error::other(broken.clone()));
+        }
+        if nesting(&record) > MAX_DEPTH {
+            let refused = format!(
+                "the {} event holds a value nested deeper than {MAX_DEPTH} levels, which the \
+                 record cannot hold",
+                event.name()
+            );
+            writer.fault.get_or_insert_with(|| refused.clone());
+            return Err(std::io::Error::new(ErrorKind::InvalidData, refused));
+        }
+        let mut line = canon(&record);
+        line.push('\n');
+        writer.append(line.as_bytes(), event.name())
     }
 
-    /// The bytes [`EventLog::emit`] writes for `event`: `canon(envelope + fields)` and a line
-    /// feed.
-    fn line(&self, event: &Event) -> String {
+    /// The first event this log could not write, if any (module doc).
+    pub fn fault(&self) -> Option<String> {
+        let writer = self.writer.lock().unwrap_or_else(|e| e.into_inner());
+        writer.fault.clone()
+    }
+
+    /// The record [`EventLog::emit`] writes for `event`: the envelope and the event's fields.
+    fn record(&self, event: &Event) -> Value {
         let mut record = Map::new();
         record.insert("kind".into(), Value::from(EVENTS_KIND));
         record.insert("event".into(), Value::from(event.name()));
@@ -469,9 +507,7 @@ impl EventLog {
         for (name, value) in event.to_fields() {
             record.entry(name).or_insert(value);
         }
-        let mut line = canon(&Value::Object(record));
-        line.push('\n');
-        line
+        Value::Object(record)
     }
 
     /// Milliseconds since the log was opened.
@@ -486,6 +522,87 @@ impl EventLog {
     pub fn plan(&self) -> &str {
         &self.plan
     }
+}
+
+/// Where a log's lines go: its file (or a stand-in in tests).
+trait Sink: Write + Send {
+    /// Cuts the sink back to `length` bytes.
+    fn set_len(&mut self, length: u64) -> std::io::Result<()>;
+}
+
+impl Sink for File {
+    fn set_len(&mut self, length: u64) -> std::io::Result<()> {
+        File::set_len(self, length)
+    }
+}
+
+/// The open file of a log and what has been written to it.
+struct Writer {
+    file: Box<dyn Sink>,
+    /// The length of the file after the last line written whole.
+    length: u64,
+    /// Why nothing can be written any more: a failed write that could not be cut back.
+    broken: Option<String>,
+    /// The first write that failed (module doc).
+    fault: Option<String>,
+}
+
+impl Writer {
+    /// Appends one line in one write (O_APPEND, so lines never interleave); on failure, cuts the
+    /// file back to its length before the line, or marks the log broken when that fails too.
+    fn append(&mut self, line: &[u8], name: &str) -> std::io::Result<()> {
+        let written = self.file.write_all(line).and_then(|()| self.file.flush());
+        match written {
+            Ok(()) => {
+                self.length += line.len() as u64;
+                Ok(())
+            }
+            Err(error) => {
+                let failure = format!("the {name} event could not be written: {}", reason(&error));
+                if let Err(cut) = self.file.set_len(self.length) {
+                    self.broken = Some(format!(
+                        "{failure}, and the part written could not be removed: {}",
+                        reason(&cut)
+                    ));
+                }
+                self.fault.get_or_insert(failure);
+                Err(error)
+            }
+        }
+    }
+}
+
+/// The deepest a node's value (a fact, a mark) may nest to be held anywhere in an event: an
+/// event holds a value at most three levels down (`with.<name>.value`), and [`encode`] keeps
+/// deeper lists to one level.
+pub const VALUE_DEPTH: usize = MAX_DEPTH - 3;
+
+/// Refuses a value nested deeper than [`VALUE_DEPTH`] (`what` names it), which the run's record
+/// could not hold.
+pub fn check_depth(value: &Value, what: &str) -> Result<(), String> {
+    if nesting(value) > VALUE_DEPTH {
+        return Err(format!(
+            "{what} is nested deeper than {VALUE_DEPTH} levels, which the run's record cannot hold"
+        ));
+    }
+    Ok(())
+}
+
+/// How deeply a value nests, counted as `value::parse_json` counts it: a scalar or an empty
+/// container at the top is 0, each container around a value adds 1.
+pub fn nesting(value: &Value) -> usize {
+    // A walk with its own stack: the value may be deeper than a recursion should go.
+    let mut deepest = 0;
+    let mut stack: Vec<(&Value, usize)> = vec![(value, 0)];
+    while let Some((value, depth)) = stack.pop() {
+        deepest = deepest.max(depth);
+        match value {
+            Value::Array(items) => stack.extend(items.iter().map(|item| (item, depth + 1))),
+            Value::Object(members) => stack.extend(members.values().map(|item| (item, depth + 1))),
+            _ => {}
+        }
+    }
+    deepest
 }
 
 /// A new invocation id: 16 lowercase hex characters, from the clock, the process id and a
@@ -504,12 +621,19 @@ pub fn new_invocation_id() -> String {
 
 /// Every event of a run folder's log, oldest first (module doc). A missing file is empty.
 pub fn read_events(path: &Path) -> Result<Vec<Value>, String> {
+    read_events_noting(path).map(|(events, _)| events)
+}
+
+/// [`read_events`], and whether a torn tail was cut off: the bytes after the last line feed,
+/// which an invocation began to write and never finished.
+pub fn read_events_noting(path: &Path) -> Result<(Vec<Value>, bool), String> {
     let mut data = match std::fs::read(path) {
         Ok(data) => data,
-        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok((Vec::new(), false)),
         Err(error) => return Err(format!("cannot read events.jsonl: {}", reason(&error))),
     };
-    if data.last().is_some_and(|last| *last != b'\n') {
+    let torn = data.last().is_some_and(|last| *last != b'\n');
+    if torn {
         // A torn tail: an invocation stopped in the middle of a line. Drop that line.
         let keep = data
             .iter()
@@ -532,7 +656,7 @@ pub fn read_events(path: &Path) -> Result<Vec<Value>, String> {
             None => return Err(format!("events.jsonl line {} is not an event", index + 1)),
         }
     }
-    Ok(events)
+    Ok((events, torn))
 }
 
 /// As [`read_events`], but stops at the first unreadable line and never writes.
@@ -582,8 +706,19 @@ fn reason(error: &std::io::Error) -> String {
     }
 }
 
+/// The deepest a value may nest for [`encode`] to encode its lists level by level: an event
+/// holds an encoded value at most three levels down (`with.<name>`, `outputs.<name>`), and each
+/// encoded list level takes two (an object and its array).
+const ENCODED_LEVELS: usize = (MAX_DEPTH - 3) / 2;
+
 /// A value as the schema's `encoded` def (module doc).
 pub fn encode(value: &Val) -> Value {
+    if let Val::List(_) = value
+        && json_nesting(value).is_some_and(|levels| levels > ENCODED_LEVELS)
+    {
+        // Encoded once: level by level, the event could not be read back (module doc).
+        return single("value", value.shown());
+    }
     match value {
         Val::File(file) => {
             let mut entry = Map::new();
@@ -612,6 +747,24 @@ pub fn encode(value: &Val) -> Value {
         // can use.
         other => single("value", other.plain().unwrap_or_else(|| other.shown())),
     }
+}
+
+/// How deeply a value that is plain JSON nests (a scalar is 0); `None` when it holds anything
+/// [`decode`] would not read back from `{"value": plain}` as itself (a file, a collection, a
+/// missing, failed or pending value, a view).
+fn json_nesting(value: &Val) -> Option<usize> {
+    let mut deepest = 0;
+    let mut stack: Vec<(&Val, usize)> = vec![(value, 0)];
+    while let Some((value, depth)) = stack.pop() {
+        deepest = deepest.max(depth);
+        match value {
+            Val::List(items) => stack.extend(items.iter().map(|item| (item, depth + 1))),
+            Val::Object(members) => stack.extend(members.values().map(|item| (item, depth + 1))),
+            Val::Null | Val::Bool(_) | Val::Number(_) | Val::Str(_) => {}
+            _ => return None,
+        }
+    }
+    Some(deepest)
 }
 
 fn single(name: &str, value: Value) -> Value {
@@ -709,6 +862,167 @@ mod tests {
     use super::*;
     use grida_fx_core::val::FileValue;
     use serde_json::json;
+    use std::sync::Arc;
+
+    /// A file that takes at most `room` more bytes: a write that does not fit takes what fits
+    /// and then fails, as a full disk does. `cut` says whether cutting back works.
+    struct Full {
+        bytes: Arc<Mutex<Vec<u8>>>,
+        room: usize,
+        cut: bool,
+    }
+
+    impl Write for Full {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            if self.room == 0 {
+                return Err(std::io::Error::other("No space left on device"));
+            }
+            let n = buf.len().min(self.room);
+            self.room -= n;
+            self.bytes.lock().unwrap().extend_from_slice(&buf[..n]);
+            Ok(n)
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl Sink for Full {
+        fn set_len(&mut self, length: u64) -> std::io::Result<()> {
+            if !self.cut {
+                return Err(std::io::Error::other("Input/output error"));
+            }
+            let mut bytes = self.bytes.lock().unwrap();
+            let freed = bytes.len() - length as usize;
+            bytes.truncate(length as usize);
+            self.room += freed;
+            Ok(())
+        }
+    }
+
+    fn log_on(room: usize, cut: bool) -> (EventLog, Arc<Mutex<Vec<u8>>>) {
+        let bytes = Arc::new(Mutex::new(Vec::new()));
+        let sink = Full {
+            bytes: Arc::clone(&bytes),
+            room,
+            cut,
+        };
+        let log = EventLog {
+            writer: Mutex::new(Writer {
+                file: Box::new(sink),
+                length: 0,
+                broken: None,
+                fault: None,
+            }),
+            invocation_id: "0123456789abcdef".into(),
+            plan: "a".repeat(64),
+            opened: Instant::now(),
+        };
+        (log, bytes)
+    }
+
+    fn problem(message: &str) -> Event {
+        Event::Problem {
+            where_: "case".into(),
+            message: message.into(),
+        }
+    }
+
+    #[test]
+    fn a_line_that_does_not_fit_leaves_nothing_behind() {
+        let (log, bytes) = log_on(500, true);
+        log.emit(&problem("first")).unwrap();
+        let whole = bytes.lock().unwrap().len();
+        assert!(whole < 250, "{whole}");
+        // Part of this line fits; the part is cut back off.
+        let error = log.emit(&problem(&"z".repeat(1000))).unwrap_err();
+        assert!(error.to_string().contains("No space"), "{error}");
+        assert_eq!(bytes.lock().unwrap().len(), whole);
+        assert!(
+            log.fault()
+                .unwrap()
+                .contains("the problem event could not be written")
+        );
+        // Later lines follow whole lines only.
+        log.emit(&problem("later")).unwrap();
+        let text = String::from_utf8(bytes.lock().unwrap().clone()).unwrap();
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines.len(), 2);
+        assert!(
+            lines
+                .iter()
+                .all(|line| parse_event(line.as_bytes()).is_some())
+        );
+        assert!(text.ends_with('\n'));
+    }
+
+    #[test]
+    fn a_log_that_cannot_be_cut_back_writes_nothing_more() {
+        let (log, bytes) = log_on(300, false);
+        log.emit(&problem("first")).unwrap();
+        assert!(log.emit(&problem(&"z".repeat(1000))).is_err());
+        let torn = bytes.lock().unwrap().len();
+        let error = log.emit(&problem("later")).unwrap_err();
+        assert!(
+            error.to_string().contains("could not be removed"),
+            "{error}"
+        );
+        assert_eq!(
+            bytes.lock().unwrap().len(),
+            torn,
+            "nothing follows the fragment"
+        );
+        assert!(log.fault().is_some());
+    }
+
+    #[test]
+    fn an_event_its_reader_could_not_read_is_never_written() {
+        let (log, bytes) = log_on(usize::MAX, true);
+        let mut deep = json!(1);
+        for _ in 0..MAX_DEPTH {
+            deep = json!([deep]);
+        }
+        let event = Event::NodeFinished {
+            id: "a#1".into(),
+            path: "a".into(),
+            cache_hit: false,
+            outputs: IndexMap::new(),
+            facts: IndexMap::from([("x".to_string(), deep)]),
+            duration_ms: 1,
+        };
+        let error = log.emit(&event).unwrap_err();
+        assert!(
+            error.to_string().contains("nested deeper than 512"),
+            "{error}"
+        );
+        assert!(bytes.lock().unwrap().is_empty());
+        assert!(log.fault().is_some());
+    }
+
+    #[test]
+    fn deep_lists_are_encoded_once_and_read_back() {
+        let mut deep = Val::Str("x".into());
+        for _ in 0..300 {
+            deep = Val::List(vec![deep, Val::Null]);
+        }
+        let encoded = encode(&deep);
+        assert!(encoded.get("value").is_some());
+        let mut event = Map::new();
+        event.insert("with".into(), json!({"v": encoded.clone()}));
+        assert!(nesting(&Value::Object(event)) <= MAX_DEPTH);
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path());
+        assert_eq!(decode(&encoded, &store).unwrap(), deep);
+        // Shallow lists keep the schema's list form.
+        let shallow = Val::List(vec![Val::List(vec![Val::Number(1.0)])]);
+        assert_eq!(
+            encode(&shallow),
+            json!({"list": [{"list": [{"value": 1}]}]})
+        );
+        assert_eq!(nesting(&json!(1)), 0);
+        assert_eq!(nesting(&json!([[], {"a": [1]}])), 3);
+    }
 
     const DIGEST: &str = "c3f9c8c283a2b1f2f1896f27a01cbe3cddc0c9d93f752e4639035a0f5b36f6e8";
 

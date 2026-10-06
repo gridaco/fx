@@ -26,6 +26,16 @@
 //!   submission. Error texts never hold an absolute path: records are named `jobs/<key>.json`;
 //! - nothing here holds a secret or a path in a record (§7).
 //!
+//! What a killed invocation leaves behind ([`Store::sweep`], at the start of every run): a
+//! temporary file it was writing (`.<16 hex>.part` beside a record or a file) is removed once it
+//! is an hour old, since one that is being written is touched far more often; a work dir is
+//! removed once its invocation no longer runs. An invocation claims its work dirs
+//! (`work/<invocation id>-<n>/`) with `work/<invocation id>.lock` ([`Store::claim_work`]), locked
+//! for as long as it runs (it is locked before it gets its name, so no sweep sees it unlocked
+//! while its invocation runs); the lock ends with the process, so a lock that can be taken
+//! belongs to an invocation that is gone. A work dir with no lock file at all (an engine that claimed none)
+//! goes once it is an hour old.
+//!
 //! The read set ([`read_set`]) maps `<with name>/<index>` to the digest of each file the
 //! instance's with-values hold, in order (store.md §3).
 //!
@@ -58,6 +68,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 /// A read set: `<name>/<index>` → file digest, sorted by key.
 pub type ReadSet = BTreeMap<String, String>;
@@ -77,6 +88,10 @@ pub enum StoreError {
     Io { what: String, reason: String },
     /// A job record exists and cannot be read (spec/store.md §4): the run stops.
     UnreadableJob { key: String, reason: String },
+    /// The file to be stored could not be read, or changed while it was read: the fault of
+    /// whoever handed it in (a body's output or `file.put`), not the store's. A sentence that
+    /// names the file as the caller did.
+    Source(String),
 }
 
 impl fmt::Display for StoreError {
@@ -84,6 +99,7 @@ impl fmt::Display for StoreError {
         match self {
             StoreError::NotADigest(text) => write!(f, "not a digest: {text}"),
             StoreError::Io { what, reason } => write!(f, "the store's {what}: {reason}"),
+            StoreError::Source(sentence) => write!(f, "{sentence}"),
             StoreError::UnreadableJob { key, reason } => {
                 write!(f, "the job record jobs/{key}.json is unreadable: {reason}")
             }
@@ -178,10 +194,11 @@ impl Store {
     /// The source is hashed first, so a present file is neither copied nor rewritten; otherwise
     /// it is copied into a temporary name in `files/<d[:2]>/` and hashed again on the way, and a
     /// source that changed in between is refused.
+    /// A source that cannot be read or that changes while it is copied is
+    /// [`StoreError::Source`]; a store that cannot be written is [`StoreError::Io`].
     pub fn put_file(&self, source: &Path, label: &str) -> Result<Stored, StoreError> {
-        let unreadable = |error: &io::Error| StoreError::Io {
-            what: "files".into(),
-            reason: format!("cannot read {label}: {}", io_reason(error)),
+        let unreadable = |error: &io::Error| {
+            StoreError::Source(format!("cannot read {label}: {}", io_reason(error)))
         };
         let (digest, size) = File::open(source)
             .and_then(|mut file| hash_reader(&mut file))
@@ -211,10 +228,9 @@ impl Store {
             temp.write_all(&buffer[..n]).map_err(|e| failed(&e))?;
         }
         if hex(&hasher.finalize()) != digest || copied != size {
-            return Err(StoreError::Io {
-                what: "files".into(),
-                reason: format!("{label} changed while it was being stored"),
-            });
+            return Err(StoreError::Source(format!(
+                "{label} changed while it was being stored"
+            )));
         }
         temp.publish(&path, true).map_err(|e| failed(&e))?;
         Ok(Stored { digest, size })
@@ -226,17 +242,17 @@ impl Store {
         let path = self.file_path(&file.digest)?;
         if !self.has(&file.digest, file.size) {
             let Some(location) = &file.location else {
-                return Err(StoreError::Io {
-                    what: "files".into(),
-                    reason: format!("{} has no local copy", file.name),
-                });
+                return Err(StoreError::Source(format!(
+                    "{} has no local copy",
+                    file.name
+                )));
             };
             let stored = self.put_file(location, &file.name)?;
             if stored.digest != file.digest || stored.size != file.size {
-                return Err(StoreError::Io {
-                    what: "files".into(),
-                    reason: format!("{} changed since it was planned", file.name),
-                });
+                return Err(StoreError::Source(format!(
+                    "{} changed since it was planned",
+                    file.name
+                )));
             }
         }
         Ok(FileValue {
@@ -624,6 +640,202 @@ fn temp_name() -> String {
     hasher.update(seed.as_bytes());
     let digest = hex(&hasher.finalize());
     format!(".{}.part", &digest[..16])
+}
+
+/// How old a temporary file or an unclaimed work dir must be before [`Store::sweep`] removes it.
+const STALE: Duration = Duration::from_secs(60 * 60);
+
+/// The work claims this process holds, by lock file: each file stays open (and locked) until
+/// [`Store::release_work`].
+static CLAIMS: std::sync::Mutex<BTreeMap<PathBuf, File>> = std::sync::Mutex::new(BTreeMap::new());
+
+fn claims() -> std::sync::MutexGuard<'static, BTreeMap<PathBuf, File>> {
+    CLAIMS.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+impl Store {
+    /// Claims the work dirs of `invocation_id` (module doc): `work/<invocation id>.lock`, locked
+    /// until [`Store::release_work`] (or the process ends). Claiming again is a no-op.
+    pub fn claim_work(&self, invocation_id: &str) -> io::Result<()> {
+        let work = self.work_root();
+        let path = work.join(format!("{invocation_id}.lock"));
+        let mut held = claims();
+        if held.contains_key(&path) {
+            return Ok(());
+        }
+        fs::create_dir_all(&work)?;
+        // Locked under a name of its own, then renamed into place: a sweep never meets a claim
+        // that is not locked yet.
+        let claiming = work.join(format!(".{invocation_id}.claim"));
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&claiming)?;
+        let locked = file
+            .try_lock()
+            .map_err(|error| match error {
+                fs::TryLockError::WouldBlock => io::Error::new(
+                    io::ErrorKind::WouldBlock,
+                    format!("work/{invocation_id}.lock is held by another invocation"),
+                ),
+                fs::TryLockError::Error(error) => error,
+            })
+            .and_then(|()| fs::rename(&claiming, &path));
+        if let Err(error) = locked {
+            let _ = fs::remove_file(&claiming);
+            return Err(error);
+        }
+        held.insert(path, file);
+        Ok(())
+    }
+
+    /// Ends the claim of `invocation_id` (its work dirs are gone by then): the lock file is
+    /// removed and unlocked. A claim never made is a no-op.
+    pub fn release_work(&self, invocation_id: &str) {
+        let path = self.work_root().join(format!("{invocation_id}.lock"));
+        if let Some(file) = claims().remove(&path) {
+            let _ = fs::remove_file(&path);
+            drop(file);
+        }
+    }
+
+    /// Removes what killed invocations left behind (module doc). Best effort: what cannot be
+    /// read or removed stays.
+    pub fn sweep(&self) {
+        self.sweep_temporaries(STALE);
+        self.sweep_work(STALE);
+    }
+
+    /// Removes temporary files older than `stale` beside the store's files and records.
+    fn sweep_temporaries(&self, stale: Duration) {
+        let mut folders = vec![self.root.join("jobs")];
+        for top in ["files", "results", "calls"] {
+            if let Ok(fans) = fs::read_dir(self.root.join(top)) {
+                folders.extend(
+                    fans.flatten()
+                        .filter(|fan| fan.file_type().is_ok_and(|kind| kind.is_dir()))
+                        .map(|fan| fan.path()),
+                );
+            }
+        }
+        for folder in folders {
+            let Ok(entries) = fs::read_dir(&folder) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let name = entry.file_name();
+                let name = name.to_string_lossy();
+                if name.starts_with('.') && name.ends_with(".part") && older(&entry.path(), stale) {
+                    let _ = fs::remove_file(entry.path());
+                }
+            }
+        }
+    }
+
+    /// Removes the work dirs of invocations that no longer run (module doc).
+    fn sweep_work(&self, stale: Duration) {
+        let work = self.work_root();
+        let Ok(entries) = fs::read_dir(&work) else {
+            return;
+        };
+        let mut claims = Vec::new();
+        let mut dirs = Vec::new();
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let is_file = entry.file_type().is_ok_and(|kind| kind.is_file());
+            if is_file && name.starts_with('.') && name.ends_with(".claim") {
+                // A claim its invocation never finished making (one being made is left alone).
+                if older(&entry.path(), Duration::from_secs(60))
+                    && unlocked(&entry.path()).is_some()
+                {
+                    let _ = fs::remove_file(entry.path());
+                }
+                continue;
+            }
+            match name.strip_suffix(".lock") {
+                Some(invocation) if is_file => claims.push(invocation.to_string()),
+                _ if entry.file_type().is_ok_and(|kind| kind.is_dir()) => dirs.push(name),
+                _ => {}
+            }
+        }
+        let owner = |dir: &str| {
+            dir.rsplit_once('-')
+                .map(|(invocation, _)| invocation.to_string())
+        };
+        for invocation in &claims {
+            let path = work.join(format!("{invocation}.lock"));
+            // Held while the dirs and the file are removed; `None` while its invocation runs.
+            let Some(_held) = unlocked(&path) else {
+                continue;
+            };
+            for dir in dirs
+                .iter()
+                .filter(|dir| owner(dir).as_ref() == Some(invocation))
+            {
+                remove_tree(&work.join(dir));
+            }
+            let _ = fs::remove_file(&path);
+        }
+        for dir in &dirs {
+            let claimed = owner(dir).is_some_and(|invocation| claims.contains(&invocation));
+            let path = work.join(dir);
+            if !claimed && path.exists() && older(&path, stale) {
+                remove_tree(&path);
+            }
+        }
+    }
+}
+
+/// The file at `path`, locked, when no one else holds its lock (`None` when someone does, or it
+/// cannot be opened).
+fn unlocked(path: &Path) -> Option<File> {
+    let file = OpenOptions::new().read(true).write(true).open(path).ok()?;
+    file.try_lock().ok()?;
+    Some(file)
+}
+
+/// Whether a file was last changed more than `age` ago (unknown times are not old).
+fn older(path: &Path, age: Duration) -> bool {
+    fs::symlink_metadata(path)
+        .and_then(|meta| meta.modified())
+        .ok()
+        .and_then(|modified| modified.elapsed().ok())
+        .is_some_and(|elapsed| elapsed > age)
+}
+
+/// Removes a folder and everything under it, making read-only folders writable first when a
+/// first try fails. Best effort.
+pub fn remove_tree(dir: &Path) {
+    if fs::remove_dir_all(dir).is_ok() {
+        return;
+    }
+    let mut folders = vec![dir.to_path_buf()];
+    while let Some(folder) = folders.pop() {
+        let Ok(meta) = fs::symlink_metadata(&folder) else {
+            continue;
+        };
+        if !meta.is_dir() {
+            continue;
+        }
+        let mut permissions = meta.permissions();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            permissions.set_mode(permissions.mode() | 0o700);
+        }
+        #[cfg(not(unix))]
+        {
+            #[allow(clippy::permissions_set_readonly_false)]
+            permissions.set_readonly(false);
+        }
+        let _ = fs::set_permissions(&folder, permissions);
+        if let Ok(entries) = fs::read_dir(&folder) {
+            folders.extend(entries.flatten().map(|entry| entry.path()));
+        }
+    }
+    let _ = fs::remove_dir_all(dir);
 }
 
 /// A file being written under a temporary name; removed when dropped unless published.

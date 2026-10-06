@@ -5,8 +5,18 @@
 //!
 //! **Sends.** At most [`MAX_SENDS`] sends per call: every send of the request counts, whether it
 //! starts a new attempt or resends under the current one. Before each send the route's slot and
-//! pacing are taken ([`super::pacing::Admission::admit`]; `Pacing` in a run). Between sends
-//! the owner waits [`Backoff`] (0.5 s, doubling, at most 8 s).
+//! pacing are taken ([`super::pacing::Admission::admit`]; `Pacing` in a run), and only then is a
+//! new attempt's hold reserved: a request waiting for its slot holds none of the ceiling, and a
+//! refused reservation gives its slot back. Between sends the owner waits [`Backoff`] (0.5 s,
+//! doubling, at most 8 s).
+//!
+//! **Checking an answer.** An answer is accepted only when, in this order, the adapter's `check`
+//! passes, its `data` survives being written as the call record writes it and read back (its
+//! canonical form, spec/identity.md §2, which is what the record replays), and the engine's own
+//! check for the capability ([`Attempts::check`]; the shape of an `agent.turn` reply) passes on
+//! that canonical form. The accepted answer carries the canonical `data`, so a live answer and
+//! its replay are the same value. Any refusal fails the attempt as billed, before anything is
+//! recorded.
 //!
 //! **A plain call, attempt by attempt** (each attempt is its own hold, `ledger::hold_id`):
 //!
@@ -14,18 +24,21 @@
 //! |---|---|---|
 //! | `NotReceived` | kept open | resend under the same attempt (sends left), else settle $0 → `Failed` |
 //! | `Refused` | settled $0 | `Refused` (`capability_refused`), never retried |
-//! | `Answered`, check passes | settled at the reported cost (whole hold when none) | `Answered` |
-//! | `Answered`, check refuses | settled as billed (reported cost, else whole hold) | new attempt (sends left), else `Failed` |
+//! | `Answered`, checks pass | settled at the reported cost (whole hold when none) | `Answered` |
+//! | `Answered`, a check refuses | settled as billed (reported cost, else whole hold) | new attempt (sends left), else `Failed` |
 //! | `Failed { retryable: true }` | settled as billed | new attempt (sends left), else `Failed` |
 //! | `Failed { retryable: false }` | settled as billed | `Failed` |
 //! | cancelled while a send is in flight | settled in full | `Cancelled` |
-//! | cancelled before a send leaves | settled $0 | `Cancelled` |
+//! | cancelled while a resend waits for its slot | settled $0 | `Cancelled` |
+//! | cancelled while a new attempt waits for its slot | none reserved | `Cancelled` |
 //!
 //! A reservation that does not fit ends the call with `Ceiling` (`ceiling_exceeded`); attempts
-//! already made stay settled.
+//! already made stay settled. A reservation the run's log cannot record ends it with `Unrecorded`
+//! before anything is sent, and so does a billed attempt whose settlement the log could not record
+//! (`HoldBook::unrecorded`): no new attempt is made once the log has failed.
 //!
-//! **A long job** ([`submit_job`]): reserve; write the job record `submitting` before the submit
-//! may leave; then
+//! **A long job** ([`submit_job`]): take the slot; reserve; write the job record `submitting`
+//! before the submit may leave; then
 //! - `NotReceived`: resend the submit (sends left), else remove the record, settle $0, `Failed`;
 //! - `Refused`: remove the record, settle $0, `Refused`;
 //! - `Uncertain`: the record stays `submitting`, settle in full, `Unsettled` (`job_unsettled`);
@@ -66,7 +79,7 @@
 
 use super::pacing::{Admission, Slot};
 use crate::engine::Cancel;
-use crate::ledger::{Hold, Ledger, Refusal, Scopes};
+use crate::ledger::{Hold, Ledger, NotReserved, Refusal, Scopes};
 use crate::store::records::{JobRecord, JobState};
 use crate::store::{Store, StoreError};
 use grida_fx_core::money::Usd;
@@ -110,19 +123,34 @@ impl Backoff {
 
 /// Where holds go: the ledger in a run, a fake in tests.
 pub trait HoldBook: Send + Sync {
-    fn reserve(&self, node_id: String, amount: Usd, scopes: &Scopes) -> Result<Hold, Refusal>;
+    /// Opens a hold once it is recorded (`crate::ledger` module doc).
+    fn reserve(&self, node_id: String, amount: Usd, scopes: &Scopes) -> Result<Hold, NotReserved>;
+    /// Settles a hold: what was charged, whether or not the log could record it.
     fn settle(&self, hold: Hold, reported: Option<Usd>) -> Usd;
+    /// Why the book can no longer record what is spent (a settlement or a reservation its log
+    /// could not write), if it cannot.
+    fn unrecorded(&self) -> Option<String> {
+        None
+    }
 }
 
 impl HoldBook for Ledger {
-    fn reserve(&self, node_id: String, amount: Usd, scopes: &Scopes) -> Result<Hold, Refusal> {
-        Ledger::reserve(self, node_id, amount, scopes)
+    fn reserve(&self, node_id: String, amount: Usd, scopes: &Scopes) -> Result<Hold, NotReserved> {
+        Ledger::reserve_recorded(self, node_id, amount, scopes)
     }
 
     fn settle(&self, hold: Hold, reported: Option<Usd>) -> Usd {
         Ledger::settle(self, hold, reported)
     }
+
+    fn unrecorded(&self) -> Option<String> {
+        Ledger::fault(self)
+    }
 }
+
+/// An engine-side check of an answer's canonical form ([`Attempts::check`]): a refusal is a
+/// sentence, and the attempt is failed as billed.
+pub type AnswerCheck<'a> = dyn Fn(&Answer) -> Result<(), String> + Sync + 'a;
 
 /// Where job records go: the store in a run, a fake in tests.
 pub trait JobBook: Send + Sync {
@@ -158,6 +186,9 @@ pub struct Attempts<'a> {
     pub backoff: Backoff,
     /// The job record's key fields (`state` and `handle` are set by the owner); long jobs only.
     pub job: Option<JobRecord>,
+    /// The engine's own check of an answer, after the adapter's (module doc, "Checking an
+    /// answer"); `None` checks nothing more.
+    pub check: Option<&'a AnswerCheck<'a>>,
 }
 
 /// How a call ended (module doc).
@@ -181,6 +212,8 @@ pub enum Outcome {
     Cancelled,
     /// The store could not keep a job record: the run stops (spec/store.md §4).
     Store(StoreError),
+    /// The run's log could not record a reservation or a settlement: the run stops (module doc).
+    Unrecorded(String),
 }
 
 /// Makes a plain call (module doc).
@@ -191,6 +224,13 @@ pub async fn send_plain(adapter: &dyn RequestAdapter, attempts: &Attempts<'_>) -
     let mut attempt = 0;
     let mut resend: Option<Hold> = None;
     loop {
+        // The slot first, then the hold (module doc, "Sends").
+        let Some(slot) = attempts.admit(&route_id).await else {
+            if let Some(hold) = resend.take() {
+                attempts.settle(hold, Some(Usd::ZERO));
+            }
+            return Outcome::Cancelled;
+        };
         let hold = match resend.take() {
             Some(hold) => hold,
             None => match attempts.reserve() {
@@ -199,12 +239,8 @@ pub async fn send_plain(adapter: &dyn RequestAdapter, attempts: &Attempts<'_>) -
                     call.attempt = attempt;
                     hold
                 }
-                Err(refusal) => return Outcome::Ceiling(refusal),
+                Err(not) => return not_reserved(not),
             },
-        };
-        let Some(slot) = attempts.admit(&route_id).await else {
-            attempts.settle(hold, Some(Usd::ZERO));
-            return Outcome::Cancelled;
         };
         sends += 1;
         let sent = race(adapter.send(&call), attempts.cancel).await;
@@ -230,20 +266,23 @@ pub async fn send_plain(adapter: &dyn RequestAdapter, attempts: &Attempts<'_>) -
                 attempts.settle(hold, Some(Usd::ZERO));
                 return Outcome::Refused(reason);
             }
-            Some(Sent::Answered(answer)) => match adapter.check(&call, &answer) {
-                Ok(()) => {
-                    let charged = attempts.settle(hold, answer.cost);
-                    return Outcome::Answered {
-                        answer,
-                        charged,
-                        attempts: attempt,
-                    };
+            Some(Sent::Answered(answer)) => {
+                let cost = answer.cost;
+                match attempts.accept(&call, answer, |call, answer| adapter.check(call, answer)) {
+                    Ok(answer) => {
+                        let charged = attempts.settle(hold, cost);
+                        return Outcome::Answered {
+                            answer,
+                            charged,
+                            attempts: attempt,
+                        };
+                    }
+                    Err(reason) => {
+                        attempts.settle(hold, cost);
+                        reason
+                    }
                 }
-                Err(reason) => {
-                    attempts.settle(hold, answer.cost);
-                    reason
-                }
-            },
+            }
             Some(Sent::Failed {
                 reason,
                 cost,
@@ -257,11 +296,8 @@ pub async fn send_plain(adapter: &dyn RequestAdapter, attempts: &Attempts<'_>) -
             }
         };
         // The attempt failed as billed: a new attempt, when sends are left.
-        if sends >= MAX_SENDS {
-            return Outcome::Failed(reason);
-        }
-        if !attempts.wait(sends).await {
-            return Outcome::Cancelled;
+        if let Some(outcome) = attempts.next(sends, reason).await {
+            return outcome;
         }
     }
 }
@@ -277,7 +313,14 @@ pub async fn submit_job(adapter: &dyn LongJob, attempts: &Attempts<'_>) -> Outco
     let mut attempt = 0;
     let mut resend: Option<Hold> = None;
     loop {
-        let resending = resend.is_some();
+        // The slot first, then the hold (module doc, "Sends").
+        let Some(slot) = attempts.admit(&route_id).await else {
+            if let Some(hold) = resend.take() {
+                // The `submitting` record of the submit that was not received.
+                return attempts.unsent(fields, hold, Outcome::Cancelled);
+            }
+            return Outcome::Cancelled;
+        };
         let hold = match resend.take() {
             Some(hold) => hold,
             None => match attempts.reserve() {
@@ -286,16 +329,8 @@ pub async fn submit_job(adapter: &dyn LongJob, attempts: &Attempts<'_>) -> Outco
                     call.attempt = attempt;
                     hold
                 }
-                Err(refusal) => return Outcome::Ceiling(refusal),
+                Err(not) => return not_reserved(not),
             },
-        };
-        let Some(slot) = attempts.admit(&route_id).await else {
-            if resending {
-                // The `submitting` record of the submit that was not received.
-                return attempts.unsent(fields, hold, Outcome::Cancelled);
-            }
-            attempts.settle(hold, Some(Usd::ZERO));
-            return Outcome::Cancelled;
         };
         // spec/store.md §5: `submitting` is written before the submit may leave.
         if let Err(error) = attempts.save(fields, JobState::Submitting, None) {
@@ -354,11 +389,8 @@ pub async fn submit_job(adapter: &dyn LongJob, attempts: &Attempts<'_>) -> Outco
             }
         };
         // The attempt failed as billed: a new attempt, when sends are left.
-        if sends >= MAX_SENDS {
-            return Outcome::Failed(reason);
-        }
-        if !attempts.wait(sends).await {
-            return Outcome::Cancelled;
+        if let Some(outcome) = attempts.next(sends, reason).await {
+            return outcome;
         }
     }
 }
@@ -466,13 +498,13 @@ async fn collect_once(
     drop(slot);
     match collected {
         None => Collect::Cancelled,
-        Some(Collected::Answered(answer)) => match adapter.check(call, &answer) {
-            Ok(()) => Collect::Answered(answer),
-            Err(reason) => Collect::Refused {
-                reason,
-                cost: answer.cost,
-            },
-        },
+        Some(Collected::Answered(answer)) => {
+            let cost = answer.cost;
+            match attempts.accept(call, answer, |call, answer| adapter.check(call, answer)) {
+                Ok(answer) => Collect::Answered(answer),
+                Err(reason) => Collect::Refused { reason, cost },
+            }
+        }
         Some(Collected::Ended { reason }) => Collect::Ended(reason),
         Some(Collected::Unreachable { reason }) => Collect::Unreachable(reason),
     }
@@ -488,6 +520,20 @@ async fn race<T>(request: BoxFuture<'_, T>, cancel: &Cancel) -> Option<T> {
     }
 }
 
+/// A reservation that opened no hold: `Ceiling` when refused, `Unrecorded` when the log failed.
+fn not_reserved(not: NotReserved) -> Outcome {
+    match not {
+        NotReserved::Refused(refusal) => Outcome::Ceiling(refusal),
+        NotReserved::Unrecorded(reason) => Outcome::Unrecorded(reason),
+    }
+}
+
+/// `data` as the call record writes it and reads it back (module doc, "Checking an answer").
+pub fn canonical_data(data: &Value) -> Result<Value, String> {
+    grida_fx_core::value::parse_json(&grida_fx_core::value::canon(data))
+        .map_err(|refused| format!("the answer's data cannot be recorded: {}", refused.message))
+}
+
 /// The engine handed a long-job call no job record fields (module doc).
 fn no_job_fields(call: &CallRequest) -> Outcome {
     Outcome::Store(StoreError::Io {
@@ -498,9 +544,40 @@ fn no_job_fields(call: &CallRequest) -> Outcome {
 
 impl Attempts<'_> {
     /// Reserves a new attempt's hold under a new name.
-    fn reserve(&self) -> Result<Hold, Refusal> {
+    fn reserve(&self) -> Result<Hold, NotReserved> {
         self.book
             .reserve((self.hold_name)(), self.hold, self.scopes)
+    }
+
+    /// The checks of an answer (module doc, "Checking an answer"): the answer with its canonical
+    /// `data`, or why it is refused.
+    fn accept(
+        &self,
+        call: &CallRequest,
+        mut answer: Answer,
+        adapter_check: impl Fn(&CallRequest, &Answer) -> Result<(), String>,
+    ) -> Result<Answer, String> {
+        adapter_check(call, &answer)?;
+        answer.data = canonical_data(&answer.data)?;
+        if let Some(check) = self.check {
+            check(&answer)?;
+        }
+        Ok(answer)
+    }
+
+    /// After an attempt failed as billed: `None` to make a new one, or how the call ends (out of
+    /// sends, a log that can no longer record, or the run stopped during the wait).
+    async fn next(&self, sends: u32, reason: String) -> Option<Outcome> {
+        if let Some(unrecorded) = self.book.unrecorded() {
+            return Some(Outcome::Unrecorded(unrecorded));
+        }
+        if sends >= MAX_SENDS {
+            return Some(Outcome::Failed(reason));
+        }
+        if !self.wait(sends).await {
+            return Some(Outcome::Cancelled);
+        }
+        None
     }
 
     fn settle(&self, hold: Hold, reported: Option<Usd>) -> Usd {

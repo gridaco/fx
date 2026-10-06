@@ -5,8 +5,10 @@
 //! 2. checks: no undeclared output port (`<type name> returned undeclared outputs <names>`), every
 //!    non-optional port present (`<type name> did not return its output <port>`), each value's
 //!    shape matching its port (`output <port> is a list`, `output <port> is a keyed collection`,
-//!    `output <port> is one file`); no fact named `cost_usd` and no reserved marker in a fact or a
-//!    mark (`-32602`). A failed check fails the node and is not retried;
+//!    `output <port> is one file`); no fact named `cost_usd`, no reserved marker in a fact or a
+//!    mark, and no fact or mark nested deeper than the run's record can hold
+//!    (`events::check_depth`); every mark checked as `annotate` checks one (`marks[<i>]: <the
+//!    annotate refusal>`). A failed check fails the node and is not retried;
 //! 3. an `annotations` port the type declares and the body left out, with marks, gets
 //!    `{"kind": "fx-annotations-v1", "annotations": marks}` written by the engine (spec/identity.md
 //!    §5 "Writing JSON"), kind `annotations`;
@@ -33,11 +35,16 @@
 //! - The engine's annotations file is written only for a one-file port named `annotations`.
 //! - A store that cannot be written is not a refusal of the result: the executor stops the run
 //!   ([`accept_or_stop`]); [`accept`] reports it as a refusal for callers that only fail the node.
+//!   A file the body wrote that cannot be read, or that changes while it is stored, is the
+//!   body's: a refusal (`<instance path>/<port>: cannot read …`, `… changed while it was being
+//!   stored`).
+//! - [`unreadable_result`] says what is wrong with a `run` result FX cannot read at all.
 
 use super::InstanceJob;
 use crate::engine::RunFiles;
-use crate::store::Store;
+use crate::events::check_depth;
 use crate::store::records::FileEntry;
+use crate::store::{Store, StoreError};
 use grida_fx_core::error::io_reason;
 use grida_fx_core::kinds;
 use grida_fx_core::spec::Shape;
@@ -142,22 +149,30 @@ pub(crate) fn accept_or_stop(
             ));
         }
         check_markers(value, &format!("fact {name}")).map_err(|r| refuse(r.message))?;
+        check_depth(value, &format!("fact {name}")).map_err(refuse)?;
+    }
+    for (index, mark) in marks.iter().enumerate() {
+        super::requests::check_mark(mark).map_err(|m| refuse(format!("marks[{index}]: {m}")))?;
     }
     let marks_json = marks_value(&marks).map_err(refuse)?;
     if let Value::Array(items) = &marks_json {
         for (index, mark) in items.iter().enumerate() {
             check_markers(mark, &format!("marks[{index}]")).map_err(|r| refuse(r.message))?;
+            check_depth(mark, &format!("marks[{index}]")).map_err(refuse)?;
         }
     }
 
     let planned = resolve(planned, work_dir, files).map_err(refuse)?;
 
     // 5. Storing.
-    let stored =
-        store_outputs(planned, &marks_json, store).map_err(|message| NotAccepted::Store {
-            message,
+    let stored = store_outputs(planned, &marks_json, store).map_err(|error| match error {
+        // What the body wrote, not the store, is at fault: the node fails.
+        StoreError::Source(sentence) => refuse(sentence),
+        other => NotAccepted::Store {
+            message: other.to_string(),
             facts: kept(),
-        })?;
+        },
+    })?;
     Ok(Accepted {
         outputs: stored,
         facts,
@@ -172,7 +187,10 @@ pub fn failure_facts(
 ) -> IndexMap<String, Value> {
     let mut kept = IndexMap::new();
     let mut keep = |name: &String, value: &Value| {
-        if name != "cost_usd" && check_markers(value, name).is_ok() {
+        if name != "cost_usd"
+            && check_markers(value, name).is_ok()
+            && check_depth(value, name).is_ok()
+        {
             kept.insert(name.clone(), value.clone());
         }
     };
@@ -438,12 +456,13 @@ pub(crate) fn inside_work_dir(work_dir: &Path, work_path: &str) -> Option<PathBu
         .map(|_| resolved)
 }
 
-/// Step 5: stores each planned file and returns the values (module doc). An error is the store's.
+/// Step 5: stores each planned file and returns the values (module doc). An error is the
+/// store's, or a [`StoreError::Source`] for a file the body wrote.
 fn store_outputs(
     planned: Vec<(String, Planned<Source>)>,
     marks: &Value,
     store: &Store,
-) -> Result<IndexMap<String, Val>, String> {
+) -> Result<IndexMap<String, Val>, StoreError> {
     let mut outputs = IndexMap::with_capacity(planned.len());
     for (port, value) in planned {
         let value = match value {
@@ -471,12 +490,10 @@ fn store_outputs(
 }
 
 /// Stores one file and reads it back as a value.
-fn store_item(item: Item<Source>, marks: &Value, store: &Store) -> Result<Val, String> {
+fn store_item(item: Item<Source>, marks: &Value, store: &Store) -> Result<Val, StoreError> {
     let (digest, kind, size) = match item.source {
         Source::Work { path, kind } => {
-            let stored = store
-                .put_file(&path, &item.name)
-                .map_err(|e| e.to_string())?;
+            let stored = store.put_file(&path, &item.name)?;
             (stored.digest, kind, stored.size)
         }
         Source::Handed { digest, kind, size } => (digest, kind, size),
@@ -485,9 +502,7 @@ fn store_item(item: Item<Source>, marks: &Value, store: &Store) -> Result<Val, S
                 "kind": ANNOTATIONS_KIND,
                 "annotations": marks,
             });
-            let stored = store
-                .put_bytes(write_json(&document).as_bytes())
-                .map_err(|e| e.to_string())?;
+            let stored = store.put_bytes(write_json(&document).as_bytes())?;
             (stored.digest, "annotations".to_string(), stored.size)
         }
     };
@@ -498,8 +513,113 @@ fn store_item(item: Item<Source>, marks: &Value, store: &Store) -> Result<Val, S
         size,
         key: item.key,
     };
-    let file = store.file_value(&entry).map_err(|e| e.to_string())?;
+    let file = store.file_value(&entry)?;
     Ok(Val::File(Box::new(file)))
+}
+
+/// What is wrong with a `run` result that does not read as one (`error` is why it did not), as
+/// a sentence that names the place: the first member that is not what spec/protocol.md §3.4 and
+/// §5.3 describe.
+pub fn unreadable_result(value: &Value, error: &serde_json::Error) -> String {
+    let Value::Object(result) = value else {
+        return "the result is not an object".to_string();
+    };
+    if let Some(name) = result
+        .keys()
+        .find(|name| !matches!(name.as_str(), "outputs" | "facts" | "marks"))
+    {
+        return format!("the result has a member {name}, which is not outputs, facts or marks");
+    }
+    let Some(Value::Object(outputs)) = result.get("outputs") else {
+        return "the result's outputs is not an object of ports".to_string();
+    };
+    for (port, output) in outputs {
+        if let Some(problem) = unreadable_output(port, output) {
+            return problem;
+        }
+    }
+    match result.get("facts") {
+        None | Some(Value::Null | Value::Object(_)) => {}
+        Some(_) => return "the result's facts is not an object".to_string(),
+    }
+    match result.get("marks") {
+        None | Some(Value::Null) => {}
+        Some(Value::Array(marks)) => {
+            for (index, mark) in marks.iter().enumerate() {
+                if let Err(error) = serde_json::from_value::<Mark>(mark.clone()) {
+                    return format!("marks[{index}]: {}", crate::host::read_reason(&error));
+                }
+            }
+        }
+        Some(_) => return "the result's marks is not a list".to_string(),
+    }
+    crate::host::read_reason(error)
+}
+
+/// What is wrong with one port's value, when something is.
+fn unreadable_output(port: &str, output: &Value) -> Option<String> {
+    let one = |label: &str, item: &Value| unreadable_file(label, item);
+    match output {
+        Value::Null => None,
+        Value::Object(members) if members.contains_key("list") => match &members["list"] {
+            Value::Array(items) if members.len() == 1 => items
+                .iter()
+                .enumerate()
+                .find_map(|(index, item)| one(&format!("{port}[{index}]"), item)),
+            _ => Some(format!("output {port}: a list is {{\"list\": [file, …]}}")),
+        },
+        Value::Object(members) if members.contains_key("collection") => {
+            let pairs = match &members["collection"] {
+                Value::Array(pairs) if members.len() == 1 => pairs,
+                _ => {
+                    return Some(format!(
+                        "output {port}: a keyed collection is {{\"collection\": [[key, file], …]}}"
+                    ));
+                }
+            };
+            pairs
+                .iter()
+                .find_map(|pair| match pair.as_array().map(Vec::as_slice) {
+                    Some([Value::String(key), item]) => one(&format!("{port}[{key}]"), item),
+                    _ => Some(format!(
+                        "output {port}: a keyed collection's item is [key, file]"
+                    )),
+                })
+        }
+        item => one(port, item),
+    }
+}
+
+/// What is wrong with one output file, when something is.
+fn unreadable_file(label: &str, item: &Value) -> Option<String> {
+    let shapes = "a file is {\"work_path\", \"kind\"?} or {\"file\": <ref>}";
+    let Value::Object(members) = item else {
+        return Some(format!("output {label}: {shapes}"));
+    };
+    if let Some(reference) = members.get("file") {
+        if members.len() != 1 {
+            return Some(format!("output {label}: {shapes}"));
+        }
+        return serde_json::from_value::<grida_fx_protocol::FileRef>(reference.clone())
+            .err()
+            .map(|error| {
+                let reason = crate::host::read_reason(&error);
+                match reason.strip_prefix("it ") {
+                    Some(rest) => format!("output {label}: the file ref {rest}"),
+                    None => format!("output {label}: the file ref is not one: {reason}"),
+                }
+            });
+    }
+    let work_path_ok = matches!(members.get("work_path"), Some(Value::String(_)));
+    let kind_ok = matches!(members.get("kind"), None | Some(Value::String(_)));
+    let only_known = members
+        .keys()
+        .all(|name| matches!(name.as_str(), "work_path" | "kind"));
+    if work_path_ok && kind_ok && only_known {
+        None
+    } else {
+        Some(format!("output {label}: {shapes}"))
+    }
 }
 
 #[cfg(test)]
@@ -670,6 +790,140 @@ mod tests {
         assert_eq!(
             refused(&job, &r, dir.path()).message,
             "marks[1].extra: an object holding only `missing` in this shape is reserved for FX's own values"
+        );
+    }
+
+    #[test]
+    fn result_marks_are_checked_as_annotate_checks_them() {
+        let dir = tempfile::tempdir().unwrap();
+        let job = job(&[("annotations", "annotations?")]);
+        let r = result(
+            json!({"outputs": {}, "marks": [{"shape": "box", "box": [0, 0, 1, 1]},
+                                                       {"shape": "point"}]}),
+        );
+        assert_eq!(
+            refused(&job, &r, dir.path()).message,
+            "marks[1]: a point mark needs at: [x, y]"
+        );
+    }
+
+    #[test]
+    fn facts_and_marks_the_record_cannot_hold_are_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let job = job(&[("x", "text?")]);
+        let deep = |levels: usize| {
+            let mut value = json!(1);
+            for _ in 0..levels {
+                value = json!([value]);
+            }
+            value
+        };
+        let held = result(json!({"outputs": {}, "facts": {"x": deep(crate::events::VALUE_DEPTH)}}));
+        let store = Store::open(&dir.path().join("store"));
+        let accepted = accept(
+            &job,
+            &held,
+            &IndexMap::new(),
+            &[],
+            dir.path(),
+            &store,
+            &RunFiles::new(),
+        );
+        assert!(accepted.is_ok(), "{accepted:?}");
+        let r = result(json!({"outputs": {}, "facts": {"ok": 1, "x": deep(510)}}));
+        let refusal = refused(&job, &r, dir.path());
+        assert_eq!(
+            refusal.message,
+            "fact x is nested deeper than 509 levels, which the run's record cannot hold"
+        );
+        assert_eq!(
+            refusal.facts,
+            IndexMap::from([("ok".to_string(), json!(1))])
+        );
+        let r = result(json!({"outputs": {}, "marks": [{"label": "a", "extra": deep(510)}]}));
+        assert_eq!(
+            refused(&job, &r, dir.path()).message,
+            "marks[0] is nested deeper than 509 levels, which the run's record cannot hold"
+        );
+    }
+
+    #[test]
+    fn an_output_the_body_cannot_have_read_fails_the_node() {
+        let dir = tempfile::tempdir().unwrap();
+        let work = dir.path().join("work");
+        std::fs::create_dir_all(&work).unwrap();
+        std::fs::write(work.join("secret.txt"), "x").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(
+                work.join("secret.txt"),
+                std::fs::Permissions::from_mode(0o000),
+            )
+            .unwrap();
+            if std::fs::File::open(work.join("secret.txt")).is_ok() {
+                // Running as a user that reads anything: nothing to check.
+                return;
+            }
+            let job = job(&[("x", "text")]);
+            let r = result(json!({"outputs": {"x": {"work_path": "secret.txt"}}}));
+            let store = Store::open(&dir.path().join("store"));
+            let not = accept_or_stop(
+                &job,
+                &r,
+                &IndexMap::new(),
+                &[],
+                &work,
+                &store,
+                &RunFiles::new(),
+            )
+            .unwrap_err();
+            assert!(
+                matches!(&not, NotAccepted::Refused(refused)
+                    if refused.message.contains("cannot read secret.txt: permission denied")),
+                "{not:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_result_fx_cannot_read_says_where() {
+        let reason = |value: Value| {
+            let error = serde_json::from_value::<RunResult>(value.clone()).unwrap_err();
+            unreadable_result(&value, &error)
+        };
+        assert_eq!(reason(json!([])), "the result is not an object");
+        assert_eq!(
+            reason(json!({"outputs": {}, "notes": 1})),
+            "the result has a member notes, which is not outputs, facts or marks"
+        );
+        assert_eq!(
+            reason(json!({"facts": {}})),
+            "the result's outputs is not an object of ports"
+        );
+        assert_eq!(
+            reason(json!({"outputs": {"text": "out/a.txt"}})),
+            "output text: a file is {\"work_path\", \"kind\"?} or {\"file\": <ref>}"
+        );
+        assert_eq!(
+            reason(json!({"outputs": {"seq": {"list": [{"work_path": "a"}, {"path": "b"}]}}})),
+            "output seq[1]: a file is {\"work_path\", \"kind\"?} or {\"file\": <ref>}"
+        );
+        assert_eq!(
+            reason(json!({"outputs": {"all": {"collection": [["k"]]}}})),
+            "output all: a keyed collection's item is [key, file]"
+        );
+        assert_eq!(
+            reason(json!({"outputs": {"x": {"file": {"digest": "d"}}}})),
+            "output x: the file ref has no kind"
+        );
+        assert_eq!(
+            reason(json!({"outputs": {}, "facts": []})),
+            "the result's facts is not an object"
+        );
+        assert_eq!(
+            reason(json!({"outputs": {}, "marks": {}})),
+            "the result's marks is not a list"
         );
     }
 

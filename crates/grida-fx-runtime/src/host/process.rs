@@ -22,18 +22,36 @@
 //! - [`HostProcess::exit_status`]: the status once the process has exited (for `the node host
 //!   exited with status <n>`).
 //!
-//! The group is killed only while the host itself has not been reaped, so its id cannot have
-//! been reused by an unrelated process group.
+//! However a host ends, its process group is killed once the host has exited, so a process a body
+//! started and left behind does not outlive the host (nor hold the command's output streams
+//! open). A host that is killed has its group killed before it is reaped; a host that exits on
+//! its own is reaped first and its group killed right after: while the group still has a member
+//! its id cannot be reused (POSIX keeps a process group's id out of use until the group is
+//! empty), and an empty group is gone, so the kill reaches nothing.
+//!
+//! The host's exit is seen by waiting on the process, not by the end of its output: a process
+//! that forked from the host keeps the protocol pipes open after the host has gone.
+//! [`HostProcess::answer_or_exit`] waits for an answer or the exit, whichever comes first; after
+//! an exit (and the group kill, which closes the pipes such a process held) it reads what the
+//! host wrote before it exited, and ends the connection when nothing more arrives within the
+//! grace period (a process that left the group still holds the pipes).
+//!
+//! Every host this process started and has not ended is listed process-wide, so an interrupted
+//! command can kill them all with [`end_every_host`] before it exits; after that call no host
+//! starts.
 
 use super::connection::{Connection, ConnectionError, Incoming};
-use super::{GRACE, HOST_ARGS, PYTHON_ADVICE, SAFE_PATH_MARK, exited_with, mismatch, program};
+use super::{GRACE, HOST_ARGS, PYTHON_ADVICE, SAFE_PATH_MARK, exit_text, mismatch, program};
 use grida_fx_core::{ENGINE_NAME, ENGINE_VERSION};
 use grida_fx_protocol::{
     EngineInfo, ErrorCode, ErrorData, InitializeParams, InitializeResult, PROTOCOL, method,
 };
+use serde_json::Value;
+use std::future::Future;
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::process::{ExitStatus, Stdio};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 use tokio::process::{Child, Command};
 
@@ -85,7 +103,12 @@ impl HostProcess {
             project_root: project_root.into(),
             sources: spec.sources.clone(),
         })
-        .map_err(|e| format!("the initialize request cannot be written: {e}"))?;
+        .map_err(|e| {
+            format!(
+                "the initialize request cannot be written: {}",
+                super::read_reason(&e)
+            )
+        })?;
         let mut command = Command::new(program(&spec.python));
         command.args(HOST_ARGS).current_dir(&spec.project_root);
         if std::env::var_os("PYTHONSAFEPATH").is_none_or(|value| value.is_empty()) {
@@ -106,12 +129,20 @@ impl HostProcess {
         })?;
         // `process_group(0)`: the host leads a group whose id is its pid.
         let group = if cfg!(unix) { child.id() } else { None };
-        let (Some(stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) else {
+        let enlisted = group.is_none_or(enlist);
+        let streams = (child.stdin.take(), child.stdout.take());
+        let (true, (Some(stdin), Some(stdout))) = (enlisted, streams) else {
+            if let Some(group) = group {
+                forget(group);
+                kill_groups_now(&[group]);
+            }
             let _ = child.start_kill();
             let _ = child.wait().await;
-            return Err(format!(
-                "cannot start the Python node host with {shown}: its streams are not piped"
-            ));
+            return Err(if enlisted {
+                format!("cannot start the Python node host with {shown}: its streams are not piped")
+            } else {
+                "the command is stopping, so no node host starts".to_string()
+            });
         };
         let connection = Connection::start(stdout, stdin, incoming);
         let mut running = Running {
@@ -120,7 +151,10 @@ impl HostProcess {
             group,
             status: None,
         };
-        let failure = match connection.request(method::INITIALIZE, Some(params)).await {
+        let asking = connection.clone();
+        let request = asking.request(method::INITIALIZE, Some(params));
+        tokio::pin!(request);
+        let failure = match running.answer_or_exit(request, grace).await {
             Ok(value) => match serde_json::from_value::<InitializeResult>(value) {
                 Ok(info) if info.protocol == PROTOCOL => {
                     return Ok(HostProcess {
@@ -131,7 +165,8 @@ impl HostProcess {
                 }
                 Ok(info) => mismatch(Some(&info.host.sdk_version), &info.protocol),
                 Err(e) => format!(
-                    "the Python node host ({shown}) answered initialize with something FX cannot read: {e}"
+                    "the Python node host ({shown}) answered initialize with something FX cannot read: {}",
+                    super::read_reason(&e)
                 ),
             },
             Err(ConnectionError::Rpc(error))
@@ -157,8 +192,8 @@ impl HostProcess {
             Err(ConnectionError::Closed) => {
                 let status = running.end(false, grace).await;
                 return Err(format!(
-                    "the Python node host ({shown}) exited{} before it answered initialize; {PYTHON_ADVICE}",
-                    exited_with(status)
+                    "the Python node host ({shown}) {} before it answered initialize; {PYTHON_ADVICE}",
+                    exit_text(status)
                 ));
             }
             Err(ConnectionError::Protocol(message)) => {
@@ -205,6 +240,21 @@ impl HostProcess {
         self.running.kill().await
     }
 
+    /// The answer to `request` (a request on this host's connection), or, when the host exits
+    /// first, what it answered before it exited: the answer it wrote, else
+    /// [`ConnectionError::Closed`] once its output ends or `grace` passes with no answer (the
+    /// connection is then ended). See the module doc.
+    pub(crate) async fn answer_or_exit<F>(
+        &mut self,
+        request: Pin<&mut F>,
+        grace: Duration,
+    ) -> Result<Value, ConnectionError>
+    where
+        F: Future<Output = Result<Value, ConnectionError>>,
+    {
+        self.running.answer_or_exit(request, grace).await
+    }
+
     /// Whether the host may serve another request: its connection works and it is running.
     pub(crate) fn is_healthy(&mut self) -> bool {
         self.connection.is_open() && self.exit_status().is_none()
@@ -220,18 +270,32 @@ impl HostProcess {
 struct Running {
     connection: Connection,
     child: Child,
-    /// The process group to kill with the host (Unix).
+    /// The process group to kill with the host (Unix), until it has been killed.
     group: Option<u32>,
     /// Set once the process has been reaped.
     status: Option<ExitStatus>,
 }
 
 impl Running {
+    /// Records the status of a reaped host and kills what is left of its group (module doc).
+    fn reaped(&mut self, status: ExitStatus) {
+        self.status = Some(status);
+        self.end_group();
+    }
+
+    /// Kills the host's process group, once, and takes it off the process-wide list.
+    fn end_group(&mut self) {
+        if let Some(group) = self.group.take() {
+            forget(group);
+            kill_groups_now(&[group]);
+        }
+    }
+
     fn try_status(&mut self) -> Option<ExitStatus> {
         if self.status.is_none()
             && let Ok(Some(status)) = self.child.try_wait()
         {
-            self.status = Some(status);
+            self.reaped(status);
         }
         self.status
     }
@@ -241,9 +305,46 @@ impl Running {
         if self.status.is_none()
             && let Ok(Ok(status)) = tokio::time::timeout(limit, self.child.wait()).await
         {
-            self.status = Some(status);
+            self.reaped(status);
         }
         self.status
+    }
+
+    /// Resolves once the process has exited, with its status; its group has been killed by then.
+    /// Cancel-safe. A process that cannot be waited for never resolves here.
+    async fn exited(&mut self) -> Option<ExitStatus> {
+        if self.status.is_none() {
+            match self.child.wait().await {
+                Ok(status) => self.reaped(status),
+                Err(_) => std::future::pending::<()>().await,
+            }
+        }
+        self.status
+    }
+
+    /// See [`HostProcess::answer_or_exit`].
+    async fn answer_or_exit<F>(
+        &mut self,
+        mut request: Pin<&mut F>,
+        grace: Duration,
+    ) -> Result<Value, ConnectionError>
+    where
+        F: Future<Output = Result<Value, ConnectionError>>,
+    {
+        tokio::select! {
+            biased;
+            answer = &mut request => return answer,
+            _ = self.exited() => {}
+        }
+        // Its group was killed with it, which closed the pipes a forked process held; what the
+        // host wrote before it exited is still read.
+        match tokio::time::timeout(grace, &mut request).await {
+            Ok(answer) => answer,
+            Err(_) => {
+                self.connection.abandon();
+                request.await
+            }
+        }
     }
 
     /// See [`HostProcess::end`].
@@ -273,13 +374,11 @@ impl Running {
     /// the host ends with it).
     async fn kill(&mut self) -> Option<ExitStatus> {
         if self.try_status().is_none() {
-            #[cfg(unix)]
-            if let Some(group) = self.group {
-                kill_group(group).await;
-            }
+            // Before reaping: the group's id is the unreaped host's own.
+            self.end_group();
             let _ = self.child.start_kill();
             if let Ok(status) = self.child.wait().await {
-                self.status = Some(status);
+                self.reaped(status);
             }
         }
         let _ = tokio::time::timeout(Duration::from_secs(1), self.connection.close_input()).await;
@@ -289,33 +388,76 @@ impl Running {
 
 impl Drop for Running {
     /// A host dropped while it runs is killed with its group (`kill_on_drop` covers the host
-    /// itself and reaps it in the background).
+    /// itself and reaps it in the background); a host that exited has what is left of its group
+    /// killed.
     fn drop(&mut self) {
-        #[cfg(unix)]
-        if self.try_status().is_none()
-            && let Some(group) = self.group
-        {
-            let _ = std::process::Command::new("kill")
-                .args(["-s", "KILL", "--", &format!("-{group}")])
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status();
-        }
+        self.try_status();
+        self.end_group();
     }
 }
 
-/// Sends `SIGKILL` to a process group (no unsafe code: the system's `kill` program).
+/// The process groups of the hosts this process started and has not ended, and whether hosts may
+/// still start (module doc).
+struct Groups {
+    live: Vec<u32>,
+    closed: bool,
+}
+
+static GROUPS: Mutex<Groups> = Mutex::new(Groups {
+    live: Vec::new(),
+    closed: false,
+});
+
+fn groups() -> MutexGuard<'static, Groups> {
+    GROUPS.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Lists a new host's group; `false` once [`end_every_host`] was called.
+fn enlist(group: u32) -> bool {
+    let mut groups = groups();
+    if groups.closed {
+        return false;
+    }
+    groups.live.push(group);
+    true
+}
+
+/// Takes a group off the list.
+fn forget(group: u32) {
+    groups().live.retain(|&listed| listed != group);
+}
+
+/// Kills the process group of every host this process started and has not ended, and lets no
+/// host start after it: for a command that is about to exit because it was interrupted. Blocks
+/// for as long as the `kill` program takes.
+pub fn end_every_host() {
+    let live = {
+        let mut groups = groups();
+        groups.closed = true;
+        std::mem::take(&mut groups.live)
+    };
+    kill_groups_now(&live);
+}
+
+/// Sends `SIGKILL` to process groups (no unsafe code: the system's `kill` program). Waits for the
+/// program, so the groups are gone when it returns.
 #[cfg(unix)]
-async fn kill_group(group: u32) {
-    let _ = Command::new("kill")
-        .args(["-s", "KILL", "--", &format!("-{group}")])
+fn kill_groups_now(groups: &[u32]) {
+    if groups.is_empty() {
+        return;
+    }
+    let _ = std::process::Command::new("kill")
+        .args(["-s", "KILL", "--"])
+        .args(groups.iter().map(|group| format!("-{group}")))
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
-        .status()
-        .await;
+        .status();
 }
+
+/// Process groups are a Unix notion: `kill_on_drop` ends a host elsewhere.
+#[cfg(not(unix))]
+fn kill_groups_now(_groups: &[u32]) {}
 
 #[cfg(all(test, unix))]
 mod tests {
@@ -384,23 +526,141 @@ time.sleep(60)
     }
 
     fn stubborn() -> (tempfile::TempDir, HostSpec) {
+        fake("stubborn", STUBBORN)
+    }
+
+    /// A folder holding `script` and an interpreter named `python-<name>` that runs it.
+    fn fake(name: &str, script: &str) -> (tempfile::TempDir, HostSpec) {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("stubborn.py"), STUBBORN).unwrap();
-        let python = dir.path().join("python-stubborn");
+        std::fs::write(dir.path().join(format!("{name}.py")), script).unwrap();
+        let python = dir.path().join(format!("python-{name}"));
         std::fs::write(
             &python,
-            "#!/bin/sh\nexec python3 \"$(dirname \"$0\")/stubborn.py\"\n",
+            format!("#!/bin/sh\nexec python3 \"$(dirname \"$0\")/{name}.py\"\n"),
         )
         .unwrap();
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&python, std::fs::Permissions::from_mode(0o755)).unwrap();
         let spec = HostSpec {
             python,
-            label: "python-stubborn".into(),
+            label: format!("python-{name}"),
             project_root: dir.path().to_path_buf(),
             sources: Vec::new(),
         };
         (dir, spec)
+    }
+
+    /// The reading and writing half of a fake host: `read()` and `write(message)`.
+    const FRAMES: &str = r#"
+import json, os, subprocess, sys, time
+def read():
+    length = None
+    while True:
+        line = sys.stdin.buffer.readline()
+        if not line:
+            return None
+        if line == b"\r\n":
+            break
+        name, _, value = line.decode("ascii").partition(":")
+        if name.strip().lower() == "content-length":
+            length = int(value.strip())
+    return json.loads(sys.stdin.buffer.read(length))
+def write(message):
+    body = json.dumps(message).encode()
+    sys.stdout.buffer.write(b"Content-Length: %d\r\n\r\n" % len(body) + body)
+    sys.stdout.buffer.flush()
+"#;
+
+    /// Answers `initialize`.
+    const INITIALIZED: &str = r#"
+message = read()
+write({"jsonrpc": "2.0", "id": message["id"], "result": {
+    "protocol": message["params"]["protocol"],
+    "host": {"language": "python", "version": "3", "sdk_version": "0"}}})
+"#;
+
+    /// A host that, asked anything, forks a child that keeps the protocol pipes and sleeps, then
+    /// exits with status 3.
+    const FORKER: &str = r#"
+read()
+child = os.fork()
+if child == 0:
+    time.sleep(30)
+    os._exit(0)
+with open("forked.txt", "w") as f:
+    f.write(str(child))
+os._exit(3)
+"#;
+
+    /// A host that starts a grandchild before it answers `initialize`, then takes `shutdown` and
+    /// `exit` as asked.
+    const POLITE: &str = r#"
+child = subprocess.Popen(["sleep", "60"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+with open("grandchild.txt", "w") as f:
+    f.write(str(child.pid))
+"#;
+
+    const POLITE_LOOP: &str = r#"
+while True:
+    message = read()
+    if message is None or message.get("method") == "exit":
+        sys.exit(0)
+    if message.get("method") == "shutdown":
+        write({"jsonrpc": "2.0", "id": message["id"], "result": None})
+"#;
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_host_whose_fork_holds_its_pipes_is_seen_to_exit() {
+        if !have_python3() {
+            return;
+        }
+        let (dir, spec) = fake("forker", &format!("{FRAMES}{INITIALIZED}{FORKER}"));
+        let mut host = HostProcess::start(&spec, Arc::new(NoIncoming))
+            .await
+            .unwrap();
+        let connection = host.connection().clone();
+        let request = connection.request("describe", None);
+        tokio::pin!(request);
+        let start = Instant::now();
+        let answer = host.answer_or_exit(request, Duration::from_secs(20)).await;
+        let took = start.elapsed();
+        assert_eq!(answer, Err(ConnectionError::Closed));
+        assert!(took < Duration::from_secs(5), "{took:?}");
+        assert_eq!(host.exit_status().and_then(|s| s.code()), Some(3));
+        assert!(host.has_ended());
+        // Its group was killed with it, the fork included, which closed the pipes.
+        let forked = std::fs::read_to_string(dir.path().join("forked.txt")).unwrap();
+        assert!(gone(&forked).await, "the forked child {forked} survived");
+        connection.closed().await;
+        assert_eq!(host.shutdown().await.and_then(|s| s.code()), Some(3));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_host_ended_politely_takes_what_it_started_with_it() {
+        if !have_python3() {
+            return;
+        }
+        let (dir, spec) = fake(
+            "polite",
+            &format!("{FRAMES}{POLITE}{INITIALIZED}{POLITE_LOOP}"),
+        );
+        let host = HostProcess::start(&spec, Arc::new(NoIncoming))
+            .await
+            .unwrap();
+        let grandchild = std::fs::read_to_string(dir.path().join("grandchild.txt")).unwrap();
+        assert!(alive(&grandchild));
+        let start = Instant::now();
+        let status = host.shutdown().await;
+        assert!(start.elapsed() < Duration::from_secs(4));
+        assert_eq!(
+            status.and_then(|s| s.code()),
+            Some(0),
+            "it exited on its own"
+        );
+        assert!(
+            gone(&grandchild).await,
+            "the grandchild {grandchild} outlived its host"
+        );
     }
 
     #[tokio::test(flavor = "multi_thread")]

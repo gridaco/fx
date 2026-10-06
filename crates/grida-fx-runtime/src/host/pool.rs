@@ -13,11 +13,16 @@
 //! <id> is pending on this host`) and such a notification is ignored (spec/protocol.md §6).
 //!
 //! [`HostLease::run`] sends `run` and waits for its answer:
-//! - at `timeout` or when `cancel` fires: `$/cancel {id}`; a host that has not answered 5 seconds
-//!   later is killed with its process group ([`RunReply::TimedOut`] / [`RunReply::Cancelled`]);
+//! - at `timeout` or when `cancel` fires: the run's requests are stopped first
+//!   ([`RunRequests::stop`]: from then on they are answered `cancelled`, so nothing of the run
+//!   makes a request past its deadline), then `$/cancel {id}`; a host that has not answered 5
+//!   seconds later is killed with its process group ([`RunReply::TimedOut`] /
+//!   [`RunReply::Cancelled`]);
 //!   an answer that arrives after the cancel is discarded (a host that answered in time stays in
 //!   the pool);
-//! - a host that exits while the run is pending: [`RunReply::Exited`] with its status;
+//! - a host that exits while the run is pending: [`RunReply::Exited`] with its status, seen by
+//!   waiting on the process (a process the body forked may keep the host's output open); its
+//!   process group is killed then;
 //! - otherwise the result or the error, as the host gave it. A host that breaks the protocol is
 //!   killed and its run ends with an `internal` error naming what it sent.
 //!
@@ -50,6 +55,10 @@ pub trait RunRequests: Send + Sync {
 
     /// A host notification carrying this run's `run_id` (`progress`).
     fn notify(&self, method: String, params: Value);
+
+    /// The run is being stopped (its deadline passed, or it was cancelled): every later request
+    /// is answered `cancelled`. Called before the host is sent `$/cancel`.
+    fn stop(&self);
 }
 
 /// How a `run` request ended.
@@ -226,9 +235,11 @@ impl HostLease {
                 "the lease holds no node host",
             ));
         };
+        let stopping = Arc::clone(&requests);
         let _registered = Registration::new(&self.router, &params.run_id, requests);
         // Until the host answers, it is busy with this run.
         self.spent = true;
+        let grace = self.pool.grace;
         let stop = Cancel::new();
         let request = connection.request_cancellable(method::RUN, Some(value), &stop);
         tokio::pin!(request);
@@ -239,28 +250,37 @@ impl HostLease {
             }
         };
         tokio::pin!(deadline);
+        let Some(host) = self.host.as_mut() else {
+            return RunReply::Error(RpcError::new(
+                ErrorCode::Internal,
+                "the lease holds no node host",
+            ));
+        };
         let stopped = tokio::select! {
             biased;
-            answer = &mut request => return self.answered(answer).await,
+            answer = host.answer_or_exit(request.as_mut(), grace) => {
+                return self.answered(answer).await;
+            }
             _ = cancel.cancelled() => RunReply::Cancelled,
             _ = &mut deadline => RunReply::TimedOut,
         };
-        // spec/protocol.md §5.3: `$/cancel`, then the host has the grace period to answer.
+        // spec/protocol.md §5.3: the run's requests end first, then `$/cancel`, and the host has
+        // the grace period to answer.
+        stopping.stop();
         stop.cancel();
-        let grace = self.pool.grace;
-        let answered = tokio::time::timeout(grace, &mut request).await;
+        let Some(host) = self.host.as_mut() else {
+            return stopped;
+        };
+        let answered =
+            tokio::time::timeout(grace, host.answer_or_exit(request.as_mut(), grace)).await;
         match answered {
-            // An answer after the cancel is discarded; the host is free again.
-            Ok(Ok(_)) | Ok(Err(ConnectionError::Rpc(_))) => self.spent = false,
+            // An answer after the cancel is discarded; the host is free again unless it exited.
+            Ok(Ok(_)) | Ok(Err(ConnectionError::Rpc(_))) => self.spent = host.has_ended(),
             Ok(Err(ConnectionError::Closed)) => {
-                if let Some(host) = self.host.as_mut() {
-                    host.end(false, grace).await;
-                }
+                host.end(false, grace).await;
             }
             Ok(Err(ConnectionError::Protocol(_))) | Err(_) => {
-                if let Some(host) = self.host.as_mut() {
-                    host.kill_now().await;
-                }
+                host.kill_now().await;
             }
         }
         stopped
@@ -269,13 +289,15 @@ impl HostLease {
     /// The reply for an answer that arrived before any cancel.
     async fn answered(&mut self, answer: Result<Value, ConnectionError>) -> RunReply {
         let grace = self.pool.grace;
+        // A host that answered and then exited serves no other run.
+        let exited = self.host.as_ref().is_none_or(HostProcess::has_ended);
         match answer {
             Ok(value) => {
-                self.spent = false;
+                self.spent = exited;
                 RunReply::Result(value)
             }
             Err(ConnectionError::Rpc(error)) => {
-                self.spent = false;
+                self.spent = exited;
                 RunReply::Error(error)
             }
             Err(ConnectionError::Closed) => {
@@ -412,10 +434,11 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    /// Answers every request with its method and params; records notifications.
+    /// Answers every request with its method and params; records notifications and stops.
     #[derive(Default)]
     struct Echo {
         notes: Mutex<Vec<(String, Value)>>,
+        stopped: std::sync::atomic::AtomicBool,
     }
 
     impl RunRequests for Echo {
@@ -429,6 +452,11 @@ mod tests {
 
         fn notify(&self, method: String, params: Value) {
             self.notes.lock().unwrap().push((method, params));
+        }
+
+        fn stop(&self) {
+            self.stopped
+                .store(true, std::sync::atomic::Ordering::SeqCst);
         }
     }
 
@@ -655,16 +683,19 @@ time.sleep(60)
         let mut lease = pool.lease().await.unwrap();
         let connection = lease.host().connection().clone();
         let start = Instant::now();
+        let requests = Arc::new(Echo::default());
         let reply = lease
             .run(
                 &params,
-                Arc::new(Echo::default()),
+                Arc::clone(&requests) as Arc<dyn RunRequests>,
                 &Cancel::new(),
                 Some(Duration::from_millis(200)),
             )
             .await;
         let took = start.elapsed();
         assert_eq!(reply, RunReply::TimedOut);
+        // The deadline stopped the run's requests.
+        assert!(requests.stopped.load(std::sync::atomic::Ordering::SeqCst));
         assert!(took >= Duration::from_millis(500), "{took:?}");
         assert!(took < Duration::from_secs(4), "{took:?}");
         // Killed: its connection closed, and it does not go back to the pool.

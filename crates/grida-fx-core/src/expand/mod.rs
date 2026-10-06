@@ -721,7 +721,22 @@ impl<'a> Expander<'a> {
         for (index, assertion) in asserts.iter().enumerate() {
             let label = format!("{where_}.assert[{index}]");
             let (value, reads) = self.evaluate_reading(frame, &assertion.check, &label);
-            if value.contains_pending() || value.truthy() {
+            if value.contains_pending() {
+                // Not decidable yet: the step it belongs to waits for what it reads, so it is
+                // decided before the step is dispatched (gnode dispatched it at once).
+                if let Some(instance) = owner.and_then(|id| self.instance_mut(id)) {
+                    let own = instance.id.clone();
+                    instance.reads.extend(
+                        value
+                            .pending_refs()
+                            .into_iter()
+                            .chain(reads)
+                            .filter(|id| *id != own),
+                    );
+                }
+                continue;
+            }
+            if value.truthy() {
                 continue;
             }
             let message = self.evaluate(frame, &Value::String(assertion.message.clone()), &label);

@@ -676,8 +676,14 @@ async fn attempt_of(
     execute(Arc::clone(services), Arc::new(job), Cancel::new()).await
 }
 
+/// Work dirs under the store's `work/` (an invocation's claim, `<id>.lock`, is a file).
 fn work_dirs_left(engine: &Engine) -> usize {
-    std::fs::read_dir(engine.store.work_root()).map_or(0, |entries| entries.count())
+    std::fs::read_dir(engine.store.work_root()).map_or(0, |entries| {
+        entries
+            .flatten()
+            .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+            .count()
+    })
 }
 
 #[tokio::test(flavor = "multi_thread")]

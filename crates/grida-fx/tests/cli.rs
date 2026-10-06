@@ -1342,3 +1342,45 @@ fn integrated_run_project_end_to_end() {
         assert_eq!(projected["instances"][id]["cache"], "hit", "{id}");
     }
 }
+
+#[test]
+fn integrated_inspect_verifies_a_run_of_another_take() {
+    let Some(python) = python_host() else {
+        eprintln!("skipped: no Python with the grida package");
+        return;
+    };
+    let project = conformance_project("run-takes");
+    let run = |folder: &str| {
+        let argv = ["run", "case", "--routes", "routes.yaml", "--run", folder];
+        let output = grida_fx_with_python(project.path(), &python, &argv);
+        assert_eq!(status(&output), 0, "{}{}", stdout(&output), stderr(&output));
+    };
+    run("runs/one");
+    let output = grida_fx_with_python(project.path(), &python, &["reroll", "runs/one", "a"]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    run("runs/two");
+    // a#2's files are placed in a folder of their own, and inspect finds them there.
+    let output = grida_fx_with_python(
+        project.path(),
+        &python,
+        &["inspect", "runs/two", "--verify", "--json"],
+    );
+    assert_eq!(status(&output), 0, "{}{}", stdout(&output), stderr(&output));
+    let document = parse(&stdout(&output));
+    assert_eq!(
+        document["verification"],
+        json!({"verified": true, "problems": []})
+    );
+    let paths: Vec<&str> = document["run"]["steps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|step| step["files"].as_array().unwrap())
+        .map(|file| file["path"].as_str().unwrap())
+        .collect();
+    assert_eq!(paths, ["files/a#2/text.txt", "files/b/text.txt"]);
+    assert_eq!(
+        std::fs::read_to_string(project.path().join("runs/two/files/a#2/text.txt")).unwrap(),
+        "take 2: hello"
+    );
+}

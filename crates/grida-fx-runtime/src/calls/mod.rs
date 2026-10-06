@@ -14,6 +14,12 @@
 //!    handed ([`crate::engine::RunFiles`], `unknown_file`). The call key is
 //!    `store::records::call_key` over the capability, the route's fingerprint, the request and the
 //!    instance's take list.
+//!
+//!    Then the key's flight in the invocation ([`flights`]): a key that already ended for good in
+//!    this invocation answers with that error and sends nothing; a key in flight is not called
+//!    again, and its caller gets the leader's outcome as a cache hit would give it (`cached:
+//!    true`, `cost_usd` 0, the `call` event too), or its error. Otherwise the caller leads, on to
+//!    step 4.
 //! 4. the call cache: a trusted call record answers (`cached: true`, `cost_usd` 0); a leftover
 //!    job record with the key is removed (spec/store.md §5). Emits `call {cached: true, cost_usd:
 //!    0}`.
@@ -31,9 +37,17 @@
 //! 8. the hold: the route's high price for this request (`Route::cost` over the request's members
 //!    as values), reserved per attempt by the retry owner under the run's ceiling and the
 //!    instance's step budgets.
-//! 9. the retry owner ([`retry`]); then the answer's files are stored, the call record published,
-//!    the job record removed, and `call {cached: false, cost_usd}` emitted (`cost_usd` the
-//!    attempt's reported cost, `null` when none, 0 for a collected job).
+//! 9. the retry owner ([`retry`]), with the engine's own check of the capability's answers
+//!    ([`engine_check`]: an `agent.turn` reply must be `{"text", "tool_calls"}`, spec/protocol.md
+//!    §6.2); then the answer's files are stored, the call record published, the job record
+//!    removed, and `call {cached: false, cost_usd}` emitted (`cost_usd` the attempt's reported
+//!    cost, `null` when none, 0 for a collected job). The answer handed back is the published
+//!    record read back as a cache hit reads it (its `data` canonical, its files in the record's
+//!    order), so a live call and its replay give the caller the same value.
+//!
+//! A reservation or a settlement the run's log could not record ([`crate::ledger`]) is a fault
+//! ([`CallError::Store`]) that stops the run; an answer that was paid for is still published
+//! first, so a resumed run replays it.
 //!
 //! Errors carry `capability`, `route` and `key` in `data` when known (spec/protocol.md §7);
 //! `ceiling_exceeded` adds `needed_usd` and `remaining_usd`.
@@ -45,25 +59,53 @@
 //! calls cost (spec/protocol.md §5.3 step 5).
 //!
 //! The call runs on the calling task: whoever must not wait for it (a run that is being
-//! cancelled) spawns it, and the call still completes and settles.
+//! cancelled, a step that ran past its timeout) spawns it, and the call still completes and
+//! settles. Every call counts as running until it returns ([`flights::Flights::track`]), and
+//! [`Services::calls_settled`] waits until none is: a run waits for it before it ends.
 
+pub mod flights;
 pub mod pacing;
 pub mod retry;
 
+use crate::agent::AGENT_TURN;
 use crate::engine::{RunFiles, Services};
 use crate::events::Event;
-use crate::ledger::{Hold, Refusal, Scopes};
+use crate::ledger::{Hold, Ledger, NotReserved, Scopes};
+use crate::store::Store;
 use crate::store::records::{CallRecord, FileEntry, JobRecord, JobState, RouteEntry, call_key};
+use flights::{Joined, Landed, Tracked};
 use grida_fx_core::money::Usd;
 use grida_fx_core::routes::Route;
 use grida_fx_core::val::{FileValue, Val};
 use grida_fx_core::value::is_digest;
 use grida_fx_protocol::{ErrorCode, RpcError};
-use grida_fx_providers::{Adapter, CallRequest, RequestFile, RouteRef};
+use grida_fx_providers::{Adapter, Answer, CallRequest, RequestFile, RouteRef};
 use indexmap::IndexMap;
-use retry::{Attempts, Backoff, HoldBook, Outcome};
+use retry::{AnswerCheck, Attempts, Backoff, HoldBook, Outcome};
 use serde_json::{Map, Value};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+
+impl Services {
+    /// How many paid calls of this invocation are running now (followers of a call in flight
+    /// included).
+    pub fn calls_running(&self) -> usize {
+        self.pacing.flights().running()
+    }
+
+    /// Resolves once no paid call of this invocation is running: every hold its calls opened is
+    /// settled, every answer they were paid is stored, and their events are written. A run awaits
+    /// it before `run_finished` and `run_cancelled` (after cancelling the invocation when it
+    /// stops, so calls in flight end at once and settle their holds in full).
+    pub async fn calls_settled(&self) {
+        self.pacing.flights().settled().await;
+    }
+
+    /// Counts a call as running before it is spawned onto a task of its own, so a wait that
+    /// starts before the task first runs still sees it ([`flights::Flights::track`]).
+    pub fn track_call(&self) -> Tracked {
+        self.pacing.flights().track()
+    }
+}
 
 /// What the call path needs to know about the instance making the call.
 #[derive(Debug, Clone)]
@@ -288,29 +330,70 @@ impl Known<'_> {
     }
 }
 
-/// Adds up what a call's holds were settled at, on top of the run's book.
+/// Adds up what a call's holds were settled at, on top of the run's ledger, and keeps the first
+/// reservation or settlement of the call that the run's log could not record.
 struct Tally<'a> {
-    book: &'a dyn HoldBook,
+    ledger: &'a Ledger,
     charged: Mutex<Option<Usd>>,
+    unrecorded: Mutex<Option<String>>,
 }
 
 impl Tally<'_> {
     fn charged(&self) -> Option<Usd> {
         *self.charged.lock().unwrap_or_else(|e| e.into_inner())
     }
+
+    /// What this call could not record, if anything.
+    fn own_fault(&self) -> Option<String> {
+        self.unrecorded
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    fn keep(&self, reason: &str) {
+        self.unrecorded
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get_or_insert_with(|| reason.to_string());
+    }
 }
 
 impl HoldBook for Tally<'_> {
-    fn reserve(&self, node_id: String, amount: Usd, scopes: &Scopes) -> Result<Hold, Refusal> {
-        self.book.reserve(node_id, amount, scopes)
+    fn reserve(&self, node_id: String, amount: Usd, scopes: &Scopes) -> Result<Hold, NotReserved> {
+        let reserved = self.ledger.reserve_recorded(node_id, amount, scopes);
+        if let Err(NotReserved::Unrecorded(reason)) = &reserved {
+            self.keep(reason);
+        }
+        reserved
     }
 
     fn settle(&self, hold: Hold, reported: Option<Usd>) -> Usd {
-        let charged = self.book.settle(hold, reported);
+        let charged = match self.ledger.settle_recorded(hold, reported) {
+            Ok(charged) => charged,
+            Err(unrecorded) => {
+                self.keep(&unrecorded.reason);
+                unrecorded.charged
+            }
+        };
         let mut total = self.charged.lock().unwrap_or_else(|e| e.into_inner());
         *total = Some(total.unwrap_or(Usd::ZERO) + charged);
         charged
     }
+
+    fn unrecorded(&self) -> Option<String> {
+        self.own_fault().or_else(|| self.ledger.fault())
+    }
+}
+
+/// The engine's own check of a capability's answers (module doc, step 9), if it has one.
+pub fn engine_check(capability: &str) -> Option<&'static AnswerCheck<'static>> {
+    (capability == AGENT_TURN).then_some(&turn_reply as &AnswerCheck<'static>)
+}
+
+/// An `agent.turn` answer is `{"text", "tool_calls"}` (spec/protocol.md §6.2).
+fn turn_reply(answer: &Answer) -> Result<(), String> {
+    crate::agent::check_reply(&answer.data)
 }
 
 /// The take list as messages show it: `1`, `2.1`.
@@ -331,6 +414,8 @@ pub async fn call(
     capability: &str,
     request: Value,
 ) -> Result<CallAnswer, CallError> {
+    let flights = Arc::clone(services.pacing.flights());
+    let _running = flights.track();
     let mut known = Known {
         capability,
         route: site.routes.get(capability).map(Route::id),
@@ -364,271 +449,416 @@ pub async fn call(
     let route_id = route.id();
 
     // 3. The request and its key.
-    let Value::Object(members) = &request else {
+    if !request.is_object() {
         return Err(known.error(
             ErrorCode::InvalidParams,
             "a capability request is a JSON object",
         ));
-    };
+    }
     let named = match file_values(&request, "request", files) {
         Ok(named) => named,
         Err(refusal) => return Err(known.error(refusal.code(), refusal.message())),
     };
-    let fingerprint = route.fingerprint();
-    let key = call_key(capability, &fingerprint, &request, &site.takes);
+    let key = call_key(capability, &route.fingerprint(), &request, &site.takes);
     known.key = Some(key.clone());
-    let store = &services.engine.store;
 
-    // 4. The call cache.
-    if let Some(record) = store.load_call(&key) {
-        // A leftover job record of an answered call is stale (spec/store.md §5); a failure to
-        // remove it is harmless, since the call record answers first.
-        let _ = store.remove_job(&key);
-        let mut answered = IndexMap::new();
-        for (name, entry) in &record.files {
-            let file = store
-                .file_value(entry)
-                .map_err(|e| CallError::Store(e.to_string()))?;
-            files.insert(&file);
-            answered.insert(name.clone(), file);
+    // 3, then: the key's flight in the invocation.
+    loop {
+        match flights.join(&key, &site.instance_id) {
+            Joined::Ended(error) => return Err(CallError::Rpc(error)),
+            Joined::Follow(mut landed) => {
+                let outcome: Option<Landed> = match landed.wait_for(Option::is_some).await {
+                    Ok(outcome) => outcome.clone(),
+                    // The leader went away without an outcome: lead in its place.
+                    Err(_) => continue,
+                };
+                let Some(outcome) = outcome else { continue };
+                match &*outcome {
+                    Ok(answer) => {
+                        return Ok(followed(
+                            services, site, files, capability, &route_id, answer,
+                        ));
+                    }
+                    // A ceiling refused the leader's instance, not necessarily this one: ask
+                    // again (a rerun of that instance is answered by the ended key).
+                    Err(CallError::Rpc(error))
+                        if error.kind() == Some(ErrorCode::CeilingExceeded) =>
+                    {
+                        continue;
+                    }
+                    Err(error) => return Err(error.clone()),
+                }
+            }
+            Joined::Lead(leader) => {
+                let lead = Lead {
+                    services,
+                    site,
+                    counter,
+                    files,
+                    capability,
+                    route,
+                    named: &named,
+                    key: &key,
+                };
+                let outcome = lead.call(request).await;
+                leader.land(&outcome);
+                return outcome;
+            }
         }
-        emit_call(
+    }
+}
+
+/// The answer a follower of a call in flight gets: the leader's, as a cache hit gives it
+/// (module doc, step 3).
+fn followed(
+    services: &Services,
+    site: &CallSite,
+    files: &RunFiles,
+    capability: &str,
+    route_id: &str,
+    answer: &CallAnswer,
+) -> CallAnswer {
+    for file in answer.files.values() {
+        files.insert(file);
+    }
+    emit_call(
+        services,
+        site,
+        capability,
+        route_id,
+        &answer.key,
+        true,
+        Some(Usd::ZERO),
+    );
+    CallAnswer {
+        key: answer.key.clone(),
+        cached: true,
+        cost: Some(Usd::ZERO),
+        charged: Usd::ZERO,
+        files: answer.files.clone(),
+        data: answer.data.clone(),
+    }
+}
+
+/// What the leader of a key's flight makes its call with (steps 4 to 9).
+struct Lead<'a> {
+    services: &'a Services,
+    site: &'a CallSite,
+    counter: &'a CallCounter,
+    files: &'a RunFiles,
+    capability: &'a str,
+    route: &'a Route,
+    named: &'a [FileValue],
+    key: &'a str,
+}
+
+/// A record's files and data as the caller gets them, its files handed to the run.
+fn from_record(
+    store: &Store,
+    files: &RunFiles,
+    record: &CallRecord,
+) -> Result<(IndexMap<String, FileValue>, Value), CallError> {
+    let mut answered = IndexMap::new();
+    for (name, entry) in &record.files {
+        let file = store
+            .file_value(entry)
+            .map_err(|e| CallError::Store(e.to_string()))?;
+        files.insert(&file);
+        answered.insert(name.clone(), file);
+    }
+    Ok((answered, record.data.clone()))
+}
+
+/// A record as the store gives it back: written in canonical form and read again.
+fn replayed(record: &CallRecord) -> Result<CallRecord, CallError> {
+    grida_fx_core::value::parse_json(&grida_fx_core::value::canon(&record.to_value()))
+        .map_err(|refused| refused.message)
+        .and_then(|value| CallRecord::from_value(&value))
+        .map_err(|reason| CallError::Store(format!("a call record cannot be read back: {reason}")))
+}
+
+impl Lead<'_> {
+    /// Steps 4 to 9 (module doc).
+    async fn call(&self, request: Value) -> Result<CallAnswer, CallError> {
+        let Lead {
             services,
             site,
+            counter,
+            files,
             capability,
-            &route_id,
-            &key,
-            true,
-            Some(Usd::ZERO),
-        );
-        return Ok(CallAnswer {
+            route,
+            named,
             key,
-            cached: true,
-            cost: Some(Usd::ZERO),
-            charged: Usd::ZERO,
-            files: answered,
-            data: record.data,
-        });
-    }
-
-    // 5. Live.
-    let ledger = match (services.live(), services.ledger.as_ref()) {
-        (true, Some(ledger)) => ledger,
-        _ => {
-            return Err(known.error(
-                ErrorCode::NotLive,
-                format!("{capability} on {route_id} is a paid call; run with --live"),
-            ));
-        }
-    };
-
-    // 6. The adapter.
-    let route_ref = RouteRef {
-        capability: capability.to_string(),
-        model: route.model.clone(),
-        provider: route.provider.clone(),
-        contract: route.contract.clone(),
-    };
-    let Some(adapter) = services.engine.adapters.serving(&route_ref).cloned() else {
-        return Err(known.error(
-            ErrorCode::NoRoute,
-            format!("no adapter serves {capability} on {route_id}"),
-        ));
-    };
-
-    // 7. The job record.
-    let unsettled_text = format!(
-        "{capability} on {route_id} (take {}) was being submitted when a run stopped, and nobody \
-         can say whether the provider took it. Check the provider's dashboard, then run grida-fx \
-         jobs --forget {key} to submit it again",
-        take_text(&site.takes)
-    );
-    let collect = match store.load_job(&key) {
-        Err(error) => return Err(CallError::Store(error.to_string())),
-        Ok(None) => None,
-        Ok(Some(record)) => match record.state {
-            JobState::Settled => None,
-            JobState::Submitting => {
-                return Err(known.error(ErrorCode::JobUnsettled, unsettled_text));
-            }
-            JobState::Submitted => match (&adapter, record.handle) {
-                (Adapter::Job(_), Some(handle)) => Some(handle),
-                _ => return Err(known.error(ErrorCode::JobUnsettled, unsettled_text)),
-            },
-        },
-    };
-
-    // 8. The hold, and what every attempt shares.
-    let with: IndexMap<String, Val> = members
-        .iter()
-        .map(|(name, value)| (name.clone(), Val::from_json(value)))
-        .collect();
-    let (_, hold) = route.cost(&with);
-    let mut request_files = IndexMap::new();
-    for file in &named {
-        let path = store
-            .file_path(&file.digest)
-            .map_err(|e| CallError::Store(e.to_string()))?;
-        request_files.insert(
-            file.digest.clone(),
-            RequestFile {
-                digest: file.digest.clone(),
-                kind: file.kind.clone(),
-                size: file.size,
-                path,
-            },
-        );
-    }
-    let route_entry = RouteEntry {
-        id: route_id.clone(),
-        fingerprint,
-    };
-    let job_template = JobRecord {
-        key: key.clone(),
-        capability: capability.to_string(),
-        route: route_entry.clone(),
-        request: request.clone(),
-        take: site.takes.clone(),
-        state: JobState::Submitting,
-        handle: None,
-    };
-    let tally = Tally {
-        book: &**ledger,
-        charged: Mutex::new(None),
-    };
-    let hold_name = || services.next_hold(&site.instance_id);
-    let attempts = Attempts {
-        call: CallRequest {
-            route: route_ref,
-            request: request.clone(),
-            files: request_files,
-            take: site.takes.clone(),
-            key: key.clone(),
-            attempt: 1,
-        },
-        hold,
-        scopes: &site.scopes,
-        hold_name: &hold_name,
-        // The site's limit (the project's override, else the route's); the route's when the
-        // site names none for this capability.
-        limit: site
-            .limits
-            .get(capability)
-            .copied()
-            .unwrap_or(route.concurrency),
-        rpm: route.requests_per_minute,
-        book: &tally,
-        jobs: &**store,
-        pacing: &*services.pacing,
-        cancel: &services.cancel,
-        backoff: Backoff::default(),
-        job: matches!(adapter, Adapter::Job(_)).then_some(job_template),
-    };
-
-    // 9. The retry owner.
-    let collected = collect.is_some();
-    let outcome = match (&adapter, &collect) {
-        (Adapter::Job(job), Some(handle)) => {
-            retry::collect_job(job.as_ref(), &attempts, handle).await
-        }
-        (Adapter::Job(job), None) => retry::submit_job(job.as_ref(), &attempts).await,
-        (Adapter::Request(plain), _) => retry::send_plain(plain.as_ref(), &attempts).await,
-    };
-    let charged = tally.charged();
-    let ended = match outcome {
-        Outcome::Answered { answer, .. } => Ok(answer),
-        Outcome::Refused(reason) => Err(known.error(
-            ErrorCode::CapabilityRefused,
-            format!("{capability} on {route_id} was refused: {reason}"),
-        )),
-        Outcome::Ceiling(refusal) => {
-            let mut data = known.data();
-            data.insert("needed_usd".into(), refusal.needed.to_value());
-            data.insert("remaining_usd".into(), refusal.remaining.to_value());
-            Err(CallError::Rpc(
-                RpcError::new(ErrorCode::CeilingExceeded, refusal.message)
-                    .with_data(Value::Object(data)),
-            ))
-        }
-        Outcome::Failed(reason) => Err(known.error(
-            ErrorCode::CallFailed,
-            format!("{capability} on {route_id} failed: {reason}"),
-        )),
-        Outcome::Unsettled(reason) => {
-            let mut data = known.data();
-            data.insert("reason".into(), Value::from(reason));
-            Err(CallError::Rpc(
-                RpcError::new(ErrorCode::JobUnsettled, unsettled_text)
-                    .with_data(Value::Object(data)),
-            ))
-        }
-        Outcome::Cancelled => Err(CallError::Cancelled),
-        Outcome::Store(error) => Err(CallError::Store(error.to_string())),
-    };
-    let answer = match ended {
-        Ok(answer) => answer,
-        Err(error) => {
-            if let Some(charged) = charged {
-                counter.add(charged);
-            }
-            return Err(error);
-        }
-    };
-
-    // The charge stands whatever happens to the answer next.
-    let charged = charged.unwrap_or(Usd::ZERO);
-    counter.add(charged);
-
-    // Bytes first: the files, then the call record, then the job record goes (spec/store.md §6).
-    let mut entries = IndexMap::new();
-    let mut answered = IndexMap::new();
-    for (name, file) in &answer.files {
-        let stored = store
-            .put_bytes(&file.bytes)
-            .map_err(|e| CallError::Store(e.to_string()))?;
-        let entry = FileEntry {
-            digest: stored.digest,
-            kind: file.kind.clone(),
-            name: name.clone(),
-            size: stored.size,
-            key: None,
+        } = *self;
+        let key = key.to_string();
+        let route_id = route.id();
+        let known = Known {
+            capability,
+            route: Some(route_id.clone()),
+            key: Some(key.clone()),
         };
-        let value = store
-            .file_value(&entry)
+        let store = &services.engine.store;
+
+        // 4. The call cache.
+        if let Some(record) = store.load_call(&key) {
+            // A leftover job record of an answered call is stale (spec/store.md §5); a failure to
+            // remove it is harmless, since the call record answers first.
+            let _ = store.remove_job(&key);
+            let (answered, data) = from_record(store, files, &record)?;
+            emit_call(
+                services,
+                site,
+                capability,
+                &route_id,
+                &key,
+                true,
+                Some(Usd::ZERO),
+            );
+            return Ok(CallAnswer {
+                key,
+                cached: true,
+                cost: Some(Usd::ZERO),
+                charged: Usd::ZERO,
+                files: answered,
+                data,
+            });
+        }
+
+        // 5. Live.
+        let ledger = match (services.live(), services.ledger.as_ref()) {
+            (true, Some(ledger)) => ledger,
+            _ => {
+                return Err(known.error(
+                    ErrorCode::NotLive,
+                    format!("{capability} on {route_id} is a paid call; run with --live"),
+                ));
+            }
+        };
+
+        // 6. The adapter.
+        let route_ref = RouteRef {
+            capability: capability.to_string(),
+            model: route.model.clone(),
+            provider: route.provider.clone(),
+            contract: route.contract.clone(),
+        };
+        let Some(adapter) = services.engine.adapters.serving(&route_ref).cloned() else {
+            return Err(known.error(
+                ErrorCode::NoRoute,
+                format!("no adapter serves {capability} on {route_id}"),
+            ));
+        };
+
+        // 7. The job record.
+        let unsettled_text = format!(
+            "{capability} on {route_id} (take {}) was being submitted when a run stopped, and \
+             nobody can say whether the provider took it. Check the provider's dashboard, then \
+             run grida-fx jobs --forget {key} to submit it again",
+            take_text(&site.takes)
+        );
+        let collect = match store.load_job(&key) {
+            Err(error) => return Err(CallError::Store(error.to_string())),
+            Ok(None) => None,
+            Ok(Some(record)) => match record.state {
+                JobState::Settled => None,
+                JobState::Submitting => {
+                    return Err(known.error(ErrorCode::JobUnsettled, unsettled_text));
+                }
+                JobState::Submitted => match (&adapter, record.handle) {
+                    (Adapter::Job(_), Some(handle)) => Some(handle),
+                    _ => return Err(known.error(ErrorCode::JobUnsettled, unsettled_text)),
+                },
+            },
+        };
+
+        // 8. The hold, and what every attempt shares.
+        let Value::Object(members) = &request else {
+            return Err(known.error(
+                ErrorCode::InvalidParams,
+                "a capability request is a JSON object",
+            ));
+        };
+        let with: IndexMap<String, Val> = members
+            .iter()
+            .map(|(name, value)| (name.clone(), Val::from_json(value)))
+            .collect();
+        let (_, hold) = route.cost(&with);
+        let mut request_files = IndexMap::new();
+        for file in named {
+            let path = store
+                .file_path(&file.digest)
+                .map_err(|e| CallError::Store(e.to_string()))?;
+            request_files.insert(
+                file.digest.clone(),
+                RequestFile {
+                    digest: file.digest.clone(),
+                    kind: file.kind.clone(),
+                    size: file.size,
+                    path,
+                },
+            );
+        }
+        let route_entry = RouteEntry {
+            id: route_id.clone(),
+            fingerprint: route.fingerprint(),
+        };
+        let job_template = JobRecord {
+            key: key.clone(),
+            capability: capability.to_string(),
+            route: route_entry.clone(),
+            request: request.clone(),
+            take: site.takes.clone(),
+            state: JobState::Submitting,
+            handle: None,
+        };
+        let tally = Tally {
+            ledger,
+            charged: Mutex::new(None),
+            unrecorded: Mutex::new(None),
+        };
+        let hold_name = || services.next_hold(&site.instance_id);
+        let attempts = Attempts {
+            call: CallRequest {
+                route: route_ref,
+                request: request.clone(),
+                files: request_files,
+                take: site.takes.clone(),
+                key: key.clone(),
+                attempt: 1,
+            },
+            hold,
+            scopes: &site.scopes,
+            hold_name: &hold_name,
+            // The site's limit (the project's override, else the route's); the route's when the
+            // site names none for this capability.
+            limit: site
+                .limits
+                .get(capability)
+                .copied()
+                .unwrap_or(route.concurrency),
+            rpm: route.requests_per_minute,
+            book: &tally,
+            jobs: &**store,
+            pacing: &*services.pacing,
+            cancel: &services.cancel,
+            backoff: Backoff::default(),
+            job: matches!(adapter, Adapter::Job(_)).then_some(job_template),
+            check: engine_check(capability),
+        };
+
+        // 9. The retry owner.
+        let collected = collect.is_some();
+        let outcome = match (&adapter, &collect) {
+            (Adapter::Job(job), Some(handle)) => {
+                retry::collect_job(job.as_ref(), &attempts, handle).await
+            }
+            (Adapter::Job(job), None) => retry::submit_job(job.as_ref(), &attempts).await,
+            (Adapter::Request(plain), _) => retry::send_plain(plain.as_ref(), &attempts).await,
+        };
+        let charged = tally.charged();
+        // What the log could not record stops the run, whatever the outcome.
+        let unrecorded = tally.own_fault();
+        let ended = match outcome {
+            Outcome::Answered { answer, .. } => Ok(answer),
+            Outcome::Refused(reason) => Err(known.error(
+                ErrorCode::CapabilityRefused,
+                format!("{capability} on {route_id} was refused: {reason}"),
+            )),
+            Outcome::Ceiling(refusal) => {
+                let mut data = known.data();
+                data.insert("needed_usd".into(), refusal.needed.to_value());
+                data.insert("remaining_usd".into(), refusal.remaining.to_value());
+                Err(CallError::Rpc(
+                    RpcError::new(ErrorCode::CeilingExceeded, refusal.message)
+                        .with_data(Value::Object(data)),
+                ))
+            }
+            Outcome::Failed(reason) => Err(known.error(
+                ErrorCode::CallFailed,
+                format!("{capability} on {route_id} failed: {reason}"),
+            )),
+            Outcome::Unsettled(reason) => {
+                let mut data = known.data();
+                data.insert("reason".into(), Value::from(reason));
+                Err(CallError::Rpc(
+                    RpcError::new(ErrorCode::JobUnsettled, unsettled_text)
+                        .with_data(Value::Object(data)),
+                ))
+            }
+            Outcome::Cancelled => Err(CallError::Cancelled),
+            Outcome::Store(error) => Err(CallError::Store(error.to_string())),
+            Outcome::Unrecorded(reason) => Err(CallError::Store(reason)),
+        };
+        let answer = match ended {
+            Ok(answer) => answer,
+            Err(error) => {
+                if let Some(charged) = charged {
+                    counter.add(charged);
+                }
+                return Err(match unrecorded {
+                    Some(reason) => CallError::Store(reason),
+                    None => error,
+                });
+            }
+        };
+
+        // The charge stands whatever happens to the answer next.
+        let charged = charged.unwrap_or(Usd::ZERO);
+        counter.add(charged);
+
+        // Bytes first: the files, then the call record, then the job record goes (spec/store.md
+        // §6).
+        let mut entries = IndexMap::new();
+        for (name, file) in &answer.files {
+            let stored = store
+                .put_bytes(&file.bytes)
+                .map_err(|e| CallError::Store(e.to_string()))?;
+            entries.insert(
+                name.clone(),
+                FileEntry {
+                    digest: stored.digest,
+                    kind: file.kind.clone(),
+                    name: name.clone(),
+                    size: stored.size,
+                    key: None,
+                },
+            );
+        }
+        let cost = if collected {
+            Some(Usd::ZERO)
+        } else {
+            answer.cost
+        };
+        let record = CallRecord {
+            key: key.clone(),
+            capability: capability.to_string(),
+            route: route_entry,
+            request,
+            take: site.takes.clone(),
+            files: entries,
+            data: answer.data,
+            cost_usd: answer.cost,
+        };
+        store
+            .save_call(&record)
             .map_err(|e| CallError::Store(e.to_string()))?;
-        files.insert(&value);
-        answered.insert(name.clone(), value);
-        entries.insert(name.clone(), entry);
+        // A job record left behind is answered by the call record from now on (spec/store.md §5).
+        let _ = store.remove_job(&key);
+        if let Some(reason) = unrecorded {
+            return Err(CallError::Store(reason));
+        }
+        // The caller gets what a replay of the record gives (module doc, step 9).
+        let (answered, data) = from_record(store, files, &replayed(&record)?)?;
+        emit_call(services, site, capability, &route_id, &key, false, cost);
+        Ok(CallAnswer {
+            key,
+            cached: false,
+            cost,
+            charged,
+            files: answered,
+            data,
+        })
     }
-    let cost = if collected {
-        Some(Usd::ZERO)
-    } else {
-        answer.cost
-    };
-    let record = CallRecord {
-        key: key.clone(),
-        capability: capability.to_string(),
-        route: route_entry,
-        request,
-        take: site.takes.clone(),
-        files: entries,
-        data: answer.data.clone(),
-        cost_usd: answer.cost,
-    };
-    store
-        .save_call(&record)
-        .map_err(|e| CallError::Store(e.to_string()))?;
-    // A job record left behind is answered by the call record from now on (spec/store.md §5).
-    let _ = store.remove_job(&key);
-    emit_call(services, site, capability, &route_id, &key, false, cost);
-    Ok(CallAnswer {
-        key,
-        cached: false,
-        cost,
-        charged,
-        files: answered,
-        data: answer.data,
-    })
 }
 
 /// Emits `call` (spec/schemas/fx-run-events-v1); nothing while planning. A failed write does

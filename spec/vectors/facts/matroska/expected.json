@@ -1,4 +1,7 @@
 {
+ "block_track_zero.mkv": {
+  "refused": "not a Matroska or WebM file (a block at byte 523 is not valid)"
+ },
  "ffv1_level1_yuva.mkv": {
   "bytes": 5449,
   "kind": "video/x-matroska",
@@ -41,6 +44,25 @@
   "duration": 1,
   "frames": 24,
   "has_alpha": false
+ },
+ "mjpeg.mkv": {
+  "bytes": 6980,
+  "kind": "video/x-matroska",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 0.125,
+  "frames": 3,
+  "has_alpha": false
+ },
+ "png_private20.mkv": {
+  "bytes": 3616,
+  "kind": "video/x-matroska",
+  "width": 64,
+  "height": 48,
+  "fps": 24,
+  "duration": 0.25,
+  "frames": 6
  },
  "png_rgb.mkv": {
   "bytes": 3340,

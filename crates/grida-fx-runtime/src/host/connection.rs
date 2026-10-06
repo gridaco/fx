@@ -11,7 +11,9 @@
 //!   - a notification (`progress`) goes to [`Incoming::notify`];
 //!   - a message outside I-JSON is answered `-32700` when it was a request, else breaks the
 //!     connection; a message that is not JSON-RPC 2.0 is answered `-32600` when it carries a method
-//!     and an id, else breaks it.
+//!     and an id, else breaks it. Whether a message the strict reader refused was a request, and
+//!     its id, is found by a scan of its top-level members that reads no other value, so a request
+//!     holding `NaN` or nesting deeper than any reader goes is still answered.
 //! - Writes go through one writer (a mutex around the input half), one whole frame at a time.
 //!   Each write runs on a task of its own, so a caller that stops waiting never leaves half a
 //!   frame on the wire.
@@ -199,6 +201,13 @@ impl Connection {
         let _ = ended.wait_for(|ended| *ended).await;
     }
 
+    /// Ends the connection as if the host's output had ended: every pending request fails with
+    /// [`ConnectionError::Closed`] and the host's output is no longer read. For a host that has
+    /// exited while a process it left holds its output open.
+    pub(crate) fn abandon(&self) {
+        self.end(Ended::Closed);
+    }
+
     /// Closes the host's input (end of file for the host). Later writes fail with
     /// [`ConnectionError::Closed`]; responses are still read until the host's output ends. Waits
     /// for a write in progress to finish.
@@ -277,17 +286,25 @@ impl Connection {
     /// Writes one message as one frame, on a task of its own (module doc).
     async fn send(&self, message: &Message) -> Result<(), ConnectionError> {
         self.check_open()?;
-        let body = serde_json::to_vec(&message.to_value())
-            .map_err(|e| ConnectionError::Protocol(format!("a message cannot be written: {e}")))?;
+        let body = serde_json::to_vec(&message.to_value()).map_err(|e| {
+            ConnectionError::Protocol(format!(
+                "a message cannot be written: {}",
+                super::read_reason(&e)
+            ))
+        })?;
         let mut frame = Vec::with_capacity(body.len() + 32);
-        write_message(&mut frame, &body)
-            .map_err(|e| ConnectionError::Protocol(format!("a message cannot be written: {e}")))?;
+        write_message(&mut frame, &body).map_err(|e| {
+            ConnectionError::Protocol(format!(
+                "a message cannot be written: {}",
+                grida_fx_core::error::io_reason(&e)
+            ))
+        })?;
         let connection = self.clone();
         match tokio::spawn(async move { connection.write_frame(frame).await }).await {
             Ok(written) => written,
-            Err(e) => Err(ConnectionError::Protocol(format!(
-                "writing to the node host stopped: {e}"
-            ))),
+            Err(_) => Err(ConnectionError::Protocol(
+                "writing to the node host stopped before the message was written".into(),
+            )),
         }
     }
 
@@ -313,7 +330,10 @@ impl Connection {
             {
                 Err(self.end(Ended::Closed))
             }
-            Err(e) => Err(self.end(Ended::Broken(format!("cannot write to the node host: {e}")))),
+            Err(e) => Err(self.end(Ended::Broken(format!(
+                "cannot write to the node host: {}",
+                grida_fx_core::error::io_reason(&e)
+            )))),
         }
     }
 
@@ -489,7 +509,8 @@ async fn read_loop<R: AsyncRead + Unpin>(connection: Connection, reader: R) {
             }
             Err(e) => {
                 connection.end(Ended::Broken(format!(
-                    "cannot read the node host's output: {e}"
+                    "cannot read the node host's output: {}",
+                    grida_fx_core::error::io_reason(&e)
                 )));
                 return;
             }
@@ -597,11 +618,136 @@ fn request_id_of(value: &Value) -> Option<Id> {
     }
 }
 
-/// The request id of a body the strict reader refused, read leniently; `None` when the body is
-/// not a request even to a lenient reader.
+/// The request id of a body the strict reader refused; `None` unless the body is a JSON object
+/// whose top-level members include a `method` and an integer or string `id` (once each). Only
+/// the top level is read: the scan steps over every other value without reading it, so it
+/// accepts what the strict reader refuses (`NaN`, any nesting), and it never recurses.
 fn lenient_request_id(body: &[u8]) -> Option<Id> {
-    let value: Value = serde_json::from_slice(body).ok()?;
-    request_id_of(&value)
+    let mut scan = Scan { body, at: 0 };
+    scan.space();
+    scan.byte(b'{')?;
+    let (mut id, mut ids, mut methods) = (None, 0, 0);
+    scan.space();
+    if scan.peek() == Some(b'}') {
+        return None;
+    }
+    loop {
+        scan.space();
+        let key = scan.string()?;
+        scan.space();
+        scan.byte(b':')?;
+        scan.space();
+        let start = scan.at;
+        scan.skip_value()?;
+        let value = &body[start..scan.at];
+        match serde_json::from_slice::<String>(key).ok()?.as_str() {
+            "id" => {
+                ids += 1;
+                id = serde_json::from_slice::<Value>(value).ok();
+            }
+            "method" => methods += 1,
+            _ => {}
+        }
+        scan.space();
+        match scan.next()? {
+            b',' => continue,
+            b'}' => break,
+            _ => return None,
+        }
+    }
+    if ids != 1 || methods != 1 {
+        return None;
+    }
+    match id? {
+        id @ (Value::Number(_) | Value::String(_)) => Id::from_value(&id).ok(),
+        _ => None,
+    }
+}
+
+/// A forward scan over a JSON text (see [`lenient_request_id`]).
+struct Scan<'a> {
+    body: &'a [u8],
+    at: usize,
+}
+
+impl<'a> Scan<'a> {
+    fn peek(&self) -> Option<u8> {
+        self.body.get(self.at).copied()
+    }
+
+    fn next(&mut self) -> Option<u8> {
+        let byte = self.peek()?;
+        self.at += 1;
+        Some(byte)
+    }
+
+    fn byte(&mut self, expected: u8) -> Option<()> {
+        (self.next()? == expected).then_some(())
+    }
+
+    fn space(&mut self) {
+        while matches!(self.peek(), Some(b' ' | b'\t' | b'\n' | b'\r')) {
+            self.at += 1;
+        }
+    }
+
+    /// A string, quotes included, left encoded.
+    fn string(&mut self) -> Option<&'a [u8]> {
+        let start = self.at;
+        self.byte(b'"')?;
+        loop {
+            match self.next()? {
+                b'"' => return Some(&self.body[start..self.at]),
+                b'\\' => {
+                    self.next()?;
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Steps over one value of any kind and nesting, reading only strings and brackets; a
+    /// scalar is whatever runs up to the next separator (`NaN` included).
+    fn skip_value(&mut self) -> Option<()> {
+        match self.peek()? {
+            b'"' => self.string().map(|_| ()),
+            b'[' | b'{' => {
+                let mut open: Vec<u8> = Vec::new();
+                loop {
+                    match self.peek()? {
+                        b'"' => {
+                            self.string()?;
+                            continue;
+                        }
+                        b'[' => open.push(b']'),
+                        b'{' => open.push(b'}'),
+                        byte @ (b']' | b'}') => {
+                            if open.pop()? != byte {
+                                return None;
+                            }
+                            if open.is_empty() {
+                                self.at += 1;
+                                return Some(());
+                            }
+                        }
+                        _ => {}
+                    }
+                    self.at += 1;
+                }
+            }
+            _ => {
+                let start = self.at;
+                while let Some(byte) = self.peek() {
+                    match byte {
+                        b',' | b'}' | b']' | b' ' | b'\t' | b'\n' | b'\r' => break,
+                        b'"' | b'[' | b'{' => return None,
+                        _ => self.at += 1,
+                    }
+                }
+                (self.at > start).then_some(())
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1002,6 +1148,81 @@ mod tests {
         }
         host.send(r#"{"jsonrpc":"2.0","id":1,"result":true}"#).await;
         assert_eq!(run.await.unwrap(), Ok(json!(true)));
+    }
+
+    #[tokio::test]
+    async fn requests_no_reader_takes_are_answered_parse_error_with_their_id() {
+        let (connection, mut host) = connect(Arc::new(NoIncoming));
+        let run = spawn_request(&connection, "run", None);
+        host.read().await.unwrap();
+        // NaN, which no JSON reader takes, and nesting deeper than any reader goes.
+        host.send(r#"{"jsonrpc":"2.0","id":9001,"method":"fact","params":{"value":NaN}}"#)
+            .await;
+        let deep = format!(
+            r#"{{"jsonrpc":"2.0","method":"fact","params":{{"value":{}{}}},"id":"deep"}}"#,
+            "[".repeat(600),
+            "]".repeat(600)
+        );
+        host.send(&deep).await;
+        let replies = by_id(vec![host.read().await.unwrap(), host.read().await.unwrap()]);
+        assert_eq!(replies[0]["id"], json!(9001));
+        assert_eq!(replies[1]["id"], json!("deep"));
+        for reply in &replies {
+            assert_eq!(reply["error"]["code"], json!(-32700), "{reply}");
+        }
+        assert!(
+            replies[1]["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("nested too deeply")
+        );
+        // The connection goes on.
+        assert!(connection.is_open());
+        host.send(r#"{"jsonrpc":"2.0","id":1,"result":true}"#).await;
+        assert_eq!(run.await.unwrap(), Ok(json!(true)));
+    }
+
+    #[test]
+    fn request_ids_are_found_without_reading_other_values() {
+        let id = |body: &str| lenient_request_id(body.as_bytes());
+        assert_eq!(
+            id(r#"{"jsonrpc":"2.0","id":7,"method":"fact","params":{"v":NaN}}"#),
+            Some(Id::Number(7))
+        );
+        assert_eq!(
+            id(
+                r#" { "params" : [Infinity, -Infinity, {"id": 1}] , "method":"x", "id" : "a\"b" } "#
+            ),
+            Some(Id::Text("a\"b".into()))
+        );
+        assert_eq!(
+            id(r#"{"method":"x","params":{"s":"} ] , \" {"},"id":2}"#),
+            Some(Id::Number(2))
+        );
+        let deep = format!(
+            r#"{{"id":3,"method":"x","params":{}{}}}"#,
+            "{\"a\":".repeat(100_000),
+            "1".to_string() + &"}".repeat(100_000)
+        );
+        assert_eq!(id(&deep), Some(Id::Number(3)));
+        // Not a request, or no id it could be answered by.
+        for body in [
+            r#"{"id":1,"result":NaN}"#,
+            r#"{"method":"progress","params":NaN}"#,
+            r#"{"id":null,"method":"x","v":NaN}"#,
+            r#"{"id":1.5,"method":"x","v":NaN}"#,
+            r#"{"id":[1],"method":"x","v":NaN}"#,
+            r#"{"id":1,"id":2,"method":"x","v":NaN}"#,
+            r#"{"id":1,"method":"x","v":[NaN}"#,
+            r#"{"id":1,"method":"x" "v":1}"#,
+            r#"[{"id":1,"method":"x"}]"#,
+            r#"{"id":1,"method":"x","#,
+            "{}",
+            "",
+            "NaN",
+        ] {
+            assert_eq!(id(body), None, "{body}");
+        }
     }
 
     #[tokio::test]

@@ -1262,3 +1262,85 @@ fn the_cache_replay_store_answers_its_call() {
     fs::remove_file(&copy).unwrap();
     assert!(store.load_call(REPLAY_KEY).is_none());
 }
+
+// ------------------------------------------------------------------ what a killed run leaves
+
+/// Makes a file or folder look `hours` old.
+fn age(path: &Path, hours: u64) {
+    let when = std::time::SystemTime::now() - std::time::Duration::from_secs(hours * 3600);
+    let file = fs::File::open(path).unwrap();
+    file.set_modified(when).unwrap();
+}
+
+#[test]
+fn stale_temporary_files_are_swept_and_fresh_ones_kept() {
+    let (_dir, store) = store();
+    let stored = store.put_bytes(ONE_TWO).unwrap();
+    let fan = store.file_path(&stored.digest).unwrap();
+    let fan = fan.parent().unwrap();
+    let old = fan.join(".0123456789abcdef.part");
+    let fresh = fan.join(".fedcba9876543210.part");
+    let record_temp = store.root().join("results/ab/.00000000000000aa.part");
+    let job_temp = store.root().join("jobs/.00000000000000bb.part");
+    fs::create_dir_all(record_temp.parent().unwrap()).unwrap();
+    fs::create_dir_all(job_temp.parent().unwrap()).unwrap();
+    for path in [&old, &fresh, &record_temp, &job_temp] {
+        fs::write(path, b"partial").unwrap();
+    }
+    for path in [&old, &record_temp, &job_temp] {
+        age(path, 2);
+    }
+    store.sweep();
+    assert!(!old.exists() && !record_temp.exists() && !job_temp.exists());
+    assert!(
+        fresh.exists(),
+        "a temporary file being written is left alone"
+    );
+    assert!(store.has(&stored.digest, stored.size), "stored files stay");
+}
+
+#[test]
+fn work_dirs_of_invocations_that_are_gone_are_swept() {
+    let (_dir, store) = store();
+    let work = store.work_root();
+    // An invocation of this process that still runs: its claim holds.
+    store.claim_work("1111111111111111").unwrap();
+    store.claim_work("1111111111111111").unwrap();
+    fs::create_dir_all(work.join("1111111111111111-1/out")).unwrap();
+    // A killed invocation: its lock file is there, and no one holds it.
+    fs::write(work.join("2222222222222222.lock"), b"").unwrap();
+    fs::create_dir_all(work.join("2222222222222222-1/out")).unwrap();
+    fs::write(work.join("2222222222222222-1/out/big.bin"), b"x").unwrap();
+    fs::create_dir_all(work.join("2222222222222222-2")).unwrap();
+    // Dirs no claim covers: swept once an hour old.
+    fs::create_dir_all(work.join("plan-1")).unwrap();
+    age(&work.join("plan-1"), 2);
+    fs::create_dir_all(work.join("plan-2")).unwrap();
+    store.sweep();
+    let mut left = names(&work);
+    left.sort();
+    assert_eq!(
+        left,
+        ["1111111111111111-1", "1111111111111111.lock", "plan-2"]
+    );
+    store.release_work("1111111111111111");
+    assert!(!work.join("1111111111111111.lock").exists());
+    // A dir its run left behind with no claim goes once it is an hour old.
+    age(&work.join("1111111111111111-1"), 2);
+    store.sweep();
+    let mut left = names(&work);
+    left.sort();
+    assert_eq!(left, ["plan-2"]);
+}
+
+#[test]
+fn a_source_that_cannot_be_read_is_not_the_stores_fault() {
+    let (dir, store) = store();
+    let gone = dir.path().join("gone.txt");
+    match store.put_file(&gone, "out/gone.txt") {
+        Err(StoreError::Source(sentence)) => {
+            assert_eq!(sentence, "cannot read out/gone.txt: no such file")
+        }
+        other => panic!("{other:?}"),
+    }
+}

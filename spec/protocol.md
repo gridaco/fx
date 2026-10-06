@@ -71,9 +71,9 @@ Every file the engine hands a host is a **file ref**:
 | `name` | a display name. It is never part of an identity. |
 | `key` | the item's key in a keyed collection; absent or `null` otherwise |
 | `path` | the absolute path of the file in the store. The host reads it and MUST NOT write, move or delete it. |
-| `facts` | the file facts `facts(f)` ([identity.md](identity.md) §4), computed by the engine |
+| `facts` | the file facts `facts(f)` ([identity.md](identity.md) §4, [facts.md](facts.md)), computed by the engine; for a file whose facts are refused, `bytes` and `kind` only |
 
-The engine MUST include `facts` in every file ref it sends. A file ref is valid only within the run that received it.
+The engine MUST include `facts` in every file ref it sends. When a file's facts are refused ([facts.md](facts.md) §1: a broken picture, an MP4 or Matroska file that does not parse), its ref still carries `facts`, holding only `bytes` and `kind`, and the engine logs the reason. Handing such a file to a host is not an error; an expression that reads its facts is ([facts.md](facts.md) §1). A host cannot tell such a file from one whose kind gives no further facts (an audio-only MP4) by its `facts`: a body that needs to know reads the file. A file ref is valid only within the run that received it.
 
 ### 3.2 Files inside JSON values
 
@@ -220,10 +220,10 @@ The result is `{outputs, facts?, marks?}`: `outputs` maps each output port to an
 
 After the host answers, the engine:
 1. merges the node facts reported with `fact`, in order, with the result's `facts` on top: a later value for a name replaces an earlier one. Marks are those reported with `annotate`, followed by the result's `marks`.
-2. checks the result: no undeclared output port, every non-optional port present, each value's shape matching its port; no fact named `cost_usd`, which is the engine's (step 5), and no reserved marker in a fact or a mark (§3.2). A failed check fails the node, with `-32602` for a refused fact or mark, and it is not retried.
+2. checks the result: no undeclared output port, every non-optional port present, each value's shape matching its port; no fact named `cost_usd`, which is the engine's (step 5), no reserved marker in a fact or a mark (§3.2), every mark well formed as `annotate` requires (§6.4), and no fact or mark nested deeper than 509 arrays and objects, which the run's record could not hold. A failed check fails the node, with `-32602` for a refused fact or mark, and it is not retried. A result FX cannot read at all fails the node with `the node host answered run with something FX cannot read: ` and the first place that is not what §3.4 describes (`output <port>: a file is {"work_path", "kind"?} or {"file": <ref>}`).
 3. writes `{"kind": "fx-annotations-v1", "annotations": marks}` as the `annotations` output when the type declares one, the body returned none, and there are marks.
 4. requires a judge's `verdict` node fact to be `accept` or `reject`.
-5. stores the output files, sets the node fact `cost_usd`, and writes the result record (`fx-result-record-v1`) under the step identity when that is known. The engine always writes `cost_usd` itself for a node a host ran: what this run paid for the node's calls, or `null` when it paid for none (a call answered from the cache costs nothing and counts as none), the same value as the result record's `cost_usd` ([store.md](store.md) §3). `fx/select@1` and other engine types report no node facts.
+5. stores the output files, sets the node fact `cost_usd`, and writes the result record (`fx-result-record-v1`) under the step identity when that is known. An output file under `work_dir` that cannot be read, or that changes while it is stored, fails the node: it is the body's, not the store's. The engine always writes `cost_usd` itself for a node a host ran: what this run paid for the node's calls, or `null` when it paid for none (a call answered from the cache costs nothing and counts as none), the same value as the result record's `cost_usd` ([store.md](store.md) §3). `fx/select@1` and other engine types report no node facts.
 
 **Failure.** The host answers `run` with an error:
 - `node_failure` when the body failed on purpose (Python: `raise ctx.fail(…)` or `NodeFailure`);
@@ -232,7 +232,7 @@ After the host answers, the engine:
 
 For `node_failure` and `node_error`, `data` MAY carry node `facts` and `marks` the body kept locally, under the same rules as a result's. The engine merges them as above, leaving out any that step 2 would refuse, so a failed node keeps its node facts and its own error.
 
-**Timeouts and cancellation.** At `timeout_s`, or when a person stops the run, the engine sends `$/cancel` for the `run`. A host that has not answered 5 seconds later is ended, together with what it started where the platform allows that. A node that timed out fails with `ran past <n> seconds` and is not retried. A host that exits while a run is pending fails that run as a `node_error` would, with `the node host exited with status <n>`.
+**Timeouts and cancellation.** At `timeout_s`, or when a person stops the run, the engine sends `$/cancel` for the `run`, and from then on answers the run's host requests with `cancelled` (§6): a paid call already sent goes on, completes and settles, and the run waits for it before it ends. A host that has not answered 5 seconds later is ended, together with what it started where the platform allows that. Whatever a host started also ends with the host whenever the host ends, not only after a cancel. A node that timed out fails with `ran past <n> seconds`, whatever the host answers after the deadline other than a result, and is not retried. A host that exits while a run is pending fails that run as a `node_error` would, with `the node host exited with status <n>`, `the node host was killed by signal <n> (<NAME>)` when a signal ended it, or `the node host exited` when its status is not known.
 
 ### 5.4 `tool.invoke`
 
@@ -267,15 +267,15 @@ Every request in this section carries the `run_id` of a pending `run`. A request
 A paid call: `{run_id, capability, request}`. `request` is the canonical request ([identity.md](identity.md) §9): JSON, with each file as a file value (§3.2). The engine:
 1. checks that the type declares the capability (`capability_undeclared`) and has calls left (`over_bound`). Cache hits count toward the bound.
 2. takes the instance's route for the capability (`no_route`).
-3. checks the request's file values (§3.2) and computes the call key ([identity.md](identity.md) §9), then answers from the call cache when it can, billing nothing and removing a leftover job record with that key ([store.md](store.md) §5). This comes before the live check and the adapter check, so a dry run replays the calls it has already paid for, and a recorded call replays with no adapter at all: recorded calls replay offline ([store.md](store.md) §4).
+3. checks the request's file values (§3.2) and computes the call key ([identity.md](identity.md) §9), then answers from the call cache when it can, billing nothing and removing a leftover job record with that key ([store.md](store.md) §5). This comes before the live check and the adapter check, so a dry run replays the calls it has already paid for, and a recorded call replays with no adapter at all: recorded calls replay offline ([store.md](store.md) §4). A key in flight is sent once: another call of the same key while it is in flight waits for it and gets its outcome as a cache hit, billing nothing. A key whose call ended `call_failed`, `capability_refused` or `job_unsettled` answers every later call of that key in the invocation with the same error and sends nothing, so a body run again under `retry: engine` never sends it again; `ceiling_exceeded` does the same for later calls from the same instance.
 4. checks that the call can be sent: it refuses with `not_live` when the run is not live (a dry run, or an `at: plan` step), and then with `no_route` when no adapter serves the route.
 5. looks up the call's job record ([store.md](store.md) §5):
    - `submitting`: an earlier submission has an unknown outcome. The engine refuses with `job_unsettled`, and the message says to check the provider's dashboard and then run `grida-fx jobs --forget <key>`.
    - `submitted`: the engine collects the job by its `handle`, with no new hold and no new submit, because the run that submitted it was charged its hold. An answered job goes on at step 8. A job that ends without a result leaves its record `settled` and fails the call with `call_failed`; a later run submits it anew. An adapter that cannot collect jobs refuses with `job_unsettled`, as for `submitting`.
    - no record, or a `settled` one: the call goes on at step 6, as a new submission.
-6. reserves, for each attempt, the route's high price for this request under the run's ceiling and any step budget, $0 included, so every attempt is recorded (`ceiling_exceeded`, with `needed_usd` and `remaining_usd` in `data`).
-7. makes the call as its only retry owner: at most 6 sends of the request in all, a resend after a send that provably was not received included; each attempt is reserved, recorded and settled. `capability_refused` means the adapter refused before anything was sent, settled at $0. `call_failed` means every attempt failed. A long job keeps its job record as [store.md](store.md) §5 describes.
-8. stores the files and the call record (`fx-call-record-v1`), and then removes the call's job record, if any.
+6. reserves, for each attempt, the route's high price for this request under the run's ceiling and any step budget, $0 included, so every attempt is recorded (`ceiling_exceeded`, with `needed_usd` and `remaining_usd` in `data`). The attempt first takes its place under the route's concurrency and pacing, and only then reserves, so calls waiting for a place hold none of the ceiling. A reservation or a settlement the run's log cannot record stops the run.
+7. makes the call as its only retry owner: at most 6 sends of the request in all, a resend after a send that provably was not received included; each attempt is reserved, recorded and settled. `capability_refused` means the adapter refused before anything was sent, settled at $0. `call_failed` means every attempt failed. A long job keeps its job record as [store.md](store.md) §5 describes. An answer is accepted only after three checks, each of which fails the attempt as billed when it refuses: the adapter's own, a round trip of its data through the record's canonical JSON, and the engine's check of the capability (for `agent.turn`, §6.2).
+8. stores the files and the call record (`fx-call-record-v1`), and then removes the call's job record, if any. The `data` and `files` handed back are the record's, as a replay reads them, so a live call and its replay give the body the same value.
 
 The result is `{key, cached, cost_usd, files: {name: file ref}, data}`. `cost_usd` is 0 on a hit and for a collected job, which bills nothing new, and `null` when the provider reported no cost (the engine then charged the whole hold).
 
@@ -297,26 +297,53 @@ The engine runs a whole tool-using model loop for the body.
 The loop, which fixes every turn's request and therefore its call key:
 1. The transcript starts with `{"role": "user", "content": instructions}`, plus `"images"` when there are any.
 2. The tools sent are the body's, in order. With `submit`, they are followed by `{"name": "submit", "description": "Finish: submit the answer this task asks for.", "parameters": submit}`.
-3. Each turn is one `agent.turn` capability call, counted and bounded like any other: `{"system", "messages", "tools", "tool_choice"}`, plus `"max_tokens"` when it is given. `messages` is the transcript as step 6 windows it. `tool_choice` is `"required"` with `submit` and `"auto"` without. The reply's data is `{"text", "tool_calls": [{"id", "name", "arguments"}]}`, appended as `{"role": "assistant", "content": text, "tool_calls": calls}`.
+3. Each turn is one `agent.turn` capability call, counted and bounded like any other: `{"system", "messages", "tools", "tool_choice"}`, plus `"max_tokens"` when it is given. `messages` is the transcript as step 6 windows it. `tool_choice` is `"required"` with `submit` and `"auto"` without. The reply's data is `{"text", "tool_calls": [{"id", "name", "arguments"}]}`, with `arguments` an object. It is appended as `{"role": "assistant", "content": text, "tool_calls": calls}`, where each call's `arguments` is a string: the canonical JSON text ([identity.md](identity.md) §2) of the object the model gave, as provider APIs carry it. What the model wrote therefore never reads as a file value or a reserved marker (§3.2) in a later turn's request. Each call is dispatched with the object.
 4. A reply without tool calls ends the loop with `{text}` when there is no `submit`. With `submit`, the engine appends the user message `Finish by calling submit.` and goes on.
 5. The calls are handled in order, and each is answered with a tool message `{"role": "tool", "name", "tool_call_id", "content", "images"}`. `tool_call_id` is present only when the call had an id, and `images` only when there are pictures.
-   - `submit`: the arguments are validated against the schema, and then passed to `agent.check` when `check` is true. An accepted value ends the loop at once with `{submitted}`; later calls in the same turn are left unanswered. A value the schema refuses is answered `refused: ` followed by `<where>: <message>` cut to 500 characters. `<message>` is the validator's message for the first error by location, and `<where>` is that location's segments joined by `/`, or `the answer` at the top. A value `agent.check` refuses is answered `refused: ` followed by the refusal cut to 500 characters.
+   - `submit`: the arguments are validated against the schema, and then passed to `agent.check` when `check` is true. An accepted value ends the loop at once with `{submitted}`; later calls in the same turn are left unanswered. A value the schema refuses is answered `refused: ` followed by `<where>: <message>` cut to 500 characters, for the first of the schema's errors. Errors are ordered by instance location (array indexes by number, member names by their text, and a location before the longer locations it starts), then by keyword location (the evaluation path, compared the same way). The errors one keyword reports at one place keep the schema's order (`required`). `<where>` is the instance location's segments joined by `/`, or `the answer` at the top. `<message>` is FX's own text for the failed keyword, from the keyword's value in the schema and the value found at that place, `<v>`, written as canonical JSON ([identity.md](identity.md) §2). `<n>` is canonical JSON, and character, item and property are plural unless n is 1:
+
+     | Keyword | `<message>` |
+     |---|---|
+     | `type` | `<v> is not of type "<t>"`; several types sorted and joined by ` or ` |
+     | `enum` | `<v> is not one of <enum>` |
+     | `const` | `<v> is not <const>` |
+     | `required`, `dependentRequired` | `"<name>" is a required property` |
+     | `additionalProperties`, `unevaluatedProperties` | `the property "<a>" is not allowed` / `the properties "<a>", "<b>" are not allowed` (every refused member, canonical order) |
+     | `minLength` / `maxLength` | `<v> is shorter than <n> characters` / `<v> is longer than <n> characters` |
+     | `minimum` / `maximum` | `<v> is less than the minimum <n>` / `<v> is greater than the maximum <n>` |
+     | `exclusiveMinimum` / `exclusiveMaximum` | `<v> is not greater than <n>` / `<v> is not less than <n>` |
+     | `multipleOf` | `<v> is not a multiple of <n>` |
+     | `minItems` / `maxItems`, `additionalItems` | `<v> has fewer than <n> items` / `<v> has more than <n> items` |
+     | `unevaluatedItems` | `<v> has items that no schema allows` |
+     | `uniqueItems` | `<v> has repeated items` |
+     | `minProperties` / `maxProperties` | `<v> has fewer than <n> properties` / `<v> has more than <n> properties` |
+     | `contains`, `minContains`, `maxContains` | `<v> does not hold the items contains asks for` |
+     | `pattern` | `<v> does not match the pattern "<pattern>"` |
+     | `format` (when asserted) | `<v> is not a valid "<format>"` |
+     | `not` | `<v> matches the schema under not` |
+     | `anyOf` | `<v> matches none of the schemas under anyOf` |
+     | `oneOf` | `<v> matches none of the schemas under oneOf` / `<v> matches more than one of the schemas under oneOf` |
+     | a `false` schema | `<v> is not allowed` |
+     | `propertyNames` | `the property name ` followed by the message for the name |
+     | any other | `<v> does not meet "<keyword>"` |
+
+     A value `agent.check` refuses is answered `refused: ` followed by the refusal cut to 500 characters.
    - An unknown name is answered `no tool named <name>`.
    - Any other name goes to `tool.invoke`. The content is `text(content)` ([identity.md](identity.md) §5), or the error text.
 6. With `recent_images: n`, each request keeps only the newest n pictures across the transcript. A message that lost pictures has `\n[<k> older picture(s) not shown]` appended to its content.
 7. After `max_steps` turns with no answer, the request fails with `agent_unfinished`: `the agent did not finish within <n> turns`.
 
-Before its first turn, the engine refuses an `agent.run` with `-32602` when `max_steps` is 0, a tool is named `submit`, a tool's `parameters` or the `submit` schema holds a reserved marker (§3.2), or `submit` is not a JSON Schema (draft 2020-12). A reply whose data is not `{"text", "tool_calls"}` fails the request with `call_failed`; a missing or `null` `text` is `""`, missing or `null` `tool_calls` are none, a call without `arguments` has `{}`, and other members are not kept.
+Before its first turn, the engine refuses an `agent.run` with `-32602` when `max_steps` is 0, a tool is named `submit`, a tool's `parameters` or the `submit` schema holds a reserved marker (§3.2), or `submit` is not a JSON Schema (draft 2020-12). The engine checks every `agent.turn` answer inside its retry owner (§6.1 step 7), before the call is recorded. Data that is not `{"text", "tool_calls"}` fails that attempt as billed, and the next attempt is a new one; when every attempt fails, the turn fails with `call_failed` and nothing is recorded. A missing or `null` `text` is `""`, missing or `null` `tool_calls` are none, a call without `arguments` has `{}`, and other members are not kept.
 
-The result is `{text}` or `{submitted}`, plus `transcript` (every message, unwindowed), `turns`, and `cost_usd` (the cost of the turns that were not cached).
+The result is `{text}` or `{submitted}`, plus `transcript` (every message, unwindowed), `turns`, and `cost_usd` (the cost of the turns that were not cached). An error that ends a loop that has started (anything but the refusals before the first turn) carries the transcript so far in `data.transcript`. Each `agent.run` starts a new transcript.
 
 ### 6.3 `fact`
 
-`{run_id, name, value}`: reports a node fact, a small value about the result, such as a score, a verdict or a measurement. `value` is any I-JSON value. The name `cost_usd` belongs to the engine, which always writes it (§5.3): a `fact` with that name, or with a value that holds a reserved marker (§3.2), is refused with `-32602`. Otherwise the engine records the fact at once, so it survives a later failure, and answers `{}`.
+`{run_id, name, value}`: reports a node fact, a small value about the result, such as a score, a verdict or a measurement. `value` is any I-JSON value. The name `cost_usd` belongs to the engine, which always writes it (§5.3): a `fact` with that name, with a value that holds a reserved marker (§3.2), or with a value nested deeper than 509 arrays and objects, which the run's record could not hold, is refused with `-32602`. Otherwise the engine records the fact at once, so it survives a later failure, and answers `{}`.
 
 ### 6.4 `annotate`
 
-`{run_id, mark}`: adds one mark to the run's annotations. A mark has an optional `shape`, which is `point` (with `at: [x, y]`), `points` (`points: [[x, y], …]`, optionally `closed`) or `box` (`box: [x0, y0, x1, y1]`), in fractions of the image from 0 to 1. A mark without a shape is a note about the whole image. `label`, `color` and `tag` are optional strings, and other fields are kept as given. The engine refuses a malformed mark, or one holding a reserved marker (§3.2), with `-32602`, and otherwise answers `{}`.
+`{run_id, mark}`: adds one mark to the run's annotations. A mark has an optional `shape`, which is `point` (with `at: [x, y]`), `points` (`points: [[x, y], …]`, optionally `closed`) or `box` (`box: [x0, y0, x1, y1]`), in fractions of the image from 0 to 1. A mark without a shape is a note about the whole image. `label`, `color` and `tag` are optional strings, and other fields are kept as given. The engine refuses a malformed mark, one holding a reserved marker (§3.2), or one nested deeper than 509 arrays and objects, with `-32602`, and otherwise answers `{}`.
 
 ### 6.5 `progress`
 
@@ -334,6 +361,8 @@ Stores a file the body made and returns its file ref, with its file facts. The p
 - `json`: a JSON value, holding no reserved marker (§3.2). The engine writes the file in the format of [identity.md](identity.md) §5, "Writing JSON": the canonical form spread over lines. The same value is therefore the same file, and the same digest, in every language. Every SDK writes JSON outputs this way (Python: `ctx.out.json`).
 
 `kind` defaults to the suffix rule for `work_path`, to `json` for `json`, and to `file` for `base64`. `name` is a display name.
+
+Params with no source or several are refused with `-32602`, `file.put takes exactly one of work_path, base64, json`. A `work_path` file that cannot be read, or that changes while it is stored, is refused with `-32602` as well: it is the body's doing, so the body may catch it and the run goes on. Only a store the engine cannot read or write stops the run.
 
 ## 7. Errors
 
@@ -609,3 +638,9 @@ The Python engine FX grew out of ran bodies in its own process and handed them l
 | A param holding a file that is neither text nor JSON arrives as a live object | `param_files` |
 | `NodeFailure`, `CapabilityError` and other exceptions | Error codes, each saying whether the node may run again |
 | A builder's takes file is `<builder module>.takes.yaml`, next to the builder file | `<workflow id>.takes.yaml` in the folder of the module that constructed the `Workflow` (§5.2), since one builder module may build several workflows. Milestone 2 renames such takes files. |
+| A schema refusal of a submitted value is the jsonschema validator's message | FX's own text per failed keyword (§6.2) |
+| A transcript's tool call holds `arguments` as an object | Its canonical JSON text, as provider APIs carry it (§6.2) |
+| `Agent.transcript` carries over from one run to the next | A new transcript per `agent.run`, and the transcript so far in the data of an error that ends a loop (§6.2) |
+| A malformed `agent.turn` reply is cached and fails every replay | A billed failed attempt that is never recorded (§6.1 step 7) |
+| A `retry: engine` rerun sends a call that already failed again: up to 36 sends of one request | A key that ended in an engine error is never sent again in the invocation (§6.1 step 3) |
+| A call still in flight when its step timed out is left behind, its hold open | It completes and settles, the run's requests are answered `cancelled` from the deadline on, and the run waits for the call before it ends (§5.3) |

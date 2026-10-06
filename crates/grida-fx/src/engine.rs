@@ -22,6 +22,9 @@
 //!   planning verbs and `run` plan through it.
 //! - [`shutdown`]: ends the node hosts an `at: plan` step left idle, politely (the runner shuts
 //!   the pool down itself at the end of a run).
+//!
+//! [`plan`] and [`shutdown`] also mark when a run's runner takes interruptions
+//! ([`crate::interrupt`]): from the end of planning until the engine is shut down.
 
 use grida_fx_core::error::io_reason;
 use grida_fx_core::host::{NodeHost, PlanTimeRunner};
@@ -92,12 +95,15 @@ pub fn plan(
 ) -> Result<Plan, Error> {
     let mut plan_time = PlanTime::new(Arc::clone(engine));
     let runner: &mut dyn PlanTimeRunner = &mut plan_time;
-    make_plan(planner, host, Some(runner), &*engine.store)
+    let plan = make_plan(planner, host, Some(runner), &*engine.store);
+    crate::interrupt::planning_ended();
+    plan
 }
 
 /// Ends the idle node hosts of `engine` (from `at: plan` steps). Call it from the verb's own
 /// thread, never from a runtime thread.
 pub fn shutdown(runtime: &tokio::runtime::Runtime, engine: &Engine) {
+    crate::interrupt::runner_ended();
     runtime.block_on(engine.hosts.shutdown());
 }
 

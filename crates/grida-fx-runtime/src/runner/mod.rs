@@ -12,23 +12,31 @@
 //! 3. a tool a live instance declares is not installed: `a program the run needs is not
 //!    installed:` and one line per tool, sorted: `<name> (for <steps, sorted, ", ">): install it,
 //!    or set GRIDA_FX_TOOL_<NAME>`;
-//! 4. the folder holds another plan (`folder::check_plan`); 5. another invocation holds its lock.
+//! 4. another invocation holds the folder's lock (`folder::RunFolder::lock`); 5. the folder holds
+//!    another plan (`folder::check_plan`, read once the lock is held, so no invocation can write
+//!    `plan.json` in between), or its `events.jsonl` holds an event of another plan:
+//!    `<folder> holds a run of another workflow or other inputs; choose a new folder`.
 //!
-//! Then: read the earlier events (`events::read_events`, a torn tail repaired); write `plan.json`
-//! once (`folder::plan_document`); replay finished steps into `planner.results`
-//! ([`replay::replay`]); open the event log; build the ledger (ceiling = the plan's) and replay
-//! it; emit `run_started {workflow, resumed, ceiling_usd, charged_usd, estimate}` (`resumed`:
-//! there were earlier events; `estimate` the fresh plan's). The ledger finds the step budgets of
-//! earlier holds in the expansion with the replayed results (the plan's own expansion when that
-//! expansion fails), so run-time instances keep their scopes.
+//! Then: read the earlier events (`events::read_events_noting`: a torn tail is cut off, with a
+//! note on stderr, `note: <folder>/events.jsonl ended in a line an earlier invocation did not
+//! finish writing; it was left out`); remove what killed invocations left behind
+//! (`RunFolder::sweep`, `Store::sweep`); write `plan.json` once (`folder::plan_document`); replay
+//! finished steps into `planner.results` ([`replay::replay`]); open the event log; build the
+//! ledger (ceiling = the plan's) and replay it; emit `run_started {workflow, resumed, ceiling_usd,
+//! charged_usd, estimate}` (`resumed`: there were earlier events; `estimate` the fresh plan's).
+//! The ledger finds the step budgets of earlier holds in the expansion with the replayed results
+//! (the plan's own expansion when that expansion fails), so run-time instances keep their scopes.
 //!
 //! The loop, until nothing runs and nothing can start:
 //! - expand again with every result so far (`grida_fx_core::expand::expand`); run-time problems
 //!   emit one `problem` each and stop the run: `a value the run produced breaks the workflow:
 //!   <where>: <message>`; running tasks are cancelled (their attempts settle);
 //! - settle instances that will never run ([`schedule::settle`]): blocked → failed result and
-//!   `node_skipped {reason, blocked: true}`; failed by an assertion → `node_failed {error}`; then
-//!   expand again, so what reads them settles in turn;
+//!   `node_skipped {reason, blocked: true}`; failed by an assertion → `node_failed {error}`; a
+//!   succeeded one a run-time assertion has since failed ([`schedule::overturned`]) → failed,
+//!   `node_failed {error}`; then expand again, so what reads them settles in turn. A running
+//!   instance whose assertion fails is stopped (its own cancellation, no `run_cancelled`) and
+//!   gets `node_failed {error}` with the assertion's message once its dispatch reports;
 //! - the phase gate ([`schedule::Gate`]): `phase_planned` per phase as it is reached; with
 //!   `--yes-up-to`, a phase after the first whose worst case takes the run past it stops the run
 //!   once nothing runs: `phase <p> may cost up to $<high, 2 places>, which takes the run past
@@ -37,11 +45,12 @@
 //! - dispatch every ready instance ([`schedule::ready`]) in listing order; an instance whose job
 //!   cannot be made (`executor::InstanceJob::from_instance`) fails at once with that sentence
 //!   (`node_failed {error}`, no `node_started`);
-//! - wait for one completion, a stop, or cancellation (Ctrl-C: [`crate::engine::Cancel`]; nothing
-//!   new starts after it). A completion's `stop` (`dispatch::Done::stop`) stops the run like a
-//!   run-time problem: one `problem {where: <instance id>, message: <stop>}`, and `stopped` is that
-//!   message. When the run stops, what still runs is cancelled and waited for; a dispatch that
-//!   finished anyway keeps its result.
+//! - wait for one completion, a stop, or cancellation (Ctrl-C or SIGTERM:
+//!   [`crate::engine::Cancel`]; nothing new starts after it). A completion's `stop`
+//!   (`dispatch::Done::stop`) stops the run like a run-time problem: one `problem {where:
+//!   <instance id>, message: <stop>}`, and `stopped` is that message. When the run stops, what
+//!   still runs is cancelled and waited for; a dispatch that finished anyway keeps its result.
+//!   An event that any part of the run could not write (`EventLog::fault`) is an engine fault.
 //!
 //! After the loop: expand once more; the declared outputs; `incomplete` when stopped, when an
 //! output is still pending, or when a planned instance never ran (each named in a `problem`
@@ -50,15 +59,19 @@
 //! purpose); `ok` when this invocation failed nothing and is not incomplete; `failed` lists
 //! what it failed in the expansion's listing order, never in completion order; place
 //! `outputs/` (a file that cannot be placed is a `problem {where: outputs.<name>}` and stops the
-//! run with `cannot place <folder>/<path>: <reason>`); emit `run_finished`. Cancellation instead:
-//! running tasks are told to stop (`$/cancel`, a host killed 5 seconds later),
+//! run with `cannot place <folder>/<path>: <reason>`); wait until no paid call of the invocation
+//! runs (`Services::calls_settled`: a step that ran past its timeout, or whose host exited, may
+//! have left one in flight, which completes and settles); emit `run_finished`, whose
+//! `charged_usd` therefore counts every attempt sent. Cancellation instead:
+//! running tasks are told to stop (`$/cancel`, a host killed 5 seconds later), the calls in
+//! flight end and settle their holds in full, then
 //! `run_cancelled {reason: "interrupted", charged_usd}` is emitted, no outputs are placed, and
 //! the outcome says `cancelled` (exit 130), with `ok: false`, `incomplete: true`, no `stopped`
 //! and no outputs. An engine fault after the folder was locked (an
-//! expansion that fails, an event that cannot be written) cancels what runs, writes `problem
-//! {where: <workflow id>}` and `run_finished {ok: false, incomplete: true, stopped: <fault>}`
-//! where it still can, and is returned as [`RunError::Fatal`]. The host pool is shut down
-//! whatever happened.
+//! expansion that fails, an event that cannot be written) cancels what runs, waits for its paid
+//! calls to settle, writes `problem {where: <workflow id>}` and `run_finished {ok: false,
+//! incomplete: true, stopped: <fault>}` where it still can, and is returned as
+//! [`RunError::Fatal`]. The host pool is shut down whatever happened.
 
 pub mod dispatch;
 pub mod replay;
@@ -137,6 +150,14 @@ pub fn run(
     let outcome = invoke(&engine, planner, host, plan, &options);
     engine.handle.block_on(engine.hosts.shutdown());
     outcome
+}
+
+/// The refusals that come before anything is written (module doc, 1 to 3), with the process's
+/// environment: a command checks them before it makes a new folder, so a refused run leaves
+/// nothing behind.
+pub fn refused(plan: &Plan, live: bool) -> Option<String> {
+    let env = |name: &str| std::env::var(name).ok();
+    refusal(plan, live, &env)
 }
 
 /// The refusals that come before anything is written (module doc, 1 to 3). `env` reads the
@@ -294,41 +315,8 @@ fn invoke(
             "the plan has no digest: an input holds a value only a run produces",
         ))
     })?;
-    crate::folder::check_plan(&options.folder, &options.label, &digest)
-        .map_err(|refused| RunError::Refused(refused.0))?;
-    let folder = RunFolder::lock(&options.folder, &options.label)
-        .map_err(|refused| RunError::Refused(refused.0))?;
-    let events_label = in_folder(&options.label, "events.jsonl");
-    // The reader's sentences name `events.jsonl`; the folder says which one.
-    let prior = crate::events::read_events(&folder.events_path()).map_err(|message| {
-        RunError::Fatal(Error::new(
-            ErrorKind::Io,
-            format!("{}: {message}", options.label),
-        ))
-    })?;
-    let document = crate::folder::plan_document(&plan, planner, &digest, &options.takes_file);
-    folder.write_plan_once(&document).map_err(|error| {
-        RunError::Fatal(Error::io(&in_folder(&options.label, "plan.json"), &error))
-    })?;
-    planner
-        .results
-        .extend(replay::replay(&prior, &engine.store));
-    let invocation_id = crate::events::new_invocation_id();
-    let log = EventLog::open(&folder.events_path(), &invocation_id, &digest)
-        .map_err(|error| RunError::Fatal(Error::io(&events_label, &error)))?;
-    let log = Arc::new(log);
-    let first = expand(planner, host);
-    let ledger = Arc::new(Ledger::new(plan.ceiling, Some(Arc::clone(&log))));
-    let scoped = first.as_ref().unwrap_or(&plan.expansion);
-    ledger.replay(&prior, &|id: &str| scopes_of(scoped, id));
+    // Listening starts before anything is written, so an interruption is never missed.
     let cancel = Cancel::new();
-    let services = Arc::new(Services::run(
-        Arc::clone(engine),
-        Arc::clone(&ledger),
-        Arc::clone(&log),
-        invocation_id,
-        cancel.clone(),
-    ));
     let (sender, receiver) = mpsc::unbounded_channel();
     let interrupted = Arc::new(AtomicBool::new(false));
     let watcher = {
@@ -336,13 +324,44 @@ fn invoke(
         let sender = sender.clone();
         let interrupted = Arc::clone(&interrupted);
         engine.handle.spawn(async move {
-            if tokio::signal::ctrl_c().await.is_ok() {
+            if interruption().await {
                 interrupted.store(true, Ordering::SeqCst);
                 cancel.cancel();
                 let _ = sender.send(Message::Interrupted);
             }
         })
     };
+    let started = prepare(engine, planner, &plan, options, &digest);
+    let (folder, prior) = match started {
+        Ok(started) => started,
+        Err(error) => {
+            watcher.abort();
+            return Err(error);
+        }
+    };
+    let events_label = in_folder(&options.label, "events.jsonl");
+    planner
+        .results
+        .extend(replay::replay(&prior, &engine.store));
+    let invocation_id = crate::events::new_invocation_id();
+    let log = match EventLog::open(&folder.events_path(), &invocation_id, &digest) {
+        Ok(log) => Arc::new(log),
+        Err(error) => {
+            watcher.abort();
+            return Err(RunError::Fatal(Error::io(&events_label, &error)));
+        }
+    };
+    let first = expand(planner, host);
+    let ledger = Arc::new(Ledger::new(plan.ceiling, Some(Arc::clone(&log))));
+    let scoped = first.as_ref().unwrap_or(&plan.expansion);
+    ledger.replay(&prior, &|id: &str| scopes_of(scoped, id));
+    let services = Arc::new(Services::run(
+        Arc::clone(engine),
+        Arc::clone(&ledger),
+        Arc::clone(&log),
+        invocation_id,
+        cancel.clone(),
+    ));
     let workflow = planner.workflow.workflow.id.clone();
     let mut scheduler = Scheduler {
         engine: Arc::clone(engine),
@@ -358,6 +377,7 @@ fn invoke(
         sender,
         receiver,
         running: IndexMap::new(),
+        overturned: IndexMap::new(),
         groups: schedule::Groups::default(),
         gate: schedule::Gate::new(),
         failed: Vec::new(),
@@ -380,6 +400,77 @@ fn invoke(
     watcher.abort();
     scheduler.join();
     outcome
+}
+
+/// Resolves on Ctrl-C (SIGINT) or, where there is one, SIGTERM; `false` when neither can be
+/// listened for.
+async fn interruption() -> bool {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+        if let Ok(mut terminate) = signal(SignalKind::terminate()) {
+            return tokio::select! {
+                interrupted = tokio::signal::ctrl_c() => interrupted.is_ok(),
+                Some(()) = terminate.recv() => true,
+            };
+        }
+    }
+    tokio::signal::ctrl_c().await.is_ok()
+}
+
+/// The folder, locked and checked, and its earlier events, with `plan.json` written (module doc:
+/// refusals 4 and 5, and what comes before the event log).
+fn prepare(
+    engine: &Arc<Engine>,
+    planner: &Planner,
+    plan: &Plan,
+    options: &RunOptions,
+    digest: &str,
+) -> Result<(RunFolder, Vec<serde_json::Value>), RunError> {
+    let folder = RunFolder::lock(&options.folder, &options.label)
+        .map_err(|refused| RunError::Refused(refused.0))?;
+    crate::folder::check_plan(&options.folder, &options.label, digest)
+        .map_err(|refused| RunError::Refused(refused.0))?;
+    let events_label = in_folder(&options.label, "events.jsonl");
+    // The reader's sentences name `events.jsonl`; the folder says which one.
+    let (prior, torn) =
+        crate::events::read_events_noting(&folder.events_path()).map_err(|message| {
+            RunError::Fatal(Error::new(
+                ErrorKind::Io,
+                format!("{}: {message}", options.label),
+            ))
+        })?;
+    if torn {
+        eprintln!(
+            "note: {events_label} ended in a line an earlier invocation did not finish writing; \
+             it was left out"
+        );
+    }
+    let another = prior
+        .iter()
+        .any(|event| event.get("plan").and_then(serde_json::Value::as_str) != Some(digest));
+    if another {
+        return Err(RunError::Refused(format!(
+            "{} holds a run of another workflow or other inputs; choose a new folder",
+            options.label
+        )));
+    }
+    folder.sweep();
+    engine.store.sweep();
+    let document = crate::folder::plan_document(plan, planner, digest, &options.takes_file);
+    folder.write_plan_once(&document).map_err(|error| {
+        RunError::Fatal(Error::io(&in_folder(&options.label, "plan.json"), &error))
+    })?;
+    Ok((folder, prior))
+}
+
+/// One running instance: the concurrency group it takes a place in, and its own cancellation
+/// (a child of the run's).
+struct Running {
+    group: Option<String>,
+    cancel: Cancel,
+    /// The instance path, for the events the scheduler writes for it.
+    path: String,
 }
 
 /// What reaches the loop.
@@ -405,8 +496,11 @@ struct Scheduler<'a> {
     workflow: String,
     sender: mpsc::UnboundedSender<Message>,
     receiver: mpsc::UnboundedReceiver<Message>,
-    /// Running instances by id, with the concurrency group each takes a place in.
-    running: IndexMap<String, Option<String>>,
+    /// Running instances by id.
+    running: IndexMap<String, Running>,
+    /// Running instances a run-time assertion failed and the run stopped: the assertion's
+    /// message (module doc).
+    overturned: IndexMap<String, String>,
     groups: schedule::Groups,
     gate: schedule::Gate,
     /// What this invocation failed, in the order it failed (in listing order once it ends).
@@ -446,6 +540,7 @@ impl Scheduler<'_> {
             self.drain();
         }
         if self.interrupted() {
+            self.settle_calls();
             let cancelled = Event::RunCancelled {
                 reason: "interrupted".to_string(),
                 charged_usd: self.ledger.charged(),
@@ -491,7 +586,13 @@ impl Scheduler<'_> {
                 )));
             }
             let running = self.running_ids();
-            let settled = schedule::settle(&expansion, &self.planner.results, &running);
+            self.stop_overturned(&expansion);
+            let mut settled = schedule::settle(&expansion, &self.planner.results, &running);
+            settled.extend(schedule::overturned(
+                &expansion,
+                &self.planner.results,
+                &running,
+            ));
             if !settled.is_empty() {
                 for settled in settled {
                     self.emit(&settled.event)?;
@@ -547,10 +648,44 @@ impl Scheduler<'_> {
                     stop.get_or_insert(stopped);
                 }
             }
+            self.check_log()?;
             if stop.is_some() {
                 return Ok(stop);
             }
         }
+    }
+
+    /// An event some part of the run could not write is an engine fault (module doc).
+    fn check_log(&self) -> Result<(), Error> {
+        match self.log.fault() {
+            Some(fault) => Err(Error::new(
+                ErrorKind::Io,
+                format!("{}: {fault}", self.events_label),
+            )),
+            None => Ok(()),
+        }
+    }
+
+    /// Stops each running instance whose state a run-time assertion turned `failed` (module doc).
+    fn stop_overturned(&mut self, expansion: &Expansion) {
+        for (id, running) in &self.running {
+            if self.overturned.contains_key(id) {
+                continue;
+            }
+            if let Some(error) = expansion
+                .instances
+                .get(id)
+                .and_then(schedule::assertion_failed)
+            {
+                self.overturned.insert(id.clone(), error);
+                running.cancel.cancel();
+            }
+        }
+    }
+
+    /// Waits until no paid call of the invocation runs (module doc).
+    fn settle_calls(&self) {
+        self.engine.handle.block_on(self.services.calls_settled());
     }
 
     /// Dispatches an instance; `false` when its job could not be made and it failed at once.
@@ -578,11 +713,22 @@ impl Scheduler<'_> {
         if let Some(group) = &group {
             self.groups.start(group);
         }
-        self.running.insert(instance.id.clone(), group);
+        // `Cancel::child` follows its parent from a task of the runtime.
+        let cancel = {
+            let _runtime = self.engine.handle.enter();
+            self.services.cancel.child()
+        };
+        self.running.insert(
+            instance.id.clone(),
+            Running {
+                group,
+                cancel: cancel.clone(),
+                path: instance.path.clone(),
+            },
+        );
         let started = node_started(instance);
         let services = Arc::clone(&self.services);
         let folder = Arc::clone(&self.folder);
-        let cancel = self.services.cancel.clone();
         let sender = self.sender.clone();
         let id = instance.id.clone();
         let task = self.engine.handle.spawn(async move {
@@ -627,8 +773,31 @@ impl Scheduler<'_> {
     /// Takes a completion in: its group place back, its result kept, its failure counted. Its
     /// stop, when it has one, is written as a `problem` and returned.
     fn finish(&mut self, done: Done) -> Result<Option<String>, Error> {
-        if let Some(group) = self.running.shift_remove(&done.id).flatten() {
+        let running = self.running.shift_remove(&done.id);
+        let path = running
+            .as_ref()
+            .map_or_else(|| done.id.clone(), |running| running.path.clone());
+        if let Some(group) = running.and_then(|running| running.group) {
             self.groups.finish(&group);
+        }
+        let overturned = self.overturned.shift_remove(&done.id);
+        if done.cancelled
+            && !self.services.cancel.is_cancelled()
+            && let Some(error) = overturned
+        {
+            // Stopped by its own assertion: the failure is the assertion's.
+            self.emit(&Event::NodeFailed {
+                id: done.id.clone(),
+                path,
+                error: Some(error.clone()),
+                facts: None,
+                duration_ms: None,
+            })?;
+            self.failed.push((done.id.clone(), Some(error.clone())));
+            self.planner
+                .results
+                .insert(done.id.clone(), crate::executor::failed(&error));
+            return Ok(None);
         }
         if !done.cancelled {
             if done.result.status == ResultStatus::Failed {
@@ -701,6 +870,8 @@ impl Scheduler<'_> {
         }
         let ok = self.failed.is_empty() && !incomplete;
         let outputs = existing_outputs(&expansion.outputs);
+        self.settle_calls();
+        self.check_log()?;
         let charged = self.ledger.charged();
         self.emit(&Event::RunFinished {
             ok,
@@ -729,6 +900,7 @@ impl Scheduler<'_> {
     /// fault is written where it still can be.
     fn fault(&mut self, fault: Error) -> RunError {
         self.drain();
+        self.settle_calls();
         let _ = self.emit(&Event::Problem {
             where_: self.workflow.clone(),
             message: fault.message.clone(),

@@ -21,7 +21,9 @@
 //!
 //! A succeeded step's files are where the run placed them (spec/store.md §8 "One file or
 //! several": `files/<step>/<port><suffix>` for a port holding one file, else
-//! `files/<step>/<port>/<label><suffix>`), from its `node_finished` outputs.
+//! `files/<step>/<port>/<label><suffix>`), from its `node_finished` outputs. `<step>` is the
+//! step folder of the instance's takes, read from its id (`<step>#<takes>` unless they are `[1]`),
+//! and each name is cut as the run cut it (`folder::step_file_path`).
 //!
 //! Text:
 //! ```text
@@ -43,7 +45,7 @@ use crate::verbs::{event_name, read_log, read_plan, text, workflow_id};
 use grida_fx_core::Error;
 use grida_fx_core::docs::project::Project;
 use grida_fx_core::money::Usd;
-use grida_fx_runtime::folder::{keyed_path, named, safe_name};
+use grida_fx_runtime::folder::{keyed_path, step_file_path, step_folder, takes_of_id};
 use indexmap::IndexMap;
 use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
@@ -245,7 +247,7 @@ fn step_view(id: String, entry: Entry, ended: bool) -> StepView {
             view.state = "succeeded";
             view.cache = text(event, "cache").map(str::to_string);
             if let Some(outputs) = event.get("outputs").and_then(Value::as_object) {
-                view.files = placed_files(&view.path, outputs);
+                view.files = placed_files(&view.id, &view.path, outputs);
             }
         }
         Some((Some("node_failed"), event)) => {
@@ -309,9 +311,9 @@ fn encoded_files(value: &Value, item_key: Option<&str>, out: &mut Vec<EncodedFil
     }
 }
 
-/// Where a succeeded step's files were placed (module doc).
-fn placed_files(step_path: &str, outputs: &Map<String, Value>) -> Vec<Placed> {
-    let step = safe_name(step_path);
+/// Where a succeeded step's files were placed (module doc): the instance id `id` names its takes.
+fn placed_files(id: &str, step_path: &str, outputs: &Map<String, Value>) -> Vec<Placed> {
+    let step = step_folder(step_path, &takes_of_id(id));
     let mut placed = Vec::new();
     for (port, value) in outputs {
         let mut files = Vec::new();
@@ -319,13 +321,12 @@ fn placed_files(step_path: &str, outputs: &Map<String, Value>) -> Vec<Placed> {
         let one = files.len() == 1;
         for (index, file) in files.into_iter().enumerate() {
             let path = if one {
-                format!("files/{step}/{}", named(port, &file.kind))
+                step_file_path(&step, port, None, &file.kind)
             } else {
-                let label = file.key.unwrap_or_else(|| index.to_string());
-                format!(
-                    "files/{step}/{port}/{}",
-                    named(&keyed_path(&label), &file.kind)
-                )
+                let label = file
+                    .key
+                    .map_or_else(|| index.to_string(), |key| keyed_path(&key));
+                step_file_path(&step, port, Some(&label), &file.kind)
             };
             placed.push(Placed {
                 path,
@@ -716,7 +717,11 @@ mod tests {
             "seq": {"list": [{"file": {"digest": "4".repeat(64), "kind": "json", "name": "s",
                                        "size": 2}}]},
         });
-        let placed = placed_files("entity['ada'].draw", outputs.as_object().unwrap());
+        let placed = placed_files(
+            "entity['ada'].draw#1",
+            "entity['ada'].draw",
+            outputs.as_object().unwrap(),
+        );
         let paths: Vec<&str> = placed.iter().map(|p| p.path.as_str()).collect();
         assert_eq!(
             paths,
@@ -726,6 +731,46 @@ mod tests {
                 "files/entity__ada__.draw/items/a/_/b.txt",
                 "files/entity__ada__.draw/seq.json",
             ]
+        );
+    }
+
+    #[test]
+    fn each_take_is_found_in_its_own_folder_and_long_names_as_cut() {
+        let one = json!({"text": {"file": {"digest": "1".repeat(64), "kind": "text/plain",
+                                           "name": "t", "size": 2}}});
+        let outputs = one.as_object().unwrap();
+        let path = |id: &str, step: &str| placed_files(id, step, outputs)[0].path.clone();
+        assert_eq!(path("draw#1", "draw"), "files/draw/text.txt");
+        assert_eq!(path("draw#2", "draw"), "files/draw#2/text.txt");
+        assert_eq!(
+            path("entity['ada'].draw#1.3", "entity['ada'].draw"),
+            "files/entity__ada__.draw#1.3/text.txt"
+        );
+        // Where the run puts it, a name too long for a file system included.
+        let long = "s".repeat(300);
+        let found = path(&format!("{long}#2"), &long);
+        let placed = grida_fx_runtime::folder::step_files(
+            &long,
+            &[2],
+            &[(
+                "text".to_string(),
+                grida_fx_core::val::Val::File(Box::new(grida_fx_core::val::FileValue {
+                    digest: "1".repeat(64),
+                    kind: "text/plain".into(),
+                    name: "t".into(),
+                    size: 2,
+                    key: None,
+                    content: None,
+                    location: None,
+                })),
+            )]
+            .into_iter()
+            .collect(),
+        );
+        assert_eq!(found, placed[0].0);
+        assert!(
+            found.split('/').all(|segment| segment.len() <= 255),
+            "{found}"
         );
     }
 

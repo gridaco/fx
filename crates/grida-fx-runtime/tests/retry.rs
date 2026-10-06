@@ -11,7 +11,7 @@ use grida_fx_runtime::calls::retry::{
     Attempts, Backoff, HoldBook, JobBook, MAX_SENDS, Outcome, collect_job, send_plain, submit_job,
 };
 use grida_fx_runtime::engine::Cancel;
-use grida_fx_runtime::ledger::{Hold, Refusal, Scopes};
+use grida_fx_runtime::ledger::{Hold, NotReserved, Refusal, Scopes};
 use grida_fx_runtime::store::StoreError;
 use grida_fx_runtime::store::records::{JobRecord, JobState, RouteEntry};
 use indexmap::IndexMap;
@@ -43,20 +43,31 @@ struct Book {
     refused: Mutex<Vec<String>>,
     /// Refuse the n-th reservation asked for (1-based).
     refuse_at: Option<usize>,
+    /// Fail to record the n-th reservation asked for (1-based).
+    unrecorded_at: Option<usize>,
+    /// Fail to record the n-th settlement (1-based); the book then says so.
+    unsettled_at: Option<usize>,
+    unrecorded: Mutex<Option<String>>,
 }
 
 impl HoldBook for Book {
-    fn reserve(&self, node_id: String, amount: Usd, scopes: &Scopes) -> Result<Hold, Refusal> {
+    fn reserve(&self, node_id: String, amount: Usd, scopes: &Scopes) -> Result<Hold, NotReserved> {
         let asked = lock(&self.reserved).len() + lock(&self.refused).len() + 1;
+        if Some(asked) == self.unrecorded_at {
+            lock(&self.refused).push(node_id.clone());
+            return Err(NotReserved::Unrecorded(format!(
+                "the run's events.jsonl could not record budget_reserved of {node_id}: disk full"
+            )));
+        }
         if Some(asked) == self.refuse_at {
             lock(&self.refused).push(node_id.clone());
-            return Err(Refusal {
+            return Err(NotReserved::Refused(Refusal {
                 needed: amount,
                 remaining: Usd(10_000),
                 message: format!(
                     "run ceiling reached: {node_id} needs up to $0.0400 and $0.0100 is left"
                 ),
-            });
+            }));
         }
         let owners: Vec<String> = scopes.iter().map(|(owner, _)| owner.clone()).collect();
         lock(&self.reserved).push((node_id.clone(), amount, owners.clone()));
@@ -68,8 +79,21 @@ impl HoldBook for Book {
     }
 
     fn settle(&self, hold: Hold, reported: Option<Usd>) -> Usd {
-        lock(&self.settled).push((hold.node_id, reported));
+        let mut settled = lock(&self.settled);
+        settled.push((hold.node_id.clone(), reported));
+        if Some(settled.len()) == self.unsettled_at {
+            lock(&self.unrecorded).get_or_insert_with(|| {
+                format!(
+                    "the run's events.jsonl could not record budget_settled of {}: disk full",
+                    hold.node_id
+                )
+            });
+        }
         reported.unwrap_or(hold.amount)
+    }
+
+    fn unrecorded(&self) -> Option<String> {
+        lock(&self.unrecorded).clone()
     }
 }
 
@@ -283,6 +307,7 @@ impl Rig {
             cancel: &self.cancel,
             backoff: Backoff::default(),
             job,
+            check: None,
         }
     }
 
@@ -630,7 +655,8 @@ async fn a_ceiling_refusal_on_the_first_attempt_sends_nothing() {
     let outcome = send_plain(&fake, &rig.plain()).await;
     assert!(matches!(outcome, Outcome::Ceiling(_)));
     assert!(fake.log().is_empty());
-    assert_eq!(rig.gate.count(), 0);
+    // The slot was taken before the hold, and given back with the refusal.
+    assert_eq!(rig.gate.count(), 1);
     assert!(rig.book.settlements().is_empty());
 }
 
@@ -709,10 +735,9 @@ async fn a_stopped_run_sends_nothing() {
     assert_eq!(outcome, Outcome::Cancelled);
     assert!(fake.log().is_empty());
     assert_eq!(rig.gate.count(), 0);
-    assert_eq!(
-        rig.book.settlements(),
-        vec![(hold_name(1), Some(Usd::ZERO))]
-    );
+    // Nothing waited for a slot, so nothing was reserved.
+    assert!(rig.book.holds().is_empty());
+    assert!(rig.book.settlements().is_empty());
 }
 
 #[tokio::test(start_paused = true)]
@@ -759,6 +784,134 @@ fn the_owner_s_futures_can_move_between_threads() {
     is_send(&send_plain(&fake, &attempts));
     is_send(&submit_job(&fake, &attempts));
     is_send(&collect_job(&fake, &attempts, &handle));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_new_attempt_waits_for_its_slot_before_it_holds_anything() {
+    let mut rig = Rig::new();
+    rig.gate.stop_at = Some(1);
+    let fake = FakeAdapter::plain(vec![Sent::Answered(answer(Some(COST)))]);
+    let outcome = send_plain(&fake, &rig.plain()).await;
+    assert_eq!(outcome, Outcome::Cancelled);
+    assert_eq!(rig.gate.count(), 1);
+    assert!(
+        rig.book.holds().is_empty(),
+        "no hold while waiting for the slot"
+    );
+    assert!(fake.log().is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn answers_are_checked_in_their_canonical_form_inside_the_owner() {
+    let rig = Rig::new();
+    let fake = FakeAdapter::plain(vec![
+        Sent::Answered(Answer::new(
+            json!({"z": 1, "a": 2.0, "bad": true}),
+            Some(Usd(1_000)),
+        )),
+        Sent::Answered(Answer::new(json!({"z": 1, "a": 2.0}), Some(COST))),
+    ]);
+    let seen = Mutex::new(Vec::new());
+    let check = |answer: &Answer| -> Result<(), String> {
+        lock(&seen).push(serde_json::to_string(&answer.data).unwrap());
+        match answer.data.get("bad") {
+            Some(_) => Err("the reply is malformed".into()),
+            None => Ok(()),
+        }
+    };
+    let mut attempts = rig.plain();
+    attempts.check = Some(&check);
+    let outcome = send_plain(&fake, &attempts).await;
+    let Outcome::Answered {
+        answer, attempts, ..
+    } = outcome
+    else {
+        panic!("expected an answer, got {outcome:?}");
+    };
+    assert_eq!(attempts, 2);
+    // The check saw the canonical form, and the answer carries it.
+    assert_eq!(
+        *lock(&seen),
+        vec![r#"{"a":2,"bad":true,"z":1}"#, r#"{"a":2,"z":1}"#]
+    );
+    assert_eq!(
+        serde_json::to_string(&answer.data).unwrap(),
+        r#"{"a":2,"z":1}"#
+    );
+    // The refused attempt was billed and settled; the next one was a new hold.
+    assert_eq!(
+        rig.book.settlements(),
+        vec![(hold_name(1), Some(Usd(1_000))), (hold_name(2), Some(COST))]
+    );
+    rig.book.assert_all_settled();
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_answer_that_cannot_be_recorded_fails_its_attempt() {
+    let rig = Rig::new();
+    let mut deep = json!(1);
+    for _ in 0..600 {
+        deep = json!([deep]);
+    }
+    let fake = FakeAdapter::plain(vec![
+        Sent::Answered(Answer::new(deep, Some(Usd(1_000)))),
+        Sent::Answered(answer(Some(COST))),
+    ]);
+    let outcome = send_plain(&fake, &rig.plain()).await;
+    assert!(matches!(outcome, Outcome::Answered { attempts: 2, .. }));
+    assert_eq!(rig.book.holds().len(), 2);
+    rig.book.assert_all_settled();
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_unrecorded_reservation_sends_nothing() {
+    let mut rig = Rig::new();
+    rig.book.unrecorded_at = Some(2);
+    let fake = FakeAdapter::plain(vec![
+        failed("http 500", Some(Usd(1_000)), true),
+        Sent::Answered(answer(Some(COST))),
+    ]);
+    let outcome = send_plain(&fake, &rig.plain()).await;
+    let Outcome::Unrecorded(reason) = outcome else {
+        panic!("expected an unrecorded hold, got {outcome:?}");
+    };
+    assert!(reason.contains("budget_reserved of gen/inv.2"), "{reason}");
+    assert_eq!(fake.log().len(), 1, "the second attempt never left");
+    rig.book.assert_all_settled();
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_unrecorded_settlement_makes_no_new_attempt() {
+    let mut rig = Rig::new();
+    rig.book.unsettled_at = Some(1);
+    let fake = FakeAdapter::plain(vec![
+        failed("http 500", Some(Usd(1_000)), true),
+        Sent::Answered(answer(Some(COST))),
+    ]);
+    let outcome = send_plain(&fake, &rig.plain()).await;
+    let Outcome::Unrecorded(reason) = outcome else {
+        panic!("expected an unrecorded settlement, got {outcome:?}");
+    };
+    assert!(reason.contains("budget_settled of gen/inv.1"), "{reason}");
+    assert_eq!(fake.log().len(), 1);
+    assert_eq!(rig.book.holds(), vec![hold_name(1)]);
+    // A long job likewise.
+    let mut rig = Rig::new();
+    rig.book.unsettled_at = Some(1);
+    let fake = FakeAdapter::long_job(
+        vec![
+            Submitted::Failed {
+                reason: "http 500".into(),
+                cost: None,
+                retryable: true,
+            },
+            accepted(),
+        ],
+        Vec::new(),
+    );
+    let outcome = submit_job(&fake, &rig.long()).await;
+    assert!(matches!(outcome, Outcome::Unrecorded(_)), "{outcome:?}");
+    assert_eq!(fake.log().len(), 1);
 }
 
 // ---------------------------------------------------------------------------------------------
