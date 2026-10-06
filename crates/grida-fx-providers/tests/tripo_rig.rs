@@ -551,7 +551,7 @@ fn every_check_failure_is_free() {
             vec![upload_expect().reply(HttpResponse::json(413, &json!({"code": 1})))],
             FakeClock::new(),
             Submitted::Refused {
-                reason: "Tripo refused the upload with HTTP 413".into(),
+                reason: "Tripo refused the upload with HTTP 413 (code 1)".into(),
             },
         ),
         (
@@ -605,7 +605,7 @@ fn the_paid_rig_follows_the_task_outcomes() {
         (
             rig_expect(RIG_BODY).reply(HttpResponse::json(422, &json!({"code": 1}))),
             Submitted::Failed {
-                reason: "Tripo refused the task with HTTP 422".into(),
+                reason: "Tripo refused the task with HTTP 422 (code 1)".into(),
                 cost: None,
                 retryable: false,
             },

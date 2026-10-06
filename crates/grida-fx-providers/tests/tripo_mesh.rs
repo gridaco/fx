@@ -592,7 +592,7 @@ fn a_failed_upload_posts_no_task() {
         assert_eq!(
             h.submit(&front_call()),
             Submitted::Refused {
-                reason: format!("Tripo refused the upload with HTTP {status}")
+                reason: format!("Tripo refused the upload with HTTP {status} (code 1)")
             }
         );
         h.done();
@@ -737,7 +737,7 @@ fn the_paid_post_is_sent_once_whatever_happens() {
         assert_eq!(
             h.submit(&front_call()),
             Submitted::Failed {
-                reason: format!("Tripo refused the task with HTTP {status}"),
+                reason: format!("Tripo refused the task with HTTP {status} (code 1)"),
                 cost: None,
                 retryable: false,
             }
@@ -1307,5 +1307,46 @@ fn the_key_never_reaches_a_reason_a_handle_or_data() {
     assert_eq!(handle, json!({"task_id": "task1"}));
     let answer = answered(h.collect(&call, handle));
     assert_clean(&answer.data.to_string());
+    h.done();
+}
+
+#[test]
+fn a_refusal_names_only_tripos_integer_error_code() {
+    let post = || post_expect(ExpectBody::JsonText(FRONT_BODY.into()));
+    for (body, named) in [
+        (
+            json!({"code": 2002, "message": "secret text", "suggestion": "secret"}),
+            " (code 2002)",
+        ),
+        (json!({"code": "2002", "message": "secret"}), ""),
+        (json!({"code": 1.5}), ""),
+        (json!(["code", 2002]), ""),
+    ] {
+        let h = harness(vec![
+            upload("front.png", "image/png", &front_png(), "tok1"),
+            post().reply(HttpResponse::json(400, &body)),
+        ]);
+        assert_eq!(
+            h.submit(&front_call()),
+            Submitted::Failed {
+                reason: format!("Tripo refused the task with HTTP 400{named}"),
+                cost: None,
+                retryable: false,
+            }
+        );
+        h.done();
+    }
+    let h = harness(vec![
+        upload("front.png", "image/png", &front_png(), "tok1"),
+        post().reply(HttpResponse::new(400, b"not json".to_vec())),
+    ]);
+    assert_eq!(
+        h.submit(&front_call()),
+        Submitted::Failed {
+            reason: "Tripo refused the task with HTTP 400".into(),
+            cost: None,
+            retryable: false,
+        }
+    );
     h.done();
 }

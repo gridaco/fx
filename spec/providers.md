@@ -307,7 +307,7 @@ Each provider's section is normative for its adapters. Status rows override §4.
   - `mesh.generate`, a long job: the free phase uploads the views, then `POST /generation/multiview-to-model`. Contract `adapter`: `tripo-multiview`.
   - `mesh.rig`, a long job: the free phase uploads the model, posts `POST /animations/rig-check` and waits for it; then `POST /animations/rig`. Contract `adapter`: `tripo-rig`.
 - **Credential:** `authorization: Bearer <TRIPO_API_KEY>` on every API request, and never on a model download.
-- **The envelope.** Every API answer must be HTTP 200 exactly, with a JSON object `{"code": 0, "data": {...}}`. Tripo's error text is never read: a reason says `body withheld`.
+- **The envelope.** Every API answer must be HTTP 200 exactly, with a JSON object `{"code": 0, "data": {...}}`. Tripo's error text is never read: a reason says `body withheld`. A refusal (below) names Tripo's error code when the body is a JSON object whose `code` is an integer, as ` (code <n>)` after the status (`Tripo refused the task with HTTP 400 (code 2002)`); nothing else of the body is kept.
 - **Limits:**
   - each upload, status read and download: 300 s;
   - the paid POST: 180 s;

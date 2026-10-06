@@ -73,6 +73,20 @@ const ENDED: [&str; 4] = ["failed", "cancelled", "banned", "expired"];
 /// Free-phase statuses that are deterministic refusals (spec/providers.md §9.4 "Free phase").
 const FREE_REFUSED: [u16; 7] = [400, 401, 403, 404, 413, 415, 422];
 
+/// The ` (code <n>)` a refusal names (spec/providers.md §9.4 "The envelope"): the integer
+/// `code` of a JSON object body, which says why Tripo refused; nothing else of the body is read.
+fn error_code(body: &[u8]) -> String {
+    match serde_json::from_slice::<Value>(body) {
+        Ok(Value::Object(envelope)) => match envelope.get("code") {
+            Some(Value::Number(code)) if code.is_i64() || code.is_u64() => {
+                format!(" (code {code})")
+            }
+            _ => String::new(),
+        },
+        _ => String::new(),
+    }
+}
+
 /// Paid-POST statuses that say Tripo refused the task (spec/providers.md §9.4 "Paid POST").
 const PAID_REFUSED: [u16; 5] = [400, 401, 403, 404, 422];
 
@@ -205,8 +219,9 @@ impl TripoApi {
         };
         if FREE_REFUSED.contains(&response.status) {
             return Err(self.refused(&format!(
-                "Tripo refused the upload with HTTP {}",
-                response.status
+                "Tripo refused the upload with HTTP {}{}",
+                response.status,
+                error_code(&response.body)
             )));
         }
         let data = Self::data(&response).map_err(|reason| self.took_nothing(reason, &response))?;
@@ -443,8 +458,9 @@ impl TripoApi {
         if PAID_REFUSED.contains(&response.status) {
             return Err(Submitted::Failed {
                 reason: self.client.reason(&format!(
-                    "Tripo refused the task with HTTP {}",
-                    response.status
+                    "Tripo refused the task with HTTP {}{}",
+                    response.status,
+                    error_code(&response.body)
                 )),
                 cost: None,
                 retryable: false,
