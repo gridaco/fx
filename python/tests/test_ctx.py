@@ -521,6 +521,16 @@ def test_capability_requests_carry_files(
     assert result.files["image"].name == "out.png"
     assert (result.cost_usd, result.cached, result.key) == (0.04, False, "c" * 64)
     assert result.json == result.data == {"revised": "x"}
+    structured = CallResult(
+        {
+            "key": "d" * 64,
+            "cached": True,
+            "cost_usd": 0,
+            "files": {},
+            "data": {"json": {"caption": "a kite"}},
+        }
+    )
+    assert structured.json == {"caption": "a kite"}
     with pytest.raises(CallFailed, match=r"^the call returned no audio$"):
         _ = result.audio
     with pytest.raises(CallFailed, match=r"^the call returned no video$"):

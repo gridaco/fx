@@ -591,7 +591,7 @@ The whole exchange is below, with the messages indented for reading. Both sides 
     "cached": false,
     "cost_usd": 0.0012,
     "files": {},
-    "data": {"caption": "A red square on a plain ground."}
+    "data": {"json": {"caption": "A red square on a plain ground."}}
   }
 }
 // host → engine

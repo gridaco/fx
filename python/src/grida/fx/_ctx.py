@@ -195,8 +195,9 @@ class Output:
 class CallResult:
     """A capability's answer (section 6.1): ``files`` by name, ``data``, ``cost_usd``,
     ``cached``, ``key``. ``image``, ``audio`` and ``video`` are the first file of that family
-    (``CallFailed("the call returned no <family>")`` otherwise); ``json`` is ``data``; ``pil()``
-    opens ``image`` with Pillow."""
+    (``CallFailed("the call returned no <family>")`` otherwise); ``json`` is ``data["json"]``
+    when ``data`` is an object holding ``json`` (a ``structured.generate`` answer,
+    spec/capabilities.md section 4), else ``data``; ``pil()`` opens ``image`` with Pillow."""
 
     def __init__(self, result: Mapping[str, Any]) -> None:
         self.result = dict(result)
@@ -235,7 +236,10 @@ class CallResult:
 
     @property
     def json(self) -> Any:
-        return self.data
+        data = self.data
+        if isinstance(data, dict) and "json" in data:
+            return data["json"]
+        return data
 
     def pil(self) -> Any:
         from grida.fx.std import pictures

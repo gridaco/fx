@@ -20,10 +20,18 @@ It prints one line per check and exits non-zero when any check fails:
       FX came from (the spec's prose may, where it records the history);
   (g) the worked examples in spec/identity.md agree with spec/vectors/identity/examples.json;
   (h) every expected fx-graph-v1 output of a conformance case passes digest.py --check-graph,
-      with the case's in/ as the project and the route tables its step passed;
+      with the case's in/ as the project and the route tables its step passed (the built-in
+      table when it passed none);
   (i) the identity vectors agree with other readers and writers: every JSON output case that
       identity.md section 5 says Python's json.dumps writes the same is written the same, and
-      every reserved-marker case is refused (or read) by the YAML reader as by the JSON reader.
+      every reserved-marker case is refused (or read) by the YAML reader as by the JSON reader;
+  (j) the built-in route table (crates/grida-fx-providers/routes/default.yaml) is in the strict
+      YAML subset and validates against fx-routes-v1; its size is the one spec/providers.md
+      section 10 states; every route's capability has its section in spec/capabilities.md and is
+      a paid built-in's of the standard library (or agent.turn, the engine's own); every feature
+      is in its capability's feature table; every contract's adapter is one providers.md
+      section 9 names; and the guide's table of built-in routes (docs/guide/05-running.md) lists
+      every route under its capability with the table's prices.
 """
 
 from __future__ import annotations
@@ -47,6 +55,8 @@ VECTORS = SPEC / "vectors"
 CONFORMANCE = REPO / "conformance"
 GUIDE = REPO / "docs" / "guide"
 GUIDE_EXAMPLES = GUIDE / "examples"
+DEFAULT_ROUTES = REPO / "crates" / "grida-fx-providers" / "routes" / "default.yaml"
+STD_CATALOG = REPO / "crates" / "grida-fx-core" / "src" / "builtins" / "catalog.json"
 
 DRAFT_2020_12 = "https://json-schema.org/draft/2020-12/schema"
 SCHEMA_ID_PREFIX = "urn:grida-fx:schema:"
@@ -60,7 +70,7 @@ TAKES_SCHEMA = "fx-takes-v1"
 FORBIDDEN_NAMES = (b"gnode", b"Gnode", b"GNODE")
 # Where the origin engine's name may not appear: the contracts and the cases, not the spec's
 # prose (identity.md and protocol.md record where FX differs from it).
-NAME_ROOTS = (SCHEMAS, VECTORS, CONFORMANCE, GUIDE)
+NAME_ROOTS = (SCHEMAS, VECTORS, CONFORMANCE, GUIDE, DEFAULT_ROUTES.parent)
 # Contract fields are lower_snake_case. External vocabulary ($ref, ...) and the x-fx-*
 # extension keywords keep their own spelling.
 SNAKE_CASE = re.compile(r"[a-z][a-z0-9_]*\Z|\$[A-Za-z]+\Z|x-fx-[a-z0-9-]+\Z")
@@ -528,6 +538,8 @@ def check_expected_graphs(gate: Gate) -> None:
             command += ["--project", str(project)]
             for route_file in routes:
                 command += ["--routes", str(project / route_file)]
+            if not routes and DEFAULT_ROUTES.is_file():
+                command += ["--builtin-routes", str(DEFAULT_ROUTES)]
             done = subprocess.run(command, capture_output=True, text=True, timeout=120)
             output = (done.stdout + done.stderr).strip().splitlines()
             problems = [] if done.returncode == 0 else output
@@ -535,6 +547,145 @@ def check_expected_graphs(gate: Gate) -> None:
             gate.result("h", f"{rel(path)} {summary}".rstrip(), problems)
     if not found:
         gate.report("skip", "h", "no expected fx-graph-v1 outputs under conformance/")
+
+
+# ---------------------------------------------------------------------------------------------
+# (j) the built-in route table
+# ---------------------------------------------------------------------------------------------
+
+# A capability section of spec/capabilities.md: `## <n>. `<capability>``.
+_CAPABILITY_HEADING = re.compile(r"^## \d+\. `([a-z]+(?:\.[a-z_]+)+)`\s*$")
+# A row of a feature table: `| `<feature>` | <meaning> |`.
+_FEATURE_ROW = re.compile(r"^\| `([a-z0-9_]+)` \|")
+_GUIDE_PRICE = re.compile(r"\$([0-9]+(?:\.[0-9]+)?) – \$([0-9]+(?:\.[0-9]+)?)")
+
+
+def _capability_features(text: str) -> dict[str, set[str]]:
+    """Each capability section of capabilities.md and the features its table lists."""
+    found: dict[str, set[str]] = {}
+    current: str | None = None
+    in_features = False
+    for line in text.splitlines():
+        heading = _CAPABILITY_HEADING.match(line)
+        if heading:
+            current, in_features = heading.group(1), False
+            found[current] = set()
+            continue
+        if line.startswith("## "):
+            current, in_features = None, False
+            continue
+        if current is None:
+            continue
+        if line.startswith("| Feature | Meaning |"):
+            in_features = True
+            continue
+        if in_features:
+            row = _FEATURE_ROW.match(line)
+            if row:
+                found[current].add(row.group(1))
+            elif not line.startswith("|"):
+                in_features = False
+    return found
+
+
+def _std_capabilities() -> set[str]:
+    catalog = digest.read_json_file(STD_CATALOG)
+    types = catalog.get("types", []) if isinstance(catalog, dict) else []
+    return {t["capability"] for t in types if isinstance(t, dict) and t.get("capability")}
+
+
+def _guide_rows(text: str) -> list[str]:
+    """The rows of docs/guide/05-running.md's table of built-in routes."""
+    rows: list[str] = []
+    inside = False
+    for line in text.splitlines():
+        if line.startswith("| Capability | Built-in routes |"):
+            inside = True
+            continue
+        if inside:
+            if not line.startswith("|"):
+                break
+            if not line.startswith("|---"):
+                rows.append(line)
+    return rows
+
+
+def _same_amount(text: str, value: Any) -> bool:
+    from decimal import Decimal
+
+    return Decimal(text) == Decimal(str(value))
+
+
+def check_default_routes(gate: Gate, schemas: dict[str, Any]) -> None:
+    if not DEFAULT_ROUTES.is_file():
+        gate.report("skip", "j", f"{rel(DEFAULT_ROUTES)}: missing")
+        return
+    subject = rel(DEFAULT_ROUTES)
+    try:
+        table = digest.read_yaml_file(DEFAULT_ROUTES)
+    except digest.RefusedInput as error:
+        gate.result("j", subject, [str(error).replace(str(DEFAULT_ROUTES), subject)])
+        return
+    if "fx-routes-v1" in schemas:
+        problems = _schema_errors(_validator(schemas, "fx-routes-v1"), table)
+        gate.result("j", f"{subject} (fx-routes-v1)", problems)
+        if problems:
+            return
+    routes = [r for r in table.get("routes", []) if isinstance(r, dict)]
+    capabilities_md = (SPEC / "capabilities.md").read_text(encoding="utf-8")
+    providers_md = (SPEC / "providers.md").read_text(encoding="utf-8")
+    sections = _capability_features(capabilities_md)
+    std = _std_capabilities() | {"agent.turn"}
+    problems = []
+    used = sorted({r["capability"] for r in routes})
+    stated = f"It holds {len(routes)} routes over {len(used)} capabilities."
+    if stated not in providers_md:
+        problems.append(f"spec/providers.md section 10 does not say {stated!r}")
+    for route in routes:
+        capability, name = route["capability"], route["route"]
+        where = f"{capability} {name}"
+        if capability not in sections:
+            problems.append(f"{where}: spec/capabilities.md has no section for {capability}")
+        else:
+            unknown = sorted(set(route.get("features", [])) - sections[capability])
+            if unknown:
+                problems.append(f"{where}: features {unknown} are not in its feature table")
+        if capability not in std:
+            problems.append(f"{where}: no paid built-in of the standard library calls it")
+        adapter = (route.get("contract") or {}).get("adapter")
+        if adapter is not None and f"Contract `adapter`: `{adapter}`" not in providers_md:
+            problems.append(f"{where}: spec/providers.md section 9 names no adapter {adapter}")
+    gate.result(
+        "j",
+        f"{subject}: {len(routes)} routes agree with spec/capabilities.md, the "
+        "standard library and spec/providers.md",
+        problems,
+    )
+    guide = GUIDE / "05-running.md"
+    rows = _guide_rows(guide.read_text(encoding="utf-8")) if guide.is_file() else []
+    problems = []
+    if not rows:
+        problems.append("no table of built-in routes")
+    for route in routes:
+        capability, name = route["capability"], route["route"]
+        row = next((r for r in rows if f"`{capability}`" in r.split("|")[1]), None)
+        if row is None:
+            problems.append(f"{capability}: no row")
+            continue
+        at = row.find(f"`{name}`")
+        if at < 0:
+            problems.append(f"{capability} {name}: not in its row")
+            continue
+        price = _GUIDE_PRICE.search(row, at)
+        low, high = route["price"].get("low_usd"), route["price"].get("high_usd")
+        if price is None or not (
+            _same_amount(price.group(1), low) and _same_amount(price.group(2), high)
+        ):
+            shown = price.group(0) if price else "no price"
+            problems.append(
+                f"{capability} {name}: the guide says {shown}, the table {low} – {high}"
+            )
+    gate.result("j", f"{rel(guide)}: the built-in routes and their prices", problems)
 
 
 def main() -> int:
@@ -548,6 +699,7 @@ def main() -> int:
     check_worked_examples(gate)
     check_expected_graphs(gate)
     check_identity_cross(gate)
+    check_default_routes(gate, schemas)
     if gate.failures:
         print(f"{gate.failures} checks failed")
         return 1

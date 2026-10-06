@@ -1,0 +1,26 @@
+{
+  "kind": "fx-exchanges-v1",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "lane": "provider",
+        "credential": "authorization: Bearer test-openrouter-key",
+        "body": {
+          "json_text": "{\"model\":\"google/lyria-3-pro-preview\",\"messages\":[{\"role\":\"user\",\"content\":\"a calm harbour theme, 30 seconds\"}],\"modalities\":[\"text\",\"audio\"],\"audio\":{\"format\":\"mp3\"},\"stream\":true}"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream",
+          "x-request-id": "music-1"
+        },
+        "body": {
+          "text": ": OPENROUTER PROCESSING\n\ndata: {\"id\":\"gen-1\",\"choices\":[{\"delta\":{\"role\":\"assistant\",\"audio\":{\"data\":\"SUQzBAAAAAAAAAAA\",\"format\":\"mp3\"}}}]}\n\n: OPENROUTER PROCESSING\n\ndata: {\"id\":\"gen-1\",\"choices\":[{\"delta\":{\"content\":\"a calm theme\",\"audio\":{\"data\":\"AAAAAP/7kAAAAAAA\"}}}],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":40,\"cost\":0.0512345}}\n\ndata: [DONE]\n\n"
+        }
+      }
+    }
+  ]
+}

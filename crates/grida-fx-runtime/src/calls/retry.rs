@@ -8,7 +8,9 @@
 //! pacing are taken ([`super::pacing::Admission::admit`]; `Pacing` in a run), and only then is a
 //! new attempt's hold reserved: a request waiting for its slot holds none of the ceiling, and a
 //! refused reservation gives its slot back. Between sends the owner waits [`Backoff`] (0.5 s,
-//! doubling, at most 8 s).
+//! doubling, at most 8 s). After a `NotReceived` whose provider asked for a wait (`retry_after`,
+//! a `Retry-After` header), it waits the longer of the backoff and that wait, the wait capped at
+//! [`MAX_RETRY_AFTER`] (60 s) (spec/providers.md §4.3).
 //!
 //! **Checking an answer.** An answer is accepted only when, in this order, the adapter's `check`
 //! passes, its `data` survives being written as the call record writes it and read back (its
@@ -92,6 +94,9 @@ use std::time::Duration;
 /// The most sends of one call's request (module doc).
 pub const MAX_SENDS: u32 = 6;
 
+/// The longest wait a provider's `retry_after` adds before a resend (module doc).
+pub const MAX_RETRY_AFTER: Duration = Duration::from_secs(60);
+
 /// The wait between sends.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Backoff {
@@ -118,6 +123,13 @@ impl Backoff {
             .checked_pow(n.saturating_sub(1))
             .and_then(|growth| self.initial.checked_mul(growth))
             .map_or(self.max, |wait| wait.min(self.max))
+    }
+
+    /// The wait after the `n`-th send when the provider asked for `retry_after`: the longer of
+    /// [`Backoff::after`] and `retry_after` capped at [`MAX_RETRY_AFTER`] (module doc).
+    pub fn pause(&self, n: u32, retry_after: Option<Duration>) -> Duration {
+        let asked = retry_after.map_or(Duration::ZERO, |wait| wait.min(MAX_RETRY_AFTER));
+        self.after(n).max(asked)
     }
 }
 
@@ -250,12 +262,15 @@ pub async fn send_plain(adapter: &dyn RequestAdapter, attempts: &Attempts<'_>) -
                 attempts.settle(hold, None);
                 return Outcome::Cancelled;
             }
-            Some(Sent::NotReceived { reason }) => {
+            Some(Sent::NotReceived {
+                reason,
+                retry_after,
+            }) => {
                 if sends >= MAX_SENDS {
                     attempts.settle(hold, Some(Usd::ZERO));
                     return Outcome::Failed(reason);
                 }
-                if !attempts.wait(sends).await {
+                if !attempts.wait(sends, retry_after).await {
                     attempts.settle(hold, Some(Usd::ZERO));
                     return Outcome::Cancelled;
                 }
@@ -347,11 +362,14 @@ pub async fn submit_job(adapter: &dyn LongJob, attempts: &Attempts<'_>) -> Outco
                 attempts.settle(hold, None);
                 return Outcome::Cancelled;
             }
-            Some(Submitted::NotReceived { reason }) => {
+            Some(Submitted::NotReceived {
+                reason,
+                retry_after,
+            }) => {
                 if sends >= MAX_SENDS {
                     return attempts.unsent(fields, hold, Outcome::Failed(reason));
                 }
-                if !attempts.wait(sends).await {
+                if !attempts.wait(sends, retry_after).await {
                     return attempts.unsent(fields, hold, Outcome::Cancelled);
                 }
                 resend = Some(hold);
@@ -574,7 +592,7 @@ impl Attempts<'_> {
         if sends >= MAX_SENDS {
             return Some(Outcome::Failed(reason));
         }
-        if !self.wait(sends).await {
+        if !self.wait(sends, None).await {
             return Some(Outcome::Cancelled);
         }
         None
@@ -596,15 +614,15 @@ impl Attempts<'_> {
         }
     }
 
-    /// Waits [`Backoff::after`] the `sends`-th send; false when the run stopped first.
-    async fn wait(&self, sends: u32) -> bool {
+    /// Waits [`Backoff::pause`] after the `sends`-th send; false when the run stopped first.
+    async fn wait(&self, sends: u32, retry_after: Option<Duration>) -> bool {
         if self.cancel.is_cancelled() {
             return false;
         }
         tokio::select! {
             biased;
             () = self.cancel.cancelled() => false,
-            () = tokio::time::sleep(self.backoff.after(sends)) => true,
+            () = tokio::time::sleep(self.backoff.pause(sends, retry_after)) => true,
         }
     }
 
@@ -667,5 +685,28 @@ mod tests {
             ..Backoff::default()
         };
         assert_eq!(flat.after(5), Duration::ZERO);
+    }
+
+    #[test]
+    fn a_provider_wait_lengthens_the_backoff_up_to_a_minute() {
+        let backoff = Backoff::default();
+        assert_eq!(backoff.pause(1, None), Duration::from_millis(500));
+        assert_eq!(
+            backoff.pause(1, Some(Duration::from_millis(100))),
+            Duration::from_millis(500),
+            "a shorter wait keeps the backoff"
+        );
+        assert_eq!(
+            backoff.pause(2, Some(Duration::from_secs(20))),
+            Duration::from_secs(20)
+        );
+        assert_eq!(
+            backoff.pause(5, Some(Duration::from_secs(3600))),
+            MAX_RETRY_AFTER
+        );
+        assert_eq!(
+            backoff.pause(5, Some(Duration::ZERO)),
+            Duration::from_secs(8)
+        );
     }
 }

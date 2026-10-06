@@ -244,18 +244,11 @@ mod tests {
     #[tokio::test]
     async fn plain_plays_its_script_in_order_and_logs_every_send() {
         let fake = FakeAdapter::plain(vec![
-            Sent::NotReceived {
-                reason: "reset".into(),
-            },
+            Sent::not_received("reset"),
             Sent::Answered(answer(json!({"n": 1}), Some(Usd(20_000)))),
         ]);
         let adapter: &dyn RequestAdapter = &fake;
-        assert_eq!(
-            adapter.send(&request(1)).await,
-            Sent::NotReceived {
-                reason: "reset".into()
-            }
-        );
+        assert_eq!(adapter.send(&request(1)).await, Sent::not_received("reset"));
         assert_eq!(
             adapter.send(&request(1)).await,
             Sent::Answered(answer(json!({"n": 1}), Some(Usd(20_000))))

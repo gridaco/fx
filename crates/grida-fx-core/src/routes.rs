@@ -5,9 +5,10 @@
 //! concurrency are not part of it.
 //!
 //! The catalog is built from tables in this order (identity.md §7): the built-in default table
-//! (left out when any `--routes` file is given; empty until the provider adapters bring the
-//! default table with real prices), then `fx.yaml` `route_tables` in order, then each
-//! `--routes` file in order. A later table's entry for the same capability and route replaces an
+//! (left out when any `--routes` file is given), then `fx.yaml` `route_tables` in order, then each
+//! `--routes` file in order. The core knows no built-in table of its own: the caller hands it in
+//! (the `grida-fx` command passes `grida_fx_providers::routes::default_table()`, the table its
+//! adapters serve; tests pass an empty one). A later table's entry for the same capability and route replaces an
 //! earlier one, contract included; two entries for the same capability and route within one
 //! table are refused (`<route> is declared twice for <capability>`).
 //!
@@ -177,11 +178,6 @@ impl RouteTable {
         RouteTable::default()
     }
 
-    /// The built-in default table. Empty until the provider adapters land.
-    pub fn builtin() -> RouteTable {
-        RouteTable::default()
-    }
-
     /// Reads one `fx: routes/v1` table (already loaded from YAML). `file` labels errors; a
     /// refusal is an [`crate::ErrorKind::Route`] error `"<file>: <where>: <message>"` (exit 2)
     /// (module doc), except a document outside the schema, which [`crate::docs::validate`]
@@ -229,13 +225,17 @@ impl RouteTable {
     }
 }
 
-/// Builds the catalog for a plan (identity.md §7): the built-in table unless `extra` is
-/// non-empty, the project's `route_tables` (relative to its root, labelled by that path), then
-/// `extra`: `(absolute path, label as the user typed it)`. Each file is read with the strict YAML
-/// loader and validated against fx-routes-v1; a missing file is an Io error naming the label.
-pub fn load_catalog(project: &Project, extra: &[(PathBuf, String)]) -> Result<RouteTable> {
+/// Builds the catalog for a plan (identity.md §7): `builtin` unless `extra` is non-empty, the
+/// project's `route_tables` (relative to its root, labelled by that path), then `extra`:
+/// `(absolute path, label as the user typed it)`. Each file is read with the strict YAML loader
+/// and validated against fx-routes-v1; a missing file is an Io error naming the label.
+pub fn load_catalog(
+    project: &Project,
+    builtin: &RouteTable,
+    extra: &[(PathBuf, String)],
+) -> Result<RouteTable> {
     let mut catalog = if extra.is_empty() {
-        RouteTable::builtin()
+        builtin.clone()
     } else {
         RouteTable::new()
     };
@@ -639,7 +639,6 @@ mod tests {
             catalog.resolve("image.generate", "img-a").unwrap_err(),
             "a route is model@provider, not 'img-a'"
         );
-        assert!(RouteTable::builtin().entries.is_empty());
     }
 
     fn priced(price: Value) -> Route {

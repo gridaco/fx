@@ -1,0 +1,955 @@
+//! fal video: a queue long job (spec/providers.md §9.3, §7).
+//!
+//! `submit`: one `POST {queue}/<model>` with `{"prompt", "image_url", "end_image_url"?,
+//! "aspect_ratio", "resolution", "duration"}` (`duration` a JSON integer); a 2xx with `request_id`,
+//! `status_url` and `response_url` both under the queue base becomes the handle
+//! `{"request_id", "status_path", "response_path"}` (the URLs minus `{queue}/`; never a host name).
+//! Contract `adapter` must be `fal-queue` when present.
+//!
+//! `collect`: polls `GET {queue}/<status_path>` every [`POLL`] until `COMPLETED` (or a truthy
+//! `error`), then `GET {queue}/<response_path>`, then downloads `video.url` (https, no credential,
+//! at most [`MAX_VIDEO_BYTES`]); all within [`COLLECT_DEADLINE`] from the start of `collect`, each
+//! GET bounded by min(remaining, 60 s), sleeping through the injected [`Clock`]. The answer is file
+//! `video` (`video/mp4`) and `data: {"facts": {"width", "height", "duration_seconds", "fps"}}` from
+//! the clip's file facts; `cost` from the result's top-level `usage.cost`. `check`: the clip's size
+//! and duration against the request (spec/providers.md §9.3).
+//!
+//! Submit refusals, in this order (spec/providers.md §5, §9.3): another route's contract; a request
+//! that does not fit `video.generate`; no `FAL_KEY`; a blank prompt, or one over
+//! [`MAX_PROMPT_CHARS`]; no `first_frame`; a `duration` that is not a whole number from 3 to 10; a
+//! `resolution` (default `720p`) or `aspect_ratio` (default `9:16`) the route does not draw; a frame
+//! with no bytes.
+//!
+//! Submit statuses: 4xx other than 408 and 429 is `Failed { Some(0), false }`; 408, 429, 500, 502
+//! and 503 are `NotReceived`; any other status, a 2xx without a usable handle, or a handle outside
+//! the queue is `Uncertain`. A transport refusal is `Refused`, `not_sent` is `NotReceived`, and
+//! `after_send` is `Uncertain`.
+//!
+//! Collect outcomes (spec/providers.md §7): a handle this adapter did not write is `Unreachable`
+//! with nothing requested. Failed reads (a transport failure, 408, 429, a 5xx, a body that is not a
+//! JSON object) are polls that saw nothing. A 401, 403 or 3xx is `Unreachable`; another 4xx is
+//! `Ended`; a status with a truthy `error` is `Ended`; the deadline is `Unreachable`. A result
+//! without an https video, a download of the wrong type, over the cap or not MP4, or a clip with
+//! no video stream is `Ended`.
+
+use super::FalClients;
+use crate::BoxFuture;
+use crate::adapter::{Answer, CallRequest, Collected, LongJob, Submitted};
+use crate::clock::Clock;
+use crate::setup::Client;
+use crate::transport::{
+    Body, Credential, HttpRequest, HttpResponse, Lane, Method, Phase, TransportError,
+    TransportErrorKind,
+};
+use grida_fx_core::money::Usd;
+use serde_json::{Map, Value, json};
+use std::sync::Arc;
+use std::time::Duration;
+
+/// The contract `adapter` this adapter serves.
+pub const CONTRACT_ADAPTER: &str = "fal-queue";
+
+/// The submit's deadline.
+pub const SUBMIT_DEADLINE: Duration = Duration::from_secs(300);
+
+/// How long one `collect` waits for the job, from its start.
+pub const COLLECT_DEADLINE: Duration = Duration::from_secs(1500);
+
+/// The polling interval.
+pub const POLL: Duration = Duration::from_secs(5);
+
+/// The longest single status or result read.
+pub const READ_DEADLINE: Duration = Duration::from_secs(60);
+
+/// The most bytes of one clip.
+pub const MAX_VIDEO_BYTES: u64 = 512 * 1024 * 1024;
+
+/// The longest prompt, in Unicode scalar values.
+pub const MAX_PROMPT_CHARS: usize = 20_000;
+
+/// The label of the submit's reasons.
+pub const SUBMIT_LABEL: &str = "fal video submission";
+
+/// The label of a status read's reasons.
+pub const STATUS_LABEL: &str = "fal video job status";
+
+/// The label of a result read's reasons.
+pub const RESULT_LABEL: &str = "fal video job result";
+
+/// The label of the clip download's reasons.
+pub const DOWNLOAD_LABEL: &str = "fal output video download";
+
+/// The sentence of a job still running at the deadline.
+pub const OUTSTANDING: &str =
+    "fal has not finished the video job yet; it is collected on the next run";
+
+/// The response cap of the submit and of each status or result read (small JSON objects).
+const JSON_RESPONSE_BYTES: u64 = 4 * 1024 * 1024;
+
+/// The longest path a handle holds.
+const MAX_PATH_CHARS: usize = 1024;
+
+/// The whole seconds the route draws.
+const SECONDS: std::ops::RangeInclusive<u64> = 3..=10;
+
+/// The tiers the route draws, with their short sides.
+const RESOLUTIONS: [(&str, u32); 4] = [("360p", 360), ("720p", 720), ("1080p", 1080), ("4k", 2160)];
+
+/// The aspect ratios the route draws.
+const ASPECTS: [&str; 2] = ["9:16", "16:9"];
+
+/// fal's video adapter (module doc).
+#[derive(Clone)]
+pub struct FalVideo {
+    clients: FalClients,
+    clock: Arc<dyn Clock>,
+}
+
+impl FalVideo {
+    pub fn new(clients: FalClients, clock: Arc<dyn Clock>) -> FalVideo {
+        FalVideo { clients, clock }
+    }
+}
+
+/// What a request asks of the route, once its values pass (step 4 of spec/providers.md §5).
+#[derive(Debug, Clone, PartialEq)]
+struct Clip<'a> {
+    prompt: &'a str,
+    first_frame: &'a Value,
+    last_frame: Option<&'a Value>,
+    seconds: u64,
+    resolution: &'a str,
+    aspect_ratio: &'a str,
+}
+
+/// The value refusals of the module doc, in order. The request already fits `video.generate`.
+fn clip(request: &Value) -> Result<Clip<'_>, String> {
+    let prompt = request.get("prompt").and_then(Value::as_str).unwrap_or("");
+    if prompt.trim().is_empty() {
+        return Err("a clip needs its prompt as text".into());
+    }
+    if prompt.chars().count() > MAX_PROMPT_CHARS {
+        return Err(format!(
+            "the prompt is longer than {MAX_PROMPT_CHARS} characters"
+        ));
+    }
+    let first_frame = match request.get("first_frame") {
+        Some(frame) if crate::capabilities::is_file_value(frame) => frame,
+        _ => return Err("this route draws from a first frame".into()),
+    };
+    let duration = request.get("duration").unwrap_or(&Value::Null);
+    let seconds = whole_seconds(duration).ok_or_else(|| {
+        format!(
+            "this route draws whole seconds from 3 to 10, not {}",
+            value_text(duration)
+        )
+    })?;
+    let text = |name: &str, default: &'static str| match request.get(name) {
+        None | Some(Value::Null) => Some(default),
+        Some(value) => value.as_str(),
+    };
+    let (resolution, aspect_ratio) = (text("resolution", "720p"), text("aspect_ratio", "9:16"));
+    match (resolution, aspect_ratio) {
+        (Some(resolution), Some(aspect_ratio))
+            if RESOLUTIONS.iter().any(|(name, _)| *name == resolution)
+                && ASPECTS.contains(&aspect_ratio) =>
+        {
+            Ok(Clip {
+                prompt,
+                first_frame,
+                last_frame: request.get("last_frame").filter(|frame| !frame.is_null()),
+                seconds,
+                resolution,
+                aspect_ratio,
+            })
+        }
+        _ => Err(format!(
+            "this route draws no {} clip at {}",
+            resolution.map_or_else(|| value_text(&request["resolution"]), str::to_string),
+            aspect_ratio.map_or_else(|| value_text(&request["aspect_ratio"]), str::to_string),
+        )),
+    }
+}
+
+/// A whole number of seconds the route draws (`3`, `3.0`), else `None`.
+fn whole_seconds(duration: &Value) -> Option<u64> {
+    let Value::Number(n) = duration else {
+        return None;
+    };
+    let x = grida_fx_core::value::as_f64(n);
+    let whole = x.is_finite() && x.fract() == 0.0 && x >= 0.0;
+    whole
+        .then_some(x as u64)
+        .filter(|seconds| SECONDS.contains(seconds))
+}
+
+/// A request value as a refusal shows it: a number in its JCS form, text as is, else its JSON.
+fn value_text(value: &Value) -> String {
+    match value {
+        Value::Number(n) => grida_fx_core::value::format_number(grida_fx_core::value::as_f64(n)),
+        Value::String(s) => s.clone(),
+        other => other.to_string(),
+    }
+}
+
+/// The size a clip of `resolution` at `aspect_ratio` has: the short side 360, 720, 1080 or 2160,
+/// the long side `short × 16 ÷ 9` (integer division), portrait for `9:16` and landscape for
+/// `16:9`. `None` for a tier or ratio the route does not draw.
+pub fn expected_size(resolution: &str, aspect_ratio: &str) -> Option<(u32, u32)> {
+    let short = RESOLUTIONS
+        .iter()
+        .find(|(name, _)| *name == resolution)
+        .map(|(_, short)| *short)?;
+    let long = short * 16 / 9;
+    match aspect_ratio {
+        "9:16" => Some((short, long)),
+        "16:9" => Some((long, short)),
+        _ => None,
+    }
+}
+
+/// A clip's file facts, as the answer's `data.facts` carries them.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ClipFacts {
+    pub width: u32,
+    pub height: u32,
+    /// Seconds, rounded to 6 places.
+    pub duration_seconds: f64,
+    /// Frames per second, rounded to 6 places.
+    pub fps: f64,
+}
+
+impl ClipFacts {
+    /// The facts of an MP4's first video track, when it has one with a positive frame rate and a
+    /// duration. Otherwise the sentence: `the file carries no video stream`, or the reader's own.
+    pub fn of_mp4(bytes: &[u8]) -> Result<ClipFacts, String> {
+        let no_stream = || "the file carries no video stream".to_string();
+        match grida_fx_core::facts::video_facts(bytes, "video/mp4") {
+            Ok(Some(facts)) => match (facts.duration, facts.fps) {
+                (Some(duration), Some(fps))
+                    if duration.is_finite() && fps.is_finite() && fps > 0.0 =>
+                {
+                    Ok(ClipFacts {
+                        width: facts.width,
+                        height: facts.height,
+                        duration_seconds: duration,
+                        fps,
+                    })
+                }
+                _ => Err(no_stream()),
+            },
+            Ok(None) => Err(no_stream()),
+            Err(reason) => Err(format!("the clip cannot be read: {reason}")),
+        }
+    }
+
+    /// `{"width", "height", "duration_seconds", "fps"}`.
+    fn to_json(self) -> Value {
+        let number = |x: f64| grida_fx_core::value::number(x).unwrap_or(Value::Null);
+        json!({
+            "width": self.width,
+            "height": self.height,
+            "duration_seconds": number(self.duration_seconds),
+            "fps": number(self.fps),
+        })
+    }
+}
+
+/// The check of a collected clip (spec/providers.md §9.3): its size is
+/// [`expected_size`] (`the clip is <w>x<h>, not <W>x<H>`), and its duration is within
+/// `1/fps + 0.01` s of `seconds` (`the clip runs <x> s, not <n> s`).
+pub fn check_clip(
+    facts: &ClipFacts,
+    resolution: &str,
+    aspect_ratio: &str,
+    seconds: f64,
+) -> Result<(), String> {
+    let Some((width, height)) = expected_size(resolution, aspect_ratio) else {
+        return Err(format!(
+            "this route draws no {resolution} clip at {aspect_ratio}"
+        ));
+    };
+    if (facts.width, facts.height) != (width, height) {
+        return Err(format!(
+            "the clip is {}x{}, not {width}x{height}",
+            facts.width, facts.height
+        ));
+    }
+    if (facts.duration_seconds - seconds).abs() > 1.0 / facts.fps + 0.01 {
+        return Err(format!(
+            "the clip runs {:.3} s, not {} s",
+            facts.duration_seconds,
+            grida_fx_core::value::format_number(seconds)
+        ));
+    }
+    Ok(())
+}
+
+/// The collecting half of a handle: what [`handle_of`] wrote.
+#[derive(Debug, Clone, PartialEq)]
+struct Job {
+    request_id: String,
+    status_path: String,
+    response_path: String,
+}
+
+impl Job {
+    /// The handle when it is exactly one this adapter writes, else `None`.
+    fn from_handle(handle: &Value) -> Option<Job> {
+        let members = handle.as_object()?;
+        if members.len() != 3 {
+            return None;
+        }
+        let text = |name: &str| {
+            members
+                .get(name)
+                .and_then(Value::as_str)
+                .filter(|text| !text.trim().is_empty())
+                .map(str::to_string)
+        };
+        let job = Job {
+            request_id: text("request_id")?,
+            status_path: text("status_path")?,
+            response_path: text("response_path")?,
+        };
+        (is_queue_path(&job.status_path) && is_queue_path(&job.response_path)).then_some(job)
+    }
+}
+
+/// A path under the queue base a handle may hold: relative, non-empty segments that are not `.`
+/// or `..`, of the characters `A-Z a-z 0-9 . _ ~ + = , @ -`. So no scheme, no host, no query, no
+/// fragment, no backslash and no percent-encoding.
+fn is_queue_path(path: &str) -> bool {
+    !path.is_empty()
+        && path.len() <= MAX_PATH_CHARS
+        && path.split('/').all(|segment| {
+            !segment.is_empty()
+                && segment != "."
+                && segment != ".."
+                && segment
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || "._~+=,@-".contains(c))
+        })
+}
+
+/// The handle of a 2xx submit answer (module doc), or the `Uncertain` sentence.
+fn handle_of(queue_base: &str, body: &[u8]) -> Result<Value, String> {
+    let no_handle = || "fal took the video job but returned no handle to collect it by".to_string();
+    let payload = crate::wire::json_object(body, SUBMIT_LABEL).map_err(|_| no_handle())?;
+    let text = |name: &str| {
+        payload
+            .get(name)
+            .and_then(Value::as_str)
+            .filter(|text| !text.trim().is_empty())
+    };
+    let (Some(request_id), Some(status_url), Some(response_url)) =
+        (text("request_id"), text("status_url"), text("response_url"))
+    else {
+        return Err(no_handle());
+    };
+    let prefix = format!("{queue_base}/");
+    let path = |url: &str| {
+        url.strip_prefix(&prefix)
+            .filter(|path| is_queue_path(path))
+            .map(str::to_string)
+            .ok_or_else(|| "a fal video job handle points outside fal's queue".to_string())
+    };
+    Ok(json!({
+        "request_id": request_id,
+        "status_path": path(status_url)?,
+        "response_path": path(response_url)?,
+    }))
+}
+
+/// What one status or result read saw.
+enum Read {
+    /// A JSON object.
+    Json(Map<String, Value>),
+    /// Nothing: poll again.
+    Nothing,
+    /// Collecting stops here.
+    Stop(Collected),
+}
+
+impl FalVideo {
+    /// Steps 1 to 5 of spec/providers.md §5, then the submit request (module doc).
+    fn prepare(&self, call: &CallRequest) -> Result<HttpRequest, String> {
+        let client = &self.clients.queue;
+        if let Some(refusal) = super::contract_refusal(call, CONTRACT_ADAPTER, &["video.generate"])
+        {
+            return Err(refusal);
+        }
+        crate::capabilities::check_request(&call.route.capability, &call.request)?;
+        let credential = client.credential(super::CREDENTIAL_HEADER, super::CREDENTIAL_PREFIX)?;
+        let clip = clip(&call.request)?;
+        let first = frame(call, clip.first_frame, "first_frame")?;
+        let last = match clip.last_frame {
+            Some(frame_value) => Some(frame(call, frame_value, "last_frame")?),
+            None => None,
+        };
+
+        let mut body = Map::new();
+        body.insert("prompt".into(), Value::String(clip.prompt.to_string()));
+        body.insert("image_url".into(), Value::String(first));
+        if let Some(last) = last {
+            body.insert("end_image_url".into(), Value::String(last));
+        }
+        body.insert("aspect_ratio".into(), json!(clip.aspect_ratio));
+        body.insert("resolution".into(), json!(clip.resolution));
+        body.insert("duration".into(), json!(clip.seconds));
+
+        let url = client.url(super::endpoint(&call.route.model));
+        Ok(HttpRequest::new(Method::Post, url, Lane::Provider)
+            .credential(credential)
+            .body(Body::Json(Value::Object(body)))
+            .timeout(SUBMIT_DEADLINE)
+            .max_response_bytes(JSON_RESPONSE_BYTES))
+    }
+
+    async fn submit_once(&self, call: &CallRequest) -> Submitted {
+        let client = &self.clients.queue;
+        let request = match self.prepare(call) {
+            Ok(request) => request,
+            Err(reason) => {
+                return Submitted::Refused {
+                    reason: client.reason(&reason),
+                };
+            }
+        };
+        match client.send(request).await {
+            Ok(response) => self.submitted(&response),
+            Err(error) => submit_transport(client, &error),
+        }
+    }
+
+    /// The submit table of the module doc for an answered POST.
+    fn submitted(&self, response: &HttpResponse) -> Submitted {
+        let client = &self.clients.queue;
+        let status = response.status;
+        let uncertain = |text: &str| Submitted::Uncertain {
+            reason: client.reason(text),
+        };
+        let text = super::status_text(SUBMIT_LABEL, response);
+        match status {
+            200..=299 => match handle_of(&client.base, &response.body) {
+                Ok(handle) => Submitted::Accepted { handle },
+                Err(sentence) => uncertain(&sentence),
+            },
+            408 => super::submit_not_received(client, &text, super::retry_after(response)),
+            429 => super::submit_not_received(
+                client,
+                &format!("{SUBMIT_LABEL} was rate limited (HTTP 429)"),
+                super::retry_after(response),
+            ),
+            400..=499 => Submitted::Failed {
+                reason: client.reason(&text),
+                cost: Some(Usd::ZERO),
+                retryable: false,
+            },
+            500 | 502 | 503 => {
+                super::submit_not_received(client, &text, super::retry_after(response))
+            }
+            300..=399 => uncertain(&format!("{SUBMIT_LABEL} was redirected (HTTP {status})")),
+            _ => uncertain(&text),
+        }
+    }
+
+    async fn collect_once(&self, call: &CallRequest, handle: &Value) -> Collected {
+        let client = &self.clients.queue;
+        let unreachable = |text: &str| Collected::Unreachable {
+            reason: client.reason(text),
+        };
+        if let Some(refusal) = super::contract_refusal(call, CONTRACT_ADAPTER, &["video.generate"])
+        {
+            return unreachable(&refusal);
+        }
+        let Some(job) = Job::from_handle(handle) else {
+            return unreachable("a fal video job handle is not one this adapter wrote");
+        };
+        let credential = match client.credential(super::CREDENTIAL_HEADER, super::CREDENTIAL_PREFIX)
+        {
+            Ok(credential) => credential,
+            Err(reason) => return unreachable(&reason),
+        };
+        let deadline = self.clock.now() + COLLECT_DEADLINE;
+
+        loop {
+            match self
+                .read(&credential, &job.status_path, deadline, STATUS_LABEL)
+                .await
+            {
+                Read::Json(status) => {
+                    if let Some(Value::String(id)) = status.get("request_id")
+                        && *id != job.request_id
+                    {
+                        return unreachable(&format!("{STATUS_LABEL} answered about another job"));
+                    }
+                    if status.get("error").is_some_and(super::truthy) {
+                        return Collected::Ended {
+                            reason: client.reason(&job_error(&status)),
+                        };
+                    }
+                    if status.get("status").and_then(Value::as_str) == Some("COMPLETED") {
+                        break;
+                    }
+                }
+                Read::Nothing => {}
+                Read::Stop(collected) => return collected,
+            }
+            if let Err(collected) = self.wait(deadline).await {
+                return collected;
+            }
+        }
+
+        let result = loop {
+            match self
+                .read(&credential, &job.response_path, deadline, RESULT_LABEL)
+                .await
+            {
+                Read::Json(result) => break result,
+                Read::Nothing => {}
+                Read::Stop(collected) => return collected,
+            }
+            if let Err(collected) = self.wait(deadline).await {
+                return collected;
+            }
+        };
+        let cost = super::reported_cost(&result);
+        let (url, declared) = match result_video(super::answer_root(&result)) {
+            Ok(video) => video,
+            Err(sentence) => {
+                return Collected::Ended {
+                    reason: client.reason(&sentence),
+                };
+            }
+        };
+        self.download(&url, declared, deadline, cost).await
+    }
+
+    /// One authorized GET of a status or result (module doc: failed reads are polls that saw
+    /// nothing).
+    async fn read(
+        &self,
+        credential: &Credential,
+        path: &str,
+        deadline: Duration,
+        label: &str,
+    ) -> Read {
+        let client = &self.clients.queue;
+        let remaining = deadline.saturating_sub(self.clock.now());
+        if remaining.is_zero() {
+            return Read::Stop(outstanding(client));
+        }
+        let request = HttpRequest::new(Method::Get, client.url(path), Lane::Provider)
+            .credential(credential.clone())
+            .timeout(remaining.min(READ_DEADLINE))
+            .max_response_bytes(JSON_RESPONSE_BYTES);
+        let response = match client.send(request).await {
+            Ok(response) => response,
+            Err(error) if error.kind == TransportErrorKind::Refused => {
+                return Read::Stop(Collected::Unreachable {
+                    reason: client.reason(&format!("{label} was not sent: {}", error.reason)),
+                });
+            }
+            Err(_) => return Read::Nothing,
+        };
+        let text = || client.reason(&super::status_text(label, &response));
+        match response.status {
+            200..=299 => match crate::wire::json_object(&response.body, label) {
+                Ok(payload) => Read::Json(payload),
+                Err(_) => Read::Nothing,
+            },
+            408 | 429 | 500..=599 => Read::Nothing,
+            300..=399 | 401 | 403 => Read::Stop(Collected::Unreachable { reason: text() }),
+            400..=499 => Read::Stop(Collected::Ended { reason: text() }),
+            _ => Read::Nothing,
+        }
+    }
+
+    /// Sleeps one poll interval, unless that would pass the deadline.
+    async fn wait(&self, deadline: Duration) -> Result<(), Collected> {
+        if self.clock.now() + POLL > deadline {
+            return Err(outstanding(&self.clients.queue));
+        }
+        self.clock.sleep(POLL).await;
+        Ok(())
+    }
+
+    /// The clip download and its answer (module doc). Failed downloads that a later read may not
+    /// repeat (a transport failure, 408, 429, a 5xx) are read again within the deadline.
+    async fn download(
+        &self,
+        url: &url::Url,
+        declared: Option<&'static str>,
+        deadline: Duration,
+        cost: Option<Usd>,
+    ) -> Collected {
+        let client = &self.clients.queue;
+        let redactor = client.redactor.with(url.as_str());
+        let ended = |text: &str| Collected::Ended {
+            reason: redactor.reason(text),
+        };
+        let unreachable = |text: &str| Collected::Unreachable {
+            reason: redactor.reason(text),
+        };
+        let response = loop {
+            let remaining = deadline.saturating_sub(self.clock.now());
+            if remaining.is_zero() {
+                return outstanding(client);
+            }
+            let request = HttpRequest::new(Method::Get, url.as_str(), Lane::Download)
+                .timeout(remaining)
+                .max_response_bytes(MAX_VIDEO_BYTES);
+            match client.send(request).await {
+                Err(error) if error.kind == TransportErrorKind::TooLarge => {
+                    return ended(&format!("{DOWNLOAD_LABEL} failed: {}", error.reason));
+                }
+                Err(error) if error.kind == TransportErrorKind::Refused => {
+                    return unreachable(&format!(
+                        "{DOWNLOAD_LABEL} was not sent: {}",
+                        error.reason
+                    ));
+                }
+                Err(_) => {}
+                Ok(response) => match response.status {
+                    200..=299 => break response,
+                    408 | 429 | 500..=599 => {}
+                    300..=399 | 401 | 403 => {
+                        return unreachable(&super::status_text(DOWNLOAD_LABEL, &response));
+                    }
+                    400..=499 => return ended(&super::status_text(DOWNLOAD_LABEL, &response)),
+                    _ => {}
+                },
+            }
+            if let Err(collected) = self.wait(deadline).await {
+                return collected;
+            }
+        };
+        let header = match response.header("content-type").map(str::trim) {
+            None | Some("") => None,
+            Some(value) => match mp4_type(value) {
+                Some(kind) => Some(kind),
+                None => return ended("fal video media type must be MP4"),
+            },
+        };
+        if let (Some(declared), Some(header)) = (declared, header)
+            && declared != header
+        {
+            return ended("fal output download media type does not match response metadata");
+        }
+        if declared.or(header).is_none() {
+            return ended("fal output video media type is missing");
+        }
+        let bytes = response.body;
+        if bytes.is_empty() {
+            return ended("fal output video download was empty");
+        }
+        if bytes.len() as u64 > MAX_VIDEO_BYTES {
+            return ended(&format!(
+                "{DOWNLOAD_LABEL} failed: the response is larger than {MAX_VIDEO_BYTES} bytes"
+            ));
+        }
+        if !crate::wire::matches_signature("video/mp4", &bytes) {
+            return ended("fal output video is not an MP4 file");
+        }
+        match ClipFacts::of_mp4(&bytes) {
+            Ok(facts) => Collected::Answered(
+                Answer::new(json!({"facts": facts.to_json()}), cost).with_file(
+                    "video",
+                    "video/mp4",
+                    bytes,
+                ),
+            ),
+            Err(sentence) => ended(&sentence),
+        }
+    }
+}
+
+/// `video/mp4` when `value` normalizes to it.
+fn mp4_type(value: &str) -> Option<&'static str> {
+    (crate::wire::normalize_media_type(value, "video").ok()? == "video/mp4").then_some("video/mp4")
+}
+
+/// The result's video: an https URL with a host and no userinfo, and its declared type (`MP4`
+/// when present). Otherwise the `Ended` sentence.
+fn result_video(root: &Map<String, Value>) -> Result<(url::Url, Option<&'static str>), String> {
+    let Some(Value::Object(video)) = root.get("video") else {
+        return Err(format!("{RESULT_LABEL} carries no video"));
+    };
+    let url = match video.get("url") {
+        Some(Value::String(url)) if !url.trim().is_empty() => url,
+        _ => return Err("fal output video url must be non-empty".into()),
+    };
+    let https = url::Url::parse(url).ok().filter(|parsed| {
+        parsed.scheme() == "https"
+            && parsed.host_str().is_some()
+            && parsed.username().is_empty()
+            && parsed.password().is_none()
+    });
+    let Some(parsed) = https else {
+        return Err("fal output video url must be https".into());
+    };
+    let declared = match video.get("content_type") {
+        Some(Value::String(value)) if !value.trim().is_empty() => match mp4_type(value) {
+            Some(kind) => Some(kind),
+            None => return Err("fal video media type must be MP4".into()),
+        },
+        _ => None,
+    };
+    Ok((parsed, declared))
+}
+
+/// `fal video job failed (<error_type>): <error>`, the error cut to 500 characters.
+fn job_error(status: &Map<String, Value>) -> String {
+    let error = match status.get("error") {
+        Some(Value::String(text)) => text.clone(),
+        Some(other) => other.to_string(),
+        None => String::new(),
+    };
+    let error: String = error.chars().take(500).collect();
+    match status.get("error_type").and_then(Value::as_str) {
+        Some(kind) => {
+            let kind: String = kind.chars().take(100).collect();
+            format!("fal video job failed ({kind}): {error}")
+        }
+        None => format!("fal video job failed: {error}"),
+    }
+}
+
+fn outstanding(client: &Client) -> Collected {
+    Collected::Unreachable {
+        reason: client.reason(OUTSTANDING),
+    }
+}
+
+/// A failed submit exchange (spec/providers.md §4.2).
+fn submit_transport(client: &Client, error: &TransportError) -> Submitted {
+    match (error.kind, error.phase) {
+        (TransportErrorKind::Refused, _) => Submitted::Refused {
+            reason: client.reason(&format!("{SUBMIT_LABEL} was not sent: {}", error.reason)),
+        },
+        (_, Phase::NotSent) => super::submit_not_received(
+            client,
+            &format!("{SUBMIT_LABEL} was not sent: {}", error.reason),
+            None,
+        ),
+        (_, Phase::AfterSend) => Submitted::Uncertain {
+            reason: client.reason(&format!(
+                "{SUBMIT_LABEL} ended without an answer; it may have been taken: {}",
+                error.reason
+            )),
+        },
+    }
+}
+
+/// A frame as a data URL (step 5 of spec/providers.md §5).
+fn frame(call: &CallRequest, value: &Value, member: &str) -> Result<String, String> {
+    let file = crate::wire::request_file(call, value, member)?;
+    let bytes = crate::wire::read_file(file, member)?;
+    Ok(super::picture_url(&file.kind, &bytes))
+}
+
+impl LongJob for FalVideo {
+    fn submit<'a>(&'a self, call: &'a CallRequest) -> BoxFuture<'a, Submitted> {
+        Box::pin(self.submit_once(call))
+    }
+
+    fn collect<'a>(&'a self, call: &'a CallRequest, handle: &'a Value) -> BoxFuture<'a, Collected> {
+        Box::pin(self.collect_once(call, handle))
+    }
+
+    fn check(&self, call: &CallRequest, answer: &Answer) -> Result<(), String> {
+        let clip = clip(&call.request)?;
+        let Some(file) = answer.files.get("video") else {
+            return Err("the answer carries no video".into());
+        };
+        let facts = ClipFacts::of_mp4(&file.bytes)?;
+        check_clip(
+            &facts,
+            clip.resolution,
+            clip.aspect_ratio,
+            clip.seconds as f64,
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn values_are_refused_in_order() {
+        let frame = json!({"file": "a".repeat(64)});
+        let ok = json!({"prompt": "p", "first_frame": frame, "duration": 3.0,
+                        "resolution": null, "aspect_ratio": null});
+        let clip_of = |request: &Value| {
+            clip(request).map(|c| {
+                (
+                    c.seconds,
+                    c.resolution.to_string(),
+                    c.aspect_ratio.to_string(),
+                )
+            })
+        };
+        assert_eq!(clip_of(&ok), Ok((3, "720p".into(), "9:16".into())));
+        let with = |member: &str, value: Value| {
+            let mut request = ok.clone();
+            request[member] = value;
+            clip(&request).unwrap_err()
+        };
+        assert_eq!(
+            with("prompt", json!("  ")),
+            "a clip needs its prompt as text"
+        );
+        assert_eq!(
+            with("prompt", json!("é".repeat(20_001))),
+            "the prompt is longer than 20000 characters"
+        );
+        assert!(
+            clip(&json!({"prompt": "é".repeat(20_000), "first_frame": frame, "duration": 3}))
+                .is_ok()
+        );
+        assert_eq!(
+            with("first_frame", Value::Null),
+            "this route draws from a first frame"
+        );
+        for (duration, shown) in [
+            (json!(12), "12"),
+            (json!(3.5), "3.5"),
+            (json!(2), "2"),
+            (json!(-3), "-3"),
+            (Value::Null, "null"),
+        ] {
+            assert_eq!(
+                with("duration", duration),
+                format!("this route draws whole seconds from 3 to 10, not {shown}")
+            );
+        }
+        assert_eq!(
+            with("resolution", json!("8k")),
+            "this route draws no 8k clip at 9:16"
+        );
+        assert_eq!(
+            with("aspect_ratio", json!("4:3")),
+            "this route draws no 720p clip at 4:3"
+        );
+        let mut no_duration = ok.clone();
+        no_duration.as_object_mut().unwrap().remove("duration");
+        assert_eq!(
+            clip(&no_duration).unwrap_err(),
+            "this route draws whole seconds from 3 to 10, not null"
+        );
+    }
+
+    #[test]
+    fn queue_paths_are_relative_and_plain() {
+        for good in [
+            "google/gemini-omni-flash/requests/req-1/status",
+            "google/gemini-omni-flash/requests/0b9e7f1c-2a4d-4c55-9d1e-6f7a8b9c0d1e",
+            "a",
+        ] {
+            assert!(is_queue_path(good), "{good}");
+        }
+        for bad in [
+            "",
+            "/abs/path",
+            "https://queue.fal.run/x",
+            "https:x",
+            "a/../b",
+            "..",
+            "a/./b",
+            "a//b",
+            "a/",
+            "a?x=1",
+            "a#f",
+            "a\\b",
+            "a%2e%2e/b",
+            "a b",
+        ] {
+            assert!(!is_queue_path(bad), "{bad}");
+        }
+        assert!(!is_queue_path(&"a".repeat(MAX_PATH_CHARS + 1)));
+    }
+
+    #[test]
+    fn handles_are_paths_under_the_queue() {
+        let base = "https://queue.fal.run";
+        let body = json!({
+            "request_id": "req-1",
+            "status_url": "https://queue.fal.run/google/gemini-omni-flash/requests/req-1/status",
+            "response_url": "https://queue.fal.run/google/gemini-omni-flash/requests/req-1",
+            "cancel_url": "https://queue.fal.run/google/gemini-omni-flash/requests/req-1/cancel",
+        });
+        let handle = handle_of(base, body.to_string().as_bytes()).unwrap();
+        assert_eq!(
+            handle,
+            json!({"request_id": "req-1",
+                   "status_path": "google/gemini-omni-flash/requests/req-1/status",
+                   "response_path": "google/gemini-omni-flash/requests/req-1"})
+        );
+        assert_eq!(
+            Job::from_handle(&handle),
+            Some(Job {
+                request_id: "req-1".into(),
+                status_path: "google/gemini-omni-flash/requests/req-1/status".into(),
+                response_path: "google/gemini-omni-flash/requests/req-1".into(),
+            })
+        );
+        let mut foreign = body.clone();
+        foreign["status_url"] = json!("https://queue.fal.run.evil.example/x/status");
+        assert_eq!(
+            handle_of(base, foreign.to_string().as_bytes()).unwrap_err(),
+            "a fal video job handle points outside fal's queue"
+        );
+        let mut missing = body.clone();
+        missing.as_object_mut().unwrap().remove("request_id");
+        assert_eq!(
+            handle_of(base, missing.to_string().as_bytes()).unwrap_err(),
+            "fal took the video job but returned no handle to collect it by"
+        );
+        assert!(handle_of(base, b"<html>ok</html>").is_err());
+        assert_eq!(Job::from_handle(&json!("x")), None);
+        let mut extra = handle.clone();
+        extra["status_url"] = json!("https://queue.fal.run/x");
+        assert_eq!(Job::from_handle(&extra), None);
+    }
+
+    #[test]
+    fn expected_sizes_for_every_tier_and_ratio() {
+        let table = [
+            ("360p", "9:16", (360, 640)),
+            ("360p", "16:9", (640, 360)),
+            ("720p", "9:16", (720, 1280)),
+            ("720p", "16:9", (1280, 720)),
+            ("1080p", "9:16", (1080, 1920)),
+            ("1080p", "16:9", (1920, 1080)),
+            ("4k", "9:16", (2160, 3840)),
+            ("4k", "16:9", (3840, 2160)),
+        ];
+        for (resolution, aspect, size) in table {
+            assert_eq!(
+                expected_size(resolution, aspect),
+                Some(size),
+                "{resolution} {aspect}"
+            );
+        }
+        assert_eq!(expected_size("8k", "9:16"), None);
+        assert_eq!(expected_size("720p", "1:1"), None);
+    }
+
+    #[test]
+    fn job_errors_are_cut() {
+        let status = json!({"status": "COMPLETED", "error": "boom ".repeat(200), "error_type": "model_error"});
+        let reason = job_error(status.as_object().unwrap());
+        assert!(reason.starts_with("fal video job failed (model_error): boom boom"));
+        assert_eq!(
+            reason.chars().count(),
+            "fal video job failed (model_error): ".chars().count() + 500
+        );
+        let untyped = json!({"error": {"detail": "x"}, "error_type": 7});
+        assert_eq!(
+            job_error(untyped.as_object().unwrap()),
+            r#"fal video job failed: {"detail":"x"}"#
+        );
+    }
+}

@@ -1,0 +1,51 @@
+{
+  "kind": "fx-exchanges-v1",
+  "note": "Synthetic exchanges, nothing recorded. The key is testing::test_keys()'s made-up value; the audio bodies are testing::media::MP3_FRAME and testing::media::MP3, base64-encoded.",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/voice-7?output_format=mp3_44100_192",
+        "lane": "provider",
+        "credential": "xi-api-key: test-elevenlabs-key",
+        "headers": {"content-type": "application/json", "accept": "audio/mpeg"},
+        "body": {"json_text": "{\"text\":\"[excited] いくよっ!\",\"model_id\":\"eleven_v3\",\"voice_settings\":{\"stability\":0.5},\"language_code\":\"ja\"}"}
+      },
+      "response": {
+        "status": 429,
+        "headers": {"content-type": "application/json", "retry-after": "2"},
+        "body": {"json": {"detail": {"status": "system_busy", "message": "secret quota"}}}
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/voice-7?output_format=mp3_44100_192",
+        "lane": "provider",
+        "credential": "xi-api-key: test-elevenlabs-key",
+        "headers": {"content-type": "application/json", "accept": "audio/mpeg"},
+        "body": {"json_text": "{\"text\":\"[excited] いくよっ!\",\"model_id\":\"eleven_v3\",\"voice_settings\":{\"stability\":0.5},\"language_code\":\"ja\"}"}
+      },
+      "response": {
+        "status": 200,
+        "headers": {"content-type": "audio/mpeg", "request-id": "req-9", "character-cost": "23"},
+        "body": {"base64": "//uQAAAAAAA="}
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.elevenlabs.io/v1/sound-generation?output_format=mp3_44100_192",
+        "lane": "provider",
+        "credential": "xi-api-key: test-elevenlabs-key",
+        "headers": {"content-type": "application/json", "accept": "audio/mpeg"},
+        "body": {"json_text": "{\"text\":\"wooden door opens\",\"model_id\":\"eleven_text_to_sound_v2\",\"loop\":false,\"duration_seconds\":0.6,\"prompt_influence\":0.3}"}
+      },
+      "response": {
+        "status": 200,
+        "headers": {"request-id": "req-7", "character-cost": "11"},
+        "body": {"base64": "SUQzBAAAAAAAAAAAAAAAAA=="}
+      }
+    }
+  ]
+}

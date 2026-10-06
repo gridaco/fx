@@ -1,0 +1,21 @@
+{
+  "kind": "fx-exchanges-v1",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/images",
+        "lane": "provider",
+        "credential": "authorization: Bearer test-openrouter-key",
+        "body": {
+          "json_text": "{\"model\":\"openai/gpt-image-2.5-sunburst\",\"prompt\":\"a kite\",\"n\":1,\"provider\":{\"allow_fallbacks\":false,\"options\":{\"openai\":{\"moderation\":\"low\"}}},\"size\":\"1024x1024\",\"quality\":\"max\",\"background\":\"auto\"}"
+        }
+      },
+      "response": {
+        "status": 429,
+        "headers": {"content-type": "application/json", "retry-after": "20"},
+        "body": {"json": {"error": {"code": 429, "message": "Rate limit exceeded"}}}
+      }
+    }
+  ]
+}

@@ -369,9 +369,7 @@ fn bad(cost: Option<Usd>) -> Answer {
 }
 
 fn not_received(reason: &str) -> Sent {
-    Sent::NotReceived {
-        reason: reason.into(),
-    }
+    Sent::not_received(reason)
 }
 
 fn failed(reason: &str, cost: Option<Usd>, retryable: bool) -> Sent {
@@ -480,6 +478,89 @@ async fn two_not_received_then_answered_resend_under_one_hold() {
     );
     assert_eq!(rig.gate.count(), 3, "every send is admitted");
     assert_eq!(rig.gate.waits(), secs(&[0.5, 1.0]));
+}
+
+/// `NotReceived` with the wait the provider asked for.
+fn rate_limited(secs: f64) -> Sent {
+    Sent::NotReceived {
+        reason: "rate limited (HTTP 429)".into(),
+        retry_after: Some(Duration::from_secs_f64(secs)),
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_provider_wait_lengthens_a_resend_up_to_a_minute() {
+    let rig = Rig::new();
+    let fake = FakeAdapter::plain(vec![
+        rate_limited(20.0),
+        rate_limited(0.1),
+        rate_limited(3600.0),
+        Sent::Answered(answer(Some(COST))),
+    ]);
+    let outcome = send_plain(&fake, &rig.plain()).await;
+    assert!(matches!(
+        outcome,
+        Outcome::Answered {
+            charged: COST,
+            attempts: 1,
+            ..
+        }
+    ));
+    assert_eq!(
+        rig.book.holds(),
+        vec![hold_name(1)],
+        "one attempt, one hold"
+    );
+    assert_eq!(rig.book.settlements(), vec![(hold_name(1), Some(COST))]);
+    // 20 s as asked; then the 1 s backoff beats 0.1 s; then 3600 s capped at 60 s.
+    assert_eq!(rig.gate.waits(), secs(&[20.0, 1.0, 60.0]));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_provider_wait_applies_to_its_own_resend_only() {
+    let rig = Rig::new();
+    let fake = FakeAdapter::plain(vec![
+        rate_limited(20.0),
+        failed("HTTP 500", None, true),
+        Sent::Answered(answer(Some(COST))),
+    ]);
+    let outcome = send_plain(&fake, &rig.plain()).await;
+    assert!(matches!(outcome, Outcome::Answered { attempts: 2, .. }));
+    assert_eq!(rig.gate.waits(), secs(&[20.0, 1.0]));
+    assert_eq!(attempt_numbers(&fake), vec![1, 1, 2]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_submit_waits_as_long_as_the_provider_asked() {
+    let rig = Rig::new();
+    let fake = FakeAdapter::long_job(
+        vec![
+            Submitted::NotReceived {
+                reason: "rate limited (HTTP 429)".into(),
+                retry_after: Some(Duration::from_secs(3)),
+            },
+            accepted(),
+        ],
+        vec![Collected::Answered(answer(Some(COST)))],
+    );
+    let outcome = submit_job(&fake, &rig.long()).await;
+    assert!(matches!(outcome, Outcome::Answered { attempts: 1, .. }));
+    assert_eq!(rig.book.holds(), vec![hold_name(1)]);
+    assert_eq!(rig.gate.waits(), secs(&[3.0, 0.0]));
+}
+
+#[tokio::test(start_paused = true)]
+async fn cancelled_during_a_provider_wait_settles_zero() {
+    let rig = Rig::new();
+    let fake = FakeAdapter::plain(vec![rate_limited(30.0), Sent::Answered(answer(Some(COST)))]);
+    rig.stop_after(Duration::from_secs(10));
+    let outcome = send_plain(&fake, &rig.plain()).await;
+    assert_eq!(outcome, Outcome::Cancelled);
+    assert_eq!(
+        rig.book.settlements(),
+        vec![(hold_name(1), Some(Usd::ZERO))]
+    );
+    assert_eq!(fake.log().len(), 1, "nothing is resent");
 }
 
 #[tokio::test(start_paused = true)]
@@ -994,6 +1075,7 @@ async fn a_submit_not_received_is_resent_under_the_same_hold() {
         vec![
             Submitted::NotReceived {
                 reason: "reset".into(),
+                retry_after: None,
             },
             accepted(),
         ],
@@ -1017,6 +1099,7 @@ async fn six_submits_not_received_remove_the_record_and_settle_zero() {
         (1..=7)
             .map(|n| Submitted::NotReceived {
                 reason: format!("reset #{n}"),
+                retry_after: None,
             })
             .collect(),
         Vec::new(),
@@ -1258,6 +1341,7 @@ async fn cancelled_while_waiting_to_resubmit_removes_the_record() {
         vec![
             Submitted::NotReceived {
                 reason: "reset".into(),
+                retry_after: None,
             },
             accepted(),
         ],
@@ -1281,6 +1365,7 @@ async fn cancelled_before_a_resubmit_leaves_removes_the_record() {
         vec![
             Submitted::NotReceived {
                 reason: "reset".into(),
+                retry_after: None,
             },
             accepted(),
         ],

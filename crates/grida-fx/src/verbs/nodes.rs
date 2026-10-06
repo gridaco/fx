@@ -79,7 +79,7 @@ pub fn run(args: &NodesArgs) -> Result<u8, Error> {
 fn project_catalog() -> Result<RouteTable, Error> {
     let cwd = super::planning::working_directory()?;
     let project = Project::find(&cwd)?;
-    load_catalog(&project, &[])
+    load_catalog(&project, &crate::engine::builtin_routes()?, &[])
 }
 
 /// A JSON value on one line, as Python's `json.dumps(value, sort_keys=True)` writes it.

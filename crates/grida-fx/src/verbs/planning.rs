@@ -83,6 +83,7 @@ fn request(args: &PlanArgs) -> Result<PlanRequest, Error> {
         arguments,
         routes: args.routes.clone(),
         max_usd,
+        builtin_routes: crate::engine::builtin_routes()?,
     })
 }
 

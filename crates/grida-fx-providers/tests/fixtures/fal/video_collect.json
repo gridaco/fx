@@ -1,0 +1,67 @@
+{
+  "kind": "fx-exchanges-v1",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://queue.fal.run/acme/clip-model/requests/req-1/status",
+        "lane": "provider",
+        "credential": "authorization: Key test-fal-key"
+      },
+      "error": {"phase": "after_send", "kind": "other", "reason": "connection reset"}
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://queue.fal.run/acme/clip-model/requests/req-1/status",
+        "lane": "provider",
+        "credential": "authorization: Key test-fal-key"
+      },
+      "response": {"status": 200, "body": {"json": {"status": "IN_QUEUE", "request_id": "req-1"}}}
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://queue.fal.run/acme/clip-model/requests/req-1/status",
+        "lane": "provider",
+        "credential": "authorization: Key test-fal-key"
+      },
+      "response": {"status": 200, "body": {"json": {"status": "IN_PROGRESS", "request_id": "req-1"}}}
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://queue.fal.run/acme/clip-model/requests/req-1/status",
+        "lane": "provider",
+        "credential": "authorization: Key test-fal-key"
+      },
+      "response": {"status": 200, "body": {"json": {"status": "COMPLETED", "request_id": "req-1"}}}
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://queue.fal.run/acme/clip-model/requests/req-1",
+        "lane": "provider",
+        "credential": "authorization: Key test-fal-key"
+      },
+      "response": {
+        "status": 200,
+        "body": {"json": {"video": {"url": "https://v3b.fal.media/files/acme/clip.mp4", "content_type": "video/mp4"},
+                          "usage": {"cost": 0.3}}}
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://v3b.fal.media/files/acme/clip.mp4",
+        "lane": "download",
+        "credential": null
+      },
+      "response": {
+        "status": 200,
+        "headers": {"content-type": "video/mp4"},
+        "body": {"file": "../../../../../spec/vectors/facts/mp4/h264_24fps.mp4"}
+      }
+    }
+  ]
+}

@@ -4,7 +4,8 @@
 //!
 //! - [`runtime`]: a multi-thread runtime with every driver enabled, its worker threads named
 //!   [`WORKER_THREAD`].
-//! - [`engine_for`]: the engine of one planner:
+//! - [`engine_for`] (the process environment) and [`engine_with_env`] (an environment given as a
+//!   function, for tests): the engine of one planner:
 //!   - **node hosts** start in the workflow's **home** project (its node modules, `fx.lock` and
 //!     `sources` live there): `<python> -P -m grida.fx.host` with the interpreter
 //!     `host::locate::python_interpreter` finds for the home (`GRIDA_FX_PYTHON`, else the home's
@@ -14,9 +15,25 @@
 //!     go under the planning project's runs folder: the project found from where the command
 //!     runs owns `runs/` and the cache (spec/store.md §8), also when the workflow comes from
 //!     another project;
-//!   - **no provider adapters**: none exist in this version, so every uncached paid call is
-//!     refused (a recorded call still replays from the store);
+//!   - **provider adapters** only when `live` (`--live`): [`adapters_for`];
 //!   - `live` as asked (`--live`).
+//! - [`adapters_for`]: without `live`, an empty registry and nothing constructed, so every
+//!   uncached paid call is refused (a recorded call still replays from the store). With `live`
+//!   (spec/providers.md §1, §3):
+//!   1. the allowlisted variables ([`provider_environment`]): the process environment, then the
+//!      planning project's `.env` (`<planning project>/.env`) for the names the process does not
+//!      set, unless the process sets `GRIDA_FX_DISABLE_DOTENV=1`;
+//!   2. the keys of that environment, and the endpoints (the default bases, with each base-URL
+//!      variable in its place);
+//!   3. `grida_fx_providers::live::live_setup` over the default transport, or over the `Offline`
+//!      transport when `GRIDA_FX_NETWORK=off` (every exchange is refused before it leaves);
+//!   4. every provider's adapters on that setup (`live::adapters`), registered whether or not
+//!      their key is present: a call without its key is refused before sending.
+//!
+//!   A `.env` or base-URL refusal is a usage error (exit 2) whose message names the variable or
+//!   the `.env` line, never a value; building the adapters prints nothing.
+//! - [`builtin_routes`]: the built-in default route table the planning verbs and `run` hand to
+//!   planning (`PlanRequest::builtin_routes`; spec/identity.md §7).
 //! - [`plan`]: `make_plan` with [`PlanTime`] as the plan-time runner and the store as the result
 //!   cache, so `at: plan` steps run while planning and `cached` is true to the store. The
 //!   planning verbs and `run` plan through it.
@@ -30,14 +47,18 @@ use grida_fx_core::error::io_reason;
 use grida_fx_core::host::{NodeHost, PlanTimeRunner};
 use grida_fx_core::plan::{Plan, make_plan};
 use grida_fx_core::project::Planner;
+use grida_fx_core::routes::RouteTable;
 use grida_fx_core::{Error, ErrorKind};
-use grida_fx_providers::Adapters;
+use grida_fx_providers::keys::Environment;
+use grida_fx_providers::live::{self, Network};
+use grida_fx_providers::{Adapters, Endpoints, Keys};
 use grida_fx_runtime::engine::Engine;
 use grida_fx_runtime::host;
 use grida_fx_runtime::host::locate::python_interpreter;
 use grida_fx_runtime::host::pool::HostPool;
 use grida_fx_runtime::host::process::HostSpec;
 use grida_fx_runtime::plantime::PlanTime;
+use std::path::Path;
 use std::sync::Arc;
 
 /// The name of the runtime's worker threads.
@@ -57,21 +78,83 @@ pub fn runtime() -> Result<tokio::runtime::Runtime, Error> {
         })
 }
 
-/// The engine of `planner` (module doc).
+/// The engine of `planner` (module doc), reading the process environment.
 pub fn engine_for(
     runtime: &tokio::runtime::Runtime,
     planner: &Planner,
     live: bool,
 ) -> Result<Arc<Engine>, Error> {
-    let env = |name: &str| std::env::var(name).ok();
+    engine_with_env(runtime, planner, live, &|name: &str| {
+        std::env::var(name).ok()
+    })
+}
+
+/// The engine of `planner` (module doc); `env` reads an environment variable.
+pub fn engine_with_env(
+    runtime: &tokio::runtime::Runtime,
+    planner: &Planner,
+    live: bool,
+    env: &dyn Fn(&str) -> Option<String>,
+) -> Result<Arc<Engine>, Error> {
+    // The transport is built inside the runtime, whatever it needs from it.
+    let adapters = {
+        let _entered = runtime.enter();
+        adapters_for(planner, live, env)?
+    };
     Ok(Arc::new(Engine::new(
         runtime.handle().clone(),
-        host_spec(planner, &env),
+        host_spec(planner, env),
         &planner.project.cache_dir(),
         HostPool::default_size(),
-        Adapters::new(),
+        adapters,
         live,
     )))
+}
+
+/// The provider adapters of an invocation (module doc): none unless `live`. A key file or a base
+/// URL that cannot be read is a usage error naming the variable or `.env` line, never a value.
+pub fn adapters_for(
+    planner: &Planner,
+    live: bool,
+    env: &dyn Fn(&str) -> Option<String>,
+) -> Result<Adapters, Error> {
+    if !live {
+        return Ok(Adapters::new());
+    }
+    let (keys, endpoints) = provider_environment(&planner.project.root, env)?;
+    let setup = live::live_setup(keys, endpoints, Network::from_env(env)).map_err(|reason| {
+        Error::new(
+            ErrorKind::Internal,
+            format!("cannot start the provider transport: {reason}"),
+        )
+    })?;
+    Ok(live::adapters(&setup))
+}
+
+/// The keys and endpoints of the planning project at `project_root` (spec/providers.md §3): the
+/// allowlisted variables from `env`, then from `<project_root>/.env` (unless `env` gives
+/// `GRIDA_FX_DISABLE_DOTENV=1`). A `.env` or base-URL refusal is a usage error; its sentence
+/// names the variable or the line, never a value.
+pub fn provider_environment(
+    project_root: &Path,
+    env: &dyn Fn(&str) -> Option<String>,
+) -> Result<(Keys, Endpoints), Error> {
+    let environment =
+        Environment::read(env, Some(&dotenv_path(project_root))).map_err(Error::usage)?;
+    let keys = Keys::from_environment(&environment);
+    let endpoints = Endpoints::from_environment(&environment, &keys).map_err(Error::usage)?;
+    Ok((keys, endpoints))
+}
+
+/// The planning project's key file.
+pub fn dotenv_path(project_root: &Path) -> std::path::PathBuf {
+    project_root.join(".env")
+}
+
+/// The built-in default route table (spec/identity.md §7), embedded in the binary.
+pub fn builtin_routes() -> Result<RouteTable, Error> {
+    grida_fx_providers::routes::default_table()
+        .map_err(|message| Error::new(ErrorKind::Internal, message))
 }
 
 /// How node hosts start for `planner`: in the home project, with the interpreter `locate` finds
@@ -150,6 +233,23 @@ mod tests {
         make_planner(&request, &mut FakeHost::new()).unwrap()
     }
 
+    /// The environment of a live test: the network off (the `Offline` transport, never the
+    /// default one), no `.env`, and `extra`.
+    fn offline_env(extra: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> + use<> {
+        let mut values: Vec<(String, String)> = vec![
+            ("GRIDA_FX_NETWORK".into(), "off".into()),
+            ("GRIDA_FX_DISABLE_DOTENV".into(), "1".into()),
+        ];
+        values.extend(extra.iter().map(|(k, v)| (k.to_string(), v.to_string())));
+        move |name: &str| {
+            values
+                .iter()
+                .rev()
+                .find(|(key, _)| key == name)
+                .map(|(_, value)| value.clone())
+        }
+    }
+
     #[test]
     fn the_engine_keeps_the_planning_projects_cache_and_the_homes_hosts() {
         let folder = tempfile::tempdir().unwrap();
@@ -160,17 +260,104 @@ mod tests {
              img-a@acme\n",
         );
         let runtime = runtime().unwrap();
-        let engine = engine_for(&runtime, &planner, true).unwrap();
+        let engine = engine_with_env(&runtime, &planner, true, &offline_env(&[])).unwrap();
         assert_eq!(engine.store.root(), root.join("shared/cache"));
         assert_eq!(engine.project_root, root);
         assert_eq!(engine.sources, ["lib"]);
         assert!(engine.live);
-        assert!(engine.adapters.is_empty());
+        // Live: every provider's adapters, whether or not a key is present.
+        let table = builtin_routes().unwrap();
+        for ((capability, id), route) in &table.entries {
+            assert!(
+                engine.adapters.serves(capability, &route.provider),
+                "no adapter serves {id} for {capability}"
+            );
+        }
+        assert!(!engine.adapters.serves("image.generate", "acme"));
         let spec = engine.hosts.spec();
         assert_eq!(spec.project_root, root);
         assert_eq!(spec.sources, ["lib"]);
         let engine = engine_for(&runtime, &planner, false).unwrap();
         assert!(!engine.live);
+        assert!(engine.adapters.is_empty());
+    }
+
+    #[test]
+    fn without_live_nothing_is_read_or_constructed() {
+        let folder = tempfile::tempdir().unwrap();
+        let root = folder.path().canonicalize().unwrap();
+        let planner = planner_in(&root, "fx: project/v1\n");
+        // A key file that would be refused, and an environment that must not be asked.
+        std::fs::write(root.join(".env"), "FAL_KEY=\"unterminated\n").unwrap();
+        let asked = std::cell::Cell::new(0usize);
+        let counting = |_: &str| {
+            asked.set(asked.get() + 1);
+            None
+        };
+        let adapters = adapters_for(&planner, false, &counting).unwrap();
+        assert!(adapters.is_empty());
+        assert_eq!(asked.get(), 0);
+    }
+
+    #[test]
+    fn a_live_engine_reads_the_planning_projects_key_file() {
+        let folder = tempfile::tempdir().unwrap();
+        let root = folder.path().canonicalize().unwrap();
+        let planner = planner_in(&root, "fx: project/v1\n");
+        let value = "fx-made-up-dotenv-value-7c1e";
+        std::fs::write(
+            root.join(".env"),
+            format!("FAL_KEY={value}\nFAL_KEY={value}\n"),
+        )
+        .unwrap();
+        let network_off = |name: &str| (name == "GRIDA_FX_NETWORK").then(|| "off".to_string());
+        // The file is read: a refusal is a usage error naming the variable, never the value.
+        let error = adapters_for(&planner, true, &network_off).unwrap_err();
+        assert_eq!(error.kind, ErrorKind::Usage);
+        assert!(error.message.contains("FAL_KEY"), "{}", error.message);
+        assert!(!error.message.contains(value), "{}", error.message);
+        // GRIDA_FX_DISABLE_DOTENV=1 turns the file off.
+        let adapters = adapters_for(&planner, true, &offline_env(&[])).unwrap();
+        assert!(adapters.serves("video.generate", "fal"));
+        // A good file gives its keys.
+        std::fs::write(root.join(".env"), format!("FAL_KEY={value}\n")).unwrap();
+        let (keys, _) = provider_environment(&root, &network_off).unwrap();
+        assert_eq!(
+            keys.source(grida_fx_providers::KeyName::Fal),
+            Some(grida_fx_providers::keys::KeySource::DotEnv)
+        );
+        assert!(!format!("{keys:?}").contains(value));
+    }
+
+    #[test]
+    fn a_base_url_holding_a_key_is_a_usage_error() {
+        let folder = tempfile::tempdir().unwrap();
+        let root = folder.path().canonicalize().unwrap();
+        let planner = planner_in(&root, "fx: project/v1\n");
+        let value = "fx-made-up-key-0b9d";
+        let env = offline_env(&[
+            ("OPENAI_API_KEY", value),
+            (
+                "OPENAI_BASE_URL",
+                "https://proxy.example.test/fx-made-up-key-0b9d",
+            ),
+        ]);
+        let error = adapters_for(&planner, true, &env).unwrap_err();
+        assert_eq!(error.kind, ErrorKind::Usage);
+        assert!(
+            error.message.contains("OPENAI_BASE_URL"),
+            "{}",
+            error.message
+        );
+        assert!(!error.message.contains(value), "{}", error.message);
+        let env = offline_env(&[("OPENAI_BASE_URL", "ftp://proxy.example.test")]);
+        let error = adapters_for(&planner, true, &env).unwrap_err();
+        assert_eq!(error.kind, ErrorKind::Usage);
+        assert!(
+            error.message.starts_with("OPENAI_BASE_URL"),
+            "{}",
+            error.message
+        );
     }
 
     #[test]

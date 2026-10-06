@@ -14,6 +14,9 @@
 //! after their own options; [`crate::args::split_plan_args`] separates the two before clap sees
 //! them.
 //!
+//! `run --live` reads the provider keys from the environment or the planning project's `.env`
+//! (spec/providers.md §3; [`crate::engine::adapters_for`]); `doctor` says which are present.
+//!
 //! As with the predecessor's argparse, a repeated option takes its last value (`--max-usd 1
 //! --max-usd 2` is a ceiling of $2; `--check --check` is `--check`); repeatable options
 //! (`--inputs`, `--routes`, `--arg`, `--same`, `--deliver`) still collect every value.
@@ -67,7 +70,7 @@ pub enum Verb {
     Schema(SchemaArgs),
     /// the node types FX knows
     Nodes(NodesArgs),
-    /// the tools and routes a workflow needs
+    /// the keys, routes and tools a workflow needs
     Doctor(DoctorArgs),
     /// pin versioned node types to their source
     Lock(LockArgs),
@@ -165,7 +168,7 @@ pub struct RunArgs {
     /// the ceiling in US dollars; a live run needs one
     #[arg(long = "max-usd", value_name = "USD", allow_negative_numbers = true)]
     pub max_usd: Option<String>,
-    /// admit paid calls
+    /// admit paid calls; provider keys come from the environment or the project's .env
     #[arg(long)]
     pub live: bool,
     /// stop before a later phase that may take the run past this amount

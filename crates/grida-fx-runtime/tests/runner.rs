@@ -258,6 +258,7 @@ fn run_in(
         arguments: Default::default(),
         routes: vec!["routes.yaml".to_string()],
         max_usd: invocation.max_usd.map(|text| Usd::parse(text).unwrap()),
+        ..PlanRequest::default()
     };
     let mut host = PythonHost::new().with_python(python.clone());
     let mut planner = make_planner(&request, &mut host).unwrap();

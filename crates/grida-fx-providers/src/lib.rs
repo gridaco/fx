@@ -1,9 +1,8 @@
 //! Provider adapters behind an injected transport. Adapters never retry; the engine owns retries.
 //!
-//! Step 3 defines the interface the engine's retry owner drives (`grida_fx_runtime::calls::retry`)
-//! and nothing that talks to a provider: real adapters, and the transport they share, arrive in
-//! step 4. The rule this interface encodes is the ratified "Retry and billing" rule
-//! (docs/wg/overview.md; spec/protocol.md §6.1 step 7; spec/store.md §5):
+//! The rule the adapter interface encodes is the ratified "Retry and billing" rule
+//! (docs/wg/overview.md; spec/protocol.md §6.1 step 7; spec/store.md §5), and how each provider's
+//! outcomes map onto it is spec/providers.md:
 //!
 //! - an adapter makes **one send** per call of [`RequestAdapter::send`] (or one submit, one
 //!   collect) and reports what happened as a [`Sent`] (or [`Submitted`], [`Collected`]);
@@ -19,20 +18,51 @@
 //! - a long job is submitted once ([`LongJob::submit`]) and then only collected by its handle
 //!   ([`LongJob::collect`]); it is never submitted again while its job record says `submitted`.
 //!
-//! [`Adapters`] maps a capability and a provider to an adapter. The `grida-fx` binary of step 3
-//! registers none, so every uncached live call is refused with `no_route` ("no adapter serves").
-//! Tests use [`fake::FakeAdapter`] (feature `testing`), which plays a script of outcomes.
+//! Layout:
+//! - [`transport`]: the [`Transport`] trait, its request and response types, the default
+//!   reqwest transport ([`transport::http`]), and for tests the replay transport and `NoNetwork`;
+//! - [`keys`] (the allowlisted key loader), [`redact`], [`setup`] (what adapters are built
+//!   from), [`clock`] (polling time), [`wire`] (helpers every adapter shares),
+//!   [`capabilities`] (spec/capabilities.md as data), [`routes`] (the built-in route table);
+//! - one module per provider: [`openai`], [`openrouter`], [`fal`], [`tripo`], [`elevenlabs`],
+//!   each with `register(&mut Adapters, &Setup)`;
+//! - [`live`]: the adapters of a live run, the only place the default transport is built;
+//! - [`fake`] and [`testing`] (feature `testing`): the scripted `FakeAdapter`, test setups,
+//!   calls and synthetic media.
+//!
+//! [`Adapters`] maps a capability and a provider to an adapter. Without `--live` the `grida-fx`
+//! binary registers none, so every uncached paid call is refused with `no_route` ("no adapter
+//! serves").
 
 pub mod adapter;
+pub mod capabilities;
+pub mod clock;
+pub mod elevenlabs;
 #[cfg(any(test, feature = "testing"))]
 pub mod fake;
+pub mod fal;
+pub mod keys;
+pub mod live;
+pub mod openai;
+pub mod openrouter;
+pub mod redact;
 pub mod registry;
+pub mod routes;
+pub mod setup;
+#[cfg(any(test, feature = "testing"))]
+pub mod testing;
+pub mod transport;
+pub mod tripo;
+pub mod wire;
 
 pub use adapter::{
     Adapter, Answer, AnsweredFile, CallRequest, Collected, LongJob, RequestAdapter, RequestFile,
     RouteRef, Sent, Submitted,
 };
+pub use keys::{KeyName, Keys, Secret};
 pub use registry::Adapters;
+pub use setup::{Endpoints, Setup};
+pub use transport::{HttpRequest, HttpResponse, Transport, TransportError};
 
 use std::future::Future;
 use std::pin::Pin;

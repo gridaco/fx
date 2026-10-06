@@ -9,9 +9,9 @@ routes:
   - { capability: vision.review, route: reviewer-vlm@openrouter, price: { low_usd: 0.003, high_usd: 0.03 }, features: [image_input] }
   - { capability: vision.review, route: vision-llm-b@openrouter, price: { low_usd: 0.003, high_usd: 0.03 }, features: [image_input] }
   - { capability: vision.annotate, route: vision-llm-b@openrouter, price: { low_usd: 0.003, high_usd: 0.03 }, features: [image_input] }
-  - { capability: mesh.generate, route: some-mesh-model@tripo, price: { low_usd: 0.30, high_usd: 0.60 }, features: [image_input] }
+  - { capability: mesh.generate, route: some-mesh-model@tripo, price: { low_usd: 0.30, high_usd: 0.60 }, features: [multiview] }
   - { capability: mesh.rig, route: some-rig-model@tripo, price: { low_usd: 0.25, high_usd: 0.50 } }
   - { capability: speech.generate, route: some-tts-model@some-voice-provider, price: { low_usd: 0.15, high_usd: 0.30, unit: 1k_chars, max_units: 5000 } }
   - { capability: sound.generate, route: some-sfx-model@some-audio-provider, price: { low_usd: 0.02, high_usd: 0.04, unit: second, max_units: 22 } }
   - { capability: music.generate, route: some-music-model@some-audio-provider, price: { low_usd: 0.01, high_usd: 0.02, unit: second, max_units: 180 } }
-  - { capability: agent.turn, route: writer-llm@openrouter, price: { low_usd: 0.003, high_usd: 0.03 }, features: [image_input, tools] }
+  - { capability: agent.turn, route: writer-llm@openrouter, price: { low_usd: 0.003, high_usd: 0.03 }, features: [image_input, tool_use] }

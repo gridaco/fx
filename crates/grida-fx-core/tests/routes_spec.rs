@@ -302,8 +302,12 @@ fn catalogs_combine_in_order() {
         },
         has_file: true,
     };
-    let catalog =
-        load_catalog(&project, &[(root.join("extra.yaml"), "extra.yaml".into())]).unwrap();
+    let catalog = load_catalog(
+        &project,
+        &RouteTable::new(),
+        &[(root.join("extra.yaml"), "extra.yaml".into())],
+    )
+    .unwrap();
     assert_eq!(catalog.entries.len(), 2);
     assert_eq!(
         catalog
@@ -313,7 +317,7 @@ fn catalogs_combine_in_order() {
             .high,
         Usd(10_000)
     );
-    let only_project = load_catalog(&project, &[]).unwrap();
+    let only_project = load_catalog(&project, &RouteTable::new(), &[]).unwrap();
     assert_eq!(
         only_project
             .resolve("image.generate", "img-a@acme")
@@ -322,8 +326,12 @@ fn catalogs_combine_in_order() {
             .high,
         Usd(40_000)
     );
-    let missing =
-        load_catalog(&project, &[(root.join("none.yaml"), "none.yaml".into())]).unwrap_err();
+    let missing = load_catalog(
+        &project,
+        &RouteTable::new(),
+        &[(root.join("none.yaml"), "none.yaml".into())],
+    )
+    .unwrap_err();
     assert_eq!(missing.kind, ErrorKind::Io);
     assert!(
         missing.message.starts_with("none.yaml"),
@@ -331,6 +339,33 @@ fn catalogs_combine_in_order() {
         missing.message
     );
     assert!(!missing.message.contains(root.to_str().unwrap()));
+    // The built-in table comes first and is left out once a --routes file is given.
+    let builtin = RouteTable::from_document(
+        &json!({"fx": "routes/v1", "routes": [
+            {"capability": "image.generate", "route": "img-a@acme", "price": {"usd": 0.09}},
+            {"capability": "mesh.rig", "route": "rig-a@acme", "price": {"usd": 0.5}},
+        ]}),
+        "built-in",
+    )
+    .unwrap();
+    let with_builtin = load_catalog(&project, &builtin, &[]).unwrap();
+    assert_eq!(with_builtin.entries.len(), 3);
+    assert_eq!(
+        with_builtin
+            .resolve("image.generate", "img-a@acme")
+            .unwrap()
+            .price
+            .high,
+        Usd(40_000)
+    );
+    assert!(with_builtin.resolve("mesh.rig", "rig-a@acme").is_ok());
+    let replaced = load_catalog(
+        &project,
+        &builtin,
+        &[(root.join("extra.yaml"), "extra.yaml".into())],
+    )
+    .unwrap();
+    assert!(replaced.resolve("mesh.rig", "rig-a@acme").is_err());
 }
 
 #[test]

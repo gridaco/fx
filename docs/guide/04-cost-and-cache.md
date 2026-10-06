@@ -48,6 +48,13 @@ How that is reckoned, with the example's prices ([examples/routes.yaml](examples
 - **Phase 2** repeats over a list `propose` makes, so it is priced at its `max: 48`: per entity
   `direct` ($0.02), `draw` ($0.30) and `review` ($0.03) at worst, 48 × $0.35 = $16.80.
 
+**Where prices come from.** Every paid call is priced by its route's entry in a route table. FX
+ships a built-in table with a route for each model and provider it can call (`grida-fx nodes
+<type>` lists them); a project's `route_tables:` are read after it and override its entries, and
+`--routes` files replace it. The built-in prices are planning allowances, not provider quotes:
+they size the plan and every reservation against your ceiling, but a call costs what its provider
+reports, and when a provider reports nothing, the call is charged its whole reservation.
+
 In general:
 - **The plan never calls a provider.** It is also how you check a workflow in CI: `grida-fx plan
   --check` fails on any error, with no spend.

@@ -66,7 +66,9 @@ together, each mark also has `image: <index>`.
   use `grounding: native`.
 
 Downstream:
-- `fx/annotations.mask@1` (planned) turns marks into a mask (for `image.edit`);
+- `fx/annotations.mask@1` (planned) turns marks into a mask for `image.edit`: a PNG the size of
+  the image whose marked areas are fully transparent (alpha 0 marks what may change), the
+  convention every shipped `image.edit` route follows;
 - `fx/image.crop@1` takes `region:` from a mark;
 - your own nodes read them with `ctx.read.annotations(name)`.
 
@@ -98,7 +100,8 @@ Downstream:
 **What a review produces:**
 - **`outputs.annotations`:** what it marked while looking. When a criterion fails, its marks say
   where.
-- **`outputs.mask`:** the marked areas as a mask, for repair.
+- **`outputs.mask`:** the marked areas as a mask for repair, in `image.edit`'s convention (marked
+  areas fully transparent, so they are what may change).
 - **`facts.verdict`,** plus `facts.criteria` (pass or fail per criterion) when you gave criteria.
 
 **Why annotate before deciding:** a judge that has to show where a problem is raises fewer vague

@@ -144,7 +144,9 @@ def passed_through() -> dict[str, str]:
 def step_environment(home: Path, passed: dict[str, str]) -> dict[str, str]:
     """A minimal environment: nothing of the caller's leaks in but PATH and `passed`.
 
-    No provider key, tool override, FX cache location or locale can change what a case prints.
+    No provider key, tool override, FX cache location or locale can change what a case prints,
+    and a case that runs `--live` reaches no provider: the network is off and no `.env` is read
+    (spec/providers.md sections 2 and 3).
     """
 
     return {
@@ -154,6 +156,8 @@ def step_environment(home: Path, passed: dict[str, str]) -> dict[str, str]:
         "LANG": "C.UTF-8",
         # Node hosts must not write bytecode into the project the case reads.
         "PYTHONDONTWRITEBYTECODE": "1",
+        "GRIDA_FX_NETWORK": "off",
+        "GRIDA_FX_DISABLE_DOTENV": "1",
         **passed,
     }
 

@@ -8,7 +8,12 @@
 //!    when either side is empty); workflow input flags as the planning verbs take them.
 //! 2. The planner; then every `--deliver` name is checked against the workflow's declared outputs
 //!    (`--deliver <pair>: name one of <sorted names, ", ">`, or `…: the workflow declares no
-//!    outputs`, exit 2) before anything is planned or run.
+//!    outputs`, exit 2) before anything is planned or run. Then the engine
+//!    ([`crate::engine::engine_for`]), which with `--live` builds every provider's adapters from
+//!    the keys in the process environment or the planning project's `.env` (spec/providers.md
+//!    §3): a `.env` or base-URL refusal is a usage error naming the variable or the line (exit 2),
+//!    and building prints nothing. A missing key refuses only the calls that need it, when they
+//!    are made (`<VARIABLE> is not set`, $0).
 //! 3. Plan through the engine ([`crate::engine::plan`]: `at: plan` steps run, `cached` is the
 //!    store's). A plan with problems prints the plan (`plan::render::render`) and exits 1
 //!    without creating a folder.
@@ -87,6 +92,7 @@ pub fn run(args: &RunArgs) -> Result<u8, Error> {
         arguments: crate::args::parse_arguments(&args.arg)?,
         routes: args.routes.clone(),
         max_usd,
+        builtin_routes: crate::engine::builtin_routes()?,
     };
     let mut host = crate::print::host();
     let mut planner = make_planner(&request, &mut host)?;

@@ -8,12 +8,15 @@ rather than taken from a library.
 Usage:
     python tools/digest.py --check-examples [--examples <examples.json>]
     python tools/digest.py --check-graph <graph.json> --project <dir> [--routes <routes.yaml> ...]
+                           [--builtin-routes <default.yaml>]
     python tools/digest.py --canon <file.json | ->
 
 --check-examples also checks markers.json and json_output.json when they sit beside the
-examples file. --check-graph builds the route catalog of identity.md section 7 from fx.yaml's
-route_tables and then each --routes file; the built-in default table is the engine's and is
-not known here.
+examples file. --check-graph builds the route catalog of identity.md section 7 from the built-in
+default table (--builtin-routes, the engine's routes/default.yaml, read as a plain route table
+and left out when a --routes file is given), fx.yaml's route_tables, and then each --routes
+file. Without --builtin-routes the built-in table is unknown here, and a route found in no
+table is a note, not a failure.
 
 Only the standard library is needed, plus PyYAML when a YAML file (a route table, fx.yaml,
 fx.lock) has to be read.
@@ -993,15 +996,16 @@ def _unsafe_relative(path: str) -> bool:
 
 
 class GraphCheck:
-    def __init__(self, project: Path, route_files: list[Path]) -> None:
+    def __init__(self, project: Path, route_files: list[Path], builtin: Path | None = None) -> None:
         self.project = project
         self.failures: list[str] = []
         self.notes: list[str] = []
         self.counts = {"identities": 0, "routes": 0, "sources": 0, "locks": 0, "plans": 0}
         self.routes = RouteTable()
         # identity.md section 7: the built-in default table heads the catalog unless a
-        # --routes file is given. This checker does not know that table.
-        self.builtin_table = not route_files
+        # --routes file is given. Unless it is handed in, this checker does not know that table.
+        self.builtin = builtin if not route_files else None
+        self.builtin_table = not route_files and builtin is None
         self.lock: dict[str, str] = {}
         self._load_project(route_files)
 
@@ -1009,9 +1013,9 @@ class GraphCheck:
         self.failures.append(message)
 
     def _load_project(self, route_files: list[Path]) -> None:
-        # The catalog, in order: the built-in table (unknown here), fx.yaml's route_tables in
+        # The catalog, in order: the built-in table (when known), fx.yaml's route_tables in
         # their listed order (relative to the project root), then each --routes file.
-        tables: list[Path] = []
+        tables: list[Path] = [self.builtin] if self.builtin is not None else []
         project_file = self.project / "fx.yaml"
         if project_file.is_file():
             document = read_yaml_file(project_file)
@@ -1336,8 +1340,10 @@ class GraphCheck:
                 )
 
 
-def check_graph(graph_path: Path, project: Path, route_files: list[Path]) -> GraphCheck:
-    checker = GraphCheck(project, route_files)
+def check_graph(
+    graph_path: Path, project: Path, route_files: list[Path], builtin: Path | None = None
+) -> GraphCheck:
+    checker = GraphCheck(project, route_files, builtin)
     checker.check(read_json_file(graph_path))
     return checker
 
@@ -1366,6 +1372,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--examples", type=Path, default=DEFAULT_EXAMPLES)
     parser.add_argument("--project", type=Path, help="the project the graph was planned in")
     parser.add_argument("--routes", type=Path, action="append", default=[], help="a route table")
+    parser.add_argument(
+        "--builtin-routes",
+        type=Path,
+        help="the built-in default route table (left out with --routes)",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -1394,7 +1405,7 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.project is None:
             parser.error("--check-graph needs --project")
-        checker = check_graph(args.check_graph, args.project, args.routes)
+        checker = check_graph(args.check_graph, args.project, args.routes, args.builtin_routes)
     except (RefusedInput, OSError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

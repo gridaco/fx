@@ -7,16 +7,32 @@ repository.workspace = true
 publish.workspace = true
 
 [features]
-# The scripted FakeAdapter, for the engine's tests. The grida-fx binary never enables it.
-testing = []
+# The scripted FakeAdapter, the ReplayTransport, NoNetwork and FakeClock: for tests. The grida-fx
+# binary never enables it.
+testing = ["dep:png", "dep:tempfile"]
 
 [dependencies]
 grida-fx-core.workspace = true
 serde_json.workspace = true
 indexmap.workspace = true
+tokio = { workspace = true, features = ["time", "sync"] }
+base64.workspace = true
+regex.workspace = true
+url.workspace = true
+reqwest.workspace = true
+sha2.workspace = true
+jsonschema.workspace = true
+# Picture reduction for structured output (spec/providers.md §9.2).
+image.workspace = true
+png = { workspace = true, optional = true }
+tempfile = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio.workspace = true
+png.workspace = true
+tempfile.workspace = true
+# The crate's own test helpers (feature `testing`) for its integration tests under tests/.
+grida-fx-providers = { path = ".", features = ["testing"] }
 
 [lints]
 workspace = true

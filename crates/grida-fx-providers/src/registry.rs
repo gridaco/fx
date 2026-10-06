@@ -30,6 +30,17 @@ impl Adapters {
             .get(&(route.capability.clone(), route.provider.clone()))
     }
 
+    /// Whether an adapter serves `capability` on `provider`.
+    pub fn serves(&self, capability: &str, provider: &str) -> bool {
+        self.by_route
+            .contains_key(&(capability.to_string(), provider.to_string()))
+    }
+
+    /// Every `(capability, provider)` served, in registration order.
+    pub fn served(&self) -> Vec<(String, String)> {
+        self.by_route.keys().cloned().collect()
+    }
+
     /// Whether no adapter is registered.
     pub fn is_empty(&self) -> bool {
         self.by_route.is_empty()

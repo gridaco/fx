@@ -18,15 +18,42 @@ fn repository() -> PathBuf {
         .unwrap()
 }
 
-/// Runs `grida-fx` in `cwd` with a minimal environment.
-fn grida_fx(cwd: &Path, args: &[&str]) -> Output {
+/// The variables no child inherits: the five provider keys and the four base URLs
+/// (spec/providers.md §3).
+const PROVIDER_VARIABLES: [&str; 9] = [
+    "OPENAI_API_KEY",
+    "OPENROUTER_API_KEY",
+    "FAL_KEY",
+    "TRIPO_API_KEY",
+    "ELEVENLABS_API_KEY",
+    "OPENAI_BASE_URL",
+    "OPENROUTER_BASE_URL",
+    "FAL_BASE_URL",
+    "ELEVENLABS_BASE_URL",
+];
+
+/// `grida-fx` in `cwd` with a minimal environment: no provider key or base URL, the network off
+/// (`--live` builds its adapters over a transport that sends nothing) and the `.env` file off.
+fn command(cwd: &Path, args: &[&str]) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_grida-fx"));
     command.args(args).current_dir(cwd).env_clear();
     if let Some(path) = std::env::var_os("PATH") {
         command.env("PATH", path);
     }
-    command.env("HOME", cwd).env("NO_COLOR", "1");
-    command.output().unwrap()
+    command
+        .env("HOME", cwd)
+        .env("NO_COLOR", "1")
+        .env("GRIDA_FX_NETWORK", "off")
+        .env("GRIDA_FX_DISABLE_DOTENV", "1");
+    for name in PROVIDER_VARIABLES {
+        command.env_remove(name);
+    }
+    command
+}
+
+/// Runs `grida-fx` in `cwd` with a minimal environment ([`command`]).
+fn grida_fx(cwd: &Path, args: &[&str]) -> Output {
+    command(cwd, args).output().unwrap()
 }
 
 fn stdout(output: &Output) -> String {
@@ -189,7 +216,8 @@ fn integrated_nodes_shows_one_type() {
          \x20 setting background: {{\"default\": \"auto\", \"enum\": [\"opaque\", \"transparent\", \"auto\"]}}\n\
          \x20 setting vars: {{\"default\": {{}}, \"type\": \"object\"}}\n\
          \x20 output  image: image/png\n\
-         \x20 routes  none installed\n",
+         \x20 routes  gpt-image-2.5-sunburst@openai, openai/gpt-image-2.5-sunburst@openrouter, \
+         openai/gpt-image-2.5/sunburst@fal\n",
         "fx/image.generate@1"
     );
     for name in ["image.generate", "fx/image.generate@1"] {
@@ -223,7 +251,10 @@ fn integrated_nodes_shows_the_projects_routes() {
     let output = grida_fx(project.path(), &["nodes", "image.generate"]);
     assert_eq!(status(&output), 0, "{}", stderr(&output));
     assert!(
-        stdout(&output).ends_with("  routes  img-a@acme, img-b@acme\n"),
+        stdout(&output).ends_with(
+            "  routes  gpt-image-2.5-sunburst@openai, img-a@acme, img-b@acme, \
+             openai/gpt-image-2.5-sunburst@openrouter, openai/gpt-image-2.5/sunburst@fal\n"
+        ),
         "{}",
         stdout(&output)
     );
@@ -281,12 +312,222 @@ fn integrated_doctor_without_a_target() {
     assert_eq!(status(&output), 0, "{}", stderr(&output));
     let text = stdout(&output);
     let lines: Vec<&str> = text.lines().collect();
-    assert_eq!(lines.len(), 2, "{text}");
+    // engine, python, a key per provider, a route per built-in route.
+    assert_eq!(lines.len(), 2 + 5 + 16, "{text}");
     assert_eq!(
         lines[0],
         format!("engine    grida-fx {}", env!("CARGO_PKG_VERSION"))
     );
     assert!(lines[1].starts_with("python    "), "{text}");
+    assert_eq!(
+        lines[2..7],
+        [
+            "key       OPENAI_API_KEY missing",
+            "key       OPENROUTER_API_KEY missing",
+            "key       FAL_KEY missing",
+            "key       TRIPO_API_KEY missing",
+            "key       ELEVENLABS_API_KEY missing",
+        ]
+    );
+    let routes = &lines[7..];
+    assert!(routes.iter().all(|l| l.starts_with("route     ")), "{text}");
+    assert!(routes.iter().all(|l| l.contains(" no key (")), "{text}");
+    let mut sorted = routes.to_vec();
+    sorted.sort();
+    assert_eq!(sorted, routes, "sorted by capability, then id");
+}
+
+/// A made-up key value, distinctive enough that finding it anywhere is a leak.
+const MADE_UP_KEY: &str = "fx-made-up-key-3f9a1c";
+
+/// Asserts that `MADE_UP_KEY` appears in neither output stream.
+fn assert_no_key(output: &Output) {
+    assert!(!stdout(output).contains(MADE_UP_KEY), "{}", stdout(output));
+    assert!(!stderr(output).contains(MADE_UP_KEY), "{}", stderr(output));
+}
+
+#[test]
+fn integrated_doctor_says_which_keys_are_present_and_never_their_values() {
+    let project = empty_project();
+    let output = command(project.path(), &["doctor"])
+        .env("FAL_KEY", MADE_UP_KEY)
+        .output()
+        .unwrap();
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    assert_no_key(&output);
+    let text = stdout(&output);
+    let keys: Vec<&str> = text.lines().filter(|l| l.starts_with("key ")).collect();
+    assert_eq!(
+        keys,
+        [
+            "key       OPENAI_API_KEY missing",
+            "key       OPENROUTER_API_KEY missing",
+            "key       FAL_KEY present (environment)",
+            "key       TRIPO_API_KEY missing",
+            "key       ELEVENLABS_API_KEY missing",
+        ]
+    );
+    assert!(
+        text.contains(
+            "\nroute     video.generate google/gemini-omni-flash/v1.1/image-to-video@fal \
+             servable\n"
+        ),
+        "{text}"
+    );
+    assert!(
+        text.contains("\nroute     mesh.rig v1.0-20240301@tripo no key (TRIPO_API_KEY)\n"),
+        "{text}"
+    );
+    // A blank value is no key.
+    let output = command(project.path(), &["doctor"])
+        .env("FAL_KEY", "   ")
+        .output()
+        .unwrap();
+    assert!(stdout(&output).contains("\nkey       FAL_KEY missing\n"));
+}
+
+#[test]
+fn integrated_doctor_lists_the_projects_routes() {
+    let project = drawing_project(
+        "fx: project/v1\nroute_tables: [routes.yaml]\nroutes:\n  image.generate: img-a@acme\n",
+    );
+    for argv in [&["doctor"][..], &["doctor", "case"][..]] {
+        let output = grida_fx(project.path(), argv);
+        assert_eq!(status(&output), 0, "{argv:?}: {}", stderr(&output));
+        let text = stdout(&output);
+        let images: Vec<&str> = text
+            .lines()
+            .filter(|l| l.starts_with("route     image.generate "))
+            .collect();
+        assert_eq!(
+            images,
+            [
+                "route     image.generate gpt-image-2.5-sunburst@openai no key (OPENAI_API_KEY)",
+                "route     image.generate img-a@acme no adapter",
+                "route     image.generate openai/gpt-image-2.5-sunburst@openrouter no key \
+                 (OPENROUTER_API_KEY)",
+                "route     image.generate openai/gpt-image-2.5/sunburst@fal no key (FAL_KEY)",
+            ],
+            "{argv:?}"
+        );
+        assert_eq!(text.lines().filter(|l| l.starts_with("route ")).count(), 17);
+    }
+}
+
+#[test]
+fn integrated_doctor_reads_the_projects_key_file() {
+    let project = empty_project();
+    std::fs::write(
+        project.path().join(".env"),
+        format!(
+            "# provider keys\nOPENAI_API_KEY={MADE_UP_KEY}\nexport FAL_KEY='{MADE_UP_KEY}'\n\
+             UNRELATED_SECRET=\"not read\n"
+        ),
+    )
+    .unwrap();
+    let doctor = |process: &[(&str, &str)]| {
+        let mut command = command(project.path(), &["doctor"]);
+        command.env_remove("GRIDA_FX_DISABLE_DOTENV");
+        for (name, value) in process {
+            command.env(name, value);
+        }
+        command.output().unwrap()
+    };
+    let output = doctor(&[]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    assert_no_key(&output);
+    let text = stdout(&output);
+    assert!(
+        text.contains("\nkey       OPENAI_API_KEY present (.env)\n"),
+        "{text}"
+    );
+    assert!(
+        text.contains("\nkey       FAL_KEY present (.env)\n"),
+        "{text}"
+    );
+    assert!(
+        text.contains("\nkey       TRIPO_API_KEY missing\n"),
+        "{text}"
+    );
+    assert!(
+        text.contains("\nroute     image.generate gpt-image-2.5-sunburst@openai servable\n"),
+        "{text}"
+    );
+    // A process value wins over the file's.
+    let output = doctor(&[("FAL_KEY", "fx-made-up-process-key")]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    assert!(
+        stdout(&output).contains("\nkey       FAL_KEY present (environment)\n"),
+        "{}",
+        stdout(&output)
+    );
+    assert!(!stdout(&output).contains("fx-made-up-process-key"));
+    // GRIDA_FX_DISABLE_DOTENV=1 turns the file off.
+    let output = doctor(&[("GRIDA_FX_DISABLE_DOTENV", "1")]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    assert!(
+        stdout(&output).contains("\nkey       OPENAI_API_KEY missing\n"),
+        "{}",
+        stdout(&output)
+    );
+}
+
+#[test]
+fn integrated_doctor_refuses_a_malformed_key_file() {
+    let project = empty_project();
+    std::fs::write(
+        project.path().join(".env"),
+        format!("OPENAI_API_KEY={MADE_UP_KEY}\nFAL_KEY=\"{MADE_UP_KEY}\n"),
+    )
+    .unwrap();
+    let output = command(project.path(), &["doctor"])
+        .env_remove("GRIDA_FX_DISABLE_DOTENV")
+        .env("TRIPO_API_KEY", MADE_UP_KEY)
+        .output()
+        .unwrap();
+    assert_eq!(status(&output), 1, "{}", stderr(&output));
+    assert_no_key(&output);
+    let text = stdout(&output);
+    let lines: Vec<&str> = text.lines().collect();
+    assert!(lines[2].starts_with("keys      .env"), "{text}");
+    assert!(lines[2].contains("FAL_KEY"), "{text}");
+    assert!(lines[2].contains("line 2"), "{text}");
+    // The rest is told from the process environment alone.
+    assert_eq!(lines[3], "key       OPENAI_API_KEY missing", "{text}");
+    assert!(
+        text.contains("\nkey       TRIPO_API_KEY present (environment)\n"),
+        "{text}"
+    );
+    assert!(text.contains("\nroute     mesh.rig v1.0-20240301@tripo servable\n"));
+    // Missing keys alone do not change the exit status; the file off, all is well again.
+    let output = command(project.path(), &["doctor"]).output().unwrap();
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+}
+
+#[cfg(unix)]
+#[test]
+fn integrated_doctor_refuses_a_symlinked_key_file() {
+    let project = empty_project();
+    let elsewhere = tempfile::tempdir().unwrap();
+    let target = elsewhere.path().join("keys");
+    std::fs::write(&target, format!("FAL_KEY={MADE_UP_KEY}\n")).unwrap();
+    std::os::unix::fs::symlink(&target, project.path().join(".env")).unwrap();
+    let output = command(project.path(), &["doctor"])
+        .env_remove("GRIDA_FX_DISABLE_DOTENV")
+        .output()
+        .unwrap();
+    assert_eq!(status(&output), 1, "{}", stderr(&output));
+    assert_no_key(&output);
+    assert!(
+        stdout(&output).contains("\nkeys      .env must be a regular file\n"),
+        "{}",
+        stdout(&output)
+    );
+    assert!(
+        stdout(&output).contains("\nkey       FAL_KEY missing\n"),
+        "{}",
+        stdout(&output)
+    );
 }
 
 #[test]
@@ -337,7 +578,7 @@ fn integrated_plan_expect_cached_names_what_is_not() {
 #[test]
 fn integrated_a_refused_plan() {
     let project = conformance_project("tiered-price");
-    // Without --routes the catalog is the built-in table, which serves nothing yet.
+    // Without --routes the catalog is the built-in table, which holds none of the case's routes.
     let output = grida_fx(project.path(), &["plan", "case"]);
     assert_eq!(status(&output), 0, "{}", stderr(&output));
     assert!(
@@ -1170,6 +1411,230 @@ fn integrated_a_live_run_needs_a_ceiling() {
     assert!(!project.path().join("runs").exists());
 }
 
+/// A project like [`drawing_project`] whose `image.generate` is bound to a built-in route.
+const BUILT_IN: &str = "fx: project/v1\nroutes:\n  image.generate: gpt-image-2.5-sunburst@openai\n";
+
+#[test]
+fn integrated_a_plan_without_routes_files_is_priced_from_the_built_in_table() {
+    let project = drawing_project(BUILT_IN);
+    let output = grida_fx(project.path(), &["price", "case"]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    let price = parse(&stdout(&output));
+    assert_eq!(
+        price["estimate"],
+        json!({"low_usd": 0.18, "high_usd": 0.25}),
+        "{price}"
+    );
+    assert_eq!(price["phases"][0]["calls"], json!([1, 1]), "{price}");
+    let output = grida_fx(project.path(), &["plan", "case", "--check"]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    assert!(
+        stdout(&output).ends_with("estimate  $0.18 – $0.25\n"),
+        "{}",
+        stdout(&output)
+    );
+    // Any --routes file leaves the built-in table out.
+    let output = grida_fx(project.path(), &["plan", "case", "--routes", "routes.yaml"]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    assert!(
+        stdout(&output).contains("\nrefused   draw.route: "),
+        "{}",
+        stdout(&output)
+    );
+}
+
+/// Every event of a run's log.
+fn events(folder: &Path) -> Vec<Value> {
+    std::fs::read_to_string(folder.join("events.jsonl"))
+        .unwrap()
+        .lines()
+        .map(parse)
+        .collect()
+}
+
+/// Every file under `folder`, read as bytes, with its path.
+fn every_file(folder: &Path, found: &mut Vec<(PathBuf, Vec<u8>)>) {
+    let Ok(entries) = std::fs::read_dir(folder) else {
+        return;
+    };
+    for entry in entries {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            every_file(&path, found);
+        } else {
+            found.push((path.clone(), std::fs::read(&path).unwrap()));
+        }
+    }
+}
+
+/// Asserts that a run spent nothing: every hold settled at $0, and the run charged $0.
+fn assert_spent_nothing(folder: &Path) {
+    let events = events(folder);
+    let settled: Vec<&Value> = events
+        .iter()
+        .filter(|e| e["event"] == "budget_settled")
+        .collect();
+    let reserved = events
+        .iter()
+        .filter(|e| e["event"] == "budget_reserved")
+        .count();
+    assert_eq!(settled.len(), reserved, "{events:#?}");
+    for event in settled {
+        assert_eq!(event["charged_usd"], json!(0), "{event}");
+    }
+    let finished = events
+        .iter()
+        .find(|e| e["event"] == "run_finished")
+        .unwrap();
+    assert_eq!(finished["charged_usd"], json!(0), "{finished}");
+}
+
+#[test]
+fn integrated_a_live_call_without_its_key_is_refused_for_nothing() {
+    let project = drawing_project(BUILT_IN);
+    let output = grida_fx(
+        project.path(),
+        &[
+            "run",
+            "case",
+            "--live",
+            "--max-usd",
+            "1",
+            "--run",
+            "runs/one",
+        ],
+    );
+    assert_eq!(status(&output), 1, "{}{}", stdout(&output), stderr(&output));
+    let text = stdout(&output);
+    assert!(
+        text.contains("\nresult    failed   spent $0.00\n"),
+        "{text}"
+    );
+    // Refused before sending (capability_refused), so settled at $0.
+    assert!(
+        text.contains(
+            "\nfailed    draw#1: image.generate on gpt-image-2.5-sunburst@openai was refused: \
+             OPENAI_API_KEY is not set\n"
+        ),
+        "{text}"
+    );
+    let folder = project.path().join("runs/one");
+    assert_spent_nothing(&folder);
+    let events = events(&folder);
+    let node_failed = events.iter().find(|e| e["event"] == "node_failed").unwrap();
+    assert!(
+        node_failed
+            .to_string()
+            .contains("OPENAI_API_KEY is not set"),
+        "{node_failed}"
+    );
+}
+
+#[test]
+fn integrated_a_live_call_with_the_network_off_sends_nothing() {
+    let project = drawing_project(BUILT_IN);
+    let output = command(
+        project.path(),
+        &[
+            "run",
+            "case",
+            "--live",
+            "--max-usd",
+            "1",
+            "--run",
+            "runs/one",
+        ],
+    )
+    .env("OPENAI_API_KEY", MADE_UP_KEY)
+    .output()
+    .unwrap();
+    assert_eq!(status(&output), 1, "{}{}", stdout(&output), stderr(&output));
+    assert_no_key(&output);
+    let text = stdout(&output);
+    assert!(
+        text.contains("\nresult    failed   spent $0.00\n"),
+        "{text}"
+    );
+    let failed = text
+        .lines()
+        .find(|l| l.starts_with("failed    draw#1: "))
+        .unwrap_or_else(|| panic!("{text}"));
+    assert!(
+        failed.starts_with(
+            "failed    draw#1: image.generate on gpt-image-2.5-sunburst@openai was refused: "
+        ),
+        "{text}"
+    );
+    assert!(failed.contains("GRIDA_FX_NETWORK"), "{text}");
+    assert_spent_nothing(&project.path().join("runs/one"));
+    // The key is in no record: not in the run, not in the cache.
+    let mut files = Vec::new();
+    every_file(project.path(), &mut files);
+    for (path, bytes) in files {
+        assert!(
+            !String::from_utf8_lossy(&bytes).contains(MADE_UP_KEY),
+            "{}",
+            path.display()
+        );
+    }
+}
+
+#[test]
+fn integrated_a_live_run_refuses_a_malformed_key_file_before_planning() {
+    let project = drawing_project(BUILT_IN);
+    std::fs::write(
+        project.path().join(".env"),
+        format!("OPENAI_API_KEY={MADE_UP_KEY}\nOPENAI_API_KEY={MADE_UP_KEY}\n"),
+    )
+    .unwrap();
+    let live = ["run", "case", "--live", "--max-usd", "1"];
+    let output = command(project.path(), &live)
+        .env_remove("GRIDA_FX_DISABLE_DOTENV")
+        .output()
+        .unwrap();
+    assert_eq!(status(&output), 2, "{}{}", stdout(&output), stderr(&output));
+    assert_no_key(&output);
+    assert!(stdout(&output).is_empty(), "{}", stdout(&output));
+    assert!(
+        stderr(&output).starts_with("grida-fx: .env"),
+        "{}",
+        stderr(&output)
+    );
+    assert!(
+        stderr(&output).contains("OPENAI_API_KEY"),
+        "{}",
+        stderr(&output)
+    );
+    assert!(!project.path().join("runs").exists());
+    // A base URL that holds a key is refused the same way.
+    let output = command(project.path(), &live)
+        .env("OPENAI_API_KEY", MADE_UP_KEY)
+        .env(
+            "OPENAI_BASE_URL",
+            format!("https://proxy.example.test/{MADE_UP_KEY}"),
+        )
+        .output()
+        .unwrap();
+    assert_eq!(status(&output), 2, "{}{}", stdout(&output), stderr(&output));
+    assert_no_key(&output);
+    assert!(
+        stderr(&output).starts_with("grida-fx: OPENAI_BASE_URL"),
+        "{}",
+        stderr(&output)
+    );
+    // Without --live neither is read: the uncached call is refused as not live.
+    let output = command(project.path(), &["run", "case", "--run", "runs/one"])
+        .env_remove("GRIDA_FX_DISABLE_DOTENV")
+        .output()
+        .unwrap();
+    assert_eq!(status(&output), 1, "{}{}", stdout(&output), stderr(&output));
+    assert!(
+        stdout(&output).contains("run with --live"),
+        "{}",
+        stdout(&output)
+    );
+}
+
 #[test]
 fn integrated_run_replays_a_recorded_call_and_delivers_it() {
     let project = conformance_project("cache-replay");
@@ -1287,17 +1752,11 @@ fn python_host() -> Option<PathBuf> {
 
 /// Runs `grida-fx` with a Python node host.
 fn grida_fx_with_python(cwd: &Path, python: &Path, args: &[&str]) -> Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_grida-fx"));
-    command.args(args).current_dir(cwd).env_clear();
-    if let Some(path) = std::env::var_os("PATH") {
-        command.env("PATH", path);
-    }
-    command
-        .env("HOME", cwd)
-        .env("NO_COLOR", "1")
+    command(cwd, args)
         .env("PYTHONDONTWRITEBYTECODE", "1")
-        .env("GRIDA_FX_PYTHON", python);
-    command.output().unwrap()
+        .env("GRIDA_FX_PYTHON", python)
+        .output()
+        .unwrap()
 }
 
 #[test]

@@ -9,14 +9,14 @@ arguments.
 | Command | |
 |---|---|
 | `grida-fx plan <target> [inputs] [--routes file]… [--max-usd N] [--check] [--expect-cached] [--json]` | expand, check, price. Never spends. |
-| `grida-fx run <target> [inputs] [--routes file]… [--live] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--run folder]` | run; `--live` admits paid calls and needs a ceiling; `--run` names the run folder |
+| `grida-fx run <target> [inputs] [--routes file]… [--live] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--run folder]` | run; `--live` admits paid calls, needs a ceiling and reads the provider keys; `--run` names the run folder |
 | `grida-fx reroll <run> <step-path> [--live]` / `grida-fx pick <run> <step-path> <take>` | takes ([Cost](04-cost-and-cache.md#takes)) |
 | `grida-fx takes list <target>` / `grida-fx takes mv <target> <old> <new>` | inspect or repair a takes file |
 | `grida-fx jobs [--forget <key>]` | the cache's long provider jobs, `settled` ones included ([Resuming](04-cost-and-cache.md#resuming)); `--forget` clears one once you have checked the provider |
 | `grida-fx inspect <run or workflow id> [--verify] [--json]` | summary; `--verify` re-checks every placed file against its record |
 | `grida-fx nodes [type]` | built-in and project node types, with settings and routes |
 | `grida-fx schema <target>` | the JSON Schema its `inputs:` compile to |
-| `grida-fx doctor [target]` | the keys, tools and routes a workflow needs |
+| `grida-fx doctor [target]` | the keys, routes and tools a workflow needs ([below](#keys-and-live-runs)) |
 | `grida-fx lock [where] [--same <node>]… [--check]` | node version locks; repeat `--same` to confirm several |
 | `grida-fx expand`, `identity`, `price <target> [inputs]` | the expanded graph, each instance's identity, the price by phase, as JSON |
 | `grida-fx project <run>` | a run's record projected to its state, as JSON |
@@ -36,10 +36,78 @@ lists under `route_tables`, then each `--routes` file in the order given. A late
 for the same capability and route replaces an earlier one, and giving any `--routes` file leaves
 the built-in table out ([identity.md §7](../../spec/identity.md#7-route-fingerprint)).
 
+The built-in table ships with the command. Its prices are planning allowances in US dollars, not
+provider quotes: what a call costs is settled from what the provider reports, else from the whole
+amount held for it ([providers.md §10](../../spec/providers.md#10-the-built-in-route-table)).
+
+| Capability | Built-in routes | Key |
+|---|---|---|
+| `image.generate`, `image.edit` | `gpt-image-2.5-sunburst@openai` ($0.18 – $0.25 a call), `openai/gpt-image-2.5-sunburst@openrouter` ($0.14 – $0.30), `openai/gpt-image-2.5/sunburst@fal` ($0.16464 – $0.50) | each provider's |
+| `structured.generate` | `openai/gpt-5.6-sol@openrouter` ($0.02 – $0.60), `openai/gpt-6-astra@openrouter` ($0.05 – $1.50) | `OPENROUTER_API_KEY` |
+| `agent.turn` | `openai/gpt-5.6-sol@openrouter` ($0.003 – $0.10), `openai/gpt-6-astra@openrouter` ($0.01 – $1.50) | `OPENROUTER_API_KEY` |
+| `music.generate` | `google/lyria-3-pro-preview@openrouter` ($0.05 – $0.50) | `OPENROUTER_API_KEY` |
+| `video.generate` | `google/gemini-omni-flash/v1.1/image-to-video@fal` (per second, by `resolution`, at most 10 s: $0.03 – $0.375) | `FAL_KEY` |
+| `mesh.generate`, `mesh.rig` | `P2-20260801@tripo` ($1.20 – $2.50), `v1.0-20240301@tripo` ($0.25 – $0.50) | `TRIPO_API_KEY` |
+| `sound.generate`, `speech.generate` | `eleven_text_to_sound_v2@elevenlabs` ($0.001 – $0.10), `eleven_v3@elevenlabs` ($0.001 – $0.05) | `ELEVENLABS_API_KEY` |
+
+A project picks one with `routes:` in `fx.yaml` (or a step's `route:`). To change a price or add
+a route, list a table under `route_tables:`: its entry for the same capability and route replaces
+the built-in one. A route on a provider FX has no adapter for still plans and prices, but a live
+call on it is refused (`no adapter serves …`). `grida-fx nodes <type>` lists the routes that
+serve a type; `grida-fx doctor` says which of them a live run could serve.
+
 `<target>` is one of:
 - a workflow file (`workflows/gallery.yaml`);
 - a workflow id (`concept-gallery`);
 - a Python builder (`level_art.py:build`), whose arguments are passed with `--arg name=value`.
+
+## Keys and live runs
+
+**Keys.** A live run (`--live`) reads each provider's key under its usual name:
+`OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `FAL_KEY`, `TRIPO_API_KEY` and `ELEVENLABS_API_KEY`
+(`OPENAI_BASE_URL`, `OPENROUTER_BASE_URL`, `FAL_BASE_URL` and `ELEVENLABS_BASE_URL` point a
+provider at another address, such as a proxy). A key that is missing refuses only the calls that
+need it, before anything is sent and for nothing: the step fails, refused with `OPENAI_API_KEY is
+not set`. Without `--live` no key is used.
+
+**The `.env` file.** A variable set (and not blank) in the environment wins. Otherwise FX reads it
+from the `.env` file of the project you run from, if there is one, and only those nine names: a
+line naming anything else is skipped without being read. A line is `NAME=value` (an `export`
+before it is fine), with the value unquoted, in `'single quotes'` taken as written, or in `"double
+quotes"` with JSON escapes; blank lines and `#` comments are skipped. A file FX cannot use stops a
+live run before anything is planned (exit 2), with a message that names the variable and the line
+and never the value: a symlink or anything but a plain file, text that is not UTF-8, a name given
+twice, an empty value, a quote out of place, or a control character in the value. Keys are never
+printed, logged or recorded. `GRIDA_FX_DISABLE_DOTENV=1` turns the file off, so only the
+environment counts (credential-free checks set it).
+
+**Trying `--live` without the network.** With `GRIDA_FX_NETWORK=off`, a live run builds its
+adapters as usual, but nothing leaves the machine: every provider request is refused before it is
+sent, and the step fails with a message that names `GRIDA_FX_NETWORK`, for nothing. Tests of live
+paths use it.
+
+**Checking keys and routes.** `grida-fx doctor` prints, after the engine and Python lines, where
+each key comes from and which routes a live run could serve, for the project you run from (the
+built-in table and its `route_tables`); with a target, the tools and node types the workflow needs
+follow:
+
+```
+engine    grida-fx 0.1.0
+python    .venv/bin/python (grida 0.1.0)
+key       OPENAI_API_KEY present (.env)
+key       OPENROUTER_API_KEY missing
+key       FAL_KEY present (environment)
+key       TRIPO_API_KEY missing
+key       ELEVENLABS_API_KEY missing
+route     image.generate gpt-image-2.5-sunburst@openai servable
+route     image.generate img-a@acme no adapter
+route     mesh.rig v1.0-20240301@tripo no key (TRIPO_API_KEY)
+…
+```
+
+A route is `servable`, has `no key` (and names the variable to set), or has `no adapter` (no
+provider of FX serves it). Missing keys don't change doctor's exit status; a `.env` or base URL
+that a live run would refuse does: doctor prints `keys      <why>` and exits 1.
 
 ## Inputs
 

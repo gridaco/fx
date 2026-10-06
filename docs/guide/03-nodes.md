@@ -13,7 +13,7 @@ Every built-in type is declared, so a workflow using it plans and prices. A type
 | Type | Inputs and settings → output |
 |---|---|
 | `image.generate@1` | `prompt`, `references`, `size`, `background` → `image` |
-| `image.edit@1` | `image`, `mask` (white = edit), `references`, `prompt`, `size`, `background` → `image` |
+| `image.edit@1` | `image`, `mask` (a PNG the size of `image`: fully transparent pixels mark where it may change; a strong hint, not a guarantee), `references`, `prompt`, `size`, `background` → `image` |
 | `structured.generate@1` | `prompt`, `system`, `context` (text, json and images; images are reduced and flattened onto `matte:`, white by default), `schema`, `max_tokens` → `json` |
 | `video.generate@1` | `prompt`, `first_frame`, `last_frame`, `duration`, `resolution`, `aspect_ratio` → `video` |
 | `speech.generate@1` | `text` (delivery as audio tags, `[whispering] ...`), `voice`, `stability`, `language_code`, `max_chars` → `audio` |
@@ -21,7 +21,7 @@ Every built-in type is declared, so a workflow using it plans and prices. A type
 | `music.generate@1` | `prompt`, `duration` → `audio` |
 | `mesh.generate@1` | `views` (pictures by side: `front`, `back`, `left`, `right`), `face_limit`, `quad`, `texture`, `pbr` → `model` |
 | `mesh.rig@1` | `model`, `rig_type`, `skeleton`, `allow_negative_check` → rigged `model` (binary glTF) |
-| `background.remove@1` | `image` → `image` with alpha (**planned**: no route yet) |
+| `background.remove@1` | `image` → `image` with alpha (**planned**: FX can call fal for it, but ships no route yet; a route in your own table makes it run) |
 
 - **A prompt may be a template file** (`prompt: ./prompts/draw.md`), rendered with the step's
   `vars:` and the workflow's `inputs`.

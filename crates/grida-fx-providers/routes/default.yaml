@@ -1,0 +1,293 @@
+# The built-in default route table (spec/identity.md §7; spec/providers.md §10).
+#
+# Embedded in the grida-fx binary and used unless a --routes file is given; a project's
+# route_tables override any entry. Prices are planning allowances in US dollars, not provider
+# quotes: what a call costs is settled from what the provider reports, else the whole hold
+# (spec/providers.md §6).
+#
+# The contract object of each entry is part of its route fingerprint, and so of every cache key
+# the route serves: editing one changes those keys. Its `adapter` (and, for the OpenAI and
+# OpenRouter routes, `adapter_behavior`) is the one spec/providers.md §9 names for the
+# capability's adapter on that provider. The image routes carry `adapter_behavior` as a string,
+# every other route as the integer 1. Price, features, concurrency and requests_per_minute are
+# not identity.
+#
+# Features are the names spec/capabilities.md lists for each capability. tests/routes.rs holds
+# this file to both specs and to the adapters of grida-fx-providers.
+fx: routes/v1
+routes:
+- capability: agent.turn
+  route: openai/gpt-5.6-sol@openrouter
+  price:
+    low_usd: 0.003
+    high_usd: 0.1
+  features:
+  - image_input
+  - tool_use
+  contract:
+    adapter: openrouter-tool-loop
+    adapter_behavior: 1
+- capability: agent.turn
+  route: openai/gpt-6-astra@openrouter
+  price:
+    low_usd: 0.01
+    high_usd: 1.5
+  features:
+  - image_input
+  - tool_use
+  concurrency: 1
+  contract:
+    adapter: openrouter-tool-loop
+    adapter_behavior: 1
+    request_policy:
+      provider:
+        require_parameters: true
+        only:
+        - openai
+        allow_fallbacks: false
+      reasoning:
+        effort: high
+      image_detail: high
+- capability: image.edit
+  route: gpt-image-2.5-sunburst@openai
+  price:
+    low_usd: 0.18
+    high_usd: 0.25
+  requests_per_minute: 150
+  features:
+  - alpha
+  - authored_prompt_passthrough
+  - auto_background
+  - custom_exact_size
+  - exact_size
+  - flexible_size
+  - image_input
+  - jpeg_output
+  - mask
+  - maximum_quality
+  - opaque_background
+  - png_output
+  - webp_output
+  contract:
+    adapter: fx-openai-image-v1
+    adapter_behavior: '1'
+- capability: image.edit
+  route: openai/gpt-image-2.5-sunburst@openrouter
+  price:
+    low_usd: 0.14
+    high_usd: 0.3
+  requests_per_minute: 150
+  features:
+  - authored_prompt_passthrough
+  - auto_background
+  - exact_size
+  - flexible_size
+  - hosted_url_reference_input
+  - image_input
+  - maximum_quality
+  - opaque_background
+  - png_output
+  contract:
+    adapter: fx-openrouter-image-v1
+    adapter_behavior: '3'
+- capability: image.edit
+  route: openai/gpt-image-2.5/sunburst@fal
+  price:
+    low_usd: 0.16464
+    high_usd: 0.5
+  features:
+  - alpha
+  - authored_prompt_passthrough
+  - auto_background
+  - custom_exact_size
+  - exact_size
+  - flexible_size
+  - hosted_url_reference_input
+  - image_input
+  - jpeg_output
+  - mask
+  - maximum_quality
+  - opaque_background
+  - png_output
+  - webp_output
+  contract:
+    adapter: fx-fal-image-v1
+    adapter_behavior: '1'
+- capability: image.generate
+  route: gpt-image-2.5-sunburst@openai
+  price:
+    low_usd: 0.18
+    high_usd: 0.25
+  requests_per_minute: 150
+  features:
+  - alpha
+  - authored_prompt_passthrough
+  - auto_background
+  - custom_exact_size
+  - exact_size
+  - flexible_size
+  - jpeg_output
+  - maximum_quality
+  - opaque_background
+  - png_output
+  - text_to_image
+  - webp_output
+  contract:
+    adapter: fx-openai-image-v1
+    adapter_behavior: '1'
+- capability: image.generate
+  route: openai/gpt-image-2.5-sunburst@openrouter
+  price:
+    low_usd: 0.14
+    high_usd: 0.3
+  requests_per_minute: 150
+  features:
+  - authored_prompt_passthrough
+  - auto_background
+  - exact_size
+  - flexible_size
+  - maximum_quality
+  - opaque_background
+  - png_output
+  - text_to_image
+  contract:
+    adapter: fx-openrouter-image-v1
+    adapter_behavior: '3'
+- capability: image.generate
+  route: openai/gpt-image-2.5/sunburst@fal
+  price:
+    low_usd: 0.16464
+    high_usd: 0.5
+  features:
+  - alpha
+  - authored_prompt_passthrough
+  - auto_background
+  - custom_exact_size
+  - exact_size
+  - flexible_size
+  - jpeg_output
+  - maximum_quality
+  - opaque_background
+  - png_output
+  - text_to_image
+  - webp_output
+  contract:
+    adapter: fx-fal-image-v1
+    adapter_behavior: '1'
+- capability: mesh.generate
+  route: P2-20260801@tripo
+  price:
+    low_usd: 1.2
+    high_usd: 2.5
+  features:
+  - multiview
+  - pbr
+  - quad
+  - textured_mesh
+  concurrency: 1
+  contract:
+    adapter: tripo-multiview
+    adapter_behavior: 1
+- capability: mesh.rig
+  route: v1.0-20240301@tripo
+  price:
+    low_usd: 0.25
+    high_usd: 0.5
+  features:
+  - biped
+  - glb_input
+  - rig_check
+  concurrency: 1
+  contract:
+    adapter: tripo-rig
+    adapter_behavior: 1
+- capability: music.generate
+  route: google/lyria-3-pro-preview@openrouter
+  price:
+    low_usd: 0.05
+    high_usd: 0.5
+  contract:
+    adapter: openrouter-music
+    adapter_behavior: 1
+- capability: sound.generate
+  route: eleven_text_to_sound_v2@elevenlabs
+  price:
+    low_usd: 0.001
+    high_usd: 0.1
+  features:
+  - exact_duration
+  contract:
+    adapter: elevenlabs-sound-effect
+    adapter_behavior: 1
+- capability: speech.generate
+  route: eleven_v3@elevenlabs
+  price:
+    low_usd: 0.001
+    high_usd: 0.05
+  features:
+  - audio_tags
+  - stability
+  contract:
+    adapter: elevenlabs-speech
+    adapter_behavior: 1
+- capability: structured.generate
+  route: openai/gpt-5.6-sol@openrouter
+  price:
+    low_usd: 0.02
+    high_usd: 0.6
+  features:
+  - image_input
+  - structured_output
+  concurrency: 4
+  contract:
+    adapter: openrouter-structured
+    adapter_behavior: 1
+- capability: structured.generate
+  route: openai/gpt-6-astra@openrouter
+  price:
+    low_usd: 0.05
+    high_usd: 1.5
+  features:
+  - image_input
+  - structured_output
+  concurrency: 4
+  contract:
+    adapter: openrouter-structured
+    adapter_behavior: 1
+    request_policy:
+      provider:
+        require_parameters: true
+        only:
+        - openai
+        allow_fallbacks: false
+      reasoning:
+        effort: high
+      image_detail: high
+    pictures: unchanged
+- capability: video.generate
+  route: google/gemini-omni-flash/v1.1/image-to-video@fal
+  price:
+    low_usd: 0.03
+    high_usd: 0.375
+    unit: second
+    max_units: 10
+    by: resolution
+    tiers:
+      1080p:
+        low_usd: 0.15
+        high_usd: 0.1875
+      360p:
+        low_usd: 0.03
+        high_usd: 0.0375
+      4k:
+        low_usd: 0.3
+        high_usd: 0.375
+      720p:
+        low_usd: 0.1
+        high_usd: 0.125
+  features:
+  - first_last_frame
+  concurrency: 1
+  contract:
+    adapter: fal-queue
+    adapter_behavior: 1

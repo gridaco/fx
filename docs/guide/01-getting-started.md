@@ -18,9 +18,12 @@ Both packages are previews, and both carry the same engine. Python users who don
 it as `python -m grida.fx <verb>` (`python -m grida.fx doctor`), or through the Python API
 ([Running](05-running.md#from-python)). This guide writes `grida-fx`.
 
-FX reads each provider's key from the environment: `OPENROUTER_API_KEY`, `OPENAI_API_KEY`,
-`FAL_KEY`, `TRIPO_API_KEY`, `ELEVENLABS_API_KEY`. It never needs a `.env` file, and keys never go
-in a project file.
+FX reads each provider's key under its usual name: `OPENAI_API_KEY`, `OPENROUTER_API_KEY`,
+`FAL_KEY`, `TRIPO_API_KEY`, `ELEVENLABS_API_KEY`. Set them in the environment, or put them in a
+`.env` file in your project (one `NAME=value` per line, and keep the file out of version
+control); the environment wins. Keys never go in `fx.yaml` or a workflow, and FX never prints
+them: only a `--live` run uses them, and `grida-fx doctor` says which ones it found, where, and
+which routes they make usable ([Running](05-running.md#keys-and-live-runs)).
 
 ### When FX needs Python
 

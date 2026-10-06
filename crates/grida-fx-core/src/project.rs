@@ -17,8 +17,9 @@
 //! 5. the home project (the nearest fx.yaml above the workflow file), its fx.lock, the registry
 //!    (route defaults: the home's, overridden by the planning project's), and
 //!    [`NodeHost::open_project`] on the home;
-//! 6. the route catalog ([`crate::routes::load_catalog`]: the planning project's
-//!    `route_tables`, then `--routes` files relative to `cwd`);
+//! 6. the route catalog ([`crate::routes::load_catalog`]: the request's built-in table unless
+//!    `--routes` is given, the planning project's `route_tables`, then `--routes` files relative
+//!    to `cwd`);
 //! 7. the takes file ([`crate::docs::takes`]): next to the workflow file, or in the folder of the
 //!    builder's `takes_anchor`; in the planning project's root when the home differs.
 //!
@@ -246,6 +247,9 @@ pub struct PlanRequest {
     pub routes: Vec<String>,
     /// `--max-usd`.
     pub max_usd: Option<Usd>,
+    /// The built-in default route table (identity.md §7), left out when `routes` is not empty.
+    /// The `grida-fx` command passes its adapters' table; the default is empty.
+    pub builtin_routes: RouteTable,
 }
 
 /// Everything a plan is made from. Owned, so expansion can run again (at-plan rounds; the
@@ -472,7 +476,7 @@ pub fn make_planner(request: &PlanRequest, host: &mut dyn NodeHost) -> Result<Pl
         .iter()
         .map(|file| (absolute(cwd, file), file.clone()))
         .collect();
-    let routes = crate::routes::load_catalog(&project, &extra)?;
+    let routes = crate::routes::load_catalog(&project, &request.builtin_routes, &extra)?;
     // 7. The takes file.
     let folder = match builder_takes {
         Some(folder) => folder,

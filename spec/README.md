@@ -9,6 +9,8 @@ These documents define FX independently of any implementation. The Rust engine, 
 | [yaml.md](yaml.md) | The strict YAML subset FX reads |
 | [store.md](store.md) | The cache layout and its records |
 | [protocol.md](protocol.md) | The node protocol between the engine and a node host |
+| [capabilities.md](capabilities.md) | Each paid capability's canonical request, its answer, and the features a route declares |
+| [providers.md](providers.md) | The transport, provider keys, how provider answers become outcomes and bills, long jobs, downloads, and the built-in route table |
 | [schemas/](schemas/) | JSON Schemas for every document and record |
 | [vectors/](vectors/) | Test vectors: canonical JSON, YAML, identity examples, file facts |
 
