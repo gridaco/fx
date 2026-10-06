@@ -119,7 +119,7 @@ fn relative_label(path: &std::path::Path, base: &std::path::Path) -> String {
 /// uses it with its own labels.
 pub fn scrub_paths(text: &str, roots: &[(String, String)]) -> String {
     let mut roots: Vec<&(String, String)> = roots.iter().collect();
-    roots.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+    roots.sort_by_key(|root| std::cmp::Reverse(root.0.len()));
     let mut text = text.to_string();
     for (root, label) in roots {
         text = replace_root(&text, root, label);

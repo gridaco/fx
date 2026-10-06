@@ -85,18 +85,16 @@ impl Flights {
     pub fn join(self: &Arc<Self>, key: &str, instance_id: &str) -> Joined {
         let mut keys = self.lock();
         match keys.get(key) {
-            Some(Flight::Ended { error, only_for }) => {
-                if only_for.as_deref().is_none_or(|only| only == instance_id) {
-                    return Joined::Ended(error.clone());
-                }
+            Some(Flight::Ended { error, only_for })
+                if only_for.as_deref().is_none_or(|only| only == instance_id) =>
+            {
+                return Joined::Ended(error.clone());
             }
-            Some(Flight::Flying { outcome, .. }) => {
-                // A leader that went away without landing closed its sender: lead in its place.
-                if outcome.has_changed().is_ok() {
-                    return Joined::Follow(outcome.clone());
-                }
+            // A leader that went away without landing closed its sender: lead in its place.
+            Some(Flight::Flying { outcome, .. }) if outcome.has_changed().is_ok() => {
+                return Joined::Follow(outcome.clone());
             }
-            None => {}
+            _ => {}
         }
         let number = self
             .leaders

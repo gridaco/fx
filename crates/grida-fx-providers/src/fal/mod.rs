@@ -426,6 +426,7 @@ mod tests {
     #[test]
     fn statuses_on_the_run_host() {
         let client = client();
+        #[allow(clippy::result_large_err)] // `Sent` is what every caller returns at once
         let classify = |response: HttpResponse| classify_run(&client, "fal x", Ok(response));
         assert!(classify(HttpResponse::new(200, Vec::new())).is_ok());
         assert_eq!(

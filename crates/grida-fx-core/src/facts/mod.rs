@@ -380,7 +380,7 @@ fn webp_facts<R: BufRead + Seek>(picture: R) -> Result<ImageFacts, String> {
         .ok_or("not a WebP picture (it is too large to decode)")?;
     let mut pixels = vec![0u8; size];
     decoder.read_image(&mut pixels).map_err(refused)?;
-    let opaque = pixels.chunks_exact(4).all(|p| p[3] == u8::MAX);
+    let opaque = pixels.as_chunks::<4>().0.iter().all(|p| p[3] == u8::MAX);
     Ok(ImageFacts {
         width,
         height,

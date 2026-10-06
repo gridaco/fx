@@ -465,6 +465,7 @@ impl TripoApi {
 
     /// Waits for a submitted task, then downloads every model it names, in order: the finished
     /// task and the `(kind, bytes)` of each model, or the outcome the collect reports.
+    #[allow(clippy::result_large_err)] // `Collected` is what every caller returns at once
     pub(crate) async fn finished_models(
         &self,
         task_id: &str,

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import io
 import json
+import platform
 import subprocess
 import sys
 import zlib
@@ -312,7 +313,9 @@ MIRROR_Y = "a19b87ca230e4b539a1a27f6089be60eb83abec5dbbc14d714b74f04c351d36f"
 MIRROR_XY = "cdee893f8fc3b9456035d913150f159b841b0fe1bc60e9f3d28ce442caa1da5c"
 RESIZE_16 = "37deea4bf3453beb74c977e42f9bb5cf885d2fc93f6e337bb26db3d0745dad9f"
 
-#: The recorded digest of each picture output (some reproduce their input byte for byte).
+#: The recorded digest of each picture output (some reproduce their input byte for byte). They
+#: hold where they were recorded, on macOS arm64 (:data:`RECORDED_ON`): with the same inputs and
+#: the same Pillow, Pillow's Linux x86-64 build writes other PNG bytes for some of these pictures.
 RECORDED = {
     "mirror_x": MIRROR_X,
     "mirror_y": MIRROR_Y,
@@ -342,6 +345,41 @@ RECORDED = {
     "pad_ok": "1df73a97baa67d429d15905d673d81b1362480ae5487adc9e27369bf44e0408c",
     "pad_odd": "bf1fe9c4ec7af13c5cdf4413b94962ba30001319908527b52210739d4212e251",
     "pad_icc": INPUT_DIGESTS["rgba_37x23.png"],
+}
+
+#: Where :data:`RECORDED` holds, as ``(sys.platform, platform.machine())``.
+RECORDED_ON = ("darwin", "arm64")
+
+#: The digest of each picture output's RGBA pixels, which hold on every platform.
+PIXELS = {
+    "mirror_x": "1c910ab8fc7d11d4bd6880b69b3ffab367a4746712eaba1e5270d421b55aa858",
+    "mirror_y": "93256bbdaa1e305f0d46339121a0927d8e71e2ddec0a2ef4c4c5651bb8fd36af",
+    "mirror_xy": "d7d13934fc637bde832a0a085de1c5741344f4f79d8afd2a6f1a7d821c0e4ce7",
+    "mirror_yx": "d7d13934fc637bde832a0a085de1c5741344f4f79d8afd2a6f1a7d821c0e4ce7",
+    "mirror_list": "d7d13934fc637bde832a0a085de1c5741344f4f79d8afd2a6f1a7d821c0e4ce7",
+    "mirror_icc": "1c910ab8fc7d11d4bd6880b69b3ffab367a4746712eaba1e5270d421b55aa858",
+    "mirror_z": "4532fccadccbbdf7a083b89fdc11000642f6f17325d8351ac039fcc3546e1f75",
+    "mirror_pal": "5bf3e46a75ba37a66a480ce9330be965c76aedf99679b28cf38af48116636e57",
+    "mirror_wide_ok": "119172c65e828369fc554b68d4f312ee98ac77102f5fd13215ad03ac6f24c6ce",
+    "resize_long": "5e577f1d61c841f20a8f3301febadcd7943d5b7e4deb5363cfe5b244ae8f4f64",
+    "resize_wh": "9e403e09e2c901dba803f0fdcd41d9cbbb213b8863a8bdcfabd9ba098b695f5c",
+    "resize_same": "4532fccadccbbdf7a083b89fdc11000642f6f17325d8351ac039fcc3546e1f75",
+    "resize_wins": "5e577f1d61c841f20a8f3301febadcd7943d5b7e4deb5363cfe5b244ae8f4f64",
+    "resize_icc": "ee2458eb3eb78add5360d3a2fde00ac9c087d0443111c2b54b10db39a67da959",
+    "resize_tie": "d333233175203f086ecb923af3a188f07d70c77d797467c697b7a0eaea08e9b5",
+    "resize_tie6": "f199624d6293e1f7dc69ceadf4bcc1dcdf12b1b4100b0e4ffeed9b06a99fa16b",
+    "resize_frac": "054f7c32b9624c9e27f5b4d676ccb38c1053b70a974d6c7d96356ff78ac51e07",
+    "resize_zero": "1f14bd8e308ebe9dc78751dce7a329816030429b5a647e0299bf7f1060422d31",
+    "resize_neg": "a5c3a910013439a359b01a20f83c6b4f73d105303ef80d7af26f5fde5005950a",
+    "resize_g16": "3d6876a0146de8576eb2395a858de1213d1b92c65b779df3a331cfd5a4584546",
+    "crop_box": "45b063f48761946c8e1e17abc91946b02d47d9f395006c35a8649fc7b7a57987",
+    "crop_pad": "4532fccadccbbdf7a083b89fdc11000642f6f17325d8351ac039fcc3546e1f75",
+    "crop_half": "0e697b7d6a9cfacce383279333f9313bdba150292dd1b79903c6161cef117853",
+    "crop_negpad": "b2691ed692bc3f874b7ddd5f4769aaf54f85bf2309aee8f6a79bdc8286912805",
+    "crop_out": "4532fccadccbbdf7a083b89fdc11000642f6f17325d8351ac039fcc3546e1f75",
+    "pad_ok": "7297c5d51785d023bed0d5c2e716ddf9c257f4c1026fad06d3b2d2b4c5bc65b8",
+    "pad_odd": "db6687abc9a46afae8b68eb05394acc74e6dfa4b41412bd9b0ea80f56eb0b536",
+    "pad_icc": "4532fccadccbbdf7a083b89fdc11000642f6f17325d8351ac039fcc3546e1f75",
 }
 
 PICTURES = [
@@ -417,10 +455,12 @@ def test_a_picture_output_is_the_recorded_bytes(
     ctx = run(body, inputs={"image": given.file(source)}, **params)
     image = ctx.result["image"]
     assert image.kind == "image/png"
-    assert image.digest == RECORDED[case]
     with Image.open(_bytes_io(image.data)) as written:
         assert written.size == size
         assert written.mode == "RGBA"
+        assert sha256(written.tobytes()) == PIXELS[case]
+    if (sys.platform, platform.machine()) == RECORDED_ON:
+        assert image.digest == RECORDED[case]
     if body == "image.crop":
         assert ctx.facts == {"box_px": BOX_PX[case]}
     else:

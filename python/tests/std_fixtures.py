@@ -5,7 +5,9 @@ Every input is made here, from a formula, so no media is committed. The golden o
 with CPython 3.12 (its ``zlib`` module 1.2.12) and Pillow 12.3.0 (its bundled zlib-ng 1.3.1,
 libjpeg-turbo and LittleCMS). :data:`INPUT_DIGESTS` holds those inputs' digests: another Pillow or
 zlib build writes other bytes, and then the goldens cannot be compared (the tests skip, saying
-which input differs).
+which input differs). Matching inputs are not enough for the picture outputs: Pillow's Linux x86-64
+build writes other PNG bytes than its macOS arm64 build for some of them, so ``test_std.py``
+compares their pixels everywhere and their bytes only where they were recorded.
 
 ``python tests/std_fixtures.py <folder>`` writes every input to ``<folder>``.
 """

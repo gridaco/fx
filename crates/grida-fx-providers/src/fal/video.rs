@@ -633,6 +633,7 @@ impl FalVideo {
     }
 
     /// Sleeps one poll interval, unless that would pass the deadline.
+    #[allow(clippy::result_large_err)] // `Collected` is what every caller returns at once
     async fn wait(&self, deadline: Duration) -> Result<(), Collected> {
         if self.clock.now() + POLL > deadline {
             return Err(outstanding(&self.clients.queue));

@@ -891,7 +891,7 @@ fn an_unchanged_picture_is_not_decoded() {
 
 #[test]
 fn the_key_never_reaches_a_reason_an_answer_or_a_url() {
-    let leaky = json!({"error": {"message": format!("bad key {KEY}"), "code": format!("{KEY}")}});
+    let leaky = json!({"error": {"message": format!("bad key {KEY}"), "code": KEY.to_string()}});
     let transport = replay(vec![
         expect(ExpectBody::Any).reply(completion(
             json!({"content": "{\"name\": \"red\"}"}),

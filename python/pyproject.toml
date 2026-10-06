@@ -6,7 +6,8 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     # The standard bodies (grida.fx.std) write pictures byte for byte as FX's predecessor did:
-    # every identity downstream depends on this exact Pillow build (docs/wg/overview.md, decision 8).
+    # every identity downstream depends on this exact Pillow build (docs/wg/overview.md, decision 8),
+    # and on the platform: its Linux x86-64 build writes other PNG bytes than its macOS arm64 build.
     "pillow==12.3.0",
 ]
 
