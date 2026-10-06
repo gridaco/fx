@@ -1,0 +1,114 @@
+# A stand-in run (`--stand-in stand_in.py#answer`): the one paid call, image.generate on
+# img-a@acme at 64x64 and opaque, is answered by `answer` in `in/stand_in.py`, which counts its
+# calls in count.txt and keeps what it was asked in asked.json (capability, route, the canonical
+# request, take, key and instance; no file, since the request holds none).
+# - runs/one: exit 0, the summary names the stand-in as typed and spends $0.00 although
+#   `--max-usd 0.01` is below the route's $0.04 hold: nothing is reserved, and the plan text
+#   shows the ceiling without warning that the run stops before crossing it. Its record
+#   (events-one.json) has `stand_in: true` on run_started and on the call, which is
+#   `cached: false` and `cost_usd: 0`, the node fact `cost_usd` is 0 (paid, at nothing), and
+#   run_started's `ceiling_usd` is 0.01. `project` shows the same.
+# - The same command again resumes runs/one and asks nothing (count.txt stays 1); its
+#   run_started (events-resumed.json) says `resumed: true` and `stand_in: true` again. plan.json
+#   (plan-one.json) has `"stand_in": true`.
+# - runs/two, the same plan in a new folder, is answered by the stand-in store's result cache:
+#   nothing is asked, and `--deliver` copies the image out of the stand-in store.
+# - runs/other (`--mood stormy`) is another step identity whose request is the same, so its call
+#   is a call-cache hit of the stand-in store: `cached: true`, `cost_usd: 0`, no `stand_in`
+#   member, nothing asked, and the node fact `cost_usd` null (a hit pays for no call). The
+#   project's own store holds no file, and no `jobs/` exists in either store.
+# - runs/plain, without a stand-in and with the same --max-usd, misses (the project's store never
+#   saw the answer) and exits 1 as a paid call without --live; its plan text warns that the
+#   worst case exceeds the ceiling. Its plan.json (plan-plain.json)
+#   has the same `plan` digest as plan-one.json and no `stand_in`: a reviewer checks that the two
+#   differ in `stand_in` only.
+# - Each folder refuses the other mode (exit 1), asking nothing.
+# - `inspect --verify` says `stand-in` in its header and verifies the placed files; `--json`
+#   has `run.stand_in: true`. `pick` and `reroll` refuse a stand-in run (exit 1) and write no
+#   takes file.
+steps:
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, --max-usd, "0.01", --stand-in, "stand_in.py#answer"]
+  mentions:
+  - "estimate  $0.01 – $0.04   ceiling $0.01\n"
+  - "run       runs/one"
+  - "stand-in  stand_in.py#answer"
+  - "result    ok   spent $0.00"
+- read: count.txt
+  save: count.txt
+- read: asked.json
+  save: asked.json
+  json: true
+- read: runs/one/events.jsonl
+  save: events-one.json
+  jsonl: true
+- argv: [project, runs/one]
+  save: project-one.json
+  json: true
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, --stand-in, "stand_in.py#answer"]
+  mentions:
+  - "stand-in  stand_in.py#answer"
+  - "result    ok   spent $0.00"
+  read: runs/one/plan.json
+  save: plan-one.json
+  json: true
+- read: count.txt
+  save: count.txt
+- read: runs/one/events.jsonl
+  save: events-resumed.json
+  jsonl: true
+- argv: [run, case, --routes, routes.yaml, --run, runs/two, --deliver, image=delivered.png, --stand-in, "stand_in.py#answer"]
+  mentions:
+  - "result    ok   spent $0.00"
+  - "delivered delivered.png"
+- read: count.txt
+  save: count.txt
+- read: runs/two/events.jsonl
+  save: events-two.json
+  jsonl: true
+- argv: [run, case, --routes, routes.yaml, --run, runs/other, --mood, stormy, --stand-in, "stand_in.py#answer"]
+  mentions:
+  - "result    ok   spent $0.00"
+  absent:
+  - .fx/cache/files
+  - .fx/cache/results
+  - .fx/cache/calls
+  - .fx/cache/jobs
+  - .fx/cache/stand-in/jobs
+- read: count.txt
+  save: count.txt
+- read: runs/other/events.jsonl
+  save: events-other.json
+  jsonl: true
+- argv: [run, case, --routes, routes.yaml, --run, runs/plain, --max-usd, "0.01"]
+  status: 1
+  mentions:
+  - "estimate  $0.01 – $0.04   ceiling $0.01   ⚠ the worst case exceeds the ceiling"
+  - "failed    draw#1: image.generate on img-a@acme is a paid call; run with --live"
+  read: runs/plain/plan.json
+  save: plan-plain.json
+  json: true
+- argv: [run, case, --routes, routes.yaml, --run, runs/one]
+  status: 1
+  mentions:
+  - "refused: runs/one holds a stand-in run; resume it with --stand-in, or choose a new folder"
+- argv: [run, case, --routes, routes.yaml, --run, runs/plain, --stand-in, "stand_in.py#answer"]
+  status: 1
+  mentions:
+  - "refused: runs/plain holds a run without a stand-in; resume it without --stand-in, or choose a new folder"
+- read: count.txt
+  save: count.txt
+- argv: [inspect, runs/one, --verify]
+  save: inspect.txt
+- argv: [inspect, runs/one, --json]
+  save: inspect.json
+  json: true
+- argv: [pick, runs/one, draw, "1"]
+  status: 1
+  mentions:
+  - "runs/one holds a stand-in run, and stand-in runs never change the workflow's takes file"
+- argv: [reroll, runs/one, draw]
+  status: 1
+  mentions:
+  - "runs/one holds a stand-in run, and stand-in runs never change the workflow's takes file"
+  absent:
+  - workflows/case.takes.yaml

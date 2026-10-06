@@ -53,6 +53,7 @@ STEP_KEYS = {
     "files",
     "stdin",
     "mentions",
+    "absent",
 }
 # The ways a saved text may be compared by meaning; a step uses at most one.
 FORMATS = ("json", "jsonl", "yaml")
@@ -265,8 +266,8 @@ def load_case(case: Path) -> list[dict[str, Any]]:
         unknown = set(step) - STEP_KEYS
         if unknown:
             raise CaseFailure(f"{where}: unknown keys {sorted(map(str, unknown))}")
-        if not ({"argv", "read", "files"} & set(step)):
-            raise CaseFailure(f"{where}: needs argv, read or files")
+        if not ({"argv", "read", "files", "absent"} & set(step)):
+            raise CaseFailure(f"{where}: needs argv, read, files or absent")
         argv = step.get("argv")
         if argv is not None and (
             not isinstance(argv, list) or not all(isinstance(item, str) for item in argv)
@@ -305,6 +306,9 @@ def load_case(case: Path) -> list[dict[str, Any]]:
         mentions = step.get("mentions", [])
         if not isinstance(mentions, list) or not all(isinstance(m, str) for m in mentions):
             raise CaseFailure(f"{where}: mentions is a list of strings")
+        absent = step.get("absent", [])
+        if not isinstance(absent, list) or not all(map(_is_path, absent)):
+            raise CaseFailure(f"{where}: absent is a list of relative paths inside the project")
     return steps
 
 
@@ -348,6 +352,9 @@ def run_case(
                 raise CaseFailure(f"{label}: {step['read']} was not written")
             output = path.read_bytes()
             label = f"step {number} (read {step['read']})"
+        for given in step.get("absent", []):
+            if holds_a_file(project_path(project, given, f"{label} absent")):
+                raise CaseFailure(f"{label}: {given} holds a file, and must hold none")
         if "save" not in step:
             continue
         assert output is not None
@@ -366,6 +373,16 @@ def run_case(
         saved.setdefault(name, output)
         saved_by.setdefault(name, number)
     return saved
+
+
+def holds_a_file(path: Path) -> bool:
+    """Whether a path a step names `absent` holds a file: it is one, or it is a folder with a
+    file anywhere below it. A folder holding only empty folders holds none, as nothing at all
+    does: an empty folder is no record."""
+
+    if path.is_dir():
+        return any(not inside.is_dir() for inside in path.rglob("*"))
+    return path.exists() or path.is_symlink()
 
 
 def normalised_json(raw: bytes, label: str) -> bytes:

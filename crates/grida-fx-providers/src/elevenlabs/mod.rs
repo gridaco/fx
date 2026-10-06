@@ -137,23 +137,8 @@ pub fn classify(
 /// `content-type`, which may echo anything, a key included: every sentence goes through the
 /// client's redactor (spec/providers.md §8).
 pub fn check_audio(client: &Client, label: &str, answer: &Answer) -> Result<(), String> {
-    let Some(audio) = answer
-        .files
-        .get(AUDIO_FILE)
-        .filter(|file| !file.bytes.is_empty())
-    else {
-        return Err(client.reason(&format!("{label} returned no audio data")));
-    };
-    if audio.kind != AUDIO_KIND {
-        let kind = crate::redact::bounded(&client.redactor.redact(&audio.kind), MAX_KIND_CHARS);
-        return Err(client.reason(&format!("requested mp3 but received {kind}")));
-    }
-    if !wire::matches_signature(AUDIO_KIND, &audio.bytes) {
-        return Err(client.reason(&format!(
-            "audio bytes do not match declared media type {AUDIO_KIND}"
-        )));
-    }
-    Ok(())
+    crate::checks::audio(answer.files.get(AUDIO_FILE), label, &client.redactor)
+        .map_err(|reason| client.reason(&reason))
 }
 
 /// Registers both adapters on provider `elevenlabs`.
@@ -281,9 +266,6 @@ fn transport_failure(client: &Client, label: &str, error: &TransportError) -> Se
         },
     }
 }
-
-/// The longest kind a reason shows.
-const MAX_KIND_CHARS: usize = 96;
 
 static SAFE_FIELD: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[A-Za-z0-9_.:-]{1,96}$").expect("a valid pattern"));

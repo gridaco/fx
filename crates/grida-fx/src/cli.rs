@@ -182,6 +182,10 @@ pub struct RunArgs {
     /// a folder that holds a run of the same plan is resumed
     #[arg(long = "run", value_name = "FOLDER")]
     pub run: Option<String>,
+    /// answer paid calls with a stand-in, offline and for nothing: FILE.py#FUNCTION, or - for a
+    /// socket on standard input (SDKs); never with --live or --yes-up-to
+    #[arg(long = "stand-in", value_name = "SOURCE", allow_hyphen_values = true)]
+    pub stand_in: Option<String>,
     /// workflow input flags (separated before parsing)
     #[arg(skip)]
     pub rest: Vec<String>,

@@ -1,0 +1,278 @@
+[
+ {
+  "cache": "miss",
+  "event": "node_finished",
+  "facts": {
+   "cost_usd": 0,
+   "measured": [
+    "lantern"
+   ],
+   "transcript_roles": [
+    "user",
+    "assistant",
+    "tool",
+    "assistant"
+   ]
+  },
+  "id": "survey#1",
+  "kind": "fx-run-events-v1",
+  "outputs": {
+   "answer": {
+    "file": {
+     "digest": "a6fd5695b908b09a71d90e802881c5a50a401d7fd591133dc306b101ba8b3748",
+     "kind": "json",
+     "name": "survey/answer",
+     "size": 707
+    }
+   }
+  },
+  "path": "survey",
+  "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756"
+ },
+ {
+  "cache": "miss",
+  "event": "node_finished",
+  "facts": {
+   "cost_usd": 0
+  },
+  "id": "estimate#1",
+  "kind": "fx-run-events-v1",
+  "outputs": {
+   "json": {
+    "file": {
+     "digest": "3914b1e09451ed93ec4e75ffc228837cb660f6d92b3a384ef97fc63e5c4f3584",
+     "kind": "json",
+     "name": "estimate/json",
+     "size": 34
+    }
+   }
+  },
+  "path": "estimate",
+  "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756"
+ },
+ {
+  "cached": false,
+  "call": "2faf89701cfd6a8b3a3714cd547e1d2d221698ed0b58703861f25dbab37f517c",
+  "capability": "agent.turn",
+  "cost_usd": 0,
+  "event": "call",
+  "id": "survey#1",
+  "kind": "fx-run-events-v1",
+  "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756",
+  "route": "llm-a@acme",
+  "stand_in": true
+ },
+ {
+  "cached": false,
+  "call": "b6e3d9ac3b42104fa669c833e938c39e3bd834476606149094c35869e5476d2a",
+  "capability": "agent.turn",
+  "cost_usd": 0,
+  "event": "call",
+  "id": "survey#1",
+  "kind": "fx-run-events-v1",
+  "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756",
+  "route": "llm-a@acme",
+  "stand_in": true
+ },
+ {
+  "cached": false,
+  "call": "e81cf317bebac519e18bfa1130b7484ab78bd587b988a9988a82868e2f70a745",
+  "capability": "structured.generate",
+  "cost_usd": 0,
+  "event": "call",
+  "id": "estimate#1",
+  "kind": "fx-run-events-v1",
+  "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756",
+  "route": "llm-a@acme",
+  "stand_in": true
+ },
+ {
+  "ceiling_usd": null,
+  "charged_usd": 0,
+  "estimate": {
+   "high_usd": 0.016,
+   "low_usd": 0.008
+  },
+  "event": "run_started",
+  "kind": "fx-run-events-v1",
+  "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756",
+  "resumed": false,
+  "stand_in": true,
+  "workflow": "case"
+ },
+ {
+  "charged_usd": 0,
+  "event": "run_finished",
+  "failed": [
+   "garbled#1",
+   "wrong#1"
+  ],
+  "incomplete": false,
+  "kind": "fx-run-events-v1",
+  "ok": false,
+  "outputs": {
+   "answer": {
+    "file": {
+     "digest": "a6fd5695b908b09a71d90e802881c5a50a401d7fd591133dc306b101ba8b3748",
+     "kind": "json",
+     "name": "survey/answer",
+     "size": 707
+    }
+   },
+   "estimate": {
+    "file": {
+     "digest": "3914b1e09451ed93ec4e75ffc228837cb660f6d92b3a384ef97fc63e5c4f3584",
+     "kind": "json",
+     "name": "estimate/json",
+     "size": 34
+    }
+   }
+  },
+  "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756",
+  "stopped": null
+ },
+ {
+  "code": "call_failed",
+  "error": "agent.turn on llm-a@acme failed: the reply is not {\"text\", \"tool_calls\"}: text is not a string",
+  "event": "node_failed",
+  "facts": {},
+  "id": "garbled#1",
+  "kind": "fx-run-events-v1",
+  "path": "garbled",
+  "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756"
+ },
+ {
+  "code": "call_failed",
+  "error": "structured.generate on llm-a@acme failed: height: \"three\" is not of type \"integer\"",
+  "event": "node_failed",
+  "facts": {},
+  "id": "wrong#1",
+  "kind": "fx-run-events-v1",
+  "path": "wrong",
+  "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756"
+ },
+ {
+  "event": "node_started",
+  "id": "estimate#1",
+  "identity": "d26e1487212fd2a47dbb711c82ce79e4a3f33a92a6618aa35a07f48b97f3e29b",
+  "kind": "fx-run-events-v1",
+  "path": "estimate",
+  "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756",
+  "reads": [],
+  "routes": {
+   "structured.generate": "llm-a@acme"
+  },
+  "step": "estimate",
+  "take": [
+   1
+  ],
+  "uses": "fx/structured.generate@1",
+  "with": {
+   "matte": {
+    "value": "#ffffff"
+   },
+   "prompt": {
+    "value": "Estimate the height of the lantern."
+   },
+   "schema": {
+    "file": {
+     "digest": "e7eaf92d0a7a4280ade59c0a0a8c53c9ad12ab392c1ea49e2d7df1e09d9329de",
+     "kind": "json",
+     "name": "schemas/height.json",
+     "size": 183
+    }
+   },
+   "vars": {
+    "value": {}
+   }
+  }
+ },
+ {
+  "event": "node_started",
+  "id": "garbled#1",
+  "identity": "80d6e3f14a0ee70ea5c2e504719092e8d73a6aa3b07c581cf7a40629dd361028",
+  "kind": "fx-run-events-v1",
+  "path": "garbled",
+  "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756",
+  "reads": [],
+  "routes": {
+   "agent.turn": "llm-a@acme"
+  },
+  "step": "garbled",
+  "take": [
+   1
+  ],
+  "uses": "./nodes/agent.py#survey",
+  "with": {
+   "task": {
+    "value": "Garble the reply."
+   }
+  }
+ },
+ {
+  "event": "node_started",
+  "id": "survey#1",
+  "identity": "8a662029270797079f1eded4c960a8fc10272b083b76bbd853b81510510cb550",
+  "kind": "fx-run-events-v1",
+  "path": "survey",
+  "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756",
+  "reads": [],
+  "routes": {
+   "agent.turn": "llm-a@acme"
+  },
+  "step": "survey",
+  "take": [
+   1
+  ],
+  "uses": "./nodes/agent.py#survey",
+  "with": {
+   "task": {
+    "value": "Measure the lantern, then submit its height."
+   }
+  }
+ },
+ {
+  "event": "node_started",
+  "id": "wrong#1",
+  "identity": "52646f28973679157025e39595d98b543bf3f8cfb9214923d19790a988b649e8",
+  "kind": "fx-run-events-v1",
+  "path": "wrong",
+  "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756",
+  "reads": [],
+  "routes": {
+   "structured.generate": "llm-a@acme"
+  },
+  "step": "wrong",
+  "take": [
+   1
+  ],
+  "uses": "fx/structured.generate@1",
+  "with": {
+   "matte": {
+    "value": "#ffffff"
+   },
+   "prompt": {
+    "value": "Answer with the wrong type."
+   },
+   "schema": {
+    "file": {
+     "digest": "e7eaf92d0a7a4280ade59c0a0a8c53c9ad12ab392c1ea49e2d7df1e09d9329de",
+     "kind": "json",
+     "name": "schemas/height.json",
+     "size": 183
+    }
+   },
+   "vars": {
+    "value": {}
+   }
+  }
+ },
+ {
+  "event": "phase_planned",
+  "high_usd": 0.016,
+  "kind": "fx-run-events-v1",
+  "phase": 1,
+  "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756",
+  "steps": 4
+ }
+]

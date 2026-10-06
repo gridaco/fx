@@ -54,6 +54,7 @@ fn route(capability: &str, model: &str, high: i64) -> Route {
 fn site(instance: &str, capability: &str, model: &str) -> CallSite {
     CallSite {
         instance_id: instance.into(),
+        path: instance.split('#').next().unwrap_or(instance).into(),
         step: instance.split('#').next().unwrap_or(instance).into(),
         type_name: "t".into(),
         takes: vec![1],
@@ -61,6 +62,7 @@ fn site(instance: &str, capability: &str, model: &str) -> CallSite {
         routes: IndexMap::from([(capability.to_string(), route(capability, model, HOLD))]),
         limits: IndexMap::new(),
         scopes: Vec::new(),
+        cancel: Cancel::new(),
     }
 }
 
@@ -649,7 +651,7 @@ async fn a_reservation_the_log_cannot_record_sends_nothing_and_stops_the_run() {
             json!({"prompt": "p"}),
         )
         .await;
-    let Err(CallError::Store(fault)) = &called.result else {
+    let Err(CallError::Fault(fault)) = &called.result else {
         panic!("expected a fault, got {:?}", called.result)
     };
     assert!(
@@ -715,7 +717,7 @@ async fn a_settlement_the_log_cannot_record_ends_the_call_as_a_fault() {
             json!({"prompt": "p"}),
         )
         .await;
-    let Err(CallError::Store(fault)) = &called.result else {
+    let Err(CallError::Fault(fault)) = &called.result else {
         panic!("expected a fault, got {:?}", called.result)
     };
     assert!(

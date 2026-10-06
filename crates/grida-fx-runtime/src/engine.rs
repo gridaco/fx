@@ -2,7 +2,7 @@
 //!
 //! - [`Engine`]: built once per command (`run`, and the planning verbs when an `at: plan` step must
 //!   run): the tokio runtime handle, the home project, the store, the node-host pool, the
-//!   provider adapters, and whether paid calls are admitted (`--live`).
+//!   provider adapters, whether paid calls are admitted (`--live`), and a stand-in run's stand-in.
 //! - [`Services`]: one run invocation's view of the engine: the ledger and the event log (both
 //!   absent while planning), per-route pacing, cancellation and the invocation id. Every task of
 //!   the invocation holds an `Arc<Services>`.
@@ -16,7 +16,10 @@
 //! store root and its project root with relative labels. A path under the project root becomes
 //! project-relative (`/…/acme/nodes/a.py` → `nodes/a.py`, the root itself `.`); the store root
 //! becomes its path relative to the project root (`.fx/cache`, or `../shared/.fx/cache` when it
-//! lies outside). Each root is matched as given and, when it differs, with its symbolic links
+//! lies outside). The command may name further private roots ([`Engine::with_private_roots`]:
+//! the planning project, the command's working directory, a stand-in file's folder), each
+//! labelled relative to the project root the same way (`..`, `../tools`); a filesystem root is
+//! never one. Each root is matched as given and, when it differs, with its symbolic links
 //! resolved; the longest root is replaced first; a match inside a longer name (`/…/acme2`) is
 //! left alone.
 //!
@@ -31,6 +34,7 @@ use crate::calls::pacing::Pacing;
 use crate::events::EventLog;
 use crate::host::pool::HostPool;
 use crate::ledger::Ledger;
+use crate::stand_in::StandIn;
 use crate::store::Store;
 use grida_fx_core::val::FileValue;
 use grida_fx_providers::Adapters;
@@ -51,6 +55,12 @@ pub struct Engine {
     pub adapters: Arc<Adapters>,
     /// `--live`: paid calls that miss the call cache may be sent.
     pub live: bool,
+    /// A stand-in run's stand-in (spec/protocol.md §5.7): the paid calls of a run that miss the
+    /// call cache are asked of it ([`Engine::with_stand_in`]). Its store is the stand-in store,
+    /// which the command opens as the engine's store.
+    pub stand_in: Option<Arc<StandIn>>,
+    /// Further private roots [`Engine::scrub`] replaces (module doc).
+    private_roots: Vec<PathBuf>,
 }
 
 impl Engine {
@@ -72,21 +82,52 @@ impl Engine {
             hosts: Arc::new(HostPool::new(host, hosts)),
             adapters: Arc::new(adapters),
             live,
+            stand_in: None,
+            private_roots: Vec::new(),
         }
     }
 
-    /// `text` with the store root and the project root replaced by relative labels (module doc).
+    /// The same engine scrubbing `roots` too (module doc); a filesystem root is left out.
+    pub fn with_private_roots(mut self, roots: impl IntoIterator<Item = PathBuf>) -> Engine {
+        for root in roots {
+            if root.parent().is_some() && !self.private_roots.contains(&root) {
+                self.private_roots.push(root);
+            }
+        }
+        self
+    }
+
+    /// The same engine answering its runs' paid calls with `stand_in` (a stand-in run; the
+    /// store given to [`Engine::new`] must be the stand-in store).
+    pub fn with_stand_in(mut self, stand_in: Arc<StandIn>) -> Engine {
+        self.stand_in = Some(stand_in);
+        self
+    }
+
+    /// Whether this engine runs stand-in runs.
+    pub fn stand_in_run(&self) -> bool {
+        self.stand_in.is_some()
+    }
+
+    /// `text` with the store root, the project root and the further private roots replaced by
+    /// relative labels (module doc).
     pub fn scrub(&self, text: &str) -> String {
         let project = self.project_root.as_path();
         let store = self.store.root();
-        let store_label = relative_label(store, project);
+        let mut labelled: Vec<(&std::path::Path, String)> = vec![
+            (store, relative_label(store, project)),
+            (project, ".".into()),
+        ];
+        for root in &self.private_roots {
+            labelled.push((root.as_path(), relative_label(root, project)));
+        }
         let mut roots: Vec<(String, String)> = Vec::new();
-        for (root, label) in [(store, store_label.as_str()), (project, ".")] {
-            roots.push((root.to_string_lossy().into_owned(), label.to_string()));
+        for (root, label) in labelled {
+            roots.push((root.to_string_lossy().into_owned(), label.clone()));
             if let Ok(resolved) = std::fs::canonicalize(root)
                 && resolved != root
             {
-                roots.push((resolved.to_string_lossy().into_owned(), label.to_string()));
+                roots.push((resolved.to_string_lossy().into_owned(), label));
             }
         }
         scrub_paths(text, &roots)
@@ -95,7 +136,7 @@ impl Engine {
 
 /// `path` relative to `base`, with `/` between segments (`..` to climb); `.` for `base` itself.
 /// Paths with no common start (other drives) give `path`'s last segment.
-fn relative_label(path: &std::path::Path, base: &std::path::Path) -> String {
+pub(crate) fn relative_label(path: &std::path::Path, base: &std::path::Path) -> String {
     let path: Vec<_> = path.components().collect();
     let base: Vec<_> = base.components().collect();
     let common = path.iter().zip(&base).take_while(|(a, b)| a == b).count();
@@ -447,5 +488,22 @@ mod tests {
         let resolved = std::fs::canonicalize(&root).unwrap().join("nodes/x.py");
         let text = format!("{}: line 3", resolved.display());
         assert_eq!(engine.scrub(&text), "nodes/x.py: line 3");
+
+        // Further private roots: a folder above the project and one beside it; never `/`.
+        let engine = engine.with_private_roots([
+            dir.path().to_path_buf(),
+            dir.path().join("tools"),
+            PathBuf::from("/"),
+        ]);
+        let text = format!(
+            "{} failed: {}",
+            dir.path().join("tools/stand_in.py").display(),
+            dir.path().join(".venv/bin/python").display()
+        );
+        assert_eq!(
+            engine.scrub(&text),
+            "../tools/stand_in.py failed: ../.venv/bin/python"
+        );
+        assert_eq!(engine.scrub("a/b /c"), "a/b /c");
     }
 }

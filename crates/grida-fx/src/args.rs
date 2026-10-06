@@ -24,7 +24,7 @@ const VALUE_OPTIONS: [&str; 4] = ["--inputs", "--routes", "--arg", "--max-usd"];
 /// Flags of `plan` alone.
 const PLAN_FLAGS: [&str; 3] = ["--check", "--json", "--expect-cached"];
 /// Options of `run` alone that take a value.
-const RUN_VALUE_OPTIONS: [&str; 3] = ["--yes-up-to", "--deliver", "--run"];
+const RUN_VALUE_OPTIONS: [&str; 4] = ["--yes-up-to", "--deliver", "--run", "--stand-in"];
 /// Flags of `run` alone.
 const RUN_FLAGS: [&str; 1] = ["--live"];
 /// Help, for every verb.
@@ -295,6 +295,34 @@ mod tests {
             strings(&["grida-fx", "run", "case", "--yes-up-to"])
         );
         assert!(rest.is_empty());
+    }
+
+    #[test]
+    fn a_stand_in_belongs_to_run_in_both_spellings() {
+        for argv in [
+            &["run", "case", "--stand-in", "-", "--who", "ada"][..],
+            &["run", "case", "--stand-in=-", "--who", "ada"][..],
+        ] {
+            let (for_clap, rest) = split(argv);
+            assert_eq!(&for_clap[..2], strings(&["grida-fx", "run"]));
+            assert!(for_clap.iter().any(|a| a.ends_with('-')), "{for_clap:?}");
+            assert_eq!(rest, strings(&["--who", "ada"]));
+        }
+        let (for_clap, rest) = split(&["run", "case", "--stand-in", "tests/stand_in.py#answer"]);
+        assert_eq!(
+            for_clap,
+            strings(&[
+                "grida-fx",
+                "run",
+                "case",
+                "--stand-in",
+                "tests/stand_in.py#answer"
+            ])
+        );
+        assert!(rest.is_empty());
+        // Not an option of the planning verbs: there it is a workflow input flag.
+        let (_, rest) = split(&["plan", "case", "--stand-in", "-"]);
+        assert_eq!(rest, strings(&["--stand-in", "-"]));
     }
 
     #[test]

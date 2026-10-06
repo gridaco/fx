@@ -467,14 +467,7 @@ pub fn check_image(
     size: Option<(u32, u32)>,
     background: &str,
 ) -> Result<(), String> {
-    if kind != "image/png" || !matches_signature("image/png", bytes) {
-        let found = if kind == "image/png" {
-            sniff_image(bytes).unwrap_or("not an image")
-        } else {
-            kind
-        };
-        return Err(format!("the answer is {found}, not image/png"));
-    }
+    check_png(kind, bytes)?;
     let facts = match grida_fx_core::facts::image_facts(bytes, "image/png") {
         Ok(Some(facts)) if png_decodes(bytes) => facts,
         _ => return Err("the image data is not decodable".into()),
@@ -496,6 +489,22 @@ pub fn check_image(
         }
         _ => Ok(()),
     }
+}
+
+/// The first image check ([`check_image`] step 1; spec/capabilities.md §2 check 1, §12): the
+/// kind is `image/png` and the bytes carry the PNG signature, else `the answer is <kind>, not
+/// image/png`, where a file whose kind says PNG shows the kind its bytes start like (`not an
+/// image` when none).
+pub fn check_png(kind: &str, bytes: &[u8]) -> Result<(), String> {
+    if kind == "image/png" && matches_signature("image/png", bytes) {
+        return Ok(());
+    }
+    let found = if kind == "image/png" {
+        sniff_image(bytes).unwrap_or("not an image")
+    } else {
+        kind
+    };
+    Err(format!("the answer is {found}, not image/png"))
 }
 
 /// Whether a PNG's pixel data decodes in full. The file facts read only the header of a picture

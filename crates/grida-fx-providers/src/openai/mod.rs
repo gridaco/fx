@@ -266,12 +266,7 @@ impl RequestAdapter for OpenAiImages {
         };
         let size =
             wire::parse_size(call.request.get("size")).map_err(|_| SIZE_SHAPE.to_string())?;
-        let background = call
-            .request
-            .get("background")
-            .and_then(Value::as_str)
-            .unwrap_or("auto");
-        wire::check_image(&image.kind, &image.bytes, size, background)
+        crate::checks::image(call, image, size)
     }
 }
 

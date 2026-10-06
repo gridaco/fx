@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:grida-fx:schema:fx-project-v1",
   "title": "FX project file, fx.yaml (fx: project/v1)",
-  "description": "`fx.yaml` marks a project's root: where runs and the cache live, the default budget and routes, the route tables to load, and where node sources are.",
+  "description": "`fx.yaml` marks a project's root: where runs and the cache live, the default budget and routes, the route tables to load, where node sources are, and where workflows are found by id.",
   "type": "object",
   "required": [
     "fx"
@@ -88,6 +88,18 @@
         "pattern": "(?:^|/)\\.\\.(?:/|$)"
       },
       "default": "nodes"
+    },
+    "workflows": {
+      "description": "The folders searched, after the project root's own *.yaml and *.yml files, for a workflow named by its id (store.md, Finding a workflow by id): each folder and every folder below it, in the listed order. Relative to the project root, or absolute; a folder outside the project is allowed, the project root and the folders above it are refused. Setting it replaces the default, and a folder that does not exist adds nothing. A workflow found this way keeps its own home: the nearest fx.yaml at or above its file.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true,
+      "default": [
+        "workflows"
+      ]
     }
   },
   "$defs": {

@@ -4,7 +4,8 @@
 //! environment leaves it unset or empty, and its own process group (Unix), so ending it ends what
 //! it started. Dropping a process that was never ended kills it with its group.
 //!
-//! [`HostProcess::start`] spawns, opens a [`Connection`] and sends `initialize`; the answer's
+//! [`HostProcess::start`] spawns, opens a [`Connection`] and sends `initialize`
+//! ([`HostProcess::start_in`]: in another working directory, for a stand-in host); the answer's
 //! protocol must be `fx-node-protocol-v1` (a mismatch, or a `protocol_mismatch` error, is the
 //! sentence `PythonHost` reports: `the project's grida <sdk> speaks <p> and grida-fx <v>
 //! speaks fx-node-protocol-v1: upgrade …`). Failures are sentences naming the interpreter as the
@@ -48,7 +49,7 @@ use grida_fx_protocol::{
 };
 use serde_json::Value;
 use std::future::Future;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::process::{ExitStatus, Stdio};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -82,9 +83,31 @@ impl HostProcess {
         HostProcess::start_within(spec, incoming, GRACE).await
     }
 
+    /// [`HostProcess::start`] with the working directory `cwd` instead of the project root: a
+    /// stand-in host (spec/protocol.md §1, §5.7) starts in the engine's working directory, with
+    /// `spec.project_root` as `initialize`'s project. It is enlisted like any host, so
+    /// [`end_every_host`] ends it too.
+    pub async fn start_in(
+        spec: &HostSpec,
+        cwd: &Path,
+        incoming: Arc<dyn Incoming>,
+    ) -> Result<HostProcess, String> {
+        HostProcess::start_at(spec, cwd, incoming, GRACE).await
+    }
+
     /// [`HostProcess::start`], giving a host that fails to initialize `grace` to exit.
     pub(crate) async fn start_within(
         spec: &HostSpec,
+        incoming: Arc<dyn Incoming>,
+        grace: Duration,
+    ) -> Result<HostProcess, String> {
+        HostProcess::start_at(spec, &spec.project_root, incoming, grace).await
+    }
+
+    /// Spawns in `cwd` and initializes (module doc).
+    async fn start_at(
+        spec: &HostSpec,
+        cwd: &Path,
         incoming: Arc<dyn Incoming>,
         grace: Duration,
     ) -> Result<HostProcess, String> {
@@ -110,7 +133,7 @@ impl HostProcess {
             )
         })?;
         let mut command = Command::new(program(&spec.python));
-        command.args(HOST_ARGS).current_dir(&spec.project_root);
+        command.args(HOST_ARGS).current_dir(cwd);
         if std::env::var_os("PYTHONSAFEPATH").is_none_or(|value| value.is_empty()) {
             command.env("PYTHONSAFEPATH", SAFE_PATH_MARK);
         }
@@ -253,6 +276,12 @@ impl HostProcess {
         F: Future<Output = Result<Value, ConnectionError>>,
     {
         self.running.answer_or_exit(request, grace).await
+    }
+
+    /// Resolves once the process has exited, with its status; its group has been killed by
+    /// then (module doc). Cancel-safe.
+    pub(crate) async fn exited(&mut self) -> Option<ExitStatus> {
+        self.running.exited().await
     }
 
     /// Whether the host may serve another request: its connection works and it is running.
@@ -750,5 +779,57 @@ while True:
             failure,
             "cannot start the Python node host with no-such-python-for-fx: no such file; set GRIDA_FX_PYTHON to a Python that has the grida package"
         );
+    }
+
+    /// Every process the engine starts gets a standard input of its own, so none inherits the
+    /// stand-in's socket on the engine's (spec/protocol.md §5.7): each `Command` the engine's
+    /// sources build outside their tests sets `stdin` before it starts the process.
+    #[test]
+    fn every_process_the_engine_starts_sets_its_standard_input() {
+        let crates = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let mut checked = 0;
+        for source in [
+            "grida-fx-runtime/src",
+            "grida-fx/src",
+            "grida-fx-providers/src",
+        ] {
+            let mut folders = vec![crates.join(source)];
+            while let Some(folder) = folders.pop() {
+                for entry in std::fs::read_dir(&folder).unwrap().flatten() {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        folders.push(path);
+                        continue;
+                    }
+                    if path.extension().and_then(|s| s.to_str()) != Some("rs") {
+                        continue;
+                    }
+                    let text = std::fs::read_to_string(&path).unwrap();
+                    // The file's own tests start their programs as they like.
+                    let code = text
+                        .find("#[cfg(test)]")
+                        .into_iter()
+                        .chain(text.find("#[cfg(all(test"))
+                        .min()
+                        .map_or(text.as_str(), |at| &text[..at]);
+                    for (at, _) in code.match_indices("Command::new(") {
+                        let rest = &code[at..];
+                        let end = [".spawn()", ".status()", ".output()"]
+                            .iter()
+                            .filter_map(|start| rest.find(start))
+                            .min()
+                            .or_else(|| rest.find("let mut child"))
+                            .unwrap_or(rest.len());
+                        assert!(
+                            rest[..end].contains(".stdin("),
+                            "{}: a Command that does not set stdin",
+                            path.display()
+                        );
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        assert!(checked >= 3, "found {checked} commands");
     }
 }

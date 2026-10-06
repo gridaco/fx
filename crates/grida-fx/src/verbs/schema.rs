@@ -15,7 +15,7 @@ use indexmap::IndexMap;
 
 pub fn run(args: &SchemaArgs) -> Result<u8, Error> {
     let cwd = super::planning::working_directory()?;
-    let mut host = crate::print::host();
+    let mut host = crate::print::planning_host(&args.target, &cwd);
     let (project, workflow) = load_target(&args.target, &cwd, &IndexMap::new(), &mut host)?;
     let home = home_of(&args.target, project, &workflow)?;
     let mut resolve = |reference: &str| resolve_ref(&home.root, reference);

@@ -1,0 +1,9 @@
+fx: workflow/v1
+id: case
+title: How a stand-in is named, and a stand-in that breaks
+steps:
+  draw:
+    uses: fx/image.generate@1
+    with: { prompt: a lantern on a quay }
+outputs:
+  image: ${{ steps.draw.outputs.image }}

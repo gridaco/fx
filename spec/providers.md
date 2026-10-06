@@ -8,6 +8,7 @@ Words: an **adapter** turns one capability call into provider requests. A **send
 
 - The engine registers one adapter per capability and provider. A route `model@provider` is served by the adapter registered for its capability on its provider; the model is the route's, never chosen by the adapter.
 - Adapters exist only in a **live** invocation (`grida-fx run --live`). Without `--live` nothing that can reach a provider is constructed: every call that is not answered from the call cache is refused (`not_live`), and a recorded call replays offline ([store.md](store.md) §4).
+- A **stand-in run** ([protocol.md](protocol.md) §5.7) is never live, and uses only the adapters' checks: it holds each stand-in's answer to the check of the adapter registered for the route's capability and provider (§4.4). Those adapters are built with no keys over a transport that refuses every exchange (§2 item 8), and nothing but their checks is called.
 - An adapter is constructed whether or not its provider's key is present. A call without the key is refused before anything is sent (§5).
 - An adapter MUST NOT retry, pace, sleep (except while polling a long job, §7) or write to the store: it returns bytes and data, and the engine stores them. It MUST be safe to drop at any point: it starts no detached task and leaves nothing behind.
 
@@ -96,6 +97,7 @@ The default classes are below. Each provider's table in §9 may override a row, 
 - An answer is accepted only after three checks. The first is the **adapter's check**: judgements on a well-formed answer, such as the file's kind and signature, exact dimensions, alpha, or the answer against the request's schema. The engine then round-trips the answer's `data` through canonical JSON, and checks the capability's shape ([protocol.md](protocol.md) §6.1 step 7). A refusal from any of the three fails the attempt **as billed**, at the reported cost or else the whole hold, and the engine may make a new attempt.
 - Structural failures belong in the send (`Failed`). Judgements on a well-formed answer belong in the check. Both bill and both may be retried; the split only decides where the sentence comes from.
 - An answer MUST hold the files named in [capabilities.md](capabilities.md), with their kinds, and the `data` named there. It holds nothing else: no request id, no usage, no provider URL.
+- A stand-in's answer passes the same checks, once and billed at nothing: its shape first, since no adapter made it, then the adapter's check, the round trip and the capability's ([protocol.md](protocol.md) §6.1, *Stand-in answers*). An adapter's check MUST therefore judge an answer from the call (its route, request, files and take) and the answer alone, never from anything its own send or collect kept.
 
 ## 5. Refusals before sending
 

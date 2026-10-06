@@ -9,7 +9,12 @@
   an agent's tools; :class:`NodeFailure` fails a node on purpose; the engine's refusals reach a
   body as :class:`EngineError` subclasses.
 - :func:`plan`, :func:`plan_async`, :func:`run` and :func:`run_async` drive the ``grida-fx``
-  binary (:mod:`grida.fx._api`).
+  binary (:mod:`grida.fx._api`); a :class:`RunResult` names each failed instance's
+  :class:`Failure`.
+- ``run(..., stand_in=answer)`` answers a run's paid calls offline with a function of one
+  :class:`StandInCall` (spec/protocol.md section 5.7), which returns an :class:`Answer` or
+  :data:`DECLINE`, or raises :class:`CallRefused` or :class:`CallFailed`
+  (:mod:`grida.fx._stand_in`).
 - :mod:`grida.fx.std` holds the Python bodies of the standard node types.
 
 ``python -P -m grida.fx.host`` is the node host the engine starts (:mod:`grida.fx.host`);
@@ -17,7 +22,17 @@
 """
 
 from grida.fx._agent import Agent, Tool, ToolInvocationError, ToolReply, ToolResult, tool
-from grida.fx._api import FxError, Plan, PlanRefused, RunResult, plan, plan_async, run, run_async
+from grida.fx._api import (
+    Failure,
+    FxError,
+    Plan,
+    PlanRefused,
+    RunResult,
+    plan,
+    plan_async,
+    run,
+    run_async,
+)
 from grida.fx._builder import Group, StepRef, Workflow
 from grida.fx._ctx import CallResult, Ctx, InputFile, Output
 from grida.fx._errors import (
@@ -29,9 +44,12 @@ from grida.fx._errors import (
     NodeFailure,
 )
 from grida.fx._spec import NodeSpec, PortSpec, SpecError, node, param, spec_of
+from grida.fx._stand_in import DECLINE, Answer, StandInCall
 
 __all__ = [
+    "DECLINE",
     "Agent",
+    "Answer",
     "CallFailed",
     "CallRefused",
     "CallResult",
@@ -39,6 +57,7 @@ __all__ = [
     "CeilingExceeded",
     "Ctx",
     "EngineError",
+    "Failure",
     "FxError",
     "Group",
     "InputFile",
@@ -50,6 +69,7 @@ __all__ = [
     "PortSpec",
     "RunResult",
     "SpecError",
+    "StandInCall",
     "StepRef",
     "Tool",
     "ToolInvocationError",

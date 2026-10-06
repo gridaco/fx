@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:grida-fx:schema:fx-graph-v1",
   "title": "FX expanded graph (fx-graph-v1)",
-  "description": "Every step instance of a workflow with its type, values, routes, wiring, identity, state and price, and each node type's identity and source digests (`types`). `grida-fx expand` prints it, with `problems`; a run folder keeps it as plan.json (store.md §8), with `plan`, `steps`, `inputs`, `view_origins` and `takes_file`.",
+  "description": "Every step instance of a workflow with its type, values, routes, wiring, identity, state and price, and each node type's identity and source digests (`types`). `grida-fx expand` prints it, with `problems`; a run folder keeps it as plan.json (store.md §8), with `plan`, `steps`, `inputs`, `view_origins` and `takes_file`, and `stand_in` for a stand-in run.",
   "type": "object",
   "required": [
     "kind",
@@ -94,6 +94,10 @@
     "takes_file": {
       "description": "The workflow's takes file, which `reroll` and `pick` write: its POSIX path relative to the planning project's root (store.md §8).",
       "$ref": "#/$defs/relative_path"
+    },
+    "stand_in": {
+      "description": "In plan.json only, and only for a stand-in run (protocol.md §5.7; store.md §8, Stand-in runs): the run answers its paid calls with a stand-in. Not part of the plan digest (identity.md §10).",
+      "const": true
     },
     "types": {
       "description": "Each distinct `uses` of the instances, as written, with its type identity (identity.md §6). A `uses` whose type could not be resolved is left out. A project type, with a version or without, also carries `source`: the digests behind its `fx-node-source-v1` object, so a checker recomputes `digest(source)` without running a node host. For a type without a version it is the identity after `source:`; for a versioned type it is what fx.lock must hold. A built-in type has no `source`.",

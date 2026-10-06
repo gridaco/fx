@@ -40,9 +40,11 @@ The engine itself runs the paid built-in types (`image.generate`, `structured.ge
   `package`.
 
 A project that uses any of them needs a Python with `grida` and Pillow installed
-(`pip install --pre grida`, which brings Pillow). FX uses `GRIDA_FX_PYTHON` when it is set, else the project's
-`.venv`, else `python3` on `PATH`. Only a project whose steps are all paid built-ins and `select`
-needs just the command. The first workflow below uses `image.check_alpha`, so it needs Python.
+(`pip install --pre grida`, which brings Pillow). FX uses `GRIDA_FX_PYTHON` when it is set, else
+the `.venv` of the workflow's project, else the `.venv` of the project you run from, else the Python
+that runs the SDK when you run through it ([Running](05-running.md#from-python)), else `python3`
+on `PATH`. Only a project whose steps are all paid built-ins and `select` needs just the command.
+The first workflow below uses `image.check_alpha`, so it needs Python.
 
 ## A project
 
@@ -66,11 +68,23 @@ budget:
   max_usd: 10                 # the ceiling for any one run; --max-usd overrides it
 routes:                       # which model serves each capability by default
   image.generate: gpt-image-2.5-sunburst@openai
+# workflows: [workflows, ../tools/art/workflows]   # where a workflow id is looked for
 ```
 
 `grida-fx nodes image.generate` lists the routes that can serve a capability: FX's built-in
 route table, plus the tables your project lists under `route_tables:` (read after it, so their
 entries win).
+
+**Where workflows are found.** A workflow named by its id (`grida-fx run icon`) is looked for among
+the `.yaml` and `.yml` files at the project root, then in `workflows/` and every folder below it. A
+monorepo that keeps its workflows elsewhere lists their folders under `workflows:`, searched in the
+order given; each is relative to the project or absolute, and may lie outside the project. The list
+replaces the default, so name `workflows` too if you keep workflows there as well. The project root
+itself, or a folder above it, is refused, since it would search your runs and cache. A workflow in a
+folder with an `fx.yaml` of its own keeps that project as its home: its `./` paths, node modules and
+route defaults are that project's, with your `routes:` winning. The runs, the cache, the budget, the
+route tables and the takes file (`<id>.takes.yaml` at your root) stay those of the project you run
+from.
 
 ## Your first workflow
 

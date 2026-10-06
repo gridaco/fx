@@ -18,6 +18,7 @@ use grida_fx_runtime::host::PythonHost;
 use grida_fx_runtime::host::process::HostSpec;
 use grida_fx_runtime::plantime::PlanTime;
 use grida_fx_runtime::runner::{RunError, RunOptions, RunOutcome, run};
+use grida_fx_runtime::stand_in::{Answerer, AnswererError, Reply, StandIn, StandInFile};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -219,6 +220,8 @@ struct Invocation<'a> {
     max_usd: Option<&'a str>,
     /// The adapter serving `image.generate` on `acme`.
     adapter: Option<Adapter>,
+    /// A stand-in run's answerer: the engine's store is then the stand-in store.
+    stand_in: Option<Arc<dyn Answerer>>,
 }
 
 impl Default for Invocation<'_> {
@@ -231,6 +234,7 @@ impl Default for Invocation<'_> {
             live: false,
             max_usd: None,
             adapter: None,
+            stand_in: None,
         }
     }
 }
@@ -266,7 +270,11 @@ fn run_in(
     if let Some(adapter) = invocation.adapter {
         adapters.register("image.generate", "acme", adapter);
     }
-    let engine = Arc::new(Engine::new(
+    let store = match invocation.stand_in {
+        Some(_) => planner.project.cache_dir().join("stand-in"),
+        None => planner.project.cache_dir(),
+    };
+    let engine = Engine::new(
         runtime.handle().clone(),
         HostSpec {
             python: python.clone(),
@@ -274,11 +282,15 @@ fn run_in(
             project_root: planner.home.root.clone(),
             sources: planner.home.document.sources.clone(),
         },
-        &planner.project.cache_dir(),
+        &store,
         2,
         adapters,
         invocation.live,
-    ));
+    );
+    let engine = Arc::new(match invocation.stand_in {
+        Some(answerer) => engine.with_stand_in(Arc::new(StandIn::new(answerer))),
+        None => engine,
+    });
     let mut plan_time = PlanTime::new(Arc::clone(&engine));
     let plan = make_plan(
         &mut planner,
@@ -1438,4 +1450,155 @@ fn a_torn_last_line_is_left_out_and_the_run_goes_on() {
         text.lines()
             .all(|line| serde_json::from_str::<Value>(line).is_ok())
     );
+}
+
+/// A stand-in that answers every call with one small picture and counts what it was asked.
+#[derive(Default)]
+struct Pictures {
+    asked: Mutex<Vec<String>>,
+}
+
+impl Answerer for Pictures {
+    fn answer<'a>(
+        &'a self,
+        params: grida_fx_protocol::StandInAnswerParams,
+        _cancel: &'a grida_fx_runtime::engine::Cancel,
+    ) -> BoxFuture<'a, Result<Reply, AnswererError>> {
+        Box::pin(async move {
+            self.asked.lock().unwrap().push(params.key);
+            let bytes = grida_fx_providers::testing::media::png(8, 8, None);
+            Ok(Reply::Answer {
+                files: [("image".to_string(), StandInFile { kind: None, bytes })]
+                    .into_iter()
+                    .collect(),
+                data: Value::Null,
+            })
+        })
+    }
+
+    fn shutdown(&self) -> BoxFuture<'_, ()> {
+        Box::pin(async {})
+    }
+}
+
+/// Every file under `root` but the stand-in store, with its bytes.
+fn store_files(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+    let mut found = Vec::new();
+    let mut folders = vec![root.to_path_buf()];
+    while let Some(folder) = folders.pop() {
+        let Ok(entries) = std::fs::read_dir(&folder) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path == root.join("stand-in") {
+                continue;
+            }
+            if entry.file_type().unwrap().is_dir() {
+                folders.push(path);
+            } else {
+                found.push((path.clone(), std::fs::read(&path).unwrap()));
+            }
+        }
+    }
+    found.sort();
+    found
+}
+
+#[test]
+fn a_stand_in_run_keeps_to_its_own_store_and_its_own_folders() {
+    let _serial = serial();
+    let project = Project::conformance("cache-replay");
+    // A plain run replays the recorded call and records a result in the store.
+    let Some(plain) = run_in(
+        &project,
+        Invocation {
+            folder: "runs/plain",
+            ..Invocation::default()
+        },
+        None,
+    ) else {
+        return;
+    };
+    assert!(plain.unwrap().ok);
+    let store = project.root.join(".fx/cache");
+    let before = store_files(&store);
+    assert!(
+        before
+            .iter()
+            .any(|(path, _)| path.starts_with(store.join("results")))
+    );
+
+    // A stand-in run reads none of it: the stand-in is asked, and what it answers is kept apart.
+    let pictures = Arc::new(Pictures::default());
+    let stand_in = || Invocation {
+        stand_in: Some(pictures.clone() as Arc<dyn Answerer>),
+        ..Invocation::default()
+    };
+    let outcome = run_in(&project, stand_in(), None).unwrap().unwrap();
+    assert!(outcome.ok, "{outcome:?}");
+    assert_eq!(outcome.charged, Usd::ZERO);
+    assert_eq!(pictures.asked.lock().unwrap().len(), 1);
+    assert_eq!(store_files(&store), before, "the store is untouched");
+    assert!(store.join("stand-in/calls").is_dir());
+    assert!(store.join("stand-in/results").is_dir());
+    assert!(!store.join("stand-in/jobs").exists());
+
+    // Marked in plan.json and run_started; the plan digest is the same in both modes.
+    let plan = |folder: &str| -> Value {
+        serde_json::from_slice(&std::fs::read(project.root.join(folder).join("plan.json")).unwrap())
+            .unwrap()
+    };
+    assert_eq!(plan("runs/one")["stand_in"], json!(true));
+    assert!(plan("runs/plain").get("stand_in").is_none());
+    assert_eq!(plan("runs/one")["plan"], plan("runs/plain")["plan"]);
+    let events = project.events("runs/one");
+    assert_eq!(named(&events, "run_started")[0]["stand_in"], json!(true));
+    assert!(
+        named(&project.events("runs/plain"), "run_started")[0]
+            .get("stand_in")
+            .is_none()
+    );
+    let calls = named(&events, "call");
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0]["stand_in"], json!(true));
+    assert_eq!(calls[0]["cost_usd"], json!(0));
+    assert!(named(&events, "budget_reserved").is_empty());
+    assert_eq!(
+        named(&events, "node_finished")[0]["facts"]["cost_usd"],
+        json!(0)
+    );
+
+    // Resumed in its own mode, it replays from the stand-in store and asks nothing.
+    let resumed = run_in(&project, stand_in(), None).unwrap().unwrap();
+    assert!(resumed.ok);
+    assert_eq!(pictures.asked.lock().unwrap().len(), 1);
+
+    // Each folder refuses the other mode.
+    let refused = run_in(&project, Invocation::default(), None).unwrap();
+    assert_eq!(
+        refused,
+        Err(RunError::Refused(
+            "runs/one holds a stand-in run; resume it with --stand-in, or choose a new folder"
+                .into()
+        ))
+    );
+    let refused = run_in(
+        &project,
+        Invocation {
+            folder: "runs/plain",
+            ..stand_in()
+        },
+        None,
+    )
+    .unwrap();
+    assert_eq!(
+        refused,
+        Err(RunError::Refused(
+            "runs/plain holds a run without a stand-in; resume it without --stand-in, or choose \
+             a new folder"
+                .into()
+        ))
+    );
+    assert_eq!(store_files(&store), before);
 }

@@ -257,12 +257,7 @@ impl RequestAdapter for OpenRouterImages {
             return Err("the answer has no image".into());
         };
         let size = wire::parse_size(call.request.get("size"))?;
-        let background = call
-            .request
-            .get("background")
-            .and_then(Value::as_str)
-            .unwrap_or("auto");
-        wire::check_image(&image.kind, &image.bytes, size, background)
+        crate::checks::image(call, image, size)
     }
 }
 

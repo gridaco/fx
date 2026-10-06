@@ -1,0 +1,8 @@
+fx: workflow/v1
+id: top
+title: A workflow at the project's root
+steps:
+  draw:
+    uses: fx/image.generate@1
+    route: img-a@acme
+    with: { prompt: a pier at dusk }

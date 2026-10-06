@@ -31,6 +31,15 @@ In the tables below, a member's type is one of:
 
 **Answers.**
 - An answer holds files by name, which the engine stores ([store.md](store.md) §3), and `data`: JSON, or `null`. It holds what the sections below name and nothing else.
+- A stand-in's answer ([protocol.md](protocol.md) §5.7), which no adapter shaped, is held to this before any other check ([protocol.md](protocol.md) §6.1, *Stand-in answers*), with these sentences, the first that applies winning:
+  - a file a section below names is missing: `the answer holds no <name>`;
+  - a file it does not name: `<capability> returns no file named <name>`;
+  - a file of another kind than the one named (for `mesh.generate`, than `model/fbx` or `model/gltf-binary`): `<name> is <kind>, not <kind>`;
+  - `data` that is not `null` where a section names none: `<capability> returns no data`;
+  - `structured.generate` data that is not an object holding only `json`: `structured.generate returns its data as {"json": <value>}`;
+  - `mesh.rig` data that is not `{"facts": {"riggable", "checked_rig_type", "advisory_override"}}` with the types §8 gives: `mesh.rig returns its data as {"facts": {"riggable", "checked_rig_type", "advisory_override"}}`.
+
+  A file without a kind takes the kind named for it here; `mesh.generate`'s `model` takes the kind its bytes show (binary glTF or binary FBX by their signatures, else `model is neither binary glTF nor binary FBX`). The data of `video.generate` (§6) and `mesh.generate` (§7) is taken from the answer's file, so a stand-in answers `null` (`<capability>'s data is taken from its file: answer null`) and the engine writes it, `video.generate`'s from the clip's facts (`the answer's video is not a clip FX can read: <reason>` when they are refused). `agent.turn` data is left to the engine's check ([protocol.md](protocol.md) §6.2).
 - A paid built-in maps an answer onto its outputs this way:
   - each output port takes the file of its name, else the first file whose kind's family matches the port's;
   - a declared `json` output takes `data.json`;

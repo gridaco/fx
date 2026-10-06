@@ -415,6 +415,87 @@ fn integrated_doctor_lists_the_projects_routes() {
 }
 
 #[test]
+fn integrated_doctor_names_the_planning_projects_interpreter_after_the_homes() {
+    let project = drawing_project(&format!("{ROUTED}workflows: [library]\n"));
+    let root = project.path();
+    let home = root.join("library/thing");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::write(home.join("fx.yaml"), "fx: project/v1\n").unwrap();
+    std::fs::rename(root.join("workflows/case.yaml"), home.join("case.yaml")).unwrap();
+    // The planning project's interpreter, which cannot start a host.
+    let bin = root.join(".venv/bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    std::fs::write(bin.join("python"), "#!/bin/sh\nexit 3\n").unwrap();
+    std::fs::set_permissions(
+        bin.join("python"),
+        std::os::unix::fs::PermissionsExt::from_mode(0o755),
+    )
+    .unwrap();
+    let output = grida_fx(root, &["doctor", "case"]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    let text = stdout(&output);
+    assert_eq!(
+        text.lines().nth(1),
+        Some("python    ../../.venv/bin/python NOT FOUND"),
+        "{text}"
+    );
+    // The home's own interpreter comes first.
+    let bin = home.join(".venv/bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    std::fs::copy(root.join(".venv/bin/python"), bin.join("python")).unwrap();
+    let text = stdout(&grida_fx(root, &["doctor", "case"]));
+    assert_eq!(
+        text.lines().nth(1),
+        Some("python    .venv/bin/python NOT FOUND"),
+        "{text}"
+    );
+}
+
+#[test]
+fn integrated_a_failing_planning_interpreter_leaves_no_private_path_in_the_record() {
+    let folder = tempfile::tempdir().unwrap();
+    let root = folder.path().canonicalize().unwrap();
+    std::fs::write(
+        root.join("fx.yaml"),
+        "fx: project/v1\nworkflows: [library]\n",
+    )
+    .unwrap();
+    let home = root.join("library/thing");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::write(home.join("fx.yaml"), "fx: project/v1\n").unwrap();
+    std::fs::write(
+        home.join("case.yaml"),
+        "fx: workflow/v1\nid: case\ntitle: Case\nsteps:\n  pack:\n    uses: fx/package@1\n    \
+         with: { files: {}, manifest: { n: 1 } }\n",
+    )
+    .unwrap();
+    // Only the planning project has an interpreter, and it cannot start a host.
+    let bin = root.join(".venv/bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    std::fs::write(bin.join("python"), "#!/bin/sh\nexit 3\n").unwrap();
+    std::fs::set_permissions(
+        bin.join("python"),
+        std::os::unix::fs::PermissionsExt::from_mode(0o755),
+    )
+    .unwrap();
+    let output = grida_fx(&root, &["run", "case", "--run", "runs/one"]);
+    assert_eq!(status(&output), 1, "{}{}", stdout(&output), stderr(&output));
+    let log = std::fs::read_to_string(root.join("runs/one/events.jsonl")).unwrap();
+    let failed = events(&root.join("runs/one"))
+        .into_iter()
+        .find(|event| event["event"] == "node_failed")
+        .expect("pack failed");
+    let error = failed["error"].as_str().unwrap();
+    assert!(
+        error.starts_with("the Python node host (../../.venv/bin/python) exited with status 3"),
+        "{error}"
+    );
+    for private in [root.clone(), folder.path().to_path_buf()] {
+        assert!(!log.contains(&*private.to_string_lossy()), "{log}");
+    }
+}
+
+#[test]
 fn integrated_doctor_reads_the_projects_key_file() {
     let project = empty_project();
     std::fs::write(
@@ -1848,4 +1929,318 @@ fn integrated_inspect_verifies_a_run_of_another_take() {
         std::fs::read_to_string(project.path().join("runs/two/files/a#2/text.txt")).unwrap(),
         "take 2: hello"
     );
+}
+
+#[test]
+fn run_refuses_a_stand_in_it_cannot_use_before_planning() {
+    let project = drawing_project(ROUTED);
+    std::fs::write(
+        project.path().join("stand_in.py"),
+        "def answer(call):\n    pass\n",
+    )
+    .unwrap();
+    std::fs::write(project.path().join("stand_in.txt"), "").unwrap();
+    let cases: [(&[&str], &str); 9] = [
+        (
+            &["--live", "--stand-in", "stand_in.py#answer"],
+            "--stand-in cannot be used with --live",
+        ),
+        (
+            &["--yes-up-to", "1", "--stand-in", "stand_in.py#answer"],
+            "--stand-in cannot be used with --yes-up-to",
+        ),
+        (
+            &["--stand-in", "stand_in.py"],
+            "--stand-in takes <file>.py#<function>, or -",
+        ),
+        (
+            &["--stand-in", "stand_in.txt#answer"],
+            "--stand-in takes <file>.py#<function>, or -",
+        ),
+        (
+            &["--stand-in", "stand_in.py#1answer"],
+            "--stand-in takes <file>.py#<function>, or -",
+        ),
+        (
+            &["--stand-in", "stand_in.py#"],
+            "--stand-in takes <file>.py#<function>, or -",
+        ),
+        (
+            &["--stand-in", "missing.py#answer"],
+            "no stand-in file missing.py",
+        ),
+        (
+            &["--stand-in", "-"],
+            "--stand-in - needs the stand-in's socket on standard input",
+        ),
+        (
+            &["--stand-in=-"],
+            "--stand-in - needs the stand-in's socket on standard input",
+        ),
+    ];
+    for (extra, message) in cases {
+        let mut argv = vec!["run", "case", "--routes", "routes.yaml"];
+        argv.extend_from_slice(extra);
+        let output = grida_fx(project.path(), &argv);
+        assert_eq!(status(&output), 2, "{extra:?}");
+        assert!(stdout(&output).is_empty(), "{extra:?}");
+        assert_eq!(
+            stderr(&output),
+            format!("grida-fx: {message}\n"),
+            "{extra:?}"
+        );
+    }
+    assert!(!project.path().join("runs").exists());
+    assert!(!project.path().join(".fx").exists());
+    let help = stdout(&grida_fx(project.path(), &["run", "--help"]));
+    assert!(help.contains("--stand-in"), "{help}");
+}
+
+#[test]
+fn integrated_a_stand_in_fault_names_no_private_path_in_the_record() {
+    let Some(python) = python_host() else {
+        eprintln!("skipped: no Python with the grida package");
+        return;
+    };
+    let folder = tempfile::tempdir().unwrap();
+    let outer = folder.path().canonicalize().unwrap();
+    let project = outer.join("proj");
+    copy_folder(
+        &repository().join("conformance/stand-in-flags/in"),
+        &project,
+    );
+    // The stand-in lives beside the project and names itself and the working directory.
+    std::fs::create_dir(outer.join("tools")).unwrap();
+    std::fs::write(
+        outer.join("tools/oops.py"),
+        "import os\n\ndef answer(call):\n    raise RuntimeError(\"cannot read \" + \
+         os.path.abspath(__file__) + \" from \" + os.getcwd())\n",
+    )
+    .unwrap();
+    let argv = [
+        "run",
+        "case",
+        "--routes",
+        "routes.yaml",
+        "--run",
+        "runs/one",
+        "--stand-in",
+        "../tools/oops.py#answer",
+    ];
+    let output = grida_fx_with_python(&project, &python, &argv);
+    assert_eq!(status(&output), 1, "{}{}", stdout(&output), stderr(&output));
+    let stopped = "the stand-in failed: RuntimeError: cannot read ../tools/oops.py from .";
+    assert!(
+        stdout(&output).contains(&format!("stopped   {stopped}\n")),
+        "{}",
+        stdout(&output)
+    );
+    let mut files = Vec::new();
+    every_file(&project.join("runs/one"), &mut files);
+    for (path, bytes) in files {
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(
+            !text.contains(&*outer.to_string_lossy()),
+            "{}: {text}",
+            path.display()
+        );
+    }
+    let finished = events(&project.join("runs/one"))
+        .into_iter()
+        .find(|event| event["event"] == "run_finished")
+        .expect("the run finished");
+    assert_eq!(finished["stopped"], stopped);
+}
+
+#[test]
+fn integrated_a_stand_in_that_exits_mid_run_stops_the_run() {
+    let Some(python) = python_host() else {
+        eprintln!("skipped: no Python with the grida package");
+        return;
+    };
+    // A step that sleeps 30 seconds and makes no call; the stand-in host exits a second after it
+    // was loaded, while the step still runs.
+    let project = conformance_project("run-timeout");
+    let root = project.path();
+    let workflow = std::fs::read_to_string(root.join("workflows/case.yaml")).unwrap();
+    std::fs::write(
+        root.join("workflows/case.yaml"),
+        workflow.replace("timeout: 1", "timeout: 25"),
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("gone.py"),
+        "import os\nimport threading\n\nthreading.Timer(1.0, os._exit, (3,)).start()\n\n\n\
+         def answer(call):\n    return None\n",
+    )
+    .unwrap();
+    let started = std::time::Instant::now();
+    let argv = [
+        "run",
+        "case",
+        "--routes",
+        "routes.yaml",
+        "--run",
+        "runs/one",
+        "--stand-in",
+        "gone.py#answer",
+    ];
+    let output = grida_fx_with_python(root, &python, &argv);
+    assert_eq!(status(&output), 1, "{}{}", stdout(&output), stderr(&output));
+    assert!(
+        stdout(&output).ends_with("stopped   the stand-in answerer exited\n"),
+        "{}",
+        stdout(&output)
+    );
+    assert!(started.elapsed() < std::time::Duration::from_secs(20));
+    let events = events(&root.join("runs/one"));
+    let problem = events
+        .iter()
+        .find(|event| event["event"] == "problem")
+        .expect("a problem");
+    assert_eq!(problem["where"], "stand_in");
+    assert_eq!(problem["message"], "the stand-in answerer exited");
+    let finished = events.last().unwrap();
+    assert_eq!(finished["event"], "run_finished");
+    assert_eq!(finished["stopped"], "the stand-in answerer exited");
+    assert_eq!(finished["incomplete"], true);
+}
+
+/// A 1x1 PNG.
+#[cfg(unix)]
+const DOT_PNG: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+/// Serves a stand-in on `socket` until the engine ends the session: `initialize`, an answer of
+/// [`DOT_PNG`] to every `stand_in.answer`, `shutdown`. Returns the methods it was sent, in order.
+#[cfg(unix)]
+fn serve_stand_in(socket: std::os::unix::net::UnixStream) -> Vec<String> {
+    use std::io::{BufRead, BufReader, Read, Write};
+    let mut writer = socket.try_clone().unwrap();
+    let mut reader = BufReader::new(socket);
+    let mut methods = Vec::new();
+    loop {
+        let mut length = None;
+        loop {
+            let mut line = String::new();
+            if reader.read_line(&mut line).unwrap() == 0 {
+                return methods;
+            }
+            if line == "\r\n" {
+                break;
+            }
+            if let Some(n) = line.strip_prefix("Content-Length: ") {
+                length = Some(n.trim().parse::<usize>().unwrap());
+            }
+        }
+        let mut body = vec![0; length.unwrap()];
+        reader.read_exact(&mut body).unwrap();
+        let message: Value = serde_json::from_slice(&body).unwrap();
+        let method = message["method"].as_str().unwrap_or_default().to_string();
+        methods.push(method.clone());
+        let result = match method.as_str() {
+            "initialize" => json!({"protocol": "fx-node-protocol-v1",
+                "host": {"language": "test", "version": "1", "sdk_version": "1"}}),
+            "stand_in.answer" => json!({"files": {"image": {"base64": DOT_PNG}}, "data": null}),
+            "shutdown" => Value::Null,
+            _ => continue,
+        };
+        let body =
+            serde_json::to_vec(&json!({"jsonrpc": "2.0", "id": message["id"], "result": result}))
+                .unwrap();
+        writer
+            .write_all(format!("Content-Length: {}\r\n\r\n", body.len()).as_bytes())
+            .unwrap();
+        writer.write_all(&body).unwrap();
+        writer.flush().unwrap();
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn integrated_a_stand_in_on_standard_input_answers_the_run() {
+    let project = drawing_project(ROUTED);
+    let (ours, theirs) = std::os::unix::net::UnixStream::pair().unwrap();
+    let child = command(
+        project.path(),
+        &[
+            "run",
+            "case",
+            "--routes",
+            "routes.yaml",
+            "--run",
+            "runs/one",
+            "--stand-in",
+            "-",
+        ],
+    )
+    .stdin(std::process::Stdio::from(std::os::fd::OwnedFd::from(
+        theirs,
+    )))
+    .stdout(std::process::Stdio::piped())
+    .stderr(std::process::Stdio::piped())
+    .spawn()
+    .unwrap();
+    let served = std::thread::spawn(move || serve_stand_in(ours));
+    let output = child.wait_with_output().unwrap();
+    let methods = served.join().unwrap();
+    assert_eq!(status(&output), 0, "{}{}", stdout(&output), stderr(&output));
+    assert_eq!(
+        methods,
+        ["initialize", "stand_in.answer", "shutdown", "exit"]
+    );
+    let text = stdout(&output);
+    assert!(text.contains("run       runs/one\nstand-in  -\n"), "{text}");
+    assert!(text.contains("result    ok   spent $0.00"), "{text}");
+    // Kept apart: the stand-in store has the answer, the store has nothing.
+    let store = project.path().join(".fx/cache");
+    assert!(store.join("stand-in/calls").is_dir());
+    assert!(!store.join("calls").exists());
+    let plan = parse(&std::fs::read_to_string(project.path().join("runs/one/plan.json")).unwrap());
+    assert_eq!(plan["stand_in"], json!(true));
+
+    // The folder refuses a run without a stand-in, and the takes file is not changed for it.
+    let output = grida_fx(
+        project.path(),
+        &[
+            "run",
+            "case",
+            "--routes",
+            "routes.yaml",
+            "--run",
+            "runs/one",
+        ],
+    );
+    assert_eq!(status(&output), 1);
+    assert!(
+        stdout(&output).contains(
+            "refused: runs/one holds a stand-in run; resume it with --stand-in, or choose a new \
+             folder"
+        ),
+        "{}",
+        stdout(&output)
+    );
+    for argv in [
+        &["pick", "runs/one", "draw", "1"][..],
+        &["reroll", "runs/one", "draw"][..],
+    ] {
+        let output = grida_fx(project.path(), argv);
+        assert_eq!(status(&output), 1, "{argv:?}");
+        assert_eq!(
+            stdout(&output),
+            "refused: runs/one holds a stand-in run, and stand-in runs never change the \
+             workflow's takes file\n"
+        );
+    }
+    assert!(!project.path().join("workflows/case.takes.yaml").exists());
+
+    // inspect says so.
+    let output = grida_fx(project.path(), &["inspect", "runs/one"]);
+    assert_eq!(status(&output), 0);
+    assert!(
+        stdout(&output).starts_with("case  \u{b7}  one  \u{b7}  stand-in\n"),
+        "{}",
+        stdout(&output)
+    );
+    let output = grida_fx(project.path(), &["inspect", "runs/one", "--json"]);
+    assert_eq!(parse(&stdout(&output))["run"]["stand_in"], json!(true));
 }

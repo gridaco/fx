@@ -1,0 +1,88 @@
+[
+ {
+  "ceiling_usd": null,
+  "charged_usd": 0,
+  "estimate": {
+   "high_usd": 0.04,
+   "low_usd": 0.01
+  },
+  "event": "run_started",
+  "kind": "fx-run-events-v1",
+  "plan": "8a6e2c7c49ddb08fe7d8f78b84456d3ba8b3862f6a558fbfe8044495270fa7cd",
+  "resumed": false,
+  "stand_in": true,
+  "workflow": "case"
+ },
+ {
+  "charged_usd": 0,
+  "event": "run_finished",
+  "failed": [
+   "draw#1"
+  ],
+  "incomplete": true,
+  "kind": "fx-run-events-v1",
+  "ok": false,
+  "outputs": {
+   "image": {
+    "value": {
+     "failed": "draw#1"
+    }
+   }
+  },
+  "plan": "8a6e2c7c49ddb08fe7d8f78b84456d3ba8b3862f6a558fbfe8044495270fa7cd",
+  "stopped": "the stand-in failed: RuntimeError: the test harness broke on image.generate"
+ },
+ {
+  "code": "internal",
+  "error": "the stand-in failed: RuntimeError: the test harness broke on image.generate",
+  "event": "node_failed",
+  "facts": {},
+  "id": "draw#1",
+  "kind": "fx-run-events-v1",
+  "path": "draw",
+  "plan": "8a6e2c7c49ddb08fe7d8f78b84456d3ba8b3862f6a558fbfe8044495270fa7cd"
+ },
+ {
+  "event": "node_started",
+  "id": "draw#1",
+  "identity": "82d1e81f7dc8741eecd35df3bfa14076eb2cbe05d2d7080757b3a403dd77fd70",
+  "kind": "fx-run-events-v1",
+  "path": "draw",
+  "plan": "8a6e2c7c49ddb08fe7d8f78b84456d3ba8b3862f6a558fbfe8044495270fa7cd",
+  "reads": [],
+  "routes": {
+   "image.generate": "img-a@acme"
+  },
+  "step": "draw",
+  "take": [
+   1
+  ],
+  "uses": "fx/image.generate@1",
+  "with": {
+   "background": {
+    "value": "auto"
+   },
+   "prompt": {
+    "value": "a lantern on a quay"
+   },
+   "vars": {
+    "value": {}
+   }
+  }
+ },
+ {
+  "event": "phase_planned",
+  "high_usd": 0.04,
+  "kind": "fx-run-events-v1",
+  "phase": 1,
+  "plan": "8a6e2c7c49ddb08fe7d8f78b84456d3ba8b3862f6a558fbfe8044495270fa7cd",
+  "steps": 1
+ },
+ {
+  "event": "problem",
+  "kind": "fx-run-events-v1",
+  "message": "the stand-in failed: RuntimeError: the test harness broke on image.generate",
+  "plan": "8a6e2c7c49ddb08fe7d8f78b84456d3ba8b3862f6a558fbfe8044495270fa7cd",
+  "where": "draw#1"
+ }
+]

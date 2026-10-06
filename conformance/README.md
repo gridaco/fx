@@ -34,7 +34,9 @@ uv run --project python python conformance/run.py --command target/debug/grida-f
   `GRIDA_FX_PYTHON=python/.venv/bin/python` after `uv sync --project python`. A value that is a
   path is made absolute from where you run the script, without following symbolic links (a
   virtual environment's `python` is one); a bare name such as `python3` is passed on unchanged.
-  Only the cases whose `in/` has no `nodes/` folder run without it.
+  A stand-in case (one that runs `run --stand-in <file>.py#<function>`) needs it too, even
+  without a `nodes/` folder: its stand-in is served by the same Python host. Only the cases
+  whose `in/` has no `nodes/` folder and that name no stand-in run without it.
 - **Options:** `--timeout SECONDS` limits each step (default 60). `--strict` fails a case that has
   no `expected/` yet. `--write` records output (below).
 - **Results:** each case prints `PASS`, `FAIL` or `PENDING`, and the runner exits non-zero if any
@@ -99,13 +101,14 @@ Each step is a mapping with these keys and no others:
 | `json` | boolean | compare the saved text as JSON (below) |
 | `jsonl` | boolean | compare the saved text as JSON Lines, such as a run's `events.jsonl` (below) |
 | `yaml` | boolean | compare the saved text as YAML, by converting it to JSON (below) |
+| `absent` | list of paths | project paths that must hold no file once the step is done: nothing is there, or only folders with no file anywhere below them (an empty folder is no record) |
 
-- A step needs `argv`, `read` or `files`. In one step, `files` are written first, then `argv`
-  runs, then `read` is read.
+- A step needs `argv`, `read`, `files` or `absent`. In one step, `files` are written first, then
+  `argv` runs, then `read` is read, then every `absent` path is checked.
 - `status`, `mentions` and `stdin` need `argv`. `read`, `json`, `jsonl` and `yaml` need
   `save`, and `save` needs `argv` or `read`. `json`, `jsonl` and `yaml` exclude each other.
-- Paths in `files`, `read` and `invalid_inputs` are POSIX and relative. They may not leave the
-  project: no `..`, no absolute path, no backslash, no symbolic link out of it.
+- Paths in `files`, `read`, `absent` and `invalid_inputs` are POSIX and relative. They may not
+  leave the project: no `..`, no absolute path, no backslash, no symbolic link out of it.
 - An unknown key, or a value of the wrong type, fails the case before any step runs.
 
 Two steps may save the same name. They must then produce the same bytes: that is how a case
@@ -119,9 +122,12 @@ file (`workflows/case.yaml`).
 | Command | What a case reads from it |
 |---|---|
 | `expand <target>`, `identity <target>`, `price <target>` | the expanded graph, each instance's identity, the price by phase, as JSON on stdout |
-| `run <target> --run <folder> [--deliver <output>=<path>]…` | a local run in `<folder>`, or the continuation of the run that folder holds; its exit status and summary lines (`result    ok   spent $0.00`, `failed    <id>: <error>`, `refused: …`); the files it writes under the folder; with `--deliver`, the output files copied to `<path>` (`{key}` once per element) after the run. No case passes `--live` |
+| `plan <target> [--json]` | whether the workflow plans (a workflow found by id, or not found); with `--json`, the expanded graph as `expand` prints it |
+| `run <target> --run <folder> [--deliver <output>=<path>]… [--max-usd <n>]` | a local run in `<folder>`, or the continuation of the run that folder holds; its exit status and summary lines (`result    ok   spent $0.00`, `failed    <id>: <error>`, `stopped   <message>`, `refused: …`); the files it writes under the folder; with `--deliver`, the output files copied to `<path>` (`{key}` once per element) after the run. No case runs `--live`: one passes it only beside `--stand-in`, a usage error |
+| `run <target> … --stand-in <file>.py#<function>` (or `--stand-in=…`) | a stand-in run: the paid calls the cache cannot answer go to `<function>` in the case's `<file>`, served by the Python host in the project folder, offline and for nothing; its summary has the line `stand-in  <source as typed>`, and it keeps its records in the stand-in store, `<cache>/stand-in/`. Its usage errors (with `--live` or `--yes-up-to`, a source of another form, a missing file, `--stand-in -` when standard input is not a socket) and a stand-in that cannot be loaded exit 2 |
 | `project <folder>` | the run's record projected to its state, as JSON on stdout |
-| `inspect <folder> --verify` | the run's summary (state, counts, spend, failures) and the check of every file it placed, on stdout |
+| `inspect <folder> --verify`, `inspect <folder> --json` | the run's summary (state, counts, spend, failures) and the check of every file it placed, on stdout; or the same as JSON |
+| `jobs` | the project store's long jobs, one line each; nothing when it holds none |
 | `reroll <folder> <step>` | the next take of a step path, written to the workflow's takes file; one line saying so and the next command, on stdout |
 | `pick <folder> <step> <take>` | a take chosen for a step path, with its result's digest, written to the takes file; one line on stdout |
 | `takes list <target>` | the takes file's entries, one line each (`<step>  take <n>[  <digest>]`), on stdout |
@@ -147,7 +153,9 @@ Every case relies on these flags:
 
 A node body in a case may keep a counter in a file in the project folder, the node host's
 working directory, so that a later step can read how often the body ran (`run-retry-engine`,
-`run-timeout`).
+`run-timeout`). A case's stand-in does the same in its own working directory, which is the
+engine's, the project folder: `count.txt` for how often it was asked and `asked.json` for what
+(`stand-in-image/README.md`).
 
 ### Exit status
 
@@ -197,7 +205,7 @@ Each step runs with a minimal environment, never the caller's:
 
 No provider key, `GRIDA_FX_TOOL_<NAME>` override or FX cache location can reach a case, and no
 case spends: a case that needs a paid call's answer seeds the project's store with it
-(`cache-replay`).
+(`cache-replay`), or answers it with a stand-in (`stand-in-image`).
 
 ## Recording expected output
 
@@ -248,10 +256,16 @@ alone.
 | `run-retry-engine` | `retry="engine"`: a body that raises twice runs a third time and succeeds, and no more; a `node_retry` event for each failed attempt |
 | `run-takes` | `reroll`, `pick` and `takes list` between runs: the takes file a run's plan names, the take each run draws, a picked result's digest checked by the next run |
 | `run-timeout` | a step past its `timeout:` fails with `ran past 1 seconds` and is not run again, even under `retry="engine"` (exit 1) |
+| `stand-in-agent` | a stand-in's `agent.turn` answers drive the engine's agent loop: a tool call, then a `submit`, and the transcript in the output; a turn whose data is not `{text, tool_calls}` and a structured answer its schema refuses are `call_failed` |
+| `stand-in-errors` | what a stand-in's answer can end in: refused, failed, declined (`not_live`), a picture of the wrong size, an answer of the wrong shape (a file's kind, an extra file, no file, data), and a body's call the request check refuses before the stand-in is asked; the `code` of each `node_failed`; nothing of them recorded, so a new run asks again |
+| `stand-in-flags` | how `--stand-in` is given: with `--live` or `--yes-up-to`, a malformed source, a missing file, a missing function, a file that fails to import, and `-` without a socket are usage errors (exit 2) that ask nothing; a stand-in that raises stops the run (exit 1) |
+| `stand-in-image` | a stand-in run: the call answered offline for $0.00 under a ceiling below its hold, marked `stand_in` in `plan.json`, `run_started` and the `call` event, kept in the stand-in store (resumed, rerun and call-cache hits ask nothing; the project's own store gets nothing and still misses); the plan digest unchanged; each folder refuses the other mode; `inspect` names it; `pick` and `reroll` refuse it |
+| `stand-in-job` | long jobs (`video.generate`, `mesh.generate`) answered at once with no job record: files sent without a kind take the capability's (the model's from its signature), and the engine writes `data` from the files, so the clip's file facts and the model's kind become node facts |
 | `takes-pick` | `takes: 3` with `pick: first_accepted`, priced as three calls |
 | `template-prompt` | a prompt file rendered with `vars` and inputs, `max:` from an input, and steps nested in a repeat |
 | `tiered-price` | a route priced per second by a request setting: each take at its tier, an unknown setting at the dearest |
 | `workflow-step` | a workflow used as a repeated step, with its own input defaults |
+| `workflows-setting` | `workflows:` in `fx.yaml` replaces the folders searched for a workflow id (overlapping entries count a file once, a missing folder adds nothing, the root is always searched); a workflow in a nested project keeps its home's route defaults under the planning project's, and its run, store and takes file are the planning project's; an entry that is the project or holds it is refused (exit 2) |
 | `yaml-strict` | the strict YAML subset in inputs, workflow, route, takes and project files: `on` as a key, quoted and plain strings (`y`, `0bad`) accepted; ambiguous scalars (a YAML 1.1 boolean in any letter case, a leading zero, a date, `1:30` and `16:9`, `.inf`), duplicate keys, anchors and tags refused (exit 2) |
 
 ## Writing a case

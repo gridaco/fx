@@ -27,7 +27,7 @@
 //!
 //! Text:
 //! ```text
-//! <workflow id>  ·  <folder name>
+//! <workflow id>  ·  <folder name>[  ·  stand-in]
 //! state     <run state>   <n> steps: <count state, …, sorted by state; or none>
 //! spent     $<charged, 2 places>                   (when the run finished or was cancelled)
 //! failed    <id>: <error or "no reason recorded">  (each failed step)
@@ -35,8 +35,11 @@
 //! verified  <n> files                              (--verify, nothing differs)
 //! ```
 //! `--json`: `{"run": {workflow, folder, state, charged_usd, steps: [{id, path, state, error?,
-//! cache?, files: [{path, digest, size}]}]}, "verification"?: {verified, problems}}`, where
-//! `folder` is the folder as named and `charged_usd` is null before the run ended. Exit 1 when
+//! cache?, files: [{path, digest, size}]}], stand_in?}, "verification"?: {verified, problems}}`,
+//! where `folder` is the folder as named and `charged_usd` is null before the run ended. A
+//! stand-in run (spec/store.md §8, "Stand-in runs"), whose `plan.json` or a `run_started` says
+//! `stand_in: true`, has `  ·  stand-in` after the header's folder name and `stand_in: true` in
+//! `run`. Exit 1 when
 //! `--verify` found a problem, else 0 (a failed run included).
 
 use crate::cli::InspectArgs;
@@ -45,7 +48,9 @@ use crate::verbs::{event_name, read_log, read_plan, text, workflow_id};
 use grida_fx_core::Error;
 use grida_fx_core::docs::project::Project;
 use grida_fx_core::money::Usd;
-use grida_fx_runtime::folder::{keyed_path, step_file_path, step_folder, takes_of_id};
+use grida_fx_runtime::folder::{
+    holds_stand_in, keyed_path, step_file_path, step_folder, takes_of_id,
+};
 use indexmap::IndexMap;
 use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
@@ -141,6 +146,8 @@ struct StepView {
 #[derive(Debug, Clone, PartialEq)]
 struct RunView {
     workflow: String,
+    /// A stand-in run: its `plan.json` or a `run_started` says so.
+    stand_in: bool,
     state: &'static str,
     /// The last `charged_usd` of a run that ended.
     charged: Option<Value>,
@@ -179,9 +186,13 @@ impl RunView {
         }
         let mut state = "planned";
         let mut charged = None;
+        let mut stand_in = holds_stand_in(plan);
         for event in events {
             match event_name(event) {
-                Some("run_started") => state = "unfinished",
+                Some("run_started") => {
+                    state = "unfinished";
+                    stand_in |= event.get("stand_in") == Some(&Value::Bool(true));
+                }
                 Some("run_finished") => {
                     let ok = event.get("ok").and_then(Value::as_bool) == Some(true);
                     state = if ok { "succeeded" } else { "failed" };
@@ -219,6 +230,7 @@ impl RunView {
             .collect();
         RunView {
             workflow: workflow_id(plan).to_string(),
+            stand_in,
             state,
             charged,
             steps,
@@ -399,8 +411,13 @@ fn text_lines(
             .collect::<Vec<_>>()
             .join(", ")
     };
+    let stand_in = if view.stand_in {
+        "  \u{b7}  stand-in"
+    } else {
+        ""
+    };
     let mut lines = vec![
-        format!("{}  \u{b7}  {folder_name}", view.workflow),
+        format!("{}  \u{b7}  {folder_name}{stand_in}", view.workflow),
         labelled(
             "state",
             &format!("{}   {} steps: {counted}", view.state, view.steps.len()),
@@ -462,6 +479,9 @@ fn json_document(view: &RunView, folder: &str, verification: Option<&Verificatio
             "steps": steps,
         }
     });
+    if view.stand_in {
+        document["run"]["stand_in"] = Value::Bool(true);
+    }
     if let Some(verification) = verification {
         document["verification"] = json!({
             "verified": verification.problems.is_empty(),

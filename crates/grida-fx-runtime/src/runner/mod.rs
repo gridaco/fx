@@ -15,7 +15,10 @@
 //! 4. another invocation holds the folder's lock (`folder::RunFolder::lock`); 5. the folder holds
 //!    another plan (`folder::check_plan`, read once the lock is held, so no invocation can write
 //!    `plan.json` in between), or its `events.jsonl` holds an event of another plan:
-//!    `<folder> holds a run of another workflow or other inputs; choose a new folder`.
+//!    `<folder> holds a run of another workflow or other inputs; choose a new folder`; 6. the
+//!    folder holds a run of the other mode, a stand-in run resumed without a stand-in or the
+//!    reverse (`folder::check_mode`, right after `check_plan`; spec/store.md §8 "Stand-in
+//!    runs").
 //!
 //! Then: read the earlier events (`events::read_events_noting`: a torn tail is cut off, with a
 //! note on stderr, `note: <folder>/events.jsonl ended in a line an earlier invocation did not
@@ -23,7 +26,10 @@
 //! (`RunFolder::sweep`, `Store::sweep`); write `plan.json` once (`folder::plan_document`); replay
 //! finished steps into `planner.results` ([`replay::replay`]); open the event log; build the
 //! ledger (ceiling = the plan's) and replay it; emit `run_started {workflow, resumed, ceiling_usd,
-//! charged_usd, estimate}` (`resumed`: there were earlier events; `estimate` the fresh plan's).
+//! charged_usd, estimate, stand_in?}` (`resumed`: there were earlier events; `estimate` the fresh
+//! plan's; `stand_in: true` only when the engine has a stand-in, which `plan.json` records too).
+//! A stand-in run's store, every lookup and every record included, is the stand-in store the
+//! engine was opened on.
 //! The ledger finds the step budgets of earlier holds in the expansion with the replayed results
 //! (the plan's own expansion when that expansion fails), so run-time instances keep their scopes.
 //!
@@ -50,6 +56,9 @@
 //!   (`dispatch::Done::stop`) stops the run like a run-time problem: one `problem {where:
 //!   <instance id>, message: <stop>}`, and `stopped` is that message. When the run stops, what
 //!   still runs is cancelled and waited for; a dispatch that finished anyway keeps its result.
+//!   In a stand-in run, the answerer going away while something runs
+//!   ([`crate::stand_in::StandIn::lost`]) stops the run the same way: one `problem {where:
+//!   stand_in, message: the stand-in answerer exited}`, and `stopped` is that message.
 //!   An event that any part of the run could not write (`EventLog::fault`) is an engine fault.
 //!
 //! After the loop: expand once more; the declared outputs; `incomplete` when stopped, when an
@@ -82,6 +91,7 @@ use crate::events::{Event, EventLog};
 use crate::executor::InstanceJob;
 use crate::folder::RunFolder;
 use crate::ledger::{Ledger, Scopes};
+use crate::stand_in::ANSWERER_EXITED;
 use crate::store::Store;
 use dispatch::Done;
 use grida_fx_core::Error;
@@ -98,6 +108,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::mpsc;
+
+/// The `where` of the `problem` a lost stand-in answerer writes.
+const STAND_IN_WHERE: &str = "stand_in";
 
 /// How to run.
 #[derive(Debug, Clone, PartialEq)]
@@ -331,11 +344,26 @@ fn invoke(
             }
         })
     };
+    // A stand-in run stops when its answerer goes away while the run still runs.
+    let answerer = engine.stand_in.as_ref().map(|stand_in| {
+        let stand_in = Arc::clone(stand_in);
+        let sender = sender.clone();
+        engine.handle.spawn(async move {
+            stand_in.lost().await;
+            let _ = sender.send(Message::AnswererLost);
+        })
+    });
+    let watchers = move || {
+        watcher.abort();
+        if let Some(answerer) = &answerer {
+            answerer.abort();
+        }
+    };
     let started = prepare(engine, planner, &plan, options, &digest);
     let (folder, prior) = match started {
         Ok(started) => started,
         Err(error) => {
-            watcher.abort();
+            watchers();
             return Err(error);
         }
     };
@@ -347,7 +375,7 @@ fn invoke(
     let log = match EventLog::open(&folder.events_path(), &invocation_id, &digest) {
         Ok(log) => Arc::new(log),
         Err(error) => {
-            watcher.abort();
+            watchers();
             return Err(RunError::Fatal(Error::io(&events_label, &error)));
         }
     };
@@ -392,12 +420,13 @@ fn invoke(
         charged_usd: scheduler.ledger.charged(),
         estimate_low: estimate.low,
         estimate_high: estimate.high,
+        stand_in: engine.stand_in_run(),
     };
     let outcome = match scheduler.emit(&started) {
         Ok(()) => scheduler.conclude(first),
         Err(error) => Err(RunError::Fatal(error)),
     };
-    watcher.abort();
+    watchers();
     scheduler.join();
     outcome
 }
@@ -419,7 +448,7 @@ async fn interruption() -> bool {
 }
 
 /// The folder, locked and checked, and its earlier events, with `plan.json` written (module doc:
-/// refusals 4 and 5, and what comes before the event log).
+/// refusals 4 to 6, and what comes before the event log).
 fn prepare(
     engine: &Arc<Engine>,
     planner: &Planner,
@@ -430,6 +459,8 @@ fn prepare(
     let folder = RunFolder::lock(&options.folder, &options.label)
         .map_err(|refused| RunError::Refused(refused.0))?;
     crate::folder::check_plan(&options.folder, &options.label, digest)
+        .map_err(|refused| RunError::Refused(refused.0))?;
+    crate::folder::check_mode(&options.folder, &options.label, engine.stand_in_run())
         .map_err(|refused| RunError::Refused(refused.0))?;
     let events_label = in_folder(&options.label, "events.jsonl");
     // The reader's sentences name `events.jsonl`; the folder says which one.
@@ -457,7 +488,13 @@ fn prepare(
     }
     folder.sweep();
     engine.store.sweep();
-    let document = crate::folder::plan_document(plan, planner, digest, &options.takes_file);
+    let document = crate::folder::plan_document(
+        plan,
+        planner,
+        digest,
+        &options.takes_file,
+        engine.stand_in_run(),
+    );
     folder.write_plan_once(&document).map_err(|error| {
         RunError::Fatal(Error::io(&in_folder(&options.label, "plan.json"), &error))
     })?;
@@ -478,6 +515,8 @@ struct Running {
 enum Message {
     Done(Box<Done>),
     Interrupted,
+    /// A stand-in run's answerer is gone ([`crate::stand_in::StandIn::lost`]).
+    AnswererLost,
 }
 
 /// The loop's state (module doc).
@@ -641,12 +680,25 @@ impl Scheduler<'_> {
                 ));
             }
             let mut stop = None;
+            let mut lost = false;
             for message in messages {
-                if let Message::Done(done) = message
-                    && let Some(stopped) = self.finish(*done)?
-                {
-                    stop.get_or_insert(stopped);
+                match message {
+                    Message::Done(done) => {
+                        if let Some(stopped) = self.finish(*done)? {
+                            stop.get_or_insert(stopped);
+                        }
+                    }
+                    Message::AnswererLost => lost = true,
+                    Message::Interrupted => {}
                 }
+            }
+            // A call that met the loss first has already stopped the run with it.
+            if lost && stop.is_none() {
+                self.emit(&Event::Problem {
+                    where_: STAND_IN_WHERE.to_string(),
+                    message: ANSWERER_EXITED.to_string(),
+                })?;
+                stop = Some(ANSWERER_EXITED.to_string());
             }
             self.check_log()?;
             if stop.is_some() {
@@ -699,6 +751,7 @@ impl Scheduler<'_> {
                     id: instance.id.clone(),
                     path: instance.path.clone(),
                     error: Some(error.clone()),
+                    code: None,
                     facts: None,
                     duration_ms: None,
                 })?;
@@ -790,6 +843,7 @@ impl Scheduler<'_> {
                 id: done.id.clone(),
                 path,
                 error: Some(error.clone()),
+                code: None,
                 facts: None,
                 duration_ms: None,
             })?;

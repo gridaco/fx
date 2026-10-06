@@ -22,11 +22,14 @@
 //! - [`transport`]: the [`Transport`] trait, its request and response types, the default
 //!   reqwest transport ([`transport::http`]), and for tests the replay transport and `NoNetwork`;
 //! - [`keys`] (the allowlisted key loader), [`redact`], [`setup`] (what adapters are built
-//!   from), [`clock`] (polling time), [`wire`] (helpers every adapter shares),
+//!   from), [`clock`] (polling time), [`wire`] (helpers every adapter shares), [`checks`] (the
+//!   answer checks routes share, and every route's check of a capability),
 //!   [`capabilities`] (spec/capabilities.md as data), [`routes`] (the built-in route table);
 //! - one module per provider: [`openai`], [`openrouter`], [`fal`], [`tripo`], [`elevenlabs`],
 //!   each with `register(&mut Adapters, &Setup)`;
 //! - [`live`]: the adapters of a live run, the only place the default transport is built;
+//! - [`stand_in`]: the checks a stand-in's answer gets in a stand-in run (spec/protocol.md §5.7):
+//!   its shape, then its route's check, from adapters built keyless over a refusing transport;
 //! - [`fake`] and [`testing`] (feature `testing`): the scripted `FakeAdapter`, test setups,
 //!   calls and synthetic media.
 //!
@@ -36,6 +39,7 @@
 
 pub mod adapter;
 pub mod capabilities;
+pub mod checks;
 pub mod clock;
 pub mod elevenlabs;
 #[cfg(any(test, feature = "testing"))]
@@ -49,6 +53,7 @@ pub mod redact;
 pub mod registry;
 pub mod routes;
 pub mod setup;
+pub mod stand_in;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
 pub mod transport;
@@ -62,6 +67,7 @@ pub use adapter::{
 pub use keys::{KeyName, Keys, Secret};
 pub use registry::Adapters;
 pub use setup::{Endpoints, Setup};
+pub use stand_in::{StandInChecks, StandInFile};
 pub use transport::{HttpRequest, HttpResponse, Transport, TransportError};
 
 use std::future::Future;

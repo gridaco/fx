@@ -121,6 +121,22 @@
         "null"
       ]
     },
+    "code": {
+      "description": "node_failed: the name (protocol.md §7) of the error that failed the node: the host's error, the engine's error the body let through, the error of a paid built-in's call, or the code a failed check of the result gives. null when the engine failed the node with no error code: a timeout, an assertion. Absent in records written before it existed.",
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-z][a-z_]*$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "stand_in": {
+      "description": "run_started: the run is a stand-in run (protocol.md §5.7). call: a stand-in answered the call, which was not answered from the cache. Present only when true.",
+      "const": true
+    },
     "reason": {
       "type": "string"
     },

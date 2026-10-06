@@ -180,6 +180,68 @@ pub mod media {
         bytes
     }
 
+    /// A minimal MP4 the facts reader takes as a clip: one `avc1` video track of `width` ×
+    /// `height` holding `frames` samples of one tick each at a timescale of `fps`, so the clip
+    /// runs `frames / fps` seconds at `fps`. It carries no media data: only the boxes the facts
+    /// read (`ftyp`, then `moov` with `mvhd` and a `trak` of `tkhd` and `mdia`: `mdhd`, `hdlr`
+    /// `vide`, and `minf`/`stbl` with `stsd`, `stts` and `stsz`).
+    pub fn mp4(width: u16, height: u16, fps: u32, frames: u32) -> Vec<u8> {
+        fn mp4box(kind: &[u8; 4], content: &[u8]) -> Vec<u8> {
+            let mut out = u32::try_from(content.len() + 8)
+                .expect("a small box")
+                .to_be_bytes()
+                .to_vec();
+            out.extend(kind);
+            out.extend(content);
+            out
+        }
+        fn full(kind: &[u8; 4], flags: u32, rest: &[u8]) -> Vec<u8> {
+            // Version 0, then the 24-bit flags.
+            let mut content = flags.to_be_bytes().to_vec();
+            content[0] = 0;
+            content.extend(rest);
+            mp4box(kind, &content)
+        }
+        fn times(scale: u32, duration: u32) -> Vec<u8> {
+            // Creation and modification times, the timescale, the duration.
+            let mut rest = vec![0; 8];
+            rest.extend(scale.to_be_bytes());
+            rest.extend(duration.to_be_bytes());
+            rest
+        }
+        let mvhd = full(b"mvhd", 0, &[times(1000, 0), vec![0; 80]].concat());
+        let tkhd = full(
+            b"tkhd",
+            3,
+            &[vec![0; 8], 1u32.to_be_bytes().to_vec(), vec![0; 68]].concat(),
+        );
+        let mdhd = full(b"mdhd", 0, &[times(fps, frames), vec![0; 4]].concat());
+        let hdlr = full(b"hdlr", 0, &[&[0u8; 4][..], b"vide", &[0; 13]].concat());
+        // A visual sample entry: 24 bytes, the size, 50 bytes, depth 24 and pre_defined -1.
+        let mut entry = vec![0; 24];
+        entry.extend(width.to_be_bytes());
+        entry.extend(height.to_be_bytes());
+        entry.extend([0; 46]);
+        entry.extend([0, 24, 0xFF, 0xFF]);
+        let stsd = full(
+            b"stsd",
+            0,
+            &[1u32.to_be_bytes().to_vec(), mp4box(b"avc1", &entry)].concat(),
+        );
+        let stts = full(
+            b"stts",
+            0,
+            &[1u32, frames, 1].map(u32::to_be_bytes).concat(),
+        );
+        let stsz = full(b"stsz", 0, &[100u32, frames].map(u32::to_be_bytes).concat());
+        let stbl = mp4box(b"stbl", &[stsd, stts, stsz].concat());
+        let mdia = mp4box(b"mdia", &[mdhd, hdlr, mp4box(b"minf", &stbl)].concat());
+        let trak = mp4box(b"trak", &[tkhd, mdia].concat());
+        let mut file = mp4box(b"ftyp", b"isom\0\0\x02\0isom");
+        file.extend(mp4box(b"moov", &[mvhd, trak].concat()));
+        file
+    }
+
     /// Bytes that start like a JPEG (not decodable).
     pub const JPEG_HEAD: &[u8] = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00";
     /// Bytes that start like an MP3 (an ID3 tag).

@@ -574,7 +574,7 @@ fn plan_json_is_the_graph_with_the_run_members() {
     let plan = make_plan(&mut planner, &mut host, None, &NoCache).unwrap();
     assert!(plan.ok(), "{:?}", plan.problems);
     let digest = plan_digest(&plan, &planner).unwrap();
-    let document = plan_document(&plan, &planner, &digest, "workflows/case.takes.yaml");
+    let document = plan_document(&plan, &planner, &digest, "workflows/case.takes.yaml", false);
 
     let schema: Value = serde_json::from_str(include_str!(
         "../../../spec/schemas/fx-graph-v1.schema.json"
@@ -611,7 +611,7 @@ fn plan_json_is_the_graph_with_the_run_members() {
     assert!(!text.contains(&*project.root.to_string_lossy()), "{text}");
 
     // An empty takes file is left out.
-    let without = plan_document(&plan, &planner, &"0".repeat(64), "");
+    let without = plan_document(&plan, &planner, &"0".repeat(64), "", false);
     assert!(without.get("takes_file").is_none());
 }
 

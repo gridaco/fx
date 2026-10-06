@@ -1,0 +1,34 @@
+# Long jobs in a stand-in run are answered at once and leave no job record. The stand-in (see
+# in/stand_in.py) answers video.generate on clip-a@acme with the bytes of in/clip.mp4 and
+# mesh.generate on mesh-a@acme with a minimal binary glTF, both without a kind and with `data`
+# null; image.generate draws the mesh's front view. The engine gives each file its capability's
+# kind (`video/mp4`; `model/gltf-binary` from the glTF signature) and writes the data from the
+# file: the clip's node facts come from its file facts, `width` 64, `height` 48,
+# `duration_seconds` 1.001 and `fps` 29.97003 (see README.md), and the mesh's node fact is
+# `model_kind: model/gltf-binary`; every `cost_usd` is 0. The mesh's request holds its view as a
+# file value, which asked.json lists with the file's facts. The run exits 0 having asked three
+# times; neither store holds a `jobs/` folder and `jobs` prints nothing. `inspect --verify`
+# checks the three placed files.
+steps:
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, --stand-in, "stand_in.py#answer"]
+  mentions:
+  - "stand-in  stand_in.py#answer"
+  - "result    ok   spent $0.00"
+  absent:
+  - .fx/cache/jobs
+  - .fx/cache/stand-in/jobs
+- read: count.txt
+  save: count.txt
+- read: asked.json
+  save: asked.json
+  json: true
+- read: runs/one/events.jsonl
+  save: events-one.json
+  jsonl: true
+- argv: [project, runs/one]
+  save: project-one.json
+  json: true
+- argv: [jobs]
+  save: jobs.txt
+- argv: [inspect, runs/one, --verify]
+  save: inspect.txt

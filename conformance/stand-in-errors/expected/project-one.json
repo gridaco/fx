@@ -1,0 +1,101 @@
+{
+ "instances": {
+  "body#1": {
+   "error": "image.generate on img-a@acme was refused: image.generate needs prompt",
+   "path": "body",
+   "state": "failed"
+  },
+  "data#1": {
+   "error": "image.generate on img-a@acme failed: image.generate returns no data",
+   "path": "data",
+   "state": "failed"
+  },
+  "declined#1": {
+   "error": "image.generate on img-a@acme is a paid call the stand-in declined",
+   "path": "declined",
+   "state": "failed"
+  },
+  "extra#1": {
+   "error": "image.generate on img-a@acme failed: image.generate returns no file named thumbnail",
+   "path": "extra",
+   "state": "failed"
+  },
+  "failed#1": {
+   "error": "image.generate on img-a@acme failed: the stand-in failed this prompt",
+   "path": "failed",
+   "state": "failed"
+  },
+  "good#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": 0
+   },
+   "path": "good",
+   "state": "succeeded"
+  },
+  "missing#1": {
+   "error": "image.generate on img-a@acme failed: the answer holds no image",
+   "path": "missing",
+   "state": "failed"
+  },
+  "refused#1": {
+   "error": "image.generate on img-a@acme was refused: the stand-in refuses this prompt",
+   "path": "refused",
+   "state": "failed"
+  },
+  "small#1": {
+   "error": "image.generate on img-a@acme failed: the image is 32x32, not 64x64",
+   "path": "small",
+   "state": "failed"
+  },
+  "text#1": {
+   "error": "image.generate on img-a@acme failed: image is text/plain, not image/png",
+   "path": "text",
+   "state": "failed"
+  }
+ },
+ "run": {
+  "run_finished": {
+   "charged_usd": 0,
+   "event": "run_finished",
+   "failed": [
+    "refused#1",
+    "failed#1",
+    "declined#1",
+    "small#1",
+    "text#1",
+    "extra#1",
+    "missing#1",
+    "data#1",
+    "body#1"
+   ],
+   "incomplete": false,
+   "ok": false,
+   "outputs": {
+    "good": {
+     "file": {
+      "digest": "61551ab637dc15d883ebc2aae4ab25077f5c02697409d08f5941b6d485caa76f",
+      "kind": "image/png",
+      "name": "good/image",
+      "size": 12420
+     }
+    }
+   },
+   "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
+   "stopped": null
+  },
+  "run_started": {
+   "ceiling_usd": null,
+   "charged_usd": 0,
+   "estimate": {
+    "high_usd": 0.4,
+    "low_usd": 0.1
+   },
+   "event": "run_started",
+   "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
+   "resumed": false,
+   "stand_in": true,
+   "workflow": "case"
+  }
+ }
+}

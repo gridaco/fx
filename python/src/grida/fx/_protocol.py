@@ -9,10 +9,15 @@ without rounding (the literal is the canonical form of the number it reads as), 
 lone surrogates, and objects whose keys are strings, unique within the object. A message also
 nests no deeper than the engine reads: no value inside more than :data:`MAX_DEPTH` lists and
 objects, the message itself counted.
+
+:func:`read_message` and :func:`write_message` frame messages over blocking streams (the node
+host's stdin and stdout); :func:`read_message_async` and :func:`write_message_async` over asyncio
+streams (the stand-in answerer ``grida.fx.run`` serves on a socket, section 5.7).
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from decimal import Decimal
@@ -78,23 +83,10 @@ def read_message(stream: BinaryIO) -> bytes | None:
             raise ProtocolError("a message header line is too long")
         if not line.endswith(b"\n"):
             raise ProtocolError("the stream ended inside a message header")
-        line = line[:-1]
-        if line.endswith(b"\r"):
-            line = line[:-1]
+        line = _header_line(line)
         if not line:
             break
-        name, colon, value = line.partition(b":")
-        if not colon:
-            raise ProtocolError(f"a message header is not a field: {line[:80]!r}")
-        if name.strip().lower() != b"content-length":
-            continue  # other header fields are ignored
-        match = _CONTENT_LENGTH.fullmatch(value)
-        if match is None:
-            raise ProtocolError(f"Content-Length is not a byte count: {value[:80]!r}")
-        found = int(match[1])
-        if length is not None and found != length:
-            raise ProtocolError("a message header gives two different lengths")
-        length = found
+        length = _header_field(line, length)
     if length is None:
         raise ProtocolError("a message header has no Content-Length")
     body = bytearray()
@@ -106,11 +98,81 @@ def read_message(stream: BinaryIO) -> bytes | None:
     return bytes(body)
 
 
+async def read_message_async(stream: asyncio.StreamReader) -> bytes | None:
+    """:func:`read_message` over an asyncio stream."""
+    length: int | None = None
+    first = True
+    while True:
+        try:
+            line = await stream.readuntil(b"\n")
+        except asyncio.IncompleteReadError as ended:
+            if first and not ended.partial:
+                return None
+            raise ProtocolError("the stream ended inside a message header") from None
+        except asyncio.LimitOverrunError:
+            raise ProtocolError("a message header line is too long") from None
+        first = False
+        if len(line) > _MAX_HEADER_LINE:
+            raise ProtocolError("a message header line is too long")
+        line = _header_line(line)
+        if not line:
+            break
+        length = _header_field(line, length)
+    if length is None:
+        raise ProtocolError("a message header has no Content-Length")
+    try:
+        return await stream.readexactly(length)
+    except asyncio.IncompleteReadError as ended:
+        raise ProtocolError(
+            f"the stream ended after {len(ended.partial)} of a message's {length} bytes"
+        ) from None
+
+
+def _header_line(line: bytes) -> bytes:
+    """A header line without its line feed and the carriage return before it."""
+    line = line[:-1]
+    return line[:-1] if line.endswith(b"\r") else line
+
+
+def _header_field(line: bytes, length: int | None) -> int | None:
+    """The message's length once the header line ``line`` is read (``length`` before it)."""
+    name, colon, value = line.partition(b":")
+    if not colon:
+        raise ProtocolError(f"a message header is not a field: {line[:80]!r}")
+    if name.strip().lower() != b"content-length":
+        return length  # other header fields are ignored
+    match = _CONTENT_LENGTH.fullmatch(value)
+    if match is None:
+        raise ProtocolError(f"Content-Length is not a byte count: {value[:80]!r}")
+    found = int(match[1])
+    if length is not None and found != length:
+        raise ProtocolError("a message header gives two different lengths")
+    return found
+
+
 def write_message(stream: BinaryIO, message: dict[str, Any]) -> None:
     """Writes one message as a frame (compact JSON, ``ensure_ascii=False``) and flushes."""
-    body = encode_message(message)
-    stream.write(b"Content-Length: " + str(len(body)).encode("ascii") + b"\r\n\r\n" + body)
+    stream.write(frame(message))
     stream.flush()
+
+
+async def write_message_async(stream: asyncio.StreamWriter, message: dict[str, Any]) -> None:
+    """:func:`write_message` over an asyncio stream: one write, then waits for room."""
+    stream.write(frame(message))
+    await stream.drain()
+
+
+def encodable_text(text: str) -> str:
+    """``text`` with each lone surrogate written as its escape (``\\udcff``), so a message
+    holding it can be sent (:func:`check_value`): an error message built from a file name that is
+    not UTF-8, say."""
+    return text.encode("utf-8", "backslashreplace").decode("utf-8")
+
+
+def frame(message: Any) -> bytes:
+    """A message as one whole frame: its header and its body (:func:`encode_message`)."""
+    body = encode_message(message)
+    return b"Content-Length: " + str(len(body)).encode("ascii") + b"\r\n\r\n" + body
 
 
 def encode_message(message: Any) -> bytes:

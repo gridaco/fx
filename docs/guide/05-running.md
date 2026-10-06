@@ -10,7 +10,7 @@ repository ([the examples' README](../../examples/README.md#from-a-clone)).
 | Command | |
 |---|---|
 | `grida-fx plan <target> [inputs] [--routes file]… [--max-usd N] [--check] [--expect-cached] [--json]` | expand, check, price. Never spends. |
-| `grida-fx run <target> [inputs] [--routes file]… [--live] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--run folder]` | run; `--live` admits paid calls, needs a ceiling and reads the provider keys; `--run` names the run folder |
+| `grida-fx run <target> [inputs] [--routes file]… [--live] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--run folder] [--stand-in file.py#function]` | run; `--live` admits paid calls, needs a ceiling and reads the provider keys; `--run` names the run folder; `--stand-in` answers paid calls with your function instead, offline ([below](#stand-ins-testing-without-a-provider)) |
 | `grida-fx reroll <run> <step-path> [--live]` / `grida-fx pick <run> <step-path> <take>` | takes ([Cost](04-cost-and-cache.md#takes)) |
 | `grida-fx takes list <target>` / `grida-fx takes mv <target> <old> <new>` | inspect or repair a takes file |
 | `grida-fx jobs [--forget <key>]` | the cache's long provider jobs, `settled` ones included ([Resuming](04-cost-and-cache.md#resuming)); `--forget` clears one once you have checked the provider |
@@ -59,7 +59,9 @@ serve a type; `grida-fx doctor` says which of them a live run could serve.
 
 `<target>` is one of:
 - a workflow file (`workflows/gallery.yaml`);
-- a workflow id (`concept-gallery`);
+- a workflow id (`concept-gallery`), looked for among the `.yaml` files at the project root, then
+  in the folders `fx.yaml` lists under `workflows:`, `workflows/` by default
+  ([Getting started](01-getting-started.md#a-project));
 - a Python builder (`level_art.py:build`), whose arguments are passed with `--arg name=value`.
 
 ## Keys and live runs
@@ -264,7 +266,226 @@ result.deliver({"images": "out/{key}.png"})
   planned with (`live`, `yes_up_to` and `run_dir` may still be given).
 - **Async:** `await grida.fx.run_async(...)`.
 - **A refused plan raises** `PlanRefused`, and a run refused before it starts raises `FxError`. A
-  failed step doesn't: check `result.ok` and `result.failed`.
+  failed step doesn't: check `result.ok`, then `result.failures`. It holds, by instance id
+  (`draw#1`), each step that failed or was skipped: its `path`, `message`, `code` (the error's
+  name, such as `node_failure` or `capability_refused`; `None` for a timeout, an assertion that
+  did not hold, or a skip), `facts` and `skipped`. `result.stopped` says why a run stopped before
+  it was done, and is `None` otherwise.
+- **Stand-ins:** `stand_in=answer` answers the run's paid calls with your function, offline and
+  for nothing ([below](#stand-ins-testing-without-a-provider)); `result.stand_in` says whether a
+  run had one.
+- **Your Python runs the nodes when nothing else is chosen:** the SDK (and `python -m grida.fx`)
+  tells the engine the Python it runs in, and node bodies, built-ins with Python bodies and a
+  `--stand-in` file run in it when neither `GRIDA_FX_PYTHON` nor a project `.venv` chooses one.
+  Set `GRIDA_FX_PYTHON` to choose another.
+
+## Stand-ins (testing without a provider)
+
+A **stand-in run** answers each paid call with a function you write instead of a provider:
+offline, for nothing, with the answers your test chooses, as a mock model does in an AI SDK. The
+rest is a real run: every step runs, your nodes and judges see the answers, and the run is
+recorded. A call answered before is replayed from the stand-in's own cache (below); the function
+is asked only the rest.
+
+**Two ways to give one:**
+- **From Python,** `grida.fx.run(..., stand_in=answer)` (or `run_async`) calls `answer` in your
+  own process, so closures, counters and lists of scripted answers work, and each run may get
+  another function. The SDK hands the engine a socket on its standard input (`--stand-in -`, for
+  SDKs rather than for typing), so this needs macOS or Linux.
+- **From the command,** `--stand-in <file>.py#<function>`, with the file relative to where you are;
+  it may lie outside the project. FX loads it in a Python of its own: `GRIDA_FX_PYTHON` when it is
+  set, else the `.venv` of the project you run from, else the SDK's Python, else `python3` on
+  `PATH`. Unlike your nodes,
+  it never uses the `.venv` of a workflow's own project when that is another one
+  ([Getting started](01-getting-started.md#when-fx-needs-python)). The file's folder comes first
+  on `sys.path`, as `python <file>` would have it. A file that is missing or does not load, or a
+  function it lacks, is refused before the run starts (exit 2).
+
+  ```bash
+  grida-fx run icon --name "copper lantern" --stand-in tests/stand_in.py#answer
+  ```
+
+  ```
+  run       runs/icon/2026-10-06-1
+  stand-in  tests/stand_in.py#answer
+  result    ok   spent $0.00
+  ```
+
+**Never with `--live` or `--yes-up-to`** (exit 2): a stand-in run spends nothing and runs every
+phase. `--max-usd` is accepted and changes nothing, since nothing is reserved: the plan shows the
+ceiling but never warns that the run stops before crossing it. `--deliver` works as in any run. `plan` and the other planning commands take no stand-in: planning never makes
+a paid call.
+
+**The function** takes one call, and may be `async`:
+
+| `call.` | |
+|---|---|
+| `capability`, `route.id`, `key` | what is asked, of which route, and the call key |
+| `take`, `takes` | the take being drawn (`2` for a second take), and the whole take list |
+| `instance.id`, `.path`, `.step` | the instance making the call: its id (`entity['ada'].draw#2`), its step path with repeat keys (`entity['ada'].draw`) and its declared step (`entity.draw`) |
+| `request` | the request, with each file in it, however deep (`references`, an agent's `messages[*].images`), as an `InputFile`: `.path`, `.read_bytes()`, `.facts` |
+| `files` | every file of the request, as an `InputFile`, by digest |
+
+What it returns or raises decides the call:
+
+| `answer(call)` | The call |
+|---|---|
+| returns an `Answer` | is answered: checked (below), stored and recorded, at `cost_usd: 0` |
+| returns `DECLINE` | goes on as in a run without a stand-in, and fails `not_live`: `… is a paid call the stand-in declined`. Made again, it is asked again |
+| raises `CallRefused("…")` | is refused (`capability_refused`), as when a provider refuses before sending |
+| raises `CallFailed("…")` | fails (`call_failed`), as when every attempt failed |
+| raises anything else, or returns `None` or another value | stops the run (below) |
+
+`Answer(files={name: file}, data=None)` takes each file as bytes, an `Output(kind=…, data=…)`, an
+`InputFile` (to answer with a file the call was given) or a `Path`. Bytes take the kind the
+capability gives that name: `image` is `image/png`, `audio` is `audio/mpeg`, `video` is
+`video/mp4`. `data` is what the capability returns
+([capabilities.md](../../spec/capabilities.md)), with shortcuts:
+- `Answer.json(value)`: a `structured.generate` answer;
+- `Answer.turn(text, tool_calls)`: one agent turn, each tool call a mapping with `name` and
+  `arguments` (and an `id`, made up when it has none);
+- `Answer.submit(**arguments)`: an agent turn that submits its answer.
+
+`video.generate` and `mesh.generate` answer `data=None`: FX reads the clip's size, frame rate and
+duration, or the model's kind, from the file itself.
+
+**Faults stop the run.** The function is part of your test, so it never fails quietly. Any other
+exception (an `AssertionError` among them), an answer FX cannot read, or a stand-in host that
+exits stops the whole run, rather than failing one call the workflow would then route around:
+`stopped   the stand-in failed: AssertionError: …`, exit 1. The function is not called again
+after its first fault, and from Python, `run()` raises that exception once the engine has ended,
+noting the run folder. A step's `timeout:` and a stopped run abandon a call the function is still
+answering, and its late answer is discarded.
+
+**Answers are checked** as a provider's are, in this order:
+1. **The request,** before the function is called: a request that does not fit its capability
+   (`image.generate needs prompt`) is refused, `capability_refused`, and the stand-in is not asked.
+2. **The answer's shape:** the files the capability returns, by name and kind, and its `data`
+   (`the answer holds no image`, `image.generate returns no file named mask`,
+   `structured.generate returns its data as {"json": <value>}`).
+3. **The route's check:** the check of FX's adapter for the route's provider when FX has one (built
+   with no key, so it sends nothing), else the check the capability makes on every route. For a
+   picture: a PNG of the exact `size`, with an alpha channel when `transparent` was asked and no
+   transparent pixel when `opaque` was (`the image is 32x32, not 64x64`). For
+   `structured.generate`, its schema; for audio, an MP3.
+4. **The data:** its round trip through canonical JSON, and an agent turn's shape.
+
+The first refusal fails the call: `call_failed`, `<capability> on <route> failed: <reason>`. A call
+that was refused or failed, by the stand-in or a check, is not asked again by the same command, and
+nothing of it is recorded, so the next command asks again, whether it resumes the folder or starts
+a new one. A picture of the wrong size is therefore a
+failed call, not a picture your judge sees: to test a judge, answer a picture that passes these
+checks and that the judge rejects.
+
+**Not checked yet:** a route's own refusals of values, which its adapter makes just before sending:
+a blank prompt, a size outside the route's range, an unknown `background`, too many pictures. A
+stand-in may answer a request that a live run would refuse there.
+
+**Kept apart from your cache:**
+- **The stand-in store.** A stand-in run keeps its input files, calls, results and outputs in
+  `stand-in/` inside the project's cache (`.fx/cache/stand-in/`), and reads nothing of the cache
+  itself. What your stand-in is asked never depends on what paid runs left in the cache, and a
+  stand-in's answer never reaches a run without one.
+- **Answers are kept** there as a provider's are in the cache: running again, into the same folder
+  or a new one, asks only what has not been answered, whatever the function. A test can check
+  that a second run calls nothing, or that a resumed run asks only for what is left. Each test
+  should therefore start from a scratch copy of the project, as below, or delete `stand-in/` first.
+- **One mode per folder.** The run folder is placed and named as any other. Its `plan.json` has
+  `"stand_in": true` and its `run_started` events `stand_in: true`, as has each `call` event the
+  stand-in answered; the plan digest is the same as without a stand-in. Resuming the folder without
+  `--stand-in`, or a plain run's folder with one, is refused (exit 1): `refused: runs/one holds a
+  stand-in run; resume it with --stand-in, or choose a new folder`.
+- **The takes file is not touched.** `reroll` and `pick` refuse a stand-in run (exit 1), and a
+  stand-in run writes nothing outside its folder and the stand-in store, apart from what
+  `--deliver` copies out. A test of picks writes the takes file itself.
+- **Read like any run.** `inspect` adds `stand-in` to its header, `inspect --json` has
+  `run.stand_in`, and `project` shows the `run_started` event as it is.
+
+**A test.** With pytest, for the icon workflow of
+[Getting started](01-getting-started.md#your-first-workflow): the first drawing is opaque
+everywhere, which its `image.check_alpha` judge rejects, so a second take is drawn.
+
+```python
+# tests/test_icon.py
+import io
+import shutil
+from collections import Counter
+from pathlib import Path
+
+import pytest
+from PIL import Image
+
+import grida.fx as fx
+from grida.fx import DECLINE, Answer, CallRefused
+
+PROJECT = Path(__file__).resolve().parents[1]
+LANTERN = {"name": "copper lantern"}
+
+
+def png(width, height, background_alpha):
+    """An orange square on a background of the given alpha."""
+    picture = Image.new("RGBA", (width, height), (32, 24, 16, background_alpha))
+    picture.paste((200, 120, 40, 255), (width // 4, height // 4, width * 3 // 4, height * 3 // 4))
+    out = io.BytesIO()
+    picture.save(out, "PNG")
+    return out.getvalue()
+
+
+@pytest.fixture
+def project(tmp_path):
+    """A scratch copy of the project, with a cache of its own and no takes: nothing starts
+    answered or picked."""
+    root = tmp_path / "project"
+    skip = shutil.ignore_patterns(".fx", ".venv", ".env", "runs", "tests", "*.takes.yaml")
+    shutil.copytree(PROJECT, root, ignore=skip)
+    return root
+
+
+def test_a_rejected_icon_is_drawn_again(project):
+    asked = Counter()
+
+    def answer(call):
+        assert "copper lantern" in call.request["prompt"]
+        asked[call.take] += 1
+        width, height = map(int, call.request["size"].split("x"))
+        # Take 1 is opaque everywhere, which the judge rejects; take 2 has a clear background.
+        return Answer(files={"image": png(width, height, 255 if call.take == 1 else 0)})
+
+    result = fx.run("icon", inputs=LANTERN, cwd=project, stand_in=answer)
+    assert result.ok and result.stand_in and result.cost == 0
+    assert asked == {1: 1, 2: 1}
+    assert result.steps["clean"].facts["verdict"] == "accept"
+
+    again = fx.run("icon", inputs=LANTERN, cwd=project, stand_in=answer)
+    assert again.ok and asked == {1: 1, 2: 1}  # answered from the stand-in store
+
+
+def test_a_refused_drawing_fails_its_step(project):
+    def answer(call):
+        raise CallRefused("no lanterns today")
+
+    result = fx.run("icon", inputs=LANTERN, cwd=project, stand_in=answer)
+    assert not result.ok
+    assert result.failures["draw#1"].code == "capability_refused"
+    assert "no lanterns today" in result.failures["draw#1"].message
+    assert result.failures["clean#1"].skipped
+
+
+def test_a_declined_drawing_is_not_live(project):
+    result = fx.run("icon", inputs=LANTERN, cwd=project, stand_in=lambda call: DECLINE)
+    assert result.failures["draw#1"].code == "not_live"
+```
+
+- **The scratch copy** gives each test an empty stand-in store, and no takes: a `reroll` or `pick`
+  you made while following [Getting started](01-getting-started.md) would change which take is
+  drawn. A test of picks writes the takes file itself.
+- **The test's own Python** runs the judge, a built-in whose body is Python: the scratch copy has
+  no `.venv`, so `grida.fx.run` falls back to the Python it runs in, which has `grida` and Pillow.
+- **A failed `assert` in the function** fails the test with its own message: the run stops, and
+  `run()` raises the `AssertionError`.
+- **One call at a time:** FX calls the function for one call after another, in the order the
+  engine asks, never for two at once, so plain counters and `list.pop(0)` scripts need no lock.
+  Steps that run at the same time may still ask in either order.
 
 ## Agents
 

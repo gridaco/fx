@@ -1,0 +1,88 @@
+[
+ {
+  "capability": "image.generate",
+  "files": {},
+  "instance": {
+   "id": "front#1",
+   "path": "front",
+   "step": "front"
+  },
+  "key": "98561367dc959e9f08b48ab1251f3f251686fdbc984113d19e8acb657dddef65",
+  "request": {
+   "background": "auto",
+   "prompt": "the lantern seen from the front",
+   "size": "64x64"
+  },
+  "route": {
+   "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+   "id": "img-a@acme"
+  },
+  "take": [
+   1
+  ]
+ },
+ {
+  "capability": "mesh.generate",
+  "files": {
+   "79c3c9ff3284e48dd47a022156c49120c6535c4c3e623e2bbfc720aeb7324494": {
+    "facts": {
+     "bytes": 12420,
+     "has_alpha": false,
+     "height": 64,
+     "kind": "image/png",
+     "opaque": true,
+     "width": 64
+    },
+    "kind": "image/png",
+    "name": "front/image",
+    "path_is_file": true,
+    "size": 12420
+   }
+  },
+  "instance": {
+   "id": "mesh#1",
+   "path": "mesh",
+   "step": "mesh"
+  },
+  "key": "30cbec7c7940b4fa8e549f49abaca67a956d1d4454de809d540cf6e426be58f2",
+  "request": {
+   "face_limit": 1000,
+   "pbr": false,
+   "quad": false,
+   "texture": true,
+   "views": {
+    "front": {
+     "file": "79c3c9ff3284e48dd47a022156c49120c6535c4c3e623e2bbfc720aeb7324494"
+    }
+   }
+  },
+  "route": {
+   "fingerprint": "0748a9529644f62bbe1ca26dfd9c5d02330a7543e29d1a0f41414ec4cf61d1aa",
+   "id": "mesh-a@acme"
+  },
+  "take": [
+   1
+  ]
+ },
+ {
+  "capability": "video.generate",
+  "files": {},
+  "instance": {
+   "id": "clip#1",
+   "path": "clip",
+   "step": "clip"
+  },
+  "key": "64fa91d9866412ddccdfcd0761d5565f722f672f10ed08d6d94b946c734aa782",
+  "request": {
+   "duration": 1,
+   "prompt": "a lantern sways on its hook"
+  },
+  "route": {
+   "fingerprint": "68af46fb8b2932f163d2085519fdefb79d8d642956668dd5ef9a072fb21d14e1",
+   "id": "clip-a@acme"
+  },
+  "take": [
+   1
+  ]
+ }
+]

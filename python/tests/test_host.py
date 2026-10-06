@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import importlib.metadata
 import io
 import itertools
@@ -1624,3 +1625,235 @@ def test_every_conformance_project_describes(
         labels = [item["label"] for item in entry["closure"]]
         assert entry["path"] in labels
         assert labels == sorted(labels)
+
+
+# --- a stand-in host (section 5.7) -------------------------------------------------------------
+
+STAND_IN = """\
+import asyncio
+import os
+import time
+
+from helpers import PICTURE
+
+from grida.fx import DECLINE, Answer, CallFailed, CallRefused
+
+ASKED = []
+
+
+def answer(call):
+    prompt = call.request.get("prompt")
+    ASKED.append(prompt)
+    if prompt == "decline":
+        return DECLINE
+    if prompt == "refuse":
+        raise CallRefused("no lighthouses here")
+    if prompt == "unsendable":
+        raise CallRefused("no file " + os.fsdecode(b"gull\\xff.png"))
+    if prompt == "fail":
+        raise CallFailed("the lighthouse fell")
+    if prompt == "slow":
+        time.sleep(0.5)
+    if prompt == "boom":
+        raise RuntimeError("a broken stand-in")
+    if prompt == "count":
+        return Answer.json({"asked": len(ASKED)})
+    return Answer(files={"image": PICTURE})
+
+
+async def answer_async(call):
+    if call.request.get("prompt") == "wait":
+        await asyncio.sleep(30)
+    return Answer(files={"image": PICTURE}, data={"seen": call.take})
+
+
+NOT_A_FUNCTION = 3
+"""
+
+STAND_IN_PICTURE = b"\x89PNG\r\n\x1a\nhost"
+STAND_IN_LOAD_RESULT = _result_validator("stand_in_load_result")
+STAND_IN_ANSWER_RESULT = _result_validator("stand_in_answer_result")
+
+
+@pytest.fixture
+def stand_ins(tmp_path: Path) -> Path:
+    """Stand-in files outside the project, beside a module they import."""
+    folder = tmp_path / "harness"
+    folder.mkdir()
+    (folder / "stand_in.py").write_text(STAND_IN, "utf-8")
+    (folder / "helpers.py").write_text(f"PICTURE = {STAND_IN_PICTURE!r}\n", "utf-8")
+    (folder / "broken.py").write_text("raise ImportError('stand-in dependencies missing')\n")
+    return folder
+
+
+def _ask_params(prompt: str, take: list[int] | None = None) -> dict[str, Any]:
+    return {
+        "capability": "image.generate",
+        "route": {"id": "img-a@acme", "fingerprint": "e" * 64},
+        "request": {"prompt": prompt, "size": "64x64"},
+        "take": take or [1],
+        "key": "a" * 64,
+        "instance": {"id": "draw#1", "path": "draw", "step": "draw"},
+        "files": {},
+    }
+
+
+def _loaded(host: HostProcess, path: Path, function: str = "answer") -> None:
+    host.initialize()
+    answer = host.request("stand_in.load", {"path": str(path), "function": function})
+    assert "result" in answer, answer
+    _valid(STAND_IN_LOAD_RESULT, answer["result"])
+    assert answer["result"] == {}
+
+
+def _answered(answer: dict[str, Any]) -> Any:
+    if "result" in answer:
+        _valid(STAND_IN_ANSWER_RESULT, answer["result"])
+        return answer["result"]
+    return answer["error"]
+
+
+def test_a_stand_in_host_loads_a_file_outside_the_project(
+    project: Path, stand_ins: Path, start: Callable[..., HostProcess]
+) -> None:
+    host = start(project)
+    _loaded(host, stand_ins / "stand_in.py")
+    # The file's folder is first on sys.path: its sibling module imported.
+    picture = base64.b64encode(STAND_IN_PICTURE).decode("ascii")
+    answer = host.request("stand_in.answer", _ask_params("a lighthouse"))
+    assert _answered(answer) == {"files": {"image": {"base64": picture}}, "data": None}
+    # From now on it serves the stand-in and nothing else.
+    refused = {"code": -32600, "message": "this host answers for a stand-in"}
+    assert host.request("describe", {"targets": [], "builtins": False})["error"] == refused
+    assert host.build("build", project, level="docks")["error"] == refused
+    assert host.request("run", {})["error"] == refused
+    loaded_again = host.request(
+        "stand_in.load", {"path": str(stand_ins / "stand_in.py"), "function": "answer"}
+    )
+    assert loaded_again["error"] == {"code": -32600, "message": "a stand-in is already loaded"}
+    assert host.request("shutdown")["result"] is None
+    host.notify("exit")
+    assert host.wait() == 0
+
+
+def test_stand_in_load_failures(
+    project: Path, stand_ins: Path, start: Callable[..., HostProcess]
+) -> None:
+    (project / "checks").mkdir()
+    (project / "checks" / "local.py").write_text("def answer(call):\n    pass\n", "utf-8")
+    host = start(project)
+    host.initialize()
+    early = host.request("stand_in.answer", _ask_params("a lighthouse"))
+    assert early["error"] == {
+        "code": -32600,
+        "message": "stand_in.answer came before stand_in.load",
+    }
+
+    def load(path: Path | str, function: str = "answer") -> dict[str, Any]:
+        return host.request("stand_in.load", {"path": str(path), "function": function})["error"]
+
+    harness = stand_ins.resolve()
+    assert load(stand_ins / "missing.py") == {
+        "code": -32004,
+        "message": f"no stand-in file {stand_ins / 'missing.py'}",
+    }
+    assert load(stand_ins / "stand_in.py", "nope") == {
+        "code": -32004,
+        "message": f"{stand_ins / 'stand_in.py'} has no function nope",
+    }
+    assert load(stand_ins / "stand_in.py", "NOT_A_FUNCTION")["message"].endswith(
+        "has no function NOT_A_FUNCTION"
+    )
+    assert load(stand_ins / "broken.py") == {
+        "code": -32004,
+        "message": f"{stand_ins / 'broken.py'} failed to import: ImportError: stand-in"
+        " dependencies missing",
+    }
+    # A file inside the working directory (the engine's) is named relative to it.
+    assert load(project / "checks" / "local.py", "nope") == {
+        "code": -32004,
+        "message": "checks/local.py has no function nope",
+    }
+    assert load("relative.py")["code"] == -32602
+    assert load(harness / "stand_in.py", "not a name")["code"] == -32602
+    # A failed load leaves the host free to load another.
+    answer = host.request(
+        "stand_in.load", {"path": str(harness / "stand_in.py"), "function": "answer"}
+    )
+    assert answer["result"] == {}
+
+
+def test_a_stand_in_host_answers_one_call_at_a_time(
+    project: Path, stand_ins: Path, start: Callable[..., HostProcess]
+) -> None:
+    host = start(project)
+    _loaded(host, stand_ins / "stand_in.py")
+    host.ids = itertools.count(10)
+    # Several at once: the slow one first holds the others back, and each comes in order.
+    for prompt in ("slow", "decline", "refuse", "fail", "count"):
+        host.send(
+            {
+                "jsonrpc": "2.0",
+                "id": next(host.ids),
+                "method": "stand_in.answer",
+                "params": _ask_params(prompt),
+            }
+        )
+    answers = [host.receive() for _ in range(5)]
+    assert [answer["id"] for answer in answers] == [10, 11, 12, 13, 14]
+    assert [_answered(answer) for answer in answers[1:]] == [
+        {"decline": True},
+        {"code": -32015, "message": "no lighthouses here"},
+        {"code": -32016, "message": "the lighthouse fell"},
+        {"files": {}, "data": {"json": {"asked": 5}}},
+    ]
+    # A message holding a lone surrogate still goes out, the surrogate written as its escape.
+    unsendable = host.request("stand_in.answer", _ask_params("unsendable"))
+    assert unsendable["error"] == {"code": -32015, "message": "no file gull\\udcff.png"}
+    # A fault: answered internal, logged with its traceback, and every later call refused.
+    boom = host.request("stand_in.answer", _ask_params("boom"))
+    assert boom["error"] == {"code": -32099, "message": "RuntimeError: a broken stand-in"}
+    later = host.request("stand_in.answer", _ask_params("count"))
+    assert later["error"] == {"code": -32099, "message": "the stand-in failed earlier"}
+    host.request("shutdown")
+    host.notify("exit")
+    assert host.wait() == 0
+    log = host.stderr()
+    assert "grida.fx.host: the stand-in failed:" in log
+    assert 'stand_in.py", line' in log and "RuntimeError: a broken stand-in" in log
+    assert "_stand_in.py" not in log, "the SDK's own frames are left out"
+
+
+def test_a_stand_in_host_cancels_calls(
+    project: Path, stand_ins: Path, start: Callable[..., HostProcess]
+) -> None:
+    host = start(project)
+    _loaded(host, stand_ins / "stand_in.py", "answer_async")
+    cancelled = {"code": -32002, "message": "the engine cancelled stand_in.answer"}
+    # A coroutine function's call is cancelled where it waits.
+    host.send(
+        {"jsonrpc": "2.0", "id": 20, "method": "stand_in.answer", "params": _ask_params("wait")}
+    )
+    host.send({"jsonrpc": "2.0", "method": "$/cancel", "params": {"id": 20}})
+    assert host.receive() == {"jsonrpc": "2.0", "id": 20, "error": cancelled}
+    answer = host.request("stand_in.answer", _ask_params("a lighthouse", take=[1, 2]))
+    assert _answered(answer)["data"] == {"seen": 2}
+
+    sync = start(project)
+    _loaded(sync, stand_ins / "stand_in.py")
+    # A call waiting for its turn is cancelled at once; the running plain function finishes.
+    for request_id, prompt in ((30, "slow"), (31, "decline")):
+        sync.send(
+            {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "method": "stand_in.answer",
+                "params": _ask_params(prompt),
+            }
+        )
+    sync.send({"jsonrpc": "2.0", "method": "$/cancel", "params": {"id": 31}})
+    time.sleep(0.2)  # the slow call is on its thread by now
+    sync.send({"jsonrpc": "2.0", "method": "$/cancel", "params": {"id": 30}})
+    first, second = sync.receive(), sync.receive()
+    assert first == {"jsonrpc": "2.0", "id": 31, "error": cancelled}
+    assert second["id"] == 30 and "result" in second

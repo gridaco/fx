@@ -1,0 +1,62 @@
+# How `run --stand-in` is given, and what stops a stand-in run. Each mistake is a usage error
+# (exit 2), refused before anything is planned, run or asked: with --live, with --yes-up-to, a
+# source that is not `<file>.py#<function>` or `-` (no `#`, a file without the .py suffix), a file
+# that does not exist, a function the file does not have, a file that fails to import, and `-`
+# when standard input is not a socket (closed, which the runner makes /dev/null; or a pipe, given
+# as `--stand-in=-`). None of them makes a run folder or asks the stand-in. Then a stand-in that
+# raises RuntimeError (given as `--stand-in=<file>#<function>`) is a fault of the stand-in, not a
+# failed call: the run stops (`stopped   the stand-in failed: RuntimeError: …`, exit 1) after the
+# stand-in was asked once; events.json pins the record of the stopped run.
+steps:
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, --live, --stand-in, "stand_in.py#answer"]
+  status: 2
+  mentions:
+  - "--stand-in cannot be used with --live"
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, --yes-up-to, "1", --stand-in, "stand_in.py#answer"]
+  status: 2
+  mentions:
+  - "--stand-in cannot be used with --yes-up-to"
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, --stand-in, stand_in.py]
+  status: 2
+  mentions:
+  - "--stand-in takes <file>.py#<function>, or -"
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, --stand-in, "routes.yaml#answer"]
+  status: 2
+  mentions:
+  - "--stand-in takes <file>.py#<function>, or -"
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, --stand-in, "missing.py#answer"]
+  status: 2
+  mentions:
+  - "no stand-in file missing.py"
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, --stand-in, "stand_in.py#nope"]
+  status: 2
+  mentions:
+  - "the stand-in stand_in.py#nope could not be loaded: "
+  - "has no function nope"
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, --stand-in, "broken.py#answer"]
+  status: 2
+  mentions:
+  - "the stand-in broken.py#answer could not be loaded: "
+  - "failed to import: RuntimeError: broken on purpose"
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, --stand-in, "-"]
+  status: 2
+  mentions:
+  - "--stand-in - needs the stand-in's socket on standard input"
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, --stand-in=-]
+  stdin: ""
+  status: 2
+  mentions:
+  - "--stand-in - needs the stand-in's socket on standard input"
+  absent:
+  - runs
+  - count.txt
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, "--stand-in=stand_in.py#answer"]
+  status: 1
+  mentions:
+  - "stand-in  stand_in.py#answer"
+  - "stopped   the stand-in failed: RuntimeError: the test harness broke on image.generate"
+- read: count.txt
+  save: count.txt
+- read: runs/one/events.jsonl
+  save: events.json
+  jsonl: true

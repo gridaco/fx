@@ -3,7 +3,9 @@ import grida.fx
 
 def test_the_sdk_imports() -> None:
     assert set(grida.fx.__all__) == {
+        "DECLINE",
         "Agent",
+        "Answer",
         "CallFailed",
         "CallRefused",
         "CallResult",
@@ -11,6 +13,7 @@ def test_the_sdk_imports() -> None:
         "CeilingExceeded",
         "Ctx",
         "EngineError",
+        "Failure",
         "FxError",
         "Group",
         "InputFile",
@@ -22,6 +25,7 @@ def test_the_sdk_imports() -> None:
         "PortSpec",
         "RunResult",
         "SpecError",
+        "StandInCall",
         "StepRef",
         "Tool",
         "ToolInvocationError",

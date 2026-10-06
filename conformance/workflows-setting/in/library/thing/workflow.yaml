@@ -1,0 +1,13 @@
+fx: workflow/v1
+id: thing
+title: A workflow kept in a project of its own
+steps:
+  draw:
+    uses: fx/image.generate@1
+    with: { prompt: a kite over a pier }
+  tune:
+    uses: fx/music.generate@1
+    with: { prompt: a slow tune for the pier }
+outputs:
+  image: ${{ steps.draw.outputs.image }}
+  tune: ${{ steps.tune.outputs.audio }}

@@ -1,0 +1,6 @@
+fx: routes/v1
+routes:
+  - { capability: image.generate, route: img-a@acme, price: { low_usd: 0.01, high_usd: 0.04 }, features: [alpha] }
+  - { capability: image.generate, route: img-b@acme, price: { low_usd: 0.02, high_usd: 0.05 }, features: [alpha] }
+  - { capability: music.generate, route: tune-a@acme, price: { low_usd: 0.05, high_usd: 0.1 } }
+  - { capability: music.generate, route: tune-b@acme, price: { low_usd: 0.06, high_usd: 0.2 } }

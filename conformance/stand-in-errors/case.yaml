@@ -1,0 +1,50 @@
+# What a stand-in's answer can end in, one step each, chosen by its prompt (see in/stand_in.py).
+# `good` is answered and stored. A refusal (`CallRefused`) is `capability_refused`; a failure
+# (`CallFailed`) is `call_failed`; `DECLINE` goes on to the live check, `not_live`, "the stand-in
+# declined". An answer that fails a check is `call_failed` with the check's sentence: the route's
+# image check (a 32x32 PNG for a 64x64 request), then the answer's shape (text/plain bytes as
+# `image`, a file the capability does not return, no file, data where it returns none). `body`
+# makes a call with no prompt from a node body: the request check refuses it before the stand-in
+# is asked (`capability_refused`, "image.generate needs prompt"), and the body lets it through.
+# The run goes on, lists every failure in the expansion's order and exits 1; events-one.json
+# pins each node_failed's `code`, and asked.json what the stand-in was asked (nine calls, the
+# body's not among them). A second run into a new folder answers `good` from the stand-in store
+# and asks each of the other eight again, since nothing of them was recorded (count 17), and the
+# body's call is refused again without asking.
+steps:
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, --stand-in, "stand_in.py#answer"]
+  status: 1
+  mentions:
+  - "stand-in  stand_in.py#answer"
+  - "result    failed   spent $0.00"
+  - "failed    refused#1: image.generate on img-a@acme was refused: the stand-in refuses this prompt"
+  - "failed    failed#1: image.generate on img-a@acme failed: the stand-in failed this prompt"
+  - "failed    declined#1: image.generate on img-a@acme is a paid call the stand-in declined"
+  - "failed    small#1: image.generate on img-a@acme failed: the image is 32x32, not 64x64"
+  - "failed    text#1: image.generate on img-a@acme failed: image is text/plain, not image/png"
+  - "failed    extra#1: image.generate on img-a@acme failed: image.generate returns no file named thumbnail"
+  - "failed    missing#1: image.generate on img-a@acme failed: the answer holds no image"
+  - "failed    data#1: image.generate on img-a@acme failed: image.generate returns no data"
+  - "failed    body#1: image.generate on img-a@acme was refused: image.generate needs prompt"
+- read: count.txt
+  save: count-one.txt
+- read: asked.json
+  save: asked.json
+  json: true
+- read: runs/one/events.jsonl
+  save: events-one.json
+  jsonl: true
+- argv: [project, runs/one]
+  save: project-one.json
+  json: true
+- argv: [run, case, --routes, routes.yaml, --run, runs/two, --stand-in, "stand_in.py#answer"]
+  status: 1
+  mentions:
+  - "result    failed   spent $0.00"
+  - "failed    declined#1: image.generate on img-a@acme is a paid call the stand-in declined"
+  - "failed    body#1: image.generate on img-a@acme was refused: image.generate needs prompt"
+- read: count.txt
+  save: count-two.txt
+- read: runs/two/events.jsonl
+  save: events-two.json
+  jsonl: true

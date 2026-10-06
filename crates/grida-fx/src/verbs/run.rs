@@ -1,22 +1,35 @@
 //! `grida-fx run <target> [inputs] [--routes f]… [--arg n=v]… [--live] [--max-usd N]
-//! [--yes-up-to N] [--deliver OUTPUT=PATH]… [--run FOLDER]` (docs/guide/05-running.md;
-//! spec/store.md §8).
+//! [--yes-up-to N] [--deliver OUTPUT=PATH]… [--run FOLDER] [--stand-in FILE.py#FUNCTION | -]`
+//! (docs/guide/05-running.md; spec/store.md §8; spec/protocol.md §5.7).
 //!
+//! 0. A stand-in, before anything else (usage errors, exit 2): `--stand-in cannot be used with
+//!    --live` (or `with --yes-up-to`); a source that is neither `<file>.py#<function>` (a Python
+//!    identifier after the last `#`) nor `-` is `--stand-in takes <file>.py#<function>, or -`; a
+//!    file that is not there is `no stand-in file <file>`; `-` with a standard input that is not
+//!    a Unix-domain socket is `--stand-in - needs the stand-in's socket on standard input`
+//!    ([`StandInSource::parse`]).
 //! 1. Arguments, before anything is read: `--max-usd` and `--yes-up-to` through `Usd::parse` (a
 //!    negative, non-finite or over-precise amount is a usage error, `<option> <text>: <reason>`,
 //!    exit 2); `--deliver` pairs split at the first `=` (`--deliver <pair>: write OUTPUT=PATH`
 //!    when either side is empty); workflow input flags as the planning verbs take them.
 //! 2. The planner; then every `--deliver` name is checked against the workflow's declared outputs
 //!    (`--deliver <pair>: name one of <sorted names, ", ">`, or `…: the workflow declares no
-//!    outputs`, exit 2) before anything is planned or run. Then the engine
+//!    outputs`, exit 2) before anything is planned or run. A stand-in's answerer starts next
+//!    ([`start_stand_in`]), before planning: for a file, a stand-in host in the working
+//!    directory (`initialize` with the planning project, then `stand_in.load` with the file's
+//!    absolute path, which nothing records), failing with `the stand-in <file>#<function> could
+//!    not be loaded: <reason>`; for `-`, `initialize` over the socket, failing with `the stand-in
+//!    on standard input could not be started: <reason>` (both exit 2). Then the engine
 //!    ([`crate::engine::engine_for`]), which with `--live` builds every provider's adapters from
 //!    the keys in the process environment or the planning project's `.env` (spec/providers.md
 //!    §3): a `.env` or base-URL refusal is a usage error naming the variable or the line (exit 2),
 //!    and building prints nothing. A missing key refuses only the calls that need it, when they
-//!    are made (`<VARIABLE> is not set`, $0).
+//!    are made (`<VARIABLE> is not set`, $0). A stand-in run's engine has the stand-in store
+//!    (`<cache>/stand-in`) as its store and asks the stand-in.
 //! 3. Plan through the engine ([`crate::engine::plan`]: `at: plan` steps run, `cached` is the
-//!    store's). A plan with problems prints the plan (`plan::render::render`) and exits 1
-//!    without creating a folder.
+//!    store's). A plan with problems prints the plan (`plan::render::render`; a stand-in run's
+//!    with `plan::render::render_stand_in`, which never warns that the ceiling stops the run)
+//!    and exits 1 without creating a folder.
 //! 4. The folder: `--run` relative to the working directory, named as typed; else
 //!    `folder::new_folder` under the planning project's runs folder, named relative to the
 //!    working directory: it makes the folder, so invocations starting at once never share one
@@ -27,7 +40,8 @@
 //!    (`plan.json` records it for `reroll` and `pick`).
 //! 5. `RunError::Refused` prints `refused: <message>` on stdout, exit 1; `RunError::Fatal` is an
 //!    error (exit 2). A cancelled run (Ctrl-C) exits 130 and prints nothing more.
-//! 6. The summary, each label padded to 10 columns: `run       <folder as named>`, `result    ok
+//! 6. The summary, each label padded to 10 columns: `run       <folder as named>`, `stand-in
+//!    <source as typed>` for a stand-in run, `result    ok
 //!    | incomplete | failed   spent $<charged, 2 places>`, `failed    <id>: <error or "no reason
 //!    recorded">` per failure in order, `stopped   <message>`. An absolute path of the project,
 //!    the home or the store left in an error is shown relative to the project.
@@ -43,7 +57,8 @@
 //!    over it, and printed `delivered <path as named>`; a target that already holds the same
 //!    bytes is left alone and not printed. An output with no file prints `missing   <name>: the
 //!    run did not produce it`.
-//! 8. Exit 0 when the run is ok and every requested output was delivered, else 1.
+//! 8. Exit 0 when the run is ok and every requested output was delivered, else 1. The stand-in's
+//!    answerer is ended with the engine ([`crate::engine::shutdown`]).
 
 use crate::cli::RunArgs;
 use crate::print::{labelled, print_line, shown_path};
@@ -53,7 +68,10 @@ use grida_fx_core::val::{FileValue, Val};
 use grida_fx_core::{Error, ErrorKind};
 use grida_fx_runtime::engine::{Engine, scrub_paths};
 use grida_fx_runtime::folder::{keyed_path, new_folder};
+use grida_fx_runtime::host::locate::python_interpreter;
+use grida_fx_runtime::host::process::HostSpec;
 use grida_fx_runtime::runner::{self, RunError, RunOptions, RunOutcome};
+use grida_fx_runtime::stand_in::{ConnectionAnswerer, StandIn};
 use grida_fx_runtime::store::Store;
 use indexmap::IndexMap;
 use std::io::Write;
@@ -68,6 +86,12 @@ const KEY: &str = "{key}";
 
 /// Runs `grida-fx run`.
 pub fn run(args: &RunArgs) -> Result<u8, Error> {
+    let cwd = super::planning::working_directory()?;
+    let stand_in = args
+        .stand_in
+        .as_deref()
+        .map(|text| StandInSource::parse(text, args, &cwd))
+        .transpose()?;
     let max_usd = args
         .max_usd
         .as_deref()
@@ -83,7 +107,6 @@ pub fn run(args: &RunArgs) -> Result<u8, Error> {
         .iter()
         .map(|pair| Delivery::parse(pair))
         .collect::<Result<Vec<_>, _>>()?;
-    let cwd = super::planning::working_directory()?;
     let request = PlanRequest {
         target: args.target.clone(),
         cwd: cwd.clone(),
@@ -94,7 +117,7 @@ pub fn run(args: &RunArgs) -> Result<u8, Error> {
         max_usd,
         builtin_routes: crate::engine::builtin_routes()?,
     };
-    let mut host = crate::print::host();
+    let mut host = crate::print::planning_host(&request.target, &request.cwd);
     let mut planner = make_planner(&request, &mut host)?;
     let declared: Vec<&str> = planner
         .workflow
@@ -107,7 +130,34 @@ pub fn run(args: &RunArgs) -> Result<u8, Error> {
         delivery.check_name(&declared)?;
     }
     let runtime = crate::engine::runtime()?;
-    let engine = crate::engine::engine_for(&runtime, &planner, args.live)?;
+    // Paths the engine keeps out of what it records besides its own roots: the working
+    // directory, and a stand-in file's folder (its traceback names it).
+    let mut private = vec![cwd.clone()];
+    if let Some(StandInSource::File { path, .. }) = &stand_in
+        && let Some(folder) = std::path::absolute(path)
+            .ok()
+            .and_then(|path| path.parent().map(Path::to_path_buf))
+    {
+        private.push(folder);
+    }
+    let stand_in = stand_in
+        .map(|source| start_stand_in(&runtime, source, &planner, &cwd))
+        .transpose()?;
+    let engine = match crate::engine::engine_for(
+        &runtime,
+        &planner,
+        args.live,
+        stand_in.clone(),
+        &private,
+    ) {
+        Ok(engine) => engine,
+        Err(error) => {
+            if let Some(stand_in) = &stand_in {
+                runtime.block_on(stand_in.shutdown());
+            }
+            return Err(error);
+        }
+    };
     let ran = plan_and_run(
         args,
         &cwd,
@@ -132,7 +182,11 @@ fn plan_and_run(
     deliveries: &[Delivery],
 ) -> Result<u8, Error> {
     let plan = crate::engine::plan(engine, planner, host)?;
-    let text = grida_fx_core::plan::render::render(&plan, planner);
+    let text = if engine.stand_in_run() {
+        grida_fx_core::plan::render::render_stand_in(&plan, planner)
+    } else {
+        grida_fx_core::plan::render::render(&plan, planner)
+    };
     if !plan.ok() {
         print_line(&text);
         return Ok(1);
@@ -181,11 +235,171 @@ fn plan_and_run(
         return Ok(INTERRUPTED);
     }
     let scrub = Scrub::new(planner, &engine.store);
-    for line in summary(&label, &outcome, &scrub) {
+    for line in summary(&label, args.stand_in.as_deref(), &outcome, &scrub) {
         print_line(&line);
     }
     let delivered = deliver(deliveries, &outcome.outputs, &engine.store, cwd)?;
     Ok(u8::from(!(outcome.ok && delivered)))
+}
+
+/// Where a stand-in run's stand-in is (spec/protocol.md §5.7), checked (module doc, step 0).
+#[derive(Debug)]
+enum StandInSource {
+    /// `<file>.py#<function>`: `file` as typed, relative to the working directory, and its
+    /// absolute path.
+    File {
+        file: String,
+        path: PathBuf,
+        function: String,
+    },
+    /// `-`: the answerer's socket, from standard input.
+    Socket(SocketOnStdin),
+}
+
+impl StandInSource {
+    /// Checks `--stand-in <text>` against the other options and the working directory `cwd`
+    /// (module doc, step 0).
+    fn parse(text: &str, args: &RunArgs, cwd: &Path) -> Result<StandInSource, Error> {
+        if args.live {
+            return Err(Error::usage("--stand-in cannot be used with --live"));
+        }
+        if args.yes_up_to.is_some() {
+            return Err(Error::usage("--stand-in cannot be used with --yes-up-to"));
+        }
+        if text == "-" {
+            return socket_on_stdin().map(StandInSource::Socket).map_err(|()| {
+                Error::usage("--stand-in - needs the stand-in's socket on standard input")
+            });
+        }
+        let (file, function) = split_stand_in(text)
+            .ok_or_else(|| Error::usage("--stand-in takes <file>.py#<function>, or -"))?;
+        let path = cwd.join(file);
+        if !path.is_file() {
+            return Err(Error::usage(format!("no stand-in file {file}")));
+        }
+        Ok(StandInSource::File {
+            file: file.to_string(),
+            path,
+            function: function.to_string(),
+        })
+    }
+}
+
+/// `<file>.py#<function>` split at its last `#`: a file named `….py` and a Python identifier.
+fn split_stand_in(text: &str) -> Option<(&str, &str)> {
+    let (file, function) = text.rsplit_once('#')?;
+    let named = file.len() > ".py".len()
+        && file.ends_with(".py")
+        && !file.ends_with("/.py")
+        && !file.ends_with("\\.py");
+    let mut chars = function.chars();
+    let identifier = chars
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
+    (named && identifier).then_some((file, function))
+}
+
+/// The answerer's end of a socket the command was given as its standard input.
+#[cfg(unix)]
+type SocketOnStdin = std::os::unix::net::UnixStream;
+#[cfg(not(unix))]
+type SocketOnStdin = ();
+
+/// Standard input as a Unix-domain stream socket (a copy of the descriptor, closed on exec, so
+/// nothing the engine starts inherits it); `Err` when it is anything else.
+#[cfg(unix)]
+fn socket_on_stdin() -> Result<SocketOnStdin, ()> {
+    use std::os::fd::AsFd;
+    use std::os::unix::fs::FileTypeExt;
+    let descriptor = std::io::stdin()
+        .as_fd()
+        .try_clone_to_owned()
+        .map_err(drop)?;
+    let file = std::fs::File::from(descriptor);
+    let socket = file
+        .metadata()
+        .is_ok_and(|metadata| metadata.file_type().is_socket());
+    if !socket {
+        return Err(());
+    }
+    let stream = std::os::unix::net::UnixStream::from(std::os::fd::OwnedFd::from(file));
+    // A socket of another domain has no Unix-domain address.
+    stream.local_addr().map_err(drop)?;
+    Ok(stream)
+}
+
+/// Stand-ins on standard input need a Unix-domain socket.
+#[cfg(not(unix))]
+fn socket_on_stdin() -> Result<SocketOnStdin, ()> {
+    Err(())
+}
+
+/// Starts the stand-in's answerer for the planning project (module doc, step 2).
+fn start_stand_in(
+    runtime: &tokio::runtime::Runtime,
+    source: StandInSource,
+    planner: &Planner,
+    cwd: &Path,
+) -> Result<Arc<StandIn>, Error> {
+    let project = &planner.project;
+    let answerer = match source {
+        StandInSource::File {
+            file,
+            path,
+            function,
+        } => {
+            let env = |name: &str| std::env::var(name).ok();
+            let python = python_interpreter(&project.root, None, &env);
+            let spec = HostSpec {
+                label: grida_fx_runtime::host::label(&python, &project.root),
+                python,
+                project_root: project.root.clone(),
+                sources: project.document.sources.clone(),
+            };
+            let path = std::path::absolute(&path).unwrap_or(path);
+            runtime
+                .block_on(ConnectionAnswerer::start_host(&spec, cwd, &path, &function))
+                .map_err(|reason| {
+                    Error::new(
+                        ErrorKind::Host,
+                        format!("the stand-in {file}#{function} could not be loaded: {reason}"),
+                    )
+                })?
+        }
+        StandInSource::Socket(socket) => runtime
+            .block_on(answerer_on_socket(socket, project))
+            .map_err(|reason| {
+                Error::new(
+                    ErrorKind::Host,
+                    format!("the stand-in on standard input could not be started: {reason}"),
+                )
+            })?,
+    };
+    Ok(Arc::new(StandIn::new(Arc::new(answerer))))
+}
+
+/// The answerer on the socket of `--stand-in -`.
+#[cfg(unix)]
+async fn answerer_on_socket(
+    socket: SocketOnStdin,
+    project: &grida_fx_core::docs::project::Project,
+) -> Result<ConnectionAnswerer, String> {
+    socket
+        .set_nonblocking(true)
+        .map_err(|error| grida_fx_core::error::io_reason(&error))?;
+    let socket = tokio::net::UnixStream::from_std(socket)
+        .map_err(|error| grida_fx_core::error::io_reason(&error))?;
+    let (reader, writer) = socket.into_split();
+    ConnectionAnswerer::start_socket(reader, writer, &project.root, &project.document.sources).await
+}
+
+#[cfg(not(unix))]
+async fn answerer_on_socket(
+    _socket: SocketOnStdin,
+    _project: &grida_fx_core::docs::project::Project,
+) -> Result<ConnectionAnswerer, String> {
+    Err("stand-ins on standard input need a Unix-domain socket".into())
 }
 
 /// The workflow's takes file, relative to the planning project (its file name when it lies
@@ -200,8 +414,13 @@ fn takes_file(planner: &Planner) -> String {
     })
 }
 
-/// The summary lines (module doc, step 6).
-fn summary(label: &str, outcome: &RunOutcome, scrub: &Scrub) -> Vec<String> {
+/// The summary lines (module doc, step 6). `stand_in`: the stand-in's source as typed.
+fn summary(
+    label: &str,
+    stand_in: Option<&str>,
+    outcome: &RunOutcome,
+    scrub: &Scrub,
+) -> Vec<String> {
     let result = if outcome.ok {
         "ok"
     } else if outcome.incomplete {
@@ -209,13 +428,14 @@ fn summary(label: &str, outcome: &RunOutcome, scrub: &Scrub) -> Vec<String> {
     } else {
         "failed"
     };
-    let mut lines = vec![
-        labelled("run", label),
-        labelled(
-            "result",
-            &format!("{result}   spent {}", outcome.charged.dollars_2()),
-        ),
-    ];
+    let mut lines = vec![labelled("run", label)];
+    if let Some(source) = stand_in {
+        lines.push(labelled("stand-in", source));
+    }
+    lines.push(labelled(
+        "result",
+        &format!("{result}   spent {}", outcome.charged.dollars_2()),
+    ));
     for (id, error) in &outcome.failed {
         let error = error.as_deref().unwrap_or("no reason recorded");
         lines.push(labelled("failed", &format!("{id}: {}", scrub.apply(error))));
@@ -736,7 +956,7 @@ mod tests {
     #[test]
     fn the_summary_lines() {
         assert_eq!(
-            summary("runs/one", &outcome(), &no_scrub()),
+            summary("runs/one", None, &outcome(), &no_scrub()),
             [
                 "run       runs/one",
                 "result    failed   spent $0.12",
@@ -754,7 +974,7 @@ mod tests {
             ),
             ..outcome()
         };
-        let lines = summary("runs/one", &stopped, &no_scrub());
+        let lines = summary("runs/one", None, &stopped, &no_scrub());
         assert_eq!(lines[1], "result    incomplete   spent $0.12");
         assert_eq!(
             lines[2],
@@ -768,7 +988,7 @@ mod tests {
             ..outcome()
         };
         assert_eq!(
-            summary("runs/case/2026-10-06-1", &ok, &no_scrub()),
+            summary("runs/case/2026-10-06-1", None, &ok, &no_scrub()),
             [
                 "run       runs/case/2026-10-06-1",
                 "result    ok   spent $0.00"

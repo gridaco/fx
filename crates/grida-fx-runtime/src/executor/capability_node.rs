@@ -24,7 +24,7 @@
 
 use super::{InstanceJob, JobBody};
 use crate::calls::{CallCounter, CallError};
-use crate::engine::{RunFiles, Services};
+use crate::engine::{Cancel, RunFiles, Services};
 use crate::store::records::FileEntry;
 use grida_fx_core::kinds::{family, is_json, is_text};
 use grida_fx_core::text::decode_text;
@@ -200,6 +200,7 @@ pub async fn run(
     job: &InstanceJob,
     counter: &CallCounter,
     files: &RunFiles,
+    cancel: Cancel,
 ) -> Result<Produced, CallError> {
     let JobBody::Capability { capability } = &job.body else {
         return Err(failed_call(
@@ -227,10 +228,10 @@ pub async fn run(
 
     let request = request_of(job).map_err(|why| failed_call(ErrorCode::InvalidParams, why))?;
     // A paid built-in is one call of its own capability, whatever else the job lists.
-    let mut site = job.call_site();
+    let mut site = job.call_site(cancel);
     site.calls = IndexMap::from([(capability.clone(), 1)]);
     let answer = crate::calls::call(services, &site, counter, files, capability, request).await?;
-    let stored = |e: crate::store::StoreError| CallError::Store(e.to_string());
+    let stored = |e: crate::store::StoreError| CallError::Fault(e.to_string());
 
     let mut outputs = IndexMap::new();
     for (port_name, port) in &job.spec.outputs {

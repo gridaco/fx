@@ -9,23 +9,33 @@
 use grida_fx_core::docs::takes::TakeChoice;
 use grida_fx_core::expand::{Instance, ResultStatus};
 use grida_fx_core::host::{FakeHost, NoCache};
+use grida_fx_core::money::Usd;
 use grida_fx_core::plan::{Plan, make_plan};
 use grida_fx_core::project::{PlanRequest, Planner, make_planner};
+use grida_fx_core::routes::{PriceUnit, Route, RoutePrice};
 use grida_fx_core::spec::{NodeSpec, Port, Retry};
 use grida_fx_core::val::{FileContent, Val};
 use grida_fx_core::{Error, Problem};
-use grida_fx_protocol::{ClosureEntry, DescribedType, ModuleDescription, RetryMode, TypeSpec};
+use grida_fx_protocol::{
+    ClosureEntry, DescribedType, ErrorCode, ModuleDescription, RetryMode, StandInAnswerParams,
+    TypeSpec,
+};
 use grida_fx_providers::Adapters;
+use grida_fx_providers::testing::media;
+use grida_fx_runtime::calls::pacing::Pacing;
 use grida_fx_runtime::engine::{Cancel, Engine, Services};
 use grida_fx_runtime::executor::{CacheUse, InstanceJob, JobBody, execute};
 use grida_fx_runtime::host::process::HostSpec;
+use grida_fx_runtime::ledger::Ledger;
 use grida_fx_runtime::plantime::PlanTime;
+use grida_fx_runtime::stand_in::{Answerer, AnswererError, Reply, StandIn, StandInFile};
 use grida_fx_runtime::store::ReadSet;
 use indexmap::IndexMap;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 // ------------------------------------------------------------------ fixtures
 
@@ -276,7 +286,7 @@ fn a_project_types_job_carries_what_the_run_needs() {
     assert_eq!(job.retry, Retry::Engine);
     assert_eq!(job.picked, Some(digest.clone()));
 
-    let site = job.call_site();
+    let site = job.call_site(Cancel::new());
     assert_eq!(site.instance_id, "draw#1");
     assert_eq!(site.type_name, "maker");
     assert_eq!(site.limits, job.limits);
@@ -604,6 +614,14 @@ def run(message):
     elif mode == "caught":
         reply = ask("file.put", {"run_id": run_id, "base64": "AAE="})
         fail(message, -32000, "caught: " + reply["error"]["message"])
+    elif mode == "caught_ok":
+        # Catches whatever the call answers, then answers a result anyway.
+        ask("capability", {"run_id": run_id, "capability": "image.generate",
+                           "request": {"prompt": "a kite", "size": "64x64",
+                                       "background": "opaque"}})
+        with open(os.path.join(work, "out.txt"), "w") as f:
+            f.write("a fallback")
+        answer(message, {"outputs": {"text": {"work_path": "out.txt"}}})
     elif mode == "exit":
         os._exit(3)
     elif mode == "slow":
@@ -723,6 +741,147 @@ async fn only_the_engines_own_faults_stop_the_run() {
     assert_eq!(attempt.result.error, Some(format!("caught: {stop}")));
 }
 
+/// A stand-in that faults, or answers a picture, and counts what it was asked.
+struct CountingStandIn {
+    fault: bool,
+    asked: AtomicUsize,
+}
+
+impl Answerer for CountingStandIn {
+    fn answer<'a>(
+        &'a self,
+        _params: StandInAnswerParams,
+        _cancel: &'a Cancel,
+    ) -> grida_fx_providers::BoxFuture<'a, Result<Reply, AnswererError>> {
+        Box::pin(async move {
+            self.asked.fetch_add(1, Ordering::SeqCst);
+            if self.fault {
+                return Err(AnswererError::Fault(
+                    "the stand-in failed: RuntimeError: harness broke".into(),
+                ));
+            }
+            Ok(Reply::Answer {
+                files: IndexMap::from([(
+                    "image".to_string(),
+                    StandInFile {
+                        kind: None,
+                        bytes: media::png(64, 64, None),
+                    },
+                )]),
+                data: Value::Null,
+            })
+        })
+    }
+
+    fn shutdown(&self) -> grida_fx_providers::BoxFuture<'_, ()> {
+        Box::pin(async {})
+    }
+}
+
+/// A stand-in run's services over the stand-in store of `project`.
+fn stand_in_services(
+    project: &Path,
+    python: &Path,
+    stand_in: Arc<CountingStandIn>,
+) -> Arc<Services> {
+    let spec = HostSpec {
+        python: python.to_path_buf(),
+        label: "python3".into(),
+        project_root: project.to_path_buf(),
+        sources: Vec::new(),
+    };
+    let engine = Engine::new(
+        tokio::runtime::Handle::current(),
+        spec,
+        &project.join(".fx/cache/stand-in"),
+        2,
+        Adapters::new(),
+        false,
+    )
+    .with_stand_in(Arc::new(StandIn::new(stand_in)));
+    Arc::new(Services {
+        engine: Arc::new(engine),
+        ledger: Some(Arc::new(Ledger::new(None, None))),
+        events: None,
+        pacing: Arc::new(Pacing::new()),
+        cancel: Cancel::new(),
+        invocation_id: "inv".into(),
+        runs: AtomicU64::new(0),
+        holds: AtomicU64::new(0),
+    })
+}
+
+/// The caught-fault job: a body that calls `image.generate` once on `img-a@acme`.
+fn calling_job(identity: &str) -> InstanceJob {
+    let mut job = hand_job(
+        JobBody::Project {
+            path: "nodes/n.py".into(),
+            attribute: "maker".into(),
+        },
+        mode("caught_ok"),
+        Some(identity.to_string()),
+    );
+    job.calls = IndexMap::from([("image.generate".to_string(), 1)]);
+    let route = Route {
+        capability: "image.generate".into(),
+        model: "img-a".into(),
+        provider: "acme".into(),
+        price: RoutePrice {
+            low: Usd(10_000),
+            high: Usd(40_000),
+            unit: PriceUnit::Call,
+            max_units: None,
+            by: None,
+            tiers: IndexMap::new(),
+        },
+        features: Default::default(),
+        concurrency: None,
+        requests_per_minute: None,
+        contract: json!({}),
+    };
+    job.routes = IndexMap::from([("image.generate".to_string(), route)]);
+    job
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_result_made_after_a_caught_stand_in_fault_is_not_recorded() {
+    if !have_python3() {
+        return;
+    }
+    let fixture = Fixture::new();
+    let python = fake_python(fixture.root.parent().unwrap());
+    let identity = "d".repeat(64);
+
+    // The stand-in faults; the body catches the `internal` answer and answers a result anyway.
+    let broken = Arc::new(CountingStandIn {
+        fault: true,
+        asked: AtomicUsize::new(0),
+    });
+    let services = stand_in_services(&fixture.root, &python, Arc::clone(&broken));
+    let attempt = attempt_of(&services, calling_job(&identity)).await;
+    assert_eq!(broken.asked.load(Ordering::SeqCst), 1);
+    assert_eq!(attempt.result.status, ResultStatus::Failed);
+    assert_eq!(
+        attempt.stop.as_deref(),
+        Some("the stand-in failed: RuntimeError: harness broke")
+    );
+    assert_eq!(attempt.result.error, attempt.stop);
+    assert_eq!(attempt.code, Some(ErrorCode::Internal));
+    let results = fixture.root.join(".fx/cache/stand-in/results");
+    assert!(!results.exists() || std::fs::read_dir(&results).unwrap().next().is_none());
+
+    // The next stand-in run finds nothing cached and asks its stand-in again.
+    let good = Arc::new(CountingStandIn {
+        fault: false,
+        asked: AtomicUsize::new(0),
+    });
+    let services = stand_in_services(&fixture.root, &python, Arc::clone(&good));
+    let attempt = attempt_of(&services, calling_job(&identity)).await;
+    assert_eq!(attempt.result.error, None);
+    assert_eq!(attempt.cache, CacheUse::Miss);
+    assert_eq!(good.asked.load(Ordering::SeqCst), 1);
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_body_runs_on_a_host_and_its_result_is_cached() {
     if !have_python3() {
@@ -808,6 +967,7 @@ async fn host_failures_become_results() {
         ])
     );
     assert!(!failed.retryable);
+    assert_eq!(failed.code, Some(ErrorCode::NodeFailure));
     // A failed attempt writes no record.
     let again = attempt_of(&services, hand_job(body.clone(), mode("fail"), identity)).await;
     assert_eq!(again.cache, CacheUse::Miss);
@@ -819,6 +979,7 @@ async fn host_failures_become_results() {
         Some("ValueError: boom at nodes/n.py")
     );
     assert!(error.retryable);
+    assert_eq!(error.code, Some(ErrorCode::NodeError));
 
     let exited = attempt_of(&services, hand_job(body.clone(), mode("exit"), None)).await;
     assert_eq!(
@@ -826,6 +987,8 @@ async fn host_failures_become_results() {
         Some("the node host exited with status 3")
     );
     assert!(exited.retryable);
+    // A host that exited fails `node_error`, as a body's exception does.
+    assert_eq!(exited.code, Some(ErrorCode::NodeError));
 
     let escape = attempt_of(&services, hand_job(body.clone(), mode("escape"), None)).await;
     assert_eq!(
@@ -833,6 +996,8 @@ async fn host_failures_become_results() {
         Some("output text: ../../outside.txt is not a file inside the work dir")
     );
     assert!(!escape.retryable);
+    // A result that fails a check fails `invalid_params`.
+    assert_eq!(escape.code, Some(ErrorCode::InvalidParams));
 
     let mut slow = hand_job(body, mode("slow"), None);
     slow.timeout_s = Some(0.5);
@@ -842,6 +1007,8 @@ async fn host_failures_become_results() {
         Some("ran past 0.5 seconds")
     );
     assert!(!timed_out.retryable);
+    // A timeout carries no code.
+    assert_eq!(timed_out.code, None);
     assert_eq!(work_dirs_left(&engine), 0);
 }
 

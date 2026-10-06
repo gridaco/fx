@@ -47,6 +47,28 @@ pub fn host() -> grida_fx_runtime::host::PythonHost {
     grida_fx_runtime::host::PythonHost::new()
 }
 
+/// The node host of a planning verb or `run` for `target`, run from `cwd`: [`host`], falling back
+/// to the planning project's `.venv` (spec/protocol.md §1). The planning project is found as
+/// planning finds it (spec/store.md): from a workflow file's folder when the target is one, else
+/// from `cwd`.
+pub fn planning_host(target: &str, cwd: &Path) -> grida_fx_runtime::host::PythonHost {
+    let named_file = matches!(
+        Path::new(target)
+            .extension()
+            .and_then(|suffix| suffix.to_str()),
+        Some("yaml" | "yml")
+    );
+    let start = if named_file {
+        cwd.join(target)
+    } else {
+        cwd.to_path_buf()
+    };
+    match grida_fx_core::docs::project::Project::find(&start) {
+        Ok(project) => host().with_planning_root(project.root),
+        Err(_) => host(),
+    }
+}
+
 /// A summary line: `label` padded to [`LABEL_WIDTH`] columns, then `text`.
 pub fn labelled(label: &str, text: &str) -> String {
     format!("{label:<LABEL_WIDTH$}{text}")

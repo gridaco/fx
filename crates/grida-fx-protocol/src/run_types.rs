@@ -7,11 +7,12 @@
 //! `agent_check_params`/`result`, `cancel_params`, `capability_params`/`result`, `agent_tool`,
 //! `agent_run_params`, `agent_message`, `agent_run_result`, `fact_params`/`result`,
 //! `annotate_params`/`result`, `progress_params`, `prompt_render_params`/`result`,
-//! `file_put_params`/`result`. The conventions are [`crate::types`]': an optional member is an
-//! `Option` left out when `None`, a required member that may be `null` must be present, a
-//! `oneOf` is an untagged enum, and unknown members are refused where the schema says
-//! `additionalProperties: false`. JSON objects whose members the schema leaves open are
-//! `IndexMap<String, Value>`, which keeps their order.
+//! `file_put_params`/`result`, and the stand-in's `stand_in_load_params`/`result`,
+//! `stand_in_answer_params`/`result` and `stand_in_file` (protocol.md §5.7). The conventions are
+//! [`crate::types`]': an optional member is an `Option` left out when `None`, a required member
+//! that may be `null` must be present, a `oneOf` is an untagged enum, and unknown members are
+//! refused where the schema says `additionalProperties: false`. JSON objects whose members the
+//! schema leaves open are `IndexMap<String, Value>`, which keeps their order.
 
 use crate::jsonrpc::Id;
 use crate::types::{nullable, present};
@@ -433,6 +434,99 @@ pub struct FilePutParams {
 
 /// `file.put` result: the stored file's ref, with its file facts.
 pub type FilePutResult = FileRef;
+
+/// `stand_in.load` params (protocol.md §5.7): the engine asks a stand-in host to load one
+/// stand-in.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StandInLoadParams {
+    /// The stand-in file's absolute path. Never recorded.
+    pub path: String,
+    /// The function's name in that file.
+    pub function: String,
+}
+
+/// `stand_in.load` result: `{}`.
+pub type StandInLoadResult = EmptyResult;
+
+/// The route of a call a stand-in is asked to answer: `{id, fingerprint}` (identity.md §7).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StandInRoute {
+    pub id: String,
+    pub fingerprint: String,
+}
+
+/// The instance making a call a stand-in is asked to answer: `{id, path, step}`, as in `run`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StandInInstance {
+    pub id: String,
+    pub path: String,
+    pub step: String,
+}
+
+/// `stand_in.answer` params (protocol.md §5.7): one paid call for the stand-in to answer.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StandInAnswerParams {
+    pub capability: String,
+    pub route: StandInRoute,
+    /// The canonical request, exactly as keyed; files as file values.
+    pub request: IndexMap<String, Value>,
+    /// The call's take list, as in the call key.
+    pub take: Vec<u64>,
+    /// The call key.
+    pub key: String,
+    pub instance: StandInInstance,
+    /// A file ref for every file value in `request`, by digest.
+    pub files: IndexMap<String, FileRef>,
+}
+
+/// A file of a stand-in's answer, as the stand-in sends it: its bytes, base64 with padding, and
+/// its kind unless the capability names one (`stand_in_file`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StandInFileWire {
+    pub base64: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+}
+
+/// The `true` of a decline: reads only `true`, writes `true`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct True;
+
+impl Serialize for True {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bool(true)
+    }
+}
+
+impl<'de> Deserialize<'de> for True {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<True, D::Error> {
+        match bool::deserialize(deserializer)? {
+            true => Ok(True),
+            false => Err(serde::de::Error::custom("a decline is true")),
+        }
+    }
+}
+
+/// `stand_in.answer` result (protocol.md §5.7): an answer, or a decline that leaves the call
+/// `not_live`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged, deny_unknown_fields)]
+pub enum StandInAnswerResult {
+    Answer {
+        /// The answer's files by name.
+        files: IndexMap<String, StandInFileWire>,
+        /// JSON, or `null`.
+        data: Value,
+    },
+    Decline {
+        decline: True,
+    },
+}
 
 #[cfg(test)]
 mod tests {

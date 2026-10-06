@@ -1,0 +1,200 @@
+[
+ {
+  "capability": "image.generate",
+  "files": {},
+  "instance": {
+   "id": "data#1",
+   "path": "data",
+   "step": "data"
+  },
+  "key": "e2a15a6b960cd44d2954d5e7e58c4add14a268b23e023e6d05e7a7aee5e3e061",
+  "request": {
+   "background": "auto",
+   "prompt": "data as well",
+   "size": "64x64"
+  },
+  "route": {
+   "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+   "id": "img-a@acme"
+  },
+  "take": [
+   1
+  ]
+ },
+ {
+  "capability": "image.generate",
+  "files": {},
+  "instance": {
+   "id": "declined#1",
+   "path": "declined",
+   "step": "declined"
+  },
+  "key": "eeb919cfeb9e2618bceaadbcb2fb0fd7e08eeef04c413e985e13c48e5c0798df",
+  "request": {
+   "background": "auto",
+   "prompt": "decline this",
+   "size": "64x64"
+  },
+  "route": {
+   "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+   "id": "img-a@acme"
+  },
+  "take": [
+   1
+  ]
+ },
+ {
+  "capability": "image.generate",
+  "files": {},
+  "instance": {
+   "id": "extra#1",
+   "path": "extra",
+   "step": "extra"
+  },
+  "key": "bc68692ee4af27f8016c6c43964553481bb13fe92fbc6a588dfd720054b1ce34",
+  "request": {
+   "background": "auto",
+   "prompt": "an extra file",
+   "size": "64x64"
+  },
+  "route": {
+   "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+   "id": "img-a@acme"
+  },
+  "take": [
+   1
+  ]
+ },
+ {
+  "capability": "image.generate",
+  "files": {},
+  "instance": {
+   "id": "failed#1",
+   "path": "failed",
+   "step": "failed"
+  },
+  "key": "2dfa16ff57e1607fc0a7b8575cec473d9dba00b6e13d00bc0c7b6c7667276712",
+  "request": {
+   "background": "auto",
+   "prompt": "fail this",
+   "size": "64x64"
+  },
+  "route": {
+   "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+   "id": "img-a@acme"
+  },
+  "take": [
+   1
+  ]
+ },
+ {
+  "capability": "image.generate",
+  "files": {},
+  "instance": {
+   "id": "good#1",
+   "path": "good",
+   "step": "good"
+  },
+  "key": "201c4b29d07c6e91c70167f0321af245d52a42535960477501bf2f069a1eb307",
+  "request": {
+   "background": "auto",
+   "prompt": "a good picture",
+   "size": "64x64"
+  },
+  "route": {
+   "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+   "id": "img-a@acme"
+  },
+  "take": [
+   1
+  ]
+ },
+ {
+  "capability": "image.generate",
+  "files": {},
+  "instance": {
+   "id": "missing#1",
+   "path": "missing",
+   "step": "missing"
+  },
+  "key": "70744808a286aaa5b6ca7ef6742641859d08a5dc739fbc3a23ba84c340b59aaa",
+  "request": {
+   "background": "auto",
+   "prompt": "no file at all",
+   "size": "64x64"
+  },
+  "route": {
+   "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+   "id": "img-a@acme"
+  },
+  "take": [
+   1
+  ]
+ },
+ {
+  "capability": "image.generate",
+  "files": {},
+  "instance": {
+   "id": "refused#1",
+   "path": "refused",
+   "step": "refused"
+  },
+  "key": "71924be4714734579058ce8666092a05dd68668359db4b2538e3b9969013d0ea",
+  "request": {
+   "background": "auto",
+   "prompt": "refuse this",
+   "size": "64x64"
+  },
+  "route": {
+   "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+   "id": "img-a@acme"
+  },
+  "take": [
+   1
+  ]
+ },
+ {
+  "capability": "image.generate",
+  "files": {},
+  "instance": {
+   "id": "small#1",
+   "path": "small",
+   "step": "small"
+  },
+  "key": "22c71a6045074361960837aff97b8d6675a24178044a1287c1c29c2d2b02cb83",
+  "request": {
+   "background": "auto",
+   "prompt": "too small",
+   "size": "64x64"
+  },
+  "route": {
+   "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+   "id": "img-a@acme"
+  },
+  "take": [
+   1
+  ]
+ },
+ {
+  "capability": "image.generate",
+  "files": {},
+  "instance": {
+   "id": "text#1",
+   "path": "text",
+   "step": "text"
+  },
+  "key": "0d406e086a77ec104acee438c1fa97bffb36e6eb067db23641f9a7a304f94347",
+  "request": {
+   "background": "auto",
+   "prompt": "text instead",
+   "size": "64x64"
+  },
+  "route": {
+   "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+   "id": "img-a@acme"
+  },
+  "take": [
+   1
+  ]
+ }
+]

@@ -75,7 +75,11 @@ missing = result.deliver({"images": "out/{key}.png"})
   problem) before any run folder exists. A failed step does not raise: check `result.ok` and
   `result.failed`. The result is read from the run folder's `events.jsonl`: `ok`, `incomplete`,
   `cost` (the folder's charge over every invocation, in US dollars), `run_dir`, `failed`,
-  `outputs` and `steps`.
+  `failures`, `stopped`, `stand_in`, `outputs` and `steps`.
+- **Failures.** `result.failures` holds a `Failure` for each failed instance id: its `path`,
+  `message`, `code` (the protocol's name of the error, such as `node_failure` or `call_failed`;
+  `None` for a timeout, an assertion or a skip), the node `facts` it reported, and `skipped` (it
+  never ran, because something it reads failed). `result.stopped` says why a run stopped early.
 - **Files.** An output file has `path` (its copy in the planning project's store,
   `<cache>/files/…`: the project above the workflow file for a `.yaml` target, else above `cwd`;
   read it, never write it), `digest`, `kind`, `name`, `size`, `key`, `read_bytes()` and
@@ -89,6 +93,60 @@ missing = result.deliver({"images": "out/{key}.png"})
   raise `FxError` with its message; so does a run it refuses to start (`refused: …`).
 - **Async.** `plan_async` and `run_async` do the same inside an event loop; `plan` and `run`
   cannot be called inside a running one. Cancelling `run_async` stops the run as Ctrl-C would.
+
+## Stand-ins: running without a provider
+
+A test runs a workflow's paid calls offline by answering them itself:
+
+```python
+from collections import Counter
+from pathlib import Path
+
+from grida.fx import DECLINE, Answer, CallRefused, run
+
+asked = Counter()
+
+
+def answer(call):  # a plain function, or an async def
+    asked[call.capability] += 1
+    if call.capability == "image.generate":
+        return Answer(files={"image": Path(f"tests/pictures/{call.request['size']}.png")})
+    if call.capability == "structured.generate":
+        return Answer.json({"title": "The lighthouse"})
+    if call.capability == "agent.turn":
+        return Answer.submit(caption="a lighthouse at dusk")
+    if call.capability == "image.edit":
+        raise CallRefused("no edits in this test")
+    return DECLINE
+
+
+result = run("workflows/gallery.yaml", run_dir="runs/test", stand_in=answer)
+assert asked["image.generate"] == 2
+assert result.failures["touch_up#1"].code == "capability_refused"
+```
+
+- **The call.** `answer` gets a `StandInCall` for each paid call the cache cannot answer:
+  `capability`, `route.id` and `route.fingerprint`, `key`, `takes` and `take`, `instance.id`,
+  `.path` and `.step`, `request` (every file in it an `InputFile`: `digest`, `path`,
+  `read_bytes()`, `facts`), `files` (the same files by digest) and `params` (the call as the
+  engine sent it, files as `{"file": digest}`).
+- **The answer.** `Answer(files={name: …}, data=…)`: a file is `bytes` (it takes the kind the
+  capability names), an `Output` of bytes or an `InputFile` (its own kind), or a path (the kind of
+  its suffix). `Answer.json(value)`, `Answer.turn(text, tool_calls)` and
+  `Answer.submit(**arguments)` build the data of `structured.generate` and `agent.turn`. Return
+  `DECLINE` to leave a call unanswered (it fails `not_live`); raise `CallRefused` or `CallFailed`
+  to refuse or fail it. The engine checks every answer as it checks a provider's: an image of the
+  wrong size fails the call.
+- **One at a time.** The function runs in this process, so counters and scripted answers work.
+  Calls are answered one at a time, in the order they come.
+- **Faults.** Anything else it raises, or a return of `None`, stops the run; `run` then raises
+  that exception, noting the run folder.
+- **Nothing is spent, and the real store is left alone.** A stand-in run is never `live` and
+  takes no `yes_up_to`; `run` does not plan it first. It keeps everything in the store's
+  `stand-in/` folder, where its result's files are read, so a later stand-in run, or a resumed
+  one, replays its answers; delete that folder to forget them. A folder resumes only in the mode
+  it was started in, and `reroll` and `pick` refuse it.
+- From the command line: `grida-fx run … --stand-in tests/stand_in.py#answer`.
 
 ## Standard bodies
 

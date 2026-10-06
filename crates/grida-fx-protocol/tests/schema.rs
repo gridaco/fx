@@ -811,6 +811,77 @@ fn every_type_validates_against_its_definition() {
     }
     s.typed("file_put_result", &file_ref(None));
 
+    // A stand-in's session (protocol.md §5.7).
+    s.typed(
+        "stand_in_load_params",
+        &StandInLoadParams {
+            path: "/work/acme/tests/stand_in.py".into(),
+            function: "answer".into(),
+        },
+    );
+    s.typed("stand_in_load_result", &StandInLoadResult::default());
+    s.typed(
+        "stand_in_answer_params",
+        &StandInAnswerParams {
+            capability: "image.edit".into(),
+            route: StandInRoute {
+                id: "img-a@acme".into(),
+                fingerprint: DIGEST.into(),
+            },
+            request: map(vec![
+                ("prompt", json!("a kite at dusk")),
+                ("image", json!({"file": DIGEST})),
+                ("size", json!("64x64")),
+            ]),
+            take: vec![2, 1],
+            key: DIGEST.into(),
+            instance: StandInInstance {
+                id: "draw['a']#2.1".into(),
+                path: "draw['a']".into(),
+                step: "draw".into(),
+            },
+            files: map(vec![(DIGEST, file_ref(None))]),
+        },
+    );
+    s.typed(
+        "stand_in_file",
+        &StandInFileWire {
+            base64: "iVBORw0KGgo=".into(),
+            kind: None,
+        },
+    );
+    s.typed(
+        "stand_in_file",
+        &StandInFileWire {
+            base64: "AAAA".into(),
+            kind: Some("audio/mpeg".into()),
+        },
+    );
+    s.typed(
+        "stand_in_answer_result",
+        &StandInAnswerResult::Answer {
+            files: map(vec![(
+                "image",
+                StandInFileWire {
+                    base64: "iVBORw0KGgo=".into(),
+                    kind: Some("image/png".into()),
+                },
+            )]),
+            data: Value::Null,
+        },
+    );
+    s.typed(
+        "stand_in_answer_result",
+        &StandInAnswerResult::Answer {
+            files: IndexMap::new(),
+            data: json!({"json": {"title": "Kite"}}),
+        },
+    );
+    s.typed(
+        "stand_in_answer_result",
+        &StandInAnswerResult::Decline { decline: True },
+    );
+
     // Whole messages.
     messages(&mut s);
 
@@ -875,6 +946,34 @@ fn messages(s: &mut Schema) {
     })
     .unwrap();
     check(s, "request", request(4, method::FACT, Some(fact)));
+    let load = serde_json::to_value(StandInLoadParams {
+        path: "/work/acme/stand_in.py".into(),
+        function: "answer".into(),
+    })
+    .unwrap();
+    check(s, "request", request(5, method::STAND_IN_LOAD, Some(load)));
+    let answer = serde_json::to_value(StandInAnswerParams {
+        capability: "image.generate".into(),
+        route: StandInRoute {
+            id: "img-a@acme".into(),
+            fingerprint: DIGEST.into(),
+        },
+        request: map(vec![("prompt", json!("a kite"))]),
+        take: vec![1],
+        key: DIGEST.into(),
+        instance: StandInInstance {
+            id: "draw#1".into(),
+            path: "draw".into(),
+            step: "draw".into(),
+        },
+        files: IndexMap::new(),
+    })
+    .unwrap();
+    check(
+        s,
+        "request",
+        request(6, method::STAND_IN_ANSWER, Some(answer)),
+    );
     check(
         s,
         "notification",
@@ -991,6 +1090,17 @@ fn schema_and_serde_refuse_the_same_shapes() {
     );
     s.refused::<Mark>("mark", json!({"shape": "box", "box": [0, 0]}));
     s.refused::<FactResult>("fact_result", json!({"x": 1}));
+    s.refused::<StandInAnswerResult>("stand_in_answer_result", json!({"decline": false}));
+    s.refused::<StandInAnswerResult>("stand_in_answer_result", json!({"files": {}}));
+    s.refused::<StandInAnswerResult>(
+        "stand_in_answer_result",
+        json!({"files": {}, "data": null, "decline": true}),
+    );
+    s.refused::<StandInAnswerResult>(
+        "stand_in_answer_result",
+        json!({"files": {"image": {"kind": "image/png"}}, "data": null}),
+    );
+    s.refused::<StandInLoadParams>("stand_in_load_params", json!({"path": "/w/s.py"}));
 }
 
 /// The fenced block of protocol.md §9 that starts with ```` ```jsonc ````.

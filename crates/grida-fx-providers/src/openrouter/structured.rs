@@ -33,6 +33,7 @@ use super::schema;
 use crate::BoxFuture;
 use crate::adapter::{Answer, CallRequest, RequestAdapter, RouteRef, Sent};
 use crate::capabilities;
+use crate::checks;
 use crate::setup::Client;
 use crate::transport::{Body, Credential, HttpRequest, HttpResponse, Lane, Method};
 use crate::wire;
@@ -68,9 +69,6 @@ pub const DEADLINE: Duration = Duration::from_secs(1800);
 
 /// The colour reduced pictures are flattened on when the request gives none.
 pub const DEFAULT_MATTE: &str = "#ffffff";
-
-/// The longest `check` refusal, in characters.
-pub const CHECK_CHARS: usize = 500;
 
 /// The `reasoning.effort` values a policy may give.
 pub const EFFORTS: [&str; 7] = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
@@ -506,41 +504,12 @@ fn schema_name(schema: &Value) -> String {
     }
 }
 
-/// The validator of a request's original schema: draft 2020-12, `format` not asserted, no
-/// remote references (nothing is fetched).
-fn validator(schema: &Value) -> Result<jsonschema::Validator, String> {
-    jsonschema::draft202012::options()
-        .should_validate_formats(false)
-        .build(schema)
-        .map_err(|_| "a structured call's schema is not a JSON Schema (draft 2020-12)".to_string())
-}
-
 /// The schema as it is sent: references inlined, then strict. The original must compile, since
 /// the answer is checked against it.
 fn sent_schema(original: &Value) -> Result<Value, String> {
     let inlined = schema::inline_refs(original)?;
-    validator(original)?;
+    checks::schema_validator(original)?;
     Ok(schema::strict(&inlined))
-}
-
-/// The schema a request file holds.
-fn schema_file(call: &CallRequest, value: &Value) -> Result<Value, String> {
-    let file = wire::request_file(call, value, "schema")?;
-    let bytes = wire::read_file(file, "schema")?;
-    match serde_json::from_slice::<Value>(&bytes) {
-        Ok(schema @ Value::Object(_)) => Ok(schema),
-        Ok(_) => Err("a structured call's schema is a JSON object".into()),
-        Err(_) => Err("a structured call's schema is not a JSON file".into()),
-    }
-}
-
-/// The request's original schema: inline, or read from its file.
-fn original_schema(call: &CallRequest) -> Result<Value, String> {
-    match call.request.get("schema") {
-        Some(value) if capabilities::is_file_value(value) => schema_file(call, value),
-        Some(schema @ Value::Object(_)) => Ok(schema.clone()),
-        _ => Err(format!("{CAPABILITY} needs schema")),
-    }
 }
 
 /// Unwraps the `completionState` envelopes a provider sometimes puts around an answer
@@ -595,28 +564,6 @@ fn unwrap_completion(value: Value) -> Value {
         }
         other => other,
     }
-}
-
-/// One validation error's instance location, ordered as spec/protocol.md §6.2 orders them:
-/// segment by segment, indexes by number before names by text, a location before the longer
-/// locations it starts.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-enum Segment {
-    Index(usize),
-    Name(String),
-}
-
-impl std::fmt::Display for Segment {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Segment::Index(i) => write!(f, "{i}"),
-            Segment::Name(name) => f.write_str(name),
-        }
-    }
-}
-
-fn cut(text: &str, max: usize) -> String {
-    text.chars().take(max).collect()
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -675,7 +622,7 @@ impl OpenRouterStructured {
         let (original, sent) = match prepared_schema {
             Some(prepared) => prepared,
             None => {
-                let original = schema_file(call, schema_value)?;
+                let original = checks::schema_file(call, schema_value)?;
                 let sent = sent_schema(&original)?;
                 (original, sent)
             }
@@ -813,43 +760,10 @@ impl RequestAdapter for OpenRouterStructured {
         })
     }
 
-    /// The answer's value against the request's original schema (spec/capabilities.md §4).
+    /// The answer's value against the request's original schema (spec/capabilities.md §4;
+    /// [`checks::structured`]).
     fn check(&self, call: &CallRequest, answer: &Answer) -> Result<(), String> {
-        let Some(value) = answer.data.get("json") else {
-            return Err("the answer holds no json value".into());
-        };
-        let schema = original_schema(call)?;
-        let validator = validator(&schema)?;
-        let mut errors: Vec<(Vec<Segment>, String)> = validator
-            .iter_errors(value)
-            .map(|error| {
-                let path = error
-                    .instance_path()
-                    .segments()
-                    .map(|segment| match segment {
-                        jsonschema::paths::LocationSegment::Index(i) => Segment::Index(i),
-                        jsonschema::paths::LocationSegment::Property(name) => {
-                            Segment::Name(name.into_owned())
-                        }
-                    })
-                    .collect();
-                (path, error.to_string())
-            })
-            .collect();
-        errors.sort_by(|a, b| a.0.cmp(&b.0));
-        let Some((path, message)) = errors.first() else {
-            return Ok(());
-        };
-        let place = if path.is_empty() {
-            "the answer".to_string()
-        } else {
-            path.iter()
-                .map(Segment::to_string)
-                .collect::<Vec<_>>()
-                .join("/")
-        };
-        let refusal = self.client.redactor.redact(&format!("{place}: {message}"));
-        Err(cut(&refusal, CHECK_CHARS))
+        checks::structured(call, answer, &self.client.redactor)
     }
 }
 

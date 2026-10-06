@@ -6,8 +6,8 @@
 //! `format!("tool      {name:12} {path or NOT FOUND}")`. Exit 1 when anything is missing.
 //!
 //! The engine and Python lines come first, with or without a target. The Python line names the
-//! interpreter the home project's node host would use (project-relative when it lies inside the
-//! project, else as configured) and the `grida` version it reports once started; `NOT FOUND`
+//! interpreter the home project's node host would use (the home's `.venv`, then the planning
+//! project's; relative to the home when it is one of those, else as configured) and the `grida` version it reports once started; `NOT FOUND`
 //! when it cannot be started. That line is information: a workflow that needs the host and cannot
 //! start it shows `missing` lines for its node types, which set the exit status. Steps are visited
 //! in declaration order, each group before its members; built-ins and repeated `uses` are
@@ -50,6 +50,7 @@ use grida_fx_runtime::host::locate::python_interpreter;
 use grida_fx_runtime::tools::{resolve_tool, tool_name};
 use indexmap::IndexMap;
 use std::collections::HashSet;
+use std::path::Path;
 use std::rc::Rc;
 
 pub fn run(args: &DoctorArgs) -> Result<u8, Error> {
@@ -60,17 +61,18 @@ pub fn run(args: &DoctorArgs) -> Result<u8, Error> {
         grida_fx_core::ENGINE_NAME,
         grida_fx_core::ENGINE_VERSION
     ));
-    let mut host = crate::print::host();
     let Some(target) = &args.target else {
+        let mut host = crate::print::host();
         let project = Project::find(&cwd)?;
-        print_line(&python_line(&mut host, &project, &env));
+        print_line(&python_line(&mut host, &project, None, &env));
         let providers = Providers::of(&project, &env)?;
         providers.print();
         return Ok(u8::from(providers.refused));
     };
+    let mut host = crate::print::planning_host(target, &cwd);
     let (project, workflow) = load_target(target, &cwd, &IndexMap::new(), &mut host)?;
     let home = super::schema::home_of(target, project.clone(), &workflow)?;
-    print_line(&python_line(&mut host, &home, &env));
+    print_line(&python_line(&mut host, &home, Some(&project.root), &env));
     let providers = Providers::of(&project, &env)?;
     providers.print();
     let mut route_defaults = home.route_defaults();
@@ -218,15 +220,19 @@ fn route_lines(catalog: &RouteTable, keys: &Keys) -> Vec<String> {
 fn python_line(
     host: &mut PythonHost,
     project: &Project,
+    planning_root: Option<&Path>,
     env: &dyn Fn(&str) -> Option<String>,
 ) -> String {
-    let interpreter = python_interpreter(&project.root, env);
+    let interpreter = python_interpreter(&project.root, planning_root, env);
     let shown = match interpreter.strip_prefix(&project.root) {
         Ok(inside) => inside
             .components()
             .map(|c| c.as_os_str().to_string_lossy())
             .collect::<Vec<_>>()
             .join("/"),
+        Err(_) if planning_root.is_some_and(|root| interpreter.starts_with(root)) => {
+            crate::print::shown_path(&interpreter, &project.root)
+        }
         Err(_) => interpreter.display().to_string(),
     };
     let started = host

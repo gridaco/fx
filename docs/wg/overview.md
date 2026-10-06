@@ -119,7 +119,8 @@ stage-gen is the acceptance test. Its workflow files and Python node bodies stay
 - the command becomes `grida-fx`;
 - feature names in `requires:`, in workflow files and in builder code, move to FX's vocabulary ([capabilities.md](../../spec/capabilities.md)): `transparent_background` → `alpha`, `masked_edit` → `mask`, `reference_images` → `image_input` and `data_url_reference_input` → `image_input` ([providers.md](../../spec/providers.md) §11). The planner refuses the old names and names FX's;
 - a builder's takes file is renamed from `<builder module>.takes.yaml` to `<workflow id>.takes.yaml`, in the folder of the module that constructed the `Workflow` ([protocol.md](../../spec/protocol.md) §10);
-- two direct provider calls in its games move to capabilities.
+- two direct provider calls in its games move to capabilities;
+- FX gains what stage-gen's tests and layout need, each a public feature that makes sense without it: **stand-in answers** (`grida-fx run --stand-in`, `grida.fx.run(…, stand_in=…)`), which answer a run's paid calls offline with a test's function, held to a provider's checks and billed at nothing ([protocol.md](../../spec/protocol.md) §5.7); **workflow search folders** (`workflows:` in `fx.yaml`), so a project finds by id the workflows kept in nested projects ([store.md](../../spec/store.md)); and **`RunResult.failures`**, each failed or skipped instance with its message and error code.
 
 Its paid cache is migrated by **replay**:
 - Each recorded workflow runs against the cache, and every call computes its old key (with the Python gnode) and its new key (with FX). Each hit is copied under the new key at $0.

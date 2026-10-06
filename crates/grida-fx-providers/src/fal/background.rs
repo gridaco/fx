@@ -129,14 +129,6 @@ impl RequestAdapter for FalBackground {
         let Some(file) = answer.files.get("image") else {
             return Err("the answer carries no image".into());
         };
-        if file.kind == "image/png" && crate::wire::matches_signature("image/png", &file.bytes) {
-            return Ok(());
-        }
-        let found = if file.kind == "image/png" {
-            crate::wire::sniff_image(&file.bytes).unwrap_or("not an image")
-        } else {
-            file.kind.as_str()
-        };
-        Err(format!("the answer is {found}, not image/png"))
+        crate::wire::check_png(&file.kind, &file.bytes)
     }
 }

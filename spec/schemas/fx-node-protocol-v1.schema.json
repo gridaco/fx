@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:grida-fx:schema:fx-node-protocol-v1",
   "title": "FX node protocol v1: one JSON-RPC 2.0 message between the engine and a node host",
-  "description": "A message is a request, a notification, a response or an error response (spec/protocol.md). Each method's params are $defs/<method>_params and its result $defs/<method>_result, with dots in the method name written as underscores; a response's result is validated against the result definition of the request it answers.",
+  "description": "A message is a request, a notification, a response or an error response (spec/protocol.md). The same messages pass between the engine and a stand-in answerer (protocol.md section 5.7), which answers only initialize, stand_in.load, stand_in.answer, $/cancel, shutdown and exit. Each method's params are $defs/<method>_params and its result $defs/<method>_result, with dots in the method name written as underscores; a response's result is validated against the result definition of the request it answers.",
   "oneOf": [
     {"$ref": "#/$defs/request"},
     {"$ref": "#/$defs/notification"},
@@ -33,7 +33,9 @@
             "fact",
             "annotate",
             "prompt.render",
-            "file.put"
+            "file.put",
+            "stand_in.load",
+            "stand_in.answer"
           ]
         },
         "params": {}
@@ -124,6 +126,20 @@
           "then": {
             "required": ["params"],
             "properties": {"params": {"$ref": "#/$defs/file_put_params"}}
+          }
+        },
+        {
+          "if": {"properties": {"method": {"const": "stand_in.load"}}},
+          "then": {
+            "required": ["params"],
+            "properties": {"params": {"$ref": "#/$defs/stand_in_load_params"}}
+          }
+        },
+        {
+          "if": {"properties": {"method": {"const": "stand_in.answer"}}},
+          "then": {
+            "required": ["params"],
+            "properties": {"params": {"$ref": "#/$defs/stand_in_answer_params"}}
           }
         }
       ]
@@ -1160,6 +1176,104 @@
       "additionalProperties": false,
       "oneOf": [{"required": ["work_path"]}, {"required": ["base64"]}, {"required": ["json"]}]
     },
-    "file_put_result": {"$ref": "#/$defs/file_ref"}
+    "file_put_result": {"$ref": "#/$defs/file_ref"},
+    "stand_in_load_params": {
+      "description": "Engine to a stand-in host (protocol.md section 5.7): load one stand-in.",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The stand-in file's absolute path. Never recorded."
+        },
+        "function": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"}
+      },
+      "required": ["path", "function"],
+      "additionalProperties": false
+    },
+    "stand_in_load_result": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "stand_in_answer_params": {
+      "description": "Engine to an answerer (protocol.md section 5.7): answer one paid call.",
+      "type": "object",
+      "properties": {
+        "capability": {"type": "string", "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$"},
+        "route": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string", "pattern": "^.+@[a-z0-9._-]+$"},
+            "fingerprint": {"$ref": "#/$defs/digest"}
+          },
+          "required": ["id", "fingerprint"],
+          "additionalProperties": false
+        },
+        "request": {
+          "type": "object",
+          "$ref": "#/$defs/file_json_value",
+          "description": "The canonical request, exactly as keyed; files as file values."
+        },
+        "take": {
+          "type": "array",
+          "items": {"type": "integer", "minimum": 1},
+          "minItems": 1
+        },
+        "key": {"$ref": "#/$defs/digest"},
+        "instance": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string", "minLength": 1},
+            "path": {"type": "string", "minLength": 1},
+            "step": {"type": "string", "minLength": 1}
+          },
+          "required": ["id", "path", "step"],
+          "additionalProperties": false
+        },
+        "files": {
+          "description": "A file ref for every file value in request, by digest.",
+          "type": "object",
+          "propertyNames": {"$ref": "#/$defs/digest"},
+          "additionalProperties": {"$ref": "#/$defs/file_ref"}
+        }
+      },
+      "required": ["capability", "route", "request", "take", "key", "instance", "files"],
+      "additionalProperties": false
+    },
+    "stand_in_file": {
+      "description": "A file of a stand-in's answer: its bytes, and its kind unless the capability names one.",
+      "type": "object",
+      "properties": {
+        "base64": {"type": "string", "contentEncoding": "base64"},
+        "kind": {"$ref": "#/$defs/kind"}
+      },
+      "required": ["base64"],
+      "additionalProperties": false
+    },
+    "stand_in_answer_result": {
+      "description": "An answer, or a decline that leaves the call not_live.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "files": {
+              "type": "object",
+              "propertyNames": {"pattern": "^[a-z][a-z0-9_]*$"},
+              "additionalProperties": {"$ref": "#/$defs/stand_in_file"}
+            },
+            "data": {}
+          },
+          "required": ["files", "data"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {"decline": {"const": true}},
+          "required": ["decline"],
+          "additionalProperties": false
+        }
+      ]
+    }
   }
 }

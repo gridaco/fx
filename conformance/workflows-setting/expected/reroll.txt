@@ -1,0 +1,2 @@
+thing.takes.yaml: draw uses take 2 from now on
+next      grida-fx run thing

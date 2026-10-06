@@ -1,0 +1,19 @@
+fx: workflow/v1
+id: case
+title: Agent turns and structured answers from a stand-in
+steps:
+  survey:
+    uses: ./nodes/agent.py#survey
+    with: { task: "Measure the lantern, then submit its height." }
+  garbled:
+    uses: ./nodes/agent.py#survey
+    with: { task: Garble the reply. }
+  estimate:
+    uses: fx/structured.generate@1
+    with: { prompt: Estimate the height of the lantern., schema: ./schemas/height.json }
+  wrong:
+    uses: fx/structured.generate@1
+    with: { prompt: Answer with the wrong type., schema: ./schemas/height.json }
+outputs:
+  answer: ${{ steps.survey.outputs.answer }}
+  estimate: ${{ steps.estimate.outputs.json }}

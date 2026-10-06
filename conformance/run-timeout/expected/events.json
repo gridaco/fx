@@ -1,0 +1,66 @@
+[
+ {
+  "ceiling_usd": null,
+  "charged_usd": 0,
+  "estimate": {
+   "high_usd": 0,
+   "low_usd": 0
+  },
+  "event": "run_started",
+  "kind": "fx-run-events-v1",
+  "plan": "cbf2fe924b8df922563ec6cb73c8e0cdd4cd0347ecabc1e63b3d8c5edf91f92b",
+  "resumed": false,
+  "workflow": "case"
+ },
+ {
+  "charged_usd": 0,
+  "event": "run_finished",
+  "failed": [
+   "nap#1"
+  ],
+  "incomplete": false,
+  "kind": "fx-run-events-v1",
+  "ok": false,
+  "outputs": {},
+  "plan": "cbf2fe924b8df922563ec6cb73c8e0cdd4cd0347ecabc1e63b3d8c5edf91f92b",
+  "stopped": null
+ },
+ {
+  "code": null,
+  "error": "ran past 1 seconds",
+  "event": "node_failed",
+  "facts": {},
+  "id": "nap#1",
+  "kind": "fx-run-events-v1",
+  "path": "nap",
+  "plan": "cbf2fe924b8df922563ec6cb73c8e0cdd4cd0347ecabc1e63b3d8c5edf91f92b"
+ },
+ {
+  "event": "node_started",
+  "id": "nap#1",
+  "identity": "edf165eb4ecf5cfaeceb2cc3d54aef65d5c86a11ece7ed7bc5d0e0bf9f690876",
+  "kind": "fx-run-events-v1",
+  "path": "nap",
+  "plan": "cbf2fe924b8df922563ec6cb73c8e0cdd4cd0347ecabc1e63b3d8c5edf91f92b",
+  "reads": [],
+  "routes": {},
+  "step": "nap",
+  "take": [
+   1
+  ],
+  "uses": "./nodes/slow.py#slow",
+  "with": {
+   "seconds": {
+    "value": 30
+   }
+  }
+ },
+ {
+  "event": "phase_planned",
+  "high_usd": 0,
+  "kind": "fx-run-events-v1",
+  "phase": 1,
+  "plan": "cbf2fe924b8df922563ec6cb73c8e0cdd4cd0347ecabc1e63b3d8c5edf91f92b",
+  "steps": 1
+ }
+]

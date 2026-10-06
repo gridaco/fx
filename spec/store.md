@@ -4,6 +4,12 @@ The store is FX's cache. It keeps file bytes by content, step results by step id
 
 The project that owns the store and the run folders is the **planning project**: the folder of the nearest `fx.yaml` at or above the workflow file when the command names the workflow by the path of its `.yaml` file, and at or above the current directory otherwise (a workflow id, a builder). A workflow's own project (its home, where its `./` paths and node modules are found) may be another one, for example a workflow found by id in a nested project; its runs still use the planning project's `cache` and `runs`.
 
+**Finding a workflow by id.** An id names the one workflow file whose `id` it is among the planning project's search files:
+1. the `*.yaml` and `*.yml` files directly in the planning project's root, sorted by name;
+2. then, for each folder of the project's `workflows` setting in its listed order (default `[workflows]`; fx-project-v1), the same files in that folder and in every folder below it, folders in the sorted order of their paths and each folder's files sorted by name. Symbolic links to folders are not followed, and a listed folder that does not exist adds nothing.
+
+`fx.yaml` and a name containing `.takes.` are never search files, and a file found twice, through folders that overlap, counts once. A setting lists folders relative to the project root, or absolute ones, which may lie outside the project; an entry that is the project root or a folder above it is refused while the project file is read, since it would search the project's own runs and store. The setting replaces the default: a project that keeps workflows both in `workflows/` and elsewhere lists both. A workflow found this way has its home at the nearest `fx.yaml` at or above its file, as any other: its node modules, `./` paths, `fx.lock` and `sources` are its home's, and its home's route defaults (`routes`) apply under the planning project's. The planning project's `cache`, `runs`, `budget` and `route_tables` are used whatever the home says, and so is the planning project's root as the folder of the takes file when the home is another project.
+
 The words MUST, MUST NOT and SHOULD are used as in RFC 2119.
 
 ## 1. Layout
@@ -14,10 +20,12 @@ The words MUST, MUST NOT and SHOULD are used as in RFC 2119.
   results/<i[:2]>/<i>.json     fx-result-record-v1          i = step_identity
   calls/<k[:2]>/<k>.json       fx-call-record-v1            k = call_key
   jobs/<k>.json                fx-job-record-v1             k = the call_key it answers
+  stand-in/                    the stand-in store: files/, results/ and calls/ as above, never jobs/ (§8)
 ```
 
 - Every name is a digest: 64 lowercase hexadecimal characters ([identity.md](identity.md) §2). An engine MUST refuse to build a store path from anything else.
 - Anything else under the store root, such as an engine's scratch space, is not part of this contract and MUST NOT be read as a record.
+- `stand-in/` is a store of its own, used only by stand-in runs (§8, *Stand-in runs*). Its records are never read as this store's, nor this store's as its, and each keeps its own scratch space and leftovers.
 - Records name files by digest only, so a store can be copied, moved or shared between projects and machines as it is.
 
 ## 2. Files
@@ -108,7 +116,7 @@ A run keeps its record in a run folder, and links its results there from the sto
 
 `grida-fx inspect` also takes a workflow id in place of a folder: that workflow's newest run under `<runs>/<workflow id>/`, the folder whose `plan.json` was written last.
 
-**Resuming.** Running in a folder that already holds a run continues it. Finished steps come back from the record and the store, and answered calls replay without being billed. A folder whose `plan.json` records a different plan digest ([identity.md](identity.md) §10), or whose `events.jsonl` holds an event with another `plan`, is refused before anything runs, with the advice to choose a new folder. The engine reads both only once it holds `run.lock`, so no other invocation writes the folder between the check and the run.
+**Resuming.** Running in a folder that already holds a run continues it. Finished steps come back from the record and the store, and answered calls replay without being billed. A folder whose `plan.json` records a different plan digest ([identity.md](identity.md) §10), or whose `events.jsonl` holds an event with another `plan`, is refused before anything runs, with the advice to choose a new folder; so is a folder of the other mode, a stand-in run resumed without a stand-in or the reverse (*Stand-in runs* below). The engine reads both only once it holds `run.lock`, so no other invocation writes the folder between the check and the run.
 
 **Layout.**
 
@@ -121,7 +129,7 @@ A run keeps its record in a run folder, and links its results there from the sto
   outputs/<name><suffix>                             the workflow's declared outputs
 ```
 
-- **`plan.json`** is the fx-graph-v1 document that `grida-fx expand` prints, `types` included, with `plan` (the plan digest), `steps`, `inputs` and `view_origins` added, and `takes_file`: the POSIX path of the workflow's takes file relative to the planning project's root, which `reroll` and `pick` write to. The first invocation writes it before any step runs, under a temporary name and then renamed (§6). Later invocations compare its `plan` and never rewrite it.
+- **`plan.json`** is the fx-graph-v1 document that `grida-fx expand` prints, `types` included, with `plan` (the plan digest), `steps`, `inputs` and `view_origins` added, and `takes_file`: the POSIX path of the workflow's takes file relative to the planning project's root, which `reroll` and `pick` write to. A stand-in run's also has `"stand_in": true`; no other run's has the member. The first invocation writes it before any step runs, under a temporary name and then renamed (§6). Later invocations compare its `plan` and never rewrite it.
 - **`events.jsonl`** is the record, and the source of truth for every command that reads the run. Each line is one fx-run-events-v1 event, written as `canon(event)` and then one line feed (U+000A), oldest first. Each line is written whole and flushed before the run goes on, in one write. A line that cannot be written whole (a full disk can take part of one) MUST NOT stay: the engine cuts the file back to its length before the line, writes nothing more if it cannot, and stops the run, so no line ever follows part of a line. A last line without its line feed is a line an invocation began and never finished (it was killed): readers leave it out, and the next invocation cuts it off, says so, and appends after it. A resumed run appends lines under a new `invocation_id`. Lines are never rewritten or removed otherwise. Every line reads back as JSON ([identity.md](identity.md) §2, nested at most 512 deep): a node fact or mark nested deeper than 509 fails its node ([protocol.md](protocol.md) §5.3), and an encoded list (fx-run-events-v1 `encoded`) nested so deep that its `{"list": …}` levels would pass that is written once as `{"value": <its plain JSON>}`, which reads back as the same list.
 - **`run.lock`** holds an exclusive operating-system file lock (`flock` on POSIX), taken without waiting, for as long as an invocation runs the folder. A second invocation that cannot take the lock is refused at once ("another invocation is running <folder>"). The lock ends with the process, so a crashed run leaves no stale lock. The file's content means nothing, and the file stays in place.
 - **`files/`** gets an instance's output files when it succeeds, whether it ran or came from the cache, before its `node_finished` event is written. Each take of a step has a folder of its own (`<step>` below), so `files/` holds every take's files and `inspect --verify` checks each against its record.
@@ -153,6 +161,15 @@ These names are for reading, and they are not identities. Two step paths or keys
 **JSON in a run folder.** A node's JSON output is a file that the engine writes in the format of [identity.md](identity.md) §5, "Writing JSON". It is stored under its digest, and the run folder links to those bytes. `plan.json` uses the same format. Records use `canon(record)`: the store's records (§3) and each line of `events.jsonl`.
 
 **Nothing private.** `plan.json` and `events.jsonl` follow §7, the same as a record: no secrets, and no absolute or temporary paths. Files are named by digest, and file paths are relative to the project.
+
+**Stand-in runs.** A stand-in run ([protocol.md](protocol.md) §5.7) stores everything in the **stand-in store**, `stand-in/` under the planning project's store root, with the layout of §1 and no `jobs/`. Its run folder is placed and named as any other's.
+- **Nothing reaches the store.** The run's input files, call records, step results and output files go to the stand-in store and only there. A stand-in's answer, or a result made from one, never becomes a record of the store, since a step's identity does not depend on how its calls were answered.
+- **Nothing comes from the store.** A stand-in run trusts no record of the store, call or result: every lookup of §4 is the stand-in store's. What a stand-in is asked therefore never depends on what earlier paid runs left in the cache, and no paid answer hides a stand-in's checks.
+- **Answers are kept.** A stand-in's answers and the results made from them are records of the stand-in store like any other, so a resumed or later stand-in run of the project replays them, whatever its stand-in. Removing `stand-in/` forgets them.
+- **Marked.** The run's `plan.json` holds `"stand_in": true`, and each `run_started` event `stand_in: true`. The mode is not part of the plan digest ([identity.md](identity.md) §10): a stand-in run and a run without one have the same digest for the same plan.
+- **One mode per folder.** Resuming a folder in the other mode is refused before anything runs: `<folder> holds a stand-in run; resume it with --stand-in, or choose a new folder`, and `<folder> holds a run without a stand-in; resume it without --stand-in, or choose a new folder`. A folder holds a stand-in run when its `plan.json` says `"stand_in": true`.
+- **The takes file is not touched.** `reroll` and `pick` refuse a stand-in run: `<folder> holds a stand-in run, and stand-in runs never change the workflow's takes file`. A stand-in run, and every command that reads one, writes nothing outside its run folder and the stand-in store, apart from what `--deliver` copies out.
+- **Read like any run.** `inspect` and `project` read a stand-in run's folder as any other's, and say that it is one. An SDK that reads a run's files by digest reads a stand-in run's from the stand-in store.
 
 ## 9. Changes from stage-gen's engine
 

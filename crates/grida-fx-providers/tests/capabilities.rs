@@ -533,12 +533,27 @@ fn long_jobs_and_answer_files_are_as_the_sections_say() {
             section.number,
             capability.name
         );
-        for (file, _) in capability.files {
+        for (file, kind) in capability.files {
             assert!(
                 text.contains(&format!("the file `{file}`")),
                 "§{} names no answer file {file}",
                 section.number
             );
+            // The kind a stand-in's file without one takes (spec/capabilities.md §1); a family
+            // leaves it to the file's bytes.
+            let named = if kind.contains('/') {
+                format!("the file `{file}` (`{kind}`)")
+            } else {
+                format!("the file `{file}`, whose kind is `{kind}/")
+            };
+            assert!(
+                text.contains(&named),
+                "§{} names {file} as {kind}",
+                section.number
+            );
+            if !kind.contains('/') {
+                assert!(text.contains("taken from its bytes"), "§{}", section.number);
+            }
         }
         if capability.files.is_empty() {
             assert!(

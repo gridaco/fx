@@ -27,7 +27,7 @@ gif = "0.14"
 image-webp = "0.2"
 clap = { version = "4", features = ["derive"] }
 tempfile = "3"
-tokio = { version = "1", features = ["rt", "rt-multi-thread", "process", "io-util", "sync", "time", "macros", "signal"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "process", "io-util", "sync", "time", "macros", "signal", "net"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 base64 = "0.22"
 unicode-general-category = "1.1"

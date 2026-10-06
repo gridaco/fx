@@ -2,7 +2,9 @@
 # `ctx.cancelled`: the engine sends `$/cancel` after 1 second and ends the node host 5 seconds
 # later. The step fails with `ran past 1 seconds` and is not run again, although its type
 # declares `retry="engine"`: the body counted one run in `naps.txt`. The run exits 1, well before
-# the body would have woken; `project` shows the failure.
+# the body would have woken; `project` shows the failure. The record (`events.json`, the run's
+# events.jsonl sorted) shows nap's `node_failed` with `code: null`: a timeout carries no error
+# code.
 steps:
 - argv:
   - run
@@ -21,3 +23,6 @@ steps:
   - runs/one
   save: project.json
   json: true
+- read: runs/one/events.jsonl
+  save: events.json
+  jsonl: true

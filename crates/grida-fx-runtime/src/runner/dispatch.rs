@@ -15,7 +15,8 @@
 //!    the step's folder names its take when it has more than one) and emit `node_finished {id,
 //!    path, cache, outputs: encoded, facts, duration_ms}`;
 //!    skipped (a select with no candidate): `node_skipped {id, path, error, facts, duration_ms}`;
-//!    failed: `node_failed {id, path, error, facts, duration_ms}`. `duration_ms` covers every
+//!    failed: `node_failed {id, path, error, code, facts, duration_ms}`, `code` the attempt's
+//!    (`executor::Attempt::code`; `null` for a pick that no longer holds). `duration_ms` covers every
 //!    attempt.
 //! 5. report [`Done`] to the loop. An attempt's `stop` is passed on; the loop stops the run.
 //!
@@ -123,10 +124,13 @@ pub async fn dispatch(
         result,
         cache,
         stop,
+        code,
         ..
     } = attempt;
+    let mut code = code;
     let mut result = scrubbed(result, &scrub);
     if let Some(error) = picked_mismatch(&job, &result) {
+        code = None;
         result = NodeResult {
             status: ResultStatus::Failed,
             outputs: Default::default(),
@@ -169,6 +173,7 @@ pub async fn dispatch(
             id: job.id.clone(),
             path: job.path.clone(),
             error: result.error.clone(),
+            code: code.map(|code| code.name().to_string()),
             facts: Some(result.facts.clone()),
             duration_ms: Some(duration_ms),
         },
@@ -343,6 +348,7 @@ mod tests {
             cache: CacheUse::Miss,
             retryable,
             stop: None,
+            code: None,
         }
     }
 

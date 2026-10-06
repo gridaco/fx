@@ -8,10 +8,12 @@ below, which implement spec/facts.md in Python with no binary (WAV through ``wav
 compares what they read with each folder's ``expected.json``.
 
 Generating (it needs ``ffmpeg`` and ``ffprobe`` on PATH) rewrites spec/vectors/facts/{wav,mp4,
-matroska}/ and the two media files of conformance/facts-media/in/, and cross-checks every fixture
-against what stage-gen's engine read from it (Python's ``wave`` for WAV, ``ffprobe`` for video;
-spec/facts.md section 7). A fixture whose facts differ from that reading fails the run unless
-DIFFERENCES lists it with the section of spec/facts.md that makes the difference deliberate.
+matroska}/ and the conformance cases' copies of them (the two media files of
+conformance/facts-media/in/ and conformance/stand-in-job/in/clip.mp4), and cross-checks every
+fixture against what stage-gen's engine read from it (Python's ``wave`` for WAV, ``ffprobe`` for
+video; spec/facts.md section 7). A fixture whose facts differ from that reading fails the run
+unless DIFFERENCES lists it with the section of spec/facts.md that makes the difference
+deliberate.
 
 Run from the repository root:
 
@@ -46,9 +48,14 @@ REPO = Path(__file__).resolve().parent.parent
 FACTS = REPO / "spec" / "vectors" / "facts"
 FOLDERS = ("wav", "mp4", "matroska")
 EXPECTED = "expected.json"
-# The conformance case facts-media plans with two of the fixtures, copied into its project.
-CASE = REPO / "conformance" / "facts-media" / "in"
-CASE_COPIES = {"voice.wav": "wav/pcm16_8k.wav", "clip.mp4": "mp4/h264_2997.mp4"}
+# Conformance cases that plan or run with fixtures, copied into their projects: each copy's path
+# under conformance/, and the fixture it copies. `--check` holds every copy to its fixture.
+CONFORMANCE = REPO / "conformance"
+CASE_COPIES = {
+    "facts-media/in/voice.wav": "wav/pcm16_8k.wav",
+    "facts-media/in/clip.mp4": "mp4/h264_2997.mp4",
+    "stand-in-job/in/clip.mp4": "mp4/h264_2997.mp4",
+}
 
 # identity.md section 4, for the suffixes the fixtures use; any other suffix is kind `file`.
 KINDS = {
@@ -1679,8 +1686,8 @@ def write_folders(files: dict[str, bytes]) -> None:
     for folder, entries in expected.items():
         text = json.dumps(entries, indent=1, ensure_ascii=False) + "\n"
         (FACTS / folder / EXPECTED).write_text(text, encoding="utf-8")
-    for name, source in CASE_COPIES.items():
-        (CASE / name).write_bytes(files[source])
+    for copy, source in CASE_COPIES.items():
+        (CONFORMANCE / copy).write_bytes(files[source])
 
 
 def cross_check(files: dict[str, bytes]) -> list[str]:
@@ -1715,7 +1722,7 @@ def check() -> list[str]:
             if got != expected[name] or list(got) != list(expected[name]):
                 problems.append(f"{folder}/{name}: read {got}, expected {expected[name]}")
     for name, source in CASE_COPIES.items():
-        copy = CASE / name
+        copy = CONFORMANCE / name
         if not copy.is_file() or copy.read_bytes() != (FACTS / source).read_bytes():
             problems.append(f"{copy.relative_to(REPO)} is not a copy of {source}")
     return problems

@@ -1,0 +1,75 @@
+{
+ "instances": {
+  "clip#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": 0,
+    "duration_seconds": 1.001,
+    "fps": 29.97003,
+    "height": 48,
+    "width": 64
+   },
+   "path": "clip",
+   "state": "succeeded"
+  },
+  "front#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": 0
+   },
+   "path": "front",
+   "state": "succeeded"
+  },
+  "mesh#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": 0,
+    "model_kind": "model/gltf-binary"
+   },
+   "path": "mesh",
+   "state": "succeeded"
+  }
+ },
+ "run": {
+  "run_finished": {
+   "charged_usd": 0,
+   "event": "run_finished",
+   "failed": [],
+   "incomplete": false,
+   "ok": true,
+   "outputs": {
+    "clip": {
+     "file": {
+      "digest": "dc6118be05f87450cb663b9d42c66cb16d0e5fe2f5114c918c972db38fda589d",
+      "kind": "video/mp4",
+      "name": "clip/video",
+      "size": 2835
+     }
+    },
+    "model": {
+     "file": {
+      "digest": "d52ea15ab28b6a8dbc5a7623dd23c044eaa0f6460322c22030cc6b976e365637",
+      "kind": "model/gltf-binary",
+      "name": "mesh/model",
+      "size": 48
+     }
+    }
+   },
+   "plan": "5e564a8e0a7c403dd3f744f32cd75091b3fec1bd32de553b0234d39949f257ca",
+   "stopped": null
+  },
+  "run_started": {
+   "ceiling_usd": null,
+   "charged_usd": 0,
+   "estimate": {
+    "high_usd": 0.5775,
+    "low_usd": 0.29
+   },
+   "event": "run_started",
+   "plan": "5e564a8e0a7c403dd3f744f32cd75091b3fec1bd32de553b0234d39949f257ca",
+   "resumed": false,
+   "stand_in": true,
+   "workflow": "case"
+  }
+ }
+}

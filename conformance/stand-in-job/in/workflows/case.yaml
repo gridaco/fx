@@ -1,0 +1,19 @@
+fx: workflow/v1
+id: case
+title: Long jobs answered by a stand-in
+steps:
+  clip:
+    uses: fx/video.generate@1
+    with: { prompt: a lantern sways on its hook, duration: 1 }
+  front:
+    uses: fx/image.generate@1
+    with: { prompt: the lantern seen from the front, size: "64x64" }
+  mesh:
+    uses: fx/mesh.generate@1
+    with:
+      views:
+        front: "${{ steps.front.outputs.image }}"
+      face_limit: 1000
+outputs:
+  clip: ${{ steps.clip.outputs.video }}
+  model: ${{ steps.mesh.outputs.model }}

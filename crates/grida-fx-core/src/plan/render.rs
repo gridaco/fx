@@ -17,7 +17,9 @@
 //!   the first. `{calls}` is `{lo} provider calls`, or `{lo}–{hi} provider calls` (no spaces
 //!   around the dash) when the counts differ.
 //! - `{money}` is `$lo` when both ends are equal, else `$lo – $hi` (spaces around the dash).
-//! - The ceiling warning appears when a ceiling exists and the estimate's high end exceeds it.
+//! - The ceiling warning appears when a ceiling exists and the estimate's high end exceeds it,
+//!   except in a stand-in run ([`render_stand_in`]): it bills nothing, so the ceiling stops
+//!   nothing there (the ceiling itself is still shown).
 //! - `note` lines are the plan's warnings, `refused` lines its problems, both in order.
 //!
 //! Amounts are shown with two decimals the way the predecessor's `f"${x:.2f}"` showed its
@@ -40,6 +42,15 @@ const WARNING: char = '\u{26a0}';
 
 /// The plan as text.
 pub fn render(plan: &Plan, planner: &Planner) -> String {
+    render_as(plan, planner, true)
+}
+
+/// The plan of a stand-in run as text: no ceiling warning (module doc).
+pub fn render_stand_in(plan: &Plan, planner: &Planner) -> String {
+    render_as(plan, planner, false)
+}
+
+fn render_as(plan: &Plan, planner: &Planner, billed: bool) -> String {
     let phases = plan.phases();
     let warnings = plan.warnings(planner);
     lay_out(&Summary {
@@ -49,6 +60,7 @@ pub fn render(plan: &Plan, planner: &Planner) -> String {
         known: plan.known(),
         estimate: plan.estimate(),
         ceiling: plan.ceiling,
+        billed,
         warnings: &warnings,
         problems: &plan.problems,
     })
@@ -62,6 +74,8 @@ struct Summary<'a> {
     known: usize,
     estimate: Estimate,
     ceiling: Option<Usd>,
+    /// Whether the run bills its calls, so the ceiling can stop it (not a stand-in run).
+    billed: bool,
     warnings: &'a [String],
     problems: &'a [Problem],
 }
@@ -86,7 +100,7 @@ fn lay_out(summary: &Summary<'_>) -> String {
     );
     if let Some(ceiling) = summary.ceiling {
         estimate.push_str(&format!("   ceiling {}", dollars(ceiling)));
-        if summary.estimate.high > ceiling {
+        if summary.billed && summary.estimate.high > ceiling {
             estimate.push_str(&format!(
                 "   {WARNING} the worst case exceeds the ceiling; the run stops before crossing it"
             ));
@@ -192,6 +206,7 @@ mod tests {
                 high: Usd(estimate.1),
             },
             ceiling: ceiling.map(Usd),
+            billed: true,
             warnings,
             problems,
         }
@@ -309,6 +324,19 @@ mod tests {
              phase 1   2 steps   1 provider calls   $0.01 – $0.04\n\
              cached    0 of 1 known steps\n\
              estimate  $0.01 – $0.04   ceiling $0.01   ⚠ the worst case exceeds the ceiling; the run stops before crossing it"
+        );
+    }
+
+    #[test]
+    fn a_stand_in_run_over_its_ceiling_gives_no_warning() {
+        let phases = [phase(1, 2, (1, 1), (10_000, 40_000), &[])];
+        let text = lay_out(&Summary {
+            billed: false,
+            ..summary(&phases, 1, (10_000, 40_000), Some(10_000), &[], &[])
+        });
+        assert!(
+            text.ends_with("estimate  $0.01 – $0.04   ceiling $0.01"),
+            "{text}"
         );
     }
 

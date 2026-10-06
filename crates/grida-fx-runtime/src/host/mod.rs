@@ -27,7 +27,8 @@
 //! notification and waits up to 5 seconds before killing it.
 //!
 //! The interpreter is the one given to [`PythonHost::with_python`], else
-//! [`locate::python_interpreter`] over the process environment. It is named in messages as the
+//! [`locate::python_interpreter`] over the process environment, with the planning project given
+//! to [`PythonHost::with_planning_root`] as its fallback. It is named in messages as the
 //! user would write it ([`label`]): a path inside the project relative to the project root. A
 //! host that failed to start, or broke the protocol, stays failed for its project: later calls
 //! give the same sentence without starting it again, until `open_project` names another
@@ -68,7 +69,7 @@ use std::time::Duration;
 const HOST_ARGS: [&str; 3] = ["-P", "-m", "grida.fx.host"];
 
 /// How long the engine waits for a host to answer `shutdown` or `$/cancel`, and then to exit.
-const GRACE: Duration = Duration::from_secs(5);
+pub(crate) const GRACE: Duration = Duration::from_secs(5);
 
 /// The `PYTHONSAFEPATH` value the engine sets for a host when its own environment has none; the
 /// host removes a `PYTHONSAFEPATH` of exactly this value before it loads user code.
@@ -84,6 +85,9 @@ pub struct PythonHost {
     sources: Vec<String>,
     /// The interpreter, when the caller chose it; else [`locate::python_interpreter`].
     python: Option<PathBuf>,
+    /// The planning project's root, when the caller knows it: its `.venv` is the interpreter's
+    /// fallback after the open project's (spec/protocol.md §1).
+    planning_root: Option<PathBuf>,
     process: Option<HostProcess>,
     /// What `initialize` answered.
     pub info: Option<InitializeResult>,
@@ -103,6 +107,7 @@ impl PythonHost {
             project_root: None,
             sources: Vec::new(),
             python: None,
+            planning_root: None,
             process: None,
             info: None,
             failure: None,
@@ -114,6 +119,13 @@ impl PythonHost {
     /// Uses this interpreter instead of locating one.
     pub fn with_python(mut self, python: PathBuf) -> PythonHost {
         self.python = Some(python);
+        self
+    }
+
+    /// Falls back to this planning project's `.venv` after the open project's when it locates
+    /// the interpreter (spec/protocol.md §1).
+    pub fn with_planning_root(mut self, root: PathBuf) -> PythonHost {
+        self.planning_root = Some(root);
         self
     }
 
@@ -132,17 +144,20 @@ impl PythonHost {
             return Some(python.clone());
         }
         let root = self.project_root.as_ref()?;
-        Some(locate::python_interpreter(root, &|name| {
-            std::env::var(name).ok()
-        }))
+        Some(locate::python_interpreter(
+            root,
+            self.planning_root.as_deref(),
+            &|name| std::env::var(name).ok(),
+        ))
     }
 
     /// The interpreter as messages name it: relative to the project root when it lies inside the
-    /// project (`.venv/bin/python`), else as given (`python3`, a `GRIDA_FX_PYTHON` value).
+    /// project (`.venv/bin/python`) or inside the planning project (`../../.venv/bin/python`),
+    /// else as given (`python3`, a `GRIDA_FX_PYTHON` value).
     pub fn interpreter_label(&self) -> Option<String> {
         let python = self.interpreter()?;
         Some(match &self.project_root {
-            Some(root) => label(&python, root),
+            Some(root) => label_from(&python, root, self.planning_root.as_deref()),
             None => python.display().to_string(),
         })
     }
@@ -377,8 +392,24 @@ pub fn label(path: &Path, root: &Path) -> String {
     }
 }
 
+/// [`label`], except that a path under `planning` (the planning project, when the home is a
+/// project nested in it) and outside `root` is named relative to `root` with `..` segments
+/// (`../../.venv/bin/python`), never by its absolute path.
+pub fn label_from(path: &Path, root: &Path, planning: Option<&Path>) -> String {
+    match planning {
+        Some(planning)
+            if path.strip_prefix(root).is_err()
+                && path.strip_prefix(planning).is_ok()
+                && root.strip_prefix(planning).is_ok() =>
+        {
+            crate::engine::relative_label(path, root)
+        }
+        _ => label(path, root),
+    }
+}
+
 /// The sentence for a host that speaks another protocol (spec/protocol.md §2 "Version mismatch").
-fn mismatch(sdk_version: Option<&str>, host_protocol: &str) -> String {
+pub(crate) fn mismatch(sdk_version: Option<&str>, host_protocol: &str) -> String {
     let grida = match sdk_version {
         Some(version) if !version.is_empty() => format!("grida {version}"),
         _ => "grida".to_string(),
@@ -698,6 +729,27 @@ mod tests {
             "/opt/py/bin/python"
         );
         assert_eq!(label(Path::new("/work/acme"), root), "/work/acme");
+        // A home nested in the planning project names the planning project's interpreter with
+        // `..` segments; anything else is labelled as before.
+        let home = Path::new("/work/acme/library/thing");
+        let planning = Some(root);
+        assert_eq!(
+            label_from(Path::new("/work/acme/.venv/bin/python"), home, planning),
+            "../../.venv/bin/python"
+        );
+        assert_eq!(
+            label_from(
+                Path::new("/work/acme/library/thing/.venv/bin/python"),
+                home,
+                planning
+            ),
+            ".venv/bin/python"
+        );
+        assert_eq!(
+            label_from(Path::new("/opt/py/bin/python"), home, planning),
+            "/opt/py/bin/python"
+        );
+        assert_eq!(label_from(Path::new("python3"), home, None), "python3");
     }
 
     #[test]

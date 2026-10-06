@@ -206,7 +206,13 @@ job id when it returned one, so you can find the job on its dashboard):
     results/<id[:2]>/<id>.json           # a step's result, by the step's identity
     calls/<key[:2]>/<key>.json           # a paid call's answer, by its request
     jobs/<key>.json                      # a long provider job's handle: collected, never resubmitted
+    stand-in/                            # what stand-in runs keep: files/, results/, calls/
   ```
 
+- **`stand-in/` is a cache of its own,** for
+  [stand-in runs](05-running.md#stand-ins-testing-without-a-provider), which answer paid calls
+  with your function instead of a provider. They read and write only there: a test never replays
+  your paid answers, and a run without a stand-in never replays a stand-in's. Deleting it forgets
+  every stand-in answer.
 - **It is an ordinary folder.** You may delete it; runs keep their own copies of their files, and
   anything deleted is made again (and billed again) when a run needs it.

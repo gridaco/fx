@@ -1,0 +1,5 @@
+fx: project/v1
+routes:
+  image.generate: img-a@acme
+  video.generate: clip-a@acme
+  mesh.generate: mesh-a@acme

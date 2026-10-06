@@ -1,0 +1,252 @@
+[
+ {
+  "cache": "miss",
+  "event": "node_finished",
+  "facts": {
+   "cost_usd": 0,
+   "duration_seconds": 1.001,
+   "fps": 29.97003,
+   "height": 48,
+   "width": 64
+  },
+  "id": "clip#1",
+  "kind": "fx-run-events-v1",
+  "outputs": {
+   "video": {
+    "file": {
+     "digest": "dc6118be05f87450cb663b9d42c66cb16d0e5fe2f5114c918c972db38fda589d",
+     "kind": "video/mp4",
+     "name": "clip/video",
+     "size": 2835
+    }
+   }
+  },
+  "path": "clip",
+  "plan": "5e564a8e0a7c403dd3f744f32cd75091b3fec1bd32de553b0234d39949f257ca"
+ },
+ {
+  "cache": "miss",
+  "event": "node_finished",
+  "facts": {
+   "cost_usd": 0,
+   "model_kind": "model/gltf-binary"
+  },
+  "id": "mesh#1",
+  "kind": "fx-run-events-v1",
+  "outputs": {
+   "model": {
+    "file": {
+     "digest": "d52ea15ab28b6a8dbc5a7623dd23c044eaa0f6460322c22030cc6b976e365637",
+     "kind": "model/gltf-binary",
+     "name": "mesh/model",
+     "size": 48
+    }
+   }
+  },
+  "path": "mesh",
+  "plan": "5e564a8e0a7c403dd3f744f32cd75091b3fec1bd32de553b0234d39949f257ca"
+ },
+ {
+  "cache": "miss",
+  "event": "node_finished",
+  "facts": {
+   "cost_usd": 0
+  },
+  "id": "front#1",
+  "kind": "fx-run-events-v1",
+  "outputs": {
+   "image": {
+    "file": {
+     "digest": "79c3c9ff3284e48dd47a022156c49120c6535c4c3e623e2bbfc720aeb7324494",
+     "kind": "image/png",
+     "name": "front/image",
+     "size": 12420
+    }
+   }
+  },
+  "path": "front",
+  "plan": "5e564a8e0a7c403dd3f744f32cd75091b3fec1bd32de553b0234d39949f257ca"
+ },
+ {
+  "cached": false,
+  "call": "30cbec7c7940b4fa8e549f49abaca67a956d1d4454de809d540cf6e426be58f2",
+  "capability": "mesh.generate",
+  "cost_usd": 0,
+  "event": "call",
+  "id": "mesh#1",
+  "kind": "fx-run-events-v1",
+  "plan": "5e564a8e0a7c403dd3f744f32cd75091b3fec1bd32de553b0234d39949f257ca",
+  "route": "mesh-a@acme",
+  "stand_in": true
+ },
+ {
+  "cached": false,
+  "call": "64fa91d9866412ddccdfcd0761d5565f722f672f10ed08d6d94b946c734aa782",
+  "capability": "video.generate",
+  "cost_usd": 0,
+  "event": "call",
+  "id": "clip#1",
+  "kind": "fx-run-events-v1",
+  "plan": "5e564a8e0a7c403dd3f744f32cd75091b3fec1bd32de553b0234d39949f257ca",
+  "route": "clip-a@acme",
+  "stand_in": true
+ },
+ {
+  "cached": false,
+  "call": "98561367dc959e9f08b48ab1251f3f251686fdbc984113d19e8acb657dddef65",
+  "capability": "image.generate",
+  "cost_usd": 0,
+  "event": "call",
+  "id": "front#1",
+  "kind": "fx-run-events-v1",
+  "plan": "5e564a8e0a7c403dd3f744f32cd75091b3fec1bd32de553b0234d39949f257ca",
+  "route": "img-a@acme",
+  "stand_in": true
+ },
+ {
+  "ceiling_usd": null,
+  "charged_usd": 0,
+  "estimate": {
+   "high_usd": 0.5775,
+   "low_usd": 0.29
+  },
+  "event": "run_started",
+  "kind": "fx-run-events-v1",
+  "plan": "5e564a8e0a7c403dd3f744f32cd75091b3fec1bd32de553b0234d39949f257ca",
+  "resumed": false,
+  "stand_in": true,
+  "workflow": "case"
+ },
+ {
+  "charged_usd": 0,
+  "event": "run_finished",
+  "failed": [],
+  "incomplete": false,
+  "kind": "fx-run-events-v1",
+  "ok": true,
+  "outputs": {
+   "clip": {
+    "file": {
+     "digest": "dc6118be05f87450cb663b9d42c66cb16d0e5fe2f5114c918c972db38fda589d",
+     "kind": "video/mp4",
+     "name": "clip/video",
+     "size": 2835
+    }
+   },
+   "model": {
+    "file": {
+     "digest": "d52ea15ab28b6a8dbc5a7623dd23c044eaa0f6460322c22030cc6b976e365637",
+     "kind": "model/gltf-binary",
+     "name": "mesh/model",
+     "size": 48
+    }
+   }
+  },
+  "plan": "5e564a8e0a7c403dd3f744f32cd75091b3fec1bd32de553b0234d39949f257ca",
+  "stopped": null
+ },
+ {
+  "event": "node_started",
+  "id": "clip#1",
+  "identity": "2ffecce9539f9a87e10e4c133b0d2b121ccfe345615cac89ccc06da2aafb31c7",
+  "kind": "fx-run-events-v1",
+  "path": "clip",
+  "plan": "5e564a8e0a7c403dd3f744f32cd75091b3fec1bd32de553b0234d39949f257ca",
+  "reads": [],
+  "routes": {
+   "video.generate": "clip-a@acme"
+  },
+  "step": "clip",
+  "take": [
+   1
+  ],
+  "uses": "fx/video.generate@1",
+  "with": {
+   "duration": {
+    "value": 1
+   },
+   "prompt": {
+    "value": "a lantern sways on its hook"
+   }
+  }
+ },
+ {
+  "event": "node_started",
+  "id": "front#1",
+  "identity": "f6a2ab62b1fd9b994948f65bfb370fda54a7b8cbec907ea1f69a6ef9614e75b5",
+  "kind": "fx-run-events-v1",
+  "path": "front",
+  "plan": "5e564a8e0a7c403dd3f744f32cd75091b3fec1bd32de553b0234d39949f257ca",
+  "reads": [],
+  "routes": {
+   "image.generate": "img-a@acme"
+  },
+  "step": "front",
+  "take": [
+   1
+  ],
+  "uses": "fx/image.generate@1",
+  "with": {
+   "background": {
+    "value": "auto"
+   },
+   "prompt": {
+    "value": "the lantern seen from the front"
+   },
+   "size": {
+    "value": "64x64"
+   },
+   "vars": {
+    "value": {}
+   }
+  }
+ },
+ {
+  "event": "node_started",
+  "id": "mesh#1",
+  "identity": "5a5abff4e33e1d931f983d87f35766e209c2b7f6dfe59bb5757882e39172f45a",
+  "kind": "fx-run-events-v1",
+  "path": "mesh",
+  "plan": "5e564a8e0a7c403dd3f744f32cd75091b3fec1bd32de553b0234d39949f257ca",
+  "reads": [
+   "front#1"
+  ],
+  "routes": {
+   "mesh.generate": "mesh-a@acme"
+  },
+  "step": "mesh",
+  "take": [
+   1
+  ],
+  "uses": "fx/mesh.generate@1",
+  "with": {
+   "face_limit": {
+    "value": 1000
+   },
+   "pbr": {
+    "value": false
+   },
+   "quad": {
+    "value": false
+   },
+   "texture": {
+    "value": true
+   },
+   "views": {
+    "value": {
+     "front": {
+      "file": "79c3c9ff3284e48dd47a022156c49120c6535c4c3e623e2bbfc720aeb7324494"
+     }
+    }
+   }
+  }
+ },
+ {
+  "event": "phase_planned",
+  "high_usd": 0.5775,
+  "kind": "fx-run-events-v1",
+  "phase": 1,
+  "plan": "5e564a8e0a7c403dd3f744f32cd75091b3fec1bd32de553b0234d39949f257ca",
+  "steps": 3
+ }
+]

@@ -933,6 +933,244 @@ fn integrated_finding_a_workflow_by_id() {
     );
 }
 
+// ------------------------------------------------------- the workflows setting
+
+/// A minimal workflow document declaring `id`.
+fn workflow_with_id(id: &str) -> String {
+    format!("fx: workflow/v1\nid: {id}\ntitle: T\nsteps:\n  a:\n    uses: fx/select@1\n")
+}
+
+/// The fixture's project with the `workflows` setting `folders`.
+fn listing(fixture: &Fixture, folders: &[&str]) -> Project {
+    Project {
+        root: fixture.root.clone(),
+        document: ProjectDoc {
+            workflows: folders.iter().map(|folder| (*folder).to_string()).collect(),
+            ..ProjectDoc::default()
+        },
+        has_file: true,
+    }
+}
+
+/// The search files as POSIX paths relative to the fixture's root, lexically (`../` kept).
+fn searched(fixture: &Fixture, project: &Project) -> Vec<String> {
+    project_workflow_files(project)
+        .iter()
+        .map(|path| {
+            let rest = path.strip_prefix(&fixture.root).unwrap();
+            rest.to_string_lossy().replace('\\', "/")
+        })
+        .collect()
+}
+
+#[test]
+fn the_workflows_setting_replaces_the_default() {
+    let fixture = Fixture::new();
+    fixture.write("fx.yaml", "fx: project/v1\nworkflows: [library]\n");
+    fixture.write("top.yaml", &workflow_with_id("top"));
+    fixture.write("workflows/other.yaml", &workflow_with_id("other"));
+    fixture.write("library/a.yaml", &workflow_with_id("a"));
+    let project = Project::find(&fixture.root).unwrap();
+    assert_eq!(project.document.workflows, ["library"]);
+    assert_eq!(searched(&fixture, &project), ["top.yaml", "library/a.yaml"]);
+    let error = find_workflow("other", &project, &fixture.root).unwrap_err();
+    assert_eq!(error.message, "no workflow with id 'other' under proj");
+    assert_eq!(
+        find_workflow("a", &project, &fixture.root).unwrap(),
+        fixture.root.join("library/a.yaml")
+    );
+    // The root's own files are searched whatever the setting says, also with no folder at all.
+    let bare = listing(&fixture, &[]);
+    assert_eq!(searched(&fixture, &bare), ["top.yaml"]);
+    assert_eq!(
+        find_workflow("top", &bare, &fixture.root).unwrap(),
+        fixture.root.join("top.yaml")
+    );
+    // A project that lists both keeps both, in its order.
+    let both = listing(&fixture, &["library", "workflows"]);
+    assert_eq!(
+        searched(&fixture, &both),
+        ["top.yaml", "library/a.yaml", "workflows/other.yaml"]
+    );
+}
+
+#[test]
+fn listed_folders_are_searched_in_their_order() {
+    let fixture = Fixture::new();
+    for file in [
+        "zeta/z.yaml",
+        "zeta/sub/y.yml",
+        "zeta/sub/fx.yaml",
+        "zeta/sub/y.takes.yaml",
+        "alpha/a.yaml",
+        "alpha/b/c.yml",
+        "alpha/notes.json",
+        "afile",
+    ] {
+        fixture.write(file, "fx: workflow/v1\n");
+    }
+    // A listed folder that does not exist, or that is a file, adds nothing.
+    let project = listing(&fixture, &["zeta", "missing", "afile", "alpha"]);
+    assert_eq!(
+        searched(&fixture, &project),
+        [
+            "zeta/z.yaml",
+            "zeta/sub/y.yml",
+            "alpha/a.yaml",
+            "alpha/b/c.yml"
+        ]
+    );
+    // Nothing listed exists: only the root's files, and the id is missing as before.
+    let nothing = listing(&fixture, &["missing"]);
+    assert!(searched(&fixture, &nothing).is_empty());
+    let error = find_workflow("case", &nothing, &fixture.root).unwrap_err();
+    assert_eq!(error.message, "no workflow with id 'case' under proj");
+}
+
+#[test]
+fn overlapping_folders_find_a_file_once() {
+    let fixture = Fixture::new();
+    fixture.write("library/x.yaml", &workflow_with_id("x"));
+    fixture.write("library/thing/workflow.yaml", &workflow_with_id("thing"));
+    let wide_first = listing(&fixture, &["library", "library/thing", "./library/thing/"]);
+    assert_eq!(
+        searched(&fixture, &wide_first),
+        ["library/x.yaml", "library/thing/workflow.yaml"]
+    );
+    assert_eq!(
+        find_workflow("thing", &wide_first, &fixture.root).unwrap(),
+        fixture.root.join("library/thing/workflow.yaml")
+    );
+    // A file is kept where it was first found.
+    let narrow_first = listing(&fixture, &["library/thing", "library"]);
+    assert_eq!(
+        searched(&fixture, &narrow_first),
+        ["library/thing/workflow.yaml", "library/x.yaml"]
+    );
+    // Overlap through `..` and through an absolute path.
+    let absolute = fixture.root.join("library").to_string_lossy().into_owned();
+    let spelled = listing(
+        &fixture,
+        &["library/thing/..", "../proj/library", absolute.as_str()],
+    );
+    assert_eq!(
+        searched(&fixture, &spelled),
+        [
+            "library/thing/../x.yaml",
+            "library/thing/../thing/workflow.yaml"
+        ]
+    );
+    assert!(find_workflow("thing", &spelled, &fixture.root).is_ok());
+}
+
+#[cfg(unix)]
+#[test]
+fn a_folder_reached_through_a_link_is_searched_once() {
+    let fixture = Fixture::new();
+    fixture.write("library/thing/workflow.yaml", &workflow_with_id("thing"));
+    std::os::unix::fs::symlink(fixture.root.join("library"), fixture.root.join("link")).unwrap();
+    // A listed link is followed; a link below a listed folder is not.
+    let project = listing(&fixture, &["link", "library"]);
+    assert_eq!(searched(&fixture, &project), ["link/thing/workflow.yaml"]);
+    assert!(find_workflow("thing", &project, &fixture.root).is_ok());
+    std::fs::create_dir_all(fixture.root.join("other")).unwrap();
+    std::os::unix::fs::symlink(
+        fixture.root.join("library/thing"),
+        fixture.root.join("other/inner"),
+    )
+    .unwrap();
+    assert!(searched(&fixture, &listing(&fixture, &["other"])).is_empty());
+}
+
+#[test]
+fn folders_outside_the_project_are_searched() {
+    let fixture = Fixture::new();
+    let outside = fixture.root.parent().unwrap().to_path_buf();
+    fixture.write("../shared/thing.yaml", &workflow_with_id("thing"));
+    fixture.write("../shared/dup.yaml", &workflow_with_id("dup"));
+    fixture.write("../elsewhere/flows/deep/far.yaml", &workflow_with_id("far"));
+    fixture.write("../elsewhere/flows/dup.yaml", &workflow_with_id("dup"));
+    let absolute = outside
+        .join("elsewhere/flows")
+        .to_string_lossy()
+        .into_owned();
+    let project = listing(&fixture, &["../shared", absolute.as_str()]);
+    assert_eq!(
+        find_workflow("thing", &project, &fixture.root).unwrap(),
+        fixture.root.join("../shared/thing.yaml")
+    );
+    assert_eq!(
+        find_workflow("far", &project, &fixture.root).unwrap(),
+        outside.join("elsewhere/flows/deep/far.yaml")
+    );
+    // Messages name a file by its path from the root, else by the absolute entry as written.
+    let error = find_workflow("dup", &project, &fixture.root).unwrap_err();
+    assert_eq!(
+        error.message,
+        format!("workflow id 'dup' is declared twice: ../shared/dup.yaml, {absolute}/dup.yaml")
+    );
+    fixture.write(
+        "../elsewhere/flows/broken.yaml",
+        "fx: workflow/v1\nid: broken\nid: broken\n",
+    );
+    let error = find_workflow("broken", &project, &fixture.root).unwrap_err();
+    assert_eq!(error.kind, ErrorKind::Yaml);
+    assert!(
+        error
+            .message
+            .starts_with(&format!("{absolute}/broken.yaml:")),
+        "{}",
+        error.message
+    );
+}
+
+#[test]
+fn a_workflows_folder_that_holds_the_project_is_refused() {
+    let fixture = Fixture::new();
+    std::fs::create_dir_all(fixture.root.join("library")).unwrap();
+    let itself = fixture.root.to_string_lossy().into_owned();
+    for entry in [".", "./", "..", "library/..", "../proj", itself.as_str()] {
+        fixture.write(
+            "fx.yaml",
+            &format!("fx: project/v1\nworkflows: [library, '{entry}']\n"),
+        );
+        let error = Project::find(&fixture.root).unwrap_err();
+        assert_eq!(error.kind, ErrorKind::Document);
+        assert_eq!(
+            error.message,
+            format!(
+                "fx.yaml: workflows: {entry} is the project or holds it; list the folders under \
+                 it that hold workflows"
+            )
+        );
+        // Planning reads the project first, so it stops there (exit 2).
+        fixture.write("library/case.yaml", CASE);
+        let error = make_planner(&request(&fixture, "case"), &mut FakeHost::new()).unwrap_err();
+        assert_eq!(error.kind, ErrorKind::Document);
+    }
+    for (setting, refused) in [
+        ("['']", "fx.yaml: workflows"),
+        ("[library, library]", "fx.yaml: workflows"),
+        ("library", "fx.yaml: workflows"),
+    ] {
+        fixture.write(
+            "fx.yaml",
+            &format!("fx: project/v1\nworkflows: {setting}\n"),
+        );
+        let error = Project::find(&fixture.root).unwrap_err();
+        assert_eq!(error.kind, ErrorKind::Document);
+        assert!(error.message.starts_with(refused), "{}", error.message);
+    }
+    fixture.write(
+        "fx.yaml",
+        "fx: project/v1\nworkflows: [library, ../sibling, ../proj/library]\n",
+    );
+    assert_eq!(
+        Project::find(&fixture.root).unwrap().document.workflows,
+        ["library", "../sibling", "../proj/library"]
+    );
+}
+
 // ------------------------------------------------------------ make_planner
 
 const CASE: &str = "fx: workflow/v1\nid: case\ntitle: Case\nsteps:\n  a:\n    uses: ./nodes/n.py#echo\n    with: { text: hello }\n";
@@ -1152,6 +1390,68 @@ fn integrated_a_nested_home() {
         planner.registry.route_default("speech.generate"),
         Some("voice-a@acme")
     );
+}
+
+/// A workflow found through the `workflows` setting, outside the planning project, under its
+/// own fx.yaml: that fx.yaml is its home (node modules, sources, the plan-digest source, route
+/// defaults under the planning project's), while the planning project keeps the runs, the
+/// route tables and the takes file.
+#[test]
+fn integrated_a_workflow_found_through_the_setting_plans_from_its_home() {
+    let fixture = Fixture::new();
+    fixture.write(
+        "fx.yaml",
+        "fx: project/v1\nroutes:\n  image.generate: img-b@acme\nworkflows: [../shared]\n",
+    );
+    fixture.write("workflows/case.yaml", &workflow_with_id("case"));
+    // The home's route tables are not loaded: a missing one is not an error.
+    fixture.write(
+        "../shared/thing/fx.yaml",
+        "fx: project/v1\nroutes:\n  image.generate: img-a@acme\n  speech.generate: voice-a@acme\nroute_tables: [missing.yaml]\nsources: [acme_nodes]\n",
+    );
+    fixture.write("../shared/thing/workflow.yaml", CASE);
+    fixture.write("case.takes.yaml", "a: { take: 2 }\n");
+    let home_root = fixture.root.parent().unwrap().join("shared/thing");
+    let mut host = FakeHost::new();
+    let planner = make_planner(&request(&fixture, "case"), &mut host).unwrap();
+    assert_eq!(planner.project.root, fixture.root);
+    assert_eq!(planner.home.root, home_root);
+    assert_eq!(planner.home.document.sources, ["acme_nodes"]);
+    assert_eq!(planner.registry.root, home_root);
+    assert_eq!(planner.workflow.path, home_root.join("workflow.yaml"));
+    assert_eq!(planner.workflow.source, "workflow.yaml");
+    assert_eq!(planner.takes_path, fixture.root.join("case.takes.yaml"));
+    assert_eq!(
+        planner.takes["a"],
+        TakeChoice {
+            take: 2,
+            result: None
+        }
+    );
+    assert_eq!(
+        planner.registry.route_default("image.generate"),
+        Some("img-b@acme")
+    );
+    assert_eq!(
+        planner.registry.route_default("speech.generate"),
+        Some("voice-a@acme")
+    );
+    assert_eq!(planner.project.cache_dir(), fixture.root.join(".fx/cache"));
+    assert_eq!(planner.project.runs_dir(), fixture.root.join("runs"));
+
+    let (project, workflow) =
+        load_target("case", &fixture.root, &IndexMap::new(), &mut host).unwrap();
+    assert_eq!(project.root, fixture.root);
+    assert_eq!(workflow.source, "workflow.yaml");
+
+    // Without a home of its own, the workflow's folder is its home, and the takes file still
+    // lands in the planning project's root.
+    std::fs::remove_file(home_root.join("fx.yaml")).unwrap();
+    let planner = make_planner(&request(&fixture, "case"), &mut host).unwrap();
+    assert_eq!(planner.home.root, home_root);
+    assert!(!planner.home.has_file);
+    assert_eq!(planner.takes_path, fixture.root.join("case.takes.yaml"));
+    assert_eq!(planner.registry.route_default("speech.generate"), None);
 }
 
 // ---------------------------------------------------------- make_plan

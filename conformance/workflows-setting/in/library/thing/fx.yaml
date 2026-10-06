@@ -1,0 +1,4 @@
+fx: project/v1
+routes:
+  image.generate: img-b@acme
+  music.generate: tune-b@acme

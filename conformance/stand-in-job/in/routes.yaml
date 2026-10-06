@@ -1,0 +1,5 @@
+fx: routes/v1
+routes:
+  - { capability: image.generate, route: img-a@acme, price: { low_usd: 0.01, high_usd: 0.04 }, features: [alpha] }
+  - { capability: video.generate, route: clip-a@acme, price: { unit: second, max_units: 10, low_usd: 0.03, high_usd: 0.0375 } }
+  - { capability: mesh.generate, route: mesh-a@acme, price: { low_usd: 0.25, high_usd: 0.5 }, features: [multiview] }

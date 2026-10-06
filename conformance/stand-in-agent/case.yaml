@@ -1,0 +1,35 @@
+# Agent turns and structured answers from a stand-in (see in/stand_in.py). `survey` runs the
+# engine's agent loop: its first agent.turn is answered with a call of the body's tool `measure`,
+# the engine invokes the tool and sends its content back, and the second turn submits a value
+# that meets the `submit` schema. The output (answer.json) holds the submitted value and the
+# transcript: the opening message, the assistant's tool call with its arguments as canonical
+# JSON text, the tool's answer, and the submit call; the node facts name what was measured and
+# the transcript's roles. `garbled`'s turn is answered with data that is not
+# `{"text", "tool_calls"}`, which the engine's check of agent.turn refuses: `call_failed`, and
+# the body lets it through. `estimate` is a structured answer that meets its schema (the
+# workflow output estimate.json); `wrong` is one that does not, refused by the every-route check
+# with `<where>: <message>`. The stand-in is asked five times (two turns, one turn, two
+# structured calls); asked.json shows each request, the schema handed over as a file. The run
+# exits 1, and events-one.json pins the node_failed codes and the `stand_in` call events.
+steps:
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, --stand-in, "stand_in.py#answer"]
+  status: 1
+  mentions:
+  - "stand-in  stand_in.py#answer"
+  - "result    failed   spent $0.00"
+  - 'failed    garbled#1: agent.turn on llm-a@acme failed: the reply is not {"text", "tool_calls"}: text is not a string'
+  - 'failed    wrong#1: structured.generate on llm-a@acme failed: height: "three" is not of type "integer"'
+- read: count.txt
+  save: count.txt
+- read: asked.json
+  save: asked.json
+  json: true
+- read: runs/one/outputs/answer.json
+  save: answer.json
+  json: true
+- read: runs/one/outputs/estimate.json
+  save: estimate.json
+  json: true
+- read: runs/one/events.jsonl
+  save: events-one.json
+  jsonl: true

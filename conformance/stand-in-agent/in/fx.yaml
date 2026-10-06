@@ -1,0 +1,4 @@
+fx: project/v1
+routes:
+  agent.turn: llm-a@acme
+  structured.generate: llm-a@acme

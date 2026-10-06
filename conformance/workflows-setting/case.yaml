@@ -1,0 +1,60 @@
+# The `workflows` setting of fx.yaml: `[library, library/thing, nowhere]` replaces the default
+# `[workflows]`. `thing` is found by id in `library/thing/workflow.yaml` (reached twice through
+# the overlapping entries, and counted once, so it is not "declared twice"); `nowhere` does not
+# exist and adds nothing; `workflows/other.yaml` is not searched (exit 2, no workflow with id
+# 'other'); the root's own `top.yaml` is searched whatever the setting says. `thing`'s home is
+# `library/thing`, the nearest fx.yaml above it: its route default for image.generate,
+# `img-b@acme`, applies, and the planning project's `tune-a@acme` overrides its `tune-b@acme`
+# for music.generate (plan-thing.json). A stand-in run of `thing` asks for both calls on those
+# routes (asked.json) and keeps its run and store in the planning project, none in the home. A
+# run of `thing` without a stand-in misses both calls (exit 1); `reroll` of that run writes
+# `thing.takes.yaml` at the planning project's root, not next to the workflow, and
+# `takes list thing` reads it there. Last, an fx.yaml whose `workflows` lists the project itself
+# (`.`), or a folder above it (`..`), is refused while it is read (exit 2).
+steps:
+- argv: [plan, thing, --routes, routes.yaml, --json]
+  save: plan-thing.json
+  json: true
+- argv: [plan, other, --routes, routes.yaml]
+  status: 2
+  mentions:
+  - "no workflow with id 'other'"
+- argv: [plan, top, --routes, routes.yaml]
+- argv: [run, thing, --routes, routes.yaml, --run, runs/thing, --stand-in, "stand_in.py#answer"]
+  mentions:
+  - "stand-in  stand_in.py#answer"
+  - "result    ok   spent $0.00"
+  absent:
+  - library/thing/.fx
+  - library/thing/runs
+- read: count.txt
+  save: count.txt
+- read: asked.json
+  save: asked.json
+  json: true
+- argv: [run, thing, --routes, routes.yaml, --run, runs/plain]
+  status: 1
+  mentions:
+  - "failed    draw#1: image.generate on img-b@acme is a paid call; run with --live"
+  - "failed    tune#1: music.generate on tune-a@acme is a paid call; run with --live"
+- argv: [reroll, runs/plain, draw]
+  save: reroll.txt
+  absent:
+  - library/thing/thing.takes.yaml
+- argv: [takes, list, thing]
+  save: takes.txt
+- read: thing.takes.yaml
+  save: thing.takes.yaml
+  yaml: true
+- files:
+    fx.yaml: "fx: project/v1\nworkflows: [\".\"]\n"
+  argv: [plan, thing, --routes, routes.yaml]
+  status: 2
+  mentions:
+  - "fx.yaml: workflows: . is the project or holds it; list the folders under it that hold workflows"
+- files:
+    fx.yaml: "fx: project/v1\nworkflows: [library, \"..\"]\n"
+  argv: [plan, thing, --routes, routes.yaml]
+  status: 2
+  mentions:
+  - "fx.yaml: workflows: .. is the project or holds it; list the folders under it that hold workflows"

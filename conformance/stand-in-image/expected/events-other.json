@@ -1,0 +1,109 @@
+[
+ {
+  "cache": "miss",
+  "event": "node_finished",
+  "facts": {
+   "cost_usd": null
+  },
+  "id": "draw#1",
+  "kind": "fx-run-events-v1",
+  "outputs": {
+   "image": {
+    "file": {
+     "digest": "61551ab637dc15d883ebc2aae4ab25077f5c02697409d08f5941b6d485caa76f",
+     "kind": "image/png",
+     "name": "draw/image",
+     "size": 12420
+    }
+   }
+  },
+  "path": "draw",
+  "plan": "d001472a7df0f6821605772d10ff439ede139a5cee9b1a5d87c84be90ddda82c"
+ },
+ {
+  "cached": true,
+  "call": "6990331e32bd6a3400700873f71cde57c5f78b814ddb9492ccbcb5fad91d8aa8",
+  "capability": "image.generate",
+  "cost_usd": 0,
+  "event": "call",
+  "id": "draw#1",
+  "kind": "fx-run-events-v1",
+  "plan": "d001472a7df0f6821605772d10ff439ede139a5cee9b1a5d87c84be90ddda82c",
+  "route": "img-a@acme"
+ },
+ {
+  "ceiling_usd": null,
+  "charged_usd": 0,
+  "estimate": {
+   "high_usd": 0.04,
+   "low_usd": 0.01
+  },
+  "event": "run_started",
+  "kind": "fx-run-events-v1",
+  "plan": "d001472a7df0f6821605772d10ff439ede139a5cee9b1a5d87c84be90ddda82c",
+  "resumed": false,
+  "stand_in": true,
+  "workflow": "case"
+ },
+ {
+  "charged_usd": 0,
+  "event": "run_finished",
+  "failed": [],
+  "incomplete": false,
+  "kind": "fx-run-events-v1",
+  "ok": true,
+  "outputs": {
+   "image": {
+    "file": {
+     "digest": "61551ab637dc15d883ebc2aae4ab25077f5c02697409d08f5941b6d485caa76f",
+     "kind": "image/png",
+     "name": "draw/image",
+     "size": 12420
+    }
+   }
+  },
+  "plan": "d001472a7df0f6821605772d10ff439ede139a5cee9b1a5d87c84be90ddda82c",
+  "stopped": null
+ },
+ {
+  "event": "node_started",
+  "id": "draw#1",
+  "identity": "6a51e8b66c712b1ce7035b632def4f60089c277091591cc78338f581f6e58ada",
+  "kind": "fx-run-events-v1",
+  "path": "draw",
+  "plan": "d001472a7df0f6821605772d10ff439ede139a5cee9b1a5d87c84be90ddda82c",
+  "reads": [],
+  "routes": {
+   "image.generate": "img-a@acme"
+  },
+  "step": "draw",
+  "take": [
+   1
+  ],
+  "uses": "fx/image.generate@1",
+  "with": {
+   "background": {
+    "value": "opaque"
+   },
+   "prompt": {
+    "value": "a lantern on a quay"
+   },
+   "size": {
+    "value": "64x64"
+   },
+   "vars": {
+    "value": {
+     "mood": "stormy"
+    }
+   }
+  }
+ },
+ {
+  "event": "phase_planned",
+  "high_usd": 0.04,
+  "kind": "fx-run-events-v1",
+  "phase": 1,
+  "plan": "d001472a7df0f6821605772d10ff439ede139a5cee9b1a5d87c84be90ddda82c",
+  "steps": 1
+ }
+]

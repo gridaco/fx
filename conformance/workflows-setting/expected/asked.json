@@ -1,0 +1,43 @@
+[
+ {
+  "capability": "image.generate",
+  "files": {},
+  "instance": {
+   "id": "draw#1",
+   "path": "draw",
+   "step": "draw"
+  },
+  "key": "96b07da6fed38e455b30357ed2f4049fa41f8c95033832a4a3d236e75faabef9",
+  "request": {
+   "background": "auto",
+   "prompt": "a kite over a pier"
+  },
+  "route": {
+   "fingerprint": "42a60906bc85d849c8c0dbb7e0d37bd710488aec649a78a580b6fcd26cbd56f9",
+   "id": "img-b@acme"
+  },
+  "take": [
+   1
+  ]
+ },
+ {
+  "capability": "music.generate",
+  "files": {},
+  "instance": {
+   "id": "tune#1",
+   "path": "tune",
+   "step": "tune"
+  },
+  "key": "9a03e81209ba760903ef8ce5b78126f0f115030c7370d92f723ca4f2e7492397",
+  "request": {
+   "prompt": "a slow tune for the pier"
+  },
+  "route": {
+   "fingerprint": "471132256e4adc879f00f26df16ade64792a1e919c920455b9e5b7a2dda1e1d7",
+   "id": "tune-a@acme"
+  },
+  "take": [
+   1
+  ]
+ }
+]

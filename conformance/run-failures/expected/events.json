@@ -72,6 +72,7 @@
   "stopped": null
  },
  {
+  "code": "node_error",
   "error": "RuntimeError: kaboom y",
   "event": "node_failed",
   "facts": {},
@@ -81,6 +82,7 @@
   "plan": "ad4d01a93d3cbab99482d48cd9d78c88148cb27f3bc5e1935f769193f47baf1b"
  },
  {
+  "code": "node_failure",
   "error": "refused on purpose",
   "event": "node_failed",
   "facts": {

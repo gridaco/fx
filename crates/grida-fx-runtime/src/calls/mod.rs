@@ -28,7 +28,7 @@
 //! 6. the adapter: none serving the route is `no_route`: `no adapter serves <capability> on <route
 //!    id>`. This is checked after the cache and the live check, so recorded calls replay offline
 //!    and without adapters (spec/protocol.md §6.1 step 4; spec/store.md §4).
-//! 7. the job record: unreadable stops the run ([`CallError::Store`]); `submitting` is
+//! 7. the job record: unreadable stops the run ([`CallError::Fault`]); `submitting` is
 //!    `job_unsettled`: `<capability> on <route id> (take <take>) was being submitted when a run
 //!    stopped, and nobody can say whether the provider took it. Check the provider's dashboard,
 //!    then run grida-fx jobs --forget <key> to submit it again`, with the record's `note` (why
@@ -48,8 +48,32 @@
 //!    record read back as a cache hit reads it (its `data` canonical, its files in the record's
 //!    order), so a live call and its replay give the caller the same value.
 //!
+//! **Stand-in answers** (spec/protocol.md §6.1 "Stand-in answers"). In a run whose engine has a
+//! stand-in ([`crate::stand_in`]), step 4's cache is the stand-in store (the engine's store), and
+//! a miss goes to the stand-in in place of steps 5 to 9: nothing is reserved, held, settled,
+//! paced or retried, and no job record is read or written.
+//! 1. a request a capability of spec/capabilities.md refuses is `capability_refused`,
+//!    `<capability> on <route id> was refused: <reason>`, and the stand-in is not asked;
+//! 2. `stand_in.answer {capability, route, request, take, key, instance: {id, path, step}, files}`
+//!    (`files`: a file ref for each file the request names, `executor::stage::file_ref`), waited
+//!    for until the calling instance is cancelled ([`CallSite::cancel`]: `cancelled`, nothing
+//!    recorded). A decline is `not_live`, `<capability> on <route id> is a paid call the stand-in
+//!    declined`, which does not end the key; the stand-in's `capability_refused` and `call_failed`
+//!    are the call's, `<capability> on <route id> was refused: <message>` and `… failed:
+//!    <message>`; a fault of the stand-in is [`CallError::Fault`] with its sentence, which stops
+//!    the run;
+//! 3. the answer's shape and the route's check (`StandInChecks::answer`), the round trip of its
+//!    data through canonical JSON, and [`engine_check`]: the first refusal is `call_failed`,
+//!    `<capability> on <route id> failed: <reason>`;
+//! 4. its files and its call record (`cost_usd` 0) are stored, the run's counter adds 0, and
+//!    `call {cached: false, cost_usd: 0, stand_in: true}` is emitted; the caller gets the record as
+//!    a replay reads it.
+//!
+//! A leader whose instance was cancelled lands `cancelled`, which ends nothing: each of its
+//! followers leads in its place and asks again.
+//!
 //! A reservation or a settlement the run's log could not record ([`crate::ledger`]) is a fault
-//! ([`CallError::Store`]) that stops the run; an answer that was paid for is still published
+//! ([`CallError::Fault`]) that stops the run; an answer that was paid for is still published
 //! first, so a resumed run replays it.
 //!
 //! Errors carry `capability`, `route` and `key` in `data` when known (spec/protocol.md §7);
@@ -71,9 +95,11 @@ pub mod pacing;
 pub mod retry;
 
 use crate::agent::AGENT_TURN;
-use crate::engine::{RunFiles, Services};
+use crate::engine::{Cancel, RunFiles, Services};
 use crate::events::Event;
+use crate::executor::stage::file_ref;
 use crate::ledger::{Hold, Ledger, NotReserved, Scopes};
+use crate::stand_in::{AnswererError, Reply, StandIn};
 use crate::store::Store;
 use crate::store::records::{CallRecord, FileEntry, JobRecord, JobState, RouteEntry, call_key};
 use flights::{Joined, Landed, Tracked};
@@ -81,7 +107,7 @@ use grida_fx_core::money::Usd;
 use grida_fx_core::routes::Route;
 use grida_fx_core::val::{FileValue, Val};
 use grida_fx_core::value::is_digest;
-use grida_fx_protocol::{ErrorCode, RpcError};
+use grida_fx_protocol::{ErrorCode, RpcError, StandInAnswerParams, StandInInstance, StandInRoute};
 use grida_fx_providers::{Adapter, Answer, CallRequest, RequestFile, RouteRef};
 use indexmap::IndexMap;
 use retry::{AnswerCheck, Attempts, Backoff, HoldBook, Outcome};
@@ -114,6 +140,8 @@ impl Services {
 #[derive(Debug, Clone)]
 pub struct CallSite {
     pub instance_id: String,
+    /// The instance's step path with its repeat keys (a stand-in's `instance.path`).
+    pub path: String,
     /// The declared step path, for messages.
     pub step: String,
     /// The type's name, for messages.
@@ -127,6 +155,9 @@ pub struct CallSite {
     pub limits: IndexMap<String, Option<u32>>,
     /// The step budgets the instance is inside (ledger::Scopes).
     pub scopes: crate::ledger::Scopes,
+    /// The calling instance's cancellation: its timeout, or a stopped run. A stand-in's answer
+    /// is waited for only until it fires (module doc, "Stand-in answers").
+    pub cancel: Cancel,
 }
 
 /// How many calls of each capability one body run has made (cache hits included).
@@ -191,8 +222,9 @@ pub enum CallError {
     /// The run stopped: the request is answered `cancelled`.
     Cancelled,
     /// A fault that stops the run: the store failed (an unreadable job record, a file or record
-    /// that cannot be written), or the call's own task ended without an answer.
-    Store(String),
+    /// that cannot be written), the call's own task ended without an answer, or a stand-in
+    /// failed (spec/protocol.md §5.7: the message is the run's `stopped` sentence).
+    Fault(String),
 }
 
 impl CallError {
@@ -204,7 +236,7 @@ impl CallError {
                 grida_fx_protocol::ErrorCode::Cancelled,
                 "the run was stopped",
             ),
-            CallError::Store(message) => {
+            CallError::Fault(message) => {
                 RpcError::new(grida_fx_protocol::ErrorCode::Internal, message.clone())
             }
         }
@@ -489,6 +521,8 @@ pub async fn call(
                     {
                         continue;
                     }
+                    // The leader's instance was cancelled, not this one: lead in its place.
+                    Err(CallError::Cancelled) => continue,
                     Err(error) => return Err(error.clone()),
                 }
             }
@@ -532,6 +566,7 @@ fn followed(
         &answer.key,
         true,
         Some(Usd::ZERO),
+        false,
     );
     CallAnswer {
         key: answer.key.clone(),
@@ -565,7 +600,7 @@ fn from_record(
     for (name, entry) in &record.files {
         let file = store
             .file_value(entry)
-            .map_err(|e| CallError::Store(e.to_string()))?;
+            .map_err(|e| CallError::Fault(e.to_string()))?;
         files.insert(&file);
         answered.insert(name.clone(), file);
     }
@@ -577,7 +612,7 @@ fn replayed(record: &CallRecord) -> Result<CallRecord, CallError> {
     grida_fx_core::value::parse_json(&grida_fx_core::value::canon(&record.to_value()))
         .map_err(|refused| refused.message)
         .and_then(|value| CallRecord::from_value(&value))
-        .map_err(|reason| CallError::Store(format!("a call record cannot be read back: {reason}")))
+        .map_err(|reason| CallError::Fault(format!("a call record cannot be read back: {reason}")))
 }
 
 impl Lead<'_> {
@@ -616,6 +651,7 @@ impl Lead<'_> {
                 &key,
                 true,
                 Some(Usd::ZERO),
+                false,
             );
             return Ok(CallAnswer {
                 key,
@@ -625,6 +661,30 @@ impl Lead<'_> {
                 files: answered,
                 data,
             });
+        }
+
+        let route_ref = RouteRef {
+            capability: capability.to_string(),
+            model: route.model.clone(),
+            provider: route.provider.clone(),
+            contract: route.contract.clone(),
+        };
+
+        // 4, in a stand-in run: the stand-in answers, refuses or fails the call; a decline goes
+        // on to the live check, which a stand-in run never passes.
+        if let Some(stand_in) = services
+            .engine
+            .stand_in
+            .as_ref()
+            .filter(|_| services.ledger.is_some())
+        {
+            if let Some(ended) = self.stand_in(stand_in, &request, &route_ref, &known).await {
+                return ended;
+            }
+            return Err(known.error(
+                ErrorCode::NotLive,
+                format!("{capability} on {route_id} is a paid call the stand-in declined"),
+            ));
         }
 
         // 5. Live.
@@ -639,12 +699,6 @@ impl Lead<'_> {
         };
 
         // 6. The adapter.
-        let route_ref = RouteRef {
-            capability: capability.to_string(),
-            model: route.model.clone(),
-            provider: route.provider.clone(),
-            contract: route.contract.clone(),
-        };
         let Some(adapter) = services.engine.adapters.serving(&route_ref).cloned() else {
             return Err(known.error(
                 ErrorCode::NoRoute,
@@ -660,7 +714,7 @@ impl Lead<'_> {
             take_text(&site.takes)
         );
         let collect = match store.load_job(&key) {
-            Err(error) => return Err(CallError::Store(error.to_string())),
+            Err(error) => return Err(CallError::Fault(error.to_string())),
             Ok(None) => None,
             Ok(Some(record)) => match record.state {
                 JobState::Settled => None,
@@ -697,7 +751,7 @@ impl Lead<'_> {
         for file in named {
             let path = store
                 .file_path(&file.digest)
-                .map_err(|e| CallError::Store(e.to_string()))?;
+                .map_err(|e| CallError::Fault(e.to_string()))?;
             request_files.insert(
                 file.digest.clone(),
                 RequestFile {
@@ -797,8 +851,8 @@ impl Lead<'_> {
                 ))
             }
             Outcome::Cancelled => Err(CallError::Cancelled),
-            Outcome::Store(error) => Err(CallError::Store(error.to_string())),
-            Outcome::Unrecorded(reason) => Err(CallError::Store(reason)),
+            Outcome::Store(error) => Err(CallError::Fault(error.to_string())),
+            Outcome::Unrecorded(reason) => Err(CallError::Fault(reason)),
         };
         let answer = match ended {
             Ok(answer) => answer,
@@ -807,7 +861,7 @@ impl Lead<'_> {
                     counter.add(charged);
                 }
                 return Err(match unrecorded {
-                    Some(reason) => CallError::Store(reason),
+                    Some(reason) => CallError::Fault(reason),
                     None => error,
                 });
             }
@@ -819,48 +873,23 @@ impl Lead<'_> {
 
         // Bytes first: the files, then the call record, then the job record goes (spec/store.md
         // §6).
-        let mut entries = IndexMap::new();
-        for (name, file) in &answer.files {
-            let stored = store
-                .put_bytes(&file.bytes)
-                .map_err(|e| CallError::Store(e.to_string()))?;
-            entries.insert(
-                name.clone(),
-                FileEntry {
-                    digest: stored.digest,
-                    kind: file.kind.clone(),
-                    name: name.clone(),
-                    size: stored.size,
-                    key: None,
-                },
-            );
-        }
         let cost = if collected {
             Some(Usd::ZERO)
         } else {
             answer.cost
         };
-        let record = CallRecord {
-            key: key.clone(),
-            capability: capability.to_string(),
-            route: route_entry,
-            request,
-            take: site.takes.clone(),
-            files: entries,
-            data: answer.data,
-            cost_usd: answer.cost,
-        };
-        store
-            .save_call(&record)
-            .map_err(|e| CallError::Store(e.to_string()))?;
+        let reported = answer.cost;
+        let record = self.publish(request, route_entry, answer, reported)?;
         // A job record left behind is answered by the call record from now on (spec/store.md §5).
         let _ = store.remove_job(&key);
         if let Some(reason) = unrecorded {
-            return Err(CallError::Store(reason));
+            return Err(CallError::Fault(reason));
         }
         // The caller gets what a replay of the record gives (module doc, step 9).
         let (answered, data) = from_record(store, files, &replayed(&record)?)?;
-        emit_call(services, site, capability, &route_id, &key, false, cost);
+        emit_call(
+            services, site, capability, &route_id, &key, false, cost, false,
+        );
         Ok(CallAnswer {
             key,
             cached: false,
@@ -872,8 +901,198 @@ impl Lead<'_> {
     }
 }
 
+impl Lead<'_> {
+    /// Stores an answer's files and then its call record (spec/store.md §6), with `cost_usd`
+    /// `reported`; the record as written.
+    fn publish(
+        &self,
+        request: Value,
+        route: RouteEntry,
+        answer: Answer,
+        reported: Option<Usd>,
+    ) -> Result<CallRecord, CallError> {
+        let store = &self.services.engine.store;
+        let mut entries = IndexMap::new();
+        for (name, file) in &answer.files {
+            let stored = store
+                .put_bytes(&file.bytes)
+                .map_err(|e| CallError::Fault(e.to_string()))?;
+            entries.insert(
+                name.clone(),
+                FileEntry {
+                    digest: stored.digest,
+                    kind: file.kind.clone(),
+                    name: name.clone(),
+                    size: stored.size,
+                    key: None,
+                },
+            );
+        }
+        let record = CallRecord {
+            key: self.key.to_string(),
+            capability: self.capability.to_string(),
+            route,
+            request,
+            take: self.site.takes.clone(),
+            files: entries,
+            data: answer.data,
+            cost_usd: reported,
+        };
+        store
+            .save_call(&record)
+            .map_err(|e| CallError::Fault(e.to_string()))?;
+        Ok(record)
+    }
+
+    /// Step 4 in a stand-in run (module doc, "Stand-in answers"): how the call ended, or `None`
+    /// when the stand-in declined it.
+    async fn stand_in(
+        &self,
+        stand_in: &StandIn,
+        request: &Value,
+        route_ref: &RouteRef,
+        known: &Known<'_>,
+    ) -> Option<Result<CallAnswer, CallError>> {
+        let Lead {
+            services,
+            site,
+            counter,
+            files,
+            capability,
+            route,
+            named,
+            key,
+        } = *self;
+        let route_id = route.id();
+        let store = &services.engine.store;
+        let refused = |reason: &str| {
+            known.error(
+                ErrorCode::CapabilityRefused,
+                format!("{capability} on {route_id} was refused: {reason}"),
+            )
+        };
+        let failed = |reason: &str| {
+            known.error(
+                ErrorCode::CallFailed,
+                format!("{capability} on {route_id} failed: {reason}"),
+            )
+        };
+
+        // 1. The request, against its capability; the stand-in is not asked when it is refused.
+        if let Err(reason) = stand_in.checks().request(capability, request) {
+            return Some(Err(refused(&reason)));
+        }
+
+        // 2. Ask, with a file ref for every file the request names.
+        let mut references = IndexMap::new();
+        let mut request_files = IndexMap::new();
+        for file in named {
+            let reference = match file_ref(store, file, files) {
+                Ok(reference) => reference,
+                Err(reason) => return Some(Err(CallError::Fault(reason))),
+            };
+            request_files.insert(
+                file.digest.clone(),
+                RequestFile {
+                    digest: file.digest.clone(),
+                    kind: file.kind.clone(),
+                    size: file.size,
+                    path: std::path::PathBuf::from(&reference.path),
+                },
+            );
+            references.insert(file.digest.clone(), reference);
+        }
+        let params = StandInAnswerParams {
+            capability: capability.to_string(),
+            route: StandInRoute {
+                id: route_id.clone(),
+                fingerprint: route.fingerprint(),
+            },
+            request: request
+                .as_object()
+                .cloned()
+                .unwrap_or_default()
+                .into_iter()
+                .collect(),
+            take: site.takes.iter().map(|take| u64::from(*take)).collect(),
+            key: key.to_string(),
+            instance: StandInInstance {
+                id: site.instance_id.clone(),
+                path: site.path.clone(),
+                step: site.step.clone(),
+            },
+            files: references,
+        };
+        let (sent, data) = match stand_in.answerer().answer(params, &site.cancel).await {
+            Ok(Reply::Answer { files, data }) => (files, data),
+            Ok(Reply::Decline) => return None,
+            Err(AnswererError::Refused(message)) => return Some(Err(refused(&message))),
+            Err(AnswererError::Failed(message)) => return Some(Err(failed(&message))),
+            Err(AnswererError::Fault(sentence)) => return Some(Err(CallError::Fault(sentence))),
+            Err(AnswererError::Cancelled) => return Some(Err(CallError::Cancelled)),
+        };
+
+        // 3. The checks a provider's answer passes, in order; the first refusal fails the call.
+        let call = CallRequest {
+            route: route_ref.clone(),
+            request: request.clone(),
+            files: request_files,
+            take: site.takes.clone(),
+            key: key.to_string(),
+            attempt: 1,
+        };
+        let mut answer = match stand_in.checks().answer(&call, sent, data) {
+            Ok(answer) => answer,
+            Err(reason) => return Some(Err(failed(&reason))),
+        };
+        answer.data = match retry::canonical_data(&answer.data) {
+            Ok(data) => data,
+            Err(reason) => return Some(Err(failed(&reason))),
+        };
+        if let Some(check) = engine_check(capability)
+            && let Err(reason) = check(&answer)
+        {
+            return Some(Err(failed(&reason)));
+        }
+
+        // 4. Stored in the stand-in store, paid at nothing, and handed back as a replay reads it.
+        let route_entry = RouteEntry {
+            id: route_id.clone(),
+            fingerprint: route.fingerprint(),
+        };
+        let ended = self
+            .publish(request.clone(), route_entry, answer, Some(Usd::ZERO))
+            .and_then(|record| replayed(&record))
+            .and_then(|record| from_record(store, files, &record));
+        let (answered, data) = match ended {
+            Ok(answered) => answered,
+            Err(error) => return Some(Err(error)),
+        };
+        counter.add(Usd::ZERO);
+        emit_call(
+            services,
+            site,
+            capability,
+            &route_id,
+            key,
+            false,
+            Some(Usd::ZERO),
+            true,
+        );
+        Some(Ok(CallAnswer {
+            key: key.to_string(),
+            cached: false,
+            cost: Some(Usd::ZERO),
+            charged: Usd::ZERO,
+            files: answered,
+            data,
+        }))
+    }
+}
+
 /// Emits `call` (spec/schemas/fx-run-events-v1); nothing while planning. A failed write does
-/// not undo a call that is already recorded in the store.
+/// not undo a call that is already recorded in the store. `stand_in`: a stand-in answered it.
+#[allow(clippy::too_many_arguments)]
 fn emit_call(
     services: &Services,
     site: &CallSite,
@@ -882,6 +1101,7 @@ fn emit_call(
     key: &str,
     cached: bool,
     cost: Option<Usd>,
+    stand_in: bool,
 ) {
     if let Some(events) = &services.events {
         let _ = events.emit(&Event::Call {
@@ -891,6 +1111,7 @@ fn emit_call(
             call: key.to_string(),
             cached,
             cost_usd: cost,
+            stand_in,
         });
     }
 }

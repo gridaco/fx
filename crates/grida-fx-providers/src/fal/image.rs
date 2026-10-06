@@ -234,12 +234,7 @@ impl RequestAdapter for FalImages {
         let size = crate::wire::parse_size(call.request.get("size"))
             .ok()
             .flatten();
-        let background = call
-            .request
-            .get("background")
-            .and_then(Value::as_str)
-            .unwrap_or("auto");
-        crate::wire::check_image(&file.kind, &file.bytes, size, background)
+        crate::checks::image(call, file, size)
     }
 }
 

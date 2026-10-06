@@ -4,7 +4,12 @@
 - The binary: ``GRIDA_FX_BIN`` when set, else the one inside the package
   (``grida/fx/_bin/grida-fx``: put in a wheel by ``tools/build_wheel.py``, or into a checkout
   by ``tools/build_engine.py``), else ``grida-fx`` on ``PATH``; none: ``RuntimeError`` naming
-  ``GRIDA_FX_BIN``. The binary's working directory is
+  ``GRIDA_FX_BIN``. The binary runs with this process's environment, plus
+  ``GRIDA_FX_SDK_PYTHON`` set to this interpreter (``sys.executable``) when it is known
+  (:func:`engine_environment`): the engine uses it for node bodies and stand-in hosts only when
+  neither ``GRIDA_FX_PYTHON`` nor a project ``.venv`` chooses one, so a project without a
+  ``.venv`` gets a Python that has ``grida`` instead of a bare ``python3``. The binary's working
+  directory is
   ``cwd`` (default: the process's), and every relative path given here (``input_files``,
   ``routes``, ``run_dir``, the paths inside ``inputs``) is relative to it, as on the command line.
 - A target is a workflow file, a workflow id, a builder ``file.py:function`` (``arguments`` as
@@ -23,17 +28,31 @@
   and ``--yes-up-to`` as given. A failed step does not raise; a run the engine refuses to start
   raises :class:`FxError` (``refused: <message>``). The :class:`RunResult` is read from the
   folder's ``events.jsonl`` (the last ``run_finished``): ``ok``, ``incomplete``, ``cost``
-  (``charged_usd``), ``run_dir``, ``failed`` (ids), ``outputs`` (files as
-  :class:`~grida.fx._ctx.InputFile`-like objects with ``path`` in the store, collections as dicts,
-  lists as lists), ``steps`` (by step path: the last finished take's ``facts`` and outputs), and
-  ``deliver(targets, root=None)`` (``{key}`` for each element; returns the names it found no file
-  for).
+  (``charged_usd``), ``run_dir``, ``failed`` (ids), ``failures`` (a :class:`Failure` by id:
+  ``path``, ``message``, ``code``, ``facts``, ``skipped``, from the last ``node_failed`` or
+  ``node_skipped`` of each), ``stopped`` (why the run stopped early, or ``None``), ``stand_in``,
+  ``outputs`` (files as :class:`~grida.fx._ctx.InputFile`-like objects with ``path`` in the
+  store, collections as dicts, lists as lists), ``steps`` (by step path: the last finished take's
+  ``facts`` and outputs), and ``deliver(targets, root=None)`` (``{key}`` for each element;
+  returns the names it found no file for).
+- **Stand-ins** (``spec/protocol.md`` sections 5.7 and 8): ``run(..., stand_in=answer)`` answers
+  the run's paid calls with ``answer``, a function of one :class:`~grida.fx.StandInCall` (plain or
+  a coroutine function; :mod:`grida.fx._stand_in`), served in this process. Each invocation makes
+  a Unix-domain socket pair, gives the engine one end as its standard input with ``--stand-in=-``,
+  and answers ``initialize``, ``stand_in.answer``, ``$/cancel``, ``shutdown`` and ``exit`` on the
+  other until the engine exits. A stand-in run plans nothing first (the run's own planning refuses
+  a plan with problems, and the SDK then plans to raise :class:`PlanRefused`); it takes no
+  ``live`` and no ``yes_up_to`` (``ValueError``), and needs a POSIX system
+  (``NotImplementedError``). A stand-in that faults makes the engine stop the run, and ``run``
+  raises the stand-in's first exception once the engine has ended, with the note ``the stand-in
+  run stopped in <folder>``.
 - :func:`run` cannot be called inside a running event loop (use :func:`run_async`).
 
 The store is the cache of the planning project (``spec/store.md``): the nearest folder holding
 ``fx.yaml`` at or above the workflow file when the target is a ``.yaml``/``.yml`` path, else at or
 above ``cwd``; its ``cache`` setting, default ``.fx/cache`` (section 8). A run's files are read
-there by digest (``files/<d[:2]>/<d>``).
+there by digest (``files/<d[:2]>/<d>``); a stand-in run's in the stand-in store, ``stand-in/``
+under it (section 8, "Stand-in runs").
 """
 
 from __future__ import annotations
@@ -46,16 +65,32 @@ import re
 import secrets
 import shutil
 import signal
+import socket
 import subprocess
+import sys
 import tempfile
 import unicodedata
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
 from grida.fx._builder import Workflow
+from grida.fx._protocol import (
+    INTERNAL,
+    INVALID_REQUEST,
+    METHOD_NOT_FOUND,
+    PARSE_ERROR,
+    ProtocolError,
+    encodable_text,
+    frame,
+    parse_message,
+    read_message_async,
+    write_message_async,
+)
+from grida.fx._stand_in import Answerer, Refused, StandIn
+from grida.fx._stand_in import initialize as _initialize_answerer
 
 #: The environment variable naming the binary to drive.
 BINARY_VARIABLE = "GRIDA_FX_BIN"
@@ -76,6 +111,8 @@ _DRAIN_S = 0.5
 _DIGEST = re.compile(r"[0-9a-f]{64}")
 _PROJECT_FILE = "fx.yaml"
 _DEFAULT_CACHE = ".fx/cache"
+#: The stand-in store, under the planning project's store (``spec/store.md`` section 1).
+_STAND_IN_STORE = "stand-in"
 
 
 class FxError(RuntimeError):
@@ -170,7 +207,8 @@ class Plan:
 
 class RunFile:
     """A file a run made: ``digest``, ``kind``, ``name``, ``size``, ``key``, and ``path``, its copy
-    in the project's store (read it, never write it)."""
+    in the project's store, or in its stand-in store for a stand-in run (read it, never write
+    it)."""
 
     def __init__(self, ref: Mapping[str, Any], store: Path) -> None:
         digest = ref.get("digest")
@@ -211,13 +249,30 @@ class StepResult:
         return f"<StepResult {self.id} facts={self.facts!r}>"
 
 
+@dataclass(frozen=True)
+class Failure:
+    """An instance the run failed (:attr:`RunResult.failures`): its ``id`` and step ``path``;
+    ``message``, the error, or for an instance that never ran the reason it was skipped;
+    ``code``, the protocol's name of the error that failed it (``spec/protocol.md`` section 7:
+    ``node_failure``, ``call_failed``, …), or ``None`` when the engine gave none (a timeout, an
+    assertion, a skip); the node ``facts`` it reported; and ``skipped``, true when it never ran
+    because something it reads failed."""
+
+    id: str
+    path: str
+    message: str
+    code: str | None
+    facts: dict[str, Any]
+    skipped: bool
+
+
 class RunResult:
     """A finished invocation (module docstring)."""
 
     def __init__(self, run_dir: Path, events: Sequence[Mapping[str, Any]]) -> None:
         self.run_dir = Path(run_dir)
         self.events = list(events)
-        #: The store the run's files are in; found from the current directory when not set.
+        #: The planning project's store; found from the current directory when not set.
         self._store: Path | None = None
 
     def _ending(self) -> Mapping[str, Any] | None:
@@ -254,6 +309,48 @@ class RunResult:
         """The ids of the instances that failed."""
         finished = self._finished()
         return [str(id_) for id_ in finished.get("failed") or []] if finished else []
+
+    @property
+    def failures(self) -> dict[str, Failure]:
+        """Each instance that failed, by id, in the order of :attr:`failed`: read from the last
+        ``node_failed`` or ``node_skipped`` event of that id, in any invocation of the folder."""
+        finished = self._finished()
+        if finished is None:
+            return {}
+        last: dict[str, Mapping[str, Any]] = {}
+        for event in self.events:
+            if event.get("event") in ("node_failed", "node_skipped"):
+                last[str(event.get("id", ""))] = event
+        failures: dict[str, Failure] = {}
+        for id_ in self.failed:
+            event = last.get(id_, {})
+            skip = event.get("event") == "node_skipped"
+            message = (event.get("reason") if skip else None) or event.get("error") or ""
+            code = None if skip else event.get("code")
+            failures[id_] = Failure(
+                id=id_,
+                path=str(event.get("path", "")),
+                message=str(message),
+                code=code if isinstance(code, str) else None,
+                facts=dict(event.get("facts") or {}),
+                skipped=skip and bool(event.get("blocked")),
+            )
+        return failures
+
+    @property
+    def stopped(self) -> str | None:
+        """Why the run stopped before it was done (``run_finished.stopped``), or ``None``."""
+        finished = self._finished()
+        stopped = finished.get("stopped") if finished is not None else None
+        return stopped if isinstance(stopped, str) else None
+
+    @property
+    def stand_in(self) -> bool:
+        """Whether the folder holds a stand-in run (a ``run_started`` says ``stand_in``)."""
+        return any(
+            event.get("event") == "run_started" and event.get("stand_in") is True
+            for event in self.events
+        )
 
     @property
     def outputs(self) -> dict[str, Any]:
@@ -310,7 +407,10 @@ class RunResult:
         return missing
 
     def _store_root(self) -> Path:
-        return self._store if self._store is not None else _project_store(Path.cwd())
+        """The store the run's files are in: the planning project's, or for a stand-in run its
+        stand-in store (``spec/store.md`` section 8, "Stand-in runs")."""
+        store = self._store if self._store is not None else _project_store(Path.cwd())
+        return store / _STAND_IN_STORE if self.stand_in else store
 
     def __repr__(self) -> str:
         return f"<RunResult {self.run_dir} ok={self.ok} cost=${self.cost:.2f}>"
@@ -407,6 +507,21 @@ def binary() -> Path:
         f"no grida-fx binary was found: this grida installation carries none, so set"
         f" {BINARY_VARIABLE} to its path, or put grida-fx on PATH"
     )
+
+
+#: The environment variable naming this SDK's interpreter for the engine: its last choice for
+#: node bodies and stand-in hosts, after ``GRIDA_FX_PYTHON`` and every project ``.venv``
+#: (``spec/protocol.md`` §1, §8).
+SDK_PYTHON_VARIABLE = "GRIDA_FX_SDK_PYTHON"
+
+
+def engine_environment() -> dict[str, str]:
+    """The binary's environment: this process's, with ``GRIDA_FX_SDK_PYTHON`` set to this
+    interpreter when it is known (module docstring)."""
+    environment = dict(os.environ)
+    if sys.executable:
+        environment[SDK_PYTHON_VARIABLE] = sys.executable
+    return environment
 
 
 def _packaged_binary() -> Path:
@@ -614,25 +729,32 @@ async def _read_into(stream: asyncio.StreamReader | None, sink: bytearray) -> No
         sink.extend(chunk)
 
 
-async def _call(args: Sequence[str], cwd: Path) -> _Exit:
+async def _call(args: Sequence[str], cwd: Path, stdin: socket.socket | None = None) -> _Exit:
     """Runs the binary with ``args`` in ``cwd``. Cancelled, it interrupts the engine (which stops
     the run as Ctrl-C would) and kills it if it has not ended a while later. Its output is what it
-    wrote until it exited: the call ends with the binary, not with the last holder of its pipes."""
+    wrote until it exited: the call ends with the binary, not with the last holder of its pipes.
+    Its standard input is the null device, or ``stdin``: a socket, closed here once the binary
+    holds it, so the binary alone keeps that end open."""
     options: dict[str, Any] = {}
     if os.name == "posix":
         # Its own session: a Ctrl-C at the terminal reaches it once, through this function.
         options["start_new_session"] = True
     loop = asyncio.get_running_loop()
-    transport, protocol = await loop.subprocess_exec(
-        lambda: _Protocol(loop),
-        str(binary()),
-        *args,
-        cwd=cwd,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        **options,
-    )
+    try:
+        transport, protocol = await loop.subprocess_exec(
+            lambda: _Protocol(loop),
+            str(binary()),
+            *args,
+            cwd=cwd,
+            stdin=subprocess.DEVNULL if stdin is None else stdin.fileno(),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=engine_environment(),
+            **options,
+        )
+    finally:
+        if stdin is not None:
+            stdin.close()
     process = asyncio.subprocess.Process(transport, protocol, loop)
     stdout, stderr = bytearray(), bytearray()
     readers = [
@@ -681,6 +803,106 @@ async def _stop(process: asyncio.subprocess.Process, exited: asyncio.Future[None
         with contextlib.suppress(ProcessLookupError):
             process.kill()
         raise
+
+
+async def _call_answered(args: Sequence[str], cwd: Path, answerer: Answerer) -> _Exit:
+    """:func:`_call` with the stand-in served on a socket pair, the engine's end as its standard
+    input (module docstring). Once the engine has exited the serving is cancelled: nothing waits
+    for it to end on its own, nor for a stand-in still answering."""
+    ours, theirs = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        reader, writer = await asyncio.open_unix_connection(sock=ours)
+    except BaseException:
+        ours.close()
+        theirs.close()
+        raise
+    server = asyncio.ensure_future(_serve_stand_in(reader, writer, answerer))
+    try:
+        return await _call(args, cwd, stdin=theirs)
+    finally:
+        server.cancel()
+        await asyncio.wait([server])
+        # A server cancelled before it started (the engine never ran) has not closed its end.
+        answerer.close()
+        writer.close()
+
+
+async def _serve_stand_in(
+    reader: asyncio.StreamReader, writer: asyncio.StreamWriter, answerer: Answerer
+) -> None:
+    """Answers the engine on the stand-in's end of the socket until ``exit`` or the end of the
+    stream (``spec/protocol.md`` section 5.7): ``initialize`` first, then ``stand_in.answer``
+    (:class:`~grida.fx._stand_in.Answerer`), ``$/cancel``, ``shutdown``; any other method is
+    ``-32601``. Then it ends the calls still being answered and closes its end."""
+
+    def send(message: dict[str, Any]) -> None:
+        if writer.is_closing():
+            return
+        try:
+            data = frame(message)
+        except ValueError as error:
+            # An answer the engine could not read: it still gets one, so it waits for none.
+            text = encodable_text(f"the stand-in's answer could not be sent: {error}")
+            data = frame(_error_message(message.get("id"), INTERNAL, text))
+        writer.write(data)
+
+    def responder(request_id: Any) -> Callable[[dict[str, Any]], None]:
+        return lambda reply: send({"jsonrpc": "2.0", "id": request_id, **reply})
+
+    initialized = False
+    try:
+        while True:
+            try:
+                body = await read_message_async(reader)
+            except ProtocolError:
+                return  # the stream is broken: closing it tells the engine
+            if body is None:
+                return
+            try:
+                message = parse_message(body)
+            except ProtocolError as error:
+                send(_error_message(None, PARSE_ERROR, str(error)))
+                continue
+            if not isinstance(message, dict) or not isinstance(message.get("method"), str):
+                continue  # this end sends no requests, so it waits for no answer
+            method, params = message["method"], message.get("params")
+            if "id" not in message:
+                if method == "exit":
+                    return
+                if method == "$/cancel" and isinstance(params, dict):
+                    answerer.cancel(params.get("id"))
+                continue
+            request_id = message["id"]
+            if isinstance(request_id, bool) or not isinstance(request_id, int | str):
+                text = "a request id is an integer or a string"
+                send(_error_message(None, INVALID_REQUEST, text))
+                continue
+            if method == "stand_in.answer" and initialized:
+                answerer.start(request_id, params, responder(request_id))
+                continue
+            response: dict[str, Any] = {"jsonrpc": "2.0", "id": request_id}
+            try:
+                if method == "initialize":
+                    if initialized:
+                        raise Refused(INVALID_REQUEST, "initialize was already answered")
+                    response["result"] = _initialize_answerer(params)
+                    initialized = True
+                elif not initialized:
+                    raise Refused(INVALID_REQUEST, f"{method} came before initialize")
+                elif method == "shutdown":
+                    response["result"] = None
+                else:
+                    raise Refused(METHOD_NOT_FOUND, f"grida.fx's stand-in has no method {method}")
+            except Refused as refused:
+                response["error"] = refused.error
+            await write_message_async(writer, response)
+    finally:
+        answerer.close()
+        writer.close()
+
+
+def _error_message(request_id: Any, code: int, message: str) -> dict[str, Any]:
+    return {"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}}
 
 
 def _error_of(done: _Exit) -> FxError:
@@ -817,8 +1039,11 @@ async def run_async(
     cwd: str | Path | None = None,
     routes: Sequence[str | Path] | None = None,
     arguments: Mapping[str, str] | None = None,
+    stand_in: StandIn | None = None,
 ) -> RunResult:
-    """Runs ``target`` (or a plan); ``live=True`` admits paid calls (module docstring)."""
+    """Runs ``target`` (or a plan); ``live=True`` admits paid calls, and ``stand_in`` answers
+    them with a function instead, offline and for nothing (module docstring)."""
+    answerer = None if stand_in is None else _answerer(stand_in, live=live, yes_up_to=yes_up_to)
     request = _request(
         target,
         inputs=inputs,
@@ -833,18 +1058,37 @@ async def run_async(
         options.append(f"--yes-up-to={_amount('yes_up_to', yes_up_to)}")
     if run_dir is not None:
         options.append(f"--run={os.fspath(run_dir)}")
-    planned = target if isinstance(target, Plan) else await _plan(request)
-    if not planned.ok:
+    if answerer is not None:
+        options.append("--stand-in=-")
+    if isinstance(target, Plan):
+        planned: Plan | None = target
+    elif answerer is None:
+        planned = await _plan(request)
+    else:
+        planned = None  # a stand-in run plans nothing first: the run plans, and refuses problems
+    if planned is not None and not planned.ok:
         raise PlanRefused(planned)
     with _inputs_file(request) as inputs_file:
-        done = await _call(["run", *request.args(inputs_file), *options], request.cwd)
+        args = ["run", *request.args(inputs_file), *options]
+        if answerer is None:
+            done = await _call(args, request.cwd)
+        else:
+            done = await _call_answered(args, request.cwd, answerer)
+    named = [
+        line[len(_RUN_LINE) :] for line in done.stdout.splitlines() if line.startswith(_RUN_LINE)
+    ]
+    if answerer is not None and answerer.fault is not None:
+        fault = answerer.fault
+        if run_dir is not None or named:
+            folder = request.cwd / (os.fspath(run_dir) if run_dir is not None else named[-1])
+            fault.add_note(f"the stand-in run stopped in {folder}")
+        else:
+            fault.add_note(f"the stand-in run stopped: grida-fx exited with status {done.status}")
+        raise fault
     if done.status == _CANCELLED:
         raise FxError("the run was cancelled", done.status)
     if done.status not in (0, 1):
         raise _failure("run", done)
-    named = [
-        line[len(_RUN_LINE) :] for line in done.stdout.splitlines() if line.startswith(_RUN_LINE)
-    ]
     if not named:
         refused = [line for line in done.stdout.splitlines() if line.startswith(_REFUSED)]
         if refused:
@@ -859,6 +1103,22 @@ async def run_async(
     return result
 
 
+def _answerer(stand_in: StandIn, *, live: bool, yes_up_to: float | None) -> Answerer:
+    """The answerer of a stand-in run; refuses what a stand-in run cannot be, before anything is
+    started."""
+    if live:
+        raise ValueError("a stand-in run is never live: pass live=False, or no stand_in")
+    if yes_up_to is not None:
+        raise ValueError("a stand-in run runs every phase: yes_up_to does not apply")
+    if not callable(stand_in):
+        raise TypeError(
+            f"stand_in is a function of one grida.fx.StandInCall, not {type(stand_in).__name__}"
+        )
+    if os.name != "posix":
+        raise NotImplementedError("stand-ins need a POSIX system")
+    return Answerer(stand_in)
+
+
 def run(
     target: str | Plan,
     *,
@@ -871,6 +1131,7 @@ def run(
     cwd: str | Path | None = None,
     routes: Sequence[str | Path] | None = None,
     arguments: Mapping[str, str] | None = None,
+    stand_in: StandIn | None = None,
 ) -> RunResult:
     """:func:`run_async`, for code outside an event loop."""
     _no_running_loop("run")
@@ -886,5 +1147,6 @@ def run(
             cwd=cwd,
             routes=routes,
             arguments=arguments,
+            stand_in=stand_in,
         )
     )

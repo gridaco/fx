@@ -39,7 +39,15 @@
 //!    output files first). A failed attempt writes no record.
 //!
 //! [`Attempt::stop`] carries a reason the whole run must stop for (an unreadable job record, the
-//! store failing); the runner then stops like a run-time problem.
+//! store failing, a stand-in's fault); the runner then stops like a run-time problem.
+//!
+//! **Error codes.** A failed attempt carries the spec/protocol.md §7 code of the error that
+//! failed it ([`Attempt::code`], `node_failed`'s `code`): the host's `node_failure`,
+//! `node_error` (also for a host that exited) or `load_failed`; an engine error the body let
+//! through, with its own code; a paid built-in's call error (`invalid_params` for a request it
+//! cannot send); `invalid_params` when the result fails a check (step 2 and the judge's verdict)
+//! or cannot be read at all; `internal` for an attempt that stops the run. A timeout, a stop and
+//! a file that cannot be adopted carry none.
 //!
 //! Further rules:
 //! - **Stopping.** When `cancel` fires the attempt ends failed with `the run was stopped`, at
@@ -48,9 +56,11 @@
 //!   dispatcher sees the token and emits no terminal event. A step's `timeout:` bounds a paid
 //!   built-in the same way (`ran past <n> seconds`).
 //! - **Faults.** A run request that met a fault of the engine's own (an unreadable job record, a
-//!   store that cannot be read or written: [`requests::RunHandler::fault`]) stops the run even
-//!   when the body caught the error; so do a store that cannot be written while the result is
-//!   accepted, and a work dir that cannot be made. Other `internal` answers, such as a resource
+//!   store that cannot be read or written, a stand-in's fault: [`requests::RunHandler::fault`])
+//!   stops the run even when the body caught the error; a result the body answered after
+//!   catching it is not accepted and writes no record (the attempt fails `internal` with the
+//!   fault). So do a store that cannot be written while the result is accepted, and a work dir
+//!   that cannot be made. Other `internal` answers, such as a resource
 //!   that cannot be read, fail only the request, and the node when the body lets them propagate.
 //! - **Adoption.** A file that is not in the store and whose local copy cannot be read fails the
 //!   attempt (`<name> is not in the store, and its file cannot be read: <reason>`); a local copy
@@ -58,8 +68,9 @@
 //!   was planned`).
 //! - **Facts.** Facts reported with `fact` survive every failure. A paid built-in's facts (from
 //!   its answer's `data`) leave out `cost_usd` and values holding a reserved marker.
-//! - **No private paths.** Error texts that reach a result have the store root and the project
-//!   root replaced by relative labels ([`crate::engine::Engine::scrub`]).
+//! - **No private paths.** Error texts that reach a result have the store root, the project
+//!   root and the command's further private roots replaced by relative labels
+//!   ([`crate::engine::Engine::scrub`]).
 
 pub mod accept;
 pub mod capability_node;
@@ -240,10 +251,12 @@ impl InstanceJob {
         })
     }
 
-    /// The `calls::CallSite` of this job.
-    pub fn call_site(&self) -> crate::calls::CallSite {
+    /// The `calls::CallSite` of this job, its calls cancelled with `cancel` (a stand-in's answer
+    /// is waited for only until it fires).
+    pub fn call_site(&self, cancel: Cancel) -> crate::calls::CallSite {
         crate::calls::CallSite {
             instance_id: self.id.clone(),
+            path: self.path.clone(),
             step: self.step.clone(),
             type_name: self.spec.name.clone(),
             takes: self.takes.clone(),
@@ -251,6 +264,7 @@ impl InstanceJob {
             routes: self.routes.clone(),
             limits: self.limits.clone(),
             scopes: self.scopes.clone(),
+            cancel,
         }
     }
 }
@@ -272,27 +286,37 @@ pub struct Attempt {
     pub retryable: bool,
     /// The run must stop, for this reason.
     pub stop: Option<String>,
+    /// A failed attempt's error code (module doc, "Error codes"): `node_failed`'s `code`.
+    pub code: Option<ErrorCode>,
 }
 
 impl Attempt {
-    /// An attempt that ran (or was refused): not from the cache, not retryable, no stop.
+    /// An attempt that ran (or was refused): not from the cache, not retryable, no stop, no
+    /// code.
     fn ran(result: NodeResult) -> Attempt {
         Attempt {
             result,
             cache: CacheUse::Miss,
             retryable: false,
             stop: None,
+            code: None,
         }
     }
 
-    /// A failed attempt that stops the run for `reason`.
+    /// A failed attempt that stops the run for `reason`: a fault of the engine's own, `internal`.
     fn stopping(reason: String, facts: IndexMap<String, Value>) -> Attempt {
         Attempt {
             result: failure(reason.clone(), facts),
             cache: CacheUse::Miss,
             retryable: false,
             stop: Some(reason),
+            code: Some(ErrorCode::Internal),
         }
+    }
+
+    /// The same attempt, failed with `code`.
+    fn with_code(self, code: Option<ErrorCode>) -> Attempt {
+        Attempt { code, ..self }
     }
 }
 
@@ -345,6 +369,7 @@ fn from_cache(store: &Store, job: &InstanceJob) -> Option<Attempt> {
         cache: CacheUse::Hit,
         retryable: false,
         stop: None,
+        code: None,
     })
 }
 
@@ -363,34 +388,43 @@ async fn paid_builtin(
         return Attempt::ran(failed(STOPPED));
     }
     let counter = Arc::new(CallCounter::new());
+    // The call's own cancellation: the attempt's, and the step's deadline (a stand-in's answer
+    // is waited for only until then; a provider's call goes on and settles either way).
+    let call_cancel = cancel.child();
     let task = {
-        let (services, job, counter, files) = (
+        let (services, job, counter, files, call_cancel) = (
             Arc::clone(services),
             Arc::clone(job),
             Arc::clone(&counter),
             Arc::clone(&files),
+            call_cancel.clone(),
         );
         // Counted as running before the task first runs, so a run that ends meanwhile waits for
         // it (`Services::calls_settled`).
         let running = services.track_call();
         services.engine.handle.clone().spawn(async move {
             let _running = running;
-            capability_node::run(&services, &job, &counter, &files).await
+            capability_node::run(&services, &job, &counter, &files, call_cancel).await
         })
     };
     let joined = tokio::select! {
         joined = task => joined,
         _ = cancel.cancelled() => return Attempt::ran(failed(STOPPED)),
-        _ = deadline(timeout_of(job)) => return Attempt::ran(failed(&ran_past(job))),
+        _ = deadline(timeout_of(job)) => {
+            call_cancel.cancel();
+            return Attempt::ran(failed(&ran_past(job)));
+        }
     };
     match joined {
         Ok(Ok(produced)) => {
             let facts = failure_facts(&produced.facts, None);
             finish(store, job, produced.outputs, facts, counter.cost())
         }
-        Ok(Err(CallError::Rpc(error))) => Attempt::ran(failed(&error.message)),
+        Ok(Err(CallError::Rpc(error))) => {
+            Attempt::ran(failed(&error.message)).with_code(error.kind())
+        }
         Ok(Err(CallError::Cancelled)) => Attempt::ran(failed(STOPPED)),
-        Ok(Err(CallError::Store(message))) => Attempt::stopping(message, IndexMap::new()),
+        Ok(Err(CallError::Fault(message))) => Attempt::stopping(message, IndexMap::new()),
         Err(error) => Attempt::stopping(
             format!(
                 "the engine failed while making the call of {}: {error}",
@@ -480,6 +514,11 @@ async fn run_on_host(
     };
     let reported = handler.facts();
     let marks = handler.marks();
+    // A body that caught the engine's own fault and answered anyway publishes nothing: its result
+    // was made from no answer, and the run stops (module doc, "Faults").
+    if let (RunReply::Result(_), Some(fault)) = (&reply, handler.fault()) {
+        return Attempt::stopping(fault, failure_facts(&reported, None));
+    }
     let mut attempt = match reply {
         RunReply::Result(value) => match serde_json::from_value::<RunResult>(value.clone()) {
             Ok(result) => {
@@ -495,6 +534,7 @@ async fn run_on_host(
                     ),
                     Err(NotAccepted::Refused(refused)) => {
                         Attempt::ran(failure(refused.message, refused.facts))
+                            .with_code(Some(ErrorCode::InvalidParams))
                     }
                     Err(NotAccepted::Store { message, facts }) => Attempt::stopping(message, facts),
                 }
@@ -505,7 +545,8 @@ async fn run_on_host(
                     accept::unreadable_result(&value, &error)
                 ),
                 failure_facts(&reported, None),
-            )),
+            ))
+            .with_code(Some(ErrorCode::InvalidParams)),
         },
         RunReply::Error(error) => host_error(error, &reported, cancel),
         RunReply::TimedOut => Attempt::ran(failure(ran_past(job), failure_facts(&reported, None))),
@@ -517,6 +558,7 @@ async fn run_on_host(
             Attempt {
                 retryable: true,
                 ..Attempt::ran(failure(message, failure_facts(&reported, None)))
+                    .with_code(Some(ErrorCode::NodeError))
             }
         }
     };
@@ -547,14 +589,14 @@ fn host_error(error: RpcError, reported: &IndexMap<String, Value>, cancel: &Canc
             };
             Attempt {
                 retryable: true,
-                ..Attempt::ran(failure(message, facts))
+                ..Attempt::ran(failure(message, facts)).with_code(Some(ErrorCode::NodeError))
             }
         }
         Some(ErrorCode::Cancelled) if cancel.is_cancelled() => {
             Attempt::ran(failure(STOPPED.into(), facts))
         }
         // node_failure, load_failed, and every engine error the body let propagate.
-        _ => Attempt::ran(failure(error.message, facts)),
+        code => Attempt::ran(failure(error.message, facts)).with_code(code),
     }
 }
 
@@ -575,7 +617,8 @@ fn finish(
         return Attempt::ran(failure(
             format!("{} is a judge and reported no verdict", job.spec.name),
             facts,
-        ));
+        ))
+        .with_code(Some(ErrorCode::InvalidParams));
     }
     if let Some(identity) = &job.identity {
         let mut recorded = IndexMap::with_capacity(outputs.len());
@@ -584,7 +627,10 @@ fn finish(
                 Ok(output) => {
                     recorded.insert(port.clone(), output);
                 }
-                Err(message) => return Attempt::ran(failure(message, facts)),
+                Err(message) => {
+                    return Attempt::ran(failure(message, facts))
+                        .with_code(Some(ErrorCode::InvalidParams));
+                }
             }
         }
         let record = ResultRecord {
@@ -903,6 +949,7 @@ mod tests {
         let attempt = host_error(error, &reported, &cancel);
         assert_eq!(attempt.result.error.as_deref(), Some("no faces found"));
         assert!(!attempt.retryable);
+        assert_eq!(attempt.code, Some(ErrorCode::NodeFailure));
         assert_eq!(
             attempt.result.facts,
             IndexMap::from([
@@ -920,6 +967,7 @@ mod tests {
         );
         assert!(attempt.retryable);
         assert_eq!(attempt.stop, None);
+        assert_eq!(attempt.code, Some(ErrorCode::NodeError));
 
         let error = RpcError::new(ErrorCode::NodeError, "boom");
         assert_eq!(
@@ -949,6 +997,8 @@ mod tests {
             assert_eq!(attempt.result.error.as_deref(), Some("said so"), "{code}");
             assert!(!attempt.retryable, "{code}");
             assert_eq!(attempt.result.facts, reported);
+            // The engine error the body let through keeps its own code.
+            assert_eq!(attempt.code, Some(code), "{code}");
         }
 
         cancel.cancel();
@@ -958,6 +1008,8 @@ mod tests {
             &cancel,
         );
         assert_eq!(attempt.result.error.as_deref(), Some(STOPPED));
+        // A stop carries no code.
+        assert_eq!(attempt.code, None);
     }
 
     #[test]

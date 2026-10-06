@@ -8,15 +8,17 @@
 //! 2. the workflow: a builder (`^(?P<file>.+\.py):(?P<name>[A-Za-z_][A-Za-z0-9_]*)$`, run through
 //!    the host's `build` after [`NodeHost::open_project`] on the planning project, cwd = the
 //!    working directory; `load_failed` → `no builder file …` / `… has no function …`,
-//!    `build_failed` → its message; exit 2), else [`find_workflow`] and
-//!    [`crate::docs::workflow::load_workflow`]. Builder documents are validated like files; their
-//!    plan-digest source is `<path>:<function>` and their home is the planning project;
+//!    `build_failed` → its message; exit 2), else [`find_workflow`] (by id: the planning
+//!    project's root files, then the folders of its `workflows` setting, which may lie outside
+//!    it) and [`crate::docs::workflow::load_workflow`]. Builder documents are validated like
+//!    files; their plan-digest source is `<path>:<function>` and their home is the planning
+//!    project;
 //! 3. the inputs schema ([`crate::inputs::compile_inputs`], `$ref` relative to the home);
 //! 4. input flags from `rest`, then the inputs ([`crate::inputs::bind::load_inputs`]; `--inputs`
 //!    files relative to `cwd`, named as typed);
-//! 5. the home project (the nearest fx.yaml above the workflow file), its fx.lock, the registry
-//!    (route defaults: the home's, overridden by the planning project's), and
-//!    [`NodeHost::open_project`] on the home;
+//! 5. the home project (the nearest fx.yaml at or above the workflow file, also for a workflow
+//!    found outside the planning project), its fx.lock, the registry (route defaults: the
+//!    home's, overridden by the planning project's), and [`NodeHost::open_project`] on the home;
 //! 6. the route catalog ([`crate::routes::load_catalog`]: the request's built-in table unless
 //!    `--routes` is given, the planning project's `route_tables`, then `--routes` files relative
 //!    to `cwd`);
@@ -40,6 +42,7 @@ use grida_fx_protocol::BuildParams;
 use indexmap::IndexMap;
 use regex::Regex;
 use serde_json::Value;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::LazyLock;
@@ -92,13 +95,14 @@ fn absolute(cwd: &Path, path: &str) -> PathBuf {
 
 /// Finds a workflow: a path with a `.yaml`/`.yml`/`.json` suffix, relative to `cwd`
 /// (`no workflow file {target}`); else a workflow whose `id` is `target` among
-/// [`project_workflow_files`] (`workflow id {repr} is declared twice: {relpaths}`;
+/// [`project_workflow_files`] (`workflow id {repr} is declared twice: {labels}`;
 /// `no workflow with id {repr} under {project folder name}`). Files that are not UTF-8, do not
 /// mention `workflow/v1`, or do not parse are skipped while searching. When no file declares the
 /// id, a skipped file that does not parse but whose text mentions both `workflow/v1` and the id
 /// is reported instead, with the strict loader's error (the first such file in search order), so
-/// a workflow that is refused is not called missing. A path found by id is returned as found
-/// under the project root; a file target with its symbolic links resolved.
+/// a workflow that is refused is not called missing. A path found by id is returned as found:
+/// its `workflows` folder joined to the project root, so it may lie outside the project; a file
+/// target with its symbolic links resolved. Messages name a found file as `search_label` does.
 pub fn find_workflow(target: &str, project: &Project, cwd: &Path) -> Result<PathBuf> {
     if is_workflow_file(target) {
         let path = absolute(cwd, target);
@@ -119,7 +123,7 @@ pub fn find_workflow(target: &str, project: &Project, cwd: &Path) -> Result<Path
         if !text.contains("workflow/v1") {
             continue;
         }
-        let label = relative_label(&project.root, &path);
+        let label = search_label(project, &path);
         let document = match crate::yaml::load(&bytes, &label) {
             Ok(document) => document,
             Err(error) => {
@@ -154,7 +158,7 @@ pub fn find_workflow(target: &str, project: &Project, cwd: &Path) -> Result<Path
         _ => {
             let names: Vec<String> = matches
                 .iter()
-                .map(|path| relative_label(&project.root, path))
+                .map(|path| search_label(project, path))
                 .collect();
             Err(Error::plan(format!(
                 "workflow id {repr} is declared twice: {}",
@@ -164,38 +168,59 @@ pub fn find_workflow(target: &str, project: &Project, cwd: &Path) -> Result<Path
     }
 }
 
-/// A path under `root` as POSIX text relative to it (lexically), else its file name.
-fn relative_label(root: &Path, path: &Path) -> String {
-    match path.strip_prefix(root) {
-        Ok(rest) => rest
-            .components()
+/// A search file as messages name it: its path relative to the project root, lexically (so a
+/// folder listed as `../shared` keeps its `..`); else, under a folder listed by an absolute path
+/// outside the project, that entry as written and the path below it; else its file name.
+fn search_label(project: &Project, path: &Path) -> String {
+    let posix = |rest: &Path| {
+        rest.components()
             .map(|part| part.as_os_str().to_string_lossy().into_owned())
             .collect::<Vec<_>>()
-            .join("/"),
-        Err(_) => path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default(),
+            .join("/")
+    };
+    if let Ok(rest) = path.strip_prefix(&project.root) {
+        return posix(rest);
     }
+    for entry in &project.document.workflows {
+        if let Ok(rest) = path.strip_prefix(project.root.join(entry)) {
+            return format!("{}/{}", entry.trim_end_matches('/'), posix(rest));
+        }
+    }
+    path.file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default()
 }
 
-/// The files searched for a workflow id: the root's own `*.yaml`/`*.yml` entries sorted, then
-/// every folder under `workflows/` (symbolic links to folders not followed) in the sorted order
-/// of their paths, each folder's entries sorted; never `fx.yaml`, never a name containing
-/// `.takes.`, regular files only. Suffixes are case sensitive; `.json` files are never found by
-/// id.
+/// The files searched for a workflow id (spec/store.md, *Finding a workflow by id*): the root's
+/// own `*.yaml`/`*.yml` entries sorted; then, for each folder of the project's `workflows`
+/// setting in its listed order (joined to the root, so it may be absolute or lie outside the
+/// project), that folder and every folder below it (symbolic links to folders not followed) in
+/// the sorted order of their paths, each folder's entries sorted. Never `fx.yaml`, never a name
+/// containing `.takes.`, regular files only. Suffixes are case sensitive; `.json` files are never
+/// found by id. A listed folder that does not exist adds nothing. A file reached again through
+/// folders that overlap (`[library, library/thing]`) is kept only where it was first found;
+/// files are compared by their folder, with its symbolic links resolved, and their name.
 pub fn project_workflow_files(project: &Project) -> Vec<PathBuf> {
     let mut found = Vec::new();
     candidates(&project.root, &mut found);
-    let workflows = project.root.join("workflows");
-    if workflows.is_dir() {
+    for entry in &project.document.workflows {
+        let listed = project.root.join(entry);
+        if !listed.is_dir() {
+            continue;
+        }
         let mut folders = Vec::new();
-        walk_folders(&workflows, &mut folders);
+        walk_folders(&listed, &mut folders);
         folders.sort_by(|a, b| a.to_string_lossy().cmp(&b.to_string_lossy()));
         for folder in folders {
             candidates(&folder, &mut found);
         }
     }
+    let mut seen = HashSet::new();
+    found.retain(|path| {
+        let folder = path.parent().unwrap_or(path);
+        let name = path.file_name().unwrap_or_default();
+        seen.insert(crate::inputs::bind::resolve(folder).join(name))
+    });
     found
 }
 
@@ -377,7 +402,7 @@ fn load(
             let label = if is_workflow_file(&text) {
                 text.clone()
             } else {
-                relative_label(&project.root, &path)
+                search_label(&project, &path)
             };
             let workflow = crate::docs::workflow::load_workflow(&path, &label, &label)?;
             Ok(LoadedTarget {

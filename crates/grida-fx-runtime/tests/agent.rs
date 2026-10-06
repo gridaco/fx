@@ -37,7 +37,7 @@ impl TurnCaller for Model {
     fn turn(&self, request: Value) -> BoxFuture<'_, Result<CallAnswer, CallError>> {
         self.requests.lock().unwrap().push(request);
         let next = self.replies.lock().unwrap().pop_front().unwrap_or_else(|| {
-            Err(CallError::Store(
+            Err(CallError::Fault(
                 "the model's script ran out (a test sent too many turns)".into(),
             ))
         });

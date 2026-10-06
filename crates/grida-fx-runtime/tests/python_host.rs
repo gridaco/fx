@@ -910,3 +910,211 @@ fn the_real_python_host_ignores_root_modules_until_initialize() {
     assert_eq!(built.document["title"], json!("Demo 3"));
     host.shutdown().unwrap();
 }
+
+/// A stand-in host (spec/protocol.md §5.7) of the real `grida.fx.host`: `stand_in.load` of a file
+/// outside the project, which imports a module beside it, and `stand_in.answer` of each outcome.
+#[test]
+fn the_real_python_host_answers_for_a_stand_in() {
+    use grida_fx_protocol::{StandInAnswerParams, StandInInstance, StandInRoute};
+    use grida_fx_runtime::engine::Cancel;
+    use grida_fx_runtime::host::process::HostSpec;
+    use grida_fx_runtime::stand_in::{Answerer, AnswererError, ConnectionAnswerer, Reply};
+
+    let Some(python) = real_python() else {
+        eprintln!("skipped: neither GRIDA_FX_PYTHON nor python/.venv is set up");
+        return;
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let cwd = canonical(dir.path());
+    let root = cwd.join("acme");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("fx.yaml"), "fx: project/v1\n").unwrap();
+    let tests = cwd.join("tests");
+    std::fs::create_dir_all(&tests).unwrap();
+    std::fs::write(tests.join("kites.py"), "PICTURE = b\"a kite\"\n").unwrap();
+    std::fs::write(
+        tests.join("stand_in.py"),
+        "from grida.fx import DECLINE, Answer, CallRefused\n\
+         from kites import PICTURE\n\n\n\
+         def answer(call):\n\
+         \x20   if call.capability == \"acme.decline\":\n\
+         \x20       return DECLINE\n\
+         \x20   if call.capability == \"acme.refuse\":\n\
+         \x20       raise CallRefused(\"no kites today\")\n\
+         \x20   if call.capability == \"acme.boom\":\n\
+         \x20       raise RuntimeError(\"kaboom\")\n\
+         \x20   return Answer(files={\"image\": PICTURE}, data={\"take\": call.take})\n",
+    )
+    .unwrap();
+    let spec = HostSpec {
+        label: python.display().to_string(),
+        python,
+        project_root: root.clone(),
+        sources: Vec::new(),
+    };
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let params = |capability: &str| StandInAnswerParams {
+        capability: capability.into(),
+        route: StandInRoute {
+            id: "img-a@acme".into(),
+            fingerprint: "0".repeat(64),
+        },
+        request: [("prompt".to_string(), json!("a kite"))]
+            .into_iter()
+            .collect(),
+        take: vec![1, 2],
+        key: "1".repeat(64),
+        instance: StandInInstance {
+            id: "draw#1.2".into(),
+            path: "draw".into(),
+            step: "draw".into(),
+        },
+        files: IndexMap::new(),
+    };
+    runtime.block_on(async {
+        // A function the file does not have cannot be loaded.
+        let missing =
+            ConnectionAnswerer::start_host(&spec, &cwd, &tests.join("stand_in.py"), "nope").await;
+        let Err(reason) = missing else {
+            panic!("a missing function is loaded");
+        };
+        assert!(reason.contains("has no function nope"), "{reason}");
+
+        let answerer =
+            ConnectionAnswerer::start_host(&spec, &cwd, &tests.join("stand_in.py"), "answer")
+                .await
+                .unwrap();
+        let cancel = Cancel::new();
+        let Ok(Reply::Answer { files, data }) =
+            answerer.answer(params("image.generate"), &cancel).await
+        else {
+            panic!("an answer");
+        };
+        assert_eq!(files["image"].bytes, b"a kite");
+        assert_eq!(files["image"].kind, None);
+        assert_eq!(data, json!({"take": 2}));
+        assert_eq!(
+            answerer.answer(params("acme.decline"), &cancel).await,
+            Ok(Reply::Decline)
+        );
+        assert_eq!(
+            answerer.answer(params("acme.refuse"), &cancel).await,
+            Err(AnswererError::Refused("no kites today".into()))
+        );
+        assert_eq!(
+            answerer.answer(params("acme.boom"), &cancel).await,
+            Err(AnswererError::Fault(
+                "the stand-in failed: RuntimeError: kaboom".into()
+            ))
+        );
+        // After a fault, the stand-in answers nothing more.
+        let Err(AnswererError::Fault(later)) =
+            answerer.answer(params("image.generate"), &cancel).await
+        else {
+            panic!("a fault");
+        };
+        assert!(later.starts_with("the stand-in failed: "), "{later}");
+        answerer.shutdown().await;
+        assert_eq!(
+            answerer.answer(params("image.generate"), &cancel).await,
+            Err(AnswererError::Fault("the stand-in answerer exited".into()))
+        );
+    });
+}
+
+/// A stand-in host that exits while it answers, leaving a process of its own (outside its group,
+/// handed the protocol pipes) that holds them open: the engine sees the exit, ends the pending
+/// `stand_in.answer` with `the stand-in answerer exited`, and reports the answerer lost.
+#[cfg(unix)]
+#[test]
+fn a_stand_in_host_that_exits_with_its_pipes_held_is_seen_to_go() {
+    use grida_fx_protocol::{StandInAnswerParams, StandInInstance, StandInRoute};
+    use grida_fx_runtime::engine::Cancel;
+    use grida_fx_runtime::host::process::HostSpec;
+    use grida_fx_runtime::stand_in::{Answerer, AnswererError, ConnectionAnswerer};
+
+    let Some(python) = real_python() else {
+        eprintln!("skipped: neither GRIDA_FX_PYTHON nor python/.venv is set up");
+        return;
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let cwd = canonical(dir.path());
+    std::fs::write(cwd.join("fx.yaml"), "fx: project/v1\n").unwrap();
+    let pid_file = cwd.join("child.pid");
+    std::fs::write(
+        cwd.join("stand_in.py"),
+        "import fcntl\nimport os\nimport stat\nimport subprocess\n\n\n\
+         def answer(call):\n\
+         \x20   ends = {}\n\
+         \x20   for fd in range(3, 256):\n\
+         \x20       try:\n\
+         \x20           if stat.S_ISFIFO(os.fstat(fd).st_mode):\n\
+         \x20               ends[fcntl.fcntl(fd, fcntl.F_GETFL) & os.O_ACCMODE] = fd\n\
+         \x20       except OSError:\n\
+         \x20           pass\n\
+         \x20   child = subprocess.Popen(\n\
+         \x20       [\"sleep\", \"60\"],\n\
+         \x20       stdin=ends[os.O_RDONLY],\n\
+         \x20       stdout=ends[os.O_WRONLY],\n\
+         \x20       stderr=subprocess.DEVNULL,\n\
+         \x20       start_new_session=True,\n\
+         \x20   )\n\
+         \x20   with open(\"child.pid\", \"w\") as f:\n\
+         \x20       f.write(str(child.pid))\n\
+         \x20   os._exit(3)\n",
+    )
+    .unwrap();
+    let spec = HostSpec {
+        label: python.display().to_string(),
+        python,
+        project_root: cwd.clone(),
+        sources: Vec::new(),
+    };
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let params = StandInAnswerParams {
+        capability: "image.generate".into(),
+        route: StandInRoute {
+            id: "img-a@acme".into(),
+            fingerprint: "0".repeat(64),
+        },
+        request: [("prompt".to_string(), json!("a kite"))]
+            .into_iter()
+            .collect(),
+        take: vec![1],
+        key: "1".repeat(64),
+        instance: StandInInstance {
+            id: "draw#1".into(),
+            path: "draw".into(),
+            step: "draw".into(),
+        },
+        files: IndexMap::new(),
+    };
+    let started = Instant::now();
+    let (answered, lost) = runtime.block_on(async {
+        let answerer =
+            ConnectionAnswerer::start_host(&spec, &cwd, &cwd.join("stand_in.py"), "answer")
+                .await
+                .unwrap();
+        let cancel = Cancel::new();
+        let answered =
+            tokio::time::timeout(Duration::from_secs(30), answerer.answer(params, &cancel)).await;
+        let lost = tokio::time::timeout(Duration::from_secs(5), answerer.lost()).await;
+        answerer.shutdown().await;
+        (answered, lost)
+    });
+    if let Ok(pid) = std::fs::read_to_string(&pid_file) {
+        let _ = Command::new("kill").args(["-9", pid.trim()]).status();
+    }
+    assert_eq!(
+        answered.expect("the answer does not wait for the process that holds the pipes"),
+        Err(AnswererError::Fault("the stand-in answerer exited".into()))
+    );
+    assert!(lost.is_ok(), "the answerer is reported lost");
+    assert!(started.elapsed() < Duration::from_secs(20));
+}

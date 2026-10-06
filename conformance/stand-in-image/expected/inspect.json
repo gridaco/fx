@@ -1,0 +1,24 @@
+{
+ "run": {
+  "charged_usd": 0,
+  "folder": "runs/one",
+  "stand_in": true,
+  "state": "succeeded",
+  "steps": [
+   {
+    "cache": "miss",
+    "files": [
+     {
+      "digest": "61551ab637dc15d883ebc2aae4ab25077f5c02697409d08f5941b6d485caa76f",
+      "path": "files/draw/image.png",
+      "size": 12420
+     }
+    ],
+    "id": "draw#1",
+    "path": "draw",
+    "state": "succeeded"
+   }
+  ],
+  "workflow": "case"
+ }
+}

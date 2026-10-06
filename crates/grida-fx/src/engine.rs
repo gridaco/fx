@@ -9,14 +9,19 @@
 //!   - **node hosts** start in the workflow's **home** project (its node modules, `fx.lock` and
 //!     `sources` live there): `<python> -P -m grida.fx.host` with the interpreter
 //!     `host::locate::python_interpreter` finds for the home (`GRIDA_FX_PYTHON`, else the home's
-//!     `.venv`, else `python3`), named in messages relative to the home when it lies inside it;
-//!     at most `HostPool::default_size()` of them;
+//!     `.venv`, else the planning project's `.venv`, else `GRIDA_FX_SDK_PYTHON`, else `python3`),
+//!     named in messages relative to the home when it lies inside it; at most
+//!     `HostPool::default_size()` of them;
 //!   - the **store** is the **planning** project's cache (`planner.project.cache_dir()`), and runs
 //!     go under the planning project's runs folder: the project found from where the command
 //!     runs owns `runs/` and the cache (spec/store.md §8), also when the workflow comes from
-//!     another project;
+//!     another project. A stand-in run's store is the stand-in store under it,
+//!     `<cache>/stand-in` ([`stand_in_store`]), and the engine asks its stand-in;
 //!   - **provider adapters** only when `live` (`--live`): [`adapters_for`];
-//!   - `live` as asked (`--live`).
+//!   - `live` as asked (`--live`);
+//!   - **private roots** the engine scrubs from what it records besides the home and the store
+//!     (`Engine::with_private_roots`): the planning project, and the folders the verb names (its
+//!     working directory, a stand-in file's folder).
 //! - [`adapters_for`]: without `live`, an empty registry and nothing constructed, so every
 //!   uncached paid call is refused (a recorded call still replays from the store). With `live`
 //!   (spec/providers.md §1, §3):
@@ -38,7 +43,7 @@
 //!   cache, so `at: plan` steps run while planning and `cached` is true to the store. The
 //!   planning verbs and `run` plan through it.
 //! - [`shutdown`]: ends the node hosts an `at: plan` step left idle, politely (the runner shuts
-//!   the pool down itself at the end of a run).
+//!   the pool down itself at the end of a run), and a stand-in run's answerer.
 //!
 //! [`plan`] and [`shutdown`] also mark when a run's runner takes interruptions
 //! ([`crate::interrupt`]): from the end of planning until the engine is shut down.
@@ -58,7 +63,8 @@ use grida_fx_runtime::host::locate::python_interpreter;
 use grida_fx_runtime::host::pool::HostPool;
 use grida_fx_runtime::host::process::HostSpec;
 use grida_fx_runtime::plantime::PlanTime;
-use std::path::Path;
+use grida_fx_runtime::stand_in::StandIn;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// The name of the runtime's worker threads.
@@ -78,13 +84,16 @@ pub fn runtime() -> Result<tokio::runtime::Runtime, Error> {
         })
 }
 
-/// The engine of `planner` (module doc), reading the process environment.
+/// The engine of `planner` (module doc), reading the process environment. With `stand_in`, a
+/// stand-in run's engine; `private` names further folders whose paths it scrubs (module doc).
 pub fn engine_for(
     runtime: &tokio::runtime::Runtime,
     planner: &Planner,
     live: bool,
+    stand_in: Option<Arc<StandIn>>,
+    private: &[PathBuf],
 ) -> Result<Arc<Engine>, Error> {
-    engine_with_env(runtime, planner, live, &|name: &str| {
+    engine_with_env(runtime, planner, live, stand_in, private, &|name: &str| {
         std::env::var(name).ok()
     })
 }
@@ -94,6 +103,8 @@ pub fn engine_with_env(
     runtime: &tokio::runtime::Runtime,
     planner: &Planner,
     live: bool,
+    stand_in: Option<Arc<StandIn>>,
+    private: &[PathBuf],
     env: &dyn Fn(&str) -> Option<String>,
 ) -> Result<Arc<Engine>, Error> {
     // The transport is built inside the runtime, whatever it needs from it.
@@ -101,15 +112,34 @@ pub fn engine_with_env(
         let _entered = runtime.enter();
         adapters_for(planner, live, env)?
     };
-    Ok(Arc::new(Engine::new(
+    let store = match &stand_in {
+        Some(_) => stand_in_store(planner),
+        None => planner.project.cache_dir(),
+    };
+    let engine = Engine::new(
         runtime.handle().clone(),
         host_spec(planner, env),
-        &planner.project.cache_dir(),
+        &store,
         HostPool::default_size(),
         adapters,
         live,
-    )))
+    )
+    .with_private_roots(
+        std::iter::once(planner.project.root.clone()).chain(private.iter().cloned()),
+    );
+    Ok(Arc::new(match stand_in {
+        Some(stand_in) => engine.with_stand_in(stand_in),
+        None => engine,
+    }))
 }
+
+/// The stand-in store of the planning project (spec/store.md §1, §8 "Stand-in runs").
+pub fn stand_in_store(planner: &Planner) -> std::path::PathBuf {
+    planner.project.cache_dir().join(STAND_IN_STORE)
+}
+
+/// The stand-in store's folder under the store root.
+pub const STAND_IN_STORE: &str = "stand-in";
 
 /// The provider adapters of an invocation (module doc): none unless `live`. A key file or a base
 /// URL that cannot be read is a usage error naming the variable or `.env` line, never a value.
@@ -158,12 +188,12 @@ pub fn builtin_routes() -> Result<RouteTable, Error> {
 }
 
 /// How node hosts start for `planner`: in the home project, with the interpreter `locate` finds
-/// there. `env` reads an environment variable.
+/// there, else the planning project's. `env` reads an environment variable.
 fn host_spec(planner: &Planner, env: &dyn Fn(&str) -> Option<String>) -> HostSpec {
     let home = &planner.home;
-    let python = python_interpreter(&home.root, env);
+    let python = python_interpreter(&home.root, Some(&planner.project.root), env);
     HostSpec {
-        label: host::label(&python, &home.root),
+        label: host::label_from(&python, &home.root, Some(&planner.project.root)),
         python,
         project_root: home.root.clone(),
         sources: home.document.sources.clone(),
@@ -183,11 +213,14 @@ pub fn plan(
     plan
 }
 
-/// Ends the idle node hosts of `engine` (from `at: plan` steps). Call it from the verb's own
-/// thread, never from a runtime thread.
+/// Ends the idle node hosts of `engine` (from `at: plan` steps), and its stand-in's answerer.
+/// Call it from the verb's own thread, never from a runtime thread.
 pub fn shutdown(runtime: &tokio::runtime::Runtime, engine: &Engine) {
     crate::interrupt::runner_ended();
     runtime.block_on(engine.hosts.shutdown());
+    if let Some(stand_in) = &engine.stand_in {
+        runtime.block_on(stand_in.shutdown());
+    }
 }
 
 #[cfg(test)]
@@ -260,7 +293,8 @@ mod tests {
              img-a@acme\n",
         );
         let runtime = runtime().unwrap();
-        let engine = engine_with_env(&runtime, &planner, true, &offline_env(&[])).unwrap();
+        let engine =
+            engine_with_env(&runtime, &planner, true, None, &[], &offline_env(&[])).unwrap();
         assert_eq!(engine.store.root(), root.join("shared/cache"));
         assert_eq!(engine.project_root, root);
         assert_eq!(engine.sources, ["lib"]);
@@ -277,7 +311,7 @@ mod tests {
         let spec = engine.hosts.spec();
         assert_eq!(spec.project_root, root);
         assert_eq!(spec.sources, ["lib"]);
-        let engine = engine_for(&runtime, &planner, false).unwrap();
+        let engine = engine_for(&runtime, &planner, false, None, &[]).unwrap();
         assert!(!engine.live);
         assert!(engine.adapters.is_empty());
     }
@@ -390,7 +424,7 @@ mod tests {
             "fx: project/v1\nroutes:\n  image.generate: img-a@acme\n",
         );
         let runtime = runtime().unwrap();
-        let engine = engine_for(&runtime, &planner, false).unwrap();
+        let engine = engine_for(&runtime, &planner, false, None, &[]).unwrap();
         let plan = plan(&engine, &mut planner, &mut FakeHost::new()).unwrap();
         assert!(plan.ok(), "{:?}", plan.problems);
         assert_eq!(plan.expansion.instances.len(), 1);

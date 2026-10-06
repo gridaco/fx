@@ -139,7 +139,7 @@ impl RunHandler {
     /// The answer for a failed paid call: a store fault is the run's fault.
     fn call_failed(&self, error: CallError) -> RpcError {
         match error {
-            CallError::Store(message) => self.faulted(message),
+            CallError::Fault(message) => self.faulted(message),
             other => other.to_rpc(),
         }
     }
@@ -218,7 +218,7 @@ impl RunHandler {
     fn paid(&self) -> Paid {
         Paid {
             services: Arc::clone(&self.services),
-            site: Arc::new(self.job.call_site()),
+            site: Arc::new(self.job.call_site(self.cancel.clone())),
             counter: Arc::clone(&self.counter),
             files: Arc::clone(&self.files),
             cancel: self.cancel.clone(),
@@ -471,7 +471,7 @@ async fn spawn_call(
     tokio::select! {
         biased;
         joined = task => joined.unwrap_or_else(|error| {
-            Err(CallError::Store(format!(
+            Err(CallError::Fault(format!(
                 "a paid call stopped inside the engine: {error}"
             )))
         }),

@@ -36,6 +36,7 @@ fn every_event() -> Vec<Event> {
             charged_usd: Usd::ZERO,
             estimate_low: Usd(10_000),
             estimate_high: Usd(40_000),
+            stand_in: false,
         },
         Event::RunStarted {
             workflow: "case".into(),
@@ -44,6 +45,7 @@ fn every_event() -> Vec<Event> {
             charged_usd: Usd(40_000),
             estimate_low: Usd::ZERO,
             estimate_high: Usd::ZERO,
+            stand_in: true,
         },
         Event::PhasePlanned {
             phase: 1,
@@ -95,6 +97,7 @@ fn every_event() -> Vec<Event> {
             id: "a#1".into(),
             path: "a".into(),
             error: Some("refused on purpose".into()),
+            code: Some("node_failure".into()),
             facts: Some(IndexMap::from([("seen".to_string(), json!("x"))])),
             duration_ms: Some(5),
         },
@@ -102,6 +105,7 @@ fn every_event() -> Vec<Event> {
             id: "a#1".into(),
             path: "a".into(),
             error: Some("an assertion failed".into()),
+            code: None,
             facts: None,
             duration_ms: None,
         },
@@ -135,6 +139,7 @@ fn every_event() -> Vec<Event> {
             call: CALL.into(),
             cached: true,
             cost_usd: Some(Usd::ZERO),
+            stand_in: false,
         },
         Event::Call {
             id: "a#1".into(),
@@ -143,6 +148,7 @@ fn every_event() -> Vec<Event> {
             call: CALL.into(),
             cached: false,
             cost_usd: None,
+            stand_in: false,
         },
         Event::BudgetReserved {
             node_id: "a#1/0123456789abcdef.1".into(),
@@ -185,6 +191,15 @@ fn every_event() -> Vec<Event> {
         Event::RunCancelled {
             reason: "interrupted".into(),
             charged_usd: Usd(1),
+        },
+        Event::Call {
+            id: "a#1".into(),
+            capability: "image.generate".into(),
+            route: "img-a@acme".into(),
+            call: CALL.into(),
+            cached: false,
+            cost_usd: Some(Usd::ZERO),
+            stand_in: true,
         },
     ]
 }
@@ -282,6 +297,8 @@ fn members_follow_the_schema_names() {
                "estimate": {"low_usd": 0.01, "high_usd": 0.04}})
     );
     assert_eq!(fields(&events[1])["ceiling_usd"], json!(1.5));
+    // `stand_in` only when true.
+    assert_eq!(fields(&events[1])["stand_in"], json!(true));
     assert_eq!(fields(&events[3])["take"], json!([1, 2]));
     assert_eq!(fields(&events[3])["identity"], Value::Null);
     assert_eq!(
@@ -293,11 +310,12 @@ fn members_follow_the_schema_names() {
     assert_eq!(fields(&events[6])["cache"], "miss");
     assert_eq!(
         fields(&events[7]),
-        json!({"id": "a#1", "path": "a", "error": "refused on purpose", "facts": {"seen": "x"}, "duration_ms": 5})
+        json!({"id": "a#1", "path": "a", "error": "refused on purpose", "code": "node_failure",
+               "facts": {"seen": "x"}, "duration_ms": 5})
     );
     assert_eq!(
         fields(&events[8]),
-        json!({"id": "a#1", "path": "a", "error": "an assertion failed"})
+        json!({"id": "a#1", "path": "a", "error": "an assertion failed", "code": null})
     );
     assert_eq!(
         fields(&events[9]),
@@ -326,6 +344,17 @@ fn members_follow_the_schema_names() {
     assert_eq!(
         fields(&events[20]),
         json!({"reason": "interrupted", "charged_usd": 0.000001})
+    );
+    assert!(
+        !fields(&events[12])
+            .as_object()
+            .unwrap()
+            .contains_key("stand_in")
+    );
+    assert_eq!(
+        fields(&events[21]),
+        json!({"id": "a#1", "capability": "image.generate", "route": "img-a@acme", "call": CALL,
+               "cached": false, "cost_usd": 0, "stand_in": true})
     );
 }
 

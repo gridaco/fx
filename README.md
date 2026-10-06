@@ -1,6 +1,6 @@
 # Grida FX
 
-A workflow engine for generative asset pipelines. Write a workflow file, and FX plans it, prices it before anything is spent, caches every paid call by its request, and records the run. FX works with your own provider keys.
+A workflow engine for generative asset pipelines. Write a workflow file, and FX plans it, prices it before anything is spent, caches every paid call by its request, and records the run. FX works with your own provider keys, and your tests run a workflow offline with [stand-ins](docs/guide/05-running.md#stand-ins-testing-without-a-provider): functions that answer its paid calls in place of a provider, held to the same checks and billed at nothing.
 
 FX is moving here from [softmarshmallow/stage-gen](https://github.com/softmarshmallow/stage-gen), where it is called gnode. See [the overview](docs/wg/overview.md) for the direction and the plan.
 

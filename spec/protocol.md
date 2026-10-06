@@ -12,7 +12,8 @@ The words MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
 
 **Starting a host.** The engine starts the host with its working directory at the project root and talks over the host's stdin and stdout.
 - A project module is hosted by the host of its language, chosen by suffix: `.py` is Python. The built-in types whose bodies live in `grida.fx.std` are hosted by the Python host.
-- The Python host is `<python> -P -m grida.fx.host`. `<python>` is `GRIDA_FX_PYTHON` when it is set; otherwise the project's `.venv` interpreter (`.venv/bin/python`, or `.venv\Scripts\python.exe` on Windows) when it exists; otherwise `python3` on `PATH`.
+- The Python host is `<python> -P -m grida.fx.host`. `<python>` is `GRIDA_FX_PYTHON` when it is set; otherwise the project's `.venv` interpreter (`.venv/bin/python`, or `.venv\Scripts\python.exe` on Windows) when it exists; otherwise the planning project's `.venv` interpreter ([store.md](store.md)) when that is another project and it exists; otherwise `GRIDA_FX_SDK_PYTHON` when it is set, the interpreter of an SDK that started the engine (§8); otherwise `python3` on `PATH`. An empty variable counts as unset. A node host's project is the workflow's home, so a workflow kept in a nested project of a monorepo finds the repository's `.venv` when it is run from the repository's root.
+- A stand-in host (§5.7) is the same program, started in the engine's working directory, with the planning project as its project.
 - `-P`, Python's safe-path option (Python 3.11 and later), keeps the working directory off `sys.path`. The project root is therefore not on `sys.path` until `initialize` puts it there, after the host has imported what it needs, and a project module named like a standard library module (`json.py`, `typing.py`) or like `grida` cannot replace the host's own imports. The engine also sets `PYTHONSAFEPATH=grida-fx` in the host's environment when the variable is unset or empty, for an interpreter wrapper that drops `-P`. The host removes a `PYTHONSAFEPATH` of exactly that value before it loads user code, so the programs user code starts inherit the user's environment.
 
 **Framing.** Each message is a header, `Content-Length: <n>\r\n`, an empty line `\r\n`, and then n bytes of UTF-8 JSON, as in LSP's base protocol. n counts bytes, not characters. A reader MUST ignore other header fields; a sender SHOULD write none.
@@ -25,7 +26,7 @@ The words MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
 
 **Interleaving.** Requests may be outstanding in both directions at once. While a `run` the engine sent is pending, the host sends `capability`, `fact` and the rest, and the engine sends `tool.invoke` and `agent.check` for the same run. Each side MUST keep reading and answering while its own requests are pending. Responses may arrive in any order.
 
-**One job per host.** A host handles one `describe`, `build` or `run` at a time: the engine sends the next only after the previous one is answered. To run nodes in parallel, the engine starts more hosts and reuses them. A builder changes the working directory, bodies share module state, and a run that has to be killed should take nothing else with it.
+**One job per host.** A host handles one `describe`, `build` or `run` at a time: the engine sends the next only after the previous one is answered. To run nodes in parallel, the engine starts more hosts and reuses them. A builder changes the working directory, bodies share module state, and a run that has to be killed should take nothing else with it. A stand-in host is the exception: it serves one stand-in and nothing else, and may have several `stand_in.answer` requests pending at once (§5.7).
 
 **Output streams.** stdout carries protocol messages only. A host MUST keep whatever user code prints off it: the Python host duplicates file descriptor 1 for the protocol and points descriptor 1 at stderr before it imports any user code. stderr is free-form log text. The engine may show or keep it and never parses it.
 
@@ -223,7 +224,7 @@ After the host answers, the engine:
 2. checks the result: no undeclared output port, every non-optional port present, each value's shape matching its port; no fact named `cost_usd`, which is the engine's (step 5), no reserved marker in a fact or a mark (§3.2), every mark well formed as `annotate` requires (§6.4), and no fact or mark nested deeper than 509 arrays and objects, which the run's record could not hold. A failed check fails the node, with `-32602` for a refused fact or mark, and it is not retried. A result FX cannot read at all fails the node with `the node host answered run with something FX cannot read: ` and the first place that is not what §3.4 describes (`output <port>: a file is {"work_path", "kind"?} or {"file": <ref>}`).
 3. writes `{"kind": "fx-annotations-v1", "annotations": marks}` as the `annotations` output when the type declares one, the body returned none, and there are marks.
 4. requires a judge's `verdict` node fact to be `accept` or `reject`.
-5. stores the output files, sets the node fact `cost_usd`, and writes the result record (`fx-result-record-v1`) under the step identity when that is known. An output file under `work_dir` that cannot be read, or that changes while it is stored, fails the node: it is the body's, not the store's. The engine always writes `cost_usd` itself for a node a host ran: what this run paid for the node's calls, or `null` when it paid for none (a call answered from the cache costs nothing and counts as none), the same value as the result record's `cost_usd` ([store.md](store.md) §3). `fx/select@1` and other engine types report no node facts.
+5. stores the output files, sets the node fact `cost_usd`, and writes the result record (`fx-result-record-v1`) under the step identity when that is known. An output file under `work_dir` that cannot be read, or that changes while it is stored, fails the node: it is the body's, not the store's. The engine always writes `cost_usd` itself for a node a host ran: what this run paid for the node's calls, or `null` when it paid for none (a call answered from the cache costs nothing and counts as none; a stand-in's answer, §5.7, costs nothing and counts as paid, so a node it answered has `0`), the same value as the result record's `cost_usd` ([store.md](store.md) §3). `fx/select@1` and other engine types report no node facts.
 
 **Failure.** The host answers `run` with an error:
 - `node_failure` when the body failed on purpose (Python: `raise ctx.fail(…)` or `NodeFailure`);
@@ -258,6 +259,54 @@ A tool that fails the node answers with a `node_failure` error. That ends the ag
 
 A notification, `{id}`, naming a pending request the engine sent. The host SHOULD stop that work and answer the request with `cancelled`. For a `run`, the Python SDK sets `ctx.cancelled`, which a body checks. The engine discards a result that arrives after it cancelled the request.
 
+### 5.7 Stand-in answers
+
+A **stand-in run** answers the paid calls that the call cache cannot answer with a function the caller supplies, the **stand-in**, instead of a provider. It is a test feature, like a mock model: the run is offline, every answer passes the checks a provider's answer passes (§6.1, *Stand-in answers*), nothing is billed or reserved, and what the run stores is kept apart from the project's store ([store.md](store.md) §8, *Stand-in runs*).
+
+`grida-fx run --stand-in <source>` makes one. With `--live` or `--yes-up-to` it is a usage error (exit 2), `--stand-in cannot be used with --live` (or `--yes-up-to`): a stand-in run never spends, and it runs every phase. The engine reaches the stand-in through an **answerer**: a peer that speaks this protocol's transport (§1: framing, I-JSON messages, interleaving), to which only the engine sends requests. `<source>` is one of:
+- `<file>.py#<function>`: the engine starts a **stand-in host** (§1), outside the pool of node hosts, and loads the function with `stand_in.load`. `<file>` is relative to the working directory and may lie outside the project. The engine sends its absolute path to the host and records it nowhere.
+- `-`: the answerer is already running, and the engine's standard input is a Unix-domain stream socket whose other end the answerer holds, such as one end of a socket pair an SDK made (§8). The engine reads its standard input for nothing else, and every process the engine starts gets a standard input of its own, so no node host or tool inherits the socket.
+
+Any other `<source>` is a usage error, `--stand-in takes <file>.py#<function>, or -`, and so is a file that does not exist (`no stand-in file <file>`) or a standard input that is not a socket (`--stand-in - needs the stand-in's socket on standard input`). These are refused before anything is planned.
+
+**Session.**
+
+```
+engine → answerer   initialize {protocol, engine, project_root, sources}  →  {protocol, host}
+engine → answerer   stand_in.load {path, function}  →  {}              a stand-in host only
+engine → answerer   stand_in.answer {…}  →  an answer, a decline, or an error; several at once
+engine → answerer   $/cancel {id}       (notification)
+engine → answerer   shutdown  →  null;  exit (notification)
+```
+
+- `initialize` is §2's, with the planning project's root and sources. The engine starts the session before the run starts, which may be before planning. A session that cannot start, a version mismatch, or a stand-in that cannot be loaded ends the command with exit 2 and no run: `the stand-in <file>#<function> could not be loaded: <message>` (`the stand-in on standard input could not be started: <message>` for `-`).
+- **`stand_in.load`**, `{path, function}`: `path` is the file's absolute path. The host loads the file as a module of its own, not as a project module (§5.1), with the file's folder first on `sys.path`, as `python <file>` would have it, and finds the function, which may be a coroutine function. It answers `{}`, or `load_failed` with §5.1's wording (`<file> failed to import: …`, `<file> has no function <function>`). From then on the host answers `describe`, `build` and `run` with `-32600`.
+- The engine sends `shutdown` and `exit` when the run ends. An answerer that exits, or closes its end of the socket, while the run still runs stops the run: `the stand-in answerer exited`. The engine watches for this from the start, not only when it next asks: a run with steps still running stops at once, with a `problem` event `{where: "stand_in", message: "the stand-in answerer exited"}` unless a call met the loss first, and a pending `stand_in.answer` fails with that fault. A stand-in host is gone when its process exits, even while a process it started still holds the protocol pipes open: the engine reads what the host wrote before it exited for 5 seconds, then ends the connection.
+
+**`stand_in.answer`** asks for the answer to one paid call:
+
+| Param | |
+|---|---|
+| `capability` | the capability |
+| `route` | `{id, fingerprint}` ([identity.md](identity.md) §7) |
+| `request` | the canonical request ([identity.md](identity.md) §9), with each file as a file value (§3.2), exactly as it is keyed |
+| `take` | the call's take list, as in the call key |
+| `key` | the call key |
+| `instance` | `{id, path, step}` of the instance making the call, as in `run` (§5.3) |
+| `files` | `{digest: file ref}` (§3.1) for every file value anywhere in `request`, so the answerer can read them |
+
+The result is one of:
+- **An answer**, `{files, data}`. `files` maps each file's name to `{base64, kind?}`: its bytes, base64 with padding (RFC 4648 §4), and its kind ([identity.md](identity.md) §4). Without `kind`, a file takes the kind [capabilities.md](capabilities.md) gives its name in the capability's answer (§1 there); where that section gives none, `kind` is required. `data` is JSON, or `null`. An answer carries no cost: a stand-in run bills nothing.
+- **A decline**, `{"decline": true}`: the stand-in does not answer this call, which goes on as in a run without a stand-in (`not_live`).
+
+The answerer may instead answer with an error:
+- `capability_refused`: the call is refused, as when an adapter refuses before sending;
+- `call_failed`: the call failed, as when every attempt failed.
+
+The error's `message` becomes the call's reason. Any other error, or a result FX cannot read, is a fault of the stand-in, not of the call: the engine fails the call with `internal` and stops the run, `the stand-in failed: <message>`, or `the stand-in answered something FX cannot read: <where>`.
+
+**Concurrency and cancellation.** The engine sends one `stand_in.answer` per call it cannot answer from the cache (§6.1 step 3: one per key in flight), and several may be pending at once; an answerer may answer them in any order. When the instance making a call is cancelled (§5.3: a timeout, or a stopped run), the engine sends `$/cancel` for the request and fails the call with `cancelled` at once. It records nothing, and discards an answer that arrives later. The answerer SHOULD stop working on a cancelled request.
+
 ## 6. Host to engine
 
 Every request in this section carries the `run_id` of a pending `run`. A request with any other `run_id` is refused with `-32602`, and such a notification is ignored. When the engine stops a run, it answers that run's pending host requests with `cancelled`.
@@ -268,7 +317,7 @@ A paid call: `{run_id, capability, request}`. `request` is the canonical request
 1. checks that the type declares the capability (`capability_undeclared`) and has calls left (`over_bound`). Cache hits count toward the bound.
 2. takes the instance's route for the capability (`no_route`).
 3. checks the request's file values (§3.2) and computes the call key ([identity.md](identity.md) §9), then answers from the call cache when it can, billing nothing and removing a leftover job record with that key ([store.md](store.md) §5). This comes before the live check and the adapter check, so a dry run replays the calls it has already paid for, and a recorded call replays with no adapter at all: recorded calls replay offline ([store.md](store.md) §4). A key in flight is sent once: another call of the same key while it is in flight waits for it and gets its outcome as a cache hit, billing nothing. A key whose call ended `call_failed`, `capability_refused` or `job_unsettled` answers every later call of that key in the invocation with the same error and sends nothing, so a body run again under `retry: engine` never sends it again; `ceiling_exceeded` does the same for later calls from the same instance.
-4. checks that the call can be sent: it refuses with `not_live` when the run is not live (a dry run, or an `at: plan` step), and then with `no_route` when no adapter serves the route.
+4. checks that the call can be sent. In a stand-in run (§5.7) the stand-in is asked first, as *Stand-in answers* below says: an answer, a refusal or a failure ends the call there, and only a decline goes on. The engine then refuses with `not_live` when the run is not live (a dry run, an `at: plan` step, or a stand-in run), and then with `no_route` when no adapter serves the route.
 5. looks up the call's job record ([store.md](store.md) §5):
    - `submitting`: an earlier submission has an unknown outcome. The engine refuses with `job_unsettled`, and the message says to check the provider's dashboard and then run `grida-fx jobs --forget <key>`. When the record has a `note` ([store.md](store.md) §5), the error carries it as `reason` in `data`.
    - `submitted`: the engine collects the job by its `handle`, with no new hold and no new submit, because the run that submitted it was charged its hold. An answered job goes on at step 8. A job that ends without a result leaves its record `settled` and fails the call with `call_failed`; a later run submits it anew. An adapter that cannot collect jobs refuses with `job_unsettled`, as for `submitting`.
@@ -277,7 +326,19 @@ A paid call: `{run_id, capability, request}`. `request` is the canonical request
 7. makes the call as its only retry owner: at most 6 sends of the request in all, a resend after a send that provably was not received included; each attempt is reserved, recorded and settled. `capability_refused` means the adapter refused before anything was sent, settled at $0. `call_failed` means every attempt failed. A long job keeps its job record as [store.md](store.md) §5 describes; a submission whose outcome is unknown is `job_unsettled`, with the adapter's redacted reason as `reason` in `data`. An answer is accepted only after three checks, each of which fails the attempt as billed when it refuses: the adapter's own, a round trip of its data through the record's canonical JSON, and the engine's check of the capability (for `agent.turn`, §6.2).
 8. stores the files and the call record (`fx-call-record-v1`), and then removes the call's job record, if any. The `data` and `files` handed back are the record's, as a replay reads them, so a live call and its replay give the body the same value.
 
-The result is `{key, cached, cost_usd, files: {name: file ref}, data}`. `cost_usd` is 0 on a hit and for a collected job, which bills nothing new, and `null` when the provider reported no cost (the engine then charged the whole hold).
+The result is `{key, cached, cost_usd, files: {name: file ref}, data}`. `cost_usd` is 0 on a hit, for a collected job, which bills nothing new, and for a stand-in's answer, and `null` when the provider reported no cost (the engine then charged the whole hold).
+
+**Stand-in answers.** In a stand-in run, the call cache of step 3 is the stand-in store ([store.md](store.md) §8, *Stand-in runs*), and step 4 asks the stand-in as follows. Steps 5 to 8 never apply: nothing is reserved, held, settled or retried, no job record is read or written, the route's concurrency and pacing do not apply, and a long job's capability is answered at once.
+1. For a capability of [capabilities.md](capabilities.md), the engine first checks the request against it (§1 there; [providers.md](providers.md) §5 step 2). A refusal is `capability_refused`, `<capability> on <route> was refused: <reason>`, and the stand-in is not asked. The route's own refusals of values (providers.md §5 steps 1, 3, 4 and 5) are not made.
+2. It sends `stand_in.answer` (§5.7) and waits for the result, or for the instance to be cancelled. A decline goes on at the live check: `not_live`, `<capability> on <route> is a paid call the stand-in declined`. A `capability_refused` error ends the call with `capability_refused`, `<capability> on <route> was refused: <message>`, and a `call_failed` error with `call_failed`, `<capability> on <route> failed: <message>`.
+3. It holds an answer to the checks of step 7, in this order. The first refusal fails the call with `call_failed`, `<capability> on <route> failed: <reason>`, and the call is not asked again:
+   1. the answer's shape: the files and the `data` [capabilities.md](capabilities.md) §1 says an answer of the capability holds, refused with that section's sentences. For a capability it does not define, each file's kind is only checked to be a kind. Where it says the engine takes `data` from the answer's file (`video.generate`, `mesh.generate`), the engine writes `data` now;
+   2. the route's check: the check of FX's adapter for the route's capability and provider when FX has one ([providers.md](providers.md) §1, §4.4), which sends nothing; otherwise the check [capabilities.md](capabilities.md) gives the capability for every route (its *Every route's check* or *Check*, not *A route's check*), and none for a capability it does not define;
+   3. the round trip of `data` through canonical JSON;
+   4. the engine's check of the capability (`agent.turn`, §6.2).
+4. It stores the files and then the call record, with `cost_usd` 0, in the stand-in store, and hands back the record's `files` and `data` as step 8 does, with `cached: false` and `cost_usd: 0`. The `call` event carries `stand_in: true`.
+
+A call the stand-in refused or failed, or whose answer failed a check, ends its key for the invocation as step 3 says, and nothing of it is recorded: the next invocation asks again. A declined call is asked again whenever it is made.
 
 ### 6.2 `agent.run`
 
@@ -374,22 +435,22 @@ Errors are JSON-RPC error objects, `{code, message, data?}`. `message` is a sent
 | -32001 | `node_error` | host | The body or a check raised something unexpected; `data` has `exception` and `traceback` | only under `retry: engine`, at most 6 runs in all |
 | -32002 | `cancelled` | both | The request was cancelled (§5.6), or its run was stopped | no |
 | -32003 | `protocol_mismatch` | host for `initialize` | The engine's protocol is not the host's; `data` has both | session fails |
-| -32004 | `load_failed` | host for `build`, `run` | A module, function or attribute could not be loaded | no |
+| -32004 | `load_failed` | host for `build`, `run`, `stand_in.load` | A module, function or attribute could not be loaded | no |
 | -32005 | `build_failed` | host for `build` | The builder raised, or returned no `Workflow` | no; a planning problem |
 | -32010 | `capability_undeclared` | engine for `capability`, `agent.run` | The type does not declare the capability in `calls` | no |
 | -32011 | `over_bound` | engine for `capability`, `agent.run` | The run already made as many calls as declared | no |
 | -32012 | `no_route` | engine for `capability`, `agent.run` | No route serves the capability for this instance, or no adapter serves the route of a call that must be sent | no |
-| -32013 | `not_live` | engine for `capability`, `agent.run` | The call is not cached and the run is not live | no |
+| -32013 | `not_live` | engine for `capability`, `agent.run` | The call is not cached and the run is not live, or a stand-in declined it (§5.7) | no |
 | -32014 | `ceiling_exceeded` | engine for `capability`, `agent.run` | The call's hold does not fit the run's ceiling or a step budget | no |
-| -32015 | `capability_refused` | engine for `capability`, `agent.run` | The adapter refused before sending anything; settled at $0 | no |
-| -32016 | `call_failed` | engine for `capability`, `agent.run` | Every attempt failed, each one settled, or a collected job ended without a result | no: the engine already retried the call |
+| -32015 | `capability_refused` | engine for `capability`, `agent.run`; a stand-in for `stand_in.answer` | The adapter refused before sending anything, settled at $0; or, in a stand-in run, the request does not fit its capability or the stand-in refused it | no |
+| -32016 | `call_failed` | engine for `capability`, `agent.run`; a stand-in for `stand_in.answer` | Every attempt failed, each one settled, or a collected job ended without a result; or, in a stand-in run, the stand-in failed the call or its answer failed a check (§6.1, *Stand-in answers*) | no: the engine already retried the call, or a stand-in's answer is final |
 | -32017 | `job_unsettled` | engine for `capability`, `agent.run` | An earlier submission of this call has an unknown outcome | no |
 | -32020 | `agent_unfinished` | engine for `agent.run` | No answer within `max_steps` turns | no |
 | -32021 | `undeclared_resource` | engine for `prompt.render` | The path is not one of the type's resources | no |
 | -32022 | `expression_error` | engine for `prompt.render` | The template names something nobody gave it, or does not parse | no |
 | -32023 | `outside_work_dir` | engine for `file.put` | The `work_path` names nothing inside the work dir | no |
 | -32024 | `unknown_file` | engine | A file value names a digest the engine did not hand this run | no |
-| -32099 | `internal` | both | A fault in the engine or the host itself | no |
+| -32099 | `internal` | both; a stand-in | A fault in the engine, the host or a stand-in itself. A stand-in's stops the run (§5.7) | no |
 
 "Node retried" says whether the engine may run the body again when the error ends a run. The codes from `-32010` to `-32024` reach the body as exceptions it may catch; uncaught, they end the run with the same code. Capability errors carry `capability`, `route` and `key` in `data` when they are known.
 
@@ -413,6 +474,23 @@ Errors are JSON-RPC error objects, `{code, message, data?}`. `message` is a sent
 | `ctx.cancelled` | set by `$/cancel` |
 | `ctx.fail(msg)` | `node_failure` |
 | `ctx.state` | stays in the host, shared with the body's tools |
+
+**The interpreter.** `grida.fx.plan`, `run` and their async forms, and `python -m grida.fx`, start the engine with the caller's environment plus `GRIDA_FX_SDK_PYTHON` set to the interpreter running the SDK (`sys.executable`). That interpreter has `grida`, which node hosts and stand-in hosts need, so a project without a `.venv` does not fall back to a bare `python3`; it comes after `GRIDA_FX_PYTHON` and every project `.venv` (§1), so neither the caller's choice nor a project's own environment is overridden.
+
+**Stand-ins.** `grida.fx.run(…, stand_in=answer)` and `run_async` serve `answer` in the caller's own process: they make a Unix-domain socket pair, give the engine one end as its standard input with `--stand-in -`, and answer `initialize`, `stand_in.answer`, `$/cancel`, `shutdown` and `exit` on the other (§5.7). The function's state (counters, scripted answers, the requests it saw) is therefore the caller's, and each invocation may get another function. `grida-fx run --stand-in file.py#answer` serves the same function from a stand-in host.
+
+| Python | Protocol |
+|---|---|
+| `answer(call)`, a function or a coroutine function of one `StandInCall` | `stand_in.answer`; the SDK answers one call at a time, in the order the requests arrive, a plain function on a worker thread |
+| `call.capability`, `call.route.id`, `call.route.fingerprint`, `call.key`, `call.instance.id`/`.path`/`.step` | the params of the same names |
+| `call.takes`, `call.take` | `take`, and its last number (`take[-1]`), as for `ctx.instance` |
+| `call.request` | `request`, with every file value replaced by an `InputFile` built from `files` |
+| `call.files` | `files`: `InputFile` objects by digest |
+| `return Answer(files={name: bytes or Output or InputFile or Path}, data=…)` | an answer; bytes leave `kind` out, an `Output` or an `InputFile` gives its kind, a `Path` the suffix rule's |
+| `Answer.json(value)`, `Answer.turn(text, tool_calls)`, `Answer.submit(**arguments)` | `data` of `{"json": value}`, of an `agent.turn`, and of an `agent.turn` that calls `submit` |
+| `return DECLINE` | `{"decline": true}`; returning `None` is a fault of the stand-in |
+| `raise CallRefused(msg)`, `raise CallFailed(msg)` | `capability_refused`, `call_failed` |
+| any other exception | `internal`: the engine stops the run, and `run` raises that exception once the engine has ended |
 
 ## 9. Example
 

@@ -2,7 +2,9 @@
 //! (spec/protocol.md §6).
 //!
 //! Most tests drive the call path, `request_of` and the run handler alone; the end-to-end ones
-//! go through the real store, ledger, retry owner, staging and event log.
+//! go through the real store, ledger, retry owner, staging and event log. The stand-in ones
+//! (spec/protocol.md §6.1 "Stand-in answers") answer with an answerer in the test, or over an
+//! in-memory socket.
 
 use grida_fx_core::builtins::builtin;
 use grida_fx_core::money::Usd;
@@ -10,8 +12,9 @@ use grida_fx_core::routes::{PriceUnit, Route, RoutePrice};
 use grida_fx_core::spec::{CallBound, NodeSpec, Port};
 use grida_fx_core::val::{FileContent, FileValue, Val};
 use grida_fx_core::value::{digest, file_digest};
-use grida_fx_protocol::{ErrorCode, RetryMode, RpcError};
+use grida_fx_protocol::{ErrorCode, RetryMode, RpcError, StandInAnswerParams};
 use grida_fx_providers::fake::{FakeAdapter, FakeCall};
+use grida_fx_providers::testing::media;
 use grida_fx_providers::{Adapters, Answer, AnsweredFile, Collected, Sent, Submitted};
 use grida_fx_runtime::calls::pacing::Pacing;
 use grida_fx_runtime::calls::{CallCounter, CallError, CallSite, call};
@@ -24,6 +27,9 @@ use grida_fx_runtime::host::connection::{Connection, NoIncoming};
 use grida_fx_runtime::host::pool::RunRequests;
 use grida_fx_runtime::host::process::HostSpec;
 use grida_fx_runtime::ledger::Ledger;
+use grida_fx_runtime::stand_in::{
+    Answerer, AnswererError, ConnectionAnswerer, Reply, StandIn, StandInFile,
+};
 use grida_fx_runtime::store::Store;
 use grida_fx_runtime::store::records::{
     CallRecord, FileEntry, JobRecord, JobState, RouteEntry, call_key,
@@ -66,6 +72,7 @@ fn img_a() -> Route {
 fn site(routes: Vec<Route>, calls: &[(&str, u32)]) -> CallSite {
     CallSite {
         instance_id: "draw#1".into(),
+        path: "draw".into(),
         step: "draw".into(),
         type_name: "image.generate".into(),
         takes: vec![1],
@@ -76,6 +83,7 @@ fn site(routes: Vec<Route>, calls: &[(&str, u32)]) -> CallSite {
             .collect(),
         limits: IndexMap::new(),
         scopes: Vec::new(),
+        cancel: Cancel::new(),
     }
 }
 
@@ -1195,6 +1203,7 @@ async fn the_lantern_node_replays_its_output_under_its_own_name() {
         &lantern_job(),
         &CallCounter::new(),
         &RunFiles::new(),
+        Cancel::new(),
     )
     .await
     .unwrap();
@@ -1648,7 +1657,7 @@ async fn an_unreadable_job_record_stops_the_run() {
     )
     .await;
     match result {
-        Err(CallError::Store(message)) => {
+        Err(CallError::Fault(message)) => {
             assert!(
                 message.starts_with(&format!(
                     "the job record jobs/{LANTERN_KEY}.json is unreadable"
@@ -1681,9 +1690,15 @@ async fn a_judge_built_in_reports_its_verdict_and_facts() {
         vec![("subject", Val::File(Box::new(subject)))],
         vec![route("structured.review", "llm-a", "acme", 4_000)],
     );
-    let produced = run_node(&services, &job, &CallCounter::new(), &RunFiles::new())
-        .await
-        .unwrap();
+    let produced = run_node(
+        &services,
+        &job,
+        &CallCounter::new(),
+        &RunFiles::new(),
+        Cancel::new(),
+    )
+    .await
+    .unwrap();
     assert!(produced.outputs.is_empty());
     assert_eq!(
         produced.facts.into_iter().collect::<Vec<_>>(),
@@ -1875,4 +1890,755 @@ async fn a_capability_hit_answers_the_host_with_file_refs() {
     assert!(Path::new(image["path"].as_str().unwrap()).is_absolute());
     assert!(run.files.get(&file_digest(&lantern_png())).is_some());
     assert_eq!(run.handler.counter.cost(), None);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Stand-in answers (spec/protocol.md §6.1 "Stand-in answers"), with an answerer in the test.
+
+/// How the fake answerer answers one call.
+type Answering = dyn Fn(&StandInAnswerParams) -> Result<Reply, AnswererError> + Send + Sync;
+
+/// An answerer in the test: it keeps what it was asked, may wait for a permit before it answers,
+/// and may wait for the call's cancellation instead of answering the first time it is asked.
+struct FakeAnswerer {
+    answering: Box<Answering>,
+    asked: std::sync::Mutex<Vec<StandInAnswerParams>>,
+    gate: Option<Arc<tokio::sync::Semaphore>>,
+    hang_first: bool,
+}
+
+impl FakeAnswerer {
+    fn new(
+        answering: impl Fn(&StandInAnswerParams) -> Result<Reply, AnswererError> + Send + Sync + 'static,
+    ) -> FakeAnswerer {
+        FakeAnswerer {
+            answering: Box::new(answering),
+            asked: std::sync::Mutex::new(Vec::new()),
+            gate: None,
+            hang_first: false,
+        }
+    }
+
+    fn asked(&self) -> Vec<StandInAnswerParams> {
+        self.asked.lock().unwrap().clone()
+    }
+}
+
+impl Answerer for FakeAnswerer {
+    fn answer<'a>(
+        &'a self,
+        params: StandInAnswerParams,
+        cancel: &'a Cancel,
+    ) -> grida_fx_providers::BoxFuture<'a, Result<Reply, AnswererError>> {
+        Box::pin(async move {
+            let first = {
+                let mut asked = self.asked.lock().unwrap();
+                asked.push(params.clone());
+                asked.len() == 1
+            };
+            if self.hang_first && first {
+                cancel.cancelled().await;
+                return Err(AnswererError::Cancelled);
+            }
+            if let Some(gate) = &self.gate {
+                gate.acquire().await.unwrap().forget();
+            }
+            (self.answering)(&params)
+        })
+    }
+
+    fn shutdown(&self) -> grida_fx_providers::BoxFuture<'_, ()> {
+        Box::pin(async {})
+    }
+}
+
+/// A stand-in run's engine over the stand-in store in `root`, with no adapters.
+fn stand_in_engine(root: &Path, answerer: Arc<dyn Answerer>) -> Arc<Engine> {
+    Arc::new(
+        Engine::new(
+            tokio::runtime::Handle::current(),
+            HostSpec {
+                python: PathBuf::from("python3"),
+                label: "python3".into(),
+                project_root: root.to_path_buf(),
+                sources: Vec::new(),
+            },
+            &root.join(".fx/cache/stand-in"),
+            1,
+            Adapters::new(),
+            false,
+        )
+        .with_stand_in(Arc::new(StandIn::new(answerer))),
+    )
+}
+
+/// A stand-in run's services: a run (a ledger, no ceiling) with an event log at `log`.
+fn stand_in_services(engine: Arc<Engine>, log: &Path) -> (Arc<Services>, Arc<Ledger>) {
+    let events = Arc::new(EventLog::open(log, "inv", "plan").unwrap());
+    let ledger = Arc::new(Ledger::new(None, Some(Arc::clone(&events))));
+    (live_with(engine, Arc::clone(&ledger), Some(events)), ledger)
+}
+
+fn kite_request() -> Value {
+    json!({"prompt": "a kite", "size": "64x64", "background": "opaque"})
+}
+
+fn picture(bytes: Vec<u8>, kind: Option<&str>) -> Reply {
+    Reply::Answer {
+        files: IndexMap::from([(
+            "image".to_string(),
+            StandInFile {
+                kind: kind.map(str::to_string),
+                bytes,
+            },
+        )]),
+        data: Value::Null,
+    }
+}
+
+fn opaque_kite() -> Vec<u8> {
+    media::png(64, 64, None)
+}
+
+fn site_of(instance: &str, routes: Vec<Route>, calls: &[(&str, u32)]) -> CallSite {
+    CallSite {
+        instance_id: instance.into(),
+        ..site(routes, calls)
+    }
+}
+
+/// Lets spawned tasks run until `done` holds.
+async fn until(done: impl Fn() -> bool) {
+    for _ in 0..10_000 {
+        if done() {
+            return;
+        }
+        tokio::task::yield_now().await;
+    }
+    panic!("waited too long");
+}
+
+#[tokio::test]
+async fn a_stand_in_is_asked_once_per_key_and_its_answer_is_recorded_at_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let gate = Arc::new(tokio::sync::Semaphore::new(0));
+    let answerer = Arc::new(FakeAnswerer {
+        gate: Some(Arc::clone(&gate)),
+        ..FakeAnswerer::new(|_| Ok(picture(opaque_kite(), None)))
+    });
+    let engine = stand_in_engine(dir.path(), answerer.clone());
+    let log = dir.path().join("events.jsonl");
+    let (services, ledger) = stand_in_services(Arc::clone(&engine), &log);
+
+    // Three instances make the same call at once: one leads, two follow.
+    let mut calls = Vec::new();
+    for instance in ["draw#1", "draw#2", "draw#3"] {
+        let services = Arc::clone(&services);
+        let site = site_of(instance, vec![img_a()], &[("image.generate", 1)]);
+        calls.push(tokio::spawn(async move {
+            let counter = CallCounter::new();
+            let answer = call(
+                &services,
+                &site,
+                &counter,
+                &RunFiles::new(),
+                "image.generate",
+                kite_request(),
+            )
+            .await;
+            (answer, counter.cost())
+        }));
+    }
+    until(|| answerer.asked().len() == 1 && services.calls_running() == 3).await;
+    gate.add_permits(1);
+    let mut answers = Vec::new();
+    for task in calls {
+        answers.push(task.await.unwrap());
+    }
+    assert_eq!(answerer.asked().len(), 1);
+    let led: Vec<_> = answers
+        .iter()
+        .filter(|(answer, _)| !answer.as_ref().unwrap().cached)
+        .collect();
+    assert_eq!(led.len(), 1);
+    let (answer, cost) = led[0];
+    let answer = answer.as_ref().unwrap();
+    assert_eq!(answer.cost, Some(Usd::ZERO));
+    assert_eq!(answer.charged, Usd::ZERO);
+    assert_eq!(
+        *cost,
+        Some(Usd::ZERO),
+        "a stand-in's answer counts as paid at 0"
+    );
+    assert_eq!(answer.files["image"].kind, "image/png");
+    assert_eq!(answer.files["image"].digest, file_digest(&opaque_kite()));
+
+    // What the stand-in was asked.
+    let asked = &answerer.asked()[0];
+    assert_eq!(asked.capability, "image.generate");
+    assert_eq!(asked.route.id, "img-a@acme");
+    assert_eq!(asked.route.fingerprint, IMG_A_FINGERPRINT);
+    assert_eq!(
+        Value::Object(asked.request.clone().into_iter().collect()),
+        kite_request()
+    );
+    assert_eq!(asked.take, vec![1]);
+    assert_eq!(asked.key, answer.key);
+    assert_eq!(asked.instance.path, "draw");
+    assert_eq!(asked.instance.step, "draw");
+    assert!(asked.files.is_empty());
+
+    // Recorded in the stand-in store at nothing; the next call is a hit and asks nothing.
+    let record = engine.store.load_call(&answer.key).unwrap();
+    assert_eq!(record.cost_usd, Some(Usd::ZERO));
+    assert_eq!(record.files["image"].kind, "image/png");
+    let again = call(
+        &services,
+        &site(vec![img_a()], &[("image.generate", 1)]),
+        &CallCounter::new(),
+        &RunFiles::new(),
+        "image.generate",
+        kite_request(),
+    )
+    .await
+    .unwrap();
+    assert!(again.cached);
+    assert_eq!(answerer.asked().len(), 1);
+
+    // No holds, no ledger lines, no job records.
+    assert_eq!(ledger.charged(), Usd::ZERO);
+    assert!(!dir.path().join(".fx/cache/stand-in/jobs").exists());
+    assert!(!dir.path().join(".fx/cache/calls").exists());
+    let events = read_events(&log).unwrap();
+    let names: Vec<_> = events
+        .iter()
+        .map(|e| e["event"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["call"; 4]);
+    let answered: Vec<_> = events
+        .iter()
+        .filter(|e| e.get("stand_in").is_some())
+        .collect();
+    assert_eq!(answered.len(), 1);
+    assert_eq!(answered[0]["stand_in"], json!(true));
+    assert_eq!(answered[0]["cached"], json!(false));
+    assert_eq!(answered[0]["cost_usd"], json!(0));
+    assert!(
+        events
+            .iter()
+            .filter(|e| e.get("stand_in").is_none())
+            .all(|e| e["cached"] == json!(true))
+    );
+}
+
+#[tokio::test]
+async fn a_declined_call_is_not_live_and_asked_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let answerer = Arc::new(FakeAnswerer::new(|_| Ok(Reply::Decline)));
+    let engine = stand_in_engine(dir.path(), answerer.clone());
+    let (services, _) = stand_in_services(engine, &dir.path().join("events.jsonl"));
+    let site = site(vec![img_a()], &[("image.generate", 2)]);
+    for asked in 1..=2 {
+        let error = rpc(call(
+            &services,
+            &site,
+            &CallCounter::new(),
+            &RunFiles::new(),
+            "image.generate",
+            kite_request(),
+        )
+        .await);
+        assert_eq!(error.kind(), Some(ErrorCode::NotLive));
+        assert_eq!(
+            error.message,
+            "image.generate on img-a@acme is a paid call the stand-in declined"
+        );
+        assert_eq!(answerer.asked().len(), asked);
+    }
+}
+
+#[tokio::test]
+async fn a_refused_or_failed_call_ends_its_key_and_records_nothing() {
+    for (said, code, message) in [
+        (
+            AnswererError::Refused("no kites today".into()),
+            ErrorCode::CapabilityRefused,
+            "image.generate on img-a@acme was refused: no kites today",
+        ),
+        (
+            AnswererError::Failed("the kite tore".into()),
+            ErrorCode::CallFailed,
+            "image.generate on img-a@acme failed: the kite tore",
+        ),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let said = said.clone();
+        let answerer = Arc::new(FakeAnswerer::new(move |_| Err(said.clone())));
+        let engine = stand_in_engine(dir.path(), answerer.clone());
+        let (services, _) = stand_in_services(Arc::clone(&engine), &dir.path().join("e.jsonl"));
+        let site = site(vec![img_a()], &[("image.generate", 2)]);
+        for _ in 0..2 {
+            let error = rpc(call(
+                &services,
+                &site,
+                &CallCounter::new(),
+                &RunFiles::new(),
+                "image.generate",
+                kite_request(),
+            )
+            .await);
+            assert_eq!(error.kind(), Some(code));
+            assert_eq!(error.message, message);
+        }
+        // The key ended for the invocation: asked once, and nothing recorded.
+        assert_eq!(answerer.asked().len(), 1);
+        let key = answerer.asked()[0].key.clone();
+        assert!(engine.store.load_call(&key).is_none());
+        // A new invocation asks again.
+        let (next, _) = stand_in_services(engine, &dir.path().join("f.jsonl"));
+        let _ = call(
+            &next,
+            &site,
+            &CallCounter::new(),
+            &RunFiles::new(),
+            "image.generate",
+            kite_request(),
+        )
+        .await;
+        assert_eq!(answerer.asked().len(), 2);
+    }
+}
+
+/// One stand-in call of `capability` on `route` with `request`, answered by `reply`: the
+/// outcome and how often the stand-in was asked.
+async fn answered_once(
+    capability: &str,
+    route_: Route,
+    request: Value,
+    reply: Reply,
+) -> (
+    Result<grida_fx_runtime::calls::CallAnswer, CallError>,
+    usize,
+) {
+    let dir = tempfile::tempdir().unwrap();
+    let answerer = Arc::new(FakeAnswerer::new(move |_| Ok(reply.clone())));
+    let engine = stand_in_engine(dir.path(), answerer.clone());
+    let (services, _) = stand_in_services(engine, &dir.path().join("events.jsonl"));
+    let site = site(vec![route_], &[(capability, 1)]);
+    let outcome = call(
+        &services,
+        &site,
+        &CallCounter::new(),
+        &RunFiles::new(),
+        capability,
+        request,
+    )
+    .await;
+    let asked = answerer.asked().len();
+    (outcome, asked)
+}
+
+#[tokio::test]
+async fn a_stand_ins_answer_meets_every_check_in_order() {
+    let failed = |outcome: Result<grida_fx_runtime::calls::CallAnswer, CallError>| {
+        let error = rpc(outcome);
+        assert_eq!(
+            error.kind(),
+            Some(ErrorCode::CallFailed),
+            "{}",
+            error.message
+        );
+        error.message
+    };
+
+    // 1. A request its capability refuses is refused before the stand-in is asked.
+    let (outcome, asked) = answered_once(
+        "image.generate",
+        img_a(),
+        json!({"size": "64x64"}),
+        picture(opaque_kite(), None),
+    )
+    .await;
+    let error = rpc(outcome);
+    assert_eq!(error.kind(), Some(ErrorCode::CapabilityRefused));
+    assert_eq!(
+        error.message,
+        "image.generate on img-a@acme was refused: image.generate needs prompt"
+    );
+    assert_eq!(asked, 0);
+
+    // 3.1 The shape: a file of another kind, and a file the capability does not name.
+    let (outcome, asked) = answered_once(
+        "image.generate",
+        img_a(),
+        kite_request(),
+        picture(b"a kite".to_vec(), Some("text/plain")),
+    )
+    .await;
+    assert_eq!(asked, 1);
+    assert_eq!(
+        failed(outcome),
+        "image.generate on img-a@acme failed: image is text/plain, not image/png"
+    );
+    let Reply::Answer { mut files, data } = picture(opaque_kite(), None) else {
+        unreachable!()
+    };
+    files.insert(
+        "extra".into(),
+        StandInFile {
+            kind: None,
+            bytes: b"x".to_vec(),
+        },
+    );
+    let (outcome, _) = answered_once(
+        "image.generate",
+        img_a(),
+        kite_request(),
+        Reply::Answer { files, data },
+    )
+    .await;
+    assert_eq!(
+        failed(outcome),
+        "image.generate on img-a@acme failed: image.generate returns no file named extra"
+    );
+
+    // 3.2 The route's check: a route no adapter serves gets the capability's every-route check,
+    // a route FX's adapter serves gets that adapter's.
+    let (outcome, _) = answered_once(
+        "image.generate",
+        img_a(),
+        kite_request(),
+        picture(media::png(32, 32, None), None),
+    )
+    .await;
+    assert_eq!(
+        failed(outcome),
+        "image.generate on img-a@acme failed: the image is 32x32, not 64x64"
+    );
+    let sized = json!({"prompt": "a kite", "size": "big"});
+    let (outcome, _) = answered_once(
+        "image.generate",
+        img_a(),
+        sized.clone(),
+        picture(opaque_kite(), None),
+    )
+    .await;
+    assert_eq!(
+        failed(outcome),
+        "image.generate on img-a@acme failed: size must be auto or WIDTHxHEIGHT"
+    );
+    let openai = route("image.generate", "gpt-image-2.5-sunburst", "openai", 40_000);
+    let (outcome, _) = answered_once(
+        "image.generate",
+        openai,
+        sized,
+        picture(opaque_kite(), None),
+    )
+    .await;
+    assert_eq!(
+        failed(outcome),
+        "image.generate on gpt-image-2.5-sunburst@openai failed: OpenAI image size must be auto \
+         or WIDTHxHEIGHT"
+    );
+
+    // 3.3 The round trip of the data through the record's canonical JSON.
+    let mut deep = json!(1);
+    for _ in 0..600 {
+        deep = json!([deep]);
+    }
+    let thing = route("acme.thing", "thing-a", "acme", 0);
+    let (outcome, _) = answered_once(
+        "acme.thing",
+        thing.clone(),
+        json!({"x": 1}),
+        Reply::Answer {
+            files: IndexMap::new(),
+            data: deep,
+        },
+    )
+    .await;
+    let message = failed(outcome);
+    assert!(
+        message
+            .starts_with("acme.thing on thing-a@acme failed: the answer's data cannot be recorded"),
+        "{message}"
+    );
+    // A capability FX does not ship keeps its data as it is.
+    let (outcome, _) = answered_once(
+        "acme.thing",
+        thing,
+        json!({"x": 1}),
+        Reply::Answer {
+            files: IndexMap::new(),
+            data: json!({"anything": [1, 2]}),
+        },
+    )
+    .await;
+    assert_eq!(outcome.unwrap().data, json!({"anything": [1, 2]}));
+
+    // 3.4 The engine's check of agent.turn.
+    let turn_request = json!({
+        "system": "s",
+        "messages": [{"role": "user", "content": "hi"}],
+        "tools": [],
+        "tool_choice": "auto"
+    });
+    let llm = route("agent.turn", "llm-a", "acme", 4_000);
+    let (outcome, _) = answered_once(
+        "agent.turn",
+        llm.clone(),
+        turn_request.clone(),
+        Reply::Answer {
+            files: IndexMap::new(),
+            data: json!({"text": 7}),
+        },
+    )
+    .await;
+    assert!(
+        failed(outcome).starts_with("agent.turn on llm-a@acme failed: "),
+        "the engine's turn check refuses it"
+    );
+    let (outcome, _) = answered_once(
+        "agent.turn",
+        llm,
+        turn_request,
+        Reply::Answer {
+            files: IndexMap::new(),
+            data: json!({"text": "done", "tool_calls": []}),
+        },
+    )
+    .await;
+    assert_eq!(
+        outcome.unwrap().data,
+        json!({"text": "done", "tool_calls": []})
+    );
+}
+
+#[tokio::test]
+async fn a_clips_data_is_taken_from_its_file() {
+    let video = route("video.generate", "vid-a", "acme", 100_000);
+    let clip = media::mp4(640, 360, 24, 48);
+    let answer = |data: Value| Reply::Answer {
+        files: IndexMap::from([(
+            "video".to_string(),
+            StandInFile {
+                kind: None,
+                bytes: clip.clone(),
+            },
+        )]),
+        data,
+    };
+    let (outcome, _) = answered_once(
+        "video.generate",
+        video.clone(),
+        json!({"prompt": "a kite"}),
+        answer(Value::Null),
+    )
+    .await;
+    let answered = outcome.unwrap();
+    assert_eq!(answered.files["video"].kind, "video/mp4");
+    assert_eq!(
+        answered.data,
+        json!({"facts": {"width": 640, "height": 360, "duration_seconds": 2, "fps": 24}})
+    );
+    let (outcome, _) = answered_once(
+        "video.generate",
+        video,
+        json!({"prompt": "a kite"}),
+        answer(json!({"facts": {"fps": 24}})),
+    )
+    .await;
+    let error = rpc(outcome);
+    assert_eq!(error.kind(), Some(ErrorCode::CallFailed));
+    assert_eq!(
+        error.message,
+        "video.generate on vid-a@acme failed: video.generate's data is taken from its file: \
+         answer null"
+    );
+}
+
+#[tokio::test]
+async fn a_cancelled_leader_abandons_its_question_and_a_follower_asks_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let answerer = Arc::new(FakeAnswerer {
+        hang_first: true,
+        ..FakeAnswerer::new(|_| Ok(picture(opaque_kite(), None)))
+    });
+    let engine = stand_in_engine(dir.path(), answerer.clone());
+    let (services, _) = stand_in_services(Arc::clone(&engine), &dir.path().join("e.jsonl"));
+    let leader_site = site_of("draw#1", vec![img_a()], &[("image.generate", 1)]);
+    let leader_cancel = leader_site.cancel.clone();
+    let leader = {
+        let services = Arc::clone(&services);
+        tokio::spawn(async move {
+            call(
+                &services,
+                &leader_site,
+                &CallCounter::new(),
+                &RunFiles::new(),
+                "image.generate",
+                kite_request(),
+            )
+            .await
+        })
+    };
+    until(|| answerer.asked().len() == 1).await;
+    let follower = {
+        let services = Arc::clone(&services);
+        tokio::spawn(async move {
+            call(
+                &services,
+                &site_of("draw#2", vec![img_a()], &[("image.generate", 1)]),
+                &CallCounter::new(),
+                &RunFiles::new(),
+                "image.generate",
+                kite_request(),
+            )
+            .await
+        })
+    };
+    until(|| services.calls_running() == 2).await;
+    leader_cancel.cancel();
+    assert_eq!(leader.await.unwrap(), Err(CallError::Cancelled));
+    let followed = follower.await.unwrap().unwrap();
+    assert!(!followed.cached, "the follower led in its place");
+    assert_eq!(answerer.asked().len(), 2);
+    assert_eq!(answerer.asked()[1].instance.id, "draw#2");
+}
+
+#[tokio::test]
+async fn a_fault_of_the_stand_in_stops_the_run() {
+    let dir = tempfile::tempdir().unwrap();
+    let answerer = Arc::new(FakeAnswerer::new(|_| {
+        Err(AnswererError::Fault(
+            "the stand-in failed: AssertionError: 2 != 3".into(),
+        ))
+    }));
+    let engine = stand_in_engine(dir.path(), answerer);
+    let (services, _) = stand_in_services(Arc::clone(&engine), &dir.path().join("e.jsonl"));
+    let outcome = call(
+        &services,
+        &site(vec![img_a()], &[("image.generate", 1)]),
+        &CallCounter::new(),
+        &RunFiles::new(),
+        "image.generate",
+        kite_request(),
+    )
+    .await;
+    assert_eq!(
+        outcome,
+        Err(CallError::Fault(
+            "the stand-in failed: AssertionError: 2 != 3".into()
+        ))
+    );
+    // A paid built-in's attempt stops the run with the stand-in's sentence, `internal`.
+    let job = builtin_job(
+        "image.generate",
+        vec![
+            ("prompt", Val::Str("a kite".into())),
+            ("size", Val::Str("64x64".into())),
+            ("background", Val::Str("opaque".into())),
+            ("vars", Val::Object(IndexMap::new())),
+        ],
+        vec![img_a()],
+    );
+    let attempt = grida_fx_runtime::executor::execute(services, Arc::new(job), Cancel::new()).await;
+    assert_eq!(
+        attempt.stop.as_deref(),
+        Some("the stand-in failed: AssertionError: 2 != 3")
+    );
+    assert_eq!(attempt.code, Some(ErrorCode::Internal));
+}
+
+/// The answerer's end of an in-memory connection.
+struct Peer {
+    input: tokio::io::BufReader<tokio::io::DuplexStream>,
+    output: tokio::io::DuplexStream,
+}
+
+impl Peer {
+    async fn read(&mut self) -> Value {
+        use tokio::io::{AsyncBufReadExt, AsyncReadExt};
+        let mut length = 0;
+        loop {
+            let mut line = String::new();
+            self.input.read_line(&mut line).await.unwrap();
+            if line == "\r\n" {
+                break;
+            }
+            if let Some(n) = line.strip_prefix("Content-Length: ") {
+                length = n.trim().parse().unwrap();
+            }
+        }
+        let mut body = vec![0; length];
+        self.input.read_exact(&mut body).await.unwrap();
+        serde_json::from_slice(&body).unwrap()
+    }
+
+    async fn write(&mut self, message: Value) {
+        use tokio::io::AsyncWriteExt;
+        let body = serde_json::to_vec(&message).unwrap();
+        let mut frame = format!("Content-Length: {}\r\n\r\n", body.len()).into_bytes();
+        frame.extend(body);
+        self.output.write_all(&frame).await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn a_cancelled_question_sends_cancel_and_drops_the_late_answer() {
+    let (engine_reads, peer_writes) = tokio::io::duplex(1 << 20);
+    let (peer_reads, engine_writes) = tokio::io::duplex(1 << 20);
+    let mut peer = Peer {
+        input: tokio::io::BufReader::new(peer_reads),
+        output: peer_writes,
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let starting = tokio::spawn({
+        let root = dir.path().to_path_buf();
+        async move { ConnectionAnswerer::start_socket(engine_reads, engine_writes, &root, &[]).await }
+    });
+    let initialize = peer.read().await;
+    assert_eq!(initialize["method"], json!("initialize"));
+    assert_eq!(
+        initialize["params"]["project_root"],
+        json!(dir.path().to_str().unwrap())
+    );
+    peer.write(json!({"jsonrpc": "2.0", "id": initialize["id"], "result": {
+        "protocol": "fx-node-protocol-v1",
+        "host": {"language": "python", "version": "3.12", "sdk_version": "0.1.0"}
+    }}))
+    .await;
+    let answerer: Arc<dyn Answerer> = Arc::new(starting.await.unwrap().unwrap());
+    let engine = stand_in_engine(dir.path(), answerer);
+    let (services, _) = stand_in_services(Arc::clone(&engine), &dir.path().join("e.jsonl"));
+    let site = site(vec![img_a()], &[("image.generate", 1)]);
+    let cancel = site.cancel.clone();
+    let asking = tokio::spawn({
+        let services = Arc::clone(&services);
+        async move {
+            call(
+                &services,
+                &site,
+                &CallCounter::new(),
+                &RunFiles::new(),
+                "image.generate",
+                kite_request(),
+            )
+            .await
+        }
+    });
+    let asked = peer.read().await;
+    assert_eq!(asked["method"], json!("stand_in.answer"));
+    assert_eq!(asked["params"]["capability"], json!("image.generate"));
+    cancel.cancel();
+    assert_eq!(asking.await.unwrap(), Err(CallError::Cancelled));
+    let cancelled = peer.read().await;
+    assert_eq!(cancelled["method"], json!("$/cancel"));
+    assert_eq!(cancelled["params"]["id"], asked["id"]);
+    // The answer that comes after is dropped: nothing is recorded.
+    peer.write(json!({"jsonrpc": "2.0", "id": asked["id"], "result": {"files": {}, "data": null}}))
+        .await;
+    tokio::task::yield_now().await;
+    assert!(!dir.path().join(".fx/cache/stand-in/calls").exists());
+    assert_eq!(services.calls_running(), 0);
 }

@@ -54,6 +54,8 @@ use serde_json::{Map, Value, json};
 use std::sync::Arc;
 use std::time::Duration;
 
+pub use crate::checks::ClipFacts;
+
 /// The contract `adapter` this adapter serves.
 pub const CONTRACT_ADAPTER: &str = "fal-queue";
 
@@ -213,53 +215,6 @@ pub fn expected_size(resolution: &str, aspect_ratio: &str) -> Option<(u32, u32)>
         "9:16" => Some((short, long)),
         "16:9" => Some((long, short)),
         _ => None,
-    }
-}
-
-/// A clip's file facts, as the answer's `data.facts` carries them.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct ClipFacts {
-    pub width: u32,
-    pub height: u32,
-    /// Seconds, rounded to 6 places.
-    pub duration_seconds: f64,
-    /// Frames per second, rounded to 6 places.
-    pub fps: f64,
-}
-
-impl ClipFacts {
-    /// The facts of an MP4's first video track, when it has one with a positive frame rate and a
-    /// duration. Otherwise the sentence: `the file carries no video stream`, or the reader's own.
-    pub fn of_mp4(bytes: &[u8]) -> Result<ClipFacts, String> {
-        let no_stream = || "the file carries no video stream".to_string();
-        match grida_fx_core::facts::video_facts(bytes, "video/mp4") {
-            Ok(Some(facts)) => match (facts.duration, facts.fps) {
-                (Some(duration), Some(fps))
-                    if duration.is_finite() && fps.is_finite() && fps > 0.0 =>
-                {
-                    Ok(ClipFacts {
-                        width: facts.width,
-                        height: facts.height,
-                        duration_seconds: duration,
-                        fps,
-                    })
-                }
-                _ => Err(no_stream()),
-            },
-            Ok(None) => Err(no_stream()),
-            Err(reason) => Err(format!("the clip cannot be read: {reason}")),
-        }
-    }
-
-    /// `{"width", "height", "duration_seconds", "fps"}`.
-    fn to_json(self) -> Value {
-        let number = |x: f64| grida_fx_core::value::number(x).unwrap_or(Value::Null);
-        json!({
-            "width": self.width,
-            "height": self.height,
-            "duration_seconds": number(self.duration_seconds),
-            "fps": number(self.fps),
-        })
     }
 }
 

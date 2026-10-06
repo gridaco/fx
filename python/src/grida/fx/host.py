@@ -52,7 +52,18 @@ and answers:
   ``node_error``.
 - ``$/cancel`` (section 5.6): for the pending run, sets ``ctx.cancelled`` (the body decides what
   to do); for a pending ``tool.invoke`` or ``agent.check``, answers it ``cancelled`` at once and
-  cancels its task.
+  cancels its task; for a pending ``stand_in.answer``, cancels it as
+  :class:`~grida.fx._stand_in.Answerer` says.
+- ``stand_in.load`` (section 5.7), for a stand-in host, which the engine starts in its own working
+  directory: loads the file at the absolute ``path`` as a module of its own, ``_fx_stand_in``, not
+  as a project module (it may lie outside the project), with the file's folder first on
+  ``sys.path`` as ``python <file>`` has it, and finds ``function``; ``{}``, or ``load_failed``
+  (``no stand-in file …``, ``… failed to import: …``, ``… has no function …``), the file named
+  relative to the working directory when it is inside it. From then on ``describe``, ``build`` and
+  ``run`` are answered ``-32600`` (``this host answers for a stand-in``).
+- ``stand_in.answer`` (section 5.7), once a stand-in is loaded: answered on the body loop by an
+  :class:`~grida.fx._stand_in.Answerer` (several may be pending; they are answered one at a time,
+  in order). A fault of the stand-in is answered ``internal`` and its traceback logged on stderr.
 - ``shutdown`` → ``null`` (a pending run still finishes and is answered); then the ``exit``
   notification ends the process with status 0 (1 if no ``shutdown`` came first). End of stdin
   ends the process. The process ends with ``os._exit`` once the protocol stream is flushed and
@@ -116,11 +127,13 @@ from grida.fx._protocol import (
     PROTOCOL_MISMATCH,
     ProtocolError,
     check_value,
+    encodable_text,
     parse_message,
     read_message,
 )
 from grida.fx._session import Session
 from grida.fx._spec import NodeSpec, SpecError, spec_of
+from grida.fx._stand_in import Answerer
 
 #: A project path on the wire: POSIX, relative, with no empty, ``.`` or ``..`` segment.
 _SEGMENT = r"(?:[^/\\.][^/\\]*|\.[^/\\.][^/\\]*|\.\.[^/\\]+)"
@@ -131,6 +144,8 @@ _FUNCTION = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 SAFE_PATH_MARK = "grida-fx"
 #: What a request handler returns when it answers later, from the body loop.
 _LATER = object()
+#: The name a stand-in file is loaded under (section 5.7).
+_STAND_IN_MODULE = "_fx_stand_in"
 #: Frames a ``node_error`` traceback starts after: the SDK's own (not the bodies of
 #: ``grida.fx.std``), and the machinery that ran the body (the event loop, the worker thread).
 _SDK = os.path.dirname(os.path.abspath(__file__)) + os.sep
@@ -185,6 +200,8 @@ class Host:
         self._run: _Run | None = None
         #: ``tool.invoke`` and ``agent.check`` requests being served: id -> (method, task).
         self._serving: dict[Any, tuple[str, concurrent.futures.Future[None] | None]] = {}
+        #: The stand-in this host answers for, once ``stand_in.load`` loaded it.
+        self._stand_in: Answerer | None = None
 
     # -- the session -------------------------------------------------------------------------
 
@@ -276,6 +293,12 @@ class Host:
                 raise _Refusal(INVALID_PARAMS, "shutdown takes no params")
             self.shutting_down = True
             return None
+        if method == "stand_in.load":
+            return self.stand_in_load(_params(params))
+        if method == "stand_in.answer":
+            return self.stand_in_answer(request_id, _params(params))
+        if method in ("describe", "build", "run") and self._stand_in is not None:
+            raise _Refusal(INVALID_REQUEST, "this host answers for a stand-in")
         if method in ("describe", "build", "run") and self._pending_run() is not None:
             raise _Refusal(INVALID_REQUEST, f"{method} came while a run is pending")
         if method == "describe":
@@ -297,7 +320,7 @@ class Host:
     def _send_error(
         self, request_id: Any, code: int, message: str, data: dict[str, Any] | None = None
     ) -> None:
-        error: dict[str, Any] = {"code": code, "message": message or "error"}
+        error: dict[str, Any] = {"code": code, "message": encodable_text(message or "error")}
         if data is not None:
             error["data"] = data
         self.session.send({"jsonrpc": "2.0", "id": request_id, "error": error})
@@ -316,7 +339,13 @@ class Host:
             except ValueError:
                 # data that is not an I-JSON value (a body changed ctx.facts by hand): left out.
                 self._send_error(request_id, error["code"], error["message"])
-        except (OSError, ValueError) as broken:
+        except ValueError as unsent:
+            # The last resort: an answer the engine can read, so it waits for none.
+            try:
+                self._send_error(request_id, INTERNAL, f"the answer could not be sent: {unsent}")
+            except (OSError, ValueError) as broken:
+                _log(f"grida.fx.host: could not answer request {request_id!r}: {broken}")
+        except OSError as broken:
             _log(f"grida.fx.host: could not answer request {request_id!r}: {broken}")
 
     # -- initialize --------------------------------------------------------------------------
@@ -729,11 +758,79 @@ class Host:
                 return
             served = self._serving.pop(target, None)
         if served is None:
+            if self._stand_in is not None:
+                self.session.loop().call_soon_threadsafe(self._stand_in.cancel, target)
             return
         method, task = served
         self._answer(target, error={"code": CANCELLED, "message": f"the engine cancelled {method}"})
         if task is not None:
             task.cancel()
+
+    # -- stand-ins: stand_in.load, stand_in.answer --------------------------------------------
+
+    def stand_in_load(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Loads the stand-in this host answers for (module docstring)."""
+        path = params.get("path")
+        if not isinstance(path, str) or not path or not os.path.isabs(path):
+            raise _Refusal(
+                INVALID_PARAMS, "stand_in.load's path is the stand-in file's absolute path"
+            )
+        function = params.get("function")
+        if not isinstance(function, str) or not _FUNCTION.fullmatch(function):
+            raise _Refusal(INVALID_PARAMS, "stand_in.load's function is a Python name")
+        if self._stand_in is not None:
+            raise _Refusal(INVALID_REQUEST, "a stand-in is already loaded")
+        if self._pending_run() is not None:
+            raise _Refusal(INVALID_REQUEST, "stand_in.load came while a run is pending")
+        file = Path(path)
+        shown = _shown(file)
+        module = self._load_stand_in(file.resolve(), shown)
+        try:
+            value = getattr(module, function, None)
+        except BaseException:
+            value = None
+        if not callable(value):
+            raise _Refusal(LOAD_FAILED, f"{shown} has no function {function}")
+        self._stand_in = Answerer(value, error_text=self._error_text, on_fault=self._stand_in_fault)
+        return {}
+
+    def _load_stand_in(self, file: Path, shown: str) -> Any:
+        """The stand-in file as a module of its own, its folder first on ``sys.path``."""
+        if not file.is_file():
+            raise _Refusal(LOAD_FAILED, f"no stand-in file {shown}")
+        spec = importlib.util.spec_from_file_location(_STAND_IN_MODULE, file)
+        if spec is None or spec.loader is None:
+            raise _Refusal(LOAD_FAILED, f"cannot import {shown}")
+        folder = str(file.parent)
+        sys.path[:] = [entry for entry in sys.path if entry != folder]
+        sys.path.insert(0, folder)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[_STAND_IN_MODULE] = module
+        try:
+            spec.loader.exec_module(module)
+        except BaseException as error:
+            # As for a project module: whatever its top-level code raised is its error.
+            sys.modules.pop(_STAND_IN_MODULE, None)
+            raise _Refusal(
+                LOAD_FAILED, f"{shown} failed to import: {self._error_text(error)}"
+            ) from None
+        return module
+
+    def stand_in_answer(self, request_id: Any, params: dict[str, Any]) -> object:
+        """Starts answering a ``stand_in.answer`` on the body loop; it is answered from there."""
+        answerer = self._stand_in
+        if answerer is None:
+            raise _Refusal(INVALID_REQUEST, "stand_in.answer came before stand_in.load")
+
+        def reply(answer: dict[str, Any]) -> None:
+            self._answer(request_id, answer.get("result"), answer.get("error"))
+
+        # Started by a callback, not a task, so a `$/cancel` read next finds the call.
+        self.session.loop().call_soon_threadsafe(answerer.start, request_id, params, reply)
+        return _LATER
+
+    def _stand_in_fault(self, error: BaseException) -> None:
+        _log(f"grida.fx.host: the stand-in failed:\n{self._traceback(error)}")
 
     # -- modules -----------------------------------------------------------------------------
 
@@ -797,6 +894,17 @@ def _params(params: Any) -> dict[str, Any]:
     if not isinstance(params, dict):
         raise _Refusal(INVALID_PARAMS, "this method's params are a JSON object")
     return params
+
+
+def _shown(file: Path) -> str:
+    """How messages name a stand-in file: relative to the working directory (the engine's, where
+    the user named it) when it is inside it, else by its absolute path."""
+    cwd = Path(os.getcwd())
+    given = Path(os.path.normpath(file))
+    for candidate in (given, given.resolve()):
+        if candidate.is_relative_to(cwd) and candidate != cwd:
+            return candidate.relative_to(cwd).as_posix()
+    return str(given)
 
 
 def _project_path(value: Any, what: str) -> str:

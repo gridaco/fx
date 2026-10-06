@@ -1,0 +1,7 @@
+fx: workflow/v1
+id: other
+title: A workflow in a folder the project does not list
+steps:
+  draw:
+    uses: fx/image.generate@1
+    with: { prompt: never planned }

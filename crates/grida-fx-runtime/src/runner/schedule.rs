@@ -209,6 +209,7 @@ pub fn settle(
                         id: instance.id.clone(),
                         path: instance.path.clone(),
                         error: Some(error),
+                        code: None,
                         facts: None,
                         duration_ms: None,
                     },
@@ -255,6 +256,7 @@ pub fn overturned(
                     id: instance.id.clone(),
                     path: instance.path.clone(),
                     error: Some(error),
+                    code: None,
                     facts: None,
                     duration_ms: None,
                 },
@@ -688,6 +690,7 @@ mod tests {
                 id: "x['k']#1".into(),
                 path: "x['k']".into(),
                 error: Some("x: the image is too small".into()),
+                code: None,
                 facts: None,
                 duration_ms: None,
             }

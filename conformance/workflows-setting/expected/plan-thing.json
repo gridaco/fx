@@ -1,0 +1,93 @@
+{
+ "estimate": {
+  "ceiling_usd": null,
+  "high_usd": 0.15,
+  "low_usd": 0.07
+ },
+ "instances": [
+  {
+   "id": "draw#1",
+   "identity": "e372c6e3a49f6984339bd17c4460537d9adcabfde8282792074ff1be3a1d8fc9",
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "draw",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.05,
+    "low_usd": 0.02
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "42a60906bc85d849c8c0dbb7e0d37bd710488aec649a78a580b6fcd26cbd56f9",
+     "route": "img-b@acme"
+    }
+   },
+   "state": "planned",
+   "step": "draw",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "a kite over a pier",
+    "vars": {}
+   }
+  },
+  {
+   "id": "tune#1",
+   "identity": "5d600fe5f43f0f97d5f541b3e6bd7d9e0516e48cbce45ce19add32772ff45f66",
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "tune",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.1,
+    "low_usd": 0.05
+   },
+   "reads": [],
+   "routes": {
+    "music.generate": {
+     "fingerprint": "471132256e4adc879f00f26df16ade64792a1e919c920455b9e5b7a2dda1e1d7",
+     "route": "tune-a@acme"
+    }
+   },
+   "state": "planned",
+   "step": "tune",
+   "take": [
+    1
+   ],
+   "type": "fx/music.generate@1.1",
+   "uses": "fx/music.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "prompt": "a slow tune for the pier"
+   }
+  }
+ ],
+ "kind": "fx-graph-v1",
+ "pending": [],
+ "problems": [],
+ "types": {
+  "fx/image.generate@1": {
+   "identity": "fx/image.generate@1.1"
+  },
+  "fx/music.generate@1": {
+   "identity": "fx/music.generate@1.1"
+  }
+ },
+ "workflow": {
+  "file": "workflow.yaml",
+  "id": "thing",
+  "title": "A workflow kept in a project of its own"
+ }
+}

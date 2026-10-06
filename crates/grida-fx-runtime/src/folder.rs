@@ -17,6 +17,11 @@
 //!   anything runs: `<folder> holds a run of another workflow or other inputs; choose a new
 //!   folder` (`<folder>` as the user typed it, or relative to the working directory). The runner
 //!   checks it once it holds the lock, so no other invocation can write `plan.json` in between.
+//! - [`check_mode`]: right after it, a folder of the other mode is refused (spec/store.md §8,
+//!   "Stand-in runs"): `<folder> holds a stand-in run; resume it with --stand-in, or choose a new
+//!   folder`, or `<folder> holds a run without a stand-in; resume it without --stand-in, or
+//!   choose a new folder`. A folder holds a stand-in run when its `plan.json` says `"stand_in":
+//!   true` ([`holds_stand_in`]); a folder without `plan.json` holds nothing yet.
 //! - [`RunFolder::lock`]: `run.lock` locked without waiting (`File::try_lock`); held until the
 //!   value drops. Refused at once with `another invocation is running <folder>`.
 //! - [`RunFolder::sweep`]: what a killed invocation left half placed (temporary names) is removed
@@ -24,7 +29,8 @@
 //! - [`plan_document`]: the graph document `grida-fx expand` prints, with `plan`, `steps` (every
 //!   declared step by its path: `{title, description, uses, view}`), `inputs` (plain) and
 //!   `view_origins` added, plus `takes_file` (the project-relative path of the workflow's takes
-//!   file, which `reroll` and `pick` write; spec/store.md §8 records it). Written with
+//!   file, which `reroll` and `pick` write; spec/store.md §8 records it), and `"stand_in": true`
+//!   for a stand-in run only (not part of the plan digest). Written with
 //!   `value::write_json` under a temporary name and renamed (`store::atomic_write`), once.
 //! - Placing ([`RunFolder::place`]): a hard link to the store's copy, or a copy where linking
 //!   fails, under a temporary name in the destination folder (`.<16 hex>.part`, short enough to
@@ -316,6 +322,38 @@ pub fn check_plan(path: &Path, label: &str, digest: &str) -> Result<(), FolderRe
     }
 }
 
+/// Refuses a folder that holds a run of the other mode (module doc). `stand_in`: whether this
+/// invocation answers its paid calls with a stand-in.
+pub fn check_mode(path: &Path, label: &str, stand_in: bool) -> Result<(), FolderRefused> {
+    let document = read_plan_file(path).map_err(|why| {
+        FolderRefused(format!(
+            "{label} holds a plan.json that cannot be read ({why}); choose a new folder"
+        ))
+    })?;
+    let Some(document) = document else {
+        return Ok(());
+    };
+    match (is_stand_in(&document), stand_in) {
+        (true, false) => Err(FolderRefused(format!(
+            "{label} holds a stand-in run; resume it with --stand-in, or choose a new folder"
+        ))),
+        (false, true) => Err(FolderRefused(format!(
+            "{label} holds a run without a stand-in; resume it without --stand-in, or choose a \
+             new folder"
+        ))),
+        _ => Ok(()),
+    }
+}
+
+/// Whether a `plan.json` document records a stand-in run: `"stand_in": true`.
+pub fn holds_stand_in(plan: &Value) -> bool {
+    plan.as_object().is_some_and(is_stand_in)
+}
+
+fn is_stand_in(document: &Map<String, Value>) -> bool {
+    document.get("stand_in") == Some(&Value::Bool(true))
+}
+
 /// The `plan` member of a folder's `plan.json`, when it has one.
 pub fn recorded_plan(path: &Path) -> Result<Option<Value>, String> {
     let document = read_plan_file(path).map_err(|why| format!("plan.json: {why}"))?;
@@ -339,7 +377,14 @@ fn read_plan_file(folder: &Path) -> Result<Option<Map<String, Value>>, String> {
 }
 
 /// The `plan.json` document (module doc). `takes_file` is project-relative; empty leaves it out.
-pub fn plan_document(plan: &Plan, planner: &Planner, digest: &str, takes_file: &str) -> Value {
+/// `stand_in` adds `"stand_in": true`.
+pub fn plan_document(
+    plan: &Plan,
+    planner: &Planner,
+    digest: &str,
+    takes_file: &str,
+    stand_in: bool,
+) -> Value {
     let mut document = grida_fx_core::plan::output::graph_document(plan, planner);
     let Value::Object(map) = &mut document else {
         return document;
@@ -369,6 +414,9 @@ pub fn plan_document(plan: &Plan, planner: &Planner, digest: &str, takes_file: &
     );
     if !takes_file.is_empty() {
         map.insert("takes_file".into(), Value::from(takes_file));
+    }
+    if stand_in {
+        map.insert("stand_in".into(), Value::Bool(true));
     }
     document
 }

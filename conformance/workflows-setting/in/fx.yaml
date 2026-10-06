@@ -1,0 +1,4 @@
+fx: project/v1
+workflows: [library, library/thing, nowhere]
+routes:
+  music.generate: tune-a@acme

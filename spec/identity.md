@@ -218,6 +218,7 @@ plan_digest = digest({
 - `source` is the document's project-relative POSIX path, or `<path>:<function>` for a builder.
 - `routes` is a list because one route can serve several capabilities, each with its own fingerprint (§7).
 - `inputs` are the values as given, after merging every inputs file and flag, before defaults are filled in. An optional input that was not given is left out.
+- Whether a run answers its paid calls with a stand-in ([protocol.md](protocol.md) §5.7) is not part of the digest; `plan.json` records it apart ([store.md](store.md) §8).
 
 ## 11. Instance ids
 

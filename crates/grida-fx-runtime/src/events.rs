@@ -58,6 +58,8 @@ pub enum Event {
         charged_usd: Usd,
         estimate_low: Usd,
         estimate_high: Usd,
+        /// A stand-in run (spec/protocol.md §5.7): `stand_in: true`, written only when true.
+        stand_in: bool,
     },
     PhasePlanned {
         phase: u32,
@@ -86,11 +88,13 @@ pub enum Event {
         duration_ms: u64,
     },
     /// From a dispatch (`facts`, `duration_ms` set), or from a run-time assertion state (both
-    /// `None`).
+    /// `None`). `code` is the spec/protocol.md §7 name of the error that failed the node, `None`
+    /// (written `null`) when no error code did: a timeout, an assertion.
     NodeFailed {
         id: String,
         path: String,
         error: Option<String>,
+        code: Option<String>,
         facts: Option<IndexMap<String, Value>>,
         duration_ms: Option<u64>,
     },
@@ -117,6 +121,9 @@ pub enum Event {
         call: String,
         cached: bool,
         cost_usd: Option<Usd>,
+        /// A stand-in answered the call (spec/protocol.md §6.1, "Stand-in answers"): `stand_in:
+        /// true`, written only when true.
+        stand_in: bool,
     },
     BudgetReserved {
         node_id: String,
@@ -183,6 +190,7 @@ impl Event {
                 charged_usd,
                 estimate_low,
                 estimate_high,
+                stand_in,
             } => {
                 fields.text("workflow", workflow);
                 fields.put("resumed", Value::Bool(*resumed));
@@ -192,6 +200,9 @@ impl Event {
                 estimate.insert("low_usd".into(), estimate_low.to_value());
                 estimate.insert("high_usd".into(), estimate_high.to_value());
                 fields.put("estimate", Value::Object(estimate));
+                if *stand_in {
+                    fields.put("stand_in", Value::Bool(true));
+                }
             }
             Event::PhasePlanned {
                 phase,
@@ -258,6 +269,7 @@ impl Event {
                 id,
                 path,
                 error,
+                code,
                 facts,
                 duration_ms,
             } => {
@@ -265,6 +277,7 @@ impl Event {
                 fields.text("path", path);
                 // Both forms require `error`; the schema allows null.
                 fields.text_or_null("error", error.as_deref());
+                fields.text_or_null("code", code.as_deref());
                 if let Some(facts) = facts {
                     fields.put("facts", object_of(facts));
                 }
@@ -314,6 +327,7 @@ impl Event {
                 call,
                 cached,
                 cost_usd,
+                stand_in,
             } => {
                 fields.text("id", id);
                 fields.text("capability", capability);
@@ -321,6 +335,9 @@ impl Event {
                 fields.text("call", call);
                 fields.put("cached", Value::Bool(*cached));
                 fields.money_or_null("cost_usd", *cost_usd);
+                if *stand_in {
+                    fields.put("stand_in", Value::Bool(true));
+                }
             }
             Event::BudgetReserved {
                 node_id,

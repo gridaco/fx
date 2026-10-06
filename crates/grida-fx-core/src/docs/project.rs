@@ -2,12 +2,15 @@
 //!
 //! `Project::find(start)` walks up from `start` (a file's folder, or the folder itself) to the
 //! first folder holding a regular file `fx.yaml`. With none, the project root is `start` and the
-//! document is all defaults (`runs: runs`, `cache: .fx/cache`, `nodes: nodes`). An invalid
-//! `fx.yaml` is an error (exit 2).
+//! document is all defaults (`runs: runs`, `cache: .fx/cache`, `nodes: nodes`,
+//! `workflows: [workflows]`). An invalid `fx.yaml` is an error (exit 2).
 //!
 //! The start is made absolute and its symbolic links are resolved (as far as it exists), as
 //! Python's `Path.resolve()` does. Messages name the file `fx.yaml`. A `nodes:` folder with a
-//! `..` segment reads `nodes is a folder inside the project`, gnode's sentence.
+//! `..` segment reads `nodes is a folder inside the project`, gnode's sentence. A `workflows:`
+//! folder that is the project root or a folder above it, lexically or once its symbolic links
+//! are resolved, is refused when the file is found (spec/store.md, *Finding a workflow by id*):
+//! searching it would read the project's own runs and store.
 
 use super::workflow::Budget;
 use super::{Schema, check_kind, validate};
@@ -38,6 +41,9 @@ pub struct ProjectDoc {
     pub view_origins: Vec<String>,
     pub sources: Vec<String>,
     pub nodes: String,
+    /// The folders searched for a workflow by id after the root's own files, as written:
+    /// relative to the root, or absolute ([`crate::project::project_workflow_files`]).
+    pub workflows: Vec<String>,
 }
 
 impl Default for ProjectDoc {
@@ -51,6 +57,7 @@ impl Default for ProjectDoc {
             view_origins: Vec::new(),
             sources: Vec::new(),
             nodes: "nodes".into(),
+            workflows: vec!["workflows".into()],
         }
     }
 }
@@ -76,9 +83,11 @@ impl Project {
         for folder in here.ancestors() {
             let candidate = folder.join(PROJECT_FILE);
             if candidate.is_file() {
+                let document = read_project(&candidate, PROJECT_FILE)?;
+                refuse_holding_folders(folder, &document, PROJECT_FILE)?;
                 return Ok(Project {
                     root: folder.to_path_buf(),
-                    document: read_project(&candidate, PROJECT_FILE)?,
+                    document,
                     has_file: true,
                 });
             }
@@ -114,6 +123,23 @@ impl Project {
 fn read_project(path: &Path, label: &str) -> Result<ProjectDoc> {
     let value = crate::yaml::load_file(path, label)?;
     parse_project(&value, label)
+}
+
+/// Refuses a `workflows:` entry that is the project root `root` or a folder above it, compared
+/// lexically and with symbolic links resolved (module doc).
+fn refuse_holding_folders(root: &Path, document: &ProjectDoc, label: &str) -> Result<()> {
+    let root = crate::inputs::bind::resolve(root);
+    for entry in &document.workflows {
+        let listed = root.join(entry);
+        let holds = |folder: PathBuf| root.starts_with(folder);
+        if holds(crate::inputs::lexical(&listed)) || holds(crate::inputs::bind::resolve(&listed)) {
+            return Err(Error::document(format!(
+                "{label}: workflows: {entry} is the project or holds it; list the folders under it \
+                 that hold workflows"
+            )));
+        }
+    }
+    Ok(())
 }
 
 /// Validates and types a project document (fx-project-v1).
@@ -211,6 +237,10 @@ pub(crate) fn parse_project(value: &Value, label: &str) -> Result<ProjectDoc> {
         view_origins: texts("view_origins")?,
         sources: texts("sources")?,
         nodes: text("nodes", "nodes")?,
+        workflows: match value.get("workflows") {
+            None | Some(Value::Null) => ProjectDoc::default().workflows,
+            Some(_) => texts("workflows")?,
+        },
     })
 }
 
@@ -232,11 +262,13 @@ mod tests {
             "view_origins": ["https://example.test"],
             "sources": ["acme_nodes"],
             "nodes": "src/nodes",
+            "workflows": ["library", "../shared", "/abs/flows"],
         });
         let project = parse_project(&document, "fx.yaml").unwrap();
         assert_eq!(project.runs, "out/runs");
         assert_eq!(project.cache, ".fx/cache");
         assert_eq!(project.nodes, "src/nodes");
+        assert_eq!(project.workflows, ["library", "../shared", "/abs/flows"]);
         assert_eq!(project.route_tables, ["routes.yaml"]);
         assert_eq!(project.sources, ["acme_nodes"]);
         assert_eq!(project.view_origins, ["https://example.test"]);
@@ -256,6 +288,10 @@ mod tests {
         );
         let defaults = parse_project(&json!({"fx": "project/v1"}), "fx.yaml").unwrap();
         assert_eq!(defaults, ProjectDoc::default());
+        assert_eq!(defaults.workflows, ["workflows"]);
+        // The setting replaces the default; an empty list searches only the root's own files.
+        let none = parse_project(&json!({"fx": "project/v1", "workflows": []}), "fx.yaml");
+        assert!(none.unwrap().workflows.is_empty());
     }
 
     #[test]
@@ -280,6 +316,69 @@ mod tests {
             message(json!({"fx": "project/v1", "route_tables": ["a", "a"]}))
                 .starts_with("fx.yaml: route_tables: ")
         );
+        for workflows in [
+            json!(["a", "a"]),
+            json!([""]),
+            json!(["a", 1]),
+            json!("a"),
+            json!(null),
+        ] {
+            let found = message(json!({"fx": "project/v1", "workflows": workflows}));
+            assert!(found.starts_with("fx.yaml: workflows"), "{found}");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_workflows_folder_that_holds_the_project_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap().join("proj");
+        std::fs::create_dir_all(root.join("library/thing")).unwrap();
+        std::fs::create_dir_all(root.join("ok")).unwrap();
+        std::os::unix::fs::symlink(&root, root.join("ok/up")).unwrap();
+        let refused = |entry: &str| {
+            let document = ProjectDoc {
+                workflows: vec!["library".into(), entry.into()],
+                ..ProjectDoc::default()
+            };
+            refuse_holding_folders(&root, &document, "fx.yaml").map_err(|error| error.message)
+        };
+        let above = root.parent().unwrap().to_string_lossy().into_owned();
+        let itself = root.to_string_lossy().into_owned();
+        for entry in [
+            ".",
+            "./",
+            "..",
+            "../..",
+            "library/..",
+            "library/thing/../..",
+            "../proj",
+            "ok/up",
+            "/",
+            above.as_str(),
+            itself.as_str(),
+        ] {
+            assert_eq!(
+                refused(entry),
+                Err(format!(
+                    "fx.yaml: workflows: {entry} is the project or holds it; list the folders \
+                     under it that hold workflows"
+                )),
+                "{entry}"
+            );
+        }
+        let inside = root.join("library").to_string_lossy().into_owned();
+        for entry in [
+            "library/thing",
+            "missing",
+            "../sibling",
+            "../proj/library",
+            "ok/up/library",
+            "/elsewhere/flows",
+            inside.as_str(),
+        ] {
+            assert_eq!(refused(entry), Ok(()), "{entry}");
+        }
     }
 
     /// Budgets are read as money (they need [`crate::money`]).

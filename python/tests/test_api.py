@@ -1,33 +1,43 @@
-"""``grida.fx.plan/run`` and ``python -m grida.fx``, against a stand-in ``grida-fx``.
+"""``grida.fx.plan/run`` and ``python -m grida.fx``, against a fake ``grida-fx``.
 
-The stand-in is a Python script set as ``GRIDA_FX_BIN``: it records each invocation (its
-arguments, working directory and the inputs files it was given) and answers with canned output
-per verb; for ``run`` it writes a canned ``events.jsonl`` into the run folder and prints the
-summary. So these tests pin what the SDK sends and how it reads what comes back, without an
-engine.
+The fake is a Python script set as ``GRIDA_FX_BIN``: it records each invocation (its arguments,
+working directory and the inputs files it was given) and answers with canned output per verb; for
+``run`` it writes a canned ``events.jsonl`` into the run folder and prints the summary. Given
+``--stand-in=-``, it speaks to the stand-in on its standard input as the engine does: it sends
+``initialize``, then a scripted series of ``stand_in.answer`` requests and ``$/cancel``
+notifications, then ``shutdown`` and ``exit``, and logs every message it got back. So these tests
+pin what the SDK sends and how it reads what comes back, without an engine.
 """
 
 from __future__ import annotations
 
 import asyncio
+import base64
+import collections
 import contextlib
+import gc
+import hashlib
 import json
 import os
 import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
+import types
+import warnings
 from pathlib import Path
 from typing import Any
 
 import pytest
+from jsonschema import Draft202012Validator
 
 import grida.fx as fx
 from grida.fx import _api
 from grida.fx._api import RunFile, RunResult, StepResult
 
-pytestmark = pytest.mark.skipif(os.name != "posix", reason="the stand-in binary is a script")
+pytestmark = pytest.mark.skipif(os.name != "posix", reason="the fake binary is a script")
 
 FAKE = r"""
 import json, os, signal, sys, time
@@ -43,7 +53,11 @@ for arg in args:
         if Path(name).is_file():
             inputs[name] = Path(name).read_text(encoding="utf-8")
 with log.open("a") as out:
-    out.write(json.dumps({"argv": args, "cwd": os.getcwd(), "inputs": inputs}) + "\n")
+    python = os.environ.get("GRIDA_FX_PYTHON")
+    sdk_python = os.environ.get("GRIDA_FX_SDK_PYTHON")
+    out.write(json.dumps({"argv": args, "cwd": os.getcwd(), "inputs": inputs, "python": python,
+                          "sdk_python": sdk_python}))
+    out.write("\n")
 reply = config.get(args[0] if args else "", {})
 folder = None
 if args and args[0] == "run":
@@ -53,6 +67,49 @@ if args and args[0] == "run":
         Path(folder).mkdir(parents=True, exist_ok=True)
         lines = "".join(json.dumps(event) + "\n" for event in reply["events"])
         (Path(folder) / "events.jsonl").write_text(lines + reply.get("torn", ""))
+if "--stand-in=-" in args:
+    import itertools, socket, stat
+    from grida.fx._protocol import PROTOCOL, read_message, write_message
+
+    on_socket = stat.S_ISSOCK(os.fstat(0).st_mode)
+    channel = socket.socket(fileno=os.dup(0))
+    reader, writer = channel.makefile("rb"), channel.makefile("wb")
+    ids = itertools.count(1)
+    received = []
+
+    def send(method, params=None, notify=False):
+        message = {"jsonrpc": "2.0", "method": method}
+        if not notify:
+            message["id"] = next(ids)
+        if params is not None:
+            message["params"] = params
+        write_message(writer, message)
+
+    def take(count):
+        for _ in range(count):
+            body = read_message(reader)
+            received.append(None if body is None else json.loads(body))
+
+    engine = {"name": "grida-fx", "version": "0.0.0"}
+    session = {"protocol": PROTOCOL, "engine": engine, "project_root": os.getcwd(), "sources": []}
+    send("initialize", session)
+    take(1)
+    for step in reply.get("stand_in", []):
+        if "ask" in step:
+            send("stand_in.answer", step["ask"])
+        elif "cancel" in step:
+            send("$/cancel", {"id": step["cancel"]}, notify=True)
+        elif "request" in step:
+            send(step["request"], step.get("params"))
+        elif "take" in step:
+            take(step["take"])
+        elif "sleep" in step:
+            time.sleep(step["sleep"])
+    send("shutdown")
+    take(1)
+    send("exit", notify=True)
+    with log.open("a") as out:
+        out.write(json.dumps({"on_socket": on_socket, "stand_in": received}) + "\n")
 if "linger" in reply:
     # A process of its own session that keeps this one's stdout and stderr open, as a process a
     # node body started does.
@@ -80,6 +137,28 @@ D1 = "1" * 64
 D2 = "2" * 64
 D3 = "3" * 64
 D4 = "4" * 64
+
+REPO = Path(__file__).resolve().parents[2]
+SCHEMA = json.loads(
+    (REPO / "spec" / "schemas" / "fx-node-protocol-v1.schema.json").read_text("utf-8")
+)
+EVENTS_SCHEMA = Draft202012Validator(
+    json.loads((REPO / "spec" / "schemas" / "fx-run-events-v1.schema.json").read_text("utf-8"))
+)
+
+
+def _definition(name: str) -> Draft202012Validator:
+    return Draft202012Validator({"$ref": f"#/$defs/{name}", "$defs": SCHEMA["$defs"]})
+
+
+ASK_PARAMS = _definition("stand_in_answer_params")
+ANSWER_RESULT = _definition("stand_in_answer_result")
+
+
+def _valid(validator: Draft202012Validator, value: Any) -> None:
+    errors = [f"{list(error.path)}: {error.message}" for error in validator.iter_errors(value)]
+    assert errors == [], errors
+
 
 GRAPH = {
     "kind": "fx-graph-v1",
@@ -177,7 +256,7 @@ EVENTS = [
 
 
 class Fake:
-    """The stand-in binary, its canned replies and its log."""
+    """The fake binary, its canned replies and its log."""
 
     def __init__(self, folder: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         self.folder = folder
@@ -200,12 +279,36 @@ class Fake:
         summary = "the plan text\nrun       {folder}\nresult    failed   spent $0.25\n"
         self.reply(run={"events": events, "stdout": summary, "status": 1, **reply})
 
+    def stands_in(self, script: list[dict[str, Any]], **reply: Any) -> None:
+        """A stand-in run (into ``runs/gallery/r1`` unless ``--run`` names a folder) whose
+        engine follows ``script``."""
+        reply.setdefault("folder", "runs/gallery/r1")
+        self.runs(events=STAND_IN_EVENTS, stand_in=script, **reply)
+
     @property
     def calls(self) -> list[dict[str, Any]]:
         if not self.log_path.exists():
             return []
         lines = self.log_path.read_text(encoding="utf-8").splitlines()
         return [json.loads(line) for line in lines]
+
+    @property
+    def invocations(self) -> list[list[str]]:
+        return [call["argv"] for call in self.calls if "argv" in call]
+
+    @property
+    def stand_in(self) -> list[dict[str, Any]]:
+        """What the last stand-in session got back, in order: the answer to ``initialize``, to
+        each scripted request, and to ``shutdown``; each ``stand_in.answer`` result checked
+        against its definition."""
+        sessions = [call for call in self.calls if "stand_in" in call]
+        assert sessions, "the fake engine served no stand-in"
+        assert sessions[-1]["on_socket"], "the engine's standard input is the stand-in's socket"
+        received = sessions[-1]["stand_in"]
+        for message in received[1:-1]:
+            if message is not None and "result" in message:
+                _valid(ANSWER_RESULT, message["result"])
+        return received
 
 
 @pytest.fixture
@@ -337,6 +440,26 @@ def test_plan_runs_in_the_current_directory_by_default(
     fx.plan(project / "workflows" / "gallery.yaml")
     assert fake.calls[0]["cwd"] == os.path.realpath(project)
     assert fake.calls[0]["argv"][1] == str(project / "workflows" / "gallery.yaml")
+
+
+def test_the_engine_falls_back_to_this_python_for_node_bodies(
+    fake: Fake, project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("GRIDA_FX_PYTHON", raising=False)
+    monkeypatch.delenv("GRIDA_FX_SDK_PYTHON", raising=False)
+    fx.plan("gallery", cwd=project)
+    fake.stands_in([])
+    fx.run("gallery", cwd=project, stand_in=lambda call: fx.DECLINE)
+    calls = [call for call in fake.calls if "argv" in call]
+    # The SDK names itself as the last choice; it never sets GRIDA_FX_PYTHON, so a project's
+    # .venv still wins over it.
+    assert [call["sdk_python"] for call in calls] == [sys.executable] * 3
+    assert [call["python"] for call in calls] == [None] * 3
+    assert "GRIDA_FX_SDK_PYTHON" not in os.environ
+    monkeypatch.setenv("GRIDA_FX_PYTHON", "/opt/other/python")
+    fx.plan("gallery", cwd=project)
+    assert fake.calls[-1]["python"] == "/opt/other/python"
+    assert fake.calls[-1]["sdk_python"] == sys.executable
 
 
 @pytest.mark.parametrize(
@@ -726,7 +849,7 @@ def test_cancelling_a_run_interrupts_the_engine(fake: Fake, project: Path) -> No
         while not any(call.get("argv", [""])[0] == "run" for call in fake.calls):
             assert time.monotonic() < deadline, "the run never started"
             await asyncio.sleep(0.05)
-        await asyncio.sleep(0.3)  # let the stand-in install its interrupt handler
+        await asyncio.sleep(0.3)  # let the fake install its interrupt handler
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task
@@ -752,6 +875,693 @@ def test_a_process_that_keeps_the_engines_pipes_does_not_hold_the_run(
     # The engine's summary was read, and the call ended with the engine, not with the process.
     assert result.failed == ["poster#1"]
     assert elapsed < 20
+
+
+# ------------------------------------------------------------------------------------------------
+# Stand-ins
+
+
+K1 = "a" * 64
+K2 = "b" * 64
+K3 = "c" * 64
+FINGERPRINT = "e" * 64
+PNG = b"\x89PNG\r\n\x1a\nstand-in"
+
+
+def _ask(
+    key: str = K1,
+    *,
+    capability: str = "image.generate",
+    request: dict[str, Any] | None = None,
+    files: dict[str, Any] | None = None,
+    take: tuple[int, ...] = (1,),
+    instance: str = "draw#1",
+    step: str = "draw",
+) -> dict[str, Any]:
+    """A scripted ``stand_in.answer``, checked against its definition."""
+    params = {
+        "capability": capability,
+        "route": {"id": "img-a@acme", "fingerprint": FINGERPRINT},
+        "request": {"prompt": "a lighthouse", "size": "64x64"} if request is None else request,
+        "take": list(take),
+        "key": key,
+        "instance": {"id": instance, "path": instance.rsplit("#", 1)[0], "step": step},
+        "files": files or {},
+    }
+    _valid(ASK_PARAMS, params)
+    return {"ask": params}
+
+
+def _key(number: int) -> str:
+    return format(number, "064x")
+
+
+def _ref(folder: Path, data: bytes, kind: str, name: str) -> dict[str, Any]:
+    """A file ref, as the engine hands one over, of ``data`` written into ``folder``."""
+    digest = hashlib.sha256(data).hexdigest()
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / digest).write_bytes(data)
+    return {
+        "digest": digest,
+        "kind": kind,
+        "size": len(data),
+        "name": name,
+        "path": str(folder / digest),
+        "facts": {"bytes": len(data), "kind": kind},
+    }
+
+
+def _b64(data: bytes) -> str:
+    return base64.b64encode(data).decode("ascii")
+
+
+CANCELLED = {"code": -32002, "message": "the engine cancelled stand_in.answer"}
+STAND_IN_EVENTS = [
+    _envelope(
+        "run_started",
+        workflow="gallery",
+        resumed=False,
+        ceiling_usd=None,
+        charged_usd=0,
+        estimate={"low_usd": 0, "high_usd": 0.04},
+        stand_in=True,
+    ),
+    _envelope(
+        "call",
+        id="draw#1",
+        capability="image.generate",
+        route="img-a@acme",
+        call=K1,
+        cached=False,
+        cost_usd=0,
+        stand_in=True,
+    ),
+    _envelope(
+        "node_finished",
+        id="draw#1",
+        path="draw",
+        cache="miss",
+        outputs={"image": _file(D1, "image/png", "draw/image")},
+        facts={"cost_usd": 0},
+    ),
+    _envelope(
+        "run_finished",
+        ok=True,
+        incomplete=False,
+        stopped=None,
+        charged_usd=0,
+        failed=[],
+        outputs={"plate": _file(D1, "image/png", "draw/image")},
+    ),
+]
+
+
+def test_the_fixture_events_are_run_events() -> None:
+    for event in [*EVENTS, *STAND_IN_EVENTS]:
+        _valid(EVENTS_SCHEMA, event)
+
+
+def test_a_stand_in_run_serves_the_engine_on_its_standard_input(fake: Fake, project: Path) -> None:
+    fake.stands_in([_ask(), {"take": 1}])
+    asked: list[fx.StandInCall] = []
+
+    def answer(call: fx.StandInCall) -> fx.Answer:
+        asked.append(call)
+        return fx.Answer(files={"image": PNG})
+
+    result = fx.run("gallery", cwd=project, max_usd=1, run_dir="runs/s", stand_in=answer)
+    # No plan and no price first: the run plans.
+    assert fake.invocations == [["run", "gallery", "--max-usd=1", "--run=runs/s", "--stand-in=-"]]
+    initialized, answered, shut_down = fake.stand_in
+    assert initialized["result"]["protocol"] == "fx-node-protocol-v1"
+    assert initialized["result"]["host"]["language"] == "python"
+    assert answered == {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": {"files": {"image": {"base64": _b64(PNG)}}, "data": None},
+    }
+    assert shut_down == {"jsonrpc": "2.0", "id": 3, "result": None}
+    assert [call.key for call in asked] == [K1]
+    # The result reads the stand-in store.
+    assert result.stand_in
+    assert result.ok
+    store = project.resolve() / "store" / "cache" / "stand-in"
+    assert result._store_root() == store
+    assert result.outputs["plate"].path == store / "files" / "11" / D1
+    assert result.steps["draw"].outputs["image"].path == store / "files" / "11" / D1
+
+
+def test_a_stand_in_run_refuses_what_it_cannot_be_before_starting(
+    fake: Fake, project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def answer(call: fx.StandInCall) -> fx.Answer:
+        return fx.Answer()
+
+    with pytest.raises(ValueError) as live:
+        fx.run("gallery", cwd=project, live=True, stand_in=answer)
+    assert str(live.value) == "a stand-in run is never live: pass live=False, or no stand_in"
+    with pytest.raises(ValueError) as gated:
+        fx.run("gallery", cwd=project, yes_up_to=1, stand_in=answer)
+    assert str(gated.value) == "a stand-in run runs every phase: yes_up_to does not apply"
+    with pytest.raises(TypeError) as not_callable:
+        fx.run("gallery", cwd=project, stand_in=fx.Answer())  # type: ignore[arg-type]
+    assert str(not_callable.value) == (
+        "stand_in is a function of one grida.fx.StandInCall, not Answer"
+    )
+    monkeypatch.setattr(_api, "os", types.SimpleNamespace(name="nt"))
+    with pytest.raises(NotImplementedError, match="stand-ins need a POSIX system"):
+        _api._answerer(answer, live=False, yes_up_to=None)
+    assert fake.calls == []
+
+
+def test_a_plan_runs_with_a_stand_in(fake: Fake, project: Path) -> None:
+    fake.stands_in([])
+    planned = fx.plan("gallery", cwd=project)
+    result = fx.run(planned, run_dir="runs/p", stand_in=lambda call: fx.DECLINE)
+    assert fake.invocations[-1] == ["run", "gallery", "--run=runs/p", "--stand-in=-"]
+    assert [argv[0] for argv in fake.invocations] == ["plan", "price", "run"]
+    assert result.stand_in
+
+
+def test_a_stand_in_run_whose_plan_has_problems(fake: Fake, project: Path) -> None:
+    # The run refuses the plan (exit 1, no run line); the SDK plans then, to say why.
+    fake.reply(
+        plan={"stdout": json.dumps(REFUSED_GRAPH)},
+        price={"stdout": "{}", "status": 1},
+        run={"stdout": "the plan, with its problems\n", "status": 1},
+    )
+    with pytest.raises(fx.PlanRefused):
+        fx.run("gallery", cwd=project, stand_in=lambda call: fx.DECLINE)
+    assert [argv[0] for argv in fake.invocations] == ["run", "plan", "price"]
+
+
+def test_a_stand_in_sees_the_call(fake: Fake, project: Path, tmp_path: Path) -> None:
+    front = _ref(tmp_path / "store", b"front", "image/png", "front.png")
+    back = _ref(tmp_path / "store", b"back", "image/png", "back.png")
+    request = {
+        "image": {"file": front["digest"]},
+        "views": {"front": {"file": front["digest"]}, "back": {"file": back["digest"]}},
+        "messages": [{"role": "user", "content": "look", "images": [{"file": back["digest"]}]}],
+        "note": {"file": "a.png"},
+        "size": "64x64",
+    }
+    ask = _ask(
+        K1,
+        capability="mesh.generate",
+        request=request,
+        files={front["digest"]: front, back["digest"]: back},
+        take=(2, 3),
+        instance="model['ada']#3",
+        step="model",
+    )
+    fake.stands_in([ask, {"take": 1}])
+    seen: list[fx.StandInCall] = []
+
+    def answer(call: fx.StandInCall) -> Any:
+        seen.append(call)
+        return fx.DECLINE
+
+    fx.run("gallery", cwd=project, stand_in=answer)
+    assert fake.stand_in[1]["result"] == {"decline": True}
+    (call,) = seen
+    assert call.capability == "mesh.generate"
+    assert (call.route.id, call.route.fingerprint) == ("img-a@acme", FINGERPRINT)
+    assert call.key == K1
+    assert (call.takes, call.take) == ((2, 3), 3)
+    assert (call.instance.id, call.instance.path, call.instance.step) == (
+        "model['ada']#3",
+        "model['ada']",
+        "model",
+    )
+    assert set(call.files) == {front["digest"], back["digest"]}
+    assert all(isinstance(file, fx.InputFile) for file in call.files.values())
+    # Every file value, at any depth, is the InputFile of its digest.
+    assert call.request["image"] is call.files[front["digest"]]
+    views = call.request["views"]
+    assert (views["front"].read_bytes(), views["back"].read_bytes()) == (b"front", b"back")
+    (image,) = call.request["messages"][0]["images"]
+    assert (image.digest, image.kind, image.name) == (back["digest"], "image/png", "back.png")
+    assert image.facts == {"bytes": 4, "kind": "image/png"}
+    # {"file": "a.png"} is data, not a file value; params are as they came.
+    assert call.request["note"] == {"file": "a.png"}
+    assert call.request["size"] == "64x64"
+    assert call.params["request"] == request
+    assert repr(call) == "<StandInCall mesh.generate on img-a@acme for model['ada']#3 take 3>"
+
+
+def test_stand_in_answers_go_out_as_the_protocol_says(
+    fake: Fake, project: Path, tmp_path: Path
+) -> None:
+    source = _ref(tmp_path / "store", PNG, "image/png", "source.png")
+    picture = tmp_path / "picture.WEBP"
+    picture.write_bytes(b"webp bytes")
+    script: list[Any] = [
+        fx.Answer(files={"image": PNG}),
+        fx.Answer(files={"image": fx.Output(kind="image/webp", data=b"webp")}),
+        fx.Answer(files={"image": fx.InputFile(source)}),
+        fx.Answer(files={"image": picture}),
+        fx.Answer.json({"title": "Lighthouse"}),
+        fx.Answer.turn(
+            "thinking",
+            [{"name": "look", "arguments": {"at": "sea"}}, {"id": "mine", "name": "look"}],
+        ),
+        fx.Answer.submit(caption="a lighthouse", score=3),
+        fx.DECLINE,
+        fx.CallRefused("no route takes a lighthouse"),
+        fx.CallFailed("the picture never came"),
+    ]
+
+    def answer(call: fx.StandInCall) -> Any:
+        scripted = script.pop(0)
+        if isinstance(scripted, Exception):
+            raise scripted
+        return scripted
+
+    asks = [_ask(_key(number)) for number in range(1, 11)]
+    fake.stands_in([*asks, {"take": 10}])
+    fx.run("gallery", cwd=project, stand_in=answer)
+    received = fake.stand_in[1:-1]
+    assert [message["id"] for message in received] == list(range(2, 12))
+    assert [message.get("result", message.get("error")) for message in received] == [
+        {"files": {"image": {"base64": _b64(PNG)}}, "data": None},
+        {"files": {"image": {"base64": _b64(b"webp"), "kind": "image/webp"}}, "data": None},
+        {"files": {"image": {"base64": _b64(PNG), "kind": "image/png"}}, "data": None},
+        {"files": {"image": {"base64": _b64(b"webp bytes"), "kind": "image/webp"}}, "data": None},
+        {"files": {}, "data": {"json": {"title": "Lighthouse"}}},
+        {
+            "files": {},
+            "data": {
+                "text": "thinking",
+                "tool_calls": [
+                    {"id": "call_1", "name": "look", "arguments": {"at": "sea"}},
+                    {"id": "mine", "name": "look", "arguments": {}},
+                ],
+            },
+        },
+        {
+            "files": {},
+            "data": {
+                "text": "",
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "name": "submit",
+                        "arguments": {"caption": "a lighthouse", "score": 3},
+                    }
+                ],
+            },
+        },
+        {"decline": True},
+        {"code": -32015, "message": "no route takes a lighthouse"},
+        {"code": -32016, "message": "the picture never came"},
+    ]
+    assert script == []
+
+
+def test_an_async_stand_in_keeps_its_state_in_this_process(fake: Fake, project: Path) -> None:
+    counts: collections.Counter[str] = collections.Counter()
+    asks = [_ask(K1), _ask(K2, capability="structured.generate"), _ask(K3)]
+    fake.stands_in([*asks, {"take": 3}])
+
+    async def answer(call: fx.StandInCall) -> fx.Answer:
+        await asyncio.sleep(0)
+        counts[call.capability] += 1
+        if call.capability == "structured.generate":
+            return fx.Answer.json({"n": counts[call.capability]})
+        return fx.Answer(files={"image": PNG})
+
+    fx.run("gallery", cwd=project, stand_in=answer)
+    assert counts == {"image.generate": 2, "structured.generate": 1}
+    assert fake.stand_in[2]["result"] == {"files": {}, "data": {"json": {"n": 1}}}
+
+
+@pytest.mark.parametrize("kind", ["plain", "async"])
+def test_stand_in_calls_are_answered_one_at_a_time_in_arrival_order(
+    fake: Fake, project: Path, kind: str
+) -> None:
+    order: list[str] = []
+    running = [0, 0]  # now, at most
+    guard = threading.Lock()
+
+    def enter(call: fx.StandInCall) -> None:
+        with guard:
+            order.append(call.key)
+            running[0] += 1
+            running[1] = max(running)
+
+    def leave() -> fx.Answer:
+        with guard:
+            running[0] -= 1
+        return fx.Answer(files={"image": PNG})
+
+    def plain(call: fx.StandInCall) -> fx.Answer:
+        enter(call)
+        time.sleep(0.05)
+        return leave()
+
+    async def awaited(call: fx.StandInCall) -> fx.Answer:
+        enter(call)
+        await asyncio.sleep(0.05)
+        return leave()
+
+    fake.stands_in([_ask(K1), _ask(K2), _ask(K3), {"take": 3}])
+    fx.run("gallery", cwd=project, stand_in=plain if kind == "plain" else awaited)
+    assert order == [K1, K2, K3]
+    assert running == [0, 1]
+    assert [message["id"] for message in fake.stand_in[1:-1]] == [2, 3, 4]
+
+
+def test_cancel_of_a_stand_in_call_waiting_its_turn(fake: Fake, project: Path) -> None:
+    asked: list[str] = []
+
+    def answer(call: fx.StandInCall) -> fx.Answer:
+        asked.append(call.key)
+        time.sleep(0.5)
+        return fx.Answer(files={"image": PNG})
+
+    # Ids: initialize 1, K1 2, K2 3.
+    script = [_ask(K1), _ask(K2), {"cancel": 3}, {"take": 2}]
+    fake.stands_in(script)
+    fx.run("gallery", cwd=project, stand_in=answer)
+    cancelled, answered = fake.stand_in[1:-1]
+    assert cancelled == {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "error": CANCELLED,
+    }
+    assert answered["id"] == 2 and "result" in answered
+    assert asked == [K1]
+
+
+def test_cancel_of_a_running_stand_in_call(fake: Fake, project: Path) -> None:
+    seen: list[str] = []
+
+    async def awaited(call: fx.StandInCall) -> fx.Answer:
+        try:
+            await asyncio.sleep(30)
+        except asyncio.CancelledError:
+            seen.append("cancelled")
+            raise
+        return fx.Answer(files={"image": PNG})
+
+    script = [_ask(K1), {"sleep": 0.2}, {"cancel": 2}, {"take": 1}]
+    fake.stands_in(script)
+    fx.run("gallery", cwd=project, stand_in=awaited)
+    assert fake.stand_in[1]["error"] == CANCELLED
+    assert seen == ["cancelled"]
+
+    # A plain function already running finishes, and its answer goes out.
+    def plain(call: fx.StandInCall) -> fx.Answer:
+        time.sleep(0.6)
+        seen.append("finished")
+        return fx.Answer(files={"image": PNG})
+
+    fx.run("gallery", cwd=project, stand_in=plain)
+    assert fake.stand_in[1]["result"] == {"files": {"image": {"base64": _b64(PNG)}}, "data": None}
+    assert seen == ["cancelled", "finished"]
+
+
+def test_the_run_ends_with_the_engine_while_a_plain_stand_in_still_answers(
+    fake: Fake, project: Path
+) -> None:
+    released = threading.Event()
+
+    def blocked(call: fx.StandInCall) -> fx.Answer:
+        released.wait(30)
+        return fx.Answer(files={"image": PNG})
+
+    # The second call waits for its turn behind the first; the engine exits without either.
+    fake.stands_in([_ask(K1), _ask(K2), {"sleep": 0.3}])
+    started = time.monotonic()
+    try:
+        result = fx.run("gallery", cwd=project, stand_in=blocked)
+    finally:
+        released.set()
+    assert time.monotonic() - started < 5
+    assert result.stand_in
+    initialized, shut_down = fake.stand_in
+    assert "result" in initialized
+    assert shut_down["result"] is None
+
+
+def test_the_run_ends_with_the_engine_while_a_coroutine_stand_in_still_answers(
+    fake: Fake, project: Path
+) -> None:
+    async def asleep(call: fx.StandInCall) -> fx.Answer:
+        await asyncio.sleep(30)
+        return fx.Answer(files={"image": PNG})
+
+    fake.stands_in([_ask(K1), _ask(K2), {"sleep": 0.3}])
+    started = time.monotonic()
+    result = fx.run("gallery", cwd=project, stand_in=asleep)
+    assert time.monotonic() - started < 5
+    assert result.stand_in
+    assert len(fake.stand_in) == 2
+
+
+def test_an_error_answer_holding_a_lone_surrogate_reaches_the_engine(
+    fake: Fake, project: Path
+) -> None:
+    name = os.fsdecode(b"gull\xff.png")
+
+    def refusing(call: fx.StandInCall) -> fx.Answer:
+        raise fx.CallRefused("no file " + name)
+
+    fake.stands_in([_ask(K1), {"take": 1}])
+    fx.run("gallery", cwd=project, stand_in=refusing)
+    assert fake.stand_in[1]["error"] == {
+        "code": fx.CallRefused.code,
+        "message": "no file gull\\udcff.png",
+    }
+
+    def faulting(call: fx.StandInCall) -> fx.Answer:
+        raise RuntimeError("cannot read " + name)
+
+    with pytest.raises(RuntimeError):
+        fx.run("gallery", cwd=project, stand_in=faulting)
+    assert fake.stand_in[1]["error"] == {
+        "code": -32099,
+        "message": "RuntimeError: cannot read gull\\udcff.png",
+    }
+
+
+def test_a_stand_in_run_without_an_engine_leaves_no_socket_open(
+    project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("GRIDA_FX_BIN", str(project / "missing"))
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", ResourceWarning)
+        for _ in range(2):
+            with pytest.raises(RuntimeError, match="GRIDA_FX_BIN"):
+                fx.run("gallery", cwd=project, stand_in=lambda call: fx.DECLINE)
+        gc.collect()
+    unclosed = [w for w in caught if issubclass(w.category, ResourceWarning)]
+    assert unclosed == [], [str(w.message) for w in unclosed]
+
+
+def test_each_run_serves_its_own_stand_in(fake: Fake, project: Path) -> None:
+    fake.stands_in([_ask(K1), {"take": 1}])
+    first: list[str] = []
+    second: list[str] = []
+    fx.run("gallery", cwd=project, stand_in=lambda call: first.append(call.key) or fx.DECLINE)
+    fx.run(
+        "gallery",
+        cwd=project,
+        stand_in=lambda call: second.append(call.key) or fx.Answer(files={"image": PNG}),
+    )
+    assert (first, second) == ([K1], [K1])
+    assert "result" in fake.stand_in[1] and fake.stand_in[1]["result"] != {"decline": True}
+
+
+class _Stop(BaseException):
+    """Not an Exception: what a stand-in raises is its fault all the same."""
+
+
+@pytest.mark.parametrize(
+    ("raised", "text"),
+    [
+        (RuntimeError("no picture for you"), "RuntimeError: no picture for you"),
+        (_Stop(), "_Stop"),
+    ],
+)
+def test_a_stand_in_that_raises_stops_the_run_and_run_raises_it(
+    fake: Fake, project: Path, raised: BaseException, text: str
+) -> None:
+    script = [_ask(K1), {"take": 1}, _ask(K2), {"take": 1}]
+    fake.stands_in(script)
+    asked: list[str] = []
+
+    def answer(call: fx.StandInCall) -> fx.Answer:
+        asked.append(call.key)
+        raise raised
+
+    with pytest.raises(type(raised)) as caught:
+        fx.run("gallery", cwd=project, run_dir="runs/s", stand_in=answer)
+    assert caught.value is raised
+    assert caught.value.__notes__ == [f"the stand-in run stopped in {project / 'runs' / 's'}"]
+    failed, later = fake.stand_in[1:-1]
+    assert failed["error"] == {"code": -32099, "message": text}
+    # Later calls are answered without calling the stand-in again.
+    assert later["error"] == {"code": -32099, "message": "the stand-in failed earlier"}
+    assert asked == [K1]
+
+
+@pytest.mark.parametrize(
+    ("returned", "message"),
+    [
+        (None, "a stand-in returns an Answer or grida.fx.DECLINE, not None"),
+        ({"files": {}}, "a stand-in returns an Answer or grida.fx.DECLINE, not dict"),
+    ],
+)
+def test_a_stand_in_that_returns_something_else_is_a_fault(
+    fake: Fake, project: Path, returned: Any, message: str
+) -> None:
+    fake.stands_in([_ask(K1), {"take": 1}])
+    with pytest.raises(TypeError) as raised:
+        fx.run("gallery", cwd=project, stand_in=lambda call: returned)
+    assert str(raised.value) == message
+    assert raised.value.__notes__ == [
+        f"the stand-in run stopped in {project / 'runs' / 'gallery' / 'r1'}"
+    ]
+    assert fake.stand_in[1]["error"] == {"code": -32099, "message": f"TypeError: {message}"}
+
+
+def test_the_stand_in_answers_only_its_own_methods(fake: Fake, project: Path) -> None:
+    load = {"path": str(project / "stand_in.py"), "function": "answer"}
+    initialize = {
+        "protocol": "fx-node-protocol-v1",
+        "engine": {"name": "grida-fx", "version": "0.0.0"},
+        "project_root": str(project),
+        "sources": [],
+    }
+    script = [
+        {"request": "stand_in.load", "params": load},
+        {"request": "initialize", "params": initialize},
+        {"cancel": 99},
+        {"take": 2},
+    ]
+    fake.stands_in(script)
+    fx.run("gallery", cwd=project, stand_in=lambda call: fx.DECLINE)
+    assert [message["error"] for message in fake.stand_in[1:-1]] == [
+        {"code": -32601, "message": "grida.fx's stand-in has no method stand_in.load"},
+        {"code": -32600, "message": "initialize was already answered"},
+    ]
+
+
+def test_run_result_failures(tmp_path: Path) -> None:
+    started = {
+        "workflow": "w",
+        "ceiling_usd": None,
+        "charged_usd": 0,
+        "estimate": {"low_usd": 0, "high_usd": 0},
+        "stand_in": True,
+    }
+    second = {"invocation_id": "inv-2"}
+    events = [
+        _envelope("run_started", resumed=False, **started),
+        _envelope(
+            "node_failed",
+            id="draw#1",
+            path="draw",
+            error="image.generate on img-a@acme failed: the stand-in said no",
+            code="call_failed",
+            facts={"tries": 1},
+        ),
+        _envelope("node_failed", id="note#1", path="note", error="on purpose", code="node_failure"),
+        _envelope(
+            "run_finished",
+            ok=False,
+            incomplete=False,
+            stopped=None,
+            charged_usd=0,
+            failed=["draw#1", "note#1"],
+            outputs={},
+        ),
+        {**_envelope("run_started", resumed=True, **started), **second},
+        {
+            **_envelope(
+                "node_failed",
+                id="draw#1",
+                path="draw",
+                error="image.generate on img-a@acme failed: the image is 32x32, not 64x64",
+                code="call_failed",
+                facts={"cost_usd": 0},
+            ),
+            **second,
+        },
+        {
+            **_envelope("node_failed", id="check#1", path="check", error="too dark", code=None),
+            **second,
+        },
+        {
+            **_envelope(
+                "node_skipped",
+                id="pack#1",
+                path="pack",
+                reason="something it reads failed",
+                blocked=True,
+            ),
+            **second,
+        },
+        {
+            **_envelope(
+                "run_finished",
+                ok=False,
+                incomplete=True,
+                stopped="the stand-in failed: RuntimeError: broken",
+                charged_usd=0,
+                failed=["check#1", "draw#1", "pack#1"],
+                outputs={},
+            ),
+            **second,
+        },
+    ]
+    for event in events:
+        _valid(EVENTS_SCHEMA, event)
+    result = RunResult(tmp_path, events)
+    assert list(result.failures) == ["check#1", "draw#1", "pack#1"]
+    assert result.failures["draw#1"] == fx.Failure(
+        id="draw#1",
+        path="draw",
+        message="image.generate on img-a@acme failed: the image is 32x32, not 64x64",
+        code="call_failed",
+        facts={"cost_usd": 0},
+        skipped=False,
+    )
+    assert result.failures["check#1"] == fx.Failure(
+        id="check#1", path="check", message="too dark", code=None, facts={}, skipped=False
+    )
+    assert result.failures["pack#1"] == fx.Failure(
+        id="pack#1",
+        path="pack",
+        message="something it reads failed",
+        code=None,
+        facts={},
+        skipped=True,
+    )
+    assert result.stopped == "the stand-in failed: RuntimeError: broken"
+    assert result.stand_in
+    result._store = tmp_path / "cache"
+    assert result._store_root() == tmp_path / "cache" / "stand-in"
+    # Before a run_finished there are none.
+    unfinished = RunResult(tmp_path, events[:3])
+    assert (unfinished.failures, unfinished.stopped) == ({}, None)
+    # A run without a stand-in, whose record predates `code`.
+    plain = RunResult(tmp_path, EVENTS)
+    assert not plain.stand_in
+    assert plain.failures == {
+        "poster#1": fx.Failure(
+            id="poster#1",
+            path="poster",
+            message="the poster has no face",
+            code=None,
+            facts={},
+            skipped=False,
+        )
+    }
+    assert plain.stopped is None
+    plain._store = tmp_path / "cache"
+    assert plain._store_root() == tmp_path / "cache"
 
 
 # ------------------------------------------------------------------------------------------------
@@ -881,6 +1691,20 @@ def test_the_module_becomes_the_binary(fake: Fake, project: Path) -> None:
     assert (done.returncode, done.stdout, done.stderr) == (1, "plan text\n", "a warning\n")
     assert fake.calls[-1]["argv"] == ["plan", "gallery", "--check", "--name", "Ada Lovelace"]
     assert fake.calls[-1]["cwd"] == os.path.realpath(project)
+
+
+def test_the_module_names_its_own_python_for_node_bodies(
+    fake: Fake, project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake.reply(plan={"stdout": "plan text\n"})
+    monkeypatch.delenv("GRIDA_FX_PYTHON", raising=False)
+    _module(["plan", "gallery"], project)
+    assert fake.calls[-1]["python"] is None
+    assert fake.calls[-1]["sdk_python"] == sys.executable
+    monkeypatch.setenv("GRIDA_FX_PYTHON", "/opt/other/python")
+    _module(["plan", "gallery"], project)
+    assert fake.calls[-1]["python"] == "/opt/other/python"
+    assert fake.calls[-1]["sdk_python"] == sys.executable
 
 
 def test_the_module_without_a_binary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

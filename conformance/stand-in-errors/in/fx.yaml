@@ -1,0 +1,3 @@
+fx: project/v1
+routes:
+  image.generate: img-a@acme

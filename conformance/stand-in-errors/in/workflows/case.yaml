@@ -1,0 +1,35 @@
+fx: workflow/v1
+id: case
+title: What a stand-in's answer can end in
+steps:
+  good:
+    uses: fx/image.generate@1
+    with: { prompt: a good picture, size: "64x64" }
+  refused:
+    uses: fx/image.generate@1
+    with: { prompt: refuse this, size: "64x64" }
+  failed:
+    uses: fx/image.generate@1
+    with: { prompt: fail this, size: "64x64" }
+  declined:
+    uses: fx/image.generate@1
+    with: { prompt: decline this, size: "64x64" }
+  small:
+    uses: fx/image.generate@1
+    with: { prompt: too small, size: "64x64" }
+  text:
+    uses: fx/image.generate@1
+    with: { prompt: text instead, size: "64x64" }
+  extra:
+    uses: fx/image.generate@1
+    with: { prompt: an extra file, size: "64x64" }
+  missing:
+    uses: fx/image.generate@1
+    with: { prompt: no file at all, size: "64x64" }
+  data:
+    uses: fx/image.generate@1
+    with: { prompt: data as well, size: "64x64" }
+  body:
+    uses: ./nodes/asks.py#asks_nothing
+outputs:
+  good: ${{ steps.good.outputs.image }}

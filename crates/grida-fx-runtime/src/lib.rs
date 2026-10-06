@@ -9,6 +9,7 @@
 //! | [`folder`] | run folders: names, `plan.json`, `run.lock`, placing files |
 //! | [`ledger`] | the ceiling, step budgets, holds and their settlement |
 //! | [`calls`] | the `capability` request path, the retry owner, route pacing |
+//! | [`stand_in`] | stand-in runs: the answerer of a stand-in's calls, the checks its answers meet |
 //! | [`agent`] | the agent loop (`agent.run`) |
 //! | [`executor`] | one attempt of one instance: result cache, select, paid built-ins, host runs, accepting results |
 //! | [`runner`] | one run invocation: refusals, resume, scheduling, dispatch, outputs |
@@ -29,5 +30,6 @@ pub mod host;
 pub mod ledger;
 pub mod plantime;
 pub mod runner;
+pub mod stand_in;
 pub mod store;
 pub mod tools;

@@ -150,7 +150,9 @@ pub struct Capability {
     /// Only these names have a meaning for it; every route of the built-in table declares only
     /// these.
     pub features: &'static [&'static str],
-    /// The answer's files: `(name, kind or family)`.
+    /// The answer's files: `(name, kind)`, the kind spec/capabilities.md names for the file. A
+    /// family instead (`model`, of `mesh.generate`) means the file's bytes decide its kind
+    /// within it. A stand-in's file without a kind takes this one ([`crate::stand_in`]).
     pub files: &'static [(&'static str, &'static str)],
 }
 
@@ -271,7 +273,7 @@ pub const CAPABILITIES: &[Capability] = &[
         shape: Shape::Request,
         members: &[req("prompt", Text), opt("duration", Number)],
         features: &[],
-        files: &[("audio", "audio")],
+        files: &[("audio", "audio/mpeg")],
     },
     Capability {
         name: "sound.generate",
@@ -283,7 +285,7 @@ pub const CAPABILITIES: &[Capability] = &[
             opt("loop", Boolean),
         ],
         features: &["exact_duration"],
-        files: &[("audio", "audio")],
+        files: &[("audio", "audio/mpeg")],
     },
     Capability {
         name: "speech.generate",
@@ -296,7 +298,7 @@ pub const CAPABILITIES: &[Capability] = &[
             opt("max_chars", Integer),
         ],
         features: &["audio_tags", "stability"],
-        files: &[("audio", "audio")],
+        files: &[("audio", "audio/mpeg")],
     },
     Capability {
         name: "structured.generate",

@@ -155,14 +155,7 @@ impl RequestAdapter for OpenRouterMusic {
         let Some(audio) = answer.files.get("audio") else {
             return Err("the answer has no audio".into());
         };
-        if wire::matches_signature(&audio.kind, &audio.bytes) {
-            Ok(())
-        } else {
-            Err(format!(
-                "audio bytes do not match declared media type {}",
-                audio.kind
-            ))
-        }
+        crate::checks::audio_signature(audio)
     }
 }
 

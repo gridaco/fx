@@ -32,10 +32,16 @@ pub enum PlanVerb {
 /// Runs a planning verb.
 pub fn run(verb: PlanVerb, args: &PlanArgs) -> Result<u8, Error> {
     let request = request(args)?;
-    let mut host = crate::print::host();
+    let mut host = crate::print::planning_host(&request.target, &request.cwd);
     let mut planner = make_planner(&request, &mut host)?;
     let runtime = crate::engine::runtime()?;
-    let engine = crate::engine::engine_for(&runtime, &planner, false)?;
+    let engine = crate::engine::engine_for(
+        &runtime,
+        &planner,
+        false,
+        None,
+        std::slice::from_ref(&request.cwd),
+    )?;
     let plan = crate::engine::plan(&engine, &mut planner, &mut host);
     crate::engine::shutdown(&runtime, &engine);
     let plan = plan?;

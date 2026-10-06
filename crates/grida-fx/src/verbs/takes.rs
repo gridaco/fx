@@ -23,6 +23,9 @@
 //!   last number is the take; the last such event wins, and none leaves the entry without a
 //!   `result`. Writes `{take, result?}` (a bare digest) and prints `<takes file name>: <step> uses
 //!   take <n>`.
+//! - `reroll` and `pick` refuse a stand-in run, whose `plan.json` says `"stand_in": true`
+//!   (spec/store.md §8 "Stand-in runs"): `refused: <run> holds a stand-in run, and stand-in runs
+//!   never change the workflow's takes file`, exit 1, before the log is read.
 //! - `takes list <target>`: the target's takes file (found as planning finds it: next to the
 //!   workflow file, or in the planning project's root for a workflow of another project); one
 //!   line per entry, sorted by step path: `<step>  take <n>[  <result>]`. No file prints nothing.
@@ -43,6 +46,7 @@ use grida_fx_core::docs::takes::{MAX_TAKE, TakeChoice, Takes, read_takes, render
 use grida_fx_core::docs::{Schema, validate};
 use grida_fx_core::project::{Target, load_target};
 use grida_fx_core::{Error, ErrorKind};
+use grida_fx_runtime::folder::holds_stand_in;
 use indexmap::IndexMap;
 use serde_json::{Value, json};
 use std::path::{Component, Path, PathBuf};
@@ -51,6 +55,9 @@ use std::path::{Component, Path, PathBuf};
 pub fn reroll(args: &RerollArgs) -> Result<u8, Error> {
     let cwd = super::planning::working_directory()?;
     let run = RunTakes::open(&args.run, &cwd)?;
+    if let Some(refused) = run.refused(&args.run) {
+        return Ok(refused);
+    }
     let events = read_log(&run.folder, &args.run, false)?;
     let latest = latest_take(&events, &args.step)
         .ok_or_else(|| Error::usage(format!("{} never ran a step {}", args.run, args.step)))?;
@@ -81,6 +88,9 @@ pub fn pick(args: &PickArgs) -> Result<u8, Error> {
     let take = parse_take(&args.take)?;
     let cwd = super::planning::working_directory()?;
     let run = RunTakes::open(&args.run, &cwd)?;
+    if let Some(refused) = run.refused(&args.run) {
+        return Ok(refused);
+    }
     let events = read_log(&run.folder, &args.run, false)?;
     if !names_step(&run.plan, &events, &args.step) {
         return Err(Error::usage(format!(
@@ -145,7 +155,7 @@ impl TakesFile {
                 "{target} is a builder; takes list and takes mv take a workflow file or id"
             )));
         }
-        let mut host = crate::print::host();
+        let mut host = crate::print::planning_host(target, cwd);
         let (project, workflow) = load_target(target, cwd, &IndexMap::new(), &mut host)?;
         let home = Project::find(&workflow.path)?;
         let folder = if home.root != project.root {
@@ -183,6 +193,20 @@ struct RunTakes {
 }
 
 impl RunTakes {
+    /// A stand-in run's takes file is never written (spec/store.md §8, "Stand-in runs"): prints
+    /// `refused: <run> holds a stand-in run, and stand-in runs never change the workflow's takes
+    /// file` and gives the exit status, 1; `None` for any other run.
+    fn refused(&self, given: &str) -> Option<u8> {
+        if !holds_stand_in(&self.plan) {
+            return None;
+        }
+        print_line(&format!(
+            "refused: {given} holds a stand-in run, and stand-in runs never change the \
+             workflow's takes file"
+        ));
+        Some(1)
+    }
+
     fn open(given: &str, cwd: &Path) -> Result<RunTakes, Error> {
         let folder = cwd.join(given);
         let plan = read_plan(&folder, given)?;

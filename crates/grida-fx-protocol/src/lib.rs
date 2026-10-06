@@ -19,7 +19,7 @@ pub use types::*;
 /// The protocol this engine speaks (protocol.md §2).
 pub const PROTOCOL: &str = "fx-node-protocol-v1";
 
-/// Method names (protocol.md §2, §5, §6).
+/// Method names (protocol.md §2, §5, §6; the stand-in's, §5.7).
 pub mod method {
     pub const INITIALIZE: &str = "initialize";
     pub const SHUTDOWN: &str = "shutdown";
@@ -37,4 +37,6 @@ pub mod method {
     pub const PROGRESS: &str = "progress";
     pub const PROMPT_RENDER: &str = "prompt.render";
     pub const FILE_PUT: &str = "file.put";
+    pub const STAND_IN_LOAD: &str = "stand_in.load";
+    pub const STAND_IN_ANSWER: &str = "stand_in.answer";
 }
