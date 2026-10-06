@@ -13,6 +13,7 @@ import asyncio
 import contextlib
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -271,7 +272,7 @@ def test_a_relative_binary_is_taken_from_the_current_directory(
 
 def test_the_packaged_binary_sits_in_the_package() -> None:
     packaged = _api._packaged_binary()
-    assert packaged.parent == Path(fx.__file__).resolve().parent / "bin"
+    assert packaged.parent == Path(fx.__file__).resolve().parent / "_bin"
     assert packaged.name in ("grida-fx", "grida-fx.exe")
 
 
@@ -899,3 +900,55 @@ def test_the_module_with_a_binary_it_cannot_start(
     done = _module(["plan", "x"], tmp_path)
     assert done.returncode == 2
     assert done.stderr.startswith(f"grida-fx: cannot start {unrunnable}: ")
+
+
+def _installed(site: Path) -> Path:
+    """A copy of this package in ``site``, as a wheel installs it: its packaged binary's place."""
+    source = Path(fx.__file__).resolve().parents[1]
+    shutil.copytree(source, site / "grida", ignore=shutil.ignore_patterns("__pycache__", "_bin"))
+    packaged = site / _api._packaged_binary().relative_to(source.parent)
+    packaged.parent.mkdir()
+    return packaged
+
+
+def _shell(path: Path, body: str) -> None:
+    path.write_text(f"#!/bin/sh\n{body}\n", encoding="utf-8")
+    path.chmod(0o755)
+
+
+def test_the_module_runs_the_packaged_binary_before_the_one_on_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    packaged = _installed(tmp_path / "site")
+    _shell(packaged, 'echo "packaged $# [$1] [$2]"; echo "to stderr" >&2; exit 3')
+    on_path = tmp_path / "path"
+    on_path.mkdir()
+    _shell(on_path / "grida-fx", 'echo "on path"; exit 0')
+    monkeypatch.delenv("GRIDA_FX_BIN", raising=False)
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path / "site"))
+    monkeypatch.setenv("PATH", f"{on_path}{os.pathsep}{os.environ['PATH']}")
+    done = _module(["--version", "two words"], tmp_path)
+    assert (done.returncode, done.stdout, done.stderr) == (
+        3,
+        "packaged 2 [--version] [two words]\n",
+        "to stderr\n",
+    )
+    packaged.unlink()
+    done = _module(["nodes"], tmp_path)
+    assert (done.returncode, done.stdout) == (0, "on path\n")
+
+
+def test_the_module_with_no_binary_anywhere_names_the_variable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _installed(tmp_path / "site")
+    monkeypatch.delenv("GRIDA_FX_BIN", raising=False)
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path / "site"))
+    monkeypatch.setenv("PATH", str(tmp_path / "nowhere"))
+    done = _module(["--version"], tmp_path)
+    assert done.returncode == 2
+    assert done.stdout == ""
+    assert done.stderr == (
+        "grida-fx: no grida-fx binary was found: this grida installation carries none, so set"
+        " GRIDA_FX_BIN to its path, or put grida-fx on PATH\n"
+    )

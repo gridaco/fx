@@ -6,7 +6,14 @@
       "name": "@grida/fx",
       "devDependencies": {
         "@types/bun": "^1.2.0",
+        "@types/node": "*",
         "typescript": "^5.6.0",
+      },
+      "optionalDependencies": {
+        "@grida/fx-darwin-arm64": "0.1.0-alpha.1",
+        "@grida/fx-darwin-x64": "0.1.0-alpha.1",
+        "@grida/fx-linux-arm64-gnu": "0.1.0-alpha.1",
+        "@grida/fx-linux-x64-gnu": "0.1.0-alpha.1",
       },
     },
   },

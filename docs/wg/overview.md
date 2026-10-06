@@ -73,10 +73,12 @@ This milestone works only in this repo. The Python gnode stays in stage-gen, fro
   - `facts()`;
   - number and YAML edge cases;
   - JCS vectors.
+- **Status:** done (`7aa75a2`).
 
 **2. The offline core in Rust, with the Python describe host.**
 - **Scope:** workflow parsing, expressions, expansion, identity, planning, pricing, the routes document, and protocol v2 `describe` and `build`. Most conformance cases and every stage-gen workflow load Python node modules even to plan, so the Python host's `describe` and `build` arrive here, not in step 3.
 - **Gate:** checked against today's Python engine. With digests removed, the expanded graphs, prices and projections must match the Python output exactly. A small standalone script checks the digest formula, and the published JCS vectors check the canonical JSON.
+- **Status:** done (`315f378`).
 
 **3. The runner, the Python node host and the `grida.fx` SDK.**
 - **Scope:**
@@ -91,17 +93,20 @@ This milestone works only in this repo. The Python gnode stays in stage-gen, fro
 - **Gate:**
   - every conformance case passes;
   - stage-gen's workflows and game pipelines plan and dry-run on the Rust engine, with their Python nodes and builders unchanged in shape.
+- **Status:** done (`403760e`, `3fafd28`).
 
 **4. Provider adapters.**
 - **Scope:** only the routes our workflows use: openrouter (images, structured output, agent turns, music), openai (images with native alpha), fal (images, video, background removal), tripo (mesh, rig) and elevenlabs (speech, sound effects).
 - **Text and agent calls** go through FX's own thin client (decision 9). Cache keys come from FX's canonical request.
 - **Prices:** FX ships a default route table with prices and capabilities, which users can override. Actual cost is settled from what the provider reports.
 - **Tests cost nothing to run:** each adapter is checked against an injected transport and synthetic exchange fixtures. CI has no keys and spends nothing.
+- **Status:** done (`6b84fd8`, `6205da0`).
 
 **5. Packaging and a preview publish.**
 - **npm:** `@grida/fx` plus the per-platform engine packages.
 - **PyPI:** `grida` wheels, one per platform.
 - **Releases are previews** (an npm `next` tag, PyPI pre-releases) until milestone 2 passes.
+- **Status:** the packages and the release workflow are built; nothing is published yet. The first publish (`v0.1.0-alpha.1`) is the owner's, after review ([RELEASING.md](../../RELEASING.md)).
 
 ## Milestone 2: stage-gen moves onto FX
 

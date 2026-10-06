@@ -7,6 +7,18 @@ bodies when the engine runs them (`python -m grida.fx.host`, started by the engi
 the `grida-fx` engine from Python. The engine is the only place with engine logic: planning,
 identities, the cache and budgets all happen in `grida-fx`, never in this package.
 
+## Install
+
+```sh
+pip install --pre grida
+```
+
+The preview is a pre-release (`0.1.0aN`), so it needs `--pre` (`uv pip install --prerelease=allow
+grida`). Each wheel carries the engine for its platform: macOS on Apple silicon (11 or later) and
+on Intel (10.12 or later), and Linux with glibc 2.28 or later on x86_64 and aarch64. Windows is not
+in the preview: the engine's runner uses Unix process groups and signals. There is no source
+distribution, and the wheels install no console command: the engine runs as `python -m grida.fx`.
+
 ## The engine from the command line
 
 ```sh
@@ -19,7 +31,7 @@ python -m grida.fx run workflows/gallery.yaml --poster inputs/poster.png --live 
 is the first of:
 
 1. `GRIDA_FX_BIN`, when set (a path; relative to the current directory);
-2. the one shipped inside the `grida` wheel (`grida/fx/bin/grida-fx`);
+2. the one shipped inside the `grida` wheel (`grida/fx/_bin/grida-fx`);
 3. `grida-fx` on `PATH`.
 
 With none of them, the command prints `grida-fx: …` naming `GRIDA_FX_BIN` and exits 2.

@@ -1,0 +1,295 @@
+name: release
+
+# Builds the preview's engine for its four targets, packs the grida wheels and the npm packages
+# around each one, holds every package to the conformance suite as installed, and then (for a
+# v* tag, once a reviewer approves the "release" environment) publishes them: npm under the
+# dist-tag next, PyPI as a pre-release. RELEASING.md has the owner's steps.
+#
+# A workflow_dispatch run is a dry run unless dry_run is unchecked on a v* tag: it builds and
+# checks everything and publishes nothing. Windows is not in the preview: the engine's runner uses
+# Unix process groups and signals.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build and check everything, publish nothing
+        type: boolean
+        default: true
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_INCREMENTAL: "0"
+  CARGO_TERM_COLOR: always
+  GRIDA_FX_NETWORK: "off"
+
+jobs:
+  versions:
+    name: Versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      python_version: ${{ steps.version.outputs.python_version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # setup-uv publishes no major tags; this pins one immutable release. No caches in a release.
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: false
+      - name: Every manifest names one pre-release version, and a tag names it too
+        run: |
+          check=(uv run --no-project --python 3.12 tools/check_versions.py --prerelease)
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then check+=(--tag "$GITHUB_REF_NAME"); fi
+          "${check[@]}"
+      - id: version
+        run: |
+          print=(uv run --no-project --python 3.12 tools/check_versions.py --print)
+          echo "version=$("${print[@]}" semver)" >> "$GITHUB_OUTPUT"
+          echo "python_version=$("${print[@]}" pep440)" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: versions
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # tools/build_wheel.py reads each wheel tag back from the binary; the job checks it is the
+          # one below. On macOS the minimum version is the tag's.
+          - target: aarch64-apple-darwin
+            runner: macos-15
+            macos: "11.0"
+            wheel_tag: macosx_11_0_arm64
+          - target: x86_64-apple-darwin
+            runner: macos-15-intel
+            macos: "10.12"
+            wheel_tag: macosx_10_12_x86_64
+          # Linux binaries link glibc 2.28 at most (manylinux_2_28, and the npm packages' libc),
+          # through cargo-zigbuild. Each builds on its own architecture, so its checks can run it.
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+            glibc: "2.28"
+            wheel_tag: manylinux_2_28_x86_64
+            sdk: true # this job uploads @grida/fx (every job packs it)
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+            glibc: "2.28"
+            wheel_tag: manylinux_2_28_aarch64
+    env:
+      TARGET: ${{ matrix.target }}
+      VERSION: ${{ needs.versions.outputs.version }}
+      PYTHON_VERSION: ${{ needs.versions.outputs.python_version }}
+      BIN: target/${{ matrix.target }}/release/grida-fx
+      WHEEL_TAG: ${{ matrix.wheel_tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: false
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v7
+        with:
+          # The npm packages promise Node 18 or later: they are built and checked on the oldest.
+          node-version: "18"
+          package-manager-cache: false
+      - name: Packages go outside the checkout
+        run: echo "DIST=$RUNNER_TEMP/dist" >> "$GITHUB_ENV"
+
+      - name: Build grida-fx (macOS ${{ matrix.macos }} or later)
+        if: runner.os == 'macOS'
+        env:
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macos }}
+        run: |
+          export RUSTFLAGS="--remap-path-prefix=$GITHUB_WORKSPACE=fx --remap-path-prefix=$HOME/.cargo=cargo --remap-path-prefix=$HOME/.rustup=rustup"
+          cargo build --locked --release --bin grida-fx --target "$TARGET"
+      - name: Build grida-fx (glibc ${{ matrix.glibc }} or later)
+        if: runner.os == 'Linux'
+        env:
+          GLIBC: ${{ matrix.glibc }}
+        run: |
+          export RUSTFLAGS="--remap-path-prefix=$GITHUB_WORKSPACE=fx --remap-path-prefix=$HOME/.cargo=cargo --remap-path-prefix=$HOME/.rustup=rustup"
+          zigbuild="$RUNNER_TEMP/zigbuild"
+          uv venv --python 3.12 "$zigbuild"
+          uv pip install --python "$zigbuild/bin/python" cargo-zigbuild==0.23.4 ziglang==0.14.1
+          CARGO_ZIGBUILD_PYTHON_PATH="$zigbuild/bin/python" "$zigbuild/bin/cargo-zigbuild" \
+            zigbuild --locked --release --bin grida-fx --target "$TARGET.$GLIBC"
+      - name: The engine runs here and names the release's version
+        run: |
+          printed=$("$BIN" --version)
+          echo "$printed"
+          test "$printed" = "grida-fx $VERSION"
+
+      - run: uv sync --locked --project python
+      # build_wheel.py reads the platform tag back from the binary and refuses one it cannot tag
+      # honestly: a glibc past 2.28, a library outside the system, the wrong architecture.
+      - name: Build the grida wheel
+        run: >-
+          uv run --locked --project python python tools/build_wheel.py
+          --binary "$BIN" --target "$TARGET" --out "$DIST/wheels"
+      - name: Install the wheel into a fresh environment
+        run: |
+          wheels=("$DIST"/wheels/*.whl)
+          test "${#wheels[@]}" -eq 1
+          case "${wheels[0]##*/}" in
+            "grida-$PYTHON_VERSION-py3-none-$WHEEL_TAG.whl") ;;
+            *) echo "::error::${wheels[0]##*/} is not tagged $WHEEL_TAG"; exit 1 ;;
+          esac
+          venv="$RUNNER_TEMP/wheel-check"
+          # The oldest Python the wheel supports (requires-python).
+          uv venv --python 3.11 "$venv"
+          uv pip install --python "$venv/bin/python" "${wheels[0]}"
+          echo "WHEEL_PYTHON=$venv/bin/python" >> "$GITHUB_ENV"
+      - name: Conformance suite through python -m grida.fx, as installed
+        run: |
+          "$WHEEL_PYTHON" -m grida.fx --version
+          GRIDA_FX_PYTHON="$WHEEL_PYTHON" uv run --locked --project python \
+            python conformance/run.py --strict --command "$WHEEL_PYTHON -m grida.fx"
+
+      - name: Install the SDK's TypeScript compiler
+        working-directory: js/fx
+        run: bun install --frozen-lockfile
+      - name: Build the npm packages
+        run: node tools/build_npm.mjs --out "$DIST/npm" --target "$TARGET=$BIN"
+      - name: Install the npm packages into a fresh prefix
+        run: |
+          prefix="$RUNNER_TEMP/npm-check"
+          mkdir -p "$prefix"
+          npm install --prefix "$prefix" --no-audit --no-fund --no-save "$DIST"/npm/*.tgz
+          echo "NPM_BIN=$prefix/node_modules/.bin/grida-fx" >> "$GITHUB_ENV"
+      - name: Conformance suite through the npm grida-fx, as installed
+        run: |
+          "$NPM_BIN" --version
+          GRIDA_FX_PYTHON="$WHEEL_PYTHON" uv run --locked --project python \
+            python conformance/run.py --strict --command "$NPM_BIN"
+      # Every job packs @grida/fx; one uploads it, every job uploads its own engine package.
+      - name: Set the tarballs apart
+        run: |
+          mkdir -p "$DIST/npm-sdk" "$DIST/npm-engine"
+          mv "$DIST/npm/grida-fx-$VERSION.tgz" "$DIST/npm-sdk/"
+          mv "$DIST"/npm/*.tgz "$DIST/npm-engine/"
+          test "$(find "$DIST/npm-engine" -name '*.tgz' | wc -l)" -eq 1
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wheel-${{ matrix.target }}
+          path: ${{ runner.temp }}/dist/wheels/*.whl
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: npm-${{ matrix.target }}
+          path: ${{ runner.temp }}/dist/npm-engine/*.tgz
+          if-no-files-found: error
+      - if: matrix.sdk
+        uses: actions/upload-artifact@v7
+        with:
+          name: npm-sdk
+          path: ${{ runner.temp }}/dist/npm-sdk/*.tgz
+          if-no-files-found: error
+
+  publish:
+    name: Publish (npm next, PyPI pre-release)
+    needs: [versions, build]
+    if: startsWith(github.ref, 'refs/tags/v') && inputs.dry_run != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Required reviewers are set on this environment by the owner; it also holds NPM_TOKEN while
+    # a package has never been published (RELEASING.md).
+    environment:
+      name: release
+      url: https://www.npmjs.com/package/@grida/fx
+    permissions:
+      contents: read
+      id-token: write # npm provenance and trusted publishing; PyPI trusted publishing
+    env:
+      VERSION: ${{ needs.versions.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: wheel-*
+          path: dist/wheels
+          merge-multiple: true
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: npm-*
+          path: dist/npm
+          merge-multiple: true
+      - name: Exactly the preview's packages
+        run: |
+          ls -l dist/wheels dist/npm
+          test "$(find dist/wheels -name '*.whl' | wc -l)" -eq 4
+          test "$(find dist/wheels -type f ! -name '*.whl' | wc -l)" -eq 0
+          test "$(find dist/npm -name '*.tgz' | wc -l)" -eq 5
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Publish to npm under next, the engine packages before @grida/fx
+        env:
+          # Only until each package has a trusted publisher (RELEASING.md); npm tries OIDC first.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Trusted publishing needs npm 11.5.1 or later.
+          if ! node -e '
+            const [major, minor, patch] = process.argv[1].split(".").map(Number);
+            process.exit(major > 11 || (major === 11 && (minor > 5 || (minor === 5 && patch >= 1))) ? 0 : 1);
+          ' "$(npm --version)"; then
+            npm install --global npm@11
+          fi
+          npm --version
+          describe() {
+            tar -xzOf "$1" package/package.json \
+              | node -e 'const p = JSON.parse(require("fs").readFileSync(0, "utf8")); console.log(p.name + "@" + p.version)'
+          }
+          publish() {
+            local spec
+            spec=$(describe "$1")
+            if [ "${spec##*@}" != "$VERSION" ]; then
+              echo "::error::$1 is $spec, not version $VERSION"
+              exit 1
+            fi
+            if [ "$(npm view "$spec" version 2> /dev/null)" = "$VERSION" ]; then
+              echo "$spec is already published: skipped"
+              return
+            fi
+            npm publish "$1" --tag next --access public --provenance
+          }
+          sdk=""
+          for tarball in dist/npm/*.tgz; do
+            spec=$(describe "$tarball")
+            if [ "${spec%@*}" = "@grida/fx" ]; then
+              sdk=$tarball
+            else
+              publish "$tarball"
+            fi
+          done
+          test -n "$sdk"
+          publish "$sdk"
+      - name: Publish the wheels to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/wheels/
+          skip-existing: true
+          print-hash: true

@@ -1,11 +1,11 @@
 """Planning and running from Python (``docs/guide/05-running.md`` "From Python"), by driving the
 ``grida-fx`` binary: the engine is the only place with engine logic (``AGENTS.md``).
 
-- The binary: ``GRIDA_FX_BIN`` when set, else the one packaged with ``grida`` (``grida/fx/bin/
-  grida-fx``, step 5), else ``grida-fx`` on ``PATH``; none: ``RuntimeError`` naming
-  ``GRIDA_FX_BIN``. The binary's working directory is ``cwd`` (default: the process's), and every
-  relative path given here (``input_files``, ``routes``, ``run_dir``, the paths inside
-  ``inputs``) is relative to it, as on the command line.
+- The binary: ``GRIDA_FX_BIN`` when set, else the one a ``grida`` wheel carries
+  (``grida/fx/_bin/grida-fx``, put there by ``tools/build_wheel.py``), else ``grida-fx`` on
+  ``PATH``; none: ``RuntimeError`` naming ``GRIDA_FX_BIN``. The binary's working directory is
+  ``cwd`` (default: the process's), and every relative path given here (``input_files``,
+  ``routes``, ``run_dir``, the paths inside ``inputs``) is relative to it, as on the command line.
 - A target is a workflow file, a workflow id, a builder ``file.py:function`` (``arguments`` as
   ``--arg``), or a :class:`Plan` (run as it was planned: its own target and options; giving
   planning options with it is a ``TypeError``). A :class:`~grida.fx.Workflow` object is refused
@@ -403,13 +403,14 @@ def binary() -> Path:
     if found is not None:
         return Path(found)
     raise RuntimeError(
-        f"no grida-fx binary was found: set {BINARY_VARIABLE} to its path, or put grida-fx on PATH"
+        f"no grida-fx binary was found: this grida installation carries none, so set"
+        f" {BINARY_VARIABLE} to its path, or put grida-fx on PATH"
     )
 
 
 def _packaged_binary() -> Path:
-    """Where the ``grida`` wheel carries the engine."""
-    return Path(__file__).resolve().parent / "bin" / _EXECUTABLE
+    """Where a ``grida`` wheel carries the engine (``tools/build_wheel.py``)."""
+    return Path(__file__).resolve().parent / "_bin" / _EXECUTABLE
 
 
 def _planning_start(request: _Request) -> Path:

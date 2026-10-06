@@ -1,5 +1,7 @@
 name: ci
 
+# Offline: no job holds a key or reaches a provider (AGENTS.md).
+
 on:
   push:
     branches: [main]
@@ -8,11 +10,21 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_INCREMENTAL: "0"
+  GRIDA_FX_NETWORK: "off"
+
 jobs:
   rust:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -27,11 +39,14 @@ jobs:
       run:
         working-directory: python
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # setup-uv publishes no major tags; this pins one immutable release.
+      - uses: astral-sh/setup-uv@v10.2.0
       - run: uv sync --locked
-      - run: uv run ruff check .
-      - run: uv run ruff format --check .
+      - run: uv run ruff check . ../tools ../conformance
+      - run: uv run ruff format --check . ../tools ../conformance/run.py
       - run: uv run pytest
 
   js:
@@ -40,16 +55,55 @@ jobs:
       run:
         working-directory: js/fx
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
       - run: bun test
+      # @grida/fx as release.yml packs it (no engine package: those need a release build).
+      - name: Pack @grida/fx
+        working-directory: .
+        run: node tools/build_npm.mjs --out "$RUNNER_TEMP/npm"
 
   spec:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.2.0
       - run: uv sync --locked --project python
-      - run: uv run --project python python tools/check_spec.py
+      - run: uv run --locked --project python python tools/check_spec.py
+
+  # Every conformance case, through the command line of a fresh grida-fx, with the repository's
+  # Python SDK hosting the node bodies. --strict: a case without reviewed output fails.
+  conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: cargo build --locked --bin grida-fx
+      - run: uv sync --locked --project python
+      - name: conformance/run.py --strict
+        env:
+          GRIDA_FX_PYTHON: python/.venv/bin/python
+        run: >-
+          uv run --locked --project python python conformance/run.py --strict
+          --command target/debug/grida-fx
+
+  # Every manifest states the Cargo workspace's version (tools/check_versions.py).
+  versions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: uv run --no-project --python 3.12 tools/check_versions.py --self-check
+      - run: uv run --no-project --python 3.12 tools/check_versions.py

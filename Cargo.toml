@@ -41,3 +41,8 @@ unsafe_code = "deny"
 [workspace.lints.clippy]
 dbg_macro = "warn"
 todo = "warn"
+
+[profile.release]
+# A released engine carries no symbols, and its remaining paths are remapped by the release
+# workflow, so no build machine's folders ship in it.
+strip = true
