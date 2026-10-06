@@ -1,0 +1,5 @@
+fx: project/v1
+budget:
+  max_usd: 2
+routes:
+  image.edit: gpt-image-2.5-sunburst@openai   # takes a mask and keeps transparency

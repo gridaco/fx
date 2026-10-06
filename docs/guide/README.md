@@ -24,29 +24,20 @@ until then.
 
 ## Example projects
 
-Each project is a complete FX project, written from scratch the way a user would write it, with
-original settings and characters. They plan and price offline against illustrative routes,
-[`examples/routes.yaml`](examples/routes.yaml). Every project's `fx.yaml` lists that file under
-`route_tables`, which FX reads after its built-in route table, so the examples' entries win and
-each project prices the same on every installation
-([identity.md §7](../../spec/identity.md#7-route-fingerprint)). The commands in each project's
-README work as written from the folder it names.
+The [examples](../../examples/) are complete FX projects, written from scratch the way a user
+would write them, with original settings and characters. Their routes are FX's built-in ones
+(rigged-character adds one illustrative route, for a capability FX does not serve yet), so their
+plans price at the built-in allowances, and a live run uses your own keys. Each plans
+offline; without `--live` a run does every free step and refuses each paid call at $0.
 
-| Project | What it shows | Status |
+| Project | What it shows | What runs |
 |---|---|---|
-| [concept-gallery](examples/concept-gallery/) | propose a world, review it, one reviewed image per entity: YAML plus one Python judge | plans and prices; its reviews use `vision.review` and `structured.review`, which are planned |
-| [looping-parallax](examples/looping-parallax/) | plan-time facts, fallbacks, local Python nodes | plans and prices; its node bodies elide the seam and preview math, so it is read, not run |
-| [rigged-character](examples/rigged-character/) | agents, Blender, parts × review rounds, a recovery loop, resume | plans and prices; its reviews use `vision.review`, and its Blender steps use tool scripts (`ctx.tool(...).script`) and version constraints, which are planned |
-| [game-build](examples/game-build/) | a game repo that builds its art with FX from its own level files: Python builder | plans and prices; its node bodies elide the same math as looping-parallax |
+| [hello](../../examples/hello/) | your own nodes, built-in local steps, a judge, a keyed repeat, the cache | everything, offline, at $0 |
+| [looping-parallax](../../examples/looping-parallax/) | plan-time facts, fallbacks, a paid call inside your own node | offline when every layer mirrors; a repaint is live |
+| [concept-gallery](../../examples/concept-gallery/) | propose a world, review it, one reviewed image per entity: YAML plus judges you write | live |
+| [game-build](../../examples/game-build/) | a game repo that builds its art with FX from its own level files: Python builder | the sky offline; the rest live |
+| [rigged-character](../../examples/rigged-character/) | agents, Blender, parts × review rounds, a recovery loop, resume | plans and prices; its reviews use `vision.review`, which has no adapter yet, and its Blender steps use tool scripts (`ctx.tool(...).script`) and version constraints, which are planned |
 
 Every example has Python nodes or built-in local types, so each needs a Python with `grida` and
-Pillow ([Getting started](01-getting-started.md#when-fx-needs-python)).
-
-The example pictures (the concept gallery's poster and the two parallax layers) are flat
-placeholder shapes, drawn by [`examples/draw_placeholders.py`](examples/draw_placeholders.py).
-It draws the same pixels on every run and writes every copy the examples read. From the
-repository root:
-
-```bash
-cd python && uv run --with pillow python ../docs/guide/examples/draw_placeholders.py
-```
+Pillow ([Getting started](01-getting-started.md#when-fx-needs-python)). The
+[examples' README](../../examples/README.md) says how to run them from a clone of the repository.

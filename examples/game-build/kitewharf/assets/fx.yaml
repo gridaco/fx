@@ -1,0 +1,6 @@
+fx: project/v1
+budget:
+  max_usd: 5
+routes:
+  image.generate: gpt-image-2.5-sunburst@openai   # icons need transparency
+  image.edit: gpt-image-2.5-sunburst@openai       # sky repaints need a mask

@@ -1,4 +1,6 @@
 /target/
+# The engine tools/build_engine.py puts beside the Python SDK of a checkout.
+/python/src/grida/fx/_bin/
 **/node_modules/
 **/__pycache__/
 **/.venv/

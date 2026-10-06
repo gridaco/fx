@@ -1,0 +1,10 @@
+fx: project/v1
+budget:
+  max_usd: 30
+routes:
+  image.generate: gpt-image-2.5-sunburst@openai
+  image.edit: gpt-image-2.5-sunburst@openai
+  agent.turn: openai/gpt-5.6-sol@openrouter
+  vision.review: reviewer-vlm@openrouter
+route_tables:                   # vision.review has no adapter in FX yet: this table lets it plan
+  - routes.yaml

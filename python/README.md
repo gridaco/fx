@@ -19,6 +19,11 @@ on Intel (10.12 or later), and Linux with glibc 2.28 or later on x86_64 and aarc
 in the preview: the engine's runner uses Unix process groups and signals. There is no source
 distribution, and the wheels install no console command: the engine runs as `python -m grida.fx`.
 
+From a checkout of the repository, `python3 tools/build_engine.py` builds the engine and puts it
+where a wheel carries it: `python/src/grida/fx/_bin/grida-fx` in the checkout (ignored by git). An
+editable install of the checkout's `python/` folder (`uv sync --project python`, or a path
+dependency in another project) then finds it. Run it again after every pull.
+
 ## The engine from the command line
 
 ```sh
@@ -31,7 +36,8 @@ python -m grida.fx run workflows/gallery.yaml --poster inputs/poster.png --live 
 is the first of:
 
 1. `GRIDA_FX_BIN`, when set (a path; relative to the current directory);
-2. the one shipped inside the `grida` wheel (`grida/fx/_bin/grida-fx`);
+2. the one inside the package (`grida/fx/_bin/grida-fx`): shipped in the wheel, or built into a
+   checkout by `tools/build_engine.py`;
 3. `grida-fx` on `PATH`.
 
 With none of them, the command prints `grida-fx: …` naming `GRIDA_FX_BIN` and exits 2.

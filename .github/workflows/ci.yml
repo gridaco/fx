@@ -45,8 +45,8 @@ jobs:
       # setup-uv publishes no major tags; this pins one immutable release.
       - uses: astral-sh/setup-uv@v10.2.0
       - run: uv sync --locked
-      - run: uv run ruff check . ../tools ../conformance
-      - run: uv run ruff format --check . ../tools ../conformance/run.py
+      - run: uv run ruff check . ../tools ../conformance ../examples
+      - run: uv run ruff format --check . ../tools ../conformance/run.py ../examples
       - run: uv run pytest
 
   js:
@@ -96,6 +96,22 @@ jobs:
         run: >-
           uv run --locked --project python python conformance/run.py --strict
           --command target/debug/grida-fx
+
+  # The examples as a clone runs them (examples/README.md): the engine built into the SDK by
+  # tools/build_engine.py, then every example planned, and every runnable one run offline through
+  # the SDK. Paid calls are refused at $0; tools/check_examples.py holds the examples to that.
+  examples:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: uv sync --locked --project python
+      - run: python3 tools/build_engine.py
+      - run: uv run --locked --project python python tools/check_examples.py
 
   # Every manifest states the Cargo workspace's version (tools/check_versions.py).
   versions:

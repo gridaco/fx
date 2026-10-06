@@ -1830,7 +1830,7 @@ steps:
 #[test]
 fn a_judge_reads_its_evidence_in_the_rigged_character_shape() {
     let project = Project::new();
-    // The guide's rigged character (docs/guide/examples/rigged-character), its types made local:
+    // The rigged character example (examples/rigged-character), its types made local:
     // parts that regenerate inside a build that regenerates, each part's review judging its mesh
     // by renders of the measured mesh, and an assembly whose review judges the oriented mesh by
     // its renders.

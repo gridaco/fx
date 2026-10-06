@@ -217,7 +217,9 @@ def test_the_wheel_is_the_same_bytes_whenever_it_is_built(tmp_path: Path) -> Non
     copy.mkdir()
     for name in ("pyproject.toml", "README.md"):
         shutil.copy2(PYTHON / name, copy / name)
-    shutil.copytree(PYTHON / "src", copy / "src", ignore=shutil.ignore_patterns("__pycache__"))
+    # As a fresh checkout has it: no caches, and no engine from tools/build_engine.py.
+    clean = shutil.ignore_patterns("__pycache__", "_bin")
+    shutil.copytree(PYTHON / "src", copy / "src", ignore=clean)
     first = _build(tmp_path / "first", macho(), "aarch64-apple-darwin", copy)
     for path in copy.rglob("*"):
         os.utime(path, (2_000_000_000, 2_000_000_000))

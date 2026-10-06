@@ -44,6 +44,7 @@ FX exists today as **gnode**, inside [softmarshmallow/stage-gen](https://github.
 | 8 | **The standard library's node bodies stay in Python for milestone 1** (`grida.fx.std`, ported from gnode with Pillow). Milestone 2's replay can keep a cached paid call only if FX builds the same request gnode built, and a Rust image resize that differs from Pillow's by one byte changes every request downstream of it. The engine still owns `select` and every fact. Rust bodies come later, with a planned rekey. | in the approved plan |
 | 9 | **No third-party OpenAI client.** Adapters are thin clients on FX's own injected transport. The canonical request then *is* the wire body, and every exchange can be replayed in tests. (This settles D4.) | in the approved plan |
 | 10 | **Document versions restart at v1 in the `fx` namespace** (`fx: workflow/v1`, `fx-graph-v1`, …). "Identity v3" and "protocol v2" below are design names relative to gnode. Authored YAML documents carry `fx: <doc>/v1`; machine-written JSON carries `"kind": "fx-<doc>-v1"`. | in the approved plan |
+| 11 | **FX runs from a clone until it is published, and publishing waits for trusted publishing.**<br>• Publishing waits until the owner sets up trusted publishing (OIDC). npm sets that up only on a package that already exists, so [RELEASING.md](../../RELEASING.md)'s first-publish step is revisited then.<br>• Until then, `tools/build_engine.py` builds the engine into a checkout's Python SDK, and [examples/](../../examples/) prove that path in CI.<br>• stage-gen takes this repository as a submodule at `third_party/fx`, with a path dependency on its `python/`, and FX can be changed in place there. Detaching later changes that dependency line, not stage-gen's imports. | the owner's direction (2026-10-06) |
 
 ## Names
 
@@ -106,12 +107,13 @@ This milestone works only in this repo. The Python gnode stays in stage-gen, fro
 - **npm:** `@grida/fx` plus the per-platform engine packages.
 - **PyPI:** `grida` wheels, one per platform.
 - **Releases are previews** (an npm `next` tag, PyPI pre-releases) until milestone 2 passes.
-- **Status:** the packages and the release workflow are built; nothing is published yet. The first publish (`v0.1.0-alpha.1`) is the owner's, after review ([RELEASING.md](../../RELEASING.md)).
+- **Status:** the packages and the release workflow are built; nothing is published yet. The first publish (`v0.1.0-alpha.1`) is the owner's, after review ([RELEASING.md](../../RELEASING.md)), and waits for trusted publishers (decision 11). Meanwhile FX runs from a clone, and the [examples](../../examples/) run in CI that way.
 
 ## Milestone 2: stage-gen moves onto FX
 
 stage-gen is the acceptance test. Its workflow files and Python node bodies stay as they are, but for the names below. What changes:
 
+- FX arrives as a submodule at `third_party/fx` (decision 11): `grida` is a path dependency on `third_party/fx/python`, stage-gen's gates build the engine with `tools/build_engine.py`, its pre-push hook checks the submodule out, and its own linters skip it;
 - imports become `from grida.fx import …`;
 - file names become `fx.yaml` and its siblings;
 - the command becomes `grida-fx`;

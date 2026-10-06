@@ -8,7 +8,7 @@ It prints one line per check and exits non-zero when any check fails:
 
   (a) every spec/schemas/*.schema.json is a valid draft 2020-12 schema with the right $id and a
       title, and its declared properties are lower_snake_case;
-  (b) every authored YAML document under conformance/*/in/ and docs/guide/examples/ is in the
+  (b) every authored YAML document under conformance/*/in/ and examples/ is in the
       strict YAML subset and validates against the schema its `fx:` discriminator names;
   (c) the JCS vectors: accept cases canonicalize to their text (with rfc8785 and with
       tools/digest.py), refuse cases are refused by digest.py's I-JSON reader for their reason;
@@ -16,8 +16,8 @@ It prints one line per check and exits non-zero when any check fails:
       non-empty <n>.txt) and agree with digest.py's reader of the subset;
   (e) tools/digest.py --check-examples passes: the identity examples, the reserved-marker
       vectors and the JSON output vectors;
-  (f) nothing under spec/schemas/, spec/vectors/, conformance/ or docs/guide/ names the engine
-      FX came from (the spec's prose may, where it records the history);
+  (f) nothing under spec/schemas/, spec/vectors/, conformance/, docs/guide/ or examples/ names
+      the engine FX came from (the spec's prose may, where it records the history);
   (g) the worked examples in spec/identity.md agree with spec/vectors/identity/examples.json;
   (h) every expected fx-graph-v1 output of a conformance case passes digest.py --check-graph,
       with the case's in/ as the project and the route tables its step passed (the built-in
@@ -58,7 +58,7 @@ SCHEMAS = SPEC / "schemas"
 VECTORS = SPEC / "vectors"
 CONFORMANCE = REPO / "conformance"
 GUIDE = REPO / "docs" / "guide"
-GUIDE_EXAMPLES = GUIDE / "examples"
+EXAMPLES = REPO / "examples"
 DEFAULT_ROUTES = REPO / "crates" / "grida-fx-providers" / "routes" / "default.yaml"
 STD_CATALOG = REPO / "crates" / "grida-fx-core" / "src" / "builtins" / "catalog.json"
 FEATURES = REPO / "crates" / "grida-fx-core" / "src" / "expand" / "features.json"
@@ -75,7 +75,7 @@ TAKES_SCHEMA = "fx-takes-v1"
 FORBIDDEN_NAMES = (b"gnode", b"Gnode", b"GNODE")
 # Where the origin engine's name may not appear: the contracts and the cases, not the spec's
 # prose (identity.md and protocol.md record where FX differs from it).
-NAME_ROOTS = (SCHEMAS, VECTORS, CONFORMANCE, GUIDE, DEFAULT_ROUTES.parent)
+NAME_ROOTS = (SCHEMAS, VECTORS, CONFORMANCE, GUIDE, EXAMPLES, DEFAULT_ROUTES.parent)
 # Contract fields are lower_snake_case. External vocabulary ($ref, ...) and the x-fx-*
 # extension keywords keep their own spelling.
 SNAKE_CASE = re.compile(r"[a-z][a-z0-9_]*\Z|\$[A-Za-z]+\Z|x-fx-[a-z0-9-]+\Z")
@@ -200,9 +200,12 @@ def _authored_documents() -> Iterator[Path]:
                 found += sorted(workflows.glob("*.yaml")) + sorted(workflows.glob("*.yml"))
             found += sorted(inside.glob("*.takes.yaml"))
             yield from (path for path in found if path.is_file())
-    if GUIDE_EXAMPLES.is_dir():
-        for path in sorted(GUIDE_EXAMPLES.rglob("*")):
-            if not path.is_file():
+    if EXAMPLES.is_dir():
+        for path in sorted(EXAMPLES.rglob("*")):
+            # What running an example writes is not authored (.gitignore).
+            if not path.is_file() or {".fx", "runs", ".venv"} & set(
+                path.relative_to(EXAMPLES).parts
+            ):
                 continue
             if path.name in ("fx.yaml", "routes.yaml", "fx.lock") or path.name.endswith(
                 ".takes.yaml"

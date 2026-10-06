@@ -1,0 +1,5 @@
+size: 64
+badges:
+  - { id: sun, shape: circle, color: "#f2b632" }
+  - { id: leaf, shape: diamond, color: "#4c9a52" }
+  - { id: stone, shape: square, color: "#7d7f86" }

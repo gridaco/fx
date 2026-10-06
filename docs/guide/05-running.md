@@ -4,7 +4,8 @@
 
 The command is `grida-fx` (from `npm install -g @grida/fx@next`, or `npx @grida/fx@next`). Without Node,
 the `grida` Python package runs the same engine: `python -m grida.fx <verb>` takes the same
-arguments.
+arguments. The packages are not published yet: until they are, run FX from a clone of the
+repository ([the examples' README](../../examples/README.md#from-a-clone)).
 
 | Command | |
 |---|---|
@@ -217,7 +218,7 @@ not run again, even under `retry="engine"`.
 
 ## Delivering outputs
 
-From the [game-build](examples/game-build/) example's `kitewharf/assets/`:
+From the [game-build](../../examples/game-build/) example's `kitewharf/assets/`:
 
 ```bash
 grida-fx run level_art.py:build --arg level=../levels/docks.toml --live \

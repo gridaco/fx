@@ -472,48 +472,52 @@ fn features_say_what_the_adapters_honour() {
     }
 }
 
-/// routes-caps F4: the guide's example table (docs/guide/examples/routes.yaml) plans offline, so
-/// a feature it declares that FX's adapter refuses would plan a step that a live run refuses. Its
+/// routes-caps F4: an example's own route table (examples/<name>/routes.yaml) plans offline, so a
+/// feature it declares that FX's adapter refuses would plan a step that a live run refuses. Its
 /// routes on providers FX serves declare only names their capability defines, and only what the
 /// adapter honours; `structured.review` has no features (spec/capabilities.md §13).
 #[test]
-fn the_guide_s_example_table_declares_only_what_fx_honours() {
-    let path = format!(
-        "{}/../../docs/guide/examples/routes.yaml",
-        env!("CARGO_MANIFEST_DIR")
-    );
-    let text = std::fs::read(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
-    let document =
-        grida_fx_core::yaml::load(&text, "routes.yaml").expect("the guide's table loads");
-    let guide = RouteTable::from_document(&document, "routes.yaml").expect("the guide's table");
+fn every_example_table_declares_only_what_fx_honours() {
+    let examples = format!("{}/../../examples", env!("CARGO_MANIFEST_DIR"));
+    let mut tables: Vec<_> = std::fs::read_dir(&examples)
+        .unwrap_or_else(|e| panic!("{examples}: {e}"))
+        .map(|entry| entry.expect("an example folder").path().join("routes.yaml"))
+        .filter(|path| path.is_file())
+        .collect();
+    tables.sort();
+    assert!(!tables.is_empty(), "no example has a routes.yaml");
     let registry = registry();
-    for route in guide.entries.values() {
-        let id = route.id();
-        if let Some(capability) = capability(&route.capability) {
-            for feature in &route.features {
-                assert!(
-                    capability.features.contains(&feature.as_str()),
-                    "{} {id}: {feature} is not one of its features",
-                    route.capability
-                );
+    for path in tables {
+        let label = path.display().to_string();
+        let text = std::fs::read(&path).unwrap_or_else(|e| panic!("{label}: {e}"));
+        let document = grida_fx_core::yaml::load(&text, "routes.yaml").expect("the table loads");
+        let table = RouteTable::from_document(&document, "routes.yaml").expect("the table");
+        for route in table.entries.values() {
+            let id = route.id();
+            if let Some(capability) = capability(&route.capability) {
+                for feature in &route.features {
+                    assert!(
+                        capability.features.contains(&feature.as_str()),
+                        "{label}: {} {id}: {feature} is not one of its features",
+                        route.capability
+                    );
+                }
             }
-        }
-        if !registry.serves(&route.capability, &route.provider) {
-            continue;
-        }
-        // Every image.generate adapter of FX refuses references (spec/providers.md §9).
-        if route.capability == "image.generate" {
-            assert!(!route.features.contains("image_input"), "{id}");
-        }
-        // OpenRouter's image adapter refuses a mask and a transparent background (§9.2).
-        if route.provider == "openrouter" && route.capability.starts_with("image.") {
-            assert!(!route.features.contains("alpha"), "{id}");
-            assert!(!route.features.contains("mask"), "{id}");
-        }
-    }
-    for route in guide.entries.values() {
-        if route.capability == "structured.review" {
-            assert!(route.features.is_empty(), "{}", route.id());
+            if route.capability == "structured.review" {
+                assert!(route.features.is_empty(), "{label}: {id}");
+            }
+            if !registry.serves(&route.capability, &route.provider) {
+                continue;
+            }
+            // Every image.generate adapter of FX refuses references (spec/providers.md §9).
+            if route.capability == "image.generate" {
+                assert!(!route.features.contains("image_input"), "{label}: {id}");
+            }
+            // OpenRouter's image adapter refuses a mask and a transparent background (§9.2).
+            if route.provider == "openrouter" && route.capability.starts_with("image.") {
+                assert!(!route.features.contains("alpha"), "{label}: {id}");
+                assert!(!route.features.contains("mask"), "{label}: {id}");
+            }
         }
     }
 }

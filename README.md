@@ -6,7 +6,16 @@ FX is moving here from [softmarshmallow/stage-gen](https://github.com/softmarshm
 
 ## Install (preview)
 
-FX is in preview: npm has it under the `next` tag and PyPI as a pre-release. Both packages carry the same engine, the `grida-fx` binary.
+The preview packages are not published yet. Until they are, FX runs from a clone of this repository, which needs cargo and [uv](https://docs.astral.sh/uv/) ([examples/README.md](examples/README.md#from-a-clone) has the rest):
+
+```sh
+git clone https://github.com/gridaco/fx && cd fx
+uv sync --project python          # the Python SDK and Pillow, in python/.venv
+python3 tools/build_engine.py     # the engine, built into that SDK; again after every pull
+uv run --project python python -m grida.fx --version
+```
+
+Once published, npm will have FX under the `next` tag and PyPI as a pre-release. Both packages carry the same engine, the `grida-fx` binary.
 
 ```sh
 npm install -g @grida/fx@next    # the grida-fx command, and the JavaScript SDK

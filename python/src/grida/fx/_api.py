@@ -1,9 +1,10 @@
 """Planning and running from Python (``docs/guide/05-running.md`` "From Python"), by driving the
 ``grida-fx`` binary: the engine is the only place with engine logic (``AGENTS.md``).
 
-- The binary: ``GRIDA_FX_BIN`` when set, else the one a ``grida`` wheel carries
-  (``grida/fx/_bin/grida-fx``, put there by ``tools/build_wheel.py``), else ``grida-fx`` on
-  ``PATH``; none: ``RuntimeError`` naming ``GRIDA_FX_BIN``. The binary's working directory is
+- The binary: ``GRIDA_FX_BIN`` when set, else the one inside the package
+  (``grida/fx/_bin/grida-fx``: put in a wheel by ``tools/build_wheel.py``, or into a checkout
+  by ``tools/build_engine.py``), else ``grida-fx`` on ``PATH``; none: ``RuntimeError`` naming
+  ``GRIDA_FX_BIN``. The binary's working directory is
   ``cwd`` (default: the process's), and every relative path given here (``input_files``,
   ``routes``, ``run_dir``, the paths inside ``inputs``) is relative to it, as on the command line.
 - A target is a workflow file, a workflow id, a builder ``file.py:function`` (``arguments`` as

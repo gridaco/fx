@@ -1,0 +1,5 @@
+# FX serves no vision.review yet (spec/capabilities.md §13). This illustrative route lets the
+# example plan and price; a live run refuses its calls as no_route until an adapter exists.
+fx: routes/v1
+routes:
+  - { capability: vision.review, route: reviewer-vlm@openrouter, price: { low_usd: 0.003, high_usd: 0.03 }, features: [image_input] }

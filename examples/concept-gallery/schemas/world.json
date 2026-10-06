@@ -1,0 +1,33 @@
+{
+  "type": "object",
+  "required": ["title", "entities", "relationships", "open_questions"],
+  "properties": {
+    "title": { "type": "string" },
+    "entities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "mode", "description"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9_]+$", "description": "lower_snake_case: a-z, 0-9 and _" },
+          "name": { "type": "string" },
+          "mode": { "enum": ["character", "place", "object"] },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "relationships": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["from", "to", "kind"],
+        "properties": {
+          "from": { "type": "string", "description": "an entity id" },
+          "to": { "type": "string", "description": "an entity id" },
+          "kind": { "type": "string" }
+        }
+      }
+    },
+    "open_questions": { "type": "array", "items": { "type": "string" } }
+  }
+}

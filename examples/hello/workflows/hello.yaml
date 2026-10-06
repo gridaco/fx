@@ -1,0 +1,54 @@
+# A list of badges in; each one drawn, checked and scaled down, then all of them on one sheet and
+# in one folder. Nothing here is paid: it runs offline, at $0, with no keys.
+fx: workflow/v1
+id: hello
+title: Hello, badges
+description: Draw a badge for each entry, check its background is clear, scale it down, and lay the badges out on one sheet.
+
+inputs:
+  size: { type: integer, default: 64, minimum: 16, maximum: 256 }
+  badges:
+    type: list
+    max_items: 16
+    items:
+      id:    { type: string, pattern: "^[a-z0-9_]+$" }
+      shape: { type: string, enum: [circle, square, diamond] }
+      color: { type: string, pattern: "^#[0-9a-f]{6}$" }
+
+steps:
+  badge:
+    for_each: ${{ inputs.badges }}
+    key: ${{ item.id }}
+    steps:
+      draw:                                  # your own node: Pillow draws the shape
+        uses: ./nodes/badges.py#badge
+        with: { shape: "${{ item.shape }}", color: "${{ item.color }}" }
+
+      clear:                                 # a built-in judge: is the background transparent?
+        uses: fx/image.check_alpha@1
+        judges: draw                         # a rejection fails the badge (`on_reject: fail`)
+        with: { image: "${{ steps.draw.outputs.image }}" }
+
+      small:                                 # a built-in step; it waits for `clear`
+        uses: fx/image.resize@1
+        with: { image: "${{ steps.draw.outputs.image }}", longest_side: "${{ inputs.size }}" }
+
+  sheet:                                     # every badge, in the order of the input list
+    uses: ./nodes/badges.py#sheet
+    with: { badges: "${{ steps.badge.*.small.outputs.image }}", gap: 8 }
+
+  pack:                                      # a folder by destination path, and a manifest
+    uses: fx/package@1
+    with:
+      files:
+        "badges/{key}.png": ${{ steps.badge.*.small.outputs.image }}
+        "sheet.png": ${{ steps.sheet.outputs.image }}
+      manifest:
+        size: ${{ inputs.size }}
+        badges: ${{ inputs.badges }}
+
+outputs:
+  sheet:  ${{ steps.sheet.outputs.image }}
+  badges: ${{ steps.badge.*.small.outputs.image }}
+  files:  ${{ steps.pack.outputs.files }}
+  manifest: ${{ steps.pack.outputs.manifest }}

@@ -1,0 +1,6 @@
+fx: project/v1
+budget:
+  max_usd: 12
+routes:                         # one key serves every call: OPENROUTER_API_KEY
+  structured.generate: openai/gpt-5.6-sol@openrouter
+  image.edit: openai/gpt-image-2.5-sunburst@openrouter

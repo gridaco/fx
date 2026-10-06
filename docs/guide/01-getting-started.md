@@ -15,6 +15,8 @@ grida-fx doctor                 # checks the keys and tools your workflows need
 ```
 
 Both packages are previews (npm's `next` tag, PyPI pre-releases), and both carry the same engine.
+They are not published yet: until they are, run FX from a clone of the repository
+([the examples' README](../../examples/README.md#from-a-clone)).
 The preview runs on macOS, and on Linux with glibc 2.28 or later, on x64 and arm64. Windows is not
 in the preview, because the engine's runner uses Unix process groups and signals: use WSL 2
 ([the platforms](../../README.md#install-preview)). Python users who don't want Node run
@@ -63,7 +65,7 @@ fx: project/v1
 budget:
   max_usd: 10                 # the ceiling for any one run; --max-usd overrides it
 routes:                       # which model serves each capability by default
-  image.generate: gpt-image-2@openai
+  image.generate: gpt-image-2.5-sunburst@openai
 ```
 
 `grida-fx nodes image.generate` lists the routes that can serve a capability: FX's built-in
@@ -111,16 +113,16 @@ grida-fx plan workflows/icon.yaml --name "copper lantern"
 
 ```
 icon  ·  1 phase
-phase 1   6 steps   1–3 provider calls   $0.04 – $0.90
+phase 1   6 steps   1–3 provider calls   $0.18 – $0.75
 cached    0 of 3 known steps
-estimate  $0.04 – $0.90   ceiling $10.00
+estimate  $0.18 – $0.75   ceiling $10.00
 ```
 
 The plan counts every take regeneration may draw: three drawings and their three checks. The low
 end is the one drawing that surely runs, at the route's lowest price; the high end is all three,
-at its highest. The prices in this guide are the illustrative ones in
-[`examples/routes.yaml`](examples/routes.yaml) (`gpt-image-2@openai`: $0.04 – $0.30 a call);
-your installation's route table has its own.
+at its highest. The prices are the allowances of FX's built-in route table
+(`gpt-image-2.5-sunburst@openai`: $0.18 – $0.25 a call), which a project's own tables can
+override.
 
 ```bash
 grida-fx run workflows/icon.yaml --name "copper lantern" --live
@@ -128,7 +130,7 @@ grida-fx run workflows/icon.yaml --name "copper lantern" --live
 
 `--live` is required whenever a run may call a paid provider. Without it nothing is spent: local
 steps still run, a paid call the cache already answered is replayed, and any other paid call
-fails its step (`image.generate on gpt-image-2@openai is a paid call; run with --live`). A live
+fails its step (`image.generate on gpt-image-2.5-sunburst@openai is a paid call; run with --live`). A live
 run also needs a ceiling, here the project's `budget:`. The run's folder holds its outputs;
 `grida-fx inspect` summarises it.
 

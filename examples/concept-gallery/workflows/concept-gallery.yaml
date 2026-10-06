@@ -1,0 +1,117 @@
+# A synopsis, a poster and a direction in; a reviewed storyworld and one reviewed concept
+# image per entity out.
+fx: workflow/v1
+id: concept-gallery
+title: Concept gallery
+description: >
+  Propose the entities of a storyworld from its synopsis, have an independent model admit the
+  proposal, then draw one reviewed concept image for each admitted entity.
+
+inputs:
+  synopsis:  { type: file, kind: text/markdown, description: "The world's facts" }
+  direction: { type: file, kind: text/markdown, description: "How far to expand, what to avoid" }
+  poster:    { type: file, kind: image, description: "Visual evidence only; never a source of facts" }
+  max_entities: { type: integer, default: 8, minimum: 4, maximum: 24 }
+
+tables:
+  size_by_mode:                 # how each kind of entity is framed, in sizes the image route serves
+    character: 1712x2560
+    place: 2560x1712
+    object: 1024x1024
+
+steps:
+  # ---- phase 1: the world -------------------------------------------------------------
+  poster_small:
+    uses: fx/image.resize@1
+    with: { image: "${{ inputs.poster }}", longest_side: 768 }
+
+  propose:
+    uses: fx/structured.generate@1
+    route: openai/gpt-5.6-sol@openrouter
+    requires: [image_input, structured_output]
+    with:
+      prompt: ./prompts/propose.md          # template; sees `inputs`
+      schema: ./schemas/world.json          # entities, relationships, open questions
+      context: [ "${{ inputs.synopsis }}", "${{ inputs.direction }}", "${{ steps.poster_small.outputs.image }}" ]
+      vars: { max_entities: "${{ inputs.max_entities }}" }
+
+  well_formed:                              # deterministic: ids unique, relations resolve, counts in range
+    uses: ./nodes/world_checks.py#well_formed
+    judges: propose
+    with: { world: "${{ steps.propose.outputs.json }}", max_entities: "${{ inputs.max_entities }}" }
+    on_reject: { regenerate: { max: 2, then: fail } }
+
+  admit:                                    # a judge you write: nodes/reviews.py
+    uses: ./nodes/reviews.py#admit
+    route: openai/gpt-6-astra@openrouter
+    independent_of: propose                 # the plan refuses if both resolve to the same model
+    judges: propose
+    needs: [well_formed]                    # judges of one step run in parallel; run the free one first
+    with:
+      world: ${{ steps.propose.outputs.json }}
+      synopsis: ${{ inputs.synopsis }}
+      direction: ${{ inputs.direction }}
+      criteria:
+        - "Every entity is grounded in the synopsis: stated there, or directly implied."
+        - "No two entities are the same thing under two names."
+        - "Every relationship names entities the proposal lists."
+        - "The direction's limits are respected."
+    on_reject: { regenerate: { max: 2, then: fail } }
+
+  grammar:                                  # one visual grammar for the whole set; reads `propose`,
+    uses: fx/structured.generate@1          # so it waits for both of its judges
+    with:
+      prompt: ./prompts/grammar.md
+      schema: ./schemas/grammar.json
+      context: [ "${{ steps.propose.outputs.json }}", "${{ steps.poster_small.outputs.image }}" ]
+
+  # ---- phase 2: one image per entity (its size is known only after phase 1) ----------
+  entity:
+    for_each: ${{ steps.propose.outputs.json.entities }}
+    key: ${{ item.id }}
+    max: ${{ inputs.max_entities }}
+    steps:
+      direct:
+        uses: fx/structured.generate@1
+        with:
+          prompt: ./prompts/direct-entity.md
+          schema: ./schemas/entity-direction.json
+          vars: { entity: "${{ item }}", grammar: "${{ steps.grammar.outputs.json }}" }
+
+      draw:                                   # drawn from the poster: an edit takes input pictures
+        uses: fx/image.edit@1
+        with:
+          prompt: ${{ steps.direct.outputs.json.prompt }}
+          size: ${{ lookup(tables.size_by_mode, item.mode) }}
+          image: ${{ inputs.poster }}
+
+      review:                                        # a judge you write: nodes/reviews.py
+        uses: ./nodes/reviews.py#review
+        route: openai/gpt-6-astra@openrouter
+        independent_of: direct
+        judges: draw
+        requires: [image_input]
+        with:
+          image: ${{ steps.draw.outputs.image }}
+          criteria:                                  # answered one by one, each with a reason
+            - "It shows exactly ${{ item.name }} as directed: ${{ steps.direct.outputs.json.must_show }}"
+            - "None of this is present: ${{ steps.direct.outputs.json.must_avoid }}"
+            - "There is no text, logo, watermark or frame."
+            - "It follows the set's grammar: ${{ steps.grammar.outputs.json.summary }}"
+        on_reject: continue                          # a rejection is a result; rerolls are yours
+
+  close:
+    uses: fx/package@1
+    with:
+      files:
+        "world.json": ${{ steps.propose.outputs.json }}
+        "admission.json": ${{ steps.admit.facts }}
+        "images/{key}.png": ${{ steps.entity.*.draw.outputs.image }}
+      manifest:
+        title: ${{ steps.propose.outputs.json.title }}
+        entities: ${{ steps.entity.*.review.facts }}     # verdict + reasons, per key
+
+outputs:
+  world:    ${{ steps.propose.outputs.json }}
+  gallery:  ${{ steps.close.outputs.files }}
+  images:   ${{ steps.entity.*.draw.outputs.image }}

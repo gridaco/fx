@@ -1,7 +1,0 @@
-fx: project/v1
-budget:
-  max_usd: 2
-routes:
-  image.edit: gpt-image-2@openai
-route_tables:                   # the guide's illustrative prices, read after the built-in table
-  - ../routes.yaml
