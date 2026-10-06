@@ -794,6 +794,7 @@ fn the_paid_post_is_sent_once_whatever_happens() {
         assert_eq!(posts, 1);
         h.done();
     }
+    // Tripo does not document a refused task as unbilled, so it costs the whole hold (`None`).
     for status in [400, 401, 403, 404, 422] {
         let h = harness(after_uploads([post().reply(HttpResponse::json(
             status,
@@ -902,15 +903,55 @@ fn an_fbx_is_preferred_and_every_model_is_downloaded() {
 
 #[test]
 fn a_task_tripo_ended_is_over() {
-    // spec/providers.md §9.4 "Collect" (mirrors stage-gen's "a failed task is over").
-    for state in ["failed", "cancelled", "banned", "expired"] {
+    // spec/providers.md §9.4 "Collect": Tripo returns the frozen credits of a failed or cancelled
+    // task, and documents nothing for a banned or expired one.
+    for (state, cost) in [
+        ("failed", Some(Usd::ZERO)),
+        ("cancelled", Some(Usd::ZERO)),
+        ("banned", None),
+        ("expired", None),
+    ] {
         let h = harness(vec![read("task1", "running"), read("task1", state)]);
         assert_eq!(
             h.collect(&two_view_call(), handle("task1")),
             Collected::Ended {
-                reason: format!("Tripo ended task task1 as {state}")
+                reason: format!("Tripo ended task task1 as {state}"),
+                cost,
             }
         );
+        h.done();
+    }
+
+    // The read's own `credits_consumed` wins over the rule: a positive figure is booked, a figure
+    // that cannot be read costs the whole hold, and no figure (absent or `null`) costs $0.
+    let without = |state: &str| {
+        read_expect("task1").reply(ok(
+            json!({"task_id": "task1", "status": state, "output": {}}),
+        ))
+    };
+    let with = |state: &str, credits: Value| {
+        read_expect("task1").reply(status("task1", state, json!({}), credits))
+    };
+    let cases = [
+        (with("failed", json!(48)), Some(Usd(480_000))),
+        (with("cancelled", json!("48")), Some(Usd(480_000))),
+        (with("failed", json!("lots")), None),
+        (with("cancelled", json!({"credits": 48})), None),
+        (with("failed", json!(0)), Some(Usd::ZERO)),
+        (with("failed", Value::Null), Some(Usd::ZERO)),
+        (without("failed"), Some(Usd::ZERO)),
+        (without("cancelled"), Some(Usd::ZERO)),
+        (with("banned", json!(48)), None),
+        (with("expired", json!(0)), None),
+        (without("banned"), None),
+    ];
+    for (exchange, cost) in cases {
+        let h = harness(vec![exchange]);
+        let Collected::Ended { cost: booked, .. } = h.collect(&two_view_call(), handle("task1"))
+        else {
+            panic!("an ended task");
+        };
+        assert_eq!(booked, cost);
         h.done();
     }
 }
@@ -1082,8 +1123,10 @@ fn an_answer_about_another_task_or_an_unknown_status_is_unreachable() {
 #[test]
 fn the_output_scan_decides_what_is_downloaded() {
     // spec/providers.md §9.4 "Tasks" (mirrors stage-gen's "a model from another host is refused").
+    // The task succeeded, so an unusable output costs what its success read reports (125 credits).
     let ended = |reason: &str| Collected::Ended {
         reason: reason.into(),
+        cost: Some(Usd(1_250_000)),
     };
     let outside = "a Tripo model address is outside Tripo's own hosts";
     let malformed = "a Tripo model address is malformed; details withheld";
@@ -1151,7 +1194,10 @@ fn the_output_scan_decides_what_is_downloaded() {
     ]);
     assert_eq!(
         h.collect(&two_view_call(), handle("task1")),
-        ended(no_model)
+        Collected::Ended {
+            reason: no_model.into(),
+            cost: Some(Usd(10_000)),
+        }
     );
     h.done();
 
@@ -1253,12 +1299,14 @@ fn downloads_are_fetched_once_and_capped() {
             },
             Collected::Ended {
                 reason: "Tripo returned a model that is neither GLB nor binary FBX".into(),
+                cost: Some(Usd(1_250_000)),
             },
         ),
         (
             Expect::download(signed).reply(HttpResponse::new(200, b"PK\x03\x04rest".to_vec())),
             Collected::Ended {
                 reason: "Tripo returned a model that is neither GLB nor binary FBX".into(),
+                cost: Some(Usd(1_250_000)),
             },
         ),
     ];
@@ -1306,6 +1354,42 @@ fn the_cost_is_the_finished_tasks_credits_rounded_up() {
         let answer = answered(h.collect(&two_view_call(), handle("task1")));
         assert_eq!(answer.cost, cost, "{credits:?}");
         h.done();
+    }
+}
+
+#[test]
+fn an_unusable_output_costs_what_its_success_read_reports() {
+    // spec/providers.md §7, §9.4 "Collect", "Cost": the task succeeded, so Tripo charged it, and
+    // the read says how much. A figure that is absent or cannot be read is the whole hold (`None`).
+    let off_host = json!({"model": "https://example.com/model.glb"});
+    let not_a_model = json!({"model": STORAGE});
+    let cases: Vec<(Option<Value>, Option<Usd>)> = vec![
+        (Some(json!(50)), Some(Usd(500_000))),
+        (Some(json!("50")), Some(Usd(500_000))),
+        (Some(json!(0)), Some(Usd::ZERO)),
+        (Some(Value::Null), None),
+        (None, None),
+        (Some(json!("lots")), None),
+    ];
+    for (credits, cost) in cases {
+        for output in [&off_host, &not_a_model] {
+            let mut data = json!({"task_id": "task1", "status": "success", "output": output});
+            if let Some(credits) = &credits {
+                data["credits_consumed"] = credits.clone();
+            }
+            let mut exchanges = vec![read_expect("task1").reply(ok(data))];
+            if output == &not_a_model {
+                exchanges.push(download(STORAGE, b"PK\x03\x04rest"));
+            }
+            let h = harness(exchanges);
+            let Collected::Ended { cost: booked, .. } =
+                h.collect(&two_view_call(), handle("task1"))
+            else {
+                panic!("an unusable output ends the job");
+            };
+            assert_eq!(booked, cost, "{credits:?} {output}");
+            h.done();
+        }
     }
 }
 

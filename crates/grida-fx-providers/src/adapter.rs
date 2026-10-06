@@ -281,8 +281,11 @@ pub enum Collected {
     /// The job's answer.
     Answered(Answer),
     /// The job ended without a result: the record becomes `settled`, the call fails
-    /// `call_failed`, and a later run submits it anew.
-    Ended { reason: String },
+    /// `call_failed`, and a later run submits it anew. `cost` is what the ended job costs
+    /// (spec/providers.md §7): the provider's own figure for it, as for an answer when the job
+    /// finished with an unusable result; `Some(0)` only where spec/providers.md §9 says so; `None`
+    /// otherwise, and the run that submitted the job then charges its whole hold.
+    Ended { reason: String, cost: Option<Usd> },
     /// Collecting failed and the job may still be running: the record stays `submitted`, the
     /// call fails `call_failed`, and a later run collects again.
     Unreachable { reason: String },
@@ -410,6 +413,7 @@ mod tests {
             Box::pin(async {
                 Collected::Ended {
                     reason: "silent".into(),
+                    cost: None,
                 }
             })
         }

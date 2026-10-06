@@ -619,9 +619,9 @@ fn integrated_plan_text_of_tiered_price() {
     assert_eq!(
         stdout(&output),
         "case  ·  1 phase\n\
-         phase 1   3 steps   3 provider calls   $2.49 – $6.86\n\
-         cached    0 of 3 known steps\n\
-         estimate  $2.49 – $6.86\n"
+         phase 1   4 steps   4 provider calls   $2.61 – $8.36\n\
+         cached    0 of 4 known steps\n\
+         estimate  $2.61 – $8.36\n"
     );
     let output = grida_fx(
         project.path(),
@@ -637,7 +637,7 @@ fn integrated_plan_text_of_tiered_price() {
     );
     assert_eq!(status(&output), 0, "{}", stderr(&output));
     assert!(stdout(&output).ends_with(
-        "estimate  $2.49 – $6.86   ceiling $1.00   ⚠ the worst case exceeds the ceiling; the run stops before crossing it\n"
+        "estimate  $2.61 – $8.36   ceiling $1.00   ⚠ the worst case exceeds the ceiling; the run stops before crossing it\n"
     ));
 }
 
@@ -650,7 +650,7 @@ fn integrated_plan_expect_cached_names_what_is_not() {
     );
     assert_eq!(status(&output), 1);
     assert!(
-        stdout(&output).ends_with("\nnot cached: small#1, large#1, unknown#1\n"),
+        stdout(&output).ends_with("\nnot cached: small#1, large#1, unknown#1, unlisted#1\n"),
         "{}",
         stdout(&output)
     );
@@ -691,16 +691,16 @@ fn integrated_documents_of_tiered_price() {
         price,
         json!({
             "phases": [{
-                "phase": 1, "steps": 3, "calls": [3, 3],
-                "low_usd": 2.49, "high_usd": 6.8625, "then": [],
+                "phase": 1, "steps": 4, "calls": [4, 4],
+                "low_usd": 2.61, "high_usd": 8.3625, "then": [],
             }],
-            "estimate": {"low_usd": 2.49, "high_usd": 6.8625},
+            "estimate": {"low_usd": 2.61, "high_usd": 8.3625},
             "ceiling_usd": null,
         })
     );
     let identity = run("identity");
     let ids: Vec<&String> = identity.as_object().unwrap().keys().collect();
-    assert_eq!(ids, ["large#1", "small#1", "unknown#1"]);
+    assert_eq!(ids, ["large#1", "small#1", "unknown#1", "unlisted#1"]);
     let graph = run("expand");
     let schema: Value = parse(include_str!(
         "../../../spec/schemas/fx-graph-v1.schema.json"
@@ -775,7 +775,7 @@ fn integrated_a_repeated_option_takes_its_last_value() {
     assert!(stdout(&output).starts_with('{'));
     let output = plan(&["--expect-cached", "--expect-cached"]);
     assert_eq!(status(&output), 1, "{}", stderr(&output));
-    assert!(stdout(&output).ends_with("\nnot cached: small#1, large#1, unknown#1\n"));
+    assert!(stdout(&output).ends_with("\nnot cached: small#1, large#1, unknown#1, unlisted#1\n"));
     // Repeatable options still keep every value: the missing first file is read and refused.
     let output = plan(&["--inputs", "missing.yaml", "--inputs", "inputs.yaml"]);
     assert_eq!(status(&output), 2);
@@ -1507,19 +1507,39 @@ fn integrated_a_plan_without_routes_files_is_priced_from_the_built_in_table() {
     let output = grida_fx(project.path(), &["price", "case"]);
     assert_eq!(status(&output), 0, "{}", stderr(&output));
     let price = parse(&stdout(&output));
+    // No size: the route's whole range.
     assert_eq!(
         price["estimate"],
-        json!({"low_usd": 0.18, "high_usd": 0.25}),
+        json!({"low_usd": 0.09, "high_usd": 0.7}),
         "{price}"
     );
     assert_eq!(price["phases"][0]["calls"], json!([1, 1]), "{price}");
     let output = grida_fx(project.path(), &["plan", "case", "--check"]);
     assert_eq!(status(&output), 0, "{}", stderr(&output));
     assert!(
-        stdout(&output).ends_with("estimate  $0.18 – $0.25\n"),
+        stdout(&output).ends_with("estimate  $0.09 – $0.70\n"),
         "{}",
         stdout(&output)
     );
+    // A size the route's tiers list is priced at its tier; any other at the whole range.
+    for (size, estimate) in [
+        ("1024x1024", json!({"low_usd": 0.21, "high_usd": 0.29})),
+        ("2048x2048", json!({"low_usd": 0.09, "high_usd": 0.7})),
+        ("auto", json!({"low_usd": 0.09, "high_usd": 0.7})),
+    ] {
+        std::fs::write(
+            project.path().join("workflows/sized.yaml"),
+            format!(
+                "fx: workflow/v1\nid: sized\ntitle: Sized\nsteps:\n  draw:\n    uses: \
+                 fx/image.generate@1\n    with: {{ prompt: a kite, size: {size} }}\n"
+            ),
+        )
+        .unwrap();
+        let output = grida_fx(project.path(), &["price", "sized"]);
+        assert_eq!(status(&output), 0, "{}", stderr(&output));
+        let price = parse(&stdout(&output));
+        assert_eq!(price["estimate"], estimate, "{size}: {price}");
+    }
     // Any --routes file leaves the built-in table out.
     let output = grida_fx(project.path(), &["plan", "case", "--routes", "routes.yaml"]);
     assert_eq!(status(&output), 0, "{}", stderr(&output));

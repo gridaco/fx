@@ -43,13 +43,19 @@ amount held for it ([providers.md §10](../../spec/providers.md#10-the-built-in-
 
 | Capability | Built-in routes | Key |
 |---|---|---|
-| `image.generate`, `image.edit` | `gpt-image-2.5-sunburst@openai` ($0.18 – $0.25 a call), `openai/gpt-image-2.5-sunburst@openrouter` ($0.14 – $0.30), `openai/gpt-image-2.5/sunburst@fal` ($0.16464 – $0.50) | each provider's |
+| `image.generate` | `gpt-image-2.5-sunburst@openai` (a call, by `size`: $0.09 – $0.70), `openai/gpt-image-2.5-sunburst@openrouter` ($0.13 – $0.70), `openai/gpt-image-2.5/sunburst@fal` ($0.09 – $0.70) | each provider's |
+| `image.edit` | `gpt-image-2.5-sunburst@openai` (a call, by `size`: $0.09 – $0.85), `openai/gpt-image-2.5-sunburst@openrouter` ($0.13 – $0.85), `openai/gpt-image-2.5/sunburst@fal` ($0.09 – $0.85) | each provider's |
 | `structured.generate` | `openai/gpt-5.6-sol@openrouter` ($0.02 – $0.60), `openai/gpt-6-astra@openrouter` ($0.05 – $1.50) | `OPENROUTER_API_KEY` |
 | `agent.turn` | `openai/gpt-5.6-sol@openrouter` ($0.003 – $0.10), `openai/gpt-6-astra@openrouter` ($0.01 – $1.50) | `OPENROUTER_API_KEY` |
 | `music.generate` | `google/lyria-3-pro-preview@openrouter` ($0.05 – $0.50) | `OPENROUTER_API_KEY` |
 | `video.generate` | `google/gemini-omni-flash/v1.1/image-to-video@fal` (per second, by `resolution`, at most 10 s: $0.03 – $0.375) | `FAL_KEY` |
 | `mesh.generate`, `mesh.rig` | `P2-20260801@tripo` ($1.20 – $2.50), `v1.0-20240301@tripo` ($0.25 – $0.50) | `TRIPO_API_KEY` |
 | `sound.generate`, `speech.generate` | `eleven_text_to_sound_v2@elevenlabs` ($0.001 – $0.10), `eleven_v3@elevenlabs` ($0.001 – $0.05) | `ELEVENLABS_API_KEY` |
+
+An image call is priced by its `size`. A size the route's tiers list is priced at its tier:
+`1024x1024` is $0.21 – $0.29 for a generate on `gpt-image-2.5-sunburst@openai`, and
+$0.21 – $0.43 for an edit. `auto`, no size, or a size no tier lists is priced at the whole
+range above ([providers.md §10](../../spec/providers.md#10-the-built-in-route-table)).
 
 A project picks one with `routes:` in `fx.yaml` (or a step's `route:`). To change a price or add
 a route, list a table under `route_tables:`: its entry for the same capability and route replaces

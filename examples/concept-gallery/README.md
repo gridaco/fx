@@ -30,17 +30,19 @@ grida-fx plan concept-gallery --synopsis inputs/tidebell/synopsis.md \
 ```
 concept-gallery  ·  2 phases
 phase 1   9 steps   3–5 provider calls   $0.09 – $4.80
-phase 2   entity (up to 8)   ≤ $19.20   priced exactly when its list exists
+phase 2   entity (up to 8)   ≤ $23.60   priced exactly when its list exists
 cached    0 of 1 known steps
-estimate  $0.09 – $24.00   ceiling $12.00   ⚠ the worst case exceeds the ceiling; the run stops before crossing it
+estimate  $0.09 – $28.40   ceiling $12.00   ⚠ the worst case exceeds the ceiling; the run stops before crossing it
 ```
 
 - **Phase 1:** `propose` and `grammar` are one call each to the writer model
   (`openai/gpt-5.6-sol@openrouter`, $0.02 – $0.60 a call), and `admit` one to the reviewer
   (`openai/gpt-6-astra@openrouter`, $0.05 – $1.50). Each of `propose`'s two judges may ask for a
   second take of it, which `admit` reviews again: 3 – 5 calls.
-- **Phase 2:** up to `max_entities` entities (8 unless you say) × (`direct` $0.60 + `draw` $0.30
-  + `review` $1.50) at worst = $19.20, priced exactly once phase 1 has made the list.
+- **Phase 2:** up to `max_entities` entities (8 unless you say) × (`direct` $0.60 + `draw` $0.85
+  + `review` $1.50) at worst = $23.60, priced exactly once phase 1 has made the list. Until then
+  an entity's size is unknown, so `draw` is priced at the route's whole range; then each is
+  priced at its size's tier: $0.79 for a character or a place, $0.64 for an object.
 - **The ceiling** is the project's $12 (`fx.yaml`), or `--max-usd`: the run stops before crossing
   it. The figures are each route's allowance, a worst case; what a call costs is settled from
   what the provider reports

@@ -372,7 +372,8 @@ pub(crate) fn refusals_plan() -> (Plan, Planner) {
     (plan, planner)
 }
 
-/// Case `tiered-price`: three clips priced per second at their tiers.
+/// Case `tiered-price` as the predecessor printed it: three clips priced per second at their
+/// tiers (the case's fourth, `unlisted`, came later).
 pub(crate) fn tiered_plan() -> (Plan, Planner) {
     let planner = planner();
     let video = builtin_type("video.generate", true);

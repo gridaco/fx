@@ -16,15 +16,20 @@
 //! - free phase: 400, 401, 403, 404, 413, 415 and 422 are `Refused`, and so is a request the
 //!   transport refused itself (the network turned off); every other failure is `NotReceived`;
 //! - the paid POST: `not_sent` and 429 are `NotReceived`; 400, 401, 403, 404 and 422 are
-//!   `Failed { cost: None, retryable: false }`; anything else that is not a usable task id is
-//!   `Uncertain`, and when Tripo returned a task id that is a safe field
-//!   (`^[A-Za-z0-9_.:-]{1,96}$`) but not one FX collects, the reason names it so a person can find
-//!   the task;
+//!   `Failed { cost: None, retryable: false }`, since Tripo does not document a refusal as
+//!   unbilled; anything else that is not a usable task id is `Uncertain`, and when Tripo returned
+//!   a task id that is a safe field (`^[A-Za-z0-9_.:-]{1,96}$`) but not one FX collects, the
+//!   reason names it so a person can find the task;
 //! - collecting: a status read that fails is a poll that saw nothing, except a credential or proxy
 //!   problem (401, 403, a 3xx) or a transport refusal, which end polling at once as `Unreachable`;
 //!   a terminal status other than `success`, an unusable output and a file of the wrong kind are
 //!   `Ended`; still running at the deadline, an answer about another task, an unknown status and a
-//!   download that fails or is over the cap are `Unreachable`.
+//!   download that fails or is over the cap are `Unreachable`. An `Ended` for `failed` or
+//!   `cancelled`, whose frozen credits Tripo returns ([`UNBILLED`]), costs the credits the read
+//!   reports, `Some(0)` when it reports none ([`ended_cost`]); an unusable output or a file of
+//!   the wrong kind comes from a task that succeeded, so it costs what that success read reports,
+//!   as an answer would ([`Task::cost`]); `banned` and `expired` cost `None`. A figure that
+//!   cannot be read is `None` throughout.
 //!
 //! A model URL is downloaded at Tripo's text, byte for byte; the riggability check's `rig_type`
 //! reaches a handle or an answer only as a short plain string, else `null`; and a [`Task`]'s
@@ -70,6 +75,11 @@ const RUNNING: [&str; 2] = ["queued", "running"];
 /// The task statuses that end a task without a result.
 const ENDED: [&str; 4] = ["failed", "cancelled", "banned", "expired"];
 
+/// The ended statuses Tripo does not bill (spec/providers.md §9.4 "Collect"): its billing
+/// documentation says `Failed and cancelled tasks are not charged`, and its task lifecycle says
+/// their frozen credits are released. It says nothing of `banned` or `expired`.
+pub const UNBILLED: [&str; 2] = ["failed", "cancelled"];
+
 /// Free-phase statuses that are deterministic refusals (spec/providers.md §9.4 "Free phase").
 const FREE_REFUSED: [u16; 7] = [400, 401, 403, 404, 413, 415, 422];
 
@@ -87,7 +97,8 @@ fn error_code(body: &[u8]) -> String {
     }
 }
 
-/// Paid-POST statuses that say Tripo refused the task (spec/providers.md §9.4 "Paid POST").
+/// Paid-POST statuses that say Tripo refused the task (spec/providers.md §9.4 "Paid POST"). They
+/// cost `None`: Tripo does not document a refusal as unbilled, and $0 is never inferred.
 const PAID_REFUSED: [u16; 5] = [400, 401, 403, 404, 422];
 
 /// The most model URLs one finished task may name.
@@ -127,6 +138,15 @@ pub struct Task {
     pub credits_consumed: Option<Value>,
 }
 
+impl Task {
+    /// What the task cost by this read: its `credits_consumed` as [`credits_cost`] reads it,
+    /// `None` when absent or unreadable. A finished task costs this whether its output answers
+    /// or is unusable (spec/providers.md §9.4 "Cost").
+    pub fn cost(&self) -> Option<Usd> {
+        credits_cost(self.credits_consumed.as_ref())
+    }
+}
+
 impl std::fmt::Debug for Task {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Task")
@@ -143,8 +163,11 @@ pub enum Waited {
     /// `success`.
     Done(Task),
     /// A terminal status other than success (`failed`, `cancelled`, `banned`, `expired`): the
-    /// status.
-    Ended(String),
+    /// status, and the read's `credits_consumed` as Tripo sent it (`None` when absent).
+    Ended {
+        status: String,
+        credits_consumed: Option<Value>,
+    },
     /// Still `queued`/`running` at the deadline, or every read failed until it, or an answer for
     /// another task or with an unknown status: the reason.
     Unreachable(String),
@@ -302,7 +325,10 @@ impl TripoApi {
                             });
                         }
                         if ENDED.contains(&status.as_str()) {
-                            return Waited::Ended(status);
+                            return Waited::Ended {
+                                status,
+                                credits_consumed: data.remove("credits_consumed"),
+                            };
                         }
                         last_status = Some(status);
                     }
@@ -480,7 +506,9 @@ impl TripoApi {
     }
 
     /// Waits for a submitted task, then downloads every model it names, in order: the finished
-    /// task and the `(kind, bytes)` of each model, or the outcome the collect reports.
+    /// task and the `(kind, bytes)` of each model, or the outcome the collect reports. A task
+    /// Tripo ended without a result costs [`ended_cost`]; a finished task whose output is
+    /// unusable costs [`Task::cost`].
     #[allow(clippy::result_large_err)] // `Collected` is what every caller returns at once
     pub(crate) async fn finished_models(
         &self,
@@ -489,23 +517,34 @@ impl TripoApi {
     ) -> Result<(Task, Vec<(String, Vec<u8>)>), Collected> {
         let task = match self.wait(task_id, deadline).await {
             Waited::Done(task) => task,
-            Waited::Ended(status) => {
+            Waited::Ended {
+                status,
+                credits_consumed,
+            } => {
+                let cost = ended_cost(&status, credits_consumed.as_ref());
                 return Err(Collected::Ended {
                     reason: self
                         .client
                         .reason(&format!("Tripo ended task {task_id} as {status}")),
+                    cost,
                 });
             }
             Waited::Unreachable(reason) => return Err(Collected::Unreachable { reason }),
         };
+        // From here the task succeeded, so Tripo charged it: an unusable output costs what the
+        // success read reports, as an answer would ([`Task::cost`]).
+        let cost = task.cost();
         let urls = Self::model_urls(&task.output).map_err(|reason| Collected::Ended {
             reason: self.client.reason(&reason),
+            cost,
         })?;
         let mut models = Vec::with_capacity(urls.len());
         for (_, url) in &urls {
             match self.download(url).await {
                 Ok(model) => models.push(model),
-                Err(Download::Ended(reason)) => return Err(Collected::Ended { reason }),
+                Err(Download::Ended(reason)) => {
+                    return Err(Collected::Ended { reason, cost });
+                }
                 Err(Download::Unreachable(reason)) => {
                     return Err(Collected::Unreachable { reason });
                 }
@@ -547,7 +586,8 @@ impl TripoApi {
 /// Why a download failed.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Download {
-    /// The task's output is unusable: `Collected::Ended`.
+    /// The task's output is unusable: `Collected::Ended` at the finished task's own reported
+    /// cost ([`Task::cost`]), since the task succeeded and was charged.
     Ended(String),
     /// Try again in a later collect: `Collected::Unreachable`.
     Unreachable(String),
@@ -622,6 +662,21 @@ pub(crate) fn credits_cost(credits: Option<&Value>) -> Option<Usd> {
         _ => return None,
     };
     crate::wire::decimal_micros_ceil(&text, MICROS_PER_CREDIT)
+}
+
+/// The cost of a task Tripo ended without a result (spec/providers.md §9.4 "Collect", "Cost").
+/// For `failed` and `cancelled` ([`UNBILLED`]): the read's own `credits_consumed` as
+/// [`credits_cost`] reads it, since a figure Tripo reports wins over its documented rule;
+/// `Some(0)` when the read reports none (absent or `null`); `None`, the whole hold, when the
+/// figure cannot be read. Every other status: `None`.
+pub(crate) fn ended_cost(status: &str, credits: Option<&Value>) -> Option<Usd> {
+    if !UNBILLED.contains(&status) {
+        return None;
+    }
+    match credits {
+        None | Some(Value::Null) => Some(Usd::ZERO),
+        Some(figure) => credits_cost(Some(figure)),
+    }
 }
 
 /// A value from Tripo kept in a handle or an answer's `data`: a short plain string
@@ -918,6 +973,42 @@ mod tests {
             assert_eq!(credits_cost(Some(&credits)), cost, "{credits}");
         }
         assert_eq!(credits_cost(None), None);
+    }
+
+    #[test]
+    fn an_ended_task_costs_what_tripo_reports_else_its_rule() {
+        // spec/providers.md §9.4 "Collect": a failed or cancelled task costs the read's own
+        // figure, $0 when it reports none, and the whole hold when the figure cannot be read.
+        for status in UNBILLED {
+            let cases = [
+                (None, Some(Usd::ZERO)),
+                (Some(Value::Null), Some(Usd::ZERO)),
+                (Some(json!(0)), Some(Usd::ZERO)),
+                (Some(json!("0")), Some(Usd::ZERO)),
+                (Some(json!(48)), Some(Usd(480_000))),
+                (Some(json!("48")), Some(Usd(480_000))),
+                (Some(json!("lots")), None),
+                (Some(json!(-1)), None),
+                (Some(json!(true)), None),
+            ];
+            for (credits, cost) in cases {
+                assert_eq!(
+                    ended_cost(status, credits.as_ref()),
+                    cost,
+                    "{status} {credits:?}"
+                );
+            }
+        }
+        // Tripo documents nothing for a banned or expired task: always the whole hold.
+        for status in ["banned", "expired"] {
+            for credits in [None, Some(json!(0)), Some(json!(48))] {
+                assert_eq!(
+                    ended_cost(status, credits.as_ref()),
+                    None,
+                    "{status} {credits:?}"
+                );
+            }
+        }
     }
 
     #[test]

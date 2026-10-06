@@ -1327,6 +1327,7 @@ async fn a_job_that_ended_without_a_result_is_settled_in_full() {
         vec![accepted()],
         vec![Collected::Ended {
             reason: "the job failed".into(),
+            cost: None,
         }],
     );
     let outcome = submit_job(&fake, &rig.long()).await;
@@ -1336,6 +1337,29 @@ async fn a_job_that_ended_without_a_result_is_settled_in_full() {
         vec![submitting(), submitted(), settled(Some(handle()))]
     );
     assert_eq!(rig.book.settlements(), vec![(hold_name(1), None)]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_job_that_ended_at_a_reported_cost_is_settled_at_it() {
+    // spec/providers.md §6: an ended job bills what its adapter reports, else its whole hold.
+    for cost in [Usd::ZERO, Usd(5_000)] {
+        let rig = Rig::new();
+        let fake = FakeAdapter::long_job(
+            vec![accepted()],
+            vec![Collected::Ended {
+                reason: "the job was cancelled".into(),
+                cost: Some(cost),
+            }],
+        );
+        let outcome = submit_job(&fake, &rig.long()).await;
+        assert_eq!(outcome, Outcome::Failed("the job was cancelled".into()));
+        assert_eq!(
+            rig.jobs.ops(),
+            vec![submitting(), submitted(), settled(Some(handle()))]
+        );
+        assert_eq!(rig.book.settlements(), vec![(hold_name(1), Some(cost))]);
+        assert_eq!(fake.log().len(), 2, "an ended job is not submitted again");
+    }
 }
 
 #[tokio::test(start_paused = true)]
@@ -1591,17 +1615,23 @@ async fn a_collected_answer_its_check_refuses_settles_the_record() {
 
 #[tokio::test(start_paused = true)]
 async fn a_collected_job_that_ended_is_settled() {
-    let rig = Rig::new();
-    let fake = FakeAdapter::long_job(
-        Vec::new(),
-        vec![Collected::Ended {
-            reason: "the job expired".into(),
-        }],
-    );
-    let outcome = collect_job(&fake, &rig.long(), &handle()).await;
-    assert_eq!(outcome, Outcome::Failed("the job expired".into()));
-    assert_eq!(rig.jobs.ops(), vec![settled(Some(handle()))]);
-    assert!(rig.book.holds().is_empty());
+    // The run that submitted the job settled its hold; whatever the ended job reports, a later
+    // run bills nothing new.
+    for cost in [None, Some(Usd::ZERO)] {
+        let rig = Rig::new();
+        let fake = FakeAdapter::long_job(
+            Vec::new(),
+            vec![Collected::Ended {
+                reason: "the job expired".into(),
+                cost,
+            }],
+        );
+        let outcome = collect_job(&fake, &rig.long(), &handle()).await;
+        assert_eq!(outcome, Outcome::Failed("the job expired".into()));
+        assert_eq!(rig.jobs.ops(), vec![settled(Some(handle()))]);
+        assert!(rig.book.holds().is_empty());
+        assert!(rig.book.settlements().is_empty());
+    }
 }
 
 #[tokio::test(start_paused = true)]
@@ -1648,6 +1678,7 @@ async fn a_settled_record_that_cannot_be_written_after_collecting_stops_the_run(
         Vec::new(),
         vec![Collected::Ended {
             reason: "the job expired".into(),
+            cost: None,
         }],
     );
     let outcome = collect_job(&fake, &rig.long(), &handle()).await;
@@ -1676,6 +1707,28 @@ async fn every_attempt_is_charged_by_the_ledger() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn an_ended_job_is_charged_what_its_adapter_reports() {
+    use grida_fx_runtime::ledger::Ledger;
+    for (cost, charged) in [(Some(Usd::ZERO), Usd::ZERO), (None, HOLD)] {
+        let rig = Rig::new();
+        let ledger = Ledger::new(Some(Usd(1_000_000)), None);
+        let fake = FakeAdapter::long_job(
+            vec![accepted()],
+            vec![Collected::Ended {
+                reason: "the job failed".into(),
+                cost,
+            }],
+        );
+        let mut attempts = rig.long();
+        attempts.book = &ledger;
+        let outcome = submit_job(&fake, &attempts).await;
+        assert_eq!(outcome, Outcome::Failed("the job failed".into()));
+        assert_eq!(ledger.charged(), charged, "{cost:?}");
+        assert_eq!(ledger.held(), Usd::ZERO);
+    }
+}
+
+#[tokio::test(start_paused = true)]
 async fn the_store_keeps_the_job_states() {
     use grida_fx_runtime::store::Store;
     let dir = tempfile::tempdir().expect("a temporary folder");
@@ -1685,6 +1738,7 @@ async fn the_store_keeps_the_job_states() {
         vec![accepted()],
         vec![Collected::Ended {
             reason: "the job failed".into(),
+            cost: None,
         }],
     );
     let mut attempts = rig.long();

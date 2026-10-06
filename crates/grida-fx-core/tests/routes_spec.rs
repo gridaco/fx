@@ -124,17 +124,23 @@ fn the_tiered_price_case() {
         ("resolution", Val::Str("4k".into())),
     ]));
     let unknown = route.cost(&with(&[("prompt", Val::Str("a lantern sways".into()))]));
+    // A value no tier names is priced at the whole range, as a missing one is.
+    let unlisted = route.cost(&with(&[
+        ("duration", Val::Number(4.0)),
+        ("resolution", Val::Str("720p".into())),
+    ]));
     assert_eq!(micros(small), (90_000, 112_500));
     assert_eq!(micros(large), (2_400_000, 3_000_000));
     assert_eq!(micros(unknown), (0, 3_750_000));
-    let low: Usd = [small.0, large.0, unknown.0].into_iter().sum();
-    let high: Usd = [small.1, large.1, unknown.1].into_iter().sum();
-    assert_eq!((low, high), (Usd(2_490_000), Usd(6_862_500)));
-    assert_eq!(low.to_value(), json!(2.49));
-    assert_eq!(high.to_value(), json!(6.8625));
+    assert_eq!(micros(unlisted), (120_000, 1_500_000));
+    let low: Usd = [small.0, large.0, unknown.0, unlisted.0].into_iter().sum();
+    let high: Usd = [small.1, large.1, unknown.1, unlisted.1].into_iter().sum();
+    assert_eq!((low, high), (Usd(2_610_000), Usd(8_362_500)));
+    assert_eq!(low.to_value(), json!(2.61));
+    assert_eq!(high.to_value(), json!(8.3625));
     assert_eq!(
         format!("{} – {}", low.dollars_2(), high.dollars_2()),
-        "$2.49 – $6.86"
+        "$2.61 – $8.36"
     );
 }
 

@@ -240,6 +240,7 @@ A repeated step's path carries its key in brackets, quoted: `entity['ada'].draw#
 - A route price with more decimal places is refused when the route table is read.
 - Engines compute money in whole micro-dollars (integers). Division rounds half to even.
 - Money is written as JSON numbers. `0` and `0.0` are the same value (§1).
+- A tiered price ([fx-routes-v1](schemas/fx-routes-v1.schema.json) `by` and `tiers`) prices a call at the tier its `by` setting names, when that setting is text. A setting that is absent, is not text, is not known to the plan yet, or names no tier prices the call at the route's whole range. A tier outside that range is refused when the route table is read.
 
 ## 13. Changes from gnode
 

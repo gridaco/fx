@@ -684,26 +684,49 @@ fn a_rig_answers_its_one_glb_with_the_checks_facts() {
     assert_eq!(answer.files["model"].bytes, glb(2));
     h.done();
 
-    // Two GLBs, or none: the task made no single GLB.
+    // Two GLBs, or none: the task made no single GLB. It succeeded, so it costs what its read
+    // reports, as an answer would; a figure that is absent or cannot be read is the whole hold.
     let second = "https://api.tripo3d.ai/out/second.glb";
-    for (output, downloads) in [
-        (
-            json!({"model": STORAGE, "rig_model": second}),
-            vec![download(STORAGE, &glb(1)), download(second, &glb(2))],
-        ),
-        (json!({"model": fbx_url}), vec![download(fbx_url, &fbx(1))]),
+    for (credits, cost) in [
+        (json!(25), Some(Usd(250_000))),
+        (json!("40"), Some(Usd(400_000))),
+        (Value::Null, None),
+        (json!("many"), None),
     ] {
-        let mut exchanges = vec![read("task2", "success", output, json!(25))];
-        exchanges.extend(downloads);
-        let h = harness(exchanges);
-        assert_eq!(
-            h.collect(&rig_call(json!({})), plain_handle()),
-            Collected::Ended {
-                reason: "the Tripo rig task made no single GLB".into()
-            }
-        );
-        h.done();
+        for (output, downloads) in [
+            (
+                json!({"model": STORAGE, "rig_model": second}),
+                vec![download(STORAGE, &glb(1)), download(second, &glb(2))],
+            ),
+            (json!({"model": fbx_url}), vec![download(fbx_url, &fbx(1))]),
+        ] {
+            let mut exchanges = vec![read("task2", "success", output, credits.clone())];
+            exchanges.extend(downloads);
+            let h = harness(exchanges);
+            assert_eq!(
+                h.collect(&rig_call(json!({})), plain_handle()),
+                Collected::Ended {
+                    reason: "the Tripo rig task made no single GLB".into(),
+                    cost,
+                },
+                "{credits}"
+            );
+            h.done();
+        }
     }
+    // A file of the wrong kind ends the job at the same figure.
+    let h = harness(vec![
+        read("task2", "success", json!({"model": STORAGE}), json!(25)),
+        download(STORAGE, b"PK\x03\x04rest"),
+    ]);
+    assert_eq!(
+        h.collect(&rig_call(json!({})), plain_handle()),
+        Collected::Ended {
+            reason: "Tripo returned a model that is neither GLB nor binary FBX".into(),
+            cost: Some(Usd(250_000)),
+        }
+    );
+    h.done();
 
     // The facts come from the handle, so a later run reports the same ones.
     let h = harness(vec![
@@ -743,14 +766,34 @@ fn a_rig_answers_its_one_glb_with_the_checks_facts() {
 
 #[test]
 fn a_rig_collect_ends_or_stays_outstanding_like_a_mesh() {
-    let h = harness(vec![read("task2", "cancelled", json!({}), json!(0))]);
-    assert_eq!(
-        h.collect(&rig_call(json!({})), plain_handle()),
-        Collected::Ended {
-            reason: "Tripo ended task task2 as cancelled".into()
-        }
-    );
-    h.done();
+    for (state, cost) in [
+        ("failed", Some(Usd::ZERO)),
+        ("cancelled", Some(Usd::ZERO)),
+        ("banned", None),
+        ("expired", None),
+    ] {
+        let h = harness(vec![read("task2", state, json!({}), json!(0))]);
+        assert_eq!(
+            h.collect(&rig_call(json!({})), plain_handle()),
+            Collected::Ended {
+                reason: format!("Tripo ended task task2 as {state}"),
+                cost,
+            }
+        );
+        h.done();
+    }
+    // A figure Tripo reports for a failed task is booked; one that cannot be read is the whole hold.
+    for (credits, cost) in [(json!(25), Some(Usd(250_000))), (json!("many"), None)] {
+        let h = harness(vec![read("task2", "failed", json!({}), credits)]);
+        assert_eq!(
+            h.collect(&rig_call(json!({})), plain_handle()),
+            Collected::Ended {
+                reason: "Tripo ended task task2 as failed".into(),
+                cost,
+            }
+        );
+        h.done();
+    }
 
     let clock = FakeClock::scripted(&[Duration::ZERO, Duration::ZERO, Duration::from_secs(601)]);
     let h = harness_with(

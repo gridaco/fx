@@ -115,8 +115,9 @@ Refusals are $0 because nothing left. A provider that would have answered the sa
 
 - **A reported cost is the provider's own figure, in US dollars.** It must be a finite, non-negative JSON number. Booleans, strings and `null` are not costs. It is converted exactly from its JCS text ([identity.md](identity.md) §2) and MUST be **rounded up** to whole micro-dollars, so a cost is never under-counted: `0.00012345` is `$0.000124`, and `1e-7` is `$0.000001`. (This is the conversion of a reported figure. The half-even rounding of [identity.md](identity.md) §12 is for the engine's own arithmetic on prices.)
 - **Credits.** A provider that reports credits converts them at its documented rate: Tripo, 1 credit = USD 0.01 (§9.4). The result is rounded up the same way.
-- **Nothing is computed from tokens or price lists.** When the provider reports no cost, the cost is `None` and the engine charges the whole hold: never less than the call may have cost.
-- **Collecting** a long job a previous run submitted bills nothing new ([protocol.md](protocol.md) §6.1 step 5). A job that ends without a result bills its whole hold in the run that submitted it, since `Ended` carries no cost.
+- **Nothing is computed from tokens or price lists.** When the provider reports no cost, the cost is `None` and the engine charges the whole hold. A route's high is meant to cover what a call may cost, so that this charge never under-counts it; §10 records where a built-in route's high is not known to.
+- **Collecting** a long job a previous run submitted bills nothing new ([protocol.md](protocol.md) §6.1 step 5). A job that ends without a result in the run that submitted it bills what its adapter reports for the ended job (`Ended { cost }`, §7), else its whole hold. As for a refusal (§4.3), `Some(0)` is never inferred: an ended job is $0 only where its provider's row in §9 says so, and §9 records why.
+- **A job the submitting run stopped waiting for keeps its whole hold.** That run settles the hold in full when the job is `Unreachable` (§7), since the job may still be running. A later run that finds the job ended, at whatever cost, bills nothing new and changes nothing already booked.
 
 ## 7. Long jobs
 
@@ -148,6 +149,7 @@ A long job (a video, a mesh, a rig) is submitted once and then collected by its 
   | A credential or proxy problem (401, 403, a 3xx) | `Unreachable` | stays `submitted` |
 
   Settling a job that may still be running would invite a second paid submit, so whenever it is not clear that the job is over, the outcome is `Unreachable`.
+- **`Ended { cost }`** carries what the ended job costs: the provider's own figure where §9 reads one for a job that ended that way; `Some(0)` only where §9 says the provider does not bill such a job and it reports no figure; else `None`. The run that submitted the job settles its hold at that cost, else in full (§6). A result that is unusable came from a job the provider finished and billed, so it costs what the provider reported for that job, as an answer would, and `None` when the provider reported nothing that can be read.
 - **The check of a collected answer** runs as for a plain answer. A refusal settles the record and fails the call, since drawing again is a new paid job.
 
 ## 8. Downloads and reasons
@@ -299,6 +301,7 @@ Each provider's section is normative for its adapters. Status rows override §4.
   - The download is made once per collect (§8). A transport failure, a refusal by the transport, a 3xx, 401, 403, 408, 429, a 5xx or another status outside 2xx and 4xx is `Unreachable`; a later collect reads the result and downloads again. Another 4xx is `Ended`, and so is a body that is empty, over the cap or not MP4 by its bytes, or a clip with no video stream.
   - A handle that is not one the adapter wrote (`a fal video job handle is not one this adapter wrote`) is `Unreachable`, and nothing is requested.
   - A fal job that may still be running is never settled.
+  - An `Ended` after the result read (a result without an https video, or a download that ends the job) comes from a job fal finished, so it costs that read's `usage.cost`, as an answer would (§7). Every other `Ended` costs `None`, and so does a result read without a cost: the run that submitted the job then charges its whole hold.
 - **Reasons:** the labels are `fal image generation`, `fal output image download`, `fal video submission`, `fal video job status`, `fal video job result`, `fal output video download` and `fal background removal`. Response bodies are never quoted, except the bounded `error_type` and error of a failed job.
 
 ### 9.4 Tripo
@@ -331,7 +334,7 @@ Each provider's section is normative for its adapters. Status rows override §4.
 - **Paid POST (overrides of §4.2–4.3):**
   - a request the transport refuses itself: `Refused`;
   - `not_sent` otherwise, and 429: `NotReceived`;
-  - 400, 401, 403, 404 and 422: `Failed { cost: None, retryable: false }`. Tripo has not documented that a refused task is unbilled;
+  - 400, 401, 403, 404 and 422: `Failed { cost: None, retryable: false }`. Tripo's [billing documentation](https://developers.tripo3d.com/en/docs/billing) says credits are frozen when a task is created, and its [task lifecycle](https://developers.tripo3d.com/en/docs/task-lifecycle) says a submitted request returns a `task_id`. A refused POST returns none. But Tripo does not document a refusal as unbilled, and `Some(0)` is never inferred (§4.3);
   - `after_send`, 3xx, 408, 5xx, any other status, an unreadable envelope, and a missing or malformed task id: `Uncertain`. The reason adds the cause in brackets (`Tripo may have taken the task; it is not posted again (<cause>)`).
   - A task id matches `^[A-Za-z0-9_-]{1,128}$`. An `Uncertain` for a 200 whose task id is a string matching `^[A-Za-z0-9_.:-]{1,96}$` names it: `Tripo's answer names task <id>, which is not a task id FX collects`. Any other non-blank string gives `Tripo's answer has a malformed task id`; none gives `Tripo's answer has no task id`.
 - **Tasks.**
@@ -342,9 +345,10 @@ Each provider's section is normative for its adapters. Status rows override §4.
   - A rig answer needs exactly one GLB, as file `model`, with `data: {"facts": {"riggable", "checked_rig_type", "advisory_override"}}` taken from the handle.
 - **Collect:**
   - `failed`, `cancelled`, `banned` and `expired` are `Ended`, and so are an unusable URL scan, a URL off Tripo's hosts, and a file of the wrong kind;
+  - an `Ended` for `failed` or `cancelled` costs the `credits_consumed` of that status read, converted as under **Cost**, and `Some(0)` when the read has none (absent or `null`). A figure that cannot be read costs `None`. Tripo's [billing documentation](https://developers.tripo3d.com/en/docs/billing) says `Failed and cancelled tasks are not charged`, and its [task lifecycle](https://developers.tripo3d.com/en/docs/task-lifecycle) says the frozen credits of a failed or cancelled task are released. A figure Tripo reports still wins over that rule (§6). An `Ended` for an unusable output (the URL scan, a host, a file's kind, or no model an answer can keep) comes from a task that succeeded, so it costs that success read's `credits_consumed`, as an answer would (**Cost**). `banned` and `expired` cost `None`, whatever the read reports: Tripo documents nothing for them;
   - an unknown status, another task's answer, and a download that fails or is over the cap are `Unreachable`;
   - a 401, a 403, a 3xx or a transport refusal on a status read ends polling at once as `Unreachable`; other failed reads (404 and 429 included) are polls that saw nothing.
-- **Cost:** `credits_consumed` of the finished task, a number or a decimal string, × USD 0.01, rounded up (§6). The check's credits are not counted.
+- **Cost:** `credits_consumed` of the finished task, a number or a decimal string, × USD 0.01, rounded up (§6), whether its output answers or is unusable; `None` when it is absent or cannot be read. The check's credits are not counted. A task that ended `failed` or `cancelled` costs its own read's `credits_consumed` the same way, or $0 when that read reports none (above). A refused paid POST, and a `banned` or `expired` task, are charged the whole hold. These costs are booked by the run that submitted the task, when it sees the task end. A task still running when that run stops waiting keeps the whole hold that run charged, and a later run that finds it ended bills nothing new (§6).
 
 ### 9.5 ElevenLabs
 
@@ -373,6 +377,13 @@ FX ships a default route table, embedded in `grida-fx`. It is the first table of
 
 - It holds 16 routes over 10 capabilities. Every route MUST be served by an adapter of §9, and every capability is defined in [capabilities.md](capabilities.md).
 - **Prices are planning allowances** in US dollars, not provider quotes. What a call costs is settled from what the provider reports, or else from the whole hold (§6). The video route is priced per second, in tiers by `resolution`.
+- **The image routes are priced per call, in tiers by `size`** ([identity.md](identity.md) §12). A tier is named by the exact size text, such as `1024x1024`. A request whose `size` no tier names (`auto`, none, or any other `<W>x<H>`) is priced at the route's whole range. The plan prices a step by its `size`, and each attempt's hold is the high price of the request's own tier ([protocol.md](protocol.md) §6.1 step 6).
+  - A tier's low is the image output at quality max for that size, at $30 per million output tokens, rounded down to the cent. The output is measured or, where only a call's bill is known, derived from that bill less an estimate of its input. The estimate is the same for every such bill: the measured input of one comparable call, a prompt and one input picture ($0.006314). Each such bill is below every high of its tier. A tier's high adds an allowance for the input, rounded up to the cent: $0.07 for a generate's prompt, and $0.21 for an edit's 16 input pictures and long prompt.
+  - The whole range contains every tier: $0.09 to $0.70 for a generate and to $0.85 for an edit, from $0.13 on OpenRouter.
+  - **OpenAI's highs are what an OpenAI call is booked at.** OpenAI reports token usage but no cost (§9.1), so every OpenAI image call is booked at its whole hold, and a high below what a call can cost would under-count it. Each OpenAI high leaves room for one image output at its size, measured or derived as above. The fal routes serve the same model in the same envelope, and take the same prices.
+  - **OpenRouter's highs cover twice the output.** OpenRouter reports its cost (§9.2), so its high is only the hold. It has billed a 1024x1024 generate $0.42164: twice the output the same size cost at OpenAI directly (2 × $0.21072 = $0.42144), plus its prompt. Its tiers name only the sizes it serves (§9.2).
+  - **An open risk.** That one bill does not show whether OpenRouter counts the output twice or the model now draws twice as much. If the model does, an OpenAI call, and a fal call whose answer reports no cost, can cost one more output than its high, and is under-counted by up to that much: a 1024x1024 generate would cost about $0.42 and be booked at $0.29. So the OpenAI and fal highs are not known to be worst cases. OpenAI's usage report for a call made since that bill settles it: one output means the doubling is OpenRouter's; two mean these highs need the same room as OpenRouter's.
+  - A project that knows its calls better restates a route in its own route table, with tighter prices ([identity.md](identity.md) §7).
 - **Contracts are identity.** Each contract object enters its route fingerprint, and so every cache key the route serves. Changing a contract changes every key under it.
   - A contract's `adapter` is the name §9 gives the adapter that serves the route, and its `adapter_behavior` is the behaviour §9 names, where §9 names one.
   - The image routes carry `adapter_behavior` as a string (`"1"`, `"3"`), and every other route carries it as the integer `1`. Each adapter serves its behaviour only as spelled here: the string and the number are different contracts, with different fingerprints.
@@ -392,6 +403,9 @@ FX ships a default route table, embedded in `grida-fx`. It is the first table of
 - **A provably unsent Tripo task post is `NotReceived`.** Before, it stopped the next run for a person.
 - **The fal handle holds paths**, with a plain query kept, and a `request_id` that is a safe id. Before, it held absolute URLs and any `request_id`. A failed status read during a fal collect no longer settles the job.
 - **Downloads are capped.** Video, background and Tripo downloads have size caps, and every download refuses redirects and carries no credential.
+- **A Tripo task that ends failed or cancelled in the run that submitted it costs what Tripo reports, else $0** (§9.4). Before, it was charged the whole hold. One that a later run finds ended keeps the whole hold the submitting run charged when it stopped waiting (§6).
+- **A long job that finished with an unusable result costs what its provider reported for it** (§7), else the whole hold. Before, it was always charged the whole hold.
+- **Image routes are priced by size** (§10). The plan prices each call, and each attempt is held, at the tier of the request's own `size`. Before, every image call on a route was priced and held at one range, whatever its size.
 - **Music cost is read.** OpenRouter music now reads `usage.cost`; before, every call was charged its whole hold.
 - **A malformed `revised_prompt` no longer fails a paid image.**
 - **Answers no longer carry `attempts`**, request ids or usage. Structured output answers `{"json": value}`.

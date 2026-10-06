@@ -1,5 +1,5 @@
-# A route priced per second by a setting: each take is priced at its own tier, and a take whose
-# setting the plan cannot know yet at the dearest one.
+# A route priced per second by a setting: each take is priced at its own tier, and a take with no
+# setting (`unknown`) or a value no tier names (`unlisted`, 720p) at the route's whole range.
 steps:
 - argv:
   - price

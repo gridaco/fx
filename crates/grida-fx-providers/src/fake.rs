@@ -172,6 +172,7 @@ impl FakeAdapter {
             .pop_front()
             .unwrap_or_else(|| Collected::Ended {
                 reason: SCRIPT_RAN_OUT.into(),
+                cost: None,
             })
     }
 }
@@ -282,7 +283,8 @@ mod tests {
         assert_eq!(
             LongJob::collect(&fake, &request(1), &json!({"id": "j1"})).await,
             Collected::Ended {
-                reason: SCRIPT_RAN_OUT.into()
+                reason: SCRIPT_RAN_OUT.into(),
+                cost: None,
             }
         );
         assert_eq!(fake.log().len(), 3);

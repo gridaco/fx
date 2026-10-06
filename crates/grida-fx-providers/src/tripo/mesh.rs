@@ -12,7 +12,8 @@
 //! (spec/capabilities.md §7), the key, the values (the view names, then their count, then
 //! `face_limit`), then the view files in the order front, back, left, right (each: its bytes, then
 //! its kind). A multiview task takes two views at least: Tripo refuses `front` alone only at the
-//! paid POST (HTTP 400, a failed call at the whole hold), so the adapter refuses it first, at $0.
+//! paid POST (HTTP 400, after the uploads, a failed call at the whole hold), so the adapter
+//! refuses it first, at $0, before anything is sent.
 
 use super::TripoApi;
 use crate::BoxFuture;
@@ -133,16 +134,15 @@ impl TripoMesh {
                     .position(|(kind, _)| kind == "model/gltf-binary")
             });
         let Some(index) = chosen else {
+            // The task succeeded, so Tripo charged it what the read reports.
             return Collected::Ended {
                 reason: api.client.reason("the Tripo task made no model"),
+                cost: task.cost(),
             };
         };
         let (kind, bytes) = models.into_iter().nth(index).unwrap_or_default();
         let data = json!({"facts": {"model_kind": kind}});
-        Collected::Answered(
-            Answer::new(data, super::credits_cost(task.credits_consumed.as_ref()))
-                .with_file("model", &kind, bytes),
-        )
+        Collected::Answered(Answer::new(data, task.cost()).with_file("model", &kind, bytes))
     }
 }
 

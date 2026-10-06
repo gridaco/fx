@@ -11,7 +11,8 @@
 //! - every route is served by an adapter of this crate (`live::adapters`), whose kind matches the
 //!   capability's shape, and every contract names the `adapter` (and `adapter_behavior`) that
 //!   spec/providers.md §9 gives that adapter;
-//! - prices parse, and the video route's tiers price as spec/identity.md §12 reads them.
+//! - prices parse, and the tiered routes price as spec/identity.md §12 reads them: the video
+//!   route by `resolution`, the image routes by `size`.
 
 use grida_fx_core::routes::RouteTable;
 

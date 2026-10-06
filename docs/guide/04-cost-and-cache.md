@@ -34,21 +34,22 @@ grida-fx plan concept-gallery --inputs inputs/tidebell.yaml --max-usd 12
 ```
 concept-gallery  ·  2 phases
 phase 1   9 steps   3–5 provider calls   $0.09 – $4.80
-phase 2   entity (up to 8)   ≤ $19.20   priced exactly when its list exists
+phase 2   entity (up to 8)   ≤ $23.60   priced exactly when its list exists
 cached    0 of 1 known steps
-estimate  $0.09 – $24.00   ceiling $12.00   ⚠ the worst case exceeds the ceiling; the run stops before crossing it
+estimate  $0.09 – $28.40   ceiling $12.00   ⚠ the worst case exceeds the ceiling; the run stops before crossing it
 ```
 
 How that is reckoned, with the allowances of FX's built-in routes (the writer model $0.02 –
-$0.60 a call, the reviewer $0.05 – $1.50, an image $0.14 – $0.30):
+$0.60 a call, the reviewer $0.05 – $1.50, an image edit $0.13 – $0.85, or its size's tier):
 - **Phase 1** has nine step instances: `poster_small`, `propose`, `well_formed`, `admit`,
   `grammar` and `close`, plus the second take of `propose` and of its two judges, which
   regeneration may draw. Three calls surely run (`propose` and `grammar` on the writer, `admit`
   on the reviewer, at the low end: $0.09). At worst five do (two takes of `propose` and of
   `admit`, and `grammar`): $4.80.
 - **Phase 2** repeats over a list `propose` makes, so it is priced at its `max:`, the input
-  `max_entities` (8 here): per entity `direct` ($0.60), `draw` ($0.30) and `review` ($1.50) at
-  worst, 8 × $2.40 = $19.20.
+  `max_entities` (8 here): per entity `direct` ($0.60), `draw` ($0.85) and `review` ($1.50) at
+  worst, 8 × $2.95 = $23.60. An entity's size is not known yet, so `draw` is priced at the
+  route's whole range; once the list exists, each is priced at its size's tier ($0.79 at most).
 
 **Where prices come from.** Every paid call is priced by its route's entry in a route table. FX
 ships a built-in table with a route for each model and provider it can call (`grida-fx nodes

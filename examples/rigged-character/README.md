@@ -34,26 +34,28 @@ grida-fx plan   rigged-character --brief inputs/wren.md --partition head_body
 
 ```
 rigged-character  ·  1 phase
-phase 1   116 steps   53–367 provider calls   $3.33 – $80.28
+phase 1   116 steps   53–367 provider calls   $3.06 – $85.23
 cached    0 of 3 known steps
-estimate  $3.33 – $80.28   ceiling $30.00   ⚠ the worst case exceeds the ceiling; the run stops before crossing it
+estimate  $3.06 – $85.23   ceiling $30.00   ⚠ the worst case exceeds the ceiling; the run stops before crossing it
 ```
 
 Where the worst case comes from, with each route's allowance (an agent turn $0.10, an image
-$0.25, a review $0.03, a mesh $2.50, a rig $0.50):
+$0.70, an edit $0.85, a review $0.03, a mesh $2.50, a rig $0.50). The reference agent asks for
+`1024x1536` inside its tool, where the plan cannot see it, so the plan prices its pictures at the
+image routes' whole range; a live run holds that size's tier, $0.24 an image and $0.38 an edit.
 
 ```
-references   3 takes × (12 agent turns + 3 images + review)                          ≤ $5.94
+references   3 takes × (12 agent turns + image + 2 edits + review)                  ≤ $10.89
 body         3 builds, each:                                                        ≤ $74.31
                part[head], part[body]  2 × 3 takes × (mesh + review)       $15.18
                assemble                3 takes × (30 agent turns + review)  $9.09
                rig_provider            1 job (mesh.rig)                     $0.50
                audit                   local                                $0.00
 admit        1 review                                                                ≤ $0.03
-worst case                                                                            $80.28
+worst case                                                                            $85.23
 ```
 
-The low end, $3.33, is what surely runs: the first take of everything, at the lowest prices
+The low end, $3.06, is what surely runs: the first take of everything, at the lowest prices
 (16 + 36 + 1 = 53 calls). Regeneration accounts for the rest, up to 367 calls. The ceiling stops
 a run before it crosses $30, whatever the regeneration does.
 

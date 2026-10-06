@@ -68,7 +68,7 @@
                 "exclusiveMinimum": 0
               },
               "by": {
-                "description": "The request setting whose value picks a tier, such as `resolution`. A call whose setting the plan does not know yet is priced at the whole range.",
+                "description": "The request setting whose text value picks a tier, such as `resolution` or `size`. A call whose setting is absent, is not text, is not known to the plan yet, or names no tier is priced at the whole range.",
                 "type": "string",
                 "minLength": 1
               },

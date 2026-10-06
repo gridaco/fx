@@ -91,6 +91,8 @@ A picture from a prompt.
 
 **Limits a route may have:** an exact-size envelope or a fixed list of sizes, no transparency, and no references. They are enforced as refusals ([providers.md](providers.md) §9). No route FX ships takes references for `image.generate`, so none declares `image_input` for it.
 
+**Pricing:** per call, in tiers by `size` ([identity.md](identity.md) §12; the built-in tiers are in [providers.md](providers.md) §10).
+
 ## 3. `image.edit`
 
 A picture made from input pictures, optionally within a mask.
@@ -126,6 +128,8 @@ A picture made from input pictures, optionally within a mask.
 | `mask` | the route takes a `mask` |
 
 **Limits a route may have:** an exact-size envelope or a fixed list of sizes, no transparency, no mask, and a limit on the number of input pictures. They are enforced as refusals ([providers.md](providers.md) §9). Every route FX ships takes at most 16 input pictures (`image` and `references`; the mask does not count).
+
+**Pricing:** as for `image.generate`, with a larger allowance for the input pictures ([providers.md](providers.md) §10).
 
 ## 4. `structured.generate`
 

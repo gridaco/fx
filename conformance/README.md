@@ -263,7 +263,7 @@ alone.
 | `stand-in-job` | long jobs (`video.generate`, `mesh.generate`) answered at once with no job record: files sent without a kind take the capability's (the model's from its signature), and the engine writes `data` from the files, so the clip's file facts and the model's kind become node facts |
 | `takes-pick` | `takes: 3` with `pick: first_accepted`, priced as three calls |
 | `template-prompt` | a prompt file rendered with `vars` and inputs, `max:` from an input, and steps nested in a repeat |
-| `tiered-price` | a route priced per second by a request setting: each take at its tier, an unknown setting at the dearest |
+| `tiered-price` | a route priced per second by a request setting: each take at its tier, and a take with no setting or a value no tier names at the route's whole range |
 | `workflow-step` | a workflow used as a repeated step, with its own input defaults |
 | `workflows-setting` | `workflows:` in `fx.yaml` replaces the folders searched for a workflow id (overlapping entries count a file once, a missing folder adds nothing, the root is always searched); a workflow in a nested project keeps its home's route defaults under the planning project's, and its run, store and takes file are the planning project's; an entry that is the project or holds it is refused (exit 2) |
 | `yaml-strict` | the strict YAML subset in inputs, workflow, route, takes and project files: `on` as a key, quoted and plain strings (`y`, `0bad`) accepted; ambiguous scalars (a YAML 1.1 boolean in any letter case, a leading zero, a date, `1:30` and `16:9`, `.inf`), duplicate keys, anchors and tags refused (exit 2) |

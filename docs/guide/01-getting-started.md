@@ -127,16 +127,16 @@ grida-fx plan workflows/icon.yaml --name "copper lantern"
 
 ```
 icon  ·  1 phase
-phase 1   6 steps   1–3 provider calls   $0.18 – $0.75
+phase 1   6 steps   1–3 provider calls   $0.21 – $0.87
 cached    0 of 3 known steps
-estimate  $0.18 – $0.75   ceiling $10.00
+estimate  $0.21 – $0.87   ceiling $10.00
 ```
 
 The plan counts every take regeneration may draw: three drawings and their three checks. The low
-end is the one drawing that surely runs, at the route's lowest price; the high end is all three,
-at its highest. The prices are the allowances of FX's built-in route table
-(`gpt-image-2.5-sunburst@openai`: $0.18 – $0.25 a call), which a project's own tables can
-override.
+end is the one drawing that surely runs, at the low price of its size's tier; the high end is all
+three, at the tier's high. The prices are the allowances of FX's built-in route table, in tiers by
+size (`gpt-image-2.5-sunburst@openai` at `1024x1024`: $0.21 – $0.29 a call), which a project's own
+tables can override.
 
 ```bash
 grida-fx run workflows/icon.yaml --name "copper lantern" --live

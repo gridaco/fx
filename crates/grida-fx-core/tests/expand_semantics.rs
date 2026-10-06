@@ -1329,12 +1329,20 @@ steps:
     uses: fx/video.generate@1
     with:
       prompt: a lantern sways
+  unlisted:
+    uses: fx/video.generate@1
+    with:
+      prompt: a lantern sways
+      duration: 4
+      resolution: 720p
 ",
     );
     assert!(expansion.problems.is_empty(), "{:?}", problems(&expansion));
     usd(90_000, 112_500, get(&expansion, "small#1"));
     usd(2_400_000, 3_000_000, get(&expansion, "large#1"));
     usd(0, 3_750_000, get(&expansion, "unknown#1"));
+    // A value no tier names is priced at the whole range.
+    usd(120_000, 1_500_000, get(&expansion, "unlisted#1"));
 }
 
 #[test]

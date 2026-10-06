@@ -82,7 +82,7 @@ impl TripoRig {
         };
         let checked = match api.wait(&check_id, CHECK_DEADLINE).await {
             Waited::Done(task) => task,
-            Waited::Ended(status) => {
+            Waited::Ended { status, .. } => {
                 return api.refused(&format!("Tripo's riggability check ended as {status}"));
             }
             Waited::Unreachable(reason) => return api.not_received(&reason),
@@ -139,8 +139,10 @@ impl TripoRig {
             .into_iter()
             .filter(|(kind, _)| kind == "model/gltf-binary");
         let (Some((_, bytes)), None) = (glbs.next(), glbs.next()) else {
+            // The task succeeded, so Tripo charged it what the read reports.
             return Collected::Ended {
                 reason: api.client.reason("the Tripo rig task made no single GLB"),
+                cost: task.cost(),
             };
         };
         let check = handle.get("check");
@@ -161,13 +163,11 @@ impl TripoRig {
             "checked_rig_type": checked_rig_type,
             "advisory_override": advisory_override,
         }});
-        Collected::Answered(
-            Answer::new(data, super::credits_cost(task.credits_consumed.as_ref())).with_file(
-                "model",
-                "model/gltf-binary",
-                bytes,
-            ),
-        )
+        Collected::Answered(Answer::new(data, task.cost()).with_file(
+            "model",
+            "model/gltf-binary",
+            bytes,
+        ))
     }
 }
 

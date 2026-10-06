@@ -123,10 +123,12 @@ fn refused(call: &CallRequest, keys: Keys) -> String {
     }
 }
 
+/// The reason of an `Ended` collect that reports no cost, as every one does when no read reported
+/// a cost (spec/providers.md §9.3).
 fn ended(collected: Collected) -> String {
     match collected {
-        Collected::Ended { reason } => reason,
-        other => panic!("expected Ended, got {other:?}"),
+        Collected::Ended { reason, cost: None } => reason,
+        other => panic!("expected Ended at no reported cost, got {other:?}"),
     }
 }
 
@@ -532,6 +534,51 @@ fn collect_polls_through_a_dropped_read_then_downloads_without_credential() {
     assert!(download.headers.is_empty(), "{:?}", download.headers);
     assert_eq!(download.max_response_bytes, video::MAX_VIDEO_BYTES);
     assert_eq!(download.timeout, COLLECT_DEADLINE - POLL * 3);
+}
+
+#[test]
+fn an_unusable_result_costs_what_the_result_read_reports() {
+    // spec/providers.md §7, §9.3: fal finished the job and reported its cost, so an unusable
+    // result is booked at that figure, as an answer would be; without a figure, the whole hold.
+    let not_mp4 = || {
+        Expect::download(VIDEO_URL).reply(
+            HttpResponse::new(200, b"not a clip".to_vec()).with_header("content-type", "video/mp4"),
+        )
+    };
+    let cases: Vec<(Value, Vec<Exchange>, Option<Usd>)> = vec![
+        (
+            json!({"video": {"url": VIDEO_URL}, "usage": {"cost": 0.3}}),
+            vec![not_mp4()],
+            Some(Usd(300_000)),
+        ),
+        (
+            json!({"video": {"url": VIDEO_URL}, "usage": {"cost": 0.3}}),
+            vec![Expect::download(VIDEO_URL).reply(HttpResponse::new(404, Vec::new()))],
+            Some(Usd(300_000)),
+        ),
+        (
+            json!({"video": {"url": "http://v3b.fal.media/files/clip.mp4"}, "usage": {"cost": 0.3}}),
+            Vec::new(),
+            Some(Usd(300_000)),
+        ),
+        (
+            json!({"video": {"url": VIDEO_URL}, "usage": {"cost": "0.3"}}),
+            vec![not_mp4()],
+            None,
+        ),
+        (json!({"video": {"url": VIDEO_URL}}), vec![not_mp4()], None),
+    ];
+    for (body, downloads, cost) in cases {
+        let clock = Arc::new(FakeClock::new());
+        let mut exchanges = vec![completed(), result_get().reply(ok(body.clone()))];
+        exchanges.extend(downloads);
+        let transport = Arc::new(ReplayTransport::new(exchanges));
+        let Collected::Ended { cost: booked, .. } = collect(&transport, &clock, &call(json!({})))
+        else {
+            panic!("an unusable result ends the job: {body}");
+        };
+        assert_eq!(booked, cost, "{body}");
+    }
 }
 
 #[test]

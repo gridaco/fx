@@ -99,37 +99,37 @@ fn expected_routes() -> Vec<Expected> {
             "image.edit",
             "gpt-image-2.5-sunburst@openai",
             image_contract("fx-openai-image-v1", "1"),
-            ("0.18", "0.25"),
+            ("0.09", "0.85"),
         ),
         expected(
             "image.edit",
             "openai/gpt-image-2.5-sunburst@openrouter",
             image_contract("fx-openrouter-image-v1", "3"),
-            ("0.14", "0.3"),
+            ("0.13", "0.85"),
         ),
         expected(
             "image.edit",
             "openai/gpt-image-2.5/sunburst@fal",
             image_contract("fx-fal-image-v1", "1"),
-            ("0.16464", "0.5"),
+            ("0.09", "0.85"),
         ),
         expected(
             "image.generate",
             "gpt-image-2.5-sunburst@openai",
             image_contract("fx-openai-image-v1", "1"),
-            ("0.18", "0.25"),
+            ("0.09", "0.7"),
         ),
         expected(
             "image.generate",
             "openai/gpt-image-2.5-sunburst@openrouter",
             image_contract("fx-openrouter-image-v1", "3"),
-            ("0.14", "0.3"),
+            ("0.13", "0.7"),
         ),
         expected(
             "image.generate",
             "openai/gpt-image-2.5/sunburst@fal",
             image_contract("fx-fal-image-v1", "1"),
-            ("0.16464", "0.5"),
+            ("0.09", "0.7"),
         ),
         expected(
             "mesh.generate",
@@ -566,6 +566,21 @@ fn prices_and_tiers_parse() {
                     ("720p", usd("0.1"), usd("0.125")),
                 ]
             );
+        } else if route.capability.starts_with("image.") {
+            assert_eq!(price.unit, PriceUnit::Call, "{}", route.id());
+            assert_eq!(price.by.as_deref(), Some("size"), "{}", route.id());
+            let tiers: Vec<(&str, Usd, Usd)> = price
+                .tiers
+                .iter()
+                .map(|(name, (low, high))| (name.as_str(), *low, *high))
+                .collect();
+            assert_eq!(
+                tiers,
+                image_tiers(&route.capability, &route.provider),
+                "{} {}",
+                route.capability,
+                route.id()
+            );
         } else {
             assert_eq!(price.unit, PriceUnit::Call, "{}", route.id());
             assert!(
@@ -575,6 +590,151 @@ fn prices_and_tiers_parse() {
             );
         }
     }
+}
+
+/// The size tiers of the OpenAI and fal image routes (one model, one envelope): the size, the
+/// low price, the high price of a generate, and of an edit. A low is the output at quality max,
+/// measured or derived from a measured bill, rounded down to the cent; a high adds $0.07 for a
+/// generate's prompt, or $0.21 for an edit's 16 input pictures and long prompt, rounded up
+/// (spec/providers.md §10).
+const IMAGE_TIERS: &[(&str, &str, &str, &str)] = &[
+    ("1024x1024", "0.21", "0.29", "0.43"),
+    ("1024x1536", "0.16", "0.24", "0.38"),
+    ("1152x1024", "0.19", "0.27", "0.41"),
+    ("1152x2496", "0.14", "0.22", "0.36"),
+    ("1536x1024", "0.16", "0.24", "0.38"),
+    ("1536x1536", "0.30", "0.38", "0.52"),
+    ("1712x2560", "0.28", "0.36", "0.50"),
+    ("2064x1008", "0.13", "0.21", "0.35"),
+    ("2464x3328", "0.52", "0.60", "0.74"),
+    ("2496x1152", "0.14", "0.22", "0.36"),
+    ("2560x1440", "0.22", "0.30", "0.44"),
+    ("2560x1712", "0.28", "0.36", "0.50"),
+    ("2880x960", "0.10", "0.18", "0.32"),
+];
+
+/// The OpenRouter image routes' tiers: only the sizes it serves, with highs that cover twice the
+/// output (spec/providers.md §10).
+const OPENROUTER_IMAGE_TIERS: &[(&str, &str, &str, &str)] = &[
+    ("1024x1024", "0.21", "0.50", "0.64"),
+    ("1152x2496", "0.14", "0.37", "0.51"),
+    ("1712x2560", "0.28", "0.65", "0.79"),
+    ("2064x1008", "0.13", "0.34", "0.48"),
+    ("2496x1152", "0.14", "0.37", "0.51"),
+    ("2560x1440", "0.22", "0.52", "0.66"),
+    ("2560x1712", "0.28", "0.65", "0.79"),
+];
+
+/// An image route's tiers as `(size, low, high)`, in the table's order.
+fn image_tiers(capability: &str, provider: &str) -> Vec<(&'static str, Usd, Usd)> {
+    let tiers = match provider {
+        "openrouter" => OPENROUTER_IMAGE_TIERS,
+        _ => IMAGE_TIERS,
+    };
+    tiers
+        .iter()
+        .map(|(size, low, generate, edit)| {
+            let high = if capability == "image.edit" {
+                edit
+            } else {
+                generate
+            };
+            (*size, usd(low), usd(high))
+        })
+        .collect()
+}
+
+#[test]
+fn image_tiers_name_sizes_their_routes_serve() {
+    let table = table();
+    let sizes = |id: &str| -> BTreeSet<String> {
+        table.entries[&("image.generate".to_string(), id.to_string())]
+            .price
+            .tiers
+            .keys()
+            .cloned()
+            .collect()
+    };
+    let served: BTreeSet<String> = openrouter::image::ALLOWED_SIZES
+        .iter()
+        .map(|size| size.to_string())
+        .collect();
+    assert_eq!(sizes("openai/gpt-image-2.5-sunburst@openrouter"), served);
+    for id in [
+        "gpt-image-2.5-sunburst@openai",
+        "openai/gpt-image-2.5/sunburst@fal",
+    ] {
+        for size in sizes(id) {
+            let (width, height) = size.split_once('x').expect("WxH");
+            let (width, height) = (width.parse().unwrap(), height.parse().unwrap());
+            assert_eq!(
+                grida_fx_providers::wire::check_size_envelope(width, height, "OpenAI"),
+                Ok(()),
+                "{id} {size}"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_image_routes_price_by_size() {
+    let table = table();
+    let with = |size: Option<&str>| -> IndexMap<String, Val> {
+        let mut with = IndexMap::new();
+        with.insert("prompt".to_string(), Val::Str("a kite".to_string()));
+        if let Some(size) = size {
+            with.insert("size".to_string(), Val::Str(size.to_string()));
+        }
+        with
+    };
+    let mut checked = 0;
+    for route in table.entries.values() {
+        if !route.capability.starts_with("image.") {
+            continue;
+        }
+        let id = route.id();
+        let (_, low, high) = image_tiers(&route.capability, &route.provider)
+            .into_iter()
+            .find(|(size, _, _)| *size == "1024x1024")
+            .expect("every image route has a 1024x1024 tier");
+        assert_eq!(
+            route.cost(&with(Some("1024x1024"))),
+            (low, high),
+            "{} {id}",
+            route.capability
+        );
+        // A size the tiers do not list, `auto`, or none: the whole range.
+        let whole = (route.price.low, route.price.high);
+        for size in [Some("2048x2048"), Some("auto"), None] {
+            assert_eq!(
+                route.cost(&with(size)),
+                whole,
+                "{} {id} {size:?}",
+                route.capability
+            );
+        }
+        checked += 1;
+    }
+    assert_eq!(checked, 6);
+    let openai = |capability: &str, size: &str| {
+        table
+            .resolve(capability, "gpt-image-2.5-sunburst@openai")
+            .unwrap()
+            .cost(&with(Some(size)))
+    };
+    assert_eq!(
+        openai("image.generate", "1024x1024"),
+        (usd("0.21"), usd("0.29"))
+    );
+    assert_eq!(
+        openai("image.edit", "1024x1024"),
+        (usd("0.21"), usd("0.43"))
+    );
+    assert_eq!(
+        openai("image.generate", "2048x2048"),
+        (usd("0.09"), usd("0.70"))
+    );
+    assert_eq!(openai("image.edit", "auto"), (usd("0.09"), usd("0.85")));
 }
 
 #[test]

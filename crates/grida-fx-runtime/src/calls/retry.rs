@@ -49,15 +49,15 @@
 //! - `Failed`: the record becomes `settled`, settle as billed, new attempt when retryable;
 //! - `Accepted { handle }`: the record becomes `submitted` with the handle, then the job is
 //!   collected under the same hold ([`collect_job`] rules, but the hold is settled: the reported
-//!   cost of the answer, else in full);
+//!   cost of the answer, or the cost the adapter reports for a job that `Ended`, else in full);
 //! - cancelled while the submit is in flight: the record stays `submitting`, settle in full,
 //!   `Cancelled`; cancelled while collecting: the record stays `submitted`, settle in full.
 //!
 //! **Collecting** ([`collect_job`], a `submitted` record found before the call): no hold, no new
 //! submit, nothing billed (`charged` 0). `Answered` → the caller publishes the call record and then
 //! removes the job record; a check that refuses the answer settles the record and fails the call;
-//! `Ended` → the record becomes `settled`, `Failed`; `Unreachable` → the record stays
-//! `submitted`, `Failed`; cancelled → the record stays `submitted`, `Cancelled`.
+//! `Ended` → the record becomes `settled`, `Failed`, whatever cost it reports; `Unreachable` → the
+//! record stays `submitted`, `Failed`; cancelled → the record stays `submitted`, `Cancelled`.
 //!
 //! **Reasons.** Every reason an outcome carries (`Refused`, `Failed`, `Unsettled`) passes through
 //! the adapter's redactor last (`RequestAdapter::redactor`, `LongJob::redactor`; spec/providers.md
@@ -461,7 +461,7 @@ async fn collect(adapter: &dyn LongJob, attempts: &Attempts<'_>, handle: &Value)
             charged: Usd::ZERO,
             attempts: 0,
         },
-        Collect::Refused { reason, .. } | Collect::Ended(reason) => {
+        Collect::Refused { reason, .. } | Collect::Ended { reason, .. } => {
             match attempts.save(fields, JobState::Settled, Some(handle)) {
                 Ok(()) => Outcome::Failed(reason),
                 Err(error) => Outcome::Store(error),
@@ -503,9 +503,10 @@ async fn collect_held(
                 Err(error) => Outcome::Store(error),
             }
         }
-        Collect::Ended(reason) => {
+        Collect::Ended { reason, cost } => {
+            // The cost the adapter reports for the ended job, else the whole hold.
             let saved = attempts.save(fields, JobState::Settled, Some(handle));
-            attempts.settle(hold, None);
+            attempts.settle(hold, cost);
             match saved {
                 Ok(()) => Outcome::Failed(reason),
                 Err(error) => Outcome::Store(error),
@@ -527,7 +528,11 @@ enum Collect {
         reason: String,
         cost: Option<Usd>,
     },
-    Ended(String),
+    /// The job ended without a result; `cost` is what the adapter reported for it.
+    Ended {
+        reason: String,
+        cost: Option<Usd>,
+    },
     Unreachable(String),
     Cancelled,
 }
@@ -553,7 +558,7 @@ async fn collect_once(
                 Err(reason) => Collect::Refused { reason, cost },
             }
         }
-        Some(Collected::Ended { reason }) => Collect::Ended(reason),
+        Some(Collected::Ended { reason, cost }) => Collect::Ended { reason, cost },
         Some(Collected::Unreachable { reason }) => Collect::Unreachable(reason),
     }
 }
@@ -821,6 +826,7 @@ mod tests {
             Box::pin(async move {
                 Collected::Ended {
                     reason: format!("the job failed: {KEY}"),
+                    cost: None,
                 }
             })
         }

@@ -7,7 +7,7 @@
 //! in-memory socket.
 
 use grida_fx_core::builtins::builtin;
-use grida_fx_core::money::Usd;
+use grida_fx_core::money::{Units, Usd};
 use grida_fx_core::routes::{PriceUnit, Route, RoutePrice};
 use grida_fx_core::spec::{CallBound, NodeSpec, Port};
 use grida_fx_core::val::{FileContent, FileValue, Val};
@@ -1423,6 +1423,145 @@ async fn a_hold_past_the_ceiling_is_ceiling_exceeded() {
     assert_eq!(data["remaining_usd"], json!(0.01));
     assert_eq!(data["key"], json!(LANTERN_KEY));
     assert!(fake.log().is_empty());
+}
+
+/// An image route priced per call in tiers by `size` (spec/providers.md §10): one tier,
+/// $0.21–0.29, inside the whole range, $0.09–0.70.
+fn img_sized() -> Route {
+    let mut sized = route("image.generate", "img-s", "acme", 700_000);
+    sized.price.low = Usd(90_000);
+    sized.price.by = Some("size".into());
+    sized.price.tiers = IndexMap::from([("1024x1024".to_string(), (Usd(210_000), Usd(290_000)))]);
+    sized
+}
+
+/// A route priced per second in tiers by `resolution`, at most 10 seconds: one tier, $0.05–0.10
+/// a second, inside the whole range, $0.03–0.30 a second.
+fn clip_sized() -> Route {
+    let mut sized = route("video.generate", "clip-s", "acme", 300_000);
+    sized.price.low = Usd(30_000);
+    sized.price.unit = PriceUnit::Second;
+    sized.price.max_units = Some(Units::whole(10));
+    sized.price.by = Some("resolution".into());
+    sized.price.tiers = IndexMap::from([("720p".to_string(), (Usd(50_000), Usd(100_000)))]);
+    sized
+}
+
+/// A call on `route_` whose answer reports no cost, under a $10 ceiling: the one hold it
+/// reserved (`budget_reserved`'s `amount_usd`) and what it was charged.
+async fn held_and_charged(route_: Route, request: Value) -> (Value, Usd) {
+    let dir = tempfile::tempdir().unwrap();
+    let fake = FakeAdapter::plain(vec![Sent::Answered(answered(b"png", None))]);
+    let mut adapters = Adapters::new();
+    adapters.register(&route_.capability, &route_.provider, fake.as_request());
+    let log_path = dir.path().join("events.jsonl");
+    let events = Arc::new(EventLog::open(&log_path, "inv", "plan").unwrap());
+    let ledger = Arc::new(Ledger::new(
+        Some(Usd(10_000_000)),
+        Some(Arc::clone(&events)),
+    ));
+    let services = live_with(
+        engine(dir.path(), adapters, true),
+        Arc::clone(&ledger),
+        Some(events),
+    );
+    let capability = route_.capability.clone();
+    let answer = call(
+        &services,
+        &site(vec![route_], &[(capability.as_str(), 1)]),
+        &CallCounter::new(),
+        &RunFiles::new(),
+        &capability,
+        request,
+    )
+    .await
+    .unwrap();
+    assert_eq!(answer.cost, None);
+    assert_eq!(ledger.charged(), answer.charged);
+    let reserved: Vec<Value> = read_events(&log_path)
+        .unwrap()
+        .into_iter()
+        .filter(|event| event["event"] == "budget_reserved")
+        .map(|event| event["amount_usd"].clone())
+        .collect();
+    let [amount] = &reserved[..] else {
+        panic!("one hold, not {reserved:?}")
+    };
+    (amount.clone(), answer.charged)
+}
+
+#[tokio::test]
+async fn an_image_hold_is_the_high_of_the_request_s_own_size() {
+    let cases = [
+        (json!({"prompt": "a lantern", "size": "1024x1024"}), 290_000),
+        (json!({"prompt": "a lantern", "size": "auto"}), 700_000),
+        (json!({"prompt": "a lantern", "size": "2048x2048"}), 700_000),
+        (json!({"prompt": "a lantern"}), 700_000),
+    ];
+    for (request, micros) in cases {
+        let (reserved, charged) = held_and_charged(img_sized(), request.clone()).await;
+        assert_eq!(reserved, Usd(micros).to_value(), "{request}");
+        assert_eq!(charged, Usd(micros), "{request}");
+    }
+}
+
+#[tokio::test]
+async fn a_per_second_hold_is_the_high_of_the_request_s_own_tier_and_length() {
+    let cases = [
+        (
+            json!({"prompt": "a tide", "duration": 4, "resolution": "720p"}),
+            400_000,
+        ),
+        (
+            json!({"prompt": "a tide", "duration": 4, "resolution": "1080p"}),
+            1_200_000,
+        ),
+        (json!({"prompt": "a tide", "duration": 4}), 1_200_000),
+        (
+            json!({"prompt": "a tide", "duration": 20, "resolution": "720p"}),
+            1_000_000,
+        ),
+        (json!({"prompt": "a tide", "resolution": "720p"}), 1_000_000),
+    ];
+    for (request, micros) in cases {
+        let (reserved, charged) = held_and_charged(clip_sized(), request.clone()).await;
+        assert_eq!(reserved, Usd(micros).to_value(), "{request}");
+        assert_eq!(charged, Usd(micros), "{request}");
+    }
+}
+
+#[tokio::test]
+async fn a_ceiling_between_two_tiers_refuses_only_the_larger_hold() {
+    let ceiling = Some(Usd(500_000));
+    let small = json!({"prompt": "a lantern", "size": "1024x1024"});
+    let large = json!({"prompt": "a lantern", "size": "auto"});
+    for (request, refused) in [(small, false), (large, true)] {
+        let dir = tempfile::tempdir().unwrap();
+        let fake = FakeAdapter::plain(vec![Sent::Answered(answered(b"png", None))]);
+        let mut adapters = Adapters::new();
+        adapters.register("image.generate", "acme", fake.as_request());
+        let services = live(engine(dir.path(), adapters, true), ceiling);
+        let outcome = call(
+            &services,
+            &site(vec![img_sized()], &[("image.generate", 1)]),
+            &CallCounter::new(),
+            &RunFiles::new(),
+            "image.generate",
+            request,
+        )
+        .await;
+        if !refused {
+            assert_eq!(outcome.unwrap().charged, Usd(290_000));
+            assert_eq!(fake.log().len(), 1);
+            continue;
+        }
+        let error = rpc(outcome);
+        assert_eq!(error.code, ErrorCode::CeilingExceeded.code());
+        let data = error.data.unwrap();
+        assert_eq!(data["needed_usd"], json!(0.7));
+        assert_eq!(data["remaining_usd"], json!(0.5));
+        assert!(fake.log().is_empty());
+    }
 }
 
 fn job_record(state: JobState, handle: Option<Value>) -> JobRecord {

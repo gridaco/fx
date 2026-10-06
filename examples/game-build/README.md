@@ -115,15 +115,17 @@ grida-fx run  level_art.py:build --arg level=../levels/docks.toml --live --max-u
 
 ```
 kitewharf-level-art  ·  1 phase
-phase 1   20 steps   3–7 provider calls   $0.54 – $1.75
+phase 1   20 steps   3–7 provider calls   $0.51 – $2.44
 cached    0 of 11 known steps
-estimate  $0.54 – $1.75   ceiling $5.00
+estimate  $0.51 – $2.44   ceiling $5.00
 ```
 
-With the built-in route's allowance of $0.18 – $0.25 an image:
-- **`plate`:** one image, $0.18 – $0.25.
-- **`icon`:** two pickups, each a drawing and its check, regenerated up to three takes: 2 – 6
-  images, $0.36 – $1.50.
+With the built-in route's allowances, priced by size:
+- **`plate`:** one image, $0.09 – $0.70. Its node asks for `1024x1024` inside its body, where the
+  plan cannot see it, so the plan prices it at the route's whole range; the run holds the size's
+  $0.29.
+- **`icon`:** two pickups, each a drawing at `1024x1024` ($0.21 – $0.29) and its check,
+  regenerated up to three takes: 2 – 6 images, $0.42 – $1.74.
 - **`sky`:** both of the docks' layers mirror by default, so the sky is free: seven local steps.
 
 Without `--live`, the run mirrors the sky and refuses the plate and the icons, at $0.
@@ -165,9 +167,9 @@ grida-fx plan level_art.py:build --arg level=../levels/docks.toml --check --expe
 
 ```
 kitewharf-level-art  ·  1 phase
-phase 1   20 steps   3–7 provider calls   $0.54 – $1.75
+phase 1   20 steps   3–7 provider calls   $0.51 – $2.44
 cached    0 of 11 known steps
-estimate  $0.54 – $1.75   ceiling $5.00
+estimate  $0.51 – $2.44   ceiling $5.00
 not cached: plate#1, icon['lantern'].draw#1, icon['lantern'].draw#2, icon['lantern'].draw#3, icon['rope'].draw#1, icon['rope'].draw#2, icon['rope'].draw#3, sky.layer['far_cliffs'].loops_already#1, sky.layer['far_cliffs'].mirror#1, sky.layer['near_masts'].loops_already#1, sky.layer['near_masts'].mirror#1, icon['lantern'].clean#1, icon['lantern'].clean#2, icon['lantern'].clean#3, icon['rope'].clean#1, icon['rope'].clean#2, icon['rope'].clean#3, sky.layer['far_cliffs'].chosen#1, sky.layer['near_masts'].chosen#1, sky.compose#1
 ```
 

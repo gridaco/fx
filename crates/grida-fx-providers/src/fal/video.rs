@@ -37,8 +37,11 @@
 //! `Unreachable`. A result without an https video is `Ended`. The download is made once: a
 //! transport failure, a 3xx, 401, 403, 408, 429, a 5xx or another status outside 2xx and 4xx is
 //! `Unreachable` (a later collect reads the result and downloads again); another 4xx, a body over
-//! the cap, empty or without the MP4 signature, or a clip with no video stream is `Ended`. The
-//! bytes decide the kind: a `content-type` header and the result's `content_type` are not read.
+//! the cap, empty or without the MP4 signature, or a clip with no video stream is `Ended`. An
+//! `Ended` after the result read comes from a job fal finished, so it costs that read's
+//! `usage.cost`, as an answer would; every other `Ended` reports no cost (`None`), so the run that
+//! submitted the job charges its whole hold. The bytes decide the kind: a `content-type` header
+//! and the result's `content_type` are not read.
 
 use super::FalClients;
 use crate::BoxFuture;
@@ -508,6 +511,7 @@ impl FalVideo {
                     if status.get("error").is_some_and(super::truthy) {
                         return Collected::Ended {
                             reason: client.reason(&job_error(&status, &client.redactor)),
+                            cost: None,
                         };
                     }
                     if status.get("status").and_then(Value::as_str) == Some("COMPLETED") {
@@ -535,12 +539,15 @@ impl FalVideo {
                 return collected;
             }
         };
+        // fal finished the job, so what the result reports is its cost, whether the result
+        // answers or is unusable.
         let cost = super::reported_cost(&result);
         let url = match result_video(super::answer_root(&result)) {
             Ok(url) => url,
             Err(sentence) => {
                 return Collected::Ended {
                     reason: client.reason(&sentence),
+                    cost,
                 };
             }
         };
@@ -582,7 +589,10 @@ impl FalVideo {
             },
             408 | 429 | 500..=599 => Read::Nothing,
             300..=399 | 401 | 403 => Read::Stop(Collected::Unreachable { reason: text() }),
-            400..=499 => Read::Stop(Collected::Ended { reason: text() }),
+            400..=499 => Read::Stop(Collected::Ended {
+                reason: text(),
+                cost: None,
+            }),
             _ => Read::Nothing,
         }
     }
@@ -608,6 +618,7 @@ impl FalVideo {
         }
         let ended = |text: &str| Collected::Ended {
             reason: redactor.reason(text),
+            cost,
         };
         let unreachable = |text: &str| Collected::Unreachable {
             reason: redactor.reason(text),

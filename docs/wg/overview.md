@@ -107,14 +107,14 @@ This milestone works only in this repo. The Python gnode stays in stage-gen, fro
 **5. Packaging and a preview publish.**
 - **npm:** `@grida/fx` plus the per-platform engine packages.
 - **PyPI:** `grida` wheels, one per platform.
-- **Releases are previews** (an npm `next` tag, PyPI pre-releases) until milestone 2 passes.
+- **Releases are previews** (an npm `next` tag, PyPI pre-releases) until milestone 2 passes and a published preview has passed its checks as installed ([RELEASING.md](../../RELEASING.md#checking-the-published-preview)).
 - **Status:** the packages and the release workflow are built; nothing is published yet. The first publish (`v0.1.0-alpha.1`) is the owner's, after review ([RELEASING.md](../../RELEASING.md)), and waits for trusted publishers (decision 11). Meanwhile FX runs from a clone, and the [examples](../../examples/) run in CI that way.
 
 ## Milestone 2: stage-gen moves onto FX
 
 stage-gen is the acceptance test. Its workflow files and Python node bodies stayed as they were, but for the names below.
 
-**Status:** stage-gen runs on FX, and gnode is deleted (FX `f4e7dea`, stage-gen `f499c35d`). Every workflow and game plans on FX at gnode's prices, with only digests moved, and its tests run whole workflows offline with stand-ins. The live smoke runs remain (below).
+**Status:** stage-gen runs on FX, and gnode is deleted (FX `f4e7dea`, stage-gen `f499c35d`). Every workflow and game planned on FX at gnode's prices, with only digests moved, and its tests run whole workflows offline with stand-ins. The live smoke runs took place on 2026-10-07 (below). Since then the image routes are priced in tiers by size ([providers.md](../../spec/providers.md) §10), so an image step no longer plans at gnode's image price.
 
 What changed:
 
@@ -148,17 +148,17 @@ gnode's tests, conformance suite, guide and schemas left with it; the suite and 
 - The largest block, $108 of one workflow's spike calls, could not move at all: they begin with agent turns, whose keys change shape, and every later call depends on them.
 - gnode's runs stay in stage-gen's `out/`, and its run viewer no longer lists them.
 
-**Next:** one budgeted live smoke run per provider, each with the owner's go and a cap:
+**Smoke runs:** one budgeted live run per provider, each with the owner's go and a cap, took place on 2026-10-07:
 
 | Provider | Capabilities checked |
 |---|---|
 | OpenAI | `image.edit` |
-| OpenRouter | `structured.generate`, `image.edit`, `agent.turn`, `music.generate` |
+| OpenRouter | `structured.generate`, `image.generate`, `agent.turn`, `music.generate` |
 | fal | `video.generate` |
 | Tripo | `mesh.generate`, `mesh.rig` |
 | ElevenLabs | `sound.generate`, `speech.generate` |
 
-After that, FX leaves preview. Publishing still waits for trusted publishing (decision 11).
+Milestone 2 has passed. FX leaves preview once its first publish, the preview `v0.1.0-alpha.1`, has passed its checks as installed. That publish still waits for trusted publishing (decision 11).
 
 ## Later
 
@@ -225,5 +225,5 @@ gnode's capability layer sent a paid request again up to 6 times and settled onl
   - the comparison against gnode (milestone 1, steps 2–3; its tool left with gnode);
   - adapter fixtures (step 4);
   - an installed-package check per platform (step 5).
-- **stage-gen (milestone 2):** `uv run python scripts/check.py`, its `VERIFICATION.md` gates and the clean-worktree pre-push hook. Every workflow and game plans on FX at gnode's prices and runs whole with stand-ins.
+- **stage-gen (milestone 2):** `uv run python scripts/check.py`, its `VERIFICATION.md` gates and the clean-worktree pre-push hook. Every workflow and game plans on FX, at gnode's prices until the image routes were priced by size, and runs whole with stand-ins.
 - **Spending:** none in milestone 1. Paid runs in milestone 2 each need the owner's go and a cap.

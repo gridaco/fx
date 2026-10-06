@@ -1,7 +1,8 @@
 # Releasing
 
-FX ships as previews until milestone 2 passes ([overview](docs/wg/overview.md)): npm versions go
-under the dist-tag `next`, and PyPI gets pre-releases. [`.github/workflows/release.yml`](.github/workflows/release.yml)
+FX ships as previews until milestone 2 passes and a published preview has passed its checks as
+installed ([below](#checking-the-published-preview); [overview](docs/wg/overview.md)): npm versions
+go under the dist-tag `next`, and PyPI gets pre-releases. [`.github/workflows/release.yml`](.github/workflows/release.yml)
 builds, checks and publishes. The owner does the account setup, pushes the tag and approves the
 publish. Nothing is published from a laptop.
 

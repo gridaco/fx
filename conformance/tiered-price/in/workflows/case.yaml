@@ -19,3 +19,9 @@ steps:
     uses: fx/video.generate@1
     with:
       prompt: a lantern sways
+  unlisted:
+    uses: fx/video.generate@1
+    with:
+      prompt: a lantern sways
+      duration: 4
+      resolution: 720p

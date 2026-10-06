@@ -36,9 +36,9 @@ grida-fx run  looping-parallax --inputs inputs/harbor.yaml --live --max-usd 2
 
 ```
 looping-parallax  ·  1 phase
-phase 1   11 steps   0–2 provider calls   $0.00 – $0.50
+phase 1   11 steps   0–2 provider calls   $0.00 – $1.70
 cached    0 of 6 known steps
-estimate  $0.00 – $0.50   ceiling $2.00
+estimate  $0.00 – $1.70   ceiling $2.00
 ```
 
 That is the plan in a fresh folder. After the mirror-only run, `far_cliffs`' three steps and
@@ -49,8 +49,8 @@ That is the plan in a fresh folder. After the mirror-only run, `far_cliffs`' thr
   `seam_ok`. Then `compose`.
 - **0 – 2 calls:** every paid step is a *maybe*: `near_masts` is repainted only if it doesn't loop
   already, and a second take only if the first seam is rejected. At worst that is two
-  `image.edit` calls at $0.25 (the built-in route's allowance): $0.50. If every layer mirrors,
-  nothing is paid at all.
+  `image.edit` calls, $1.70. The repaint names no size, so each is priced at the built-in
+  route's whole range, up to $0.85. If every layer mirrors, nothing is paid at all.
 - **Without `--live`** the run mirrors `far_cliffs` and refuses the repaint at $0
   (`image.edit on gpt-image-2.5-sunburst@openai is a paid call; run with --live`).
 
