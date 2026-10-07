@@ -4,8 +4,10 @@ FX ships as previews until milestone 2 passes and a published preview has passed
 installed ([below](#checking-the-published-preview); [overview](docs/wg/overview.md)): npm versions
 go under the dist-tag `next`, and PyPI gets pre-releases. [`.github/workflows/release.yml`](.github/workflows/release.yml)
 builds, checks and publishes. The owner does the account setup, pushes the tag and approves the
-publish. An explicitly authorized local setup preview can use the shared packaging
-tools and the separate manual publisher below; it has no CI build provenance.
+publish. Start by preparing and publishing an Apple Silicon preview locally, then
+bootstrap the remaining npm engine packages from a CI dry run. CI publishing uses
+OIDC for both registries and holds no publishing token. Local uploads have no CI
+build provenance.
 
 ## What a release publishes
 
@@ -59,25 +61,24 @@ pre-release (`-alpha.N`, `-beta.N` or `-rc.N`).
      the only reviewer, leave "Prevent self-review" off, or you can never approve your own tag.
    - **Deployment branches and tags:** choose "Selected branches and tags" and add a tag rule
      `v*`, so only a release tag can reach the publish job.
-   - **Environment secret `NPM_TOKEN`:** needed only for the first publish (step 3).
 3. **npm:**
    - Make sure the npm organization `grida` exists and your account can publish under `@grida`
      (as an owner, or as a member of a team with write access to the scope).
-   - **The first publish needs a token.** npm configures a trusted publisher on a package's
-     settings page, which exists only once the package does. All five packages are new, so the
-     first release publishes with a token. On npmjs.com, go to Access Tokens → Generate New
-     Token → Granular Access Token. Give it read and write access to packages and scopes,
-     limited to the `@grida` scope, and a short expiry. If your account requires two-factor
-     authentication for writes, allow the token to bypass it. Store the token as the
-     `release` environment's `NPM_TOKEN` secret. The workflow passes it as `NODE_AUTH_TOKEN`
-     and adds `--provenance`.
-   - **Then switch each package to trusted publishing.** After the first release, open each of
+   - **Bootstrap locally with `npm login` and account 2FA.** npm configures a trusted publisher
+     on an existing package's settings page. The Apple Silicon local preview creates
+     `@grida/fx-darwin-arm64` and `@grida/fx`; the dry run below supplies the remaining three
+     engine tarballs for a manual first upload. Do not add an npm token to GitHub.
+   - **Then configure each package's trusted publisher.** Open each of
      the five packages' Settings → Trusted Publisher → GitHub Actions and enter: organization
-     `gridaco`, repository `fx`, workflow `release.yml`, environment `release`. Delete the
-     `NPM_TOKEN` secret and revoke the token. npm tries OIDC before any token, and it then
-     attests provenance by itself. You can also set each package's publishing access to
+     `gridaco`, repository `fx`, workflow `release.yml`, environment `release`.
+     Under allowed actions, enable direct publishing with **`npm publish`**; the default
+     staged-only permission does not authorize this workflow. Register the publishers shortly
+     before the next release: a new configuration expires if it has not published within two
+     days. You can also set each package's publishing access to
      "Require two-factor authentication and disallow tokens".
-4. **PyPI:** you already hold the project `grida`. Open Manage project → Publishing → Add a new
+4. **PyPI:** `grida` already exists as a placeholder; use an account that owns it. Open
+   [Manage project → Publishing](https://pypi.org/manage/project/grida/settings/publishing/)
+   → Add a new
    publisher → GitHub, and enter: owner `gridaco`, repository `fx`, workflow `release.yml`,
    environment `release`. This needs no token: `pypa/gh-action-pypi-publish` uses trusted
    publishing, and it attaches attestations.
@@ -86,6 +87,20 @@ pre-release (`-alpha.N`, `-beta.N` or `-rc.N`).
      `pip install --pre grida` quietly installs 0.0.1 instead of failing. A yanked release is
      installed only when pinned exactly.
 
+Both registries trust the same identity:
+
+| Field | Value |
+|---|---|
+| GitHub owner | `gridaco` |
+| Repository | `fx` |
+| Workflow filename | `release.yml` (filename only) |
+| Environment | `release` |
+
+The publisher uses GitHub-hosted runners and `id-token: write`. No `NPM_TOKEN`,
+`NODE_AUTH_TOKEN` or PyPI API token is configured in CI. See the current
+[npm trusted publishing instructions](https://docs.npmjs.com/trusted-publishers/)
+and [PyPI existing-project setup](https://docs.pypi.org/trusted-publishers/adding-a-publisher/).
+
 ## A dry run
 
 Go to Actions → release → Run workflow. Pick `main` (or the tag), and leave **dry_run** checked.
@@ -93,6 +108,24 @@ The run builds all four targets and checks everything, but publishes nothing. It
 (`wheel-<target>`, `npm-<target>` and `npm-sdk`) are the exact files a release would publish, so
 you can download and inspect them. Do this before the first tag. (A run started on a `v*` tag
 with dry_run unchecked publishes, just as pushing the tag does.)
+
+After the Apple Silicon preview, bootstrap the other three npm packages from a **successful**
+dry run of the same source and version. Download its `npm-x86_64-apple-darwin`,
+`npm-x86_64-unknown-linux-gnu` and `npm-aarch64-unknown-linux-gnu` artifacts into separate folders
+(Actions → run → Artifacts, or `gh run download <run-id> --repo gridaco/fx --dir target/bootstrap`).
+Each contains exactly one tested engine tarball. Inspect them and publish from your
+npm-authenticated machine:
+
+```sh
+npm publish target/bootstrap/npm-x86_64-apple-darwin/*.tgz --tag next --access public --ignore-scripts --registry https://registry.npmjs.org
+npm publish target/bootstrap/npm-x86_64-unknown-linux-gnu/*.tgz --tag next --access public --ignore-scripts --registry https://registry.npmjs.org
+npm publish target/bootstrap/npm-aarch64-unknown-linux-gnu/*.tgz --tag next --access public --ignore-scripts --registry https://registry.npmjs.org
+```
+
+All five npm package pages now exist. Register their trusted publishers, configure PyPI,
+bump to the next preview and push its tag. That next release publishes all four platforms
+through OIDC, including the three remaining Python wheels. The initial local preview
+supports Apple Silicon only until the remaining artifacts are uploaded.
 
 ## Local packaging and setup preview
 
@@ -104,22 +137,22 @@ and then performs its installed-package checks on the oldest supported runtimes.
 Locally, `--verify` performs clean Python/npm installs, strict conformance and
 embedded-viewer checks, with provider keys removed and dotenv disabled.
 
-For an Apple Silicon setup preview, build the viewer and a production engine first:
+For a native macOS setup preview, use Bun **1.4.0**, Node 18 or later, Rust 1.89 or
+later, and a current uv (`uv self update` for a standalone uv installation). The
+publisher requires uv's `--no-attestations` option; uv 0.6 does not support it.
+Prepare the entire verified bundle with one command:
 
 ```sh
-bun --no-env-file install --frozen-lockfile
-bun --no-env-file run check:viewer
-bun --no-env-file run test:viewer
-bun --no-env-file run build:viewer
-(cd js/fx && bun --no-env-file install --frozen-lockfile)
-MACOSX_DEPLOYMENT_TARGET=11.0 CARGO_INCREMENTAL=0 \
-  RUSTFLAGS="--remap-path-prefix=$PWD=fx --remap-path-prefix=$HOME/.cargo=cargo --remap-path-prefix=$HOME/.rustup=rustup" \
-  cargo build --locked --release --bin grida-fx --target aarch64-apple-darwin
-uv run --locked --project python python tools/package_release.py \
-  --binary target/aarch64-apple-darwin/release/grida-fx \
-  --target aarch64-apple-darwin \
-  --out target/packages/0.1.0-alpha.1-macos-arm64 --verify
+uv run --locked --project python python tools/prepare_local.py
+# Optional: choose a different, new output directory.
+uv run --locked --project python python tools/prepare_local.py --out target/packages/review-2
 ```
+
+`prepare_local.py` installs frozen Bun dependencies, checks/tests/builds the viewer,
+typechecks the SDK, builds a release engine with the deployment baseline and remapped
+paths, and calls the shared packager with installed verification enabled. It never
+uploads. On Apple Silicon, the default output is
+`target/packages/0.1.0-alpha.1-aarch64-apple-darwin/`.
 
 The output directory must be new; an output inside the checkout must be gitignored.
 The three artifacts are one `grida` wheel, the native npm engine tarball, and the
@@ -137,8 +170,11 @@ Use `--only pypi` or `--only npm` to publish them independently, including from
 different machines. Copy the manifest and all three artifacts together: the full
 bundle is still validated, but only the selected registry is contacted and only
 its uploader is required. A prior PyPI publication does not block npm-only publishing.
-The account owner performs npm login/2FA and provides a project-scoped PyPI token
-through the uploader's secure prompt or their own credential setup. Never put a
+The account owner performs npm login/2FA. For local PyPI publishing, open
+[PyPI account settings → API tokens](https://pypi.org/manage/account/token/), create a token
+scoped to **Project: grida**, and paste it into uv's hidden password prompt
+(username is `__token__`). A local machine cannot use GitHub Actions OIDC. Revoke this
+bootstrap token after the local upload; CI uses the trusted publisher instead. Never put a
 token in source, command arguments, logs or `.env`. Local publishing does not request
 CI provenance or trusted-publisher attestations. Already-published versions are
 refused so a partial publication must be inspected before resuming.
