@@ -16,7 +16,7 @@ grida-fx doctor           # checks the keys and tools your workflows need
 
 Both packages are published as stable releases starting at `0.1.0` and carry the same engine.
 No repository clone or Rust toolchain is needed. For source development, see
-[the examples' README](../../examples/README.md#from-a-clone).
+[CONTRIBUTING.md](../../CONTRIBUTING.md#build-from-source).
 FX runs on macOS, and on Linux with glibc 2.28 or later, on x64 and arm64. Native Windows is not
 supported, because the engine's runner uses Unix process groups and signals: use WSL 2
 ([the platforms](../../README.md#install)). Python users who don't want Node run

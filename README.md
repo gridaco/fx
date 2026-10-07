@@ -1,52 +1,88 @@
 # Grida FX
 
-A workflow engine for generative asset pipelines. Write a workflow file, and FX plans it, prices it before anything is spent, caches every paid call by its request, and records the run. FX works with your own provider keys, and your tests run a workflow offline with [stand-ins](docs/guide/05-running.md#stand-ins-testing-without-a-provider): functions that answer its paid calls in place of a provider, held to the same checks and billed at nothing.
+**Go with the flow.**
 
-FX grew out of gnode, the Python engine [softmarshmallow/stage-gen](https://github.com/softmarshmallow/stage-gen) ran on until it moved onto FX. See [the overview](docs/wg/overview.md) for the direction and the plan.
+Reusable workflows for images, audio, and more. Connect your code and AI models,
+bring your own provider keys, and turn a one-off script into something you can run again.
+
+- **See the plan first.** Inspect the steps, dependencies, and estimated cost before a paid run.
+- **Keep the work you already did.** Reuse matching results from the cache and resume interrupted runs.
+- **Look inside a run.** Open the node canvas to explore steps, connections, and recorded artifacts.
+- **Test without a bill.** Run ordinary code offline, or use [stand-ins](docs/guide/05-running.md#stand-ins-testing-without-a-provider)
+  to answer paid calls in tests.
 
 ## Install
 
-FX is published on npm and PyPI with stable versions starting at `0.1.0`, for all four platforms below. To develop FX from a clone, you need cargo, [Bun](https://bun.sh) and [uv](https://docs.astral.sh/uv/) ([examples/README.md](examples/README.md#from-a-clone) has the rest):
+Choose npm for the CLI and JavaScript SDK:
 
 ```sh
-git clone https://github.com/gridaco/fx && cd fx
-uv sync --project python          # the Python SDK and Pillow, in python/.venv
-bun --no-env-file install --frozen-lockfile
-python3 tools/build_engine.py     # the engine, built into that SDK; again after every pull
-uv run --project python python -m grida.fx --version
-```
-
-Both package formats carry the same engine, the `grida-fx` binary, with its viewer embedded. Installed packages need no Bun, Docker or frontend build.
-
-```sh
-npm install -g @grida/fx    # the grida-fx command, and the JavaScript SDK
+npm install -g @grida/fx
 grida-fx --version
-npx @grida/fx --version     # or run it without installing
 ```
 
-Install the Python SDK:
+Or Python for the SDK, custom nodes, and builders:
 
 ```sh
-pip install grida          # the Python SDK, imported as grida.fx
-python -m grida.fx --version     # the engine from Python, with no Node needed
+pip install grida
+python -m grida.fx --version
 ```
 
-FX runs on:
+Both packages include the same native engine and its web viewer. Installed users
+need no Rust toolchain, Bun, Docker, or frontend build. You can also use
+`npx @grida/fx` without a global installation.
 
-| Platform | npm engine package | PyPI wheel |
-|---|---|---|
-| macOS 11 or later on Apple silicon | `@grida/fx-darwin-arm64` | `macosx_11_0_arm64` |
-| macOS 10.12 or later on Intel | `@grida/fx-darwin-x64` | `macosx_10_12_x86_64` |
-| Linux on x64, glibc 2.28 or later | `@grida/fx-linux-x64-gnu` | `manylinux_2_28_x86_64` |
-| Linux on arm64, glibc 2.28 or later | `@grida/fx-linux-arm64-gnu` | `manylinux_2_28_aarch64` |
+npm needs Node 18+; Python needs Python 3.11+. FX supports macOS on Apple silicon
+and Intel, and Linux on x64 and arm64 with glibc 2.28+. Windows users can use WSL 2;
+native Windows and Alpine/musl are not supported yet. Python nodes, builders, and
+local image operations need the Python package, even when launched through npm.
 
-The npm package needs Node 18 or later; the Python one needs Python 3.11 or later. **Windows is not supported yet**, since the engine's runner uses Unix process groups and signals; use WSL 2. Linux with musl (Alpine) isn't supported either.
+## Plan. Run. View.
 
-Start with [the guide](docs/guide/01-getting-started.md). [RELEASING.md](RELEASING.md) describes packaging, verification and publication for stable and prerelease versions.
+For an existing workflow:
 
-[Agent skills](skills/README.md) cover authoring, running, and inspecting FX
-workflows with installed packages: `npx skills add gridaco/fx --skill grida-fx`.
+```sh
+grida-fx plan workflows/example.yaml
+grida-fx run workflows/example.yaml
+grida-fx view workflows/example.yaml
+```
 
-For viewer development, the [canonical fixture suite](fixtures/viewer/README.md)
-generates real provider-free plans and runs covering branches, joins, matrices,
-keyed repeats, conditions, media, cache reuse, takes and failures.
+A run without `--live` executes local steps and reuses cached paid results.
+New provider calls require `--live` and a spending ceiling, such as `--max-usd 5`.
+Open a recorded run with `grida-fx view --run runs/example`.
+Python users can substitute `python -m grida.fx` for `grida-fx`.
+
+Start with [the guide](docs/guide/01-getting-started.md), or explore the
+[examples](examples/): recolor an image with code, build a looping background,
+or compose a concept gallery.
+
+### For agents
+
+Install the skill for workflow authoring, execution, and inspection:
+
+```sh
+npx skills add gridaco/fx
+```
+
+## Under the hood
+
+FX is a workflow engine for asset pipelines, implemented in Rust. YAML declares
+the dependency graph; the Python and JavaScript SDKs provide programmatic authoring
+and execution APIs. Python also hosts custom node bodies and workflow builders.
+
+The engine owns planning, scheduling, result identities, caching, spending limits,
+provider retries, and run records. SDKs and node bodies use that engine rather than
+implementing their own execution or billing layer. AI generation is one application;
+ordinary code can run as workflow steps too. The bundled viewer is a read-only
+canvas for plans and recorded runs.
+
+Read the [workflow language](docs/guide/02-workflow-file.md),
+[Python SDK](python/README.md), [JavaScript SDK](js/fx/README.md),
+and [specifications](spec/) for the technical contracts.
+
+## Contribute
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for source builds, examples, checks, and
+viewer development. [The overview](docs/wg/overview.md) records the
+project's history and direction; [ISSUES.md](ISSUES.md) tracks known gaps.
+
+Grida FX is open source under [Apache-2.0](LICENSE).

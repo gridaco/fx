@@ -20,27 +20,17 @@ the ceiling you give with `--max-usd` ([Running](../docs/guide/05-running.md#key
 
 ## From a clone
 
-For source development, run FX from a checkout of this repository. This needs git, cargo
-([rustup.rs](https://rustup.rs)), [Bun](https://bun.sh) 1.4 and [uv](https://docs.astral.sh/uv/).
+Follow [the source build instructions](../CONTRIBUTING.md#build-from-source).
+Then, from the checkout root:
 
 ```bash
-git clone https://github.com/gridaco/fx && cd fx
-uv sync --project python          # the Python SDK and Pillow, in python/.venv
-bun --no-env-file install --frozen-lockfile
-python3 tools/build_engine.py     # the engine, built into that SDK
 alias grida-fx="uv run --project '$PWD/python' python -m grida.fx"
 cd examples/hello && grida-fx run hello --inputs inputs/badges.yaml
 ```
 
-- **`tools/build_engine.py`** builds the viewer, embeds it into `grida-fx`, and puts the binary where the SDK looks
-  for its engine (`python/src/grida/fx/_bin/`, ignored by git). Run it again after every pull, so
-  the engine always matches the SDK beside it. After dependency changes, repeat the frozen Bun install.
-  Direct Cargo builds also need `bun --no-env-file run build:viewer` first; a missing bundle fails the build.
-- **The alias** runs the engine through the SDK, in `python/.venv`. That folder's `python3` is
-  also the Python the engine starts your node bodies with, so they find `grida` and Pillow.
-- **Another project** uses the same checkout through a path dependency on its `python/` folder,
-  installed editable (with uv: `grida = { path = "<checkout>/python", editable = true }` under
-  `[tool.uv.sources]`). Its `grida.fx` then drives the engine of that checkout, with no setting.
+The alias uses the checkout's SDK and Python environment, so node bodies can find
+`grida` and Pillow. Rebuild the engine after pulling or switching commits, as
+[CONTRIBUTING.md](../CONTRIBUTING.md#build-from-source) describes.
 
 ## From the packages
 
