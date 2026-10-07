@@ -6,8 +6,10 @@
  },
  "instances": [
   {
+   "bindings": [],
    "id": "draw#1",
    "identity": "a54c0c314729452a1dac01d6546cb394181c9392e905a75d0c761e3381827064",
+   "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": null,
@@ -41,8 +43,10 @@
    }
   },
   {
+   "bindings": [],
    "id": "write#1",
    "identity": "ac53055bc6d6256d1e288337285096fab5419efbbf970286f2599917e741ac31",
+   "interface_bindings": [],
    "judged_by": [
     "review#1"
    ],
@@ -81,8 +85,10 @@
    }
   },
   {
+   "bindings": [],
    "id": "review#1",
    "identity": "141777f4e3170fd414b7b86afde920bdc4070e3ca9cfbd31cb8494ce32439397",
+   "interface_bindings": [],
    "judged_by": [],
    "judges": "write#1",
    "key": null,
@@ -116,8 +122,10 @@
    }
   },
   {
+   "bindings": [],
    "id": "lost#1",
    "identity": "a987c0e53ae35d676235579ed180d277b737c74abd9cda2667c57802fc444aab",
+   "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": null,
@@ -181,9 +189,21 @@
    "where": "unbounded"
   }
  ],
+ "scopes": [],
  "types": {
   "./nodes/cases.py#shout": {
    "identity": "nodes/cases.py#shout@1",
+   "ports": {
+    "inputs": {},
+    "outputs": {
+     "text": "text"
+    },
+    "params": {
+     "text": {
+      "type": "string"
+     }
+    }
+   },
    "source": {
     "files": {
      "nodes/cases.py": "d34041da3235ac70a67a2748fbffc8cd8ab51dc12db3098472c52e2f40db0930"
@@ -192,13 +212,112 @@
    }
   },
   "fx/image.generate@1": {
-   "identity": "fx/image.generate@1.1"
+   "identity": "fx/image.generate@1.1",
+   "ports": {
+    "inputs": {
+     "references": "image[]?"
+    },
+    "outputs": {
+     "image": "image/png"
+    },
+    "params": {
+     "background": {
+      "default": "auto",
+      "enum": [
+       "opaque",
+       "transparent",
+       "auto"
+      ]
+     },
+     "prompt": {
+      "type": "string",
+      "x-fx-template": true
+     },
+     "size": {
+      "type": "string",
+      "x-fx-optional": true
+     },
+     "vars": {
+      "default": {},
+      "type": "object"
+     }
+    }
+   }
   },
   "fx/structured.generate@1": {
-   "identity": "fx/structured.generate@1.1"
+   "identity": "fx/structured.generate@1.1",
+   "ports": {
+    "inputs": {
+     "context": "file[]?",
+     "schema": "json"
+    },
+    "outputs": {
+     "json": "json"
+    },
+    "params": {
+     "matte": {
+      "default": "#ffffff",
+      "type": "string"
+     },
+     "max_tokens": {
+      "type": "integer",
+      "x-fx-optional": true
+     },
+     "prompt": {
+      "type": "string",
+      "x-fx-template": true
+     },
+     "system": {
+      "type": "string",
+      "x-fx-optional": true,
+      "x-fx-template": true
+     },
+     "vars": {
+      "default": {},
+      "type": "object"
+     }
+    }
+   }
   },
   "fx/vision.review@1": {
-   "identity": "fx/vision.review@1.1"
+   "identity": "fx/vision.review@1.1",
+   "ports": {
+    "inputs": {
+     "feedback": "annotations?",
+     "image": "image?",
+     "images": "image[]?"
+    },
+    "outputs": {
+     "annotations": "annotations?",
+     "mask": "image/png?"
+    },
+    "params": {
+     "criteria": {
+      "type": "array",
+      "x-fx-optional": true
+     },
+     "question": {
+      "type": "string",
+      "x-fx-optional": true,
+      "x-fx-template": true
+     },
+     "report": {
+      "default": "annotations",
+      "enum": [
+       "annotations",
+       "verdict"
+      ]
+     },
+     "review_size": {
+      "type": "integer",
+      "x-fx-optional": true
+     },
+     "vars": {
+      "default": {},
+      "type": "object"
+     }
+    }
+   }
   }
  },
  "workflow": {

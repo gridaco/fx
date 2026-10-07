@@ -6,8 +6,10 @@
  },
  "instances": [
   {
+   "bindings": [],
    "id": "a#1",
    "identity": "511782d66d16a009ed3673de4bf647c5f2452373202fc2d92645114c57462be2",
+   "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": null,
@@ -34,8 +36,10 @@
    }
   },
   {
+   "bindings": [],
    "id": "b#1",
    "identity": "00e52dfa07c982e3f3144185156909f9bbe1660e38f5d6496642ed8908ae177e",
+   "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": null,
@@ -70,9 +74,21 @@
    "where": "b"
   }
  ],
+ "scopes": [],
  "types": {
   "./nodes/n.py#echo": {
    "identity": "source:0def34fd9aba01ea946962466ec971e3189515424fe76ebe2d913db4aeaa60a4",
+   "ports": {
+    "inputs": {},
+    "outputs": {
+     "text": "text"
+    },
+    "params": {
+     "text": {
+      "type": "string"
+     }
+    }
+   },
    "source": {
     "files": {
      "nodes/helper.py": "1ea5aa2ea6a549a746640e2a089294ec8954d4664a5eef4dcc023064f3537689",
@@ -85,6 +101,17 @@
   },
   "./nodes/n.py#pinned": {
    "identity": "nodes/n.py#pinned@2",
+   "ports": {
+    "inputs": {},
+    "outputs": {
+     "text": "text"
+    },
+    "params": {
+     "text": {
+      "type": "string"
+     }
+    }
+   },
    "source": {
     "files": {
      "nodes/helper.py": "1ea5aa2ea6a549a746640e2a089294ec8954d4664a5eef4dcc023064f3537689",

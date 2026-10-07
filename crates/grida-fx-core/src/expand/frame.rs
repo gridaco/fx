@@ -25,17 +25,22 @@ pub(crate) struct ExpId(pub usize);
 /// Where steps are declared, with an evaluation context.
 #[derive(Debug, Clone)]
 pub(crate) struct Frame {
+    pub display_scope: Option<String>,
+    pub workflow_scope: Option<String>,
     pub steps: Steps,
     /// Instance path prefix (`""`, `"g['a']."`).
     pub prefix: String,
     /// Declaration prefix (`""`, `"g."`).
     pub decl_prefix: String,
     pub variables: IndexMap<String, Val>,
+    pub variable_bindings: std::collections::BTreeMap<String, Vec<super::wiring::Binding>>,
+    pub variable_interfaces: std::collections::BTreeMap<String, Vec<super::wiring::Binding>>,
     /// The frame a group was nested from; `None` for a workflow root (a used workflow's too).
     pub parent: Option<FrameId>,
     pub takes: Vec<u32>,
     pub workflow: Rc<WorkflowDoc>,
     pub inputs: Rc<IndexMap<String, Val>>,
+    pub input_bindings: Rc<std::collections::BTreeMap<String, Vec<super::wiring::Binding>>>,
     pub phase: u32,
     /// `(judged step name, take)` while a judge's take is expanded.
     pub judging: Option<(String, u32)>,
@@ -52,6 +57,9 @@ pub(crate) struct FrameChanges {
     pub prefix: Option<String>,
     pub decl_prefix: Option<String>,
     pub variables: Option<IndexMap<String, Val>>,
+    pub variable_bindings: Option<std::collections::BTreeMap<String, Vec<super::wiring::Binding>>>,
+    pub variable_interfaces:
+        Option<std::collections::BTreeMap<String, Vec<super::wiring::Binding>>>,
     pub parent: Option<Option<FrameId>>,
     pub takes: Option<Vec<u32>>,
     pub phase: Option<u32>,
@@ -242,6 +250,12 @@ impl FrameChanges {
         }
         if let Some(variables) = self.variables {
             frame.variables = variables;
+        }
+        if let Some(interfaces) = self.variable_interfaces {
+            frame.variable_interfaces = interfaces;
+        }
+        if let Some(bindings) = self.variable_bindings {
+            frame.variable_bindings = bindings;
         }
         if let Some(parent) = self.parent {
             frame.parent = parent;

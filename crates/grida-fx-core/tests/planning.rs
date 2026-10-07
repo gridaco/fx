@@ -1615,11 +1615,15 @@ fn inst(path: &str, phase: u32, state: State, prices: &[(&str, &str, u32, i64, i
         timeout_s: None,
         reason: None,
         reads: BTreeSet::new(),
+        bindings: Vec::new(),
+        interface_bindings: Vec::new(),
+        display_scope: None,
     }
 }
 
 fn pending(path: &str, max: u32, high: i64, phase: u32) -> PendingRepeat {
     PendingRepeat {
+        display_scope: None,
         path: path.to_string(),
         max,
         waiting_on: BTreeSet::new(),

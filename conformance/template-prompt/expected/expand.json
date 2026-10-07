@@ -6,8 +6,10 @@
  },
  "instances": [
   {
+   "bindings": [],
    "id": "draw['lantern'].picture#1",
    "identity": "8040437c8494a5285a2471613023907fa60bb8649b26b5bd3f56d46f3e761092",
+   "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": null,
@@ -44,8 +46,10 @@
    }
   },
   {
+   "bindings": [],
    "id": "draw['rope'].picture#1",
    "identity": "9c8430c49f3d8ffe68ab60f6b507b00487c53a1cb00a1e9f161c8027ba85f956",
+   "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": null,
@@ -82,8 +86,10 @@
    }
   },
   {
+   "bindings": [],
    "id": "draw['gull'].picture#1",
    "identity": "bf327ed8fc68b07e9afdca6578165394fa652ec43d8d5b7e6499b9ef93af2783",
+   "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": null,
@@ -123,9 +129,101 @@
  "kind": "fx-graph-v1",
  "pending": [],
  "problems": [],
+ "scopes": [
+  {
+   "id": "scope:draw['lantern']#",
+   "input_bindings": [],
+   "kind": "group",
+   "nodes": [
+    "draw['lantern'].picture#1"
+   ],
+   "output_bindings": [],
+   "parent": null,
+   "path": "draw['lantern']",
+   "pending": [],
+   "ports": {
+    "inputs": {},
+    "outputs": []
+   },
+   "source": null,
+   "step": "draw",
+   "take": [],
+   "title": "draw"
+  },
+  {
+   "id": "scope:draw['rope']#",
+   "input_bindings": [],
+   "kind": "group",
+   "nodes": [
+    "draw['rope'].picture#1"
+   ],
+   "output_bindings": [],
+   "parent": null,
+   "path": "draw['rope']",
+   "pending": [],
+   "ports": {
+    "inputs": {},
+    "outputs": []
+   },
+   "source": null,
+   "step": "draw",
+   "take": [],
+   "title": "draw"
+  },
+  {
+   "id": "scope:draw['gull']#",
+   "input_bindings": [],
+   "kind": "group",
+   "nodes": [
+    "draw['gull'].picture#1"
+   ],
+   "output_bindings": [],
+   "parent": null,
+   "path": "draw['gull']",
+   "pending": [],
+   "ports": {
+    "inputs": {},
+    "outputs": []
+   },
+   "source": null,
+   "step": "draw",
+   "take": [],
+   "title": "draw"
+  }
+ ],
  "types": {
   "fx/image.generate@1": {
-   "identity": "fx/image.generate@1.1"
+   "identity": "fx/image.generate@1.1",
+   "ports": {
+    "inputs": {
+     "references": "image[]?"
+    },
+    "outputs": {
+     "image": "image/png"
+    },
+    "params": {
+     "background": {
+      "default": "auto",
+      "enum": [
+       "opaque",
+       "transparent",
+       "auto"
+      ]
+     },
+     "prompt": {
+      "type": "string",
+      "x-fx-template": true
+     },
+     "size": {
+      "type": "string",
+      "x-fx-optional": true
+     },
+     "vars": {
+      "default": {},
+      "type": "object"
+     }
+    }
+   }
   }
  },
  "workflow": {

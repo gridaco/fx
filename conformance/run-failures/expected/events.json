@@ -1,12 +1,193 @@
 [
  {
+  "bindings": [],
+  "code": "node_error",
+  "error": "RuntimeError: kaboom y",
+  "event": "node_failed",
+  "facts": {},
+  "id": "bang#1",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "bang",
+  "plan": "ad4d01a93d3cbab99482d48cd9d78c88148cb27f3bc5e1935f769193f47baf1b",
+  "ports": {
+   "inputs": {},
+   "outputs": {
+    "text": "text"
+   },
+   "params": {
+    "text": {
+     "type": "string"
+    }
+   }
+  },
+  "reads": [],
+  "uses": "./nodes/fails.py#boom"
+ },
+ {
+  "bindings": [],
+  "code": "node_failure",
+  "error": "refused on purpose",
+  "event": "node_failed",
+  "facts": {
+   "seen": "x"
+  },
+  "id": "nope#1",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "nope",
+  "plan": "ad4d01a93d3cbab99482d48cd9d78c88148cb27f3bc5e1935f769193f47baf1b",
+  "ports": {
+   "inputs": {},
+   "outputs": {
+    "text": "text"
+   },
+   "params": {
+    "text": {
+     "type": "string"
+    }
+   }
+  },
+  "reads": [],
+  "uses": "./nodes/fails.py#refuse"
+ },
+ {
+  "bindings": [],
+  "event": "node_started",
+  "id": "bang#1",
+  "identity": "73ac56a0bfaa9ef52cc3fcf0c265f5358e646155c90aef5ecffac8916d1ad634",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "bang",
+  "plan": "ad4d01a93d3cbab99482d48cd9d78c88148cb27f3bc5e1935f769193f47baf1b",
+  "ports": {
+   "inputs": {},
+   "outputs": {
+    "text": "text"
+   },
+   "params": {
+    "text": {
+     "type": "string"
+    }
+   }
+  },
+  "reads": [],
+  "routes": {},
+  "step": "bang",
+  "take": [
+   1
+  ],
+  "uses": "./nodes/fails.py#boom",
+  "with": {
+   "text": {
+    "value": "y"
+   }
+  }
+ },
+ {
+  "bindings": [],
+  "event": "node_started",
+  "id": "nope#1",
+  "identity": "26a4430afa5cd69a3f06f63130654ff1cd6755cd765521630723893dcb3ce44e",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "nope",
+  "plan": "ad4d01a93d3cbab99482d48cd9d78c88148cb27f3bc5e1935f769193f47baf1b",
+  "ports": {
+   "inputs": {},
+   "outputs": {
+    "text": "text"
+   },
+   "params": {
+    "text": {
+     "type": "string"
+    }
+   }
+  },
+  "reads": [],
+  "routes": {},
+  "step": "nope",
+  "take": [
+   1
+  ],
+  "uses": "./nodes/fails.py#refuse",
+  "with": {
+   "text": {
+    "value": "x"
+   }
+  }
+ },
+ {
+  "bindings": [],
+  "event": "node_started",
+  "id": "ok#1",
+  "identity": "dcc0595c7c7f765bd5d5b0c25063aade8ac6d6b8518cd966c520c547f4392609",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "ok",
+  "plan": "ad4d01a93d3cbab99482d48cd9d78c88148cb27f3bc5e1935f769193f47baf1b",
+  "ports": {
+   "inputs": {},
+   "outputs": {
+    "text": "text"
+   },
+   "params": {
+    "text": {
+     "type": "string"
+    }
+   }
+  },
+  "reads": [],
+  "routes": {},
+  "step": "ok",
+  "take": [
+   1
+  ],
+  "uses": "./nodes/fails.py#make",
+  "with": {
+   "text": {
+    "value": "hi"
+   }
+  }
+ },
+ {
+  "bindings": [
+   {
+    "source": "nope#1",
+    "source_kind": "output",
+    "source_port": "text",
+    "target_port": "text"
+   }
+  ],
   "blocked": true,
   "event": "node_skipped",
   "id": "after#1",
+  "judges": null,
   "kind": "fx-run-events-v1",
+  "needs": [],
   "path": "after",
   "plan": "ad4d01a93d3cbab99482d48cd9d78c88148cb27f3bc5e1935f769193f47baf1b",
-  "reason": "something it reads failed"
+  "ports": {
+   "inputs": {},
+   "outputs": {
+    "text": "text"
+   },
+   "params": {
+    "text": {
+     "type": "string"
+    }
+   }
+  },
+  "reads": [
+   "nope#1"
+  ],
+  "reason": "something it reads failed",
+  "uses": "./nodes/fails.py#make"
  },
  {
   "cache": "miss",
@@ -72,93 +253,30 @@
   "stopped": null
  },
  {
-  "code": "node_error",
-  "error": "RuntimeError: kaboom y",
-  "event": "node_failed",
-  "facts": {},
-  "id": "bang#1",
-  "kind": "fx-run-events-v1",
-  "path": "bang",
-  "plan": "ad4d01a93d3cbab99482d48cd9d78c88148cb27f3bc5e1935f769193f47baf1b"
- },
- {
-  "code": "node_failure",
-  "error": "refused on purpose",
-  "event": "node_failed",
-  "facts": {
-   "seen": "x"
-  },
-  "id": "nope#1",
-  "kind": "fx-run-events-v1",
-  "path": "nope",
-  "plan": "ad4d01a93d3cbab99482d48cd9d78c88148cb27f3bc5e1935f769193f47baf1b"
- },
- {
-  "event": "node_started",
-  "id": "bang#1",
-  "identity": "73ac56a0bfaa9ef52cc3fcf0c265f5358e646155c90aef5ecffac8916d1ad634",
-  "kind": "fx-run-events-v1",
-  "path": "bang",
-  "plan": "ad4d01a93d3cbab99482d48cd9d78c88148cb27f3bc5e1935f769193f47baf1b",
-  "reads": [],
-  "routes": {},
-  "step": "bang",
-  "take": [
-   1
-  ],
-  "uses": "./nodes/fails.py#boom",
-  "with": {
-   "text": {
-    "value": "y"
-   }
-  }
- },
- {
-  "event": "node_started",
-  "id": "nope#1",
-  "identity": "26a4430afa5cd69a3f06f63130654ff1cd6755cd765521630723893dcb3ce44e",
-  "kind": "fx-run-events-v1",
-  "path": "nope",
-  "plan": "ad4d01a93d3cbab99482d48cd9d78c88148cb27f3bc5e1935f769193f47baf1b",
-  "reads": [],
-  "routes": {},
-  "step": "nope",
-  "take": [
-   1
-  ],
-  "uses": "./nodes/fails.py#refuse",
-  "with": {
-   "text": {
-    "value": "x"
-   }
-  }
- },
- {
-  "event": "node_started",
-  "id": "ok#1",
-  "identity": "dcc0595c7c7f765bd5d5b0c25063aade8ac6d6b8518cd966c520c547f4392609",
-  "kind": "fx-run-events-v1",
-  "path": "ok",
-  "plan": "ad4d01a93d3cbab99482d48cd9d78c88148cb27f3bc5e1935f769193f47baf1b",
-  "reads": [],
-  "routes": {},
-  "step": "ok",
-  "take": [
-   1
-  ],
-  "uses": "./nodes/fails.py#make",
-  "with": {
-   "text": {
-    "value": "hi"
-   }
-  }
- },
- {
   "event": "phase_planned",
   "high_usd": 0,
   "kind": "fx-run-events-v1",
   "phase": 1,
   "plan": "ad4d01a93d3cbab99482d48cd9d78c88148cb27f3bc5e1935f769193f47baf1b",
   "steps": 4
+ },
+ {
+  "event": "scopes_updated",
+  "kind": "fx-run-events-v1",
+  "node_interface_bindings": {
+   "after#1": [
+    {
+     "source": "nope#1",
+     "source_kind": "output",
+     "source_port": "text",
+     "target_port": "text"
+    }
+   ],
+   "bang#1": [],
+   "nope#1": [],
+   "ok#1": []
+  },
+  "plan": "ad4d01a93d3cbab99482d48cd9d78c88148cb27f3bc5e1935f769193f47baf1b",
+  "scopes": []
  }
 ]

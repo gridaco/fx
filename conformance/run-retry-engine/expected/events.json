@@ -16,6 +16,40 @@
   "plan": "caa43d0c93e82d42f8e875d76eb2cb6616ac28344b539744d0ba7d59e890afca"
  },
  {
+  "bindings": [],
+  "event": "node_started",
+  "id": "flaky#1",
+  "identity": "780ce5ca812b47ec82a4d224b7b6f5bfa2bef826504969638c7c80f74c713e32",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "flaky",
+  "plan": "caa43d0c93e82d42f8e875d76eb2cb6616ac28344b539744d0ba7d59e890afca",
+  "ports": {
+   "inputs": {},
+   "outputs": {
+    "text": "text"
+   },
+   "params": {
+    "text": {
+     "type": "string"
+    }
+   }
+  },
+  "reads": [],
+  "routes": {},
+  "step": "flaky",
+  "take": [
+   1
+  ],
+  "uses": "./nodes/flaky.py#flaky",
+  "with": {
+   "text": {
+    "value": "steady"
+   }
+  }
+ },
+ {
   "cache": "miss",
   "event": "node_finished",
   "facts": {
@@ -70,31 +104,20 @@
   "stopped": null
  },
  {
-  "event": "node_started",
-  "id": "flaky#1",
-  "identity": "780ce5ca812b47ec82a4d224b7b6f5bfa2bef826504969638c7c80f74c713e32",
-  "kind": "fx-run-events-v1",
-  "path": "flaky",
-  "plan": "caa43d0c93e82d42f8e875d76eb2cb6616ac28344b539744d0ba7d59e890afca",
-  "reads": [],
-  "routes": {},
-  "step": "flaky",
-  "take": [
-   1
-  ],
-  "uses": "./nodes/flaky.py#flaky",
-  "with": {
-   "text": {
-    "value": "steady"
-   }
-  }
- },
- {
   "event": "phase_planned",
   "high_usd": 0,
   "kind": "fx-run-events-v1",
   "phase": 1,
   "plan": "caa43d0c93e82d42f8e875d76eb2cb6616ac28344b539744d0ba7d59e890afca",
   "steps": 1
+ },
+ {
+  "event": "scopes_updated",
+  "kind": "fx-run-events-v1",
+  "node_interface_bindings": {
+   "flaky#1": []
+  },
+  "plan": "caa43d0c93e82d42f8e875d76eb2cb6616ac28344b539744d0ba7d59e890afca",
+  "scopes": []
  }
 ]

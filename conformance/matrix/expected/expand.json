@@ -6,8 +6,10 @@
  },
  "instances": [
   {
+   "bindings": [],
    "id": "combo['open']['smile']#1",
    "identity": "e94f778ba757d63e0dff771d7ac32a6c562aeb746fb1d487023d73989f732796",
+   "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": "open.smile",
@@ -34,8 +36,10 @@
    }
   },
   {
+   "bindings": [],
    "id": "combo['open']['flat']#1",
    "identity": "e03df11f722e972c2a68793ab0391474838c6665ef7e111ac2bd2997195874c4",
+   "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": "open.flat",
@@ -62,8 +66,10 @@
    }
   },
   {
+   "bindings": [],
    "id": "combo['shut']['smile']#1",
    "identity": "023b72d2059524b1eabc5ab3642194c5dee8e0f7a415e66cec0103059df47312",
+   "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": "shut.smile",
@@ -90,8 +96,10 @@
    }
   },
   {
+   "bindings": [],
    "id": "combo['shut']['flat']#1",
    "identity": "524e23529059c09228e7635ddd345e47e7d0aeeb8b3d8f253fe4c756b3bac2b2",
+   "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": "shut.flat",
@@ -118,8 +126,60 @@
    }
   },
   {
+   "bindings": [
+    {
+     "source": "combo['open']['flat']#1",
+     "source_kind": "output",
+     "source_port": "text",
+     "target_port": "parts"
+    },
+    {
+     "source": "combo['open']['smile']#1",
+     "source_kind": "output",
+     "source_port": "text",
+     "target_port": "parts"
+    },
+    {
+     "source": "combo['shut']['flat']#1",
+     "source_kind": "output",
+     "source_port": "text",
+     "target_port": "parts"
+    },
+    {
+     "source": "combo['shut']['smile']#1",
+     "source_kind": "output",
+     "source_port": "text",
+     "target_port": "parts"
+    }
+   ],
    "id": "all#1",
    "identity": null,
+   "interface_bindings": [
+    {
+     "source": "combo['open']['flat']#1",
+     "source_kind": "output",
+     "source_port": "text",
+     "target_port": "parts"
+    },
+    {
+     "source": "combo['open']['smile']#1",
+     "source_kind": "output",
+     "source_port": "text",
+     "target_port": "parts"
+    },
+    {
+     "source": "combo['shut']['flat']#1",
+     "source_kind": "output",
+     "source_port": "text",
+     "target_port": "parts"
+    },
+    {
+     "source": "combo['shut']['smile']#1",
+     "source_kind": "output",
+     "source_port": "text",
+     "target_port": "parts"
+    }
+   ],
    "judged_by": [],
    "judges": null,
    "key": null,
@@ -194,9 +254,19 @@
  "kind": "fx-graph-v1",
  "pending": [],
  "problems": [],
+ "scopes": [],
  "types": {
   "./nodes/cases.py#join": {
    "identity": "nodes/cases.py#join@1",
+   "ports": {
+    "inputs": {
+     "parts": "text{}"
+    },
+    "outputs": {
+     "text": "text"
+    },
+    "params": {}
+   },
    "source": {
     "files": {
      "nodes/cases.py": "d34041da3235ac70a67a2748fbffc8cd8ab51dc12db3098472c52e2f40db0930"
@@ -206,6 +276,17 @@
   },
   "./nodes/cases.py#shout": {
    "identity": "nodes/cases.py#shout@1",
+   "ports": {
+    "inputs": {},
+    "outputs": {
+     "text": "text"
+    },
+    "params": {
+     "text": {
+      "type": "string"
+     }
+    }
+   },
    "source": {
     "files": {
      "nodes/cases.py": "d34041da3235ac70a67a2748fbffc8cd8ab51dc12db3098472c52e2f40db0930"

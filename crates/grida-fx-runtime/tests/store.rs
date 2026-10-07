@@ -228,6 +228,9 @@ fn instance(identity: Option<&str>, with: IndexMap<String, Val>) -> Instance {
         timeout_s: None,
         reason: None,
         reads: BTreeSet::new(),
+        bindings: Vec::new(),
+        interface_bindings: Vec::new(),
+        display_scope: None,
     }
 }
 

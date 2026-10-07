@@ -6,8 +6,10 @@
  },
  "instances": [
   {
+   "bindings": [],
    "id": "split#1",
    "identity": "81b5b43abf2ac93b67e6eedef519573519532be2f5934cc119ba4b5718ca9506",
+   "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": null,
@@ -36,8 +38,24 @@
    }
   },
   {
+   "bindings": [
+    {
+     "source": "split#1",
+     "source_kind": "output",
+     "source_port": "items",
+     "target_port": "prompt"
+    }
+   ],
    "id": "draw['l0']#1",
    "identity": "d378c1822e24ab2d0e325e859ed63bbc20bb970d38f24c15264571c36a715705",
+   "interface_bindings": [
+    {
+     "source": "split#1",
+     "source_kind": "output",
+     "source_port": "items",
+     "target_port": "prompt"
+    }
+   ],
    "judged_by": [],
    "judges": null,
    "key": "l0",
@@ -71,8 +89,24 @@
    }
   },
   {
+   "bindings": [
+    {
+     "source": "split#1",
+     "source_kind": "output",
+     "source_port": "items",
+     "target_port": "prompt"
+    }
+   ],
    "id": "draw['l1']#1",
    "identity": "0b6ae7e35793b4b90dcb4f9499ff7666f3759ca3b3170a3d4b08d7ee1887ef80",
+   "interface_bindings": [
+    {
+     "source": "split#1",
+     "source_kind": "output",
+     "source_port": "items",
+     "target_port": "prompt"
+    }
+   ],
    "judged_by": [],
    "judges": null,
    "key": "l1",
@@ -106,8 +140,24 @@
    }
   },
   {
+   "bindings": [
+    {
+     "source": "split#1",
+     "source_kind": "output",
+     "source_port": "items",
+     "target_port": "prompt"
+    }
+   ],
    "id": "draw['l2']#1",
    "identity": "067dfff2500163172cc1287e4e6c1876af811c1dc1262fd0bc1af2a3d30ad2bb",
+   "interface_bindings": [
+    {
+     "source": "split#1",
+     "source_kind": "output",
+     "source_port": "items",
+     "target_port": "prompt"
+    }
+   ],
    "judged_by": [],
    "judges": null,
    "key": "l2",
@@ -144,9 +194,19 @@
  "kind": "fx-graph-v1",
  "pending": [],
  "problems": [],
+ "scopes": [],
  "types": {
   "./nodes/cases.py#lines": {
    "identity": "nodes/cases.py#lines@1",
+   "ports": {
+    "inputs": {
+     "text": "text"
+    },
+    "outputs": {
+     "items": "json"
+    },
+    "params": {}
+   },
    "source": {
     "files": {
      "nodes/cases.py": "d34041da3235ac70a67a2748fbffc8cd8ab51dc12db3098472c52e2f40db0930"
@@ -155,7 +215,37 @@
    }
   },
   "fx/image.generate@1": {
-   "identity": "fx/image.generate@1.1"
+   "identity": "fx/image.generate@1.1",
+   "ports": {
+    "inputs": {
+     "references": "image[]?"
+    },
+    "outputs": {
+     "image": "image/png"
+    },
+    "params": {
+     "background": {
+      "default": "auto",
+      "enum": [
+       "opaque",
+       "transparent",
+       "auto"
+      ]
+     },
+     "prompt": {
+      "type": "string",
+      "x-fx-template": true
+     },
+     "size": {
+      "type": "string",
+      "x-fx-optional": true
+     },
+     "vars": {
+      "default": {},
+      "type": "object"
+     }
+    }
+   }
   }
  },
  "workflow": {

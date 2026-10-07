@@ -7,8 +7,10 @@
  "inputs": {},
  "instances": [
   {
+   "bindings": [],
    "id": "draw#1",
    "identity": "58c93ed555fa717f094371851abf62940d9ed9e8e6869d59a6ee1d0058d62e41",
+   "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": null,
@@ -49,6 +51,7 @@
  "pending": [],
  "plan": "9ca20105019824d520654fe63d03e486e1d081748a16413d8c434dab8a1d5f5c",
  "problems": [],
+ "scopes": [],
  "stand_in": true,
  "steps": {
   "draw": {
@@ -61,7 +64,37 @@
  "takes_file": "workflows/case.takes.yaml",
  "types": {
   "fx/image.generate@1": {
-   "identity": "fx/image.generate@1.1"
+   "identity": "fx/image.generate@1.1",
+   "ports": {
+    "inputs": {
+     "references": "image[]?"
+    },
+    "outputs": {
+     "image": "image/png"
+    },
+    "params": {
+     "background": {
+      "default": "auto",
+      "enum": [
+       "opaque",
+       "transparent",
+       "auto"
+      ]
+     },
+     "prompt": {
+      "type": "string",
+      "x-fx-template": true
+     },
+     "size": {
+      "type": "string",
+      "x-fx-optional": true
+     },
+     "vars": {
+      "default": {},
+      "type": "object"
+     }
+    }
+   }
   }
  },
  "view_origins": [],

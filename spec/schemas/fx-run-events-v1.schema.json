@@ -30,7 +30,8 @@
         "budget_reserved",
         "budget_settled",
         "budget_refused",
-        "problem"
+        "problem",
+        "scopes_updated"
       ]
     },
     "invocation_id": {
@@ -38,7 +39,7 @@
       "type": "string"
     },
     "plan": {
-      "description": "The plan digest (identity.md §10), the same as plan.json's `plan`.",
+      "description": "The plan digest (identity.md \u00a710), the same as plan.json's `plan`.",
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
     },
@@ -113,7 +114,7 @@
     },
     "facts": {
       "type": "object",
-      "description": "The node facts the body reported (identity.md §4). File facts are not listed; they are computed from the bytes."
+      "description": "The node facts the body reported (identity.md \u00a74). File facts are not listed; they are computed from the bytes."
     },
     "error": {
       "type": [
@@ -122,7 +123,7 @@
       ]
     },
     "code": {
-      "description": "node_failed: the name (protocol.md §7) of the error that failed the node: the host's error, the engine's error the body let through, the error of a paid built-in's call, or the code a failed check of the result gives. null when the engine failed the node with no error code: a timeout, an assertion. Absent in records written before it existed.",
+      "description": "node_failed: the name (protocol.md \u00a77) of the error that failed the node: the host's error, the engine's error the body let through, the error of a paid built-in's call, or the code a failed check of the result gives. null when the engine failed the node with no error code: a timeout, an assertion. Absent in records written before it existed.",
       "anyOf": [
         {
           "type": "string",
@@ -134,7 +135,7 @@
       ]
     },
     "stand_in": {
-      "description": "run_started: the run is a stand-in run (protocol.md §5.7). call: a stand-in answered the call, which was not answered from the cache. Present only when true.",
+      "description": "run_started: the run is a stand-in run (protocol.md \u00a75.7). call: a stand-in answered the call, which was not answered from the cache. Present only when true.",
       "const": true
     },
     "reason": {
@@ -164,7 +165,7 @@
       "pattern": "^.+@[a-z0-9._-]+$"
     },
     "call": {
-      "description": "The call key (identity.md §9).",
+      "description": "The call key (identity.md \u00a79).",
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
     },
@@ -277,6 +278,47 @@
     },
     "message": {
       "type": "string"
+    },
+    "ports": {
+      "$ref": "#/$defs/ports",
+      "description": "Known runtime instance declarations on node_started, node_failed and node_skipped, including instances created after the initial plan. Absent when the type was unresolved or in older records."
+    },
+    "bindings": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/binding"
+      }
+    },
+    "needs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "judges": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "scopes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/scope"
+      },
+      "description": "Optional engine-owned display scopes. Absence means a legacy flat graph; an empty array authoritatively means no nested scopes."
+    },
+    "node_interface_bindings": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "uniqueItems": true,
+        "items": {
+          "$ref": "#/$defs/interface_binding"
+        }
+      }
     }
   },
   "allOf": [
@@ -516,6 +558,21 @@
           "message"
         ]
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "scopes_updated"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "scopes",
+          "node_interface_bindings"
+        ]
+      }
     }
   ],
   "$defs": {
@@ -534,7 +591,7 @@
           "pattern": "^[0-9a-f]{64}$"
         },
         "kind": {
-          "description": "identity.md §4.",
+          "description": "identity.md \u00a74.",
           "type": "string"
         },
         "name": {
@@ -624,7 +681,270 @@
           "additionalProperties": false,
           "properties": {
             "value": {
-              "description": "A plain value (identity.md §3)."
+              "description": "A plain value (identity.md \u00a73)."
+            }
+          }
+        }
+      ]
+    },
+    "ports": {
+      "description": "Declared input/output file ports and JSON parameter schemas for display. Absent in older documents. Does not participate in identity.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inputs",
+        "outputs",
+        "params"
+      ],
+      "properties": {
+        "inputs": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^(?:image|audio|video|model|text|json|annotations|file)(?:/[a-z0-9.+-]+)?(?:\\[\\]|\\{\\})?\\??$"
+          }
+        },
+        "outputs": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^(?:image|audio|video|model|text|json|annotations|file)(?:/[a-z0-9.+-]+)?(?:\\[\\]|\\{\\})?\\??$"
+          }
+        },
+        "params": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "binding": {
+      "description": "An evaluated reference from one resolved instance output or node fact to a named with entry. A compound expression or collection may have several references. Unresolved instance/take choices are omitted; readers keep dependency edges instead of guessing.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "source_port",
+        "target_port",
+        "source_kind"
+      ],
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_port": {
+          "type": "string"
+        },
+        "target_port": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "source_kind": {
+          "enum": [
+            "output",
+            "fact"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "source_kind": {
+                "const": "output"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "source_port": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "parent",
+        "kind",
+        "path",
+        "step",
+        "take",
+        "title",
+        "source",
+        "ports",
+        "input_bindings",
+        "output_bindings",
+        "nodes",
+        "pending"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^scope:.+#"
+        },
+        "parent": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "enum": [
+            "group",
+            "workflow"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "step": {
+          "type": "string",
+          "minLength": 1
+        },
+        "take": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "title": {
+          "type": "string"
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Portable loaded workflow source for imports; null for inline groups. Never an absolute filesystem path."
+        },
+        "ports": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "inputs",
+            "outputs"
+          ],
+          "properties": {
+            "inputs": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "additionalProperties": true
+            },
+            "outputs": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              }
+            }
+          }
+        },
+        "input_bindings": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/interface_binding"
+          }
+        },
+        "output_bindings": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/interface_binding"
+          }
+        },
+        "nodes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "pending": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "interface_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "source_port",
+        "source_kind",
+        "target_port"
+      ],
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_port": {
+          "type": "string"
+        },
+        "source_kind": {
+          "enum": [
+            "output",
+            "fact",
+            "scope_input",
+            "scope_output"
+          ]
+        },
+        "target_port": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "source_kind": {
+                "enum": [
+                  "output",
+                  "scope_input",
+                  "scope_output"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "source_port": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              }
             }
           }
         }

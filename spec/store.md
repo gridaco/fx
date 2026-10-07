@@ -136,6 +136,78 @@ A run keeps its record in a run folder, and links its results there from the sto
 - **`outputs/`** gets the workflow's declared outputs at the end of each invocation, before `run_finished`. An incomplete run places the outputs that exist. An output that holds no file, such as a plain value, has no entry here; its value is in the `run_finished` event.
 - `views/` is reserved for views, which are planned and not part of this version.
 
+**Display scopes and workflow interfaces.** New expanded graphs optionally record
+`scopes`, and each instance records `interface_bindings`, separate from flattened
+`bindings`. These fields describe authored boundaries; they change no value, read set,
+identity, price, cache lookup or execution decision. A scope is one expanded inline
+`group` or imported `workflow` occurrence. Its stable display `id` is `scope:` followed
+by its instance `path`, `#`, and its enclosing group take numbers joined by `.`; `take`
+contains those numbers (possibly empty). Repeat keys remain in `path`. `parent` is its
+containing scope's id, or null at the root; `step` is the declaration path. `title` prefers
+the authored step title, then an imported workflow's title, then the step name. `source`
+is the imported workflow's portable loaded source, or null for a group. Scope ids are
+unique; parents form an acyclic forest. `nodes` lists direct leaf instance ids and
+`pending` lists direct pending repeat paths. Nested members belong to their direct
+scope only. Unexpanded repeats do not acquire hypothetical scopes from shadow pricing.
+
+`ports.inputs` preserves the workflow's input declarations; `ports.outputs` lists its
+output alias names. Workflow outputs have no declared node-port type: readers MUST NOT
+invent one. Inline groups have empty boundary ports. `input_bindings` records the
+observed source of each supplied workflow input; `output_bindings` records observed
+sources of its output aliases. Each uses `{source, source_port, source_kind, target_port}`.
+For `output` or `fact`, the source is a leaf instance. For `scope_input` or `scope_output`,
+it is an explicit scope boundary and its named declared port. `target_port` is the input
+or output alias in that scope; in an instance's `interface_bindings` it is its input or
+parameter. Node references preserve their actual take; boundary references preserve the
+actual selected public alias, including two aliases that wrap the same inner output.
+A scope input referenced inside its workflow remains that boundary input even when its
+caller supplied a literal. Bindings are display references, not claims of value equality
+or passthrough: an expression can compute from several sources. Unread output aliases,
+unresolved selection and ambiguous per-item attribution have no fabricated mapping.
+All observations are made during existing expression evaluation, never by evaluating
+more code or opening source from a viewer.
+
+A run records `scopes_updated {scopes, node_interface_bindings}` when this display
+snapshot changes, before events for affected dynamically created nodes, and after the
+final expansion. The per-node object maps instance ids to authoritative binding arrays;
+empty arrays clear earlier bindings. The snapshot is complete for the current expansion,
+not a patch. A reader keeps node execution history independently, applies the latest
+snapshot, and can display historical nodes no longer belonging to a current scope at
+root. Replays ignore this display-only event. Old records without these fields remain
+flat; readers MUST NOT infer imported workflow boundaries or aliases from path strings,
+artifact digests or the filesystem. A saved-plan host refuses invalid, cyclic or dangling scope metadata. A run viewer omits
+such metadata with a warning, without hiding the underlying execution record.
+
+**Named connection metadata.** New expanded graphs include `types.<uses>.ports`, with
+`inputs` and `outputs` mapped to their declared port notation and `params` mapped to
+their JSON Schemas ([protocol.md](protocol.md) §4). Each instance also includes
+`bindings`: deduplicated evaluated references of
+`{source, source_port, target_port, source_kind}`. `source` is the exact upstream
+instance id, `source_kind` is `output` or `fact`, and `target_port` names the
+destination's `with` entry, either a file input or a parameter. A compound expression
+or collection can have several bindings to one entry. File facts keep the original
+file output as their source; node facts use `source_kind: fact`.
+
+Bindings describe references evaluated while resolving that entry, rather than a
+claim that the entry equals the upstream value. They do not include short-circuited
+operands, ordering dependencies, or reads leaked from another step's expansion.
+An unresolved choice of repeat key or take has no invented port binding; its ordinary
+dependency remains visible. Runtime re-expansion supplies exact bindings when it can.
+`node_started` records `ports`, `bindings`, `needs`, and `judges` for the instance,
+including instances absent from the initial plan. A reader uses these later fields
+in preference to the initial graph, including an explicitly empty binding list.
+Failures and blocked skips before dispatch also record the known instance's
+declarations and bindings on their terminal event; they do not invent a start event.
+For a repeat item derived from one resolved output, the engine can forward that
+source into the item's parameters. When several origins make that attribution
+ambiguous, it retains ordinary dependencies rather than claiming an exact port wire.
+
+All these fields are display metadata, outside node identities, call keys, and the
+plan digest. They do not affect scheduling or values. They are optional when reading
+older graphs and events: absence means that named wiring was not recorded, and a
+viewer may show ordinary dependency lines without inferring port names from digests
+or resolved values.
+
 **Placing a file.** A file in `files/` or `outputs/` is a hard link to the store's copy (§2), or a copy of it where linking fails, for example across file systems. It is placed like a store write (§6): written under a temporary name in its destination folder, then renamed over its final name. The temporary name is `.<16 lowercase hex>.part`, 22 bytes, so it fits wherever the final name fits. A name that already holds the same bytes is left alone, so a resumed run does not place it again. Any other file there is replaced. Placed files share bytes with the store, so nothing may edit them in place. An invocation that holds `run.lock` removes the temporary names an earlier, killed invocation left in the folder.
 
 **Names.**

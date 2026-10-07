@@ -1,5 +1,991 @@
 [
  {
+  "bindings": [],
+  "code": "call_failed",
+  "error": "image.generate on img-a@acme failed: image is text/plain, not image/png",
+  "event": "node_failed",
+  "facts": {},
+  "id": "text#1",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "text",
+  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
+  "ports": {
+   "inputs": {
+    "references": "image[]?"
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "params": {
+    "background": {
+     "default": "auto",
+     "enum": [
+      "opaque",
+      "transparent",
+      "auto"
+     ]
+    },
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "size": {
+     "type": "string",
+     "x-fx-optional": true
+    },
+    "vars": {
+     "default": {},
+     "type": "object"
+    }
+   }
+  },
+  "reads": [],
+  "uses": "fx/image.generate@1"
+ },
+ {
+  "bindings": [],
+  "code": "call_failed",
+  "error": "image.generate on img-a@acme failed: image.generate returns no data",
+  "event": "node_failed",
+  "facts": {},
+  "id": "data#1",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "data",
+  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
+  "ports": {
+   "inputs": {
+    "references": "image[]?"
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "params": {
+    "background": {
+     "default": "auto",
+     "enum": [
+      "opaque",
+      "transparent",
+      "auto"
+     ]
+    },
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "size": {
+     "type": "string",
+     "x-fx-optional": true
+    },
+    "vars": {
+     "default": {},
+     "type": "object"
+    }
+   }
+  },
+  "reads": [],
+  "uses": "fx/image.generate@1"
+ },
+ {
+  "bindings": [],
+  "code": "call_failed",
+  "error": "image.generate on img-a@acme failed: image.generate returns no file named thumbnail",
+  "event": "node_failed",
+  "facts": {},
+  "id": "extra#1",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "extra",
+  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
+  "ports": {
+   "inputs": {
+    "references": "image[]?"
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "params": {
+    "background": {
+     "default": "auto",
+     "enum": [
+      "opaque",
+      "transparent",
+      "auto"
+     ]
+    },
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "size": {
+     "type": "string",
+     "x-fx-optional": true
+    },
+    "vars": {
+     "default": {},
+     "type": "object"
+    }
+   }
+  },
+  "reads": [],
+  "uses": "fx/image.generate@1"
+ },
+ {
+  "bindings": [],
+  "code": "call_failed",
+  "error": "image.generate on img-a@acme failed: the answer holds no image",
+  "event": "node_failed",
+  "facts": {},
+  "id": "missing#1",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "missing",
+  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
+  "ports": {
+   "inputs": {
+    "references": "image[]?"
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "params": {
+    "background": {
+     "default": "auto",
+     "enum": [
+      "opaque",
+      "transparent",
+      "auto"
+     ]
+    },
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "size": {
+     "type": "string",
+     "x-fx-optional": true
+    },
+    "vars": {
+     "default": {},
+     "type": "object"
+    }
+   }
+  },
+  "reads": [],
+  "uses": "fx/image.generate@1"
+ },
+ {
+  "bindings": [],
+  "code": "call_failed",
+  "error": "image.generate on img-a@acme failed: the image is 32x32, not 64x64",
+  "event": "node_failed",
+  "facts": {},
+  "id": "small#1",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "small",
+  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
+  "ports": {
+   "inputs": {
+    "references": "image[]?"
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "params": {
+    "background": {
+     "default": "auto",
+     "enum": [
+      "opaque",
+      "transparent",
+      "auto"
+     ]
+    },
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "size": {
+     "type": "string",
+     "x-fx-optional": true
+    },
+    "vars": {
+     "default": {},
+     "type": "object"
+    }
+   }
+  },
+  "reads": [],
+  "uses": "fx/image.generate@1"
+ },
+ {
+  "bindings": [],
+  "code": "call_failed",
+  "error": "image.generate on img-a@acme failed: the stand-in failed this prompt",
+  "event": "node_failed",
+  "facts": {},
+  "id": "failed#1",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "failed",
+  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
+  "ports": {
+   "inputs": {
+    "references": "image[]?"
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "params": {
+    "background": {
+     "default": "auto",
+     "enum": [
+      "opaque",
+      "transparent",
+      "auto"
+     ]
+    },
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "size": {
+     "type": "string",
+     "x-fx-optional": true
+    },
+    "vars": {
+     "default": {},
+     "type": "object"
+    }
+   }
+  },
+  "reads": [],
+  "uses": "fx/image.generate@1"
+ },
+ {
+  "bindings": [],
+  "code": "capability_refused",
+  "error": "image.generate on img-a@acme was refused: image.generate needs prompt",
+  "event": "node_failed",
+  "facts": {},
+  "id": "body#1",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "body",
+  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
+  "ports": {
+   "inputs": {},
+   "outputs": {
+    "image": "image/png"
+   },
+   "params": {}
+  },
+  "reads": [],
+  "uses": "./nodes/asks.py#asks_nothing"
+ },
+ {
+  "bindings": [],
+  "code": "capability_refused",
+  "error": "image.generate on img-a@acme was refused: the stand-in refuses this prompt",
+  "event": "node_failed",
+  "facts": {},
+  "id": "refused#1",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "refused",
+  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
+  "ports": {
+   "inputs": {
+    "references": "image[]?"
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "params": {
+    "background": {
+     "default": "auto",
+     "enum": [
+      "opaque",
+      "transparent",
+      "auto"
+     ]
+    },
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "size": {
+     "type": "string",
+     "x-fx-optional": true
+    },
+    "vars": {
+     "default": {},
+     "type": "object"
+    }
+   }
+  },
+  "reads": [],
+  "uses": "fx/image.generate@1"
+ },
+ {
+  "bindings": [],
+  "code": "not_live",
+  "error": "image.generate on img-a@acme is a paid call the stand-in declined",
+  "event": "node_failed",
+  "facts": {},
+  "id": "declined#1",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "declined",
+  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
+  "ports": {
+   "inputs": {
+    "references": "image[]?"
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "params": {
+    "background": {
+     "default": "auto",
+     "enum": [
+      "opaque",
+      "transparent",
+      "auto"
+     ]
+    },
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "size": {
+     "type": "string",
+     "x-fx-optional": true
+    },
+    "vars": {
+     "default": {},
+     "type": "object"
+    }
+   }
+  },
+  "reads": [],
+  "uses": "fx/image.generate@1"
+ },
+ {
+  "bindings": [],
+  "event": "node_started",
+  "id": "body#1",
+  "identity": "e00dd711cb3924c95b5429bd12d8bb5928b27d331969559f642baa75fe94129d",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "body",
+  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
+  "ports": {
+   "inputs": {},
+   "outputs": {
+    "image": "image/png"
+   },
+   "params": {}
+  },
+  "reads": [],
+  "routes": {
+   "image.generate": "img-a@acme"
+  },
+  "step": "body",
+  "take": [
+   1
+  ],
+  "uses": "./nodes/asks.py#asks_nothing",
+  "with": {}
+ },
+ {
+  "bindings": [],
+  "event": "node_started",
+  "id": "data#1",
+  "identity": "be19834a3b00c8907b30ae8a5405f6d86ff58ff8f5bbffcd15b15fb7b68828d2",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "data",
+  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
+  "ports": {
+   "inputs": {
+    "references": "image[]?"
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "params": {
+    "background": {
+     "default": "auto",
+     "enum": [
+      "opaque",
+      "transparent",
+      "auto"
+     ]
+    },
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "size": {
+     "type": "string",
+     "x-fx-optional": true
+    },
+    "vars": {
+     "default": {},
+     "type": "object"
+    }
+   }
+  },
+  "reads": [],
+  "routes": {
+   "image.generate": "img-a@acme"
+  },
+  "step": "data",
+  "take": [
+   1
+  ],
+  "uses": "fx/image.generate@1",
+  "with": {
+   "background": {
+    "value": "auto"
+   },
+   "prompt": {
+    "value": "data as well"
+   },
+   "size": {
+    "value": "64x64"
+   },
+   "vars": {
+    "value": {}
+   }
+  }
+ },
+ {
+  "bindings": [],
+  "event": "node_started",
+  "id": "declined#1",
+  "identity": "6fbdb1901c532210cac57316c517caea4a7c18346daa77b8420c7d8609af040a",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "declined",
+  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
+  "ports": {
+   "inputs": {
+    "references": "image[]?"
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "params": {
+    "background": {
+     "default": "auto",
+     "enum": [
+      "opaque",
+      "transparent",
+      "auto"
+     ]
+    },
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "size": {
+     "type": "string",
+     "x-fx-optional": true
+    },
+    "vars": {
+     "default": {},
+     "type": "object"
+    }
+   }
+  },
+  "reads": [],
+  "routes": {
+   "image.generate": "img-a@acme"
+  },
+  "step": "declined",
+  "take": [
+   1
+  ],
+  "uses": "fx/image.generate@1",
+  "with": {
+   "background": {
+    "value": "auto"
+   },
+   "prompt": {
+    "value": "decline this"
+   },
+   "size": {
+    "value": "64x64"
+   },
+   "vars": {
+    "value": {}
+   }
+  }
+ },
+ {
+  "bindings": [],
+  "event": "node_started",
+  "id": "extra#1",
+  "identity": "360a68a0c57c9f9a2cab7a4cc306f972c0832e0bd26d075b90af8410be8b53b2",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "extra",
+  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
+  "ports": {
+   "inputs": {
+    "references": "image[]?"
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "params": {
+    "background": {
+     "default": "auto",
+     "enum": [
+      "opaque",
+      "transparent",
+      "auto"
+     ]
+    },
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "size": {
+     "type": "string",
+     "x-fx-optional": true
+    },
+    "vars": {
+     "default": {},
+     "type": "object"
+    }
+   }
+  },
+  "reads": [],
+  "routes": {
+   "image.generate": "img-a@acme"
+  },
+  "step": "extra",
+  "take": [
+   1
+  ],
+  "uses": "fx/image.generate@1",
+  "with": {
+   "background": {
+    "value": "auto"
+   },
+   "prompt": {
+    "value": "an extra file"
+   },
+   "size": {
+    "value": "64x64"
+   },
+   "vars": {
+    "value": {}
+   }
+  }
+ },
+ {
+  "bindings": [],
+  "event": "node_started",
+  "id": "failed#1",
+  "identity": "c53f7e13da7b5e9fc3d26e48c55b6123cedae55b247299d32faf3a3aa0780608",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "failed",
+  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
+  "ports": {
+   "inputs": {
+    "references": "image[]?"
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "params": {
+    "background": {
+     "default": "auto",
+     "enum": [
+      "opaque",
+      "transparent",
+      "auto"
+     ]
+    },
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "size": {
+     "type": "string",
+     "x-fx-optional": true
+    },
+    "vars": {
+     "default": {},
+     "type": "object"
+    }
+   }
+  },
+  "reads": [],
+  "routes": {
+   "image.generate": "img-a@acme"
+  },
+  "step": "failed",
+  "take": [
+   1
+  ],
+  "uses": "fx/image.generate@1",
+  "with": {
+   "background": {
+    "value": "auto"
+   },
+   "prompt": {
+    "value": "fail this"
+   },
+   "size": {
+    "value": "64x64"
+   },
+   "vars": {
+    "value": {}
+   }
+  }
+ },
+ {
+  "bindings": [],
+  "event": "node_started",
+  "id": "good#1",
+  "identity": "442f7a35c390fa23a8adb10f4ac76c9152adb5d26c615dc8e88cdf44eae79894",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "good",
+  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
+  "ports": {
+   "inputs": {
+    "references": "image[]?"
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "params": {
+    "background": {
+     "default": "auto",
+     "enum": [
+      "opaque",
+      "transparent",
+      "auto"
+     ]
+    },
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "size": {
+     "type": "string",
+     "x-fx-optional": true
+    },
+    "vars": {
+     "default": {},
+     "type": "object"
+    }
+   }
+  },
+  "reads": [],
+  "routes": {
+   "image.generate": "img-a@acme"
+  },
+  "step": "good",
+  "take": [
+   1
+  ],
+  "uses": "fx/image.generate@1",
+  "with": {
+   "background": {
+    "value": "auto"
+   },
+   "prompt": {
+    "value": "a good picture"
+   },
+   "size": {
+    "value": "64x64"
+   },
+   "vars": {
+    "value": {}
+   }
+  }
+ },
+ {
+  "bindings": [],
+  "event": "node_started",
+  "id": "missing#1",
+  "identity": "2db7c2d1db26bf44e6af88e3d23ae695df712dea7d2a2884b18fd52c7f0ba9a1",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "missing",
+  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
+  "ports": {
+   "inputs": {
+    "references": "image[]?"
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "params": {
+    "background": {
+     "default": "auto",
+     "enum": [
+      "opaque",
+      "transparent",
+      "auto"
+     ]
+    },
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "size": {
+     "type": "string",
+     "x-fx-optional": true
+    },
+    "vars": {
+     "default": {},
+     "type": "object"
+    }
+   }
+  },
+  "reads": [],
+  "routes": {
+   "image.generate": "img-a@acme"
+  },
+  "step": "missing",
+  "take": [
+   1
+  ],
+  "uses": "fx/image.generate@1",
+  "with": {
+   "background": {
+    "value": "auto"
+   },
+   "prompt": {
+    "value": "no file at all"
+   },
+   "size": {
+    "value": "64x64"
+   },
+   "vars": {
+    "value": {}
+   }
+  }
+ },
+ {
+  "bindings": [],
+  "event": "node_started",
+  "id": "refused#1",
+  "identity": "c9ec9399619114fdfab0058b337700151f6005a662356a97d6b6c846a899d62e",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "refused",
+  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
+  "ports": {
+   "inputs": {
+    "references": "image[]?"
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "params": {
+    "background": {
+     "default": "auto",
+     "enum": [
+      "opaque",
+      "transparent",
+      "auto"
+     ]
+    },
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "size": {
+     "type": "string",
+     "x-fx-optional": true
+    },
+    "vars": {
+     "default": {},
+     "type": "object"
+    }
+   }
+  },
+  "reads": [],
+  "routes": {
+   "image.generate": "img-a@acme"
+  },
+  "step": "refused",
+  "take": [
+   1
+  ],
+  "uses": "fx/image.generate@1",
+  "with": {
+   "background": {
+    "value": "auto"
+   },
+   "prompt": {
+    "value": "refuse this"
+   },
+   "size": {
+    "value": "64x64"
+   },
+   "vars": {
+    "value": {}
+   }
+  }
+ },
+ {
+  "bindings": [],
+  "event": "node_started",
+  "id": "small#1",
+  "identity": "85bad3f4d4813da1198efd78ed1d8011381330fff3a26966645b07e35f25bdc2",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "small",
+  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
+  "ports": {
+   "inputs": {
+    "references": "image[]?"
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "params": {
+    "background": {
+     "default": "auto",
+     "enum": [
+      "opaque",
+      "transparent",
+      "auto"
+     ]
+    },
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "size": {
+     "type": "string",
+     "x-fx-optional": true
+    },
+    "vars": {
+     "default": {},
+     "type": "object"
+    }
+   }
+  },
+  "reads": [],
+  "routes": {
+   "image.generate": "img-a@acme"
+  },
+  "step": "small",
+  "take": [
+   1
+  ],
+  "uses": "fx/image.generate@1",
+  "with": {
+   "background": {
+    "value": "auto"
+   },
+   "prompt": {
+    "value": "too small"
+   },
+   "size": {
+    "value": "64x64"
+   },
+   "vars": {
+    "value": {}
+   }
+  }
+ },
+ {
+  "bindings": [],
+  "event": "node_started",
+  "id": "text#1",
+  "identity": "412f0f27ea04fd551f7ef4c780318f32989ec0860f30e756b3fe3cffcd6bed3a",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "text",
+  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
+  "ports": {
+   "inputs": {
+    "references": "image[]?"
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "params": {
+    "background": {
+     "default": "auto",
+     "enum": [
+      "opaque",
+      "transparent",
+      "auto"
+     ]
+    },
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "size": {
+     "type": "string",
+     "x-fx-optional": true
+    },
+    "vars": {
+     "default": {},
+     "type": "object"
+    }
+   }
+  },
+  "reads": [],
+  "routes": {
+   "image.generate": "img-a@acme"
+  },
+  "step": "text",
+  "take": [
+   1
+  ],
+  "uses": "fx/image.generate@1",
+  "with": {
+   "background": {
+    "value": "auto"
+   },
+   "prompt": {
+    "value": "text instead"
+   },
+   "size": {
+    "value": "64x64"
+   },
+   "vars": {
+    "value": {}
+   }
+  }
+ },
+ {
   "cache": "hit",
   "event": "node_finished",
   "facts": {
@@ -65,398 +1051,29 @@
   "stopped": null
  },
  {
-  "code": "call_failed",
-  "error": "image.generate on img-a@acme failed: image is text/plain, not image/png",
-  "event": "node_failed",
-  "facts": {},
-  "id": "text#1",
-  "kind": "fx-run-events-v1",
-  "path": "text",
-  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1"
- },
- {
-  "code": "call_failed",
-  "error": "image.generate on img-a@acme failed: image.generate returns no data",
-  "event": "node_failed",
-  "facts": {},
-  "id": "data#1",
-  "kind": "fx-run-events-v1",
-  "path": "data",
-  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1"
- },
- {
-  "code": "call_failed",
-  "error": "image.generate on img-a@acme failed: image.generate returns no file named thumbnail",
-  "event": "node_failed",
-  "facts": {},
-  "id": "extra#1",
-  "kind": "fx-run-events-v1",
-  "path": "extra",
-  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1"
- },
- {
-  "code": "call_failed",
-  "error": "image.generate on img-a@acme failed: the answer holds no image",
-  "event": "node_failed",
-  "facts": {},
-  "id": "missing#1",
-  "kind": "fx-run-events-v1",
-  "path": "missing",
-  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1"
- },
- {
-  "code": "call_failed",
-  "error": "image.generate on img-a@acme failed: the image is 32x32, not 64x64",
-  "event": "node_failed",
-  "facts": {},
-  "id": "small#1",
-  "kind": "fx-run-events-v1",
-  "path": "small",
-  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1"
- },
- {
-  "code": "call_failed",
-  "error": "image.generate on img-a@acme failed: the stand-in failed this prompt",
-  "event": "node_failed",
-  "facts": {},
-  "id": "failed#1",
-  "kind": "fx-run-events-v1",
-  "path": "failed",
-  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1"
- },
- {
-  "code": "capability_refused",
-  "error": "image.generate on img-a@acme was refused: image.generate needs prompt",
-  "event": "node_failed",
-  "facts": {},
-  "id": "body#1",
-  "kind": "fx-run-events-v1",
-  "path": "body",
-  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1"
- },
- {
-  "code": "capability_refused",
-  "error": "image.generate on img-a@acme was refused: the stand-in refuses this prompt",
-  "event": "node_failed",
-  "facts": {},
-  "id": "refused#1",
-  "kind": "fx-run-events-v1",
-  "path": "refused",
-  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1"
- },
- {
-  "code": "not_live",
-  "error": "image.generate on img-a@acme is a paid call the stand-in declined",
-  "event": "node_failed",
-  "facts": {},
-  "id": "declined#1",
-  "kind": "fx-run-events-v1",
-  "path": "declined",
-  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1"
- },
- {
-  "event": "node_started",
-  "id": "body#1",
-  "identity": "e00dd711cb3924c95b5429bd12d8bb5928b27d331969559f642baa75fe94129d",
-  "kind": "fx-run-events-v1",
-  "path": "body",
-  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
-  "reads": [],
-  "routes": {
-   "image.generate": "img-a@acme"
-  },
-  "step": "body",
-  "take": [
-   1
-  ],
-  "uses": "./nodes/asks.py#asks_nothing",
-  "with": {}
- },
- {
-  "event": "node_started",
-  "id": "data#1",
-  "identity": "be19834a3b00c8907b30ae8a5405f6d86ff58ff8f5bbffcd15b15fb7b68828d2",
-  "kind": "fx-run-events-v1",
-  "path": "data",
-  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
-  "reads": [],
-  "routes": {
-   "image.generate": "img-a@acme"
-  },
-  "step": "data",
-  "take": [
-   1
-  ],
-  "uses": "fx/image.generate@1",
-  "with": {
-   "background": {
-    "value": "auto"
-   },
-   "prompt": {
-    "value": "data as well"
-   },
-   "size": {
-    "value": "64x64"
-   },
-   "vars": {
-    "value": {}
-   }
-  }
- },
- {
-  "event": "node_started",
-  "id": "declined#1",
-  "identity": "6fbdb1901c532210cac57316c517caea4a7c18346daa77b8420c7d8609af040a",
-  "kind": "fx-run-events-v1",
-  "path": "declined",
-  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
-  "reads": [],
-  "routes": {
-   "image.generate": "img-a@acme"
-  },
-  "step": "declined",
-  "take": [
-   1
-  ],
-  "uses": "fx/image.generate@1",
-  "with": {
-   "background": {
-    "value": "auto"
-   },
-   "prompt": {
-    "value": "decline this"
-   },
-   "size": {
-    "value": "64x64"
-   },
-   "vars": {
-    "value": {}
-   }
-  }
- },
- {
-  "event": "node_started",
-  "id": "extra#1",
-  "identity": "360a68a0c57c9f9a2cab7a4cc306f972c0832e0bd26d075b90af8410be8b53b2",
-  "kind": "fx-run-events-v1",
-  "path": "extra",
-  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
-  "reads": [],
-  "routes": {
-   "image.generate": "img-a@acme"
-  },
-  "step": "extra",
-  "take": [
-   1
-  ],
-  "uses": "fx/image.generate@1",
-  "with": {
-   "background": {
-    "value": "auto"
-   },
-   "prompt": {
-    "value": "an extra file"
-   },
-   "size": {
-    "value": "64x64"
-   },
-   "vars": {
-    "value": {}
-   }
-  }
- },
- {
-  "event": "node_started",
-  "id": "failed#1",
-  "identity": "c53f7e13da7b5e9fc3d26e48c55b6123cedae55b247299d32faf3a3aa0780608",
-  "kind": "fx-run-events-v1",
-  "path": "failed",
-  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
-  "reads": [],
-  "routes": {
-   "image.generate": "img-a@acme"
-  },
-  "step": "failed",
-  "take": [
-   1
-  ],
-  "uses": "fx/image.generate@1",
-  "with": {
-   "background": {
-    "value": "auto"
-   },
-   "prompt": {
-    "value": "fail this"
-   },
-   "size": {
-    "value": "64x64"
-   },
-   "vars": {
-    "value": {}
-   }
-  }
- },
- {
-  "event": "node_started",
-  "id": "good#1",
-  "identity": "442f7a35c390fa23a8adb10f4ac76c9152adb5d26c615dc8e88cdf44eae79894",
-  "kind": "fx-run-events-v1",
-  "path": "good",
-  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
-  "reads": [],
-  "routes": {
-   "image.generate": "img-a@acme"
-  },
-  "step": "good",
-  "take": [
-   1
-  ],
-  "uses": "fx/image.generate@1",
-  "with": {
-   "background": {
-    "value": "auto"
-   },
-   "prompt": {
-    "value": "a good picture"
-   },
-   "size": {
-    "value": "64x64"
-   },
-   "vars": {
-    "value": {}
-   }
-  }
- },
- {
-  "event": "node_started",
-  "id": "missing#1",
-  "identity": "2db7c2d1db26bf44e6af88e3d23ae695df712dea7d2a2884b18fd52c7f0ba9a1",
-  "kind": "fx-run-events-v1",
-  "path": "missing",
-  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
-  "reads": [],
-  "routes": {
-   "image.generate": "img-a@acme"
-  },
-  "step": "missing",
-  "take": [
-   1
-  ],
-  "uses": "fx/image.generate@1",
-  "with": {
-   "background": {
-    "value": "auto"
-   },
-   "prompt": {
-    "value": "no file at all"
-   },
-   "size": {
-    "value": "64x64"
-   },
-   "vars": {
-    "value": {}
-   }
-  }
- },
- {
-  "event": "node_started",
-  "id": "refused#1",
-  "identity": "c9ec9399619114fdfab0058b337700151f6005a662356a97d6b6c846a899d62e",
-  "kind": "fx-run-events-v1",
-  "path": "refused",
-  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
-  "reads": [],
-  "routes": {
-   "image.generate": "img-a@acme"
-  },
-  "step": "refused",
-  "take": [
-   1
-  ],
-  "uses": "fx/image.generate@1",
-  "with": {
-   "background": {
-    "value": "auto"
-   },
-   "prompt": {
-    "value": "refuse this"
-   },
-   "size": {
-    "value": "64x64"
-   },
-   "vars": {
-    "value": {}
-   }
-  }
- },
- {
-  "event": "node_started",
-  "id": "small#1",
-  "identity": "85bad3f4d4813da1198efd78ed1d8011381330fff3a26966645b07e35f25bdc2",
-  "kind": "fx-run-events-v1",
-  "path": "small",
-  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
-  "reads": [],
-  "routes": {
-   "image.generate": "img-a@acme"
-  },
-  "step": "small",
-  "take": [
-   1
-  ],
-  "uses": "fx/image.generate@1",
-  "with": {
-   "background": {
-    "value": "auto"
-   },
-   "prompt": {
-    "value": "too small"
-   },
-   "size": {
-    "value": "64x64"
-   },
-   "vars": {
-    "value": {}
-   }
-  }
- },
- {
-  "event": "node_started",
-  "id": "text#1",
-  "identity": "412f0f27ea04fd551f7ef4c780318f32989ec0860f30e756b3fe3cffcd6bed3a",
-  "kind": "fx-run-events-v1",
-  "path": "text",
-  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
-  "reads": [],
-  "routes": {
-   "image.generate": "img-a@acme"
-  },
-  "step": "text",
-  "take": [
-   1
-  ],
-  "uses": "fx/image.generate@1",
-  "with": {
-   "background": {
-    "value": "auto"
-   },
-   "prompt": {
-    "value": "text instead"
-   },
-   "size": {
-    "value": "64x64"
-   },
-   "vars": {
-    "value": {}
-   }
-  }
- },
- {
   "event": "phase_planned",
   "high_usd": 0.4,
   "kind": "fx-run-events-v1",
   "phase": 1,
   "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
   "steps": 10
+ },
+ {
+  "event": "scopes_updated",
+  "kind": "fx-run-events-v1",
+  "node_interface_bindings": {
+   "body#1": [],
+   "data#1": [],
+   "declined#1": [],
+   "extra#1": [],
+   "failed#1": [],
+   "good#1": [],
+   "missing#1": [],
+   "refused#1": [],
+   "small#1": [],
+   "text#1": []
+  },
+  "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
+  "scopes": []
  }
 ]

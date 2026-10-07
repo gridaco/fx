@@ -6,8 +6,10 @@
  },
  "instances": [
   {
+   "bindings": [],
    "id": "describe#1",
    "identity": "a8580a41d4b7b9c0bae5f4732bd0a4c0a99be32e8deb1704d003ef325e1b4576",
+   "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": null,
@@ -41,8 +43,24 @@
    }
   },
   {
+   "bindings": [
+    {
+     "source": "describe#1",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "prompt"
+    }
+   ],
    "id": "wider#1",
    "identity": null,
+   "interface_bindings": [
+    {
+     "source": "describe#1",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "prompt"
+    }
+   ],
    "judged_by": [],
    "judges": null,
    "key": null,
@@ -87,9 +105,40 @@
  "kind": "fx-graph-v1",
  "pending": [],
  "problems": [],
+ "scopes": [],
  "types": {
   "fx/image.generate@1": {
-   "identity": "fx/image.generate@1.1"
+   "identity": "fx/image.generate@1.1",
+   "ports": {
+    "inputs": {
+     "references": "image[]?"
+    },
+    "outputs": {
+     "image": "image/png"
+    },
+    "params": {
+     "background": {
+      "default": "auto",
+      "enum": [
+       "opaque",
+       "transparent",
+       "auto"
+      ]
+     },
+     "prompt": {
+      "type": "string",
+      "x-fx-template": true
+     },
+     "size": {
+      "type": "string",
+      "x-fx-optional": true
+     },
+     "vars": {
+      "default": {},
+      "type": "object"
+     }
+    }
+   }
   }
  },
  "workflow": {

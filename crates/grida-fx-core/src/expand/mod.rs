@@ -49,12 +49,14 @@
 //!   never run.
 
 pub mod bind;
+pub mod display;
 pub mod frame;
 pub mod group;
 pub mod judge;
 pub mod node;
 pub mod repeat;
 pub mod scope;
+pub mod wiring;
 
 use crate::docs::takes::Takes;
 use crate::docs::workflow::{Assertion, LoadedWorkflow, OnFail, OnReject, Step};
@@ -159,6 +161,10 @@ pub struct Instance {
     pub reason: Option<String>,
     /// Ids of instances whose results its evaluation read.
     pub reads: BTreeSet<String>,
+    /// Display-only, resolved output/fact references per input or parameter.
+    pub bindings: Vec<wiring::Binding>,
+    pub interface_bindings: Vec<wiring::Binding>,
+    pub display_scope: Option<String>,
 }
 
 impl Instance {
@@ -193,6 +199,7 @@ impl Instance {
 /// A repeat whose list only a run produces.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PendingRepeat {
+    pub display_scope: Option<String>,
     /// `prefix + name`, no own key suffix.
     pub path: String,
     /// `max:`, or 1 when absent or invalid.
@@ -238,6 +245,7 @@ impl NodeResult {
 /// The result of one expansion.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Expansion {
+    pub scopes: Vec<display::Scope>,
     /// In insertion order: the graph's listing order.
     pub instances: IndexMap<String, Instance>,
     pub pending: Vec<PendingRepeat>,
@@ -331,6 +339,8 @@ pub(crate) struct Expander<'a> {
     pub(crate) problems: Vec<Problem>,
     /// The active read sets, innermost last (`_evaluate_reading`).
     pub(crate) read_sets: Vec<BTreeSet<String>>,
+    pub(crate) wiring: wiring::Trace,
+    pub(crate) display_scopes: IndexMap<String, display::Scope>,
     /// Evaluating a select's `first_of`.
     pub(crate) selecting: bool,
     /// Views handed out to expressions; indices are [`crate::val::ViewId`]s.
@@ -377,6 +387,8 @@ impl<'a> Expander<'a> {
             pending: Vec::new(),
             problems: Vec::new(),
             read_sets: Vec::new(),
+            wiring: wiring::Trace::default(),
+            display_scopes: IndexMap::new(),
             selecting: false,
             views: Vec::new(),
             lets_active: Vec::new(),
@@ -427,7 +439,9 @@ impl<'a> Expander<'a> {
         if let Some(error) = self.fatal.take() {
             return Err(error);
         }
+        self.finish_display_scopes();
         Ok(Expansion {
+            scopes: self.display_scopes.into_values().collect(),
             instances: self.instances,
             pending: self.pending,
             problems: self.problems,
@@ -453,6 +467,11 @@ impl<'a> Expander<'a> {
             takes: Vec::new(),
             workflow,
             inputs: Rc::new(self.env.inputs.clone()),
+            input_bindings: Rc::default(),
+            display_scope: None,
+            workflow_scope: None,
+            variable_interfaces: Default::default(),
+            variable_bindings: Default::default(),
             phase: 1,
             judging: None,
             budget: None,
@@ -482,11 +501,13 @@ impl<'a> Expander<'a> {
         }
         let exp = self.new_exp(scope, name);
         self.memo.insert(key, exp);
+        self.wiring.suspend();
         self.expand_step(scope, name, exp);
         if self.exps[exp.0].kind == frame::ExpKind::Expanding {
             self.exps[exp.0].kind = frame::ExpKind::Absent;
         }
         self.release_held();
+        self.wiring.resume();
         Ok(exp)
     }
 
@@ -1173,6 +1194,9 @@ pub(crate) mod testing {
             timeout_s: None,
             reason: None,
             reads: BTreeSet::new(),
+            bindings: Vec::new(),
+            interface_bindings: Vec::new(),
+            display_scope: None,
         }
     }
 }

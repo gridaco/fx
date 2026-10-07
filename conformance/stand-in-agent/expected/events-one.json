@@ -1,5 +1,292 @@
 [
  {
+  "bindings": [],
+  "code": "call_failed",
+  "error": "agent.turn on llm-a@acme failed: the reply is not {\"text\", \"tool_calls\"}: text is not a string",
+  "event": "node_failed",
+  "facts": {},
+  "id": "garbled#1",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "garbled",
+  "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756",
+  "ports": {
+   "inputs": {},
+   "outputs": {
+    "answer": "json"
+   },
+   "params": {
+    "task": {
+     "type": "string"
+    }
+   }
+  },
+  "reads": [],
+  "uses": "./nodes/agent.py#survey"
+ },
+ {
+  "bindings": [],
+  "code": "call_failed",
+  "error": "structured.generate on llm-a@acme failed: height: \"three\" is not of type \"integer\"",
+  "event": "node_failed",
+  "facts": {},
+  "id": "wrong#1",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "wrong",
+  "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756",
+  "ports": {
+   "inputs": {
+    "context": "file[]?",
+    "schema": "json"
+   },
+   "outputs": {
+    "json": "json"
+   },
+   "params": {
+    "matte": {
+     "default": "#ffffff",
+     "type": "string"
+    },
+    "max_tokens": {
+     "type": "integer",
+     "x-fx-optional": true
+    },
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "system": {
+     "type": "string",
+     "x-fx-optional": true,
+     "x-fx-template": true
+    },
+    "vars": {
+     "default": {},
+     "type": "object"
+    }
+   }
+  },
+  "reads": [],
+  "uses": "fx/structured.generate@1"
+ },
+ {
+  "bindings": [],
+  "event": "node_started",
+  "id": "estimate#1",
+  "identity": "d26e1487212fd2a47dbb711c82ce79e4a3f33a92a6618aa35a07f48b97f3e29b",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "estimate",
+  "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756",
+  "ports": {
+   "inputs": {
+    "context": "file[]?",
+    "schema": "json"
+   },
+   "outputs": {
+    "json": "json"
+   },
+   "params": {
+    "matte": {
+     "default": "#ffffff",
+     "type": "string"
+    },
+    "max_tokens": {
+     "type": "integer",
+     "x-fx-optional": true
+    },
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "system": {
+     "type": "string",
+     "x-fx-optional": true,
+     "x-fx-template": true
+    },
+    "vars": {
+     "default": {},
+     "type": "object"
+    }
+   }
+  },
+  "reads": [],
+  "routes": {
+   "structured.generate": "llm-a@acme"
+  },
+  "step": "estimate",
+  "take": [
+   1
+  ],
+  "uses": "fx/structured.generate@1",
+  "with": {
+   "matte": {
+    "value": "#ffffff"
+   },
+   "prompt": {
+    "value": "Estimate the height of the lantern."
+   },
+   "schema": {
+    "file": {
+     "digest": "e7eaf92d0a7a4280ade59c0a0a8c53c9ad12ab392c1ea49e2d7df1e09d9329de",
+     "kind": "json",
+     "name": "schemas/height.json",
+     "size": 183
+    }
+   },
+   "vars": {
+    "value": {}
+   }
+  }
+ },
+ {
+  "bindings": [],
+  "event": "node_started",
+  "id": "garbled#1",
+  "identity": "80d6e3f14a0ee70ea5c2e504719092e8d73a6aa3b07c581cf7a40629dd361028",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "garbled",
+  "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756",
+  "ports": {
+   "inputs": {},
+   "outputs": {
+    "answer": "json"
+   },
+   "params": {
+    "task": {
+     "type": "string"
+    }
+   }
+  },
+  "reads": [],
+  "routes": {
+   "agent.turn": "llm-a@acme"
+  },
+  "step": "garbled",
+  "take": [
+   1
+  ],
+  "uses": "./nodes/agent.py#survey",
+  "with": {
+   "task": {
+    "value": "Garble the reply."
+   }
+  }
+ },
+ {
+  "bindings": [],
+  "event": "node_started",
+  "id": "survey#1",
+  "identity": "8a662029270797079f1eded4c960a8fc10272b083b76bbd853b81510510cb550",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "survey",
+  "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756",
+  "ports": {
+   "inputs": {},
+   "outputs": {
+    "answer": "json"
+   },
+   "params": {
+    "task": {
+     "type": "string"
+    }
+   }
+  },
+  "reads": [],
+  "routes": {
+   "agent.turn": "llm-a@acme"
+  },
+  "step": "survey",
+  "take": [
+   1
+  ],
+  "uses": "./nodes/agent.py#survey",
+  "with": {
+   "task": {
+    "value": "Measure the lantern, then submit its height."
+   }
+  }
+ },
+ {
+  "bindings": [],
+  "event": "node_started",
+  "id": "wrong#1",
+  "identity": "52646f28973679157025e39595d98b543bf3f8cfb9214923d19790a988b649e8",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "wrong",
+  "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756",
+  "ports": {
+   "inputs": {
+    "context": "file[]?",
+    "schema": "json"
+   },
+   "outputs": {
+    "json": "json"
+   },
+   "params": {
+    "matte": {
+     "default": "#ffffff",
+     "type": "string"
+    },
+    "max_tokens": {
+     "type": "integer",
+     "x-fx-optional": true
+    },
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "system": {
+     "type": "string",
+     "x-fx-optional": true,
+     "x-fx-template": true
+    },
+    "vars": {
+     "default": {},
+     "type": "object"
+    }
+   }
+  },
+  "reads": [],
+  "routes": {
+   "structured.generate": "llm-a@acme"
+  },
+  "step": "wrong",
+  "take": [
+   1
+  ],
+  "uses": "fx/structured.generate@1",
+  "with": {
+   "matte": {
+    "value": "#ffffff"
+   },
+   "prompt": {
+    "value": "Answer with the wrong type."
+   },
+   "schema": {
+    "file": {
+     "digest": "e7eaf92d0a7a4280ade59c0a0a8c53c9ad12ab392c1ea49e2d7df1e09d9329de",
+     "kind": "json",
+     "name": "schemas/height.json",
+     "size": 183
+    }
+   },
+   "vars": {
+    "value": {}
+   }
+  }
+ },
+ {
   "cache": "miss",
   "event": "node_finished",
   "facts": {
@@ -132,147 +419,23 @@
   "stopped": null
  },
  {
-  "code": "call_failed",
-  "error": "agent.turn on llm-a@acme failed: the reply is not {\"text\", \"tool_calls\"}: text is not a string",
-  "event": "node_failed",
-  "facts": {},
-  "id": "garbled#1",
-  "kind": "fx-run-events-v1",
-  "path": "garbled",
-  "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756"
- },
- {
-  "code": "call_failed",
-  "error": "structured.generate on llm-a@acme failed: height: \"three\" is not of type \"integer\"",
-  "event": "node_failed",
-  "facts": {},
-  "id": "wrong#1",
-  "kind": "fx-run-events-v1",
-  "path": "wrong",
-  "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756"
- },
- {
-  "event": "node_started",
-  "id": "estimate#1",
-  "identity": "d26e1487212fd2a47dbb711c82ce79e4a3f33a92a6618aa35a07f48b97f3e29b",
-  "kind": "fx-run-events-v1",
-  "path": "estimate",
-  "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756",
-  "reads": [],
-  "routes": {
-   "structured.generate": "llm-a@acme"
-  },
-  "step": "estimate",
-  "take": [
-   1
-  ],
-  "uses": "fx/structured.generate@1",
-  "with": {
-   "matte": {
-    "value": "#ffffff"
-   },
-   "prompt": {
-    "value": "Estimate the height of the lantern."
-   },
-   "schema": {
-    "file": {
-     "digest": "e7eaf92d0a7a4280ade59c0a0a8c53c9ad12ab392c1ea49e2d7df1e09d9329de",
-     "kind": "json",
-     "name": "schemas/height.json",
-     "size": 183
-    }
-   },
-   "vars": {
-    "value": {}
-   }
-  }
- },
- {
-  "event": "node_started",
-  "id": "garbled#1",
-  "identity": "80d6e3f14a0ee70ea5c2e504719092e8d73a6aa3b07c581cf7a40629dd361028",
-  "kind": "fx-run-events-v1",
-  "path": "garbled",
-  "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756",
-  "reads": [],
-  "routes": {
-   "agent.turn": "llm-a@acme"
-  },
-  "step": "garbled",
-  "take": [
-   1
-  ],
-  "uses": "./nodes/agent.py#survey",
-  "with": {
-   "task": {
-    "value": "Garble the reply."
-   }
-  }
- },
- {
-  "event": "node_started",
-  "id": "survey#1",
-  "identity": "8a662029270797079f1eded4c960a8fc10272b083b76bbd853b81510510cb550",
-  "kind": "fx-run-events-v1",
-  "path": "survey",
-  "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756",
-  "reads": [],
-  "routes": {
-   "agent.turn": "llm-a@acme"
-  },
-  "step": "survey",
-  "take": [
-   1
-  ],
-  "uses": "./nodes/agent.py#survey",
-  "with": {
-   "task": {
-    "value": "Measure the lantern, then submit its height."
-   }
-  }
- },
- {
-  "event": "node_started",
-  "id": "wrong#1",
-  "identity": "52646f28973679157025e39595d98b543bf3f8cfb9214923d19790a988b649e8",
-  "kind": "fx-run-events-v1",
-  "path": "wrong",
-  "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756",
-  "reads": [],
-  "routes": {
-   "structured.generate": "llm-a@acme"
-  },
-  "step": "wrong",
-  "take": [
-   1
-  ],
-  "uses": "fx/structured.generate@1",
-  "with": {
-   "matte": {
-    "value": "#ffffff"
-   },
-   "prompt": {
-    "value": "Answer with the wrong type."
-   },
-   "schema": {
-    "file": {
-     "digest": "e7eaf92d0a7a4280ade59c0a0a8c53c9ad12ab392c1ea49e2d7df1e09d9329de",
-     "kind": "json",
-     "name": "schemas/height.json",
-     "size": 183
-    }
-   },
-   "vars": {
-    "value": {}
-   }
-  }
- },
- {
   "event": "phase_planned",
   "high_usd": 0.016,
   "kind": "fx-run-events-v1",
   "phase": 1,
   "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756",
   "steps": 4
+ },
+ {
+  "event": "scopes_updated",
+  "kind": "fx-run-events-v1",
+  "node_interface_bindings": {
+   "estimate#1": [],
+   "garbled#1": [],
+   "survey#1": [],
+   "wrong#1": []
+  },
+  "plan": "cac724aacef5d20ec5d30166c2a81ce2e5b0a9d46d3d819174568358368fa756",
+  "scopes": []
  }
 ]

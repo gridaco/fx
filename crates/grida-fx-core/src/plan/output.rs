@@ -57,6 +57,7 @@ pub fn graph_document(plan: &Plan, planner: &Planner) -> Value {
         "kind": "fx-graph-v1",
         "workflow": workflow,
         "types": types,
+        "scopes": plan.expansion.scopes,
         "instances": plan.expansion.ordered().map(instance_document).collect::<Vec<_>>(),
         "pending": plan.expansion.pending.iter().map(pending_document).collect::<Vec<_>>(),
         "estimate": {
@@ -108,6 +109,8 @@ pub fn instance_document(instance: &Instance) -> Value {
         "waiting_on": instance.waiting_on().into_iter().collect::<Vec<_>>(),
         "needs": instance.needs,
         "reads": instance.inputs_from().into_iter().collect::<Vec<_>>(),
+        "bindings": instance.bindings,
+        "interface_bindings": instance.interface_bindings,
         "price": {"low_usd": usd(instance.low()), "high_usd": usd(instance.high())},
         "view": instance.view,
     });
@@ -195,10 +198,26 @@ fn plan_object(
 fn type_entry(resolved: &ResolvedType) -> Value {
     let mut entry = Map::new();
     entry.insert("identity".into(), Value::String(resolved.identity.clone()));
+    entry.insert("ports".into(), ports_document(&resolved.spec));
     if let Some(source) = &resolved.source {
         entry.insert("source".into(), source.to_value());
     }
     Value::Object(entry)
+}
+
+/// Display declarations, kept separate from type and step identity documents.
+pub fn ports_document(spec: &crate::spec::NodeSpec) -> Value {
+    let inputs: Map<String, Value> = spec
+        .inputs
+        .iter()
+        .map(|(name, port)| (name.clone(), Value::from(port.notation())))
+        .collect();
+    let outputs: Map<String, Value> = spec
+        .outputs
+        .iter()
+        .map(|(name, port)| (name.clone(), Value::from(port.notation())))
+        .collect();
+    json!({"inputs": inputs, "outputs": outputs, "params": spec.params})
 }
 
 fn pending_document(repeat: &PendingRepeat) -> Value {
@@ -324,6 +343,8 @@ mod tests {
                 "waiting_on",
                 "needs",
                 "reads",
+                "bindings",
+                "interface_bindings",
                 "price",
                 "view",
             ])
@@ -486,8 +507,8 @@ mod tests {
         assert_eq!(
             document["types"],
             json!({
-                "fx/files.copy@1": {"identity": "fx/files.copy@1.1"},
-                "fx/image.generate@1": {"identity": "fx/image.generate@1.1"},
+                "fx/files.copy@1": {"identity": "fx/files.copy@1.1", "ports": {"inputs": {}, "outputs": {}, "params": {}}},
+                "fx/image.generate@1": {"identity": "fx/image.generate@1.1", "ports": {"inputs": {}, "outputs": {}, "params": {}}},
             })
         );
         let ids: Vec<&Value> = document["instances"]
@@ -612,6 +633,7 @@ mod tests {
             document["types"]["./nodes/n.py#echo"],
             json!({
                 "identity": "source:f80b608fa143ba177212d039ea7c96232c844aefb446375b523c6108774327b3",
+                "ports": {"inputs": {}, "outputs": {}, "params": {}},
                 "source": {
                     "files": {"nodes/n.py": "9e26bf369911c45c243c684147b23fc9e1dcfcf257d299a1c632016a6fcd33f4"},
                     "resources": {"prompts/r.md": "66a045b452102c59d840ec097d59d9467e13a3f34f6494e539ffd32c1bb35f18"},
@@ -639,5 +661,47 @@ mod tests {
             document["estimate"],
             json!({"low_usd": 2.49, "high_usd": 6.8625})
         );
+    }
+
+    #[test]
+    fn display_bindings_do_not_change_identities_prices_or_the_plan_digest() {
+        let (mut plan, planner) = tiny_plan();
+        let digest = plan_digest(&plan, &planner);
+        let identities = identity_document(&plan);
+        let prices = price_document(&plan);
+        let instance = plan.expansion.instances.values_mut().next().unwrap();
+        instance.bindings.push(crate::expand::wiring::Binding {
+            source: "display_only#1".into(),
+            source_port: "image".into(),
+            target_port: "prompt".into(),
+            source_kind: crate::expand::wiring::SourceKind::Output,
+        });
+        instance.interface_bindings = instance.bindings.clone();
+        instance.display_scope = Some("scope:display_only#".into());
+        assert_eq!(
+            graph_document(&plan, &planner)["instances"][0]["bindings"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        plan.expansion.scopes.push(crate::expand::display::Scope {
+            id: "scope:display_only#".into(),
+            parent: None,
+            kind: "workflow",
+            path: "display_only".into(),
+            step: "display_only".into(),
+            take: Vec::new(),
+            title: "Display only".into(),
+            source: Some("workflows/display.yaml".into()),
+            ports: Default::default(),
+            input_bindings: Vec::new(),
+            output_bindings: Vec::new(),
+            nodes: Vec::new(),
+            pending: Vec::new(),
+        });
+        assert_eq!(plan_digest(&plan, &planner), digest);
+        assert_eq!(identity_document(&plan), identities);
+        assert_eq!(price_document(&plan), prices);
     }
 }

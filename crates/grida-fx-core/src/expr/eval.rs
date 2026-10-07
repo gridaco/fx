@@ -30,6 +30,12 @@ use serde_json::Value;
 /// What names mean, and how views behave. The expander's step scope and prompt-file scope, and
 /// the runner's `prompt.render` scope, implement it.
 pub trait Scope {
+    /// Optional, observational access tracing. Hooks must not evaluate or modify values.
+    fn begin_access(&mut self) {}
+    fn end_access(&mut self, _ok: bool) {}
+    fn access_member(&mut self, _name: &str) {}
+    fn access_unknown_member(&mut self) {}
+
     /// A bare name. Unknown names are refused with the scope's own message (`unknown name 'x'` in
     /// a step scope, `a prompt sees vars and inputs, not 'x'` in a prompt file).
     fn root(&mut self, name: &str) -> Result<Val, ExprError>;
@@ -96,6 +102,14 @@ pub fn evaluate<S: Scope + ?Sized>(expr: &Expr, scope: &mut S) -> Result<Val, Ex
 /// `steps.x.outputs.text` does not nest a frame per access.
 #[inline(never)]
 fn access<S: Scope + ?Sized>(scope: &mut S, expr: &Expr) -> Result<Val, ExprError> {
+    scope.begin_access();
+    let result = access_chain(scope, expr);
+    scope.end_access(result.is_ok());
+    result
+}
+
+#[inline(never)]
+fn access_chain<S: Scope + ?Sized>(scope: &mut S, expr: &Expr) -> Result<Val, ExprError> {
     let mut at = links(expr);
     let mut value = evaluate(link(expr, at), scope)?;
     while at > 0 {
@@ -135,7 +149,10 @@ fn link(expr: &Expr, depth: usize) -> &Expr {
 #[inline(never)]
 fn apply<S: Scope + ?Sized>(scope: &mut S, link: &Expr, value: Val) -> Result<Val, ExprError> {
     match link {
-        Expr::Field(_, name) => member(scope, value, name),
+        Expr::Field(_, name) => {
+            scope.access_member(name);
+            member(scope, value, name)
+        }
         Expr::Index(_, index) => indexed(scope, value, index),
         _ => every(scope, value),
     }
@@ -145,6 +162,11 @@ fn apply<S: Scope + ?Sized>(scope: &mut S, link: &Expr, value: Val) -> Result<Va
 #[inline(never)]
 fn indexed<S: Scope + ?Sized>(scope: &mut S, value: Val, index: &Expr) -> Result<Val, ExprError> {
     let index = evaluate(index, scope)?;
+    if let Val::Str(name) = &index {
+        scope.access_member(name);
+    } else {
+        scope.access_unknown_member();
+    }
     item(scope, value, index)
 }
 

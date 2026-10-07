@@ -1,5 +1,111 @@
 [
  {
+  "bindings": [],
+  "code": "internal",
+  "error": "the stand-in failed: RuntimeError: the test harness broke on image.generate",
+  "event": "node_failed",
+  "facts": {},
+  "id": "draw#1",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "draw",
+  "plan": "8a6e2c7c49ddb08fe7d8f78b84456d3ba8b3862f6a558fbfe8044495270fa7cd",
+  "ports": {
+   "inputs": {
+    "references": "image[]?"
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "params": {
+    "background": {
+     "default": "auto",
+     "enum": [
+      "opaque",
+      "transparent",
+      "auto"
+     ]
+    },
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "size": {
+     "type": "string",
+     "x-fx-optional": true
+    },
+    "vars": {
+     "default": {},
+     "type": "object"
+    }
+   }
+  },
+  "reads": [],
+  "uses": "fx/image.generate@1"
+ },
+ {
+  "bindings": [],
+  "event": "node_started",
+  "id": "draw#1",
+  "identity": "82d1e81f7dc8741eecd35df3bfa14076eb2cbe05d2d7080757b3a403dd77fd70",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "draw",
+  "plan": "8a6e2c7c49ddb08fe7d8f78b84456d3ba8b3862f6a558fbfe8044495270fa7cd",
+  "ports": {
+   "inputs": {
+    "references": "image[]?"
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "params": {
+    "background": {
+     "default": "auto",
+     "enum": [
+      "opaque",
+      "transparent",
+      "auto"
+     ]
+    },
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "size": {
+     "type": "string",
+     "x-fx-optional": true
+    },
+    "vars": {
+     "default": {},
+     "type": "object"
+    }
+   }
+  },
+  "reads": [],
+  "routes": {
+   "image.generate": "img-a@acme"
+  },
+  "step": "draw",
+  "take": [
+   1
+  ],
+  "uses": "fx/image.generate@1",
+  "with": {
+   "background": {
+    "value": "auto"
+   },
+   "prompt": {
+    "value": "a lantern on a quay"
+   },
+   "vars": {
+    "value": {}
+   }
+  }
+ },
+ {
   "ceiling_usd": null,
   "charged_usd": 0,
   "estimate": {
@@ -33,44 +139,6 @@
   "stopped": "the stand-in failed: RuntimeError: the test harness broke on image.generate"
  },
  {
-  "code": "internal",
-  "error": "the stand-in failed: RuntimeError: the test harness broke on image.generate",
-  "event": "node_failed",
-  "facts": {},
-  "id": "draw#1",
-  "kind": "fx-run-events-v1",
-  "path": "draw",
-  "plan": "8a6e2c7c49ddb08fe7d8f78b84456d3ba8b3862f6a558fbfe8044495270fa7cd"
- },
- {
-  "event": "node_started",
-  "id": "draw#1",
-  "identity": "82d1e81f7dc8741eecd35df3bfa14076eb2cbe05d2d7080757b3a403dd77fd70",
-  "kind": "fx-run-events-v1",
-  "path": "draw",
-  "plan": "8a6e2c7c49ddb08fe7d8f78b84456d3ba8b3862f6a558fbfe8044495270fa7cd",
-  "reads": [],
-  "routes": {
-   "image.generate": "img-a@acme"
-  },
-  "step": "draw",
-  "take": [
-   1
-  ],
-  "uses": "fx/image.generate@1",
-  "with": {
-   "background": {
-    "value": "auto"
-   },
-   "prompt": {
-    "value": "a lantern on a quay"
-   },
-   "vars": {
-    "value": {}
-   }
-  }
- },
- {
   "event": "phase_planned",
   "high_usd": 0.04,
   "kind": "fx-run-events-v1",
@@ -84,5 +152,14 @@
   "message": "the stand-in failed: RuntimeError: the test harness broke on image.generate",
   "plan": "8a6e2c7c49ddb08fe7d8f78b84456d3ba8b3862f6a558fbfe8044495270fa7cd",
   "where": "draw#1"
+ },
+ {
+  "event": "scopes_updated",
+  "kind": "fx-run-events-v1",
+  "node_interface_bindings": {
+   "draw#1": []
+  },
+  "plan": "8a6e2c7c49ddb08fe7d8f78b84456d3ba8b3862f6a558fbfe8044495270fa7cd",
+  "scopes": []
  }
 ]

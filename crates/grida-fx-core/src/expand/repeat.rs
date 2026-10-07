@@ -33,6 +33,8 @@ pub(crate) struct RepeatItem {
     pub key: String,
     pub suffix: String,
     pub variables: IndexMap<String, Val>,
+    pub bindings: Vec<super::wiring::Binding>,
+    pub interfaces: Vec<super::wiring::Binding>,
 }
 
 /// What a repeat's list evaluated to.
@@ -78,11 +80,25 @@ impl Expander<'_> {
         );
         let concurrency_group = format!("{}{}", self.frames[at.frame.0].prefix, at.name);
         for item in items {
+            let mut variable_bindings = self.frame(positioned).variable_bindings.clone();
+            let mut variable_interfaces = self.frame(positioned).variable_interfaces.clone();
+            for name in item.variables.keys() {
+                variable_bindings.insert(name.clone(), item.bindings.clone());
+                variable_interfaces.insert(name.clone(), item.interfaces.clone());
+            }
+            let item_frame = self.derive(
+                positioned,
+                FrameChanges {
+                    variable_bindings: Some(variable_bindings),
+                    variable_interfaces: Some(variable_interfaces),
+                    ..Default::default()
+                },
+            );
             let child = self.new_exp(at.frame, &at.name);
             // Registered first: a later step of this very item may refer back into it.
             self.exps[into.0].children.push((item.key.clone(), child));
             let position = Position {
-                frame: positioned,
+                frame: item_frame,
                 name: at.name.clone(),
                 declared: Rc::clone(&at.declared),
                 where_: at.where_.clone(),
@@ -108,8 +124,29 @@ impl Expander<'_> {
         &mut self,
         at: &Position,
     ) -> (Listed, std::collections::BTreeSet<String>) {
+        self.wiring.begin_capture(&at.declared.as_);
         let (listed, reads) = self.for_each_value(at);
-        self.for_each_list(at, listed, reads)
+        let (bindings, interfaces) = self.wiring.end_capture_full();
+        let (mut listed, reads) = self.for_each_list(at, listed, reads);
+        // A single source of a whole list can be forwarded through item fields. A mixed
+        // list/collection has no element-level lineage here: retain its dependency only.
+        if bindings.len() == 1
+            && at.declared.for_each.as_ref().is_some_and(Value::is_string)
+            && let Listed::Items(items) = &mut listed
+        {
+            for item in items {
+                item.bindings.clone_from(&bindings);
+            }
+        }
+        if interfaces.len() == 1
+            && at.declared.for_each.as_ref().is_some_and(Value::is_string)
+            && let Listed::Items(items) = &mut listed
+        {
+            for item in items {
+                item.interfaces.clone_from(&interfaces);
+            }
+        }
+        (listed, reads)
     }
 
     /// The value of a `for_each`, and the ids it read.
@@ -203,6 +240,8 @@ impl Expander<'_> {
                 suffix: format!("[{}]", quote_key(&key)),
                 key,
                 variables,
+                bindings: Vec::new(),
+                interfaces: Vec::new(),
             });
         }
         (Listed::Items(items), reads)
@@ -262,6 +301,8 @@ impl Expander<'_> {
                 suffix: keys.iter().map(|k| format!("[{}]", quote_key(k))).collect(),
                 key: keys.join("."),
                 variables,
+                bindings: Vec::new(),
+                interfaces: Vec::new(),
             });
         }
         (Listed::Items(items), reads)
@@ -322,6 +363,7 @@ impl Expander<'_> {
             return;
         }
         self.pending.push(PendingRepeat {
+            display_scope: self.frames[at.frame.0].display_scope.clone(),
             path: format!("{}{}", self.frames[at.frame.0].prefix, at.name),
             max: limit.unwrap_or(1),
             waiting_on: refs.clone(),
@@ -341,6 +383,7 @@ impl Expander<'_> {
     /// towards the high price, planned ones towards the low, and nested pending repeats too.
     pub(crate) fn shadow_price(&mut self, at: &Position, phase: u32) -> (Usd, Usd) {
         let saved_instances = self.instances.clone();
+        let saved_display_scopes = self.display_scopes.clone();
         let saved_pending = self.pending.clone();
         let saved_problems = self.problems.clone();
         let saved_memo = self.memo.clone();
@@ -421,6 +464,7 @@ impl Expander<'_> {
         // Forget everything the hypothetical item expanded, steps it reached outside the repeat
         // included: they expand again, for real, when the plan reaches them.
         self.instances = saved_instances;
+        self.display_scopes = saved_display_scopes;
         self.pending = saved_pending;
         self.problems = saved_problems;
         self.memo = saved_memo;

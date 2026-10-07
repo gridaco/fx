@@ -100,6 +100,7 @@ pub async fn dispatch(
         }
     };
     let scrub = |text: &str| services.engine.scrub(text);
+    let display = started.node_display();
     if let Err(stop) = emit(&started) {
         return Done::stopped(&job.id, crate::executor::failed(&stop), stop);
     }
@@ -168,6 +169,7 @@ pub async fn dispatch(
             error: result.error.clone(),
             facts: Some(result.facts.clone()),
             duration_ms: Some(duration_ms),
+            display,
         },
         ResultStatus::Failed => Event::NodeFailed {
             id: job.id.clone(),
@@ -176,6 +178,7 @@ pub async fn dispatch(
             code: code.map(|code| code.name().to_string()),
             facts: Some(result.facts.clone()),
             duration_ms: Some(duration_ms),
+            display,
         },
     };
     if let Err(sentence) = emit(&terminal) {

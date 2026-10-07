@@ -58,6 +58,36 @@ fn cases_module(path: PathBuf) -> ModuleDescription {
     let text = json!({"type": "string"});
     let types = vec![
         (
+            "pair",
+            spec(
+                "pair",
+                json!({}),
+                json!({"value": {"default": "ready"}}),
+                json!({"left": "text", "right": "text"}),
+                false,
+            ),
+        ),
+        (
+            "propose",
+            spec(
+                "propose",
+                json!({}),
+                json!({}),
+                json!({"items": "json"}),
+                false,
+            ),
+        ),
+        (
+            "consume",
+            spec(
+                "consume",
+                json!({}),
+                json!({"value": {}, "other": {"x-fx-optional": true}}),
+                json!({"text": "text"}),
+                false,
+            ),
+        ),
+        (
             "shout",
             spec(
                 "shout",
@@ -204,6 +234,355 @@ impl Case {
 
 fn strings(values: &[&str]) -> Val {
     Val::List(values.iter().map(|v| Val::Str((*v).into())).collect())
+}
+
+mod port_wiring {
+    use super::*;
+
+    fn wires(expansion: &Expansion, id: &str) -> Value {
+        serde_json::to_value(&instance(expansion, id).bindings).unwrap()
+    }
+
+    fn wire(source: &str, port: &str, target: &str) -> Value {
+        json!({"source": source, "source_port": port, "target_port": target, "source_kind": "output"})
+    }
+
+    #[test]
+    fn bindings_keep_multiple_ports_and_do_not_inherit_upstream_or_control_reads() {
+        let case = Case::new(&[(
+            "main",
+            r#"
+fx: workflow/v1
+id: main
+title: Main
+steps:
+  origin: { uses: ./nodes/cases.py#pair }
+  producer:
+    uses: ./nodes/cases.py#pair
+    with: { value: "${{ steps.origin.outputs.left }}" }
+  sink:
+    uses: ./nodes/cases.py#consume
+    needs: [origin]
+    with:
+      value: "${{ steps.producer.outputs.left + steps.producer.outputs.right }}"
+      other: "${{ false && steps.origin.outputs.right }}"
+"#,
+        )]);
+        let expansion = case.expand("main");
+        assert!(
+            problems(&expansion).is_empty(),
+            "{:?}",
+            problems(&expansion)
+        );
+        assert_eq!(
+            wires(&expansion, "sink#1"),
+            json!([
+                wire("producer#1", "left", "value"),
+                wire("producer#1", "right", "value")
+            ])
+        );
+        assert_eq!(
+            wires(&expansion, "producer#1"),
+            json!([wire("origin#1", "left", "value")])
+        );
+        assert_eq!(instance(&expansion, "sink#1").needs, ["origin#1"]);
+    }
+
+    #[test]
+    fn dynamic_output_selection_never_claims_all_ports_while_the_key_is_pending() {
+        let mut case = Case::new(&[(
+            "main",
+            r#"
+fx: workflow/v1
+id: main
+title: Main
+steps:
+  producer: { uses: ./nodes/cases.py#pair }
+  selector: { uses: ./nodes/cases.py#shout, with: { text: right } }
+  sink:
+    uses: ./nodes/cases.py#consume
+    with: { value: "${{ steps.producer.outputs[steps.selector.outputs.text] }}" }
+"#,
+        )]);
+        let before = case.expand("main");
+        assert!(problems(&before).is_empty(), "{:?}", problems(&before));
+        assert_eq!(
+            wires(&before, "sink#1"),
+            json!([wire("selector#1", "text", "value")])
+        );
+        case.done("selector#1", &[("text", Val::Str("right".into()))]);
+        case.done(
+            "producer#1",
+            &[
+                ("left", Val::Str("same".into())),
+                ("right", Val::Str("same".into())),
+            ],
+        );
+        let after = case.expand("main");
+        assert!(problems(&after).is_empty(), "{:?}", problems(&after));
+        assert_eq!(
+            wires(&after, "sink#1"),
+            json!([
+                wire("producer#1", "right", "value"),
+                wire("selector#1", "text", "value")
+            ])
+        );
+    }
+
+    #[test]
+    fn let_and_used_workflow_aliases_keep_selected_ports_and_forwarded_inputs() {
+        let case = Case::new(&[
+            (
+                "main",
+                r#"
+fx: workflow/v1
+id: main
+title: Main
+let:
+  ports: "${{ steps.producer.outputs }}"
+steps:
+  producer: { uses: ./nodes/cases.py#pair }
+  alias:
+    uses: ./nodes/cases.py#consume
+    with: { value: "${{ let.ports.right }}" }
+  nested:
+    uses: ./workflows/child.yaml
+    with: { text: "${{ steps.producer.outputs.left }}" }
+  sink:
+    uses: ./nodes/cases.py#consume
+    with: { value: "${{ steps.nested.outputs.chosen }}" }
+"#,
+            ),
+            (
+                "child",
+                r#"
+fx: workflow/v1
+id: child
+title: Child
+inputs: { text: { type: string } }
+steps:
+  inner:
+    uses: ./nodes/cases.py#pair
+    with: { value: "${{ inputs.text }}" }
+  all_inputs:
+    uses: ./nodes/cases.py#consume
+    with: { value: "${{ inputs }}" }
+outputs:
+  chosen: "${{ steps.inner.outputs.left }}"
+  unused: "${{ steps.inner.outputs.right }}"
+"#,
+            ),
+        ]);
+        let expansion = case.expand("main");
+        assert!(
+            problems(&expansion).is_empty(),
+            "{:?}",
+            problems(&expansion)
+        );
+        assert_eq!(
+            wires(&expansion, "alias#1"),
+            json!([wire("producer#1", "right", "value")])
+        );
+        assert_eq!(
+            wires(&expansion, "nested.inner#1"),
+            json!([wire("producer#1", "left", "value")])
+        );
+        assert_eq!(
+            wires(&expansion, "nested.all_inputs#1"),
+            json!([wire("producer#1", "left", "value")])
+        );
+        assert_eq!(
+            wires(&expansion, "sink#1"),
+            json!([wire("nested.inner#1", "left", "value")])
+        );
+    }
+
+    #[test]
+    fn lists_wildcards_and_fact_fields_preserve_reference_kinds() {
+        let case = Case::new(&[(
+            "main",
+            r#"
+fx: workflow/v1
+id: main
+title: Main
+steps:
+  producer:
+    for_each: [a, b]
+    key: "${{ item }}"
+    uses: ./nodes/cases.py#pair
+  sink:
+    uses: ./nodes/cases.py#consume
+    with:
+      value: ["${{ steps.producer['a'].outputs.left }}", "${{ steps.producer['a'].outputs.right }}"]
+      other: "${{ steps.producer.*.outputs.left }}"
+  facts:
+    uses: ./nodes/cases.py#consume
+    with: { value: "${{ steps.producer['b'].facts.score }}" }
+"#,
+        )]);
+        let expansion = case.expand("main");
+        assert!(
+            problems(&expansion).is_empty(),
+            "{:?}",
+            problems(&expansion)
+        );
+        assert_eq!(
+            wires(&expansion, "sink#1"),
+            json!([
+                wire("producer['a']#1", "left", "other"),
+                wire("producer['a']#1", "left", "value"),
+                wire("producer['a']#1", "right", "value"),
+                wire("producer['b']#1", "left", "other")
+            ])
+        );
+        assert_eq!(
+            wires(&expansion, "facts#1"),
+            json!([{
+                "source": "producer['b']#1", "source_port": "score", "target_port": "value", "source_kind": "fact"
+            }])
+        );
+    }
+
+    #[test]
+    fn runtime_repeat_items_forward_one_known_source_but_not_ambiguous_lists() {
+        let mut case = Case::new(&[(
+            "main",
+            r#"
+fx: workflow/v1
+id: main
+title: Main
+steps:
+  propose: { uses: ./nodes/cases.py#propose }
+  dynamic:
+    for_each: "${{ steps.propose.outputs.items.entries }}"
+    key: "${{ item.id }}"
+    max: 2
+    uses: ./nodes/cases.py#consume
+    with: { value: "${{ item.label }}" }
+  a: { uses: ./nodes/cases.py#pair }
+  b: { uses: ./nodes/cases.py#pair }
+  mixed:
+    for_each: ["${{ steps.a.outputs.left }}", "${{ steps.b.outputs.left }}"]
+    max: 2
+    uses: ./nodes/cases.py#consume
+    with: { value: "${{ item }}" }
+"#,
+        )]);
+        let before = case.expand("main");
+        assert!(
+            before
+                .instances
+                .keys()
+                .all(|id| !id.starts_with("dynamic["))
+        );
+        let file = grida_fx_core::val::FileValue {
+            digest: "0".repeat(64),
+            kind: "json".into(),
+            name: "items".into(),
+            size: 1,
+            key: None,
+            location: None,
+            content: Some(grida_fx_core::val::FileContent::Json(json!({"entries": [
+                {"id": "amber", "label": "Amber"}, {"id": "fern", "label": "Fern"}
+            ]}))),
+        };
+        case.done("propose#1", &[("items", Val::File(Box::new(file)))]);
+        case.done("a#1", &[("left", Val::Str("a".into()))]);
+        case.done("b#1", &[("left", Val::Str("b".into()))]);
+        let after = case.expand("main");
+        assert!(problems(&after).is_empty(), "{:?}", problems(&after));
+        for id in ["dynamic['amber']#1", "dynamic['fern']#1"] {
+            assert_eq!(
+                wires(&after, id),
+                json!([wire("propose#1", "items", "value")])
+            );
+        }
+        assert_eq!(wires(&after, "mixed['0']#1"), json!([]));
+        assert_eq!(wires(&after, "mixed['1']#1"), json!([]));
+    }
+
+    #[test]
+    fn judge_inputs_pin_each_take_and_consumers_bind_the_accepted_take() {
+        let mut case = Case::new(&[(
+            "main",
+            r#"
+fx: workflow/v1
+id: main
+title: Main
+steps:
+  render: { uses: ./nodes/cases.py#shout, with: { text: a } }
+  review:
+    uses: ./nodes/cases.py#verdict
+    judges: render
+    with: { subject: "${{ steps.render.outputs.text }}", accept_take: 2 }
+    on_reject: { regenerate: { max: 2, then: fail } }
+  sink:
+    uses: ./nodes/cases.py#consume
+    with: { value: "${{ steps.render.outputs.text }}" }
+"#,
+        )]);
+        let before = case.expand("main");
+        assert!(problems(&before).is_empty(), "{:?}", problems(&before));
+        assert_eq!(
+            wires(&before, "review#1"),
+            json!([wire("render#1", "text", "subject")])
+        );
+        assert_eq!(
+            wires(&before, "review#2"),
+            json!([wire("render#2", "text", "subject")])
+        );
+        assert_eq!(wires(&before, "sink#1"), json!([]));
+        for (take, verdict) in [(1, "reject"), (2, "accept")] {
+            case.done(
+                &format!("render#{take}"),
+                &[("text", Val::Str("same".into()))],
+            );
+            case.done(&format!("review#{take}"), &[]);
+            case.results
+                .get_mut(&format!("review#{take}"))
+                .unwrap()
+                .facts
+                .insert("verdict".into(), Value::from(verdict));
+        }
+        let after = case.expand("main");
+        assert!(problems(&after).is_empty(), "{:?}", problems(&after));
+        assert_eq!(
+            wires(&after, "sink#1"),
+            json!([wire("render#2", "text", "value")])
+        );
+    }
+
+    #[test]
+    fn failed_sources_keep_the_port_that_blocks_a_consumer() {
+        let mut case = Case::new(&[(
+            "main",
+            r#"
+fx: workflow/v1
+id: main
+title: Main
+steps:
+  fail: { uses: ./nodes/cases.py#pair }
+  blocked:
+    uses: ./nodes/cases.py#consume
+    with: { value: "${{ steps.fail.outputs.left }}" }
+"#,
+        )]);
+        case.results.insert(
+            "fail#1".into(),
+            NodeResult {
+                status: ResultStatus::Failed,
+                outputs: IndexMap::new(),
+                facts: IndexMap::new(),
+                error: Some("failed intentionally".into()),
+            },
+        );
+        let expansion = case.expand("main");
+        assert_eq!(instance(&expansion, "blocked#1").state, State::Blocked);
+        assert_eq!(
+            wires(&expansion, "blocked#1"),
+            json!([wire("fail#1", "left", "value")])
+        );
+    }
 }
 
 fn ids(expansion: &Expansion) -> Vec<&str> {
@@ -1527,4 +1906,273 @@ fn a_chain_longer_than_the_bound_is_refused() {
     );
     // s100 stays absent; every other step plans.
     assert_eq!(count, 2100);
+}
+
+mod display_scopes {
+    use super::*;
+
+    fn binding(source: &str, source_port: &str, target_port: &str, kind: &str) -> Value {
+        json!({"source":source,"source_port":source_port,"target_port":target_port,"source_kind":kind})
+    }
+
+    fn scope(expansion: &Expansion, id: &str) -> Value {
+        serde_json::to_value(
+            expansion
+                .scopes
+                .iter()
+                .find(|scope| scope.id == id)
+                .unwrap(),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn repeated_workflow_boundaries_keep_exact_aliases_and_literal_inputs() {
+        let case = Case::new(&[
+            (
+                "main",
+                r#"
+fx: workflow/v1
+id: main
+title: Main
+steps:
+  group:
+    title: Repeated samples
+    for_each: [left, right]
+    key: "${{ item }}"
+    steps:
+      imported:
+        uses: ./workflows/inner.yaml
+        with: { name: "${{ item }}" }
+      after:
+        uses: ./nodes/cases.py#consume
+        with: { value: "${{ steps.imported.outputs.second }}" }
+"#,
+            ),
+            (
+                "inner",
+                r#"
+fx: workflow/v1
+id: inner
+title: Inner workflow
+inputs:
+  name: { type: string }
+steps:
+  make:
+    uses: ./nodes/cases.py#consume
+    with: { value: "${{ inputs.name }}" }
+outputs:
+  first: "${{ steps.make.outputs.text }}"
+  second: "${{ steps.make.outputs.text }}"
+"#,
+            ),
+        ]);
+        let expansion = case.expand("main");
+        assert_eq!(problems(&expansion), []);
+        assert_eq!(expansion.scopes.len(), 4);
+        for key in ["left", "right"] {
+            let outer = format!("scope:group['{key}']#");
+            let inner = format!("scope:group['{key}'].imported#");
+            let make = format!("group['{key}'].imported.make#1");
+            let after = format!("group['{key}'].after#1");
+            let record = scope(&expansion, &inner);
+            assert_eq!(record["parent"], outer);
+            assert_eq!(record["kind"], "workflow");
+            assert_eq!(record["title"], "Inner workflow");
+            assert_eq!(record["source"], "workflows/inner.yaml");
+            assert_eq!(record["nodes"], json!([make]));
+            assert_eq!(
+                record["ports"],
+                json!({"inputs":{"name":{"type":"string"}},"outputs":["first","second"]})
+            );
+            assert_eq!(record["input_bindings"], json!([]));
+            assert_eq!(
+                record["output_bindings"],
+                json!([
+                    binding(&make, "text", "first", "output"),
+                    binding(&make, "text", "second", "output")
+                ])
+            );
+            assert_eq!(
+                serde_json::to_value(&instance(&expansion, &make).interface_bindings).unwrap(),
+                json!([binding(&inner, "name", "value", "scope_input")])
+            );
+            assert_eq!(
+                serde_json::to_value(&instance(&expansion, &after).interface_bindings).unwrap(),
+                json!([binding(&inner, "second", "value", "scope_output")])
+            );
+            assert_eq!(
+                serde_json::to_value(&instance(&expansion, &after).bindings).unwrap(),
+                json!([binding(&make, "text", "value", "output")])
+            );
+            let group = scope(&expansion, &outer);
+            assert_eq!(group["kind"], "group");
+            assert_eq!(group["title"], "Repeated samples");
+            assert_eq!(group["parent"], Value::Null);
+            assert_eq!(group["nodes"], json!([after]));
+        }
+    }
+
+    #[test]
+    fn nested_imports_preserve_boundary_to_boundary_mappings() {
+        let case = Case::new(&[
+            (
+                "main",
+                r#"
+fx: workflow/v1
+id: main
+title: Main
+steps:
+  source: { uses: ./nodes/cases.py#pair }
+  outer:
+    uses: ./workflows/outer.yaml
+    with: { image: "${{ steps.source.outputs.left }}" }
+  read:
+    uses: ./nodes/cases.py#consume
+    with: { value: "${{ steps.outer.outputs.preview }}" }
+"#,
+            ),
+            (
+                "outer",
+                r#"
+fx: workflow/v1
+id: outer
+title: Outer
+inputs:
+  image: { type: file, kind: text }
+steps:
+  inner:
+    uses: ./workflows/inner.yaml
+    with: { image: "${{ inputs.image }}" }
+outputs:
+  preview: "${{ steps.inner.outputs.thumbnail }}"
+"#,
+            ),
+            (
+                "inner",
+                r#"
+fx: workflow/v1
+id: inner
+title: Inner
+inputs:
+  image: { type: file, kind: text }
+steps:
+  use:
+    uses: ./nodes/cases.py#consume
+    with: { value: "${{ inputs.image }}" }
+outputs:
+  thumbnail: "${{ steps.use.outputs.text }}"
+"#,
+            ),
+        ]);
+        let expansion = case.expand("main");
+        assert_eq!(problems(&expansion), []);
+        let outer = scope(&expansion, "scope:outer#");
+        let inner = scope(&expansion, "scope:outer.inner#");
+        assert_eq!(
+            outer["input_bindings"],
+            json!([binding("source#1", "left", "image", "output")])
+        );
+        assert_eq!(
+            inner["input_bindings"],
+            json!([binding("scope:outer#", "image", "image", "scope_input")])
+        );
+        assert_eq!(
+            outer["output_bindings"],
+            json!([binding(
+                "scope:outer.inner#",
+                "thumbnail",
+                "preview",
+                "scope_output"
+            )])
+        );
+        assert_eq!(
+            inner["output_bindings"],
+            json!([binding("outer.inner.use#1", "text", "thumbnail", "output")])
+        );
+    }
+
+    #[test]
+    fn pending_repeats_do_not_publish_shadow_scopes_and_runtime_items_gain_real_scopes() {
+        let mut case = Case::new(&[
+            (
+                "main",
+                r#"
+fx: workflow/v1
+id: main
+title: Main
+steps:
+  propose: { uses: ./nodes/cases.py#propose }
+  group:
+    steps:
+      imported:
+        for_each: "${{ steps.propose.outputs.items }}"
+        key: "${{ item }}"
+        max: 2
+        uses: ./workflows/inner.yaml
+        with: { name: "${{ item }}" }
+"#,
+            ),
+            (
+                "inner",
+                r#"
+fx: workflow/v1
+id: inner
+title: Inner
+inputs:
+  name: { type: string }
+steps:
+  make:
+    uses: ./nodes/cases.py#consume
+    with: { value: "${{ inputs.name }}" }
+outputs:
+  unused: "${{ unknown_name }}"
+"#,
+            ),
+        ]);
+        let before = case.expand("main");
+        assert_eq!(problems(&before), []);
+        assert_eq!(before.scopes.len(), 1);
+        assert_eq!(
+            scope(&before, "scope:group#")["pending"],
+            json!(["group.imported"])
+        );
+        case.done("propose#1", &[("items", strings(&["a", "b"]))]);
+        let after = case.expand("main");
+        assert_eq!(problems(&after), []); // Unread aliases were not evaluated for metadata.
+        assert_eq!(after.scopes.len(), 3);
+        assert_eq!(scope(&after, "scope:group#")["pending"], json!([]));
+        for key in ["a", "b"] {
+            let record = scope(&after, &format!("scope:group.imported['{key}']#"));
+            assert_eq!(record["parent"], "scope:group#");
+            assert_eq!(record["ports"]["outputs"], json!(["unused"]));
+            assert_eq!(record["output_bindings"], json!([]));
+        }
+    }
+
+    #[test]
+    fn group_takes_have_distinct_scope_ids_and_direct_membership() {
+        let case = Case::new(&[(
+            "main",
+            r#"
+fx: workflow/v1
+id: main
+title: Main
+steps:
+  attempts:
+    regenerate: { max: 2, until: "${{ false }}", then: continue }
+    steps:
+      make: { uses: ./nodes/cases.py#pair }
+"#,
+        )]);
+        let expansion = case.expand("main");
+        assert_eq!(problems(&expansion), []);
+        assert_eq!(expansion.scopes.len(), 2);
+        for take in 1..=2 {
+            let record = scope(&expansion, &format!("scope:attempts#{take}"));
+            assert_eq!(record["parent"], Value::Null);
+            assert_eq!(record["take"], json!([take]));
+            assert_eq!(record["nodes"], json!([format!("attempts.make#{take}.1")]));
+        }
+    }
 }

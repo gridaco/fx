@@ -48,9 +48,25 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 pub const EVENTS_KIND: &str = "fx-run-events-v1";
 
+/// Display-only metadata for an instance, including one that settles before dispatch.
+/// It contains no execution values and is never replayed into the scheduler.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NodeDisplay {
+    pub uses: String,
+    pub reads: Vec<String>,
+    pub ports: Value,
+    pub bindings: Vec<grida_fx_core::expand::wiring::Binding>,
+    pub needs: Vec<String>,
+    pub judges: Option<String>,
+}
+
 /// One event's own fields (module doc). Names and members follow fx-run-events-v1.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Event {
+    ScopesUpdated {
+        scopes: Value,
+        node_interface_bindings: Value,
+    },
     RunStarted {
         workflow: String,
         resumed: bool,
@@ -74,6 +90,11 @@ pub enum Event {
         identity: Option<String>,
         uses: String,
         reads: Vec<String>,
+        /// Display declarations and references; never replayed into execution values.
+        ports: Value,
+        bindings: Vec<grida_fx_core::expand::wiring::Binding>,
+        needs: Vec<String>,
+        judges: Option<String>,
         /// `{capability: route id}`.
         routes: IndexMap<String, String>,
         /// `{name: encoded}`.
@@ -97,6 +118,7 @@ pub enum Event {
         code: Option<String>,
         facts: Option<IndexMap<String, Value>>,
         duration_ms: Option<u64>,
+        display: Option<NodeDisplay>,
     },
     /// A blocked instance (`reason`, `blocked: true`), or a select with no candidate (`error`,
     /// `facts`, `duration_ms`).
@@ -108,6 +130,7 @@ pub enum Event {
         error: Option<String>,
         facts: Option<IndexMap<String, Value>>,
         duration_ms: Option<u64>,
+        display: Option<NodeDisplay>,
     },
     NodeRetry {
         id: String,
@@ -159,9 +182,35 @@ pub enum Event {
 }
 
 impl Event {
+    /// Reuse a dispatch's recorded declarations in its terminal event without re-expanding it.
+    pub(crate) fn node_display(&self) -> Option<NodeDisplay> {
+        if let Event::NodeStarted {
+            uses,
+            reads,
+            ports,
+            bindings,
+            needs,
+            judges,
+            ..
+        } = self
+        {
+            Some(NodeDisplay {
+                uses: uses.clone(),
+                reads: reads.clone(),
+                ports: ports.clone(),
+                bindings: bindings.clone(),
+                needs: needs.clone(),
+                judges: judges.clone(),
+            })
+        } else {
+            None
+        }
+    }
+
     /// The `event` member: `run_started`, `node_finished`, ….
     pub fn name(&self) -> &'static str {
         match self {
+            Event::ScopesUpdated { .. } => "scopes_updated",
             Event::RunStarted { .. } => "run_started",
             Event::PhasePlanned { .. } => "phase_planned",
             Event::NodeStarted { .. } => "node_started",
@@ -183,6 +232,13 @@ impl Event {
     pub fn to_fields(&self) -> Map<String, Value> {
         let mut fields = Fields::default();
         match self {
+            Event::ScopesUpdated {
+                scopes,
+                node_interface_bindings,
+            } => {
+                fields.put("scopes", scopes.clone());
+                fields.put("node_interface_bindings", node_interface_bindings.clone());
+            }
             Event::RunStarted {
                 workflow,
                 resumed,
@@ -221,6 +277,10 @@ impl Event {
                 identity,
                 uses,
                 reads,
+                ports,
+                bindings,
+                needs,
+                judges,
                 routes,
                 with,
             } => {
@@ -233,6 +293,10 @@ impl Event {
                 );
                 fields.text_or_null("identity", identity.as_deref());
                 fields.text("uses", uses);
+                fields.put("ports", ports.clone());
+                fields.put("bindings", serde_json::json!(bindings));
+                fields.put("needs", serde_json::json!(needs));
+                fields.text_or_null("judges", judges.as_deref());
                 fields.put(
                     "reads",
                     Value::Array(reads.iter().map(|r| Value::from(r.as_str())).collect()),
@@ -272,6 +336,7 @@ impl Event {
                 code,
                 facts,
                 duration_ms,
+                display,
             } => {
                 fields.text("id", id);
                 fields.text("path", path);
@@ -284,6 +349,9 @@ impl Event {
                 if let Some(duration_ms) = duration_ms {
                     fields.put("duration_ms", Value::from(*duration_ms));
                 }
+                if let Some(display) = display {
+                    fields.display(display);
+                }
             }
             Event::NodeSkipped {
                 id,
@@ -293,6 +361,7 @@ impl Event {
                 error,
                 facts,
                 duration_ms,
+                display,
             } => {
                 fields.text("id", id);
                 fields.text("path", path);
@@ -313,6 +382,9 @@ impl Event {
                 }
                 if let Some(duration_ms) = duration_ms {
                     fields.put("duration_ms", Value::from(*duration_ms));
+                }
+                if let Some(display) = display {
+                    fields.display(display);
                 }
             }
             Event::NodeRetry { id, attempt, error } => {
@@ -405,6 +477,15 @@ impl Event {
 struct Fields(Map<String, Value>);
 
 impl Fields {
+    fn display(&mut self, display: &NodeDisplay) {
+        self.text("uses", &display.uses);
+        self.put("reads", serde_json::json!(display.reads));
+        self.put("ports", display.ports.clone());
+        self.put("bindings", serde_json::json!(display.bindings));
+        self.put("needs", serde_json::json!(display.needs));
+        self.text_or_null("judges", display.judges.as_deref());
+    }
+
     fn put(&mut self, name: &str, value: Value) {
         self.0.insert(name.to_string(), value);
     }

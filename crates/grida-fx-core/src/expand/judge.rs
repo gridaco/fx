@@ -507,7 +507,10 @@ impl Expander<'_> {
         pinned: Option<u32>,
         what: What,
     ) -> Result<Val, ExprError> {
-        let id = match self.chosen(exp, pinned) {
+        self.wiring.suspend();
+        let chosen = self.chosen(exp, pinned);
+        self.wiring.resume();
+        let id = match chosen {
             Chosen::Instance(id) => id,
             Chosen::Value(Val::Pending(pending)) => {
                 let token = json!({"of": pending.token, "what": what.as_str()});
@@ -517,6 +520,7 @@ impl Expander<'_> {
                 ))));
             }
             Chosen::Value(Val::Failed(id)) => {
+                self.trace_result(&id, what);
                 // A take whose body failed has a result, and reading it is a read (gnode listed
                 // such a take as done and read its result).
                 if self
@@ -531,6 +535,7 @@ impl Expander<'_> {
             }
             Chosen::Value(value) => return Ok(value),
         };
+        self.trace_result(&id, what);
         let Some(chosen) = self.instances.get(&id) else {
             return Ok(Val::Missing);
         };
@@ -585,6 +590,32 @@ impl Expander<'_> {
             outputs.insert(name.clone(), value.clone());
         }
         Ok(Val::Object(outputs))
+    }
+
+    fn trace_result(&mut self, id: &str, what: What) {
+        let Some(instance) = self.instances.get(id) else {
+            return;
+        };
+        let kind = if what == What::Outputs {
+            super::wiring::SourceKind::Output
+        } else {
+            super::wiring::SourceKind::Fact
+        };
+        let ports = if what == What::Outputs {
+            instance.ty.spec.outputs.keys().cloned().collect()
+        } else {
+            self.env
+                .results
+                .get(id)
+                .map(|result| result.facts.keys().cloned().collect())
+                .unwrap_or_default()
+        };
+        self.wiring.result(
+            id,
+            kind,
+            ports,
+            instance.ty.is_select() && what == What::Outputs,
+        );
     }
 
     /// `steps.x.take`.
@@ -853,6 +884,9 @@ pub(crate) mod tests {
             timeout_s: None,
             reason: None,
             reads: BTreeSet::new(),
+            bindings: Vec::new(),
+            interface_bindings: Vec::new(),
+            display_scope: None,
         }
     }
 
@@ -960,6 +994,11 @@ pub(crate) mod tests {
                 takes: Vec::new(),
                 workflow,
                 inputs: Rc::new(IndexMap::new()),
+                input_bindings: Rc::default(),
+                display_scope: None,
+                workflow_scope: None,
+                variable_interfaces: Default::default(),
+                variable_bindings: Default::default(),
                 phase: 1,
                 judging: None,
                 budget: None,

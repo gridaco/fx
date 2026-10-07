@@ -6,8 +6,10 @@
  },
  "instances": [
   {
+   "bindings": [],
    "id": "describe#1",
    "identity": "895e8ede1de7b278c018cfb1bd0321a7f7989dfe9f0c1d7e1669a32658e3dfd9",
+   "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": null,
@@ -48,9 +50,26 @@
  "kind": "fx-graph-v1",
  "pending": [],
  "problems": [],
+ "scopes": [],
  "types": {
   "fx/package@1": {
-   "identity": "fx/package@1.1"
+   "identity": "fx/package@1.1",
+   "ports": {
+    "inputs": {},
+    "outputs": {
+     "files": "file{}",
+     "manifest": "json"
+    },
+    "params": {
+     "files": {
+      "type": "object"
+     },
+     "manifest": {
+      "default": {},
+      "type": "object"
+     }
+    }
+   }
   }
  },
  "workflow": {

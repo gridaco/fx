@@ -6,8 +6,10 @@
  },
  "instances": [
   {
+   "bindings": [],
    "id": "count#1",
    "identity": "f8a9e8ecdbd14337e2bd5a3729b8992a2d6a91a51e41dc62841f5bb088c34578",
+   "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": null,
@@ -36,8 +38,24 @@
    }
   },
   {
+   "bindings": [
+    {
+     "source": "count#1",
+     "source_kind": "output",
+     "source_port": "items",
+     "target_port": "prompt"
+    }
+   ],
    "id": "draw#1",
    "identity": null,
+   "interface_bindings": [
+    {
+     "source": "count#1",
+     "source_kind": "output",
+     "source_port": "items",
+     "target_port": "prompt"
+    }
+   ],
    "judged_by": [],
    "judges": null,
    "key": null,
@@ -82,9 +100,19 @@
  "kind": "fx-graph-v1",
  "pending": [],
  "problems": [],
+ "scopes": [],
  "types": {
   "./nodes/cases.py#lines": {
    "identity": "nodes/cases.py#lines@1",
+   "ports": {
+    "inputs": {
+     "text": "text"
+    },
+    "outputs": {
+     "items": "json"
+    },
+    "params": {}
+   },
    "source": {
     "files": {
      "nodes/cases.py": "d34041da3235ac70a67a2748fbffc8cd8ab51dc12db3098472c52e2f40db0930"
@@ -93,7 +121,37 @@
    }
   },
   "fx/image.generate@1": {
-   "identity": "fx/image.generate@1.1"
+   "identity": "fx/image.generate@1.1",
+   "ports": {
+    "inputs": {
+     "references": "image[]?"
+    },
+    "outputs": {
+     "image": "image/png"
+    },
+    "params": {
+     "background": {
+      "default": "auto",
+      "enum": [
+       "opaque",
+       "transparent",
+       "auto"
+      ]
+     },
+     "prompt": {
+      "type": "string",
+      "x-fx-template": true
+     },
+     "size": {
+      "type": "string",
+      "x-fx-optional": true
+     },
+     "vars": {
+      "default": {},
+      "type": "object"
+     }
+    }
+   }
   }
  },
  "workflow": {

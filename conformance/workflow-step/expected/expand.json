@@ -6,8 +6,23 @@
  },
  "instances": [
   {
+   "bindings": [],
    "id": "each['ada'].loud#1",
    "identity": "42f3dee2c04e27700766545aac6a97c7c330a532e5663917381fb77bc5dc87ca",
+   "interface_bindings": [
+    {
+     "source": "scope:each['ada']#",
+     "source_kind": "scope_input",
+     "source_port": "name",
+     "target_port": "text"
+    },
+    {
+     "source": "scope:each['ada']#",
+     "source_kind": "scope_input",
+     "source_port": "suffix",
+     "target_port": "text"
+    }
+   ],
    "judged_by": [],
    "judges": null,
    "key": null,
@@ -34,8 +49,23 @@
    }
   },
   {
+   "bindings": [],
    "id": "each['bo'].loud#1",
    "identity": "25de8bba9ea1a4d3d9b464ab8ee9c5f562ec47ba062638b19816247fb5b0bb1a",
+   "interface_bindings": [
+    {
+     "source": "scope:each['bo']#",
+     "source_kind": "scope_input",
+     "source_port": "name",
+     "target_port": "text"
+    },
+    {
+     "source": "scope:each['bo']#",
+     "source_kind": "scope_input",
+     "source_port": "suffix",
+     "target_port": "text"
+    }
+   ],
    "judged_by": [],
    "judges": null,
    "key": null,
@@ -65,9 +95,96 @@
  "kind": "fx-graph-v1",
  "pending": [],
  "problems": [],
+ "scopes": [
+  {
+   "id": "scope:each['ada']#",
+   "input_bindings": [],
+   "kind": "workflow",
+   "nodes": [
+    "each['ada'].loud#1"
+   ],
+   "output_bindings": [
+    {
+     "source": "each['ada'].loud#1",
+     "source_kind": "output",
+     "source_port": "text",
+     "target_port": "loud"
+    }
+   ],
+   "parent": null,
+   "path": "each['ada']",
+   "pending": [],
+   "ports": {
+    "inputs": {
+     "name": {
+      "type": "string"
+     },
+     "suffix": {
+      "default": "!",
+      "type": "string"
+     }
+    },
+    "outputs": [
+     "loud"
+    ]
+   },
+   "source": "workflows/inner.yaml",
+   "step": "each",
+   "take": [],
+   "title": "Inner"
+  },
+  {
+   "id": "scope:each['bo']#",
+   "input_bindings": [],
+   "kind": "workflow",
+   "nodes": [
+    "each['bo'].loud#1"
+   ],
+   "output_bindings": [
+    {
+     "source": "each['bo'].loud#1",
+     "source_kind": "output",
+     "source_port": "text",
+     "target_port": "loud"
+    }
+   ],
+   "parent": null,
+   "path": "each['bo']",
+   "pending": [],
+   "ports": {
+    "inputs": {
+     "name": {
+      "type": "string"
+     },
+     "suffix": {
+      "default": "!",
+      "type": "string"
+     }
+    },
+    "outputs": [
+     "loud"
+    ]
+   },
+   "source": "workflows/inner.yaml",
+   "step": "each",
+   "take": [],
+   "title": "Inner"
+  }
+ ],
  "types": {
   "./nodes/cases.py#shout": {
    "identity": "nodes/cases.py#shout@1",
+   "ports": {
+    "inputs": {},
+    "outputs": {
+     "text": "text"
+    },
+    "params": {
+     "text": {
+      "type": "string"
+     }
+    }
+   },
    "source": {
     "files": {
      "nodes/cases.py": "d34041da3235ac70a67a2748fbffc8cd8ab51dc12db3098472c52e2f40db0930"

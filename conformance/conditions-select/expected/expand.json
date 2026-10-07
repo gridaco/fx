@@ -6,8 +6,10 @@
  },
  "instances": [
   {
+   "bindings": [],
    "id": "base#1",
    "identity": "8fbdaf5e947e424107fde5a6d59e4d494a855f740850c79b888cba281fc941cc",
+   "interface_bindings": [],
    "judged_by": [
     "check#1"
    ],
@@ -43,8 +45,24 @@
    }
   },
   {
+   "bindings": [
+    {
+     "source": "base#1",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "subject"
+    }
+   ],
    "id": "check#1",
    "identity": null,
+   "interface_bindings": [
+    {
+     "source": "base#1",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "subject"
+    }
+   ],
    "judged_by": [],
    "judges": "base#1",
    "key": null,
@@ -80,8 +98,10 @@
    }
   },
   {
+   "bindings": [],
    "id": "fix#1",
    "identity": "620dd8f3e91cfa2a00a36f55452ff06034f13226fd6b7d6a27905b7184a3a70d",
+   "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": null,
@@ -115,8 +135,10 @@
    }
   },
   {
+   "bindings": [],
    "id": "chosen#1",
    "identity": null,
+   "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": null,
@@ -166,9 +188,21 @@
  "kind": "fx-graph-v1",
  "pending": [],
  "problems": [],
+ "scopes": [],
  "types": {
   "./nodes/cases.py#verdict": {
    "identity": "nodes/cases.py#verdict@1",
+   "ports": {
+    "inputs": {
+     "subject": "file"
+    },
+    "outputs": {},
+    "params": {
+     "accept_take": {
+      "type": "integer"
+     }
+    }
+   },
    "source": {
     "files": {
      "nodes/cases.py": "d34041da3235ac70a67a2748fbffc8cd8ab51dc12db3098472c52e2f40db0930"
@@ -177,10 +211,51 @@
    }
   },
   "fx/image.generate@1": {
-   "identity": "fx/image.generate@1.1"
+   "identity": "fx/image.generate@1.1",
+   "ports": {
+    "inputs": {
+     "references": "image[]?"
+    },
+    "outputs": {
+     "image": "image/png"
+    },
+    "params": {
+     "background": {
+      "default": "auto",
+      "enum": [
+       "opaque",
+       "transparent",
+       "auto"
+      ]
+     },
+     "prompt": {
+      "type": "string",
+      "x-fx-template": true
+     },
+     "size": {
+      "type": "string",
+      "x-fx-optional": true
+     },
+     "vars": {
+      "default": {},
+      "type": "object"
+     }
+    }
+   }
   },
   "fx/select@1": {
-   "identity": "fx/select@1.1"
+   "identity": "fx/select@1.1",
+   "ports": {
+    "inputs": {},
+    "outputs": {
+     "value": "file?"
+    },
+    "params": {
+     "first_of": {
+      "type": "array"
+     }
+    }
+   }
   }
  },
  "workflow": {

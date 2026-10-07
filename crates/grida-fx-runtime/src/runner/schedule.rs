@@ -194,6 +194,7 @@ pub fn settle(
                         error: None,
                         facts: None,
                         duration_ms: None,
+                        display: super::terminal_display(instance),
                     },
                 })
             }
@@ -212,6 +213,7 @@ pub fn settle(
                         code: None,
                         facts: None,
                         duration_ms: None,
+                        display: super::terminal_display(instance),
                     },
                 })
             }
@@ -259,6 +261,7 @@ pub fn overturned(
                     code: None,
                     facts: None,
                     duration_ms: None,
+                    display: super::terminal_display(instance),
                 },
             })
         })
@@ -438,6 +441,9 @@ mod tests {
             timeout_s: None,
             reason: None,
             reads: BTreeSet::new(),
+            bindings: Vec::new(),
+            interface_bindings: Vec::new(),
+            display_scope: None,
         }
     }
 
@@ -677,6 +683,7 @@ mod tests {
                 error: None,
                 facts: None,
                 duration_ms: None,
+                display: Some(super::super::node_display(&e.instances["b#1"])),
             }
         );
         assert_eq!(settled[0].result.status, ResultStatus::Failed);
@@ -693,6 +700,7 @@ mod tests {
                 code: None,
                 facts: None,
                 duration_ms: None,
+                display: Some(super::super::node_display(&e.instances["x['k']#1"])),
             }
         );
         assert_eq!(
@@ -708,6 +716,67 @@ mod tests {
             settled[3].result.error.as_deref(),
             Some("an assertion failed")
         );
+    }
+
+    #[test]
+    fn newly_expanded_blocked_instance_records_ports_without_a_start() {
+        let initial = expansion(Vec::new());
+        let mut dynamic = with_state(instance("dynamic['one']#1"), State::Blocked);
+        assert!(!initial.instances.contains_key(&dynamic.id));
+        dynamic.phase = 2;
+        dynamic.reads.insert("source#1".into());
+        dynamic.needs = vec!["barrier#1".into()];
+        dynamic.bindings = vec![grida_fx_core::expand::wiring::Binding {
+            source: "source#1".into(),
+            source_port: "image".into(),
+            target_port: "image".into(),
+            source_kind: grida_fx_core::expand::wiring::SourceKind::Output,
+        }];
+        let spec = Rc::make_mut(&mut Rc::make_mut(&mut dynamic.ty).spec);
+        spec.inputs.insert(
+            "image".into(),
+            grida_fx_core::spec::Port::parse("image").unwrap(),
+        );
+        spec.outputs.insert(
+            "report".into(),
+            grida_fx_core::spec::Port::parse("json").unwrap(),
+        );
+        let expanded = expansion(vec![dynamic]);
+        let settled = settle(&expanded, &IndexMap::new(), &none());
+        assert_eq!(settled.len(), 1);
+        assert_eq!(settled[0].event.name(), "node_skipped");
+        assert_eq!(settled[0].result.status, ResultStatus::Failed);
+        let fields = settled[0].event.to_fields();
+        assert_eq!(fields["uses"], "./nodes/cases.py#shout");
+        assert_eq!(
+            fields["ports"],
+            serde_json::json!({"inputs":{"image":"image"},"outputs":{"report":"json"},"params":{}})
+        );
+        assert_eq!(
+            fields["bindings"],
+            serde_json::json!([{"source":"source#1","source_port":"image","target_port":"image","source_kind":"output"}])
+        );
+        assert_eq!(fields["needs"], serde_json::json!(["barrier#1"]));
+        assert!(
+            fields["reads"]
+                .as_array()
+                .unwrap()
+                .contains(&serde_json::json!("source#1"))
+        );
+        assert!(!fields.contains_key("with"));
+        assert!(!fields.contains_key("duration_ms"));
+    }
+
+    #[test]
+    fn unresolved_type_failure_does_not_claim_empty_port_declarations() {
+        let mut unknown = with_state(instance("unknown#1"), State::Failed);
+        Rc::make_mut(&mut unknown.ty).identity.clear();
+        let settled = settle(&expansion(vec![unknown]), &IndexMap::new(), &none());
+        assert_eq!(settled.len(), 1);
+        let fields = settled[0].event.to_fields();
+        assert_eq!(settled[0].event.name(), "node_failed");
+        assert!(!fields.contains_key("ports"));
+        assert!(!fields.contains_key("bindings"));
     }
 
     #[test]
@@ -838,6 +907,7 @@ mod tests {
             with_state(priced(instance("m#1"), 3, "0.05"), State::Maybe),
         ]);
         e.pending.push(PendingRepeat {
+            display_scope: None,
             path: "more".into(),
             max: 4,
             waiting_on: ["a#1".to_string()].into(),

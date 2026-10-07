@@ -6,8 +6,10 @@
  },
  "instances": [
   {
+   "bindings": [],
    "id": "draw#1",
    "identity": "c0eaef5452b54d2e6d22d9e97cc0a46d3f81585a5f436e75512729a15c03eb17",
+   "interface_bindings": [],
    "judged_by": [
     "check#1"
    ],
@@ -43,8 +45,10 @@
    }
   },
   {
+   "bindings": [],
    "id": "draw#2",
    "identity": "1146ab8d3286e10e8f6adffd9b5c5241c331eef84bbb1c05cef881c70afe4a20",
+   "interface_bindings": [],
    "judged_by": [
     "check#2"
    ],
@@ -81,8 +85,10 @@
    }
   },
   {
+   "bindings": [],
    "id": "draw#3",
    "identity": "490d60661bd69f6364af6f78db216d6df2c6e1f2490e9de0c736d546c5221d70",
+   "interface_bindings": [],
    "judged_by": [
     "check#3"
    ],
@@ -119,8 +125,24 @@
    }
   },
   {
+   "bindings": [
+    {
+     "source": "draw#1",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "subject"
+    }
+   ],
    "id": "check#1",
    "identity": null,
+   "interface_bindings": [
+    {
+     "source": "draw#1",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "subject"
+    }
+   ],
    "judged_by": [],
    "judges": "draw#1",
    "key": null,
@@ -156,8 +178,24 @@
    }
   },
   {
+   "bindings": [
+    {
+     "source": "draw#2",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "subject"
+    }
+   ],
    "id": "check#2",
    "identity": null,
+   "interface_bindings": [
+    {
+     "source": "draw#2",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "subject"
+    }
+   ],
    "judged_by": [],
    "judges": "draw#2",
    "key": null,
@@ -193,8 +231,24 @@
    }
   },
   {
+   "bindings": [
+    {
+     "source": "draw#3",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "subject"
+    }
+   ],
    "id": "check#3",
    "identity": null,
+   "interface_bindings": [
+    {
+     "source": "draw#3",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "subject"
+    }
+   ],
    "judged_by": [],
    "judges": "draw#3",
    "key": null,
@@ -230,8 +284,10 @@
    }
   },
   {
+   "bindings": [],
    "id": "after#1",
    "identity": null,
+   "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": null,
@@ -284,9 +340,21 @@
  "kind": "fx-graph-v1",
  "pending": [],
  "problems": [],
+ "scopes": [],
  "types": {
   "./nodes/cases.py#shout": {
    "identity": "nodes/cases.py#shout@1",
+   "ports": {
+    "inputs": {},
+    "outputs": {
+     "text": "text"
+    },
+    "params": {
+     "text": {
+      "type": "string"
+     }
+    }
+   },
    "source": {
     "files": {
      "nodes/cases.py": "d34041da3235ac70a67a2748fbffc8cd8ab51dc12db3098472c52e2f40db0930"
@@ -296,6 +364,17 @@
   },
   "./nodes/cases.py#verdict": {
    "identity": "nodes/cases.py#verdict@1",
+   "ports": {
+    "inputs": {
+     "subject": "file"
+    },
+    "outputs": {},
+    "params": {
+     "accept_take": {
+      "type": "integer"
+     }
+    }
+   },
    "source": {
     "files": {
      "nodes/cases.py": "d34041da3235ac70a67a2748fbffc8cd8ab51dc12db3098472c52e2f40db0930"
@@ -304,7 +383,37 @@
    }
   },
   "fx/image.generate@1": {
-   "identity": "fx/image.generate@1.1"
+   "identity": "fx/image.generate@1.1",
+   "ports": {
+    "inputs": {
+     "references": "image[]?"
+    },
+    "outputs": {
+     "image": "image/png"
+    },
+    "params": {
+     "background": {
+      "default": "auto",
+      "enum": [
+       "opaque",
+       "transparent",
+       "auto"
+      ]
+     },
+     "prompt": {
+      "type": "string",
+      "x-fx-template": true
+     },
+     "size": {
+      "type": "string",
+      "x-fx-optional": true
+     },
+     "vars": {
+      "default": {},
+      "type": "object"
+     }
+    }
+   }
   }
  },
  "workflow": {

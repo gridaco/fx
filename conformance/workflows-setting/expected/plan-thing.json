@@ -6,8 +6,10 @@
  },
  "instances": [
   {
+   "bindings": [],
    "id": "draw#1",
    "identity": "e372c6e3a49f6984339bd17c4460537d9adcabfde8282792074ff1be3a1d8fc9",
+   "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": null,
@@ -41,8 +43,10 @@
    }
   },
   {
+   "bindings": [],
    "id": "tune#1",
    "identity": "5d600fe5f43f0f97d5f541b3e6bd7d9e0516e48cbce45ce19add32772ff45f66",
+   "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": null,
@@ -77,12 +81,59 @@
  "kind": "fx-graph-v1",
  "pending": [],
  "problems": [],
+ "scopes": [],
  "types": {
   "fx/image.generate@1": {
-   "identity": "fx/image.generate@1.1"
+   "identity": "fx/image.generate@1.1",
+   "ports": {
+    "inputs": {
+     "references": "image[]?"
+    },
+    "outputs": {
+     "image": "image/png"
+    },
+    "params": {
+     "background": {
+      "default": "auto",
+      "enum": [
+       "opaque",
+       "transparent",
+       "auto"
+      ]
+     },
+     "prompt": {
+      "type": "string",
+      "x-fx-template": true
+     },
+     "size": {
+      "type": "string",
+      "x-fx-optional": true
+     },
+     "vars": {
+      "default": {},
+      "type": "object"
+     }
+    }
+   }
   },
   "fx/music.generate@1": {
-   "identity": "fx/music.generate@1.1"
+   "identity": "fx/music.generate@1.1",
+   "ports": {
+    "inputs": {},
+    "outputs": {
+     "audio": "audio"
+    },
+    "params": {
+     "duration": {
+      "type": "number",
+      "x-fx-optional": true
+     },
+     "prompt": {
+      "type": "string",
+      "x-fx-template": true
+     }
+    }
+   }
   }
  },
  "workflow": {

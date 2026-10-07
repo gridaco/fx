@@ -159,6 +159,9 @@ pub(crate) fn instance_of(
         timeout_s: None,
         reason: None,
         reads: BTreeSet::new(),
+        bindings: Vec::new(),
+        interface_bindings: Vec::new(),
+        display_scope: None,
     }
 }
 
@@ -182,6 +185,7 @@ pub(crate) fn instance(
 
 fn pending(path: &str, max: u32, phase: u32, low: i64, high: i64) -> PendingRepeat {
     PendingRepeat {
+        display_scope: None,
         path: path.to_string(),
         max,
         waiting_on: BTreeSet::new(),

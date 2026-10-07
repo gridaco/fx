@@ -270,16 +270,38 @@ fn scopes_of(expansion: &Expansion, id: &str) -> Scopes {
         .collect()
 }
 
+/// Declarations already resolved for an instance, without execution values.
+fn node_display(instance: &Instance) -> crate::events::NodeDisplay {
+    crate::events::NodeDisplay {
+        uses: instance.uses.clone(),
+        reads: instance.inputs_from().into_iter().collect(),
+        ports: grida_fx_core::plan::output::ports_document(&instance.ty.spec),
+        bindings: instance.bindings.clone(),
+        needs: instance.needs.clone(),
+        judges: instance.judges.clone(),
+    }
+}
+
+/// A placeholder type is not evidence that a failed node has no ports.
+fn terminal_display(instance: &Instance) -> Option<crate::events::NodeDisplay> {
+    (!instance.ty.identity.is_empty()).then(|| node_display(instance))
+}
+
 /// The `node_started` event of an instance about to be dispatched.
 fn node_started(instance: &Instance) -> Event {
+    let display = node_display(instance);
     Event::NodeStarted {
         id: instance.id.clone(),
         path: instance.path.clone(),
         step: instance.step.clone(),
         take: instance.takes.clone(),
         identity: instance.identity.clone(),
-        uses: instance.uses.clone(),
-        reads: instance.inputs_from().into_iter().collect(),
+        uses: display.uses,
+        reads: display.reads,
+        ports: display.ports,
+        bindings: display.bindings,
+        needs: display.needs,
+        judges: display.judges,
         routes: instance
             .routes
             .iter()
@@ -411,6 +433,7 @@ fn invoke(
         failed: Vec::new(),
         tasks: Vec::new(),
         interrupted,
+        display_snapshot: None,
     };
     let estimate = plan.estimate();
     let started = Event::RunStarted {
@@ -508,6 +531,7 @@ struct Running {
     cancel: Cancel,
     /// The instance path, for the events the scheduler writes for it.
     path: String,
+    display: crate::events::NodeDisplay,
 }
 
 /// What reaches the loop.
@@ -521,6 +545,7 @@ enum Message {
 
 /// The loop's state (module doc).
 struct Scheduler<'a> {
+    display_snapshot: Option<serde_json::Value>,
     engine: Arc<Engine>,
     planner: &'a mut Planner,
     host: &'a mut dyn NodeHost,
@@ -555,6 +580,26 @@ impl Scheduler<'_> {
         self.log
             .emit(event)
             .map_err(|error| Error::io(&self.events_label, &error))
+    }
+
+    /// Record only changed display metadata, before the nodes that depend on its scopes.
+    fn emit_scopes(&mut self, expansion: &Expansion) -> Result<(), Error> {
+        let node_interface_bindings: BTreeMap<_, _> = expansion
+            .instances
+            .iter()
+            .map(|(id, instance)| (id, &instance.interface_bindings))
+            .collect();
+        let snapshot = serde_json::json!({
+            "scopes": expansion.scopes, "node_interface_bindings": node_interface_bindings,
+        });
+        if self.display_snapshot.as_ref() != Some(&snapshot) {
+            self.emit(&Event::ScopesUpdated {
+                scopes: snapshot["scopes"].clone(),
+                node_interface_bindings: snapshot["node_interface_bindings"].clone(),
+            })?;
+            self.display_snapshot = Some(snapshot);
+        }
+        Ok(())
     }
 
     fn interrupted(&self) -> bool {
@@ -611,6 +656,7 @@ impl Scheduler<'_> {
                 Some(expansion) => expansion,
                 None => expand(self.planner, self.host)?,
             };
+            self.emit_scopes(&expansion)?;
             if !expansion.problems.is_empty() {
                 let problems = unique(expansion.problems);
                 for problem in &problems {
@@ -754,6 +800,7 @@ impl Scheduler<'_> {
                     code: None,
                     facts: None,
                     duration_ms: None,
+                    display: terminal_display(instance),
                 })?;
                 self.planner
                     .results
@@ -777,6 +824,7 @@ impl Scheduler<'_> {
                 group,
                 cancel: cancel.clone(),
                 path: instance.path.clone(),
+                display: node_display(instance),
             },
         );
         let started = node_started(instance);
@@ -827,6 +875,7 @@ impl Scheduler<'_> {
     /// stop, when it has one, is written as a `problem` and returned.
     fn finish(&mut self, done: Done) -> Result<Option<String>, Error> {
         let running = self.running.shift_remove(&done.id);
+        let display = running.as_ref().map(|running| running.display.clone());
         let path = running
             .as_ref()
             .map_or_else(|| done.id.clone(), |running| running.path.clone());
@@ -846,6 +895,7 @@ impl Scheduler<'_> {
                 code: None,
                 facts: None,
                 duration_ms: None,
+                display,
             })?;
             self.failed.push((done.id.clone(), Some(error.clone())));
             self.planner
@@ -891,6 +941,7 @@ impl Scheduler<'_> {
     /// The end of an invocation that was not cancelled (module doc).
     fn close(&mut self, stopped: Option<String>) -> Result<RunOutcome, Error> {
         let expansion = expand(self.planner, self.host)?;
+        self.emit_scopes(&expansion)?;
         in_listing_order(&mut self.failed, &expansion);
         let mut stopped = stopped;
         let mut incomplete =
@@ -1052,6 +1103,9 @@ mod tests {
             timeout_s: None,
             reason: None,
             reads: BTreeSet::new(),
+            bindings: Vec::new(),
+            interface_bindings: Vec::new(),
+            display_scope: None,
         }
     }
 
@@ -1180,6 +1234,13 @@ mod tests {
         let mut i = instance("join#1", "join", &[], State::Planned);
         i.reads = ["b#1".to_string(), "join#1".to_string()].into();
         i.needs = vec!["c#1".into()];
+        i.judges = Some("b#1".into());
+        i.bindings.push(grida_fx_core::expand::wiring::Binding {
+            source: "b#1".into(),
+            source_port: "image".into(),
+            target_port: "parts".into(),
+            source_kind: grida_fx_core::expand::wiring::SourceKind::Output,
+        });
         i.with.insert(
             "parts".into(),
             Val::Pending(Box::new(grida_fx_core::val::Pending::of("a#1", None))),
@@ -1190,6 +1251,10 @@ mod tests {
             reads,
             routes,
             with,
+            ports,
+            bindings,
+            needs,
+            judges,
             ..
         } = node_started(&i)
         else {
@@ -1200,6 +1265,13 @@ mod tests {
         assert_eq!(reads, ["a#1", "b#1", "c#1"]);
         assert!(routes.is_empty());
         assert_eq!(with.keys().collect::<Vec<_>>(), ["parts"]);
+        assert_eq!(
+            ports,
+            serde_json::json!({"inputs": {}, "outputs": {}, "params": {}})
+        );
+        assert_eq!(bindings, i.bindings);
+        assert_eq!(needs, ["c#1"]);
+        assert_eq!(judges.as_deref(), Some("b#1"));
     }
 
     #[test]

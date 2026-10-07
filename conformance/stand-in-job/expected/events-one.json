@@ -1,5 +1,200 @@
 [
  {
+  "bindings": [],
+  "event": "node_started",
+  "id": "clip#1",
+  "identity": "2ffecce9539f9a87e10e4c133b0d2b121ccfe345615cac89ccc06da2aafb31c7",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "clip",
+  "plan": "5e564a8e0a7c403dd3f744f32cd75091b3fec1bd32de553b0234d39949f257ca",
+  "ports": {
+   "inputs": {
+    "first_frame": "image?",
+    "last_frame": "image?"
+   },
+   "outputs": {
+    "video": "video/mp4"
+   },
+   "params": {
+    "aspect_ratio": {
+     "type": "string",
+     "x-fx-optional": true
+    },
+    "duration": {
+     "type": "number",
+     "x-fx-optional": true
+    },
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "resolution": {
+     "type": "string",
+     "x-fx-optional": true
+    }
+   }
+  },
+  "reads": [],
+  "routes": {
+   "video.generate": "clip-a@acme"
+  },
+  "step": "clip",
+  "take": [
+   1
+  ],
+  "uses": "fx/video.generate@1",
+  "with": {
+   "duration": {
+    "value": 1
+   },
+   "prompt": {
+    "value": "a lantern sways on its hook"
+   }
+  }
+ },
+ {
+  "bindings": [],
+  "event": "node_started",
+  "id": "front#1",
+  "identity": "f6a2ab62b1fd9b994948f65bfb370fda54a7b8cbec907ea1f69a6ef9614e75b5",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "front",
+  "plan": "5e564a8e0a7c403dd3f744f32cd75091b3fec1bd32de553b0234d39949f257ca",
+  "ports": {
+   "inputs": {
+    "references": "image[]?"
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "params": {
+    "background": {
+     "default": "auto",
+     "enum": [
+      "opaque",
+      "transparent",
+      "auto"
+     ]
+    },
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "size": {
+     "type": "string",
+     "x-fx-optional": true
+    },
+    "vars": {
+     "default": {},
+     "type": "object"
+    }
+   }
+  },
+  "reads": [],
+  "routes": {
+   "image.generate": "img-a@acme"
+  },
+  "step": "front",
+  "take": [
+   1
+  ],
+  "uses": "fx/image.generate@1",
+  "with": {
+   "background": {
+    "value": "auto"
+   },
+   "prompt": {
+    "value": "the lantern seen from the front"
+   },
+   "size": {
+    "value": "64x64"
+   },
+   "vars": {
+    "value": {}
+   }
+  }
+ },
+ {
+  "bindings": [
+   {
+    "source": "front#1",
+    "source_kind": "output",
+    "source_port": "image",
+    "target_port": "views"
+   }
+  ],
+  "event": "node_started",
+  "id": "mesh#1",
+  "identity": "5a5abff4e33e1d931f983d87f35766e209c2b7f6dfe59bb5757882e39172f45a",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "mesh",
+  "plan": "5e564a8e0a7c403dd3f744f32cd75091b3fec1bd32de553b0234d39949f257ca",
+  "ports": {
+   "inputs": {
+    "views": "image{}"
+   },
+   "outputs": {
+    "model": "model"
+   },
+   "params": {
+    "face_limit": {
+     "type": "integer",
+     "x-fx-optional": true
+    },
+    "pbr": {
+     "default": false,
+     "type": "boolean"
+    },
+    "quad": {
+     "default": false,
+     "type": "boolean"
+    },
+    "texture": {
+     "default": true,
+     "type": "boolean"
+    }
+   }
+  },
+  "reads": [
+   "front#1"
+  ],
+  "routes": {
+   "mesh.generate": "mesh-a@acme"
+  },
+  "step": "mesh",
+  "take": [
+   1
+  ],
+  "uses": "fx/mesh.generate@1",
+  "with": {
+   "face_limit": {
+    "value": 1000
+   },
+   "pbr": {
+    "value": false
+   },
+   "quad": {
+    "value": false
+   },
+   "texture": {
+    "value": true
+   },
+   "views": {
+    "value": {
+     "front": {
+      "file": "79c3c9ff3284e48dd47a022156c49120c6535c4c3e623e2bbfc720aeb7324494"
+     }
+    }
+   }
+  }
+ },
+ {
   "cache": "miss",
   "event": "node_finished",
   "facts": {
@@ -146,107 +341,29 @@
   "stopped": null
  },
  {
-  "event": "node_started",
-  "id": "clip#1",
-  "identity": "2ffecce9539f9a87e10e4c133b0d2b121ccfe345615cac89ccc06da2aafb31c7",
-  "kind": "fx-run-events-v1",
-  "path": "clip",
-  "plan": "5e564a8e0a7c403dd3f744f32cd75091b3fec1bd32de553b0234d39949f257ca",
-  "reads": [],
-  "routes": {
-   "video.generate": "clip-a@acme"
-  },
-  "step": "clip",
-  "take": [
-   1
-  ],
-  "uses": "fx/video.generate@1",
-  "with": {
-   "duration": {
-    "value": 1
-   },
-   "prompt": {
-    "value": "a lantern sways on its hook"
-   }
-  }
- },
- {
-  "event": "node_started",
-  "id": "front#1",
-  "identity": "f6a2ab62b1fd9b994948f65bfb370fda54a7b8cbec907ea1f69a6ef9614e75b5",
-  "kind": "fx-run-events-v1",
-  "path": "front",
-  "plan": "5e564a8e0a7c403dd3f744f32cd75091b3fec1bd32de553b0234d39949f257ca",
-  "reads": [],
-  "routes": {
-   "image.generate": "img-a@acme"
-  },
-  "step": "front",
-  "take": [
-   1
-  ],
-  "uses": "fx/image.generate@1",
-  "with": {
-   "background": {
-    "value": "auto"
-   },
-   "prompt": {
-    "value": "the lantern seen from the front"
-   },
-   "size": {
-    "value": "64x64"
-   },
-   "vars": {
-    "value": {}
-   }
-  }
- },
- {
-  "event": "node_started",
-  "id": "mesh#1",
-  "identity": "5a5abff4e33e1d931f983d87f35766e209c2b7f6dfe59bb5757882e39172f45a",
-  "kind": "fx-run-events-v1",
-  "path": "mesh",
-  "plan": "5e564a8e0a7c403dd3f744f32cd75091b3fec1bd32de553b0234d39949f257ca",
-  "reads": [
-   "front#1"
-  ],
-  "routes": {
-   "mesh.generate": "mesh-a@acme"
-  },
-  "step": "mesh",
-  "take": [
-   1
-  ],
-  "uses": "fx/mesh.generate@1",
-  "with": {
-   "face_limit": {
-    "value": 1000
-   },
-   "pbr": {
-    "value": false
-   },
-   "quad": {
-    "value": false
-   },
-   "texture": {
-    "value": true
-   },
-   "views": {
-    "value": {
-     "front": {
-      "file": "79c3c9ff3284e48dd47a022156c49120c6535c4c3e623e2bbfc720aeb7324494"
-     }
-    }
-   }
-  }
- },
- {
   "event": "phase_planned",
   "high_usd": 0.5775,
   "kind": "fx-run-events-v1",
   "phase": 1,
   "plan": "5e564a8e0a7c403dd3f744f32cd75091b3fec1bd32de553b0234d39949f257ca",
   "steps": 3
+ },
+ {
+  "event": "scopes_updated",
+  "kind": "fx-run-events-v1",
+  "node_interface_bindings": {
+   "clip#1": [],
+   "front#1": [],
+   "mesh#1": [
+    {
+     "source": "front#1",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "views"
+    }
+   ]
+  },
+  "plan": "5e564a8e0a7c403dd3f744f32cd75091b3fec1bd32de553b0234d39949f257ca",
+  "scopes": []
  }
 ]

@@ -1,5 +1,71 @@
 [
  {
+  "bindings": [],
+  "event": "node_started",
+  "id": "draw#1",
+  "identity": "6a51e8b66c712b1ce7035b632def4f60089c277091591cc78338f581f6e58ada",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "draw",
+  "plan": "d001472a7df0f6821605772d10ff439ede139a5cee9b1a5d87c84be90ddda82c",
+  "ports": {
+   "inputs": {
+    "references": "image[]?"
+   },
+   "outputs": {
+    "image": "image/png"
+   },
+   "params": {
+    "background": {
+     "default": "auto",
+     "enum": [
+      "opaque",
+      "transparent",
+      "auto"
+     ]
+    },
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "size": {
+     "type": "string",
+     "x-fx-optional": true
+    },
+    "vars": {
+     "default": {},
+     "type": "object"
+    }
+   }
+  },
+  "reads": [],
+  "routes": {
+   "image.generate": "img-a@acme"
+  },
+  "step": "draw",
+  "take": [
+   1
+  ],
+  "uses": "fx/image.generate@1",
+  "with": {
+   "background": {
+    "value": "opaque"
+   },
+   "prompt": {
+    "value": "a lantern on a quay"
+   },
+   "size": {
+    "value": "64x64"
+   },
+   "vars": {
+    "value": {
+     "mood": "stormy"
+    }
+   }
+  }
+ },
+ {
   "cache": "miss",
   "event": "node_finished",
   "facts": {
@@ -66,44 +132,20 @@
   "stopped": null
  },
  {
-  "event": "node_started",
-  "id": "draw#1",
-  "identity": "6a51e8b66c712b1ce7035b632def4f60089c277091591cc78338f581f6e58ada",
-  "kind": "fx-run-events-v1",
-  "path": "draw",
-  "plan": "d001472a7df0f6821605772d10ff439ede139a5cee9b1a5d87c84be90ddda82c",
-  "reads": [],
-  "routes": {
-   "image.generate": "img-a@acme"
-  },
-  "step": "draw",
-  "take": [
-   1
-  ],
-  "uses": "fx/image.generate@1",
-  "with": {
-   "background": {
-    "value": "opaque"
-   },
-   "prompt": {
-    "value": "a lantern on a quay"
-   },
-   "size": {
-    "value": "64x64"
-   },
-   "vars": {
-    "value": {
-     "mood": "stormy"
-    }
-   }
-  }
- },
- {
   "event": "phase_planned",
   "high_usd": 0.04,
   "kind": "fx-run-events-v1",
   "phase": 1,
   "plan": "d001472a7df0f6821605772d10ff439ede139a5cee9b1a5d87c84be90ddda82c",
   "steps": 1
+ },
+ {
+  "event": "scopes_updated",
+  "kind": "fx-run-events-v1",
+  "node_interface_bindings": {
+   "draw#1": []
+  },
+  "plan": "d001472a7df0f6821605772d10ff439ede139a5cee9b1a5d87c84be90ddda82c",
+  "scopes": []
  }
 ]

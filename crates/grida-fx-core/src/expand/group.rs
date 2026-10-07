@@ -28,6 +28,7 @@ impl Expander<'_> {
             self.regenerating(child, declared, where_, into);
             return;
         }
+        self.display_scope(child, declared, where_, None, Vec::new());
         // Members expand when something refers to them, or in the final sweep.
         let exp = &mut self.exps[into.0];
         exp.kind = ExpKind::Group;
@@ -85,6 +86,7 @@ impl Expander<'_> {
                     ..Default::default()
                 },
             );
+            self.display_scope(take_scope, declared, where_, None, Vec::new());
             self.exps[into.0].take_scopes.push(take_scope);
             self.scopes.push(take_scope);
             if let Until::Pending(pending) = &previous {
@@ -124,7 +126,8 @@ impl Expander<'_> {
             .iter()
             .map(|(name, value)| (name.clone(), value.clone()))
             .collect();
-        let given = self.evaluate(context, &Value::Object(with), &format!("{where_}.with"));
+        let (given, input_bindings, input_interfaces) =
+            self.workflow_with(context, &with, &format!("{where_}.with"));
         let given = match given {
             Val::Object(given) => given,
             _ => IndexMap::new(),
@@ -172,6 +175,9 @@ impl Expander<'_> {
         // A root of its own: no parent, no variables, its own tables and let; the caller's takes,
         // phase, budget and maybe.
         let root = self.new_frame(Frame {
+            display_scope: self.frames[context.0].display_scope.clone(),
+            workflow_scope: None,
+            variable_interfaces: Default::default(),
             steps: Rc::clone(&inner.steps),
             prefix: format!("{path}."),
             decl_prefix: format!("{where_}."),
@@ -180,18 +186,69 @@ impl Expander<'_> {
             takes,
             workflow: Rc::clone(&inner),
             inputs: Rc::new(bound),
+            input_bindings: Rc::new(input_bindings),
+            variable_bindings: Default::default(),
             phase,
             judging: None,
             budget,
             owner: None,
             maybe,
         });
+        self.display_scope(
+            root,
+            &at.declared,
+            where_,
+            Some(&used),
+            input_interfaces
+                .into_iter()
+                .filter(|b| inner.inputs.contains_key(&b.target_port))
+                .collect(),
+        );
         self.workflow_root(root, &used.source, context);
         let exp = &mut self.exps[into.0];
         exp.kind = ExpKind::Workflow;
         exp.scope = Some(root);
         exp.document = Some(used);
         self.scopes.push(root);
+    }
+
+    /// The same one-pass object resolution as `evaluate`, observing each input's lineage.
+    /// As before, one refused member loses the whole object; finishing still happens once,
+    /// after every member has resolved. Metadata does not enter the bound values.
+    fn workflow_with(
+        &mut self,
+        frame: FrameId,
+        with: &serde_json::Map<String, Value>,
+        where_: &str,
+    ) -> (
+        Val,
+        std::collections::BTreeMap<String, Vec<super::wiring::Binding>>,
+        Vec<super::wiring::Binding>,
+    ) {
+        let mut values = IndexMap::new();
+        let mut bindings = std::collections::BTreeMap::new();
+        let mut interfaces = Vec::new();
+        for (name, raw) in with {
+            self.wiring.begin_capture(name);
+            let value = crate::expr::resolve(raw, &mut super::scope::StepScope { ex: self, frame });
+            let (leaf, boundary) = self.wiring.end_capture_full();
+            bindings.insert(name.clone(), leaf);
+            interfaces.extend(boundary);
+            match value {
+                Ok(value) => {
+                    values.insert(name.clone(), value);
+                }
+                Err(error) => return (self.refused(where_, error), Default::default(), Vec::new()),
+            }
+        }
+        let value = crate::expr::finish(
+            &mut super::scope::StepScope { ex: self, frame },
+            Val::Object(values),
+        );
+        match value {
+            Ok(value) => (value, bindings, interfaces),
+            Err(error) => (self.refused(where_, error), Default::default(), Vec::new()),
+        }
     }
 
     /// `{member: facts}` of each direct node member's latest result in group take `take`

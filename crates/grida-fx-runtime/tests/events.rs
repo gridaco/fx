@@ -5,7 +5,7 @@ use grida_fx_core::money::Usd;
 use grida_fx_core::val::{Collection, FileValue, Val};
 use grida_fx_core::value::canon;
 use grida_fx_runtime::events::{
-    EVENTS_KIND, Event, EventLog, decode, encode, new_invocation_id, read_events,
+    EVENTS_KIND, Event, EventLog, NodeDisplay, decode, encode, new_invocation_id, read_events,
     read_events_tolerant,
 };
 use grida_fx_runtime::store::Store;
@@ -60,6 +60,10 @@ fn every_event() -> Vec<Event> {
             identity: None,
             uses: "./nodes/cases.py#shout".into(),
             reads: vec!["count#1".into()],
+            ports: json!({"inputs": {}, "params": {}, "outputs": {}}),
+            bindings: Vec::new(),
+            needs: Vec::new(),
+            judges: None,
             routes: IndexMap::from([("image.generate".to_string(), "img-a@acme".to_string())]),
             with: IndexMap::from([
                 ("text".to_string(), json!({"value": "ada"})),
@@ -74,6 +78,10 @@ fn every_event() -> Vec<Event> {
             identity: Some(DIGEST.into()),
             uses: "fx/image.generate@1".into(),
             reads: vec![],
+            ports: json!({"inputs": {}, "params": {}, "outputs": {}}),
+            bindings: Vec::new(),
+            needs: Vec::new(),
+            judges: None,
             routes: IndexMap::new(),
             with: IndexMap::new(),
         },
@@ -100,6 +108,7 @@ fn every_event() -> Vec<Event> {
             code: Some("node_failure".into()),
             facts: Some(IndexMap::from([("seen".to_string(), json!("x"))])),
             duration_ms: Some(5),
+            display: None,
         },
         Event::NodeFailed {
             id: "a#1".into(),
@@ -108,6 +117,7 @@ fn every_event() -> Vec<Event> {
             code: None,
             facts: None,
             duration_ms: None,
+            display: None,
         },
         Event::NodeSkipped {
             id: "c#1".into(),
@@ -117,6 +127,7 @@ fn every_event() -> Vec<Event> {
             error: None,
             facts: None,
             duration_ms: None,
+            display: None,
         },
         Event::NodeSkipped {
             id: "pick#1".into(),
@@ -126,6 +137,7 @@ fn every_event() -> Vec<Event> {
             error: None,
             facts: Some(IndexMap::new()),
             duration_ms: Some(1),
+            display: None,
         },
         Event::NodeRetry {
             id: "a#1".into(),
@@ -200,6 +212,10 @@ fn every_event() -> Vec<Event> {
             cached: false,
             cost_usd: Some(Usd::ZERO),
             stand_in: true,
+        },
+        Event::ScopesUpdated {
+            scopes: json!([]),
+            node_interface_bindings: json!({"leaf#1": []}),
         },
     ]
 }
@@ -284,6 +300,78 @@ fn every_event_matches_the_schema() {
         let mut found: Vec<String> = line.as_object().unwrap().keys().cloned().collect();
         found.sort();
         assert_eq!(found, expected);
+    }
+}
+
+#[test]
+fn terminal_display_metadata_is_flattened_without_execution_values() {
+    let display = NodeDisplay {
+        uses: "./nodes/cases.py#shout".into(),
+        reads: vec!["source#1".into()],
+        ports: json!({"inputs":{"image":"image"},"outputs":{"report":"json"},"params":{"label":{"type":"string"}}}),
+        bindings: vec![grida_fx_core::expand::wiring::Binding {
+            source: "source#1".into(),
+            source_port: "image".into(),
+            target_port: "image".into(),
+            source_kind: grida_fx_core::expand::wiring::SourceKind::Output,
+        }],
+        needs: vec!["barrier#1".into()],
+        judges: None,
+    };
+    let events = [
+        Event::NodeFailed {
+            id: "dynamic['one']#1".into(),
+            path: "dynamic['one']".into(),
+            error: Some("assertion failed".into()),
+            code: None,
+            facts: None,
+            duration_ms: None,
+            display: Some(display.clone()),
+        },
+        Event::NodeSkipped {
+            id: "dynamic['two']#1".into(),
+            path: "dynamic['two']".into(),
+            reason: Some("source failed".into()),
+            blocked: true,
+            error: None,
+            facts: None,
+            duration_ms: None,
+            display: Some(display.clone()),
+        },
+    ];
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("events.jsonl");
+    let log = EventLog::open(&path, "terminal-metadata", PLAN).unwrap();
+    let schema: Value = serde_json::from_str(include_str!(
+        "../../../spec/schemas/fx-run-events-v1.schema.json"
+    ))
+    .unwrap();
+    let validator = jsonschema::validator_for(&schema).unwrap();
+    for event in &events {
+        log.emit(event).unwrap();
+    }
+    let written = lines(&path);
+    assert_eq!(written.len(), 2);
+    for (event, line) in events.iter().zip(&written) {
+        let errors: Vec<_> = validator
+            .iter_errors(line)
+            .map(|error| error.to_string())
+            .collect();
+        assert!(errors.is_empty(), "{errors:?}");
+        let fields = event.to_fields();
+        assert_eq!(fields["uses"], display.uses);
+        assert_eq!(fields["reads"], json!(["source#1"]));
+        assert_eq!(fields["ports"], display.ports);
+        assert_eq!(
+            fields["bindings"],
+            json!([{"source":"source#1","source_port":"image","target_port":"image","source_kind":"output"}])
+        );
+        assert_eq!(fields["needs"], json!(["barrier#1"]));
+        assert_eq!(fields["judges"], Value::Null);
+        assert!(!fields.contains_key("display"));
+        assert!(!fields.contains_key("with"));
+        assert!(!fields.contains_key("identity"));
+        assert_ne!(line["event"], "node_started");
     }
 }
 

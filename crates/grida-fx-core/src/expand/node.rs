@@ -83,6 +83,8 @@ struct Gathered {
 struct WithValues {
     values: IndexMap<String, Val>,
     reads: BTreeSet<String>,
+    bindings: BTreeSet<super::wiring::Binding>,
+    interfaces: BTreeSet<super::wiring::Binding>,
     /// Template params given a project file, rendered once the defaults are in.
     templates: BTreeSet<String>,
 }
@@ -136,6 +138,8 @@ pub(crate) struct Trial {
     /// Held work, and the innermost read set (the only one that gains reads meanwhile).
     held: Vec<Held>,
     reads: Option<BTreeSet<String>>,
+    wiring: super::wiring::Trace,
+    display_scopes: IndexMap<String, super::display::Scope>,
     /// How long the lists it only appends to were.
     pending: usize,
     problems: usize,
@@ -486,6 +490,8 @@ impl Expander<'_> {
             undo: self.undo.len(),
             held: self.held.clone(),
             reads: self.read_sets.last().cloned(),
+            wiring: self.wiring.clone(),
+            display_scopes: self.display_scopes.clone(),
             pending: self.pending.len(),
             problems: self.problems.len(),
             scopes: self.scopes.len(),
@@ -514,6 +520,8 @@ impl Expander<'_> {
         self.instances.truncate(trial.instances);
         self.memo.retain(|_, expansion| expansion.0 < trial.started);
         self.held = trial.held;
+        self.wiring = trial.wiring;
+        self.display_scopes = trial.display_scopes;
         if let (Some(reads), Some(innermost)) = (trial.reads, self.read_sets.last_mut()) {
             *innermost = reads;
         }
@@ -588,6 +596,8 @@ impl Expander<'_> {
                 WithValues {
                     values: with,
                     reads,
+                    bindings,
+                    interfaces,
                     ..
                 },
             bound: (routes, prices),
@@ -655,6 +665,9 @@ impl Expander<'_> {
             timeout_s: declared.timeout,
             reason,
             reads,
+            bindings: bindings.into_iter().collect(),
+            interface_bindings: interfaces.into_iter().collect(),
+            display_scope: context.display_scope.clone(),
         };
         self.instances.insert(id.clone(), instance);
         if !declared.asserts.is_empty() && matches!(state, State::Planned | State::Done) {
@@ -702,7 +715,11 @@ impl Expander<'_> {
         // FX: selecting mode belongs to the built-in fx/select@1 only.
         let selecting = resolved.is_select() && name == "first_of";
         let outer = std::mem::replace(&mut self.selecting, selecting);
+        self.wiring.begin_capture(name);
         let value = self.evaluate_into(frame, raw, &at, &mut gathering.reads);
+        let (bindings, interfaces) = self.wiring.end_capture_full();
+        gathering.bindings.extend(bindings);
+        gathering.interfaces.extend(interfaces);
         self.selecting = outer;
         self.with_entry_value(resolved, name, &at, selecting, value, gathering);
     }

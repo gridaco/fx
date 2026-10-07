@@ -6,8 +6,10 @@
  },
  "instances": [
   {
+   "bindings": [],
    "id": "split#1",
    "identity": "bf962085678453d7f58ea3e3f1d88c1f36a272be03574ef28b91397301f05a5e",
+   "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": null,
@@ -46,9 +48,19 @@
   }
  ],
  "problems": [],
+ "scopes": [],
  "types": {
   "./nodes/cases.py#lines": {
    "identity": "nodes/cases.py#lines@1",
+   "ports": {
+    "inputs": {
+     "text": "text"
+    },
+    "outputs": {
+     "items": "json"
+    },
+    "params": {}
+   },
    "source": {
     "files": {
      "nodes/cases.py": "d34041da3235ac70a67a2748fbffc8cd8ab51dc12db3098472c52e2f40db0930"
@@ -57,7 +69,37 @@
    }
   },
   "fx/image.generate@1": {
-   "identity": "fx/image.generate@1.1"
+   "identity": "fx/image.generate@1.1",
+   "ports": {
+    "inputs": {
+     "references": "image[]?"
+    },
+    "outputs": {
+     "image": "image/png"
+    },
+    "params": {
+     "background": {
+      "default": "auto",
+      "enum": [
+       "opaque",
+       "transparent",
+       "auto"
+      ]
+     },
+     "prompt": {
+      "type": "string",
+      "x-fx-template": true
+     },
+     "size": {
+      "type": "string",
+      "x-fx-optional": true
+     },
+     "vars": {
+      "default": {},
+      "type": "object"
+     }
+    }
+   }
   }
  },
  "workflow": {

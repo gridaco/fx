@@ -6,8 +6,10 @@
  },
  "instances": [
   {
+   "bindings": [],
    "id": "build.draw#1.1",
    "identity": "d2342b8f73aabce1fec173d254fd81c7d40fee25c44e0db6c82371c2caadce40",
+   "interface_bindings": [],
    "judged_by": [
     "build.audit#1.1"
    ],
@@ -44,8 +46,24 @@
    }
   },
   {
+   "bindings": [
+    {
+     "source": "build.draw#1.1",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "subject"
+    }
+   ],
    "id": "build.audit#1.1",
    "identity": null,
+   "interface_bindings": [
+    {
+     "source": "build.draw#1.1",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "subject"
+    }
+   ],
    "judged_by": [],
    "judges": "build.draw#1.1",
    "key": null,
@@ -82,8 +100,10 @@
    }
   },
   {
+   "bindings": [],
    "id": "build.draw#2.1",
    "identity": "7f8fdb16e79a475814300798a59cfc855826a600710a2b163c686153b86cd22f",
+   "interface_bindings": [],
    "judged_by": [
     "build.audit#2.1"
    ],
@@ -120,8 +140,24 @@
    }
   },
   {
+   "bindings": [
+    {
+     "source": "build.draw#2.1",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "subject"
+    }
+   ],
    "id": "build.audit#2.1",
    "identity": null,
+   "interface_bindings": [
+    {
+     "source": "build.draw#2.1",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "subject"
+    }
+   ],
    "judged_by": [],
    "judges": "build.draw#2.1",
    "key": null,
@@ -158,8 +194,10 @@
    }
   },
   {
+   "bindings": [],
    "id": "build.draw#3.1",
    "identity": "ef20caddbaa387e52e217254090c8593edfba3322c2a351fc8f3fd7c284b23d3",
+   "interface_bindings": [],
    "judged_by": [
     "build.audit#3.1"
    ],
@@ -196,8 +234,24 @@
    }
   },
   {
+   "bindings": [
+    {
+     "source": "build.draw#3.1",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "subject"
+    }
+   ],
    "id": "build.audit#3.1",
    "identity": null,
+   "interface_bindings": [
+    {
+     "source": "build.draw#3.1",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "subject"
+    }
+   ],
    "judged_by": [],
    "judges": "build.draw#3.1",
    "key": null,
@@ -234,8 +288,10 @@
    }
   },
   {
+   "bindings": [],
    "id": "export#1",
    "identity": null,
+   "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": null,
@@ -288,9 +344,91 @@
  "kind": "fx-graph-v1",
  "pending": [],
  "problems": [],
+ "scopes": [
+  {
+   "id": "scope:build#1",
+   "input_bindings": [],
+   "kind": "group",
+   "nodes": [
+    "build.draw#1.1",
+    "build.audit#1.1"
+   ],
+   "output_bindings": [],
+   "parent": null,
+   "path": "build",
+   "pending": [],
+   "ports": {
+    "inputs": {},
+    "outputs": []
+   },
+   "source": null,
+   "step": "build",
+   "take": [
+    1
+   ],
+   "title": "build"
+  },
+  {
+   "id": "scope:build#2",
+   "input_bindings": [],
+   "kind": "group",
+   "nodes": [
+    "build.draw#2.1",
+    "build.audit#2.1"
+   ],
+   "output_bindings": [],
+   "parent": null,
+   "path": "build",
+   "pending": [],
+   "ports": {
+    "inputs": {},
+    "outputs": []
+   },
+   "source": null,
+   "step": "build",
+   "take": [
+    2
+   ],
+   "title": "build"
+  },
+  {
+   "id": "scope:build#3",
+   "input_bindings": [],
+   "kind": "group",
+   "nodes": [
+    "build.draw#3.1",
+    "build.audit#3.1"
+   ],
+   "output_bindings": [],
+   "parent": null,
+   "path": "build",
+   "pending": [],
+   "ports": {
+    "inputs": {},
+    "outputs": []
+   },
+   "source": null,
+   "step": "build",
+   "take": [
+    3
+   ],
+   "title": "build"
+  }
+ ],
  "types": {
   "./nodes/cases.py#shout": {
    "identity": "nodes/cases.py#shout@1",
+   "ports": {
+    "inputs": {},
+    "outputs": {
+     "text": "text"
+    },
+    "params": {
+     "text": {
+      "type": "string"
+     }
+    }
+   },
    "source": {
     "files": {
      "nodes/cases.py": "d34041da3235ac70a67a2748fbffc8cd8ab51dc12db3098472c52e2f40db0930"
@@ -300,6 +438,17 @@
   },
   "./nodes/cases.py#verdict": {
    "identity": "nodes/cases.py#verdict@1",
+   "ports": {
+    "inputs": {
+     "subject": "file"
+    },
+    "outputs": {},
+    "params": {
+     "accept_take": {
+      "type": "integer"
+     }
+    }
+   },
    "source": {
     "files": {
      "nodes/cases.py": "d34041da3235ac70a67a2748fbffc8cd8ab51dc12db3098472c52e2f40db0930"
@@ -308,7 +457,37 @@
    }
   },
   "fx/image.generate@1": {
-   "identity": "fx/image.generate@1.1"
+   "identity": "fx/image.generate@1.1",
+   "ports": {
+    "inputs": {
+     "references": "image[]?"
+    },
+    "outputs": {
+     "image": "image/png"
+    },
+    "params": {
+     "background": {
+      "default": "auto",
+      "enum": [
+       "opaque",
+       "transparent",
+       "auto"
+      ]
+     },
+     "prompt": {
+      "type": "string",
+      "x-fx-template": true
+     },
+     "size": {
+      "type": "string",
+      "x-fx-optional": true
+     },
+     "vars": {
+      "default": {},
+      "type": "object"
+     }
+    }
+   }
   }
  },
  "workflow": {

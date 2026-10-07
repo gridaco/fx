@@ -71,6 +71,22 @@ pub(crate) struct StepScope<'x, 'a> {
 }
 
 impl Scope for StepScope<'_, '_> {
+    fn begin_access(&mut self) {
+        self.ex.wiring.begin_access();
+    }
+
+    fn end_access(&mut self, ok: bool) {
+        self.ex.wiring.end_access(ok);
+    }
+
+    fn access_member(&mut self, name: &str) {
+        self.ex.wiring.member(name);
+    }
+
+    fn access_unknown_member(&mut self) {
+        self.ex.wiring.unknown_member();
+    }
+
     fn root(&mut self, name: &str) -> Result<Val, ExprError> {
         self.ex.root(self.frame, name)
     }
@@ -198,10 +214,31 @@ impl Expander<'_> {
         let data = &self.frames[frame.0];
         // Variables shadow the roots.
         if let Some(value) = data.variables.get(name) {
+            if let Some(bindings) = data.variable_bindings.get(name) {
+                self.wiring.references(
+                    bindings,
+                    data.variable_interfaces
+                        .get(name)
+                        .map(Vec::as_slice)
+                        .unwrap_or_default(),
+                );
+            }
             return Ok(value.clone());
         }
         match name {
-            "inputs" => Ok(Val::Object((*data.inputs).clone())),
+            "inputs" => {
+                if let Some(scope) = &data.workflow_scope {
+                    self.wiring.boundary(
+                        (*data.input_bindings).clone(),
+                        scope,
+                        super::wiring::SourceKind::ScopeInput,
+                        data.workflow.inputs.keys().cloned(),
+                    );
+                } else {
+                    self.wiring.aliases((*data.input_bindings).clone());
+                }
+                Ok(Val::Object((*data.inputs).clone()))
+            }
             // Raw: expressions inside tables are never evaluated.
             "tables" => Ok(Val::Object(
                 data.workflow
@@ -618,9 +655,28 @@ impl Expander<'_> {
             return Val::Missing;
         };
         let mut outputs = IndexMap::new();
+        let mut aliases = std::collections::BTreeMap::new();
+        let mut interfaces = Vec::new();
         for (output, value) in &document.workflow.outputs {
+            self.wiring.begin_capture(output);
             let value = self.evaluate(scope, value, &format!("outputs.{output}"));
+            let (bindings, boundary) = self.wiring.end_capture_full();
+            aliases.insert(output.clone(), bindings);
+            interfaces.extend(boundary);
             outputs.insert(output.clone(), value);
+        }
+        if let Some(id) = self.frames[scope.0].workflow_scope.clone() {
+            if let Some(record) = self.display_scopes.get_mut(&id) {
+                record.output_bindings = interfaces;
+            }
+            self.wiring.boundary(
+                aliases,
+                &id,
+                super::wiring::SourceKind::ScopeOutput,
+                document.workflow.outputs.keys().cloned(),
+            );
+        } else {
+            self.wiring.aliases(aliases);
         }
         Val::Object(outputs)
     }

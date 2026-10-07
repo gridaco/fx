@@ -326,6 +326,107 @@ fn named<'a>(events: &'a [Value], name: &str) -> Vec<&'a Value> {
     events.iter().filter(|e| e["event"] == name).collect()
 }
 
+#[test]
+fn dynamic_import_scopes_are_recorded_before_failed_and_blocked_nodes() {
+    let _serial = serial();
+    let project = Project::new(&[
+        (
+            "case",
+            r#"
+fx: workflow/v1
+id: case
+title: Dynamic imported failures
+steps:
+  count: { uses: ./nodes/cases.py#count, with: { n: 1 } }
+  imported:
+    for_each: "${{ steps.count.outputs.items.lines }}"
+    key: "${{ item }}"
+    max: 1
+    uses: ./workflows/inner.yaml
+    with: { name: "${{ item }}" }
+"#,
+        ),
+        (
+            "inner",
+            r#"
+fx: workflow/v1
+id: inner
+title: Inner failure
+inputs:
+  name: { type: string }
+steps:
+  fail:
+    uses: ./nodes/cases.py#refuse
+    with: { text: "${{ inputs.name }}" }
+  blocked:
+    uses: ./nodes/cases.py#upper
+    with: { text: "${{ steps.fail.outputs.text }}" }
+outputs:
+  result: "${{ steps.blocked.outputs.text }}"
+"#,
+        ),
+    ]);
+    let Some(outcome) = run_in(&project, Invocation::default(), None) else {
+        return;
+    };
+    let outcome = outcome.unwrap();
+    assert!(!outcome.ok);
+    assert_eq!(outcome.charged, Usd::ZERO);
+    let events = project.events("runs/one");
+    let scope_id = "scope:imported['l0']#";
+    let first_scope = events
+        .iter()
+        .position(|event| {
+            event["event"] == "scopes_updated"
+                && event["scopes"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|s| s["id"] == scope_id)
+        })
+        .unwrap();
+    let failed = events
+        .iter()
+        .position(|event| event["event"] == "node_failed" && event["id"] == "imported['l0'].fail#1")
+        .unwrap();
+    let skipped = events
+        .iter()
+        .position(|event| {
+            event["event"] == "node_skipped" && event["id"] == "imported['l0'].blocked#1"
+        })
+        .unwrap();
+    assert!(first_scope < failed && first_scope < skipped);
+    assert!(
+        !named(&events, "node_started")
+            .iter()
+            .any(|event| event["id"] == "imported['l0'].blocked#1")
+    );
+    let snapshot = named(&events, "scopes_updated").last().copied().unwrap();
+    assert_eq!(snapshot["scopes"][0]["id"], scope_id);
+    assert_eq!(
+        snapshot["scopes"][0]["nodes"],
+        json!(["imported['l0'].fail#1", "imported['l0'].blocked#1"])
+    );
+    assert_eq!(
+        snapshot["node_interface_bindings"]["imported['l0'].fail#1"],
+        json!([{
+            "source":scope_id,"source_port":"name","target_port":"text","source_kind":"scope_input"
+        }])
+    );
+    let plan: Value =
+        serde_json::from_slice(&std::fs::read(project.root.join("runs/one/plan.json")).unwrap())
+            .unwrap();
+    assert_eq!(plan["scopes"], json!([]));
+    let schema: Value = serde_json::from_str(include_str!(
+        "../../../spec/schemas/fx-run-events-v1.schema.json"
+    ))
+    .unwrap();
+    let validator = jsonschema::validator_for(&schema).unwrap();
+    for event in named(&events, "scopes_updated") {
+        assert!(validator.is_valid(event), "{event}");
+    }
+}
+
 fn invocations(events: &[Value]) -> Vec<String> {
     let mut ids: Vec<String> = Vec::new();
     for event in events {
@@ -571,9 +672,36 @@ fn a_resumed_run_replays_what_finished() {
         .filter(|e| e["invocation_id"] == ids[1].as_str())
         .collect();
     let later_names: Vec<&str> = later.iter().map(|e| e["event"].as_str().unwrap()).collect();
-    assert_eq!(later_names, ["run_started", "run_finished"]);
-    assert_eq!(later[0]["resumed"], json!(true));
-    assert_eq!(later[1]["outputs"], run_finished_outputs(&events, &ids[0]));
+    assert_eq!(
+        later_names,
+        ["run_started", "scopes_updated", "run_finished"]
+    );
+    let initial_display = events
+        .iter()
+        .rev()
+        .find(|event| event["invocation_id"] == ids[0] && event["event"] == "scopes_updated")
+        .unwrap();
+    assert_eq!(later[1]["scopes"], initial_display["scopes"]);
+    assert_eq!(
+        later[1]["node_interface_bindings"],
+        initial_display["node_interface_bindings"]
+    );
+    let execution: Vec<&Value> = later
+        .into_iter()
+        .filter(|event| event["event"] != "scopes_updated")
+        .collect();
+    assert_eq!(
+        execution
+            .iter()
+            .map(|event| event["event"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["run_started", "run_finished"]
+    );
+    assert_eq!(execution[0]["resumed"], json!(true));
+    assert_eq!(
+        execution[1]["outputs"],
+        run_finished_outputs(&events, &ids[0])
+    );
 
     // A step whose file left the store runs again; the others still replay.
     let ada = named(&events, "node_finished")

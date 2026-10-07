@@ -6,8 +6,10 @@
  },
  "instances": [
   {
+   "bindings": [],
    "id": "loud['ada']#1",
    "identity": "fbd51250a6696c1d2cb60fb60e76b382796c41774627be8ab32f95981529c83a",
+   "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": "ada",
@@ -34,8 +36,10 @@
    }
   },
   {
+   "bindings": [],
    "id": "loud['bo']#1",
    "identity": "931ec2479e7fdb1ccb1962d09bf7df950426b4905118e90679d34edfd0cf47a5",
+   "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": "bo",
@@ -62,8 +66,10 @@
    }
   },
   {
+   "bindings": [],
    "id": "loud['cy']#1",
    "identity": "30d391ba8ea127ced504b6b062067b5c09cb2cd53728ad2e63a3aca21e7eda90",
+   "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": "cy",
@@ -90,8 +96,48 @@
    }
   },
   {
+   "bindings": [
+    {
+     "source": "loud['ada']#1",
+     "source_kind": "output",
+     "source_port": "text",
+     "target_port": "parts"
+    },
+    {
+     "source": "loud['bo']#1",
+     "source_kind": "output",
+     "source_port": "text",
+     "target_port": "parts"
+    },
+    {
+     "source": "loud['cy']#1",
+     "source_kind": "output",
+     "source_port": "text",
+     "target_port": "parts"
+    }
+   ],
    "id": "joined#1",
    "identity": null,
+   "interface_bindings": [
+    {
+     "source": "loud['ada']#1",
+     "source_kind": "output",
+     "source_port": "text",
+     "target_port": "parts"
+    },
+    {
+     "source": "loud['bo']#1",
+     "source_kind": "output",
+     "source_port": "text",
+     "target_port": "parts"
+    },
+    {
+     "source": "loud['cy']#1",
+     "source_kind": "output",
+     "source_port": "text",
+     "target_port": "parts"
+    }
+   ],
    "judged_by": [],
    "judges": null,
    "key": null,
@@ -156,9 +202,19 @@
  "kind": "fx-graph-v1",
  "pending": [],
  "problems": [],
+ "scopes": [],
  "types": {
   "./nodes/cases.py#join": {
    "identity": "nodes/cases.py#join@1",
+   "ports": {
+    "inputs": {
+     "parts": "text{}"
+    },
+    "outputs": {
+     "text": "text"
+    },
+    "params": {}
+   },
    "source": {
     "files": {
      "nodes/cases.py": "d34041da3235ac70a67a2748fbffc8cd8ab51dc12db3098472c52e2f40db0930"
@@ -168,6 +224,17 @@
   },
   "./nodes/cases.py#shout": {
    "identity": "nodes/cases.py#shout@1",
+   "ports": {
+    "inputs": {},
+    "outputs": {
+     "text": "text"
+    },
+    "params": {
+     "text": {
+      "type": "string"
+     }
+    }
+   },
    "source": {
     "files": {
      "nodes/cases.py": "d34041da3235ac70a67a2748fbffc8cd8ab51dc12db3098472c52e2f40db0930"
