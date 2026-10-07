@@ -9,6 +9,10 @@ bootstrap the remaining npm engine packages from a CI dry run. CI publishing use
 OIDC for both registries and holds no publishing token. Local uploads have no CI
 build provenance.
 
+The first CI preview is published: `0.1.0-alpha.2` on npm and `0.1.0a2` on PyPI.
+All five npm trusted publishers and the PyPI publisher have completed a tokenless
+upload. Future releases start with a version bump; the initial bootstrap is complete.
+
 ## What a release publishes
 
 One engine binary per target, packaged twice. Each binary embeds the same production viewer
@@ -76,7 +80,7 @@ pre-release (`-alpha.N`, `-beta.N` or `-rc.N`).
      before the next release: a new configuration expires if it has not published within two
      days. You can also set each package's publishing access to
      "Require two-factor authentication and disallow tokens".
-4. **PyPI:** `grida` already exists as a placeholder; use an account that owns it. Open
+4. **PyPI:** `grida` already exists; use an account that owns it. Open
    [Manage project → Publishing](https://pypi.org/manage/project/grida/settings/publishing/)
    → Add a new
    publisher → GitHub, and enter: owner `gridaco`, repository `fx`, workflow `release.yml`,
@@ -152,7 +156,7 @@ uv run --locked --project python python tools/prepare_local.py --out target/pack
 typechecks the SDK, builds a release engine with the deployment baseline and remapped
 paths, and calls the shared packager with installed verification enabled. It never
 uploads. On Apple Silicon, the default output is
-`target/packages/0.1.0-alpha.1-aarch64-apple-darwin/`.
+`target/packages/0.1.0-alpha.2-aarch64-apple-darwin/`.
 
 The output directory must be new; an output inside the checkout must be gitignored.
 The three artifacts are one `grida` wheel, the native npm engine tarball, and the
@@ -193,11 +197,15 @@ uv run --locked --project python python tools/publish_local.py --manifest <outpu
 
 ## Releasing
 
+First bump every manifest and lockfile to a new preview version as described above.
+Then tag that version; never reuse an already published version or tag.
+
 ```sh
 git switch main && git pull
-uv run --project python python tools/check_versions.py --tag v0.1.0-alpha.1 --prerelease
-git tag -a v0.1.0-alpha.1 -m "Grida FX 0.1.0-alpha.1 (preview)"
-git push origin v0.1.0-alpha.1
+version=$(uv run --project python python tools/check_versions.py --print semver)
+uv run --project python python tools/check_versions.py --tag "v$version" --prerelease
+git tag -a "v$version" -m "Grida FX $version (preview)"
+git push origin "v$version"
 ```
 
 The tag starts `release.yml`, which runs four jobs:
@@ -233,21 +241,21 @@ The tag starts `release.yml`, which runs four jobs:
    so you can re-run a publish that failed partway.
 
 A published version can never be replaced. If something is wrong after publishing, fix it,
-bump to the next pre-release (`0.1.0-alpha.2`, `0.1.0a2`) and tag again.
+bump to the next pre-release (`0.1.0-alpha.3`, `0.1.0a3`) and tag again.
 
 ## Checking the published preview
 
 On a supported machine, after the run is green:
 
 ```sh
-npm view @grida/fx dist-tags                # next: 0.1.0-alpha.1
+npm view @grida/fx dist-tags                # next: 0.1.0-alpha.2
 npm install -g @grida/fx@next
-grida-fx --version                          # grida-fx 0.1.0-alpha.1
+grida-fx --version                          # grida-fx 0.1.0-alpha.2
 npx --yes @grida/fx@next --version          # the same, without installing
 
 python3.12 -m venv fx-check                 # any Python 3.11 or later
 fx-check/bin/pip install --pre grida
-fx-check/bin/python -m grida.fx --version   # grida-fx 0.1.0-alpha.1
+fx-check/bin/python -m grida.fx --version   # grida-fx 0.1.0-alpha.2
 ```
 
 - **Provenance:** each package's npm page shows its provenance, linked to the workflow run.

@@ -108,7 +108,7 @@ This milestone works only in this repo. The Python gnode stays in stage-gen, fro
 - **npm:** `@grida/fx` plus the per-platform engine packages.
 - **PyPI:** `grida` wheels, one per platform.
 - **Releases are previews** (an npm `next` tag, PyPI pre-releases) until milestone 2 passes and a published preview has passed its checks as installed ([RELEASING.md](../../RELEASING.md#checking-the-published-preview)).
-- **Status:** the packages and the release workflow are built; nothing is published yet. The first publish (`v0.1.0-alpha.1`) is the owner's, after review ([RELEASING.md](../../RELEASING.md)), and waits for trusted publishers (decision 11). Meanwhile FX runs from a clone, and the [examples](../../examples/) run in CI that way.
+- **Status:** published. The npm packages were bootstrapped at `0.1.0-alpha.1`; `v0.1.0-alpha.2` then published all five npm packages and all four `grida` wheels (`0.1.0a2`) through GitHub Actions trusted publishing, with provenance and attestations. All four targets passed their installed-package checks in CI; fresh registry installations on Apple Silicon also passed all 39 conformance cases and the embedded-viewer checks ([RELEASING.md](../../RELEASING.md)).
 
 ## Milestone 2: stage-gen moves onto FX
 
@@ -158,7 +158,7 @@ gnode's tests, conformance suite, guide and schemas left with it; the suite and 
 | Tripo | `mesh.generate`, `mesh.rig` |
 | ElevenLabs | `sound.generate`, `speech.generate` |
 
-Milestone 2 has passed. FX leaves preview once its first publish, the preview `v0.1.0-alpha.1`, has passed its checks as installed. That publish still waits for trusted publishing (decision 11).
+Milestone 2 has passed. The published preview `v0.1.0-alpha.2` has also passed its checks as installed, satisfying the publication gate for leaving preview. The current release remains a pre-release under npm's `next` tag and on PyPI.
 
 ## Later
 
