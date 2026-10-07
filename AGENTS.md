@@ -19,6 +19,7 @@ Guardrails for working in this repository. [README.md](README.md) says what FX i
 | `js/fx-web/`, `js/fx-react/` | Private browser-only contracts, TypeScript controllers/canvas, and thin React adapters. |
 | `web/viewer/` | Vite/React/Tailwind client, built and embedded in the engine. |
 | `examples/` | Projects written the way a user would. CI plans every one and runs every runnable one offline through the SDK, from a fresh build (rigged-character only plans). |
+| `skills/` | Self-contained user-installable agent skills, distributed through `npx skills add gridaco/fx`; the README owns layout and authoring conventions. |
 | `fixtures/viewer/` | Canonical provider-free development harness for viewer topology, media, cache, takes, failures and recorded in-progress states; generated data stays outside the source fixture. |
 | `tools/` | What runs outside the engine: the spec gate, the independent digest checker, packaging, `build_engine.py` (the engine into a checkout's SDK) and `check_examples.py`. |
 

@@ -40,6 +40,9 @@ The npm package needs Node 18 or later; the Python one needs Python 3.11 or late
 
 Start with [the guide](docs/guide/01-getting-started.md). [RELEASING.md](RELEASING.md) says how a preview is published.
 
+[Agent skills](skills/README.md) cover authoring, running, and inspecting FX
+workflows with installed packages: `npx skills add gridaco/fx --skill grida-fx`.
+
 For viewer development, the [canonical fixture suite](fixtures/viewer/README.md)
 generates real provider-free plans and runs covering branches, joins, matrices,
 keyed repeats, conditions, media, cache reuse, takes and failures.
