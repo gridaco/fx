@@ -6,7 +6,7 @@ FX grew out of gnode, the Python engine [softmarshmallow/stage-gen](https://gith
 
 ## Install (preview)
 
-The npm preview is published under the `next` tag for all four platforms below. The Python FX preview is awaiting its first CI publication; PyPI currently has only the old `grida` placeholder. Python users can run FX from a clone in the meantime, which needs cargo, [Bun](https://bun.sh) and [uv](https://docs.astral.sh/uv/) ([examples/README.md](examples/README.md#from-a-clone) has the rest):
+The preview is published on npm under the `next` tag and on PyPI as a pre-release, for all four platforms below. To develop FX from a clone, you need cargo, [Bun](https://bun.sh) and [uv](https://docs.astral.sh/uv/) ([examples/README.md](examples/README.md#from-a-clone) has the rest):
 
 ```sh
 git clone https://github.com/gridaco/fx && cd fx
@@ -24,7 +24,7 @@ grida-fx --version
 npx @grida/fx@next --version     # or run it without installing
 ```
 
-After the first Python preview is published:
+Install the Python SDK:
 
 ```sh
 pip install --pre grida          # the Python SDK, imported as grida.fx
