@@ -40,14 +40,10 @@ def prepare(out: Path | None) -> Path:
     for program in ("bun", "cargo", "node", "npm", "uv", "git"):
         if shutil.which(program) is None:
             raise ValueError(f"{program} is required on PATH")
-    expected_bun = json.loads((ROOT / "package.json").read_text())[
-        "packageManager"
-    ].split("@")[1]
+    expected_bun = json.loads((ROOT / "package.json").read_text())["packageManager"].split("@")[1]
     actual_bun = subprocess.check_output(["bun", "--version"], text=True).strip()
     if actual_bun != expected_bun:
-        raise ValueError(
-            f"use Bun {expected_bun} (found {actual_bun}); the lockfile is frozen"
-        )
+        raise ValueError(f"use Bun {expected_bun} (found {actual_bun}); the lockfile is frozen")
     version = subprocess.check_output(
         [
             sys.executable,
@@ -61,9 +57,7 @@ def prepare(out: Path | None) -> Path:
     ).strip()
     out = (out or ROOT / "target/packages" / f"{version}-{target}").absolute()
     if out.exists():
-        raise ValueError(
-            "output already exists; review it or select a new directory with --out"
-        )
+        raise ValueError("output already exists; review it or select a new directory with --out")
     source = source_snapshot()
     environment = clean_environment()
     environment.update(MACOSX_DEPLOYMENT_TARGET=minimum, CARGO_INCREMENTAL="0")
@@ -114,9 +108,7 @@ def prepare(out: Path | None) -> Path:
     )
     binary = Path(metadata["target_directory"]) / target / "release/grida-fx"
     if source_snapshot() != source:
-        raise ValueError(
-            "source changed during the build; prepare again before packaging"
-        )
+        raise ValueError("source changed during the build; prepare again before packaging")
     return package(binary, target, out, installed_checks=True)
 
 
