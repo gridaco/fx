@@ -166,7 +166,9 @@ Milestone 2 has passed. FX leaves preview once its first publish, the preview `v
 - The TypeScript node host for `@grida/fx`.
 - GG as a provider.
 - The `grida fx` umbrella.
-- Views (`grida-fx view`).
+- Views: a [local workflow-plan and run viewer](../guide/07-viewing.md), with a
+  read-only node canvas, is implemented;
+  [project browsing, custom views, snapshots, and lifecycle decisions](../../TODO.md#standalone-workflow-and-run-viewer) remain later work.
 - Standard-library node bodies in Rust, with a planned rekey (decision 8). This also makes their outputs the same bytes on every platform. Today Pillow's Linux x86-64 build writes other PNG bytes than its macOS arm64 build for some pictures, so a cache filled on one platform misses on the other for every paid call downstream of a std picture output.
 
 ## Identity v3

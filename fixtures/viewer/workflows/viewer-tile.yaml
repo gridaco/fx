@@ -1,0 +1,17 @@
+fx: workflow/v1
+id: viewer-tile
+title: Nested viewer tile
+
+inputs:
+  image: { type: file, kind: image }
+
+steps:
+  tint:
+    uses: ./nodes/media.py#tint
+    with: { image: "${{ inputs.image }}", tone: cool }
+  thumb:
+    uses: fx/image.resize@1
+    with: { image: "${{ steps.tint.outputs.image }}", longest_side: 48 }
+
+outputs:
+  image: ${{ steps.thumb.outputs.image }}

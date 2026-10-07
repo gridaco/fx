@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import traceback
@@ -103,6 +104,36 @@ def hello(home: Path) -> str:
     return f"{len(first.steps)} steps ran at $0, then all {len(second.steps)} from the cache"
 
 
+def image_recolor(home: Path) -> str:
+    subprocess.run([sys.executable, "make_input.py"], cwd=home, check=True)
+    inputs = ["inputs/example.yaml"]
+    plan = planned("image-recolor", home, input_files=inputs)
+    expect(plan.estimate() == (0.0, 0.0), "image-recolor has a nonzero estimate")
+    first = finished(fx.run("image-recolor", input_files=inputs, cwd=home), "the first recolor")
+    expect(set(first.steps) == {"input", "recolor", "delay"}, "the three image steps did not run")
+    expect(all(step.cache == "miss" for step in first.steps.values()), "the first run was cached")
+    with Image.open(first.outputs["before"].path) as before:
+        red, green, blue, alpha = before.convert("RGBA").split()
+        expected = Image.merge("RGBA", (blue, red, green, alpha)).tobytes()
+    with Image.open(first.outputs["after"].path) as after:
+        expect(after.size == (480, 320), f"the output dimensions changed: {after.size}")
+        expect(after.convert("RGBA").tobytes() == expected, "the channel rotation is incorrect")
+    expect(first.outputs["before"].digest != first.outputs["after"].digest, "no colors changed")
+    delay = next(
+        event
+        for event in first.events
+        if event.get("event") == "node_finished" and event.get("path") == "delay"
+    )
+    expect(delay["duration_ms"] >= 4900, "the uncached delay did not wait five seconds")
+    expect(first.steps["delay"].facts["wait_seconds"] == 5, "the delay lost its parameter")
+    second = finished(fx.run("image-recolor", input_files=inputs, cwd=home), "the cached recolor")
+    expect(all(step.cache == "hit" for step in second.steps.values()), "a step missed the cache")
+    expect(
+        second.outputs["after"].digest == first.outputs["after"].digest, "cache changed the image"
+    )
+    return "three code-only steps at $0, exact recolor and five-second delay; then all cached"
+
+
 def looping_parallax(home: Path) -> str:
     planned("looping-parallax", home, input_files=["inputs/harbor.yaml"])
     run = fx.run("looping-parallax", input_files=["inputs/mirror-only.yaml"], cwd=home)
@@ -166,6 +197,7 @@ def rigged_character(home: Path) -> str:
 
 CHECKS: dict[str, tuple[str, Callable[[Path], str]]] = {
     "hello": ("hello", hello),
+    "image-recolor": ("image-recolor", image_recolor),
     "looping-parallax": ("looping-parallax", looping_parallax),
     "looping-parallax:refused": ("looping-parallax", looping_parallax_refused),
     "concept-gallery": ("concept-gallery", concept_gallery),

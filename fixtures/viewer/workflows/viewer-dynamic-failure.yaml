@@ -1,0 +1,23 @@
+fx: workflow/v1
+id: viewer-dynamic-failure
+title: Viewer runtime expansion failure fixture
+description: A runtime-produced item expands into a failed child and a consumer that must never start.
+
+steps:
+  propose:
+    uses: ./nodes/dynamic_failure.py#propose
+
+  branch:
+    for_each: ${{ steps.propose.outputs.items.entries }}
+    key: ${{ item.id }}
+    max: 1
+    steps:
+      fail:
+        uses: ./nodes/dynamic_failure.py#fail
+        with: { message: "${{ item.message }}" }
+      blocked:
+        uses: ./nodes/dynamic_failure.py#blocked
+        with: { report: "${{ steps.fail.outputs.report }}" }
+
+outputs:
+  reports: ${{ steps.branch.*.blocked.outputs.report }}

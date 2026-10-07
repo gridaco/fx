@@ -17,7 +17,7 @@ use crate::print::{print_json, print_line};
 use grida_fx_core::Error;
 use grida_fx_core::money::Usd;
 use grida_fx_core::plan::{Plan, output, render};
-use grida_fx_core::project::{PlanRequest, make_planner};
+use grida_fx_core::project::{PlanRequest, Planner, make_planner};
 use std::path::PathBuf;
 
 /// Which planning verb.
@@ -31,20 +31,7 @@ pub enum PlanVerb {
 
 /// Runs a planning verb.
 pub fn run(verb: PlanVerb, args: &PlanArgs) -> Result<u8, Error> {
-    let request = request(args)?;
-    let mut host = crate::print::planning_host(&request.target, &request.cwd);
-    let mut planner = make_planner(&request, &mut host)?;
-    let runtime = crate::engine::runtime()?;
-    let engine = crate::engine::engine_for(
-        &runtime,
-        &planner,
-        false,
-        None,
-        std::slice::from_ref(&request.cwd),
-    )?;
-    let plan = crate::engine::plan(&engine, &mut planner, &mut host);
-    crate::engine::shutdown(&runtime, &engine);
-    let plan = plan?;
+    let (plan, planner) = planned(args)?;
     let refused = u8::from(!plan.ok());
     Ok(match verb {
         PlanVerb::Plan => {
@@ -75,6 +62,31 @@ pub fn run(verb: PlanVerb, args: &PlanArgs) -> Result<u8, Error> {
             refused
         }
     })
+}
+
+/// Uses the same offline planner as `plan` to materialize a browser's static graph.
+/// A refused plan remains inspectable, with its planning problems in the document.
+pub(crate) fn graph(args: &PlanArgs) -> Result<serde_json::Value, Error> {
+    let (plan, planner) = planned(args)?;
+    Ok(output::graph_document(&plan, &planner))
+}
+
+fn planned(args: &PlanArgs) -> Result<(Plan, Planner), Error> {
+    let request = request(args)?;
+    let mut host = crate::print::planning_host(&request.target, &request.cwd);
+    let mut planner = make_planner(&request, &mut host)?;
+    let runtime = crate::engine::runtime()?;
+    let engine = crate::engine::engine_for(
+        &runtime,
+        &planner,
+        false,
+        None,
+        std::slice::from_ref(&request.cwd),
+    )?;
+    let plan = crate::engine::plan(&engine, &mut planner, &mut host);
+    crate::engine::shutdown(&runtime, &engine);
+    let plan = plan?;
+    Ok((plan, planner))
 }
 
 /// The request of a planning verb's arguments.
@@ -202,6 +214,9 @@ mod tests {
             timeout_s: None,
             reason: None,
             reads: BTreeSet::new(),
+            bindings: Vec::new(),
+            interface_bindings: Vec::new(),
+            display_scope: None,
         }
     }
 
@@ -212,6 +227,7 @@ mod tests {
         }
         if pending {
             expansion.pending.push(PendingRepeat {
+                display_scope: None,
                 path: "draw".into(),
                 max: 6,
                 waiting_on: BTreeSet::new(),

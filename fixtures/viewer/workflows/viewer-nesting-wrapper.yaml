@@ -1,0 +1,32 @@
+fx: workflow/v1
+id: viewer-nesting-wrapper
+title: Imported image wrapper
+
+inputs:
+  source_image: { type: file, kind: image }
+  image_tone: { type: string, enum: [warm, cool] }
+
+steps:
+  tint:
+    uses: ./nodes/media.py#tint
+    with: { image: "${{ inputs.source_image }}", tone: "${{ inputs.image_tone }}" }
+
+  imported_leaf:
+    title: Imported thumbnail leaf
+    uses: ./workflows/viewer-nesting-leaf.yaml
+    with: { base_image: "${{ steps.tint.outputs.image }}" }
+
+  inline:
+    title: Inline accent group
+    steps:
+      draw:
+        uses: ./nodes/media.py#draw
+        with: { shape: diamond, color: "#a898c6" }
+      thumb:
+        uses: fx/image.resize@1
+        with: { image: "${{ steps.draw.outputs.image }}", longest_side: 24 }
+
+outputs:
+  preview: ${{ steps.imported_leaf.outputs.thumbnail }}
+  same_preview: ${{ steps.imported_leaf.outputs.thumbnail }}
+  accent: ${{ steps.inline.thumb.outputs.image }}

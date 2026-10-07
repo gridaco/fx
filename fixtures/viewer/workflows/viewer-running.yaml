@@ -1,0 +1,21 @@
+fx: workflow/v1
+id: viewer-running
+title: Viewer running fixture
+description: A bounded local wait gives the harness time to capture a running node and its waiting consumer.
+
+inputs:
+  wait_seconds: { type: integer, default: 5, minimum: 0, maximum: 5 }
+
+steps:
+  seed:
+    uses: ./nodes/media.py#seed
+  delay:
+    uses: ./nodes/media.py#delay
+    with: { image: "${{ steps.seed.outputs.image }}", seconds: "${{ inputs.wait_seconds }}" }
+  finished:
+    uses: ./nodes/media.py#tint
+    with: { image: "${{ steps.delay.outputs.image }}", tone: violet }
+
+outputs:
+  seed: ${{ steps.seed.outputs.image }}
+  finished: ${{ steps.finished.outputs.image }}

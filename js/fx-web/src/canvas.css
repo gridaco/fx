@@ -1,0 +1,50 @@
+.fx-canvas { position: relative; width: 100%; height: 100%; min-height: 0; overflow: hidden; outline: none; background-color: #fafafa; background-image: radial-gradient(#d4d4d8 .8px, transparent .8px); background-size: 20px 20px; }
+.fx-canvas > svg { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+.fx-canvas.is-panning > svg { cursor: grabbing; }
+.fx-canvas-node { cursor: pointer; outline: none; }
+.fx-canvas-frame { pointer-events: none; }
+.fx-canvas-frame rect { fill: #f4f4f580; stroke: #d4d4d8; stroke-width: 1px; }
+.fx-canvas-frame text { fill: #71717a; font: 600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.fx-canvas-workflow .fx-canvas-node-box { stroke: #a5b4c8; }
+.fx-canvas-boundary .fx-canvas-node-box { fill: #f4f4f5; }
+.fx-canvas-workflow-count { fill: #71717a; font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.fx-canvas-workflow-failure { fill: #b91c1c; font: 600 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.fx-canvas-open-workflow { cursor: pointer; outline: none; }
+.fx-canvas-open-workflow rect { fill: #eff6ff; stroke: #bfdbfe; }
+.fx-canvas-open-workflow text { fill: #2563eb; font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.fx-canvas-open-workflow:hover rect, .fx-canvas-open-workflow:focus-visible rect { fill: #dbeafe; stroke: #2563eb; }
+.fx-canvas-node-box { fill: #fff; stroke: #d4d4d8; stroke-width: 1.2px; }
+.fx-canvas-pending { stroke-dasharray: 6 4; fill: #fafafa; }
+.fx-canvas-node:hover .fx-canvas-node-box { stroke: #71717a; }
+.fx-canvas-node.is-selected .fx-canvas-node-box, .fx-canvas-node:focus-visible .fx-canvas-node-box { stroke: #2563eb; stroke-width: 2px; }
+.fx-canvas-node-title { fill: #27272a; font: 600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.fx-canvas-node-type { fill: #71717a; font: 10px "SFMono-Regular", Consolas, monospace; }
+.fx-canvas-node-state { fill: #52525b; font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.fx-canvas-node-image { pointer-events: none; }
+.fx-canvas-image-border { fill: none; stroke: #e4e4e7; stroke-width: 1px; pointer-events: none; }
+.fx-canvas-image-error { fill: #71717a; font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; pointer-events: none; }
+.fx-canvas-image-count { fill: #a1a1aa; font: 10px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.fx-canvas-toolbar { position: absolute; bottom: 16px; left: 16px; display: flex; align-items: center; gap: 1px; padding: 3px; border: 1px solid #e4e4e7; border-radius: 9px; background: #fff; box-shadow: 0 2px 5px #00000008; }
+.fx-canvas-toolbar button { min-width: 32px; height: 30px; padding: 0 8px; border: 0; border-radius: 5px; background: #fff; color: #3f3f46; font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; cursor: pointer; }
+.fx-canvas-toolbar button:hover { background: #f4f4f5; }
+.fx-canvas-toolbar span { width: 44px; text-align: center; color: #71717a; font: 11px "SFMono-Regular", Consolas, monospace; }
+.fx-canvas-help { position: absolute; top: 14px; left: 16px; margin: 0; font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #a1a1aa; pointer-events: none; }
+.fx-canvas-empty { position: absolute; top: 45%; width: 100%; text-align: center; color: #71717a; font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.fx-canvas-connection { opacity: .3; }
+.fx-canvas-connection.is-highlighted { opacity: 1; }
+.fx-canvas-edge { fill: none; stroke-width: 1.5px; pointer-events: none; vector-effect: non-scaling-stroke; }
+.fx-canvas-connection.is-highlighted .fx-canvas-edge { stroke-width: 2px; }
+.fx-canvas-edge-hit { fill: none; stroke: transparent; stroke-width: 10px; pointer-events: stroke; vector-effect: non-scaling-stroke; }
+.fx-canvas-edge-data { stroke: #6084b2; }
+.fx-canvas-edge-control { stroke: #a1a1aa; stroke-dasharray: 6 4; }
+.fx-canvas-edge-dependency { stroke: #a1a1aa; stroke-dasharray: 2 4; }
+.fx-canvas-node-divider { stroke: #f0f0f2; stroke-width: 1px; }
+.fx-canvas-port-heading { fill: #a1a1aa; font: 8px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing: 1px; }
+.fx-canvas-port circle, .fx-canvas-port rect, .fx-canvas-port path { fill: #fff; stroke-width: 1.5px; }
+.fx-canvas-port-artifact { stroke: #6084b2; }
+.fx-canvas-port-parameter { stroke: #9b78b8; }
+.fx-canvas-port-fact { stroke: #bc9149; }
+.fx-canvas-port-value { stroke: #71717a; }
+.fx-canvas-port-name { fill: #3f3f46; stroke: none; font: 11px "SFMono-Regular", Consolas, monospace; }
+.fx-canvas-port-type { fill: #a1a1aa; stroke: none; font: 9px "SFMono-Regular", Consolas, monospace; }
+.fx-canvas-settings { fill: #71717a; font: 10px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }

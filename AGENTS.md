@@ -11,11 +11,15 @@ Guardrails for working in this repository. [README.md](README.md) says what FX i
 | `crates/grida-fx-runtime` | Running: the store, the call cache, budgets, the retry owner, facts, the agent loop, node hosts. |
 | `crates/grida-fx-providers` | Provider adapters behind an injected transport. |
 | `crates/grida-fx` | The `grida-fx` command. |
+| `crates/grida-fx-viewer` | Read-only run projection and static plan/run loopback host for the embedded viewer. |
 | `spec/` | The language-neutral contracts: schemas, identity, protocol, test vectors. Code follows `spec/`; a change to identity is a change to `spec/` first. |
 | `conformance/` | Cases that hold any implementation to the spec through the command line only. |
 | `python/` | The `grida` distribution; FX is `grida.fx`. |
-| `js/` | `@grida/fx` and its per-platform engine packages. |
+| `js/fx/` | `@grida/fx`, the Node SDK and command launcher; per-platform engines are packaged separately. |
+| `js/fx-web/`, `js/fx-react/` | Private browser-only contracts, TypeScript controllers/canvas, and thin React adapters. |
+| `web/viewer/` | Vite/React/Tailwind client, built and embedded in the engine. |
 | `examples/` | Projects written the way a user would. CI plans every one and runs every runnable one offline through the SDK, from a fresh build (rigged-character only plans). |
+| `fixtures/viewer/` | Canonical provider-free development harness for viewer topology, media, cache, takes, failures and recorded in-progress states; generated data stays outside the source fixture. |
 | `tools/` | What runs outside the engine: the spec gate, the independent digest checker, packaging, `build_engine.py` (the engine into a checkout's SDK) and `check_examples.py`. |
 
 ## Rules
@@ -28,16 +32,30 @@ Guardrails for working in this repository. [README.md](README.md) says what FX i
 - **Examples run.** Their node bodies are real code and their routes are the built-in table's, and the plan output in a README is pasted from the engine. An example that needs something FX does not have yet (a capability without an adapter, a planned API) only plans: it may keep an illustrative route of its own and placeholder bodies, and its README says so. A change that alters what an example prints updates its README.
 - **Contracts use `lower_snake_case`.** Keep mandatory external vocabulary exactly (`$ref`, `$defs`, `additionalProperties`).
 - **Identifiers, comments, logs and messages are in English.**
+- **Nontrivial browser UI uses vanilla TypeScript classes.** Own canvas, viewport,
+  interaction and viewer state in independently testable classes. React is a thin
+  presentation/mount layer; use a React-specific framework only when it is the
+  practical choice for a capability that cannot reasonably fit that boundary.
+- **Use Lucide package icons for browser UI chrome.** Bundle the imported icons
+  with the client so installed viewers work offline. Keep workflow geometry
+  (connections, sockets and frames) owned by the canvas rather than the icon library.
 
 ## Verification
 
 Run the checks for what you touched:
 
 ```sh
+bun --no-env-file install --frozen-lockfile
+bun --no-env-file run check:viewer && bun --no-env-file run test:viewer && bun --no-env-file run build:viewer
 cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test --workspace
-(cd python && uv run ruff check . ../tools ../conformance ../examples && uv run ruff format --check . ../tools ../conformance/run.py ../examples && uv run pytest)
-(cd js/fx && bun run typecheck && bun test)
+(cd python && uv run ruff check --config pyproject.toml . ../tools ../conformance ../examples ../fixtures && uv run ruff format --check --config pyproject.toml . ../tools ../conformance/run.py ../examples ../fixtures && uv run pytest)
+(cd js/fx && bun --no-env-file run typecheck && bun --no-env-file test)
 uv run --project python python tools/check_spec.py
 uv run --project python python conformance/run.py --command target/debug/grida-fx
 python3 tools/build_engine.py && uv run --project python python tools/check_examples.py
+python3 tools/check_viewer.py --command "$PWD/python/src/grida/fx/_bin/grida-fx"
+uv run --project python python tools/check_viewer_fixtures.py
 ```
+
+Source builds embed `web/viewer/dist` and refuse a missing bundle. Bun is a build-time dependency;
+installed npm and Python packages serve the bundled viewer without a frontend runtime.

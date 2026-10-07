@@ -29,6 +29,13 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.0"
+      - run: bun --no-env-file install --frozen-lockfile
+      - run: bun --no-env-file run check:viewer
+      - run: bun --no-env-file run test:viewer
+      - run: bun --no-env-file run build:viewer
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test --workspace
@@ -45,8 +52,8 @@ jobs:
       # setup-uv publishes no major tags; this pins one immutable release.
       - uses: astral-sh/setup-uv@v10.2.0
       - run: uv sync --locked
-      - run: uv run ruff check . ../tools ../conformance ../examples
-      - run: uv run ruff format --check . ../tools ../conformance/run.py ../examples
+      - run: uv run ruff check --config pyproject.toml . ../tools ../conformance ../examples ../fixtures
+      - run: uv run ruff format --check --config pyproject.toml . ../tools ../conformance/run.py ../examples ../fixtures
       - run: uv run pytest
 
   js:
@@ -59,9 +66,9 @@ jobs:
         with:
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2
-      - run: bun install --frozen-lockfile
-      - run: bun run typecheck
-      - run: bun test
+      - run: bun --no-env-file install --frozen-lockfile
+      - run: bun --no-env-file run typecheck
+      - run: bun --no-env-file test
       # @grida/fx as release.yml packs it (no engine package: those need a release build).
       - name: Pack @grida/fx
         working-directory: .
@@ -88,7 +95,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: astral-sh/setup-uv@v10.2.0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.0"
+      - run: bun --no-env-file install --frozen-lockfile
+      - run: bun --no-env-file run build:viewer
       - run: cargo build --locked --bin grida-fx
+      - run: python3 tools/check_viewer.py --command "$PWD/target/debug/grida-fx"
       - run: uv sync --locked --project python
       - name: conformance/run.py --strict
         env:
@@ -109,9 +122,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: astral-sh/setup-uv@v10.2.0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.0"
+      - run: bun --no-env-file install --frozen-lockfile
       - run: uv sync --locked --project python
       - run: python3 tools/build_engine.py
       - run: uv run --locked --project python python tools/check_examples.py
+      - run: uv run --locked --project python python tools/check_viewer_fixtures.py
 
   # Every manifest states the Cargo workspace's version (tools/check_versions.py).
   versions:

@@ -114,9 +114,13 @@ fn no_arguments_is_a_usage_error() {
 #[test]
 fn an_unknown_verb_is_a_usage_error() {
     let project = empty_project();
-    let output = grida_fx(project.path(), &["view"]);
+    let output = grida_fx(project.path(), &["no-such-verb"]);
     assert_eq!(status(&output), 2);
-    assert!(stderr(&output).contains("view"), "{}", stderr(&output));
+    assert!(
+        stderr(&output).contains("no-such-verb"),
+        "{}",
+        stderr(&output)
+    );
 }
 
 #[test]
@@ -126,7 +130,7 @@ fn help_and_version_exit_zero() {
     assert_eq!(status(&output), 0);
     let help = stdout(&output);
     for verb in [
-        "plan", "expand", "identity", "price", "schema", "nodes", "doctor", "lock",
+        "plan", "expand", "identity", "price", "schema", "nodes", "doctor", "lock", "view",
     ] {
         assert!(help.contains(verb), "{help}");
     }
@@ -714,7 +718,19 @@ fn integrated_documents_of_tiered_price() {
     assert_eq!(graph["workflow"]["file"], "workflows/case.yaml");
     assert_eq!(
         graph["types"],
-        json!({"fx/video.generate@1": {"identity": "fx/video.generate@1.1"}})
+        json!({"fx/video.generate@1": {
+            "identity": "fx/video.generate@1.1",
+            "ports": {
+                "inputs": {"first_frame": "image?", "last_frame": "image?"},
+                "outputs": {"video": "video/mp4"},
+                "params": {
+                    "aspect_ratio": {"type": "string", "x-fx-optional": true},
+                    "duration": {"type": "number", "x-fx-optional": true},
+                    "prompt": {"type": "string", "x-fx-template": true},
+                    "resolution": {"type": "string", "x-fx-optional": true},
+                },
+            },
+        }})
     );
     let mut json_plan = vec!["plan", "case", "--json"];
     json_plan.extend_from_slice(&routes);

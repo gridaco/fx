@@ -8,6 +8,7 @@ plans.
 | Example | What it shows | What runs |
 |---|---|---|
 | [hello](hello/) | your own nodes, built-in local steps, a judge, a keyed repeat, a folder of results, the cache | everything, offline, at $0, with no keys |
+| [image-recolor](image-recolor/) | an image input, an algorithmic recolor, a five-second delay, plan/run viewing and the cache | ordinary Python code, offline, at $0, with no keys |
 | [looping-parallax](looping-parallax/) | plan-time facts and assertions, fallbacks, a paid call inside your own node | offline when every layer mirrors; a repaint needs `OPENAI_API_KEY` |
 | [concept-gallery](concept-gallery/) | structured answers, judges you write on a second model, two phases, takes | live, with `OPENROUTER_API_KEY` |
 | [game-build](game-build/) | a game that builds its art from its own level files: a Python builder | the sky mirrors offline; the ground plate, icons and repaints need `OPENAI_API_KEY` |
@@ -20,19 +21,21 @@ the ceiling you give with `--max-usd` ([Running](../docs/guide/05-running.md#key
 ## From a clone
 
 FX runs from a checkout of this repository, with nothing published. It needs git, cargo
-([rustup.rs](https://rustup.rs)) and [uv](https://docs.astral.sh/uv/).
+([rustup.rs](https://rustup.rs)), [Bun](https://bun.sh) 1.4 and [uv](https://docs.astral.sh/uv/).
 
 ```bash
 git clone https://github.com/gridaco/fx && cd fx
 uv sync --project python          # the Python SDK and Pillow, in python/.venv
+bun --no-env-file install --frozen-lockfile
 python3 tools/build_engine.py     # the engine, built into that SDK
 alias grida-fx="uv run --project '$PWD/python' python -m grida.fx"
 cd examples/hello && grida-fx run hello --inputs inputs/badges.yaml
 ```
 
-- **`tools/build_engine.py`** builds `grida-fx` from the checkout and puts it where the SDK looks
+- **`tools/build_engine.py`** builds the viewer, embeds it into `grida-fx`, and puts the binary where the SDK looks
   for its engine (`python/src/grida/fx/_bin/`, ignored by git). Run it again after every pull, so
-  the engine always matches the SDK beside it; when nothing changed it takes a second.
+  the engine always matches the SDK beside it. After dependency changes, repeat the frozen Bun install.
+  Direct Cargo builds also need `bun --no-env-file run build:viewer` first; a missing bundle fails the build.
 - **The alias** runs the engine through the SDK, in `python/.venv`. That folder's `python3` is
   also the Python the engine starts your node bodies with, so they find `grida` and Pillow.
 - **Another project** uses the same checkout through a path dependency on its `python/` folder,

@@ -2,7 +2,8 @@
 
     python3 tools/build_engine.py [--debug]
 
-It runs ``cargo build --locked --release -p grida-fx`` (``--debug``: the dev profile) and copies
+It builds the viewer with Bun, runs ``cargo build --locked --release -p grida-fx``
+(``--debug``: the dev profile) and copies
 the binary to ``python/src/grida/fx/_bin/grida-fx``, the place a ``grida`` wheel carries it
 (gitignored here). A ``grida`` installed from this checkout then finds the engine with no
 setting: ``uv sync --project python`` here, or a path dependency on ``<checkout>/python`` in
@@ -11,8 +12,11 @@ another project (installed editable, so it reads this folder). ``python -m grida
 
 Run it again after every pull or checkout: cargo rebuilds only what changed, and the copy is
 replaced only when it differs, so the engine always matches the SDK beside it. ``CARGO_TARGET_DIR``
-is honoured. It needs cargo (https://rustup.rs) and Python 3.9 or later. It prints the binary's
-path; any failure exits 1 with ``build_engine: <reason>``.
+is honoured. Source builds need cargo (https://rustup.rs), Bun (https://bun.sh) and Python 3.9
+or later. Install the root workspace dependencies once with
+``bun --no-env-file install --frozen-lockfile``. Installed npm packages and Python wheels carry
+the viewer inside the engine and need no Bun or frontend build. Any failure exits 1 with
+``build_engine: <reason>``.
 """
 
 from __future__ import annotations
@@ -51,6 +55,14 @@ def target_directory() -> Path:
 def build(debug: bool) -> Path:
     if shutil.which("cargo") is None:
         raise Refused("cargo is not on PATH (install Rust from https://rustup.rs)")
+    if shutil.which("bun") is None:
+        raise Refused("bun is not on PATH (source builds need Bun from https://bun.sh)")
+    done = subprocess.run(["bun", "--no-env-file", "run", "build:viewer"], cwd=ROOT)
+    if done.returncode != 0:
+        raise Refused(
+            "viewer build failed; install its dependencies with "
+            "`bun --no-env-file install --frozen-lockfile` from the FX checkout"
+        )
     profile = [] if debug else ["--release"]
     done = subprocess.run(["cargo", "build", "--locked", *profile, "-p", "grida-fx"], cwd=ROOT)
     if done.returncode != 0:

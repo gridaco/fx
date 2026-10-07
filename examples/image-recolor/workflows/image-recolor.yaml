@@ -1,0 +1,31 @@
+# Three ordinary Python nodes, with no provider calls or route configuration.
+fx: workflow/v1
+id: image-recolor
+title: Recolor an image
+description: Read an image, rotate its color channels, and wait five seconds before returning it.
+
+inputs:
+  image: { type: file, kind: image }
+  wait_seconds: { type: integer, default: 5, minimum: 0, maximum: 30 }
+
+steps:
+  input:
+    title: Read the input image
+    uses: ./nodes/read_image.py#read_image
+    with: { image: "${{ inputs.image }}" }
+
+  recolor:
+    title: Rotate the color channels
+    uses: ./nodes/recolor.py#recolor
+    with: { image: "${{ steps.input.outputs.image }}" }
+
+  delay:
+    title: Wait before returning the image
+    uses: ./nodes/delay.py#delay
+    with:
+      image: ${{ steps.recolor.outputs.image }}
+      seconds: ${{ inputs.wait_seconds }}
+
+outputs:
+  before: ${{ steps.input.outputs.image }}
+  after: ${{ steps.delay.outputs.image }}

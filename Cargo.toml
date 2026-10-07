@@ -14,6 +14,7 @@ grida-fx-core = { path = "crates/grida-fx-core" }
 grida-fx-protocol = { path = "crates/grida-fx-protocol" }
 grida-fx-runtime = { path = "crates/grida-fx-runtime" }
 grida-fx-providers = { path = "crates/grida-fx-providers" }
+grida-fx-viewer = { path = "crates/grida-fx-viewer" }
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 sha2 = "0.10"

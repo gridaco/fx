@@ -9,9 +9,9 @@ which is normative: where this guide and `spec/` disagree, `spec/` wins. Where t
 something designed but not built yet, it says **planned**. FX is in preview;
 [the overview](../wg/overview.md) has the plan.
 
-Views (custom HTML pages for a step or a whole run, a dashboard over your runs, and static
-exports of them) come later: they are on the overview's Later list, and this guide leaves them out
-until then.
+The local viewer shows workflow plans and existing runs on a read-only node canvas.
+Custom step pages, project dashboards,
+and static snapshot exports remain planned.
 
 ## Chapters
 
@@ -21,6 +21,7 @@ until then.
 4. [Cost, cache and takes](04-cost-and-cache.md)
 5. [Running: CLI, Python, agents](05-running.md)
 6. [Annotations and judges](06-annotations-and-judges.md): marks as artifacts, verdicts as decisions
+7. [Viewing workflows and runs](07-viewing.md): the bundled local node canvas
 
 ## Example projects
 

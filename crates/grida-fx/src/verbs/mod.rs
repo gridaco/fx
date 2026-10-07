@@ -14,6 +14,7 @@ pub mod project;
 pub mod run;
 pub mod schema;
 pub mod takes;
+pub mod view;
 
 use grida_fx_core::{Error, ErrorKind};
 use serde_json::Value;

@@ -88,6 +88,8 @@ pub enum Verb {
     Project(ProjectArgs),
     /// a run's summary, from its own folder
     Inspect(InspectArgs),
+    /// view a workflow plan or an existing run in a local browser; never starts a run
+    View(ViewArgs),
 }
 
 /// The common options of the planning verbs, plus the verb-specific flags.
@@ -262,6 +264,45 @@ pub struct InspectArgs {
     pub json: bool,
 }
 
+#[derive(Debug, Args, Clone)]
+#[command(group(clap::ArgGroup::new("source").required(true).multiple(false).args(["target", "run", "plan"])))]
+pub struct ViewArgs {
+    /// a workflow file, a workflow id, or a Python builder file.py:function
+    pub target: Option<String>,
+    /// an existing run folder
+    #[arg(long, value_name = "DIRECTORY")]
+    pub run: Option<String>,
+    /// an already-materialized fx-graph-v1 JSON plan; no author code is loaded
+    #[arg(long, value_name = "FILE")]
+    pub plan: Option<String>,
+    /// inputs YAML for a workflow target; repeatable; later files win
+    #[arg(long = "inputs", value_name = "FILE", requires = "target")]
+    pub inputs: Vec<String>,
+    /// a route table for a workflow target; repeatable
+    #[arg(long = "routes", value_name = "FILE", requires = "target")]
+    pub routes: Vec<String>,
+    /// an argument for a Python builder target
+    #[arg(long = "arg", value_name = "NAME=VALUE", requires = "target")]
+    pub arg: Vec<String>,
+    /// the planning ceiling in US dollars; viewing never admits paid calls
+    #[arg(
+        long = "max-usd",
+        value_name = "USD",
+        allow_negative_numbers = true,
+        requires = "target"
+    )]
+    pub max_usd: Option<String>,
+    /// loopback port; 0 asks the operating system for an available port
+    #[arg(long, default_value_t = 0)]
+    pub port: u16,
+    /// print the URL without opening a browser
+    #[arg(long)]
+    pub no_open: bool,
+    /// workflow input flags, separated before parsing
+    #[arg(skip)]
+    pub rest: Vec<String>,
+}
+
 /// Parses `argv` (the program name first), runs the verb, and maps the outcome to an exit code.
 pub fn main(argv: Vec<OsString>) -> ExitCode {
     let (for_clap, rest) = split_plan_args(&argv);
@@ -355,6 +396,10 @@ fn dispatch(verb: Verb, rest: Vec<String>) -> Result<u8, Error> {
         Verb::Jobs(args) => verbs::jobs::run(&args),
         Verb::Project(args) => verbs::project::run(&args),
         Verb::Inspect(args) => verbs::inspect::run(&args),
+        Verb::View(mut args) => {
+            args.rest = rest;
+            verbs::view::run(&args)
+        }
     }
 }
 

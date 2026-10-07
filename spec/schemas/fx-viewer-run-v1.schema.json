@@ -1,0 +1,514 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-viewer-run-v1",
+  "title": "FX viewer run read model (fx-viewer-run-v1)",
+  "description": "Read-only bootstrap HTTP projection of one recorded run, not a portable snapshot or execution contract. Values retain the plan or run event encoding. Missing placed artifacts remain explicitly unavailable.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "workflow",
+    "run_name",
+    "state",
+    "stand_in",
+    "charged_usd",
+    "estimate",
+    "inputs",
+    "outputs",
+    "nodes",
+    "artifacts",
+    "warnings"
+  ],
+  "properties": {
+    "kind": {
+      "const": "fx-viewer-run-v1"
+    },
+    "workflow": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "run_name": {
+      "type": "string"
+    },
+    "state": {
+      "enum": [
+        "planned",
+        "unfinished",
+        "succeeded",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "stand_in": {
+      "type": "boolean"
+    },
+    "charged_usd": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "estimate": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "inputs": {
+      "type": "object"
+    },
+    "outputs": {
+      "type": "object"
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/node"
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/artifact"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "scopes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/scope"
+      },
+      "description": "Optional engine-owned display scopes. Absence means a legacy flat graph; an empty array authoritatively means no nested scopes."
+    }
+  },
+  "$defs": {
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "path",
+        "title",
+        "uses",
+        "state",
+        "reads",
+        "with",
+        "outputs",
+        "cache",
+        "error",
+        "duration_ms"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "uses": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "state": {
+          "enum": [
+            "pending",
+            "running",
+            "succeeded",
+            "failed",
+            "skipped"
+          ]
+        },
+        "reads": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "with": {
+          "type": "object"
+        },
+        "outputs": {
+          "type": "object"
+        },
+        "cache": {
+          "enum": [
+            "hit",
+            "miss",
+            null
+          ]
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "duration_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "ports": {
+          "$ref": "#/$defs/ports"
+        },
+        "bindings": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/binding"
+          }
+        },
+        "needs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "judges": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "interface_bindings": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/interface_binding"
+          }
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "digest",
+        "kind",
+        "name",
+        "size",
+        "available",
+        "url"
+      ],
+      "properties": {
+        "digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "available": {
+          "type": "boolean"
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^/api/artifacts/[0-9a-f]{64}$"
+        }
+      }
+    },
+    "ports": {
+      "description": "Declared input/output file ports and JSON parameter schemas for display. Absent in older documents. Does not participate in identity.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inputs",
+        "outputs",
+        "params"
+      ],
+      "properties": {
+        "inputs": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^(?:image|audio|video|model|text|json|annotations|file)(?:/[a-z0-9.+-]+)?(?:\\[\\]|\\{\\})?\\??$"
+          }
+        },
+        "outputs": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^(?:image|audio|video|model|text|json|annotations|file)(?:/[a-z0-9.+-]+)?(?:\\[\\]|\\{\\})?\\??$"
+          }
+        },
+        "params": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "binding": {
+      "description": "An evaluated reference from one resolved instance output or node fact to a named with entry. A compound expression or collection may have several references. Unresolved instance/take choices are omitted; readers keep dependency edges instead of guessing.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "source_port",
+        "target_port",
+        "source_kind"
+      ],
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_port": {
+          "type": "string"
+        },
+        "target_port": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "source_kind": {
+          "enum": [
+            "output",
+            "fact"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "source_kind": {
+                "const": "output"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "source_port": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "parent",
+        "kind",
+        "path",
+        "step",
+        "take",
+        "title",
+        "source",
+        "ports",
+        "input_bindings",
+        "output_bindings",
+        "nodes",
+        "pending"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^scope:.+#"
+        },
+        "parent": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "enum": [
+            "group",
+            "workflow"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "step": {
+          "type": "string",
+          "minLength": 1
+        },
+        "take": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "title": {
+          "type": "string"
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Portable loaded workflow source for imports; null for inline groups. Never an absolute filesystem path."
+        },
+        "ports": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "inputs",
+            "outputs"
+          ],
+          "properties": {
+            "inputs": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "additionalProperties": true
+            },
+            "outputs": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              }
+            }
+          }
+        },
+        "input_bindings": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/interface_binding"
+          }
+        },
+        "output_bindings": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/interface_binding"
+          }
+        },
+        "nodes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "pending": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "interface_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "source_port",
+        "source_kind",
+        "target_port"
+      ],
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_port": {
+          "type": "string"
+        },
+        "source_kind": {
+          "enum": [
+            "output",
+            "fact",
+            "scope_input",
+            "scope_output"
+          ]
+        },
+        "target_port": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "source_kind": {
+                "enum": [
+                  "output",
+                  "scope_input",
+                  "scope_output"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "source_port": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

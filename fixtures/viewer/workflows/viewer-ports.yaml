@@ -1,0 +1,78 @@
+fx: workflow/v1
+id: viewer-ports
+title: Viewer named ports fixture
+description: Exact port wiring across equal-content outputs, lists, keyed collections, wildcards and computed settings.
+
+steps:
+  seed:
+    uses: ./nodes/media.py#seed
+
+  split:
+    uses: ./nodes/ports.py#split
+    with: { image: "${{ steps.seed.outputs.image }}" }
+
+  merge:
+    uses: ./nodes/ports.py#merge
+    with:
+      image: ${{ steps.split.outputs.color }}
+      mask: ${{ steps.split.outputs.mask }}
+
+  same:
+    uses: ./nodes/ports.py#compare
+    with:
+      left: ${{ steps.split.outputs.color }}
+      right: ${{ steps.split.outputs.copy }}
+
+  list:
+    uses: ./nodes/media.py#sheet
+    with:
+      images:
+        - ${{ steps.split.outputs.color }}
+        - ${{ steps.split.outputs.mask }}
+        - ${{ steps.split.outputs.copy }}
+
+  bundle:
+    uses: ./nodes/media.py#bundle
+    with:
+      seed: ${{ steps.seed.outputs.image }}
+      warm: ${{ steps.merge.outputs.image }}
+      cool: ${{ steps.split.outputs.mask }}
+
+  keyed:
+    uses: ./nodes/ports.py#gather
+    with: { images: "${{ steps.bundle.outputs.collection }}" }
+
+  tile:
+    for_each:
+      - { id: amber, shape: circle, color: "#bfa462" }
+      - { id: teal, shape: diamond, color: "#619fa4" }
+    key: ${{ item.id }}
+    uses: ./nodes/media.py#draw
+    with: { shape: "${{ item.shape }}", color: "${{ item.color }}" }
+
+  wildcard:
+    uses: ./nodes/ports.py#gather
+    with: { images: "${{ steps.tile.*.outputs.image }}" }
+
+  settings:
+    uses: ./nodes/ports.py#settings
+    with:
+      width: ${{ steps.split.outputs.report.width + 1 }}
+      label: "Size ${{ steps.split.outputs.report.width }} x ${{ steps.split.outputs.report.height }}"
+      pixels: ${{ steps.split.facts.pixel_count }}
+      file_width: ${{ facts(steps.split.outputs.color).width }}
+      literal: A literal setting has no upstream socket
+
+  barrier:
+    needs: [merge, settings]
+    uses: ./nodes/media.py#note
+    with: { message: A control dependency is distinct from a data binding }
+
+outputs:
+  image: ${{ steps.merge.outputs.image }}
+  same: ${{ steps.same.outputs.report }}
+  list: ${{ steps.list.outputs.image }}
+  keyed: ${{ steps.keyed.outputs.image }}
+  wildcard: ${{ steps.wildcard.outputs.image }}
+  settings: ${{ steps.settings.outputs.report }}
+  barrier: ${{ steps.barrier.outputs.text }}

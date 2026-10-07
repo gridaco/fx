@@ -1,0 +1,15 @@
+fx: workflow/v1
+id: viewer-nesting-failure-wrapper
+title: Imported failing wrapper
+
+inputs:
+  source_image: { type: file, kind: image }
+
+steps:
+  inner:
+    title: Imported failing child
+    uses: ./workflows/viewer-nesting-failure-leaf.yaml
+    with: { candidate: "${{ inputs.source_image }}" }
+
+outputs:
+  preview: ${{ steps.inner.outputs.picture }}

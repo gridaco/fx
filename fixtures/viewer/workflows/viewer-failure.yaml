@@ -1,0 +1,26 @@
+fx: workflow/v1
+id: viewer-failure
+title: Viewer failure fixture
+description: One explicit failure, a blocked data consumer, an independent branch and an ordering-only barrier.
+
+steps:
+  seed:
+    uses: ./nodes/media.py#seed
+  intentional_failure:
+    uses: ./nodes/media.py#fail
+    with: { image: "${{ steps.seed.outputs.image }}" }
+  dependent:
+    uses: ./nodes/media.py#tint
+    with: { image: "${{ steps.intentional_failure.outputs.image }}", tone: warm }
+  independent:
+    uses: ./nodes/media.py#draw
+    with: { shape: circle, color: "#a4bdea" }
+  after_failure:
+    needs: [intentional_failure]
+    uses: ./nodes/media.py#note
+    with: { message: An ordering-only dependency can finish after a failed step. }
+
+outputs:
+  independent: ${{ steps.independent.outputs.image }}
+  after_failure: ${{ steps.after_failure.outputs.text }}
+  unavailable: ${{ steps.dependent.outputs.image }}

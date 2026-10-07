@@ -1,0 +1,31 @@
+fx: workflow/v1
+id: viewer-takes
+title: Local takes and review
+description: >-
+  Draw an original geometric image, reject the first take with a deterministic local
+  check, and accept the second. Every result is recorded without a provider call.
+
+steps:
+  render:
+    title: Draw a candidate
+    uses: ./nodes/takes.py#render
+
+  review:
+    title: Check the candidate's center
+    uses: ./nodes/takes.py#review
+    judges: render
+    with:
+      image: ${{ steps.render.outputs.image }}
+    on_reject:
+      regenerate: { max: 3, then: fail }
+
+  finish:
+    title: Keep the accepted image
+    uses: ./nodes/takes.py#finish
+    with:
+      image: ${{ steps.render.outputs.image }}
+      report: ${{ steps.review.outputs.report }}
+
+outputs:
+  image: ${{ steps.finish.outputs.image }}
+  report: ${{ steps.finish.outputs.report }}

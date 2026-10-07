@@ -1,0 +1,12 @@
+{
+  "name": "grida-fx-web-workspace",
+  "private": true,
+  "packageManager": "bun@1.4.0",
+  "workspaces": ["web/viewer", "js/fx-web", "js/fx-react"],
+  "scripts": {
+    "build:viewer": "bun --no-env-file run --cwd web/viewer build",
+    "check:viewer": "bun --no-env-file run --cwd web/viewer check",
+    "test:viewer": "bun --no-env-file test js/fx-web/tests",
+    "dev:viewer": "bun --no-env-file run --cwd web/viewer dev"
+  }
+}

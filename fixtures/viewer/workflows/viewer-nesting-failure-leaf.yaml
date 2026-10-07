@@ -1,0 +1,17 @@
+fx: workflow/v1
+id: viewer-nesting-failure-leaf
+title: Imported failing child
+
+inputs:
+  candidate: { type: file, kind: image }
+
+steps:
+  fail:
+    uses: ./nodes/media.py#fail
+    with: { image: "${{ inputs.candidate }}" }
+  blocked:
+    uses: ./nodes/media.py#tint
+    with: { image: "${{ steps.fail.outputs.image }}", tone: warm }
+
+outputs:
+  picture: ${{ steps.blocked.outputs.image }}

@@ -59,9 +59,33 @@ jobs:
           echo "version=$("${print[@]}" semver)" >> "$GITHUB_OUTPUT"
           echo "python_version=$("${print[@]}" pep440)" >> "$GITHUB_OUTPUT"
 
+  viewer:
+    name: Build viewer assets
+    needs: versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.0"
+      - run: bun --no-env-file install --frozen-lockfile
+      - run: bun --no-env-file run check:viewer
+      - run: bun --no-env-file run test:viewer
+      - run: bun --no-env-file run build:viewer
+      - uses: actions/upload-artifact@v7
+        with:
+          name: viewer-assets
+          path: web/viewer/dist/
+          if-no-files-found: error
+
   build:
     name: Build ${{ matrix.target }}
-    needs: versions
+    needs: [versions, viewer]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     permissions:
@@ -101,6 +125,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      # Every target embeds this exact frontend build; users install only the native package.
+      - uses: actions/download-artifact@v8
+        with:
+          name: viewer-assets
+          path: web/viewer/dist/
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -165,10 +194,14 @@ jobs:
           "$WHEEL_PYTHON" -m grida.fx --version
           GRIDA_FX_PYTHON="$WHEEL_PYTHON" uv run --locked --project python \
             python conformance/run.py --strict --command "$WHEEL_PYTHON -m grida.fx"
+      - name: The installed wheel serves its embedded viewer outside the checkout
+        run: >-
+          "$WHEEL_PYTHON" tools/check_viewer.py
+          --command "$WHEEL_PYTHON -m grida.fx"
 
       - name: Install the SDK's TypeScript compiler
         working-directory: js/fx
-        run: bun install --frozen-lockfile
+        run: bun --no-env-file install --frozen-lockfile
       - name: Build the npm packages
         run: node tools/build_npm.mjs --out "$DIST/npm" --target "$TARGET=$BIN"
       - name: Install the npm packages into a fresh prefix
@@ -182,6 +215,8 @@ jobs:
           "$NPM_BIN" --version
           GRIDA_FX_PYTHON="$WHEEL_PYTHON" uv run --locked --project python \
             python conformance/run.py --strict --command "$NPM_BIN"
+      - name: The installed npm package serves its embedded viewer outside the checkout
+        run: python3 tools/check_viewer.py --command "$NPM_BIN"
       # Every job packs @grida/fx; one uploads it, every job uploads its own engine package.
       - name: Set the tarballs apart
         run: |

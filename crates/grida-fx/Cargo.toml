@@ -15,6 +15,7 @@ grida-fx-core.workspace = true
 grida-fx-protocol.workspace = true
 grida-fx-runtime.workspace = true
 grida-fx-providers.workspace = true
+grida-fx-viewer.workspace = true
 tokio.workspace = true
 serde_json.workspace = true
 indexmap.workspace = true

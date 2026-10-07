@@ -8,7 +8,9 @@ publish. Nothing is published from a laptop.
 
 ## What a release publishes
 
-One engine binary per target, packaged twice:
+One engine binary per target, packaged twice. Each binary embeds the same production viewer
+bundle built once for that release; installed users need no Bun, Node server, Docker or frontend
+build to open it. Python users still need no Node at all.
 
 | Target | Built on | npm package | PyPI wheel tag |
 |---|---|---|---|
@@ -100,11 +102,15 @@ git tag -a v0.1.0-alpha.1 -m "Grida FX 0.1.0-alpha.1 (preview)"
 git push origin v0.1.0-alpha.1
 ```
 
-The tag starts `release.yml`, which runs three jobs:
+The tag starts `release.yml`, which runs four jobs:
 
 1. **versions:** `tools/check_versions.py --prerelease --tag <tag>`. Every manifest names the
    workspace version, the tag names it too, and it is a pre-release.
-2. **build**, once per target, on the runner in the table above:
+2. **viewer:** installs the frozen root Bun workspace, checks, tests and builds the viewer, and uploads
+   `web/viewer/dist` as one build artifact. Generated assets stay out of Git. Missing assets fail
+   the native build rather than producing a package without its UI.
+3. **build**, once per target, on the runner in the table above:
+   - downloads that viewer bundle before compiling, so all platforms embed identical assets;
    - builds `grida-fx` with `--locked --release` (cargo-zigbuild for glibc 2.28 on Linux;
      `MACOSX_DEPLOYMENT_TARGET` 11.0 or 10.12 on macOS), and checks that it prints
      `grida-fx <version>`;
@@ -116,9 +122,12 @@ The tag starts `release.yml`, which runs three jobs:
    - builds the npm packages with `tools/build_npm.mjs`, under Node 18 (the oldest Node the
      packages support). It installs the tarballs into a fresh prefix, and runs the suite again
      through the installed `grida-fx` command;
+   - runs `tools/check_viewer.py` through both installed commands from an isolated temporary
+     directory. A synthetic graph needs no provider; loopback requests must retrieve every
+     embedded frontend file byte-for-byte, without a browser or frontend runtime;
    - uploads the wheel and the engine package it just tested. Every job packs `@grida/fx` the
      same way, and the `x86_64-unknown-linux-gnu` job uploads it.
-3. **publish** waits for a reviewer to approve the `release` environment. It runs only for a
+4. **publish** waits for a reviewer to approve the `release` environment. It runs only for a
    `v*` tag, and never for a dry run. It publishes the four engine packages and then
    `@grida/fx` to npm, under `next` with `--access public --provenance`, and then the four wheels
    to PyPI. It checks out no code. A package version that is already published is skipped,

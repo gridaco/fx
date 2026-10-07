@@ -1,0 +1,38 @@
+fx: workflow/v1
+id: viewer-nesting
+title: Repeated imported workflows
+description: Two keyed imports share one wrapper, which imports a leaf workflow and contains an inline group.
+
+steps:
+  seed:
+    uses: ./nodes/media.py#seed
+
+  imported:
+    title: Imported image wrapper
+    for_each:
+      - { id: warm, tone: warm }
+      - { id: cool, tone: cool }
+    key: ${{ item.id }}
+    uses: ./workflows/viewer-nesting-wrapper.yaml
+    with:
+      source_image: ${{ steps.seed.outputs.image }}
+      image_tone: ${{ item.tone }}
+
+  sheet:
+    uses: ./nodes/media.py#sheet
+    with:
+      images:
+        - ${{ steps.imported['warm'].outputs.preview }}
+        - ${{ steps.imported['cool'].outputs.preview }}
+
+  same_aliases:
+    uses: ./nodes/ports.py#compare
+    with:
+      left: ${{ steps.imported['warm'].outputs.preview }}
+      right: ${{ steps.imported['warm'].outputs.same_preview }}
+
+outputs:
+  sheet: ${{ steps.sheet.outputs.image }}
+  previews: ${{ steps.imported.*.outputs.preview }}
+  accents: ${{ steps.imported.*.outputs.accent }}
+  same_aliases: ${{ steps.same_aliases.outputs.report }}

@@ -1,0 +1,25 @@
+fx: workflow/v1
+id: viewer-nesting-failure
+title: Failure inside imported workflows
+description: A nested imported failure remains visible through both enclosing workflow cards.
+
+steps:
+  seed:
+    uses: ./nodes/media.py#seed
+
+  broken_wrapper:
+    title: Imported failing wrapper
+    uses: ./workflows/viewer-nesting-failure-wrapper.yaml
+    with: { source_image: "${{ steps.seed.outputs.image }}" }
+
+  dependent:
+    uses: ./nodes/media.py#tint
+    with: { image: "${{ steps.broken_wrapper.outputs.preview }}", tone: cool }
+
+  independent:
+    uses: ./nodes/media.py#draw
+    with: { shape: square, color: "#b6a6cc" }
+
+outputs:
+  unavailable: ${{ steps.dependent.outputs.image }}
+  independent: ${{ steps.independent.outputs.image }}

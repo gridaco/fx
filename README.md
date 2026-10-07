@@ -6,16 +6,17 @@ FX grew out of gnode, the Python engine [softmarshmallow/stage-gen](https://gith
 
 ## Install (preview)
 
-The preview packages are not published yet. Until they are, FX runs from a clone of this repository, which needs cargo and [uv](https://docs.astral.sh/uv/) ([examples/README.md](examples/README.md#from-a-clone) has the rest):
+The preview packages are not published yet. Until they are, FX runs from a clone of this repository, which needs cargo, [Bun](https://bun.sh) and [uv](https://docs.astral.sh/uv/) ([examples/README.md](examples/README.md#from-a-clone) has the rest):
 
 ```sh
 git clone https://github.com/gridaco/fx && cd fx
 uv sync --project python          # the Python SDK and Pillow, in python/.venv
+bun --no-env-file install --frozen-lockfile
 python3 tools/build_engine.py     # the engine, built into that SDK; again after every pull
 uv run --project python python -m grida.fx --version
 ```
 
-Once published, npm will have FX under the `next` tag and PyPI as a pre-release. Both packages carry the same engine, the `grida-fx` binary.
+Once published, npm will have FX under the `next` tag and PyPI as a pre-release. Both packages carry the same engine, the `grida-fx` binary, with its viewer embedded. Installed packages need no Bun, Docker or frontend build.
 
 ```sh
 npm install -g @grida/fx@next    # the grida-fx command, and the JavaScript SDK
@@ -38,3 +39,7 @@ The preview runs on:
 The npm package needs Node 18 or later; the Python one needs Python 3.11 or later. **Windows is not supported yet**, since the engine's runner uses Unix process groups and signals; use WSL 2. Linux with musl (Alpine) isn't supported either.
 
 Start with [the guide](docs/guide/01-getting-started.md). [RELEASING.md](RELEASING.md) says how a preview is published.
+
+For viewer development, the [canonical fixture suite](fixtures/viewer/README.md)
+generates real provider-free plans and runs covering branches, joins, matrices,
+keyed repeats, conditions, media, cache reuse, takes and failures.

@@ -11,14 +11,15 @@
 //! after `expand`, `identity` or `price` they are workflow input flags like any other. `run` takes
 //! the planning verbs' value options plus its own: `--yes-up-to`, `--deliver` and `--run` with a
 //! value, and the flag `--live`; `plan`'s flags are input flags after `run`. Arguments of any
-//! other verb, and of no verb, all stay for clap.
+//! other verb, and of no verb, all stay for clap. `view` takes the planning value options
+//! plus `--run`, `--plan`, `--port`, and `--no-open`; saved-file modes reject input flags.
 
 use grida_fx_core::Error;
 use indexmap::IndexMap;
 use std::ffi::OsString;
 
 /// The verbs whose extra arguments are workflow input flags.
-const PLANNING_VERBS: [&str; 5] = ["plan", "expand", "identity", "price", "run"];
+const PLANNING_VERBS: [&str; 6] = ["plan", "expand", "identity", "price", "run", "view"];
 /// Options of every planning verb that take a value.
 const VALUE_OPTIONS: [&str; 4] = ["--inputs", "--routes", "--arg", "--max-usd"];
 /// Flags of `plan` alone.
@@ -27,6 +28,10 @@ const PLAN_FLAGS: [&str; 3] = ["--check", "--json", "--expect-cached"];
 const RUN_VALUE_OPTIONS: [&str; 4] = ["--yes-up-to", "--deliver", "--run", "--stand-in"];
 /// Flags of `run` alone.
 const RUN_FLAGS: [&str; 1] = ["--live"];
+/// Options of `view` alone that take a value.
+const VIEW_VALUE_OPTIONS: [&str; 3] = ["--run", "--plan", "--port"];
+/// Flags of `view` alone.
+const VIEW_FLAGS: [&str; 1] = ["--no-open"];
 /// Help, for every verb.
 const HELP_FLAGS: [&str; 2] = ["-h", "--help"];
 
@@ -39,6 +44,7 @@ pub fn split_plan_args(argv: &[OsString]) -> (Vec<OsString>, Vec<String>) {
     let (own_values, own_flags): (&[&str], &[&str]) = match verb {
         "plan" => (&[], &PLAN_FLAGS),
         "run" => (&RUN_VALUE_OPTIONS, &RUN_FLAGS),
+        "view" => (&VIEW_VALUE_OPTIONS, &VIEW_FLAGS),
         _ => (&[], &[]),
     };
     let mut for_clap: Vec<OsString> = argv[..2].to_vec();
@@ -340,6 +346,51 @@ mod tests {
             expected.extend_from_slice(argv);
             assert_eq!(for_clap, strings(&expected));
             assert!(rest.is_empty(), "{argv:?}");
+        }
+    }
+
+    #[test]
+    fn view_keeps_viewer_options_and_passes_workflow_input_flags() {
+        let (for_clap, rest) = split(&[
+            "view",
+            "case",
+            "--name",
+            "Ada",
+            "--inputs=inputs.yaml",
+            "--routes",
+            "routes.yaml",
+            "--arg",
+            "theme=dusk",
+            "--max-usd",
+            "-1",
+            "--port=8787",
+            "--no-open",
+        ]);
+        assert_eq!(
+            for_clap,
+            strings(&[
+                "grida-fx",
+                "view",
+                "case",
+                "--inputs=inputs.yaml",
+                "--routes",
+                "routes.yaml",
+                "--arg",
+                "theme=dusk",
+                "--max-usd",
+                "-1",
+                "--port=8787",
+                "--no-open",
+            ])
+        );
+        assert_eq!(rest, strings(&["--name", "Ada"]));
+        for source in ["--run", "--plan"] {
+            let (for_clap, rest) = split(&["view", source, "--odd-path", "--no-open"]);
+            assert_eq!(
+                for_clap,
+                strings(&["grida-fx", "view", source, "--odd-path", "--no-open"])
+            );
+            assert!(rest.is_empty());
         }
     }
 

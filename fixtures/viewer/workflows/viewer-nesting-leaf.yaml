@@ -1,0 +1,14 @@
+fx: workflow/v1
+id: viewer-nesting-leaf
+title: Imported thumbnail leaf
+
+inputs:
+  base_image: { type: file, kind: image }
+
+steps:
+  resize:
+    uses: fx/image.resize@1
+    with: { image: "${{ inputs.base_image }}", longest_side: 48 }
+
+outputs:
+  thumbnail: ${{ steps.resize.outputs.image }}

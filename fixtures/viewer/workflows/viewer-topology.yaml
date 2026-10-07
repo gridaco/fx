@@ -1,0 +1,139 @@
+fx: workflow/v1
+id: viewer-topology
+title: Viewer topology fixture
+description: Provider-free coverage of media, fanout, joins, repeats, conditions, nested workflows and ordering.
+
+inputs:
+  enabled: { type: boolean, default: true }
+
+tables:
+  badges:
+    - { id: sun, shape: circle, color: "#e9b45d" }
+    - { id: leaf, shape: diamond, color: "#70b7a2" }
+    - { id: stone, shape: square, color: "#8b91ba" }
+
+steps:
+  plan_note:
+    at: plan
+    uses: ./nodes/media.py#note
+    with: { message: "This free local result already exists in the plan." }
+
+  seed:
+    uses: ./nodes/media.py#seed
+
+  warm:
+    uses: ./nodes/media.py#tint
+    with: { image: "${{ steps.seed.outputs.image }}", tone: warm }
+
+  cool:
+    uses: ./nodes/media.py#tint
+    with: { image: "${{ steps.seed.outputs.image }}", tone: cool }
+
+  metrics:
+    uses: ./nodes/media.py#metrics
+    with: { image: "${{ steps.seed.outputs.image }}", enabled: "${{ inputs.enabled }}" }
+
+  caption:
+    uses: ./nodes/media.py#caption
+    with: { image: "${{ steps.seed.outputs.image }}" }
+
+  audio:
+    uses: ./nodes/media.py#tone
+    with: { image: "${{ steps.seed.outputs.image }}" }
+
+  sheet:
+    title: Join the original seed with the warm and cool variations into one transparent contact sheet
+    uses: ./nodes/media.py#sheet
+    with:
+      images:
+        - ${{ steps.seed.outputs.image }}
+        - ${{ steps.warm.outputs.image }}
+        - ${{ steps.cool.outputs.image }}
+
+  matrix:
+    matrix: { color: ["#d16a71", "#619db9"], shape: [circle, square, diamond] }
+    uses: ./nodes/media.py#draw
+    with: { shape: "${{ matrix.shape }}", color: "${{ matrix.color }}" }
+
+  badge:
+    for_each: ${{ tables.badges }}
+    key: ${{ item.id }}
+    steps:
+      draw:
+        uses: ./nodes/media.py#draw
+        with: { shape: "${{ item.shape }}", color: "${{ item.color }}" }
+      check_alpha:
+        uses: fx/image.check_alpha@1
+        judges: draw
+        with: { image: "${{ steps.draw.outputs.image }}" }
+      thumb:
+        uses: fx/image.resize@1
+        with: { image: "${{ steps.draw.outputs.image }}", longest_side: 40 }
+
+  propose:
+    uses: ./nodes/media.py#propose
+
+  dynamic:
+    for_each: ${{ steps.propose.outputs.items.entries }}
+    key: ${{ item.id }}
+    max: 3
+    uses: ./nodes/media.py#draw
+    with: { shape: "${{ item.shape }}", color: "${{ item.color }}" }
+
+  static_false:
+    if: ${{ false }}
+    uses: ./nodes/media.py#tint
+    with: { image: "${{ steps.seed.outputs.image }}", tone: violet }
+
+  selected:
+    if: ${{ steps.metrics.outputs.report.enabled }}
+    uses: ./nodes/media.py#tint
+    with: { image: "${{ steps.seed.outputs.image }}", tone: green }
+
+  skipped:
+    if: ${{ !steps.metrics.outputs.report.enabled }}
+    uses: ./nodes/media.py#tint
+    with: { image: "${{ steps.seed.outputs.image }}", tone: violet }
+
+  chosen:
+    uses: fx/select@1
+    with:
+      first_of:
+        - ${{ steps.skipped.outputs.image }}
+        - ${{ steps.selected.outputs.image }}
+        - ${{ steps.seed.outputs.image }}
+
+  barrier:
+    needs: [sheet, audio, caption]
+    uses: ./nodes/media.py#note
+    with: { message: "The image join, audio and text branches have finished." }
+
+  bundle:
+    uses: ./nodes/media.py#bundle
+    with:
+      seed: ${{ steps.seed.outputs.image }}
+      warm: ${{ steps.warm.outputs.image }}
+      cool: ${{ steps.cool.outputs.image }}
+
+  nested:
+    steps:
+      draw:
+        uses: ./nodes/media.py#draw
+        with: { shape: diamond, color: "#c8a5cb" }
+      tile:
+        uses: ./workflows/viewer-tile.yaml
+        with: { image: "${{ steps.draw.outputs.image }}" }
+
+outputs:
+  seed: ${{ steps.seed.outputs.image }}
+  sheet: ${{ steps.sheet.outputs.image }}
+  metrics: ${{ steps.metrics.outputs.report }}
+  caption: ${{ steps.caption.outputs.text }}
+  audio: ${{ steps.audio.outputs.audio }}
+  badges: ${{ steps.badge.*.thumb.outputs.image }}
+  dynamic: ${{ steps.dynamic.*.outputs.image }}
+  chosen: ${{ steps.chosen.outputs.value }}
+  images: ${{ steps.bundle.outputs.images }}
+  collection: ${{ steps.bundle.outputs.collection }}
+  nested: ${{ steps.nested.tile.outputs.image }}
+  barrier: ${{ steps.barrier.outputs.text }}

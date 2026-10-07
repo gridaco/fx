@@ -1,0 +1,1526 @@
+{
+  "kind": "fx-viewer-fixtures-v1",
+  "running_step": "delay",
+  "warm_cache_miss_paths": [
+    "chosen"
+  ],
+  "stable_output_ports": [
+    "seed",
+    "sheet",
+    "metrics",
+    "caption",
+    "audio",
+    "chosen",
+    "nested",
+    "barrier"
+  ],
+  "plans": [
+    {
+      "file": "topology.json",
+      "node_count": 33,
+      "edge_count": 33,
+      "pending_count": 1,
+      "required_states": [
+        "planned",
+        "maybe",
+        "done",
+        "unexpanded"
+      ],
+      "requires_nodes": [
+        "seed#1",
+        "matrix['#d16a71']['circle']#1",
+        "matrix['#619db9']['diamond']#1",
+        "badge['sun'].draw#1",
+        "badge['stone'].thumb#1",
+        "nested.tile.thumb#1",
+        "dynamic"
+      ],
+      "requires_edges": [
+        {
+          "source": "seed#1",
+          "target": "warm#1",
+          "kinds": [
+            "reads"
+          ]
+        },
+        {
+          "source": "seed#1",
+          "target": "cool#1",
+          "kinds": [
+            "reads"
+          ]
+        },
+        {
+          "source": "warm#1",
+          "target": "sheet#1",
+          "kinds": [
+            "reads"
+          ]
+        },
+        {
+          "source": "cool#1",
+          "target": "sheet#1",
+          "kinds": [
+            "reads"
+          ]
+        },
+        {
+          "source": "sheet#1",
+          "target": "barrier#1",
+          "kinds": [
+            "needs"
+          ]
+        },
+        {
+          "source": "badge['sun'].draw#1",
+          "target": "badge['sun'].check_alpha#1",
+          "kind": "control",
+          "kinds": [
+            "judges"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "failure.json",
+      "node_count": 5,
+      "edge_count": 3,
+      "pending_count": 0
+    },
+    {
+      "file": "running.json",
+      "node_count": 3,
+      "edge_count": 2,
+      "pending_count": 0
+    },
+    {
+      "file": "takes.json",
+      "node_count": 7,
+      "edge_count": 12,
+      "pending_count": 0,
+      "required_states": [
+        "planned",
+        "maybe"
+      ]
+    },
+    {
+      "file": "ports.json",
+      "node_count": 12,
+      "pending_count": 0,
+      "requires_ports": [
+        {
+          "id": "split#1",
+          "inputs": {
+            "image": "image"
+          },
+          "outputs": {
+            "color": "image/png",
+            "copy": "image/png",
+            "mask": "image/png",
+            "report": "json"
+          },
+          "params": []
+        },
+        {
+          "id": "merge#1",
+          "inputs": {
+            "image": "image",
+            "mask": "image"
+          },
+          "outputs": {
+            "image": "image/png"
+          },
+          "params": []
+        },
+        {
+          "id": "same#1",
+          "inputs": {
+            "left": "image",
+            "right": "image"
+          },
+          "outputs": {
+            "report": "json"
+          },
+          "params": []
+        },
+        {
+          "id": "list#1",
+          "inputs": {
+            "images": "image[]"
+          },
+          "outputs": {
+            "image": "image/png"
+          },
+          "params": []
+        },
+        {
+          "id": "keyed#1",
+          "inputs": {
+            "images": "image{}"
+          },
+          "outputs": {
+            "image": "image/png",
+            "keys": "json"
+          },
+          "params": []
+        },
+        {
+          "id": "wildcard#1",
+          "inputs": {
+            "images": "image{}"
+          },
+          "outputs": {
+            "image": "image/png",
+            "keys": "json"
+          },
+          "params": []
+        },
+        {
+          "id": "settings#1",
+          "inputs": {},
+          "outputs": {
+            "report": "json"
+          },
+          "params": [
+            "width",
+            "label",
+            "pixels",
+            "file_width",
+            "literal"
+          ]
+        }
+      ],
+      "requires_bindings": [
+        {
+          "source": "seed#1",
+          "source_port": "image",
+          "target": "split#1",
+          "target_port": "image",
+          "source_kind": "output"
+        },
+        {
+          "source": "split#1",
+          "source_port": "color",
+          "target": "merge#1",
+          "target_port": "image",
+          "source_kind": "output"
+        },
+        {
+          "source": "split#1",
+          "source_port": "mask",
+          "target": "merge#1",
+          "target_port": "mask",
+          "source_kind": "output"
+        },
+        {
+          "source": "split#1",
+          "source_port": "color",
+          "target": "same#1",
+          "target_port": "left",
+          "source_kind": "output"
+        },
+        {
+          "source": "split#1",
+          "source_port": "copy",
+          "target": "same#1",
+          "target_port": "right",
+          "source_kind": "output"
+        },
+        {
+          "source": "split#1",
+          "source_port": "color",
+          "target": "list#1",
+          "target_port": "images",
+          "source_kind": "output"
+        },
+        {
+          "source": "split#1",
+          "source_port": "mask",
+          "target": "list#1",
+          "target_port": "images",
+          "source_kind": "output"
+        },
+        {
+          "source": "split#1",
+          "source_port": "copy",
+          "target": "list#1",
+          "target_port": "images",
+          "source_kind": "output"
+        },
+        {
+          "source": "bundle#1",
+          "source_port": "collection",
+          "target": "keyed#1",
+          "target_port": "images",
+          "source_kind": "output"
+        },
+        {
+          "source": "tile['amber']#1",
+          "source_port": "image",
+          "target": "wildcard#1",
+          "target_port": "images",
+          "source_kind": "output"
+        },
+        {
+          "source": "tile['teal']#1",
+          "source_port": "image",
+          "target": "wildcard#1",
+          "target_port": "images",
+          "source_kind": "output"
+        },
+        {
+          "source": "split#1",
+          "source_port": "report",
+          "target": "settings#1",
+          "target_port": "width",
+          "source_kind": "output"
+        },
+        {
+          "source": "split#1",
+          "source_port": "report",
+          "target": "settings#1",
+          "target_port": "label",
+          "source_kind": "output"
+        },
+        {
+          "source": "split#1",
+          "source_port": "pixel_count",
+          "target": "settings#1",
+          "target_port": "pixels",
+          "source_kind": "fact"
+        },
+        {
+          "source": "split#1",
+          "source_port": "color",
+          "target": "settings#1",
+          "target_port": "file_width",
+          "source_kind": "output"
+        },
+        {
+          "source": "seed#1",
+          "source_port": "image",
+          "target": "bundle#1",
+          "target_port": "seed",
+          "source_kind": "output"
+        },
+        {
+          "source": "merge#1",
+          "source_port": "image",
+          "target": "bundle#1",
+          "target_port": "warm",
+          "source_kind": "output"
+        },
+        {
+          "source": "split#1",
+          "source_port": "mask",
+          "target": "bundle#1",
+          "target_port": "cool",
+          "source_kind": "output"
+        }
+      ],
+      "literal_settings": [
+        {
+          "id": "settings#1",
+          "name": "literal"
+        }
+      ],
+      "requires_edges": [
+        {
+          "source": "merge#1",
+          "target": "barrier#1",
+          "kind": "control",
+          "kinds": [
+            "needs"
+          ]
+        },
+        {
+          "source": "settings#1",
+          "target": "barrier#1",
+          "kind": "control",
+          "kinds": [
+            "needs"
+          ]
+        }
+      ],
+      "edge_count": 20
+    },
+    {
+      "file": "ports-legacy.json",
+      "node_count": 12,
+      "pending_count": 0,
+      "legacy": true,
+      "edge_count": 13
+    },
+    {
+      "file": "dynamic-failure.json",
+      "node_count": 2,
+      "edge_count": 0,
+      "pending_count": 1,
+      "requires_nodes": [
+        "propose#1",
+        "branch"
+      ]
+    },
+    {
+      "file": "nesting.json",
+      "node_count": 11,
+      "pending_count": 0,
+      "root_node_count": 5,
+      "requires_scopes": [
+        {
+          "path": "imported['warm']",
+          "parent": null,
+          "kind": "workflow",
+          "source": "workflows/viewer-nesting-wrapper.yaml",
+          "inputs": [
+            "source_image",
+            "image_tone"
+          ],
+          "outputs": [
+            "preview",
+            "same_preview",
+            "accent"
+          ],
+          "nodes": [
+            "imported['warm'].tint#1"
+          ],
+          "visible_count": 6
+        },
+        {
+          "path": "imported['warm'].imported_leaf",
+          "parent": "imported['warm']",
+          "kind": "workflow",
+          "source": "workflows/viewer-nesting-leaf.yaml",
+          "inputs": [
+            "base_image"
+          ],
+          "outputs": [
+            "thumbnail"
+          ],
+          "nodes": [
+            "imported['warm'].imported_leaf.resize#1"
+          ],
+          "visible_count": 3
+        },
+        {
+          "path": "imported['warm'].inline",
+          "parent": "imported['warm']",
+          "kind": "group",
+          "source": null,
+          "inputs": [],
+          "outputs": [],
+          "nodes": [
+            "imported['warm'].inline.draw#1",
+            "imported['warm'].inline.thumb#1"
+          ]
+        },
+        {
+          "path": "imported['cool']",
+          "parent": null,
+          "kind": "workflow",
+          "source": "workflows/viewer-nesting-wrapper.yaml",
+          "inputs": [
+            "source_image",
+            "image_tone"
+          ],
+          "outputs": [
+            "preview",
+            "same_preview",
+            "accent"
+          ],
+          "nodes": [
+            "imported['cool'].tint#1"
+          ],
+          "visible_count": 6
+        },
+        {
+          "path": "imported['cool'].imported_leaf",
+          "parent": "imported['cool']",
+          "kind": "workflow",
+          "source": "workflows/viewer-nesting-leaf.yaml",
+          "inputs": [
+            "base_image"
+          ],
+          "outputs": [
+            "thumbnail"
+          ],
+          "nodes": [
+            "imported['cool'].imported_leaf.resize#1"
+          ],
+          "visible_count": 3
+        },
+        {
+          "path": "imported['cool'].inline",
+          "parent": "imported['cool']",
+          "kind": "group",
+          "source": null,
+          "inputs": [],
+          "outputs": [],
+          "nodes": [
+            "imported['cool'].inline.draw#1",
+            "imported['cool'].inline.thumb#1"
+          ]
+        }
+      ],
+      "requires_interfaces": [
+        {
+          "source": "seed#1",
+          "source_port": "image",
+          "source_kind": "output",
+          "target": "imported['warm']",
+          "target_port": "source_image",
+          "target_kind": "scope_input"
+        },
+        {
+          "source": "imported['warm']",
+          "source_port": "source_image",
+          "source_kind": "scope_input",
+          "target": "imported['warm'].tint#1",
+          "target_port": "image",
+          "target_kind": "node"
+        },
+        {
+          "source": "imported['warm']",
+          "source_port": "image_tone",
+          "source_kind": "scope_input",
+          "target": "imported['warm'].tint#1",
+          "target_port": "tone",
+          "target_kind": "node"
+        },
+        {
+          "source": "imported['warm'].tint#1",
+          "source_port": "image",
+          "source_kind": "output",
+          "target": "imported['warm'].imported_leaf",
+          "target_port": "base_image",
+          "target_kind": "scope_input"
+        },
+        {
+          "source": "imported['warm'].imported_leaf",
+          "source_port": "base_image",
+          "source_kind": "scope_input",
+          "target": "imported['warm'].imported_leaf.resize#1",
+          "target_port": "image",
+          "target_kind": "node"
+        },
+        {
+          "source": "imported['warm'].imported_leaf.resize#1",
+          "source_port": "image",
+          "source_kind": "output",
+          "target": "imported['warm'].imported_leaf",
+          "target_port": "thumbnail",
+          "target_kind": "scope_output"
+        },
+        {
+          "source": "imported['warm'].imported_leaf",
+          "source_port": "thumbnail",
+          "source_kind": "scope_output",
+          "target": "imported['warm']",
+          "target_port": "preview",
+          "target_kind": "scope_output"
+        },
+        {
+          "source": "imported['warm']",
+          "source_port": "preview",
+          "source_kind": "scope_output",
+          "target": "sheet#1",
+          "target_port": "images",
+          "target_kind": "node"
+        },
+        {
+          "source": "seed#1",
+          "source_port": "image",
+          "source_kind": "output",
+          "target": "imported['cool']",
+          "target_port": "source_image",
+          "target_kind": "scope_input"
+        },
+        {
+          "source": "imported['cool']",
+          "source_port": "source_image",
+          "source_kind": "scope_input",
+          "target": "imported['cool'].tint#1",
+          "target_port": "image",
+          "target_kind": "node"
+        },
+        {
+          "source": "imported['cool']",
+          "source_port": "image_tone",
+          "source_kind": "scope_input",
+          "target": "imported['cool'].tint#1",
+          "target_port": "tone",
+          "target_kind": "node"
+        },
+        {
+          "source": "imported['cool'].tint#1",
+          "source_port": "image",
+          "source_kind": "output",
+          "target": "imported['cool'].imported_leaf",
+          "target_port": "base_image",
+          "target_kind": "scope_input"
+        },
+        {
+          "source": "imported['cool'].imported_leaf",
+          "source_port": "base_image",
+          "source_kind": "scope_input",
+          "target": "imported['cool'].imported_leaf.resize#1",
+          "target_port": "image",
+          "target_kind": "node"
+        },
+        {
+          "source": "imported['cool'].imported_leaf.resize#1",
+          "source_port": "image",
+          "source_kind": "output",
+          "target": "imported['cool'].imported_leaf",
+          "target_port": "thumbnail",
+          "target_kind": "scope_output"
+        },
+        {
+          "source": "imported['cool'].imported_leaf",
+          "source_port": "thumbnail",
+          "source_kind": "scope_output",
+          "target": "imported['cool']",
+          "target_port": "preview",
+          "target_kind": "scope_output"
+        },
+        {
+          "source": "imported['cool']",
+          "source_port": "preview",
+          "source_kind": "scope_output",
+          "target": "sheet#1",
+          "target_port": "images",
+          "target_kind": "node"
+        },
+        {
+          "source": "imported['warm'].imported_leaf",
+          "source_port": "thumbnail",
+          "source_kind": "scope_output",
+          "target": "imported['warm']",
+          "target_port": "same_preview",
+          "target_kind": "scope_output"
+        },
+        {
+          "source": "imported['warm']",
+          "source_port": "preview",
+          "source_kind": "scope_output",
+          "target": "same_aliases#1",
+          "target_port": "left",
+          "target_kind": "node"
+        },
+        {
+          "source": "imported['warm']",
+          "source_port": "same_preview",
+          "source_kind": "scope_output",
+          "target": "same_aliases#1",
+          "target_port": "right",
+          "target_kind": "node"
+        }
+      ]
+    },
+    {
+      "file": "nesting-failure.json",
+      "node_count": 5,
+      "pending_count": 0,
+      "root_node_count": 4,
+      "requires_scopes": [
+        {
+          "path": "broken_wrapper",
+          "parent": null,
+          "kind": "workflow",
+          "source": "workflows/viewer-nesting-failure-wrapper.yaml",
+          "inputs": [
+            "source_image"
+          ],
+          "outputs": [
+            "preview"
+          ],
+          "nodes": [],
+          "visible_count": 3
+        },
+        {
+          "path": "broken_wrapper.inner",
+          "parent": "broken_wrapper",
+          "kind": "workflow",
+          "source": "workflows/viewer-nesting-failure-leaf.yaml",
+          "inputs": [
+            "candidate"
+          ],
+          "outputs": [
+            "picture"
+          ],
+          "nodes": [
+            "broken_wrapper.inner.fail#1",
+            "broken_wrapper.inner.blocked#1"
+          ],
+          "visible_count": 4
+        }
+      ],
+      "requires_interfaces": [
+        {
+          "source": "seed#1",
+          "source_port": "image",
+          "source_kind": "output",
+          "target": "broken_wrapper",
+          "target_port": "source_image",
+          "target_kind": "scope_input"
+        },
+        {
+          "source": "broken_wrapper",
+          "source_port": "source_image",
+          "source_kind": "scope_input",
+          "target": "broken_wrapper.inner",
+          "target_port": "candidate",
+          "target_kind": "scope_input"
+        },
+        {
+          "source": "broken_wrapper.inner",
+          "source_port": "candidate",
+          "source_kind": "scope_input",
+          "target": "broken_wrapper.inner.fail#1",
+          "target_port": "image",
+          "target_kind": "node"
+        },
+        {
+          "source": "broken_wrapper.inner.blocked#1",
+          "source_port": "image",
+          "source_kind": "output",
+          "target": "broken_wrapper.inner",
+          "target_port": "picture",
+          "target_kind": "scope_output"
+        },
+        {
+          "source": "broken_wrapper.inner",
+          "source_port": "picture",
+          "source_kind": "scope_output",
+          "target": "broken_wrapper",
+          "target_port": "preview",
+          "target_kind": "scope_output"
+        },
+        {
+          "source": "broken_wrapper",
+          "source_port": "preview",
+          "source_kind": "scope_output",
+          "target": "dependent#1",
+          "target_port": "image",
+          "target_kind": "node"
+        }
+      ]
+    },
+    {
+      "file": "nesting-legacy.json",
+      "node_count": 11,
+      "pending_count": 0,
+      "root_node_count": 11,
+      "legacy": true
+    }
+  ],
+  "views": [
+    {
+      "file": "cold.json",
+      "state": "succeeded",
+      "node_count": 35,
+      "edge_count": 35,
+      "preview_count": 25,
+      "requires_nodes": [
+        "seed#1",
+        "dynamic['amber']#1",
+        "dynamic['slate']#1",
+        "matrix['#619db9']['diamond']#1"
+      ],
+      "node_states": {
+        "selected#1": "succeeded",
+        "skipped#1": "skipped"
+      },
+      "requires_edges": [
+        {
+          "source": "warm#1",
+          "target": "sheet#1",
+          "kinds": [
+            "reads"
+          ]
+        },
+        {
+          "source": "badge['sun'].draw#1",
+          "target": "badge['sun'].check_alpha#1",
+          "kind": "control",
+          "kinds": [
+            "judges"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "cached.json",
+      "state": "succeeded",
+      "cache_hits": 32,
+      "node_count": 35,
+      "edge_count": 35,
+      "preview_count": 25
+    },
+    {
+      "file": "alternative.json",
+      "state": "succeeded",
+      "requires_nodes": [
+        "skipped#1"
+      ],
+      "node_states": {
+        "skipped#1": "succeeded"
+      },
+      "edge_count": 35
+    },
+    {
+      "file": "failure.json",
+      "state": "failed",
+      "node_count": 5,
+      "edge_count": 3,
+      "preview_count": 2,
+      "required_states": [
+        "succeeded",
+        "failed",
+        "skipped"
+      ],
+      "node_states": {
+        "intentional_failure#1": "failed",
+        "dependent#1": "skipped",
+        "independent#1": "succeeded",
+        "after_failure#1": "succeeded"
+      }
+    },
+    {
+      "file": "takes.json",
+      "state": "succeeded",
+      "node_count": 7,
+      "edge_count": 8,
+      "preview_count": 3,
+      "requires_nodes": [
+        "render#1",
+        "render#2",
+        "review#1",
+        "review#2",
+        "finish#1"
+      ],
+      "requires_bindings": [
+        {
+          "source": "render#1",
+          "source_port": "image",
+          "target": "review#1",
+          "target_port": "image",
+          "source_kind": "output"
+        },
+        {
+          "source": "render#2",
+          "source_port": "image",
+          "target": "review#2",
+          "target_port": "image",
+          "source_kind": "output"
+        },
+        {
+          "source": "render#2",
+          "source_port": "image",
+          "target": "finish#1",
+          "target_port": "image",
+          "source_kind": "output"
+        },
+        {
+          "source": "review#2",
+          "source_port": "report",
+          "target": "finish#1",
+          "target_port": "report",
+          "source_kind": "output"
+        }
+      ]
+    },
+    {
+      "file": "running.json",
+      "state": "unfinished",
+      "node_count": 3,
+      "edge_count": 2,
+      "preview_count": 1,
+      "required_states": [
+        "succeeded",
+        "running",
+        "pending"
+      ],
+      "node_states": {
+        "delay#1": "running",
+        "finished#1": "pending"
+      }
+    },
+    {
+      "file": "missing.json",
+      "state": "succeeded",
+      "node_count": 35,
+      "edge_count": 35,
+      "preview_count": 24,
+      "requires_nodes": [
+        "sheet#1"
+      ]
+    },
+    {
+      "file": "ports.json",
+      "node_count": 12,
+      "requires_ports": [
+        {
+          "id": "split#1",
+          "inputs": {
+            "image": "image"
+          },
+          "outputs": {
+            "color": "image/png",
+            "copy": "image/png",
+            "mask": "image/png",
+            "report": "json"
+          },
+          "params": []
+        },
+        {
+          "id": "merge#1",
+          "inputs": {
+            "image": "image",
+            "mask": "image"
+          },
+          "outputs": {
+            "image": "image/png"
+          },
+          "params": []
+        },
+        {
+          "id": "same#1",
+          "inputs": {
+            "left": "image",
+            "right": "image"
+          },
+          "outputs": {
+            "report": "json"
+          },
+          "params": []
+        },
+        {
+          "id": "list#1",
+          "inputs": {
+            "images": "image[]"
+          },
+          "outputs": {
+            "image": "image/png"
+          },
+          "params": []
+        },
+        {
+          "id": "keyed#1",
+          "inputs": {
+            "images": "image{}"
+          },
+          "outputs": {
+            "image": "image/png",
+            "keys": "json"
+          },
+          "params": []
+        },
+        {
+          "id": "wildcard#1",
+          "inputs": {
+            "images": "image{}"
+          },
+          "outputs": {
+            "image": "image/png",
+            "keys": "json"
+          },
+          "params": []
+        },
+        {
+          "id": "settings#1",
+          "inputs": {},
+          "outputs": {
+            "report": "json"
+          },
+          "params": [
+            "width",
+            "label",
+            "pixels",
+            "file_width",
+            "literal"
+          ]
+        }
+      ],
+      "requires_bindings": [
+        {
+          "source": "seed#1",
+          "source_port": "image",
+          "target": "split#1",
+          "target_port": "image",
+          "source_kind": "output"
+        },
+        {
+          "source": "split#1",
+          "source_port": "color",
+          "target": "merge#1",
+          "target_port": "image",
+          "source_kind": "output"
+        },
+        {
+          "source": "split#1",
+          "source_port": "mask",
+          "target": "merge#1",
+          "target_port": "mask",
+          "source_kind": "output"
+        },
+        {
+          "source": "split#1",
+          "source_port": "color",
+          "target": "same#1",
+          "target_port": "left",
+          "source_kind": "output"
+        },
+        {
+          "source": "split#1",
+          "source_port": "copy",
+          "target": "same#1",
+          "target_port": "right",
+          "source_kind": "output"
+        },
+        {
+          "source": "split#1",
+          "source_port": "color",
+          "target": "list#1",
+          "target_port": "images",
+          "source_kind": "output"
+        },
+        {
+          "source": "split#1",
+          "source_port": "mask",
+          "target": "list#1",
+          "target_port": "images",
+          "source_kind": "output"
+        },
+        {
+          "source": "split#1",
+          "source_port": "copy",
+          "target": "list#1",
+          "target_port": "images",
+          "source_kind": "output"
+        },
+        {
+          "source": "bundle#1",
+          "source_port": "collection",
+          "target": "keyed#1",
+          "target_port": "images",
+          "source_kind": "output"
+        },
+        {
+          "source": "tile['amber']#1",
+          "source_port": "image",
+          "target": "wildcard#1",
+          "target_port": "images",
+          "source_kind": "output"
+        },
+        {
+          "source": "tile['teal']#1",
+          "source_port": "image",
+          "target": "wildcard#1",
+          "target_port": "images",
+          "source_kind": "output"
+        },
+        {
+          "source": "split#1",
+          "source_port": "report",
+          "target": "settings#1",
+          "target_port": "width",
+          "source_kind": "output"
+        },
+        {
+          "source": "split#1",
+          "source_port": "report",
+          "target": "settings#1",
+          "target_port": "label",
+          "source_kind": "output"
+        },
+        {
+          "source": "split#1",
+          "source_port": "pixel_count",
+          "target": "settings#1",
+          "target_port": "pixels",
+          "source_kind": "fact"
+        },
+        {
+          "source": "split#1",
+          "source_port": "color",
+          "target": "settings#1",
+          "target_port": "file_width",
+          "source_kind": "output"
+        },
+        {
+          "source": "seed#1",
+          "source_port": "image",
+          "target": "bundle#1",
+          "target_port": "seed",
+          "source_kind": "output"
+        },
+        {
+          "source": "merge#1",
+          "source_port": "image",
+          "target": "bundle#1",
+          "target_port": "warm",
+          "source_kind": "output"
+        },
+        {
+          "source": "split#1",
+          "source_port": "mask",
+          "target": "bundle#1",
+          "target_port": "cool",
+          "source_kind": "output"
+        }
+      ],
+      "literal_settings": [
+        {
+          "id": "settings#1",
+          "name": "literal"
+        }
+      ],
+      "requires_edges": [
+        {
+          "source": "merge#1",
+          "target": "barrier#1",
+          "kind": "control",
+          "kinds": [
+            "needs"
+          ]
+        },
+        {
+          "source": "settings#1",
+          "target": "barrier#1",
+          "kind": "control",
+          "kinds": [
+            "needs"
+          ]
+        }
+      ],
+      "state": "succeeded",
+      "preview_count": 9,
+      "edge_count": 20
+    },
+    {
+      "file": "ports-legacy.json",
+      "state": "succeeded",
+      "node_count": 12,
+      "preview_count": 9,
+      "legacy": true,
+      "edge_count": 13
+    },
+    {
+      "file": "dynamic-failure.json",
+      "state": "failed",
+      "node_count": 3,
+      "preview_count": 0,
+      "node_states": {
+        "branch['broken'].fail#1": "failed",
+        "branch['broken'].blocked#1": "skipped"
+      },
+      "requires_ports": [
+        {
+          "id": "branch['broken'].fail#1",
+          "inputs": {},
+          "outputs": {
+            "report": "json"
+          },
+          "params": [
+            "message"
+          ]
+        },
+        {
+          "id": "branch['broken'].blocked#1",
+          "inputs": {
+            "report": "json"
+          },
+          "outputs": {
+            "report": "json"
+          },
+          "params": []
+        }
+      ],
+      "requires_bindings": [
+        {
+          "source": "branch['broken'].fail#1",
+          "source_port": "report",
+          "target": "branch['broken'].blocked#1",
+          "target_port": "report",
+          "source_kind": "output"
+        },
+        {
+          "source": "propose#1",
+          "source_port": "items",
+          "target": "branch['broken'].fail#1",
+          "target_port": "message",
+          "source_kind": "output"
+        }
+      ],
+      "edge_count": 2
+    },
+    {
+      "file": "nesting.json",
+      "node_count": 11,
+      "root_node_count": 5,
+      "requires_scopes": [
+        {
+          "path": "imported['warm']",
+          "parent": null,
+          "kind": "workflow",
+          "source": "workflows/viewer-nesting-wrapper.yaml",
+          "inputs": [
+            "source_image",
+            "image_tone"
+          ],
+          "outputs": [
+            "preview",
+            "same_preview",
+            "accent"
+          ],
+          "nodes": [
+            "imported['warm'].tint#1"
+          ],
+          "visible_count": 6,
+          "state": "succeeded"
+        },
+        {
+          "path": "imported['warm'].imported_leaf",
+          "parent": "imported['warm']",
+          "kind": "workflow",
+          "source": "workflows/viewer-nesting-leaf.yaml",
+          "inputs": [
+            "base_image"
+          ],
+          "outputs": [
+            "thumbnail"
+          ],
+          "nodes": [
+            "imported['warm'].imported_leaf.resize#1"
+          ],
+          "visible_count": 3,
+          "state": "succeeded"
+        },
+        {
+          "path": "imported['warm'].inline",
+          "parent": "imported['warm']",
+          "kind": "group",
+          "source": null,
+          "inputs": [],
+          "outputs": [],
+          "nodes": [
+            "imported['warm'].inline.draw#1",
+            "imported['warm'].inline.thumb#1"
+          ]
+        },
+        {
+          "path": "imported['cool']",
+          "parent": null,
+          "kind": "workflow",
+          "source": "workflows/viewer-nesting-wrapper.yaml",
+          "inputs": [
+            "source_image",
+            "image_tone"
+          ],
+          "outputs": [
+            "preview",
+            "same_preview",
+            "accent"
+          ],
+          "nodes": [
+            "imported['cool'].tint#1"
+          ],
+          "visible_count": 6,
+          "state": "succeeded"
+        },
+        {
+          "path": "imported['cool'].imported_leaf",
+          "parent": "imported['cool']",
+          "kind": "workflow",
+          "source": "workflows/viewer-nesting-leaf.yaml",
+          "inputs": [
+            "base_image"
+          ],
+          "outputs": [
+            "thumbnail"
+          ],
+          "nodes": [
+            "imported['cool'].imported_leaf.resize#1"
+          ],
+          "visible_count": 3,
+          "state": "succeeded"
+        },
+        {
+          "path": "imported['cool'].inline",
+          "parent": "imported['cool']",
+          "kind": "group",
+          "source": null,
+          "inputs": [],
+          "outputs": [],
+          "nodes": [
+            "imported['cool'].inline.draw#1",
+            "imported['cool'].inline.thumb#1"
+          ]
+        }
+      ],
+      "requires_interfaces": [
+        {
+          "source": "seed#1",
+          "source_port": "image",
+          "source_kind": "output",
+          "target": "imported['warm']",
+          "target_port": "source_image",
+          "target_kind": "scope_input"
+        },
+        {
+          "source": "imported['warm']",
+          "source_port": "source_image",
+          "source_kind": "scope_input",
+          "target": "imported['warm'].tint#1",
+          "target_port": "image",
+          "target_kind": "node"
+        },
+        {
+          "source": "imported['warm']",
+          "source_port": "image_tone",
+          "source_kind": "scope_input",
+          "target": "imported['warm'].tint#1",
+          "target_port": "tone",
+          "target_kind": "node"
+        },
+        {
+          "source": "imported['warm'].tint#1",
+          "source_port": "image",
+          "source_kind": "output",
+          "target": "imported['warm'].imported_leaf",
+          "target_port": "base_image",
+          "target_kind": "scope_input"
+        },
+        {
+          "source": "imported['warm'].imported_leaf",
+          "source_port": "base_image",
+          "source_kind": "scope_input",
+          "target": "imported['warm'].imported_leaf.resize#1",
+          "target_port": "image",
+          "target_kind": "node"
+        },
+        {
+          "source": "imported['warm'].imported_leaf.resize#1",
+          "source_port": "image",
+          "source_kind": "output",
+          "target": "imported['warm'].imported_leaf",
+          "target_port": "thumbnail",
+          "target_kind": "scope_output"
+        },
+        {
+          "source": "imported['warm'].imported_leaf",
+          "source_port": "thumbnail",
+          "source_kind": "scope_output",
+          "target": "imported['warm']",
+          "target_port": "preview",
+          "target_kind": "scope_output"
+        },
+        {
+          "source": "imported['warm']",
+          "source_port": "preview",
+          "source_kind": "scope_output",
+          "target": "sheet#1",
+          "target_port": "images",
+          "target_kind": "node"
+        },
+        {
+          "source": "seed#1",
+          "source_port": "image",
+          "source_kind": "output",
+          "target": "imported['cool']",
+          "target_port": "source_image",
+          "target_kind": "scope_input"
+        },
+        {
+          "source": "imported['cool']",
+          "source_port": "source_image",
+          "source_kind": "scope_input",
+          "target": "imported['cool'].tint#1",
+          "target_port": "image",
+          "target_kind": "node"
+        },
+        {
+          "source": "imported['cool']",
+          "source_port": "image_tone",
+          "source_kind": "scope_input",
+          "target": "imported['cool'].tint#1",
+          "target_port": "tone",
+          "target_kind": "node"
+        },
+        {
+          "source": "imported['cool'].tint#1",
+          "source_port": "image",
+          "source_kind": "output",
+          "target": "imported['cool'].imported_leaf",
+          "target_port": "base_image",
+          "target_kind": "scope_input"
+        },
+        {
+          "source": "imported['cool'].imported_leaf",
+          "source_port": "base_image",
+          "source_kind": "scope_input",
+          "target": "imported['cool'].imported_leaf.resize#1",
+          "target_port": "image",
+          "target_kind": "node"
+        },
+        {
+          "source": "imported['cool'].imported_leaf.resize#1",
+          "source_port": "image",
+          "source_kind": "output",
+          "target": "imported['cool'].imported_leaf",
+          "target_port": "thumbnail",
+          "target_kind": "scope_output"
+        },
+        {
+          "source": "imported['cool'].imported_leaf",
+          "source_port": "thumbnail",
+          "source_kind": "scope_output",
+          "target": "imported['cool']",
+          "target_port": "preview",
+          "target_kind": "scope_output"
+        },
+        {
+          "source": "imported['cool']",
+          "source_port": "preview",
+          "source_kind": "scope_output",
+          "target": "sheet#1",
+          "target_port": "images",
+          "target_kind": "node"
+        },
+        {
+          "source": "imported['warm'].imported_leaf",
+          "source_port": "thumbnail",
+          "source_kind": "scope_output",
+          "target": "imported['warm']",
+          "target_port": "same_preview",
+          "target_kind": "scope_output"
+        },
+        {
+          "source": "imported['warm']",
+          "source_port": "preview",
+          "source_kind": "scope_output",
+          "target": "same_aliases#1",
+          "target_port": "left",
+          "target_kind": "node"
+        },
+        {
+          "source": "imported['warm']",
+          "source_port": "same_preview",
+          "source_kind": "scope_output",
+          "target": "same_aliases#1",
+          "target_port": "right",
+          "target_kind": "node"
+        }
+      ],
+      "state": "succeeded",
+      "preview_count": 10
+    },
+    {
+      "file": "nesting-failure.json",
+      "node_count": 5,
+      "root_node_count": 4,
+      "requires_scopes": [
+        {
+          "path": "broken_wrapper",
+          "parent": null,
+          "kind": "workflow",
+          "source": "workflows/viewer-nesting-failure-wrapper.yaml",
+          "inputs": [
+            "source_image"
+          ],
+          "outputs": [
+            "preview"
+          ],
+          "nodes": [],
+          "visible_count": 3,
+          "state": "failed"
+        },
+        {
+          "path": "broken_wrapper.inner",
+          "parent": "broken_wrapper",
+          "kind": "workflow",
+          "source": "workflows/viewer-nesting-failure-leaf.yaml",
+          "inputs": [
+            "candidate"
+          ],
+          "outputs": [
+            "picture"
+          ],
+          "nodes": [
+            "broken_wrapper.inner.fail#1",
+            "broken_wrapper.inner.blocked#1"
+          ],
+          "visible_count": 4,
+          "state": "failed"
+        }
+      ],
+      "requires_interfaces": [
+        {
+          "source": "seed#1",
+          "source_port": "image",
+          "source_kind": "output",
+          "target": "broken_wrapper",
+          "target_port": "source_image",
+          "target_kind": "scope_input"
+        },
+        {
+          "source": "broken_wrapper",
+          "source_port": "source_image",
+          "source_kind": "scope_input",
+          "target": "broken_wrapper.inner",
+          "target_port": "candidate",
+          "target_kind": "scope_input"
+        },
+        {
+          "source": "broken_wrapper.inner",
+          "source_port": "candidate",
+          "source_kind": "scope_input",
+          "target": "broken_wrapper.inner.fail#1",
+          "target_port": "image",
+          "target_kind": "node"
+        },
+        {
+          "source": "broken_wrapper.inner.blocked#1",
+          "source_port": "image",
+          "source_kind": "output",
+          "target": "broken_wrapper.inner",
+          "target_port": "picture",
+          "target_kind": "scope_output"
+        },
+        {
+          "source": "broken_wrapper.inner",
+          "source_port": "picture",
+          "source_kind": "scope_output",
+          "target": "broken_wrapper",
+          "target_port": "preview",
+          "target_kind": "scope_output"
+        },
+        {
+          "source": "broken_wrapper",
+          "source_port": "preview",
+          "source_kind": "scope_output",
+          "target": "dependent#1",
+          "target_port": "image",
+          "target_kind": "node"
+        }
+      ],
+      "state": "failed",
+      "preview_count": 2,
+      "node_states": {
+        "broken_wrapper.inner.fail#1": "failed",
+        "broken_wrapper.inner.blocked#1": "skipped",
+        "dependent#1": "skipped",
+        "independent#1": "succeeded"
+      }
+    },
+    {
+      "file": "nesting-legacy.json",
+      "node_count": 11,
+      "root_node_count": 11,
+      "state": "succeeded",
+      "preview_count": 10,
+      "legacy": true
+    }
+  ]
+}
