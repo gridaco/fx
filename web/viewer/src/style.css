@@ -23,7 +23,12 @@ button { touch-action: manipulation; }
 .fx-action:disabled { color: #a1a1aa; cursor: default; }
 .fx-badge { padding: 1px 5px; border: 1px solid #e4e4e7; border-radius: 3px; color: #71717a; font-size: 10px; line-height: 16px; white-space: nowrap; }
 .fx-workspace { display: grid; flex: 1; min-height: 0; min-width: 0; grid-template-columns: minmax(0, 1fr); overflow: hidden; }
-.fx-outline, .fx-inspector { display: none; min-width: 0; min-height: 0; flex-direction: column; background: #fcfcfd; }
+.fx-outline, .fx-inspector { position: relative; display: none; min-width: 0; min-height: 0; flex-direction: column; background: #fcfcfd; }
+.fx-sidebar-resize { position: absolute; top: 0; bottom: 0; width: 7px; z-index: 4; cursor: col-resize; touch-action: none; }
+.fx-sidebar-resize[data-resize="left"] { right: -4px; }
+.fx-sidebar-resize[data-resize="right"] { left: -4px; }
+.fx-sidebar-resize:hover, .fx-sidebar-resize:focus-visible { background: #6084b230; }
+.fx-resizing, .fx-resizing * { cursor: col-resize !important; user-select: none !important; }
 .fx-outline { border-right: 1px solid #e4e4e7; }
 .fx-inspector { border-left: 1px solid #e4e4e7; background: white; }
 .fx-panel-heading { display: flex; height: 32px; flex-shrink: 0; align-items: center; justify-content: space-between; padding: 0 12px; border-bottom: 1px solid #ebebee; color: #52525b; font-size: 11px; font-weight: 600; }
@@ -79,8 +84,8 @@ button { touch-action: manipulation; }
 .fx-unavailable { margin: 0 auto; max-width: 420px; padding: 64px 24px; text-align: center; }
 .fx-unavailable h2 { font-size: 14px; font-weight: 600; }
 .fx-unavailable p { margin: 8px 0 16px; color: #71717a; }
-@media (min-width: 1024px) { .fx-workspace { grid-template-columns: 212px minmax(0, 1fr); } .fx-outline { display: flex; } .fx-canvas-context { display: none; } }
-@media (min-width: 1280px) { .fx-workspace { grid-template-columns: 212px minmax(0, 1fr) 304px; } .fx-inspector { display: flex; } }
+@media (min-width: 1024px) { .fx-workspace { grid-template-columns: var(--fx-left-width, 212px) minmax(0, 1fr); } .fx-outline { display: flex; } .fx-canvas-context { display: none; } }
+@media (min-width: 1280px) { .fx-workspace { grid-template-columns: var(--fx-left-width, 212px) minmax(0, 1fr) var(--fx-right-width, 304px); } .fx-inspector { display: flex; } }
 .preview-grid {
   background-color: #fafafa;
   background-image: linear-gradient(45deg, #f0f0f0 25%, transparent 25%), linear-gradient(-45deg, #f0f0f0 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #f0f0f0 75%), linear-gradient(-45deg, transparent 75%, #f0f0f0 75%);

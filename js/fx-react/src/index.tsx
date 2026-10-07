@@ -57,10 +57,10 @@ export function ArtifactPreview({ artifact }: { artifact: Artifact }) {
         <div title={artifact.name || artifact.digest} className="truncate text-[11px] font-medium text-zinc-800">{artifact.name || artifact.digest.slice(0, 12)}</div>
         <div className="mt-0.5 text-[10px] text-zinc-500">{artifact.kind} · {bytes(artifact.size)}</div>
       </div>
-      {available && <a className="shrink-0 rounded border border-zinc-200 px-2 py-1 text-[10px] font-medium text-zinc-700 hover:bg-zinc-50" href={artifact.url!} download={artifact.name || artifact.digest}>Download</a>}
+      {available && <a className="shrink-0 rounded border border-zinc-200 px-2 py-1 text-[10px] font-medium text-zinc-700 hover:bg-zinc-50" href={artifact.url!} target="_blank" rel="noopener noreferrer" title="Open artifact in a new tab">Open</a>}
     </div>
     {!available ? <p className="border-t border-zinc-200 bg-zinc-50 px-2.5 py-2 text-[11px] text-zinc-500">File unavailable in this run folder.</p>
-      : state.error ? <p className="border-t border-zinc-200 px-2.5 py-2 text-[11px] text-zinc-500">Preview unavailable. The file can still be downloaded.</p>
+      : state.error ? <p className="border-t border-zinc-200 px-2.5 py-2 text-[11px] text-zinc-500">Preview unavailable. Try opening the file.</p>
       : image ? <div className="preview-grid border-t border-zinc-200 p-2"><img className="mx-auto max-h-72 max-w-full rounded object-contain" src={artifact.url!} alt={artifact.name || "Workflow artifact"} loading="lazy" onError={controller.fail} /></div>
       : audio ? <div className="border-t border-zinc-200 p-2"><audio className="w-full" controls preload="metadata" src={artifact.url!} onError={controller.fail} /></div>
       : video ? <div className="border-t border-zinc-200 bg-zinc-100 p-2"><video className="max-h-72 w-full rounded" controls preload="metadata" src={artifact.url!} onError={controller.fail} /></div>

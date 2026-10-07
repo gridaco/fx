@@ -125,6 +125,9 @@ export class CanvasController {
   private readonly viewport = new CanvasViewport();
   private readonly nodes = new Map<string, SVGGElement>();
   private readonly edges = new Map<string, { group: SVGGElement; source: string; target: string }>();
+  private readonly incidentEdges = new Map<string, Set<string>>();
+  private highlightedEdges = new Set<string>();
+  private viewportFrame: number | null = null;
   private readonly abort = new AbortController();
   private graphAbort = new AbortController();
   private readonly resize: ResizeObserver;
@@ -167,10 +170,7 @@ export class CanvasController {
     button("Fit workflow", "Fit", () => this.fit());
     this.empty.className = "fx-canvas-empty";
     this.empty.textContent = "No expanded steps in this plan.";
-    const help = document.createElement("p");
-    help.className = "fx-canvas-help";
-    help.textContent = "Scroll or drag to pan · Pinch to zoom · Solid: data · Dashed: control or dependency";
-    container.replaceChildren(this.svg, this.toolbar, this.empty, help);
+    container.replaceChildren(this.svg, this.toolbar, this.empty);
     container.addEventListener("wheel", this.onWheel, { passive: false, signal: this.abort.signal });
     this.svg.addEventListener("pointerdown", this.onPointerDown, { signal: this.abort.signal });
     this.svg.addEventListener("pointermove", this.onPointerMove, { signal: this.abort.signal });
@@ -197,9 +197,11 @@ export class CanvasController {
     this.graphAbort.abort();
     this.graphAbort = new AbortController();
     this.layout = layoutGraph(graph);
-    this.content.replaceChildren();
+    const fragment = document.createDocumentFragment();
     this.nodes.clear();
     this.edges.clear();
+    this.incidentEdges.clear();
+    this.highlightedEdges.clear();
     const frames = this.layout.frames ?? [];
     const frameById = new Map(frames.map((frame) => [frame.id, frame]));
     const depth = (frame: PositionedFrame) => {
@@ -211,7 +213,7 @@ export class CanvasController {
       const group = element("g", { class: "fx-canvas-frame", "data-frame-id": frame.id, "aria-label": frame.title });
       group.append(element("rect", { x: frame.x, y: frame.y, width: frame.width, height: frame.height, rx: 12 }));
       group.append(element("text", { x: frame.x + 14, y: frame.y + 16 }, short(frame.title, 64)));
-      this.content.append(group);
+      fragment.append(group);
     }
     for (const edge of this.layout.edges) {
       const description = edge.kind === "data"
@@ -226,8 +228,13 @@ export class CanvasController {
       group.append(path, hit);
       group.addEventListener("pointerenter", () => this.highlightConnections(null, edge.id), { signal: this.graphAbort.signal });
       group.addEventListener("pointerleave", () => this.highlightConnections(null), { signal: this.graphAbort.signal });
-      this.content.append(group);
+      fragment.append(group);
       this.edges.set(edge.id, { group, source: edge.source, target: edge.target });
+      for (const id of [edge.source, edge.target]) {
+        let incident = this.incidentEdges.get(id);
+        if (!incident) this.incidentEdges.set(id, incident = new Set());
+        incident.add(edge.id);
+      }
     }
     for (const [index, node] of this.layout.nodes.entries()) {
       const preview = node.preview;
@@ -306,26 +313,37 @@ export class CanvasController {
       group.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") { event.preventDefault(); this.onSelect(node.id); }
       }, { signal: this.graphAbort.signal });
-      this.content.append(group);
+      fragment.append(group);
       this.nodes.set(node.id, group);
     }
+    this.content.replaceChildren(fragment);
     this.empty.hidden = this.layout.nodes.length > 0;
-    this.setSelection(this.selected);
+    const selected = this.selected;
+    this.selected = null;
+    this.setSelection(selected);
     if (!this.didFit) this.fit();
     else this.applyViewport();
     if (navigating || restoringFocus) this.container.focus({ preventScroll: true });
   }
   setSelection(id: string | null) {
+    if (id === this.selected) return;
+    const previous = this.selected;
     this.selected = id;
-    for (const [key, group] of this.nodes) {
+    for (const key of [previous, id]) {
+      if (key === null) continue;
+      const group = this.nodes.get(key);
+      if (!group) continue;
       group.classList.toggle("is-selected", key === id);
       group.setAttribute(group.getAttribute("role") === "button" ? "aria-pressed" : "aria-current", String(key === id));
     }
   }
   private highlightConnections(nodeId: string | null, edgeId: string | null = null) {
-    for (const [id, edge] of this.edges) {
-      edge.group.classList.toggle("is-highlighted", !this.drag && (id === edgeId || edge.source === nodeId || edge.target === nodeId));
-    }
+    const next = this.drag ? new Set<string>() : nodeId !== null
+      ? this.incidentEdges.get(nodeId) ?? new Set<string>()
+      : new Set(edgeId === null ? [] : [edgeId]);
+    for (const id of this.highlightedEdges) if (!next.has(id)) this.edges.get(id)?.group.classList.remove("is-highlighted");
+    for (const id of next) if (!this.highlightedEdges.has(id)) this.edges.get(id)?.group.classList.add("is-highlighted");
+    this.highlightedEdges = next;
   }
   fit() {
     const bounds = this.container.getBoundingClientRect();
@@ -339,15 +357,25 @@ export class CanvasController {
     this.applyViewport();
   }
   private applyViewport() {
+    if (this.viewportFrame !== null) cancelAnimationFrame(this.viewportFrame);
+    this.viewportFrame = null;
     const { x, y, zoom } = this.viewport.getSnapshot();
     this.content.setAttribute("transform", `translate(${x},${y}) scale(${zoom})`);
     this.zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
+  }
+  /** Keep every input delta, but write camera DOM only once per animation frame. */
+  private scheduleViewport() {
+    if (this.viewportFrame !== null) return;
+    this.viewportFrame = requestAnimationFrame(() => {
+      this.viewportFrame = null;
+      this.applyViewport();
+    });
   }
   private onWheel = (event: WheelEvent) => {
     event.preventDefault();
     const bounds = this.svg.getBoundingClientRect();
     this.viewport.wheel(event, { x: event.clientX - bounds.left, y: event.clientY - bounds.top }, bounds);
-    this.applyViewport();
+    this.scheduleViewport();
   };
   private onPointerDown = (event: PointerEvent) => {
     if (event.button !== 0 || (event.target as Element).closest("[data-node-id]")) return;
@@ -361,7 +389,7 @@ export class CanvasController {
     this.drag.moved ||= Math.hypot(event.clientX - this.drag.startX, event.clientY - this.drag.startY) > 4;
     this.viewport.pan(event.clientX - this.drag.x, event.clientY - this.drag.y);
     this.drag.x = event.clientX; this.drag.y = event.clientY;
-    this.applyViewport();
+    this.scheduleViewport();
   };
   private onPointerUp = (event: PointerEvent) => {
     if (!this.drag || this.drag.pointer !== event.pointerId) return;
@@ -379,5 +407,9 @@ export class CanvasController {
     this.drag = null;
     this.container.classList.remove("is-panning");
   }
-  dispose() { this.cancelDrag(); this.abort.abort(); this.graphAbort.abort(); this.resize.disconnect(); this.container.replaceChildren(); }
+  dispose() {
+    if (this.viewportFrame !== null) cancelAnimationFrame(this.viewportFrame);
+    this.viewportFrame = null;
+    this.cancelDrag(); this.abort.abort(); this.graphAbort.abort(); this.resize.disconnect(); this.container.replaceChildren();
+  }
 }

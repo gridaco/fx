@@ -1,9 +1,10 @@
-import { StrictMode, useEffect, useSyncExternalStore, type ReactNode } from "react";
+import { StrictMode, useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { ArrowLeft, LayoutGrid, RefreshCw, Square, Workflow } from "lucide-react";
 import { ViewerController, displayPortName, type CanvasStep, type GraphDocument, type GraphInstance, type InterfaceBinding, type PendingRepeat, type PortBinding, type ViewerRun } from "@grida/fx-web";
 import { PortList, Status, ValueList, WorkflowCanvas, money } from "@grida/fx-react";
 import "./style.css";
+import { SidebarResize } from "./sidebar-resize";
 
 const controller = new ViewerController();
 const iconProps = { size: 14, strokeWidth: 1.5, "aria-hidden": true } as const;
@@ -121,6 +122,19 @@ function RunPendingInspector({ node }: { node: CanvasStep }) {
   </>;
 }
 
+function Workspace({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const resize = new SidebarResize(ref.current!);
+    return () => resize.dispose();
+  }, []);
+  return <div ref={ref} className="fx-workspace">{children}</div>;
+}
+
+function ResizeHandle({ side }: { side: "left" | "right" }) {
+  return <div className="fx-sidebar-resize" data-resize={side} role="separator" aria-orientation="vertical" aria-label={`Resize ${side === "left" ? "workflow outline" : "inspector"}`} aria-valuemin={side === "left" ? 180 : 240} aria-valuemax={side === "left" ? 420 : 560} aria-valuenow={side === "left" ? 212 : 304} tabIndex={0} title="Drag to resize · Double-click to reset" />;
+}
+
 function App() {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   useEffect(() => { void controller.refresh(); return () => controller.dispose(); }, []);
@@ -136,7 +150,7 @@ function App() {
   return <div className="fx-viewer">
     {error && <p role="alert" className="fx-error">{error}{view && " Showing the last loaded data."}</p>}
     {!view ? <main className="fx-unavailable"><h2>{loading ? "Opening the workflow…" : "Workflow unavailable"}</h2><p>{loading ? "Reading the selected graph or run." : "Check that the local viewer server is running."}</p>{!loading && <button onClick={() => void controller.refresh()} className="fx-action">Try again</button>}</main>
-      : <div className="fx-workspace">
+      : <Workspace>
         <aside aria-label="Workflow outline" className="fx-outline">
           <div className="fx-workflow-heading">
             <h1>{view.workflow.title || "Workflow viewer"}</h1>
@@ -158,9 +172,10 @@ function App() {
             </button>)}</div>
           </nav>
           {run && <div className="fx-run-controls">{refresh}<span className="fx-updated">{updated ? `Updated ${updated.toLocaleTimeString()}` : ""}</span></div>}
+          <ResizeHandle side="left" />
         </aside>
         <main aria-label="Workflow canvas" className="fx-canvas-pane">
-          {!!view.scopes?.length && <nav aria-label="Workflow location" className="fx-location">
+          {breadcrumbs.length > 1 && <nav aria-label="Workflow location" className="fx-location">
             <button onClick={back} disabled={scope === null} aria-label="Back to parent workflow" className="fx-back"><ArrowLeft {...iconProps} />Back</button>
             <div className="fx-breadcrumbs">{breadcrumbs.map((crumb, index) => <span key={crumb.id ?? "root"}>{index > 0 && <span aria-hidden="true" className="fx-breadcrumb-separator">/</span>}<button onClick={() => controller.goToScope(crumb.id)} title={crumb.id ?? crumb.title} aria-current={index === breadcrumbs.length - 1 ? "page" : undefined}>{crumb.title}</button></span>)}</div>
           </nav>}
@@ -173,8 +188,9 @@ function App() {
             {run?.warnings.length ? <details className="fx-notice"><summary>{run.warnings.length} record {run.warnings.length === 1 ? "notice" : "notices"}</summary><ul>{run.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul></details> : null}
             {selectedNode?.kind ? <ScopeInspector node={selectedNode} /> : !selectedNode && scopeNode ? <ScopeInspector node={scopeNode} active /> : plan ? <PlanInspector plan={plan} instance={instance} pending={pending} canvasNode={selectedNode} /> : run && selectedNode?.pending ? <RunPendingInspector node={selectedNode} /> : run ? <RunInspector run={run} node={runNode} canvasNode={selectedNode} /> : null}
           </div>
+          <ResizeHandle side="right" />
         </aside>
-      </div>}
+      </Workspace>}
   </div>;
 }
 
