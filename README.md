@@ -42,7 +42,7 @@ FX runs on:
 
 The npm package needs Node 18 or later; the Python one needs Python 3.11 or later. **Windows is not supported yet**, since the engine's runner uses Unix process groups and signals; use WSL 2. Linux with musl (Alpine) isn't supported either.
 
-Start with [the guide](docs/guide/01-getting-started.md). [RELEASING.md](RELEASING.md) says how a preview is published.
+Start with [the guide](docs/guide/01-getting-started.md). [RELEASING.md](RELEASING.md) describes packaging, verification and publication for stable and prerelease versions.
 
 [Agent skills](skills/README.md) cover authoring, running, and inspecting FX
 workflows with installed packages: `npx skills add gridaco/fx --skill grida-fx`.

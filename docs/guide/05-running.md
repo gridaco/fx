@@ -4,8 +4,8 @@
 
 The command is `grida-fx` (from `npm install -g @grida/fx`, or `npx @grida/fx`). Without Node,
 the `grida` Python package runs the same engine: `python -m grida.fx <verb>` takes the same
-arguments. The packages are not published yet: until they are, run FX from a clone of the
-repository ([the examples' README](../../examples/README.md#from-a-clone)).
+arguments. Install it with `pip install grida`. Both packages are published as stable
+releases; [the source setup](../../examples/README.md#from-a-clone) is for development.
 
 | Command | |
 |---|---|

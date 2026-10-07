@@ -20,7 +20,7 @@ the ceiling you give with `--max-usd` ([Running](../docs/guide/05-running.md#key
 
 ## From a clone
 
-FX runs from a checkout of this repository, with nothing published. It needs git, cargo
+For source development, run FX from a checkout of this repository. This needs git, cargo
 ([rustup.rs](https://rustup.rs)), [Bun](https://bun.sh) 1.4 and [uv](https://docs.astral.sh/uv/).
 
 ```bash
@@ -44,8 +44,8 @@ cd examples/hello && grida-fx run hello --inputs inputs/badges.yaml
 
 ## From the packages
 
-Once a preview is published, `npm install -g @grida/fx@next` gives the `grida-fx` command, and
-`pip install --pre grida` the SDK with the engine inside
+`npm install -g @grida/fx` installs the stable `grida-fx` command, and
+`pip install grida` installs the Python SDK with the same engine inside
 ([Getting started](../docs/guide/01-getting-started.md#install)).
 
 ## The pictures

@@ -6,8 +6,8 @@ result with a record of how it was made.
 
 This guide describes FX for the people who use it. The contracts are in [`spec/`](../../spec/),
 which is normative: where this guide and `spec/` disagree, `spec/` wins. Where the guide describes
-something designed but not built yet, it says **planned**. FX is in preview;
-[the overview](../wg/overview.md) has the plan.
+something designed but not built yet, it says **planned**. Stable FX releases start at `0.1.0`;
+[the overview](../wg/overview.md) records shipped milestones and future work.
 
 The local viewer shows workflow plans and existing runs on a read-only node canvas.
 Custom step pages, project dashboards,

@@ -31,7 +31,7 @@ Every built-in type is declared, so a workflow using it plans and prices. A type
   `duration` when the text isn't known yet.
 
 **Judges and annotators** (see [Annotations and judges](06-annotations-and-judges.md); the free
-ones are local, and in the preview they run on Python):
+ones are local and run on Python):
 
 | Type | What it does |
 |---|---|
@@ -42,7 +42,7 @@ ones are local, and in the preview they run on Python):
 | `structured.review@1` | **planned:** `subject` (json), a `rubric` file, a `question` or `criteria`, and optional `context` files → a verdict, with per-criterion reasons |
 | `audio.check_duration@1` | **planned:** is the clip between `min_s` and `max_s` |
 
-**Media** (local, free; in the preview they run on Python, see
+**Media** (local, free; they run on Python, see
 [Getting started](01-getting-started.md#when-fx-needs-python)):
 - image: `resize` (`longest_side`, or `width` and `height`), `crop` (`box`, `padding`, or a
   `region` from annotations), `pad` (`width`, `height`), `mirror_repeat` (`axis`: `x`, `y` or
@@ -50,7 +50,7 @@ ones are local, and in the preview they run on Python):
 - **planned:** image `compose`, `key` (chroma), `sheet`, `contact_sheet`; video `probe`, `frames`,
   `encode`; audio `normalize`, `trim`, `concat`, `mix`; annotations `mask`, `filter`.
 
-**Plumbing** (local, free; all but `select` run on Python in the preview):
+**Plumbing** (local, free; all but `select` run on Python):
 - `select@1`: the first of `first_of` that exists and wasn't rejected (it runs in the engine);
 - `json.merge@1`: `documents` → one `json`;
 - `package@1`: lay results out by destination path (`files`) beside a `manifest` you write in YAML;
@@ -295,7 +295,7 @@ Built-in node types always carry versions; their major version is in `uses:`.
 
 Node bodies in TypeScript come later: the TypeScript node host for `@grida/fx` is on the Later
 list in [the overview](../wg/overview.md). Until then, JavaScript and TypeScript users drive the
-engine with `@grida/fx` (build workflows, plan and run them). In the preview they need Python in
+engine with `@grida/fx` (build workflows, plan and run them). They need Python in
 two cases: for node bodies of their own, and for the built-in local types (`image.resize`,
 `image.check_alpha`, `package` and the rest), whose bodies are Python for now
 ([Getting started](01-getting-started.md#when-fx-needs-python)). A project whose steps are all

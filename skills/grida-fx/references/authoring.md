@@ -52,7 +52,7 @@ sections needed for the user's workflow; check against the installed engine.
 
 ## Custom Python nodes
 
-Python 3.11+ with `grida>=0.1.0a1` is required. In `nodes/greet.py`:
+Python 3.11+ with `grida>=0.1.0` is required. In `nodes/greet.py`:
 
 ```python
 from grida.fx import Ctx, node
@@ -153,7 +153,7 @@ distinction. Async callers use `plan_async` and `run_async`.
 
 ## JavaScript and TypeScript
 
-Install `@grida/fx@next` in the project. Use `workflow`, `expr`, and `toYaml` to
+Install `@grida/fx` in the project (`npm install @grida/fx`). Use `workflow`, `expr`, and `toYaml` to
 author a workflow, then write its YAML and give that path to the engine. This
 example reuses `nodes/greet.py` above, so it also needs the Python runtime:
 

@@ -51,7 +51,7 @@ and `(cd python && uv lock)`, and check the result:
 uv run --project python python tools/check_versions.py   # every place agrees (CI runs it too)
 ```
 
-The release tag is `v` followed by the workspace version, for example `v0.1.0-alpha.1`. The
+The release tag is `v` followed by the workspace version, for example `v0.1.0` or `v0.2.0-alpha.1`. The
 workflow refuses a tag that names any other version. It accepts stable versions and
 pre-releases (`-alpha.N`, `-beta.N` or `-rc.N`).
 
@@ -86,7 +86,7 @@ pre-releases (`-alpha.N`, `-beta.N` or `-rc.N`).
    publishing, and it attaches attestations.
    - **Optional, recommended:** yank `grida` 0.0.1, the placeholder that reserved the name. Until
      you do, on a machine with no wheel (Windows, glibc older than 2.28, musl),
-     `pip install --pre grida` quietly installs 0.0.1 instead of failing. A yanked release is
+     `pip install grida` can fall back to 0.0.1 instead of failing. A yanked release is
      installed only when pinned exactly.
 
 Both registries trust the same identity:
@@ -154,7 +154,8 @@ uv run --locked --project python python tools/prepare_local.py --out target/pack
 typechecks the SDK, builds a release engine with the deployment baseline and remapped
 paths, and calls the shared packager with installed verification enabled. It never
 uploads. On Apple Silicon, the default output is
-`target/packages/0.1.0-alpha.2-aarch64-apple-darwin/`.
+`target/packages/<workspace-version>-aarch64-apple-darwin/`
+(for example `target/packages/0.1.0-aarch64-apple-darwin/`).
 
 The output directory must be new; an output inside the checkout must be gitignored.
 The three artifacts are one `grida` wheel, the native npm engine tarball, and the
@@ -249,7 +250,7 @@ On a supported machine, after the run is green:
 npm view @grida/fx dist-tags                # latest: 0.1.0
 npm install -g @grida/fx
 grida-fx --version                          # grida-fx 0.1.0
-npx --yes @grida/fx --version          # the same, without installing
+npx --yes @grida/fx --version               # the same, without installing
 
 python3.12 -m venv fx-check                 # any Python 3.11 or later
 fx-check/bin/pip install grida
@@ -258,7 +259,7 @@ fx-check/bin/python -m grida.fx --version   # grida-fx 0.1.0
 
 - **Provenance:** each package's npm page shows its provenance, linked to the workflow run.
   PyPI shows each wheel's attestations on its file page.
-- **Conformance:** to run the whole suite against the installed preview, from a checkout:
+- **Conformance:** to run the whole suite against the installed release, from a checkout:
 
   ```sh
   GRIDA_FX_PYTHON=fx-check/bin/python uv run --project python python conformance/run.py \

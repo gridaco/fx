@@ -31,7 +31,7 @@ Choose the installation appropriate to the project:
 npm install @grida/fx
 npx grida-fx --version
 
-# Or invoke the published preview without adding a project dependency.
+# Or invoke the stable release without adding a project dependency.
 npx @grida/fx --version
 
 # Python 3.11+: install into the project's virtual environment.
@@ -49,7 +49,7 @@ The commands below use `grida-fx`; substitute `npx grida-fx`,
 does not install a `grida-fx` console command. npm's native engine is an optional
 dependency: do not omit optional dependencies when installing it.
 
-The preview targets macOS and Linux with glibc on x64/arm64; confirm a package is
+FX supports macOS and Linux with glibc on x64/arm64; confirm a package is
 available for the particular platform. Native Windows and Alpine/musl are not
 supported. Windows users can use WSL 2. Python nodes, Python builders, and local
 built-ins such as `image.resize`, `files.copy`, and `package` need Python with the

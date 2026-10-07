@@ -11,15 +11,15 @@ FX builds generated assets the way a build system builds code:
 ```bash
 npm install -g @grida/fx   # the grida-fx command (or without installing: npx @grida/fx)
 pip install grida         # the Python SDK, for nodes and builders you write in Python
-grida-fx doctor                 # checks the keys and tools your workflows need
+grida-fx doctor           # checks the keys and tools your workflows need
 ```
 
-Both packages are previews (npm's `next` tag, PyPI pre-releases), and both carry the same engine.
-They are not published yet: until they are, run FX from a clone of the repository
-([the examples' README](../../examples/README.md#from-a-clone)).
-The preview runs on macOS, and on Linux with glibc 2.28 or later, on x64 and arm64. Windows is not
-in the preview, because the engine's runner uses Unix process groups and signals: use WSL 2
-([the platforms](../../README.md#install-preview)). Python users who don't want Node run
+Both packages are published as stable releases starting at `0.1.0` and carry the same engine.
+No repository clone or Rust toolchain is needed. For source development, see
+[the examples' README](../../examples/README.md#from-a-clone).
+FX runs on macOS, and on Linux with glibc 2.28 or later, on x64 and arm64. Native Windows is not
+supported, because the engine's runner uses Unix process groups and signals: use WSL 2
+([the platforms](../../README.md#install)). Python users who don't want Node run
 it as `python -m grida.fx <verb>` (`python -m grida.fx doctor`), or through the Python API
 ([Running](05-running.md#from-python)). This guide writes `grida-fx`.
 
@@ -35,7 +35,7 @@ which routes they make usable ([Running](05-running.md#keys-and-live-runs)).
 The engine itself runs the paid built-in types (`image.generate`, `structured.generate`, …),
 `fx/select@1` and every file fact. Everything else runs on Python:
 - your own Python nodes and builders, which import `from grida.fx import node, Ctx`;
-- in the preview, the built-in local types too: `image.resize`, `image.crop`, `image.pad`,
+- the built-in local types too: `image.resize`, `image.crop`, `image.pad`,
   `image.mirror_repeat`, `image.check_alpha`, `image.check_size`, `json.merge`, `files.copy` and
   `package`.
 

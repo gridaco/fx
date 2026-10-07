@@ -5,7 +5,7 @@ files and to plan, price and run them. Grida FX is a workflow engine for generat
 pipelines: write a workflow file, and FX plans it, prices it before anything is spent, caches
 every paid call by its request, and records the run. It works with your own provider keys.
 
-This is a **preview** (`0.x` pre-releases under the npm tag `next`).
+Stable releases start at `0.1.0` and use npm's default `latest` tag. Prereleases use `next`.
 
 ```sh
 npm install @grida/fx     # or: npm install -g @grida/fx
@@ -22,7 +22,7 @@ your machine:
 | Linux on x64, glibc 2.28 or later | `@grida/fx-linux-x64-gnu` |
 | Linux on arm64, glibc 2.28 or later | `@grida/fx-linux-arm64-gnu` |
 
-**Windows is not in the preview**: the engine's runner uses Unix process groups and signals. Use
+**Native Windows is not supported yet**: the engine's runner uses Unix process groups and signals. Use
 WSL 2, which runs the Linux packages. Linux with musl (Alpine) is not supported either. Node 18 or
 later.
 
@@ -30,7 +30,7 @@ later.
 `--omit=optional`, or need a binary of your own, set `GRIDA_FX_BIN` to the path of a `grida-fx`
 binary: the command and the SDK use it first.
 
-Some steps run on Python in the preview (your own Python nodes, and the built-in local types such
+Some steps run on Python (your own Python nodes, and the built-in local types such
 as `image.resize`): those projects also need `pip install grida`, or `GRIDA_FX_PYTHON`
 pointing at a Python that has them. A project whose steps are all paid built-ins and `select`
 needs only this package. See [Getting started](https://github.com/gridaco/fx/blob/main/docs/guide/01-getting-started.md).
