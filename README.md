@@ -6,7 +6,7 @@ FX grew out of gnode, the Python engine [softmarshmallow/stage-gen](https://gith
 
 ## Install (preview)
 
-The preview packages are not published yet. Until they are, FX runs from a clone of this repository, which needs cargo, [Bun](https://bun.sh) and [uv](https://docs.astral.sh/uv/) ([examples/README.md](examples/README.md#from-a-clone) has the rest):
+The npm preview is published under the `next` tag for all four platforms below. The Python FX preview is awaiting its first CI publication; PyPI currently has only the old `grida` placeholder. Python users can run FX from a clone in the meantime, which needs cargo, [Bun](https://bun.sh) and [uv](https://docs.astral.sh/uv/) ([examples/README.md](examples/README.md#from-a-clone) has the rest):
 
 ```sh
 git clone https://github.com/gridaco/fx && cd fx
@@ -16,13 +16,17 @@ python3 tools/build_engine.py     # the engine, built into that SDK; again after
 uv run --project python python -m grida.fx --version
 ```
 
-Once published, npm will have FX under the `next` tag and PyPI as a pre-release. Both packages carry the same engine, the `grida-fx` binary, with its viewer embedded. Installed packages need no Bun, Docker or frontend build.
+Both package formats carry the same engine, the `grida-fx` binary, with its viewer embedded. Installed packages need no Bun, Docker or frontend build.
 
 ```sh
 npm install -g @grida/fx@next    # the grida-fx command, and the JavaScript SDK
 grida-fx --version
 npx @grida/fx@next --version     # or run it without installing
+```
 
+After the first Python preview is published:
+
+```sh
 pip install --pre grida          # the Python SDK, imported as grida.fx
 python -m grida.fx --version     # the engine from Python, with no Node needed
 ```
