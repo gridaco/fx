@@ -102,7 +102,7 @@ describe.skipIf(!tools || linux === undefined)("tools/build_npm.mjs", () => {
         files: ["bin/grida-fx", "README.md", "LICENSE"],
         license: "Apache-2.0",
         homepage: "https://grida.co/fx",
-        publishConfig: { access: "public", tag: "next" },
+        publishConfig: { access: "public", tag: version.includes("-") ? "next" : "latest" },
       });
       expect(package_.bin).toBeUndefined();
       expect(readFileSync(join(engineFolder, "LICENSE"), "utf8")).toBe(
@@ -110,7 +110,7 @@ describe.skipIf(!tools || linux === undefined)("tools/build_npm.mjs", () => {
       );
       expect(statSync(join(engineFolder, "bin", "grida-fx")).mode & 0o777).toBe(0o755);
       expect(readFileSync(join(engineFolder, "README.md"), "utf8")).toContain(
-        "npm install @grida/fx@next",
+        `npm install @grida/fx${version.includes("-") ? "@next" : ""}`,
       );
     },
     SLOW,

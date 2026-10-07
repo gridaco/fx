@@ -38,7 +38,7 @@ PYPI_REGISTRY = "https://pypi.org"
 PYPI_UPLOAD = "https://upload.pypi.org/legacy/"
 MAX_METADATA = 2 * 1024 * 1024
 MAX_ARCHIVE_CONTENT = 1024 * 1024 * 1024
-VERSION = re.compile(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)-(alpha|beta|rc)\.(0|[1-9]\d*)")
+VERSION = re.compile(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(alpha|beta|rc)\.(0|[1-9]\d*))?")
 SHA256 = re.compile(r"[0-9a-f]{64}")
 TARGETS = {
     "aarch64-apple-darwin": (
@@ -236,8 +236,9 @@ def validate_npm(artifact: Artifact, target: str, binary_sha256: str) -> None:
         fail("npm package identity disagrees with the manifest")
     if manifest.get("private") is True or manifest.get("scripts"):
         fail("release npm packages must be public and have no lifecycle scripts")
-    if manifest.get("publishConfig") != {"access": "public", "tag": "next"}:
-        fail("npm package must declare public preview publishing under next")
+    tag = "next" if "-" in artifact.version else "latest"
+    if manifest.get("publishConfig") != {"access": "public", "tag": tag}:
+        fail(f"npm package must declare public publishing under {tag}")
     engine_name, os_name, cpu, libc, _ = TARGETS[target]
     if artifact.name == "@grida/fx":
         pins = manifest.get("optionalDependencies", {})
@@ -279,13 +280,13 @@ def load_manifest(path: Path) -> Release:
     version = value.get("version")
     match = VERSION.fullmatch(version) if isinstance(version, str) else None
     if match is None:
-        fail("manifest version must be a canonical alpha, beta or rc preview")
+        fail("manifest version must be canonical SemVer with an optional alpha, beta or rc phase")
     major, minor, patch, phase, number = match.groups()
-    python_version = (
-        f"{major}.{minor}.{patch}{ {'alpha': 'a', 'beta': 'b', 'rc': 'rc'}[phase] }{number}"
-    )
+    python_version = f"{major}.{minor}.{patch}"
+    if phase is not None:
+        python_version += f"{ {'alpha': 'a', 'beta': 'b', 'rc': 'rc'}[phase] }{number}"
     if value.get("python_version") != python_version:
-        fail("Python and npm preview versions disagree")
+        fail("Python and npm versions disagree")
     target = value.get("target")
     if not isinstance(target, str) or target not in TARGETS:
         fail("manifest target is not a supported preview target")
@@ -375,7 +376,7 @@ def commands(release: Release, only: str = "all") -> list[list[str]]:
                     "publish",
                     str(artifact.path),
                     "--tag",
-                    "next",
+                    "next" if "-" in artifact.version else "latest",
                     "--access",
                     "public",
                     "--ignore-scripts",

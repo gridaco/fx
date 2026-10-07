@@ -28,11 +28,11 @@ Choose the installation appropriate to the project:
 
 ```sh
 # Node 18+: project-local CLI and JavaScript/TypeScript SDK.
-npm install @grida/fx@next
+npm install @grida/fx
 npx grida-fx --version
 
 # Or invoke the published preview without adding a project dependency.
-npx @grida/fx@next --version
+npx @grida/fx --version
 
 # Python 3.11+: install into the project's virtual environment.
 python -m pip install 'grida>=0.1.0'
@@ -45,7 +45,7 @@ the user's platform, report that rather than silently accepting an older package
 or switching to a source build. Follow the project's lockfile when it pins FX.
 
 The commands below use `grida-fx`; substitute `npx grida-fx`,
-`npx @grida/fx@next`, or `python -m grida.fx` as appropriate. The Python package
+`npx @grida/fx`, or `python -m grida.fx` as appropriate. The Python package
 does not install a `grida-fx` console command. npm's native engine is an optional
 dependency: do not omit optional dependencies when installing it.
 

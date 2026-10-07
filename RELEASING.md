@@ -1,13 +1,13 @@
 # Releasing
 
 Milestone 2 and the installed-preview checks have passed. Python uses stable releases
-starting at `0.1.0`, so users can install with `pip install grida`. npm continues under the
-dist-tag `next`. [`.github/workflows/release.yml`](.github/workflows/release.yml) builds,
+starting at `0.1.0`, so users can install with `pip install grida`. npm uses `latest` for stable versions and `next` for pre-releases. [`.github/workflows/release.yml`](.github/workflows/release.yml) builds,
 checks and publishes both package formats from the same version. The owner pushes the tag
 and approves the publish. CI uses OIDC for both registries and holds no publishing token.
 Local uploads have no CI build provenance.
 
 The first CI preview is published: `0.1.0-alpha.2` on npm and `0.1.0a2` on PyPI.
+The stable release `0.1.0` is published on npm and PyPI.
 All five npm trusted publishers and the PyPI publisher have completed a tokenless
 upload. Future releases start with a version bump; the initial bootstrap is complete.
 
@@ -25,7 +25,7 @@ build to open it. Python users still need no Node at all.
 | `aarch64-unknown-linux-gnu` | `ubuntu-24.04-arm`, cargo-zigbuild, glibc 2.28 | `@grida/fx-linux-arm64-gnu` | `manylinux_2_28_aarch64` |
 
 - **npm:** the four engine packages above, then `@grida/fx` (the SDK and the `grida-fx` command,
-  which runs the engine package npm installed for the machine). All five under `next`, with
+  which runs the engine package npm installed for the machine). All five under `latest` for stable versions or `next` for pre-releases, with
   provenance when published by the release workflow.
 - **PyPI:** the distribution `grida`, one wheel per target, each carrying the engine at
   `grida/fx/_bin/grida-fx`. There is no sdist, since it could not run, and no console command:
@@ -167,7 +167,7 @@ installed checks; an Apple Silicon-only setup preview must be described as such.
 `tools/publish_local.py --manifest <output>/release-manifest.json` validates the
 verified artifact identities and hashes and prints the publication plan, offline.
 Only an explicit `--publish` uploads. It uses the production registries, publishing
-the native npm engine before the SDK under `next`, then the PyPI pre-release wheel.
+the native npm engine before the SDK under `latest` (or `next` for pre-releases), then the PyPI wheel.
 Use `--only pypi` or `--only npm` to publish them independently, including from
 different machines. Copy the manifest and all three artifacts together: the full
 bundle is still validated, but only the selected registry is contacted and only
@@ -234,7 +234,7 @@ The tag starts `release.yml`, which runs four jobs:
      same way, and the `x86_64-unknown-linux-gnu` job uploads it.
 4. **publish** waits for a reviewer to approve the `release` environment. It runs only for a
    `v*` tag, and never for a dry run. It publishes the four engine packages and then
-   `@grida/fx` to npm, under `next` with `--access public --provenance`, and then the four wheels
+   `@grida/fx` to npm, under `latest` for stable versions or `next` for pre-releases, with `--access public --provenance`, and then the four wheels
    to PyPI. It checks out no code. A package version that is already published is skipped,
    so you can re-run a publish that failed partway.
 
@@ -246,10 +246,10 @@ bump to a new version (for example `0.1.1`) and tag again.
 On a supported machine, after the run is green:
 
 ```sh
-npm view @grida/fx dist-tags                # next: 0.1.0
-npm install -g @grida/fx@next
+npm view @grida/fx dist-tags                # latest: 0.1.0
+npm install -g @grida/fx
 grida-fx --version                          # grida-fx 0.1.0
-npx --yes @grida/fx@next --version          # the same, without installing
+npx --yes @grida/fx --version          # the same, without installing
 
 python3.12 -m venv fx-check                 # any Python 3.11 or later
 fx-check/bin/pip install grida

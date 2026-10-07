@@ -9,7 +9,7 @@ FX builds generated assets the way a build system builds code:
 ## Install
 
 ```bash
-npm install -g @grida/fx@next   # the grida-fx command (or without installing: npx @grida/fx@next)
+npm install -g @grida/fx   # the grida-fx command (or without installing: npx @grida/fx)
 pip install grida         # the Python SDK, for nodes and builders you write in Python
 grida-fx doctor                 # checks the keys and tools your workflows need
 ```

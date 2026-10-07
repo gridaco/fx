@@ -55,18 +55,19 @@ def npm_tarball(
 
 
 @pytest.fixture
-def release_files(publisher, tmp_path: Path):
-    version = "0.1.0-alpha.1"
-    python_version = "0.1.0a1"
+def release_files(publisher, tmp_path: Path, request: pytest.FixtureRequest):
+    version = getattr(request, "param", "0.1.0-alpha.1")
+    python_version = "0.1.0" if version == "0.1.0" else "0.1.0a1"
+    tag = "latest" if version == "0.1.0" else "next"
     wheels = tmp_path / "wheels"
     npm = tmp_path / "npm"
     wheels.mkdir()
     npm.mkdir()
-    wheel = wheels / "grida-0.1.0a1-py3-none-macosx_11_0_arm64.whl"
+    wheel = wheels / f"grida-{python_version}-py3-none-macosx_11_0_arm64.whl"
     with zipfile.ZipFile(wheel, "w") as archive:
-        prefix = "grida-0.1.0a1.dist-info/"
+        prefix = f"grida-{python_version}.dist-info/"
         archive.writestr(
-            prefix + "METADATA", "Metadata-Version: 2.1\nName: grida\nVersion: 0.1.0a1\n"
+            prefix + "METADATA", f"Metadata-Version: 2.1\nName: grida\nVersion: {python_version}\n"
         )
         archive.writestr(
             prefix + "WHEEL",
@@ -81,7 +82,7 @@ def release_files(publisher, tmp_path: Path):
         "version": version,
         "os": ["darwin"],
         "cpu": ["arm64"],
-        "publishConfig": {"access": "public", "tag": "next"},
+        "publishConfig": {"access": "public", "tag": tag},
     }
     npm_tarball(engine, engine_manifest, "package/bin/grida-fx")
     sdk = npm / f"grida-fx-{version}.tgz"
@@ -90,7 +91,7 @@ def release_files(publisher, tmp_path: Path):
         "version": version,
         "bin": {"grida-fx": "bin/grida-fx.js"},
         "optionalDependencies": {platform[0]: version for platform in publisher.TARGETS.values()},
-        "publishConfig": {"access": "public", "tag": "next"},
+        "publishConfig": {"access": "public", "tag": tag},
     }
     npm_tarball(sdk, sdk_manifest, "package/bin/grida-fx.js")
     artifacts = [
@@ -399,3 +400,14 @@ def test_file_changed_during_registry_preflight_is_not_uploaded(
     with pytest.raises(publisher.PublishError, match="digest disagrees"):
         publisher.publish(release, only)
     assert calls == []
+
+
+@pytest.mark.parametrize("release_files", ["0.1.0", "0.1.0-alpha.1"], indirect=True)
+def test_stable_and_preview_manifests_select_their_publication_channel(publisher, release_files):
+    manifest, _, _ = release_files
+    release = publisher.load_manifest(manifest)
+    expected = "latest" if release.version == "0.1.0" else "next"
+    uploads = publisher.commands(release, "npm")
+    assert len(uploads) == 2
+    for command in uploads:
+        assert command[command.index("--tag") + 1] == expected

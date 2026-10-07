@@ -24,7 +24,7 @@
     "@grida/fx-linux-arm64-gnu": "0.1.0",
     "@grida/fx-linux-x64-gnu": "0.1.0"
   },
-  "publishConfig": { "access": "public", "tag": "next" },
+  "publishConfig": { "access": "public", "tag": "latest" },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",

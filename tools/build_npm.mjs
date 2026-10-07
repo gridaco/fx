@@ -148,6 +148,7 @@ function sdkManifest(version) {
         "Make them agree (python3 tools/check_versions.py names every place).",
     );
   }
+  manifest.publishConfig = { access: "public", tag: version.includes("-") ? "next" : "latest" };
   return manifest;
 }
 
@@ -324,7 +325,7 @@ function engineReadme(platform, version) {
     "and npm installs it only on a matching machine. Install `@grida/fx` instead:",
     "",
     "```sh",
-    "npm install @grida/fx@next",
+    `npm install @grida/fx${version.includes("-") ? "@next" : ""}`,
     "npx grida-fx --help",
     "```",
     "",

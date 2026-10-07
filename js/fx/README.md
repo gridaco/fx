@@ -8,7 +8,7 @@ every paid call by its request, and records the run. It works with your own prov
 This is a **preview** (`0.x` pre-releases under the npm tag `next`).
 
 ```sh
-npm install @grida/fx@next     # or: npm install -g @grida/fx@next
+npm install @grida/fx     # or: npm install -g @grida/fx
 npx grida-fx --help
 ```
 

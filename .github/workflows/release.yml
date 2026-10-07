@@ -3,7 +3,8 @@ name: release
 # Builds the release's engine for its four targets, packs the grida wheels and the npm packages
 # around each one, holds every package to the conformance suite as installed, and then (for a
 # v* tag, once a reviewer approves the "release" environment) publishes them: npm under the
-# dist-tag next, PyPI with the version declared in the Python manifest. RELEASING.md has the owner's steps.
+# dist-tag latest for stable versions or next for pre-releases. PyPI uses the Python manifest
+# version. RELEASING.md has the owner's steps.
 #
 # A workflow_dispatch run is a dry run unless dry_run is unchecked on a v* tag: it builds and
 # checks everything and publishes nothing. Windows is not in the preview: the engine's runner uses
@@ -241,7 +242,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    name: Publish (npm next, PyPI)
+    name: Publish (npm, PyPI)
     needs: [versions, build]
     if: startsWith(github.ref, 'refs/tags/v') && inputs.dry_run != true
     runs-on: ubuntu-latest
@@ -278,7 +279,7 @@ jobs:
           node-version: "24"
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
-      - name: Publish to npm under next, the engine packages before @grida/fx
+      - name: Publish to npm, stable under latest and pre-releases under next
         run: |
           set -euo pipefail
           # Trusted publishing needs npm 11.5.1 or later.
@@ -289,6 +290,8 @@ jobs:
             npm install --global npm@11
           fi
           npm --version
+          tag=latest
+          if [[ "$VERSION" == *-* ]]; then tag=next; fi
           describe() {
             tar -xzOf "$1" package/package.json \
               | node -e 'const p = JSON.parse(require("fs").readFileSync(0, "utf8")); console.log(p.name + "@" + p.version)'
@@ -304,7 +307,7 @@ jobs:
               echo "$spec is already published: skipped"
               return
             fi
-            npm publish "$1" --tag next --access public --provenance
+            npm publish "$1" --tag "$tag" --access public --provenance
           }
           sdk=""
           for tarball in dist/npm/*.tgz; do

@@ -2,7 +2,7 @@
 
 ## CLI
 
-The command is `grida-fx` (from `npm install -g @grida/fx@next`, or `npx @grida/fx@next`). Without Node,
+The command is `grida-fx` (from `npm install -g @grida/fx`, or `npx @grida/fx`). Without Node,
 the `grida` Python package runs the same engine: `python -m grida.fx <verb>` takes the same
 arguments. The packages are not published yet: until they are, run FX from a clone of the
 repository ([the examples' README](../../examples/README.md#from-a-clone)).

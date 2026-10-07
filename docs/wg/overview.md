@@ -158,7 +158,7 @@ gnode's tests, conformance suite, guide and schemas left with it; the suite and 
 | Tripo | `mesh.generate`, `mesh.rig` |
 | ElevenLabs | `sound.generate`, `speech.generate` |
 
-Milestone 2 has passed. The published preview `v0.1.0-alpha.2` has also passed its checks as installed, satisfying the publication gate for leaving preview. The current release remains a pre-release under npm's `next` tag and on PyPI.
+Milestone 2 has passed. The published preview `v0.1.0-alpha.2` has also passed its checks as installed, satisfying the publication gate for leaving preview. The stable release `v0.1.0` is published on npm and PyPI; npm stable releases use `latest`, while pre-releases use `next`.
 
 ## Later
 
