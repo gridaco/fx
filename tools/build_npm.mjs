@@ -172,6 +172,7 @@ function buildSdk(manifest, version, folder) {
   copyFileSync(join(SDK, "bin", "grida-fx.js"), join(folder, "bin", "grida-fx.js"));
   chmodSync(join(folder, "bin", "grida-fx.js"), 0o755);
   copyFileSync(join(SDK, "README.md"), join(folder, "README.md"));
+  copyFileSync(join(SDK, "LICENSE"), join(folder, "LICENSE"));
   const published = { ...manifest, version };
   delete published.scripts;
   delete published.devDependencies;
@@ -293,6 +294,7 @@ function buildEngine(platform, binary, version, manifest, folder) {
   mkdirSync(join(folder, "bin"), { recursive: true });
   copyFileSync(binary, join(folder, "bin", "grida-fx"));
   chmodSync(join(folder, "bin", "grida-fx"), 0o755);
+  copyFileSync(join(REPO, "LICENSE"), join(folder, "LICENSE"));
   const package_ = {
     name: platform.package,
     version,
@@ -304,7 +306,7 @@ function buildEngine(platform, binary, version, manifest, folder) {
     os: [platform.os],
     cpu: [platform.cpu],
     ...(platform.libc !== null ? { libc: [platform.libc] } : {}),
-    files: ["bin/grida-fx", "README.md"],
+    files: ["bin/grida-fx", "README.md", "LICENSE"],
     preferUnplugged: true,
     publishConfig: manifest.publishConfig,
   };
@@ -405,7 +407,7 @@ async function main(argv) {
     built.push({
       name: platform.package,
       folder,
-      expected: { "package.json": null, "README.md": null, "bin/grida-fx": 0o755 },
+      expected: { "package.json": null, "README.md": null, "LICENSE": null, "bin/grida-fx": 0o755 },
     });
   }
   const missing = platforms.filter(
@@ -435,7 +437,7 @@ async function main(argv) {
 /** What @grida/fx's tarball must hold: the manifest, the readme, the command, and each module of
  * the compiled SDK with its declarations. */
 function sdkFiles() {
-  const expected = { "package.json": null, "README.md": null, "bin/grida-fx.js": 0o755 };
+  const expected = { "package.json": null, "README.md": null, "LICENSE": null, "bin/grida-fx.js": 0o755 };
   for (const module of ["index", "cli", "binary", "platforms", "api"]) {
     expected[`dist/${module}.js`] = null;
     expected[`dist/${module}.d.ts`] = null;

@@ -161,7 +161,11 @@ def test_a_wheel_carries_the_engine_the_package_and_its_record(tmp_path: Path) -
         infos = archive.infolist()
         names = [info.filename for info in infos]
         payload = sorted([*_package_names(), "grida/fx/_bin/grida-fx"])
-        assert names == [*payload, *(f"{dist_info}/{n}" for n in ("METADATA", "WHEEL", "RECORD"))]
+        assert names == [
+            *payload,
+            *(f"{dist_info}/{n}" for n in ("METADATA", "WHEEL", "licenses/LICENSE", "RECORD")),
+        ]
+        assert archive.read(f"{dist_info}/licenses/LICENSE") == (REPO / "LICENSE").read_bytes()
         assert archive.read("grida/fx/_bin/grida-fx") == binary
         assert archive.read(f"{dist_info}/WHEEL").decode() == (
             "Wheel-Version: 1.0\n"
@@ -199,7 +203,9 @@ def test_the_metadata_comes_from_pyproject_and_the_readme(tmp_path: Path) -> Non
     with zipfile.ZipFile(wheel) as archive:
         metadata = archive.read(f"grida-{project['version']}.dist-info/METADATA").decode()
     message = email.parser.Parser().parsestr(metadata)
-    assert message["Metadata-Version"] == "2.1"
+    assert message["Metadata-Version"] == "2.4"
+    assert message["License-Expression"] == project["license"] == "Apache-2.0"
+    assert message.get_all("License-File") == project["license-files"] == ["LICENSE"]
     assert message["Name"] == project["name"] == "grida"
     assert message["Version"] == project["version"]
     assert message["Summary"] == project["description"]
@@ -215,7 +221,7 @@ def test_the_metadata_comes_from_pyproject_and_the_readme(tmp_path: Path) -> Non
 def test_the_wheel_is_the_same_bytes_whenever_it_is_built(tmp_path: Path) -> None:
     copy = tmp_path / "project"
     copy.mkdir()
-    for name in ("pyproject.toml", "README.md"):
+    for name in ("pyproject.toml", "README.md", "LICENSE"):
         shutil.copy2(PYTHON / name, copy / name)
     # As a fresh checkout has it: no caches, and no engine from tools/build_engine.py.
     clean = shutil.ignore_patterns("__pycache__", "_bin")
@@ -248,6 +254,12 @@ def test_a_project_key_the_tool_does_not_write_is_refused(tmp_path: Path) -> Non
     )
     with pytest.raises(tool.BuildError, match="keywords, which build_wheel.py does not write"):
         tool.project_metadata(copy)
+
+
+def test_a_declared_license_cannot_be_silently_omitted(tmp_path: Path) -> None:
+    shutil.copy2(PYTHON / "pyproject.toml", tmp_path / "pyproject.toml")
+    with pytest.raises(tool.BuildError, match="license-files pattern 'LICENSE' matches no files"):
+        _build(tmp_path, macho(), "aarch64-apple-darwin", tmp_path)
 
 
 def test_the_command_prints_the_wheel_or_the_reason(

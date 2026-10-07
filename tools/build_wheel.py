@@ -14,11 +14,13 @@ platform, each with the engine at ``grida/fx/_bin/grida-fx``. There is no consol
 - **Contents.** Every file of the packages ``python/pyproject.toml`` names under
   ``[tool.hatch.build.targets.wheel]`` except ``__pycache__``, compiled files, dotfiles and
   ``grida/fx/_bin/``; the binary at ``grida/fx/_bin/grida-fx`` with mode 0o755 (every other file
-  0o644); then ``METADATA``, ``WHEEL`` and ``RECORD`` (sha256 and size of every other entry).
-- **Metadata** is Core Metadata 2.1 from ``[project]``: ``Name``, ``Version``, ``Summary``,
-  ``Project-URL``, ``Requires-Python``, one ``Requires-Dist`` per dependency, and the readme as
-  the description. A ``[project]`` key this script does not write is refused, so nothing is
-  dropped silently. ``WHEEL`` says ``Root-Is-Purelib: false`` and the one tag
+  0o644); then ``METADATA``, ``WHEEL``, license files and ``RECORD`` (sha256 and size of every
+  other entry). License files live in ``.dist-info/licenses/``.
+- **Metadata** is Core Metadata 2.4 from ``[project]``: ``Name``, ``Version``, ``Summary``,
+  ``Project-URL``, ``Requires-Python``, one ``Requires-Dist`` per dependency,
+  ``License-Expression``, ``License-File``, and the readme as the description. A ``[project]``
+  key this script does not write is refused, so nothing is dropped silently.
+  ``WHEEL`` says ``Root-Is-Purelib: false`` and the one tag
   ``py3-none-<platform>``.
 - **The platform tag is read from the binary**, so it is honest for it:
   - macOS: a thin 64-bit Mach-O of the target's architecture that links only system libraries
@@ -93,7 +95,17 @@ TIMESTAMP = (1980, 1, 1, 0, 0, 0)
 GENERATOR = "grida-fx tools/build_wheel.py"
 #: The ``[project]`` keys written into METADATA.
 PROJECT_KEYS = frozenset(
-    {"name", "version", "description", "readme", "requires-python", "dependencies", "urls"}
+    {
+        "name",
+        "version",
+        "description",
+        "readme",
+        "requires-python",
+        "dependencies",
+        "urls",
+        "license",
+        "license-files",
+    }
 )
 _CANONICAL_VERSION = re.compile(r"\d+(\.\d+)*((a|b|rc)\d+)?(\.post\d+)?(\.dev\d+)?")
 _README_TYPES = {".md": "text/markdown", ".rst": "text/x-rst", ".txt": "text/plain"}
@@ -278,7 +290,7 @@ def _elf_requirements(data: bytes) -> tuple[list[str], list[tuple[int, ...]]]:
 # The metadata
 
 
-def project_metadata(project: Path) -> tuple[str, str, bytes, list[Path]]:
+def project_metadata(project: Path) -> tuple[str, str, bytes, list[Path], list[Path]]:
     """The distribution's name and version, its METADATA, and the package folders to ship, from
     ``project``'s ``pyproject.toml`` (module docstring)."""
     pyproject = tomllib.loads((project / "pyproject.toml").read_text(encoding="utf-8"))
@@ -295,7 +307,20 @@ def project_metadata(project: Path) -> tuple[str, str, bytes, list[Path]]:
         raise BuildError(f"pyproject.toml [project] name {name!r} is not a distribution name")
     if not _CANONICAL_VERSION.fullmatch(version):
         raise BuildError(f"pyproject.toml [project] version {version!r} is not canonical PEP 440")
-    lines = ["Metadata-Version: 2.1", f"Name: {name}", f"Version: {version}"]
+    license_files = project_license_files(project, table.get("license-files", []))
+    metadata_version = "2.4" if "license" in table or "license-files" in table else "2.1"
+    lines = [f"Metadata-Version: {metadata_version}", f"Name: {name}", f"Version: {version}"]
+    if "license" in table:
+        license_expression = table["license"]
+        if (
+            not isinstance(license_expression, str)
+            or not license_expression.strip()
+            or "\n" in license_expression
+            or "\r" in license_expression
+        ):
+            raise BuildError("pyproject.toml [project] license must be a one-line SPDX expression")
+        lines.append(f"License-Expression: {license_expression}")
+    lines += [f"License-File: {path.relative_to(project).as_posix()}" for path in license_files]
     summary = table.get("description")
     if summary is not None:
         if "\n" in summary:
@@ -323,7 +348,37 @@ def project_metadata(project: Path) -> tuple[str, str, bytes, list[Path]]:
     packages = wheel.get("wheel", {}).get("packages")
     if not packages:
         raise BuildError("pyproject.toml names no [tool.hatch.build.targets.wheel] packages")
-    return name, version, text.encode("utf-8"), [project / package for package in packages]
+    return (
+        name,
+        version,
+        text.encode("utf-8"),
+        [project / package for package in packages],
+        license_files,
+    )
+
+
+def project_license_files(project: Path, patterns: list[str]) -> list[Path]:
+    """Resolve declared license files within the project; refuse missing or escaping files."""
+    if not isinstance(patterns, list) or any(not isinstance(pattern, str) for pattern in patterns):
+        raise BuildError("pyproject.toml [project] license-files must be an array of glob patterns")
+    files: set[Path] = set()
+    for pattern in patterns:
+        if (
+            not pattern
+            or Path(pattern).is_absolute()
+            or ".." in Path(pattern).parts
+            or "\\" in pattern
+        ):
+            raise BuildError(f"license-files pattern {pattern!r} must stay within the project")
+        matches = [path for path in project.glob(pattern) if path.is_file()]
+        if not matches:
+            raise BuildError(f"license-files pattern {pattern!r} matches no files")
+        for path in matches:
+            if not path.resolve().is_relative_to(project.resolve()):
+                raise BuildError(f"license file {path} is outside the project")
+            path.read_text(encoding="utf-8")
+            files.add(path)
+    return sorted(files)
 
 
 def package_files(folder: Path) -> Iterator[tuple[str, Path]]:
@@ -357,7 +412,7 @@ def build_wheel(binary: Path, target: str, out: Path, project: Path = PYTHON) ->
         raise BuildError(f"{binary} is not a file")
     engine = binary.read_bytes()
     tag = f"py3-none-{platform_tag(engine, target)}"
-    name, version, metadata, packages = project_metadata(project)
+    name, version, metadata, packages, license_files = project_metadata(project)
     distribution = re.sub(r"[-_.]+", "_", name).lower()
     dist_info = f"{distribution}-{version}.dist-info"
 
@@ -372,6 +427,10 @@ def build_wheel(binary: Path, target: str, out: Path, project: Path = PYTHON) ->
         f"Wheel-Version: 1.0\nGenerator: {GENERATOR}\nRoot-Is-Purelib: false\nTag: {tag}\n"
     ).encode()
     entries += [(f"{dist_info}/METADATA", metadata, 0o644), (f"{dist_info}/WHEEL", wheel, 0o644)]
+    entries += [
+        (f"{dist_info}/licenses/{path.relative_to(project).as_posix()}", path.read_bytes(), 0o644)
+        for path in license_files
+    ]
 
     record = io.StringIO()
     writer = csv.writer(record, lineterminator="\n")

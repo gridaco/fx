@@ -2,6 +2,8 @@
   "name": "@grida/fx-react",
   "version": "0.1.0-alpha.2",
   "private": true,
+  "homepage": "https://grida.co/fx",
+  "license": "Apache-2.0",
   "type": "module",
   "exports": "./src/index.tsx",
   "dependencies": {

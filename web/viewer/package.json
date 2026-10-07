@@ -2,6 +2,8 @@
   "name": "@grida/fx-viewer",
   "version": "0.0.0",
   "private": true,
+  "homepage": "https://grida.co/fx",
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
