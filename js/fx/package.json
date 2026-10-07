@@ -1,6 +1,6 @@
 {
   "name": "@grida/fx",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0",
   "description": "Grida FX for JavaScript: the grida-fx command, and an SDK to build workflows and drive the engine.",
   "keywords": ["grida", "fx", "workflow", "generative", "assets", "pipeline"],
   "homepage": "https://grida.co/fx",
@@ -19,10 +19,10 @@
   "files": ["bin/grida-fx.js", "dist", "README.md", "LICENSE"],
   "sideEffects": false,
   "optionalDependencies": {
-    "@grida/fx-darwin-arm64": "0.1.0-alpha.2",
-    "@grida/fx-darwin-x64": "0.1.0-alpha.2",
-    "@grida/fx-linux-arm64-gnu": "0.1.0-alpha.2",
-    "@grida/fx-linux-x64-gnu": "0.1.0-alpha.2"
+    "@grida/fx-darwin-arm64": "0.1.0",
+    "@grida/fx-darwin-x64": "0.1.0",
+    "@grida/fx-linux-arm64-gnu": "0.1.0",
+    "@grida/fx-linux-x64-gnu": "0.1.0"
   },
   "publishConfig": { "access": "public", "tag": "next" },
   "scripts": {

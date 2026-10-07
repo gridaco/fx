@@ -1,13 +1,11 @@
 # Releasing
 
-FX ships as previews until milestone 2 passes and a published preview has passed its checks as
-installed ([below](#checking-the-published-preview); [overview](docs/wg/overview.md)): npm versions
-go under the dist-tag `next`, and PyPI gets pre-releases. [`.github/workflows/release.yml`](.github/workflows/release.yml)
-builds, checks and publishes. The owner does the account setup, pushes the tag and approves the
-publish. Start by preparing and publishing an Apple Silicon preview locally, then
-bootstrap the remaining npm engine packages from a CI dry run. CI publishing uses
-OIDC for both registries and holds no publishing token. Local uploads have no CI
-build provenance.
+Milestone 2 and the installed-preview checks have passed. Python uses stable releases
+starting at `0.1.0`, so users can install with `pip install grida`. npm continues under the
+dist-tag `next`. [`.github/workflows/release.yml`](.github/workflows/release.yml) builds,
+checks and publishes both package formats from the same version. The owner pushes the tag
+and approves the publish. CI uses OIDC for both registries and holds no publishing token.
+Local uploads have no CI build provenance.
 
 The first CI preview is published: `0.1.0-alpha.2` on npm and `0.1.0a2` on PyPI.
 All five npm trusted publishers and the PyPI publisher have completed a tokenless
@@ -54,8 +52,8 @@ uv run --project python python tools/check_versions.py   # every place agrees (C
 ```
 
 The release tag is `v` followed by the workspace version, for example `v0.1.0-alpha.1`. The
-workflow refuses a tag that names any other version, and it refuses a version that is not a
-pre-release (`-alpha.N`, `-beta.N` or `-rc.N`).
+workflow refuses a tag that names any other version. It accepts stable versions and
+pre-releases (`-alpha.N`, `-beta.N` or `-rc.N`).
 
 ## One-time setup
 
@@ -197,21 +195,21 @@ uv run --locked --project python python tools/publish_local.py --manifest <outpu
 
 ## Releasing
 
-First bump every manifest and lockfile to a new preview version as described above.
+First bump every manifest and lockfile to a new version as described above.
 Then tag that version; never reuse an already published version or tag.
 
 ```sh
 git switch main && git pull
 version=$(uv run --project python python tools/check_versions.py --print semver)
-uv run --project python python tools/check_versions.py --tag "v$version" --prerelease
-git tag -a "v$version" -m "Grida FX $version (preview)"
+uv run --project python python tools/check_versions.py --tag "v$version"
+git tag -a "v$version" -m "Grida FX $version"
 git push origin "v$version"
 ```
 
 The tag starts `release.yml`, which runs four jobs:
 
-1. **versions:** `tools/check_versions.py --prerelease --tag <tag>`. Every manifest names the
-   workspace version, the tag names it too, and it is a pre-release.
+1. **versions:** `tools/check_versions.py --tag <tag>`. Every manifest names the
+   workspace version, and the tag names it too.
 2. **viewer:** installs the frozen root Bun workspace, checks, tests and builds the viewer, and uploads
    `web/viewer/dist` as one build artifact. Generated assets stay out of Git. Missing assets fail
    the native build rather than producing a package without its UI.
@@ -241,21 +239,21 @@ The tag starts `release.yml`, which runs four jobs:
    so you can re-run a publish that failed partway.
 
 A published version can never be replaced. If something is wrong after publishing, fix it,
-bump to the next pre-release (`0.1.0-alpha.3`, `0.1.0a3`) and tag again.
+bump to a new version (for example `0.1.1`) and tag again.
 
-## Checking the published preview
+## Checking the published release
 
 On a supported machine, after the run is green:
 
 ```sh
-npm view @grida/fx dist-tags                # next: 0.1.0-alpha.2
+npm view @grida/fx dist-tags                # next: 0.1.0
 npm install -g @grida/fx@next
-grida-fx --version                          # grida-fx 0.1.0-alpha.2
+grida-fx --version                          # grida-fx 0.1.0
 npx --yes @grida/fx@next --version          # the same, without installing
 
 python3.12 -m venv fx-check                 # any Python 3.11 or later
-fx-check/bin/pip install --pre grida
-fx-check/bin/python -m grida.fx --version   # grida-fx 0.1.0-alpha.2
+fx-check/bin/pip install grida
+fx-check/bin/python -m grida.fx --version   # grida-fx 0.1.0
 ```
 
 - **Provenance:** each package's npm page shows its provenance, linked to the workflow run.

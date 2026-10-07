@@ -182,7 +182,7 @@ def verify(wheel: Path, npm: list[Path], out: Path) -> None:
 
 def package(binary: Path, target: str, out: Path, *, installed_checks: bool) -> Path:
     binary = binary.resolve(strict=True)
-    run([sys.executable, str(ROOT / "tools" / "check_versions.py"), "--prerelease"])
+    run([sys.executable, str(ROOT / "tools" / "check_versions.py")])
     version = (
         subprocess.check_output(
             [

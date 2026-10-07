@@ -48,7 +48,6 @@ def prepare(out: Path | None) -> Path:
         [
             sys.executable,
             str(ROOT / "tools/check_versions.py"),
-            "--prerelease",
             "--print",
             "semver",
         ],

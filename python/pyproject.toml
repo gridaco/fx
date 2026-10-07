@@ -1,6 +1,6 @@
 [project]
 name = "grida"
-version = "0.1.0a2"
+version = "0.1.0"
 description = "Grida FX for Python: author nodes and workflows, and drive the grida-fx engine."
 readme = "README.md"
 license = "Apache-2.0"

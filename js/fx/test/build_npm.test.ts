@@ -82,6 +82,9 @@ describe.skipIf(!tools || linux === undefined)("tools/build_npm.mjs", () => {
 
       const sdk = JSON.parse(readFileSync(join(out, "packages", "fx", "package.json"), "utf8"));
       expect(sdk.version).toBe(version);
+      expect(readFileSync(join(out, "packages", "fx", "LICENSE"), "utf8")).toBe(
+        readFileSync(join(repoRoot, "LICENSE"), "utf8"),
+      );
       expect(sdk.scripts).toBeUndefined();
       expect(sdk.devDependencies).toBeUndefined();
       expect(sdk.optionalDependencies[platform.package]).toBe(version);
@@ -96,10 +99,15 @@ describe.skipIf(!tools || linux === undefined)("tools/build_npm.mjs", () => {
         os: ["linux"],
         cpu: [platform.cpu],
         libc: ["glibc"],
-        files: ["bin/grida-fx", "README.md"],
+        files: ["bin/grida-fx", "README.md", "LICENSE"],
+        license: "Apache-2.0",
+        homepage: "https://grida.co/fx",
         publishConfig: { access: "public", tag: "next" },
       });
       expect(package_.bin).toBeUndefined();
+      expect(readFileSync(join(engineFolder, "LICENSE"), "utf8")).toBe(
+        readFileSync(join(repoRoot, "LICENSE"), "utf8"),
+      );
       expect(statSync(join(engineFolder, "bin", "grida-fx")).mode & 0o777).toBe(0o755);
       expect(readFileSync(join(engineFolder, "README.md"), "utf8")).toContain(
         "npm install @grida/fx@next",

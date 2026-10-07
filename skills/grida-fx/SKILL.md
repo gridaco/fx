@@ -35,11 +35,11 @@ npx grida-fx --version
 npx @grida/fx@next --version
 
 # Python 3.11+: install into the project's virtual environment.
-python -m pip install --pre 'grida>=0.1.0a1'
+python -m pip install 'grida>=0.1.0'
 python -m grida.fx --version
 ```
 
-These examples target the 0.1 preview. The Python version floor matters: the older
+These examples target FX 0.1. The Python version floor matters: the older
 `grida 0.0.1` distribution is not FX. If a compatible release is unavailable for
 the user's platform, report that rather than silently accepting an older package
 or switching to a source build. Follow the project's lockfile when it pins FX.

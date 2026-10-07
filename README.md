@@ -4,9 +4,9 @@ A workflow engine for generative asset pipelines. Write a workflow file, and FX 
 
 FX grew out of gnode, the Python engine [softmarshmallow/stage-gen](https://github.com/softmarshmallow/stage-gen) ran on until it moved onto FX. See [the overview](docs/wg/overview.md) for the direction and the plan.
 
-## Install (preview)
+## Install
 
-The preview is published on npm under the `next` tag and on PyPI as a pre-release, for all four platforms below. To develop FX from a clone, you need cargo, [Bun](https://bun.sh) and [uv](https://docs.astral.sh/uv/) ([examples/README.md](examples/README.md#from-a-clone) has the rest):
+FX is published on npm under the `next` tag and on PyPI as a stable Python release, for all four platforms below. To develop FX from a clone, you need cargo, [Bun](https://bun.sh) and [uv](https://docs.astral.sh/uv/) ([examples/README.md](examples/README.md#from-a-clone) has the rest):
 
 ```sh
 git clone https://github.com/gridaco/fx && cd fx
@@ -27,11 +27,11 @@ npx @grida/fx@next --version     # or run it without installing
 Install the Python SDK:
 
 ```sh
-pip install --pre grida          # the Python SDK, imported as grida.fx
+pip install grida          # the Python SDK, imported as grida.fx
 python -m grida.fx --version     # the engine from Python, with no Node needed
 ```
 
-The preview runs on:
+FX runs on:
 
 | Platform | npm engine package | PyPI wheel |
 |---|---|---|

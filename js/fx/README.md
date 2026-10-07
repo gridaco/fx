@@ -31,7 +31,7 @@ later.
 binary: the command and the SDK use it first.
 
 Some steps run on Python in the preview (your own Python nodes, and the built-in local types such
-as `image.resize`): those projects also need `pip install --pre grida`, or `GRIDA_FX_PYTHON`
+as `image.resize`): those projects also need `pip install grida`, or `GRIDA_FX_PYTHON`
 pointing at a Python that has them. A project whose steps are all paid built-ins and `select`
 needs only this package. See [Getting started](https://github.com/gridaco/fx/blob/main/docs/guide/01-getting-started.md).
 

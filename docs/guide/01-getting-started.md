@@ -10,7 +10,7 @@ FX builds generated assets the way a build system builds code:
 
 ```bash
 npm install -g @grida/fx@next   # the grida-fx command (or without installing: npx @grida/fx@next)
-pip install --pre grida         # the Python SDK, for nodes and builders you write in Python
+pip install grida         # the Python SDK, for nodes and builders you write in Python
 grida-fx doctor                 # checks the keys and tools your workflows need
 ```
 
@@ -40,7 +40,7 @@ The engine itself runs the paid built-in types (`image.generate`, `structured.ge
   `package`.
 
 A project that uses any of them needs a Python with `grida` and Pillow installed
-(`pip install --pre grida`, which brings Pillow). FX uses `GRIDA_FX_PYTHON` when it is set, else
+(`pip install grida`, which brings Pillow). FX uses `GRIDA_FX_PYTHON` when it is set, else
 the `.venv` of the workflow's project, else the `.venv` of the project you run from, else the Python
 that runs the SDK when you run through it ([Running](05-running.md#from-python)), else `python3`
 on `PATH`. Only a project whose steps are all paid built-ins and `select` needs just the command.

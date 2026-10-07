@@ -246,7 +246,7 @@ grida-fx run level_art.py:build --arg level=../levels/docks.toml --live \
 
 ## From Python
 
-The Python SDK (`pip install --pre grida`) drives the same engine as the command, and needs no Node.
+The Python SDK (`pip install grida`) drives the same engine as the command, and needs no Node.
 
 ```python
 from grida.fx import run

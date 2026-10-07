@@ -292,7 +292,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.tag is not None and (problem := tag_problem(args.tag, version)):
         problems.append(problem)
     if args.prerelease and not is_prerelease(version):
-        problems.append(f"{version} is not a pre-release, and releases are previews for now")
+        problems.append(f"{version} is not a pre-release, as required by --prerelease")
     for problem in problems:
         print(f"FAIL {problem}", file=sys.stderr)
     if problems:

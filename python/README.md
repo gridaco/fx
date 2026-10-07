@@ -10,13 +10,13 @@ identities, the cache and budgets all happen in `grida-fx`, never in this packag
 ## Install
 
 ```sh
-pip install --pre grida
+pip install grida
 ```
 
-The preview is a pre-release (`0.1.0aN`), so it needs `--pre` (`uv pip install --prerelease=allow
-grida`). Each wheel carries the engine for its platform: macOS on Apple silicon (11 or later) and
+Python releases use stable versions starting at `0.1.0` (`uv pip install grida` also works).
+Each wheel carries the engine for its platform: macOS on Apple silicon (11 or later) and
 on Intel (10.12 or later), and Linux with glibc 2.28 or later on x86_64 and aarch64. Windows is not
-in the preview: the engine's runner uses Unix process groups and signals. There is no source
+supported: the engine's runner uses Unix process groups and signals. There is no source
 distribution, and the wheels install no console command: the engine runs as `python -m grida.fx`.
 
 From a checkout of the repository, `python3 tools/build_engine.py` builds the engine and puts it
