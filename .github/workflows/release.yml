@@ -170,12 +170,15 @@ jobs:
           test "$printed" = "grida-fx $VERSION"
 
       - run: uv sync --locked --project python
+      - name: Install the SDK's TypeScript compiler
+        working-directory: js/fx
+        run: bun --no-env-file install --frozen-lockfile
       # build_wheel.py reads the platform tag back from the binary and refuses one it cannot tag
       # honestly: a glibc past 2.28, a library outside the system, the wrong architecture.
-      - name: Build the grida wheel
+      - name: Package the compiled target for Python and npm
         run: >-
-          uv run --locked --project python python tools/build_wheel.py
-          --binary "$BIN" --target "$TARGET" --out "$DIST/wheels"
+          uv run --locked --project python python tools/package_release.py
+          --binary "$BIN" --target "$TARGET" --out "$DIST"
       - name: Install the wheel into a fresh environment
         run: |
           wheels=("$DIST"/wheels/*.whl)
@@ -199,11 +202,6 @@ jobs:
           "$WHEEL_PYTHON" tools/check_viewer.py
           --command "$WHEEL_PYTHON -m grida.fx"
 
-      - name: Install the SDK's TypeScript compiler
-        working-directory: js/fx
-        run: bun --no-env-file install --frozen-lockfile
-      - name: Build the npm packages
-        run: node tools/build_npm.mjs --out "$DIST/npm" --target "$TARGET=$BIN"
       - name: Install the npm packages into a fresh prefix
         run: |
           prefix="$RUNNER_TEMP/npm-check"

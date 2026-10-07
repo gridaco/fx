@@ -4,7 +4,8 @@ FX ships as previews until milestone 2 passes and a published preview has passed
 installed ([below](#checking-the-published-preview); [overview](docs/wg/overview.md)): npm versions
 go under the dist-tag `next`, and PyPI gets pre-releases. [`.github/workflows/release.yml`](.github/workflows/release.yml)
 builds, checks and publishes. The owner does the account setup, pushes the tag and approves the
-publish. Nothing is published from a laptop.
+publish. An explicitly authorized local setup preview can use the shared packaging
+tools and the separate manual publisher below; it has no CI build provenance.
 
 ## What a release publishes
 
@@ -21,7 +22,7 @@ build to open it. Python users still need no Node at all.
 
 - **npm:** the four engine packages above, then `@grida/fx` (the SDK and the `grida-fx` command,
   which runs the engine package npm installed for the machine). All five under `next`, with
-  provenance.
+  provenance when published by the release workflow.
 - **PyPI:** the distribution `grida`, one wheel per target, each carrying the engine at
   `grida/fx/_bin/grida-fx`. There is no sdist, since it could not run, and no console command:
   Python users run `python -m grida.fx <verb>`.
@@ -93,6 +94,67 @@ The run builds all four targets and checks everything, but publishes nothing. It
 you can download and inspect them. Do this before the first tag. (A run started on a `v*` tag
 with dry_run unchecked publishes, just as pushing the tag does.)
 
+## Local packaging and setup preview
+
+`tools/package_release.py` is the shared packaging entry point for a compiled target.
+It calls the existing wheel and npm packagers, checks version agreement, records
+the Git-visible source snapshot (including uncommitted source), and writes a manifest
+with SHA-256 hashes. It never publishes. CI uses it with each runner's release binary
+and then performs its installed-package checks on the oldest supported runtimes.
+Locally, `--verify` performs clean Python/npm installs, strict conformance and
+embedded-viewer checks, with provider keys removed and dotenv disabled.
+
+For an Apple Silicon setup preview, build the viewer and a production engine first:
+
+```sh
+bun --no-env-file install --frozen-lockfile
+bun --no-env-file run check:viewer
+bun --no-env-file run test:viewer
+bun --no-env-file run build:viewer
+(cd js/fx && bun --no-env-file install --frozen-lockfile)
+MACOSX_DEPLOYMENT_TARGET=11.0 CARGO_INCREMENTAL=0 \
+  RUSTFLAGS="--remap-path-prefix=$PWD=fx --remap-path-prefix=$HOME/.cargo=cargo --remap-path-prefix=$HOME/.rustup=rustup" \
+  cargo build --locked --release --bin grida-fx --target aarch64-apple-darwin
+uv run --locked --project python python tools/package_release.py \
+  --binary target/aarch64-apple-darwin/release/grida-fx \
+  --target aarch64-apple-darwin \
+  --out target/packages/0.1.0-alpha.1-macos-arm64 --verify
+```
+
+The output directory must be new; an output inside the checkout must be gitignored.
+The three artifacts are one `grida` wheel, the native npm engine tarball, and the
+`@grida/fx` SDK tarball. Source or artifact changes during packaging refuse the manifest;
+the recorded hashes belong to the exact bytes checked by the clean installations.
+Inspect them before publication. Do not use a debug binary or plain `uv build` for
+a release. Other platforms need their own correctly targeted release builds and
+installed checks; an Apple Silicon-only setup preview must be described as such.
+
+`tools/publish_local.py --manifest <output>/release-manifest.json` validates the
+verified artifact identities and hashes and prints the publication plan, offline.
+Only an explicit `--publish` uploads. It uses the production registries, publishing
+the native npm engine before the SDK under `next`, then the PyPI pre-release wheel.
+Use `--only pypi` or `--only npm` to publish them independently, including from
+different machines. Copy the manifest and all three artifacts together: the full
+bundle is still validated, but only the selected registry is contacted and only
+its uploader is required. A prior PyPI publication does not block npm-only publishing.
+The account owner performs npm login/2FA and provides a project-scoped PyPI token
+through the uploader's secure prompt or their own credential setup. Never put a
+token in source, command arguments, logs or `.env`. Local publishing does not request
+CI provenance or trusted-publisher attestations. Already-published versions are
+refused so a partial publication must be inspected before resuming.
+
+```sh
+uv run --locked --project python python tools/publish_local.py --manifest <output>/release-manifest.json
+# After artifact review and explicit authorization:
+npm login --registry https://registry.npmjs.org
+uv run --locked --project python python tools/publish_local.py --manifest <output>/release-manifest.json --publish
+
+# Publish Python first; npm authentication and publication can wait:
+uv run --locked --project python python tools/publish_local.py --manifest <output>/release-manifest.json --only pypi --publish
+# Later, on the npm-authenticated machine with the same verified bundle:
+uv run --locked --project python python tools/publish_local.py --manifest <output>/release-manifest.json --only npm --publish
+```
+
 ## Releasing
 
 ```sh
@@ -114,14 +176,15 @@ The tag starts `release.yml`, which runs four jobs:
    - builds `grida-fx` with `--locked --release` (cargo-zigbuild for glibc 2.28 on Linux;
      `MACOSX_DEPLOYMENT_TARGET` 11.0 or 10.12 on macOS), and checks that it prints
      `grida-fx <version>`;
-   - builds the wheel with `tools/build_wheel.py`, which reads the platform tag back from the
-     binary and refuses a dishonest one, and checks that the tag is the one in the table;
+   - packages both distributions through `tools/package_release.py`. Its wheel packager,
+     `tools/build_wheel.py`, reads the platform tag back from the binary and refuses a
+     dishonest one, and checks that the tag is the one in the table;
    - installs that wheel into a fresh Python 3.11 environment, and runs the whole conformance
      suite (`--strict`) through `python -m grida.fx`, with that environment hosting the node
      bodies;
-   - builds the npm packages with `tools/build_npm.mjs`, under Node 18 (the oldest Node the
-     packages support). It installs the tarballs into a fresh prefix, and runs the suite again
-     through the installed `grida-fx` command;
+   - its npm packager, `tools/build_npm.mjs`, runs under Node 18 (the oldest Node the
+     packages support). It installs the tarballs into a fresh prefix, and runs the suite
+     again through the installed `grida-fx` command;
    - runs `tools/check_viewer.py` through both installed commands from an isolated temporary
      directory. A synthetic graph needs no provider; loopback requests must retrieve every
      embedded frontend file byte-for-byte, without a browser or frontend runtime;
