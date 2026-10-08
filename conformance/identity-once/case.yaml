@@ -3,9 +3,15 @@
 # The copy listed second waits while the first runs, then the result cache answers it: the record
 # holds one `node_finished` with `cache: miss` and one with `cache: hit`, both with the same
 # output. Before the scheduler held the copy, both started together and both missed the cache.
+# The workflow `draw` draws one picture in two places: one identity, so the price holds one
+# `image.generate` call, not two.
 steps:
 - argv: [run, case, --routes, routes.yaml, --run, runs/one]
   mentions: ["result    ok   spent $0.00"]
 - read: runs/one/events.jsonl
   save: events.json
   jsonl: true
+- argv: [price, draw, --routes, routes.yaml]
+  save: price.json
+  json: true
+  status: 0

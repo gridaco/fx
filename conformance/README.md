@@ -239,7 +239,7 @@ alone.
 | `facts` | `facts()` of input files (an image's size, alpha and opacity; a text file's size and kind) in `if:` and in a prompt; a fact of a file not made yet leaves an identity null |
 | `facts-media` | file facts of a WAV and an MP4 input (`duration`, `fps`, `frames`, `width`) in a free built-in step's `with:` and in `if:`, and the identities they give |
 | `group-regenerate` | a group with `regenerate: {max, until}`: nested take ids (`build.draw#2.1`) and `maybe` states |
-| `identity-once` | two steps with one step identity in one run: the second waits for the first, then the result cache answers it (one `miss`, one `hit`) |
+| `identity-once` | two steps with one step identity in one run: the second waits for the first, then the result cache answers it (one `miss`, one `hit`); two paid steps with one identity are priced as one call |
 | `judge-regenerate` | a judge's `on_reject: {regenerate: {max: 3, then: fail}}`, priced as up to three calls |
 | `linear` | a file input's digest in a local step's identity, a pending value that leaves an identity null, and workflow outputs |
 | `local-identity` | an unversioned project type's `<path>#<attr>@source:<digest>` identity over its module, its project imports and its declared resources; a versioned type's `<path>#<attr>@<version>` never moves |

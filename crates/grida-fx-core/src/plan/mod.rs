@@ -13,13 +13,17 @@
 //! `cached`: live instances with a known identity that the [`ResultCache`] holds.
 //!
 //! Money is exact micro-dollars ([`Usd`], identity.md §12):
-//! - [`Plan::estimate`]: low sums the planned live instances that are not cached; high sums every
-//!   live instance that is not cached, plus each pending repeat's `max × per-instance high`.
-//!   Done instances never count; `maybe` instances count towards high only.
+//! - [`priced`]: identical work in one phase is priced once (identity.md §8): of a phase's
+//!   instances that share a known identity, only the first in listing order. A run pays for one
+//!   identity at most once, but the phase gate approves each phase on its own price, so a copy in
+//!   another phase is still priced.
+//! - [`Plan::estimate`]: low sums the [`priced`] planned live instances that are not cached; high
+//!   sums the [`priced`] live instances that are not cached, plus each pending repeat's `max ×
+//!   per-instance high`. Done instances never count; `maybe` instances count towards high only.
 //! - [`Plan::phases`]: one summary per phase number in live phases ∪ pending phases ∪ {1}. Steps
-//!   are the live members (cached and free ones included); calls and money count the members
-//!   that have prices and are not cached (low: planned ones only; high: all of them, plus the
-//!   phase's pending repeats).
+//!   are the live members (cached and free ones included); calls and money count the [`priced`]
+//!   members that have prices and are not cached (low: of the planned ones only; high: of all of
+//!   them, plus the phase's pending repeats).
 
 pub mod output;
 pub mod render;
@@ -67,6 +71,20 @@ pub struct Plan {
     pub cached: BTreeSet<String>,
 }
 
+/// The instances that pay for their work (module doc): every instance whose identity is not
+/// known, and the first in the given order of each phase's instances that share one.
+pub fn priced<'a>(instances: impl IntoIterator<Item = &'a Instance>) -> Vec<&'a Instance> {
+    let mut identities = HashSet::new();
+    instances
+        .into_iter()
+        .filter(|&i| {
+            i.identity
+                .as_deref()
+                .is_none_or(|identity| identities.insert((i.phase, identity)))
+        })
+        .collect()
+}
+
 impl Plan {
     /// No problems.
     pub fn ok(&self) -> bool {
@@ -81,11 +99,14 @@ impl Plan {
     /// The price range (module doc).
     pub fn estimate(&self) -> Estimate {
         let uncached = || self.live().filter(|i| !self.cached.contains(&i.id));
-        let low = uncached()
-            .filter(|i| i.state == State::Planned)
+        let low = priced(uncached().filter(|i| i.state == State::Planned))
+            .into_iter()
             .map(Instance::low)
             .sum();
-        let high = uncached().map(Instance::high).sum::<Usd>()
+        let high = priced(uncached())
+            .into_iter()
+            .map(Instance::high)
+            .sum::<Usd>()
             + self
                 .expansion
                 .pending
@@ -104,12 +125,14 @@ impl Plan {
             .into_iter()
             .map(|number| {
                 let members: Vec<&Instance> = self.live().filter(|i| i.phase == number).collect();
-                let paid: Vec<&Instance> = members
-                    .iter()
-                    .copied()
-                    .filter(|i| !i.prices.is_empty() && !self.cached.contains(&i.id))
-                    .collect();
-                let planned = || paid.iter().filter(|i| i.state == State::Planned);
+                let unpaid = || {
+                    members
+                        .iter()
+                        .copied()
+                        .filter(|i| !i.prices.is_empty() && !self.cached.contains(&i.id))
+                };
+                let paid = priced(unpaid());
+                let planned = priced(unpaid().filter(|i| i.state == State::Planned));
                 let calls =
                     |i: &&Instance| -> u64 { i.prices.iter().map(|p| u64::from(p.calls)).sum() };
                 let repeats: Vec<_> = self
@@ -121,9 +144,9 @@ impl Plan {
                 PhaseSummary {
                     phase: number,
                     steps: members.len(),
-                    calls_low: planned().map(calls).sum(),
+                    calls_low: planned.iter().map(calls).sum(),
                     calls_high: paid.iter().map(calls).sum(),
-                    low: planned().map(|i| i.low()).sum(),
+                    low: planned.iter().map(|i| i.low()).sum(),
                     high: paid.iter().map(|i| i.high()).sum::<Usd>()
                         + repeats.iter().map(|r| r.high()).sum(),
                     pending: repeats

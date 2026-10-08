@@ -1,0 +1,13 @@
+fx: workflow/v1
+id: draw
+title: The same drawing in two places
+steps:
+  first:
+    uses: fx/image.generate@1
+    with: { prompt: "A paper kite over a hill" }
+  second:
+    uses: fx/image.generate@1
+    with: { prompt: "A paper kite over a hill" }
+outputs:
+  first: ${{ steps.first.outputs.image }}
+  second: ${{ steps.second.outputs.image }}

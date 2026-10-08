@@ -1800,6 +1800,43 @@ fn maybe_cached_and_done_instances() {
     assert_eq!(plan.known(), 3);
 }
 
+/// Identical work in one phase is priced once (identity.md §8): of a phase's instances that share
+/// a known identity, the first pays; a copy in another phase, or an unknown identity, pays too.
+#[test]
+fn one_identity_is_priced_once_per_phase() {
+    let image = [("image.generate", "img-a@acme", 1, 10_000, 40_000)];
+    let mut plan = plan_of(
+        vec![
+            inst("a", 2, State::Planned, &image),
+            inst("b", 2, State::Maybe, &image),
+            inst("c", 2, State::Planned, &image),
+            inst("d", 1, State::Planned, &image),
+        ],
+        Vec::new(),
+    );
+    for id in ["a#1", "b#1", "d#1"] {
+        plan.expansion.instances.get_mut(id).unwrap().identity = Some("x".into());
+    }
+    plan.expansion.instances.get_mut("c#1").unwrap().identity = None;
+    assert_eq!(
+        plan.estimate(),
+        Estimate {
+            low: usd(30_000),
+            high: usd(120_000)
+        }
+    );
+    assert_eq!(
+        plan.phases()
+            .iter()
+            .map(|p| (p.steps, p.calls_low, p.calls_high, p.low, p.high))
+            .collect::<Vec<_>>(),
+        [
+            (1, 1, 1, usd(10_000), usd(40_000)),
+            (3, 2, 2, usd(20_000), usd(80_000)),
+        ]
+    );
+}
+
 fn hand_planner(takes: &[&str]) -> (Fixture, Planner) {
     let fixture = Fixture::new();
     let workflow = WorkflowDoc {

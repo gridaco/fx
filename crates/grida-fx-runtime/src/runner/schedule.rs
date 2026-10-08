@@ -18,19 +18,22 @@
 //!   after the step ran): failed, event `node_failed {error}` with the assertion's message. The
 //!   runner also stops a running instance whose state turns `failed` ([`assertion_failed`]).
 //! - [`Gate`]: phases of live instances in order, minus approved ones; a phase whose members hold
-//!   a pending value that waits on nothing is skipped (not yet priceable); else its `high` is its
-//!   unfinished live members' high plus its pending repeats' high, `phase_planned {phase, steps,
-//!   high_usd}` is emitted, and with `yes_up_to` set a phase after the first whose total (charged,
-//!   plus held, plus its high) exceeds it is not approved: the gate's stop message. Approved
-//!   phases stay approved for the invocation. A phase is announced again only when its steps or
-//!   its high changed since it was last announced in this invocation, so a refused phase that is
-//!   checked while earlier steps finish is not logged over and over.
+//!   a pending value that waits on nothing is skipped (not yet priceable); else its `high` is the
+//!   high of its unfinished live members that pay plus its pending repeats' high, `phase_planned
+//!   {phase, steps, high_usd}` is emitted, and with `yes_up_to` set a phase after the first whose
+//!   total (charged, plus held, plus its high) exceeds it is not approved: the gate's stop
+//!   message. Approved phases stay approved for the invocation. A phase is announced again only
+//!   when its steps or its high changed since it was last announced in this invocation, so a
+//!   refused phase that is checked while earlier steps finish is not logged over and over.
+//!   Identical work is priced once per phase (spec/identity.md §8): an instance whose identity
+//!   has a succeeded result pays nothing, and of the others the [`priced`] ones pay.
 //! - [`stuck`]: planned instances with no result once nothing runs or can start (each with the ids
 //!   it still waits on).
 
 use crate::events::Event;
 use grida_fx_core::expand::{Expansion, Instance, NodeResult, ResultStatus, State};
 use grida_fx_core::money::Usd;
+use grida_fx_core::plan::priced;
 use grida_fx_core::val::Val;
 use indexmap::IndexMap;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -128,12 +131,7 @@ pub fn ready(
     // The instances chosen in this call take their places too.
     let mut groups = groups.clone();
     let identity_of = |id: &String| expansion.instances.get(id)?.identity.as_deref();
-    // Identities with a succeeded result: their copies are answered by the result cache at once.
-    let succeeded: HashSet<&str> = results
-        .iter()
-        .filter(|(_, result)| result.status == ResultStatus::Succeeded)
-        .filter_map(|(id, _)| identity_of(id))
-        .collect();
+    let succeeded = succeeded_identities(expansion, results);
     let mut identities: HashSet<&str> = running.iter().filter_map(identity_of).collect();
     let mut ready = Vec::new();
     for instance in expansion.ordered() {
@@ -286,6 +284,18 @@ pub fn overturned(
         .collect()
 }
 
+/// Identities with a succeeded result: their copies are answered by the result cache at once.
+fn succeeded_identities<'a>(
+    expansion: &'a Expansion,
+    results: &IndexMap<String, NodeResult>,
+) -> HashSet<&'a str> {
+    results
+        .iter()
+        .filter(|(_, result)| result.status == ResultStatus::Succeeded)
+        .filter_map(|(id, _)| expansion.instances.get(id)?.identity.as_deref())
+        .collect()
+}
+
 /// The phase gate of one invocation (module doc).
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Gate {
@@ -317,25 +327,38 @@ impl Gate {
         held: Usd,
         yes_up_to: Option<Usd>,
     ) -> GateCheck {
-        let phases: BTreeSet<u32> = expansion
-            .ordered()
-            .filter(|i| i.state.is_live() && !results.contains_key(&i.id))
+        let unfinished = || {
+            expansion
+                .ordered()
+                .filter(|i| i.state.is_live() && !results.contains_key(&i.id))
+        };
+        let phases: BTreeSet<u32> = unfinished()
             .map(|i| i.phase)
             .filter(|phase| !self.approved.contains(phase))
             .collect();
+        let succeeded = succeeded_identities(expansion, results);
+        let paying: HashSet<&str> = priced(unfinished().filter(|i| {
+            i.identity
+                .as_deref()
+                .is_none_or(|identity| !succeeded.contains(identity))
+        }))
+        .into_iter()
+        .map(|i| i.id.as_str())
+        .collect();
         let mut planned = Vec::new();
         for phase in phases {
-            let members: Vec<&Instance> = expansion
-                .ordered()
-                .filter(|i| i.state.is_live() && i.phase == phase && !results.contains_key(&i.id))
-                .collect();
+            let members: Vec<&Instance> = unfinished().filter(|i| i.phase == phase).collect();
             let unpriceable = members
                 .iter()
                 .any(|i| i.with.values().any(Val::contains_pending) && i.waiting_on().is_empty());
             if unpriceable {
                 continue;
             }
-            let high = members.iter().map(|i| i.high()).sum::<Usd>()
+            let high = members
+                .iter()
+                .filter(|i| paying.contains(i.id.as_str()))
+                .map(|i| i.high())
+                .sum::<Usd>()
                 + expansion
                     .pending
                     .iter()
@@ -882,6 +905,34 @@ mod tests {
                 stop: None
             }
         );
+    }
+
+    #[test]
+    fn the_gate_prices_one_identity_once_per_phase() {
+        // a and b share identity x in phase 2, d has it in phase 3; c's identity is not known.
+        let e = expansion(vec![
+            with_identity(priced(instance("a#1"), 2, "0.5"), "x"),
+            with_identity(priced(instance("b#1"), 2, "0.5"), "x"),
+            priced(instance("c#1"), 2, "0.25"),
+            with_identity(priced(instance("d#1"), 3, "0.5"), "x"),
+        ]);
+        let phase = |phase, steps, high| Event::PhasePlanned {
+            phase,
+            steps,
+            high_usd: usd(high),
+        };
+        let check = Gate::new().check(&e, &IndexMap::new(), Usd::ZERO, Usd::ZERO, Some(usd("0.9")));
+        assert_eq!(check.planned, [phase(2, 3, "0.75"), phase(3, 1, "0.5")]);
+        assert_eq!(check.stop, None);
+        // Once a succeeded, its copies are answered by the result cache; once it failed, b pays.
+        let check = Gate::new().check(&e, &results(&["a#1"]), Usd::ZERO, Usd::ZERO, None);
+        assert_eq!(check.planned, [phase(2, 2, "0.25"), phase(3, 1, "0")]);
+        let failed: IndexMap<String, NodeResult> =
+            [("a#1".to_string(), crate::executor::failed("boom"))]
+                .into_iter()
+                .collect();
+        let check = Gate::new().check(&e, &failed, Usd::ZERO, Usd::ZERO, None);
+        assert_eq!(check.planned, [phase(2, 2, "0.75"), phase(3, 1, "0.5")]);
     }
 
     #[test]

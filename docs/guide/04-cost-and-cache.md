@@ -17,7 +17,8 @@ Nothing else matters. In particular:
 - **Not:** renaming a step, moving it in the file, reordering a list, changing a title, or adding
   steps elsewhere.
 - **Identical work is one piece of work.** Two steps with the same type, values, inputs and route
-  produce one result. Want several different results from one request? Ask for takes (below).
+  produce one result: the second waits for the first, and the plan prices them once. Want several
+  different results from one request? Ask for takes (below).
 
 **Paid calls are additionally kept by their exact request.** Even when a step re-runs (your code
 changed, an upstream file changed), any call it makes with a request identical to an earlier one
