@@ -67,6 +67,13 @@ Python/JavaScript SDK cancellation share these semantics. Cancellation is indepe
 of viewer hosting; pause and explicit terminate remain deferred.
 Explicit termination and durable scheduler pause remain separate follow-ups.
 
+The [SDK run-access contract](../../spec/sdk.md) aligns useful Python/JavaScript
+jobs: named creation/resume, loading a pinned saved record, and observing its
+consistent snapshots and bounded event batches. Async following owns only its
+reader and can continue across resumes. This source pass keeps service/browser
+lifetimes and diagnostic/lock/take/job maintenance on the CLI; verb mirroring is
+not required. See [the SDK guide](../guide/09-sdk-runs.md).
+
 ## Names
 
 | Thing | Name | Status |

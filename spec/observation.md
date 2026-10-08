@@ -72,7 +72,8 @@ provider usage detail and custom user events need their own scoped decisions.
 The [local service contract](service.md) owns project discovery, startup, catalog
 identity, stable run/plan URLs and independent viewer lifetime. Observation itself
 requires neither a running service nor a project: `observe RUN` reads a selected
-record directly.
+record directly. SDK `RunRecord` methods use that same direct reader, under
+[SDK run access](sdk.md).
 
 The separate [run-control contract](control.md) defines cancellation
 requests and completion verification. Observation endpoints remain read-only.
@@ -240,7 +241,13 @@ image previews without manual refresh, with selection and zoom preserved.
 
 These are source capabilities. No package release or provider run is part of this
 implementation. Pause, active parameter revision, high-frequency progress events,
-SDK observation handles and cloud execution remain separate work.
+early SDK execution/viewer handles and cloud execution remain separate work.
+
+Python and JavaScript now expose saved `RunRecord` access, snapshots, batches and
+continuous async following through the direct CLI reader. SDK iterator lifetime
+and intentional exclusions are specified in [sdk.md](sdk.md). Independent SDK
+tests cover cursor attachment, bounded catch-up, reader errors, unknown events,
+break/cancellation and later resumes without a project service.
 
 ## 6. Precedents
 

@@ -65,7 +65,8 @@ missing = result.deliver({"images": "out/{key}.png"})
   is refused with `TypeError`: name the builder that returns it.
 - **Options.** `inputs` (a mapping, written to a temporary inputs file in `cwd`, so relative
   paths in it mean what they mean on the command line), `input_files` (`--inputs`), `routes`
-  (`--routes`), `max_usd` (`--max-usd`); `run` adds `live`, `yes_up_to` and `run_dir`. `cwd` is
+  (`--routes`), `max_usd` (`--max-usd`); `run` adds `live`, `yes_up_to` and one of
+  `name` (create-only), `resume` (require-existing) or `run_dir` (explicit-folder create/resume). `cwd` is
   the engine's working directory (default: the current one); every relative path is relative to
   it. A `Plan` takes no planning options when it runs: plan again to change them.
 - **`plan`** asks the engine for the plan (`grida-fx plan --json`) and its price (`grida-fx
@@ -95,6 +96,26 @@ missing = result.deliver({"images": "out/{key}.png"})
   cannot be called inside a running one. Cancelling `run_async` requests graceful engine
   cancellation once with SIGTERM and waits for cleanup before unwinding; repeated task
   cancellation does not force the engine. A stuck cleanup can keep the task pending.
+
+## Saved runs and observation
+
+`load_run(target, verify=False, cwd=None)` returns a `RunRecord` containing the
+engine's `inspection` and absolute `run_dir`. It accepts a folder, workflow/name,
+or workflow ID for its newest-created run. The selected folder stays pinned even
+if a newer run appears. It has no invocation exit code.
+
+Use `record.snapshot()` for a consistent plan/event prefix and
+`record.events(after=cursor, limit=256)` for bounded reads. Their async forms are
+`snapshot_async` and `events_async`; loading has `load_run_async`. Documents retain
+wire field names. `record.follow(after=cursor, poll_interval=1.0)` is an async
+generator of nonempty batches, continuing through completion and later resumes
+until broken or cancelled. Observation cancellation never cancels execution.
+
+Reader failures raise `RunObservationError` with `code` and `document`; malformed
+responses raise `FxError`. Snapshot and inspection are separate samples. See
+[Working with runs from an SDK](../docs/guide/09-sdk-runs.md) for cursor-safe
+attachment, named execution/resume and reader lifetime. This describes current
+source, not a guarantee that an older published package has these APIs.
 
 ## Run control
 

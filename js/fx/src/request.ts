@@ -36,6 +36,10 @@ export interface RunOptions extends PlanOptions {
   /** The run folder, relative to `cwd` (`--run`); a folder holding a run of the same plan is
    * resumed. Default: a new folder under the project's runs folder. */
   readonly runDir?: string;
+  /** Create a named run (`--name`); an existing name is refused by the engine. */
+  readonly name?: string;
+  /** Continue an existing named run (`--resume`) with the same target and inputs. */
+  readonly resume?: string;
   /** Copy outputs out after the run (`--deliver OUTPUT=PATH`): `{ output: path }`, with `{key}`
    * in the path for each element of a collection. */
   readonly deliver?: Readonly<Record<string, string>>;
@@ -110,6 +114,16 @@ export function planningArgs(request: PlanRequest, inputsFile: string | null): s
 /** The options of `run` alone. */
 export function runArgs(options: RunOptions): string[] {
   const args: string[] = [];
+  const selected = ["runDir", "name", "resume"] as const;
+  if (selected.filter((name) => options[name] !== undefined).length > 1) {
+    throw new TypeError("runDir, name and resume are mutually exclusive");
+  }
+  for (const name of selected) {
+    const value = options[name];
+    if (value !== undefined && (typeof value !== "string" || value === "" || value.includes("\0"))) {
+      throw new TypeError(`${name} is a nonempty string without NUL`);
+    }
+  }
   if (options.live !== undefined && typeof options.live !== "boolean") {
     throw new TypeError(`live is true or false, not ${JSON.stringify(options.live)}`);
   }
@@ -120,11 +134,10 @@ export function runArgs(options: RunOptions): string[] {
     args.push(`--yes-up-to=${amountText("yesUpTo", options.yesUpTo)}`);
   }
   if (options.runDir !== undefined) {
-    if (typeof options.runDir !== "string" || options.runDir === "") {
-      throw new TypeError("runDir is a folder path");
-    }
     args.push(`--run=${options.runDir}`);
   }
+  if (options.name !== undefined) args.push(`--name=${options.name}`);
+  if (options.resume !== undefined) args.push(`--resume=${options.resume}`);
   for (const [name, path] of Object.entries(options.deliver ?? {})) {
     if (typeof path !== "string" || name === "" || path === "") {
       throw new TypeError(`deliver.${name} is a path`);

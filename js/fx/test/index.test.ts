@@ -21,6 +21,7 @@ test("the SDK's surface", () => {
     "project",
     "inspect",
     "inspectControl",
+    "loadRun",
     "cancel",
     "engineVersion",
     "toYaml",

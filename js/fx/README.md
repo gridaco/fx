@@ -58,6 +58,11 @@ const icon = result.outputs.icon; // a RunFile: digest, kind, path, read()
   runs, and reads the run back: `ok`, `incomplete`, `chargedUsd`, `failed`, `outputs`, `steps`.
   A failed step does not reject.
 - `project(runDir)` and `inspect(runOrWorkflowId, { verify })`: a run's record and summary.
+- `loadRun(target, { verify })`: a `RunRecord` with a pinned absolute `runDir` and
+  engine `inspection`. Its `snapshot()`, `events({ after, limit })` and async
+  `follow({ after, pollIntervalMs, signal })` methods use the same public reader as
+  the CLI. Following yields nonempty bounded batches until broken or aborted,
+  including across resumes. It owns no execution process or exit code.
 - `inspectControl(run)` and `cancel(run, { invocation, wait, timeout })`: exact-target local
   control, independent of viewer/service lifetime. Results keep their `lower_snake_case` wire
   fields; structured failures raise `RunControlError` with `code` and `result`.
@@ -66,7 +71,8 @@ const icon = result.outputs.icon; // a RunFile: digest, kind, path, read()
 A target is a workflow file, a workflow id, or a builder `file.py:function`. Options:
 `inputs` (values), `inputFiles`, `routes`, `args` (a builder's arguments), `maxUsd`, `cwd`,
 `env` (for example `GRIDA_FX_PYTHON`) and `signal` (an `AbortSignal`); `run` also takes `live`,
-`yesUpTo`, `runDir` and `deliver`. Relative paths start at `cwd`. The engine's errors reject with
+`yesUpTo`, `deliver`, and one of `name` (create-only), `resume` (require-existing),
+or `runDir` (explicit-folder create/resume). Relative paths start at `cwd`. The engine's errors reject with
 `FxError`, which carries its `exitCode` and `stderr`.
 
 Aborting a `run` requests graceful cancellation once with SIGTERM and waits for engine cleanup
@@ -75,6 +81,13 @@ pending. Aborting only a control waiter ends that wait without retracting accept
 See [Stopping and continuing a run](../../docs/guide/08-run-control.md) for guarded requests,
 wait timeouts, local completion and unknown remote outcomes. These APIs describe current source;
 check your installed version for availability.
+
+Observation abort stops only its reader. Apply an entire batch before checkpointing
+its opaque cursor; `RunObservationError` keeps a reader's `code` and `document`.
+Inspection and a later snapshot are independent samples. See
+[Working with runs from an SDK](../../docs/guide/09-sdk-runs.md) for saved/named
+records and observing another process. SDK execution still suppresses viewer
+hosting and returns after completion.
 
 ## Writing workflows
 

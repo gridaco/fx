@@ -1,42 +1,19 @@
 # TODO
 
+Pending work and open design questions only. Supported behavior belongs in the
+[guide](docs/guide/), [specifications](spec/) and [agent-readiness harness](AGENT_READINESS.md).
+
 ## Workflow and run viewer
 
-**Status:** the local viewer supports workflow plans and recorded runs, with a
-read-only node canvas, named typed sockets, exact recorded data bindings, and
-separate ordering/judge connections. Imported workflows collapse to named boundary
-cards with navigation into their internal canvas; inline groups use labeled frames.
-The project index groups recorded workflow ID/source, opens the newest-created run,
-and exposes names, run history and saved plans. Create-only run names and explicit
-same-plan resume are implemented in source; cleanup remains an open task below.
-The broader experience
-below remains planned; this is primarily UX work, not another engine migration or
-a port of an application's viewer. See [Viewing workflows and runs](docs/guide/07-viewing.md).
-The [canonical viewer harness](fixtures/viewer/README.md) now supplies provider-free
-regression cases. Use it to develop layout for larger graphs, scalar and
-keyed-collection inspection, and judge/take history. Extending run responses with
-precise incomplete states requires a contract decision;
-the client must not infer missing execution metadata.
-
-The contract foundation already exists: expanded `fx-graph-v1` documents, `plan.json`,
-`events.jsonl`, placed artifacts, and the state projection exposed by `inspect` and
-`project`. Build on [the store contract](spec/store.md) and its schemas. Workflow `view`
-metadata is recorded today, but rendering it remains planned; specify any missing viewer
-contract before implementing it, without changing execution or identity semantics.
-
-- Serve FX's embedded client through `grida-fx start`, with independent
-  `--standalone` inspection for probing and projectless use.
-- Make the author-to-result experience clear: inspect the planned graph, browse runs,
-  follow step dependencies and states, and inspect artifacts, cache reuse, failures and
-  recorded costs. Refresh the display as an existing run progresses.
-- Support YAML and Python-authored workflows through the same public FX contracts,
-  including custom nodes without application-specific catalog metadata.
-- Keep recorded-data inspection read-only and provider-free. Source-target viewing
-  uses existing offline planning, including author-code imports and local planning-time
-  cache writes, but never starts a run, loads provider credentials or spends money.
-- Verify the UX with standalone projects and synthetic offline runs, including a
-  stand-in run. Users should be able to understand a run and find its outputs without
-  installing an application that consumes FX.
+- Improve layout for larger graphs, scalar and keyed-collection inspection, and
+  judge/take history using the [canonical viewer harness](fixtures/viewer/README.md).
+- Render workflow `view` metadata and custom workflow views. Specify any missing
+  viewer contract before implementation, keeping presentation separate from
+  execution and identity under [the store contract](spec/store.md).
+- Define precise incomplete-state evidence where inspection needs more than the
+  recorded contracts provide; the client must not infer missing execution metadata.
+- Share browser components for the future website and design portable snapshots
+  that work with a local file server or any selected storage/CDN provider.
 
 **Prior implementation reference only:**
 [Stage Gen's viewer](https://github.com/softmarshmallow/stage-gen/tree/main/web/viewer)
@@ -44,31 +21,22 @@ and its run-view projection (`src/stage_gen/runview/`) demonstrate graph and art
 inspection. Use them to inform the UX; FX's viewer must work independently, with no
 dependency on that application's packages, catalog, branding or view-contract namespace.
 
-### Public run observation and live viewing
+### Observation and SDK readiness
 
-**Implemented in source (2026-10-08):** the ratified
-[observation v1 contract](spec/observation.md), shared read-only reader, bounded
-`observe` command, HTTP snapshot/events adapters, polling viewer and CLI automatic
-hosting. The viewer preserves camera, selection and navigation. When a project
-service is running, `run` reports its persistent run URL before run-phase execution.
-`--standalone` retains invocation-owned hosting. SDK methods skip service
-registration and hosting and have no live event handle.
-
-The [observation harness](fixtures/viewer/README.md#live-observation) proves the
-boundary with provider-free gated runs and an independent CLI/HTTP consumer.
-Remaining ideas: SSE if polling becomes insufficient, optimized retained-prefix
-validation for large histories, and future SDK observation helpers. Cloud workers
-and execution command/control protocols require separate decisions.
+- Consider SSE if polling becomes insufficient, building on
+  [observation v1](spec/observation.md) and its
+  [provider-free harness](fixtures/viewer/README.md#live-observation).
+- Optimize retained-prefix validation for large histories.
+- Design early SDK execution/viewer readiness for applications that need to
+  report a running workflow's URL before their execution call returns.
+- Ratify cloud-worker and remote-control boundaries if those uses become concrete.
 
 ### Project service
 
-**Implemented in source (2026-10-08):** [local service contract](spec/service.md).
-`init` creates optional project configuration; `start` serves the project in the
-foreground or with explicit `--background`, with `status`, `logs`, and `stop`.
-The default port is 8787, explicit ports are retained, and stable project-scoped
-routes keep several runs and materialized plans available after execution exits.
-Run execution remains independent. Browser opening requires `--open`.
-`--standalone` preserves independent inspection; `view` is hidden compatibility.
+- Consider optional native OS supervision for crash restart and login activation
+  under [the service contract](spec/service.md).
+- Evaluate machine-wide aggregation, recent projects and project switching if
+  demand grows.
 
 ### Agent-authored canvas layout
 
@@ -146,29 +114,13 @@ References from the design discussion:
   alignment/relative-placement alternatives; [SetCoLa](https://idl.uw.edu/papers/setcola)
   for applying rules to sets, potentially useful for repeated instances.
 
-### Open questions and ideas
+## SDK invocation result capture
 
-- Optional native OS supervision for crash restart and login activation; detached
-  background mode alone does not provide those guarantees.
-- Machine-wide aggregation, recent projects and project switching if demand grows.
-- Agent-authored layout as described above, scalar/collection inspection and
-  custom workflow views.
-- Shared browser components for the future website and portable snapshots that
-  work with a local file server or any selected storage/CDN provider.
-
-## One-time CLI and SDK alignment
-
-**Status: open.** Review the currently implemented CLI operations and options
-against both Python and JavaScript SDKs, and fill applicable gaps. Include
-recorded-run inspection and observation, named runs, take/job management, and
-project-service operations. Record intentional exclusions or deferrals in
-[AGENT_READINESS.md](AGENT_READINESS.md).
-
-Align request options, results, errors, and lifecycle behavior; update SDK tests
-and user documentation together. Verify supported paths against the real engine
-offline. Proposed controls such as pause remain separate scope. After this pass,
-follow the ongoing reminder in [AGENTS.md](AGENTS.md); no synchronization manifest
-or binding-generation system is required for this task.
+Define invocation-pinned execution-result capture if needed. Existing SDK
+`RunResult` construction reads the saved folder after the child exits, so an
+immediate external resume can change the latest invocation before that read.
+Keep this distinct from a saved `RunRecord`, which deliberately follows its
+folder across invocations. [SDK run access](spec/sdk.md) documents the boundary.
 
 ## Caller-defined metadata on FX entities
 
@@ -187,17 +139,12 @@ and visibility before introducing persistence or exposure in exported records.
 
 ## Run control: next operations
 
-Cancellation v1 is implemented in source (2026-10-08), including exact-target
-CLI/Python/JavaScript operations, invocation guards, verified local completion,
-shared signal handling and viewer cancellation intent. See [the contract](spec/control.md)
-and [the user guide](docs/guide/08-run-control.md). Independent provider-free gates
-cover wait timeout, cleanup, resume, admission races and private local discovery.
-
-Explicit `terminate` and durable `pause` have agreed vocabulary but need their
-own contracts. They are not part of cancellation v1. Run cleanup/retention and
-active parameter revision remain separate work. Private temporary control receipts
-currently last until system temporary storage is cleared; design bounded pruning
-without removing evidence from an active bound waiter.
+- Ratify contracts for explicit `terminate`, durable `pause`, and active parameter
+  revision, building on [run control](spec/control.md) and its
+  [user guide](docs/guide/08-run-control.md).
+- Design bounded pruning for private temporary control receipts without removing
+  evidence from an active bound waiter. Receipts currently last until system
+  temporary storage is cleared.
 
 ## Run cleanup and retention
 

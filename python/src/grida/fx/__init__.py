@@ -51,6 +51,7 @@ from grida.fx._errors import (
     EngineError,
     NodeFailure,
 )
+from grida.fx._record import RunObservationError, RunRecord, load_run, load_run_async
 from grida.fx._spec import NodeSpec, PortSpec, SpecError, node, param, spec_of
 from grida.fx._stand_in import DECLINE, Answer, StandInCall
 
@@ -76,6 +77,8 @@ __all__ = [
     "PlanRefused",
     "PortSpec",
     "RunResult",
+    "RunRecord",
+    "RunObservationError",
     "RunControlError",
     "RunControlResult",
     "SpecError",
@@ -90,6 +93,8 @@ __all__ = [
     "cancel_async",
     "inspect_control",
     "inspect_control_async",
+    "load_run",
+    "load_run_async",
     "node",
     "param",
     "plan",

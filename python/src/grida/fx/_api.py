@@ -1093,13 +1093,33 @@ async def run_async(
     max_usd: float | None = None,
     yes_up_to: float | None = None,
     run_dir: str | Path | None = None,
+    name: str | None = None,
+    resume: str | None = None,
     cwd: str | Path | None = None,
     routes: Sequence[str | Path] | None = None,
     arguments: Mapping[str, str] | None = None,
     stand_in: StandIn | None = None,
 ) -> RunResult:
     """Runs ``target`` (or a plan); ``live=True`` admits paid calls, and ``stand_in`` answers
-    them with a function instead, offline and for nothing (module docstring)."""
+    them with a function instead, offline and for nothing (module docstring). ``name`` creates
+    a named run and ``resume`` selects one to continue; each excludes ``run_dir`` and the other.
+    The engine validates names, collisions and whether a selected run can resume."""
+    if run_dir is not None:
+        if not isinstance(run_dir, str | os.PathLike):
+            raise TypeError("run_dir is a nonempty string or path")
+        run_dir = os.fspath(run_dir)
+        if not isinstance(run_dir, str):
+            raise TypeError("run_dir is a nonempty string or path")
+        if not run_dir or "\0" in run_dir:
+            raise ValueError("run_dir is nonempty and contains no NUL")
+    for option, value in (("name", name), ("resume", resume)):
+        if value is not None:
+            if not isinstance(value, str):
+                raise TypeError(f"{option} is a nonempty string")
+            if not value or "\0" in value:
+                raise ValueError(f"{option} is nonempty and contains no NUL")
+    if sum(value is not None for value in (run_dir, name, resume)) > 1:
+        raise ValueError("run_dir, name and resume are mutually exclusive")
     answerer = None if stand_in is None else _answerer(stand_in, live=live, yes_up_to=yes_up_to)
     request = _request(
         target,
@@ -1115,6 +1135,10 @@ async def run_async(
         options.append(f"--yes-up-to={_amount('yes_up_to', yes_up_to)}")
     if run_dir is not None:
         options.append(f"--run={os.fspath(run_dir)}")
+    if name is not None:
+        options.append(f"--name={name}")
+    if resume is not None:
+        options.append(f"--resume={resume}")
     if answerer is not None:
         options.append("--stand-in=-")
     if isinstance(target, Plan):
@@ -1185,6 +1209,8 @@ def run(
     max_usd: float | None = None,
     yes_up_to: float | None = None,
     run_dir: str | Path | None = None,
+    name: str | None = None,
+    resume: str | None = None,
     cwd: str | Path | None = None,
     routes: Sequence[str | Path] | None = None,
     arguments: Mapping[str, str] | None = None,
@@ -1201,6 +1227,8 @@ def run(
             max_usd=max_usd,
             yes_up_to=yes_up_to,
             run_dir=run_dir,
+            name=name,
+            resume=resume,
             cwd=cwd,
             routes=routes,
             arguments=arguments,

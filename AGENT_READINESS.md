@@ -95,14 +95,22 @@ individual commands can have narrower target rules.
 | Maintain node locks: `lock [where] --check` / `lock [where]` | Lock verification / lockfile updates | `--same` asserts unchanged behavior; it is not a way to silence a real identity change. |
 | Deliver: `run ... --deliver output=path` or SDK result delivery | Copies of available declared outputs | CLI delivery happens after execution and reports missing outputs. Preserve immutable store/placed files; copy out before editing bytes. |
 
-Python and JavaScript SDKs expose planning, execution results and artifact
-delivery. JavaScript also exports `project` and `inspect`; Python users can use
-the CLI for those recorded-run queries. Python supports `run_async`; JavaScript
-`run` is asynchronous. Async completion
-does not imply progress subscriptions, pause controls or a background engine
-service. Check `RunResult.ok`, incomplete/stopped state and failures: a failed
-step can return a result rather than throw. See [Python](python/README.md) and
-[JavaScript](js/fx/README.md) for the installed signatures.
+Python and JavaScript SDKs expose planning, named execution/resume, result files
+and delivery. `load_run` / `loadRun` return a saved `RunRecord` with a pinned
+folder and engine inspection; its snapshot/events/follow methods observe through
+the public reader. Python provides sync/async reads and an async iterator;
+JavaScript provides promises and an async iterator. JavaScript's existing `project`
+and `inspect` exports remain. Check `RunResult.ok`, incomplete/stopped state and
+failures: a failed step can return a result rather than throw. See
+[the SDK guide](docs/guide/09-sdk-runs.md) and [contract](spec/sdk.md).
+
+SDK coverage follows useful jobs, with language-native objects rather than a
+wrapper for every CLI verb. `Plan` already exposes graph/problems/pricing;
+results expose files/delivery. Project setup/service management/browser opening,
+diagnostics, node locks and take/job maintenance intentionally remain CLI-only
+until a concrete programmatic use needs a native lifetime/error design. JS callable
+stand-ins remain deferred; Python already supports them. Pause/active revision
+stay separate contracts. Async completion alone supplies no readiness handle.
 
 For CLI orchestration, status 0 describes the command's success, not every
 possible user goal. `run` requires an ok run and successful requested delivery;
@@ -159,11 +167,14 @@ cursor. Catch up while `has_more` is true. A lost response can be replayed from
 the prior cursor. `run_finished` terminates one invocation; keep following to see
 a later resume. Unfinished evidence does not establish process liveness.
 
-Python and JavaScript SDK runs currently suppress hosting and return their result
-after execution. They have no live observation handle; use the CLI to provide
-this early URL and the public read-only [observation contract](spec/observation.md)
-for independent consumers. Do not promise these source features in an older
-installed version: check its help first.
+Python and JavaScript SDK runs suppress hosting and return after execution.
+Their `RunRecord` supports independent live observation of an initialized folder:
+load once, apply its snapshot, then follow after that exact cursor. Iteration
+continues across terminal events and resumes until its consumer stops; cancelling
+that observer does not cancel the separately owned run. Missing records and invalid
+cursors are explicit errors. Inspection and snapshot are independent samples.
+The SDK has no early execution/viewer readiness handle; use the CLI to provide
+an early browser URL. Do not promise these source APIs in an older installation.
 
 ### "Stop here; continue later"
 
@@ -286,7 +297,7 @@ promise through documentation alone.
 | AR-10 | "Ask before the next expensive part." | Current later-phase `--yes-up-to`, within a separate ceiling. | Incomplete run can continue with an approved threshold; no claim of a general human-approval/pause system. |
 | AR-11 | "You disconnected; catch up." | Current in source: opaque cursors, bounded replay and snapshot reattachment; process liveness remains unknown. | Retained events can be read from a valid cursor; duplicates, unknown liveness and later invocations are handled without launching another run. |
 | AR-12 | "Put the result in my project." | Current output delivery and file verification. | Exact output destinations and missing/partial results are reported; immutable stored files remain intact. |
-| AR-13 | "Do it from Python or JavaScript." | Current SDKs share the engine; authoring/hosting capabilities differ. | Each claimed surface produces equivalent engine-owned semantics; async APIs are not misrepresented as control/event interfaces. |
+| AR-13 | "Do it from Python or JavaScript." | Current: planning, named execution/resume, result files, saved RunRecord inspection, snapshot/batch/async following, and exact-target control; authoring/hosting capabilities differ. | Each claimed job preserves engine semantics with native ergonomics. Recorded folders stay pinned; cursor attachment, bounded catch-up, errors, later resumes and observer cancellation have provider-free tests. Execution readiness/browser lifetime and CLI maintenance are intentionally excluded. |
 | AR-14 | "Run exactly what I reviewed." | Partial: planning and execution are separate; SDK `run(plan)` retains options but the engine replans. No immutable approved-plan execution interface. | Changes between review and execution are detected or require renewed review; the agent does not mistake a saved plan or SDK object for a frozen execution snapshot. |
 | AR-15 | "Keep my project available while I work." | Current in source: init, foreground/background service, status/logs/stop, persistent catalog and run URLs; OS supervision remains future work. | Repeat/parallel starts, readiness, port conflicts, project identity, independent execution, restart persistence, and standalone use all have provider-free lifecycle evidence. |
 | AR-16 | "Name this deliverable; show my workflow history." | Current in source: create-only names, explicit same-plan resume, workflow-grouped index. | Concurrent name claims have one winner; collisions/missing names/plan mismatches/ambiguous sources refuse; latest includes failures, old active records remain visible, resume retains creation time/spend, and metadata changes no cache identity. |
@@ -305,6 +316,12 @@ Use [the viewer fixtures](fixtures/viewer/README.md),
 [image-recolor](examples/image-recolor/README.md), SDK tests and
 [conformance cases](conformance/) as the initial provider-free harness. Test the
 public interface through an independent consumer, not only internal methods.
+SDK record tests in [Python](python/tests/test_record.py) and
+[JavaScript](js/fx/test/record.test.ts), plus their run tests, cover AR-13 naming,
+resume and record observation through the real engine. A `RunRecord` pins its
+folder, not one invocation: a later snapshot can include a resume. Existing
+`RunResult` construction reads the folder after execution ends and is not atomic
+with a concurrent external resume; do not promise an immutable invocation capture.
 Add targeted evidence for each changed boundary instead of rerunning paid examples.
 
 ## Gaps that should guide design

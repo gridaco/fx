@@ -72,6 +72,20 @@ describe("arguments", () => {
     expect(() => runArgs({ deliver: { icon: "" } })).toThrow("deliver.icon");
   });
 
+  test("named creation and named resume are explicit, exclusive selections", () => {
+    expect(runArgs({ name: "character_1" })).toEqual(["--name=character_1"]);
+    expect(runArgs({ resume: "character_1" })).toEqual(["--resume=character_1"]);
+    for (const options of [
+      { name: "one", resume: "one" }, { runDir: "runs/one", name: "one" },
+      { runDir: "runs/one", resume: "one" },
+    ]) expect(() => runArgs(options)).toThrow("mutually exclusive");
+    for (const option of ["name", "resume", "runDir"] as const) {
+      for (const value of ["", "bad\0value", 12]) {
+        expect(() => runArgs({ [option]: value })).toThrow(TypeError);
+      }
+    }
+  });
+
   test("amounts in decimal digits, never an exponent", () => {
     expect(amountText("maxUsd", 10)).toBe("10");
     expect(amountText("maxUsd", 0.5)).toBe("0.5");

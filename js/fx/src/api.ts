@@ -315,7 +315,7 @@ export function decode(encoded: Encoded, placed: ReadonlyMap<string, string>): R
 }
 
 /** The options `run` still takes with a {@link Plan}. */
-const RUN_ONLY: readonly string[] = ["live", "yesUpTo", "runDir", "deliver", "signal"];
+const RUN_ONLY: readonly string[] = ["live", "yesUpTo", "runDir", "name", "resume", "deliver", "signal"];
 
 /**
  * Runs `target`, or a plan, after planning it: a plan with problems rejects with

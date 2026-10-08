@@ -777,6 +777,72 @@ def test_a_plan_runs_as_it_was_planned(fake: Fake, project: Path) -> None:
     assert result.run_dir == project / "runs" / "p"
 
 
+@pytest.mark.parametrize("option", ["name", "resume"])
+@pytest.mark.parametrize("asynchronous", [False, True])
+def test_run_forwards_named_options_only_to_execution(
+    fake: Fake, project: Path, option: str, asynchronous: bool
+) -> None:
+    fake.runs(folder="runs/selected")
+    options = {option: "take-A"}
+    result = (
+        asyncio.run(fx.run_async("gallery", cwd=project, **options))
+        if asynchronous
+        else fx.run("gallery", cwd=project, **options)
+    )
+    assert fake.invocations == [
+        ["plan", "gallery", "--json"],
+        ["price", "gallery"],
+        ["run", "gallery", f"--{option}=take-A", "--no-view"],
+    ]
+    assert result.run_dir == project / "runs/selected"
+
+
+@pytest.mark.parametrize("option", ["name", "resume"])
+def test_a_plan_accepts_run_only_named_options(fake: Fake, project: Path, option: str) -> None:
+    fake.runs(folder="runs/selected")
+    planned = fx.plan("gallery", cwd=project)
+    fx.run(planned, **{option: "take-A"})
+    assert fake.invocations[-1] == ["run", "gallery", f"--{option}=take-A", "--no-view"]
+    assert len(fake.invocations) == 3
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        {"name": "a", "resume": "b"},
+        {"run_dir": "runs/a", "name": "a"},
+        {"run_dir": "runs/a", "resume": "a"},
+        {"run_dir": "", "name": "a"},
+        {"run_dir": ""},
+        {"run_dir": "a\0b"},
+        {"run_dir": 1},
+        {"run_dir": b"runs/a"},
+        {"name": ""},
+        {"resume": ""},
+        {"name": "a\0b"},
+        {"resume": "a\0b"},
+        {"name": 1},
+        {"resume": True},
+        {"name": Path("a")},
+    ],
+)
+def test_named_run_options_are_checked_before_planning(
+    fake: Fake, project: Path, options: dict[str, Any]
+) -> None:
+    with pytest.raises((TypeError, ValueError)):
+        fx.run("gallery", cwd=project, **options)
+    with pytest.raises((TypeError, ValueError)):
+        asyncio.run(fx.run_async("gallery", cwd=project, **options))
+    assert fake.calls == []
+
+
+def test_name_grammar_is_checked_by_the_engine(fake: Fake, project: Path) -> None:
+    fake.reply(run={"status": 2, "stderr": "grida-fx: run name is invalid\n"})
+    with pytest.raises(fx.FxError, match="run name is invalid"):
+        fx.run("gallery", cwd=project, name="has/slash")
+    assert fake.invocations[-1] == ["run", "gallery", "--name=has/slash", "--no-view"]
+
+
 def test_a_refused_plan_object_does_not_run(fake: Fake, project: Path) -> None:
     fake.reply(plan={"stdout": json.dumps(REFUSED_GRAPH)}, price={"stdout": "{}", "status": 1})
     planned = fx.plan("gallery", cwd=project)

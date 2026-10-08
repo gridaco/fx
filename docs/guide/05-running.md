@@ -327,8 +327,12 @@ result.deliver({"images": "out/{key}.png"})
   `Workflow` object a builder returns is not accepted yet (`TypeError`): name the builder instead.
 - **Planning first:** `grida.fx.plan(...)` returns the plan, with `.estimate()`, `.phases()` and
   `.problems`. `grida.fx.run(plan, live=True)` runs it with the target, inputs and ceiling it was
-  planned with (`live`, `yes_up_to` and `run_dir` may still be given).
+  planned with (`live`, `yes_up_to`, and one of `name`, `resume` or `run_dir` may still be given).
 - **Async:** `await grida.fx.run_async(...)`.
+- **Saved records and observation:** `load_run` / `load_run_async` return a `RunRecord`
+  with a pinned folder and engine inspection summary. Use its snapshot/event reads
+  and async `follow` iterator to observe independent execution. The
+  [SDK run guide](09-sdk-runs.md) shows Python and JavaScript journeys.
 - **A refused plan raises** `PlanRefused`, and a run refused before it starts raises `FxError`. A
   failed step doesn't: check `result.ok`, then `result.failures`. It holds, by instance id
   (`draw#1`), each step that failed or was skipped: its `path`, `message`, `code` (the error's
