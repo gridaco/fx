@@ -6,7 +6,12 @@ The examples here make no provider calls.
 
 ## Project home
 
-In a fresh project, create `fx.yaml`:
+In a fresh project, use `init` when installed help lists it; it preserves existing
+configuration. Older versions can create the same minimal `fx.yaml` manually:
+
+```sh
+python -m grida.fx init
+```
 
 ```yaml
 fx: project/v1
@@ -15,6 +20,11 @@ fx: project/v1
 Keep workflows in `workflows/` and custom Python nodes in `nodes/`. This gives
 local paths a consistent project home. The greeting example below is a small
 end-to-end check after installing FX and its Python runtime.
+
+For browser inspection, current source uses `start --background` once per project,
+then `plan --open`, `run --open`, and `inspect --open`. Check installed help before
+using those flags. Older releases can use `view TARGET` or `view --run DIR` with
+the browser flags their help advertises; do not silently switch to a source build.
 
 ## Workflow rules that affect authoring
 
@@ -83,12 +93,20 @@ From the project root:
 
 ```sh
 python -m grida.fx plan workflows/greeting.yaml --name Ada --check
-python -m grida.fx run workflows/greeting.yaml --name Ada --run runs/greeting --deliver text=out/greeting.txt
+python -m grida.fx run workflows/greeting.yaml --run runs/greeting --deliver text=out/greeting.txt -- --name Ada
 python -m grida.fx inspect runs/greeting --verify --json
-python -m grida.fx view --run runs/greeting
 ```
 
 This executes local code and records its output without provider credentials.
+The `--` delimiter keeps the workflow's `name` input separate from the run label.
+On a source version with named-run support, `--name baseline` before the delimiter
+creates a named run; use `--resume baseline` with the same inputs to continue it.
+With service support, open the retained run:
+
+```sh
+python -m grida.fx start --background
+python -m grida.fx inspect runs/greeting --open
+```
 
 Declare file `inputs`, JSON `params`, exact `outputs`, file `resources`, external
 `tools`, and any maximum paid `calls`. Read through `ctx.read`/`ctx.inputs` and
@@ -130,7 +148,12 @@ def build(name: str = "world") -> Workflow:
 ```sh
 python -m grida.fx plan assets.py:build --arg name=Ada --check
 python -m grida.fx run assets.py:build --arg name=Ada --run runs/greeting-built
-python -m grida.fx view assets.py:build --arg name=Ada
+```
+
+With the project service running, inspect the builder's materialized plan:
+
+```sh
+python -m grida.fx plan assets.py:build --arg name=Ada --open
 ```
 
 For orchestration from Python:

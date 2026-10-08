@@ -241,7 +241,7 @@ export class CanvasController {
       const portsLabel = node.ports ? `, inputs: ${node.ports.inputs.map((port) => `${displayPortName(port.name)} (${port.type}, ${port.kind})`).join(", ") || "none"}, outputs: ${node.ports.outputs.map((port) => `${displayPortName(port.name)} (${port.type}, ${port.kind})`).join(", ") || "none"}` : node.pending ? "" : ", port metadata not recorded";
       const scopeLabel = node.kind === "workflow" ? `, imported workflow, ${node.child_count ?? 0} steps, ${node.failure_count ?? 0} failed` : "";
       const label = `${node.title}, ${node.state}${scopeLabel}${portsLabel}${preview ? `, ${preview.label}, ${preview.count} image ${preview.count === 1 ? "output" : "outputs"}` : ""}`;
-      const group = element("g", { transform: `translate(${node.x},${node.y})`, class: `fx-canvas-node${node.kind === "workflow" ? " fx-canvas-workflow" : node.kind === "boundary" ? " fx-canvas-boundary" : ""}`, role: node.kind === "workflow" ? "group" : "button", tabindex: 0, "data-node-id": node.id, "aria-label": label, ...(node.kind === "workflow" ? { "aria-current": "false" } : { "aria-pressed": "false" }) });
+      const group = element("g", { transform: `translate(${node.x},${node.y})`, class: `fx-canvas-node${node.kind === "workflow" ? " fx-canvas-workflow" : node.kind === "boundary" ? " fx-canvas-boundary" : ""}`, role: node.kind === "workflow" ? "group" : "button", tabindex: 0, "data-node-id": node.id, "data-state": node.state, "aria-label": label, ...(node.kind === "workflow" ? { "aria-current": "false" } : { "aria-pressed": "false" }) });
       group.append(element("title", {}, `${node.title}\n${node.subtitle}\n${node.source_id}`));
       group.append(element("rect", { width: node.width, height: node.height, rx: 11, class: node.pending ? "fx-canvas-node-box fx-canvas-pending" : "fx-canvas-node-box" }));
       group.append(element("text", { x: 16, y: 27, class: "fx-canvas-node-title" }, short(node.title, node.ports ? 42 : 28)));
@@ -293,7 +293,8 @@ export class CanvasController {
         group.append(image, element("rect", { ...frame, rx: 6, class: "fx-canvas-image-border" }), fallback);
         group.append(element("text", { x: node.width - 16, y: node.height - 22, "text-anchor": "end", class: "fx-canvas-image-count" }, `${preview.count} image ${preview.count === 1 ? "output" : "outputs"}`));
       }
-      group.append(element("text", { x: 16, y: node.height - 22, class: "fx-canvas-node-state" }, node.state));
+      if (node.state === "running") group.append(element("circle", { cx: 21, cy: node.height - 26, r: 3.5, class: "fx-canvas-running-indicator", "aria-hidden": "true" }));
+      group.append(element("text", { x: node.state === "running" ? 32 : 16, y: node.height - 22, class: "fx-canvas-node-state" }, node.state));
       if (node.kind === "workflow" && node.scope_id) {
         group.append(element("text", { x: 16, y: node.height - 48, class: (node.failure_count ?? 0) > 0 ? "fx-canvas-workflow-failure" : "fx-canvas-workflow-count" }, `${node.child_count ?? 0} steps${node.failure_count ? ` · ${node.failure_count} failed` : ""}`));
         const open = element("g", { class: "fx-canvas-open-workflow", role: "button", tabindex: 0, "aria-label": `Open workflow ${node.title}` });

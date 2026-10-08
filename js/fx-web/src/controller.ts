@@ -1,6 +1,8 @@
 import { canvasGraph, readView, type Artifact, type CanvasGraph, type CanvasStep, type ViewerView } from "./index";
 import { WorkflowNavigation, type Breadcrumb } from "./navigation";
 import { navigationScopes, type InterfaceBinding } from "./scopes";
+import { ObservationError, observationReader, type RunObservationReader } from "./observation";
+import { validateViewerApiBase } from "./route";
 
 export interface ViewerState {
   view: ViewerView | null;
@@ -14,13 +16,45 @@ export interface ViewerState {
   scopeNode: CanvasStep | null;
 }
 
-/** Owns asynchronous reads and selection independently of any presentation framework. */
+export interface ViewerPollingScheduler {
+  schedule(callback: () => void, delay: number): unknown;
+  cancel(handle: unknown): void;
+}
+
+export interface ViewerControllerOptions {
+  /** Custom view readers remain static unless observation is explicitly supplied. */
+  observation?: RunObservationReader | false;
+  scheduler?: ViewerPollingScheduler;
+  apiBase?: string;
+}
+
+const pollingScheduler: ViewerPollingScheduler = {
+  schedule: (callback, delay) => setTimeout(callback, delay),
+  cancel: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+};
+
+/** Owns reads, serial observation, navigation and selection without a presentation framework. */
 export class ViewerController {
   private state: ViewerState = { view: null, graph: { nodes: [], edges: [] }, selected: null, loading: true, error: null, updated: null, scope: null, breadcrumbs: [{ id: null, title: "Workflow" }], scopeNode: null };
   private navigation = new WorkflowNavigation();
   private listeners = new Set<() => void>();
   private request: AbortController | null = null;
-  constructor(private readonly reader = readView) {}
+  private readonly reader: typeof readView;
+  private readonly observation: RunObservationReader | null;
+  private readonly scheduler: ViewerPollingScheduler;
+  private readonly apiBase: string;
+  private timer: unknown = null;
+  private cursor: string | null = null;
+  private observingRun = false;
+  private active = false;
+  private failures = 0;
+  constructor(reader?: typeof readView, options: ViewerControllerOptions = {}) {
+    this.apiBase = validateViewerApiBase(options.apiBase ?? "/api");
+    const defaultReader = reader === undefined || reader === readView;
+    this.reader = defaultReader ? (signal) => readView(signal, this.apiBase) : reader;
+    this.observation = options.observation === false ? null : options.observation ?? (defaultReader ? observationReader(this.apiBase) : null);
+    this.scheduler = options.scheduler ?? pollingScheduler;
+  }
 
   getSnapshot = () => this.state;
   subscribe = (listener: () => void) => {
@@ -59,11 +93,11 @@ export class ViewerController {
   };
   private project(view: ViewerView) {
     const navigation = this.navigation.getSnapshot();
-    const graph = canvasGraph(view, navigation.scope);
+    const graph = canvasGraph(view, navigation.scope, this.apiBase);
     const selected = graph.nodes.some((node) => node.id === navigation.selected) ? navigation.selected : null;
     this.navigation.select(selected);
     const parentScope = navigation.breadcrumbs.at(-2)?.id ?? null;
-    const scopeNode = navigation.scope === null ? null : canvasGraph(view, parentScope).nodes.find((node) => node.scope_id === navigation.scope) ?? null;
+    const scopeNode = navigation.scope === null ? null : canvasGraph(view, parentScope, this.apiBase).nodes.find((node) => node.scope_id === navigation.scope) ?? null;
     return { graph, selected, scope: navigation.scope, breadcrumbs: navigation.breadcrumbs, scopeNode };
   }
   openScope = (id: string) => {
@@ -77,7 +111,58 @@ export class ViewerController {
     const breadcrumbs = this.navigation.getSnapshot().breadcrumbs;
     if (breadcrumbs.length > 1) this.goToScope(breadcrumbs[breadcrumbs.length - 2].id);
   };
+  private apply(view: ViewerView) {
+    this.navigation.setScopes(navigationScopes(view.scopes), view.workflow.title);
+    this.update({ view, ...this.project(view), error: null, updated: new Date() });
+  }
+  private cancelTimer() {
+    if (this.timer !== null) this.scheduler.cancel(this.timer);
+    this.timer = null;
+  }
+  private schedulePoll() {
+    this.cancelTimer();
+    if (!this.active || !this.observingRun || !this.observation) return;
+    // A slow request never overlaps the next. Transient failures back off to at most 8 s.
+    const delay = 1000 * 2 ** Math.min(this.failures, 3);
+    this.timer = this.scheduler.schedule(() => { this.timer = null; void this.poll(); }, delay);
+  }
+  private async snapshot(request: AbortController) {
+    const snapshot = await this.observation!.snapshot(request.signal);
+    if (request.signal.aborted) return;
+    this.cursor = snapshot.cursor;
+    this.apply(snapshot.view);
+  }
+  private async poll() {
+    if (!this.active || !this.observingRun || !this.observation) return;
+    const request = new AbortController();
+    this.request = request;
+    try {
+      try {
+        if (this.cursor === null) { await this.snapshot(request); this.failures = 0; return; }
+        const batch = await this.observation.events(this.cursor, request.signal);
+        if (request.signal.aborted) return;
+        if (batch.events.length > 0) await this.snapshot(request);
+        else {
+          this.cursor = batch.cursor;
+          if (this.state.error !== null) this.update({ error: null });
+        }
+      } catch (error) {
+        if (!request.signal.aborted && error instanceof ObservationError && error.requiresSnapshot) await this.snapshot(request);
+        else throw error;
+      }
+      this.failures = 0;
+    } catch (error) {
+      if (!request.signal.aborted) {
+        this.failures++;
+        this.update({ error: error instanceof Error ? error.message : "The run could not be observed." });
+      }
+    } finally {
+      if (!request.signal.aborted) this.schedulePoll();
+    }
+  }
   refresh = async () => {
+    this.active = true;
+    this.cancelTimer();
     this.request?.abort();
     const request = new AbortController();
     this.request = request;
@@ -85,15 +170,17 @@ export class ViewerController {
     try {
       const view = await this.reader(request.signal);
       if (request.signal.aborted) return;
-      this.navigation.setScopes(navigationScopes(view.scopes), view.workflow.title);
-      this.update({ view, ...this.project(view), error: null, updated: new Date() });
+      this.observingRun = view.kind === "fx-viewer-run-v1" && this.observation !== null;
+      if (this.observingRun) await this.snapshot(request);
+      else { this.cursor = null; this.apply(view); }
+      this.failures = 0;
     } catch (error) {
-      if (!request.signal.aborted) this.update({ error: error instanceof Error ? error.message : "The workflow could not be loaded." });
+      if (!request.signal.aborted) { this.failures++; this.update({ error: error instanceof Error ? error.message : "The workflow could not be loaded." }); }
     } finally {
-      if (!request.signal.aborted) this.update({ loading: false });
+      if (!request.signal.aborted) { this.update({ loading: false }); this.schedulePoll(); }
     }
   };
-  dispose() { this.request?.abort(); }
+  dispose() { this.active = false; this.cancelTimer(); this.request?.abort(); }
 }
 
 export interface ViewportState { x: number; y: number; zoom: number }

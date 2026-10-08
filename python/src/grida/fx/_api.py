@@ -1069,7 +1069,7 @@ async def run_async(
     if planned is not None and not planned.ok:
         raise PlanRefused(planned)
     with _inputs_file(request) as inputs_file:
-        args = ["run", *request.args(inputs_file), *options]
+        args = ["run", *request.args(inputs_file), *options, "--no-view"]
         if answerer is None:
             done = await _call(args, request.cwd)
         else:

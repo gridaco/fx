@@ -1,0 +1,283 @@
+# Agent readiness
+
+FX should let an agent translate a person's changing intent into understandable,
+composable operations: discover, author, plan, execute, observe, revise and deliver.
+The person should not need to know FX's internals to ask for a change. The agent
+must be able to determine what is supported, what an operation changes, and what
+to do next from the public interface and its results.
+
+This is a living product and engineering harness. It records current behavior,
+gaps and scenarios against which we design FX. It is not a claim that every
+scenario below works today, nor approval to implement every proposed capability.
+
+**Last source review: 2026-10-08.** Current entries were checked against the CLI,
+SDKs and specifications. This documentation pass did not execute new workflows.
+Recheck the installed version before applying them to a user's installation.
+
+## Ownership and status
+
+- [spec/](spec/) owns normative contracts. Ratify a contract there before changing
+  execution, identity, lifecycle or public protocol semantics.
+- This document owns agent-facing vocabulary, operation composition, capability
+  gaps and acceptance scenarios. A scenario becomes supported only with an
+  implemented public surface and evidence.
+- [The installed skill](skills/grida-fx/SKILL.md) teaches agents how to use what
+  ships. It must not teach a proposed command as if it exists.
+- [The guide](docs/guide/) explains supported usage;
+  [the overview](docs/wg/overview.md) records decisions and milestones.
+
+Use these statuses when extending this document: **current** means implemented
+in the reviewed source; **partial** means only part of the intent is supported;
+**ratified design** means an agreed contract whose implementation is pending;
+**proposed** means a use case whose mechanics and scope still need a decision.
+Existing tests are starting points for evidence, not proof of every scenario here.
+
+## Vocabulary agents should be able to use precisely
+
+| Term | Meaning and distinction |
+|---|---|
+| Agent / caller | The external assistant or application operating FX. This is separate from an `agent.turn` node inside a workflow. |
+| Workflow definition | Authored steps, inputs, dependencies and output declarations, supplied as YAML or through supported SDK authoring. |
+| Plan | FX's resolved view of that definition and its inputs: known instances, dependencies, problems, prices and unresolved work. Planning is not execution approval. |
+| Run | The recorded execution history in a selected run folder, bound to a plan. A fresh run is created by default; cached work can still be reused. An optional name labels this record. |
+| Run name | A case-sensitive create-only label within one project and recorded workflow ID/source. It is presentation metadata, not a cache key or workflow version. |
+| Invocation | One execution attempt of that run. Resuming appends a new invocation to the same history. |
+| Step / instance | A step is authored; an instance is a concrete occurrence after repeats, takes and nesting. Use recorded identifiers instead of reconstructing them from UI labels. |
+| Artifact | A recorded output with a content identity. A path alone is not proof of success or valid content. |
+| Cache reuse | Reuse under FX's identity and validation rules. The engine decides which work matches; the agent does not manufacture cache keys. |
+| Retry | Another engine-owned attempt within execution. It is not a new run, resume, or request for an artistic alternative. |
+| Provider call / attempt / job | A call is the requested capability work; an attempt is one engine-accounted try; a job is a provider operation that may remain pending beyond a local request. An unknown job outcome is not permission to submit it again. |
+| Resume | Execute the same recorded plan again in its run folder, preserving recorded work and reusing valid results. It does not authorize changing that plan in place. |
+| Cancel | Ask the active invocation to stop. Completed work remains; in-flight work may need to settle. It does not undo a provider charge. |
+| Pause | A future, explicitly defined suspension boundary from which work can continue. There is no pause operation today; cancellation is not a pause acknowledgment. |
+| Revise | Change authored inputs or workflow choices and plan again. Today this generally needs a new run folder; valid unchanged work can still be reused from the same cache. |
+| Take / reroll / pick | A take identifies an alternative. Reroll selects a later take for the next execution; pick selects a take. Neither command executes it immediately. |
+| Observe / inspect | Read execution evidence or inspect a saved run; `--open` can present it in the browser. Neither is permission to mutate the run. |
+| Service | A project-scoped process started by `start`, providing the dashboard, catalog and observation HTTP endpoints. Workflow execution has a separate owner and lifetime. |
+| Standalone | Independent inspection with its own available port and foreground owner. It does not mean a fresh cache or different execution semantics. |
+| Project / projection | `init` establishes the recommended `fx.yaml` project; standalone use remains supported. The unrelated `project <run>` command projects recorded events into state. |
+
+The interfaces should preserve these distinctions. Avoid using one word such as
+"restart" for resume, fresh generation and revision: they have different effects
+on work, history and spending.
+
+## Current operation map
+
+Commands below use the npm launcher `grida-fx`. The Python equivalent is
+`python -m grida.fx`; it runs the same engine. Users install the packages rather
+than cloning the repository. Confirm `--version` and the relevant `--help` first.
+`<target>` means a workflow file, workflow id, or supported Python builder target;
+individual commands can have narrower target rules.
+
+| Intent / tool | What an agent receives | Conditions and effects |
+|---|---|---|
+| Discover: `--version`, `--help`, `<verb> --help` | Installed version and human-readable command help | No common machine-readable capability manifest yet. |
+| Establish project: `init [directory] --json` | Resolved project and initialization outcome | Creates minimal configuration without overwriting an existing file. No dependencies, service, credentials or execution. |
+| Start service: `start --background [--project directory] [--port N] [--open] --json` | Ready service identity and actual URL | Native background process, port 8787 by default. Matching startup is idempotent; readiness checks project, instance and protocol. Does not execute workflows or install crash/login recovery. |
+| Manage service: `status --json`, `logs --lines N`, `stop --json` | Service identity/status, bounded logs, shutdown outcome | Select the project explicitly when needed. Stop affects inspection only; runs and records remain. Plain `start` stays foreground. |
+| Discover built-ins: `nodes [TYPE]` | Text descriptions, settings, ports and applicable routes | Lists built-in types, not a complete custom-node registry. Unknown types currently print nothing with exit 0. Listing a type does not prove every advertised capability can execute. |
+| Discover workflow inputs: `schema <target>` | JSON Schema for authored inputs | May load author code to resolve a target. |
+| Validate: `plan <target> ... --check --json` | Expanded graph including problems; nonzero validation status | No FX paid calls; may import code, invoke builders, execute local `at: plan` nodes and write cache results. `--json` alone does not make plan problems a failing exit status. |
+| Inspect planned work: `expand`, `identity`, `price <target> ...` | JSON graph, instance identities, or phased estimates | Planning conditions apply. Unresolved work and estimates are not proof of final work or actual billing. |
+| Diagnose: `doctor [target]` | Text prerequisite, tool, route and key-presence diagnostics | Let FX inspect credential configuration; agents must not read secret values. Missing keys alone do not make its exit status fail. It does not make provider calls and is not a provider health check. |
+| Execute: `run <target> ... [--name NAME \| --run <folder>]` | Foreground execution, an early run URL when inspection is available, and final summary | Local code needs no `--live`; paid calls need admission and a ceiling, except cached answers. Choose a name or explicit folder when supervising asynchronously. `--name` refuses collisions; neither naming nor a fresh record forces fresh generation. Project run pages survive completion through the separately started service. `--open` requests browser launch; `--standalone` owns a temporary viewer instead; `--no-view` skips integration and conflicts with `--open`. |
+| Observe: `observe <run> --snapshot`, `observe <run> --after <cursor>`, `project <run>`, `inspect <run> --json` | Consistent snapshot, bounded event batches, state projection or summary | Read recorded data without executing workflow code. Use a precise folder or `inspect <workflow-id>/<name>`; `inspect <workflow-id>` chooses the newest-created run, including failures, and refuses ambiguous recorded sources. Keep the emitted folder for observation commands. |
+| Verify: `inspect <run> --verify --json` | Recorded summary with placed-file verification | Checks the recorded bytes, not artistic quality, external side effects, or the accuracy of a provider bill. |
+| Open browser: `plan <target> --open`, `inspect <run> --open` | A selected plan/run page in the running project service | Explicit project startup required. Source targets plan once; saved runs read records. `--standalone` hosts independently until interrupted; projectless browser inspection does this by default. Run pages follow recorded events and resumes; plans stay static. `view` remains hidden compatibility syntax, including saved-plan files. |
+| Resume: `run <target> ... --resume NAME`, or repeat `--run FOLDER` | Another invocation in the existing folder | A named resume requires an existing name; repeat current inputs/routes/takes/builder arguments explicitly. Requires the same plan digest and stand-in mode, and no other writer. A changed plan is refused rather than silently replacing history. Recorded spend and original creation time carry forward; resume does not reset the budget ledger or promote the record as newly created. |
+| Choose alternatives: `reroll <run> <step-path>`, `pick <run> <step-path> <take>` | Takes-file mutation and advice | Affect a later plan/run, not the active scheduler; both refuse stand-in runs. Reroll's `--live` only changes printed advice. Picking may still require generation of the selected take or downstream work. |
+| Maintain takes: `takes list <target>`, `takes mv <target> <old> <new>` | Text listing or takes-file edit | These targets are workflow files/ids, not builder targets. Moving refuses an existing destination entry. |
+| Diagnose jobs: `jobs`; reconcile: `jobs --forget <key>` | Text job records; explicit deletion of a job record | Forgetting can permit a fresh paid submission. Use only after reconciling the provider outcome, not as generic failure recovery. |
+| Maintain node locks: `lock [where] --check` / `lock [where]` | Lock verification / lockfile updates | `--same` asserts unchanged behavior; it is not a way to silence a real identity change. |
+| Deliver: `run ... --deliver output=path` or SDK result delivery | Copies of available declared outputs | CLI delivery happens after execution and reports missing outputs. Preserve immutable store/placed files; copy out before editing bytes. |
+
+Python and JavaScript SDKs expose planning, execution results and artifact
+delivery. JavaScript also exports `project` and `inspect`; Python users can use
+the CLI for those recorded-run queries. Python supports `run_async`; JavaScript
+`run` is asynchronous. Async completion
+does not imply progress subscriptions, pause controls or a background engine
+service. Check `RunResult.ok`, incomplete/stopped state and failures: a failed
+step can return a result rather than throw. See [Python](python/README.md) and
+[JavaScript](js/fx/README.md) for the installed signatures.
+
+For CLI orchestration, status 0 describes the command's success, not every
+possible user goal. `run` requires an ok run and successful requested delivery;
+status 1 covers refusals, unsuccessful/incomplete runs and missing deliveries;
+2 covers input/usage and fatal engine errors; 130 indicates interruption. Inspect partial records
+when a run exists. Do not depend on an English error sentence as a stable error
+code; machine-readable errors are not uniform across commands today.
+
+## Composing operations from user intent
+
+### "Make this, and let me inspect it"
+
+Resolve the installed interface and inputs, author the workflow, validate and
+price it, then execute within the user's authorized scope. An illustrative local
+sequence, with paths replaced by the user's actual files, is:
+
+```sh
+grida-fx init
+grida-fx start --background --json
+grida-fx status --json
+grida-fx schema workflows/example.yaml
+grida-fx plan workflows/example.yaml --inputs inputs.yaml --check --json
+grida-fx run workflows/example.yaml --inputs inputs.yaml --run runs/example --open
+grida-fx inspect runs/example --verify --json
+```
+
+These are individual operations, not an unconditional script. Resolve validation
+problems before running and inspect failures before claiming success. Project
+initialization is safe to repeat, and background startup returns after verified
+readiness. Preserve existing project settings rather than replacing them.
+
+`run` is foreground and non-interactive. With a running project service, it reports
+an actual usable run URL after initialization and before run-phase execution.
+An agent can relay it immediately while supervising execution; planning-time code
+precedes it. The service keeps that page available after completion and across
+service restarts while the record is retained. `--open` requests browser launch;
+otherwise report the printed URL. Do not synthesize a URL from filesystem paths.
+
+Commands never start a background service implicitly. An absent project service
+does not prevent execution; `--open` reports the startup prerequisite. For a probe,
+`run --standalone` keeps the current independent viewer lifetime: the URL ends with
+that invocation. Projectless runs use standalone behavior by default. This flag
+does not clear caches or force fresh work. `inspect RUN --standalone --open`
+independently serves the saved result until interrupted.
+
+Use `stop` to end the project's inspection service. To stop execution, interrupt
+the intended run process instead. Detached background operation is not automatic
+crash restart or login/boot activation. `status --json` reports service liveness;
+run events report execution evidence, and these are separate observations.
+
+`observe RUN --snapshot` attaches to a consistent recorded prefix. Continue with
+`observe RUN --after CURSOR`, applying the response before saving its returned
+cursor. Catch up while `has_more` is true. A lost response can be replayed from
+the prior cursor. `run_finished` terminates one invocation; keep following to see
+a later resume. Unfinished evidence does not establish process liveness.
+
+Python and JavaScript SDK runs currently suppress hosting and return their result
+after execution. They have no live observation handle; use the CLI to provide
+this early URL and the public read-only [observation contract](spec/observation.md)
+for independent consumers. Do not promise these source features in an older
+installed version: check its help first.
+
+### "Stop here; continue later"
+
+**Current:** interrupt the intended process, wait for it to end, inspect the record,
+and retain target, inputs and name/folder. Repeat the same plan with `--resume NAME`
+or the same `--run FOLDER` to resume; old input options are not restored automatically. Do not call cancellation a pause, promise every in-flight paid request
+stopped immediately, or kill unrelated FX processes. Recorded spend carries forward.
+`--yes-up-to` can leave a run incomplete before a later phase; it does not gate the
+first phase, pause on demand, or replace `--max-usd`.
+
+**Proposed pause:** specify whether active work drains or cancels, acknowledgment
+versus reaching a suspension boundary, provider jobs/reservations, and recovery
+after process exit. OS process suspension is not a durable workflow-pause contract.
+
+### "Change what has not started yet"
+
+**Current:** wait for or cancel the invocation, change authored inputs/definition,
+replan and inspect the impact, then use a new folder with the same project cache.
+Matching valid results can be reused. A changed plan is refused in the old folder.
+
+**Proposed active revision:** define dispatch races, accepted work, dependent
+invalidations, identity and budget changes, and an attributable history. "Not yet
+run" alone is insufficient when a scheduler can dispatch concurrently. No current
+command mutates active parameters.
+
+### "Keep this result; try another there"
+
+**Current:** address the exact recorded step path, use `reroll` to choose its next
+take or `pick` to select a take, replan, and run with the relevant spending approval.
+These commands affect future execution; they do not launch work or silently change
+an active invocation. A selected take may still require generation, and downstream
+work may change. Preserve the original run as evidence.
+
+### "Recover from failure"
+
+Inspect the explicit run and failed/skipped instances before retrying. Distinguish
+node failures, planning refusals, provider jobs, cancellation and invalid artifacts.
+Resume the same folder when the plan is unchanged; revise into a new folder when
+it changed. FX owns paid-call retries and settlement. Do not multiply retries in
+node code or a loop around a paid command; recorded failure is not proof that a
+provider charged nothing.
+
+## Engineering acceptance scenarios
+
+The identifiers below are stable references for future issues and tests. Add
+evidence to a row when implementing it; do not turn a proposed scenario into a
+promise through documentation alone.
+
+| ID | Person's request | Current coverage | Evidence required for acceptance |
+|---|---|---|---|
+| AR-01 | "Tell me what you can do here." | Partial: version/help, built-in catalog, input schema and planning; no uniform capability discovery. | An installed agent distinguishes supported, planned and unknown operations/types without guessing flags or interpreting empty output as support. |
+| AR-02 | "Check this before running." | Current: plan/check, graph and price JSON. | Agent uses `--check` or reads `problems` rather than treating `plan --json` exit 0 as validation; unresolved work and planning side effects stay explicit. |
+| AR-03 | "Run it locally without AI." | Current: ordinary nodes and offline stand-ins. | A normal code-only workflow completes and its artifacts verify at $0; stand-in data stays separate from paid data. |
+| AR-04 | "Show me while it runs." | Current in source: project service, early run URL, polling viewer and shared observation reader; standalone mode also remains. SDK runs return after completion. | Agent reports a verified URL; human and independent observer see the same record; project inspection survives run completion, while standalone lifetime stays explicit. |
+| AR-05 | "Stop this run now." | Current process cancellation; no public remote control operation. | Only the intended invocation stops; recorded completion, unfinished work and outstanding billing are reported accurately. |
+| AR-06 | "Continue that exact run." | Current in source: require-existing named resume and explicit-folder same-plan resume. | Finished valid work is reused; plan/mode mismatch and an existing writer are refused; history distinguishes invocations. |
+| AR-07 | "Pause and wait for me." | Proposed; cancellation and later-phase thresholds only cover narrower intents. | Explicit request/acknowledgment/boundary semantics; active work and reservations accounted for; resume survives the documented lifetime. |
+| AR-08 | "Change what has not started yet." | Partial: revise/replan/new run with cache reuse. Active mutation proposed. | Unchanged work is retained where identities match; an edit racing dispatch cannot silently change already accepted work; history and cost remain attributable. |
+| AR-09 | "Keep this result; try another there." | Current takes, reroll and pick. | Selected recorded instance is addressed exactly; no command implies immediate execution; next-plan impact and possible cost are visible. |
+| AR-10 | "Ask before the next expensive part." | Current later-phase `--yes-up-to`, within a separate ceiling. | Incomplete run can continue with an approved threshold; no claim of a general human-approval/pause system. |
+| AR-11 | "You disconnected; catch up." | Current in source: opaque cursors, bounded replay and snapshot reattachment; process liveness remains unknown. | Retained events can be read from a valid cursor; duplicates, unknown liveness and later invocations are handled without launching another run. |
+| AR-12 | "Put the result in my project." | Current output delivery and file verification. | Exact output destinations and missing/partial results are reported; immutable stored files remain intact. |
+| AR-13 | "Do it from Python or JavaScript." | Current SDKs share the engine; authoring/hosting capabilities differ. | Each claimed surface produces equivalent engine-owned semantics; async APIs are not misrepresented as control/event interfaces. |
+| AR-14 | "Run exactly what I reviewed." | Partial: planning and execution are separate; SDK `run(plan)` retains options but the engine replans. No immutable approved-plan execution interface. | Changes between review and execution are detected or require renewed review; the agent does not mistake a saved plan or SDK object for a frozen execution snapshot. |
+| AR-15 | "Keep my project available while I work." | Current in source: init, foreground/background service, status/logs/stop, persistent catalog and run URLs; OS supervision remains future work. | Repeat/parallel starts, readiness, port conflicts, project identity, independent execution, restart persistence, and standalone use all have provider-free lifecycle evidence. |
+| AR-16 | "Name this deliverable; show my workflow history." | Current in source: create-only names, explicit same-plan resume, workflow-grouped index. | Concurrent name claims have one winner; collisions/missing names/plan mismatches/ambiguous sources refuse; latest includes failures, old active records remain visible, resume retains creation time/spend, and metadata changes no cache identity. |
+
+For AR-04 and AR-11, [the observation checker](tools/check_observation.py) and
+[observation v1](spec/observation.md) provide the source acceptance evidence.
+For AR-15 and persistent AR-04 inspection, [the service contract](spec/service.md)
+defines lifecycle and browser acceptance. The [public CLI service tests](crates/grida-fx/tests/service.rs)
+and [execution integration tests](crates/grida-fx/tests/service_run.rs) exercise
+lifecycle and run independence without providers; [the service demo](tools/demo_service.py)
+prepares a fresh code-only project and prints ordinary user commands. Named-run
+CLI/runtime tests and catalog/frontend grouping tests provide AR-16 evidence. Source
+evidence does not imply that an older installed release contains these features.
+Use [the viewer fixtures](fixtures/viewer/README.md),
+[image-recolor](examples/image-recolor/README.md), SDK tests and
+[conformance cases](conformance/) as the initial provider-free harness. Test the
+public interface through an independent consumer, not only internal methods.
+Add targeted evidence for each changed boundary instead of rerunning paid examples.
+
+## Gaps that should guide design
+
+- **Discovery and outcomes:** machine-readable capabilities, consistent structured
+  refusals and early run identity are incomplete. When adding an operation,
+  expose its inputs, preconditions, mutation/spend effects, acknowledgment versus
+  completion, result and recoverable failure conditions.
+- **Observation versus control:** public observation is ratified; pause, active
+  revision and remote execution control are not. Keep their ownership distinct
+  even if a future client presents them together.
+- **Long-lived interaction:** project run URLs now survive execution and service
+  restart while records are retained. Agents still need to distinguish server
+  liveness, recorded run state, and unsupported execution control. Machine-wide
+  aggregation and automatic service recovery remain separate design work.
+- **Plan freshness:** a reviewed plan is not an execution token. Current SDK
+  `run(plan)` retains its target/options, but execution plans again. Define how
+  review is bound to actual inputs and code before promising exact reviewed-plan
+  execution; meanwhile, recheck material changes before running.
+- **Intent and authority:** a configured budget is not user authorization. Preserve
+  existing authorized scope; when an operation changes that scope, make its
+  effects concrete before asking for a decision. Agents must not expose secrets
+  or implement their own provider retry loop to work around a missing tool.
+- **Known correctness limits:** [ISSUES.md](ISSUES.md) tracks missing provider usage,
+  an unexplained image-cost discrepancy and an unversioned export identity
+  collision. Do not claim complete cost explanation or universally correct reuse
+  while those remain open. Current workarounds for the collision are distinct
+  source files for distinct unversioned node functions or declared node versions.
+
+## Keeping this useful
+
+For changes to the CLI, SDKs, lifecycle or public contracts, identify the relevant
+scenario here and update its status and evidence alongside the change. For a new
+user intent, add a scenario before selecting a transport or adding commands.
+Record the supported path and a precise unsupported boundary, rather than
+teaching agents a workaround that corrupts identity or history.
+
+An operation is agent-ready when another process can discover it, satisfy its
+preconditions, apply it to the right run, understand its outcome, and choose the
+next operation from public evidence. The person should receive a clear result
+or an actionable limitation without needing to understand FX's implementation.

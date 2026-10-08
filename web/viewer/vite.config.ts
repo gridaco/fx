@@ -7,6 +7,11 @@ export default defineConfig({
   envDir: false,
   plugins: [react(), tailwindcss()],
   server: {
-    proxy: { "/api": { target: "http://127.0.0.1:8080", changeOrigin: true } },
+    proxy: {
+      "/api": { target: "http://127.0.0.1:8080", changeOrigin: true },
+      "^/p/[a-f0-9]{64}/(?:runs|plans)/[a-f0-9]{64}/api(?:/|$)": {
+        target: "http://127.0.0.1:8080", changeOrigin: true,
+      },
+    },
   },
 });

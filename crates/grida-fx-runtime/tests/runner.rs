@@ -302,6 +302,7 @@ fn run_in(
     let options = RunOptions {
         folder: project.root.join(invocation.folder),
         label: invocation.folder.to_string(),
+        name: None,
         yes_up_to: invocation.yes_up_to.map(|text| Usd::parse(text).unwrap()),
         takes_file: format!("workflows/{}.takes.yaml", invocation.target),
     };

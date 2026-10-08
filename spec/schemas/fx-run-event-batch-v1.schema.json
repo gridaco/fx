@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "$id": "urn:grida-fx:schema:fx-run-event-batch-v1",
+  "title": "Run observation event batch",
+  "required": [
+    "kind",
+    "cursor",
+    "events",
+    "has_more"
+  ],
+  "properties": {
+    "kind": {
+      "const": "fx-run-event-batch-v1"
+    },
+    "cursor": {
+      "type": "string",
+      "minLength": 1
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "kind",
+          "event",
+          "invocation_id",
+          "plan",
+          "offset_ms"
+        ],
+        "properties": {
+          "kind": {
+            "const": "fx-run-events-v1"
+          },
+          "event": {
+            "type": "string",
+            "minLength": 1
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "plan": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "offset_ms": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "has_more": {
+      "type": "boolean"
+    }
+  }
+}

@@ -11,7 +11,7 @@ Guardrails for working in this repository. [README.md](README.md) says what FX i
 | `crates/grida-fx-runtime` | Running: the store, the call cache, budgets, the retry owner, facts, the agent loop, node hosts. |
 | `crates/grida-fx-providers` | Provider adapters behind an injected transport. |
 | `crates/grida-fx` | The `grida-fx` command. |
-| `crates/grida-fx-viewer` | Read-only run projection and static plan/run loopback host for the embedded viewer. |
+| `crates/grida-fx-viewer` | Read-only run projection, standalone hosting and the project service for the embedded viewer. |
 | `spec/` | The language-neutral contracts: schemas, identity, protocol, test vectors. Code follows `spec/`; a change to identity is a change to `spec/` first. |
 | `conformance/` | Cases that hold any implementation to the spec through the command line only. |
 | `python/` | The `grida` distribution; FX is `grida.fx`. |
@@ -29,9 +29,10 @@ Guardrails for working in this repository. [README.md](README.md) says what FX i
 - **Offline is the default, and nothing spends.** Tests and CI never call a provider and hold no keys. A live call needs the owner's explicit go and a cap.
 - **The engine is the only place with engine logic.** Expressions, identity, prompt rendering, the agent loop and facts live in Rust. SDKs build documents, author nodes and host node bodies; they never compute an identity.
 - **One retry owner: the engine.** Transports and adapters never retry. A request is resent only when it provably was not received; every other repeat is a new, recorded and settled attempt, at most 6 in all.
-- **Never persist secrets.** No keys, authorization headers, signed URLs or private absolute paths in records, logs, caches or test fixtures. Provider keys come from the environment through the allowlisted loader; `.env` is optional and never printed.
+- **Never persist secrets.** No provider keys, authorization headers, signed URLs or private absolute paths in portable records, logs, caches or test fixtures. Provider keys come from the environment through the allowlisted loader; `.env` is optional and never printed. The private, excluded `.fx/service/` coordination state may hold canonical local paths and its local control token, as specified in [spec/service.md](spec/service.md); never expose these in browser documents or portable artifacts.
 - **Examples run.** Their node bodies are real code and their routes are the built-in table's, and the plan output in a README is pasted from the engine. An example that needs something FX does not have yet (a capability without an adapter, a planned API) only plans: it may keep an illustrative route of its own and placeholder bodies, and its README says so. A change that alters what an example prints updates its README.
 - **Contracts use `lower_snake_case`.** Keep mandatory external vocabulary exactly (`$ref`, `$defs`, `additionalProperties`).
+- **Agent readiness is a design harness.** For CLI, SDK, lifecycle or public-contract changes, consult [AGENT_READINESS.md](AGENT_READINESS.md) and update affected scenarios, capability status and evidence. Keep proposed capabilities separate from implemented behavior; `spec/` remains normative.
 - **Identifiers, comments, logs and messages are in English.**
 - **Nontrivial browser UI uses vanilla TypeScript classes.** Own canvas, viewport,
   interaction and viewer state in independently testable classes. React is a thin
@@ -55,6 +56,7 @@ uv run --project python python tools/check_spec.py
 uv run --project python python conformance/run.py --command target/debug/grida-fx
 python3 tools/build_engine.py && uv run --project python python tools/check_examples.py
 python3 tools/check_viewer.py --command "$PWD/python/src/grida/fx/_bin/grida-fx"
+uv run --project python python tools/check_observation.py --command target/debug/grida-fx
 uv run --project python python tools/check_viewer_fixtures.py
 ```
 

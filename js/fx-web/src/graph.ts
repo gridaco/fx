@@ -1,4 +1,5 @@
 import type { ViewerRun } from "./index";
+import { validateViewerApiBase } from "./route";
 import { isNodePorts, isPortBindings, parameterType, type NodePorts, type PortBinding } from "./ports";
 import { isInterfaceBindings, isWorkflowScopes, projectScopes, type InterfaceBinding, type WorkflowScope } from "./scopes";
 
@@ -160,12 +161,12 @@ function recordedFileDigests(value: unknown): string[] {
 }
 
 /** Select a recorded output image from the host's verified artifact inventory. */
-function imagePreview(node: ViewerRun["nodes"][number], artifacts: Map<string, ViewerRun["artifacts"][number]>): CanvasImagePreview | undefined {
+function imagePreview(node: ViewerRun["nodes"][number], artifacts: Map<string, ViewerRun["artifacts"][number]>, apiBase: string): CanvasImagePreview | undefined {
   const images = new Map<string, { url: string; label: string }>();
   for (const [port, value] of Object.entries(node.outputs)) {
     for (const digest of recordedFileDigests(value)) {
       const artifact = artifacts.get(digest);
-      if (artifact?.available && imageKinds.has(artifact.kind) && artifact.url === `/api/artifacts/${digest}` && !images.has(digest)) {
+      if (artifact?.available && imageKinds.has(artifact.kind) && artifact.url === `${apiBase}/artifacts/${digest}` && !images.has(digest)) {
         images.set(digest, { url: artifact.url, label: `${port}: ${artifact.name}` });
       }
     }
@@ -175,12 +176,13 @@ function imagePreview(node: ViewerRun["nodes"][number], artifacts: Map<string, V
 }
 
 /** Project declared wiring for display; no expressions or execution decisions are evaluated. */
-export function flatCanvasGraph(view: GraphDocument | ViewerRun): CanvasGraph {
+export function flatCanvasGraph(view: GraphDocument | ViewerRun, apiBase = "/api"): CanvasGraph {
+  validateViewerApiBase(apiBase);
   const plan = view.kind === "fx-graph-v1";
   const artifacts = new Map(plan ? [] : view.artifacts.map((item) => [item.digest, item]));
   const source = plan ? view.instances : view.nodes;
   const nodes: CanvasStep[] = source.map((item) => {
-    const preview = plan ? undefined : imagePreview(item as ViewerRun["nodes"][number], artifacts);
+    const preview = plan ? undefined : imagePreview(item as ViewerRun["nodes"][number], artifacts, apiBase);
     const declared = plan ? view.types?.[item.uses ?? ""]?.ports : (item as ViewerRun["nodes"][number]).ports;
     const boundParams = new Set([...(item.bindings ?? []), ...(item.interface_bindings ?? [])].map((binding) => binding.target_port));
     const ports: CanvasStep["ports"] = declared ? {
@@ -256,6 +258,6 @@ export function flatCanvasGraph(view: GraphDocument | ViewerRun): CanvasGraph {
   return { nodes, edges: [...connections.values()] };
 }
 
-export function canvasGraph(view: GraphDocument | ViewerRun, scopeId: string | null = null): CanvasGraph {
-  return projectScopes(view, flatCanvasGraph(view), scopeId);
+export function canvasGraph(view: GraphDocument | ViewerRun, scopeId: string | null = null, apiBase = "/api"): CanvasGraph {
+  return projectScopes(view, flatCanvasGraph(view, apiBase), scopeId);
 }

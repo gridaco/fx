@@ -1,5 +1,6 @@
 import { isNodePorts, isPortBindings, type NodePorts, type PortBinding } from "./ports";
 import { isInterfaceBindings, isWorkflowScopes, type InterfaceBinding, type WorkflowScope } from "./scopes";
+import { validateViewerApiBase } from "./route";
 
 export interface Artifact {
   digest: string;
@@ -78,7 +79,7 @@ function node(value: unknown): value is RunNode {
     && (value.interface_bindings === undefined || isInterfaceBindings(value.interface_bindings));
 }
 
-function artifact(value: unknown): value is Artifact {
+function artifact(value: unknown, apiBase: string): value is Artifact {
   return record(value)
     && typeof value.digest === "string" && /^[a-f0-9]{64}$/.test(value.digest)
     && typeof value.kind === "string"
@@ -86,11 +87,12 @@ function artifact(value: unknown): value is Artifact {
     && typeof value.size === "number" && Number.isFinite(value.size) && value.size >= 0
     && typeof value.available === "boolean"
     && nullableString(value.url)
-    && (value.url === null || value.url === `/api/artifacts/${value.digest}`);
+    && (value.url === null || value.url === `${apiBase}/artifacts/${value.digest}`);
 }
 
 /** Validate the browser boundary before any artifact URL is used. */
-export function parseViewerRun(value: unknown): ViewerRun {
+export function parseViewerRun(value: unknown, apiBase = "/api"): ViewerRun {
+  validateViewerApiBase(apiBase);
   if (!record(value) || value.kind !== "fx-viewer-run-v1") {
     throw new Error("This viewer does not support the returned run format.");
   }
@@ -107,30 +109,31 @@ export function parseViewerRun(value: unknown): ViewerRun {
       && typeof value.estimate.high_usd === "number"))
     && record(value.inputs) && record(value.outputs)
     && Array.isArray(value.nodes) && value.nodes.every(node)
-    && Array.isArray(value.artifacts) && value.artifacts.every(artifact)
+    && Array.isArray(value.artifacts) && value.artifacts.every((item) => artifact(item, apiBase))
     && strings(value.warnings)
     && (value.scopes === undefined || isWorkflowScopes(value.scopes));
   if (!valid) throw new Error("The run response is incomplete or malformed.");
   return value as unknown as ViewerRun;
 }
 
-export async function readRun(signal?: AbortSignal): Promise<ViewerRun> {
-  const response = await fetch("/api/run", { signal, cache: "no-store" });
+export async function readRun(signal?: AbortSignal, apiBase = "/api"): Promise<ViewerRun> {
+  const response = await fetch(`${validateViewerApiBase(apiBase)}/run`, { signal, cache: "no-store" });
   if (!response.ok) throw new Error(`The run could not be read (HTTP ${response.status}).`);
-  return parseViewerRun(await response.json());
+  return parseViewerRun(await response.json(), apiBase);
 }
 
 export type ViewerView = GraphDocument | ViewerRun;
 
-export function parseViewerView(value: unknown): ViewerView {
+export function parseViewerView(value: unknown, apiBase = "/api"): ViewerView {
+  validateViewerApiBase(apiBase);
   if (record(value) && value.kind === "fx-graph-v1") return parseGraph(value);
-  return parseViewerRun(value);
+  return parseViewerRun(value, apiBase);
 }
 
-export async function readView(signal?: AbortSignal): Promise<ViewerView> {
-  const response = await fetch("/api/view", { signal, cache: "no-store" });
+export async function readView(signal?: AbortSignal, apiBase = "/api"): Promise<ViewerView> {
+  const response = await fetch(`${validateViewerApiBase(apiBase)}/view`, { signal, cache: "no-store" });
   if (!response.ok) throw new Error(`The workflow could not be read (HTTP ${response.status}).`);
-  return parseViewerView(await response.json());
+  return parseViewerView(await response.json(), apiBase);
 }
 
 /** Find encoded FX file references without interpreting workflow expressions. */
@@ -158,3 +161,6 @@ export * from "./canvas";
 export * from "./ports";
 export * from "./navigation";
 export * from "./scopes";
+export * from "./observation";
+export * from "./route";
+export * from "./service";

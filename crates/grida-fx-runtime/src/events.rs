@@ -69,6 +69,10 @@ pub enum Event {
     },
     RunStarted {
         workflow: String,
+        /// Optional human name, immutable across this run's invocations.
+        name: Option<String>,
+        /// Original creation time, UTC RFC3339 milliseconds.
+        created_at: String,
         resumed: bool,
         ceiling_usd: Option<Usd>,
         charged_usd: Usd,
@@ -241,6 +245,8 @@ impl Event {
             }
             Event::RunStarted {
                 workflow,
+                name,
+                created_at,
                 resumed,
                 ceiling_usd,
                 charged_usd,
@@ -249,6 +255,10 @@ impl Event {
                 stand_in,
             } => {
                 fields.text("workflow", workflow);
+                if let Some(name) = name {
+                    fields.text("name", name);
+                }
+                fields.text("created_at", created_at);
                 fields.put("resumed", Value::Bool(*resumed));
                 fields.money_or_null("ceiling_usd", *ceiling_usd);
                 fields.money("charged_usd", *charged_usd);
@@ -715,6 +725,33 @@ pub fn new_invocation_id() -> String {
     let mut id = sha256_hex(seed.as_bytes());
     id.truncate(16);
     id
+}
+
+/// A wall-clock time in the portable run metadata format. It never enters an identity.
+pub fn created_at(time: SystemTime) -> String {
+    chrono::DateTime::<chrono::Utc>::from(time).to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+}
+
+/// The first start owns a run's name and creation time. Older records use the original
+/// plan file's modification time; later invocations cannot rename or reorder the run.
+pub fn run_metadata(events: &[Value], legacy_created: SystemTime) -> (Option<String>, String) {
+    let first = events
+        .iter()
+        .find(|event| event.get("event").and_then(Value::as_str) == Some("run_started"));
+    let name = first
+        .and_then(|event| event.get("name"))
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let timestamp = first
+        .and_then(|event| event.get("created_at"))
+        .and_then(Value::as_str)
+        .and_then(|text| chrono::DateTime::parse_from_rfc3339(text).ok())
+        .map(|time| {
+            time.with_timezone(&chrono::Utc)
+                .to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+        })
+        .unwrap_or_else(|| created_at(legacy_created));
+    (name, timestamp)
 }
 
 /// Every event of a run folder's log, oldest first (module doc). A missing file is empty.

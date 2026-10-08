@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-service-status-v1",
+  "title": "Verified local FX service status",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "kind",
+    "state",
+    "protocol_version",
+    "project_id",
+    "instance_id",
+    "pid",
+    "url"
+  ],
+  "properties": {
+    "kind": {
+      "const": "fx-service-status-v1"
+    },
+    "state": {
+      "enum": [
+        "running",
+        "stopped",
+        "unavailable",
+        "incompatible"
+      ]
+    },
+    "protocol_version": {
+      "const": 1
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "instance_id": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "pid": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "url": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^http://127\\.0\\.0\\.1:[1-9][0-9]{0,4}/$"
+    }
+  }
+}

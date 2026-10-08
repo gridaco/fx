@@ -4,6 +4,11 @@ Thanks for helping improve FX. Start with [AGENTS.md](AGENTS.md) for repository
 boundaries and guardrails. The [specifications](spec/) own public contracts;
 [the overview](docs/wg/overview.md) records the design and planned work.
 
+[Agent readiness](AGENT_READINESS.md) is the living design harness for how external
+agents discover and compose FX operations. Use its scenarios when changing the
+CLI, SDKs, lifecycle or public contracts, and update supported behavior and evidence
+alongside those changes.
+
 ## Build from source
 
 Source development needs Git, Rust/Cargo ([rustup.rs](https://rustup.rs)),
@@ -105,3 +110,33 @@ Keep tests offline and never persist credentials, authorization headers, or sign
 URLs. Any live provider work needs explicit authorization and a dollar ceiling.
 Keep committed examples and media original, with a documented rights basis for
 referenced inputs. Follow AGENTS.md for the remaining artifact and contract rules.
+
+### Observation development
+
+The shared contract is [spec/observation.md](spec/observation.md). After building the
+engine and viewer, run the credential-free integration harness:
+
+```sh
+uv run --project python python tools/check_observation.py --command target/debug/grida-fx
+```
+
+It creates fresh code-only fixture projects and verifies snapshot attachment,
+CLI/HTTP replay, slow consumers, resume, artifacts, cancellation, failure and
+standalone server lifetime. `cargo test -p grida-fx --test service --test service_run` covers project
+service readiness, ownership, restart and execution independence. Generated
+evidence stays outside Git. See the
+[fixture guide](fixtures/viewer/README.md#live-observation) for manual viewing.
+
+### Project service development
+
+[spec/service.md](spec/service.md) defines project ownership, local catalog,
+readiness and standalone behavior. After building, prepare an isolated project:
+
+```sh
+uv run --offline --no-sync --project python python tools/demo_service.py
+```
+
+The helper creates only source fixtures and prints ordinary user commands to
+start FX, plan, run and stop it. It never starts a service or executes a workflow.
+Use its fresh project to inspect uncached waits; repeated identical runs correctly
+reuse their cache. No Docker, frontend dev server or provider account is needed.

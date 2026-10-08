@@ -103,6 +103,10 @@ jobs:
       - run: cargo build --locked --bin grida-fx
       - run: python3 tools/check_viewer.py --command "$PWD/target/debug/grida-fx"
       - run: uv sync --locked --project python
+      - name: Local service and browser command integration
+        run: >-
+          GRIDA_FX_PYTHON="$PWD/python/.venv/bin/python"
+          cargo test --locked -p grida-fx --test open --test service --test service_run
       - name: conformance/run.py --strict
         env:
           GRIDA_FX_PYTHON: python/.venv/bin/python
@@ -130,6 +134,7 @@ jobs:
       - run: python3 tools/build_engine.py
       - run: uv run --locked --project python python tools/check_examples.py
       - run: uv run --locked --project python python tools/check_viewer_fixtures.py
+      - run: uv run --locked --project python python tools/check_observation.py --command "$PWD/python/src/grida/fx/_bin/grida-fx"
 
   # Every manifest states the Cargo workspace's version (tools/check_versions.py).
   versions:

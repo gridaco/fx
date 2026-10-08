@@ -9,20 +9,68 @@ releases; [the source setup](../../CONTRIBUTING.md#build-from-source) is for dev
 
 | Command | |
 |---|---|
-| `grida-fx plan <target> [inputs] [--routes file]… [--max-usd N] [--check] [--expect-cached] [--json]` | expand, check, price. Never spends. |
-| `grida-fx run <target> [inputs] [--routes file]… [--live] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--run folder] [--stand-in file.py#function]` | run; `--live` admits paid calls, needs a ceiling and reads the provider keys; `--run` names the run folder; `--stand-in` answers paid calls with your function instead, offline ([below](#stand-ins-testing-without-a-provider)) |
+| `grida-fx init [directory] [--json]` | establish a project without overwriting existing configuration |
+| `grida-fx start [--project directory] [--port N] [--background] [--open] [--json]` | serve the project's dashboard and recorded runs; foreground by default |
+| `grida-fx status [--project directory] [--json]` / `stop [--project directory] [--json]` | inspect or stop that project's service |
+| `grida-fx logs [--project directory] [--lines N]` | read a bounded tail of service logs |
+| `grida-fx plan <target> [inputs] [--routes file]… [--max-usd N] [--check] [--expect-cached] [--json] [--open] [--standalone]` | expand, check, price; optionally open the plan canvas. Never spends. |
+| `grida-fx run <target> [inputs] [--routes file]… [--live] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--name NAME \| --resume NAME \| --run folder] [--stand-in file.py#function] [--open \| --no-view] [--standalone]` | run; `--live` admits paid calls, needs a ceiling and reads the provider keys; `--name` creates a named run, `--resume` continues it, `--run` selects a folder; `--stand-in` answers paid calls with your function instead, offline ([below](#stand-ins-testing-without-a-provider)) |
 | `grida-fx reroll <run> <step-path> [--live]` / `grida-fx pick <run> <step-path> <take>` | takes ([Cost](04-cost-and-cache.md#takes)) |
 | `grida-fx takes list <target>` / `grida-fx takes mv <target> <old> <new>` | inspect or repair a takes file |
 | `grida-fx jobs [--forget <key>]` | the cache's long provider jobs, `settled` ones included ([Resuming](04-cost-and-cache.md#resuming)); `--forget` clears one once you have checked the provider |
-| `grida-fx inspect <run or workflow id> [--verify] [--json]` | summary; `--verify` re-checks every placed file against its record |
+| `grida-fx inspect <folder or workflow id or workflow id/name> [--verify] [--json] [--open] [--standalone]` | summary; a workflow ID selects its newest-created run; `--verify` re-checks every placed file; `--open` opens its canvas |
 | `grida-fx nodes [type]` | built-in and project node types, with settings and routes |
 | `grida-fx schema <target>` | the JSON Schema its `inputs:` compile to |
 | `grida-fx doctor [target]` | the keys, routes and tools a workflow needs ([below](#keys-and-live-runs)) |
 | `grida-fx lock [where] [--same <node>]… [--check]` | node version locks; repeat `--same` to confirm several |
 | `grida-fx expand`, `identity`, `price <target> [inputs]` | the expanded graph, each instance's identity, the price by phase, as JSON |
 | `grida-fx project <run>` | a run's record projected to its state, as JSON |
+| `grida-fx observe <run> [--after cursor] [--limit 256]` / `observe <run> --snapshot` | consistent snapshot or bounded recorded events, as JSON ([contract](../../spec/observation.md)) |
 
-`grida-fx --help` lists what your installation has.
+`grida-fx --help` lists what your installation has. These service commands describe
+current source behavior; installed packages gain it when that source is released.
+Use `init`, then `start --background` for normal project work. The service uses
+loopback port 8787 by default and keeps run pages available after execution exits.
+`run` prints an available run URL after initialization and before run-phase steps;
+`--open` requests browser launch. Commands never start a background service implicitly.
+Execution still works when the service is stopped.
+
+## Name a run or continue it
+
+```sh
+grida-fx run character-rig
+grida-fx run character-rig --name character_1_rig_ready
+grida-fx run character-rig --resume character_1_rig_ready
+grida-fx inspect character-rig --open
+grida-fx inspect character-rig/character_1_rig_ready --open
+```
+
+Without a name, each command creates a fresh run record; matching cached results
+can still make it finish immediately. `--name` creates once and refuses an existing
+name. `--resume` requires that name and the same current plan and execution mode:
+supply the same inputs, routes, takes and builder arguments again. It appends an
+invocation, retains recorded work and spending, and never replaces history.
+`--run PATH` remains the explicit create-or-resume folder interface, including
+for SDK users. The three options are mutually exclusive; there is no overwrite.
+
+Names are case-sensitive, start with a letter or digit, and contain at most 64
+letters, digits, underscores or hyphens. They are scoped to one project and
+recorded workflow ID/source. Inspection refuses an ID shared by several sources;
+use an actual run folder to select one precisely. A changed workflow definition
+or inputs needs a fresh run, and stays under the same workflow in the index.
+
+Put workflow inputs that overlap CLI options after `--`, or use `--inputs FILE`:
+`grida-fx run greeting --name baseline -- --name Ada`. Plan commands still accept
+`grida-fx plan greeting --name Ada` as an authored input. Check installed help:
+named runs, like the project service, describe current source until released.
+
+For independent tests and probes, `run --standalone` hosts its own viewer on an
+available port until execution ends. Projectless runs use this model by default.
+`plan --standalone` and `inspect --standalone` host their selected data until
+interrupted. `--standalone` does not disable cache reuse. `--no-view` skips run
+viewer integration and conflicts with `--open`; SDK runs use it. JSON plan/inspect
+output cannot be combined with browser-serving flags. See
+[Viewing](07-viewing.md) for the lifecycle and independent observation commands.
 
 **Exit status.** `0` when the command did what it was asked: for `run`, the run is ok and every
 `--deliver` found its output. `1` when it read everything and refused or stopped: a plan with
@@ -308,7 +356,7 @@ is asked only the rest.
   function it lacks, is refused before the run starts (exit 2).
 
   ```bash
-  grida-fx run icon --name "copper lantern" --stand-in tests/stand_in.py#answer
+  grida-fx run icon --stand-in tests/stand_in.py#answer -- --name "copper lantern"
   ```
 
   ```

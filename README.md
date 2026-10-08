@@ -36,20 +36,27 @@ and Intel, and Linux on x64 and arm64 with glibc 2.28+. Windows users can use WS
 native Windows and Alpine/musl are not supported yet. Python nodes, builders, and
 local image operations need the Python package, even when launched through npm.
 
-## Plan. Run. View.
+## Plan. Run. Inspect.
 
-For an existing workflow:
+Current source adds a persistent project dashboard. Check your installed
+`--help` first; older published releases may lack the service commands.
+For an existing workflow, start the service once:
 
 ```sh
-grida-fx plan workflows/example.yaml
-grida-fx run workflows/example.yaml
-grida-fx view workflows/example.yaml
+grida-fx init
+grida-fx start --background
+grida-fx plan workflows/example.yaml --open
+grida-fx run workflows/example.yaml --run runs/example --open
+grida-fx inspect runs/example --open
 ```
 
 A run without `--live` executes local steps and reuses cached paid results.
 New provider calls require `--live` and a spending ceiling, such as `--max-usd 5`.
-Open a recorded run with `grida-fx view --run runs/example`.
+The dashboard stays at `http://127.0.0.1:8787/` by default after execution finishes;
+`grida-fx stop` stops the service. Browser opening requires `--open`.
 Python users can substitute `python -m grida.fx` for `grida-fx`.
+The [viewing guide](docs/guide/07-viewing.md) covers independent `--standalone`
+inspection and the older `view` command.
 
 Start with [the guide](docs/guide/01-getting-started.md), or explore the
 [examples](examples/): recolor an image with code, build a looping background,

@@ -7,18 +7,18 @@ use std::io::Write;
 use tempfile::TempDir;
 use tower::ServiceExt;
 
-struct Fixture {
+pub(super) struct Fixture {
     directory: TempDir,
-    digest: String,
+    pub(super) digest: String,
     bytes: Vec<u8>,
 }
 
 impl Fixture {
-    fn new(kind: &str) -> Self {
+    pub(super) fn new(kind: &str) -> Self {
         let directory = tempfile::tempdir().unwrap();
         let bytes = b"a synthetic offline artifact".to_vec();
         let digest = file_digest(&bytes);
-        let plan = json!({
+        let mut plan = json!({
             "kind": "fx-graph-v1", "plan": "a".repeat(64),
             "workflow": {"id": "sample", "title": "Sample workflow"},
             "instances": [{"id":"draw#1", "path":"draw", "uses":"acme/draw@1", "state":"planned", "reads":[], "with":{}}],
@@ -26,6 +26,23 @@ impl Fixture {
             "inputs": {"caption":"A synthetic sample"},
             "estimate": {"low_usd":0,"high_usd":0}, "stand_in":true
         });
+        plan["pending"] = json!([]);
+        plan["estimate"]["ceiling_usd"] = Value::Null;
+        let instance = &mut plan["instances"][0];
+        instance["step"] = json!("draw");
+        instance["type"] = json!("acme/draw@1");
+        instance["take"] = json!([1]);
+        instance["key"] = Value::Null;
+        instance["identity"] = Value::Null;
+        instance["phase"] = json!(1);
+        instance["price"] = json!({"low_usd":0,"high_usd":0});
+        instance["routes"] = json!({});
+        instance["waiting_on"] = json!([]);
+        instance["judged_by"] = json!([]);
+        instance["view"] = json!(false);
+        instance["needs"] = json!([]);
+        instance["judges"] = Value::Null;
+        grida_fx_core::docs::validate(Schema::Graph, &plan, "fixture").unwrap();
         std::fs::write(directory.path().join("plan.json"), plan.to_string()).unwrap();
         let encoded =
             json!({"file":{"digest":digest,"kind":kind,"name":"sample","size":bytes.len()}});
@@ -52,7 +69,7 @@ impl Fixture {
         }
     }
 
-    fn root(&self) -> PathBuf {
+    pub(super) fn root(&self) -> PathBuf {
         self.directory.path().canonicalize().unwrap()
     }
 
@@ -60,6 +77,7 @@ impl Fixture {
         router(AppState {
             source: Source::Run(self.root()),
             authority: "127.0.0.1:43123".into(),
+            artifact_prefix: String::new(),
         })
     }
 
@@ -318,7 +336,7 @@ fn dynamic_nodes_terminated_before_start_keep_recorded_ports() {
     }
 }
 
-fn static_plan() -> Value {
+pub(super) fn static_plan() -> Value {
     let instances: Vec<Value> = ["planned", "maybe", "absent", "blocked", "failed", "done"]
         .into_iter()
         .enumerate()
@@ -353,6 +371,7 @@ async fn static_plan_api_preserves_all_planner_evidence_without_mutation() {
     let app = router(AppState {
         source,
         authority: "127.0.0.1:43123".into(),
+        artifact_prefix: String::new(),
     });
     for _ in 0..2 {
         let response = app
@@ -769,4 +788,177 @@ fn byte_ranges_cover_suffixes_and_refuse_multipart() {
     assert_eq!(byte_range("bytes=2-1", 10), None);
     assert_eq!(byte_range("bytes=0-1,3-4", 10), None);
     assert_eq!(byte_range("bytes=0-", 0), None);
+}
+
+#[tokio::test]
+async fn observation_snapshot_and_batches_share_one_record_frontier() {
+    let fixture = Fixture::new("image/png");
+    let response = fixture
+        .app()
+        .oneshot(
+            Fixture::request("/api/snapshot")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+    let captured: Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(captured["kind"], "fx-run-snapshot-v1");
+    assert_eq!(captured["view"]["state"], "failed");
+    let cursor = captured["cursor"].as_str().unwrap();
+    let mut log = FileForEvents::new(&fixture.root());
+    log.append(json!({"event":"run_started"}));
+    log.append(
+        json!({"event":"node_started", "id":"draw#1", "path":"draw", "with":{}, "reads":[]}),
+    );
+    let response = fixture
+        .app()
+        .oneshot(
+            Fixture::request(&format!("/api/events?after={cursor}&limit=1"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let batch: Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(batch["events"].as_array().unwrap().len(), 1);
+    assert_eq!(batch["events"][0]["event"], "run_started");
+    assert_eq!(batch["has_more"], true);
+    // The initial projection never includes events appended after its capture.
+    let observed = grida_fx_runtime::observation::snapshot(&fixture.root()).unwrap();
+    let view = read::read_observed(&fixture.root(), &observed)
+        .unwrap()
+        .document;
+    log.append(json!({"event":"run_finished", "ok":true, "outputs":{}}));
+    assert_eq!(view.state, "unfinished");
+    assert_eq!(view.nodes[0].state, "running");
+}
+
+#[tokio::test]
+async fn observation_errors_are_structured_and_do_not_leak_source_paths() {
+    let fixture = Fixture::new("image/png");
+    for (path, status, code) in [
+        (
+            "/api/events?after=broken",
+            StatusCode::CONFLICT,
+            "invalid_cursor",
+        ),
+        (
+            "/api/events?limit=0",
+            StatusCode::BAD_REQUEST,
+            "invalid_limit",
+        ),
+        (
+            "/api/events?limit=many",
+            StatusCode::BAD_REQUEST,
+            "invalid_limit",
+        ),
+        (
+            "/api/events?limit=1&limit=2",
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
+        ),
+        (
+            "/api/events?after=a&after=b",
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
+        ),
+    ] {
+        let response = fixture
+            .app()
+            .oneshot(Fixture::request(path).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), status);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let value: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(value["kind"], "fx-run-observation-error-v1");
+        assert_eq!(value["code"], code);
+        assert!(!String::from_utf8_lossy(&body).contains(fixture.root().to_str().unwrap()));
+    }
+}
+
+#[test]
+fn running_cost_follows_settlements_and_resume_baseline() {
+    let fixture = Fixture::new("image/png");
+    let mut log = FileForEvents::new(&fixture.root());
+    log.append(json!({"event":"run_started", "charged_usd":0.4}));
+    log.append(
+        json!({"event":"budget_settled", "charged_usd":0.1, "node_id":"draw#1", "reported":true}),
+    );
+    let current = read::read_run(&fixture.root()).unwrap().document;
+    assert_eq!(current.state, "unfinished");
+    assert!((current.charged_usd.unwrap() - 0.5).abs() < 0.0000001);
+    log.append(json!({"event":"run_cancelled", "charged_usd":0.6}));
+    assert_eq!(
+        read::read_run(&fixture.root())
+            .unwrap()
+            .document
+            .charged_usd,
+        Some(0.6)
+    );
+    log.append(json!({"event":"run_started"}));
+    log.append(
+        json!({"event":"budget_settled", "charged_usd":0.2, "node_id":"draw#1", "reported":true}),
+    );
+    assert_eq!(
+        read::read_run(&fixture.root())
+            .unwrap()
+            .document
+            .charged_usd,
+        None
+    );
+}
+
+#[test]
+fn run_projection_uses_first_recorded_name_across_resume() {
+    let fixture = Fixture::new("image/png");
+    let path = fixture.root().join("events.jsonl");
+    let events = std::fs::read_to_string(&path).unwrap();
+    let (first, rest) = events.split_once('\n').unwrap();
+    let mut first: Value = serde_json::from_str(first).unwrap();
+    first["name"] = json!("character_1_rig_ready");
+    std::fs::write(&path, format!("{first}\n{rest}")).unwrap();
+    FileForEvents::new(&fixture.root())
+        .append(json!({"event":"run_started", "name":"different_name"}));
+    assert_eq!(
+        read::read_inventory(&fixture.root())
+            .unwrap()
+            .document
+            .run_name,
+        "character_1_rig_ready"
+    );
+}
+
+#[test]
+fn run_projection_keeps_legacy_basename_for_missing_or_invalid_initial_names() {
+    for name in [
+        Value::Null,
+        json!("two words"),
+        json!("_leading"),
+        json!("café"),
+        json!("a".repeat(65)),
+        json!("/private/invalid"),
+    ] {
+        let fixture = Fixture::new("image/png");
+        let root = fixture.root();
+        let path = root.join("events.jsonl");
+        let events = std::fs::read_to_string(&path).unwrap();
+        let (first, rest) = events.split_once('\n').unwrap();
+        let mut first: Value = serde_json::from_str(first).unwrap();
+        if !name.is_null() {
+            first["name"] = name;
+        }
+        std::fs::write(&path, format!("{first}\n{rest}")).unwrap();
+        FileForEvents::new(&root).append(json!({"event":"run_started", "name":"later_valid_name"}));
+        assert_eq!(
+            read::read_inventory(&root).unwrap().document.run_name,
+            root.file_name().unwrap().to_string_lossy()
+        );
+    }
 }

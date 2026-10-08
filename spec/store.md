@@ -104,7 +104,7 @@ Once the call is answered, its call record is published and then its job record 
 
 A run keeps its record in a run folder, and links its results there from the store. The folder is for people and for the commands that read a run (`inspect`, `project`, `reroll`, `pick`). The store stays the cache: deleting a run folder loses nothing the store holds, and a copied run folder can be read on another machine.
 
-**Where.** `grida-fx run --run <folder>` runs in `<folder>`, relative to the current directory. Without `--run`, the run gets a new folder:
+**Where.** `grida-fx run --run <folder>` creates or resumes `<folder>`, relative to the current directory. Without `--run`, `--name` or `--resume`, every invocation creates a new run, even when all results come from the cache:
 
 ```
 <runs>/<workflow id>/<YYYY-MM-DD>-<n>/
@@ -114,7 +114,43 @@ A run keeps its record in a run folder, and links its results there from the sto
 - `<YYYY-MM-DD>` is the local date when the command starts.
 - `<n>` is the smallest integer from 1 for which nothing of that name exists yet. The engine claims the name by making the folder, an operation that fails when the name exists: an invocation that finds it taken meanwhile tries the next `n`, so invocations starting at once never share a new folder. A run refused before it wrote anything removes the folder again.
 
-`grida-fx inspect` also takes a workflow id in place of a folder: that workflow's newest run under `<runs>/<workflow id>/`, the folder whose `plan.json` was written last.
+**Named runs.** `run TARGET --name NAME` creates a new named run. Names match
+`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`, are case-sensitive, and are unique within
+the planning project plus the recorded workflow ID and source (`workflow.file`).
+The command atomically claims the folder; a collision is an error, including when
+the existing run has identical inputs or is unfinished. There is no overwrite.
+Named storage is `<runs>/<workflow id>/named-<source digest>/<NAME>-<name digest>/`,
+where each digest is SHA-256 of that source/name string's UTF-8 bytes. The name
+digest keeps case-distinct labels distinct on case-insensitive filesystems. This namespace
+does not enter any execution or cache identity. A refusal before writing a record
+releases a newly claimed empty folder. Naming needs no running service.
+
+`run TARGET --resume NAME` requires an existing named run of that same workflow ID
+and source. It plans the current target with the currently supplied inputs, routes,
+takes and builder arguments; it does not reconstruct an old source or restore old
+arguments. The existing same-plan and same-mode checks below apply. A missing name
+is an error, never a request to create one. `--name`, `--resume` and `--run` are
+mutually exclusive. Workflow input flags that overlap CLI options follow `--`, for
+example `run greeting --name baseline -- --name Ada`; inputs files remain another
+way to supply them. Planning's `--name Ada` still names a workflow input.
+
+`inspect WORKFLOW_ID` selects the newest-created recorded run, including failures,
+not the last successful or most recently resumed run. `inspect WORKFLOW_ID/NAME`
+selects a named run. Both refuse an ambiguous ID belonging to several recorded
+sources; an actual run folder disambiguates. Lookup is bounded to the project's
+configured runs tree, excluding symlink traversal. It uses the first `run_started`
+creation time, falling back to unchanged `plan.json` modification time for legacy
+records. Creation-time ties use a deterministic folder order. Real folder paths
+remain accepted directly.
+
+**Presentation metadata.** New `run_started` events record `created_at`, a UTC
+RFC3339 timestamp with milliseconds, and optionally `name`. Both describe the run,
+not the invocation. Resuming repeats the first event's values without changing
+creation time or name; old runs use their original plan-file time. Consumers accept
+older events without these optional fields. Neither field belongs in `plan.json`,
+the plan digest, step or call identities, prices, or cache keys. A changed definition
+or input creates a different plan within the same logical workflow (recorded ID
+and source); FX introduces no workflow revision or version registry.
 
 **Resuming.** Running in a folder that already holds a run continues it. Finished steps come back from the record and the store, and answered calls replay without being billed. A folder whose `plan.json` records a different plan digest ([identity.md](identity.md) §10), or whose `events.jsonl` holds an event with another `plan`, is refused before anything runs, with the advice to choose a new folder; so is a folder of the other mode, a stand-in run resumed without a stand-in or the reverse (*Stand-in runs* below). The engine reads both only once it holds `run.lock`, so no other invocation writes the folder between the check and the run.
 

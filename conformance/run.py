@@ -59,7 +59,7 @@ STEP_KEYS = {
 FORMATS = ("json", "jsonl", "yaml")
 # Run-event members whose values differ between machines and invocations. They are dropped only
 # from run events (objects with an "event" member), never from the data under DATA_KEYS.
-VOLATILE_KEYS = {"offset_ms", "invocation_id", "duration_ms"}
+VOLATILE_KEYS = {"offset_ms", "invocation_id", "duration_ms", "created_at"}
 DATA_KEYS = {"with", "inputs", "outputs", "request", "data", "facts", "params", "value", "contract"}
 # Which Python hosts node bodies: passed through from the caller when set.
 PYTHON_HOST = "GRIDA_FX_PYTHON"
@@ -487,17 +487,19 @@ def _jcs_integer(value: float) -> int:
 def _normal(value: object, in_data: bool = False) -> object:
     """Drop what differs between invocations; `1` and `1.0` are one number.
 
-    Timings and invocation ids are dropped from run events only (objects with an "event"
-    member), never inside the data a record carries (`with`, `outputs`, `facts`, ...), where a
-    member may have any name.
+    Timings and invocation ids are dropped from run events (objects with an "event"
+    member). Creation time is also dropped from inspect's recorded run summary.
+    Nothing inside the data a record carries (`with`, `outputs`, `facts`, ...) is
+    changed: an authored member may have any name.
     """
 
     if isinstance(value, dict):
         event = not in_data and "event" in value
+        run_summary = not in_data and {"workflow", "folder", "steps", "state"} <= value.keys()
         return {
             key: _normal(item, in_data or key in DATA_KEYS)
             for key, item in value.items()
-            if not (event and key in VOLATILE_KEYS)
+            if not (event and key in VOLATILE_KEYS) and not (run_summary and key == "created_at")
         }
     if isinstance(value, list):
         return [_normal(item, in_data) for item in value]

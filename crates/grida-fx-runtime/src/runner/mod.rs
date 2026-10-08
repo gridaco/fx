@@ -104,7 +104,7 @@ use grida_fx_core::project::Planner;
 use grida_fx_core::val::Val;
 use indexmap::IndexMap;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::mpsc;
@@ -119,6 +119,8 @@ pub struct RunOptions {
     pub folder: PathBuf,
     /// How messages name it (as typed, or relative to the working directory).
     pub label: String,
+    /// Optional run name; used only on first creation, outside execution identities.
+    pub name: Option<String>,
     /// `--yes-up-to`.
     pub yes_up_to: Option<Usd>,
     /// The workflow's takes file, project-relative (recorded in `plan.json`).
@@ -160,7 +162,22 @@ pub fn run(
     plan: Plan,
     options: RunOptions,
 ) -> Result<RunOutcome, RunError> {
-    let outcome = invoke(&engine, planner, host, plan, &options);
+    run_with_ready(engine, planner, host, plan, options, |_| {})
+}
+
+/// Runs a plan, calling `ready` after the run folder and its `run_started` event are
+/// persisted, before any run-phase step is dispatched. A host can publish an observation
+/// URL here. The callback has no result: hosts handle observation failures themselves.
+/// Planning may already have executed explicit `at: plan` steps before this boundary.
+pub fn run_with_ready(
+    engine: Arc<Engine>,
+    planner: &mut Planner,
+    host: &mut dyn NodeHost,
+    plan: Plan,
+    options: RunOptions,
+    ready: impl FnOnce(&Path),
+) -> Result<RunOutcome, RunError> {
+    let outcome = invoke(&engine, planner, host, plan, &options, ready);
     engine.handle.block_on(engine.hosts.shutdown());
     outcome
 }
@@ -340,6 +357,7 @@ fn invoke(
     host: &mut dyn NodeHost,
     plan: Plan,
     options: &RunOptions,
+    ready: impl FnOnce(&Path),
 ) -> Result<RunOutcome, RunError> {
     let env = |name: &str| std::env::var(name).ok();
     if let Some(refused) = refusal(&plan, engine.live, &env) {
@@ -436,7 +454,23 @@ fn invoke(
         display_snapshot: None,
     };
     let estimate = plan.estimate();
+    let (recorded_name, created_at) = if prior
+        .iter()
+        .any(|event| event.get("event").and_then(serde_json::Value::as_str) == Some("run_started"))
+    {
+        let legacy_created = std::fs::metadata(scheduler.folder.plan_path())
+            .and_then(|metadata| metadata.modified())
+            .unwrap_or(std::time::UNIX_EPOCH);
+        crate::events::run_metadata(&prior, legacy_created)
+    } else {
+        (
+            options.name.clone(),
+            crate::events::created_at(std::time::SystemTime::now()),
+        )
+    };
     let started = Event::RunStarted {
+        name: recorded_name,
+        created_at,
         workflow: scheduler.workflow.clone(),
         resumed: !prior.is_empty(),
         ceiling_usd: plan.ceiling,
@@ -446,7 +480,10 @@ fn invoke(
         stand_in: engine.stand_in_run(),
     };
     let outcome = match scheduler.emit(&started) {
-        Ok(()) => scheduler.conclude(first),
+        Ok(()) => {
+            ready(&options.folder);
+            scheduler.conclude(first)
+        }
         Err(error) => Err(RunError::Fatal(error)),
     };
     watchers();
@@ -1049,6 +1086,101 @@ mod tests {
     use grida_fx_core::spec::{BodyKind, NodeSpec, Retry};
     use std::collections::HashMap;
     use std::rc::Rc;
+
+    #[test]
+    fn readiness_publishes_a_readable_record_before_execution() {
+        use crate::host::process::HostSpec;
+        use grida_fx_core::host::NoHost;
+        use grida_fx_core::project::{PlanRequest, make_planner};
+        use grida_fx_providers::Adapters;
+
+        let temporary = tempfile::tempdir().unwrap();
+        let root = temporary.path().canonicalize().unwrap();
+        std::fs::write(root.join("workflow.yaml"), "fx: workflow/v1\nid: ready\ntitle: Readiness fixture\nsteps:\n  choose:\n    uses: fx/select@1\n    with: {first_of: [1]}\n").unwrap();
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let engine = Arc::new(Engine::new(
+            runtime.handle().clone(),
+            HostSpec {
+                python: root.join("unused-python"),
+                label: "unused-python".into(),
+                project_root: root.clone(),
+                sources: Vec::new(),
+            },
+            &root.join("cache"),
+            1,
+            Adapters::new(),
+            false,
+        ));
+        let mut host = NoHost;
+        let mut planner = make_planner(
+            &PlanRequest {
+                target: "workflow.yaml".into(),
+                cwd: root.clone(),
+                ..PlanRequest::default()
+            },
+            &mut host,
+        )
+        .unwrap();
+        let plan =
+            grida_fx_core::plan::make_plan(&mut planner, &mut host, None, engine.store.as_ref())
+                .unwrap();
+        assert!(plan.ok(), "{:?}", plan.problems);
+        let folder = root.join("runs/one");
+        let mut ready_called = false;
+        let outcome = run_with_ready(
+            Arc::clone(&engine),
+            &mut planner,
+            &mut host,
+            plan.clone(),
+            RunOptions {
+                folder: folder.clone(),
+                label: "runs/one".into(),
+                name: None,
+                yes_up_to: None,
+                takes_file: String::new(),
+            },
+            |observed_folder| {
+                ready_called = true;
+                assert_eq!(observed_folder, folder);
+                let snapshot = crate::observation::snapshot(observed_folder).unwrap();
+                assert_eq!(snapshot.events.len(), 1);
+                assert_eq!(snapshot.events[0]["event"], "run_started");
+            },
+        )
+        .unwrap();
+        assert!(ready_called);
+        assert!(outcome.ok, "{outcome:?}");
+        assert!(
+            crate::observation::snapshot(&folder)
+                .unwrap()
+                .events
+                .iter()
+                .any(|event| event["event"] == "run_finished")
+        );
+
+        let mut refused = plan;
+        refused
+            .problems
+            .push(Problem::new("choose", "deliberately refused"));
+        let error = run_with_ready(
+            engine,
+            &mut planner,
+            &mut host,
+            refused,
+            RunOptions {
+                folder: root.join("runs/refused"),
+                label: "runs/refused".into(),
+                name: None,
+                yes_up_to: None,
+                takes_file: String::new(),
+            },
+            |_| panic!("a refused run cannot advertise a viewer"),
+        );
+        assert!(matches!(error, Err(RunError::Refused(_))));
+    }
 
     fn instance(id: &str, step: &str, tools: &[&str], state: State) -> Instance {
         let spec = NodeSpec {

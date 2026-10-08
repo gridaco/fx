@@ -1,12 +1,14 @@
 import { StrictMode, useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import { ArrowLeft, LayoutGrid, RefreshCw, Square, Workflow } from "lucide-react";
-import { ViewerController, displayPortName, type CanvasStep, type GraphDocument, type GraphInstance, type InterfaceBinding, type PendingRepeat, type PortBinding, type ViewerRun } from "@grida/fx-web";
+import { ArrowLeft, ArrowUpRight, ChevronRight, FileText, LayoutGrid, RefreshCw, Square, Workflow } from "lucide-react";
+import { ServiceIndexProjection, ViewerController, ViewerEntryController, displayPortName, type CanvasStep, type GraphDocument, type GraphInstance, type InterfaceBinding, type PendingRepeat, type PortBinding, type ServiceEntry, type ServiceIndex, type ViewerRun } from "@grida/fx-web";
 import { PortList, Status, ValueList, WorkflowCanvas, money } from "@grida/fx-react";
 import "./style.css";
 import { SidebarResize } from "./sidebar-resize";
 
-const controller = new ViewerController();
+const entryController = new ViewerEntryController(window.location.pathname);
+const apiBase = entryController.route?.api_base ?? "/api";
+const controller = new ViewerController(undefined, { apiBase });
 const iconProps = { size: 14, strokeWidth: 1.5, "aria-hidden": true } as const;
 
 function JsonValue({ value }: { value: unknown }) {
@@ -135,7 +137,7 @@ function ResizeHandle({ side }: { side: "left" | "right" }) {
   return <div className="fx-sidebar-resize" data-resize={side} role="separator" aria-orientation="vertical" aria-label={`Resize ${side === "left" ? "workflow outline" : "inspector"}`} aria-valuemin={side === "left" ? 180 : 240} aria-valuemax={side === "left" ? 420 : 560} aria-valuenow={side === "left" ? 212 : 304} tabIndex={0} title="Drag to resize · Double-click to reset" />;
 }
 
-function App() {
+function WorkflowView() {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   useEffect(() => { void controller.refresh(); return () => controller.dispose(); }, []);
   const { view, graph, selected, loading, error, updated, scope, breadcrumbs, scopeNode } = state;
@@ -153,6 +155,7 @@ function App() {
       : <Workspace>
         <aside aria-label="Workflow outline" className="fx-outline">
           <div className="fx-workflow-heading">
+            {entryController.route?.project_id && <a href="/" className="fx-project-back"><ArrowLeft {...iconProps} />Project</a>}
             <h1>{view.workflow.title || "Workflow viewer"}</h1>
             <div className="fx-workflow-context"><span>{plan ? "Static plan" : "Run"}</span>{(run?.stand_in || plan?.stand_in) && <span className="fx-badge">Stand-in</span>}<span className="fx-readonly">Read only</span></div>
             {run && <code className="fx-run-name">{run.run_name}</code>}
@@ -165,7 +168,7 @@ function App() {
           <nav aria-label="Workflow steps" className="fx-step-nav">
             <button onClick={() => controller.select(null)} aria-current={selected === null ? "page" : undefined} className="fx-overview"><LayoutGrid {...iconProps} />{scopeNode ? "Workflow overview" : plan ? "Plan overview" : "Run overview"}</button>
             <div className="fx-list-heading"><span>Steps</span><span>{graph.nodes.length}</span></div>
-            <div>{graph.nodes.map((node) => <button key={node.id} onClick={() => controller.select(node.id)} aria-current={selected === node.id ? "page" : undefined} aria-label={`${node.title}, ${node.state}, ${node.source_id}`} title={`${node.title} · ${node.state}\n${node.source_id}`} className="fx-step-row">
+            <div>{graph.nodes.map((node) => <button key={node.id} onClick={() => controller.select(node.id)} aria-current={selected === node.id ? "page" : undefined} data-state={node.state} aria-label={`${node.title}, ${node.state}, ${node.source_id}`} title={`${node.title} · ${node.state}\n${node.source_id}`} className="fx-step-row">
               {node.kind === "workflow" ? <Workflow {...iconProps} /> : <Square {...iconProps} />}
               <span className="fx-step-label"><span>{node.title}</span><code>{node.source_id}</code></span>
               <span className="fx-state-dot" data-state={node.state} aria-hidden="true" />
@@ -181,6 +184,7 @@ function App() {
           </nav>}
           <div className="fx-canvas-surface"><WorkflowCanvas graph={graph} selected={selected} scope={scope} onSelect={controller.select} onOpenScope={controller.openScope} onBack={back} /></div>
           <div className="fx-canvas-context" title={`${view.workflow.title}${run ? ` · Run ${run.run_name}` : " · Static plan"} · Read only`}>{run ? refresh : <span className="fx-badge">Static plan · Read only</span>}</div>
+          {entryController.route?.project_id && <a href="/" className="fx-project-back fx-project-back-floating"><ArrowLeft {...iconProps} />Project</a>}
         </main>
         <aside aria-label="Step details" className="fx-inspector">
           <div className="fx-panel-heading"><span>Inspector</span><span className="fx-panel-hint">{selectedNode?.kind ? "Workflow" : selectedNode ? "Step" : "Overview"}</span></div>
@@ -191,6 +195,51 @@ function App() {
           <ResizeHandle side="right" />
         </aside>
       </Workspace>}
+  </div>;
+}
+
+function EntryTime({ entry }: { entry: ServiceEntry }) {
+  return entry.created_at
+    ? <time dateTime={entry.created_at} title={entry.created_at}>{new Date(entry.created_at).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" })}</time>
+    : <span>Creation time not recorded</span>;
+}
+
+function HistoryEntry({ entry, latest = false }: { entry: ServiceEntry; latest?: boolean }) {
+  return <li><a href={entry.url} className="fx-project-history-entry">
+    {entry.kind === "plan" ? <FileText {...iconProps} /> : <Square {...iconProps} />}
+    <code>{entry.name ?? entry.id.slice(0, 12)}</code>{latest && <span className="fx-project-latest">Latest</span>}
+    <span className="fx-project-history-time"><EntryTime entry={entry} /></span><Status state={entry.state} /><ArrowUpRight {...iconProps} />
+  </a></li>;
+}
+
+function ProjectIndex({ catalog, loading }: { catalog: ServiceIndex; loading: boolean }) {
+  const { groups } = new ServiceIndexProjection(catalog);
+  return <main className="fx-project">
+    <header className="fx-project-heading"><h1>{catalog.title}</h1><button onClick={() => void entryController.refresh()} disabled={loading} className="fx-action" aria-label="Refresh project"><RefreshCw {...iconProps} />Refresh</button></header>
+    <div className="fx-project-list-heading"><h2>Workflows</h2><span>{groups.length} {groups.length === 1 ? "workflow" : "workflows"}</span></div>
+    {groups.length ? <ul className="fx-project-list">{groups.map((group) => <li key={group.key}>
+      <a href={group.primary.url} className="fx-project-entry">
+        <Workflow {...iconProps} /><div className="fx-project-entry-name"><h3>{group.title}</h3>
+          {group.show_source && <code className="fx-project-source" title={group.workflow?.source}>{group.workflow?.source}</code>}
+          <span>{group.primary.kind === "plan" ? "Saved plan" : group.latest_known ? "Latest run" : "Run"}<code>{group.primary.name ?? group.primary.id.slice(0, 12)}</code><EntryTime entry={group.primary} /></span>
+        </div><Status state={group.primary.state} /><ArrowUpRight {...iconProps} />
+      </a>
+      {group.unfinished_runs.length > 0 && <section className="fx-project-unfinished" aria-label={`Other unfinished runs of ${group.title}`}><p>Other unfinished runs</p><ul>{group.unfinished_runs.map((entry) => <HistoryEntry key={entry.id} entry={entry} />)}</ul></section>}
+      {(group.runs.length > 0 || group.plans.length > 1) && <details className="fx-project-history"><summary><ChevronRight {...iconProps} /><span>History</span><span className="fx-project-history-count">{group.runs.length > 0 && `${group.runs.length} ${group.runs.length === 1 ? "run" : "runs"}`}{group.runs.length > 0 && group.plans.length > 0 && " · "}{group.plans.length > 0 && `${group.plans.length} ${group.plans.length === 1 ? "saved plan" : "saved plans"}`}</span></summary>
+        {group.runs.length > 0 && <div><h4>Runs</h4><ul>{group.runs.map((entry) => <HistoryEntry key={entry.id} entry={entry} latest={group.latest_known && entry === group.primary} />)}</ul></div>}
+        {group.plans.length > 0 && <div><h4>Saved plans</h4><ul>{group.plans.map((entry) => <HistoryEntry key={entry.id} entry={entry} />)}</ul></div>}
+      </details>}
+    </li>)}</ul> : <div className="fx-project-empty"><Workflow size={24} strokeWidth={1.25} aria-hidden="true" /><h2>No workflows yet</h2><p>Run a workflow or use plan --open in this project to see it here.</p></div>}
+  </main>;
+}
+
+function App() {
+  const { kind, catalog, loading, error } = useSyncExternalStore(entryController.subscribe, entryController.getSnapshot);
+  useEffect(() => { void entryController.refresh(); return () => entryController.dispose(); }, []);
+  if (kind === "viewer") return <WorkflowView />;
+  return <div className="fx-viewer">
+    {error && <p role="alert" className="fx-error">{error}{catalog && " Showing the last loaded data."}</p>}
+    {catalog ? <ProjectIndex catalog={catalog} loading={loading} /> : <main className="fx-unavailable"><h2>{loading ? "Opening FX…" : "FX unavailable"}</h2><p>{loading ? "Reading the local project or workflow." : "Check that the local FX service is running."}</p>{!loading && <button onClick={() => void entryController.refresh()} className="fx-action">Try again</button>}</main>}
   </div>;
 }
 

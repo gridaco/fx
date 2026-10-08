@@ -339,7 +339,7 @@ export async function run(target: string | Plan, options: RunOptions = {}): Prom
     throw new PlanRefused(planned);
   }
   const done = await withInputsFile(request, (inputsFile) =>
-    call(["run", ...planningArgs(request, inputsFile), ...own], callOptions(request, signal)),
+    call(["run", ...planningArgs(request, inputsFile), ...own, "--no-view"], callOptions(request, signal)),
   );
   if (done.status === INTERRUPTED) {
     throw new FxError("the run was interrupted", {

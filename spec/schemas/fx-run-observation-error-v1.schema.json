@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "$id": "urn:grida-fx:schema:fx-run-observation-error-v1",
+  "title": "Run observation error",
+  "required": [
+    "kind",
+    "code",
+    "message"
+  ],
+  "properties": {
+    "kind": {
+      "const": "fx-run-observation-error-v1"
+    },
+    "code": {
+      "type": "string",
+      "minLength": 1
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

@@ -6,6 +6,7 @@
 //! | [`engine`] | what a command shares: the runtime handle, the store, the host pool, adapters; one invocation's services; cancellation |
 //! | [`store`] | spec/store.md §1–§7: files, result/call/job records, trust, atomic writes, read sets |
 //! | [`events`] | `events.jsonl`: the fx-run-events-v1 writer and readers, value encoding |
+//! | [`observation`] | read-only snapshots and cursor-based event batches |
 //! | [`folder`] | run folders: names, `plan.json`, `run.lock`, placing files |
 //! | [`ledger`] | the ceiling, step budgets, holds and their settlement |
 //! | [`calls`] | the `capability` request path, the retry owner, route pacing |
@@ -28,6 +29,7 @@ pub mod executor;
 pub mod folder;
 pub mod host;
 pub mod ledger;
+pub mod observation;
 pub mod plantime;
 pub mod runner;
 pub mod stand_in;

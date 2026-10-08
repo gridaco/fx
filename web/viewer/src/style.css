@@ -14,6 +14,9 @@ button { touch-action: manipulation; }
 .fx-viewer { display: flex; height: 100dvh; min-height: 0; flex-direction: column; overflow: hidden; background: white; color: #27272a; font-size: 12px; }
 .fx-workflow-heading { flex-shrink: 0; padding: 10px 12px; border-bottom: 1px solid #ebebee; }
 .fx-workflow-heading h1 { overflow-wrap: anywhere; font-size: 12px; font-weight: 600; line-height: 18px; }
+.fx-project-back { display: inline-flex; align-items: center; gap: 4px; margin-bottom: 8px; color: #71717a; font-size: 10px; }
+.fx-project-back:hover { color: #27272a; }
+.fx-project-back-floating { position: absolute; left: 12px; bottom: 56px; margin: 0; padding: 4px 7px; border: 1px solid #e4e4e7; border-radius: 4px; background: white; z-index: 1; }
 .fx-workflow-context { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 5px; color: #71717a; font-size: 10px; }
 .fx-workflow-context .fx-readonly { margin-left: auto; }
 .fx-run-name { display: block; margin-top: 4px; overflow-wrap: anywhere; color: #92929c; font-size: 10px; line-height: 15px; }
@@ -49,6 +52,10 @@ button { touch-action: manipulation; }
 .fx-overview:hover, .fx-step-row:hover { background: #f0f0f3; }
 .fx-overview[aria-current="page"], .fx-step-row[aria-current="page"] { background: #eaf0f7; color: #345675; }
 .fx-step-row[aria-current="page"] .fx-step-label > span, .fx-step-row[aria-current="page"] > svg { color: #345675; }
+.fx-step-row[data-state="running"] { background: #eff6ff; box-shadow: inset 2px 0 #2563eb; color: #1d4ed8; }
+.fx-step-row[data-state="running"][aria-current="page"] { background: #dbeafe; }
+.fx-step-row[data-state="running"] .fx-step-label > span, .fx-step-row[data-state="running"] > svg { color: #1d4ed8; }
+.fx-step-row[data-state="running"] .fx-step-label > span { font-weight: 600; }
 .fx-list-heading { display: flex; align-items: center; justify-content: space-between; padding: 12px 6px 5px; color: #92929c; font-size: 10px; }
 .fx-state-dot { width: 5px; height: 5px; flex-shrink: 0; border-radius: 50%; background: #a1a1aa; }
 .fx-state-dot:is([data-state="succeeded"], [data-state="done"]) { background: #659b83; }
@@ -84,7 +91,7 @@ button { touch-action: manipulation; }
 .fx-unavailable { margin: 0 auto; max-width: 420px; padding: 64px 24px; text-align: center; }
 .fx-unavailable h2 { font-size: 14px; font-weight: 600; }
 .fx-unavailable p { margin: 8px 0 16px; color: #71717a; }
-@media (min-width: 1024px) { .fx-workspace { grid-template-columns: var(--fx-left-width, 212px) minmax(0, 1fr); } .fx-outline { display: flex; } .fx-canvas-context { display: none; } }
+@media (min-width: 1024px) { .fx-workspace { grid-template-columns: var(--fx-left-width, 212px) minmax(0, 1fr); } .fx-outline { display: flex; } .fx-canvas-context, .fx-project-back-floating { display: none; } }
 @media (min-width: 1280px) { .fx-workspace { grid-template-columns: var(--fx-left-width, 212px) minmax(0, 1fr) var(--fx-right-width, 304px); } .fx-inspector { display: flex; } }
 .preview-grid {
   background-color: #fafafa;
@@ -92,3 +99,39 @@ button { touch-action: manipulation; }
   background-size: 20px 20px;
   background-position: 0 0, 0 10px, 10px -10px, -10px 0;
 }
+.fx-project { width: 100%; max-width: 960px; margin: 0 auto; padding: 36px 28px; overflow: auto; }
+.fx-project-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 36px; }
+.fx-project-heading h1 { overflow-wrap: anywhere; font-size: 20px; font-weight: 600; letter-spacing: -0.4px; }
+.fx-project-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 10px; border-bottom: 1px solid #e4e4e7; }
+.fx-project-list-heading h2 { font-size: 12px; font-weight: 500; }
+.fx-project-list-heading > span { color: #92929c; font-size: 10px; }
+.fx-project-list > li { padding-bottom: 8px; border-bottom: 1px solid #ededf0; }
+.fx-project-entry { display: flex; align-items: center; gap: 16px; min-height: 72px; padding: 12px 8px; border-radius: 4px; }
+.fx-project-entry:hover { background: #fafafa; }
+.fx-project-entry > svg { flex-shrink: 0; color: #92929c; }
+.fx-project-entry-name { flex: 1; min-width: 0; }
+.fx-project-entry-name h3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 500; }
+.fx-project-entry-name > span { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 5px; color: #92929c; font-size: 10px; }
+.fx-project-entry-name code { font-size: 9px; }
+.fx-project-entry-name > span > code { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fx-project-source { display: block; margin-top: 4px; overflow: hidden; color: #71717a; text-overflow: ellipsis; white-space: nowrap; }
+.fx-project-history { margin-left: 38px; }
+.fx-project-history > summary { display: flex; width: fit-content; align-items: center; gap: 6px; padding: 4px 0; color: #71717a; font-size: 10px; list-style: none; }
+.fx-project-history > summary::-webkit-details-marker { display: none; }
+.fx-project-history > summary:hover { color: #27272a; }
+.fx-project-history > summary > svg { width: 12px; height: 12px; }
+.fx-project-history[open] > summary > svg { transform: rotate(90deg); }
+.fx-project-history-count { margin-left: 4px; color: #92929c; }
+.fx-project-history > div { margin: 10px 0 4px; }
+.fx-project-history h4, .fx-project-unfinished > p { margin: 0 0 5px; color: #8b8b94; font-size: 10px; font-weight: 500; }
+.fx-project-history-entry { display: flex; align-items: center; gap: 10px; min-height: 32px; padding: 6px 8px; border-radius: 4px; color: #71717a; font-size: 10px; }
+.fx-project-history-entry:hover { background: #fafafa; }
+.fx-project-history-entry > svg { flex-shrink: 0; color: #a1a1aa; }
+.fx-project-history-entry > code { flex: 1; min-width: 0; overflow: hidden; color: #52525b; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.fx-project-history-time { color: #92929c; }
+.fx-project-latest { color: #92929c; font-size: 9px; }
+.fx-project-unfinished { margin: 0 0 6px 38px; padding: 8px 0 4px 10px; border-left: 2px solid #dbe5f2; }
+.fx-project-empty { padding: 64px 16px; color: #92929c; text-align: center; }
+.fx-project-empty > svg { margin: 0 auto 12px; }
+.fx-project-empty h2 { color: #52525b; font-size: 13px; font-weight: 500; }
+.fx-project-empty p { margin-top: 6px; font-size: 12px; }

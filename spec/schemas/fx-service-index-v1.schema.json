@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-service-index-v1",
+  "title": "Local FX project catalog",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "kind",
+    "project_id",
+    "title",
+    "entries"
+  ],
+  "properties": {
+    "kind": {
+      "const": "fx-service-index-v1"
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "title": {
+      "type": "string"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "url",
+          "state"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "kind": {
+            "enum": [
+              "run",
+              "plan"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "pattern": "^/p/[a-f0-9]{64}/(runs|plans)/[a-f0-9]{64}/$"
+          },
+          "state": {
+            "type": "string",
+            "minLength": 1
+          },
+          "workflow": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "id",
+              "source"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+              },
+              "source": {
+                "description": "Exact portable recorded workflow.file; no absolute paths.",
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?![\\\\/])(?![A-Za-z]:)(?![Ff][Ii][Ll][Ee]:)(?!.*://)[^\\\\\\u0000-\\u001f\\u007f]+$"
+              }
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+          },
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "name"
+              ]
+            },
+            "then": {
+              "properties": {
+                "kind": {
+                  "const": "run"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

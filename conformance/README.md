@@ -176,10 +176,12 @@ A run a person interrupts exits 130; no case does.
   would round (one that is not the canonical form of the number it reads as:
   `9007199254740993`, but not `9007199254740992` or `10000000000000000`), a literal of more than
   21 digits by its length alone. Then:
-  - `offset_ms`, `invocation_id` and `duration_ms` are dropped from run events (objects with an
+  - `offset_ms`, `invocation_id`, `duration_ms` and `created_at` are dropped from run events (objects with an
     `event` member). The data a record carries is never touched, whatever its members are named:
     nothing under `with`, `inputs`, `outputs`, `request`, `data`, `facts`, `params`, `value` or
     `contract`.
+    `created_at` is also omitted from the recorded run summary returned by `inspect`.
+    Focused named-run tests check that creation time stays fixed across resumes.
   - An integral number below 1e21 is written as digits, as JCS writes it: `1`, `1.0` and `1e0`
     are one value, and `1e16` is `10000000000000000`.
   - The result is printed with sorted keys and an indent of 1.

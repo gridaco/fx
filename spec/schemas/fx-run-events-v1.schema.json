@@ -319,6 +319,17 @@
           "$ref": "#/$defs/interface_binding"
         }
       }
+    },
+    "name": {
+      "description": "Optional immutable run label on run_started; presentation metadata only.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+    },
+    "created_at": {
+      "description": "Immutable UTC run creation timestamp on run_started; repeated on resume, absent in legacy records.",
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
     }
   },
   "allOf": [

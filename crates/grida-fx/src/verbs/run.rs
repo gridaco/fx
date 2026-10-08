@@ -1,5 +1,6 @@
 //! `grida-fx run <target> [inputs] [--routes f]… [--arg n=v]… [--live] [--max-usd N]
-//! [--yes-up-to N] [--deliver OUTPUT=PATH]… [--run FOLDER] [--stand-in FILE.py#FUNCTION | -]`
+//! [--yes-up-to N] [--deliver OUTPUT=PATH]… [--name NAME | --resume NAME | --run FOLDER]
+//! [--stand-in FILE.py#FUNCTION | -]`
 //! (docs/guide/05-running.md; spec/store.md §8; spec/protocol.md §5.7).
 //!
 //! 0. A stand-in, before anything else (usage errors, exit 2): `--stand-in cannot be used with
@@ -30,7 +31,9 @@
 //!    store's). A plan with problems prints the plan (`plan::render::render`; a stand-in run's
 //!    with `plan::render::render_stand_in`, which never warns that the ceiling stops the run)
 //!    and exits 1 without creating a folder.
-//! 4. The folder: `--run` relative to the working directory, named as typed; else
+//! 4. The folder: `--name` atomically claims a source-scoped name; `--resume` requires its
+//!    recorded run to exist, with the current plan and mode checked by the runner. `--run` is
+//!    relative to the working directory, named as typed, and retains create/resume behavior; else
 //!    `folder::new_folder` under the planning project's runs folder, named relative to the
 //!    working directory: it makes the folder, so invocations starting at once never share one
 //!    (one that cannot be made is an error, exit 2). The refusals that need no folder
@@ -86,6 +89,9 @@ const KEY: &str = "{key}";
 
 /// Runs `grida-fx run`.
 pub fn run(args: &RunArgs) -> Result<u8, Error> {
+    for name in args.name.iter().chain(args.resume.iter()) {
+        super::run_catalog::validate_name(name)?;
+    }
     let cwd = super::planning::working_directory()?;
     let stand_in = args
         .stand_in
@@ -197,28 +203,68 @@ fn plan_and_run(
         print_line(&format!("refused: {message}"));
         return Ok(1);
     }
-    let (folder, label, made) = match &args.run {
-        Some(typed) => (cwd.join(typed), typed.clone(), false),
-        None => {
-            let runs = planner.project.runs_dir();
-            let folder = new_folder(&runs, &planner.workflow.workflow.id).map_err(|error| {
-                Error::io(
-                    &shown_path(&runs.join(&planner.workflow.workflow.id), cwd),
-                    &error,
-                )
-            })?;
-            let label = shown_path(&folder, cwd);
-            (folder, label, true)
+    let (folder, label, made) = if let Some(name) = &args.name {
+        let folder = super::run_catalog::create_named(
+            &planner.project.runs_dir(),
+            &planner.workflow.workflow.id,
+            &planner.workflow.source,
+            name,
+        )?;
+        let label = shown_path(&folder, cwd);
+        (folder, label, true)
+    } else if let Some(name) = &args.resume {
+        let folder = super::run_catalog::resume_named(
+            &planner.project.runs_dir(),
+            &planner.workflow.workflow.id,
+            &planner.workflow.source,
+            name,
+        )?;
+        let label = shown_path(&folder, cwd);
+        (folder, label, false)
+    } else {
+        match &args.run {
+            Some(typed) => (cwd.join(typed), typed.clone(), false),
+            None => {
+                let runs = planner.project.runs_dir();
+                let folder = new_folder(&runs, &planner.workflow.workflow.id).map_err(|error| {
+                    Error::io(
+                        &shown_path(&runs.join(&planner.workflow.workflow.id), cwd),
+                        &error,
+                    )
+                })?;
+                let label = shown_path(&folder, cwd);
+                (folder, label, true)
+            }
         }
     };
     print_line(&text);
     let options = RunOptions {
         folder: folder.clone(),
         label: label.clone(),
+        name: args.name.clone(),
         yes_up_to,
         takes_file: takes_file(planner),
     };
-    let ran = runner::run(Arc::clone(engine), planner, host, plan, options);
+    let mut viewer = None;
+    let project = planner.project.clone();
+    let ran = runner::run_with_ready(Arc::clone(engine), planner, host, plan, options, |root| {
+        // Observation is independent: a bind failure must not fail or hold up execution.
+        if !args.no_view && (args.standalone || !project.has_file) {
+            match RunViewer::start(engine, root, args.open) {
+                Ok(host) => viewer = Some(host),
+                Err(_) => crate::print::print_error(&Error::usage(
+                    "standalone viewer unavailable; the workflow will continue. Reopen it with inspect RUN --standalone after completion.",
+                )),
+            }
+        } else if !args.no_view {
+            super::view::report_service(
+                super::service::register_run(&project, root, args.open),
+                args.open,
+            );
+        }
+    });
+    // The run command's lifetime owns the server, including failure and cancellation.
+    drop(viewer);
     if made && ran.is_err() {
         // Refused before anything was written: the new folder goes again (only while empty).
         let _ = std::fs::remove_dir(&folder);
@@ -240,6 +286,51 @@ fn plan_and_run(
     }
     let delivered = deliver(deliveries, &outcome.outputs, &engine.store, cwd)?;
     Ok(u8::from(!(outcome.ok && delivered)))
+}
+
+/// The viewer shares the engine's executor but never awaits its scheduling or observers.
+struct RunViewer {
+    stop: Option<tokio::sync::oneshot::Sender<()>>,
+    task: tokio::task::JoinHandle<()>,
+}
+
+impl RunViewer {
+    fn start(engine: &Engine, root: &Path, open: bool) -> std::io::Result<Self> {
+        let server = engine.handle.block_on(grida_fx_viewer::bind(root, 0))?;
+        let url = server.url().to_string();
+        let (stop, stopped) = tokio::sync::oneshot::channel();
+        let task = engine.handle.spawn(async move {
+            if server
+                .serve_until(async move {
+                    let _ = stopped.await;
+                })
+                .await
+                .is_err()
+            {
+                crate::print::print_error(&Error::usage(
+                    "viewer stopped; the workflow will continue.",
+                ));
+            }
+        });
+        print_line(&labelled("view", &url));
+        if open {
+            super::view::launch_browser(url);
+        }
+        Ok(Self {
+            stop: Some(stop),
+            task,
+        })
+    }
+}
+
+impl Drop for RunViewer {
+    fn drop(&mut self) {
+        // Aborting also bounds shutdown when a browser keeps an artifact response open.
+        if let Some(stop) = self.stop.take() {
+            let _ = stop.send(());
+        }
+        self.task.abort();
+    }
 }
 
 /// Where a stand-in run's stand-in is (spec/protocol.md §5.7), checked (module doc, step 0).

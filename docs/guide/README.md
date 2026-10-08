@@ -9,9 +9,11 @@ which is normative: where this guide and `spec/` disagree, `spec/` wins. Where t
 something designed but not built yet, it says **planned**. Stable FX releases start at `0.1.0`;
 [the overview](../wg/overview.md) records shipped milestones and future work.
 
-The local viewer shows workflow plans and existing runs on a read-only node canvas.
-Custom step pages, project dashboards,
-and static snapshot exports remain planned.
+The local FX service gives a project a stable address, a run/plan index, and a
+read-only node canvas. Start with `grida-fx init` and `grida-fx start --background`;
+standalone workflows remain supported. These service commands describe current
+source behavior: check your installed version's help before using them.
+Custom step pages and static snapshot exports remain planned.
 
 ## Chapters
 

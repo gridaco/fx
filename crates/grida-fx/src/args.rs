@@ -5,14 +5,18 @@
 //! `--routes`, `--arg`, `--max-usd` with a value, as `--x v` or `--x=v`; `--check`, `--json`,
 //! `--expect-cached`; `-h`/`--help`) and the first positional (the target) stay for clap;
 //! everything else goes to `rest`, in order, for `grida_fx_core::inputs::flags`. No prefix
-//! abbreviation (FX decision). An input whose flag equals a verb option is shadowed by it.
+//! abbreviation (FX decision). `--` ends CLI option parsing: everything after it is an
+//! authored input, including flags otherwise reserved by the verb.
 //!
 //! `--check`, `--json` and `--expect-cached` are options of `plan` only, as in the predecessor:
 //! after `expand`, `identity` or `price` they are workflow input flags like any other. `run` takes
-//! the planning verbs' value options plus its own: `--yes-up-to`, `--deliver` and `--run` with a
-//! value, and the flag `--live`; `plan`'s flags are input flags after `run`. Arguments of any
-//! other verb, and of no verb, all stay for clap. `view` takes the planning value options
-//! plus `--run`, `--plan`, `--port`, and `--no-open`; saved-file modes reject input flags.
+//! the planning verbs' value options plus its own: `--yes-up-to`, `--deliver`, `--name`,
+//! `--resume` and `--run` with a
+//! value, and the flags `--live`, `--no-view` and `--open`; `plan`'s flags are input flags
+//! after `run`. Arguments of any other verb, and of no verb, all stay for clap.
+//! `view` takes the planning value options
+//! plus `--run`, `--plan`, `--port`, and `--open` (`--no-open` is kept for compatibility);
+//! saved-file modes reject input flags.
 
 use grida_fx_core::Error;
 use indexmap::IndexMap;
@@ -23,15 +27,28 @@ const PLANNING_VERBS: [&str; 6] = ["plan", "expand", "identity", "price", "run",
 /// Options of every planning verb that take a value.
 const VALUE_OPTIONS: [&str; 4] = ["--inputs", "--routes", "--arg", "--max-usd"];
 /// Flags of `plan` alone.
-const PLAN_FLAGS: [&str; 3] = ["--check", "--json", "--expect-cached"];
+const PLAN_FLAGS: [&str; 5] = [
+    "--check",
+    "--json",
+    "--expect-cached",
+    "--open",
+    "--standalone",
+];
 /// Options of `run` alone that take a value.
-const RUN_VALUE_OPTIONS: [&str; 4] = ["--yes-up-to", "--deliver", "--run", "--stand-in"];
+const RUN_VALUE_OPTIONS: [&str; 6] = [
+    "--yes-up-to",
+    "--deliver",
+    "--run",
+    "--stand-in",
+    "--name",
+    "--resume",
+];
 /// Flags of `run` alone.
-const RUN_FLAGS: [&str; 1] = ["--live"];
+const RUN_FLAGS: [&str; 4] = ["--live", "--no-view", "--open", "--standalone"];
 /// Options of `view` alone that take a value.
 const VIEW_VALUE_OPTIONS: [&str; 3] = ["--run", "--plan", "--port"];
 /// Flags of `view` alone.
-const VIEW_FLAGS: [&str; 1] = ["--no-open"];
+const VIEW_FLAGS: [&str; 2] = ["--open", "--no-open"];
 /// Help, for every verb.
 const HELP_FLAGS: [&str; 2] = ["-h", "--help"];
 
@@ -57,6 +74,16 @@ pub fn split_plan_args(argv: &[OsString]) -> (Vec<OsString>, Vec<String>) {
             for_clap.push(argument.clone());
             continue;
         };
+        if text == "--" {
+            for value in arguments {
+                if let Some(text) = value.to_str() {
+                    rest.push(text.to_string());
+                } else {
+                    for_clap.push(value.clone());
+                }
+            }
+            break;
+        }
         let name = text.split_once('=').map_or(text, |(name, _)| name);
         if VALUE_OPTIONS.contains(&name) || own_values.contains(&name) {
             for_clap.push(argument.clone());
@@ -235,6 +262,7 @@ mod tests {
             "--name",
             "Ada",
             "--live",
+            "--open",
             "--max-usd",
             "3",
             "--yes-up-to",
@@ -253,7 +281,10 @@ mod tests {
                 "grida-fx",
                 "run",
                 "case",
+                "--name",
+                "Ada",
                 "--live",
+                "--open",
                 "--max-usd",
                 "3",
                 "--yes-up-to",
@@ -266,7 +297,25 @@ mod tests {
                 "--inputs=inputs.yaml",
             ])
         );
-        assert_eq!(rest, strings(&["--name", "Ada", "--loud=yes"]));
+        assert_eq!(rest, strings(&["--loud=yes"]));
+    }
+
+    #[test]
+    fn delimiter_passes_reserved_run_flags_as_inputs() {
+        let (own, rest) = split(&[
+            "run", "case", "--name", "baseline", "--", "--name", "Ada", "--open",
+        ]);
+        assert_eq!(
+            own,
+            strings(&["grida-fx", "run", "case", "--name", "baseline"])
+        );
+        assert_eq!(rest, strings(&["--name", "Ada", "--open"]));
+        let (own, rest) = split(&["run", "case", "--resume=baseline"]);
+        assert_eq!(
+            own,
+            strings(&["grida-fx", "run", "case", "--resume=baseline"])
+        );
+        assert!(rest.is_empty());
     }
 
     #[test]
@@ -364,7 +413,7 @@ mod tests {
             "--max-usd",
             "-1",
             "--port=8787",
-            "--no-open",
+            "--open",
         ]);
         assert_eq!(
             for_clap,
@@ -380,17 +429,19 @@ mod tests {
                 "--max-usd",
                 "-1",
                 "--port=8787",
-                "--no-open",
+                "--open",
             ])
         );
         assert_eq!(rest, strings(&["--name", "Ada"]));
         for source in ["--run", "--plan"] {
-            let (for_clap, rest) = split(&["view", source, "--odd-path", "--no-open"]);
-            assert_eq!(
-                for_clap,
-                strings(&["grida-fx", "view", source, "--odd-path", "--no-open"])
-            );
-            assert!(rest.is_empty());
+            for flag in ["--open", "--no-open"] {
+                let (for_clap, rest) = split(&["view", source, "--odd-path", flag]);
+                assert_eq!(
+                    for_clap,
+                    strings(&["grida-fx", "view", source, "--odd-path", flag])
+                );
+                assert!(rest.is_empty());
+            }
         }
     }
 

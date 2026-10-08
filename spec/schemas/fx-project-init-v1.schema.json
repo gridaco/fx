@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-project-init-v1",
+  "title": "Local FX project initialization result",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "kind",
+    "created",
+    "project_root",
+    "files_created"
+  ],
+  "properties": {
+    "kind": {
+      "const": "fx-project-init-v1"
+    },
+    "created": {
+      "type": "boolean"
+    },
+    "project_root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "files_created": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "const": "fx.yaml"
+      }
+    }
+  }
+}

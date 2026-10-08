@@ -1,0 +1,49 @@
+fx: workflow/v1
+id: viewer-observation
+title: Live observation fixture
+description: Three bounded waits between local image recolors, so live activity moves across the canvas; no providers.
+
+inputs:
+  wait_seconds: { type: integer, default: 5, minimum: 0, maximum: 30 }
+  gate: { type: boolean, default: false }
+  fail_after_wait: { type: boolean, default: false }
+
+steps:
+  seed:
+    uses: ./nodes/media.py#seed
+  wait:
+    uses: ./nodes/observation.py#wait
+    with:
+      image: ${{ steps.seed.outputs.image }}
+      seconds: ${{ inputs.wait_seconds }}
+      gate: ${{ inputs.gate }}
+      fail_after_wait: ${{ inputs.fail_after_wait }}
+  warm:
+    uses: ./nodes/media.py#tint
+    with: { image: "${{ steps.wait.outputs.image }}", tone: warm }
+  wait_warm:
+    uses: ./nodes/observation.py#wait
+    with:
+      image: ${{ steps.warm.outputs.image }}
+      seconds: ${{ inputs.wait_seconds }}
+      gate: ${{ inputs.gate }}
+      fail_after_wait: false
+  violet:
+    uses: ./nodes/media.py#tint
+    with: { image: "${{ steps.wait_warm.outputs.image }}", tone: violet }
+  wait_violet:
+    uses: ./nodes/observation.py#wait
+    with:
+      image: ${{ steps.violet.outputs.image }}
+      seconds: ${{ inputs.wait_seconds }}
+      gate: ${{ inputs.gate }}
+      fail_after_wait: false
+  finished:
+    uses: ./nodes/media.py#tint
+    with: { image: "${{ steps.wait_violet.outputs.image }}", tone: cool }
+
+outputs:
+  seed: ${{ steps.seed.outputs.image }}
+  warm: ${{ steps.warm.outputs.image }}
+  violet: ${{ steps.violet.outputs.image }}
+  finished: ${{ steps.finished.outputs.image }}

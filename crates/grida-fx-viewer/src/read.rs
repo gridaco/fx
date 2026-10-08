@@ -222,7 +222,21 @@ fn node(value: &Value, steps: &Map<String, Value>, types: &Map<String, Value>) -
 
 /// Reads the browser response, checking availability of every recorded placed artifact.
 pub(crate) fn read_run(root: &Path) -> io::Result<Snapshot> {
-    let mut snapshot = read_inventory(root)?;
+    verify_inventory(root, read_inventory(root)?)
+}
+
+/// Projects exactly the observation prefix; never rereads the live event log.
+pub(crate) fn read_observed(
+    root: &Path,
+    observed: &grida_fx_runtime::observation::RunSnapshot,
+) -> io::Result<Snapshot> {
+    verify_inventory(
+        root,
+        project_inventory(root, &observed.plan, &observed.events, Vec::new())?,
+    )
+}
+
+fn verify_inventory(root: &Path, mut snapshot: Snapshot) -> io::Result<Snapshot> {
     for candidate in snapshot.candidates.values_mut() {
         candidate.artifact.available = candidate
             .paths
@@ -286,6 +300,15 @@ pub(crate) fn read_inventory(root: &Path) -> io::Result<Snapshot> {
         Err(error) if error.kind() == io::ErrorKind::NotFound => Vec::new(),
         Err(error) => return Err(error),
     };
+    project_inventory(root, &plan, &events, warnings)
+}
+
+fn project_inventory(
+    root: &Path,
+    plan: &Value,
+    events: &[Value],
+    mut warnings: Vec<String>,
+) -> io::Result<Snapshot> {
     let steps = plan
         .get("steps")
         .and_then(Value::as_object)
@@ -307,6 +330,8 @@ pub(crate) fn read_inventory(root: &Path) -> io::Result<Snapshot> {
     let mut scopes = plan.get("scopes").cloned();
     let mut node_interfaces = None;
     let mut state = "planned".to_string();
+    let mut recorded_run_name = None;
+    let mut saw_first_start = false;
     let mut stand_in = plan.get("stand_in") == Some(&Value::Bool(true));
     let mut charged = None;
     let mut outputs = json!({});
@@ -315,17 +340,17 @@ pub(crate) fn read_inventory(root: &Path) -> io::Result<Snapshot> {
         collect_object(&current.parameters, None, &mut candidates);
     }
     for event in events {
-        if text(&event, "kind") != Some("fx-run-events-v1") {
+        if text(event, "kind") != Some("fx-run-events-v1") {
             warnings.push("An unsupported event kind was ignored.".into());
             continue;
         }
-        if let (Some(expected), Some(recorded)) = (text(&plan, "plan"), text(&event, "plan"))
+        if let (Some(expected), Some(recorded)) = (text(plan, "plan"), text(event, "plan"))
             && expected != recorded
         {
             warnings.push("An event for another plan was ignored.".into());
             continue;
         }
-        match text(&event, "event") {
+        match text(event, "event") {
             Some("scopes_updated") => {
                 scopes = Some(event.get("scopes").cloned().unwrap_or(Value::Null));
                 node_interfaces = Some(
@@ -336,10 +361,25 @@ pub(crate) fn read_inventory(root: &Path) -> io::Result<Snapshot> {
                 );
             }
             Some("run_started") => {
+                if !saw_first_start {
+                    recorded_run_name = text(event, "name")
+                        .filter(|name| super::service::safe_name(name))
+                        .map(str::to_owned);
+                    saw_first_start = true;
+                }
                 state = "unfinished".into();
-                charged = None;
+                charged = event.get("charged_usd").and_then(Value::as_f64);
                 outputs = json!({});
                 stand_in |= event.get("stand_in") == Some(&Value::Bool(true));
+            }
+            Some("budget_settled") => {
+                // The event records this call's booked charge; run_started supplies the
+                // prior-invocation baseline. Absent older baseline evidence stays unknown.
+                if let (Some(total), Some(settled)) =
+                    (charged, event.get("charged_usd").and_then(Value::as_f64))
+                {
+                    charged = Some(total + settled);
+                }
             }
             Some("run_finished") => {
                 state = if event.get("ok") == Some(&Value::Bool(true)) {
@@ -358,12 +398,12 @@ pub(crate) fn read_inventory(root: &Path) -> io::Result<Snapshot> {
                 outputs = json!({});
             }
             Some(name @ ("node_started" | "node_finished" | "node_failed" | "node_skipped")) => {
-                let Some(id) = text(&event, "id") else {
+                let Some(id) = text(event, "id") else {
                     continue;
                 };
                 let index = if let Some(index) = nodes.iter().position(|entry| entry.id == id) {
                     index
-                } else if let Some(entry) = node(&event, &steps, &types) {
+                } else if let Some(entry) = node(event, &steps, &types) {
                     nodes.push(entry);
                     nodes.len() - 1
                 } else {
@@ -372,7 +412,7 @@ pub(crate) fn read_inventory(root: &Path) -> io::Result<Snapshot> {
                 let current = &mut nodes[index];
                 // Runtime evidence is authoritative even when a dynamically-created node
                 // failed or was blocked before dispatch. Absence preserves older records.
-                if let Some(uses) = text(&event, "uses") {
+                if let Some(uses) = text(event, "uses") {
                     current.uses = Some(uses.to_string());
                 }
                 if let Some(ports) = event.get("ports").filter(|v| v.is_object()) {
@@ -401,10 +441,10 @@ pub(crate) fn read_inventory(root: &Path) -> io::Result<Snapshot> {
                         current.cache = None;
                         current.outputs = json!({});
                         current.duration_ms = None;
-                        if let Some(path) = text(&event, "path") {
+                        if let Some(path) = text(event, "path") {
                             current.path = path.into();
                         }
-                        current.uses = text(&event, "uses")
+                        current.uses = text(event, "uses")
                             .map(str::to_string)
                             .or(current.uses.take());
                         current.reads = strings(event.get("reads"));
@@ -413,7 +453,7 @@ pub(crate) fn read_inventory(root: &Path) -> io::Result<Snapshot> {
                     "node_finished" => {
                         current.state = "succeeded".into();
                         current.outputs = object(event.get("outputs"));
-                        current.cache = text(&event, "cache").map(str::to_string);
+                        current.cache = text(event, "cache").map(str::to_string);
                         current.error = None;
                         let placed_step = step_folder(&current.path, &takes_of_id(&current.id));
                         collect_object(
@@ -431,9 +471,9 @@ pub(crate) fn read_inventory(root: &Path) -> io::Result<Snapshot> {
                         .into();
                         current.outputs = json!({});
                         current.cache = None;
-                        current.error = text(&event, "error")
+                        current.error = text(event, "error")
                             .filter(|s| !s.is_empty())
-                            .or_else(|| text(&event, "reason"))
+                            .or_else(|| text(event, "reason"))
                             .map(str::to_string);
                     }
                 }
@@ -463,7 +503,7 @@ pub(crate) fn read_inventory(root: &Path) -> io::Result<Snapshot> {
     scopes = super::scopes::project_run(
         scopes,
         node_interfaces.as_ref(),
-        &plan,
+        plan,
         &mut nodes,
         &mut warnings,
     );
@@ -473,9 +513,10 @@ pub(crate) fn read_inventory(root: &Path) -> io::Result<Snapshot> {
     let document = RunDocument {
         kind: "fx-viewer-run-v1",
         workflow,
-        run_name: root
-            .file_name()
-            .map_or_else(|| "Run".into(), |name| name.to_string_lossy().into_owned()),
+        run_name: recorded_run_name.unwrap_or_else(|| {
+            root.file_name()
+                .map_or_else(|| "Run".into(), |name| name.to_string_lossy().into_owned())
+        }),
         state,
         stand_in,
         charged_usd: charged,

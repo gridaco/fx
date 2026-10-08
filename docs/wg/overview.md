@@ -32,6 +32,10 @@ FX grew out of **gnode**, the Python engine inside [softmarshmallow/stage-gen](h
 
 ## Decisions
 
+[Agent readiness](../../AGENT_READINESS.md) tracks the user intents, vocabulary,
+operation sequences and acceptance scenarios used to evaluate these designs.
+It distinguishes implemented behavior, ratified contracts and proposed capabilities.
+
 | | Decision | Status |
 |---|---|---|
 | 1 | **FX is standalone.** It owns its provider adapters, and users bring their own keys from the environment (`OPENROUTER_API_KEY`, `FAL_KEY`, …; later `GG_API_KEY`). FX depends on no Grida package. | ratified |
@@ -46,6 +50,13 @@ FX grew out of **gnode**, the Python engine inside [softmarshmallow/stage-gen](h
 | 10 | **Document versions restart at v1 in the `fx` namespace** (`fx: workflow/v1`, `fx-graph-v1`, …). "Identity v3" and "protocol v2" below are design names relative to gnode. Authored YAML documents carry `fx: <doc>/v1`; machine-written JSON carries `"kind": "fx-<doc>-v1"`. | in the approved plan |
 | 11 | **Initial publication waited for trusted publishing; that bootstrap is complete.**<br>• The original decision required the owner to set up trusted publishing (OIDC) before publication. npm sets that up only on a package that already exists, so [RELEASING.md](../../RELEASING.md) records the first-publish bootstrap. Stable `0.1.0` is now published on both registries.<br>• For source development, `tools/build_engine.py` builds the engine into a checkout's Python SDK, and [examples/](../../examples/) prove that path in CI.<br>• stage-gen takes this repository as a submodule at `third_party/fx`, with a path dependency on its `python/`, and FX can be changed in place there. Detaching later changes that dependency line, not stage-gen's imports. | the owner's direction (2026-10-06) |
 | 12 | **No cache replay.** stage-gen moves onto FX with an empty cache, and gnode is deleted in the same step, with no period of running both engines. This replaces the replay milestone 2 first planned; [milestone 2](#milestone-2-stage-gen-moves-onto-fx) says why. | the owner's decision (2026-10-06) |
+| 13 | **Run observation is a public contract.** FX will expose versioned, read-only execution events for independent consumers; the built-in viewer must use the same observation boundary. Recorded events remain authoritative. Ordered reads, cursor/replay semantics, compatibility and observer independence are specified before a follow interface is advertised as stable. [Run observation](../../spec/observation.md) records the wire interface, guarantees, lifecycle and verification. | v1 ratified and implemented in source (2026-10-08) |
+
+The [local service contract](../../spec/service.md) is ratified and implemented in
+source (2026-10-08): optional project initialization, a native foreground or
+background FX service, fixed-port project browsing, persistent run/plan routes,
+and explicit standalone inspection. Workflow processes retain execution ownership.
+OS supervision and machine-wide aggregation remain later work.
 
 ## Names
 
@@ -166,9 +177,10 @@ Milestone 2 has passed. The published preview `v0.1.0-alpha.2` has also passed i
 - The TypeScript node host for `@grida/fx`.
 - GG as a provider.
 - The `grida fx` umbrella.
-- Views: a [local workflow-plan and run viewer](../guide/07-viewing.md), with a
-  read-only node canvas, is implemented;
-  [project browsing, custom views, snapshots, and lifecycle decisions](../../TODO.md#standalone-workflow-and-run-viewer) remain later work.
+- Views: the [local workflow-plan and run viewer](../guide/07-viewing.md), read-only
+  node canvas, live observation and persistent project service are implemented in
+  source. [Custom views, portable snapshots and optional OS supervision](../../TODO.md#workflow-and-run-viewer)
+  remain later work.
 - Standard-library node bodies in Rust, with a planned rekey (decision 8). This also makes their outputs the same bytes on every platform. Today Pillow's Linux x86-64 build writes other PNG bytes than its macOS arm64 build for some pictures, so a cache filled on one platform misses on the other for every paid call downstream of a std picture output.
 
 ## Identity v3

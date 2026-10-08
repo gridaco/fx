@@ -1,12 +1,15 @@
-//! `grida-fx inspect <run | workflow id> [--verify] [--json]` (spec/store.md §8).
+//! `grida-fx inspect <run | workflow id | workflow id/name> [--verify] [--json]` (spec/store.md §8).
 //!
-//! The folder: `<run>` relative to the working directory when it is a folder or has more than one
-//! path part; else the newest run of that workflow id under the runs folder of the project found
-//! from the working directory (the folder whose `plan.json` was written last; the greater name
-//! when two were written at once); none: `no run folder <run>, and no runs of a workflow <run>
-//! here` (exit 2). A folder without a readable fx-graph-v1 `plan.json` is `<run> is not a run
-//! folder` (exit 2). The log is read as `project` reads it; a folder with no log has run nothing.
-//! Nothing is written.
+//! An existing folder or explicit path is inspected directly. Otherwise a workflow ID opens
+//! its newest-created recorded run, including failures, and `workflow/name` opens its named
+//! run. Distinct recorded sources sharing an ID are ambiguous and require an explicit path.
+//! Creation time comes from the first `run_started`, falling back to the immutable plan file's
+//! modification time for older records; resume does not reorder history. Discovery is bounded
+//! to the configured runs tree and does not follow symlinks. A folder without a readable
+//! fx-graph-v1 `plan.json` is `<run> is not a run folder` (exit 2). The log is read as `project`
+//! reads it; a folder with no log has run nothing.
+//! Text/JSON inspection writes nothing. Browser inspection may register the run in
+//! the selected project's private catalog; standalone inspection serves it directly.
 //!
 //! The steps: each plan instance that is not absent, in plan order, then each instance only the
 //! log names, in the order the log first names it. The last `node_*` event decides a step's state
@@ -76,50 +79,54 @@ pub fn run(args: &InspectArgs) -> Result<u8, Error> {
             print_line(&line);
         }
     }
-    Ok(u8::from(
-        verification.is_some_and(|v| !v.problems.is_empty()),
-    ))
+    let status = u8::from(verification.is_some_and(|v| !v.problems.is_empty()));
+    if args.open || args.standalone {
+        let project = Project::find(&cwd)?;
+        if args.standalone || !project.has_file {
+            super::view::serve(None, Some(&folder), 0, args.open)?;
+        } else {
+            super::view::report_service(
+                super::service::register_run(&project, &folder, args.open),
+                args.open,
+            );
+        }
+    }
+    Ok(status)
 }
 
 /// The run folder `given` names, and how messages name it (module doc).
 fn find_folder(given: &str, cwd: &Path) -> Result<(PathBuf, String), Error> {
     let folder = cwd.join(given);
-    let parts = Path::new(given)
-        .components()
-        .filter(|c| !matches!(c, Component::CurDir))
-        .count();
-    if folder.is_dir() || parts > 1 {
+    if folder.is_dir() {
         return Ok((folder, given.to_string()));
     }
-    let project = Project::find(cwd)?;
-    newest_run(&project.runs_dir().join(given))
-        .map(|found| {
+    let parts: Vec<_> = Path::new(given)
+        .components()
+        .filter(|part| !matches!(part, Component::CurDir))
+        .collect();
+    let selector = match parts.as_slice() {
+        [Component::Normal(id)] => id.to_str().map(|id| (id, None)),
+        [Component::Normal(id), Component::Normal(name)] => id
+            .to_str()
+            .zip(name.to_str())
+            .filter(|(_, name)| super::run_catalog::validate_name(name).is_ok())
+            .map(|(id, name)| (id, Some(name))),
+        _ => None,
+    };
+    if let Some((id, name)) = selector {
+        let project = Project::find(cwd)?;
+        if let Some(found) = super::run_catalog::resolve(&project.runs_dir(), id, name)? {
             let label = shown_path(&found, cwd);
-            (found, label)
-        })
-        .ok_or_else(|| {
-            Error::usage(format!(
+            return Ok((found, label));
+        }
+        if name.is_none() {
+            return Err(Error::usage(format!(
                 "no run folder {given}, and no runs of a workflow {given} here"
-            ))
-        })
-}
-
-/// The folder under `runs` whose `plan.json` was written last.
-fn newest_run(runs: &Path) -> Option<PathBuf> {
-    std::fs::read_dir(runs)
-        .ok()?
-        .flatten()
-        .filter_map(|entry| {
-            let path = entry.path();
-            let written = std::fs::metadata(path.join("plan.json"))
-                .ok()
-                .filter(std::fs::Metadata::is_file)?
-                .modified()
-                .ok()?;
-            path.is_dir().then(|| (written, entry.file_name(), path))
-        })
-        .max_by(|a, b| (a.0, &a.1).cmp(&(b.0, &b.1)))
-        .map(|(_, _, path)| path)
+            )));
+        }
+    }
+    // An explicit path still reaches the normal recorded-run validation and error messages.
+    Ok((folder, given.to_string()))
 }
 
 /// A file a succeeded step placed.
@@ -146,6 +153,8 @@ struct StepView {
 #[derive(Debug, Clone, PartialEq)]
 struct RunView {
     workflow: String,
+    name: Option<String>,
+    created_at: Option<String>,
     /// A stand-in run: its `plan.json` or a `run_started` says so.
     stand_in: bool,
     state: &'static str,
@@ -228,7 +237,16 @@ impl RunView {
             .into_iter()
             .map(|(id, entry)| step_view(id, entry, ended))
             .collect();
+        let first_start = events
+            .iter()
+            .find(|event| event_name(event) == Some("run_started"));
         RunView {
+            name: first_start
+                .and_then(|event| text(event, "name"))
+                .map(str::to_string),
+            created_at: first_start
+                .and_then(|event| text(event, "created_at"))
+                .map(str::to_string),
             workflow: workflow_id(plan).to_string(),
             stand_in,
             state,
@@ -416,6 +434,7 @@ fn text_lines(
     } else {
         ""
     };
+    let folder_name = view.name.as_deref().unwrap_or(folder_name);
     let mut lines = vec![
         format!("{}  \u{b7}  {folder_name}{stand_in}", view.workflow),
         labelled(
@@ -479,6 +498,12 @@ fn json_document(view: &RunView, folder: &str, verification: Option<&Verificatio
             "steps": steps,
         }
     });
+    if let Some(name) = &view.name {
+        document["run"]["name"] = json!(name);
+    }
+    if let Some(created_at) = &view.created_at {
+        document["run"]["created_at"] = json!(created_at);
+    }
     if view.stand_in {
         document["run"]["stand_in"] = Value::Bool(true);
     }
@@ -858,7 +883,12 @@ mod tests {
             let folder = root.join("runs/case").join(name);
             std::fs::create_dir_all(&folder).unwrap();
             let plan = folder.join("plan.json");
-            std::fs::write(&plan, "{}").unwrap();
+            std::fs::write(
+                &plan,
+                json!({"kind":"fx-graph-v1","workflow":{"id":"case","file":"workflow.yaml"}})
+                    .to_string(),
+            )
+            .unwrap();
             let when = std::time::SystemTime::now() - std::time::Duration::from_secs(age);
             std::fs::File::options()
                 .write(true)

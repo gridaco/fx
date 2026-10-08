@@ -9,10 +9,13 @@ pub mod inspect;
 pub mod jobs;
 pub mod lock;
 pub mod nodes;
+pub mod observe;
 pub mod planning;
 pub mod project;
 pub mod run;
+mod run_catalog;
 pub mod schema;
+pub mod service;
 pub mod takes;
 pub mod view;
 

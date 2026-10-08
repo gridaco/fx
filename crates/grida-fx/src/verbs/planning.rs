@@ -33,7 +33,7 @@ pub enum PlanVerb {
 pub fn run(verb: PlanVerb, args: &PlanArgs) -> Result<u8, Error> {
     let (plan, planner) = planned(args)?;
     let refused = u8::from(!plan.ok());
-    Ok(match verb {
+    let status = match verb {
         PlanVerb::Plan => {
             if args.json {
                 print_json(&output::graph_document(&plan, &planner));
@@ -61,7 +61,19 @@ pub fn run(verb: PlanVerb, args: &PlanArgs) -> Result<u8, Error> {
             print_json(&output::price_document(&plan));
             refused
         }
-    })
+    };
+    if verb == PlanVerb::Plan && (args.open || args.standalone) {
+        let graph = output::graph_document(&plan, &planner);
+        if args.standalone || !planner.project.has_file {
+            super::view::serve(Some(graph), None, 0, args.open)?;
+        } else {
+            super::view::report_service(
+                super::service::register_plan(&planner.project, &graph, args.open),
+                args.open,
+            );
+        }
+    }
+    Ok(status)
 }
 
 /// Uses the same offline planner as `plan` to materialize a browser's static graph.

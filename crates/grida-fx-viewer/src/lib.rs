@@ -1,15 +1,19 @@
-//! A foreground, read-only browser viewer for an FX run or a materialized plan.
+//! Read-only browser views for FX runs and materialized plans, hosted independently or by a
+//! project service with a private local catalog.
 //!
 //! The caller owns argument parsing, browser opening and process interruption. This crate binds
-//! loopback only and starts no workflow, provider adapter, node host, daemon, or project scan.
+//! loopback only and starts no workflow, provider adapter or node host. Service discovery is
+//! confined to the explicitly configured run directory.
 
 mod read;
 mod scopes;
+pub mod service;
 
 pub use read::{Artifact, Node, RunDocument};
 
 use axum::body::Body;
-use axum::extract::{Path as RoutePath, Request, State};
+use axum::extract::rejection::QueryRejection;
+use axum::extract::{Path as RoutePath, Query, Request, State};
 use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
@@ -17,7 +21,9 @@ use axum::routing::get;
 use axum::{Json, Router};
 use grida_fx_core::docs::{Schema, validate};
 use grida_fx_core::value::is_digest;
+use grida_fx_runtime::observation;
 use rust_embed::RustEmbed;
+use serde::Deserialize;
 use serde_json::Value;
 use std::io;
 use std::net::{Ipv4Addr, SocketAddr};
@@ -40,6 +46,7 @@ enum Source {
 struct AppState {
     source: Source,
     authority: String,
+    artifact_prefix: String,
 }
 
 /// A bound server. The caller can print its actual address before opening a browser.
@@ -59,13 +66,25 @@ impl Server {
     pub async fn serve(self) -> io::Result<()> {
         axum::serve(self.listener, self.app).await
     }
+
+    /// Stops accepting requests when the caller ends this invocation.
+    pub async fn serve_until(
+        self,
+        stop: impl std::future::Future<Output = ()> + Send + 'static,
+    ) -> io::Result<()> {
+        axum::serve(self.listener, self.app)
+            .with_graceful_shutdown(stop)
+            .await
+    }
 }
 
 /// Validates one existing run folder and binds loopback. Port zero lets the OS choose safely.
 pub async fn bind(run: &Path, port: u16) -> io::Result<Server> {
     let root = run.canonicalize()?;
     let checked = root.clone();
-    tokio::task::spawn_blocking(move || read::read_run(&checked))
+    // Initial hosting checks records only. Artifact hashing belongs to observers,
+    // so large files cannot hold up a workflow before its first step.
+    tokio::task::spawn_blocking(move || read::read_inventory(&checked))
         .await
         .map_err(io::Error::other)??;
     bind_source(Source::Run(root), port).await
@@ -91,7 +110,11 @@ async fn bind_source(source: Source, port: u16) -> io::Result<Server> {
         tokio::net::TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, port))).await?;
     let authority = listener.local_addr()?.to_string();
     let url = format!("http://{authority}/");
-    let app = router(AppState { source, authority });
+    let app = router(AppState {
+        source,
+        authority,
+        artifact_prefix: String::new(),
+    });
     Ok(Server { listener, app, url })
 }
 
@@ -100,6 +123,8 @@ fn router(state: AppState) -> Router {
     Router::new()
         .route("/api/view", get(view_document))
         .route("/api/run", get(run_document))
+        .route("/api/snapshot", get(observation_snapshot))
+        .route("/api/events", get(observation_events))
         .route("/api/artifacts/{digest}", get(artifact))
         .route("/api/{*path}", get(api_missing))
         .fallback(get(asset))
@@ -168,7 +193,8 @@ async fn run_document(State(state): State<Arc<AppState>>) -> Response {
     };
     let root = root.clone();
     match tokio::task::spawn_blocking(move || read::read_run(&root)).await {
-        Ok(Ok(snapshot)) => {
+        Ok(Ok(mut snapshot)) => {
+            prefix_artifacts(&mut snapshot.document, &state.artifact_prefix);
             let mut response = Json(snapshot.document).into_response();
             response
                 .headers_mut()
@@ -180,6 +206,118 @@ async fn run_document(State(state): State<Arc<AppState>>) -> Response {
             "The selected run cannot be read. Check its plan and record files.",
         ),
     }
+}
+
+fn prefix_artifacts(document: &mut RunDocument, prefix: &str) {
+    for artifact in &mut document.artifacts {
+        if let Some(url) = &mut artifact.url {
+            *url = format!("{prefix}{url}");
+        }
+    }
+}
+
+/// A display projection and its cursor use the same captured event prefix.
+async fn observation_snapshot(State(state): State<Arc<AppState>>) -> Response {
+    let Source::Run(root) = &state.source else {
+        return observation_failure("unavailable", "A static plan has no recorded run.");
+    };
+    let root = root.clone();
+    match tokio::task::spawn_blocking(move || {
+        let captured = observation::snapshot(&root)?;
+        let view = read::read_observed(&root, &captured)
+            .map_err(|_| ())
+            .ok()
+            .map(|snapshot| snapshot.document);
+        Ok::<_, observation::ObservationError>((captured, view))
+    })
+    .await
+    {
+        Ok(Ok((captured, Some(mut view)))) => {
+            prefix_artifacts(&mut view, &state.artifact_prefix);
+            let mut value = serde_json::to_value(captured).expect("serializable snapshot");
+            value["view"] = serde_json::to_value(view).expect("serializable view");
+            observed_json(value)
+        }
+        Ok(Err(error)) => observed_error(error),
+        _ => observation_failure("unavailable", "The selected run cannot be projected."),
+    }
+}
+
+#[derive(Deserialize)]
+struct EventQuery {
+    after: Option<String>,
+    limit: Option<String>,
+}
+
+async fn observation_events(
+    State(state): State<Arc<AppState>>,
+    query: Result<Query<EventQuery>, QueryRejection>,
+) -> Response {
+    let Source::Run(root) = &state.source else {
+        return observation_failure("unavailable", "A static plan has no recorded run.");
+    };
+    let query = match query {
+        Ok(Query(query)) => query,
+        Err(_) => {
+            return observation_failure(
+                "invalid_request",
+                "Observation query parameters are malformed.",
+            );
+        }
+    };
+    let limit = match query.limit.as_deref() {
+        None => observation::DEFAULT_LIMIT,
+        Some(value) => match value.parse::<usize>() {
+            Ok(limit) => limit,
+            Err(_) => {
+                return observation_failure(
+                    "invalid_limit",
+                    "Limit must be an integer from 1 to 1024.",
+                );
+            }
+        },
+    };
+    let root = root.clone();
+    match tokio::task::spawn_blocking(move || {
+        observation::batch(&root, query.after.as_deref(), limit)
+    })
+    .await
+    {
+        Ok(Ok(batch)) => observed_json(serde_json::to_value(batch).expect("serializable batch")),
+        Ok(Err(error)) => observed_error(error),
+        _ => observation_failure("unavailable", "The selected run cannot be read."),
+    }
+}
+
+fn observed_json(value: Value) -> Response {
+    let mut response = Json(value).into_response();
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
+
+fn observation_failure(code: &str, message: &str) -> Response {
+    let status = match code {
+        "invalid_cursor" | "run_changed" => StatusCode::CONFLICT,
+        "invalid_limit" | "unsupported_version" | "invalid_request" => StatusCode::BAD_REQUEST,
+        _ => StatusCode::UNPROCESSABLE_ENTITY,
+    };
+    let mut response = observed_json(serde_json::json!({
+        "kind": "fx-run-observation-error-v1", "code": code, "message": message
+    }));
+    *response.status_mut() = status;
+    response
+}
+
+fn observed_error(error: observation::ObservationError) -> Response {
+    let value = serde_json::to_value(error).expect("serializable observation error");
+    observation_failure(
+        value["code"].as_str().unwrap_or("unavailable"),
+        value["message"]
+            .as_str()
+            .unwrap_or("The selected run cannot be read."),
+    )
 }
 
 async fn api_missing() -> Response {

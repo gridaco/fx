@@ -569,6 +569,7 @@ def test_run_plans_then_runs_in_the_folder_given(fake: Fake, project: Path) -> N
         "--live",
         "--yes-up-to=0.5",
         "--run=runs/mine",
+        "--no-view",
     ]
     assert run_call["inputs"] == {inputs_file: '{"poster": "inputs/poster.png"}\n'}
     assert run_call["cwd"] == os.path.realpath(project)
@@ -580,7 +581,7 @@ def test_run_plans_then_runs_in_the_folder_given(fake: Fake, project: Path) -> N
 def test_run_reads_the_folder_from_the_summary(fake: Fake, project: Path) -> None:
     fake.runs(folder="runs/gallery/2026-10-06-1")
     result = fx.run("gallery", cwd=project)
-    assert fake.calls[-1]["argv"] == ["run", "gallery"]
+    assert fake.calls[-1]["argv"] == ["run", "gallery", "--no-view"]
     assert result.run_dir == project / "runs" / "gallery" / "2026-10-06-1"
     assert len(result.events) == len(EVENTS)
 
@@ -759,6 +760,7 @@ def test_a_plan_runs_as_it_was_planned(fake: Fake, project: Path) -> None:
         "--max-usd=1",
         "--live",
         "--run=runs/p",
+        "--no-view",
     ]
     assert calls[-1]["cwd"] == os.path.realpath(project)
     assert result.run_dir == project / "runs" / "p"
@@ -991,7 +993,9 @@ def test_a_stand_in_run_serves_the_engine_on_its_standard_input(fake: Fake, proj
 
     result = fx.run("gallery", cwd=project, max_usd=1, run_dir="runs/s", stand_in=answer)
     # No plan and no price first: the run plans.
-    assert fake.invocations == [["run", "gallery", "--max-usd=1", "--run=runs/s", "--stand-in=-"]]
+    assert fake.invocations == [
+        ["run", "gallery", "--max-usd=1", "--run=runs/s", "--stand-in=-", "--no-view"]
+    ]
     initialized, answered, shut_down = fake.stand_in
     assert initialized["result"]["protocol"] == "fx-node-protocol-v1"
     assert initialized["result"]["host"]["language"] == "python"
@@ -1038,7 +1042,7 @@ def test_a_plan_runs_with_a_stand_in(fake: Fake, project: Path) -> None:
     fake.stands_in([])
     planned = fx.plan("gallery", cwd=project)
     result = fx.run(planned, run_dir="runs/p", stand_in=lambda call: fx.DECLINE)
-    assert fake.invocations[-1] == ["run", "gallery", "--run=runs/p", "--stand-in=-"]
+    assert fake.invocations[-1] == ["run", "gallery", "--run=runs/p", "--stand-in=-", "--no-view"]
     assert [argv[0] for argv in fake.invocations] == ["plan", "price", "run"]
     assert result.stand_in
 

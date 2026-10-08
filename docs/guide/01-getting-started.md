@@ -48,7 +48,24 @@ The first workflow below uses `image.check_alpha`, so it needs Python.
 
 ## A project
 
-A project is a folder with an `fx.yaml` in it:
+A project is a folder with an `fx.yaml` in it. In current source, the standard
+setup is:
+
+```sh
+grida-fx init
+grida-fx start --background
+grida-fx status --json
+```
+
+`init` creates only a minimal `fx.yaml`; it preserves existing configuration and
+does not install dependencies or start anything. `start` serves the bundled
+dashboard at `http://127.0.0.1:8787/`. Add `--open` to open it, or omit
+`--background` to keep the service in your terminal. `grida-fx stop` stops the
+service without stopping workflows or deleting their records. Background mode
+survives the launching command; it does not install crash or login supervision.
+Check `grida-fx --help` first: older published versions may lack these commands.
+
+As you author workflows and run them, a project can look like this:
 
 ```
 my-assets/
@@ -59,7 +76,11 @@ my-assets/
   inputs/             # files you feed in
   runs/               # every run, one folder each   (created by grida-fx)
   .fx/cache/          # content-addressed results    (created by grida-fx)
+  .fx/service/        # local service state and catalog (created by grida-fx)
 ```
+
+The initializer leaves routes and budgets to you. For the paid example below,
+extend its configuration:
 
 ```yaml
 # fx.yaml
@@ -85,6 +106,11 @@ folder with an `fx.yaml` of its own keeps that project as its home: its `./` pat
 route defaults are that project's, with your `routes:` winning. The runs, the cache, the budget, the
 route tables and the takes file (`<id>.takes.yaml` at your root) stay those of the project you run
 from.
+
+Keep `runs/` and `.fx/` out of source control. A project file is recommended,
+not required for execution. For a one-off workflow, call `run` directly; use
+`--standalone` inside an existing project to request an independent viewer for
+that invocation. See [Viewing](07-viewing.md#standalone-inspection).
 
 ## Your first workflow
 
@@ -139,7 +165,7 @@ size (`gpt-image-2.5-sunburst@openai` at `1024x1024`: $0.21 – $0.29 a call), w
 tables can override.
 
 ```bash
-grida-fx run workflows/icon.yaml --name "copper lantern" --live
+grida-fx run workflows/icon.yaml --live -- --name "copper lantern"
 ```
 
 `--live` is required whenever a run may call a paid provider. Without it nothing is spent: local
@@ -148,17 +174,21 @@ fails its step (`image.generate on gpt-image-2.5-sunburst@openai is a paid call;
 run also needs a ceiling, here the project's `budget:`. The run's folder holds its outputs;
 `grida-fx inspect` summarises it.
 
+With the local service running, add `--open` to a plan or run to open its canvas.
+The run URL stays available after execution finishes. A missing service does not
+prevent execution; start it explicitly when you want browser inspection.
+
 ## Run it again
 
 Run the same command again and nothing is generated: every step is answered from the cache. Change
-the name and only `draw` and `clean` run again. Rename a step, reorder your file, or change a
+the workflow input `name` (after `--`) and only `draw` and `clean` run again. Rename a step, reorder your file, or change a
 title, and nothing re-runs. [Cost, cache and takes](04-cost-and-cache.md) has the exact rule.
 
 Don't like the icon? Ask for another take of that one step:
 
 ```bash
 grida-fx reroll runs/icon/2026-10-02-1 draw     # take 2 from now on; take 1 stays in the cache
-grida-fx run workflows/icon.yaml --name "copper lantern" --live    # draws take 2
+grida-fx run workflows/icon.yaml --live -- --name "copper lantern"    # draws take 2
 grida-fx pick   runs/icon/2026-10-02-2 draw 1   # changed your mind: back to take 1, free
 ```
 

@@ -58,6 +58,16 @@ pub struct Cli {
 /// The verbs.
 #[derive(Debug, Subcommand)]
 pub enum Verb {
+    /// initialize a project without starting services or executing workflows
+    Init(InitArgs),
+    /// start the project FX service; workflow execution remains independent
+    Start(StartArgs),
+    /// show the project service status and verified URL
+    Status(ServiceArgs),
+    /// stop the project service without stopping workflow runs
+    Stop(ServiceArgs),
+    /// read the latest project service log lines
+    Logs(LogsArgs),
     /// expand, check and price a workflow; never spends
     Plan(PlanArgs),
     /// the expanded graph, as JSON
@@ -86,10 +96,63 @@ pub enum Verb {
     Jobs(JobsArgs),
     /// a run's record projected to its state, as JSON
     Project(ProjectArgs),
+    /// read bounded recorded events or a consistent snapshot, as JSON; never executes code
+    Observe(ObserveArgs),
     /// a run's summary, from its own folder
     Inspect(InspectArgs),
-    /// view a workflow plan or an existing run in a local browser; never starts a run
+    /// serve a workflow plan or an existing run on loopback; never starts a run
+    #[command(hide = true)]
     View(ViewArgs),
+}
+
+/// Initialize the recommended project configuration.
+#[derive(Debug, Args, Clone)]
+pub struct InitArgs {
+    /// project directory (default: here)
+    pub directory: Option<String>,
+    /// print the initialization result as JSON
+    #[arg(long)]
+    pub json: bool,
+}
+
+/// Start one local project service.
+#[derive(Debug, Args, Clone)]
+pub struct StartArgs {
+    /// directory in the project (default: here)
+    #[arg(long, value_name = "DIRECTORY")]
+    pub project: Option<String>,
+    /// fixed loopback port; remembered locally (default: 8787); zero is refused
+    #[arg(long)]
+    pub port: Option<u16>,
+    /// detach and return after verified readiness; no login or crash supervision
+    #[arg(long)]
+    pub background: bool,
+    /// open the project dashboard after readiness
+    #[arg(long)]
+    pub open: bool,
+    /// print the verified service status as JSON
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args, Clone)]
+pub struct ServiceArgs {
+    /// directory in the project (default: here)
+    #[arg(long, value_name = "DIRECTORY")]
+    pub project: Option<String>,
+    /// print the service status as JSON
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args, Clone)]
+pub struct LogsArgs {
+    /// directory in the project (default: here)
+    #[arg(long, value_name = "DIRECTORY")]
+    pub project: Option<String>,
+    /// number of final lines, from 1 to 10000
+    #[arg(long, default_value_t = 100)]
+    pub lines: usize,
 }
 
 /// The common options of the planning verbs, plus the verb-specific flags.
@@ -118,6 +181,12 @@ pub struct PlanArgs {
     /// plan: exit 1 unless every step is cached
     #[arg(long = "expect-cached")]
     pub expect_cached: bool,
+    /// plan: open the materialized plan in the running project service
+    #[arg(long, conflicts_with = "json")]
+    pub open: bool,
+    /// plan: serve this plan in a foreground viewer on an available port
+    #[arg(long, conflicts_with = "json")]
+    pub standalone: bool,
     /// workflow input flags (separated before parsing)
     #[arg(skip)]
     pub rest: Vec<String>,
@@ -182,12 +251,27 @@ pub struct RunArgs {
     pub deliver: Vec<String>,
     /// the run folder, relative to here (default: a new one under the project's runs folder);
     /// a folder that holds a run of the same plan is resumed
-    #[arg(long = "run", value_name = "FOLDER")]
+    #[arg(long = "run", value_name = "FOLDER", conflicts_with_all = ["name", "resume"])]
     pub run: Option<String>,
+    /// create a named run; an existing name is an error
+    #[arg(long, value_name = "NAME", conflicts_with = "resume")]
+    pub name: Option<String>,
+    /// resume an existing named run with the same planned target and inputs
+    #[arg(long, value_name = "NAME")]
+    pub resume: Option<String>,
     /// answer paid calls with a stand-in, offline and for nothing: FILE.py#FUNCTION, or - for a
     /// socket on standard input (SDKs); never with --live or --yes-up-to
     #[arg(long = "stand-in", value_name = "SOURCE", allow_hyphen_values = true)]
     pub stand_in: Option<String>,
+    /// use an invocation-owned viewer on an available port; no project service needed
+    #[arg(long, conflicts_with = "no_view")]
+    pub standalone: bool,
+    /// suppress viewer registration and hosting for this invocation
+    #[arg(long)]
+    pub no_view: bool,
+    /// open the run's viewer in the default browser after initialization
+    #[arg(long, conflicts_with = "no_view")]
+    pub open: bool,
     /// workflow input flags (separated before parsing)
     #[arg(skip)]
     pub rest: Vec<String>,
@@ -247,6 +331,21 @@ pub struct JobsArgs {
 }
 
 #[derive(Debug, Args, Clone)]
+pub struct ObserveArgs {
+    /// a run folder
+    pub run: String,
+    /// continue strictly after this opaque cursor
+    #[arg(long, conflicts_with = "snapshot")]
+    pub after: Option<String>,
+    /// maximum returned events, 1–1024 (default: 256)
+    #[arg(long, default_value_t = 256, conflicts_with = "snapshot")]
+    pub limit: usize,
+    /// return the plan and complete recorded prefix with its attachment cursor
+    #[arg(long)]
+    pub snapshot: bool,
+}
+
+#[derive(Debug, Args, Clone)]
 pub struct ProjectArgs {
     /// a run folder
     pub run: String,
@@ -262,6 +361,12 @@ pub struct InspectArgs {
     /// print the summary as JSON
     #[arg(long)]
     pub json: bool,
+    /// open the recorded run in the running project service
+    #[arg(long, conflicts_with = "json")]
+    pub open: bool,
+    /// serve this recorded run in a foreground viewer on an available port
+    #[arg(long, conflicts_with = "json")]
+    pub standalone: bool,
 }
 
 #[derive(Debug, Args, Clone)]
@@ -295,8 +400,11 @@ pub struct ViewArgs {
     /// loopback port; 0 asks the operating system for an available port
     #[arg(long, default_value_t = 0)]
     pub port: u16,
-    /// print the URL without opening a browser
-    #[arg(long)]
+    /// open the viewer in the default browser after the server is ready
+    #[arg(long, conflicts_with = "no_open")]
+    pub open: bool,
+    /// compatibility flag: serving without browser launch is already the default
+    #[arg(long, hide = true)]
     pub no_open: bool,
     /// workflow input flags, separated before parsing
     #[arg(skip)]
@@ -378,6 +486,11 @@ fn dispatch(verb: Verb, rest: Vec<String>) -> Result<u8, Error> {
         verbs::planning::run(which, &args)
     };
     match verb {
+        Verb::Init(args) => verbs::service::init(&args),
+        Verb::Start(args) => verbs::service::start(&args),
+        Verb::Status(args) => verbs::service::status(&args),
+        Verb::Stop(args) => verbs::service::stop(&args),
+        Verb::Logs(args) => verbs::service::logs(&args),
         Verb::Plan(args) => planning(PlanVerb::Plan, args, rest),
         Verb::Expand(args) => planning(PlanVerb::Expand, args, rest),
         Verb::Identity(args) => planning(PlanVerb::Identity, args, rest),
@@ -395,6 +508,7 @@ fn dispatch(verb: Verb, rest: Vec<String>) -> Result<u8, Error> {
         Verb::Takes(args) => verbs::takes::takes(&args),
         Verb::Jobs(args) => verbs::jobs::run(&args),
         Verb::Project(args) => verbs::project::run(&args),
+        Verb::Observe(args) => verbs::observe::run(&args),
         Verb::Inspect(args) => verbs::inspect::run(&args),
         Verb::View(mut args) => {
             args.rest = rest;

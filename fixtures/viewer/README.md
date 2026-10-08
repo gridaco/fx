@@ -21,8 +21,9 @@ uv run --project python python tools/check_viewer_fixtures.py
 # Keep an inspectable suite. The destination must be new or empty.
 uv run --project python python tools/check_viewer_fixtures.py --output .fx/viewer-fixtures/demo
 
-uv run --project python python -m grida.fx view --plan .fx/viewer-fixtures/demo/plans/topology.json
-uv run --project python python -m grida.fx view --run .fx/viewer-fixtures/demo/runs/cold
+# Saved JSON plans use the compatibility viewer; neither command executes source.
+uv run --project python python -m grida.fx view --plan .fx/viewer-fixtures/demo/plans/topology.json --open
+uv run --project python python -m grida.fx inspect .fx/viewer-fixtures/demo/runs/cold --standalone --open
 ```
 
 To inspect a different case, replace `cold` with `cached`, `alternative`, `failure`,
@@ -30,17 +31,93 @@ To inspect a different case, replace `cold` with `cached`, `alternative`, `failu
 `nesting-failure`, or `nesting-legacy`.
 The suite produces ten plans and thirteen run views. Viewing saved data never reruns the workflow.
 Each viewer stays in the foreground until Ctrl-C. The running case is a static
-recorded prefix; Refresh will not advance it. For an actual short running workflow,
-open a separate viewer on the new run directory and use Refresh while it runs:
+recorded prefix; observation does not advance it. For an actual short running workflow:
 
 ```sh
 cd .fx/viewer-fixtures/demo/project
-uv run --project ../../../../python python -m grida.fx run viewer-running --run ../runs/live-local
+uv run --project ../../../../python python -m grida.fx run viewer-running --run ../runs/live-local --standalone
 ```
 
 This command still uses ordinary local code, without `--live`. Its wait is bounded
 to five seconds. A new run directory does not force an empty cache; change the
 wait input or use another generated project when deliberately testing execution.
+
+## Live observation
+
+`viewer-observation.yaml` is a separate, smaller fixture for attaching during real
+execution. Its seven steps form one chain:
+
+`seed → wait → warm → wait_warm → violet → wait_violet → finished`
+
+Three bounded waits separate visibly different local image transforms. Each wait
+defaults to five seconds, with a thirty-second maximum (fifteen seconds total by
+default). The running highlight moves between waits and completed cards gain image
+previews. With a running project service, `run` reports its persistent run URL
+before execution starts; add `--open` to open it automatically. Status and artifacts
+update through the public observation API. `--standalone` instead hosts a viewer
+that stops when `run` exits. Use `inspect RUN --standalone --open` to serve the
+retained record independently afterward.
+
+```sh
+# Independent CLI and HTTP consumers, checking standalone lifecycle in fresh projects.
+uv run --project python python tools/check_observation.py
+
+# Keep the real runs, projections and logs for inspection.
+uv run --project python python tools/check_observation.py --output .fx/observation/demo
+
+# Repeat to watch real execution: a fresh project and cache every time.
+# Eight seconds per wait, about twenty-four seconds in total.
+uv run --offline --no-sync --project python python tools/demo_viewer.py --wait-seconds 8 --open
+```
+
+The demo launcher copies only the workflow, project configuration and two node
+modules into a fresh temporary directory; it leaves the run there and prints a
+command for inspecting it afterward. It delegates to the public `run --standalone` CLI with
+dotenv disabled, network off, provider keys removed and a $0 ceiling. `--open` is
+opt-in, as it is for the ordinary CLI. Ctrl-C interrupts the run normally.
+
+This fixture has no paid capabilities. Direct `run` invocations with identical
+inputs can reuse the waits from cache; the demo launcher always has a fresh cache.
+The checker uses `gate: true` and a fixed `.observation-release` marker inside its
+copied fixture project, so it can inspect the running state without a timing race.
+The marker is development control data, not a workflow event or user-facing pause
+API. Releasing the marker unblocks all three waits for the checker. Each node
+observes cancellation and fails after its bounded wait if not released.
+
+The independent checker proves snapshot-to-follow continuity, bounded catch-up,
+repeatable cursor reads, agreement between CLI and HTTP consumers, a slow observer,
+finished-run resume under a new invocation, failure, cancellation, zero spending,
+artifact digests, `--no-view`, and hosted-server shutdown. It imports no runtime or
+viewer internals. It also verifies the seven-step ordering, wait passthroughs,
+changed image digests, and cold execution. Reader unit tests own malformed records
+and cursor invalidation.
+The existing ten-plan/thirteen-view suite remains unchanged.
+
+## Persistent project service
+
+Prepare a fresh project without starting any processes:
+
+```sh
+uv run --offline --no-sync --project python python tools/demo_service.py
+```
+
+The helper prints ordinary public commands: `init` has prepared the project, then
+use `start --background --open`, `plan viewer-observation --open`, and
+`run viewer-observation --name baseline --wait-seconds 8 --max-usd 0 --open`.
+The project index and every registered run remain available after execution exits.
+A second run with `--wait-seconds 9` gives three new uncached waits at the same
+service address. Both runs and the saved plan appear under one workflow; expand
+history to see them. `--resume baseline --wait-seconds 8` continues the existing
+record without promoting it as a new run; repeating `--name baseline` is an error.
+Use `inspect viewer-observation/baseline` for exact selection. These commands
+describe source behavior until released. Stop with `stop`; start again to inspect
+the same retained URLs.
+
+`cargo test -p grida-fx --test service --test service_run` verifies service lifecycle and execution
+independence through the public CLI. Viewer backend and browser tests cover scoped
+routing, artifacts, catalog polling and unavailable records. The private catalog
+holds local addresses only; portable workflow records stay unchanged. See
+[the service contract](../../spec/service.md) for ownership and failure behavior.
 
 ## Coverage
 

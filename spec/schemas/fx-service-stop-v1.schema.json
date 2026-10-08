@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-service-stop-v1",
+  "title": "Accepted local FX service shutdown",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "kind",
+    "state"
+  ],
+  "properties": {
+    "kind": {
+      "const": "fx-service-stop-v1"
+    },
+    "state": {
+      "const": "stopping"
+    }
+  }
+}

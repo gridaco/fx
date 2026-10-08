@@ -17,6 +17,12 @@
 .fx-canvas-pending { stroke-dasharray: 6 4; fill: #fafafa; }
 .fx-canvas-node:hover .fx-canvas-node-box { stroke: #71717a; }
 .fx-canvas-node.is-selected .fx-canvas-node-box, .fx-canvas-node:focus-visible .fx-canvas-node-box { stroke: #2563eb; stroke-width: 2px; }
+.fx-canvas-node[data-state="running"] .fx-canvas-node-box { fill: #eff6ff; stroke: #2563eb; stroke-width: 2px; vector-effect: non-scaling-stroke; }
+.fx-canvas-node[data-state="running"].is-selected .fx-canvas-node-box, .fx-canvas-node[data-state="running"]:focus-visible .fx-canvas-node-box { stroke: #1d4ed8; stroke-width: 3px; }
+.fx-canvas-node[data-state="running"] .fx-canvas-node-state { fill: #1d4ed8; font-weight: 600; }
+.fx-canvas-running-indicator { fill: #2563eb; animation: fx-running-indicator 1.6s ease-in-out infinite; }
+@keyframes fx-running-indicator { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .fx-canvas-running-indicator { animation: none; } }
 .fx-canvas-node-title { fill: #27272a; font: 600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 .fx-canvas-node-type { fill: #71717a; font: 10px "SFMono-Regular", Consolas, monospace; }
 .fx-canvas-node-state { fill: #52525b; font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }

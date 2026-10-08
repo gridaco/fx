@@ -31,6 +31,8 @@ fn every_event() -> Vec<Event> {
     vec![
         Event::RunStarted {
             workflow: "case".into(),
+            name: None,
+            created_at: "2026-10-08T00:00:00.000Z".into(),
             resumed: false,
             ceiling_usd: None,
             charged_usd: Usd::ZERO,
@@ -40,6 +42,8 @@ fn every_event() -> Vec<Event> {
         },
         Event::RunStarted {
             workflow: "case".into(),
+            name: Some("baseline".into()),
+            created_at: "2026-10-08T00:00:00.000Z".into(),
             resumed: true,
             ceiling_usd: Some(Usd(1_500_000)),
             charged_usd: Usd(40_000),
@@ -381,10 +385,11 @@ fn members_follow_the_schema_names() {
     let events = every_event();
     assert_eq!(
         fields(&events[0]),
-        json!({"workflow": "case", "resumed": false, "ceiling_usd": null, "charged_usd": 0,
+        json!({"workflow": "case", "created_at": "2026-10-08T00:00:00.000Z", "resumed": false, "ceiling_usd": null, "charged_usd": 0,
                "estimate": {"low_usd": 0.01, "high_usd": 0.04}})
     );
     assert_eq!(fields(&events[1])["ceiling_usd"], json!(1.5));
+    assert_eq!(fields(&events[1])["name"], "baseline");
     // `stand_in` only when true.
     assert_eq!(fields(&events[1])["stand_in"], json!(true));
     assert_eq!(fields(&events[3])["take"], json!([1, 2]));
@@ -741,4 +746,45 @@ fn files_round_trip_through_the_store() {
     );
     // A text file's content is read as expansion reads step outputs.
     assert!(file.content.is_some());
+}
+
+#[test]
+fn immutable_metadata_comes_from_first_start_and_legacy_plan_time() {
+    use grida_fx_runtime::events::{created_at, run_metadata};
+    let plan_time = std::time::UNIX_EPOCH + std::time::Duration::from_millis(1_728_000_000_123);
+    assert_eq!(created_at(plan_time), "2024-10-04T00:00:00.123Z");
+    let legacy = vec![
+        json!({"event":"run_started"}),
+        json!({"event":"run_started","name":"later","created_at":"2026-10-08T00:00:00.000Z"}),
+    ];
+    assert_eq!(
+        run_metadata(&legacy, plan_time),
+        (None, "2024-10-04T00:00:00.123Z".into())
+    );
+    let named = vec![
+        json!({"event":"run_started","name":"first","created_at":"2026-10-08T01:00:00.000Z"}),
+        json!({"event":"run_started","name":"later","created_at":"2026-10-08T02:00:00.000Z"}),
+    ];
+    assert_eq!(
+        run_metadata(&named, plan_time),
+        (Some("first".into()), "2026-10-08T01:00:00.000Z".into())
+    );
+}
+
+#[test]
+fn creation_times_normalize_to_utc_milliseconds() {
+    use grida_fx_runtime::events::run_metadata;
+    for (timestamp, expected) in [
+        ("2026-10-08T01:00:00Z", "2026-10-08T01:00:00.000Z"),
+        ("2026-10-08T10:00:00.1+09:00", "2026-10-08T01:00:00.100Z"),
+    ] {
+        assert_eq!(
+            run_metadata(
+                &[json!({"event":"run_started","created_at":timestamp})],
+                std::time::UNIX_EPOCH
+            )
+            .1,
+            expected
+        );
+    }
 }

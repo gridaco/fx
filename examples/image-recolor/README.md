@@ -13,9 +13,14 @@ Use a Python with `grida` and Pillow installed, and an FX engine with its embedd
 
 ```bash
 python make_input.py
+grida-fx init
+grida-fx start --background
 grida-fx plan image-recolor --inputs inputs/example.yaml
-grida-fx view image-recolor --inputs inputs/example.yaml
+grida-fx plan image-recolor --inputs inputs/example.yaml --open
 ```
+
+These service commands describe current source. Check installed `--help`; older
+releases use the compatibility viewer described in the [viewing guide](../../docs/guide/07-viewing.md#standalone-inspection).
 
 The plan prints:
 
@@ -26,21 +31,21 @@ cached    0 of 1 known steps
 estimate  $0.00
 ```
 
-The viewer shows the plan without running the nodes. Stop it with Ctrl-C, then run the
-workflow and open its recorded inputs, intermediate images, final images, and durations:
+The plan canvas shows the graph without running the nodes. Keep the service running,
+then execute and inspect the recorded inputs, intermediate images, final images, and durations:
 
 ```bash
-grida-fx run image-recolor --inputs inputs/example.yaml --run runs/first
-grida-fx view --run runs/first
+grida-fx run image-recolor --inputs inputs/example.yaml --run runs/first --open
+grida-fx inspect runs/first --open
 ```
 
 `runs/first/outputs/before.png` is the normalized input and `after.png` is the recolored
 image. The final node returns the same image after its delay, so the recolor and delay
 outputs have the same digest. Each step's placed image also lives under `runs/first/files/`.
 
-To inspect the five-second node while it is running, open a second terminal as soon as the
-run folder appears and run `grida-fx view --run runs/first`; use Refresh while the run proceeds.
-A plan view remains the plan it opened; it does not become a running workflow.
+`run --open` opens its page before run-phase execution. The page follows the five-second
+wait automatically and remains available after the command exits. A plan page stays static.
+Use `grida-fx stop` when finished inspecting; stopping the service does not stop a workflow.
 
 Run again with `--run runs/second`: all three nodes use the cache, including the delay, so
 there is no second five-second wait. A new run folder alone does not bypass the cache.

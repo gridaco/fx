@@ -176,8 +176,12 @@ grida-fx pick runs/voiced-scenes/2026-10-02-1 "scene['s04'].music" 3
 
 ## Resuming
 
-If a run is interrupted (crash, Ctrl-C, power), run the same command again. Finished steps come
-from the cache, and paid calls already answered are replayed from the record.
+If a run is interrupted (crash, Ctrl-C, power), repeat the same target and inputs
+with `--resume NAME` for a named run, or the same `--run FOLDER`. A missing named
+run is refused, and a changed plan requires a fresh run. Repeating `--name NAME`
+refuses a collision; omitting all three options creates another run record.
+Finished steps come from the cache, and paid calls already answered are replayed
+from the record. Resume preserves history, creation time and accumulated spending.
 
 A long provider job that was submitted but not collected (rigging, video) is collected, not
 submitted again. If FX can't tell whether a submission reached the provider, it fails that step

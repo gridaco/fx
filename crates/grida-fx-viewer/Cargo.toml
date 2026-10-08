@@ -13,6 +13,7 @@ grida-fx-core.workspace = true
 grida-fx-runtime.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+chrono.workspace = true
 sha2.workspace = true
 jsonschema.workspace = true
 tokio = { workspace = true, features = ["fs"] }
@@ -21,7 +22,6 @@ rust-embed = { version = "8", features = ["debug-embed"] }
 mime_guess = "2"
 tokio-util = { version = "0.7", features = ["io"] }
 
-[dev-dependencies]
 tempfile.workspace = true
 tower = { version = "0.5", features = ["util"] }
 

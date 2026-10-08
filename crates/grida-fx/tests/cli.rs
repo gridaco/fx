@@ -130,10 +130,19 @@ fn help_and_version_exit_zero() {
     assert_eq!(status(&output), 0);
     let help = stdout(&output);
     for verb in [
-        "plan", "expand", "identity", "price", "schema", "nodes", "doctor", "lock", "view",
+        "init", "start", "status", "stop", "logs", "plan", "expand", "identity", "price", "schema",
+        "nodes", "doctor", "lock",
     ] {
         assert!(help.contains(verb), "{help}");
     }
+    assert!(
+        !help
+            .lines()
+            .any(|line| line.trim_start().starts_with("view ")),
+        "{help}"
+    );
+    let output = grida_fx(project.path(), &["view", "--help"]);
+    assert_eq!(status(&output), 0);
     let output = grida_fx(project.path(), &["plan", "--help"]);
     assert_eq!(status(&output), 0);
     assert!(stdout(&output).contains("--max-usd"));
