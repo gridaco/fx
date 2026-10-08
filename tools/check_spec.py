@@ -421,6 +421,7 @@ def check_worked_examples(gate: Gate) -> None:
     canonicals = {e.get("canonical") for e in examples}
     digests = {e.get("digest") for e in examples}
     instance_ids = {e.get("instance_id") for e in examples}
+    type_identities = {e.get("type_identity") for e in examples}
     text = spec.read_text(encoding="utf-8")
     start = text.find("## 14.")
     problems: list[str] = []
@@ -435,7 +436,7 @@ def check_worked_examples(gate: Gate) -> None:
             problems.append(f"canon not in the vectors: {value}")
         elif name in ("digest", "file_digest") and value not in digests:
             problems.append(f"{name} not in the vectors: {value}")
-        elif name == "type_identity" and value.removeprefix("source:") not in digests:
+        elif name == "type_identity" and value not in type_identities:
             problems.append(f"type_identity not in the vectors: {value}")
         elif name == "instance_id" and value not in instance_ids:
             problems.append(f"instance_id not in the vectors: {value}")

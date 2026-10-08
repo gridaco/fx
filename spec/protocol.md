@@ -124,7 +124,7 @@ The engine records the kind it is given and checks the shape, not the kind, agai
 | `resources` | `[path]` | project files the body reads at run time (prompt files, schemas): POSIX, relative to the project root, no `..` |
 | `tools` | `[string]` | external programs: a name matching `^[a-z0-9][a-z0-9_-]*$`, optionally followed by a version bound that starts with one of `<>=!~`, as in `blender>=4.2` |
 | `view` | string or null | a view template, kept for the views work (not in this version) |
-| `version` | integer ≥ 0, or null | null for an unversioned type, whose identity is its source ([identity.md](identity.md) §6) |
+| `version` | integer ≥ 0, or null | null for an unversioned type, whose identity is its export and its source ([identity.md](identity.md) §6) |
 | `retry` | `"service"` or `"engine"` | see below |
 
 Input, param and output names match `^[a-z][a-z0-9_]*$`. No name is both an input and a param.

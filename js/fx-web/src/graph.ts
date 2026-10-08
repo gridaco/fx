@@ -86,7 +86,7 @@ function typeEntry(value: unknown): boolean {
   if (!isRecord(value) || !fields(value, ["identity"], ["source", "ports"]) || !isString(value.identity)
     || !optional(value, "ports", isNodePorts)) return false;
   if (/^fx\/[^@]+@(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$/.test(value.identity)) return !("source" in value);
-  if (!/^(?:source:[0-9a-f]{64}|[^./#][^#]*#[A-Za-z_][A-Za-z0-9_]*@(?:0|[1-9][0-9]*))$/.test(value.identity)) return false;
+  if (!/^[^./#][^#]*#[A-Za-z_][A-Za-z0-9_]*@(?:0|[1-9][0-9]*|source:[0-9a-f]{64})$/.test(value.identity)) return false;
   const source = value.source;
   return isRecord(source) && fields(source, ["files", "resources"])
     && isRecord(source.files) && Object.keys(source.files).length > 0 && isRecord(source.resources)

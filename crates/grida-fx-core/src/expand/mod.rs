@@ -1165,7 +1165,7 @@ pub(crate) mod testing {
             uses: "./nodes/cases.py#shout".to_string(),
             ty: Rc::new(ResolvedType {
                 uses: "./nodes/cases.py#shout".to_string(),
-                identity: "source:0".to_string(),
+                identity: "nodes/cases.py#shout@source:0".to_string(),
                 spec: Rc::new(spec),
                 origin: TypeOrigin::Project {
                     path: "nodes/cases.py".to_string(),

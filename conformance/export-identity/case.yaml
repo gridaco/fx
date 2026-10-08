@@ -1,0 +1,23 @@
+# Two unversioned node types from one module, `upper` and `lower`, receive the same word. They
+# share the module's source digest, but the identity names the export (spec/identity.md
+# section 6): `nodes/pair.py#upper@source:<digest>` and `nodes/pair.py#lower@source:<digest>`,
+# so their step identities differ in `expand`. The first run executes both bodies; the second,
+# into another folder, answers both from the result cache. Each run's `outputs/up.txt` is KITE
+# and `outputs/down.txt` is kite. Before the export entered the identity, both steps had one
+# cache key, and the second run gave both the same output.
+steps:
+- argv: [expand, case, --routes, routes.yaml]
+  save: expand.json
+  json: true
+- argv: [run, case, --routes, routes.yaml, --run, runs/one]
+  mentions: ["cached    0 of 2 known steps", "result    ok   spent $0.00"]
+- read: runs/one/outputs/up.txt
+  save: up.txt
+- read: runs/one/outputs/down.txt
+  save: down.txt
+- argv: [run, case, --routes, routes.yaml, --run, runs/two]
+  mentions: ["cached    2 of 2 known steps", "result    ok   spent $0.00"]
+- read: runs/two/outputs/up.txt
+  save: up.txt
+- read: runs/two/outputs/down.txt
+  save: down.txt

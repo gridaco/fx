@@ -235,12 +235,13 @@ alone.
 | `cache-replay` | a paid call answered offline from a seeded call record, without `--live`; a second run answered from the result cache |
 | `cache-replay-miss` | the same project without a store: a paid call without `--live` is refused (exit 1), naming the capability, the route and `--live` |
 | `conditions-select` | `if:` on an input and on a judge's fact, `on_reject: continue`, and `fx/select@1` with `first_of` |
+| `export-identity` | two unversioned exports of one module given the same value: one source digest, two type and step identities; a second run answers both from the cache, and each keeps its own output |
 | `facts` | `facts()` of input files (an image's size, alpha and opacity; a text file's size and kind) in `if:` and in a prompt; a fact of a file not made yet leaves an identity null |
 | `facts-media` | file facts of a WAV and an MP4 input (`duration`, `fps`, `frames`, `width`) in a free built-in step's `with:` and in `if:`, and the identities they give |
 | `group-regenerate` | a group with `regenerate: {max, until}`: nested take ids (`build.draw#2.1`) and `maybe` states |
 | `judge-regenerate` | a judge's `on_reject: {regenerate: {max: 3, then: fail}}`, priced as up to three calls |
 | `linear` | a file input's digest in a local step's identity, a pending value that leaves an identity null, and workflow outputs |
-| `local-identity` | an unversioned project type's `source:` identity over its module, its project imports and its declared resources; a versioned type's `<path>#<attr>@<version>` never moves |
+| `local-identity` | an unversioned project type's `<path>#<attr>@source:<digest>` identity over its module, its project imports and its declared resources; a versioned type's `<path>#<attr>@<version>` never moves |
 | `lock-drift` | an `fx.lock` entry that no longer matches its source refuses the plan, `lock --check` and `lock`; `lock --same` confirms it |
 | `lock-write` | `lock --check` without a lock fails; `lock` writes `fx.lock` for the versioned types only |
 | `matrix` | a 2x2 `matrix` with dotted keys, collected into a `text{}` port |

@@ -1,9 +1,9 @@
-# A project node type without a version is named by its source: `source:` and the digest of
-# its module, every project module it imports (nodes/helper.py) and its declared resources
-# (prompts/r.md). A type with a version is named `nodes/n.py#pinned@2`; its source matters only
-# to fx.lock. Editing the resource, then the imported helper, moves a#1 each time and never b#1:
-# the workflow `pinned` holds only b, and every step saving identity-pinned.json must print the
-# same bytes.
+# A project node type without a version is named by its export and its source:
+# `nodes/n.py#echo@source:` and the digest of its module, every project module it imports
+# (nodes/helper.py) and its declared resources (prompts/r.md). A type with a version is
+# named `nodes/n.py#pinned@2`; its source matters only to fx.lock. Editing the resource, then
+# the imported helper, moves a#1 each time and never b#1: the workflow `pinned` holds only b,
+# and every step saving identity-pinned.json must print the same bytes.
 steps:
 - argv: [expand, case, --routes, routes.yaml]
   save: expand.json

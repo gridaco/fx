@@ -120,12 +120,15 @@ cache, billing, or provenance layer. Direct HTTP calls escape FX's pricing and
 spending controls. Read the [node guide](https://github.com/gridaco/fx/blob/main/docs/guide/03-nodes.md)
 before introducing a capability or judge.
 
-**Current cache limitation:** distinct unversioned exports in one source module
-can share a type identity. Put distinct unversioned node bodies in separate files.
-Explicit node versions also distinguish export paths, but require intentional
-version/lock maintenance: bump versions when behavior changes, and use
-`lock --same` only when behavior is unchanged. Changing step names or run folders
-does not repair the unversioned collision.
+**Cache limitation of older engines, including the 0.1.0 release:** distinct
+unversioned exports in one source module can share a type identity, so one step
+can be answered with another's cached result. Check what `grida-fx expand <target>`
+prints under `types`: a fixed engine names an unversioned type
+`<path>#<attr>@source:<digest>`, an affected one prints a bare `source:<digest>`.
+On an affected engine, put distinct unversioned node bodies in separate files, or
+declare node versions and maintain `fx.lock` (bump a version when behavior
+changes; use `lock --same` only when it does not). Changing step names or run
+folders does not avoid it.
 
 ## Python builders and execution
 

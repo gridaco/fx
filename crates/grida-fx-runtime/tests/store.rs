@@ -592,7 +592,7 @@ fn records_round_trip() {
     b.key = Some("bo".into());
     let result = ResultRecord {
         identity: digest_of(1),
-        type_identity: "source:".to_string() + &digest_of(2),
+        type_identity: format!("nodes/n.py#echo@source:{}", digest_of(2)),
         outputs: IndexMap::from([
             ("one".to_string(), RecordOutput::File(a.clone())),
             (

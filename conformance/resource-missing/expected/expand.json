@@ -8,7 +8,7 @@
   {
    "bindings": [],
    "id": "fine#1",
-   "identity": "087a6ea54a67a18526142f744dc70f967e01adff8d5970dd28c28e9092a074de",
+   "identity": "99d124abf6c19bafe72a2a1b00d4bd6377f74611b32b452e9d7cbf16c05f8dff",
    "interface_bindings": [],
    "judged_by": [],
    "judges": null,
@@ -27,7 +27,7 @@
    "take": [
     1
    ],
-   "type": "source:40ae3f97efc1a0535cc2172fdde24573c40aad6b9939493abcb1b26059e2075f",
+   "type": "nodes/n.py#echo@source:40ae3f97efc1a0535cc2172fdde24573c40aad6b9939493abcb1b26059e2075f",
    "uses": "./nodes/n.py#echo",
    "view": false,
    "waiting_on": [],
@@ -47,7 +47,7 @@
  "scopes": [],
  "types": {
   "./nodes/n.py#echo": {
-   "identity": "source:40ae3f97efc1a0535cc2172fdde24573c40aad6b9939493abcb1b26059e2075f",
+   "identity": "nodes/n.py#echo@source:40ae3f97efc1a0535cc2172fdde24573c40aad6b9939493abcb1b26059e2075f",
    "ports": {
     "inputs": {},
     "outputs": {

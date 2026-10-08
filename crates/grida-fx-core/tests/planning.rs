@@ -654,7 +654,7 @@ fn integrated_lock_keeps_stale_entries() {
 
 // ---------------------------------------------------- resolved project types
 
-/// identity.md §14: the unversioned type's identity is `source:` and the digest.
+/// identity.md §14: the unversioned type's identity is its export and its source's digest.
 #[test]
 fn integrated_an_unversioned_type_is_named_by_its_source() {
     let fixture = Fixture::new();
@@ -669,7 +669,7 @@ fn integrated_an_unversioned_type_is_named_by_its_source() {
     let resolved = node(registry.node_type("./nodes/n.py#echo", &mut host));
     assert_eq!(
         resolved.identity,
-        "source:f80b608fa143ba177212d039ea7c96232c844aefb446375b523c6108774327b3"
+        "nodes/n.py#echo@source:f80b608fa143ba177212d039ea7c96232c844aefb446375b523c6108774327b3"
     );
     assert_eq!(resolved.uses, "./nodes/n.py#echo");
     assert_eq!(resolved.body, BodyKind::Project);
@@ -690,6 +690,30 @@ fn integrated_an_unversioned_type_is_named_by_its_source() {
     assert_eq!(host.describe_calls, 1);
 }
 
+/// identity.md §6: two unversioned exports of one module share their source but not their
+/// identity, so equal values never make their steps one. The identity names the attribute the
+/// type is exported as, not the name `@node` gives it.
+#[test]
+fn integrated_unversioned_exports_of_one_module_differ() {
+    let fixture = Fixture::new();
+    fixture.write("nodes/n.py", "x = 1\n");
+    let mut host = FakeHost::new().with_module(described(
+        "nodes/n.py",
+        vec![
+            ("upper", type_spec("shout", None, &[])),
+            ("lower", type_spec("whisper", None, &[])),
+        ],
+        fixture.closure(&["nodes/n.py"]),
+    ));
+    let mut registry = fixture.registry();
+    let upper = node(registry.node_type("./nodes/n.py#upper", &mut host));
+    let lower = node(registry.node_type("./nodes/n.py#lower", &mut host));
+    let shared = upper.source.as_ref().unwrap().digest();
+    assert_eq!(shared, lower.source.as_ref().unwrap().digest());
+    assert_eq!(upper.identity, format!("nodes/n.py#upper@source:{shared}"));
+    assert_eq!(lower.identity, format!("nodes/n.py#lower@source:{shared}"));
+}
+
 /// conformance `local-identity`: the unversioned identity moves with the resource and the
 /// helper module; the versioned one does not.
 #[test]
@@ -702,7 +726,7 @@ fn integrated_local_identity() {
         (echo.identity.clone(), pinned.identity.clone())
     };
     let (echo, pinned) = identities(&mut host);
-    assert!(echo.starts_with("source:"));
+    assert!(echo.starts_with("nodes/n.py#echo@source:"));
     assert_eq!(pinned, "nodes/n.py#pinned@2");
     fixture.write("prompts/r.md", "Say it twice: ${{ text }}\n");
     let (echo_resource, pinned_resource) = identities(&mut host);

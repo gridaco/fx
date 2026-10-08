@@ -714,7 +714,7 @@ def _instance(
     }
 
 
-SOURCE_TYPE = "source:" + NODE_SOURCE
+SOURCE_TYPE = "nodes/n.py#echo@source:" + NODE_SOURCE
 DRAW_ROUTES = {"image.generate": {"route": "img-a@acme", "fingerprint": ROUTE}}
 DRAW_WITH = {"prompt": "A picture of 2 lines", "background": "auto", "vars": {}}
 CASES_PY = b"def lines(text):\n    return len(text.splitlines())\n"
@@ -886,6 +886,13 @@ def test_check_graph_route_in_no_table(project: Path, capsys: pytest.CaptureFixt
     assert _run_check(project, _graph(), "--routes", str(other)) == 1
 
 
+def _retype_echo(graph: dict[str, Any], identity: str) -> None:
+    """Give `echo` another type identity everywhere it is printed, consistently."""
+    graph["types"]["./nodes/n.py#echo"]["identity"] = identity
+    graph["instances"][2]["type"] = identity
+    graph["instances"][2]["identity"] = digest.step_identity(identity, {"name": "ada"}, {}, [1])
+
+
 @pytest.mark.parametrize(
     "tamper",
     [
@@ -904,7 +911,13 @@ def test_check_graph_route_in_no_table(project: Path, capsys: pytest.CaptureFixt
         lambda g: g["instances"][3].update(identity=BUILTIN_STEP),
         lambda g: g["instances"][3]["with"].update(prompt="known"),
         lambda g: g.update(kind="fx-graph-v2"),
-        lambda g: g["types"]["./nodes/n.py#echo"].update(identity="source:" + "4" * 64),
+        lambda g: g["types"]["./nodes/n.py#echo"].update(
+            identity="nodes/n.py#echo@source:" + "4" * 64
+        ),
+        # identity.md section 6: the identity names the export; the form without it is retired.
+        lambda g: _retype_echo(g, "source:" + NODE_SOURCE),
+        lambda g: _retype_echo(g, "nodes/n.py#shout@source:" + NODE_SOURCE),
+        lambda g: _retype_echo(g, "nodes/m.py#echo@source:" + NODE_SOURCE),
         lambda g: g["types"]["./nodes/n.py#echo"]["source"]["files"].update(
             {"nodes/n.py": "5" * 64}
         ),
@@ -938,6 +951,9 @@ def test_check_graph_route_in_no_table(project: Path, capsys: pytest.CaptureFixt
         "null-identity-without-pending",
         "kind",
         "source-identity",
+        "source-identity-without-export",
+        "source-identity-of-another-export",
+        "source-identity-of-another-module",
         "source-file-digest",
         "missing-resource",
         "project-type-without-source",
@@ -966,10 +982,10 @@ def test_check_graph_notes_a_label_outside_the_project(
     graph = _graph()
     source = graph["types"]["./nodes/n.py#echo"]["source"]
     source["files"]["acme_lib/util.py"] = "9" * 64
-    identity = "source:" + digest.node_source_digest(source["files"], source["resources"])
-    graph["types"]["./nodes/n.py#echo"]["identity"] = identity
-    graph["instances"][2]["type"] = identity
-    graph["instances"][2]["identity"] = digest.step_identity(identity, {"name": "ada"}, {}, [1])
+    identity = "nodes/n.py#echo@source:" + digest.node_source_digest(
+        source["files"], source["resources"]
+    )
+    _retype_echo(graph, identity)
     assert _run_check(project, graph) == 0
     assert "acme_lib/util.py" in capsys.readouterr().out
 

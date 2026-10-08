@@ -808,6 +808,11 @@ def _example_failures(example: dict[str, Any]) -> Iterator[str]:
         )
     if rebuilt is not None and rebuilt != want_digest:
         yield f"{name}: the {kind} formula gives {rebuilt}, expected {want_digest}"
+    if "type_identity" in example:
+        # identity.md section 6: an unversioned type is named by its export and this digest.
+        sourced = _PROJECT_TYPE.match(example["type_identity"])
+        if kind != "fx-node-source-v1" or not sourced or sourced["digest"] != want_digest:
+            yield f"{name}: type identity {example['type_identity']!r} does not name this digest"
 
 
 def check_examples(path: Path) -> list[str]:
@@ -952,27 +957,22 @@ def _take_list(instance: dict[str, Any]) -> list[int] | None:
 _BUILTIN_USES = re.compile(r"fx/[^@\s]+@[0-9]+\Z")
 _BUILTIN_TYPE = re.compile(r"fx/[^@\s]+@[0-9]+\.[0-9]+\Z")
 _LOCAL_USES = re.compile(r"\./(?P<path>[^#\s]+)#(?P<attr>[A-Za-z_][A-Za-z0-9_]*)\Z")
-_LOCAL_TYPE = re.compile(r"(?P<path>[^#\s]+)#(?P<attr>[A-Za-z_][A-Za-z0-9_]*)@[0-9]+\Z")
+# A project type: `<path>#<attr>@<version>`, or `<path>#<attr>@source:<digest>` without a version.
+_PROJECT_TYPE = re.compile(
+    r"(?P<path>[^#\s]+)#(?P<attr>[A-Za-z_][A-Za-z0-9_]*)"
+    r"@(?:[0-9]+|source:(?P<digest>[0-9a-f]{64}))\Z"
+)
 
 
 def _type_problem(uses: Any, type_identity: str) -> str | None:
     """Check a printed type identity against its uses: as identity.md section 6 defines it."""
-    if type_identity.startswith("source:"):
-        if not _HEX64.match(type_identity[len("source:") :]):
-            return f"type {type_identity!r} is not source:<64 hex>"
-        if isinstance(uses, str) and not _LOCAL_USES.match(uses):
-            return (
-                f"type {type_identity!r} is a source identity, "
-                f"but uses {uses!r} is not ./<path>#<attr>"
-            )
-        return None
     if _BUILTIN_TYPE.match(type_identity):
         if isinstance(uses, str) and not (
             _BUILTIN_USES.match(uses) and type_identity.startswith(uses + ".")
         ):
             return f"type {type_identity!r} is not {uses!r} plus a version"
         return None
-    local = _LOCAL_TYPE.match(type_identity)
+    local = _PROJECT_TYPE.match(type_identity)
     if local:
         used = _LOCAL_USES.match(uses) if isinstance(uses, str) else None
         if isinstance(uses, str) and not (
@@ -1300,15 +1300,16 @@ class GraphCheck:
                 self.fail(f"{where}: a project type must carry its source")
                 continue
             computed = self._source_digest(where, source, has_problems)
-            if identity.startswith("source:"):
+            printed = _PROJECT_TYPE.match(identity)
+            if printed and printed["digest"]:
                 if computed is None:
                     continue
                 self.counts["sources"] += 1
-                if "source:" + computed != identity:
+                if printed["digest"] != computed:
                     self.fail(
                         f"{where}: node source differs\n"
                         f"  printed:  {identity}\n"
-                        f"  computed: source:{computed}"
+                        f"  computed: {printed['path']}#{printed['attr']}@source:{computed}"
                     )
                 continue
             # A versioned project type: its source digest is what fx.lock must hold.

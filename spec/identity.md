@@ -109,7 +109,7 @@ When every number is an integer written without `.0` (a Python `int`, not a whol
 |---|---|
 | built-in, `uses: fx/<name>@<major>` | `fx/<name>@<major>.<version>`, e.g. `fx/image.generate@1.1` |
 | project type with a version, `uses: ./<path>#<attr>` | `<path>#<attr>@<version>`, where `<path>` is POSIX, relative to the project root, without `./` |
-| project type without a version | `source:` + `digest(source)` |
+| project type without a version, `uses: ./<path>#<attr>` | `<path>#<attr>@source:` + `digest(source)`, with `<path>` as above |
 
 For a project type without a version:
 
@@ -124,6 +124,9 @@ source = {
 - The **source closure** is the module that defines the type plus every project module it imports, transitively. Which files that is depends on the language, so the node host reports it (see the node protocol's `describe`). The engine reads and hashes the files itself.
 - A **label** is the file's path, POSIX, relative to the base it was found under: the project root, or the folder that contains a declared source package (so a package's files are labelled `<package>/…`). When both bases hold the file, the nearer one counts.
 - A **resource** is a project file the node reads at run time (a prompt, a schema). It is keyed by its declared path. A declared resource that does not exist inside the project is a refusal while planning.
+- The **export**, `<path>#<attr>`, is part of the identity because a source does not name one type. Every type a module declares shares its source closure, types that declare the same resources share the whole source, and modules that import each other share one closure. Without the export, two unversioned types that receive the same values (§8) would have one step identity, and the second would be answered with the first's result.
+
+Up to and including the 0.1.0 release, an unversioned type's identity was `source:` + `digest(source)`, without the export. Records made under that rule are not rewritten. An unversioned step planned now misses the result cache once and runs again; the paid calls it makes are still answered by the call cache, because a call key holds no type identity (§9). The plan digest of a workflow that uses an unversioned type changes with it (§10), so resuming a run folder planned under the old rule is refused: start a new run. Built-in and versioned types, `digest(source)` itself and `fx.lock` are unchanged.
 
 A versioned type's source digest is not part of its identity. It is recorded in `fx.lock`, and planning refuses a type whose source no longer matches its lock entry: the author either bumps the version or confirms that behaviour did not change (`grida-fx lock --same`). A versioned type with no lock entry plans normally, and `grida-fx lock --check` reports it as unlocked.
 
@@ -297,11 +300,11 @@ Each example gives the object, its canonical bytes and its digest. The same exam
     canon  = {"capability":"image.generate","kind":"fx-call-v1","request":{"background":"auto","prompt":"A picture of 2 lines"},"route":"4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4","take":[1]}
     digest = 9f66a9f2d23c7cf21331a3a45778bf9a660451a79cd4df3aae5f576e0b807d38
 
-**A node's source.** An unversioned type in `nodes/n.py` (bytes `x = 1\n`) declaring the resource `prompts/r.md` (bytes `Hello\n`):
+**A node's source.** The unversioned type `echo` in `nodes/n.py` (bytes `x = 1\n`), declaring the resource `prompts/r.md` (bytes `Hello\n`):
 
     canon  = {"files":{"nodes/n.py":"9e26bf369911c45c243c684147b23fc9e1dcfcf257d299a1c632016a6fcd33f4"},"kind":"fx-node-source-v1","resources":{"prompts/r.md":"66a045b452102c59d840ec097d59d9467e13a3f34f6494e539ffd32c1bb35f18"}}
     digest = f80b608fa143ba177212d039ea7c96232c844aefb446375b523c6108774327b3
-    type_identity = source:f80b608fa143ba177212d039ea7c96232c844aefb446375b523c6108774327b3
+    type_identity = nodes/n.py#echo@source:f80b608fa143ba177212d039ea7c96232c844aefb446375b523c6108774327b3
 
 **A route with a contract.** `img-a@acme` serving `image.edit`, declared with a contract. The contract enters the fingerprint as written, arrays in their order:
 

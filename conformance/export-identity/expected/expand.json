@@ -7,14 +7,14 @@
  "instances": [
   {
    "bindings": [],
-   "id": "a#1",
-   "identity": "90c627d1a13c73cefa84a66e1561a4d586c38626e7c6397eda80f91e0db94ea0",
+   "id": "up#1",
+   "identity": "702521fc20ff6bf973556f3afbdc067055b93f47d8ce7a19bb8b600817907bd1",
    "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": null,
    "needs": [],
-   "path": "a",
+   "path": "up",
    "phase": 1,
    "price": {
     "high_usd": 0,
@@ -23,28 +23,28 @@
    "reads": [],
    "routes": {},
    "state": "planned",
-   "step": "a",
+   "step": "up",
    "take": [
     1
    ],
-   "type": "nodes/n.py#echo@source:0def34fd9aba01ea946962466ec971e3189515424fe76ebe2d913db4aeaa60a4",
-   "uses": "./nodes/n.py#echo",
+   "type": "nodes/pair.py#upper@source:878c2580a31bfcddc299571068023c455379c750c9a7f1e2bd00fb82f9503b88",
+   "uses": "./nodes/pair.py#upper",
    "view": false,
    "waiting_on": [],
    "with": {
-    "text": "hello"
+    "word": "Kite"
    }
   },
   {
    "bindings": [],
-   "id": "b#1",
-   "identity": "00e52dfa07c982e3f3144185156909f9bbe1660e38f5d6496642ed8908ae177e",
+   "id": "down#1",
+   "identity": "a686ee97c9ea6100e64248c2c7a0f1b1da327be315433f152b71903cdb8ec29c",
    "interface_bindings": [],
    "judged_by": [],
    "judges": null,
    "key": null,
    "needs": [],
-   "path": "b",
+   "path": "down",
    "phase": 1,
    "price": {
     "high_usd": 0,
@@ -53,16 +53,16 @@
    "reads": [],
    "routes": {},
    "state": "planned",
-   "step": "b",
+   "step": "down",
    "take": [
     1
    ],
-   "type": "nodes/n.py#pinned@2",
-   "uses": "./nodes/n.py#pinned",
+   "type": "nodes/pair.py#lower@source:878c2580a31bfcddc299571068023c455379c750c9a7f1e2bd00fb82f9503b88",
+   "uses": "./nodes/pair.py#lower",
    "view": false,
    "waiting_on": [],
    "with": {
-    "text": "hello"
+    "word": "Kite"
    }
   }
  ],
@@ -71,46 +71,42 @@
  "problems": [],
  "scopes": [],
  "types": {
-  "./nodes/n.py#echo": {
-   "identity": "nodes/n.py#echo@source:0def34fd9aba01ea946962466ec971e3189515424fe76ebe2d913db4aeaa60a4",
+  "./nodes/pair.py#lower": {
+   "identity": "nodes/pair.py#lower@source:878c2580a31bfcddc299571068023c455379c750c9a7f1e2bd00fb82f9503b88",
    "ports": {
     "inputs": {},
     "outputs": {
      "text": "text"
     },
     "params": {
-     "text": {
+     "word": {
       "type": "string"
      }
     }
    },
    "source": {
     "files": {
-     "nodes/helper.py": "1ea5aa2ea6a549a746640e2a089294ec8954d4664a5eef4dcc023064f3537689",
-     "nodes/n.py": "e31f04013996e6a7e2f1c97b6d4033a322719e5bcd6cf60c8cec3292b99c8123"
+     "nodes/pair.py": "f4132be581219cc2301e2218555d722f19cf711e0af54216ac59df232f1fb2da"
     },
-    "resources": {
-     "prompts/r.md": "addc2533aadc26534d6957983e09b6d5db177c5fe2be458e8ca899394e20f5bd"
-    }
+    "resources": {}
    }
   },
-  "./nodes/n.py#pinned": {
-   "identity": "nodes/n.py#pinned@2",
+  "./nodes/pair.py#upper": {
+   "identity": "nodes/pair.py#upper@source:878c2580a31bfcddc299571068023c455379c750c9a7f1e2bd00fb82f9503b88",
    "ports": {
     "inputs": {},
     "outputs": {
      "text": "text"
     },
     "params": {
-     "text": {
+     "word": {
       "type": "string"
      }
     }
    },
    "source": {
     "files": {
-     "nodes/helper.py": "1ea5aa2ea6a549a746640e2a089294ec8954d4664a5eef4dcc023064f3537689",
-     "nodes/n.py": "e31f04013996e6a7e2f1c97b6d4033a322719e5bcd6cf60c8cec3292b99c8123"
+     "nodes/pair.py": "f4132be581219cc2301e2218555d722f19cf711e0af54216ac59df232f1fb2da"
     },
     "resources": {}
    }
@@ -119,6 +115,6 @@
  "workflow": {
   "file": "workflows/case.yaml",
   "id": "case",
-  "title": "Local node identity"
+  "title": "Two exports of one module, given the same word"
  }
 }

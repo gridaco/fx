@@ -346,11 +346,12 @@ Add targeted evidence for each changed boundary instead of rerunning paid exampl
   existing authorized scope; when an operation changes that scope, make its
   effects concrete before asking for a decision. Agents must not expose secrets
   or implement their own provider retry loop to work around a missing tool.
-- **Known correctness limits:** [ISSUES.md](ISSUES.md) tracks missing provider usage,
-  an unexplained image-cost discrepancy and an unversioned export identity
-  collision. Do not claim complete cost explanation or universally correct reuse
-  while those remain open. Current workarounds for the collision are distinct
-  source files for distinct unversioned node functions or declared node versions.
+- **Known correctness limits:** [ISSUES.md](ISSUES.md) tracks missing provider usage
+  and an unexplained image-cost discrepancy. Do not claim complete cost explanation
+  while those remain open. Unversioned node identities name their export in source
+  (`<path>#<attr>@source:<digest>`). Engines that print a bare `source:<digest>`,
+  including the 0.1.0 release, can give two unversioned exports of one module one
+  cache key; there, keep distinct bodies in separate files or declare versions.
 
 ## Keeping this useful
 

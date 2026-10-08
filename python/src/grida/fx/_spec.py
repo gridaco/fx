@@ -2,7 +2,8 @@
 
 A node type declares its inputs (files, as port notation), params (JSON Schemas), outputs, whether
 it judges, the paid calls it makes at most, the project files it reads, the programs it runs, a
-version (``None``: identified by its source) and its retry mode. The SDK expands shorthand:
+version (``None``: identified by its export and its source) and its retry mode. The SDK expands
+shorthand:
 
 - a param given as ``bool``/``int``/``float``/``str``/``list``/``dict`` becomes
   ``{"type": "boolean"|"integer"|"number"|"string"|"array"|"object"}``; a tuple of choices

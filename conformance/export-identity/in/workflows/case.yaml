@@ -1,0 +1,15 @@
+fx: workflow/v1
+id: case
+title: Two exports of one module, given the same word
+inputs:
+  word: { type: string, default: Kite }
+steps:
+  up:
+    uses: ./nodes/pair.py#upper
+    with: { word: "${{ inputs.word }}" }
+  down:
+    uses: ./nodes/pair.py#lower
+    with: { word: "${{ inputs.word }}" }
+outputs:
+  up: ${{ steps.up.outputs.text }}
+  down: ${{ steps.down.outputs.text }}

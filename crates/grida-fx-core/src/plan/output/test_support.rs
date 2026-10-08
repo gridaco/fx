@@ -581,7 +581,7 @@ pub(crate) fn local_identity_plan() -> (Plan, Planner) {
     let echo = project_type(
         "nodes/n.py",
         "echo",
-        "source:f80b608fa143ba177212d039ea7c96232c844aefb446375b523c6108774327b3",
+        "nodes/n.py#echo@source:f80b608fa143ba177212d039ea7c96232c844aefb446375b523c6108774327b3",
         SourceDigests {
             files: BTreeMap::from([(
                 "nodes/n.py".to_string(),

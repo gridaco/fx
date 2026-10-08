@@ -412,7 +412,7 @@ mod tests {
             uses: "./nodes/cases.py#shout".into(),
             ty: Rc::new(ResolvedType {
                 uses: "./nodes/cases.py#shout".into(),
-                identity: "source:0".into(),
+                identity: "nodes/cases.py#shout@source:0".into(),
                 spec: Rc::new(spec),
                 origin: TypeOrigin::Project {
                     path: "nodes/cases.py".into(),

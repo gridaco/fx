@@ -632,7 +632,7 @@ mod tests {
         assert_eq!(
             document["types"]["./nodes/n.py#echo"],
             json!({
-                "identity": "source:f80b608fa143ba177212d039ea7c96232c844aefb446375b523c6108774327b3",
+                "identity": "nodes/n.py#echo@source:f80b608fa143ba177212d039ea7c96232c844aefb446375b523c6108774327b3",
                 "ports": {"inputs": {}, "outputs": {}, "params": {}},
                 "source": {
                     "files": {"nodes/n.py": "9e26bf369911c45c243c684147b23fc9e1dcfcf257d299a1c632016a6fcd33f4"},

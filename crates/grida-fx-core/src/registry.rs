@@ -29,7 +29,7 @@
 //! sets [`ResolvedType::drift`] to `{uses}: its source changed but version {v} did not; bump the
 //! version, or confirm no change in behaviour with grida-fx lock --same {path}#{attr}`, which the
 //! expander reports on the step (conformance `lock-drift`). An unversioned type's identity is
-//! `source:` + `digest(source)`.
+//! `<path>#<attr>@source:` + `digest(source)`: modules can share a source, so the export counts.
 //!
 //! Paths: `./` and `../` are relative to the home root (the folder of the nearest fx.yaml above
 //! the workflow file), never to the workflow file. Every path is checked against the project
@@ -310,15 +310,16 @@ impl Registry {
             .source_digests(closure, &spec.resources)
             .map_err(|message| RegistryError::Problem(format!("{uses}: {message}")))?;
         let digest = source.digest();
+        let export = format!("{relative}#{attribute}");
         let (identity, drift) = match spec.version {
-            None => (format!("source:{digest}"), None),
+            None => (format!("{export}@source:{digest}"), None),
             Some(version) => {
-                let identity = format!("{relative}#{attribute}@{version}");
+                let identity = format!("{export}@{version}");
                 let drift = match self.locks.nodes.get(&identity) {
                     Some(locked) if *locked != digest => Some(format!(
                         "{uses}: its source changed but version {version} did not; bump the \
                          version, or confirm no change in behaviour with grida-fx lock --same \
-                         {relative}#{attribute}"
+                         {export}"
                     )),
                     _ => None,
                 };

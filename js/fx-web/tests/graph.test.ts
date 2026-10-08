@@ -44,6 +44,17 @@ describe("plan boundary and graph projection", () => {
     duplicate.instances.push(duplicate.instances[0]);
     expect(() => parseGraph(duplicate)).toThrow("does not match");
   });
+  test("accepts an unversioned type named by its export and source, and refuses the retired form", () => {
+    const digest = "a".repeat(64);
+    const source = { files: { "nodes.py": "b".repeat(64) }, resources: {} };
+    const input = graph();
+    input.instances = [step("read#1", { type: `nodes.py#transform@source:${digest}` })];
+    input.pending = [];
+    input.types = { "./nodes.py#transform": { identity: `nodes.py#transform@source:${digest}`, source } };
+    expect(parseGraph(input)).toEqual(input);
+    input.types = { "./nodes.py#transform": { identity: `source:${digest}`, source } };
+    expect(() => parseGraph(input)).toThrow("does not match");
+  });
   test("parameter names are not interpreted as value markers", () => {
     const input = graph();
     input.instances[0].with = { pending: [1, 2, 3] };

@@ -1607,7 +1607,7 @@ while (message := read()) is not None:
             uses: "./nodes/render.py#render".into(),
             ty: Rc::new(ResolvedType {
                 uses: "./nodes/render.py#render".into(),
-                identity: "source:0".into(),
+                identity: "nodes/render.py#render@source:0".into(),
                 spec: Rc::new(spec),
                 origin: TypeOrigin::Project {
                     path: "nodes/render.py".into(),

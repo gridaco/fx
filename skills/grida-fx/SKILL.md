@@ -149,7 +149,7 @@ and FX's recorded cost. Distinguish an estimate, engine-booked cost, and provide
 billing. Detailed provider usage is not currently retained, and the open image
 billing discrepancy has no confirmed cause. See the
 [current issues](https://github.com/gridaco/fx/blob/main/ISSUES.md) when diagnosing
-cost or identity behavior; do not claim those gaps are fixed.
+cost behavior; do not claim those gaps are fixed.
 
 ## Project service and browser inspection
 

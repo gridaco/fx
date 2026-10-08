@@ -100,7 +100,7 @@
       "const": true
     },
     "types": {
-      "description": "Each distinct `uses` of the instances, as written, with its type identity (identity.md \u00a76). A `uses` whose type could not be resolved is left out. A project type, with a version or without, also carries `source`: the digests behind its `fx-node-source-v1` object, so a checker recomputes `digest(source)` without running a node host. For a type without a version it is the identity after `source:`; for a versioned type it is what fx.lock must hold. A built-in type has no `source`.",
+      "description": "Each distinct `uses` of the instances, as written, with its type identity (identity.md \u00a76). A `uses` whose type could not be resolved is left out. A project type, with a version or without, also carries `source`: the digests behind its `fx-node-source-v1` object, so a checker recomputes `digest(source)` without running a node host. For a type without a version it is the digest after `@source:`; for a versioned type it is what fx.lock must hold. A built-in type has no `source`.",
       "type": "object",
       "propertyNames": {
         "type": "string",
@@ -452,17 +452,14 @@
       "additionalProperties": false,
       "properties": {
         "identity": {
-          "description": "`fx/<name>@<major>.<version>` for a built-in, `<path>#<attr>@<version>` for a versioned project type, `source:` and `digest(source)` for a project type without a version.",
+          "description": "`fx/<name>@<major>.<version>` for a built-in, `<path>#<attr>@<version>` for a versioned project type, `<path>#<attr>@source:` and `digest(source)` for a project type without a version.",
           "type": "string",
           "anyOf": [
             {
               "pattern": "^fx/[^@]+@(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)$"
             },
             {
-              "pattern": "^[^./#][^#]*#[A-Za-z_][A-Za-z0-9_]*@(?:0|[1-9][0-9]*)$"
-            },
-            {
-              "pattern": "^source:[0-9a-f]{64}$"
+              "pattern": "^[^./#][^#]*#[A-Za-z_][A-Za-z0-9_]*@(?:0|[1-9][0-9]*|source:[0-9a-f]{64})$"
             }
           ]
         },
