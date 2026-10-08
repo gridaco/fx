@@ -1,0 +1,15 @@
+fx: workflow/v1
+id: case
+title: The same work in two places
+inputs:
+  word: { type: string, default: Kite }
+steps:
+  first:
+    uses: ./nodes/stamp.py#stamp
+    with: { word: "${{ inputs.word }}" }
+  second:
+    uses: ./nodes/stamp.py#stamp
+    with: { word: "${{ inputs.word }}" }
+outputs:
+  first: ${{ steps.first.outputs.text }}
+  second: ${{ steps.second.outputs.text }}

@@ -1,0 +1,171 @@
+[
+ {
+  "bindings": [],
+  "event": "node_started",
+  "id": "first#1",
+  "identity": "6d1833d1a519dc3611cf796dbae0c7464db7f2a0d18f16ea9761ee8c48c7cf72",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "first",
+  "plan": "b54bf877cc87ea7c656494d124c177a6f0d574a8f85c91401fbf0c456f52af9d",
+  "ports": {
+   "inputs": {},
+   "outputs": {
+    "text": "text"
+   },
+   "params": {
+    "word": {
+     "type": "string"
+    }
+   }
+  },
+  "reads": [],
+  "routes": {},
+  "step": "first",
+  "take": [
+   1
+  ],
+  "uses": "./nodes/stamp.py#stamp",
+  "with": {
+   "word": {
+    "value": "Kite"
+   }
+  }
+ },
+ {
+  "bindings": [],
+  "event": "node_started",
+  "id": "second#1",
+  "identity": "6d1833d1a519dc3611cf796dbae0c7464db7f2a0d18f16ea9761ee8c48c7cf72",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "second",
+  "plan": "b54bf877cc87ea7c656494d124c177a6f0d574a8f85c91401fbf0c456f52af9d",
+  "ports": {
+   "inputs": {},
+   "outputs": {
+    "text": "text"
+   },
+   "params": {
+    "word": {
+     "type": "string"
+    }
+   }
+  },
+  "reads": [],
+  "routes": {},
+  "step": "second",
+  "take": [
+   1
+  ],
+  "uses": "./nodes/stamp.py#stamp",
+  "with": {
+   "word": {
+    "value": "Kite"
+   }
+  }
+ },
+ {
+  "cache": "hit",
+  "event": "node_finished",
+  "facts": {
+   "cost_usd": null
+  },
+  "id": "second#1",
+  "kind": "fx-run-events-v1",
+  "outputs": {
+   "text": {
+    "file": {
+     "digest": "dee3f65ef9dae331d4077c6d0d9e1d11574ab8c13f6b9e759df10affe54f8f42",
+     "kind": "text/plain",
+     "name": "first/text",
+     "size": 5
+    }
+   }
+  },
+  "path": "second",
+  "plan": "b54bf877cc87ea7c656494d124c177a6f0d574a8f85c91401fbf0c456f52af9d"
+ },
+ {
+  "cache": "miss",
+  "event": "node_finished",
+  "facts": {
+   "cost_usd": null
+  },
+  "id": "first#1",
+  "kind": "fx-run-events-v1",
+  "outputs": {
+   "text": {
+    "file": {
+     "digest": "dee3f65ef9dae331d4077c6d0d9e1d11574ab8c13f6b9e759df10affe54f8f42",
+     "kind": "text/plain",
+     "name": "first/text",
+     "size": 5
+    }
+   }
+  },
+  "path": "first",
+  "plan": "b54bf877cc87ea7c656494d124c177a6f0d574a8f85c91401fbf0c456f52af9d"
+ },
+ {
+  "ceiling_usd": null,
+  "charged_usd": 0,
+  "estimate": {
+   "high_usd": 0,
+   "low_usd": 0
+  },
+  "event": "run_started",
+  "kind": "fx-run-events-v1",
+  "plan": "b54bf877cc87ea7c656494d124c177a6f0d574a8f85c91401fbf0c456f52af9d",
+  "resumed": false,
+  "workflow": "case"
+ },
+ {
+  "charged_usd": 0,
+  "event": "run_finished",
+  "failed": [],
+  "incomplete": false,
+  "kind": "fx-run-events-v1",
+  "ok": true,
+  "outputs": {
+   "first": {
+    "file": {
+     "digest": "dee3f65ef9dae331d4077c6d0d9e1d11574ab8c13f6b9e759df10affe54f8f42",
+     "kind": "text/plain",
+     "name": "first/text",
+     "size": 5
+    }
+   },
+   "second": {
+    "file": {
+     "digest": "dee3f65ef9dae331d4077c6d0d9e1d11574ab8c13f6b9e759df10affe54f8f42",
+     "kind": "text/plain",
+     "name": "first/text",
+     "size": 5
+    }
+   }
+  },
+  "plan": "b54bf877cc87ea7c656494d124c177a6f0d574a8f85c91401fbf0c456f52af9d",
+  "stopped": null
+ },
+ {
+  "event": "phase_planned",
+  "high_usd": 0,
+  "kind": "fx-run-events-v1",
+  "phase": 1,
+  "plan": "b54bf877cc87ea7c656494d124c177a6f0d574a8f85c91401fbf0c456f52af9d",
+  "steps": 2
+ },
+ {
+  "event": "scopes_updated",
+  "kind": "fx-run-events-v1",
+  "node_interface_bindings": {
+   "first#1": [],
+   "second#1": []
+  },
+  "plan": "b54bf877cc87ea7c656494d124c177a6f0d574a8f85c91401fbf0c456f52af9d",
+  "scopes": []
+ }
+]

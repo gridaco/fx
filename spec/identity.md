@@ -175,7 +175,7 @@ step_identity = digest({
   A `with:` name that is neither an input nor a param of the type is a refusal while planning.
 - A string given to an input port that starts with `./` or `../` and holds no newline names a file, and becomes that file. In a workflow the path is relative to the workflow's home, the folder of the nearest `fx.yaml` above the workflow file; in an inputs file it is relative to that file. It must resolve inside the home. An absolute path, or one that leaves the home, is refused.
 - `take` lists one number per regenerating level, outermost first: `[1]`, or `[2, 1]` for take 1 inside take 2 of a regenerating group.
-- The step's path, name and instance id are not part of it. Identical work in two places has one identity and runs once.
+- The step's path, name and instance id are not part of it. Identical work in two places has one identity and runs once in a run: an instance whose identity another instance of the same run is running waits for it, and the result cache then answers it. If that instance fails, the waiting one runs on its own. Runs in other processes that share the store do not wait for each other.
 - If `with_values` contains a pending value, the identity is `null` until the values it waits on exist.
 
 Upstream results enter by content: a file an upstream step wrote is `{"file": digest}`. An upstream step that runs again and writes the same bytes therefore leaves every downstream identity unchanged.

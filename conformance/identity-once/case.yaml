@@ -1,0 +1,11 @@
+# Two steps, `first` and `second`, run the same unversioned type on the same word, so they have
+# one step identity (spec/identity.md section 8: identical work in two places runs once in a run).
+# The copy listed second waits while the first runs, then the result cache answers it: the record
+# holds one `node_finished` with `cache: miss` and one with `cache: hit`, both with the same
+# output. Before the scheduler held the copy, both started together and both missed the cache.
+steps:
+- argv: [run, case, --routes, routes.yaml, --run, runs/one]
+  mentions: ["result    ok   spent $0.00"]
+- read: runs/one/events.jsonl
+  save: events.json
+  jsonl: true

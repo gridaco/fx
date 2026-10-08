@@ -4,6 +4,8 @@
 //!   no pending value in `with`; every id in `needs` has a result or is absent from the expansion
 //!   (a need on a judged step whose later takes became absent is met); every id in `reads` has a
 //!   result or is absent, blocked or failed (an assertion that reads another step holds the step);
+//!   no other instance with its identity is running or chosen before it, unless one with that
+//!   identity has succeeded (spec/identity.md §8);
 //!   and its concurrency group (`concurrency_group`, `concurrency`) has a free place ([`Groups`]).
 //!   In listing order. An id the expansion does not list counts as absent, and an instance never
 //!   waits on its own id.
@@ -125,6 +127,14 @@ pub fn ready(
 ) -> Vec<String> {
     // The instances chosen in this call take their places too.
     let mut groups = groups.clone();
+    let identity_of = |id: &String| expansion.instances.get(id)?.identity.as_deref();
+    // Identities with a succeeded result: their copies are answered by the result cache at once.
+    let succeeded: HashSet<&str> = results
+        .iter()
+        .filter(|(_, result)| result.status == ResultStatus::Succeeded)
+        .filter_map(|(id, _)| identity_of(id))
+        .collect();
+    let mut identities: HashSet<&str> = running.iter().filter_map(identity_of).collect();
     let mut ready = Vec::new();
     for instance in expansion.ordered() {
         if instance.state != State::Planned
@@ -149,12 +159,20 @@ pub fn ready(
         {
             continue;
         }
+        let identity = instance
+            .identity
+            .as_deref()
+            .filter(|identity| !succeeded.contains(identity));
+        if identity.is_some_and(|identity| identities.contains(identity)) {
+            continue;
+        }
         if let Some((group, limit)) = group_of(instance) {
             if groups.running(group) >= limit {
                 continue;
             }
             groups.start(group);
         }
+        identities.extend(identity);
         ready.push(instance.id.clone());
     }
     ready
@@ -447,6 +465,11 @@ mod tests {
         }
     }
 
+    fn with_identity(mut i: Instance, identity: &str) -> Instance {
+        i.identity = Some(identity.into());
+        i
+    }
+
     fn with_state(mut i: Instance, state: State) -> Instance {
         i.state = state;
         i
@@ -605,6 +628,37 @@ mod tests {
         // A maybe read may still run.
         let e = expansion(vec![with_state(instance("source#1"), State::Maybe), gated]);
         assert!(ready(&e, &IndexMap::new(), &none(), &Groups::default()).is_empty());
+    }
+
+    #[test]
+    fn one_identity_runs_once_and_its_copies_wait() {
+        let member = |mut i: Instance| {
+            i.concurrency_group = Some("draw".into());
+            i.concurrency = Some(2);
+            i
+        };
+        let e = expansion(vec![
+            member(with_identity(instance("a#1"), "x")),
+            member(with_identity(instance("b#1"), "x")),
+            member(with_identity(instance("c#1"), "x")),
+            member(instance("d#1")),
+        ]);
+        // Copies wait on the one chosen before them and take no place in its group; instances
+        // without an identity never wait.
+        assert_eq!(
+            ready(&e, &IndexMap::new(), &none(), &Groups::default()),
+            ["a#1", "d#1"]
+        );
+        let running: HashSet<String> = ["a#1".to_string()].into();
+        assert!(ready(&e, &results(&["d#1"]), &running, &Groups::default()).is_empty());
+        // Once the first succeeded, every copy starts; once it failed, the next copy runs alone.
+        assert_eq!(
+            ready(&e, &results(&["a#1", "d#1"]), &none(), &Groups::default()),
+            ["b#1", "c#1"]
+        );
+        let mut failed = results(&["d#1"]);
+        failed.insert("a#1".into(), crate::executor::failed("boom"));
+        assert_eq!(ready(&e, &failed, &none(), &Groups::default()), ["b#1"]);
     }
 
     #[test]
