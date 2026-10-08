@@ -234,6 +234,8 @@ pub struct Services {
     pub events: Option<Arc<EventLog>>,
     pub pacing: Arc<Pacing>,
     pub cancel: Cancel,
+    /// Serialized execution admission, cancellation acceptance and finalization.
+    pub control: Arc<crate::run_control::RunControl>,
     /// `fx-run-events-v1` `invocation_id`; also names holds and run ids.
     pub invocation_id: String,
     /// Counts `run` requests, for unique `run_id`s.
@@ -247,12 +249,14 @@ impl Services {
     /// invocation id is `plan-<16 hex>`, new each time, so the work dirs of two commands planning
     /// at once never meet.
     pub fn planning(engine: Arc<Engine>) -> Services {
+        let cancel = Cancel::new();
         Services {
             engine,
             ledger: None,
             events: None,
             pacing: Arc::new(Pacing::new()),
-            cancel: Cancel::new(),
+            control: crate::run_control::RunControl::unrecorded(cancel.clone()),
+            cancel,
             invocation_id: format!("plan-{}", crate::events::new_invocation_id()),
             runs: std::sync::atomic::AtomicU64::new(0),
             holds: std::sync::atomic::AtomicU64::new(0),
@@ -268,6 +272,7 @@ impl Services {
         cancel: Cancel,
     ) -> Services {
         Services {
+            control: crate::run_control::RunControl::new(Arc::clone(&events), cancel.clone()),
             engine,
             ledger: Some(ledger),
             events: Some(events),

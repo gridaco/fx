@@ -233,7 +233,29 @@ After the host answers, the engine:
 
 For `node_failure` and `node_error`, `data` MAY carry node `facts` and `marks` the body kept locally, under the same rules as a result's. The engine merges them as above, leaving out any that step 2 would refuse, so a failed node keeps its node facts and its own error.
 
-**Timeouts and cancellation.** At `timeout_s`, or when a person stops the run, the engine sends `$/cancel` for the `run`, and from then on answers the run's host requests with `cancelled` (§6): a paid call already sent goes on, completes and settles, and the run waits for it before it ends. A host that has not answered 5 seconds later is ended, together with what it started where the platform allows that. Whatever a host started also ends with the host whenever the host ends, not only after a cancel. A node that timed out fails with `ran past <n> seconds`, whatever the host answers after the deadline other than a result, and is not retried. A host that exits while a run is pending fails that run as a `node_error` would, with `the node host exited with status <n>`, `the node host was killed by signal <n> (<NAME>)` when a signal ended it, or `the node host exited` when its status is not known.
+**Timeouts and cancellation.** At `timeout_s`, or when a person stops the run,
+the engine sends `$/cancel` for the node's `run` request, and from then on answers
+that request's host calls with `cancelled` (§6). A node timeout alone does not
+cancel a paid call already sent: the engine retains that call and settles its
+outcome. Cancelling the whole workflow invocation instead cancels local waiting
+on in-flight sends/submission/collection and conservatively settles an unknown
+received outcome at its full reservation. Resumable provider jobs retain their
+`submitting`/`submitted` records as [store.md §5](store.md#5-long-jobs) specifies.
+The runner waits for local call bookkeeping before recording cancellation; this
+does not prove the provider stopped or confirmed the final bill. A forced process
+exit can interrupt that bookkeeping. The [run-control contract](control.md)
+defines acceptance, verified local completion and forced exit. First SIGINT/SIGTERM
+and SDK run cancellation share its graceful path without an automatic runner
+force timer; only a second explicit SIGINT grants emergency force authority.
+
+A host that has not answered 5 seconds later is ended, together with what it
+started where the platform allows that. Whatever a host started also ends with
+the host whenever the host ends, not only after a cancel. A node that timed out
+fails with `ran past <n> seconds`, whatever the host answers after the deadline
+other than a result, and is not retried. A host that exits while a run is pending
+fails that run as a `node_error` would, with `the node host exited with status <n>`,
+`the node host was killed by signal <n> (<NAME>)` when a signal ended it, or
+`the node host exited` when its status is not known.
 
 ### 5.4 `tool.invoke`
 
@@ -721,4 +743,4 @@ The Python engine FX grew out of ran bodies in its own process and handed them l
 | `Agent.transcript` carries over from one run to the next | A new transcript per `agent.run`, and the transcript so far in the data of an error that ends a loop (§6.2) |
 | A malformed `agent.turn` reply is cached and fails every replay | A billed failed attempt that is never recorded (§6.1 step 7) |
 | A `retry: engine` rerun sends a call that already failed again: up to 36 sends of one request | A key that ended in an engine error is never sent again in the invocation (§6.1 step 3) |
-| A call still in flight when its step timed out is left behind, its hold open | It completes and settles, the run's requests are answered `cancelled` from the deadline on, and the run waits for the call before it ends (§5.3) |
+| A call still in flight when its step timed out is left behind, its hold open | A step timeout leaves paid work with the engine to finish and settle. Whole-invocation cancellation instead ends local waiting with conservative settlement; remote completion can remain unknown (§5.3). |

@@ -100,6 +100,8 @@ pub enum Verb {
     Observe(ObserveArgs),
     /// a run's summary, from its own folder
     Inspect(InspectArgs),
+    /// request cancellation of one exact run invocation, without starting a service
+    Cancel(CancelArgs),
     /// serve a workflow plan or an existing run on loopback; never starts a run
     #[command(hide = true)]
     View(ViewArgs),
@@ -361,12 +363,36 @@ pub struct InspectArgs {
     /// print the summary as JSON
     #[arg(long)]
     pub json: bool,
+    /// observe verified local control for an exact run folder or WORKFLOW_ID/NAME
+    #[arg(long, conflicts_with_all = ["open", "standalone", "verify"])]
+    pub control: bool,
     /// open the recorded run in the running project service
     #[arg(long, conflicts_with = "json")]
     pub open: bool,
     /// serve this recorded run in a foreground viewer on an available port
     #[arg(long, conflicts_with = "json")]
     pub standalone: bool,
+}
+
+#[derive(Debug, Args, Clone)]
+pub struct CancelArgs {
+    /// an explicit run folder, or exact WORKFLOW_ID/NAME; no implicit latest run
+    pub run: String,
+    /// require the current invocation to match this ID
+    #[arg(long, value_name = "ID")]
+    pub invocation: Option<String>,
+    /// wait for this invocation's terminal result and verified local cleanup
+    #[arg(long)]
+    pub wait: bool,
+    /// total wait deadline: a positive integer followed by s, m or h (default: 30s)
+    #[arg(long, requires = "wait", value_parser = verbs::control::parse_timeout)]
+    pub timeout: Option<std::time::Duration>,
+    /// print one structured operational result, including errors
+    #[arg(long)]
+    pub json: bool,
+    /// internal SDK intent label; never a provider or author-code selector
+    #[arg(long, hide = true, default_value = "cli", value_parser = ["cli", "sdk"])]
+    pub source: String,
 }
 
 #[derive(Debug, Args, Clone)]
@@ -510,6 +536,7 @@ fn dispatch(verb: Verb, rest: Vec<String>) -> Result<u8, Error> {
         Verb::Project(args) => verbs::project::run(&args),
         Verb::Observe(args) => verbs::observe::run(&args),
         Verb::Inspect(args) => verbs::inspect::run(&args),
+        Verb::Cancel(args) => verbs::control::cancel(&args),
         Verb::View(mut args) => {
             args.rest = rest;
             verbs::view::run(&args)
@@ -583,5 +610,41 @@ mod tests {
         };
         assert_eq!(lock.r#where.as_deref(), Some("proj"));
         assert_eq!(lock.same, ["a", "b"]);
+    }
+
+    #[test]
+    fn control_flags_require_exact_usage_without_planning_argument_split() {
+        let parse = |args: &[&str]| {
+            Cli::try_parse_from(std::iter::once("grida-fx").chain(args.iter().copied()))
+        };
+        assert!(parse(&["cancel", "case/baseline", "--timeout", "1s"]).is_err());
+        assert!(parse(&["cancel", "case/baseline", "--wait", "--timeout", "0s"]).is_err());
+        assert!(parse(&["inspect", "case/baseline", "--control", "--standalone"]).is_err());
+        assert!(parse(&["inspect", "case/baseline", "--control", "--open"]).is_err());
+        let Verb::Cancel(args) = parse(&[
+            "cancel",
+            "case/baseline",
+            "--invocation",
+            "0123456789abcdef",
+            "--wait",
+            "--timeout",
+            "2m",
+            "--json",
+        ])
+        .unwrap()
+        .verb
+        else {
+            panic!("not cancel");
+        };
+        assert_eq!(args.invocation.as_deref(), Some("0123456789abcdef"));
+        assert_eq!(args.timeout, Some(std::time::Duration::from_secs(120)));
+        assert!(args.wait && args.json);
+        let Verb::Inspect(args) = parse(&["inspect", "case/baseline", "--control", "--json"])
+            .unwrap()
+            .verb
+        else {
+            panic!("not inspect");
+        };
+        assert!(args.control && args.json);
     }
 }

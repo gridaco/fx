@@ -23,6 +23,7 @@ export {
   run,
 } from "./api.js";
 export { BINARY_VARIABLE, type BinaryOptions, binary, type Environment } from "./binary.js";
+export { cancel, type CancelOptions, inspectControl, RunControlError, type RunControlResult } from "./control.js";
 export type {
   Encoded,
   FileRef,

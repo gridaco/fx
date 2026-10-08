@@ -89,12 +89,14 @@ fn rig_in(root: &Path, adapters: Adapters, live: bool, ceiling: Option<Usd>) -> 
     ));
     let log = Arc::new(EventLog::open(&root.join("events.jsonl"), "inv", &"0".repeat(64)).unwrap());
     let ledger = Arc::new(Ledger::new(ceiling, Some(Arc::clone(&log))));
+    let cancel = Cancel::new();
     let services = Arc::new(Services {
+        control: grida_fx_runtime::run_control::RunControl::new(Arc::clone(&log), cancel.clone()),
         engine,
         ledger: Some(Arc::clone(&ledger)),
         events: Some(log),
         pacing: Arc::new(Pacing::new()),
-        cancel: Cancel::new(),
+        cancel,
         invocation_id: "inv".into(),
         runs: AtomicU64::new(0),
         holds: AtomicU64::new(0),
@@ -615,12 +617,14 @@ fn rig_with_log(root: &Path, adapters: Adapters, log: Arc<EventLog>) -> Rig {
         true,
     ));
     let ledger = Arc::new(Ledger::new(Some(Usd(1_000_000)), Some(Arc::clone(&log))));
+    let cancel = Cancel::new();
     let services = Arc::new(Services {
+        control: grida_fx_runtime::run_control::RunControl::new(Arc::clone(&log), cancel.clone()),
         engine,
         ledger: Some(Arc::clone(&ledger)),
         events: Some(log),
         pacing: Arc::new(Pacing::new()),
-        cancel: Cancel::new(),
+        cancel,
         invocation_id: "inv".into(),
         runs: AtomicU64::new(0),
         holds: AtomicU64::new(0),

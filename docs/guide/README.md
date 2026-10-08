@@ -24,6 +24,7 @@ Custom step pages and static snapshot exports remain planned.
 5. [Running: CLI, Python, agents](05-running.md)
 6. [Annotations and judges](06-annotations-and-judges.md): marks as artifacts, verdicts as decisions
 7. [Viewing workflows and runs](07-viewing.md): the bundled local node canvas
+8. [Stopping and continuing a run](08-run-control.md): exact targeting, cancellation and verified local cleanup
 
 ## Example projects
 

@@ -20,6 +20,19 @@ export interface RunSnapshot {
 /** The loopback viewer adds a projection of exactly the snapshot's event prefix. */
 export interface ViewerSnapshot extends RunSnapshot { view: ViewerRun }
 
+/** Recorded intent for the latest invocation, independent of owner liveness. */
+export function cancellationRequested(events: readonly RunEvent[]): boolean {
+  let invocation: string | null = null;
+  let requested = false;
+  for (const event of events) {
+    if (event.event === "run_started") { invocation = event.invocation_id; requested = false; }
+    if (event.invocation_id !== invocation) continue;
+    if (event.event === "cancel_requested") requested = true;
+    if (event.event === "run_finished" || event.event === "run_cancelled") requested = false;
+  }
+  return requested;
+}
+
 export interface RunEventBatch {
   kind: "fx-run-event-batch-v1";
   cursor: string;

@@ -63,6 +63,9 @@ pub struct NodeDisplay {
 /// One event's own fields (module doc). Names and members follow fx-run-events-v1.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Event {
+    CancelRequested {
+        source: crate::run_control::CancelSource,
+    },
     ScopesUpdated {
         scopes: Value,
         node_interface_bindings: Value,
@@ -214,6 +217,7 @@ impl Event {
     /// The `event` member: `run_started`, `node_finished`, ….
     pub fn name(&self) -> &'static str {
         match self {
+            Event::CancelRequested { .. } => "cancel_requested",
             Event::ScopesUpdated { .. } => "scopes_updated",
             Event::RunStarted { .. } => "run_started",
             Event::PhasePlanned { .. } => "phase_planned",
@@ -236,6 +240,9 @@ impl Event {
     pub fn to_fields(&self) -> Map<String, Value> {
         let mut fields = Fields::default();
         match self {
+            Event::CancelRequested { source } => {
+                fields.text("source", source.as_str());
+            }
             Event::ScopesUpdated {
                 scopes,
                 node_interface_bindings,
@@ -576,6 +583,11 @@ impl EventLog {
     /// Writes one event with its envelope: one `canon` line, flushed, whole or not at all
     /// (module doc).
     pub fn emit(&self, event: &Event) -> std::io::Result<()> {
+        self.emit_record(event).map(|_| ())
+    }
+
+    /// Writes an event and returns the exact flushed record, including its envelope.
+    pub fn emit_record(&self, event: &Event) -> std::io::Result<Value> {
         let record = self.record(event);
         let mut writer = self.writer.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(broken) = &writer.broken {
@@ -592,7 +604,8 @@ impl EventLog {
         }
         let mut line = canon(&record);
         line.push('\n');
-        writer.append(line.as_bytes(), event.name())
+        writer.append(line.as_bytes(), event.name())?;
+        Ok(record)
     }
 
     /// The first event this log could not write, if any (module doc).
@@ -1062,6 +1075,21 @@ mod tests {
             where_: "case".into(),
             message: message.into(),
         }
+    }
+
+    #[test]
+    fn cancellation_persistence_failure_closes_admission_without_acceptance() {
+        let (log, bytes) = log_on(0, true);
+        let cancel = crate::engine::Cancel::new();
+        let control = crate::run_control::RunControl::new(Arc::new(log), cancel.clone());
+        assert_eq!(
+            control.request_cancel(crate::run_control::CancelSource::Cli),
+            crate::run_control::CancelAcceptance::RecordError,
+        );
+        assert!(control.admit().is_none());
+        assert!(cancel.is_cancelled());
+        assert!(!control.cancellation_requested());
+        assert!(bytes.lock().unwrap().is_empty());
     }
 
     #[test]

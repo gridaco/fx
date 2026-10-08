@@ -4,6 +4,7 @@
 //! and [`read_log`]: a folder is named as the user typed it, relative to the working directory,
 //! and messages name it that way (spec/store.md §8 "Nothing private").
 
+pub mod control;
 pub mod doctor;
 pub mod inspect;
 pub mod jobs;

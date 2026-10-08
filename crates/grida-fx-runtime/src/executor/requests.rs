@@ -147,6 +147,7 @@ impl RunHandler {
     /// Ends the run: later requests are answered `cancelled`.
     pub fn close(&self) {
         self.closed.store(true, std::sync::atomic::Ordering::SeqCst);
+        self.cancel.cancel();
     }
 
     /// Whether requests are answered `cancelled` now.
@@ -402,7 +403,14 @@ impl RunRequests for RunHandler {
         method: String,
         params: Value,
     ) -> BoxFuture<'static, Result<Value, RpcError>> {
-        Box::pin(async move { self.serve(&method, params).await })
+        // Capture the permit before the connection detaches this incoming request task.
+        let admission = self.services.control.admit();
+        Box::pin(async move {
+            let Some(_admission) = admission else {
+                return Err(cancelled());
+            };
+            self.serve(&method, params).await
+        })
     }
 
     fn notify(&self, method: String, params: Value) {
@@ -486,11 +494,12 @@ struct Turns {
 
 impl TurnCaller for Turns {
     fn turn(&self, request: Value) -> BoxFuture<'_, Result<CallAnswer, CallError>> {
-        Box::pin(spawn_call(
-            self.paid.clone(),
-            AGENT_TURN.to_string(),
-            request,
-        ))
+        Box::pin(async move {
+            let Some(_admission) = self.paid.services.control.admit() else {
+                return Err(CallError::Cancelled);
+            };
+            spawn_call(self.paid.clone(), AGENT_TURN.to_string(), request).await
+        })
     }
 }
 
@@ -504,14 +513,15 @@ struct HostBody {
 
 impl HostBody {
     async fn ask<T: DeserializeOwned>(&self, method: &str, params: Value) -> Result<T, RpcError> {
-        let answer = self
-            .host
-            .request_cancellable(method, Some(params), &self.cancel)
-            .await
-            .map_err(|error| match error {
-                ConnectionError::Rpc(error) => error,
-                other => internal(other.to_string()),
-            })?;
+        let answer = tokio::select! {
+            biased;
+            () = self.cancel.cancelled() => return Err(cancelled()),
+            answer = self.host.request_cancellable(method, Some(params), &self.cancel) => answer,
+        }
+        .map_err(|error| match error {
+            ConnectionError::Rpc(error) => error,
+            other => internal(other.to_string()),
+        })?;
         serde_json::from_value(answer).map_err(|error| {
             internal(format!(
                 "the node host answered {method} with something else: {}",
@@ -850,6 +860,38 @@ pub(crate) fn render_prompt(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn closing_an_agent_rpc_ends_local_tool_wait_without_a_host_answer() {
+        use tokio::io::AsyncReadExt;
+        let (engine_reader, _peer_writer) = tokio::io::duplex(1024);
+        let (mut peer_reader, engine_writer) = tokio::io::duplex(1024);
+        let connection = Connection::start(
+            engine_reader,
+            engine_writer,
+            Arc::new(crate::host::connection::NoIncoming),
+        );
+        let cancel = Cancel::new();
+        let body = HostBody {
+            host: connection,
+            run_id: "inv-1".into(),
+            cancel: cancel.clone(),
+            files: Arc::new(RunFiles::new()),
+        };
+        let tool = tokio::spawn(async move {
+            body.ask::<Value>(method::TOOL_INVOKE, serde_json::json!({"run_id": "inv-1"}))
+                .await
+        });
+        let mut started = [0u8; 1];
+        peer_reader.read_exact(&mut started).await.unwrap();
+        cancel.cancel();
+        let error = tokio::time::timeout(std::time::Duration::from_millis(100), tool)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(error.kind(), Some(ErrorCode::Cancelled));
+    }
     use serde_json::json;
 
     fn mark(value: Value) -> Mark {

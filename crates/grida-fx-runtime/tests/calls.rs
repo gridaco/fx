@@ -113,12 +113,20 @@ fn live_with(
     ledger: Arc<Ledger>,
     events: Option<Arc<EventLog>>,
 ) -> Arc<Services> {
+    let cancel = Cancel::new();
+    let control = match &events {
+        Some(events) => {
+            grida_fx_runtime::run_control::RunControl::new(Arc::clone(events), cancel.clone())
+        }
+        None => grida_fx_runtime::run_control::RunControl::unrecorded(cancel.clone()),
+    };
     Arc::new(Services {
+        control,
         engine,
         ledger: Some(ledger),
         events,
         pacing: Arc::new(Pacing::new()),
-        cancel: Cancel::new(),
+        cancel,
         invocation_id: "inv".into(),
         runs: AtomicU64::new(0),
         holds: AtomicU64::new(0),
@@ -635,6 +643,29 @@ async fn ask(handler: &Arc<RunHandler>, method: &str, params: Value) -> Result<V
     Arc::clone(handler)
         .request(method.to_string(), params)
         .await
+}
+
+#[tokio::test]
+async fn an_incoming_agent_rpc_is_tracked_before_its_detached_task_starts() {
+    let run = planning_run();
+    let control = Arc::clone(&run.handler.services.control);
+    // The connection creates this future synchronously, then spawns it separately from the
+    // top-level node run. Its permit already exists even while its task has not been polled.
+    let incoming = Arc::clone(&run.handler).request("agent.run".into(), json!({"run_id": "inv-1"}));
+    run.handler.services.calls_settled().await;
+    let draining = {
+        let control = Arc::clone(&control);
+        tokio::spawn(async move { control.drain_admissions().await })
+    };
+    tokio::task::yield_now().await;
+    assert!(!draining.is_finished());
+    run.handler.close();
+    assert_eq!(
+        incoming.await.unwrap_err().kind(),
+        Some(ErrorCode::Cancelled)
+    );
+    draining.await.unwrap();
+    assert_eq!(control.begin_finalization(), Ok(true));
 }
 
 #[tokio::test]

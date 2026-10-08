@@ -1807,9 +1807,19 @@ fn integrated_run_replays_a_recorded_call_and_delivers_it() {
     // A one-file output cannot be delivered per key.
     let output = run(&["--run", "runs/one", "--deliver", "image=out/{key}.png"]);
     assert_eq!(status(&output), 2);
+    let diagnostics = stderr(&output);
+    let lines: Vec<_> = diagnostics.lines().collect();
+    assert_eq!(lines.len(), 3);
+    let invocation = lines[0].strip_prefix("invocation ").unwrap();
+    assert_eq!(invocation.len(), 16);
+    assert!(invocation.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    assert!(matches!(
+        lines[1],
+        "control   available" | "control   unavailable"
+    ));
     assert_eq!(
-        stderr(&output),
-        "grida-fx: --deliver image=out/{key}.png: image is one file, so no {key}\n"
+        lines[2],
+        "grida-fx: --deliver image=out/{key}.png: image is one file, so no {key}"
     );
     // Without --run, a new folder under the project's runs folder, named from here.
     let output = run(&[]);

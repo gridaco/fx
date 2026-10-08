@@ -88,6 +88,10 @@ remaining connections; local runtime cleanup is also bounded. Stopping
 the service never cancels workflow processes. The service neither schedules nor
 resumes a workflow after a crash. Clients may reconnect and replay recorded events.
 
+The [run-control contract](control.md) defines the separate, runner-owned cancellation
+interface. Its private discovery works without this
+service; neither service shutdown nor a browser read is a cancellation request.
+
 Background means detached from the invoking command and terminal. Automatic crash
 restart, login/boot activation, system-level installation, cross-user access and
 machine-wide project aggregation are not part of this first contract. Native OS

@@ -29,8 +29,8 @@
 //! The run is unregistered from the router before `run` returns (also when its future is
 //! dropped), so later host requests for it are answered `-32602`.
 //!
-//! [`HostPool::shutdown`] ends every idle host politely (`HostProcess::shutdown`); the pool can
-//! still lease hosts afterwards. Dropping the pool kills the hosts it still holds.
+//! [`HostPool::shutdown`] ends idle hosts politely and awaits unhealthy-host retirement,
+//! reporting whether every owned child was reaped. The pool can still lease hosts afterwards.
 
 use super::GRACE;
 use super::connection::{ConnectionError, Incoming};
@@ -40,6 +40,7 @@ use grida_fx_protocol::{ErrorCode, RpcError, RunParams, method};
 use grida_fx_providers::BoxFuture;
 use serde_json::Value;
 use std::process::ExitStatus;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
@@ -86,6 +87,7 @@ pub struct HostPool {
     /// How long a host gets to answer `$/cancel`, to take `shutdown`, or to exit (5 seconds;
     /// shorter in tests).
     grace: Duration,
+    cleanup_verified: Arc<AtomicBool>,
 }
 
 struct PoolState {
@@ -93,6 +95,10 @@ struct PoolState {
     idle: Vec<Idle>,
     /// Why hosts cannot be started, once one failed to start.
     failure: Option<String>,
+    /// Keep every detached unhealthy-host reap inside the shutdown barrier.
+    retiring: Vec<tokio::task::JoinHandle<Option<ExitStatus>>>,
+    /// Dropped outside a runtime; shutdown takes ownership of these processes too.
+    retired: Vec<HostProcess>,
 }
 
 /// An idle host and the router its connection serves.
@@ -111,8 +117,11 @@ impl HostPool {
             state: Mutex::new(PoolState {
                 idle: Vec::new(),
                 failure: None,
+                retiring: Vec::new(),
+                retired: Vec::new(),
             }),
             grace: GRACE,
+            cleanup_verified: Arc::new(AtomicBool::new(true)),
         }
     }
 
@@ -140,10 +149,17 @@ impl HostPool {
 
     /// An idle host, a new one, or the next one returned (module doc).
     pub async fn lease(self: &Arc<Self>) -> Result<HostLease, String> {
-        let permit = Arc::clone(&self.leases)
-            .acquire_owned()
-            .await
-            .map_err(|_| "the node host pool is closed".to_string())?;
+        self.lease_cancellable(&Cancel::new()).await
+    }
+
+    /// Cancellation during startup is handled while retaining and reaping the owned child.
+    pub async fn lease_cancellable(self: &Arc<Self>, cancel: &Cancel) -> Result<HostLease, String> {
+        let acquiring = Arc::clone(&self.leases).acquire_owned();
+        let permit = tokio::select! {
+            biased;
+            () = cancel.cancelled() => return Err("the run was stopped".into()),
+            permit = acquiring => permit.map_err(|_| "the node host pool is closed".to_string())?,
+        };
         loop {
             let idle = self.state().idle.pop();
             let Some(mut idle) = idle else { break };
@@ -156,14 +172,24 @@ impl HostPool {
                     spent: false,
                 });
             }
-            idle.process.kill_now().await;
+            if idle.process.kill_now().await.is_none() {
+                self.cleanup_verified.store(false, Ordering::SeqCst);
+            }
         }
         if let Some(failure) = self.state().failure.clone() {
             return Err(failure);
         }
         let router = Arc::new(Router::new());
         let incoming: Arc<dyn Incoming> = router.clone();
-        match HostProcess::start_within(&self.spec, incoming, self.grace).await {
+        match HostProcess::start_cancellable(
+            &self.spec,
+            incoming,
+            self.grace,
+            cancel,
+            Arc::clone(&self.cleanup_verified),
+        )
+        .await
+        {
             Ok(process) => Ok(HostLease {
                 pool: Arc::clone(self),
                 host: Some(process),
@@ -172,21 +198,44 @@ impl HostPool {
                 spent: false,
             }),
             Err(failure) => {
-                self.state().failure = Some(failure.clone());
+                if !cancel.is_cancelled() {
+                    self.state().failure = Some(failure.clone());
+                }
                 Err(failure)
             }
         }
     }
 
-    /// Ends every idle host politely.
-    pub async fn shutdown(&self) {
-        let idle = std::mem::take(&mut self.state().idle);
+    /// Ends idle and retiring hosts and verifies every owned child was reaped.
+    /// Call once authored work has ended and released its leases.
+    pub async fn shutdown(&self) -> bool {
+        let (idle, retiring, retired) = {
+            let mut state = self.state();
+            (
+                std::mem::take(&mut state.idle),
+                std::mem::take(&mut state.retiring),
+                std::mem::take(&mut state.retired),
+            )
+        };
         let mut ending = tokio::task::JoinSet::new();
         let grace = self.grace;
         for mut idle in idle {
             ending.spawn(async move { idle.process.end(true, grace).await });
         }
-        while ending.join_next().await.is_some() {}
+        for mut host in retired {
+            ending.spawn(async move { host.kill_now().await });
+        }
+        for retired in retiring {
+            if !matches!(retired.await, Ok(Some(_))) {
+                self.cleanup_verified.store(false, Ordering::SeqCst);
+            }
+        }
+        while let Some(ended) = ending.join_next().await {
+            if !matches!(ended, Ok(Some(_))) {
+                self.cleanup_verified.store(false, Ordering::SeqCst);
+            }
+        }
+        self.cleanup_verified.load(Ordering::SeqCst)
     }
 }
 
@@ -328,14 +377,12 @@ impl Drop for HostLease {
                     process: host,
                     router: Arc::clone(&self.router),
                 });
-            } else if !host.has_ended()
-                && let Ok(runtime) = tokio::runtime::Handle::try_current()
-            {
-                runtime.spawn(async move {
-                    host.kill_now().await;
-                });
+            } else if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+                let retiring = runtime.spawn(async move { host.kill_now().await });
+                self.pool.state().retiring.push(retiring);
+            } else {
+                self.pool.state().retired.push(host);
             }
-            // Otherwise dropping the process kills it with its group.
         }
         drop(self.permit.take());
     }
@@ -626,6 +673,136 @@ while read() is not None:
     pass
 time.sleep(60)
 "#;
+
+    #[cfg(unix)]
+    fn fake_host(source: &str) -> (tempfile::TempDir, HostSpec) {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("host.py"), source).unwrap();
+        let python = dir.path().join("python-stub");
+        std::fs::write(
+            &python,
+            "#!/bin/sh\nexec python3 \"$(dirname \"$0\")/host.py\"\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&python, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let spec = HostSpec {
+            python,
+            label: "python-stub".into(),
+            project_root: dir.path().to_path_buf(),
+            sources: Vec::new(),
+        };
+        (dir, spec)
+    }
+
+    #[cfg(unix)]
+    async fn pid_file(root: &std::path::Path) -> String {
+        tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if let Ok(pid) = std::fs::read_to_string(root.join("pid.txt"))
+                    && !pid.is_empty()
+                {
+                    return pid;
+                }
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .unwrap()
+    }
+
+    #[cfg(unix)]
+    fn assert_reaped(pid: &str) {
+        let status = std::process::Command::new("kill")
+            .args(["-0", pid])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .unwrap();
+        assert!(
+            !status.success(),
+            "the owned node host survived its cleanup barrier"
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn shutdown_reaps_an_unhealthy_host_even_before_its_retirement_task_runs() {
+        let source = DEAF.replace("import json, sys, time", "import json, os, sys, time\nwith open('pid.txt', 'w') as f:\n    f.write(str(os.getpid()))")
+            .replace("while read() is not None:\n    pass\ntime.sleep(60)", "message = read()\nbody = json.dumps({'jsonrpc': '2.0', 'id': message['id'], 'result': None}).encode()\nsys.stdout.buffer.write(b'Content-Length: %d\\r\\n\\r\\n' % len(body) + body)\nsys.stdout.buffer.flush()\nos.close(sys.stdout.fileno())\ntime.sleep(60)");
+        let (dir, spec) = fake_host(&source);
+        let pool = Arc::new(HostPool::new(spec, 1).with_grace(Duration::from_millis(50)));
+        let lease = pool.lease().await.unwrap();
+        let connection = lease.host().connection().clone();
+        assert_eq!(
+            connection.request("run", Some(json!({}))).await.unwrap(),
+            Value::Null
+        );
+        connection.closed().await;
+        let pid = pid_file(dir.path()).await;
+        drop(lease);
+        assert_eq!(pool.state().retiring.len(), 1);
+        assert!(pool.shutdown().await);
+        assert_reaped(&pid);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn startup_cancellation_reaps_the_host_without_waiting_for_initialize() {
+        let (dir, spec) = fake_host(
+            "import os, time\nwith open('pid.txt', 'w') as f:\n    f.write(str(os.getpid()))\ntime.sleep(60)\n",
+        );
+        let pool = Arc::new(HostPool::new(spec, 1).with_grace(Duration::from_millis(50)));
+        let cancel = Cancel::new();
+        let started = {
+            let pool = Arc::clone(&pool);
+            let cancel = cancel.clone();
+            tokio::spawn(async move { pool.lease_cancellable(&cancel).await })
+        };
+        let pid = pid_file(dir.path()).await;
+        cancel.cancel();
+        let result = tokio::time::timeout(Duration::from_secs(2), started)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(result.is_err());
+        assert!(pool.shutdown().await);
+        assert_reaped(&pid);
+    }
+
+    #[tokio::test]
+    async fn a_retirement_task_failure_permanently_withholds_cleanup_verification() {
+        let pool = HostPool::new(
+            HostSpec {
+                python: "python3".into(),
+                label: "python3".into(),
+                project_root: "/work/acme".into(),
+                sources: Vec::new(),
+            },
+            1,
+        );
+        pool.state().retiring.push(tokio::spawn(async {
+            panic!("injected retirement failure")
+        }));
+        assert!(!pool.shutdown().await);
+        assert!(!pool.shutdown().await);
+    }
+
+    #[tokio::test]
+    async fn a_missing_retirement_status_never_certifies_cleanup() {
+        let pool = HostPool::new(
+            HostSpec {
+                python: "python3".into(),
+                label: "python3".into(),
+                project_root: "/work/acme".into(),
+                sources: Vec::new(),
+            },
+            1,
+        );
+        pool.state().retiring.push(tokio::spawn(async { None }));
+        assert!(!pool.shutdown().await);
+    }
 
     #[cfg(unix)]
     #[tokio::test(flavor = "multi_thread")]

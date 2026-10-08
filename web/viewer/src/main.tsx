@@ -140,7 +140,7 @@ function ResizeHandle({ side }: { side: "left" | "right" }) {
 function WorkflowView() {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   useEffect(() => { void controller.refresh(); return () => controller.dispose(); }, []);
-  const { view, graph, selected, loading, error, updated, scope, breadcrumbs, scopeNode } = state;
+  const { view, graph, selected, loading, error, updated, scope, breadcrumbs, scopeNode, cancelling } = state;
   const plan = view?.kind === "fx-graph-v1" ? view : null;
   const run = view?.kind === "fx-viewer-run-v1" ? view : null;
   const selectedNode = graph.nodes.find((node) => node.id === selected);
@@ -161,7 +161,7 @@ function WorkflowView() {
             {run && <code className="fx-run-name">{run.run_name}</code>}
           </div>
           <dl className="fx-run-summary">
-            {run && <><div><dt>State</dt><dd><Status state={run.state} /></dd></div><div><dt>Spend</dt><dd className="font-mono">{money(run.charged_usd)}</dd></div></>}
+            {run && <><div><dt>State</dt><dd title={cancelling ? "Cancellation requested; local cleanup is not yet verified." : undefined}><Status state={cancelling ? "cancelling" : run.state} /></dd></div><div><dt>Spend</dt><dd className="font-mono">{money(run.charged_usd)}</dd></div></>}
             {plan && <div><dt>Expanded</dt><dd>{plan.instances.length} steps</dd></div>}
             <div><dt>Estimate</dt><dd className="font-mono">{view.estimate ? `${money(view.estimate.low_usd)} – ${money(view.estimate.high_usd)}` : "Not recorded"}</dd></div>
           </dl>

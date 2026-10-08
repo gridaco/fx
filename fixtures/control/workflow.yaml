@@ -1,0 +1,22 @@
+fx: workflow/v1
+id: control-harness
+title: Cancellation harness
+description: A local gate with delayed cleanup, followed by a step cancellation must never admit.
+
+inputs:
+  cancel_delay: { type: integer, default: 3, minimum: 0, maximum: 10 }
+
+steps:
+  checkpoint:
+    uses: ./nodes.py#checkpoint
+  hold:
+    uses: ./nodes.py#hold
+    with:
+      text: ${{ steps.checkpoint.outputs.text }}
+      cancel_delay: ${{ inputs.cancel_delay }}
+  after:
+    uses: ./nodes.py#after
+    with: { text: "${{ steps.hold.outputs.text }}" }
+
+outputs:
+  text: ${{ steps.after.outputs.text }}

@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-run-control-v1",
+  "title": "FX local run control (fx-run-control-v1)",
+  "description": "A bounded observation or cancellation result for one selected invocation. Local completion does not verify remote work.",
+  "type": "object",
+  "required": [
+    "kind",
+    "operation",
+    "invocation_id",
+    "outcome",
+    "request_status",
+    "recorded_state",
+    "cleanup",
+    "external_completion"
+  ],
+  "properties": {
+    "kind": {
+      "const": "fx-run-control-v1"
+    },
+    "operation": {
+      "enum": [
+        "inspect",
+        "cancel"
+      ]
+    },
+    "invocation_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "outcome": {
+      "enum": [
+        "inspected",
+        "accepted",
+        "already_requested",
+        "already_terminal",
+        "finishing",
+        "completed",
+        "error"
+      ]
+    },
+    "request_status": {
+      "enum": [
+        "accepted",
+        "not_accepted",
+        "unknown"
+      ]
+    },
+    "recorded_state": {
+      "enum": [
+        "planned",
+        "unfinished",
+        "succeeded",
+        "failed",
+        "cancelled",
+        "unknown"
+      ]
+    },
+    "cleanup": {
+      "enum": [
+        "pending",
+        "complete",
+        "unknown"
+      ]
+    },
+    "external_completion": {
+      "const": "not_verified"
+    },
+    "code": {
+      "enum": [
+        "invalid_target",
+        "ambiguous_target",
+        "invocation_mismatch",
+        "unsupported_version",
+        "unauthorized",
+        "unavailable",
+        "record_error",
+        "wait_timeout",
+        "owner_lost",
+        "acknowledgment_unknown",
+        "completion_unverified"
+      ]
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "availability": {
+      "enum": [
+        "available",
+        "unavailable",
+        "unsupported",
+        "unknown"
+      ]
+    },
+    "can_cancel": {
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "const": "error"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "code",
+          "message"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "inspect"
+          },
+          "outcome": {
+            "const": "inspected"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "availability",
+          "can_cancel"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "const": "completed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "cleanup": {
+            "const": "complete"
+          },
+          "recorded_state": {
+            "enum": [
+              "succeeded",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "invocation_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "invocation_id"
+        ]
+      }
+    }
+  ]
+}

@@ -799,12 +799,14 @@ fn stand_in_services(
         false,
     )
     .with_stand_in(Arc::new(StandIn::new(stand_in)));
+    let cancel = Cancel::new();
     Arc::new(Services {
+        control: grida_fx_runtime::run_control::RunControl::unrecorded(cancel.clone()),
         engine: Arc::new(engine),
         ledger: Some(Arc::new(Ledger::new(None, None))),
         events: None,
         pacing: Arc::new(Pacing::new()),
-        cancel: Cancel::new(),
+        cancel,
         invocation_id: "inv".into(),
         runs: AtomicU64::new(0),
         holds: AtomicU64::new(0),

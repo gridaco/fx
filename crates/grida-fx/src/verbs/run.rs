@@ -247,22 +247,41 @@ fn plan_and_run(
     };
     let mut viewer = None;
     let project = planner.project.clone();
-    let ran = runner::run_with_ready(Arc::clone(engine), planner, host, plan, options, |root| {
-        // Observation is independent: a bind failure must not fail or hold up execution.
-        if !args.no_view && (args.standalone || !project.has_file) {
-            match RunViewer::start(engine, root, args.open) {
-                Ok(host) => viewer = Some(host),
-                Err(_) => crate::print::print_error(&Error::usage(
-                    "standalone viewer unavailable; the workflow will continue. Reopen it with inspect RUN --standalone after completion.",
-                )),
-            }
-        } else if !args.no_view {
-            super::view::report_service(
-                super::service::register_run(&project, root, args.open),
-                args.open,
+    let ran = runner::run_with_control_ready(
+        Arc::clone(engine),
+        planner,
+        host,
+        plan,
+        options,
+        |ready| {
+            crate::interrupt::runner_started();
+            print_line(&format!("run       {label}"));
+            eprintln!("invocation {}", ready.invocation_id);
+            eprintln!(
+                "{}",
+                if ready.control_available {
+                    "control   available"
+                } else {
+                    "control   unavailable"
+                }
             );
-        }
-    });
+            let root = &ready.folder;
+            // Observation is independent: a bind failure must not fail or hold up execution.
+            if !args.no_view && (args.standalone || !project.has_file) {
+                match RunViewer::start(engine, root, args.open) {
+                    Ok(host) => viewer = Some(host),
+                    Err(_) => crate::print::print_error(&Error::usage(
+                        "standalone viewer unavailable; the workflow will continue. Reopen it with inspect RUN --standalone after completion.",
+                    )),
+                }
+            } else if !args.no_view {
+                super::view::report_service(
+                    super::service::register_run(&project, root, args.open),
+                    args.open,
+                );
+            }
+        },
+    );
     // The run command's lifetime owns the server, including failure and cancellation.
     drop(viewer);
     if made && ran.is_err() {
@@ -281,7 +300,12 @@ fn plan_and_run(
         return Ok(INTERRUPTED);
     }
     let scrub = Scrub::new(planner, &engine.store);
-    for line in summary(&label, args.stand_in.as_deref(), &outcome, &scrub) {
+    // The run folder was already flushed at readiness. Keep one stable summary header;
+    // dynamic invocation/control diagnostics belong to stderr.
+    for line in summary(&label, args.stand_in.as_deref(), &outcome, &scrub)
+        .into_iter()
+        .skip(1)
+    {
         print_line(&line);
     }
     let delivered = deliver(deliveries, &outcome.outputs, &engine.store, cwd)?;

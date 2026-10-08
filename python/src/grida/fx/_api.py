@@ -103,7 +103,7 @@ _REFUSED = "refused: "
 _ERROR = "grida-fx: "
 _USAGE_OR_ERROR = 2
 _CANCELLED = 130
-#: How long a stopped engine gets to finish after its interrupt, before it is killed.
+#: The stop grace for non-run commands. Run cleanup has no automatic force deadline.
 _STOP_GRACE_S = 10.0
 #: How long the engine's pipes are still read once it has exited: what it wrote is already there,
 #: and a process a node body started may hold them open for as long as it runs.
@@ -274,6 +274,15 @@ class RunResult:
         self.events = list(events)
         #: The planning project's store; found from the current directory when not set.
         self._store: Path | None = None
+
+    @property
+    def invocation_id(self) -> str | None:
+        """The latest initialized invocation in this result's recorded events."""
+        for event in reversed(self.events):
+            if event.get("event") == "run_started":
+                value = event.get("invocation_id")
+                return value if isinstance(value, str) else None
+        return None
 
     def _ending(self) -> Mapping[str, Any] | None:
         """The last ``run_finished`` or ``run_cancelled``, whichever came last."""
@@ -730,8 +739,39 @@ async def _read_into(stream: asyncio.StreamReader | None, sink: bytearray) -> No
 
 
 async def _call(args: Sequence[str], cwd: Path, stdin: socket.socket | None = None) -> _Exit:
-    """Runs the binary with ``args`` in ``cwd``. Cancelled, it interrupts the engine (which stops
-    the run as Ctrl-C would) and kills it if it has not ended a while later. Its output is what it
+    """Runs the binary, retaining ownership of a cancelled run until its engine has exited.
+    Repeated task cancellation is the same request, never emergency force authority. Non-run
+    commands keep their process-owned interruption and force deadline."""
+    if not args or args[0] != "run":
+        return await _call_owned(args, cwd, stdin)
+    stop_requested = asyncio.Event()
+    owner = asyncio.ensure_future(_call_owned(args, cwd, stdin, stop_requested))
+    try:
+        return await asyncio.shield(owner)
+    except BaseException:
+        stop_requested.set()
+        # Shield creation, exit, pipe draining and transport cleanup from caller cancellation.
+        # Even cancellation during subprocess creation must leave an owner to stop the child.
+        while not owner.done():
+            try:
+                await asyncio.shield(owner)
+            except asyncio.CancelledError:
+                continue
+            except Exception:
+                break  # The owner finished with an error; preserve the caller's interruption.
+        # Retrieve a possible owner failure without replacing the caller's interruption.
+        if not owner.cancelled():
+            owner.exception()
+        raise
+
+
+async def _call_owned(
+    args: Sequence[str],
+    cwd: Path,
+    stdin: socket.socket | None = None,
+    stop_requested: asyncio.Event | None = None,
+) -> _Exit:
+    """Runs the binary with ``args`` in ``cwd``. Its output is what it
     wrote until it exited: the call ends with the binary, not with the last holder of its pipes.
     Its standard input is the null device, or ``stdin``: a socket, closed here once the binary
     holds it, so the binary alone keeps that end open."""
@@ -740,6 +780,9 @@ async def _call(args: Sequence[str], cwd: Path, stdin: socket.socket | None = No
         # Its own session: a Ctrl-C at the terminal reaches it once, through this function.
         options["start_new_session"] = True
     loop = asyncio.get_running_loop()
+    environment = engine_environment()
+    if args and args[0] == "run":
+        environment["GRIDA_FX_CANCEL_SOURCE"] = "sdk"
     try:
         transport, protocol = await loop.subprocess_exec(
             lambda: _Protocol(loop),
@@ -749,7 +792,7 @@ async def _call(args: Sequence[str], cwd: Path, stdin: socket.socket | None = No
             stdin=subprocess.DEVNULL if stdin is None else stdin.fileno(),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            env=engine_environment(),
+            env=environment,
             **options,
         )
     finally:
@@ -761,15 +804,23 @@ async def _call(args: Sequence[str], cwd: Path, stdin: socket.socket | None = No
         asyncio.ensure_future(_read_into(process.stdout, stdout)),
         asyncio.ensure_future(_read_into(process.stderr, stderr)),
     ]
+    stopper = None if stop_requested is None else asyncio.ensure_future(stop_requested.wait())
     try:
         try:
-            await asyncio.shield(protocol.exited)
+            if stopper is None:
+                await asyncio.shield(protocol.exited)
+            else:
+                await asyncio.wait([protocol.exited, stopper], return_when=asyncio.FIRST_COMPLETED)
+                if not protocol.exited.done():
+                    await _stop(process, protocol.exited, graceful=True)
         except BaseException:
-            await _stop(process, protocol.exited)
+            await _stop(process, protocol.exited, graceful=stop_requested is not None)
             raise
         # What the binary wrote before it exited is in the pipes; read it, then stop reading.
         await asyncio.wait(readers, timeout=_DRAIN_S)
     finally:
+        if stopper is not None:
+            stopper.cancel()
         for reader in readers:
             reader.cancel()
         await asyncio.wait(readers)
@@ -782,16 +833,22 @@ async def _call(args: Sequence[str], cwd: Path, stdin: socket.socket | None = No
     )
 
 
-async def _stop(process: asyncio.subprocess.Process, exited: asyncio.Future[None]) -> None:
-    """Interrupts the engine, as Ctrl-C would, and kills it if it has not exited a while later.
-    Its pipes are read meanwhile, so it never waits on them."""
+async def _stop(
+    process: asyncio.subprocess.Process, exited: asyncio.Future[None], *, graceful: bool = False
+) -> None:
+    """Interrupts once. Runs retain cleanup ownership without a force deadline; other commands
+    keep their existing process-owned fallback. Pipes are read meanwhile."""
     if exited.done():
         return
     with contextlib.suppress(ProcessLookupError):
         if os.name == "posix":
-            process.send_signal(signal.SIGINT)
+            # SIGTERM is always idempotent; only an explicit second SIGINT grants force.
+            process.send_signal(signal.SIGTERM if graceful else signal.SIGINT)
         else:
             process.terminate()
+    if graceful:
+        await asyncio.shield(exited)
+        return
     try:
         await asyncio.wait_for(asyncio.shield(exited), _STOP_GRACE_S)
     except TimeoutError:
@@ -821,10 +878,10 @@ async def _call_answered(args: Sequence[str], cwd: Path, answerer: Answerer) -> 
         return await _call(args, cwd, stdin=theirs)
     finally:
         server.cancel()
-        await asyncio.wait([server])
         # A server cancelled before it started (the engine never ran) has not closed its end.
         answerer.close()
         writer.close()
+        await asyncio.wait([server])
 
 
 async def _serve_stand_in(

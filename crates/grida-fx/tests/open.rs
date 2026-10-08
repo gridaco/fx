@@ -194,6 +194,15 @@ fn run_opens_only_when_requested_and_launcher_failure_does_not_fail_execution() 
         };
         assert!(url.starts_with("http://127.0.0.1:"));
         await_file(&root.join("entered"));
+        let invocation = running.errors.recv_timeout(Duration::from_secs(5)).unwrap();
+        let id = invocation.strip_prefix("invocation ").unwrap();
+        assert_eq!(id.len(), 16);
+        assert!(id.bytes().all(|byte| byte.is_ascii_hexdigit()));
+        let control = running.errors.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(matches!(
+            control.as_str(),
+            "control   available" | "control   unavailable"
+        ));
         if open {
             await_file(&root.join("opened.json"));
             let receipt: serde_json::Value =

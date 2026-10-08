@@ -34,6 +34,14 @@ from grida.fx._api import (
     run_async,
 )
 from grida.fx._builder import Group, StepRef, Workflow
+from grida.fx._control import (
+    RunControlError,
+    RunControlResult,
+    cancel,
+    cancel_async,
+    inspect_control,
+    inspect_control_async,
+)
 from grida.fx._ctx import CallResult, Ctx, InputFile, Output
 from grida.fx._errors import (
     CallFailed,
@@ -68,6 +76,8 @@ __all__ = [
     "PlanRefused",
     "PortSpec",
     "RunResult",
+    "RunControlError",
+    "RunControlResult",
     "SpecError",
     "StandInCall",
     "StepRef",
@@ -76,6 +86,10 @@ __all__ = [
     "ToolReply",
     "ToolResult",
     "Workflow",
+    "cancel",
+    "cancel_async",
+    "inspect_control",
+    "inspect_control_async",
     "node",
     "param",
     "plan",

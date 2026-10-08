@@ -325,6 +325,9 @@ const STOPPED: &str = "the run was stopped";
 
 /// Makes one attempt (module doc).
 pub async fn execute(services: Arc<Services>, job: Arc<InstanceJob>, cancel: Cancel) -> Attempt {
+    let Some(_admission) = services.control.admit() else {
+        return Attempt::ran(failed(STOPPED)).with_code(Some(ErrorCode::Cancelled));
+    };
     let store = Arc::clone(&services.engine.store);
     if let Some(hit) = from_cache(&store, &job) {
         return hit;
@@ -472,10 +475,7 @@ async fn run_on_host(
         Ok(params) => params,
         Err(message) => return Attempt::ran(failed(&message)),
     };
-    let lease = tokio::select! {
-        lease = services.engine.hosts.lease() => lease,
-        _ = cancel.cancelled() => return Attempt::ran(failed(STOPPED)),
-    };
+    let lease = services.engine.hosts.lease_cancellable(cancel).await;
     let mut lease = match lease {
         Ok(lease) => lease,
         Err(message) => return Attempt::ran(failed(&message)),
@@ -503,10 +503,10 @@ async fn run_on_host(
             timeout,
         )
         .await;
+    let timed_out = requests_cancel.is_cancelled() && !cancel.is_cancelled();
     handler.close();
     drop(lease);
     // Past the deadline, whatever the host answered other than a result is the timeout.
-    let timed_out = requests_cancel.is_cancelled() && !cancel.is_cancelled();
     let reply = match reply {
         RunReply::Result(value) => RunReply::Result(value),
         _ if timed_out => RunReply::TimedOut,

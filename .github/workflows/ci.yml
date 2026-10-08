@@ -135,6 +135,7 @@ jobs:
       - run: uv run --locked --project python python tools/check_examples.py
       - run: uv run --locked --project python python tools/check_viewer_fixtures.py
       - run: uv run --locked --project python python tools/check_observation.py --command "$PWD/python/src/grida/fx/_bin/grida-fx"
+      - run: uv run --locked --project python python tools/check_control.py --command "$PWD/python/src/grida/fx/_bin/grida-fx"
 
   # Every manifest states the Cargo workspace's version (tools/check_versions.py).
   versions:

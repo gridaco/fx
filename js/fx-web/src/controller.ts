@@ -1,7 +1,7 @@
 import { canvasGraph, readView, type Artifact, type CanvasGraph, type CanvasStep, type ViewerView } from "./index";
 import { WorkflowNavigation, type Breadcrumb } from "./navigation";
 import { navigationScopes, type InterfaceBinding } from "./scopes";
-import { ObservationError, observationReader, type RunObservationReader } from "./observation";
+import { cancellationRequested, ObservationError, observationReader, type RunObservationReader } from "./observation";
 import { validateViewerApiBase } from "./route";
 
 export interface ViewerState {
@@ -14,6 +14,7 @@ export interface ViewerState {
   scope: string | null;
   breadcrumbs: Breadcrumb[];
   scopeNode: CanvasStep | null;
+  cancelling: boolean;
 }
 
 export interface ViewerPollingScheduler {
@@ -35,7 +36,7 @@ const pollingScheduler: ViewerPollingScheduler = {
 
 /** Owns reads, serial observation, navigation and selection without a presentation framework. */
 export class ViewerController {
-  private state: ViewerState = { view: null, graph: { nodes: [], edges: [] }, selected: null, loading: true, error: null, updated: null, scope: null, breadcrumbs: [{ id: null, title: "Workflow" }], scopeNode: null };
+  private state: ViewerState = { view: null, graph: { nodes: [], edges: [] }, selected: null, loading: true, error: null, updated: null, scope: null, breadcrumbs: [{ id: null, title: "Workflow" }], scopeNode: null, cancelling: false };
   private navigation = new WorkflowNavigation();
   private listeners = new Set<() => void>();
   private request: AbortController | null = null;
@@ -111,9 +112,9 @@ export class ViewerController {
     const breadcrumbs = this.navigation.getSnapshot().breadcrumbs;
     if (breadcrumbs.length > 1) this.goToScope(breadcrumbs[breadcrumbs.length - 2].id);
   };
-  private apply(view: ViewerView) {
+  private apply(view: ViewerView, cancelling = false) {
     this.navigation.setScopes(navigationScopes(view.scopes), view.workflow.title);
-    this.update({ view, ...this.project(view), error: null, updated: new Date() });
+    this.update({ view, ...this.project(view), cancelling, error: null, updated: new Date() });
   }
   private cancelTimer() {
     if (this.timer !== null) this.scheduler.cancel(this.timer);
@@ -130,7 +131,7 @@ export class ViewerController {
     const snapshot = await this.observation!.snapshot(request.signal);
     if (request.signal.aborted) return;
     this.cursor = snapshot.cursor;
-    this.apply(snapshot.view);
+    this.apply(snapshot.view, cancellationRequested(snapshot.events));
   }
   private async poll() {
     if (!this.active || !this.observingRun || !this.observation) return;

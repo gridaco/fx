@@ -125,8 +125,19 @@ if "sleep" in reply:
     def interrupted(signum, frame):
         with log.open("a") as out:
             out.write(json.dumps({"interrupted": True}) + "\n")
+            if "cleanup_gate" in reply:
+                out.write(json.dumps({"signal": signum,
+                                      "source": os.environ.get("GRIDA_FX_CANCEL_SOURCE")}) + "\n")
+        if "cleanup_gate" in reply:
+            while not Path(reply["cleanup_gate"]).exists():
+                time.sleep(0.01)
+            with log.open("a") as out:
+                out.write(json.dumps({"cleanup": "complete"}) + "\n")
         sys.exit(130)
     signal.signal(signal.SIGINT, interrupted)
+    signal.signal(signal.SIGTERM, interrupted)
+    if "ready_file" in reply:
+        Path(reply["ready_file"]).write_text(str(os.getpid()))
     time.sleep(reply["sleep"])
 sys.stdout.write(reply.get("stdout", "").replace("{folder}", folder or ""))
 sys.stderr.write(reply.get("stderr", ""))
@@ -858,6 +869,235 @@ def test_cancelling_a_run_interrupts_the_engine(fake: Fake, project: Path) -> No
 
     asyncio.run(cancel())
     assert {"interrupted": True} in fake.calls
+
+
+def test_repeated_run_task_cancellation_retains_cleanup_ownership(
+    fake: Fake, project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    gate, ready = project / "cleanup", project / "ready"
+    fake.reply(run={"sleep": 30, "cleanup_gate": str(gate), "ready_file": str(ready)})
+    # A much shorter non-run deadline proves that run cancellation never uses that timer.
+    monkeypatch.setattr(_api, "_STOP_GRACE_S", 0.03)
+
+    async def scenario() -> None:
+        task = asyncio.create_task(fx.run_async("gallery", cwd=project))
+        try:
+            async with asyncio.timeout(10):
+                while not ready.exists():
+                    await asyncio.sleep(0.01)
+            task.cancel()
+            async with asyncio.timeout(10):
+                while {"interrupted": True} not in fake.calls:
+                    await asyncio.sleep(0.01)
+            task.cancel()
+            await asyncio.sleep(0.1)
+            assert not task.done(), "a cancelled run detached before engine cleanup"
+            assert [call for call in fake.calls if "signal" in call] == [
+                {"signal": signal.SIGTERM, "source": "sdk"}
+            ]
+        finally:
+            gate.touch()
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(task, 10)
+
+    asyncio.run(scenario())
+    assert {"cleanup": "complete"} in fake.calls
+
+
+def test_run_cancellation_while_process_creation_is_pending_keeps_an_owner(
+    project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def scenario() -> None:
+        creation = asyncio.Event()
+        released = asyncio.Event()
+        observed: list[bool] = []
+
+        async def owned(
+            args: object, cwd: object, stdin: object, stop: asyncio.Event
+        ) -> _api._Exit:
+            creation.set()
+            await released.wait()
+            observed.append(stop.is_set())
+            return _api._Exit(130, "", "")
+
+        monkeypatch.setattr(_api, "_call_owned", owned)
+        task = asyncio.create_task(_api._call(["run", "gallery"], project))
+        await creation.wait()
+        task.cancel()
+        await asyncio.sleep(0)
+        task.cancel()
+        await asyncio.sleep(0)
+        assert not task.done()
+        released.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert observed == [True]
+
+    asyncio.run(scenario())
+
+
+def test_cancelling_only_a_control_wait_does_not_signal_its_run(fake: Fake, project: Path) -> None:
+    ready = project / "control-ready"
+    # The independently owned runner is a separate process with its own interrupt evidence.
+    runner_log = project / "runner-signals"
+    runner = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            "import signal,sys,time; "
+            "signal.signal(signal.SIGTERM, lambda *args: open(sys.argv[1], 'w').write('stop')); "
+            "signal.signal(signal.SIGINT, lambda *args: open(sys.argv[1], 'w').write('stop')); "
+            "time.sleep(30)",
+            str(runner_log),
+        ],
+        start_new_session=True,
+    )
+    fake.reply(cancel={"sleep": 30, "ready_file": str(ready)})
+
+    async def scenario() -> None:
+        task = asyncio.create_task(fx.cancel_async("runs/a", cwd=project, wait=True))
+        async with asyncio.timeout(10):
+            while not ready.exists():
+                await asyncio.sleep(0.01)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(task, 10)
+
+    try:
+        asyncio.run(scenario())
+        assert runner.poll() is None
+        assert not runner_log.exists()
+        assert {"interrupted": True} in fake.calls
+    finally:
+        runner.kill()
+        runner.wait(timeout=10)
+
+
+def _control_result(operation: str = "cancel", **fields: Any) -> dict[str, Any]:
+    result = {
+        "kind": "fx-run-control-v1",
+        "operation": operation,
+        "invocation_id": "inv-1",
+        "outcome": "accepted" if operation == "cancel" else "inspected",
+        "request_status": "accepted" if operation == "cancel" else "not_accepted",
+        "recorded_state": "unfinished",
+        "cleanup": "pending",
+        "external_completion": "not_verified",
+    }
+    if operation == "inspect":
+        result.update(availability="available", can_cancel=True)
+    return {**result, **fields}
+
+
+def test_control_wrappers_forward_exact_target_options_and_preserve_outcomes(
+    fake: Fake, project: Path
+) -> None:
+    fake.reply(inspect={"stdout": json.dumps(_control_result("inspect"))})
+    sampled = fx.inspect_control(Path("gallery/one"), cwd=project)
+    assert isinstance(sampled, fx.RunControlResult)
+    assert sampled.invocation_id == "inv-1" and sampled.can_cancel is True
+    assert fake.invocations[-1] == ["inspect", "gallery/one", "--control", "--json"]
+    fake.reply(cancel={"stdout": json.dumps(_control_result())})
+    requested = fx.cancel("runs/one", cwd=project, invocation=sampled.invocation_id)
+    assert requested.outcome == "accepted" and requested.cleanup == "pending"
+    assert fake.invocations[-1] == [
+        "cancel",
+        "runs/one",
+        "--source=sdk",
+        "--invocation=inv-1",
+        "--json",
+    ]
+    completed = _control_result(outcome="completed", recorded_state="failed", cleanup="complete")
+    fake.reply(cancel={"stdout": json.dumps(completed)})
+    result = fx.cancel("runs/one", cwd=project, wait=True, timeout="2m")
+    assert result.outcome == "completed" and result.recorded_state == "failed"
+    assert result.external_completion == "not_verified"
+    assert fake.invocations[-1] == [
+        "cancel",
+        "runs/one",
+        "--source=sdk",
+        "--wait",
+        "--timeout=2m",
+        "--json",
+    ]
+
+
+def test_async_control_and_structured_errors(fake: Fake, project: Path) -> None:
+    failure = _control_result(
+        outcome="error", code="wait_timeout", message="local cleanup is still pending"
+    )
+    fake.reply(cancel={"stdout": json.dumps(failure), "status": 1})
+    with pytest.raises(fx.RunControlError) as caught:
+        asyncio.run(fx.cancel_async("runs/one", cwd=project, wait=True, timeout="1s"))
+    assert caught.value.status == 1 and caught.value.code == "wait_timeout"
+    assert caught.value.result.request_status == "accepted"
+    assert caught.value.result.cleanup == "pending"
+    inspected = _control_result("inspect", availability="unavailable", can_cancel=False)
+    fake.reply(inspect={"stdout": json.dumps(inspected)})
+    assert (
+        asyncio.run(fx.inspect_control_async("runs/one", cwd=project)).availability == "unavailable"
+    )
+
+
+@pytest.mark.parametrize(
+    ("fields", "status", "wait"),
+    [
+        ({"outcome": "future_success"}, 0, False),
+        ({"outcome": "accepted"}, 2, False),
+        ({"outcome": "completed"}, 0, False),
+        ({"outcome": "accepted"}, 0, True),
+        ({"outcome": "completed", "cleanup": "pending", "recorded_state": "cancelled"}, 0, True),
+        ({"outcome": "completed", "cleanup": "complete", "recorded_state": "unfinished"}, 0, True),
+        (
+            {
+                "outcome": "completed",
+                "cleanup": "complete",
+                "recorded_state": "cancelled",
+                "invocation_id": None,
+            },
+            0,
+            True,
+        ),
+        ({"outcome": "error", "code": "future_code", "message": "unknown"}, 0, False),
+        ({"outcome": "error", "code": "wait_timeout", "message": "timed out"}, 2, True),
+        ({"invocation_id": "x" * 257}, 0, False),
+        ({"external_completion": "complete"}, 0, False),
+    ],
+)
+def test_unknown_or_mismatched_control_responses_are_never_success(
+    fake: Fake, project: Path, fields: dict[str, Any], status: int, wait: bool
+) -> None:
+    fake.reply(cancel={"stdout": json.dumps(_control_result(**fields)), "status": status})
+    with pytest.raises(fx.FxError) as caught:
+        fx.cancel("runs/one", cwd=project, wait=wait)
+    assert not isinstance(caught.value, fx.RunControlError)
+
+
+def test_unsupported_control_binary_and_compatible_extensions(fake: Fake, project: Path) -> None:
+    fake.reply(cancel={"stderr": "grida-fx: unknown command 'cancel'\n", "status": 2})
+    with pytest.raises(fx.FxError, match="unknown command") as caught:
+        fx.cancel("runs/one", cwd=project)
+    assert not isinstance(caught.value, fx.RunControlError)
+    fake.reply(cancel={"stdout": json.dumps(_control_result(extension={"future": True}))})
+    assert fx.cancel("runs/one", cwd=project).outcome == "accepted"
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        {"timeout": "1s"},
+        {"wait": True, "timeout": "0s"},
+        {"wait": True, "timeout": "1.5s"},
+        {"wait": "yes"},
+        {"invocation": ""},
+    ],
+)
+def test_invalid_control_options_are_refused_before_starting_an_engine(
+    fake: Fake, project: Path, options: dict[str, Any]
+) -> None:
+    with pytest.raises((TypeError, ValueError)):
+        fx.cancel("runs/one", cwd=project, **options)
+    assert fake.invocations == []
 
 
 def test_a_process_that_keeps_the_engines_pipes_does_not_hold_the_run(

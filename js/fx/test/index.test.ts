@@ -20,6 +20,8 @@ test("the SDK's surface", () => {
     "run",
     "project",
     "inspect",
+    "inspectControl",
+    "cancel",
     "engineVersion",
     "toYaml",
     "workflow",

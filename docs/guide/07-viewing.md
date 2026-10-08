@@ -244,3 +244,11 @@ the fixture's expectations are the regression baseline.
 Custom node views, portable web snapshots, machine-wide project aggregation and
 OS-managed startup/recovery remain later work. The [service contract](../../spec/service.md)
 owns current lifecycle guarantees; [TODO](../../TODO.md) records open ideas.
+
+## Cancellation intent
+
+The run sidebar shows `cancelling` after a recorded `cancel_requested` event and
+returns to the terminal state when that invocation ends. A resume resets the intent.
+This label does not prove the runner is still alive or that cleanup finished. Use
+[`inspect --control` or `cancel --wait`](08-run-control.md) for verified local control.
+The viewer has no cancellation button or write endpoint in this version.

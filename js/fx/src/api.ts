@@ -230,6 +230,12 @@ export class RunResult {
     return this.projection.run?.run_finished;
   }
 
+  /** The initialized invocation represented by this result's projection. */
+  get invocationId(): string | null {
+    const value = this.projection.run?.run_started?.invocation_id;
+    return typeof value === "string" ? value : null;
+  }
+
   /** Whether every step that had to run succeeded and the run ended normally. */
   get ok(): boolean {
     return this.finished?.ok === true;

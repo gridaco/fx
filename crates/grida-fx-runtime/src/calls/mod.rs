@@ -783,6 +783,7 @@ impl Lead<'_> {
         };
         let hold_name = || services.next_hold(&site.instance_id);
         let attempts = Attempts {
+            control: Some(&services.control),
             call: CallRequest {
                 route: route_ref,
                 request: request.clone(),
@@ -970,6 +971,9 @@ impl Lead<'_> {
                 ErrorCode::CapabilityRefused,
                 format!("{capability} on {route_id} was refused: {reason}"),
             )
+        };
+        let Some(_admission) = services.control.admit() else {
+            return Some(Err(CallError::Cancelled));
         };
         let failed = |reason: &str| {
             known.error(

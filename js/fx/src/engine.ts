@@ -4,7 +4,8 @@
  * The engine runs in the caller's process group, so a Ctrl-C at the terminal reaches it as it
  * reaches the caller, and it stops a run as it would on its own: do not also abort the call on
  * that Ctrl-C (a second interruption makes the engine end at once). An `AbortSignal` stops it from
- * code: the engine gets SIGINT, and SIGKILL if it has not exited 10 seconds later.
+ * code: a run gets one idempotent SIGTERM and retains ownership until engine cleanup ends, without
+ * an automatic force deadline. Other commands retain their ten-second SIGKILL fallback.
  *
  * A call ends when the engine exits, not when the last holder of its pipes closes them: a process
  * a node body started may outlive the engine on purpose.
@@ -21,8 +22,8 @@ export interface CallOptions {
   /** Variables over `process.env` for the engine (`undefined` removes one), e.g.
    * `GRIDA_FX_PYTHON`. `GRIDA_FX_BIN` here also chooses the binary. */
   readonly env?: Environment;
-  /** Stops the engine (SIGINT, then SIGKILL after 10 seconds); the call rejects with the
-   * signal's reason once it has exited. */
+  /** Interrupts the engine once. A run waits for engine cleanup before rejecting with the
+   * signal's reason; other commands retain a ten-second force fallback. */
   readonly signal?: AbortSignal;
 }
 
@@ -40,7 +41,7 @@ export interface Exit {
 export const USAGE_OR_ERROR = 2;
 /** The exit status of an interrupted command. */
 export const INTERRUPTED = 130;
-/** How long a stopped engine has to exit before it is killed. */
+/** The stop grace for non-run commands. Run cleanup has no automatic force deadline. */
 const STOP_GRACE_MS = 10_000;
 /** How long the pipes are still read once the engine has exited. */
 const DRAIN_MS = 500;
@@ -51,6 +52,9 @@ const ERROR_PREFIX = "grida-fx: ";
 export async function call(args: readonly string[], options: CallOptions = {}): Promise<Exit> {
   const cwd = options.cwd ?? process.cwd();
   const env = mergeEnvironment(options.env);
+  if (args[0] === "run") {
+    env.GRIDA_FX_CANCEL_SOURCE = "sdk";
+  }
   const engine = findEngine(machineLookup(env, cwd));
   options.signal?.throwIfAborted();
   return new Promise<Exit>((resolvePromise, reject) => {
@@ -64,13 +68,21 @@ export async function call(args: readonly string[], options: CallOptions = {}): 
     child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
     child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
     let killTimer: NodeJS.Timeout | undefined;
+    let interrupted = false;
     const onAbort = () => {
-      if (child.exitCode === null && child.signalCode === null) {
-        child.kill("SIGINT");
-        killTimer = setTimeout(() => child.kill("SIGKILL"), STOP_GRACE_MS);
+      if (!interrupted && child.exitCode === null && child.signalCode === null) {
+        interrupted = true;
+        child.kill(args[0] === "run" ? "SIGTERM" : "SIGINT");
+        if (args[0] !== "run") {
+          killTimer = setTimeout(() => child.kill("SIGKILL"), STOP_GRACE_MS);
+        }
       }
     };
     options.signal?.addEventListener("abort", onAbort, { once: true });
+    // An abort between the initial check and listener registration must still stop this child.
+    if (options.signal?.aborted) {
+      onAbort();
+    }
     const finish = () => {
       options.signal?.removeEventListener("abort", onAbort);
       if (killTimer !== undefined) {

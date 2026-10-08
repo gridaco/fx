@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
-  ObservationError, ViewerController, parseRunEventBatch, parseRunSnapshot,
+  cancellationRequested, ObservationError, ViewerController, parseRunEventBatch, parseRunSnapshot,
   parseViewerSnapshot, readObservation, type RunEvent, type RunEventBatch,
   type RunObservationReader, type ViewerPollingScheduler, type ViewerRun, type ViewerSnapshot,
 } from "../src/index";
@@ -83,6 +83,30 @@ describe("observation read boundary", () => {
 });
 
 describe("serial live viewer observation", () => {
+  test("recorded cancellation intent clears on terminal or resume without changing run state", async () => {
+    const requested = { ...event, event: "cancel_requested", source: "cli" };
+    const terminal = { ...event, event: "run_cancelled" };
+    const resumed = { ...event, invocation_id: "invocation-b" };
+    expect(cancellationRequested([event, requested])).toBeTrue();
+    expect(cancellationRequested([event, requested, terminal])).toBeFalse();
+    expect(cancellationRequested([event, requested, resumed, requested])).toBeFalse();
+    const clock = new Clock();
+    let current = { ...snapshot(), view: run("unfinished"), events: [event, requested] };
+    const observation: RunObservationReader = {
+      async snapshot() { return current; },
+      async events() { return batch(current.cursor, current.events); },
+    };
+    const controller = new ViewerController(async () => run(), { observation, scheduler: clock });
+    await controller.refresh(); controller.select("instance:read#1");
+    expect(controller.getSnapshot()).toMatchObject({ cancelling: true, view: { state: "unfinished" } });
+    current = { ...snapshot("terminal"), view: run("cancelled"), events: [event, requested, terminal] };
+    await clock.tick();
+    expect(controller.getSnapshot()).toMatchObject({ cancelling: false, selected: "instance:read#1", view: { state: "cancelled" } });
+    current = { ...snapshot("resumed"), view: run("unfinished"), events: [event, requested, terminal, resumed] };
+    await clock.tick();
+    expect(controller.getSnapshot()).toMatchObject({ cancelling: false, view: { state: "unfinished" } });
+    controller.dispose();
+  });
   test("live projections retain nested navigation, breadcrumbs and selected instances", async () => {
     const clock = new Clock(), plan = nestedPlan();
     let state = "running";

@@ -61,6 +61,9 @@ use std::path::{Component, Path, PathBuf};
 
 /// Runs `grida-fx inspect`.
 pub fn run(args: &InspectArgs) -> Result<u8, Error> {
+    if args.control {
+        return super::control::inspect(args);
+    }
     let cwd = super::planning::working_directory()?;
     let (folder, label) = find_folder(&args.run, &cwd)?;
     let plan = read_plan(&folder, &label)?;

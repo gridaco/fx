@@ -224,3 +224,40 @@ recorded prefix. Continue with `observe RUN --after CURSOR --limit 256`; apply a
 batch before saving its returned cursor and drain while `has_more`. A terminal
 event ends one invocation; a later resume can append more. Unfinished state does
 not prove process liveness, and a stopped viewer does not prove a stopped workflow.
+
+## Stop execution and verify cleanup
+
+Check installed help before using `inspect --control` and `cancel`; older releases
+may lack these commands. Select an explicit run folder or exact `WORKFLOW_ID/NAME`.
+Never cancel a bare workflow ID or assume its newest run is the intended target.
+
+```sh
+grida-fx inspect runs/example --control --json
+grida-fx cancel runs/example --invocation INVOCATION_ID --wait --timeout 30s --json
+```
+
+Retain the inspected invocation for the guard. A newer invocation refuses it even
+if already terminal. A request binds once and never retargets a later resume.
+Acceptance means closed admission and persisted intent; `completed` with
+`cleanup: complete` additionally verifies local bookkeeping, owned host cleanup
+and released writer ownership. `external_completion` remains `not_verified`.
+Never promise remote cancellation, a refund or that an unknown charge became $0.
+
+No-wait `cancel` returns after acknowledgment or a definite no-op. Wait defaults
+to 30s; a timeout or interrupted waiter leaves an accepted request effective.
+Repeated requests are idempotent. Retry with the same invocation guard to verify.
+A missing cleanup receipt is `completion_unverified`, not permission to force.
+Check the result and exit status: control exit 0 does not mean workflow success.
+
+First Ctrl-C/SIGTERM is graceful; repeated SIGTERM is idempotent. There is no
+automatic runner force timer. A second explicit Ctrl-C is emergency force and
+can interrupt bookkeeping. Python `inspect_control`/`cancel` and their `_async`
+variants, and JavaScript `inspectControl`/`cancel`, use this same contract.
+SDK run cancellation retains ownership until engine cleanup; aborting only a
+control wait ends that wait. Choose a run folder to supervise a pending SDK run.
+
+Continue by repeating the original target/inputs/options with `--resume NAME` or
+the same `--run FOLDER`. Existing plan/mode checks and recorded spend remain.
+An explicit resume can repeat an uncertain plain synchronous paid call; resumable
+jobs retain their separate reconciliation protection. Cancellation is not pause;
+`pause` and `terminate` remain deferred.

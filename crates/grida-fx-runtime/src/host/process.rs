@@ -52,6 +52,7 @@ use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::process::{ExitStatus, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 use tokio::process::{Child, Command};
@@ -92,7 +93,7 @@ impl HostProcess {
         cwd: &Path,
         incoming: Arc<dyn Incoming>,
     ) -> Result<HostProcess, String> {
-        HostProcess::start_at(spec, cwd, incoming, GRACE).await
+        HostProcess::start_at(spec, cwd, incoming, GRACE, None, None).await
     }
 
     /// [`HostProcess::start`], giving a host that fails to initialize `grace` to exit.
@@ -101,7 +102,26 @@ impl HostProcess {
         incoming: Arc<dyn Incoming>,
         grace: Duration,
     ) -> Result<HostProcess, String> {
-        HostProcess::start_at(spec, &spec.project_root, incoming, grace).await
+        HostProcess::start_at(spec, &spec.project_root, incoming, grace, None, None).await
+    }
+
+    /// Pool startup retains process ownership while cancellation interrupts initialization.
+    pub(crate) async fn start_cancellable(
+        spec: &HostSpec,
+        incoming: Arc<dyn Incoming>,
+        grace: Duration,
+        cancel: &crate::engine::Cancel,
+        cleanup_verified: Arc<AtomicBool>,
+    ) -> Result<HostProcess, String> {
+        HostProcess::start_at(
+            spec,
+            &spec.project_root,
+            incoming,
+            grace,
+            Some(cancel),
+            Some(cleanup_verified),
+        )
+        .await
     }
 
     /// Spawns in `cwd` and initializes (module doc).
@@ -110,6 +130,8 @@ impl HostProcess {
         cwd: &Path,
         incoming: Arc<dyn Incoming>,
         grace: Duration,
+        cancel: Option<&crate::engine::Cancel>,
+        cleanup_verified: Option<Arc<AtomicBool>>,
     ) -> Result<HostProcess, String> {
         let shown = &spec.label;
         let Some(project_root) = spec.project_root.to_str() else {
@@ -157,10 +179,18 @@ impl HostProcess {
         let (true, (Some(stdin), Some(stdout))) = (enlisted, streams) else {
             if let Some(group) = group {
                 forget(group);
-                kill_groups_now(&[group]);
+                if !kill_groups_now(&[group])
+                    && let Some(verified) = &cleanup_verified
+                {
+                    verified.store(false, Ordering::SeqCst);
+                }
             }
             let _ = child.start_kill();
-            let _ = child.wait().await;
+            if child.wait().await.is_err()
+                && let Some(verified) = &cleanup_verified
+            {
+                verified.store(false, Ordering::SeqCst);
+            }
             return Err(if enlisted {
                 format!("cannot start the Python node host with {shown}: its streams are not piped")
             } else {
@@ -173,11 +203,27 @@ impl HostProcess {
             child,
             group,
             status: None,
+            cleanup_verified,
+            group_delivery_verified: true,
         };
         let asking = connection.clone();
         let request = asking.request(method::INITIALIZE, Some(params));
         tokio::pin!(request);
-        let failure = match running.answer_or_exit(request, grace).await {
+        let cancelled = async {
+            match cancel {
+                Some(cancel) => cancel.cancelled().await,
+                None => std::future::pending().await,
+            }
+        };
+        let answer = tokio::select! {
+            biased;
+            () = cancelled => {
+                running.kill().await;
+                return Err("the run was stopped while its node host initialized".into());
+            }
+            answer = running.answer_or_exit(request, grace) => answer,
+        };
+        let failure = match answer {
             Ok(value) => match serde_json::from_value::<InitializeResult>(value) {
                 Ok(info) if info.protocol == PROTOCOL => {
                     return Ok(HostProcess {
@@ -242,6 +288,11 @@ impl HostProcess {
         self.end(true, GRACE).await
     }
 
+    /// Shutdown evidence for an owner that must certify local cleanup.
+    pub(crate) async fn shutdown_verified(mut self) -> bool {
+        self.end(true, GRACE).await.is_some() && self.running.group_delivery_verified
+    }
+
     /// Kills the process and its group at once.
     pub async fn kill(mut self) -> Option<ExitStatus> {
         self.kill_now().await
@@ -303,6 +354,9 @@ struct Running {
     group: Option<u32>,
     /// Set once the process has been reaped.
     status: Option<ExitStatus>,
+    /// Pool receipt eligibility: a dropped or failed reap leaves cleanup unverified.
+    cleanup_verified: Option<Arc<AtomicBool>>,
+    group_delivery_verified: bool,
 }
 
 impl Running {
@@ -316,7 +370,12 @@ impl Running {
     fn end_group(&mut self) {
         if let Some(group) = self.group.take() {
             forget(group);
-            kill_groups_now(&[group]);
+            if !kill_groups_now(&[group]) {
+                self.group_delivery_verified = false;
+                if let Some(verified) = &self.cleanup_verified {
+                    verified.store(false, Ordering::SeqCst);
+                }
+            }
         }
     }
 
@@ -422,6 +481,11 @@ impl Drop for Running {
     fn drop(&mut self) {
         self.try_status();
         self.end_group();
+        if self.status.is_none()
+            && let Some(verified) = &self.cleanup_verified
+        {
+            verified.store(false, Ordering::SeqCst);
+        }
     }
 }
 
@@ -457,8 +521,7 @@ fn forget(group: u32) {
 }
 
 /// Kills the process group of every host this process started and has not ended, and lets no
-/// host start after it: for a command that is about to exit because it was interrupted. Blocks
-/// for as long as the `kill` program takes.
+/// host start after it: for a command that is about to exit because it was interrupted.
 pub fn end_every_host() {
     let live = {
         let mut groups = groups();
@@ -468,31 +531,171 @@ pub fn end_every_host() {
     kill_groups_now(&live);
 }
 
-/// Sends `SIGKILL` to process groups (no unsafe code: the system's `kill` program). Waits for the
-/// program, so the groups are gone when it returns.
+/// Sends `SIGKILL` directly to every owned group. Only successful delivery or the kernel's
+/// `ESRCH` (the group is already absent) verifies cleanup; other errors remain unverified.
 #[cfg(unix)]
-fn kill_groups_now(groups: &[u32]) {
-    if groups.is_empty() {
-        return;
-    }
-    let _ = std::process::Command::new("kill")
-        .args(["-s", "KILL", "--"])
-        .args(groups.iter().map(|group| format!("-{group}")))
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
+fn kill_groups_now(groups: &[u32]) -> bool {
+    kill_groups_with(groups, rustix::process::kill_process_group)
+}
+
+#[cfg(unix)]
+fn kill_groups_with(
+    groups: &[u32],
+    mut kill: impl FnMut(rustix::process::Pid, rustix::process::Signal) -> rustix::io::Result<()>,
+) -> bool {
+    use rustix::io::Errno;
+    use rustix::process::{Pid, Signal};
+
+    groups.iter().fold(true, |verified, &group| {
+        // Zero names the caller's group and one would map to kill(-1), so neither can be an
+        // owned host group. Reject them and out-of-range IDs before invoking the syscall.
+        let pid = i32::try_from(group)
+            .ok()
+            .filter(|&raw| raw > 1)
+            .and_then(Pid::from_raw);
+        let result = pid
+            .ok_or(Errno::INVAL)
+            .and_then(|pid| kill(pid, Signal::KILL));
+        // Do not short-circuit after failure: every other owned group still needs cleanup.
+        verified & matches!(result, Ok(()) | Err(Errno::SRCH))
+    })
 }
 
 /// Process groups are a Unix notion: `kill_on_drop` ends a host elsewhere.
 #[cfg(not(unix))]
-fn kill_groups_now(_groups: &[u32]) {}
+fn kill_groups_now(_groups: &[u32]) -> bool {
+    true
+}
 
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
     use crate::host::connection::NoIncoming;
     use std::time::Instant;
+
+    #[test]
+    fn group_cleanup_accepts_only_delivery_or_kernel_confirmed_absence() {
+        use rustix::io::Errno;
+
+        assert!(kill_groups_with(&[42], |_, _| Ok(())));
+        assert!(kill_groups_with(&[42], |_, _| Err(Errno::SRCH)));
+        for error in [Errno::PERM, Errno::INVAL, Errno::IO, Errno::INTR] {
+            assert!(!kill_groups_with(&[42], |_, _| Err(error)), "{error:?}");
+        }
+        let mut attempted = Vec::new();
+        assert!(!kill_groups_with(&[42, 43], |pid, _| {
+            attempted.push(pid.as_raw_pid());
+            if pid.as_raw_pid() == 42 {
+                Err(Errno::PERM)
+            } else {
+                Ok(())
+            }
+        }));
+        assert_eq!(attempted, [42, 43]);
+        assert!(!kill_groups_with(&[0, 1, u32::MAX], |_, _| panic!(
+            "an invalid group must never reach kill"
+        )));
+        assert!(kill_groups_now(&[]));
+    }
+
+    #[tokio::test]
+    async fn an_already_reaped_empty_group_is_verified_by_esrch() {
+        let mut child = tokio::process::Command::new("/bin/sh")
+            .args(["-c", "exit 0"])
+            .process_group(0)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let group = child.id().unwrap();
+        assert!(child.wait().await.unwrap().success());
+        let pid = rustix::process::Pid::from_raw(i32::try_from(group).unwrap()).unwrap();
+        assert_eq!(
+            rustix::process::test_kill_process_group(pid),
+            Err(rustix::io::Errno::SRCH)
+        );
+        assert!(kill_groups_now(&[group]));
+    }
+
+    /// Runs with a child-only PATH override, so concurrent tests keep their own environment.
+    #[tokio::test]
+    async fn path_shadowed_kill_cannot_fake_verified_group_cleanup() {
+        use rustix::process::{Pid, Signal, kill_process, test_kill_process};
+        use std::os::unix::fs::PermissionsExt;
+
+        if std::env::var("GRIDA_FX_GROUP_KILL_CHILD").as_deref() != Ok("1") {
+            let dir = tempfile::tempdir().unwrap();
+            let stub = dir.path().join("kill");
+            std::fs::write(
+                &stub,
+                "#!/bin/sh\nprintf '%s' \"$*\" >> \"$GRIDA_FX_GROUP_KILL_LOG\"\nexit 1\n",
+            )
+            .unwrap();
+            std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+            let path = std::env::join_paths(std::iter::once(dir.path().to_path_buf()).chain(
+                std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()),
+            ))
+            .unwrap();
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "host::process::tests::path_shadowed_kill_cannot_fake_verified_group_cleanup",
+                    "--nocapture",
+                ])
+                .env("PATH", path)
+                .env("GRIDA_FX_GROUP_KILL_CHILD", "1")
+                .env("GRIDA_FX_GROUP_KILL_LOG", dir.path().join("invoked"))
+                .stdin(Stdio::null())
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert!(
+                !dir.path().join("invoked").exists(),
+                "group cleanup must not resolve kill through PATH"
+            );
+            return;
+        }
+        assert!(
+            have_python3(),
+            "this process-group regression needs python3"
+        );
+        let (dir, spec) = fake(
+            "polite",
+            &format!("{FRAMES}{POLITE}{INITIALIZED}{POLITE_LOOP}"),
+        );
+        let host = HostProcess::start(&spec, Arc::new(NoIncoming))
+            .await
+            .unwrap();
+        let grandchild = std::fs::read_to_string(dir.path().join("grandchild.txt")).unwrap();
+        let pid = Pid::from_raw(grandchild.trim().parse().unwrap()).unwrap();
+        assert_eq!(test_kill_process(pid), Ok(()));
+        let verified = host.shutdown_verified().await;
+        let ended = tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                if test_kill_process(pid) == Err(rustix::io::Errno::SRCH) {
+                    return;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .is_ok();
+        if !ended {
+            // A failing regression must still clean up the real child it started.
+            let _ = kill_process(pid, Signal::KILL);
+        }
+        assert!(verified, "the actual kernel delivery should verify cleanup");
+        assert!(
+            ended,
+            "the grandchild {grandchild} survived reported verified cleanup"
+        );
+    }
 
     /// A host that answers `initialize`, starts a grandchild, and then ignores everything.
     const STUBBORN: &str = r#"

@@ -102,6 +102,15 @@ pub trait Answerer: Send + Sync {
     /// Ends the answerer: `shutdown`, `exit`, and its end of the channel closed.
     fn shutdown(&self) -> BoxFuture<'_, ()>;
 
+    /// Local cleanup evidence. Injected in-process answerers own their synchronous shutdown;
+    /// a process-backed answerer verifies its owned host rather than discarding its status.
+    fn shutdown_verified(&self) -> BoxFuture<'_, bool> {
+        Box::pin(async move {
+            self.shutdown().await;
+            true
+        })
+    }
+
     /// Resolves once the answerer is gone before [`Answerer::shutdown`] began (module doc,
     /// "Losing the answerer"); never, for an answerer that cannot be lost.
     fn lost(&self) -> BoxFuture<'_, ()> {
@@ -136,8 +145,8 @@ impl StandIn {
     }
 
     /// Ends the answerer (module doc).
-    pub async fn shutdown(&self) {
-        self.answerer.shutdown().await;
+    pub async fn shutdown(&self) -> bool {
+        self.answerer.shutdown_verified().await
     }
 
     /// Resolves once the answerer is gone while the run still runs ([`Answerer::lost`]).
@@ -161,6 +170,7 @@ pub struct ConnectionAnswerer {
     ending: Cancel,
     /// Set once the peer is gone before the shutdown began (module doc, "Losing the answerer").
     lost: Arc<tokio::sync::watch::Sender<bool>>,
+    cleanup_verified: std::sync::atomic::AtomicBool,
 }
 
 impl ConnectionAnswerer {
@@ -172,6 +182,7 @@ impl ConnectionAnswerer {
             host: Arc::new(tokio::sync::Mutex::new(host)),
             ending: Cancel::new(),
             lost: Arc::new(tokio::sync::watch::channel(false).0),
+            cleanup_verified: std::sync::atomic::AtomicBool::new(true),
         };
         answerer.watch();
         answerer
@@ -383,7 +394,10 @@ impl Answerer for ConnectionAnswerer {
         Box::pin(async move {
             self.ending.cancel();
             if let Some(host) = self.host.lock().await.take() {
-                host.shutdown().await;
+                if !host.shutdown_verified().await {
+                    self.cleanup_verified
+                        .store(false, std::sync::atomic::Ordering::SeqCst);
+                }
                 return;
             }
             if self.connection.is_open() {
@@ -394,7 +408,21 @@ impl Answerer for ConnectionAnswerer {
                 })
                 .await;
             }
-            let _ = tokio::time::timeout(GRACE, self.connection.close_input()).await;
+            if tokio::time::timeout(GRACE, self.connection.close_input())
+                .await
+                .is_err()
+            {
+                self.cleanup_verified
+                    .store(false, std::sync::atomic::Ordering::SeqCst);
+            }
+        })
+    }
+
+    fn shutdown_verified(&self) -> BoxFuture<'_, bool> {
+        Box::pin(async move {
+            self.shutdown().await;
+            self.cleanup_verified
+                .load(std::sync::atomic::Ordering::SeqCst)
         })
     }
 
@@ -466,6 +494,21 @@ const UNREADABLE: &str = "the stand-in answered something FX cannot read";
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[tokio::test]
+    async fn repeated_stand_in_shutdown_does_not_erase_unverified_cleanup() {
+        let connection = Connection::start(
+            tokio::io::empty(),
+            tokio::io::sink(),
+            Arc::new(crate::host::connection::NoIncoming),
+        );
+        let answerer = ConnectionAnswerer::over(connection, None);
+        answerer
+            .cleanup_verified
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+        assert!(!answerer.shutdown_verified().await);
+        assert!(!answerer.shutdown_verified().await);
+    }
 
     #[test]
     fn results_map_to_replies() {

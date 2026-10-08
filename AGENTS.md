@@ -21,6 +21,7 @@ Guardrails for working in this repository. [README.md](README.md) says what FX i
 | `examples/` | Projects written the way a user would. CI plans every one and runs every runnable one offline through the SDK, from a fresh build (rigged-character only plans). |
 | `skills/` | Self-contained user-installable agent skills, distributed through `npx skills add gridaco/fx`; the README owns layout and authoring conventions. |
 | `fixtures/viewer/` | Canonical provider-free development harness for viewer topology, media, cache, takes, failures and recorded in-progress states; generated data stays outside the source fixture. |
+| `fixtures/control/` | Provider-free checkpoint and delayed-cleanup harness for cancellation acceptance, waiting, verified cleanup and resume. Copy it into a fresh project for each test. |
 | `tools/` | What runs outside the engine: the spec gate, the independent digest checker, packaging, `build_engine.py` (the engine into a checkout's SDK) and `check_examples.py`. |
 
 ## Rules
@@ -33,6 +34,8 @@ Guardrails for working in this repository. [README.md](README.md) says what FX i
 - **Examples run.** Their node bodies are real code and their routes are the built-in table's, and the plan output in a README is pasted from the engine. An example that needs something FX does not have yet (a capability without an adapter, a planned API) only plans: it may keep an illustrative route of its own and placeholder bodies, and its README says so. A change that alters what an example prints updates its README.
 - **Contracts use `lower_snake_case`.** Keep mandatory external vocabulary exactly (`$ref`, `$defs`, `additionalProperties`).
 - **Agent readiness is a design harness.** For CLI, SDK, lifecycle or public-contract changes, consult [AGENT_READINESS.md](AGENT_READINESS.md) and update affected scenarios, capability status and evidence. Keep proposed capabilities separate from implemented behavior; `spec/` remains normative.
+- **Keep CLI and SDK surfaces aligned.** When adding or changing a public operation, review both Python and JavaScript SDKs, including options, results, errors, and lifecycle behavior. Update applicable wrappers, tests, and documentation together. If SDK support is intentionally deferred or inapplicable, record that explicitly in [AGENT_READINESS.md](AGENT_READINESS.md).
+- **Run-control coordination stays private.** [spec/control.md](spec/control.md) specifies the same-user temporary control directory allowed to hold local paths and a control token. It is outside portable run records, caches, browser documents and logs; preserve its ownership, permissions and confinement requirements when implementing it.
 - **Identifiers, comments, logs and messages are in English.**
 - **Nontrivial browser UI uses vanilla TypeScript classes.** Own canvas, viewport,
   interaction and viewer state in independently testable classes. React is a thin
@@ -57,6 +60,7 @@ uv run --project python python conformance/run.py --command target/debug/grida-f
 python3 tools/build_engine.py && uv run --project python python tools/check_examples.py
 python3 tools/check_viewer.py --command "$PWD/python/src/grida/fx/_bin/grida-fx"
 uv run --project python python tools/check_observation.py --command target/debug/grida-fx
+uv run --project python python tools/check_control.py --command target/debug/grida-fx
 uv run --project python python tools/check_viewer_fixtures.py
 ```
 

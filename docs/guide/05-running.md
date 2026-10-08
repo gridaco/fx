@@ -13,6 +13,8 @@ releases; [the source setup](../../CONTRIBUTING.md#build-from-source) is for dev
 | `grida-fx start [--project directory] [--port N] [--background] [--open] [--json]` | serve the project's dashboard and recorded runs; foreground by default |
 | `grida-fx status [--project directory] [--json]` / `stop [--project directory] [--json]` | inspect or stop that project's service |
 | `grida-fx logs [--project directory] [--lines N]` | read a bounded tail of service logs |
+| `grida-fx inspect RUN --control [--json]` | observe an exact invocation's local control availability |
+| `grida-fx cancel RUN [--invocation ID] [--wait] [--timeout DURATION] [--json]` | request cancellation; optionally verify local completion ([Run control](08-run-control.md)) |
 | `grida-fx plan <target> [inputs] [--routes file]… [--max-usd N] [--check] [--expect-cached] [--json] [--open] [--standalone]` | expand, check, price; optionally open the plan canvas. Never spends. |
 | `grida-fx run <target> [inputs] [--routes file]… [--live] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--name NAME \| --resume NAME \| --run folder] [--stand-in file.py#function] [--open \| --no-view] [--standalone]` | run; `--live` admits paid calls, needs a ceiling and reads the provider keys; `--name` creates a named run, `--resume` continues it, `--run` selects a folder; `--stand-in` answers paid calls with your function instead, offline ([below](#stand-ins-testing-without-a-provider)) |
 | `grida-fx reroll <run> <step-path> [--live]` / `grida-fx pick <run> <step-path> <take>` | takes ([Cost](04-cost-and-cache.md#takes)) |
@@ -76,9 +78,16 @@ output cannot be combined with browser-serving flags. See
 `--deliver` found its output. `1` when it read everything and refused or stopped: a plan with
 problems, a run refused before it started (a live run without a ceiling, a folder that holds
 another plan), a run that is not ok, an output that `--deliver` did not find. `2` for unreadable
-input or a command-line mistake, with `grida-fx: <message>` on stderr. `130` when you interrupt a
-command (Ctrl-C, or SIGTERM) at any point, planning included: node hosts end with it, and what a
-run finished is kept ([Resuming](04-cost-and-cache.md#resuming)).
+input or a command-line mistake, with `grida-fx: <message>` on stderr. `130` for
+process-owned interruption, including planning, or accepted run cancellation
+(Ctrl-C, SIGTERM or `cancel`): owned node hosts are cleaned up and completed work
+is kept ([Resuming](04-cost-and-cache.md#resuming)). If finalization already won,
+the execution can preserve its actual terminal result and normal exit status.
+
+Control commands have their own [outcomes and exit codes](08-run-control.md).
+First Ctrl-C/SIGTERM requests graceful run cancellation, with no automatic runner
+force timer. A second explicit Ctrl-C is emergency force; repeated SIGTERM is
+idempotent. Cancelling a separate waiter never stops waiting by forcing the run.
 
 **Route tables.** Routes and their prices come from FX's built-in table, then the tables `fx.yaml`
 lists under `route_tables`, then each `--routes` file in the order given. A later table's entry
@@ -226,7 +235,8 @@ past `--yes-up-to`, an interruption) is *incomplete*. Everything a run finished 
 shown, and running the same command into the same folder (`--run`) continues from there; a
 folder that holds a run of another workflow or other inputs is refused.
 
-`run` prints the plan, then a summary, each label in a column of ten:
+`run` prints the plan, then its selected folder and invocation before executing.
+Its result summary follows execution, each label in a column of ten:
 
 ```
 run       runs/one

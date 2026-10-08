@@ -227,6 +227,9 @@ where
             return Attempted::Cancelled;
         }
         let attempt = execute().await;
+        if attempt.code == Some(grida_fx_protocol::ErrorCode::Cancelled) {
+            return Attempted::Cancelled;
+        }
         let failed = attempt.result.status == ResultStatus::Failed;
         if failed && cancel.is_cancelled() {
             return Attempted::Cancelled;

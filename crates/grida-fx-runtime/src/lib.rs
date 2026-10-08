@@ -23,6 +23,7 @@
 
 pub mod agent;
 pub mod calls;
+pub mod control;
 pub mod engine;
 pub mod events;
 pub mod executor;
@@ -31,6 +32,7 @@ pub mod host;
 pub mod ledger;
 pub mod observation;
 pub mod plantime;
+pub mod run_control;
 pub mod runner;
 pub mod stand_in;
 pub mod store;

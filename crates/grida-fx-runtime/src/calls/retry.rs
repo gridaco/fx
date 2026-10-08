@@ -98,6 +98,7 @@ use grida_fx_providers::{
     Answer, BoxFuture, CallRequest, Collected, LongJob, RequestAdapter, Sent, Submitted,
 };
 use serde_json::Value;
+use std::sync::Arc;
 use std::time::Duration;
 
 /// The most sends of one call's request (module doc).
@@ -204,6 +205,8 @@ pub struct Attempts<'a> {
     pub jobs: &'a dyn JobBook,
     pub pacing: &'a dyn Admission,
     pub cancel: &'a Cancel,
+    /// Invocation admission: every send/resend/collection shares cancellation acceptance.
+    pub control: Option<&'a Arc<crate::run_control::RunControl>>,
     pub backoff: Backoff,
     /// The job record's key fields (`state` and `handle` are set by the owner); long jobs only.
     pub job: Option<JobRecord>,
@@ -250,7 +253,7 @@ async fn plain(adapter: &dyn RequestAdapter, attempts: &Attempts<'_>) -> Outcome
     let mut resend: Option<Hold> = None;
     loop {
         // The slot first, then the hold (module doc, "Sends").
-        let Some(slot) = attempts.admit(&route_id).await else {
+        let Some((slot, _admission)) = attempts.admit(&route_id).await else {
             if let Some(hold) = resend.take() {
                 attempts.settle(hold, Some(Usd::ZERO));
             }
@@ -346,7 +349,7 @@ async fn submit(adapter: &dyn LongJob, attempts: &Attempts<'_>) -> Outcome {
     let mut resend: Option<Hold> = None;
     loop {
         // The slot first, then the hold (module doc, "Sends").
-        let Some(slot) = attempts.admit(&route_id).await else {
+        let Some((slot, _admission)) = attempts.admit(&route_id).await else {
             if let Some(hold) = resend.take() {
                 // The `submitting` record of the submit that was not received.
                 return attempts.unsent(fields, hold, Outcome::Cancelled);
@@ -544,7 +547,7 @@ async fn collect_once(
     call: &CallRequest,
     handle: &Value,
 ) -> Collect {
-    let Some(slot) = attempts.admit(&call.route.id()).await else {
+    let Some((slot, _admission)) = attempts.admit(&call.route.id()).await else {
         return Collect::Cancelled;
     };
     let collected = race(adapter.collect(call, handle), attempts.cancel).await;
@@ -650,15 +653,20 @@ impl Attempts<'_> {
     }
 
     /// Takes the route's slot and pacing for one send; `None` when the run stopped first.
-    async fn admit(&self, route_id: &str) -> Option<Slot> {
+    async fn admit(&self, route_id: &str) -> Option<(Slot, Option<crate::run_control::Admission>)> {
         if self.cancel.is_cancelled() {
             return None;
         }
-        tokio::select! {
+        let slot = tokio::select! {
             biased;
             () = self.cancel.cancelled() => None,
             slot = self.pacing.admit(route_id, self.limit, self.rpm, self.cancel) => slot,
-        }
+        }?;
+        let admission = match self.control {
+            Some(control) => Some(control.admit()?),
+            None => None,
+        };
+        Some((slot, admission))
     }
 
     /// Waits [`Backoff::pause`] after the `sends`-th send; false when the run stopped first.
@@ -938,6 +946,7 @@ mod tests {
             check: Option<&'a AnswerCheck<'a>>,
         ) -> Attempts<'a> {
             Attempts {
+                control: None,
                 call: call(),
                 hold: Usd(40_000),
                 scopes: &self.scopes,

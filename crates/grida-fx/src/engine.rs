@@ -208,9 +208,7 @@ pub fn plan(
 ) -> Result<Plan, Error> {
     let mut plan_time = PlanTime::new(Arc::clone(engine));
     let runner: &mut dyn PlanTimeRunner = &mut plan_time;
-    let plan = make_plan(planner, host, Some(runner), &*engine.store);
-    crate::interrupt::planning_ended();
-    plan
+    make_plan(planner, host, Some(runner), &*engine.store)
 }
 
 /// Ends the idle node hosts of `engine` (from `at: plan` steps), and its stand-in's answerer.

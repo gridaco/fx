@@ -74,6 +74,12 @@ identity, stable run/plan URLs and independent viewer lifetime. Observation itse
 requires neither a running service nor a project: `observe RUN` reads a selected
 record directly.
 
+The separate [run-control contract](control.md) defines cancellation
+requests and completion verification. Observation endpoints remain read-only.
+Its additive `cancel_requested` event follows the unknown-event compatibility rule
+below. The bundled viewer derives cancellation intent from this event; its
+existing run-state enum remains unchanged.
+
 A CLI run plans and validates, initializes its record and flushes `run_started`,
 then announces an available viewing URL before run-phase execution. Planning may
 execute declared local `at: plan` nodes before that URL exists. In project mode,

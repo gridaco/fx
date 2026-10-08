@@ -92,7 +92,22 @@ missing = result.deliver({"images": "out/{key}.png"})
 - **Errors.** The engine's own errors (exit status 2: a workflow it cannot read, a bad option)
   raise `FxError` with its message; so does a run it refuses to start (`refused: …`).
 - **Async.** `plan_async` and `run_async` do the same inside an event loop; `plan` and `run`
-  cannot be called inside a running one. Cancelling `run_async` stops the run as Ctrl-C would.
+  cannot be called inside a running one. Cancelling `run_async` requests graceful engine
+  cancellation once with SIGTERM and waits for cleanup before unwinding; repeated task
+  cancellation does not force the engine. A stuck cleanup can keep the task pending.
+
+## Run control
+
+`inspect_control(run)` and `cancel(run, invocation=None, wait=False, timeout=None)`
+inspect or cancel an exact run folder or `WORKFLOW_ID/NAME`. Their async counterparts
+are `inspect_control_async` and `cancel_async`. `RunControlResult` preserves the wire
+contract's `lower_snake_case` fields. Structured failures raise `RunControlError`
+with `code` and `result`; unsupported binaries or malformed responses raise `FxError`.
+Choose `run_dir` to control a pending SDK invocation through these separate operations.
+
+See [Stopping and continuing a run](../docs/guide/08-run-control.md) for guarded requests,
+wait timeouts and verified local completion. Local completion never verifies remote
+provider completion. These APIs describe current source; check your installed version.
 
 ## Stand-ins: running without a provider
 

@@ -20,6 +20,7 @@
         "run_started",
         "run_finished",
         "run_cancelled",
+        "cancel_requested",
         "phase_planned",
         "node_started",
         "node_finished",
@@ -330,6 +331,14 @@
       "type": "string",
       "format": "date-time",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+    },
+    "source": {
+      "description": "Origin of cancellation intent for this invocation.",
+      "enum": [
+        "cli",
+        "signal",
+        "sdk"
+      ]
     }
   },
   "allOf": [
@@ -382,6 +391,20 @@
         "required": [
           "reason",
           "charged_usd"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "cancel_requested"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "source"
         ]
       }
     },

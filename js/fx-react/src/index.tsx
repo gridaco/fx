@@ -14,6 +14,7 @@ export function Status({ state }: { state: string }) {
     succeeded: "bg-emerald-50 text-emerald-800 ring-emerald-200",
     failed: "bg-red-50 text-red-800 ring-red-200",
     running: "bg-blue-50 text-blue-800 ring-blue-200",
+    cancelling: "bg-amber-50 text-amber-800 ring-amber-200",
     cancelled: "bg-amber-50 text-amber-800 ring-amber-200",
     interrupted: "bg-amber-50 text-amber-800 ring-amber-200",
     planned: "bg-blue-50 text-blue-800 ring-blue-200",

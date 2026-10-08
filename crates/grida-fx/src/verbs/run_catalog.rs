@@ -2,12 +2,12 @@
 
 use grida_fx_core::Error;
 use grida_fx_core::value::sha256_hex;
-use grida_fx_runtime::events::{read_events_tolerant, run_metadata};
+use grida_fx_runtime::events::run_metadata;
 use grida_fx_runtime::folder::safe_name;
 use serde_json::Value;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::time::{Duration, Instant, SystemTime};
 
 const MAX_ENTRIES: usize = 2048;
 const MAX_DEPTH: usize = 4;
@@ -128,7 +128,28 @@ struct RecordedRun {
 /// The newest-created run, including failures; different recorded sources cannot silently
 /// share an ID lookup. Names are unique only within a source, so name lookup also checks it.
 pub(super) fn resolve(runs: &Path, id: &str, name: Option<&str>) -> Result<Option<PathBuf>, Error> {
-    let candidates: Vec<_> = scan(runs)?.into_iter().filter(|run| run.id == id).collect();
+    resolve_bounded(runs, id, name, None)
+}
+
+pub(super) fn resolve_control(
+    runs: &Path,
+    id: &str,
+    name: &str,
+    wait: Option<(Instant, Duration)>,
+) -> Result<Option<PathBuf>, Error> {
+    resolve_bounded(runs, id, Some(name), wait)
+}
+
+fn resolve_bounded(
+    runs: &Path,
+    id: &str,
+    name: Option<&str>,
+    wait: Option<(Instant, Duration)>,
+) -> Result<Option<PathBuf>, Error> {
+    let candidates: Vec<_> = scan(runs, wait)?
+        .into_iter()
+        .filter(|run| run.id == id)
+        .collect();
     let sources: BTreeSet<_> = candidates.iter().map(|run| &run.source).collect();
     if sources.len() > 1 {
         return Err(Error::usage(format!(
@@ -150,11 +171,16 @@ pub(super) fn resolve(runs: &Path, id: &str, name: Option<&str>) -> Result<Optio
 }
 
 /// Bounded discovery stays within the configured run tree and never follows symlinks.
-fn scan(runs: &Path) -> Result<Vec<RecordedRun>, Error> {
+fn scan(runs: &Path, wait: Option<(Instant, Duration)>) -> Result<Vec<RecordedRun>, Error> {
     let mut stack = vec![(runs.to_path_buf(), 0)];
     let mut visited = 0;
     let mut recorded = Vec::new();
     while let Some((folder, depth)) = stack.pop() {
+        if wait.is_some_and(|(started, timeout)| started.elapsed() >= timeout) {
+            return Err(Error::usage(
+                "the control wait deadline expired during run discovery",
+            ));
+        }
         let Ok(metadata) = std::fs::symlink_metadata(&folder) else {
             continue;
         };
@@ -195,7 +221,20 @@ fn read_recorded(folder: &Path) -> Option<RecordedRun> {
     if !metadata.is_file() || metadata.file_type().is_symlink() {
         return None;
     }
-    let graph: Value = serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
+    if metadata.len() > 16 * 1024 * 1024 {
+        return None;
+    }
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)
+        .ok()?
+        .take(16 * 1024 * 1024 + 1)
+        .read_to_end(&mut bytes)
+        .ok()?;
+    if bytes.len() > 16 * 1024 * 1024 {
+        return None;
+    }
+    let graph: Value = serde_json::from_slice(&bytes).ok()?;
     if graph.get("kind")?.as_str()? != "fx-graph-v1" {
         return None;
     }
@@ -212,7 +251,38 @@ fn read_recorded(folder: &Path) -> Option<RecordedRun> {
     {
         return None;
     }
-    let events = read_events_tolerant(&events_path).ok()?;
+    // Lookup needs only the immutable first run_started metadata. Bound this read as well
+    // as tree traversal; a client must never load an arbitrarily large run to select it.
+    let events = match std::fs::File::open(&events_path) {
+        Ok(file) => {
+            if file.metadata().ok()?.len() > 64 * 1024 * 1024 {
+                return None;
+            }
+            let mut bytes = Vec::new();
+            file.take(64 * 1024 * 1024 + 1)
+                .read_to_end(&mut bytes)
+                .ok()?;
+            if bytes.len() > 64 * 1024 * 1024 {
+                return None;
+            }
+            let mut events = Vec::new();
+            for line in bytes.split_inclusive(|byte| *byte == b'\n') {
+                if line.last() != Some(&b'\n') {
+                    break;
+                }
+                let Ok(event) = serde_json::from_slice::<Value>(line) else {
+                    break;
+                };
+                if event.get("event").and_then(Value::as_str) == Some("run_started") {
+                    events.push(event);
+                    break;
+                }
+            }
+            events
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(_) => return None,
+    };
     let (name, created_at) = run_metadata(
         &events,
         metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH),

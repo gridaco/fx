@@ -38,8 +38,8 @@ local image operations need the Python package, even when launched through npm.
 
 ## Plan. Run. Inspect.
 
-Current source adds a persistent project dashboard. Check your installed
-`--help` first; older published releases may lack the service commands.
+Current source adds a persistent project dashboard and exact-run cancellation.
+Check your installed `--help` first; older published releases may lack these commands.
 For an existing workflow, start the service once:
 
 ```sh
@@ -57,6 +57,8 @@ The dashboard stays at `http://127.0.0.1:8787/` by default after execution finis
 Python users can substitute `python -m grida.fx` for `grida-fx`.
 The [viewing guide](docs/guide/07-viewing.md) covers independent `--standalone`
 inspection and the older `view` command.
+To stop execution, use `grida-fx cancel runs/example --wait`. The
+[run-control guide](docs/guide/08-run-control.md) explains targeting, cleanup and resume.
 
 Start with [the guide](docs/guide/01-getting-started.md), or explore the
 [examples](examples/): recolor an image with code, build a looping background,

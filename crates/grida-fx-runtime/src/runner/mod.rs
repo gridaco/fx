@@ -68,9 +68,10 @@
 //! purpose); `ok` when this invocation failed nothing and is not incomplete; `failed` lists
 //! what it failed in the expansion's listing order, never in completion order; place
 //! `outputs/` (a file that cannot be placed is a `problem {where: outputs.<name>}` and stops the
-//! run with `cannot place <folder>/<path>: <reason>`); wait until no paid call of the invocation
-//! runs (`Services::calls_settled`: a step that ran past its timeout, or whose host exited, may
-//! have left one in flight, which completes and settles); emit `run_finished`, whose
+//! run with `cannot place <folder>/<path>: <reason>`). Before that publication, wait until no
+//! paid call of the invocation runs (`Services::calls_settled`: a step that ran past its timeout,
+//! or whose host exited, may have left one in flight, which completes and settles), then
+//! serialize finalization with cancellation acceptance; emit `run_finished`, whose
 //! `charged_usd` therefore counts every attempt sent. Cancellation instead:
 //! running tasks are told to stop (`$/cancel`, a host killed 5 seconds later), the calls in
 //! flight end and settle their holds in full, then
@@ -91,6 +92,7 @@ use crate::events::{Event, EventLog};
 use crate::executor::InstanceJob;
 use crate::folder::RunFolder;
 use crate::ledger::{Ledger, Scopes};
+use crate::run_control::{CancelSource, RunControl};
 use crate::stand_in::ANSWERER_EXITED;
 use crate::store::Store;
 use dispatch::Done;
@@ -106,8 +108,7 @@ use indexmap::IndexMap;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 
 /// The `where` of the `problem` a lost stand-in answerer writes.
 const STAND_IN_WHERE: &str = "stand_in";
@@ -177,7 +178,31 @@ pub fn run_with_ready(
     options: RunOptions,
     ready: impl FnOnce(&Path),
 ) -> Result<RunOutcome, RunError> {
-    let outcome = invoke(&engine, planner, host, plan, &options, ready);
+    run_with_control_ready(engine, planner, host, plan, options, |run| {
+        ready(&run.folder)
+    })
+}
+
+/// Initialized run identity, independently of any viewer or project service.
+#[derive(Debug, Clone)]
+pub struct ReadyRun {
+    pub folder: PathBuf,
+    pub invocation_id: String,
+    pub control_available: bool,
+}
+
+/// Like [`run_with_ready`], also exposing the invocation and verified control readiness.
+pub fn run_with_control_ready(
+    engine: Arc<Engine>,
+    planner: &mut Planner,
+    host: &mut dyn NodeHost,
+    plan: Plan,
+    options: RunOptions,
+    ready: impl FnOnce(&ReadyRun),
+) -> Result<RunOutcome, RunError> {
+    let outcome = invoke(&engine, planner, host, plan, &options, |run, _control| {
+        ready(run)
+    });
     engine.handle.block_on(engine.hosts.shutdown());
     outcome
 }
@@ -357,7 +382,7 @@ fn invoke(
     host: &mut dyn NodeHost,
     plan: Plan,
     options: &RunOptions,
-    ready: impl FnOnce(&Path),
+    ready: impl FnOnce(&ReadyRun, &Arc<RunControl>),
 ) -> Result<RunOutcome, RunError> {
     let env = |name: &str| std::env::var(name).ok();
     if let Some(refused) = refusal(&plan, engine.live, &env) {
@@ -371,17 +396,31 @@ fn invoke(
     // Listening starts before anything is written, so an interruption is never missed.
     let cancel = Cancel::new();
     let (sender, receiver) = mpsc::unbounded_channel();
-    let interrupted = Arc::new(AtomicBool::new(false));
+    let (control_ready, mut control_receiver) = watch::channel::<Option<Arc<RunControl>>>(None);
+    let signal_source = if std::env::var("GRIDA_FX_CANCEL_SOURCE").as_deref() == Ok("sdk") {
+        CancelSource::Sdk
+    } else {
+        CancelSource::Signal
+    };
     let watcher = {
         let cancel = cancel.clone();
         let sender = sender.clone();
-        let interrupted = Arc::clone(&interrupted);
         engine.handle.spawn(async move {
-            if interruption().await {
-                interrupted.store(true, Ordering::SeqCst);
-                cancel.cancel();
-                let _ = sender.send(Message::Interrupted);
+            let signal = tokio::select! {
+                signal = interruption() => signal,
+                () = cancel.cancelled() => false,
+            };
+            if signal {
+                let control = control_receiver
+                    .wait_for(|control| control.is_some())
+                    .await
+                    .ok()
+                    .and_then(|control| control.clone());
+                if let Some(control) = control {
+                    control.request_cancel(signal_source);
+                }
             }
+            let _ = sender.send(Message::Interrupted);
         })
     };
     // A stand-in run stops when its answerer goes away while the run still runs.
@@ -450,8 +489,9 @@ fn invoke(
         gate: schedule::Gate::new(),
         failed: Vec::new(),
         tasks: Vec::new(),
-        interrupted,
         display_snapshot: None,
+        cleanup_verified: true,
+        cleanup_completed: false,
     };
     let estimate = plan.estimate();
     let (recorded_name, created_at) = if prior
@@ -479,15 +519,52 @@ fn invoke(
         estimate_high: estimate.high,
         stand_in: engine.stand_in_run(),
     };
+    let mut endpoint = None;
     let outcome = match scheduler.emit(&started) {
         Ok(()) => {
-            ready(&options.folder);
+            endpoint = match crate::control::ControlServer::start(
+                &options.folder,
+                &digest,
+                &scheduler.services.invocation_id,
+                Arc::clone(&scheduler.services.control),
+                &engine.handle,
+            ) {
+                Ok(endpoint) => Some(endpoint),
+                Err(_) => {
+                    eprintln!(
+                        "note: local run control is unavailable; signal cancellation remains available"
+                    );
+                    None
+                }
+            };
+            control_ready.send_replace(Some(Arc::clone(&scheduler.services.control)));
+            ready(
+                &ReadyRun {
+                    folder: options.folder.clone(),
+                    invocation_id: scheduler.services.invocation_id.clone(),
+                    control_available: endpoint.is_some(),
+                },
+                &scheduler.services.control,
+            );
             scheduler.conclude(first)
         }
         Err(error) => Err(RunError::Fatal(error)),
     };
     watchers();
     scheduler.join();
+    let cleanup_verified = scheduler.cleanup_hosts();
+    let terminal = scheduler.services.control.terminal();
+    // No task or host retains the folder now. Release its writer before certifying cleanup.
+    drop(scheduler);
+    if cleanup_verified
+        && let (Some(endpoint), Some(terminal)) = (&endpoint, terminal)
+        && endpoint.complete(&terminal).is_err()
+    {
+        eprintln!("note: local cleanup completed, but its control receipt could not be saved");
+    }
+    if !cleanup_verified {
+        eprintln!("note: node-host cleanup could not be verified; no completion receipt was saved");
+    }
     outcome
 }
 
@@ -607,8 +684,9 @@ struct Scheduler<'a> {
     /// What this invocation failed, in the order it failed (in listing order once it ends).
     failed: Vec<(String, Option<String>)>,
     tasks: Vec<tokio::task::JoinHandle<()>>,
-    /// Set by Ctrl-C.
-    interrupted: Arc<AtomicBool>,
+    /// Failed cleanup verification remains failed across repeated shutdown barriers.
+    cleanup_verified: bool,
+    cleanup_completed: bool,
 }
 
 impl Scheduler<'_> {
@@ -640,7 +718,7 @@ impl Scheduler<'_> {
     }
 
     fn interrupted(&self) -> bool {
-        self.interrupted.load(Ordering::SeqCst)
+        self.services.control.cancellation_requested()
     }
 
     fn running_ids(&self) -> HashSet<String> {
@@ -660,13 +738,39 @@ impl Scheduler<'_> {
         if stopped.is_some() || self.interrupted() {
             self.drain();
         }
-        if self.interrupted() {
-            self.settle_calls();
+        // Finalization cannot race still-running calls or tasks, including calls left by a
+        // timed-out node. Acceptance may win throughout this drain.
+        self.join();
+        self.settle_calls();
+        self.engine
+            .handle
+            .block_on(self.services.control.drain_admissions());
+        // An already-admitted RPC can register a paid task after the first zero-call sample.
+        // Its local wait may end on handler closure before that task settles bookkeeping.
+        self.settle_calls();
+        self.check_log().map_err(|fault| self.fault(fault))?;
+        let final_expansion = if self.interrupted() {
+            None
+        } else {
+            Some(expand(self.planner, self.host).map_err(|fault| self.fault(fault))?)
+        };
+        // A host can answer its top-level run while a nested tool is still serving. End
+        // every owned host before finalization, with the existing bounded host grace.
+        // Cancellation remains acceptable throughout this barrier.
+        if !self.cleanup_hosts() {
+            return Err(self.fault(Error::internal("node-host cleanup could not be verified")));
+        }
+        let finish = self
+            .services
+            .control
+            .begin_finalization()
+            .map_err(|message| self.fault(Error::internal(message)))?;
+        if !finish && self.interrupted() {
             let cancelled = Event::RunCancelled {
                 reason: "interrupted".to_string(),
                 charged_usd: self.ledger.charged(),
             };
-            self.emit(&cancelled).map_err(RunError::Fatal)?;
+            self.emit_terminal(&cancelled).map_err(RunError::Fatal)?;
             return Ok(RunOutcome {
                 folder: self.options.folder.clone(),
                 ok: false,
@@ -678,7 +782,10 @@ impl Scheduler<'_> {
                 cancelled: true,
             });
         }
-        self.close(stopped).map_err(|fault| self.fault(fault))
+        let expansion = final_expansion
+            .ok_or_else(|| self.fault(Error::internal("the run has no final expansion")))?;
+        self.close(stopped, expansion)
+            .map_err(|fault| self.fault(fault))
     }
 
     /// Runs the loop until nothing runs and nothing can start; the stop message, if the run
@@ -825,6 +932,9 @@ impl Scheduler<'_> {
 
     /// Dispatches an instance; `false` when its job could not be made and it failed at once.
     fn start(&mut self, instance: &Instance) -> Result<bool, Error> {
+        let Some(admission) = self.services.control.admit() else {
+            return Ok(true);
+        };
         let env = |name: &str| std::env::var(name).ok();
         let job = match InstanceJob::from_instance(instance, self.planner, &env) {
             Ok(job) => job,
@@ -870,6 +980,7 @@ impl Scheduler<'_> {
         let sender = self.sender.clone();
         let id = instance.id.clone();
         let task = self.engine.handle.spawn(async move {
+            let _admission = admission;
             let dispatched = tokio::spawn(dispatch::dispatch(
                 services,
                 Arc::new(job),
@@ -961,6 +1072,7 @@ impl Scheduler<'_> {
 
     /// Cancels what runs and waits for every dispatch to report, keeping what finished.
     fn drain(&mut self) {
+        self.services.control.close_admission();
         self.services.cancel.cancel();
         while !self.running.is_empty() {
             let messages = self.wait();
@@ -976,8 +1088,11 @@ impl Scheduler<'_> {
     }
 
     /// The end of an invocation that was not cancelled (module doc).
-    fn close(&mut self, stopped: Option<String>) -> Result<RunOutcome, Error> {
-        let expansion = expand(self.planner, self.host)?;
+    fn close(
+        &mut self,
+        stopped: Option<String>,
+        expansion: Expansion,
+    ) -> Result<RunOutcome, Error> {
         self.emit_scopes(&expansion)?;
         in_listing_order(&mut self.failed, &expansion);
         let mut stopped = stopped;
@@ -1012,10 +1127,9 @@ impl Scheduler<'_> {
         }
         let ok = self.failed.is_empty() && !incomplete;
         let outputs = existing_outputs(&expansion.outputs);
-        self.settle_calls();
         self.check_log()?;
         let charged = self.ledger.charged();
-        self.emit(&Event::RunFinished {
+        self.emit_terminal(&Event::RunFinished {
             ok,
             incomplete,
             stopped: stopped.clone(),
@@ -1042,12 +1156,21 @@ impl Scheduler<'_> {
     /// fault is written where it still can be.
     fn fault(&mut self, fault: Error) -> RunError {
         self.drain();
+        self.join();
         self.settle_calls();
+        self.engine
+            .handle
+            .block_on(self.services.control.drain_admissions());
+        self.settle_calls();
+        let cleanup_verified = self.cleanup_hosts();
         let _ = self.emit(&Event::Problem {
             where_: self.workflow.clone(),
             message: fault.message.clone(),
         });
-        let _ = self.emit(&Event::RunFinished {
+        if cleanup_verified {
+            let _ = self.services.control.begin_finalization();
+        }
+        let _ = self.emit_terminal(&Event::RunFinished {
             ok: false,
             incomplete: true,
             stopped: Some(fault.message.clone()),
@@ -1063,6 +1186,26 @@ impl Scheduler<'_> {
         for task in self.tasks.drain(..) {
             let _ = self.engine.handle.block_on(task);
         }
+    }
+
+    /// Ends host-owned authored work before either finalization or a cleanup receipt.
+    fn cleanup_hosts(&mut self) -> bool {
+        if self.cleanup_completed {
+            return self.cleanup_verified;
+        }
+        self.cleanup_verified &= self.engine.handle.block_on(self.engine.hosts.shutdown());
+        if let Some(stand_in) = &self.engine.stand_in {
+            self.cleanup_verified &= self.engine.handle.block_on(stand_in.shutdown());
+        }
+        self.cleanup_completed = true;
+        self.cleanup_verified
+    }
+
+    fn emit_terminal(&self, event: &Event) -> Result<(), Error> {
+        self.services
+            .control
+            .emit_terminal(event)
+            .map_err(|error| Error::io(&self.events_label, &error))
     }
 }
 
@@ -1086,6 +1229,264 @@ mod tests {
     use grida_fx_core::spec::{BodyKind, NodeSpec, Retry};
     use std::collections::HashMap;
     use std::rc::Rc;
+
+    /// Simulates a nested authored tool that survives the top-level run response. The host
+    /// itself observes the event record when shutdown begins, avoiding an observer race.
+    #[cfg(unix)]
+    #[test]
+    fn owned_hosts_end_nested_work_before_normal_or_cancelled_finalization() {
+        use crate::host::process::HostSpec;
+        use grida_fx_core::host::FakeHost;
+        use grida_fx_core::project::{PlanRequest, make_planner};
+        use grida_fx_protocol::{
+            ClosureEntry, DescribedType, ModuleDescription, RetryMode, TypeSpec,
+        };
+        use grida_fx_providers::Adapters;
+        use std::os::unix::fs::PermissionsExt;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::time::{Duration, Instant};
+
+        struct CleanupAnswerer {
+            root: PathBuf,
+            checked: AtomicBool,
+        }
+        impl crate::stand_in::Answerer for CleanupAnswerer {
+            fn answer<'a>(
+                &'a self,
+                _params: grida_fx_protocol::StandInAnswerParams,
+                _cancel: &'a Cancel,
+            ) -> grida_fx_providers::BoxFuture<
+                'a,
+                Result<crate::stand_in::Reply, crate::stand_in::AnswererError>,
+            > {
+                Box::pin(async { panic!("this fixture has no paid calls") })
+            }
+
+            fn shutdown(&self) -> grida_fx_providers::BoxFuture<'_, ()> {
+                Box::pin(async move {
+                    if !self.checked.swap(true, Ordering::SeqCst) {
+                        let events = crate::events::read_events_tolerant(
+                            &self.root.join("runs/one/events.jsonl"),
+                        )
+                        .unwrap();
+                        assert!(!events.iter().any(|event| matches!(
+                            event["event"].as_str(),
+                            Some("run_finished" | "run_cancelled")
+                        )));
+                        std::fs::write(self.root.join("stand-in-ended"), "ended").unwrap();
+                    }
+                })
+            }
+        }
+
+        const HOST: &str = r#"
+import json, os, sys, threading
+from pathlib import Path
+stop = threading.Event()
+tool = None
+pending = None
+def read():
+    length = None
+    while True:
+        line = sys.stdin.buffer.readline()
+        if not line:
+            return None
+        if line == b'\r\n':
+            break
+        name, _, value = line.decode('ascii').partition(':')
+        if name.strip().lower() == 'content-length':
+            length = int(value.strip())
+    return json.loads(sys.stdin.buffer.read(length))
+def answer(id, result):
+    body = json.dumps({'jsonrpc': '2.0', 'id': id, 'result': result}).encode()
+    sys.stdout.buffer.write(b'Content-Length: %d\r\n\r\n' % len(body) + body)
+    sys.stdout.buffer.flush()
+while (message := read()) is not None:
+    method = message.get('method')
+    if method == 'initialize':
+        answer(message['id'], {'protocol': message['params']['protocol'],
+            'host': {'language': 'python', 'version': '3', 'sdk_version': '0'}})
+    elif method == 'run':
+        tool = threading.Thread(target=stop.wait)
+        tool.start()
+        Path('tool-active').write_text(str(os.getpid()))
+        if Path('cancel-mode').exists():
+            pending = message['id']
+        else:
+            answer(message['id'], {'outputs': {}})
+    elif method == '$/cancel' and pending is not None:
+        # Like the supported Python host, the run can settle while a nested tool persists.
+        answer(pending, {'outputs': {}})
+        pending = None
+    elif method == 'shutdown':
+        events = [json.loads(line) for line in Path('runs/one/events.jsonl').read_text().splitlines()]
+        Path('shutdown-observation.json').write_text(json.dumps({
+            'tool_active': tool.is_alive(),
+            'terminal': any(e['event'] in ('run_finished', 'run_cancelled') for e in events)}))
+        stop.set()
+        tool.join()
+        Path('tool-ended').write_text('ended')
+        answer(message['id'], None)
+    elif method == 'exit':
+        break
+"#;
+        for cancelled in [false, true] {
+            let temporary = tempfile::tempdir().unwrap();
+            let root = temporary.path().canonicalize().unwrap();
+            std::fs::create_dir(root.join("nodes")).unwrap();
+            std::fs::write(
+                root.join("nodes/case.py"),
+                "# Described by the planning stand-in.\n",
+            )
+            .unwrap();
+            std::fs::write(root.join("host.py"), HOST).unwrap();
+            std::fs::write(root.join("fx.yaml"), "fx: project/v1\n").unwrap();
+            std::fs::write(root.join("workflow.yaml"), "fx: workflow/v1\nid: cleanup\ntitle: Host cleanup fixture\nsteps:\n  body:\n    uses: ./nodes/case.py#body\n").unwrap();
+            if cancelled {
+                std::fs::write(root.join("cancel-mode"), "cancel").unwrap();
+            }
+            let python = root.join("python-stub");
+            std::fs::write(
+                &python,
+                "#!/bin/sh\nexec python3 \"$(dirname \"$0\")/host.py\"\n",
+            )
+            .unwrap();
+            std::fs::set_permissions(&python, std::fs::Permissions::from_mode(0o755)).unwrap();
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            let engine = Arc::new(
+                Engine::new(
+                    runtime.handle().clone(),
+                    HostSpec {
+                        python,
+                        label: "python-stub".into(),
+                        project_root: root.clone(),
+                        sources: Vec::new(),
+                    },
+                    &root.join("cache"),
+                    1,
+                    Adapters::new(),
+                    false,
+                )
+                .with_stand_in(Arc::new(crate::stand_in::StandIn::new(Arc::new(
+                    CleanupAnswerer {
+                        root: root.clone(),
+                        checked: AtomicBool::new(false),
+                    },
+                )))),
+            );
+            let mut host = FakeHost::new().with_module(ModuleDescription::Described {
+                path: "nodes/case.py".into(),
+                types: vec![DescribedType {
+                    attribute: "body".into(),
+                    spec: TypeSpec {
+                        name: "body".into(),
+                        description: None,
+                        inputs: IndexMap::new(),
+                        params: IndexMap::new(),
+                        outputs: IndexMap::new(),
+                        judge: false,
+                        calls: IndexMap::new(),
+                        resources: Vec::new(),
+                        tools: Vec::new(),
+                        view: None,
+                        version: Some(1),
+                        retry: RetryMode::Service,
+                    },
+                }],
+                closure: vec![ClosureEntry {
+                    label: "nodes/case.py".into(),
+                    path: root.join("nodes/case.py").to_string_lossy().into_owned(),
+                }],
+            });
+            let mut planner = make_planner(
+                &PlanRequest {
+                    target: "workflow.yaml".into(),
+                    cwd: root.clone(),
+                    ..PlanRequest::default()
+                },
+                &mut host,
+            )
+            .unwrap();
+            let plan = grida_fx_core::plan::make_plan(
+                &mut planner,
+                &mut host,
+                None,
+                engine.store.as_ref(),
+            )
+            .unwrap();
+            assert!(plan.ok(), "{:?}", plan.problems);
+            let folder = root.join("runs/one");
+            let mut cancelling = None;
+            let outcome = invoke(
+                &engine,
+                &mut planner,
+                &mut host,
+                plan,
+                &RunOptions {
+                    folder: folder.clone(),
+                    label: "runs/one".into(),
+                    name: None,
+                    yes_up_to: None,
+                    takes_file: String::new(),
+                },
+                |_ready, control| {
+                    if cancelled {
+                        let control = Arc::clone(control);
+                        let root = root.clone();
+                        cancelling = Some(std::thread::spawn(move || {
+                            let deadline = Instant::now() + Duration::from_secs(5);
+                            while !root.join("tool-active").exists() {
+                                assert!(
+                                    Instant::now() < deadline,
+                                    "the host did not start its tool"
+                                );
+                                std::thread::sleep(Duration::from_millis(5));
+                            }
+                            assert_eq!(
+                                control.request_cancel(CancelSource::Cli),
+                                crate::run_control::CancelAcceptance::Accepted,
+                            );
+                        }));
+                    }
+                },
+            )
+            .unwrap();
+            if let Some(cancelling) = cancelling {
+                cancelling.join().unwrap();
+            }
+            assert_eq!(outcome.cancelled, cancelled, "{outcome:?}");
+            assert!(outcome.ok || cancelled, "{outcome:?}");
+            let observed: serde_json::Value = serde_json::from_slice(
+                &std::fs::read(root.join("shutdown-observation.json")).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(
+                observed,
+                serde_json::json!({"tool_active": true, "terminal": false})
+            );
+            assert!(root.join("tool-ended").exists());
+            assert!(root.join("stand-in-ended").exists());
+            let pid = std::fs::read_to_string(root.join("tool-active")).unwrap();
+            let status = std::process::Command::new("kill")
+                .args(["-0", &pid])
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .unwrap();
+            assert!(!status.success(), "the owned host survived finalization");
+            let events = crate::events::read_events_tolerant(&folder.join("events.jsonl")).unwrap();
+            assert!(events.iter().any(|event| event["event"]
+                == if cancelled {
+                    "run_cancelled"
+                } else {
+                    "run_finished"
+                }));
+        }
+    }
 
     #[test]
     fn readiness_publishes_a_readable_record_before_execution() {

@@ -307,6 +307,7 @@ impl Rig {
 
     fn attempts(&self, capability: &str, job: Option<JobRecord>) -> Attempts<'_> {
         Attempts {
+            control: None,
             call: request(capability),
             hold: HOLD,
             scopes: &self.scopes,
@@ -415,6 +416,101 @@ fn secs(waits: &[f64]) -> Vec<Duration> {
 
 // ---------------------------------------------------------------------------------------------
 // A plain call
+
+/// A route slot arrives in the same turn as cancellation acceptance. The separate request
+/// token deliberately stays clear, proving the invocation gate orders the send itself.
+struct CancelAtSlot {
+    control: Arc<grida_fx_runtime::run_control::RunControl>,
+    at: u32,
+    admitted: AtomicU32,
+}
+
+impl Admission for CancelAtSlot {
+    fn admit<'a>(
+        &'a self,
+        _route_id: &'a str,
+        _limit: Option<u32>,
+        _rpm: Option<u32>,
+        _cancel: &'a Cancel,
+    ) -> BoxFuture<'a, Option<Slot>> {
+        Box::pin(async move {
+            if self.admitted.fetch_add(1, Ordering::SeqCst) + 1 == self.at {
+                assert_eq!(
+                    self.control
+                        .request_cancel(grida_fx_runtime::run_control::CancelSource::Cli),
+                    grida_fx_runtime::run_control::CancelAcceptance::Accepted,
+                );
+            }
+            Some(Slot::free())
+        })
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn acceptance_between_slot_and_paid_admission_sends_and_reserves_nothing() {
+    let rig = Rig::new();
+    let dir = tempfile::tempdir().unwrap();
+    let control = grida_fx_runtime::run_control::RunControl::new(
+        Arc::new(
+            grida_fx_runtime::events::EventLog::open(
+                &dir.path().join("events.jsonl"),
+                "owner-a",
+                &key(),
+            )
+            .unwrap(),
+        ),
+        Cancel::new(),
+    );
+    let gate = CancelAtSlot {
+        control: Arc::clone(&control),
+        at: 1,
+        admitted: AtomicU32::new(0),
+    };
+    let mut attempts = rig.plain();
+    attempts.control = Some(&control);
+    attempts.pacing = &gate;
+    let fake = FakeAdapter::plain(vec![Sent::Answered(answer(Some(COST)))]);
+    assert_eq!(send_plain(&fake, &attempts).await, Outcome::Cancelled);
+    assert!(fake.log().is_empty());
+    assert!(rig.book.holds().is_empty());
+    assert!(!rig.cancel.is_cancelled());
+}
+
+#[tokio::test(start_paused = true)]
+async fn acceptance_between_sends_blocks_resend_and_settles_not_received_at_zero() {
+    let rig = Rig::new();
+    let dir = tempfile::tempdir().unwrap();
+    let control = grida_fx_runtime::run_control::RunControl::new(
+        Arc::new(
+            grida_fx_runtime::events::EventLog::open(
+                &dir.path().join("events.jsonl"),
+                "owner-a",
+                &key(),
+            )
+            .unwrap(),
+        ),
+        Cancel::new(),
+    );
+    let gate = CancelAtSlot {
+        control: Arc::clone(&control),
+        at: 2,
+        admitted: AtomicU32::new(0),
+    };
+    let mut attempts = rig.plain();
+    attempts.control = Some(&control);
+    attempts.pacing = &gate;
+    let fake = FakeAdapter::plain(vec![
+        not_received("not sent"),
+        Sent::Answered(answer(Some(COST))),
+    ]);
+    assert_eq!(send_plain(&fake, &attempts).await, Outcome::Cancelled);
+    assert_eq!(fake.log().len(), 1);
+    assert_eq!(
+        rig.book.settlements(),
+        vec![(hold_name(1), Some(Usd::ZERO))]
+    );
+    rig.book.assert_all_settled();
+}
 
 #[tokio::test(start_paused = true)]
 async fn an_answer_that_passes_its_check_is_settled_at_its_reported_cost() {

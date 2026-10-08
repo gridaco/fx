@@ -193,6 +193,7 @@ impl Rig {
     fn attempts(&self, call: CallRequest, hold: Usd) -> Attempts<'_> {
         let capability = call.route.capability.clone();
         Attempts {
+            control: None,
             call,
             hold,
             scopes: &self.scopes,
