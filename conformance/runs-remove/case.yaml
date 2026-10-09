@@ -1,0 +1,24 @@
+# `runs list` and `runs remove`: a preview removes nothing, filters take dated runs only and
+# keep incomplete ones, named and placed runs go when named, and what is not a run is refused.
+steps:
+- argv: [runs, list, --json]
+  save: list.json
+  json: true
+- argv: [runs, remove, --state, failed]
+  mentions: ["would remove  history/case/2026-10-02-1  (failed)", "passed    1 named"]
+- argv: [runs, list, --json]
+  save: list.json
+  json: true
+- argv: [runs, remove, --state, failed, --yes, --json]
+  save: removal.json
+  json: true
+  absent: [history/case/2026-10-02-1]
+- argv: [runs, remove, ., --yes]
+  status: 2
+  mentions: ["not a run folder"]
+- argv: [runs, remove, case/baseline, history/mine, --yes]
+  mentions: ["removed       case/baseline  (failed)", "removed       history/mine  (unfinished)"]
+  absent: [history/mine]
+- argv: [runs, list, --json]
+  save: after.json
+  json: true

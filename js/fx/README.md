@@ -66,6 +66,12 @@ const icon = result.outputs.icon; // a RunFile: digest, kind, path, read()
 - `inspectControl(run)` and `cancel(run, { invocation, wait, timeout })`: exact-target local
   control, independent of viewer/service lifetime. Results keep their `lower_snake_case` wire
   fields; structured failures raise `RunControlError` with `code` and `result`.
+- `listRuns({ workflow })`: the project's runs, newest first, each with its `folder`, a `runDir`
+  resolved against `cwd`, and `lower_snake_case` wire fields (`state`, `placement`,
+  `charged_usd`, …). `removeRuns(runs, { preview })`: removes exactly the runs given (filter
+  `listRuns` yourself); `preview: true` removes nothing. A refused or partial run is an entry's
+  `outcome`, not a rejection; a RUN that is not a run raises `RunRemovalError` with `code` and
+  `run`, before anything is removed.
 - `binary()` and `engineVersion()`: the engine in use.
 
 A target is a workflow file, a workflow id, or a builder `file.py:function`. Options:

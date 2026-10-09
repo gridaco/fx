@@ -148,24 +148,16 @@ and visibility before introducing persistence or exposure in exported records.
 
 ## Run cleanup and retention
 
-**Status: idea; command and policy not designed or implemented.** Consider a
-dedicated cleanup command for accumulated runs and related local data.
+Listing and removing runs are implemented in source ([store.md](spec/store.md) §9,
+[guide](docs/guide/10-cleanup.md)). Still open:
 
-Workflow use has two distinct intents:
-
-- **Developing the workflow:** repeatedly revise and test the definition to find
-  a reliable configuration, such as one that rigs a character correctly. This
-  produces many exploratory runs that users may eventually want to discard.
-- **Using the workflow in production:** execute an established definition with
-  expected behavior for a particular input or deliverable. These runs often merit
-  deliberate names, such as `character_1_rig_ready`, and longer retention.
-
-Design cleanup around those needs without requiring separate execution modes.
-Consider explicit selection, retention/protection, and a preview of what would be
-removed. A name alone should not determine whether a run is disposable. Distinguish
-removing run history from reclaiming shared cached artifacts, and account for
-active runs and project catalog entries. Naming, retention defaults, and exact CLI
-syntax remain open decisions; this is not a proposal to overwrite runs by default.
+- **Reclaiming cache bytes.** Removing a run frees little, since its files are links
+  into the store. Pruning the store must keep everything a kept run, a pick or an
+  outstanding job still needs, know when any engine is writing the store, and refuse a
+  store other projects share. Removed paid answers are billed again when needed.
+- **Retention policies.** Keeping the newest N runs of a workflow, or defaults per
+  project, are not designed; selection stays explicit.
+- **Saved plans.** Catalog plan entries have no removal path.
 
 ## CLI update notices (npm and PyPI)
 

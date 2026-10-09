@@ -130,6 +130,18 @@ See [Stopping and continuing a run](../docs/guide/08-run-control.md) for guarded
 wait timeouts and verified local completion. Local completion never verifies remote
 provider completion. These APIs describe current source; check your installed version.
 
+## Listing and removing runs
+
+`list_runs(workflow=None, cwd=None)` returns the planning project's runs, newest first, as
+`RunEntry` objects with the wire contract's fields and `run_dir`, the folder resolved against
+`cwd`. `remove_runs(runs, preview=False, cwd=None)` removes exactly the named runs (folders,
+`run_dir` values or `WORKFLOW_ID/NAME`); `preview=True` only reports what would go. There are
+no filters: choose from the list yourself. The async forms are `list_runs_async` and
+`remove_runs_async`. A run that is active or the last holding a pick is refused in the
+`RunRemoval` result, not raised; a target that is not a run raises `RunRemovalError` with
+`code` and `run`, and nothing is removed. An applied removal whose result cannot be read
+raises `FxError` saying it may already have taken effect, with the engine's `stdout`.
+
 ## Stand-ins: running without a provider
 
 A test runs a workflow's paid calls offline by answering them itself:

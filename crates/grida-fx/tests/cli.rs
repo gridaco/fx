@@ -968,7 +968,7 @@ fn run_help_names_its_options() {
     }
     let output = grida_fx(project.path(), &["--help"]);
     for verb in [
-        "run", "reroll", "pick", "takes", "jobs", "project", "inspect",
+        "run", "reroll", "pick", "takes", "jobs", "project", "inspect", "runs",
     ] {
         assert!(stdout(&output).contains(verb), "{verb}");
     }

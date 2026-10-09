@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-run-list-v1",
+  "title": "FX project runs (fx-run-list-v1)",
+  "description": "`grida-fx runs list --json`: the runs a planning project holds, newest first, and what could not be read (spec/store.md §9). Reading it takes no lock and writes nothing.",
+  "type": "object",
+  "required": [
+    "kind",
+    "runs",
+    "skipped"
+  ],
+  "properties": {
+    "kind": {
+      "const": "fx-run-list-v1"
+    },
+    "runs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/run"
+      }
+    },
+    "skipped": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/skipped"
+      }
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "run": {
+      "type": "object",
+      "required": [
+        "folder",
+        "workflow",
+        "source",
+        "name",
+        "placement",
+        "state",
+        "created_at",
+        "charged_usd",
+        "stand_in"
+      ],
+      "properties": {
+        "folder": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The run folder, relative to the working directory of the command (or absolute when it shares no root with it)."
+        },
+        "workflow": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The recorded workflow id, or the one its position gives; null when neither is known."
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The recorded workflow source (`plan.json` `workflow.file`); null for a folder without a plan."
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The run's name: recorded, or given by a named position."
+        },
+        "placement": {
+          "enum": [
+            "allocated",
+            "named",
+            "explicit",
+            "external"
+          ],
+          "description": "allocated: `<runs>/<id>/<YYYY-MM-DD>-<n>`; named: `<runs>/<id>/named-<digest>/<NAME>-<digest>`; explicit: elsewhere in the runs tree; external: outside it, known from the run index or the catalog (spec/store.md §9)."
+        },
+        "state": {
+          "enum": [
+            "planned",
+            "unfinished",
+            "succeeded",
+            "failed",
+            "incomplete",
+            "cancelled",
+            "empty",
+            "removing",
+            "missing"
+          ],
+          "description": "As inspect reads the log, with inspect's failed split into incomplete (ok false, incomplete true) and failed; empty: no plan.json at a run's position; removing: a removal's tombstone; missing: an external folder that is gone. Recorded unfinished is not evidence that a process is alive."
+        },
+        "created_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The first run_started's creation time (RFC 3339); null for a folder without a plan."
+        },
+        "charged_usd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The charge in USD the last run_finished or run_cancelled records; null before the run ended."
+        },
+        "stand_in": {
+          "type": "boolean"
+        },
+        "stopped": {
+          "type": "string",
+          "description": "Why an incomplete run stopped."
+        }
+      },
+      "additionalProperties": true
+    },
+    "skipped": {
+      "type": "object",
+      "required": [
+        "folder",
+        "code",
+        "message"
+      ],
+      "properties": {
+        "folder": {
+          "type": "string"
+        },
+        "code": {
+          "enum": [
+            "unreadable",
+            "not_a_folder",
+            "foreign_run",
+            "unreadable_run",
+            "no_plan",
+            "unreadable_entry",
+            "unreachable_run"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

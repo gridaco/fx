@@ -1,0 +1,251 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-run-removal-v1",
+  "title": "FX run removal (fx-run-removal-v1)",
+  "description": "`grida-fx runs remove --json`: what a removal did, or would do without --yes (spec/store.md §8, \"Removing a run\"). An error document means nothing was removed.",
+  "type": "object",
+  "required": [
+    "kind",
+    "applied"
+  ],
+  "properties": {
+    "kind": {
+      "const": "fx-run-removal-v1"
+    },
+    "applied": {
+      "type": "boolean",
+      "description": "false for a preview (no --yes) and for an error: nothing was removed."
+    },
+    "runs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/run"
+      }
+    },
+    "skipped": {
+      "type": "object",
+      "description": "How many runs the filters matched but passed over, by reason.",
+      "propertyNames": {
+        "enum": [
+          "named",
+          "explicit",
+          "external",
+          "holds_pick",
+          "young",
+          "holds_runs"
+        ]
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 1
+      }
+    },
+    "freed_bytes": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Bytes of files whose every link was inside the removed folders."
+    },
+    "cache_bytes": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Bytes of files still linked from elsewhere (the store, other runs); removing the runs does not free them."
+    },
+    "error": {
+      "type": "object",
+      "required": [
+        "code",
+        "message",
+        "run"
+      ],
+      "properties": {
+        "code": {
+          "enum": [
+            "invalid_target",
+            "ambiguous_target",
+            "not_a_run"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "run": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "oneOf": [
+    {
+      "required": [
+        "error"
+      ],
+      "properties": {
+        "applied": {
+          "const": false
+        }
+      }
+    },
+    {
+      "required": [
+        "runs",
+        "skipped",
+        "freed_bytes",
+        "cache_bytes"
+      ],
+      "not": {
+        "required": [
+          "error"
+        ]
+      }
+    }
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "run": {
+      "type": "object",
+      "required": [
+        "folder",
+        "workflow",
+        "source",
+        "name",
+        "placement",
+        "state",
+        "created_at",
+        "charged_usd",
+        "stand_in",
+        "outcome",
+        "freed_bytes",
+        "cache_bytes"
+      ],
+      "properties": {
+        "folder": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The run folder, relative to the working directory of the command (or absolute when it shares no root with it)."
+        },
+        "workflow": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The recorded workflow id, or the one its position gives; null when neither is known."
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The recorded workflow source (`plan.json` `workflow.file`); null for a folder without a plan."
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The run's name: recorded, or given by a named position."
+        },
+        "placement": {
+          "enum": [
+            "allocated",
+            "named",
+            "explicit",
+            "external"
+          ],
+          "description": "allocated: `<runs>/<id>/<YYYY-MM-DD>-<n>`; named: `<runs>/<id>/named-<digest>/<NAME>-<digest>`; explicit: elsewhere in the runs tree; external: outside it, known from the run index or the catalog (spec/store.md §9)."
+        },
+        "state": {
+          "enum": [
+            "planned",
+            "unfinished",
+            "succeeded",
+            "failed",
+            "incomplete",
+            "cancelled",
+            "empty",
+            "removing",
+            "missing"
+          ],
+          "description": "As inspect reads the log, with inspect's failed split into incomplete (ok false, incomplete true) and failed; empty: no plan.json at a run's position; removing: a removal's tombstone; missing: an external folder that is gone. Recorded unfinished is not evidence that a process is alive."
+        },
+        "created_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The first run_started's creation time (RFC 3339); null for a folder without a plan."
+        },
+        "charged_usd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The charge in USD the last run_finished or run_cancelled records; null before the run ended."
+        },
+        "stand_in": {
+          "type": "boolean"
+        },
+        "stopped": {
+          "type": "string",
+          "description": "Why an incomplete run stopped."
+        },
+        "outcome": {
+          "enum": [
+            "would_remove",
+            "would_forget",
+            "removed",
+            "forgotten",
+            "refused",
+            "partial"
+          ],
+          "description": "would_*: a preview. forgotten: a missing external folder's run index and catalog entries removed. refused: nothing of this run was removed. partial: the run is gone as a run, but its tombstone could not be removed; runs remove finishes it."
+        },
+        "code": {
+          "enum": [
+            "active",
+            "holds_pick",
+            "changed",
+            "not_removable",
+            "io"
+          ],
+          "description": "active: an invocation holds its run.lock. holds_pick: the last run holding a pick, or one whose takes file cannot be read. changed: it no longer holds what was selected, or a run started inside it. not_removable: it could not be locked or renamed (nothing changed). io: its tombstone could not be removed."
+        },
+        "message": {
+          "type": "string"
+        },
+        "freed_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cache_bytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "enum": [
+                  "refused",
+                  "partial"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "code",
+              "message"
+            ]
+          }
+        }
+      ],
+      "additionalProperties": true
+    }
+  }
+}

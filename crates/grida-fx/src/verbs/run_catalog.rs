@@ -53,7 +53,12 @@ pub(super) fn create_named(
     ensure_directory(&parent)?;
     let folder = named_folder(runs, id, source, name);
     std::fs::create_dir(&folder).map_err(|error| {
-        if error.kind() == std::io::ErrorKind::AlreadyExists {
+        if error.kind() == std::io::ErrorKind::AlreadyExists && !folder.join("plan.json").exists() {
+            Error::usage(format!(
+                "run {id}/{name} was claimed but holds no run; remove the claim with grida-fx \
+                 runs remove {id}/{name}, or choose a new name"
+            ))
+        } else if error.kind() == std::io::ErrorKind::AlreadyExists {
             Error::usage(format!(
                 "run {id}/{name} already exists; use --resume {name} or choose a new name"
             ))

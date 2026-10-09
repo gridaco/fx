@@ -229,7 +229,7 @@ impl RunTakes {
 }
 
 /// Whether a recorded path stays inside the project: relative, POSIX, no `.`/`..` parts.
-fn is_inside(relative: &str) -> bool {
+pub(super) fn is_inside(relative: &str) -> bool {
     !relative.is_empty()
         && !relative.contains('\\')
         && relative.split('/').all(|part| !part.is_empty())
@@ -297,7 +297,7 @@ fn is_take_of(id: &str, step: &str, take: u32) -> bool {
 }
 
 /// The digest a pick records (module doc).
-fn picked_result(events: &[Value], step: &str, take: u32) -> Option<String> {
+pub(super) fn picked_result(events: &[Value], step: &str, take: u32) -> Option<String> {
     let mut result = None;
     for event in events {
         let finished = event_name(event) == Some("node_finished")

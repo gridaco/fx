@@ -10,10 +10,11 @@ This is a living product and engineering harness. It records current behavior,
 gaps and scenarios against which we design FX. It is not a claim that every
 scenario below works today, nor approval to implement every proposed capability.
 
-**Last source review: 2026-10-08.** Current entries were checked against the CLI,
+**Last source review: 2026-10-09.** Current entries were checked against the CLI,
 SDKs and specifications. The cancellation delivery includes provider-free execution evidence from
-`tools/check_control.py`; other capability status rests on the evidence listed
-below. No live providers were used.
+`tools/check_control.py`; run listing and removal rest on the `runs` CLI tests, the
+`runs-remove` conformance case and the SDK tests; other capability status rests on the evidence
+listed below. No live providers were used.
 Recheck the installed version before applying them to a user's installation.
 
 ## Ownership and status
@@ -59,6 +60,7 @@ Existing tests are starting points for evidence, not proof of every scenario her
 | Service | A project-scoped process started by `start`, providing the dashboard, catalog and observation HTTP endpoints. Workflow execution has a separate owner and lifetime. |
 | Standalone | Independent inspection with its own available port and foreground owner. It does not mean a fresh cache or different execution semantics. |
 | Project / projection | `init` establishes the recommended `fx.yaml` project; standalone use remains supported. The unrelated `project <run>` command projects recorded events into state. |
+| Remove a run | Delete a run's folder and its record. The cache keeps the results it used, so removing frees little disk and costs no reuse. Distinct from cancelling a run, and from clearing the cache, which makes the next run that needs a result pay again. |
 
 The interfaces should preserve these distinctions. Avoid using one word such as
 "restart" for resume, fresh generation and revision: they have different effects
@@ -91,6 +93,7 @@ individual commands can have narrower target rules.
 | Resume: `run <target> ... --resume NAME`, or repeat `--run FOLDER` | Another invocation in the existing folder | A named resume requires an existing name; repeat current inputs/routes/takes/builder arguments explicitly. Requires the same plan digest and stand-in mode, and no other writer. A changed plan is refused rather than silently replacing history. Recorded spend and original creation time carry forward; resume does not reset the budget ledger or promote the record as newly created. |
 | Choose alternatives: `reroll <run> <step-path>`, `pick <run> <step-path> <take>` | Takes-file mutation and advice | Affect a later plan/run, not the active scheduler; both refuse stand-in runs. Reroll's `--live` only changes printed advice. Picking may still require generation of the selected take or downstream work. |
 | Maintain takes: `takes list <target>`, `takes mv <target> <old> <new>` | Text listing or takes-file edit | These targets are workflow files/ids, not builder targets. Moving refuses an existing destination entry. |
+| Clean up runs: `runs list --json`; `runs remove RUN… [--yes] --json` or `runs remove --workflow ID --state STATE --before DATE [--yes] --json` | The project's runs with placement and recorded state; what a removal would do, or did | Listing reads only. Removal previews until `--yes`; filters take dated runs only, never named, `--run` or external ones. Refuses a selection that is not a run (exit 2, nothing removed), a run an invocation holds (`active`) and the last run holding a pick (`holds_pick`). Removed files are mostly links into the cache, which keeps them. Python list_runs/remove_runs and JavaScript listRuns/removeRuns take explicit runs. |
 | Diagnose jobs: `jobs`; reconcile: `jobs --forget <key>` | Text job records; explicit deletion of a job record | Forgetting can permit a fresh paid submission. Use only after reconciling the provider outcome, not as generic failure recovery. |
 | Maintain node locks: `lock [where] --check` / `lock [where]` | Lock verification / lockfile updates | `--same` asserts unchanged behavior; it is not a way to silence a real identity change. |
 | Deliver: `run ... --deliver output=path` or SDK result delivery | Copies of available declared outputs | CLI delivery happens after execution and reports missing outputs. Preserve immutable store/placed files; copy out before editing bytes. |
@@ -108,6 +111,8 @@ SDK coverage follows useful jobs, with language-native objects rather than a
 wrapper for every CLI verb. `Plan` already exposes graph/problems/pricing;
 results expose files/delivery. Project setup/service management/browser opening,
 diagnostics, node locks and take/job maintenance intentionally remain CLI-only
+(run listing and removal are SDK operations: `list_runs` / `listRuns` and
+`remove_runs` / `removeRuns`, with explicit runs)
 until a concrete programmatic use needs a native lifetime/error design. JS callable
 stand-ins remain deferred; Python already supports them. Pause/active revision
 stay separate contracts. Async completion alone supplies no readiness handle.
@@ -302,6 +307,7 @@ promise through documentation alone.
 | AR-15 | "Keep my project available while I work." | Current in source: init, foreground/background service, status/logs/stop, persistent catalog and run URLs; OS supervision remains future work. | Repeat/parallel starts, readiness, port conflicts, project identity, independent execution, restart persistence, and standalone use all have provider-free lifecycle evidence. |
 | AR-16 | "Name this deliverable; show my workflow history." | Current in source: create-only names, explicit same-plan resume, workflow-grouped index. | Concurrent name claims have one winner; collisions/missing names/plan mismatches/ambiguous sources refuse; latest includes failures, old active records remain visible, resume retains creation time/spend, and metadata changes no cache identity. |
 | AR-17 | "Tidy up the layout; place X below Y." | Proposed: agent-authored adjacent JSON layout; visual editing deferred. | Agent discovers exact scope/references, edits and validates layout, verifies the renderer loaded the intended revision, and reports the actual URL or actionable diagnostics. No builder execution, provider calls, execution-history changes or identity/resume changes; repeats, nested scopes and stale references have provider-free evidence. |
+| AR-18 | "Clean up last week's exploratory runs, but keep my named ones." | Implemented in source: `runs list` and `runs remove` (CLI, Python, JavaScript). Reclaiming cache bytes is proposed separately. | Agent lists, previews and then removes exactly the previewed runs; named, `--run` and external runs survive filters; an active run, the last pick holder and a non-run selection are refused with a code and nothing else changes; catalog and run index forget removed folders; provider-free CLI, conformance and SDK evidence. |
 
 For AR-04 and AR-11, [the observation checker](tools/check_observation.py) and
 [observation v1](spec/observation.md) provide the source acceptance evidence.

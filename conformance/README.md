@@ -132,6 +132,8 @@ file (`workflows/case.yaml`).
 | `pick <folder> <step> <take>` | a take chosen for a step path, with its result's digest, written to the takes file; one line on stdout |
 | `takes list <target>` | the takes file's entries, one line each (`<step>  take <n>[  <digest>]`), on stdout |
 | `lock [--check] [--same <type>]` | `fx.lock`, written or checked |
+| `runs list --json` | the project's runs, newest first, as JSON on stdout (fx-run-list-v1) |
+| `runs remove <run>… [--yes] [--json]`, `runs remove --state <state>… [--yes] [--json]` | what a removal would do, or did with `--yes`: one line per run (`would remove  <folder>  (<state>)`, `removed       <folder>  (<state>)`) and what the filters passed over, or the same as JSON (fx-run-removal-v1); a selection that is not a run exits 2 and removes nothing |
 
 Every case relies on these flags:
 
@@ -260,6 +262,7 @@ alone.
 | `run-retry-engine` | `retry="engine"`: a body that raises twice runs a third time and succeeds, and no more; a `node_retry` event for each failed attempt |
 | `run-takes` | `reroll`, `pick` and `takes list` between runs: the takes file a run's plan names, the take each run draws, a picked result's digest checked by the next run |
 | `run-timeout` | a step past its `timeout:` fails with `ran past 1 seconds` and is not run again, even under `retry="engine"` (exit 1) |
+| `runs-remove` | `runs list` and `runs remove` over hand-written runs: a preview removes nothing, `--state failed` takes a failed dated run and keeps an incomplete one and the named run, a named and a placed run go when named, and the project folder is refused |
 | `stand-in-agent` | a stand-in's `agent.turn` answers drive the engine's agent loop: a tool call, then a `submit`, and the transcript in the output; a turn whose data is not `{text, tool_calls}` and a structured answer its schema refuses are `call_failed` |
 | `stand-in-errors` | what a stand-in's answer can end in: refused, failed, declined (`not_live`), a picture of the wrong size, an answer of the wrong shape (a file's kind, an extra file, no file, data), and a body's call the request check refuses before the stand-in is asked; the `code` of each `node_failed`; nothing of them recorded, so a new run asks again |
 | `stand-in-flags` | how `--stand-in` is given: with `--live` or `--yes-up-to`, a malformed source, a missing file, a missing function, a file that fails to import, and `-` without a socket are usage errors (exit 2) that ask nothing; a stand-in that raises stops the run (exit 1) |

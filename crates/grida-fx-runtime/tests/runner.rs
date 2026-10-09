@@ -305,6 +305,7 @@ fn run_in(
         name: None,
         yes_up_to: invocation.yes_up_to.map(|text| Usd::parse(text).unwrap()),
         takes_file: format!("workflows/{}.takes.yaml", invocation.target),
+        ..RunOptions::default()
     };
     let helper = during.map(std::thread::spawn);
     let outcome = run(engine, &mut planner, &mut host, plan, options);

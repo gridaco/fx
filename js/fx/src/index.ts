@@ -29,6 +29,11 @@ export {
   type RunFollowOptions, RunObservationError, type RunObservationFailure,
   type RunReadOptions, RunRecord, type RunSnapshot,
 } from "./record.js";
+export {
+  listRuns, type ListRunsOptions, type RemoveRunsOptions, removeRuns, type RunEntry,
+  type RunPlacement, type RunRemoval, type RunRemovalEntry, RunRemovalError,
+  type RunRemovalFailure, type RunRemovalSkip, type RunState,
+} from "./runs.js";
 export type {
   Encoded,
   FileRef,

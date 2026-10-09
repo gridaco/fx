@@ -73,6 +73,7 @@ use grida_fx_runtime::engine::{Engine, scrub_paths};
 use grida_fx_runtime::folder::{keyed_path, new_folder};
 use grida_fx_runtime::host::locate::python_interpreter;
 use grida_fx_runtime::host::process::HostSpec;
+use grida_fx_runtime::run_index::RunIndex;
 use grida_fx_runtime::runner::{self, RunError, RunOptions, RunOutcome};
 use grida_fx_runtime::stand_in::{ConnectionAnswerer, StandIn};
 use grida_fx_runtime::store::Store;
@@ -244,6 +245,10 @@ fn plan_and_run(
         name: args.name.clone(),
         yes_up_to,
         takes_file: takes_file(planner),
+        existing: args.resume.is_some(),
+        index: Some(RunIndex {
+            project_root: planner.project.root.clone(),
+        }),
     };
     let mut viewer = None;
     let project = planner.project.clone();

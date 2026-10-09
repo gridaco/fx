@@ -26,6 +26,7 @@ Custom step pages and static snapshot exports remain planned.
 7. [Viewing workflows and runs](07-viewing.md): the bundled local node canvas
 8. [Stopping and continuing a run](08-run-control.md): exact targeting, cancellation and verified local cleanup
 9. [Working with runs from an SDK](09-sdk-runs.md): names, saved records and independent observation
+10. [Cleaning up runs](10-cleanup.md): listing a project's runs and removing the ones you no longer need
 
 ## Example projects
 

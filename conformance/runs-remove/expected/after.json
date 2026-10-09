@@ -1,0 +1,28 @@
+{
+ "kind": "fx-run-list-v1",
+ "runs": [
+  {
+   "charged_usd": 0,
+   "created_at": "2026-10-03T09:00:00.000Z",
+   "folder": "history/case/2026-10-03-1",
+   "name": null,
+   "placement": "allocated",
+   "source": "workflows/case.yaml",
+   "stand_in": false,
+   "state": "incomplete",
+   "workflow": "case"
+  },
+  {
+   "charged_usd": 0,
+   "created_at": "2026-10-01T09:00:00.000Z",
+   "folder": "history/case/2026-10-01-1",
+   "name": null,
+   "placement": "allocated",
+   "source": "workflows/case.yaml",
+   "stand_in": false,
+   "state": "succeeded",
+   "workflow": "case"
+  }
+ ],
+ "skipped": []
+}

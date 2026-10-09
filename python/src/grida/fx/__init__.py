@@ -52,6 +52,16 @@ from grida.fx._errors import (
     NodeFailure,
 )
 from grida.fx._record import RunObservationError, RunRecord, load_run, load_run_async
+from grida.fx._runs import (
+    RunEntry,
+    RunRemoval,
+    RunRemovalEntry,
+    RunRemovalError,
+    list_runs,
+    list_runs_async,
+    remove_runs,
+    remove_runs_async,
+)
 from grida.fx._spec import NodeSpec, PortSpec, SpecError, node, param, spec_of
 from grida.fx._stand_in import DECLINE, Answer, StandInCall
 
@@ -81,6 +91,10 @@ __all__ = [
     "RunObservationError",
     "RunControlError",
     "RunControlResult",
+    "RunEntry",
+    "RunRemoval",
+    "RunRemovalEntry",
+    "RunRemovalError",
     "SpecError",
     "StandInCall",
     "StepRef",
@@ -93,12 +107,16 @@ __all__ = [
     "cancel_async",
     "inspect_control",
     "inspect_control_async",
+    "list_runs",
+    "list_runs_async",
     "load_run",
     "load_run_async",
     "node",
     "param",
     "plan",
     "plan_async",
+    "remove_runs",
+    "remove_runs_async",
     "run",
     "run_async",
     "spec_of",

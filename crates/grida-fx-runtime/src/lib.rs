@@ -33,6 +33,7 @@ pub mod ledger;
 pub mod observation;
 pub mod plantime;
 pub mod run_control;
+pub mod run_index;
 pub mod runner;
 pub mod stand_in;
 pub mod store;

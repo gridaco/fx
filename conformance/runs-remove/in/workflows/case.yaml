@@ -1,0 +1,7 @@
+fx: workflow/v1
+id: case
+title: Runs to clean up
+steps:
+  draw:
+    uses: fx/image.generate@1
+    with: { prompt: A paper kite over a hill }

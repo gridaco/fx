@@ -662,6 +662,7 @@ dependencies = [
 name = "grida-fx"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "clap",
  "grida-fx-core",
  "grida-fx-protocol",

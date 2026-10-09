@@ -67,6 +67,21 @@ or cancel execution when observation ends. Consumers needing a single invocation
 decide when to stop using its recorded invocation ID and terminal event; a crash
 may leave no terminal event. Follow requires no running project service.
 
+## List and remove runs
+
+Python `list_runs(workflow=None, cwd=None)` and JS `listRuns({workflow, cwd})` return the
+planning project's runs as `runs list --json` gives them ([store.md](store.md) §9), each with
+its folder resolved against the call's working directory (`run_dir` / `runDir`), which a
+removal accepts as it is. Python `remove_runs(runs, preview=False, cwd=None)` and JS
+`removeRuns(runs, {preview, cwd})` remove the named runs as `runs remove --yes` does, or with
+`preview` say what would be removed. The SDKs take explicit runs only: a caller filters the
+list itself, so what is removed is exactly what it chose. A run refused (`active`,
+`holds_pick`, `changed`, `not_removable`) or left `partial` is reported in the result, not raised; a
+selection that is not a run raises an error carrying its code, and nothing is removed. A
+result of an applied removal that cannot be read raises an error that says the removal may
+have taken effect. Neither result is bounded in size, since a project may hold thousands of
+runs.
+
 ## Intentional boundaries
 
 Plans already expose graph/problems/pricing, and execution results expose output

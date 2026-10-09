@@ -102,6 +102,8 @@ pub enum Verb {
     Inspect(InspectArgs),
     /// request cancellation of one exact run invocation, without starting a service
     Cancel(CancelArgs),
+    /// list the project's runs, or remove runs it no longer needs
+    Runs(RunsArgs),
     /// serve a workflow plan or an existing run on loopback; never starts a run
     #[command(hide = true)]
     View(ViewArgs),
@@ -326,6 +328,65 @@ pub enum TakesVerb {
 }
 
 #[derive(Debug, Args, Clone)]
+pub struct RunsArgs {
+    #[command(subcommand)]
+    pub verb: RunsVerb,
+}
+
+#[derive(Debug, Subcommand, Clone)]
+pub enum RunsVerb {
+    /// the project's runs, newest first; reads only
+    List(RunsListArgs),
+    /// remove runs: shows what it would remove, and removes it with --yes
+    Remove(RunsRemoveArgs),
+}
+
+#[derive(Debug, Args, Clone)]
+pub struct RunsListArgs {
+    /// only the runs of this workflow id
+    #[arg(long, value_name = "ID")]
+    pub workflow: Option<String>,
+    /// print the runs as JSON
+    #[arg(long)]
+    pub json: bool,
+}
+
+/// The states `runs remove --state` matches (spec/store.md §9).
+pub const RUN_STATES: [&str; 9] = [
+    "planned",
+    "unfinished",
+    "succeeded",
+    "failed",
+    "incomplete",
+    "cancelled",
+    "empty",
+    "removing",
+    "missing",
+];
+
+#[derive(Debug, Args, Clone)]
+pub struct RunsRemoveArgs {
+    /// run folders, or WORKFLOW_ID/NAME for a named run
+    #[arg(value_name = "RUN", conflicts_with_all = ["workflow", "state", "before"])]
+    pub runs: Vec<String>,
+    /// the dated runs of this workflow id
+    #[arg(long, value_name = "ID")]
+    pub workflow: Option<String>,
+    /// the dated runs in this state (repeatable)
+    #[arg(long, value_name = "STATE", value_parser = RUN_STATES)]
+    pub state: Vec<String>,
+    /// the dated runs created before this local date
+    #[arg(long, value_name = "YYYY-MM-DD")]
+    pub before: Option<String>,
+    /// remove them; without it nothing is removed
+    #[arg(long)]
+    pub yes: bool,
+    /// print the result as JSON
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args, Clone)]
 pub struct JobsArgs {
     /// forget one job (its call key, 64 hex) once you have checked the provider
     #[arg(long = "forget", value_name = "KEY")]
@@ -537,6 +598,7 @@ fn dispatch(verb: Verb, rest: Vec<String>) -> Result<u8, Error> {
         Verb::Observe(args) => verbs::observe::run(&args),
         Verb::Inspect(args) => verbs::inspect::run(&args),
         Verb::Cancel(args) => verbs::control::cancel(&args),
+        Verb::Runs(args) => verbs::runs::run(&args),
         Verb::View(mut args) => {
             args.rest = rest;
             verbs::view::run(&args)

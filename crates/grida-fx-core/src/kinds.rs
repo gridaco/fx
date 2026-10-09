@@ -53,7 +53,7 @@ pub fn kind_of(name: &str) -> &'static str {
 /// → `.gif`, `text/yaml` → `.yaml`), `.json` for `annotations`, and `""` for every other kind,
 /// `file` and families such as `image` included. gnode's run folders had no suffix for
 /// `image/gif`, `audio/ogg`, `text/yaml`, `text/toml`, `text/html` and `model/gltf+json`;
-/// store.md §9 lists that change.
+/// store.md §10 lists that change.
 pub fn suffix_of_kind(kind: &str) -> &'static str {
     if kind == "annotations" {
         return ".json";

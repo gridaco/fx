@@ -23,7 +23,10 @@
 //!   choose a new folder`. A folder holds a stand-in run when its `plan.json` says `"stand_in":
 //!   true` ([`holds_stand_in`]); a folder without `plan.json` holds nothing yet.
 //! - [`RunFolder::lock`]: `run.lock` locked without waiting (`File::try_lock`); held until the
-//!   value drops. Refused at once with `another invocation is running <folder>`.
+//!   value drops. Refused at once with `another invocation is running <folder>`, and with
+//!   `<folder> was removed while this invocation started` when the locked file is no longer the
+//!   folder's `run.lock` (a removal took it away). [`RunFolder::lock_existing`] (a resume) never
+//!   makes the folder: `<folder> no longer exists`.
 //! - [`RunFolder::sweep`]: what a killed invocation left half placed (temporary names) is removed
 //!   by the next one that holds the lock.
 //! - [`plan_document`]: the graph document `grida-fx expand` prints, with `plan`, `steps` (every
@@ -75,6 +78,16 @@ impl RunFolder {
     pub fn lock(path: &Path, label: &str) -> Result<RunFolder, FolderRefused> {
         std::fs::create_dir_all(path)
             .map_err(|e| FolderRefused(format!("cannot make {label}: {}", reason(&e))))?;
+        RunFolder::lock_existing(path, label)
+    }
+
+    /// Takes the lock of a folder that must exist already (a resume): a folder removed in the
+    /// meantime is refused, never made again.
+    pub fn lock_existing(path: &Path, label: &str) -> Result<RunFolder, FolderRefused> {
+        // A folder given as a symbolic link is the folder it names.
+        if !std::fs::metadata(path).is_ok_and(|meta| meta.is_dir()) {
+            return Err(FolderRefused(format!("{label} no longer exists")));
+        }
         let lock = OpenOptions::new()
             .read(true)
             .write(true)
@@ -83,19 +96,32 @@ impl RunFolder {
             .open(path.join("run.lock"))
             .map_err(|e| FolderRefused(format!("cannot open {label}/run.lock: {}", reason(&e))))?;
         match lock.try_lock() {
-            Ok(()) => Ok(RunFolder {
-                path: path.to_path_buf(),
-                label: label.to_string(),
-                lock,
-            }),
-            Err(TryLockError::WouldBlock) => Err(FolderRefused(format!(
-                "another invocation is running {label}"
-            ))),
-            Err(TryLockError::Error(e)) => Err(FolderRefused(format!(
-                "cannot lock {label}/run.lock: {}",
-                reason(&e)
-            ))),
+            Ok(()) => {}
+            Err(TryLockError::WouldBlock) => {
+                return Err(FolderRefused(format!(
+                    "another invocation is running {label}"
+                )));
+            }
+            Err(TryLockError::Error(e)) => {
+                return Err(FolderRefused(format!(
+                    "cannot lock {label}/run.lock: {}",
+                    reason(&e)
+                )));
+            }
         }
+        // `runs remove` holds the lock while it takes the folder away and unlinks `run.lock`
+        // last (spec/store.md §8, "Removing a run"): a lock taken on a file that is no longer the
+        // folder's own was taken on a run that is gone.
+        if !same_file(&lock, &path.join("run.lock")) {
+            return Err(FolderRefused(format!(
+                "{label} was removed while this invocation started"
+            )));
+        }
+        Ok(RunFolder {
+            path: path.to_path_buf(),
+            label: label.to_string(),
+            lock,
+        })
     }
 
     pub fn plan_path(&self) -> PathBuf {
@@ -183,13 +209,31 @@ fn invalid(relative: &str) -> std::io::Error {
     )
 }
 
+/// Whether the open `file` is the file now at `path` (same device and inode). Where the platform
+/// cannot tell, it is.
+pub fn same_file(file: &File, path: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        match (file.metadata(), std::fs::symlink_metadata(path)) {
+            (Ok(held), Ok(named)) => held.dev() == named.dev() && held.ino() == named.ino(),
+            _ => false,
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (file, path);
+        true
+    }
+}
+
 /// The most bytes one name may hold on the file systems FX writes to (`NAME_MAX`).
 pub const NAME_BYTES: usize = 255;
 
 /// A temporary name in the destination folder: `.<16 hex>.part`, hidden, never a digest, unique
 /// in the process so two tasks placing at once do not share one, and short (22 bytes), so it fits
 /// wherever the final name does.
-fn temporary_name() -> String {
+pub(crate) fn temporary_name() -> String {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let n = COUNTER.fetch_add(1, Ordering::Relaxed);
     let nanos = std::time::SystemTime::now()
@@ -689,6 +733,43 @@ fn reason(error: &std::io::Error) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[cfg(unix)]
+    fn a_linked_run_folder_is_the_folder_it_names() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir(root.path().join("real")).unwrap();
+        std::os::unix::fs::symlink(root.path().join("real"), root.path().join("out")).unwrap();
+        let locked = RunFolder::lock(&root.path().join("out"), "out").unwrap();
+        drop(locked);
+        RunFolder::lock_existing(&root.path().join("out"), "out").unwrap();
+        assert!(root.path().join("real/run.lock").is_file());
+    }
+
+    #[test]
+    fn a_lock_on_a_removed_folder_is_refused() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("run");
+        let first = RunFolder::lock(&path, "run").unwrap();
+        // A removal renames the folder away while it holds the lock...
+        std::fs::rename(&path, root.path().join(".removing-0123456789abcdef")).unwrap();
+        assert!(!same_file(&first.lock, &path.join("run.lock")));
+        assert_eq!(
+            RunFolder::lock_existing(&path, "run").unwrap_err().0,
+            "run no longer exists"
+        );
+        // ...and a new folder at the old place holds a new run.lock.
+        std::fs::create_dir(&path).unwrap();
+        std::fs::write(path.join("run.lock"), "").unwrap();
+        assert!(!same_file(&first.lock, &path.join("run.lock")));
+        drop(first);
+        let again = RunFolder::lock_existing(&path, "run").unwrap();
+        assert!(same_file(&again.lock, &path.join("run.lock")));
+        assert_eq!(
+            RunFolder::lock(&path, "run").unwrap_err().0,
+            "another invocation is running run"
+        );
+    }
 
     #[test]
     fn temporary_names_are_hidden_short_and_never_a_digest() {

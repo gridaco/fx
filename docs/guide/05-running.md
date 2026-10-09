@@ -225,7 +225,8 @@ runs/concept-gallery/2026-10-02-1/
 - **`events.jsonl` is the source of truth** (an `fx-run-events-v1` log); `inspect` and `project`
   are built from it. `plan.json` is the same `fx-graph-v1` document `grida-fx expand` prints, and
   names the takes file `reroll` and `pick` write.
-- **Deleting is safe:** results live in the cache.
+- **Removing is safe:** results live in the cache. `grida-fx runs remove` removes runs you no
+  longer need ([Cleaning up runs](10-cleanup.md)); it never takes a running run.
 - **Copying is safe:** a run folder can be inspected on another machine.
 
 A failed step does not stop the run: its body failed, a paid call was refused (the ceiling, no

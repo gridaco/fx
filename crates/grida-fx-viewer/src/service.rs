@@ -418,6 +418,123 @@ impl Catalog {
     }
 }
 
+/// A run the project's catalog registered, read without creating or changing local state.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RegisteredRun {
+    /// The canonical run folder the entry binds.
+    pub root: PathBuf,
+    /// The recorded identity the entry binds ([`run_identity`]).
+    pub identity: String,
+}
+
+/// The run entries of `project_root`'s catalog, and the names of entries that cannot be read.
+/// Reads `.fx/service/entries` only; a project without a catalog has none. Nothing is created,
+/// discovered or registered (spec/service.md §4).
+pub fn registered_runs(project_root: &Path) -> io::Result<(Vec<RegisteredRun>, Vec<String>)> {
+    let Some(entries) = entries_dir(project_root)? else {
+        return Ok((Vec::new(), Vec::new()));
+    };
+    let mut runs = Vec::new();
+    let mut unreadable = Vec::new();
+    for item in fs::read_dir(&entries)? {
+        let item = item?;
+        let name = item.file_name().to_string_lossy().into_owned();
+        let Some(id) = name.strip_suffix(".json").filter(|id| is_digest(id)) else {
+            continue;
+        };
+        match read_entry(&entries, id) {
+            Ok(Record::Run { root, identity, .. }) => runs.push(RegisteredRun { root, identity }),
+            Ok(Record::Plan { .. }) => {}
+            Err(_) => unreadable.push(name),
+        }
+    }
+    Ok((runs, unreadable))
+}
+
+/// The identity a catalog entry binds for the run in `root` (spec/service.md §4): its plan and
+/// first `run_started`, without creation time or name.
+pub fn run_identity(root: &Path) -> io::Result<String> {
+    Ok(run_details(&root.canonicalize()?)?.identity)
+}
+
+/// Removes `project_root`'s catalog run entries that bind `root` (canonical, as registered), and
+/// only those with `identity` when one is given: how many went. A removed run's URL is then not
+/// found (spec/service.md §4).
+pub fn deregister_runs(
+    project_root: &Path,
+    root: &Path,
+    identity: Option<&str>,
+) -> io::Result<usize> {
+    let Some(entries) = entries_dir(project_root)? else {
+        return Ok(0);
+    };
+    let mut removed = 0;
+    for item in fs::read_dir(&entries)? {
+        let item = item?;
+        let name = item.file_name().to_string_lossy().into_owned();
+        let Some(id) = name.strip_suffix(".json").filter(|id| is_digest(id)) else {
+            continue;
+        };
+        if let Ok(Record::Run {
+            root: registered,
+            identity: bound,
+            ..
+        }) = read_entry(&entries, id)
+            && registered == root
+            && identity.is_none_or(|identity| identity == bound)
+        {
+            match fs::remove_file(item.path()) {
+                Ok(()) => removed += 1,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error),
+            }
+        }
+    }
+    Ok(removed)
+}
+
+/// `<project>/.fx/service/entries` when it exists as real folders; `None` when there is none.
+/// `.fx` itself may be a symbolic link to the project's local state; `service` and `entries`
+/// must be real folders.
+fn entries_dir(project_root: &Path) -> io::Result<Option<PathBuf>> {
+    let fx = project_root.canonicalize()?.join(".fx");
+    let mut path = match fs::metadata(&fx) {
+        Ok(metadata) if metadata.is_dir() => fx.canonicalize()?,
+        Ok(_) => return Err(invalid("The local service state directory is unavailable.")),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    for part in ["service", "entries"] {
+        path = path.join(part);
+        match fs::symlink_metadata(&path) {
+            Ok(metadata) if metadata.is_dir() && !metadata.file_type().is_symlink() => {}
+            Ok(_) => return Err(invalid("The local service state directory is unavailable.")),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(Some(path))
+}
+
+/// One entry, checked as [`Catalog::record`] checks it.
+fn read_entry(entries: &Path, id: &str) -> io::Result<Record> {
+    let path = read::confined_file(entries, &format!("{id}.json"))?;
+    let file = File::open(path)?;
+    if file.metadata()?.len() > MAX_RECORD_BYTES {
+        return Err(invalid("The catalog entry is too large."));
+    }
+    let record: Record =
+        serde_json::from_reader(file).map_err(|_| invalid("The catalog entry cannot be read."))?;
+    let expected = match &record {
+        Record::Run { root, identity, .. } => digest(&json!(["fx-local-run-v1", root, identity])),
+        Record::Plan { graph, .. } => digest(&json!(["fx-local-plan-v1", graph])),
+    };
+    if record.id() != id || expected != id {
+        return Err(invalid("The catalog entry identity differs."));
+    }
+    Ok(record)
+}
+
 fn graph_title(graph: &Value) -> String {
     graph["workflow"]["title"]
         .as_str()

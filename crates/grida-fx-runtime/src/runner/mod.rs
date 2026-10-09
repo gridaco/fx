@@ -114,7 +114,7 @@ use tokio::sync::{mpsc, watch};
 const STAND_IN_WHERE: &str = "stand_in";
 
 /// How to run.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct RunOptions {
     /// The run folder, absolute.
     pub folder: PathBuf,
@@ -126,6 +126,12 @@ pub struct RunOptions {
     pub yes_up_to: Option<Usd>,
     /// The workflow's takes file, project-relative (recorded in `plan.json`).
     pub takes_file: String,
+    /// The folder holds a run already (`--resume`): one removed in the meantime is refused, never
+    /// started afresh.
+    pub existing: bool,
+    /// Where to record the folder when it lies outside the project's runs tree
+    /// (`crate::run_index`).
+    pub index: Option<crate::run_index::RunIndex>,
 }
 
 /// How an invocation ended.
@@ -593,12 +599,30 @@ fn prepare(
     options: &RunOptions,
     digest: &str,
 ) -> Result<(RunFolder, Vec<serde_json::Value>), RunError> {
-    let folder = RunFolder::lock(&options.folder, &options.label)
-        .map_err(|refused| RunError::Refused(refused.0))?;
+    let folder = if options.existing {
+        RunFolder::lock_existing(&options.folder, &options.label)
+    } else {
+        RunFolder::lock(&options.folder, &options.label)
+    }
+    .map_err(|refused| RunError::Refused(refused.0))?;
+    if options.existing && !folder.plan_path().is_file() {
+        return Err(RunError::Refused(format!(
+            "{} no longer holds a run",
+            options.label
+        )));
+    }
     crate::folder::check_plan(&options.folder, &options.label, digest)
         .map_err(|refused| RunError::Refused(refused.0))?;
     crate::folder::check_mode(&options.folder, &options.label, engine.stand_in_run())
         .map_err(|refused| RunError::Refused(refused.0))?;
+    if let Some(index) = &options.index {
+        index.record(&options.folder).map_err(|error| {
+            RunError::Refused(format!(
+                "cannot record {} in the project's run index: {error}",
+                options.label
+            ))
+        })?;
+    }
     let events_label = in_folder(&options.label, "events.jsonl");
     // The reader's sentences name `events.jsonl`; the folder says which one.
     let (prior, torn) =
@@ -1431,6 +1455,7 @@ while (message := read()) is not None:
                     name: None,
                     yes_up_to: None,
                     takes_file: String::new(),
+                    ..RunOptions::default()
                 },
                 |_ready, control| {
                     if cancelled {
@@ -1542,6 +1567,7 @@ while (message := read()) is not None:
                 name: None,
                 yes_up_to: None,
                 takes_file: String::new(),
+                ..RunOptions::default()
             },
             |observed_folder| {
                 ready_called = true;
@@ -1577,6 +1603,7 @@ while (message := read()) is not None:
                 name: None,
                 yes_up_to: None,
                 takes_file: String::new(),
+                ..RunOptions::default()
             },
             |_| panic!("a refused run cannot advertise a viewer"),
         );

@@ -1,0 +1,25 @@
+{
+ "applied": true,
+ "cache_bytes": 0,
+ "freed_bytes": 305,
+ "kind": "fx-run-removal-v1",
+ "runs": [
+  {
+   "cache_bytes": 0,
+   "charged_usd": 0,
+   "created_at": "2026-10-02T09:00:00.000Z",
+   "folder": "history/case/2026-10-02-1",
+   "freed_bytes": 305,
+   "name": null,
+   "outcome": "removed",
+   "placement": "allocated",
+   "source": "workflows/case.yaml",
+   "stand_in": false,
+   "state": "failed",
+   "workflow": "case"
+  }
+ ],
+ "skipped": {
+  "named": 1
+ }
+}
