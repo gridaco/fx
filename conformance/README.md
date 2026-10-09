@@ -132,6 +132,7 @@ file (`workflows/case.yaml`).
 | `pick <folder> <step> <take>` | a take chosen for a step path, with its result's digest, written to the takes file; one line on stdout |
 | `takes list <target>` | the takes file's entries, one line each (`<step>  take <n>[  <digest>]`), on stdout |
 | `lock [--check] [--same <type>]` | `fx.lock`, written or checked |
+| `cache prune [--forget-user <id>] [--yes] [--json]` | what pruning the store would remove, or removed with `--yes`, per store (`removed   <n> results, <n> calls (paid $<x>), <n> files: <bytes>; keeps …`), or the same as JSON (fx-cache-prune-v1); a refusal (`refused: <code>: …`) exits 1 and removes nothing |
 | `runs list --json` | the project's runs, newest first, as JSON on stdout (fx-run-list-v1) |
 | `runs remove <run>… [--yes] [--json]`, `runs remove --state <state>… [--yes] [--json]` | what a removal would do, or did with `--yes`: one line per run (`would remove  <folder>  (<state>)`, `removed       <folder>  (<state>)`) and what the filters passed over, or the same as JSON (fx-run-removal-v1); a selection that is not a run exits 2 and removes nothing |
 
@@ -234,6 +235,7 @@ alone.
 |---|---|
 | `at-plan` | an `at: plan` step runs while planning, and a `for_each` over its output expands to keyed instances; its price |
 | `at-plan-run` | an `at: plan` step in a run: its keyed `for_each` of local steps runs, collected into one output; the `at: plan` step is not run again |
+| `cache-prune` | `cache prune` over a hand-written store: refused until the store's earlier users (`legacy`) are forgotten; a preview removes nothing; what the run names stays (a result, and a paid answer only its reservation names) with their files, the rest goes and its cost is reported; a second prune removes nothing |
 | `cache-replay` | a paid call answered offline from a seeded call record, without `--live`; a second run answered from the result cache |
 | `cache-replay-miss` | the same project without a store: a paid call without `--live` is refused (exit 1), naming the capability, the route and `--live` |
 | `conditions-select` | `if:` on an input and on a judge's fact, `on_reject: continue`, and `fx/select@1` with `first_of` |

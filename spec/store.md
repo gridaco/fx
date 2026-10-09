@@ -21,12 +21,14 @@ The words MUST, MUST NOT and SHOULD are used as in RFC 2119.
   calls/<k[:2]>/<k>.json       fx-call-record-v1            k = call_key
   jobs/<k>.json                fx-job-record-v1             k = the call_key it answers
   stand-in/                    the stand-in store: files/, results/ and calls/ as above, never jobs/ (§8)
+  lock                         the store's lock (§6)
+  projects/<p>                 the planning projects that wrote the store (§6)
 ```
 
-- Every name is a digest: 64 lowercase hexadecimal characters ([identity.md](identity.md) §2). An engine MUST refuse to build a store path from anything else.
+- Every name of a file or record is a digest: 64 lowercase hexadecimal characters ([identity.md](identity.md) §2). An engine MUST refuse to build a store path from anything else.
 - Anything else under the store root, such as an engine's scratch space, is not part of this contract and MUST NOT be read as a record.
 - `stand-in/` is a store of its own, used only by stand-in runs (§8, *Stand-in runs*). Its records are never read as this store's, nor this store's as its, and each keeps its own scratch space and leftovers.
-- Records name files by digest only, so a store can be copied, moved or shared between projects and machines as it is.
+- Records name files by digest only, so a store can be copied, moved or shared between projects and machines as it is. A store shared by several projects is never pruned from one of them while another still uses it (§9).
 
 ## 2. Files
 
@@ -85,7 +87,7 @@ A capability whose provider job outlives one request (a video, a rig) keeps a jo
 
 A `submitting` record MAY carry `note`: when the submit's outcome is unknown, the redacted reason, which names the provider's job id when one was returned, so a person can find the job. No other record carries one. `grida-fx jobs` shows it, and a later run's `job_unsettled` carries it as `reason` in `data`.
 
-Once the call is answered, its call record is published and then its job record is removed. A trusted call record also removes a leftover job record with its key. A `settled` record MAY be removed at any time.
+Once the call is answered, its call record is published, the run's log names the call (its `call` event), and then its job record is removed; while that event cannot be written, the job record stays, so the paid answer is always named by one of them (§9, *Pruning a store*). A trusted call record also removes a leftover job record with its key, once its `call` event is written. A `settled` record MAY be removed at any time.
 
 ## 6. Writing
 
@@ -93,6 +95,8 @@ Once the call is answered, its call record is published and then its job record 
 - **Bytes first.** A record is published only after every file it names: a call record after its files, a result record after its output files. A job record is removed only after the call record is published. A crash therefore never leaves a record whose bytes are missing.
 - **No rewrites.** A file that is present is not written again.
 - **Concurrent writers.** Two writers of one name each publish a whole record; the last rename wins, and either is a valid record.
+- **The lock.** `lock` holds an operating-system file lock (`flock` on POSIX). An engine process holds it shared from its first write to the store (a file, a record, a job record removed, a work claim, the leftover sweep below) until the process ends, and a run takes it before it locks its folder; reading takes no lock. Pruning (§9) holds it exclusively. A writer that finds it held exclusively waits up to a minute, saying so once on stderr, and then fails ("the cache is being pruned"); a run is then refused before anything of it is written. Where the file system cannot lock, a writer goes on without the lock and says so once; pruning such a store is refused. The lock binds only engines that take it: a process of an engine older than the lock is seen by pruning only through the run folders and work claims it holds (§9), so every engine that writes a store is upgraded before the store is pruned. A stand-in store has a `lock` of its own.
+- **Users.** A process that takes the lock of its planning project's store, or of the stand-in store in it, records the project in `projects/<p>`, where `<p>` is the SHA-256 of the project root's canonical path: an empty file, made or touched, whose modification time is the project's last use. It holds no path. The engine that first makes `projects/` in a store already holding a file, record or job also writes `projects/legacy`: whoever wrote the store before is unknown.
 - **Leftovers.** A writer that stopped (a killed run) may leave a temporary file behind. A temporary name is never read as a record, and a run removes the temporary files it finds in the store once they are an hour old, since one that is still being written is changed far more often. An engine that keeps scratch space under the store root (work dirs) removes what an invocation that no longer runs left there.
 
 ## 7. What a record never holds
@@ -279,10 +283,10 @@ These names are for reading, and they are not identities. Two step paths or keys
 - **Answers are kept.** A stand-in's answers and the results made from them are records of the stand-in store like any other, so a resumed or later stand-in run of the project replays them, whatever its stand-in. Removing `stand-in/` forgets them.
 - **Marked.** The run's `plan.json` holds `"stand_in": true`, and each `run_started` event `stand_in: true`. The mode is not part of the plan digest ([identity.md](identity.md) §10): a stand-in run and a run without one have the same digest for the same plan.
 - **One mode per folder.** Resuming a folder in the other mode is refused before anything runs: `<folder> holds a stand-in run; resume it with --stand-in, or choose a new folder`, and `<folder> holds a run without a stand-in; resume it without --stand-in, or choose a new folder`. A folder holds a stand-in run when its `plan.json` says `"stand_in": true`.
-- **The takes file is not touched.** `reroll` and `pick` refuse a stand-in run: `<folder> holds a stand-in run, and stand-in runs never change the workflow's takes file`. A stand-in run, and every command that reads one, writes nothing outside its run folder and the stand-in store, apart from what `--deliver` copies out and the run's entry in the project's run index (§9).
+- **The takes file is not touched.** `reroll` and `pick` refuse a stand-in run: `<folder> holds a stand-in run, and stand-in runs never change the workflow's takes file`. A stand-in run, and every command that reads one, writes nothing outside its run folder and the stand-in store, apart from what `--deliver` copies out, the run's entry in the project's run index (§9) and the record that its project used the store (§6).
 - **Read like any run.** `inspect` and `project` read a stand-in run's folder as any other's, and say that it is one. An SDK that reads a run's files by digest reads a stand-in run's from the stand-in store.
 
-## 9. Listing and removing runs
+## 9. Listing and removing runs, and pruning the store
 
 `grida-fx runs list` lists a planning project's runs and `grida-fx runs remove` removes the ones it no longer needs ([guide](../docs/guide/10-cleanup.md)). Both read the project without writing to it until a removal is confirmed.
 
@@ -319,7 +323,24 @@ A `plan.json` of another kind, a folder at a run's place that holds files but no
 
 A tombstone that cannot be removed leaves the run `partial`: it is no longer a run, the list shows the tombstone as `removing`, and removing the tombstone finishes the job. An invocation that opened `run.lock` before the rename and locks it after the remover let go finds that the file it locked is no longer its folder's `run.lock`, and is refused (§8); one that starts at the old place after the rename gets a new, empty folder; and `--resume NAME` never makes a removed folder again. The result is [schemas/fx-run-removal-v1.schema.json](schemas/fx-run-removal-v1.schema.json).
 
-**What removing frees.** A run's placed files are links to the store's bytes (§8), so removing a run frees only what no other link holds: its `plan.json` and `events.jsonl`, and files placed as copies. The bytes the store holds stay there; the result reports both. Removing an allocated folder lets the next run that day take its name. Catalog URLs never retarget, since an entry binds the run's recorded identity.
+**What removing frees.** A run's placed files are links to the store's bytes (§8), so removing a run frees only what no other link holds: its `plan.json` and `events.jsonl`, and files placed as copies. The bytes the store holds stay there until the store is pruned; the result reports both. Removing an allocated folder lets the next run that day take its name. Catalog URLs never retarget, since an entry binds the run's recorded identity.
+
+**Pruning a store.** `grida-fx cache prune` removes from the planning project's store, and from its stand-in store, what no run of the project names. A run that later needs a removed result makes it again, and a removed paid answer is paid for again; the result says what the removed call records cost ([schemas/fx-cache-prune-v1.schema.json](schemas/fx-cache-prune-v1.schema.json)). Without `--yes` nothing is removed.
+
+It is refused, before anything is removed and in the preview too, when:
+- `overlap`: the store is, holds or lies inside the runs folder or `.fx/service`, or holds the project root;
+- `shared_cache`: `projects/` names a user other than the planning project, `legacy` included, or the store holds anything and has no `projects/`. `--forget-user <p>` drops a user once it no longer uses the store; the refusal names each;
+- `job_outstanding`: a job record is `submitting` or `submitted` (§5): collect it by running the workflow again, or forget it once the provider is checked;
+- `unreadable_store`: a folder or record of the store, or a job record, cannot be read: what it names would be taken to name nothing;
+- the project's runs cannot all be read: a folder of the runs tree that cannot be read, or a symbolic link or special file among its folders (`incomplete_walk`), a `plan.json` of another kind (`foreign_run`), a run's `plan.json` or `events.jsonl` (`unreadable_run`), a run index or catalog entry (`unreadable_entry`), an external run folder that cannot be reached (`unreachable_run`) or that is gone (`missing_run`; `runs remove <folder>` forgets it);
+- `legacy_interrupted_run`: an invocation of a run that is not a stand-in run ended with no `run_finished` or `run_cancelled` after a `budget_reserved` without `call`, so a paid answer it received may be named by no event, and no later invocation of the run succeeded; run it again to finish it, or remove it;
+- with `--yes`: `cache_in_use`, when the lock of either store, the `run.lock` of a run folder the project holds, or a work claim is held, and `lock_unsupported`, when the file system cannot lock.
+
+A folder at a run's place that holds files but no `plan.json` refuses nothing: what its `events.jsonl` names stays, in both stores. The `legacy` user also stands for this project's run folders outside its runs folder from before the run index, which pruning cannot see. A confirmed prune holds `.fx/runs/lock` while it reads the runs, so no removal runs meanwhile, and records its project among the store's users.
+
+**What stays.** Every run's `plan.json` and `events.jsonl` name what it needs: file digests, step identities and call keys, each 64 lowercase hexadecimal characters. Every such token names what stays: the result record, call record or file of that name, in the run's store (the stand-in store for a stand-in run). So do the tokens of every record that stays and of every job record, until nothing new is named. A file the store holds that is linked from anywhere else (a link count above one, such as a run folder outside the project's knowledge) stays, with every record that names it. Every `budget_reserved` names the key of the call it holds money for (fx-run-events-v1), written before anything is sent, so a paid answer is named even when its `call` event never got written.
+
+**What goes.** Every other result record, call record and file under `results/`, `calls/` and `files/`, records before files, and the leftovers of §6. Nothing else under the store root is touched: not `jobs/`, `projects/`, `lock` or a name that is not a digest. With `--yes` the stores are locked exclusively first, and everything above is checked and counted again under the lock.
 
 ## 10. Changes from stage-gen's engine
 

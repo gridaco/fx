@@ -386,6 +386,14 @@ impl Tally<'_> {
             .clone()
     }
 
+    /// Keeps why a reservation could not be recorded.
+    fn reserved(&self, reserved: Result<Hold, NotReserved>) -> Result<Hold, NotReserved> {
+        if let Err(NotReserved::Unrecorded(reason)) = &reserved {
+            self.keep(reason);
+        }
+        reserved
+    }
+
     fn keep(&self, reason: &str) {
         self.unrecorded
             .lock()
@@ -396,11 +404,22 @@ impl Tally<'_> {
 
 impl HoldBook for Tally<'_> {
     fn reserve(&self, node_id: String, amount: Usd, scopes: &Scopes) -> Result<Hold, NotReserved> {
-        let reserved = self.ledger.reserve_recorded(node_id, amount, scopes);
-        if let Err(NotReserved::Unrecorded(reason)) = &reserved {
-            self.keep(reason);
-        }
-        reserved
+        self.reserved(self.ledger.reserve_recorded(node_id, amount, scopes))
+    }
+
+    fn reserve_call(
+        &self,
+        node_id: String,
+        amount: Usd,
+        scopes: &Scopes,
+        call: &str,
+    ) -> Result<Hold, NotReserved> {
+        self.reserved(self.ledger.reserve_recorded_for(
+            node_id,
+            amount,
+            scopes,
+            Some(call.to_string()),
+        ))
     }
 
     fn settle(&self, hold: Hold, reported: Option<Usd>) -> Usd {
@@ -639,11 +658,8 @@ impl Lead<'_> {
 
         // 4. The call cache.
         if let Some(record) = store.load_call(&key) {
-            // A leftover job record of an answered call is stale (spec/store.md §5); a failure to
-            // remove it is harmless, since the call record answers first.
-            let _ = store.remove_job(&key);
             let (answered, data) = from_record(store, files, &record)?;
-            emit_call(
+            let named = emit_call(
                 services,
                 site,
                 capability,
@@ -653,6 +669,12 @@ impl Lead<'_> {
                 Some(Usd::ZERO),
                 false,
             );
+            // A leftover job record of an answered call is stale (spec/store.md §5); a failure to
+            // remove it is harmless, since the call record answers first. It goes only once the
+            // log names the call: until then it is what keeps the answer from a prune (§9).
+            if named {
+                let _ = store.remove_job(&key);
+            }
             return Ok(CallAnswer {
                 key,
                 cached: true,
@@ -881,16 +903,20 @@ impl Lead<'_> {
         };
         let reported = answer.cost;
         let record = self.publish(request, route_entry, answer, reported)?;
-        // A job record left behind is answered by the call record from now on (spec/store.md §5).
-        let _ = store.remove_job(&key);
         if let Some(reason) = unrecorded {
             return Err(CallError::Fault(reason));
         }
         // The caller gets what a replay of the record gives (module doc, step 9).
         let (answered, data) = from_record(store, files, &replayed(&record)?)?;
-        emit_call(
+        let named = emit_call(
             services, site, capability, &route_id, &key, false, cost, false,
         );
+        // A job record left behind is answered by the call record from now on (spec/store.md
+        // §5). It goes once the log names the call, so a collected answer is never named by
+        // neither (§9, "Pruning a store"); a later run that trusts the record removes it.
+        if named {
+            let _ = store.remove_job(&key);
+        }
         Ok(CallAnswer {
             key,
             cached: false,
@@ -1096,6 +1122,7 @@ impl Lead<'_> {
 
 /// Emits `call` (spec/schemas/fx-run-events-v1); nothing while planning. A failed write does
 /// not undo a call that is already recorded in the store. `stand_in`: a stand-in answered it.
+/// Whether the log holds the event now (true while planning, which keeps no log).
 #[allow(clippy::too_many_arguments)]
 fn emit_call(
     services: &Services,
@@ -1106,17 +1133,20 @@ fn emit_call(
     cached: bool,
     cost: Option<Usd>,
     stand_in: bool,
-) {
-    if let Some(events) = &services.events {
-        let _ = events.emit(&Event::Call {
-            id: site.instance_id.clone(),
-            capability: capability.to_string(),
-            route: route_id.to_string(),
-            call: key.to_string(),
-            cached,
-            cost_usd: cost,
-            stand_in,
-        });
+) -> bool {
+    match &services.events {
+        Some(events) => events
+            .emit(&Event::Call {
+                id: site.instance_id.clone(),
+                capability: capability.to_string(),
+                route: route_id.to_string(),
+                call: key.to_string(),
+                cached,
+                cost_usd: cost,
+                stand_in,
+            })
+            .is_ok(),
+        None => true,
     }
 }
 

@@ -169,6 +169,7 @@ fn every_event() -> Vec<Event> {
         Event::BudgetReserved {
             node_id: "a#1/0123456789abcdef.1".into(),
             amount_usd: Usd::ZERO,
+            call: Some(CALL.into()),
         },
         Event::BudgetSettled {
             node_id: "a#1/0123456789abcdef.1".into(),
@@ -422,7 +423,7 @@ fn members_follow_the_schema_names() {
     assert_eq!(fields(&events[13])["cost_usd"], Value::Null);
     assert_eq!(
         fields(&events[14]),
-        json!({"node_id": "a#1/0123456789abcdef.1", "amount_usd": 0})
+        json!({"node_id": "a#1/0123456789abcdef.1", "amount_usd": 0, "call": CALL})
     );
     assert_eq!(
         fields(&events[16]),

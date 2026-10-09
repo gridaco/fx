@@ -1,0 +1,4 @@
+{"created_at":"2026-10-01T09:00:00.000Z","event":"run_started","kind":"fx-run-events-v1"}
+{"event":"node_started","id":"draw","identity":"2279890ca46f73b4464ceb5c4b3b710c31487c5345575cf4db1888203c34f098","kind":"fx-run-events-v1","path":"draw"}
+{"amount_usd":0.25,"call":"71d71a638a87f46c32c74db1d536099b251b7507652ee89842584b53d1aefe61","event":"budget_reserved","kind":"fx-run-events-v1","node_id":"draw~1"}
+{"charged_usd":0.25,"event":"run_finished","incomplete":false,"kind":"fx-run-events-v1","ok":true}

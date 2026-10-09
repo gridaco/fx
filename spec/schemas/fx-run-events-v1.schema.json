@@ -166,7 +166,7 @@
       "pattern": "^.+@[a-z0-9._-]+$"
     },
     "call": {
-      "description": "The call key (identity.md \u00a79).",
+      "description": "The call key (identity.md \u00a79). On `call`, the call the event reports; on `budget_reserved`, the call the hold is for, written before anything is sent (absent in older records and for a hold of no call).",
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
     },

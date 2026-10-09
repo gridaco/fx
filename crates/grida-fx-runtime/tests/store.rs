@@ -281,8 +281,12 @@ fn every_store_path_is_built_from_a_digest() {
         StoreError::NotADigest("../escape".into()).to_string(),
         "not a digest: ../escape"
     );
-    // Nothing was written outside files/.
-    assert!(tree(store.root()).iter().all(|p| p.starts_with("files/")));
+    // Nothing was written outside files/, besides the store's lock (store.md §6).
+    assert!(
+        tree(store.root())
+            .iter()
+            .all(|p| p.starts_with("files/") || p == "lock")
+    );
 }
 
 #[test]
@@ -312,6 +316,7 @@ fn records_and_files_sit_where_store_md_puts_them() {
         format!("results/ab/{identity}.json"),
         format!("calls/{}/{}.json", &call.key[..2], call.key),
         format!("jobs/{key}.json"),
+        "lock".to_string(),
     ];
     expected.sort();
     assert_eq!(tree(store.root()), expected);

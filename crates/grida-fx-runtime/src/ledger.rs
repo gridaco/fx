@@ -195,6 +195,18 @@ impl Ledger {
         amount: Usd,
         scopes: &Scopes,
     ) -> Result<Hold, NotReserved> {
+        self.reserve_recorded_for(node_id, amount, scopes, None)
+    }
+
+    /// [`Ledger::reserve_recorded`] for the call whose key is `call`: its `budget_reserved`
+    /// names the key.
+    pub fn reserve_recorded_for(
+        &self,
+        node_id: String,
+        amount: Usd,
+        scopes: &Scopes,
+        call: Option<String>,
+    ) -> Result<Hold, NotReserved> {
         let amount = non_negative(amount);
         let mut state = self.lock();
         if let Some(fault) = &state.fault {
@@ -262,6 +274,7 @@ impl Ledger {
         let event = Event::BudgetReserved {
             node_id: node_id.clone(),
             amount_usd: amount,
+            call,
         };
         if let Err(fault) = self.emit(&mut state, &event) {
             // Nothing may be sent for a hold the log does not hold.

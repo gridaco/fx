@@ -599,6 +599,13 @@ fn prepare(
     options: &RunOptions,
     digest: &str,
 ) -> Result<(RunFolder, Vec<serde_json::Value>), RunError> {
+    // The run holds the store's lock from here on (spec/store.md §6): a prune that holds it past
+    // the wait refuses the run before anything of it is written.
+    engine.store.lease().map_err(|_| {
+        RunError::Refused(
+            "the cache is being pruned (grida-fx cache prune); run again when it ends".into(),
+        )
+    })?;
     let folder = if options.existing {
         RunFolder::lock_existing(&options.folder, &options.label)
     } else {

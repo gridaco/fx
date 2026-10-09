@@ -29,6 +29,7 @@ pub fn run(args: &JobsArgs) -> Result<u8, Error> {
     let cwd = super::planning::working_directory()?;
     let project = Project::find(&cwd)?;
     let store = Store::open(&project.cache_dir());
+    grida_fx_runtime::store::lease::set_user(&project.root, &project.cache_dir());
     let Some(key) = &args.forget else {
         for job in store.jobs()? {
             print_line(&job_line(&job));

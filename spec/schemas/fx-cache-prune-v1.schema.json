@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-cache-prune-v1",
+  "title": "FX cache prune (fx-cache-prune-v1)",
+  "description": "`grida-fx cache prune --json`: what pruning the planning project's store and its stand-in store removed, or would remove without --yes, or why it is refused (spec/store.md §9, \"Pruning a store\"). A refused prune removed nothing.",
+  "type": "object",
+  "required": [
+    "kind",
+    "applied",
+    "refused"
+  ],
+  "properties": {
+    "kind": {
+      "const": "fx-cache-prune-v1"
+    },
+    "applied": {
+      "type": "boolean",
+      "description": "false for a preview and for a refusal: nothing was removed."
+    },
+    "refused": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "enum": [
+              "overlap",
+              "shared_cache",
+              "job_outstanding",
+              "unreadable_store",
+              "incomplete_walk",
+              "foreign_run",
+              "unreadable_run",
+              "unreadable_entry",
+              "unreachable_run",
+              "missing_run",
+              "legacy_interrupted_run",
+              "cache_in_use",
+              "lock_unsupported"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "runs_seen": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "The runs whose records named what stays."
+    },
+    "forgotten_users": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "The users --forget-user dropped (or, in a preview, would drop)."
+    },
+    "stores": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "store",
+          "results",
+          "calls",
+          "files",
+          "freed_bytes",
+          "paid_usd"
+        ],
+        "properties": {
+          "store": {
+            "enum": [
+              "main",
+              "stand_in"
+            ]
+          },
+          "results": {
+            "type": "object",
+            "required": [
+              "kept",
+              "removed"
+            ],
+            "properties": {
+              "kept": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "removed": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": true
+          },
+          "calls": {
+            "type": "object",
+            "required": [
+              "kept",
+              "removed"
+            ],
+            "properties": {
+              "kept": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "removed": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": true
+          },
+          "files": {
+            "type": "object",
+            "required": [
+              "kept",
+              "removed"
+            ],
+            "properties": {
+              "kept": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "removed": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": true
+          },
+          "freed_bytes": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Bytes of the records removed and of the files removed that no other link held."
+          },
+          "paid_usd": {
+            "type": "number",
+            "minimum": 0,
+            "description": "What the removed call records cost when they were answered: a run that needs one of them again pays again."
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "What could not be removed."
+    }
+  },
+  "if": {
+    "properties": {
+      "refused": {
+        "minItems": 1
+      }
+    }
+  },
+  "then": {
+    "properties": {
+      "applied": {
+        "const": false
+      }
+    }
+  },
+  "else": {
+    "required": [
+      "runs_seen",
+      "forgotten_users",
+      "stores",
+      "errors"
+    ]
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,46 @@
+{
+ "applied": false,
+ "errors": [],
+ "forgotten_users": [
+  "legacy"
+ ],
+ "kind": "fx-cache-prune-v1",
+ "refused": [],
+ "runs_seen": 1,
+ "stores": [
+  {
+   "calls": {
+    "kept": 1,
+    "removed": 1
+   },
+   "files": {
+    "kept": 2,
+    "removed": 1
+   },
+   "freed_bytes": 577,
+   "paid_usd": 0.5,
+   "results": {
+    "kept": 1,
+    "removed": 1
+   },
+   "store": "main"
+  },
+  {
+   "calls": {
+    "kept": 0,
+    "removed": 0
+   },
+   "files": {
+    "kept": 0,
+    "removed": 0
+   },
+   "freed_bytes": 0,
+   "paid_usd": 0,
+   "results": {
+    "kept": 0,
+    "removed": 0
+   },
+   "store": "stand_in"
+  }
+ ]
+}

@@ -74,7 +74,8 @@ planning project's runs as `runs list --json` gives them ([store.md](store.md) Â
 its folder resolved against the call's working directory (`run_dir` / `runDir`), which a
 removal accepts as it is. Python `remove_runs(runs, preview=False, cwd=None)` and JS
 `removeRuns(runs, {preview, cwd})` remove the named runs as `runs remove --yes` does, or with
-`preview` say what would be removed. The SDKs take explicit runs only: a caller filters the
+`preview` say what would be removed. Pruning the cache (`cache prune`) stays a CLI
+operation: it is an operator's decision about a whole store, which may be shared. The SDKs take explicit runs only: a caller filters the
 list itself, so what is removed is exactly what it chose. A run refused (`active`,
 `holds_pick`, `changed`, `not_removable`) or left `partial` is reported in the result, not raised; a
 selection that is not a run raises an error carrying its code, and nothing is removed. A

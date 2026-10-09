@@ -104,6 +104,8 @@ pub enum Verb {
     Cancel(CancelArgs),
     /// list the project's runs, or remove runs it no longer needs
     Runs(RunsArgs),
+    /// prune the project's cache of what no run still needs
+    Cache(CacheArgs),
     /// serve a workflow plan or an existing run on loopback; never starts a run
     #[command(hide = true)]
     View(ViewArgs),
@@ -387,6 +389,32 @@ pub struct RunsRemoveArgs {
 }
 
 #[derive(Debug, Args, Clone)]
+pub struct CacheArgs {
+    #[command(subcommand)]
+    pub verb: CacheVerb,
+}
+
+#[derive(Debug, Subcommand, Clone)]
+pub enum CacheVerb {
+    /// remove what no run of the project names: shows what it would remove, and removes it with
+    /// --yes
+    Prune(CachePruneArgs),
+}
+
+#[derive(Debug, Args, Clone)]
+pub struct CachePruneArgs {
+    /// a user of the cache (as a refusal names it) that no longer uses it (repeatable)
+    #[arg(long = "forget-user", value_name = "ID")]
+    pub forget_user: Vec<String>,
+    /// prune; without it nothing is removed
+    #[arg(long)]
+    pub yes: bool,
+    /// print the result as JSON
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args, Clone)]
 pub struct JobsArgs {
     /// forget one job (its call key, 64 hex) once you have checked the provider
     #[arg(long = "forget", value_name = "KEY")]
@@ -599,6 +627,7 @@ fn dispatch(verb: Verb, rest: Vec<String>) -> Result<u8, Error> {
         Verb::Inspect(args) => verbs::inspect::run(&args),
         Verb::Cancel(args) => verbs::control::cancel(&args),
         Verb::Runs(args) => verbs::runs::run(&args),
+        Verb::Cache(args) => verbs::cache::run(&args),
         Verb::View(mut args) => {
             args.rest = rest;
             verbs::view::run(&args)

@@ -1169,7 +1169,7 @@ fn report(
     let verb = if applied { "freed" } else { "frees" };
     let shared = if cache > 0 {
         format!(
-            "; {} more stays in the cache, which shares it",
+            "; {} more stays in the cache, which shares it (grida-fx cache prune)",
             human(cache)
         )
     } else {

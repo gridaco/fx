@@ -158,6 +158,10 @@ pub enum Event {
     BudgetReserved {
         node_id: String,
         amount_usd: Usd,
+        /// The key of the call the hold is for, written before anything is sent, so a paid
+        /// answer is named in the log even when its `call` event never got written
+        /// (spec/store.md §9, "Pruning"). Absent for a hold of no call.
+        call: Option<String>,
     },
     BudgetSettled {
         node_id: String,
@@ -431,9 +435,13 @@ impl Event {
             Event::BudgetReserved {
                 node_id,
                 amount_usd,
+                call,
             } => {
                 fields.text("node_id", node_id);
                 fields.money("amount_usd", *amount_usd);
+                if let Some(call) = call {
+                    fields.text("call", call);
+                }
             }
             Event::BudgetSettled {
                 node_id,

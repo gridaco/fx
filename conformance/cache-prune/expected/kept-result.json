@@ -1,0 +1,17 @@
+{
+ "cost_usd": null,
+ "facts": {},
+ "identity": "2279890ca46f73b4464ceb5c4b3b710c31487c5345575cf4db1888203c34f098",
+ "kind": "fx-result-record-v1",
+ "outputs": {
+  "out": {
+   "file": {
+    "digest": "96ee155761e9ece572567511d75fae5d24bdd13af22ae2865e8a437788bff809",
+    "kind": "text",
+    "name": "kept picture",
+    "size": 12
+   }
+  }
+ },
+ "read": {}
+}

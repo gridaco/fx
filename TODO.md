@@ -148,13 +148,12 @@ and visibility before introducing persistence or exposure in exported records.
 
 ## Run cleanup and retention
 
-Listing and removing runs are implemented in source ([store.md](spec/store.md) §9,
-[guide](docs/guide/10-cleanup.md)). Still open:
+Listing and removing runs and pruning the cache are implemented in source
+([store.md](spec/store.md) §9, [guide](docs/guide/10-cleanup.md)). Still open:
 
-- **Reclaiming cache bytes.** Removing a run frees little, since its files are links
-  into the store. Pruning the store must keep everything a kept run, a pick or an
-  outstanding job still needs, know when any engine is writing the store, and refuse a
-  store other projects share. Removed paid answers are billed again when needed.
+- **Pruning a shared cache.** A cache other projects use is refused until they are
+  forgotten; pruning it for all of them at once (each project's runs as roots) is not
+  designed.
 - **Retention policies.** Keeping the newest N runs of a workflow, or defaults per
   project, are not designed; selection stays explicit.
 - **Saved plans.** Catalog plan entries have no removal path.

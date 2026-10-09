@@ -1,8 +1,10 @@
 # Cleaning up runs
 
 Every `grida-fx run` without `--run` or `--name` makes a new folder, so a workflow you are
-still shaping leaves dozens of exploratory runs behind. `runs list` shows what a project holds;
-`runs remove` takes away the runs you no longer need. Neither calls a provider or runs a node.
+still shaping leaves dozens of exploratory runs behind, and the cache keeps every picture they
+drew. `runs list` shows what a project holds, `runs remove` takes away the runs you no longer
+need, and `cache prune` gives back the disk their results took. None of them calls a provider or
+runs a node.
 
 ## See what you have
 
@@ -46,7 +48,7 @@ grida-fx runs remove runs/rig/2026-10-09-3 rig/old_baseline --yes
 would remove  runs/rig/2026-10-09-3  (failed)
 would remove  runs/rig/2026-10-08-1  (failed)
 passed    1 named (filters select dated runs only; name a run to remove it)
-frees     1.2 kB; 48.3 MB more stays in the cache, which shares it
+frees     1.2 kB; 48.3 MB more stays in the cache, which shares it (grida-fx cache prune)
 next      add --yes to remove them
 ```
 
@@ -67,12 +69,44 @@ next      add --yes to remove them
 Removing an allocated run lets the next run that day reuse its folder name; the viewer's links
 never point a removed run's URL at the new one.
 
-## Disk space
+## Get the disk back
 
 A run folder's files are links to the [cache](04-cost-and-cache.md)'s copies, so removing a run
 frees only its own record (`plan.json`, `events.jsonl`) and any file that had to be copied. The
-removal says how much stays in the cache, which keeps every result so that the next run reuses it
-instead of paying again.
+bytes come back when you prune the cache of what no remaining run names:
+
+```sh
+grida-fx cache prune
+grida-fx cache prune --yes
+```
+
+```text
+cache     .fx/cache
+runs      12 runs name what stays
+removes   340 results, 120 calls (paid $4.20), 980 files: 1.2 GB; keeps 41 results, 9 calls, 63 files
+stand-in  0 results, 0 calls (paid $0.00), 0 files: 0 B; keeps 3 results, 0 calls, 4 files
+next      add --yes to prune; a run that needs a removed result makes it again, and pays again for a removed call
+```
+
+Whatever a remaining run names stays, so every kept run can still be inspected, resumed and
+read from an SDK, and its steps still come from the cache. Everything else goes: a run that later
+needs a removed result makes it again, and pays again for a removed paid answer. The preview says
+what the removed answers cost.
+
+Pruning refuses, and removes nothing, while it cannot be sure what is still needed:
+
+- **Another project uses the cache.** Each project that writes a cache is recorded in it
+  (`projects/`, by a digest of its path). While another one is, or a cache was written before FX
+  recorded its users (`legacy`), pruning from one project could delete what the other needs. Once
+  that project is gone or uses a cache of its own, pass `--forget-user ID`, with the id the refusal
+  names.
+- **Something is running**, a provider job is not collected yet (run the workflow again, or
+  `grida-fx jobs --forget` it once you have checked the provider), a run cannot be read, or a run
+  was interrupted by an engine older than this one. The refusal says which and what to do.
+- **Upgrade first.** Runs and plans of this version hold the cache's lock while they write it,
+  and a prune waits for none of them. An older `grida-fx` running at the same time is seen only
+  through its run folder; upgrade every engine that writes the cache, including ones an SDK
+  bundles, before you prune.
 
 ## From an SDK
 
@@ -105,7 +139,12 @@ if (failed.length > 0) {
 A refused or partial run is reported in the result; a selection that is not a run raises an
 error and removes nothing.
 
-The contracts are in [the store specification](../../spec/store.md#9-listing-and-removing-runs)
-and the [list](../../spec/schemas/fx-run-list-v1.schema.json) and
-[removal](../../spec/schemas/fx-run-removal-v1.schema.json) schemas. These commands are new in
+Pruning stays a command-line operation: it decides about a whole cache, which other projects may
+share.
+
+The contracts are in
+[the store specification](../../spec/store.md#9-listing-and-removing-runs-and-pruning-the-store)
+and the [list](../../spec/schemas/fx-run-list-v1.schema.json),
+[removal](../../spec/schemas/fx-run-removal-v1.schema.json) and
+[prune](../../spec/schemas/fx-cache-prune-v1.schema.json) schemas. These commands are new in
 source: check your installed version's help before using them.

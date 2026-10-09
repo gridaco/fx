@@ -24,7 +24,10 @@
 //!   fails a check (absent, never an error, never partly used); [`Store::load_job`] returns an
 //!   error for a record that exists and cannot be read, because it may stand for a paid
 //!   submission. Error texts never hold an absolute path: records are named `jobs/<key>.json`;
-//! - nothing here holds a secret or a path in a record (§7).
+//! - nothing here holds a secret or a path in a record (§7);
+//! - every writer first holds the store's lock shared ([`lease`], store.md §6): a prune holds it
+//!   exclusively, and a writer that cannot have it within a minute fails ("the cache is being
+//!   pruned").
 //!
 //! What a killed invocation leaves behind ([`Store::sweep`], at the start of every run): a
 //! temporary file it was writing (`.<16 hex>.part` beside a record or a file) is removed once it
@@ -49,6 +52,7 @@
 //! - text content is read for files of at most 1 000 000 bytes, as workflow input files are, and
 //!   JSON content obeys the reserved-marker rule (spec/identity.md §3), as JSON input files do.
 
+pub mod lease;
 pub mod records;
 
 use grida_fx_core::error::io_reason;
@@ -181,6 +185,7 @@ impl Store {
         let digest = value::file_digest(bytes);
         let size = bytes.len() as u64;
         if !self.has(&digest, size) {
+            self.leased()?;
             let path = self.file_path(&digest)?;
             atomic_write(&path, bytes, true)
                 .map_err(|e| io_error(file_relative_unchecked(&digest), &e))?;
@@ -206,6 +211,7 @@ impl Store {
         if self.has(&digest, size) {
             return Ok(Stored { digest, size });
         }
+        self.leased()?;
         let path = self.file_path(&digest)?;
         let relative = file_relative_unchecked(&digest);
         let failed = |error: &io::Error| io_error(relative.clone(), error);
@@ -390,6 +396,7 @@ impl Store {
     /// Removes a job record; absent is fine.
     pub fn remove_job(&self, key: &str) -> Result<(), StoreError> {
         let relative = record_relative(Records::Jobs, key)?;
+        self.leased()?;
         match fs::remove_file(self.root.join(&relative)) {
             Ok(()) => Ok(()),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
@@ -460,9 +467,24 @@ impl Store {
         value: &Value,
         read_only: bool,
     ) -> Result<(), StoreError> {
+        self.leased()?;
         let bytes = value::canon(value);
         atomic_write(&self.root.join(relative), bytes.as_bytes(), read_only)
             .map_err(|e| io_error(relative, &e))
+    }
+
+    /// Holds the store's lock before a write ([`lease`]).
+    fn leased(&self) -> Result<(), StoreError> {
+        self.lease().map_err(|not| StoreError::Io {
+            what: "lock".into(),
+            reason: match not {
+                lease::NotLocked::Held => {
+                    "the cache is being pruned (grida-fx cache prune); run again when it ends"
+                        .into()
+                }
+                lease::NotLocked::Unsupported(error) => io_reason(&error),
+            },
+        })
     }
 }
 
@@ -663,6 +685,8 @@ impl Store {
         if held.contains_key(&path) {
             return Ok(());
         }
+        self.leased()
+            .map_err(|error| io::Error::new(io::ErrorKind::WouldBlock, error.to_string()))?;
         fs::create_dir_all(&work)?;
         // Locked under a name of its own, then renamed into place: a sweep never meets a claim
         // that is not locked yet.
@@ -704,6 +728,9 @@ impl Store {
     /// Removes what killed invocations left behind (module doc). Best effort: what cannot be
     /// read or removed stays.
     pub fn sweep(&self) {
+        if self.leased().is_err() {
+            return;
+        }
         self.sweep_temporaries(STALE);
         self.sweep_work(STALE);
     }

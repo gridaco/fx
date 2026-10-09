@@ -1,5 +1,6 @@
 //! The runs a planning project holds (spec/store.md §9, "Which runs a project holds"), for
-//! `runs list` and `runs remove`. Nothing here takes a lock, repairs a log or creates a folder.
+//! `runs list`, `runs remove` and `cache prune`. Nothing here takes a lock, repairs a log or
+//! creates a folder.
 //!
 //! - **The runs tree**, walked whole from the configured runs folder (a symbolic link there is
 //!   followed): every directory below it, at any depth and with no cap, never through a symbolic
@@ -18,7 +19,7 @@
 //! - **Problems** stop nothing here but are reported: a directory that cannot be read, a symbolic
 //!   link or special file among the tree's directories, a `plan.json` of another kind, a run whose
 //!   files cannot be read, an index or catalog entry that cannot be read, an external folder that
-//!   cannot be reached. `runs list` reports them as skipped.
+//!   cannot be reached. `runs list` reports them as skipped; `cache prune` refuses on any.
 //!
 //! State (`fx-run-list-v1`): `planned`, `unfinished`, `succeeded`, `cancelled` as `inspect`
 //! reads them; inspect's `failed` split into `incomplete` (`ok: false, incomplete: true`, which a
@@ -154,7 +155,7 @@ pub(crate) enum ProblemKind {
     /// A run whose `plan.json` or `events.jsonl` cannot be read.
     UnreadableRun,
     /// A folder at a run's place that holds files but no `plan.json`: searched for runs, never
-    /// removed.
+    /// removed; pruning keeps what its `events.jsonl` names.
     NoPlan,
     /// A run index entry or catalog entry that cannot be read.
     UnreadableEntry,

@@ -147,6 +147,18 @@ impl Backoff {
 pub trait HoldBook: Send + Sync {
     /// Opens a hold once it is recorded (`crate::ledger` module doc).
     fn reserve(&self, node_id: String, amount: Usd, scopes: &Scopes) -> Result<Hold, NotReserved>;
+    /// [`HoldBook::reserve`] for the call whose key is `call`; a book that records holds names
+    /// the key with the hold.
+    fn reserve_call(
+        &self,
+        node_id: String,
+        amount: Usd,
+        scopes: &Scopes,
+        call: &str,
+    ) -> Result<Hold, NotReserved> {
+        let _ = call;
+        self.reserve(node_id, amount, scopes)
+    }
     /// Settles a hold: what was charged, whether or not the log could record it.
     fn settle(&self, hold: Hold, reported: Option<Usd>) -> Usd;
     /// Why the book can no longer record what is spent (a settlement or a reservation its log
@@ -159,6 +171,16 @@ pub trait HoldBook: Send + Sync {
 impl HoldBook for Ledger {
     fn reserve(&self, node_id: String, amount: Usd, scopes: &Scopes) -> Result<Hold, NotReserved> {
         Ledger::reserve_recorded(self, node_id, amount, scopes)
+    }
+
+    fn reserve_call(
+        &self,
+        node_id: String,
+        amount: Usd,
+        scopes: &Scopes,
+        call: &str,
+    ) -> Result<Hold, NotReserved> {
+        Ledger::reserve_recorded_for(self, node_id, amount, scopes, Some(call.to_string()))
     }
 
     fn settle(&self, hold: Hold, reported: Option<Usd>) -> Usd {
@@ -614,7 +636,7 @@ impl Attempts<'_> {
     /// Reserves a new attempt's hold under a new name.
     fn reserve(&self) -> Result<Hold, NotReserved> {
         self.book
-            .reserve((self.hold_name)(), self.hold, self.scopes)
+            .reserve_call((self.hold_name)(), self.hold, self.scopes, &self.call.key)
     }
 
     /// The checks of an answer (module doc, "Checking an answer"): the answer with its canonical

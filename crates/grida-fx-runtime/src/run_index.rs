@@ -1,6 +1,6 @@
 //! The run index (spec/store.md §9, "Which runs a project holds"): every run folder a planning
-//! project's runs used, so that listing and removal know every run of the project wherever it
-//! lies, whatever `--no-view` said, and whatever the `runs` setting says now.
+//! project's runs used, so that listing, removal and pruning know every run of the project's
+//! store wherever it lies, whatever `--no-view` said, and whatever the `runs` setting says now.
 //!
 //! ```text
 //! <project root>/.fx/runs/

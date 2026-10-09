@@ -116,6 +116,9 @@ pub fn engine_with_env(
         Some(_) => stand_in_store(planner),
         None => planner.project.cache_dir(),
     };
+    // Whatever this process writes to a store marks the planning project among its users
+    // (spec/store.md §6).
+    grida_fx_runtime::store::lease::set_user(&planner.project.root, &planner.project.cache_dir());
     let engine = Engine::new(
         runtime.handle().clone(),
         host_spec(planner, env),

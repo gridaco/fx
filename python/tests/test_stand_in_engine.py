@@ -195,8 +195,9 @@ def test_a_stand_in_answers_each_paid_call_once_and_its_answers_are_kept(project
     assert image.path.resolve() == stand_ins / "files" / image.digest[:2] / image.digest
     assert edited == [picture_for(by_step["gull"])]
 
-    # Everything went to the stand-in store; the project's own store holds nothing.
-    assert sorted(path.name for path in store.iterdir()) == ["stand-in"]
+    # Everything went to the stand-in store; the project's own store holds nothing but the
+    # record that the project used it (spec/store.md §6).
+    assert sorted(path.name for path in store.iterdir()) == ["projects", "stand-in"]
     assert len(records(stand_ins / "calls")) == 3
     assert not (stand_ins / "jobs").exists()
     outputs = result.outputs
@@ -229,7 +230,7 @@ def test_a_stand_in_answers_each_paid_call_once_and_its_answers_are_kept(project
         name: file.digest for name, file in outputs.items()
     }
     assert len(records(stand_ins / "calls")) == 3
-    assert sorted(path.name for path in store.iterdir()) == ["stand-in"]
+    assert sorted(path.name for path in store.iterdir()) == ["projects", "stand-in"]
 
 
 def test_a_refused_call_fails_its_step_and_a_resume_with_another_stand_in_asks_only_it(

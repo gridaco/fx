@@ -221,4 +221,5 @@ job id when it returned one, so you can find the job on its dashboard):
   your paid answers, and a run without a stand-in never replays a stand-in's. Deleting it forgets
   every stand-in answer.
 - **It is an ordinary folder.** You may delete it; runs keep their own copies of their files, and
-  anything deleted is made again (and billed again) when a run needs it.
+  anything deleted is made again (and billed again) when a run needs it. To delete only what no
+  remaining run needs, prune it ([Cleaning up runs](10-cleanup.md#get-the-disk-back)).
