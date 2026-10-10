@@ -59,7 +59,7 @@ STEP_KEYS = {
 FORMATS = ("json", "jsonl", "yaml")
 # Run-event members whose values differ between machines and invocations. They are dropped only
 # from run events (objects with an "event" member), never from the data under DATA_KEYS.
-VOLATILE_KEYS = {"offset_ms", "invocation_id", "duration_ms", "created_at"}
+VOLATILE_KEYS = {"offset_ms", "invocation_id", "duration_ms", "created_at", "started_at"}
 DATA_KEYS = {"with", "inputs", "outputs", "request", "data", "facts", "params", "value", "contract"}
 # Which Python hosts node bodies: passed through from the caller when set.
 PYTHON_HOST = "GRIDA_FX_PYTHON"

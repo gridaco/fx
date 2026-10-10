@@ -156,6 +156,8 @@ export function projectScopes(view: GraphDocument | ViewerRun, flat: CanvasGraph
   for (const scope of workflowScopes) {
     const children = descendants(scope);
     const failed = children.filter((node) => node.state === "failed");
+    // A workflow has run since its first step started.
+    const started_at = children.flatMap((node) => node.started_at ?? []).sort()[0];
     const errors = children.filter((node) => node.state === "failed" || node.state === "blocked").flatMap((node) => {
       const source = sourceNodes.get(node.source_id);
       const message = source && ("error" in source ? source.error : source.reason);
@@ -163,7 +165,7 @@ export function projectScopes(view: GraphDocument | ViewerRun, flat: CanvasGraph
     });
     nodes.push({ id: scope.id, source_id: scope.id, kind: "workflow", scope_id: scope.id, path: scope.path, address: scope.step, take: scope.take, key: scope.path,
       title: scope.title || scope.path, subtitle: scope.source ?? scope.path,
-      state: scopeState(children.map((node) => node.state), plan), pending: false,
+      state: scopeState(children.map((node) => node.state), plan), pending: false, ...(started_at ? { started_at } : {}),
       child_count: children.length, failure_count: failed.length, ...(errors.length ? { errors } : {}), ports: scopePorts(scope) });
   }
   const inputId = active === null ? null : `boundary:input:${active}`;

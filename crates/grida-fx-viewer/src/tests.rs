@@ -102,8 +102,16 @@ impl FileForEvents {
     fn append(&mut self, mut event: Value) {
         event["kind"] = json!("fx-run-events-v1");
         event["plan"] = json!("a".repeat(64));
-        event["invocation_id"] = json!("offline-fixture");
-        event["offset_ms"] = json!(0);
+        for (name, default) in [
+            ("invocation_id", json!("offline-fixture")),
+            ("offset_ms", json!(0)),
+        ] {
+            event
+                .as_object_mut()
+                .unwrap()
+                .entry(name)
+                .or_insert(default);
+        }
         writeln!(self.0, "{event}").unwrap();
     }
 }
@@ -334,6 +342,34 @@ fn dynamic_nodes_terminated_before_start_keep_recorded_ports() {
         assert_eq!(entry["state"], state);
         assert!(entry["duration_ms"].is_null());
     }
+}
+
+#[test]
+fn a_start_is_dated_from_its_invocation_start() {
+    let fixture = Fixture::new("image/png");
+    let mut events = FileForEvents::new(&fixture.root());
+    // The fixture's own invocation records no start, so its steps stay undated.
+    for event in [
+        json!({"event":"run_started","invocation_id":"resumed","started_at":"2026-10-11T09:00:00.000Z","offset_ms":0}),
+        json!({"event":"node_started","id":"draw#1","path":"draw","invocation_id":"resumed","offset_ms":61500}),
+    ] {
+        events.append(event);
+    }
+    drop(events);
+    let document =
+        serde_json::to_value(read::read_inventory(&fixture.root()).unwrap().document).unwrap();
+    let node = |id: &str| {
+        document["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|node| node["id"] == id)
+            .unwrap()
+            .clone()
+    };
+    assert_eq!(node("draw#1")["state"], "running");
+    assert_eq!(node("draw#1")["started_at"], "2026-10-11T09:01:01.500Z");
+    assert!(node("later#1").get("started_at").is_none());
 }
 
 pub(super) fn static_plan() -> Value {

@@ -205,6 +205,12 @@
           ],
           "minimum": 0
         },
+        "started_at": {
+          "description": "When this instance last started, UTC RFC3339 milliseconds: its invocation's recorded start plus the start event's offset. Absent when the record cannot date it.",
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+        },
         "ports": {
           "$ref": "#/$defs/ports"
         },

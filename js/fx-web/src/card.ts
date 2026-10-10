@@ -9,6 +9,14 @@ export function element<K extends keyof SVGElementTagNameMap>(tag: K, attributes
   if (text !== undefined) node.textContent = text;
   return node;
 }
+/** A running card's state and how long it has run: "running · 8s", "· 1m 04s", "· 2h 05m". */
+export function runningLabel(started: number, now: number) {
+  const seconds = Math.max(0, Math.floor((now - started) / 1000));
+  const [hours, minutes, rest] = [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60];
+  const two = (value: number) => String(value).padStart(2, "0");
+  return `running · ${hours ? `${hours}h ${two(minutes)}m` : minutes ? `${minutes}m ${two(rest)}s` : `${rest}s`}`;
+}
+
 export function short(text: string, limit: number) { return [...text].length > limit ? [...text].slice(0, limit - 1).join("") + "…" : text; }
 
 /**
@@ -75,7 +83,11 @@ export function nodeCard(node: PositionedNode, canvasId: string, index: number, 
     group.append(element("rect", { x: 16, y: canvasNodeGeometry(node).preview_y, width: node.width - 32, height: 140, rx: 6, class: "fx-canvas-image-border" }));
   }
   if (node.state === "running") group.append(element("circle", { cx: 21, cy: node.height - 26, r: 3.5, class: "fx-canvas-running-indicator", "aria-hidden": "true" }));
-  group.append(element("text", { x: node.state === "running" ? 32 : 16, y: node.height - 22, class: "fx-canvas-node-state" }, node.state));
+  // A dated running card carries its start; the canvas recounts it every second.
+  const started = node.state === "running" && node.started_at ? Date.parse(node.started_at) : NaN;
+  group.append(Number.isNaN(started)
+    ? element("text", { x: node.state === "running" ? 32 : 16, y: node.height - 22, class: "fx-canvas-node-state" }, node.state)
+    : element("text", { x: 32, y: node.height - 22, class: "fx-canvas-node-state", "data-started": started }, runningLabel(started, Date.now())));
   if (node.kind === "workflow" && node.scope_id) {
     group.append(element("text", { x: 16, y: node.height - 48, class: (node.failure_count ?? 0) > 0 ? "fx-canvas-workflow-failure" : "fx-canvas-workflow-count" }, `${node.child_count ?? 0} steps${node.failure_count ? ` · ${node.failure_count} failed` : ""}`));
     const open = element("g", { class: "fx-canvas-open-workflow", role: "button", tabindex: 0, "aria-label": `Open workflow ${node.title}` });

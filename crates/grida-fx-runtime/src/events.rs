@@ -3,7 +3,9 @@
 //! Each line is `canon(event)` and one line feed, written whole and flushed before the run goes
 //! on, oldest first, never rewritten. The envelope on every event: `kind:
 //! "fx-run-events-v1"`, `event`, `invocation_id`, `plan` (the plan digest), `offset_ms`
-//! (milliseconds since the [`EventLog`] was opened, rounded down). [`Event`] holds each event's
+//! (milliseconds since the [`EventLog`] was opened, rounded down); `run_started` also carries
+//! `started_at`, the wall-clock time the log was opened, so `offset_ms` dates any event of the
+//! invocation. [`Event`] holds each event's
 //! own fields with the schema's names; `to_fields` writes them (an `Option` that is `None` is
 //! left out unless the schema requires the member, where it is `null`).
 //!
@@ -561,6 +563,8 @@ pub struct EventLog {
     invocation_id: String,
     plan: String,
     opened: Instant,
+    /// The wall-clock time of `opened`, recorded as `started_at` on `run_started`.
+    opened_at: SystemTime,
 }
 
 impl std::fmt::Debug for EventLog {
@@ -594,6 +598,7 @@ impl EventLog {
             invocation_id: invocation_id.to_string(),
             plan: plan.to_string(),
             opened: Instant::now(),
+            opened_at: SystemTime::now(),
         })
     }
 
@@ -642,6 +647,9 @@ impl EventLog {
         );
         record.insert("plan".into(), Value::from(self.plan.as_str()));
         record.insert("offset_ms".into(), Value::from(self.offset_ms()));
+        if matches!(event, Event::RunStarted { .. }) {
+            record.insert("started_at".into(), Value::from(created_at(self.opened_at)));
+        }
         for (name, value) in event.to_fields() {
             record.entry(name).or_insert(value);
         }
@@ -1083,6 +1091,7 @@ mod tests {
             invocation_id: "0123456789abcdef".into(),
             plan: "a".repeat(64),
             opened: Instant::now(),
+            opened_at: SystemTime::now(),
         };
         (log, bytes)
     }

@@ -346,6 +346,12 @@
       "format": "date-time",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
     },
+    "started_at": {
+      "description": "UTC start of this invocation on run_started, the time its offset_ms counts from; new on every invocation, absent in older records. Presentation metadata only.",
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+    },
     "source": {
       "description": "Origin of cancellation intent for this invocation.",
       "enum": [

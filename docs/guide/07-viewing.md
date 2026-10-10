@@ -68,6 +68,11 @@ select it, and press Esc, click outside or use × to put the deck back. Dragging
 from anywhere, cards included. Spreading and closing are short slides, and none under
 the system's reduced-motion setting.
 
+A running step counts up how long it has run (`running · 1m 04s`), and a running
+workflow card how long since its first step started. A count far past what the step
+usually takes points to a stalled or stopped run: the record cannot tell whether the
+process is still alive. Runs recorded before FX kept start times show `running` alone.
+
 Cards show the node's named, typed input and output ports. A list or keyed collection
 uses one port. Solid wires join the particular output and input referenced by the
 workflow; several wires can connect the same two steps through different ports.

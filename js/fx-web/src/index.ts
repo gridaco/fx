@@ -29,6 +29,8 @@ export interface RunNode {
   cache: string | null;
   error: string | null;
   duration_ms: number | null;
+  /** When this instance last started, UTC; absent when the record cannot date it. */
+  started_at?: string;
   ports?: NodePorts;
   bindings?: PortBinding[];
   needs?: string[];
@@ -66,6 +68,17 @@ function nullableString(value: unknown): value is string | null {
   return value === null || typeof value === "string";
 }
 
+/** A real UTC calendar time in the records' RFC3339 form. */
+export function utcTimestamp(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?Z$/.exec(value);
+  if (!match) return false;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime())
+    && [date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate(), date.getUTCHours(), date.getUTCMinutes(), date.getUTCSeconds()]
+      .every((part, index) => part === Number(match[index + 1]));
+}
+
 function nullableNumber(value: unknown): value is number | null {
   return value === null || (typeof value === "number" && Number.isFinite(value));
 }
@@ -82,6 +95,7 @@ function node(value: unknown): value is RunNode {
     && nullableString(value.cache)
     && nullableString(value.error)
     && nullableNumber(value.duration_ms)
+    && (value.started_at === undefined || utcTimestamp(value.started_at))
     && (value.ports === undefined || isNodePorts(value.ports))
     && (value.bindings === undefined || isPortBindings(value.bindings))
     && (value.needs === undefined || strings(value.needs))

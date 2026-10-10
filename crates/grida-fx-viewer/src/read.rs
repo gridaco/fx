@@ -73,6 +73,10 @@ pub struct Node {
     pub cache: Option<String>,
     pub error: Option<String>,
     pub duration_ms: Option<u64>,
+    /// When this instance last started, UTC RFC3339 milliseconds: its invocation's
+    /// `started_at` plus the start's `offset_ms`. Omitted when the record cannot date it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub started_at: Option<String>,
     /// The run ended while this instance was running (its `state` is then `failed`).
     pub interrupted: bool,
 }
@@ -258,6 +262,7 @@ fn node(value: &Value, steps: &Map<String, Value>, types: &Map<String, Value>) -
         cache: None,
         error: text(value, "reason").map(str::to_string),
         duration_ms: None,
+        started_at: None,
         interrupted: false,
     })
 }
@@ -401,6 +406,8 @@ fn project_inventory(
     let mut charged = None;
     let mut outputs = json!({});
     let mut candidates = BTreeMap::new();
+    // Each invocation's recorded start, which dates its events' offset_ms.
+    let mut invocation_starts = BTreeMap::new();
     for current in &nodes {
         collect_object(&current.parameters, None, &mut candidates);
     }
@@ -434,6 +441,13 @@ fn project_inventory(
                 }
             }
             Some("run_started") => {
+                if let (Some(invocation), Some(start)) = (
+                    text(event, "invocation_id"),
+                    text(event, "started_at")
+                        .and_then(|time| chrono::DateTime::parse_from_rfc3339(time).ok()),
+                ) {
+                    invocation_starts.insert(invocation, start.to_utc());
+                }
                 if !saw_first_start {
                     recorded_run_name = text(event, "name")
                         .filter(|name| super::service::safe_name(name))
@@ -523,6 +537,17 @@ fn project_inventory(
                         current.cache = None;
                         current.outputs = json!({});
                         current.duration_ms = None;
+                        current.started_at = text(event, "invocation_id")
+                            .and_then(|invocation| invocation_starts.get(invocation))
+                            .zip(
+                                event
+                                    .get("offset_ms")
+                                    .and_then(Value::as_u64)
+                                    .and_then(|offset| i64::try_from(offset).ok())
+                                    .and_then(chrono::TimeDelta::try_milliseconds),
+                            )
+                            .and_then(|(start, offset)| start.checked_add_signed(offset))
+                            .map(|time| time.to_rfc3339_opts(chrono::SecondsFormat::Millis, true));
                         if let Some(path) = text(event, "path") {
                             current.path = path.into();
                         }

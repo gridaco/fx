@@ -71,6 +71,19 @@ describe("scope contract", () => {
 });
 
 describe("hierarchical graph projection", () => {
+  test("a run step carries its start, and a workflow card has run since its first step started", () => {
+    const view = run(nestedPlan());
+    const at = (id: string) => view.nodes.find((node) => node.id === id)!;
+    Object.assign(at("a.paint#1"), { state: "running", started_at: "2026-10-11T09:01:00.000Z" });
+    Object.assign(at("deep.paint#1"), { started_at: "2026-10-11T09:00:30.000Z" });
+    const malformed = structuredClone(view);
+    malformed.nodes[0].started_at = "2026-10-11 09:00";
+    expect(() => parseViewerRun(malformed)).toThrow();
+    expect(canvasGraph(parseViewerRun(view)).nodes.find((node) => node.id === "scope:batch.item#1"))
+      .toMatchObject({ state: "running", started_at: "2026-10-11T09:00:30.000Z" });
+    expect(canvasGraph(parseViewerRun(view), "scope:batch.item#1").nodes.find((node) => node.id === "instance:a.paint#1"))
+      .toMatchObject({ state: "running", started_at: "2026-10-11T09:01:00.000Z" });
+  });
   test("collapses imported occurrences inside an expanded group and preserves exact public aliases", () => {
     const plan = nestedPlan();
     const before = JSON.stringify(plan);

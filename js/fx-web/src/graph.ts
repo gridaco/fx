@@ -155,6 +155,8 @@ export interface CanvasImagePreview {
 }
 export interface CanvasStep {
   id: string; source_id: string; title: string; subtitle: string; state: string; pending: boolean;
+  /** When the step last started, UTC: a running card counts up from it. */
+  started_at?: string;
   /** The recorded declaration path: the key of the layout report's cells. */
   address?: string;
   /** The recorded take and item key, which order and label a deck. */
@@ -218,6 +220,7 @@ export function flatCanvasGraph(view: GraphDocument | ViewerRun, apiBase = "/api
   const source = plan ? view.instances : view.nodes;
   const nodes: CanvasStep[] = source.map((item) => {
     const preview = plan ? undefined : imagePreview(item as ViewerRun["nodes"][number], artifacts, apiBase);
+    const started_at = plan ? undefined : (item as ViewerRun["nodes"][number]).started_at;
     const declared = plan ? view.types?.[item.uses ?? ""]?.ports : (item as ViewerRun["nodes"][number]).ports;
     const boundParams = new Set([...(item.bindings ?? []), ...(item.interface_bindings ?? [])].map((binding) => binding.target_port));
     const ports: CanvasStep["ports"] = declared ? {
@@ -234,6 +237,7 @@ export function flatCanvasGraph(view: GraphDocument | ViewerRun, apiBase = "/api
       ...(item.take ? { take: item.take } : {}), ...(item.key !== undefined ? { key: item.key } : {}),
       title: plan ? view.steps?.[(item as GraphInstance).step]?.title || item.path : (item as ViewerRun["nodes"][number]).title || item.path,
       subtitle: item.uses ?? "Type not recorded", state: item.state, pending: false,
+      ...(started_at ? { started_at } : {}),
       ...(preview ? { preview } : {}), ...(ports ? { ports } : {}),
     };
   });

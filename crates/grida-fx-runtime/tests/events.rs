@@ -309,6 +309,10 @@ fn every_event_matches_the_schema() {
         // The envelope plus the event's own members, nothing else.
         let mut expected: Vec<String> = event.to_fields().keys().cloned().collect();
         expected.extend(["kind", "event", "invocation_id", "plan", "offset_ms"].map(String::from));
+        if event.name() == "run_started" {
+            // The invocation's wall-clock start, which dates every offset_ms of it.
+            expected.push("started_at".into());
+        }
         expected.sort();
         let mut found: Vec<String> = line.as_object().unwrap().keys().cloned().collect();
         found.sort();

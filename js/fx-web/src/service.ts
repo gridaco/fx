@@ -1,4 +1,4 @@
-import { parseViewerView, type ViewerView } from "./index";
+import { parseViewerView, utcTimestamp, type ViewerView } from "./index";
 import type { ViewerPollingScheduler } from "./controller";
 import { parseViewerRoute, viewerEntryUrl, type ViewerRoute } from "./route";
 
@@ -22,16 +22,6 @@ export interface ServiceIndex {
 
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function utcTimestamp(value: unknown): value is string {
-  if (typeof value !== "string") return false;
-  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?Z$/.exec(value);
-  if (!match) return false;
-  const date = new Date(value);
-  return Number.isFinite(date.getTime())
-    && [date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate(), date.getUTCHours(), date.getUTCMinutes(), date.getUTCSeconds()]
-      .every((part, index) => part === Number(match[index + 1]));
 }
 
 function workflow(value: unknown): value is NonNullable<ServiceEntry["workflow"]> {

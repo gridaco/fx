@@ -154,7 +154,9 @@ remain accepted directly.
 RFC3339 timestamp with milliseconds, and optionally `name`. Both describe the run,
 not the invocation. Resuming repeats the first event's values without changing
 creation time or name; old runs use their original plan-file time. Consumers accept
-older events without these optional fields. Neither field belongs in `plan.json`,
+older events without these optional fields. Every new `run_started` also records
+`started_at`, the invocation's own start in the same format: the time its `offset_ms`
+counts from, so a reader can date any event of that invocation. None of these fields belongs in `plan.json`,
 the plan digest, step or call identities, prices, or cache keys. A changed definition
 or input creates a different plan within the same logical workflow (recorded ID
 and source); FX introduces no workflow revision or version registry.

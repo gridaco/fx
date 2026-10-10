@@ -3,7 +3,7 @@ import { CanvasViewport } from "./controller";
 import { displayPortName } from "./ports";
 import { canvasEdgePath, layoutGraph, type CanvasLayout, type PlacedDeck, type PositionedFrame, type PositionedNode } from "./layout";
 import { deckBadge, expandedColumns, restingFront, type DeckMember } from "./deck";
-import { element, nodeCard, short } from "./card";
+import { element, nodeCard, runningLabel, short } from "./card";
 
 const EXPANDED_GAP = 32;
 /** §5.9: expanded decks fit the viewport down to card titles (13 px) about 11 px on screen. */
@@ -207,6 +207,15 @@ export class CanvasController {
     this.decks = this.layout.decks.map((placed, index) => this.deck(placed, index, layer(placed.frame).cards, items));
     this.decks.forEach((_, index) => this.restDeck(index));
     this.content.replaceChildren(rootEdges, rootCards);
+    // Running cards count up together, once a second, until the next redraw.
+    const clocks = [...this.content.querySelectorAll<SVGTextElement>("text[data-started]")];
+    if (clocks.length) {
+      const timer = window.setInterval(() => {
+        const now = Date.now();
+        for (const clock of clocks) clock.textContent = runningLabel(Number(clock.dataset.started), now);
+      }, 1000);
+      signal.addEventListener("abort", () => window.clearInterval(timer), { once: true });
+    }
   }
 
   private frameCard(frame: PositionedFrame) {

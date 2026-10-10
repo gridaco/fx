@@ -179,7 +179,7 @@ A run a person interrupts exits 130; no case does.
   would round (one that is not the canonical form of the number it reads as:
   `9007199254740993`, but not `9007199254740992` or `10000000000000000`), a literal of more than
   21 digits by its length alone. Then:
-  - `offset_ms`, `invocation_id`, `duration_ms` and `created_at` are dropped from run events (objects with an
+  - `offset_ms`, `invocation_id`, `duration_ms`, `created_at` and `started_at` are dropped from run events (objects with an
     `event` member). The data a record carries is never touched, whatever its members are named:
     nothing under `with`, `inputs`, `outputs`, `request`, `data`, `facts`, `params`, `value` or
     `contract`.
