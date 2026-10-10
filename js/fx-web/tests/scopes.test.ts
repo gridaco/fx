@@ -76,7 +76,7 @@ describe("hierarchical graph projection", () => {
     const before = JSON.stringify(plan);
     const graph = canvasGraph(plan);
     expect(graph.nodes.map((node) => node.id)).toEqual(["instance:seed#1", "instance:save#1", "scope:batch.item#1", "scope:batch.item#2"]);
-    expect(graph.frames).toEqual([{ id: "scope:batch#1", title: "Batch", nodes: ["scope:batch.item#1", "scope:batch.item#2"], parent: null }]);
+    expect(graph.frames).toEqual([{ id: "scope:batch#1", title: "Batch", nodes: ["scope:batch.item#1", "scope:batch.item#2"], parent: null, address: "scope:batch#1", take: [1], key: "scope:batch#1", state: "planned" }]);
     const card = graph.nodes.find((node) => node.id === "scope:batch.item#1")!;
     expect(card).toMatchObject({ kind: "workflow", scope_id: card.id, child_count: 2, failure_count: 0, state: "planned" });
     expect(card.ports?.outputs).toEqual([{ name: "alternate", type: "unknown", kind: "value" }, { name: "hero", type: "unknown", kind: "value" }]);
@@ -95,7 +95,7 @@ describe("hierarchical graph projection", () => {
     expect(graph.nodes.map((node) => node.id)).toEqual([
       "boundary:input:scope:batch.item#1", "instance:a.paint#1", "scope:batch.item.child#1.1", "boundary:output:scope:batch.item#1",
     ]);
-    expect(graph.frames).toEqual([{ id: "scope:a.inline#1", title: "Preparation", nodes: ["instance:a.paint#1"], parent: null }]);
+    expect(graph.frames).toEqual([{ id: "scope:a.inline#1", title: "Preparation", nodes: ["instance:a.paint#1"], parent: null, address: "scope:a.inline#1", take: [1], key: "scope:a.inline#1", state: "planned" }]);
     expect(graph.nodes[0].ports?.outputs).toEqual([{ name: "count", type: "integer", kind: "parameter" }, { name: "image", type: "image", kind: "artifact" }]);
     expect(graph.nodes[1].ports?.inputs.some((port) => port.name === "amount" && port.kind === "parameter")).toBeTrue();
     expect(graph.edges.filter((edge) => edge.target === "instance:a.paint#1").map((edge) => [edge.source_port, edge.target_port])).toEqual([["image", "image"], ["count", "amount"]]);

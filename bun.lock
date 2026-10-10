@@ -21,9 +21,6 @@
     "js/fx-web": {
       "name": "@grida/fx-web",
       "version": "0.1.0",
-      "dependencies": {
-        "@dagrejs/dagre": "3.1.1",
-      },
     },
     "web/viewer": {
       "name": "@grida/fx-viewer",
@@ -48,10 +45,6 @@
     },
   },
   "packages": {
-    "@dagrejs/dagre": ["@dagrejs/dagre@3.1.1", "", { "dependencies": { "@dagrejs/graphlib": "4.0.5" } }, "sha512-zroZB1dFOFiGgv4Xcrn1DckB1o4aOikPqD2NDQPV0WM//CXGcS6xiD0rNkqHmw6FEg4tabt4nxPLwgCWT+Vb2A=="],
-
-    "@dagrejs/graphlib": ["@dagrejs/graphlib@4.0.5", "", {}, "sha512-7xrBTqIts3o+PMUZX97wSc+7TUbW+/rULzGNCTP6yooNVDXbzw4Wutg/H/xOutTB/c/k0YqOAavgPh4/Zk9PFA=="],
-
     "@grida/fx-react": ["@grida/fx-react@workspace:js/fx-react"],
 
     "@grida/fx-viewer": ["@grida/fx-viewer@workspace:web/viewer"],

@@ -53,6 +53,7 @@ def check(command: list[str], assets: Path) -> int:
         run.mkdir()
         graph = {
             "kind": "fx-graph-v1",
+            "plan": "0" * 64,
             "workflow": {"id": "preview", "title": "Preview"},
             "instances": [],
             "pending": [],
@@ -95,6 +96,20 @@ def check(command: list[str], assets: Path) -> int:
                         raise ValueError("installed viewer changed the saved plan")
                 elif document.get("kind") != "fx-viewer-run-v1":
                     raise ValueError("installed viewer returned no run projection")
+                # The layout report: automatic cells for every view, never cached.
+                with client.open(base + "api/layout", timeout=5) as response:
+                    layout = json.load(response)
+                    if (
+                        response.headers.get("Cache-Control") != "no-store"
+                        or response.headers.get("ETag") is not None
+                    ):
+                        raise ValueError(f"{source}: layout report may be cached")
+                if layout.get("kind") != "fx-layout-report-v1" or not isinstance(
+                    layout.get("cells"), dict
+                ):
+                    raise ValueError(f"{source}: installed viewer returned no layout report")
+                if (layout.get("cursor") is None) != (source == "--plan"):
+                    raise ValueError(f"{source}: only a run's layout report has a cursor")
                 for path in files:
                     relative = path.relative_to(assets).as_posix()
                     url = base if relative == "index.html" else base + quote(relative)

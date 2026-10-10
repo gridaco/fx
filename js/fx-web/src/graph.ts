@@ -15,7 +15,7 @@ export interface GraphInstance {
   bindings?: PortBinding[];
   interface_bindings?: InterfaceBinding[];
 }
-export interface PendingRepeat { path: string; max: number; phase: number; high_usd: number }
+export interface PendingRepeat { path: string; step?: string; max: number; phase: number; high_usd: number; waiting_on?: string[] }
 export interface GraphDocument {
   kind: "fx-graph-v1";
   workflow: { id: string; title: string; description?: string; file?: string };
@@ -28,7 +28,7 @@ export interface GraphDocument {
   stand_in?: true;
   takes_file?: string;
   view_origins?: string[];
-  steps?: Record<string, { title?: string | null; description?: string | null; uses?: string | null; view?: boolean | string }>;
+  steps?: Record<string, { title?: string | null; description?: string | null; uses?: string | null; view?: boolean | string; order?: number }>;
   types?: Record<string, { identity: string; source?: { files: Record<string, string>; resources: Record<string, string> }; ports?: NodePorts }>;
   scopes?: WorkflowScope[];
 }
@@ -40,6 +40,8 @@ const isNullableString = (value: unknown) => value === null || isString(value);
 const isStrings = (value: unknown): value is string[] => Array.isArray(value) && value.every(isString);
 const isAmount = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0;
 const isPositiveInteger = (value: unknown) => typeof value === "number" && Number.isInteger(value) && value >= 1;
+const isCount = (value: unknown) => typeof value === "number" && Number.isInteger(value) && value >= 0;
+const isDistinctStrings = (value: unknown) => isStrings(value) && new Set(value).size === value.length;
 const isDigest = (value: unknown) => isString(value) && /^[a-f0-9]{64}$/.test(value);
 const isView = (value: unknown) => isString(value) || typeof value === "boolean";
 const isRelative = (value: string) => value.split("/").every((part) => part !== "" && part !== "." && part !== "..");
@@ -79,8 +81,9 @@ function instance(value: unknown): value is GraphInstance {
     && optional(value, "bindings", isPortBindings) && optional(value, "interface_bindings", isInterfaceBindings);
 }
 function pendingRepeat(value: unknown): value is PendingRepeat {
-  return isRecord(value) && fields(value, ["path", "max", "phase", "high_usd"])
-    && isString(value.path) && isPositiveInteger(value.max) && isPositiveInteger(value.phase) && isAmount(value.high_usd);
+  return isRecord(value) && fields(value, ["path", "max", "phase", "high_usd"], ["step", "waiting_on"])
+    && isString(value.path) && isPositiveInteger(value.max) && isPositiveInteger(value.phase) && isAmount(value.high_usd)
+    && optional(value, "step", isString) && optional(value, "waiting_on", isDistinctStrings);
 }
 function typeEntry(value: unknown): boolean {
   if (!isRecord(value) || !fields(value, ["identity"], ["source", "ports"]) || !isString(value.identity)
@@ -114,12 +117,37 @@ export function parseGraph(value: unknown): GraphDocument {
     && optional(value, "takes_file", (item) => isString(item) && isRelative(item))
     && optional(value, "view_origins", isStrings)
     && optional(value, "steps", (items) => isRecord(items) && Object.values(items).every((item) => isRecord(item)
-      && fields(item, [], ["title", "description", "uses", "view"])
-      && ["title", "description", "uses"].every((key) => optional(item, key, isNullableString)) && optional(item, "view", isView)))
+      && fields(item, [], ["title", "description", "uses", "view", "order"])
+      && ["title", "description", "uses"].every((key) => optional(item, key, isNullableString)) && optional(item, "view", isView)
+      && optional(item, "order", isCount)))
     && optional(value, "types", (items) => isRecord(items) && Object.entries(items).every(([key, item]) => key.length > 0 && typeEntry(item)))
     && optional(value, "scopes", isWorkflowScopes);
   if (!valid) throw new Error("The graph response does not match fx-graph-v1.");
   return value as unknown as GraphDocument;
+}
+
+/** The engine's cells and member order (spec/layout.md §6.11, fx-layout-report-v1). */
+export interface LayoutReport {
+  kind: "fx-layout-report-v1";
+  file: string | null;
+  revision: string | null;
+  state: "applied" | "none" | "refused";
+  cursor: string | null;
+  diagnostics: { code: string; message: string; address?: string }[];
+  cells: Record<string, { column: number; row: number; source: "automatic" | "authored" }>;
+  order: string[];
+}
+
+export function parseLayoutReport(value: unknown): LayoutReport {
+  const valid = isRecord(value) && value.kind === "fx-layout-report-v1"
+    && isNullableString(value.file) && isNullableString(value.revision) && isNullableString(value.cursor)
+    && ["applied", "none", "refused"].includes(value.state as string)
+    && Array.isArray(value.diagnostics) && value.diagnostics.every((item) => isRecord(item) && isString(item.code) && isString(item.message))
+    && isRecord(value.cells) && Object.values(value.cells).every((cell) => isRecord(cell) && isCount(cell.column) && isCount(cell.row)
+      && (cell.source === "automatic" || cell.source === "authored"))
+    && isStrings(value.order);
+  if (!valid) throw new Error("The layout response does not match fx-layout-report-v1.");
+  return value as unknown as LayoutReport;
 }
 
 export interface CanvasImagePreview {
@@ -127,7 +155,14 @@ export interface CanvasImagePreview {
 }
 export interface CanvasStep {
   id: string; source_id: string; title: string; subtitle: string; state: string; pending: boolean;
+  /** The recorded declaration path: the key of the layout report's cells. */
+  address?: string;
+  /** The recorded take and item key, which order and label a deck. */
+  take?: number[];
+  key?: string | null;
   kind?: "workflow" | "boundary";
+  /** A boundary card's side of an opened imported workflow. */
+  side?: "input" | "output";
   scope_id?: string;
   path?: string;
   child_count?: number;
@@ -142,7 +177,7 @@ export interface CanvasConnection {
   kind?: "data" | "control" | "dependency";
   source_port?: string; target_port?: string; source_kind?: "output" | "fact";
 }
-export interface CanvasFrame { id: string; title: string; nodes: string[]; parent?: string | null }
+export interface CanvasFrame { id: string; title: string; nodes: string[]; parent?: string | null; address?: string; take?: number[]; key?: string; state?: string }
 export interface CanvasGraph { nodes: CanvasStep[]; edges: CanvasConnection[]; frames?: CanvasFrame[] }
 
 const imageKinds = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"]);
@@ -195,6 +230,8 @@ export function flatCanvasGraph(view: GraphDocument | ViewerRun, apiBase = "/api
     } : undefined;
     return {
       id: `instance:${item.id}`, source_id: item.id,
+      address: plan ? (item as GraphInstance).step : (item as ViewerRun["nodes"][number]).step ?? item.path,
+      ...(item.take ? { take: item.take } : {}), ...(item.key !== undefined ? { key: item.key } : {}),
       title: plan ? view.steps?.[(item as GraphInstance).step]?.title || item.path : (item as ViewerRun["nodes"][number]).title || item.path,
       subtitle: item.uses ?? "Type not recorded", state: item.state, pending: false,
       ...(preview ? { preview } : {}), ...(ports ? { ports } : {}),
@@ -216,7 +253,7 @@ export function flatCanvasGraph(view: GraphDocument | ViewerRun, apiBase = "/api
     node.ports.settings.sort(compareNamed);
   }
   if (plan) nodes.push(...view.pending.map((item) => ({
-    id: `pending:${item.path}`, source_id: item.path, title: item.path,
+    id: `pending:${item.path}`, source_id: item.path, address: item.step ?? item.path, title: item.path,
     subtitle: `Up to ${item.max} items · phase ${item.phase}`, state: "unexpanded", pending: true,
   })));
   const byId = new Map(source.map((item) => [item.id, item]));

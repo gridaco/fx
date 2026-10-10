@@ -16,6 +16,11 @@ serde_json.workspace = true
 chrono.workspace = true
 sha2.workspace = true
 jsonschema.workspace = true
+indexmap.workspace = true
+# Connected components, strongly connected components and topological order for the cell
+# rule (spec/layout.md §8). MIT OR Apache-2.0; pulls fixedbitset (MIT OR Apache-2.0),
+# hashbrown 0.15 (MIT OR Apache-2.0) and foldhash 0.1 (Zlib).
+petgraph = { version = "0.8.2", default-features = false, features = ["std"] }
 tokio = { workspace = true, features = ["fs"] }
 axum = "0.8"
 rust-embed = { version = "8", features = ["debug-embed"] }

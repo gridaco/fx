@@ -262,6 +262,40 @@
  },
  {
   "event": "scopes_updated",
+  "instances": [
+   {
+    "id": "ok#1",
+    "key": null,
+    "step": "ok",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "nope#1",
+    "key": null,
+    "step": "nope",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "after#1",
+    "key": null,
+    "step": "after",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "bang#1",
+    "key": null,
+    "step": "bang",
+    "take": [
+     1
+    ]
+   }
+  ],
   "kind": "fx-run-events-v1",
   "node_interface_bindings": {
    "after#1": [
@@ -276,6 +310,7 @@
    "nope#1": [],
    "ok#1": []
   },
+  "pending": [],
   "plan": "ad4d01a93d3cbab99482d48cd9d78c88148cb27f3bc5e1935f769193f47baf1b",
   "scopes": []
  }

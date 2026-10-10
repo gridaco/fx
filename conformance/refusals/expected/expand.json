@@ -160,7 +160,12 @@
    "high_usd": 0,
    "max": 1,
    "path": "unbounded",
-   "phase": 2
+   "phase": 2,
+   "step": "unbounded",
+   "waiting_on": [
+    "review#1",
+    "write#1"
+   ]
   }
  ],
  "problems": [

@@ -155,10 +155,21 @@
  },
  {
   "event": "scopes_updated",
+  "instances": [
+   {
+    "id": "draw#1",
+    "key": null,
+    "step": "draw",
+    "take": [
+     1
+    ]
+   }
+  ],
   "kind": "fx-run-events-v1",
   "node_interface_bindings": {
    "draw#1": []
   },
+  "pending": [],
   "plan": "8a6e2c7c49ddb08fe7d8f78b84456d3ba8b3862f6a558fbfe8044495270fa7cd",
   "scopes": []
  }

@@ -5,25 +5,84 @@ use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
 
+/// A validator composed from one embedded spec schema.
+fn compile(schema: &str, compose: impl FnOnce(&Value) -> Value) -> jsonschema::Validator {
+    let document: Value = serde_json::from_str(schema).expect("embedded schema is JSON");
+    jsonschema::validator_for(&compose(&document)).expect("embedded schema compiles")
+}
+
+const VIEWER_SCHEMA: &str = include_str!("../../../spec/schemas/fx-viewer-run-v1.schema.json");
+
 fn schema() -> &'static jsonschema::Validator {
     static SCHEMA: OnceLock<jsonschema::Validator> = OnceLock::new();
     SCHEMA.get_or_init(|| {
-        let document: Value = serde_json::from_str(include_str!(
-            "../../../spec/schemas/fx-viewer-run-v1.schema.json"
-        ))
-        .expect("embedded viewer schema is JSON");
-        jsonschema::validator_for(&json!({
-            "$defs": document["$defs"],
-            "type":"object", "required":["scopes", "bindings"],
-            "properties":{
-                "scopes":{"type":"array","items":{"$ref":"#/$defs/scope"}},
-                "bindings":{"type":"object","additionalProperties":{
-                    "type":"array","uniqueItems":true,"items":{"$ref":"#/$defs/interface_binding"}
-                }}
-            }
-        }))
-        .expect("embedded scope schema compiles")
+        compile(VIEWER_SCHEMA, |document| {
+            json!({
+                "$defs": document["$defs"],
+                "type":"object", "required":["scopes", "bindings"],
+                "properties":{
+                    "scopes":{"type":"array","items":{"$ref":"#/$defs/scope"}},
+                    "bindings":{"type":"object","additionalProperties":{
+                        "type":"array","uniqueItems":true,"items":{"$ref":"#/$defs/interface_binding"}
+                    }}
+                }
+            })
+        })
     })
+}
+
+/// A `scopes_updated` event's recorded expansion (fx-run-events-v1 `instances`, `pending`).
+fn expansion_schema() -> &'static jsonschema::Validator {
+    static SCHEMA: OnceLock<jsonschema::Validator> = OnceLock::new();
+    SCHEMA.get_or_init(|| {
+        compile(
+            include_str!("../../../spec/schemas/fx-run-events-v1.schema.json"),
+            |document| {
+                json!({
+                    "$defs": document["$defs"],
+                    "type": "object",
+                    "properties": {
+                        "instances": document["properties"]["instances"],
+                        "pending": document["properties"]["pending"],
+                    }
+                })
+            },
+        )
+    })
+}
+
+/// The document's `pending` (fx-viewer-run-v1 `pending_repeat`).
+fn pending_schema() -> &'static jsonschema::Validator {
+    static SCHEMA: OnceLock<jsonschema::Validator> = OnceLock::new();
+    SCHEMA.get_or_init(|| {
+        compile(VIEWER_SCHEMA, |document| {
+            json!({"$defs": document["$defs"], "type": "array", "items": {"$ref": "#/$defs/pending_repeat"}})
+        })
+    })
+}
+
+/// A `scopes_updated`'s expanded instances and pending repeats, each `None` when the event does
+/// not record it. An expansion with an unsupported shape is left out with a warning, never
+/// guessed.
+pub(crate) fn expansion<'a>(
+    event: &'a Value,
+    warnings: &mut Vec<String>,
+) -> (Option<&'a Vec<Value>>, Option<&'a Value>) {
+    if !expansion_schema().is_valid(event) {
+        warnings.push(
+            "Recorded expansion metadata has an unsupported shape; the run is drawn from its plan and start events.".into(),
+        );
+        return (None, None);
+    }
+    (
+        event.get("instances").and_then(Value::as_array),
+        event.get("pending"),
+    )
+}
+
+/// `pending` when it is a valid fx-viewer-run-v1 pending list.
+pub(crate) fn valid_pending(pending: Value) -> Option<Value> {
+    pending_schema().is_valid(&pending).then_some(pending)
 }
 
 fn string<'a>(value: &'a Value, name: &str) -> &'a str {
@@ -182,6 +241,8 @@ pub(crate) fn validate_plan(plan: &Value) -> Result<(), &'static str> {
     validate(scopes, &json!(bindings), &nodes, Some(&pending))
 }
 
+/// Validates the newest scopes against the run's known instances. Every member stays: the
+/// layout reads members before they start. `None` draws the run flat.
 pub(crate) fn project_run(
     scopes: Option<Value>,
     recorded_bindings: Option<&Value>,
@@ -189,7 +250,7 @@ pub(crate) fn project_run(
     nodes: &mut [Node],
     warnings: &mut Vec<String>,
 ) -> Option<Value> {
-    let Some(mut scopes) = scopes else {
+    let Some(scopes) = scopes else {
         for node in nodes {
             node.interface_bindings = None;
         }
@@ -221,13 +282,16 @@ pub(crate) fn project_run(
         }
         return None;
     }
-    let visible: BTreeSet<_> = nodes.iter().map(|n| n.id.as_str()).collect();
-    for scope in scopes.as_array_mut().expect("validated scopes") {
-        // The run model omits absent planned nodes; retain only its visible members.
-        scope["nodes"]
-            .as_array_mut()
-            .expect("validated scope nodes")
-            .retain(|node| node.as_str().is_some_and(|id| visible.contains(id)));
-    }
     Some(scopes)
+}
+
+/// The document's scopes: the run model omits absent planned nodes and members that have not
+/// started, so each scope keeps only the nodes the document lists.
+pub(crate) fn retain_nodes(scopes: &mut Value, nodes: &[Node]) {
+    let visible: BTreeSet<_> = nodes.iter().map(|n| n.id.as_str()).collect();
+    for scope in scopes.as_array_mut().into_iter().flatten() {
+        if let Some(members) = scope["nodes"].as_array_mut() {
+            members.retain(|node| node.as_str().is_some_and(|id| visible.contains(id)));
+        }
+    }
 }

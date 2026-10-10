@@ -102,6 +102,13 @@
         "$ref": "#/$defs/scope"
       },
       "description": "Optional engine-owned display scopes. Absence means a legacy flat graph; an empty array authoritatively means no nested scopes."
+    },
+    "pending": {
+      "description": "The repeats not yet expanded: the latest scopes_updated `pending` when the record holds one, else the plan's `pending` whose phase has not been planned yet. Absent when neither is recorded.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/pending_repeat"
+      }
     }
   },
   "$defs": {
@@ -127,6 +134,26 @@
         },
         "path": {
           "type": "string"
+        },
+        "step": {
+          "description": "The declared step's path, without repeat keys, as the plan, node_started or the latest scopes_updated records it. Absent when no record names it.",
+          "type": "string"
+        },
+        "take": {
+          "description": "One take per regenerating level, outermost first. Absent when no record names it.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "minItems": 1
+        },
+        "key": {
+          "description": "A directly repeated step's item key, null otherwise. Absent when no record names it.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "title": {
           "type": "string"
@@ -206,6 +233,10 @@
           "items": {
             "$ref": "#/$defs/interface_binding"
           }
+        },
+        "interrupted": {
+          "description": "True when the run ended while this instance was running: it never finished, and its `state` is `failed`. Read from the recorded events, never from error text.",
+          "type": "boolean"
         }
       }
     },
@@ -509,6 +540,45 @@
           }
         }
       ]
+    },
+    "pending_repeat": {
+      "description": "A repeat whose instances a later phase expands (fx-graph-v1 `pending`). `step` and `waiting_on` are absent in records written before they existed.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "max",
+        "phase",
+        "high_usd"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "step": {
+          "type": "string",
+          "minLength": 1
+        },
+        "max": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "phase": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "high_usd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "waiting_on": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      }
     }
   }
 }

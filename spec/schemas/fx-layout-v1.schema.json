@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-layout-v1",
+  "title": "FX canvas layout file, <workflow id>.layout.json (fx-layout-v1)",
+  "description": "Ratified design, not implemented (layout.md §6): where the viewer places a workflow's declared steps. It lives in the folder of the workflow's takes file and is read as UTF-8 I-JSON of at most 1 MiB (identity.md §1). An invalid file is not applied at all. Planning, expansion, runs, resume and the store never read it; it is not part of the plan digest (identity.md §10).",
+  "type": "object",
+  "required": [
+    "kind",
+    "steps"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "kind": {
+      "const": "fx-layout-v1"
+    },
+    "steps": {
+      "description": "Declaration path to entry. One key covers every instance of its step, in plan and run views, at any count. An empty object draws exactly what no file draws.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$",
+        "description": "A declaration path (layout.md §6.2): step names joined by `.`, with no repeat key and no take: `sheet`, `badge.draw`."
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/entry"
+      }
+    }
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "dependentRequired": {
+        "column": [
+          "row"
+        ],
+        "row": [
+          "column"
+        ]
+      },
+      "properties": {
+        "column": {
+          "description": "The slot's column in its container's coordinates, given with `row` (layout.md §4, rule 9). Empty tracks collapse, so only the order of values matters (rule 10).",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9999
+        },
+        "row": {
+          "description": "The slot's row in its container's coordinates, given with `column`.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9999
+        },
+        "repeats": {
+          "description": "How the step's members draw: `deck`, the engine default, stacks them; `grid` spreads the slot's outer level (items, matrix combinations or group iterations, else takes), and an inner take level stays a deck (layout.md §6.3).",
+          "enum": [
+            "deck",
+            "grid"
+          ]
+        }
+      }
+    }
+  }
+}

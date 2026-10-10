@@ -1,4 +1,4 @@
-import { parseGraph, parseViewerRun, type GraphDocument, type ViewerRun } from "./index";
+import { parseGraph, parseLayoutReport, parseViewerRun, type GraphDocument, type LayoutReport, type ViewerRun } from "./index";
 import { validateViewerApiBase } from "./route";
 
 /** The event envelope is stable; a consumer may ignore unfamiliar event names or fields. */
@@ -17,8 +17,8 @@ export interface RunSnapshot {
   events: RunEvent[];
 }
 
-/** The loopback viewer adds a projection of exactly the snapshot's event prefix. */
-export interface ViewerSnapshot extends RunSnapshot { view: ViewerRun }
+/** The loopback viewer adds a projection and a layout report of exactly the snapshot's event prefix. */
+export interface ViewerSnapshot extends RunSnapshot { view: ViewerRun; layout?: LayoutReport }
 
 /** Recorded intent for the latest invocation, independent of owner liveness. */
 export function cancellationRequested(events: readonly RunEvent[]): boolean {
@@ -68,7 +68,9 @@ export function parseRunSnapshot(value: unknown): RunSnapshot {
 
 export function parseViewerSnapshot(value: unknown, apiBase = "/api"): ViewerSnapshot {
   const snapshot = parseRunSnapshot(value);
-  parseViewerRun((value as Record<string, unknown>).view, apiBase);
+  const { view, layout } = value as Record<string, unknown>;
+  parseViewerRun(view, apiBase);
+  if (layout !== undefined) parseLayoutReport(layout);
   return snapshot as ViewerSnapshot;
 }
 
@@ -108,3 +110,8 @@ export function observationReader(apiBase = "/api"): RunObservationReader {
 }
 
 export const readObservation: RunObservationReader = observationReader();
+
+/** A saved plan's layout report; a run's arrives with its snapshot. */
+export async function readLayout(signal: AbortSignal, apiBase = "/api"): Promise<LayoutReport> {
+  return parseLayoutReport(await readResponse(`${validateViewerApiBase(apiBase)}/layout`, signal));
+}

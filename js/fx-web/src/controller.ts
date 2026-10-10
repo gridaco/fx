@@ -1,12 +1,14 @@
-import { canvasGraph, readView, type Artifact, type CanvasGraph, type CanvasStep, type ViewerView } from "./index";
+import { canvasGraph, readView, type Artifact, type CanvasGraph, type CanvasStep, type LayoutReport, type ViewerView } from "./index";
 import { WorkflowNavigation, type Breadcrumb } from "./navigation";
 import { navigationScopes, type InterfaceBinding } from "./scopes";
-import { cancellationRequested, ObservationError, observationReader, type RunObservationReader } from "./observation";
+import { cancellationRequested, ObservationError, observationReader, readLayout, type RunObservationReader } from "./observation";
 import { validateViewerApiBase } from "./route";
 
 export interface ViewerState {
   view: ViewerView | null;
   graph: CanvasGraph;
+  /** The engine's cells and member order; null until read, or for a reader that serves none. */
+  layout: LayoutReport | null;
   selected: string | null;
   loading: boolean;
   error: string | null;
@@ -27,6 +29,8 @@ export interface ViewerControllerOptions {
   observation?: RunObservationReader | false;
   scheduler?: ViewerPollingScheduler;
   apiBase?: string;
+  /** Reads a saved plan's layout report (a run's comes with its snapshot); defaults to the host's `layout` route with the default reader. */
+  layout?: ((signal: AbortSignal) => Promise<LayoutReport>) | false;
 }
 
 const pollingScheduler: ViewerPollingScheduler = {
@@ -36,12 +40,13 @@ const pollingScheduler: ViewerPollingScheduler = {
 
 /** Owns reads, serial observation, navigation and selection without a presentation framework. */
 export class ViewerController {
-  private state: ViewerState = { view: null, graph: { nodes: [], edges: [] }, selected: null, loading: true, error: null, updated: null, scope: null, breadcrumbs: [{ id: null, title: "Workflow" }], scopeNode: null, cancelling: false };
+  private state: ViewerState = { view: null, graph: { nodes: [], edges: [] }, layout: null, selected: null, loading: true, error: null, updated: null, scope: null, breadcrumbs: [{ id: null, title: "Workflow" }], scopeNode: null, cancelling: false };
   private navigation = new WorkflowNavigation();
   private listeners = new Set<() => void>();
   private request: AbortController | null = null;
   private readonly reader: typeof readView;
   private readonly observation: RunObservationReader | null;
+  private readonly layoutReader: ((signal: AbortSignal) => Promise<LayoutReport>) | null;
   private readonly scheduler: ViewerPollingScheduler;
   private readonly apiBase: string;
   private timer: unknown = null;
@@ -55,6 +60,12 @@ export class ViewerController {
     this.reader = defaultReader ? (signal) => readView(signal, this.apiBase) : reader;
     this.observation = options.observation === false ? null : options.observation ?? (defaultReader ? observationReader(this.apiBase) : null);
     this.scheduler = options.scheduler ?? pollingScheduler;
+    this.layoutReader = options.layout === false ? null : options.layout ?? (defaultReader ? (signal) => readLayout(signal, this.apiBase) : null);
+  }
+  /** A report that cannot be read keeps the previous one; the canvas still draws. */
+  private async readLayout(signal: AbortSignal) {
+    if (!this.layoutReader) return this.state.layout;
+    try { return await this.layoutReader(signal); } catch { return this.state.layout; }
   }
 
   getSnapshot = () => this.state;
@@ -112,9 +123,9 @@ export class ViewerController {
     const breadcrumbs = this.navigation.getSnapshot().breadcrumbs;
     if (breadcrumbs.length > 1) this.goToScope(breadcrumbs[breadcrumbs.length - 2].id);
   };
-  private apply(view: ViewerView, cancelling = false) {
+  private apply(view: ViewerView, layout: LayoutReport | null, cancelling = false) {
     this.navigation.setScopes(navigationScopes(view.scopes), view.workflow.title);
-    this.update({ view, ...this.project(view), cancelling, error: null, updated: new Date() });
+    this.update({ view, layout, ...this.project(view), cancelling, error: null, updated: new Date() });
   }
   private cancelTimer() {
     if (this.timer !== null) this.scheduler.cancel(this.timer);
@@ -131,7 +142,7 @@ export class ViewerController {
     const snapshot = await this.observation!.snapshot(request.signal);
     if (request.signal.aborted) return;
     this.cursor = snapshot.cursor;
-    this.apply(snapshot.view, cancellationRequested(snapshot.events));
+    this.apply(snapshot.view, snapshot.layout ?? this.state.layout, cancellationRequested(snapshot.events));
   }
   private async poll() {
     if (!this.active || !this.observingRun || !this.observation) return;
@@ -173,7 +184,12 @@ export class ViewerController {
       if (request.signal.aborted) return;
       this.observingRun = view.kind === "fx-viewer-run-v1" && this.observation !== null;
       if (this.observingRun) await this.snapshot(request);
-      else { this.cursor = null; this.apply(view); }
+      else {
+        const layout = await this.readLayout(request.signal);
+        if (request.signal.aborted) return;
+        this.cursor = null;
+        this.apply(view, layout);
+      }
       this.failures = 0;
     } catch (error) {
       if (!request.signal.aborted) { this.failures++; this.update({ error: error instanceof Error ? error.message : "The workflow could not be loaded." }); }
@@ -213,11 +229,11 @@ export class CanvasViewport {
     const ratio = zoom / this.state.zoom;
     this.state = { x: point.x - (point.x - this.state.x) * ratio, y: point.y - (point.y - this.state.y) * ratio, zoom };
   }
-  fit(bounds: { width: number; height: number }, size: { width: number; height: number }) {
+  fit(bounds: { x?: number; y?: number; width: number; height: number }, size: { width: number; height: number }) {
     if (size.width <= 0 || size.height <= 0) return;
     const zoom = Math.min(1.1, Math.max(1, size.width - 64) / Math.max(1, bounds.width), Math.max(1, size.height - 64) / Math.max(1, bounds.height));
     this.minimumZoom = Math.min(0.01, zoom / 10);
-    this.state = { x: (size.width - bounds.width * zoom) / 2, y: (size.height - bounds.height * zoom) / 2, zoom };
+    this.state = { x: (size.width - bounds.width * zoom) / 2 - (bounds.x ?? 0) * zoom, y: (size.height - bounds.height * zoom) / 2 - (bounds.y ?? 0) * zoom, zoom };
   }
 }
 

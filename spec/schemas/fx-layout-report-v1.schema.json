@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-layout-report-v1",
+  "title": "FX canvas layout report (fx-layout-report-v1)",
+  "description": "Where the viewer places a run's or a saved plan's steps (layout.md §6.11): every slot's cell and every member's order, served at the scoped `api/layout` route. The browser places its own cards in these cells and never computes one. Ship A serves automatic cells only; `file`, `revision` and `diagnostics` stay empty until the layout file ships.",
+  "type": "object",
+  "required": [
+    "kind",
+    "file",
+    "revision",
+    "state",
+    "cursor",
+    "diagnostics",
+    "cells",
+    "order"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "kind": {
+      "const": "fx-layout-report-v1"
+    },
+    "file": {
+      "description": "The derived project-relative POSIX path of the layout file, or null when no location is known.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "revision": {
+      "description": "The file digest (identity.md §2) of the layout file bytes read, or null when nothing was read.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "state": {
+      "enum": [
+        "applied",
+        "none",
+        "refused"
+      ]
+    },
+    "cursor": {
+      "description": "For a run, the observation cursor of the record prefix the report reflects; null for a plan.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "enum": [
+              "unknown_step",
+              "not_drawn",
+              "outside_document",
+              "shared_cell",
+              "backward_edge",
+              "displaced",
+              "layout_invalid",
+              "layout_location_unknown",
+              "layout_location_refused"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "cells": {
+      "description": "Every slot's address mapped to its cell in its container (layout.md §4), container by container from the root. A container's frames share its cells, so an address is an unambiguous key.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "column",
+          "row",
+          "source"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "column": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "row": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "source": {
+            "enum": [
+              "automatic",
+              "authored"
+            ]
+          }
+        }
+      }
+    },
+    "order": {
+      "description": "Every member, instance ids and scope ids, in order key (layout.md §4 rule 4). Only the relative order of one slot's members is meaningful.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

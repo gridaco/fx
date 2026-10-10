@@ -14,6 +14,12 @@ export interface Artifact {
 export interface RunNode {
   id: string;
   path: string;
+  /** The declared step, when a record names it. */
+  step?: string;
+  take?: number[];
+  key?: string | null;
+  /** The run ended while this instance was running. */
+  interrupted?: boolean;
   title: string;
   uses: string | null;
   state: string;
@@ -44,6 +50,8 @@ export interface ViewerRun {
   artifacts: Artifact[];
   warnings: string[];
   scopes?: WorkflowScope[];
+  /** The repeats not yet expanded. */
+  pending?: { path: string; step?: string; max: number; phase: number; waiting_on?: string[] }[];
 }
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -66,6 +74,8 @@ function node(value: unknown): value is RunNode {
   return record(value)
     && [value.id, value.path, value.title, value.state].every((item) => typeof item === "string")
     && nullableString(value.uses)
+    && (value.step === undefined || typeof value.step === "string")
+    && (value.interrupted === undefined || typeof value.interrupted === "boolean")
     && strings(value.reads)
     && record(value.with)
     && record(value.outputs)
@@ -158,6 +168,8 @@ import { parseGraph, type GraphDocument } from "./graph";
 export * from "./graph";
 export * from "./controller";
 export * from "./canvas";
+export * from "./layout";
+export * from "./deck";
 export * from "./ports";
 export * from "./navigation";
 export * from "./scopes";

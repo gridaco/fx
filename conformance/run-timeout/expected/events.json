@@ -95,10 +95,21 @@
  },
  {
   "event": "scopes_updated",
+  "instances": [
+   {
+    "id": "nap#1",
+    "key": null,
+    "step": "nap",
+    "take": [
+     1
+    ]
+   }
+  ],
   "kind": "fx-run-events-v1",
   "node_interface_bindings": {
    "nap#1": []
   },
+  "pending": [],
   "plan": "cbf2fe924b8df922563ec6cb73c8e0cdd4cd0347ecabc1e63b3d8c5edf91f92b",
   "scopes": []
  }

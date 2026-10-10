@@ -66,7 +66,6 @@
 use crate::cli::RunArgs;
 use crate::print::{labelled, print_line, shown_path};
 use grida_fx_core::project::{PlanRequest, Planner, make_planner};
-use grida_fx_core::registry::relative_inside;
 use grida_fx_core::val::{FileValue, Val};
 use grida_fx_core::{Error, ErrorKind};
 use grida_fx_runtime::engine::{Engine, scrub_paths};
@@ -244,7 +243,7 @@ fn plan_and_run(
         label: label.clone(),
         name: args.name.clone(),
         yes_up_to,
-        takes_file: takes_file(planner),
+        takes_file: super::takes_file(planner),
         existing: args.resume.is_some(),
         index: Some(RunIndex {
             project_root: planner.project.root.clone(),
@@ -520,18 +519,6 @@ async fn answerer_on_socket(
     _project: &grida_fx_core::docs::project::Project,
 ) -> Result<ConnectionAnswerer, String> {
     Err("stand-ins on standard input need a Unix-domain socket".into())
-}
-
-/// The workflow's takes file, relative to the planning project (its file name when it lies
-/// outside it, which planning never makes).
-fn takes_file(planner: &Planner) -> String {
-    relative_inside(&planner.project.root, &planner.takes_path).unwrap_or_else(|| {
-        planner
-            .takes_path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default()
-    })
 }
 
 /// The summary lines (module doc, step 6). `stand_in`: the stand-in's source as typed.

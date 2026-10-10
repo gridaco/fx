@@ -172,7 +172,7 @@ and source); FX introduces no workflow revision or version registry.
   outputs/<name><suffix>                             the workflow's declared outputs
 ```
 
-- **`plan.json`** is the fx-graph-v1 document that `grida-fx expand` prints, `types` included, with `plan` (the plan digest), `steps`, `inputs` and `view_origins` added, and `takes_file`: the POSIX path of the workflow's takes file relative to the planning project's root, which `reroll` and `pick` write to. A stand-in run's also has `"stand_in": true`; no other run's has the member. The first invocation writes it before any step runs, under a temporary name and then renamed (§6). Later invocations compare its `plan` and never rewrite it.
+- **`plan.json`** is the fx-graph-v1 document that `grida-fx expand` prints, `types` included, with `plan` (the plan digest), `steps` (each declared step by its declaration path, with its declaration `order`), `inputs` and `view_origins` added, and `takes_file`: the POSIX path of the workflow's takes file relative to the planning project's root, which `reroll` and `pick` write to. A stand-in run's also has `"stand_in": true`; no other run's has the member. The first invocation writes it before any step runs, under a temporary name and then renamed (§6). Later invocations compare its `plan` and never rewrite it.
 - **`events.jsonl`** is the record, and the source of truth for every command that reads the run. Each line is one fx-run-events-v1 event, written as `canon(event)` and then one line feed (U+000A), oldest first. Each line is written whole and flushed before the run goes on, in one write. A line that cannot be written whole (a full disk can take part of one) MUST NOT stay: the engine cuts the file back to its length before the line, writes nothing more if it cannot, and stops the run, so no line ever follows part of a line. A last line without its line feed is a line an invocation began and never finished (it was killed): readers leave it out, and the next invocation cuts it off, says so, and appends after it. A resumed run appends lines under a new `invocation_id`. Lines are never rewritten or removed otherwise. Every line reads back as JSON ([identity.md](identity.md) §2, nested at most 512 deep): a node fact or mark nested deeper than 509 fails its node ([protocol.md](protocol.md) §5.3), and an encoded list (fx-run-events-v1 `encoded`) nested so deep that its `{"list": …}` levels would pass that is written once as `{"value": <its plain JSON>}`, which reads back as the same list.
 - **`run.lock`** holds an exclusive operating-system file lock (`flock` on POSIX), taken without waiting, for as long as an invocation runs the folder. A second invocation that cannot take the lock is refused at once ("another invocation is running <folder>"). The lock ends with the process, so a crashed run leaves no stale lock. The file's content means nothing. It stays in place while the folder holds a run; a removal (§9) unlinks it last. An invocation that took the lock then checks that the file it locked is still the folder's `run.lock` (the same device and inode), and is refused otherwise ("<folder> was removed while this invocation started"), since that lock was taken on a folder that is gone.
 - **`files/`** gets an instance's output files when it succeeds, whether it ran or came from the cache, before its `node_finished` event is written. Each take of a step has a folder of its own (`<step>` below), so `files/` holds every take's files and `inspect --verify` checks each against its record.
@@ -210,11 +210,14 @@ unresolved selection and ambiguous per-item attribution have no fabricated mappi
 All observations are made during existing expression evaluation, never by evaluating
 more code or opening source from a viewer.
 
-A run records `scopes_updated {scopes, node_interface_bindings}` when this display
-snapshot changes, before events for affected dynamically created nodes, and after the
-final expansion. The per-node object maps instance ids to authoritative binding arrays;
-empty arrays clear earlier bindings. The snapshot is complete for the current expansion,
-not a patch. A reader keeps node execution history independently, applies the latest
+A run records `scopes_updated {scopes, node_interface_bindings, instances, pending}` when
+this display snapshot changes, before events for affected dynamically created nodes, and
+after the final expansion. The per-node object maps instance ids to authoritative binding
+arrays; empty arrays clear earlier bindings. `instances` lists every instance of the
+expansion except absent ones, in expansion order, as `{id, step, take, key}`, so a reader
+knows each member and its step before it starts; `pending` lists the expansion's pending
+repeats as fx-graph-v1 does. Records written before these two members existed lack them.
+The snapshot is complete for the current expansion, not a patch. A reader keeps node execution history independently, applies the latest
 snapshot, and can display historical nodes no longer belonging to a current scope at
 root. Replays ignore this display-only event. Old records without these fields remain
 flat; readers MUST NOT infer imported workflow boundaries or aliases from path strings,

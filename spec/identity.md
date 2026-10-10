@@ -222,6 +222,7 @@ plan_digest = digest({
 - `routes` is a list because one route can serve several capabilities, each with its own fingerprint (§7).
 - `inputs` are the values as given, after merging every inputs file and flag, before defaults are filled in. An optional input that was not given is left out.
 - Whether a run answers its paid calls with a stand-in ([protocol.md](protocol.md) §5.7) is not part of the digest; `plan.json` records it apart ([store.md](store.md) §8).
+- The canvas layout file ([layout.md](layout.md) §7, a ratified design not yet implemented) is not part of the digest: adding, editing or removing it changes no digest, so it needs no `kind` change.
 
 ## 11. Instance ids
 

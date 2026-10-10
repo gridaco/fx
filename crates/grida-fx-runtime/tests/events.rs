@@ -221,6 +221,14 @@ fn every_event() -> Vec<Event> {
         Event::ScopesUpdated {
             scopes: json!([]),
             node_interface_bindings: json!({"leaf#1": []}),
+            instances: json!([
+                {"id": "leaf#1", "step": "leaf", "take": [1], "key": null},
+                {"id": "each['ada']#2", "step": "each", "take": [2], "key": "ada"},
+            ]),
+            pending: json!([{
+                "path": "more", "step": "more", "max": 4, "phase": 2, "high_usd": 0.16,
+                "waiting_on": ["leaf#1"],
+            }]),
         },
     ]
 }
@@ -450,6 +458,72 @@ fn members_follow_the_schema_names() {
         json!({"id": "a#1", "capability": "image.generate", "route": "img-a@acme", "call": CALL,
                "cached": false, "cost_usd": 0, "stand_in": true})
     );
+    let snapshot = fields(&events[22]);
+    let mut members: Vec<&str> = snapshot
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    members.sort_unstable();
+    assert_eq!(
+        members,
+        ["instances", "node_interface_bindings", "pending", "scopes"]
+    );
+    assert_eq!(
+        snapshot["instances"][1],
+        json!({"id": "each['ada']#2", "step": "each", "take": [2], "key": "ada"})
+    );
+    assert_eq!(snapshot["pending"][0]["step"], "more");
+}
+
+#[test]
+fn a_scope_snapshot_names_its_instances_and_pending_repeats_completely() {
+    let schema: Value = serde_json::from_str(include_str!(
+        "../../../spec/schemas/fx-run-events-v1.schema.json"
+    ))
+    .unwrap();
+    let validator = jsonschema::validator_for(&schema).unwrap();
+    let snapshot = |instances: Value, pending: Value| {
+        json!({
+            "kind": EVENTS_KIND, "event": "scopes_updated", "invocation_id": "0123456789abcdef",
+            "plan": PLAN, "offset_ms": 0, "scopes": [], "node_interface_bindings": {},
+            "instances": instances, "pending": pending,
+        })
+    };
+    let leaf = json!({"id": "leaf#1", "step": "leaf", "take": [1], "key": null});
+    let more = json!({
+        "path": "more", "step": "more", "max": 4, "phase": 2, "high_usd": 0.16, "waiting_on": [],
+    });
+    assert!(validator.is_valid(&snapshot(json!([leaf]), json!([more]))));
+    // A record written before the members existed still validates.
+    let mut older = snapshot(json!([]), json!([]));
+    older.as_object_mut().unwrap().remove("instances");
+    older.as_object_mut().unwrap().remove("pending");
+    assert!(validator.is_valid(&older));
+    // Each member of an instance and of a pending repeat is required, and nothing else is let in.
+    for member in ["id", "step", "take", "key"] {
+        let mut partial = leaf.clone();
+        partial.as_object_mut().unwrap().remove(member);
+        assert!(
+            !validator.is_valid(&snapshot(json!([partial]), json!([]))),
+            "{member}"
+        );
+    }
+    for member in ["path", "step", "max", "phase", "high_usd", "waiting_on"] {
+        let mut partial = more.clone();
+        partial.as_object_mut().unwrap().remove(member);
+        assert!(
+            !validator.is_valid(&snapshot(json!([]), json!([partial]))),
+            "{member}"
+        );
+    }
+    let mut extra = leaf.clone();
+    extra["state"] = json!("planned");
+    assert!(!validator.is_valid(&snapshot(json!([extra]), json!([]))));
+    let mut untaken = leaf.clone();
+    untaken["take"] = json!([]);
+    assert!(!validator.is_valid(&snapshot(json!([untaken]), json!([]))));
 }
 
 #[test]

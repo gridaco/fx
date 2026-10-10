@@ -66,8 +66,17 @@ export interface Graph {
     };
   };
   instances: GraphInstance[];
-  /** Repeats whose instances a later phase expands, with their worst case. */
-  pending: { path: string; max: number; phase: number; high_usd: number }[];
+  /** Repeats whose instances a later phase expands, with their worst case. `step` is the
+   * declared step's path and `waiting_on` what its list needs; both are absent in documents
+   * written before they existed. */
+  pending: {
+    path: string;
+    step?: string;
+    max: number;
+    phase: number;
+    high_usd: number;
+    waiting_on?: string[];
+  }[];
   estimate: PriceRange & { ceiling_usd: number | null };
   /** Why the plan is refused; empty when it is not. */
   problems: Problem[];

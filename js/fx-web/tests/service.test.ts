@@ -203,14 +203,15 @@ describe("project index lifecycle", () => {
 });
 
 describe("viewer controller API ownership", () => {
-  test("one API base scopes default view, snapshot, events and canvas artifact URLs", async () => {
+  test("one API base scopes default view, snapshot, events and canvas artifact URLs; the snapshot carries the layout", async () => {
     const original = globalThis.fetch;
     const requests: string[] = [];
     let base = apiBase;
     globalThis.fetch = (async (url: string | URL | Request) => {
       requests.push(String(url));
+      const layout = { kind: "fx-layout-report-v1", file: null, revision: null, state: "none", cursor: "cursor&?/+", diagnostics: [], cells: {}, order: [] };
       const value = String(url).endsWith("/view") ? run(base)
-        : String(url).endsWith("/snapshot") ? { kind: "fx-run-snapshot-v1", cursor: "cursor&?/+", plan: graph(), events: [], view: run(base) }
+        : String(url).endsWith("/snapshot") ? { kind: "fx-run-snapshot-v1", cursor: "cursor&?/+", plan: graph(), events: [], view: run(base), layout }
         : { kind: "fx-run-event-batch-v1", cursor: "cursor&?/+", events: [], has_more: false };
       return new Response(JSON.stringify(value));
     }) as typeof fetch;
@@ -222,6 +223,7 @@ describe("viewer controller API ownership", () => {
           await controller.refresh(); await clock.tick();
           expect(controller.getSnapshot().error).toBeNull();
           expect(requests.slice(0, 2)).toEqual([`${base}/view`, `${base}/snapshot`]);
+          expect(controller.getSnapshot().layout?.kind).toBe("fx-layout-report-v1");
           const events = new URL(requests[2], "http://localhost");
           expect(events.pathname).toBe(`${base}/events`); expect(events.searchParams.get("after")).toBe("cursor&?/+");
           expect(controller.getSnapshot().graph.nodes[0].preview?.url).toBe(`${base}/artifacts/${digest}`);

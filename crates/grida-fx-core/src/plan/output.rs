@@ -3,7 +3,11 @@
 //! - [`graph_document`]: `grida-fx expand` and `plan --json` print fx-graph-v1
 //!   (spec/schemas/fx-graph-v1.schema.json): `kind`, `workflow` `{id, title, description?,
 //!   file}`, `types` (each distinct uses: `{identity, source?}`), `instances`, `pending`
-//!   `{path, max, phase, high_usd}`, `estimate` `{low_usd, high_usd, ceiling_usd}`, `problems`.
+//!   ([`pending_document`]), `estimate` `{low_usd, high_usd, ceiling_usd}`, `problems`.
+//! - [`pending_document`]: one pending repeat: `path`, `step` (its declaration path), `max`,
+//!   `phase`, `high_usd` and `waiting_on` (sorted).
+//! - [`steps_document`]: every declared step by its declaration path, `{title, description, uses,
+//!   view, order}`, which a run's `plan.json` and a materialized plan add to the graph.
 //! - [`instance_document`]: one instance: `id`, `path`, `step`, `take`, `uses`, `type` (the type
 //!   identity), `with` (each value's `shown` form, pending as `{"pending": …}`), `routes`
 //!   `{cap: {route, fingerprint}}`, `state`, `identity`, `phase`, `key`, `judges`, `judged_by`
@@ -23,6 +27,7 @@
 //! written as a JSON number of dollars (identity.md §12).
 
 use super::{Estimate, PhaseSummary, Plan};
+use crate::docs::workflow::Steps;
 use crate::error::Problem;
 use crate::expand::{Instance, PendingRepeat, State};
 use crate::money::Usd;
@@ -220,13 +225,45 @@ pub fn ports_document(spec: &crate::spec::NodeSpec) -> Value {
     json!({"inputs": inputs, "outputs": outputs, "params": spec.params})
 }
 
-fn pending_document(repeat: &PendingRepeat) -> Value {
+/// One pending repeat of the graph (module doc).
+pub fn pending_document(repeat: &PendingRepeat) -> Value {
     json!({
         "path": repeat.path,
+        "step": repeat.step,
         "max": repeat.max,
         "phase": repeat.phase,
         "high_usd": usd(repeat.high()),
+        "waiting_on": repeat.waiting_on,
     })
+}
+
+/// Each declared step by its declaration path (a group's steps as `<group>.<step>`): `{title,
+/// description, uses, view, order}`. `order` is the step's position, from 0, in a pre-order walk
+/// of the declarations: a group before its steps, each level in authored order. A JSON object
+/// keeps no member order, so this is how a reader recovers it. A used workflow's own steps are
+/// not listed.
+pub fn steps_document(steps: &Steps) -> Map<String, Value> {
+    let mut found = Map::new();
+    declared_steps(steps, "", &mut found);
+    found
+}
+
+fn declared_steps(steps: &Steps, prefix: &str, found: &mut Map<String, Value>) {
+    for (name, step) in steps.iter() {
+        let path = format!("{prefix}{name}");
+        let text = |text: &Option<String>| text.as_deref().map_or(Value::Null, Value::from);
+        let mut document = Map::new();
+        document.insert("title".into(), text(&step.title));
+        document.insert("description".into(), text(&step.description));
+        document.insert("uses".into(), text(&step.uses));
+        document.insert("view".into(), step.view.to_value());
+        // Every step listed so far comes before this one in the walk.
+        document.insert("order".into(), Value::from(found.len()));
+        found.insert(path.clone(), Value::Object(document));
+        if let Some(inner) = &step.steps {
+            declared_steps(inner, &format!("{path}."), found);
+        }
+    }
 }
 
 fn problems(problems: &[Problem]) -> Value {
@@ -566,13 +603,105 @@ mod tests {
         assert_eq!(document["workflow"]["description"], "Draws each line.");
         assert_eq!(
             document["pending"],
-            json!([{"path": "draw", "max": 6, "phase": 2, "high_usd": 0.24}])
+            json!([{
+                "path": "draw", "step": "draw", "max": 6, "phase": 2, "high_usd": 0.24,
+                "waiting_on": [],
+            }])
         );
         assert_eq!(
             document["problems"],
             json!([{"where": "draw.route", "message": "no route for image.generate"}])
         );
         assert_eq!(document["estimate"]["ceiling_usd"], 1);
+    }
+
+    #[test]
+    fn a_pending_repeat_names_its_step_and_what_it_waits_on() {
+        let repeat = PendingRepeat {
+            display_scope: Some("scope:entity['ada']#".into()),
+            path: "entity['ada'].draw".into(),
+            step: "entity.draw".into(),
+            max: 3,
+            waiting_on: BTreeSet::from(["split#1".to_string(), "count#1".to_string()]),
+            per_instance_low: Usd(10_000),
+            per_instance_high: Usd(40_000),
+            phase: 2,
+        };
+        let document = pending_document(&repeat);
+        assert_eq!(
+            document,
+            json!({
+                "path": "entity['ada'].draw",
+                "step": "entity.draw",
+                "max": 3,
+                "phase": 2,
+                "high_usd": 0.12,
+                "waiting_on": ["count#1", "split#1"],
+            }),
+            "sorted and distinct, without the display scope"
+        );
+        let graph = json!({
+            "kind": "fx-graph-v1",
+            "workflow": {"id": "case", "title": "Case"},
+            "instances": [],
+            "pending": [document],
+            "estimate": {"low_usd": 0, "high_usd": 0.12, "ceiling_usd": null},
+        });
+        assert_valid_graph(&graph);
+    }
+
+    #[test]
+    fn steps_are_ordered_by_a_pre_order_walk_of_the_declarations() {
+        let document = json!({
+            "fx": "workflow/v1",
+            "id": "case",
+            "title": "Case",
+            "steps": {
+                "zeta": {"uses": "fx/files.copy@1", "title": "Last name, first step"},
+                "badge": {
+                    "for_each": ["sun", "stone"],
+                    "steps": {
+                        "draw": {"uses": "fx/image.generate@1", "view": "card"},
+                        "check": {"uses": "fx/files.copy@1"},
+                    },
+                },
+                "alpha": {"uses": "fx/files.copy@1", "description": "After the group."},
+            },
+        });
+        let workflow = crate::docs::workflow::parse_workflow(&document, "case.yaml").unwrap();
+        let steps = steps_document(&workflow.steps);
+        let mut order: Vec<(&str, u64)> = steps
+            .iter()
+            .map(|(path, step)| (path.as_str(), step["order"].as_u64().unwrap()))
+            .collect();
+        order.sort_by_key(|(_, order)| *order);
+        assert_eq!(
+            order,
+            [
+                ("zeta", 0),
+                ("badge", 1),
+                ("badge.draw", 2),
+                ("badge.check", 3),
+                ("alpha", 4)
+            ]
+        );
+        assert_eq!(
+            steps["zeta"],
+            json!({
+                "title": "Last name, first step", "description": null,
+                "uses": "fx/files.copy@1", "view": false, "order": 0,
+            })
+        );
+        assert_eq!(
+            steps["badge"],
+            json!({"title": null, "description": null, "uses": null, "view": false, "order": 1})
+        );
+        assert_eq!(steps["badge.draw"]["view"], "card");
+        assert_eq!(steps["alpha"]["description"], "After the group.");
+        let (plan, planner) = linear_plan();
+        let mut graph = graph_document(&plan, &planner);
+        graph["steps"] = Value::Object(steps);
+        assert_valid_graph(&graph);
     }
 
     #[test]

@@ -11,6 +11,10 @@
 //!   repeats">` and exit 1 when anything live is uncached, unknown or pending;
 //! - `expand`: the graph document; `identity`: the identity document; `price`: the price
 //!   document; each exits 1 when the plan has problems (the document is still printed).
+//!
+//! `plan --open`, `plan --standalone` and `view <workflow>` serve a materialized plan
+//! ([`materialized`]): the graph with `steps` and `takes_file` added, as a run's `plan.json` has
+//! them. `expand` and `plan --json` print the graph alone.
 
 use crate::cli::PlanArgs;
 use crate::print::{print_json, print_line};
@@ -18,6 +22,7 @@ use grida_fx_core::Error;
 use grida_fx_core::money::Usd;
 use grida_fx_core::plan::{Plan, output, render};
 use grida_fx_core::project::{PlanRequest, Planner, make_planner};
+use serde_json::Value;
 use std::path::PathBuf;
 
 /// Which planning verb.
@@ -63,7 +68,7 @@ pub fn run(verb: PlanVerb, args: &PlanArgs) -> Result<u8, Error> {
         }
     };
     if verb == PlanVerb::Plan && (args.open || args.standalone) {
-        let graph = output::graph_document(&plan, &planner);
+        let graph = materialized(&plan, &planner);
         if args.standalone || !planner.project.has_file {
             super::view::serve(Some(graph), None, 0, args.open)?;
         } else {
@@ -78,9 +83,25 @@ pub fn run(verb: PlanVerb, args: &PlanArgs) -> Result<u8, Error> {
 
 /// Uses the same offline planner as `plan` to materialize a browser's static graph.
 /// A refused plan remains inspectable, with its planning problems in the document.
-pub(crate) fn graph(args: &PlanArgs) -> Result<serde_json::Value, Error> {
+pub(crate) fn graph(args: &PlanArgs) -> Result<Value, Error> {
     let (plan, planner) = planned(args)?;
-    Ok(output::graph_document(&plan, &planner))
+    Ok(materialized(&plan, &planner))
+}
+
+/// The graph a viewer serves for a plan: the graph document with `steps` (every declared step,
+/// with its declaration order) and `takes_file` (project-relative; left out when empty), the
+/// members a run's `plan.json` adds for its readers. Neither enters the plan digest.
+fn materialized(plan: &Plan, planner: &Planner) -> Value {
+    let mut graph = output::graph_document(plan, planner);
+    if let Value::Object(map) = &mut graph {
+        let steps = output::steps_document(&planner.workflow.workflow.steps);
+        map.insert("steps".into(), Value::Object(steps));
+        let takes_file = super::takes_file(planner);
+        if !takes_file.is_empty() {
+            map.insert("takes_file".into(), Value::from(takes_file));
+        }
+    }
+    graph
 }
 
 fn planned(args: &PlanArgs) -> Result<(Plan, Planner), Error> {
@@ -241,6 +262,7 @@ mod tests {
             expansion.pending.push(PendingRepeat {
                 display_scope: None,
                 path: "draw".into(),
+                step: "draw".into(),
                 max: 6,
                 waiting_on: BTreeSet::new(),
                 per_instance_low: Usd(0),

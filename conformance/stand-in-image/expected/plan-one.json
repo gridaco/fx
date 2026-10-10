@@ -56,6 +56,7 @@
  "steps": {
   "draw": {
    "description": null,
+   "order": 0,
    "title": null,
    "uses": "fx/image.generate@1",
    "view": false

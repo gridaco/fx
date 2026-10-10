@@ -321,6 +321,20 @@
         }
       }
     },
+    "instances": {
+      "description": "scopes_updated: every instance of the current expansion except absent ones, in expansion order (the graph's listing order), with its declared step, take and repeat key. Absent in records written before it existed.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/expanded_instance"
+      }
+    },
+    "pending": {
+      "description": "scopes_updated: the current expansion's pending repeats, as fx-graph-v1 records them. Absent in records written before it existed.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/pending_repeat"
+      }
+    },
     "name": {
       "description": "Optional immutable run label on run_started; presentation metadata only.",
       "type": "string",
@@ -983,6 +997,86 @@
           }
         }
       ]
+    },
+    "expanded_instance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "step",
+        "take",
+        "key"
+      ],
+      "properties": {
+        "id": {
+          "description": "The instance id (identity.md \u00a711).",
+          "type": "string"
+        },
+        "step": {
+          "description": "The declared step's path, without repeat keys.",
+          "type": "string",
+          "minLength": 1
+        },
+        "take": {
+          "description": "One take per regenerating level, outermost first.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "minItems": 1
+        },
+        "key": {
+          "description": "A directly repeated step's item key; null otherwise.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "pending_repeat": {
+      "description": "A repeat whose instances a later phase expands (fx-graph-v1 `pending`).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "step",
+        "max",
+        "phase",
+        "high_usd",
+        "waiting_on"
+      ],
+      "properties": {
+        "path": {
+          "description": "The step path, with the repeat keys around it.",
+          "type": "string"
+        },
+        "step": {
+          "description": "The declared step's path, without repeat keys.",
+          "type": "string",
+          "minLength": 1
+        },
+        "max": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "phase": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "high_usd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "waiting_on": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      }
     }
   }
 }

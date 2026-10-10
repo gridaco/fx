@@ -30,7 +30,8 @@
 //! - [`RunFolder::sweep`]: what a killed invocation left half placed (temporary names) is removed
 //!   by the next one that holds the lock.
 //! - [`plan_document`]: the graph document `grida-fx expand` prints, with `plan`, `steps` (every
-//!   declared step by its path: `{title, description, uses, view}`), `inputs` (plain) and
+//!   declared step by its path: `{title, description, uses, view, order}`,
+//!   [`output::steps_document`]), `inputs` (plain) and
 //!   `view_origins` added, plus `takes_file` (the project-relative path of the workflow's takes
 //!   file, which `reroll` and `pick` write; spec/store.md §8 records it), and `"stand_in": true`
 //!   for a stand-in run only (not part of the plan digest). Written with
@@ -45,9 +46,8 @@
 //! Messages name the folder by its label and files by their place in it, never by an absolute
 //! path.
 
-use grida_fx_core::docs::workflow::Steps;
 use grida_fx_core::kinds::suffix_of_kind;
-use grida_fx_core::plan::Plan;
+use grida_fx_core::plan::{Plan, output};
 use grida_fx_core::project::Planner;
 use grida_fx_core::val::{FileValue, Val};
 use grida_fx_core::value::{is_digest, parse_json, write_json};
@@ -429,14 +429,15 @@ pub fn plan_document(
     takes_file: &str,
     stand_in: bool,
 ) -> Value {
-    let mut document = grida_fx_core::plan::output::graph_document(plan, planner);
+    let mut document = output::graph_document(plan, planner);
     let Value::Object(map) = &mut document else {
         return document;
     };
     map.insert("plan".into(), Value::from(digest));
-    let mut steps = Map::new();
-    step_documents(&planner.workflow.workflow.steps, "", &mut steps);
-    map.insert("steps".into(), Value::Object(steps));
+    map.insert(
+        "steps".into(),
+        Value::Object(output::steps_document(&planner.workflow.workflow.steps)),
+    );
     let inputs: Map<String, Value> = planner
         .inputs
         .given
@@ -463,24 +464,6 @@ pub fn plan_document(
         map.insert("stand_in".into(), Value::Bool(true));
     }
     document
-}
-
-/// Each declared step by its path (a group's steps as `<group>.<step>`): `{title, description,
-/// uses, view}`. A used workflow's own steps are not listed.
-fn step_documents(steps: &Steps, prefix: &str, found: &mut Map<String, Value>) {
-    for (name, step) in steps.iter() {
-        let path = format!("{prefix}{name}");
-        let text = |text: &Option<String>| text.as_deref().map_or(Value::Null, Value::from);
-        let mut document = Map::new();
-        document.insert("title".into(), text(&step.title));
-        document.insert("description".into(), text(&step.description));
-        document.insert("uses".into(), text(&step.uses));
-        document.insert("view".into(), step.view.to_value());
-        found.insert(path.clone(), Value::Object(document));
-        if let Some(inner) = &step.steps {
-            step_documents(inner, &format!("{path}."), found);
-        }
-    }
 }
 
 /// `<step>`: every character that is not a letter or digit (Unicode general category L or N),

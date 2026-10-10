@@ -140,7 +140,7 @@ function ResizeHandle({ side }: { side: "left" | "right" }) {
 function WorkflowView() {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   useEffect(() => { void controller.refresh(); return () => controller.dispose(); }, []);
-  const { view, graph, selected, loading, error, updated, scope, breadcrumbs, scopeNode, cancelling } = state;
+  const { view, graph, layout, selected, loading, error, updated, scope, breadcrumbs, scopeNode, cancelling } = state;
   const plan = view?.kind === "fx-graph-v1" ? view : null;
   const run = view?.kind === "fx-viewer-run-v1" ? view : null;
   const selectedNode = graph.nodes.find((node) => node.id === selected);
@@ -182,7 +182,7 @@ function WorkflowView() {
             <button onClick={back} disabled={scope === null} aria-label="Back to parent workflow" className="fx-back"><ArrowLeft {...iconProps} />Back</button>
             <div className="fx-breadcrumbs">{breadcrumbs.map((crumb, index) => <span key={crumb.id ?? "root"}>{index > 0 && <span aria-hidden="true" className="fx-breadcrumb-separator">/</span>}<button onClick={() => controller.goToScope(crumb.id)} title={crumb.id ?? crumb.title} aria-current={index === breadcrumbs.length - 1 ? "page" : undefined}>{crumb.title}</button></span>)}</div>
           </nav>}
-          <div className="fx-canvas-surface"><WorkflowCanvas graph={graph} selected={selected} scope={scope} onSelect={controller.select} onOpenScope={controller.openScope} onBack={back} /></div>
+          <div className="fx-canvas-surface"><WorkflowCanvas graph={graph} layout={layout} selected={selected} scope={scope} onSelect={controller.select} onOpenScope={controller.openScope} onBack={back} /></div>
           <div className="fx-canvas-context" title={`${view.workflow.title}${run ? ` · Run ${run.run_name}` : " · Static plan"} · Read only`}>{run ? refresh : <span className="fx-badge">Static plan · Read only</span>}</div>
           {entryController.route?.project_id && <a href="/" className="fx-project-back fx-project-back-floating"><ArrowLeft {...iconProps} />Project</a>}
         </main>

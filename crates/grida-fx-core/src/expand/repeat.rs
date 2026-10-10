@@ -365,6 +365,7 @@ impl Expander<'_> {
         self.pending.push(PendingRepeat {
             display_scope: self.frames[at.frame.0].display_scope.clone(),
             path: format!("{}{}", self.frames[at.frame.0].prefix, at.name),
+            step: at.where_.clone(),
             max: limit.unwrap_or(1),
             waiting_on: refs.clone(),
             per_instance_low: low,

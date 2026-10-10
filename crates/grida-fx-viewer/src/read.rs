@@ -11,7 +11,7 @@ use grida_fx_runtime::folder::{
 use serde::Serialize;
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
 use std::io::{self, Read, Seek};
 use std::path::{Component, Path, PathBuf};
@@ -31,6 +31,10 @@ pub struct RunDocument {
     pub nodes: Vec<Node>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scopes: Option<Value>,
+    /// The repeats not yet expanded: the latest `scopes_updated` `pending`, else the plan's
+    /// whose phase was not planned yet.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pending: Option<Value>,
     pub artifacts: Vec<Artifact>,
     pub warnings: Vec<String>,
 }
@@ -40,6 +44,15 @@ pub struct RunDocument {
 pub struct Node {
     pub id: String,
     pub path: String,
+    /// The declared step: the plan instance's, else `node_started`'s, else the latest
+    /// `scopes_updated` listing's. Omitted when no record names it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub step: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub take: Option<Vec<u64>>,
+    /// The item key, `Some(None)` (null) for an instance that is not directly repeated.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key: Option<Option<String>>,
     pub title: String,
     pub uses: Option<String>,
     pub state: String,
@@ -60,6 +73,8 @@ pub struct Node {
     pub cache: Option<String>,
     pub error: Option<String>,
     pub duration_ms: Option<u64>,
+    /// The run ended while this instance was running (its `state` is then `failed`).
+    pub interrupted: bool,
 }
 
 /// A recorded file, including files whose bytes are not in the selected folder.
@@ -83,6 +98,26 @@ struct Candidate {
 pub(crate) struct Snapshot {
     pub document: RunDocument,
     candidates: BTreeMap<String, Candidate>,
+    pub recorded: Recorded,
+}
+
+/// What the layout reads besides the browser document (spec/layout.md §2, §4 rule 4).
+#[derive(Default)]
+pub(crate) struct Recorded {
+    /// The validated scopes of the newest snapshot with every member kept; the document's
+    /// `scopes` keep only the nodes it lists. `None` draws the run flat.
+    pub scopes: Option<Value>,
+    /// The latest `scopes_updated` `instances` (`{id, step, take, key}`, expansion order),
+    /// when that event records them.
+    pub instances: Option<Vec<Value>>,
+    /// Every instance any recorded listing named, by id; one the newest listing leaves out
+    /// became absent.
+    pub listed: BTreeMap<String, Value>,
+    /// Every pending repeat any `scopes_updated` recorded, by path, newest entry kept: an
+    /// expanded repeat keeps its slot and its `waiting_on` edges (§4 rule 3).
+    pub waited: BTreeMap<String, Value>,
+    /// The instances with a recorded node event.
+    pub started: BTreeSet<String>,
 }
 
 #[cfg(test)]
@@ -158,7 +193,7 @@ fn verified_file(root: &Path, relative: &str, artifact: &Artifact) -> io::Result
     Ok(file)
 }
 
-fn text<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
+pub(crate) fn text<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
     value.get(key).and_then(Value::as_str)
 }
 
@@ -169,7 +204,7 @@ fn object(value: Option<&Value>) -> Value {
         .unwrap_or_else(|| json!({}))
 }
 
-fn strings(value: Option<&Value>) -> Vec<String> {
+pub(crate) fn strings(value: Option<&Value>) -> Vec<String> {
     value
         .and_then(Value::as_array)
         .into_iter()
@@ -190,6 +225,12 @@ fn node(value: &Value, steps: &Map<String, Value>, types: &Map<String, Value>) -
     Some(Node {
         id,
         path,
+        step: text(value, "step").map(str::to_string),
+        take: takes(value.get("take")),
+        key: value
+            .get("key")
+            .filter(|key| key.is_null() || key.is_string())
+            .map(|key| key.as_str().map(str::to_string)),
         title,
         uses: text(value, "uses").map(str::to_string),
         state: if text(value, "state") == Some("done") {
@@ -217,7 +258,18 @@ fn node(value: &Value, steps: &Map<String, Value>, types: &Map<String, Value>) -
         cache: None,
         error: text(value, "reason").map(str::to_string),
         duration_ms: None,
+        interrupted: false,
     })
+}
+
+/// A recorded take array: one positive integer per regenerating level.
+pub(crate) fn takes(value: Option<&Value>) -> Option<Vec<u64>> {
+    let takes: Vec<u64> = value?
+        .as_array()?
+        .iter()
+        .map(|take| take.as_u64().filter(|take| *take >= 1))
+        .collect::<Option<_>>()?;
+    (!takes.is_empty()).then_some(takes)
 }
 
 /// Reads the browser response, checking availability of every recorded placed artifact.
@@ -230,10 +282,16 @@ pub(crate) fn read_observed(
     root: &Path,
     observed: &grida_fx_runtime::observation::RunSnapshot,
 ) -> io::Result<Snapshot> {
-    verify_inventory(
-        root,
-        project_inventory(root, &observed.plan, &observed.events, Vec::new())?,
-    )
+    verify_inventory(root, project_records(root, observed)?)
+}
+
+/// The projection of exactly the observation prefix, without opening artifact bytes. The layout
+/// reads its records; serving a document goes through [`read_observed`].
+pub(crate) fn project_records(
+    root: &Path,
+    observed: &grida_fx_runtime::observation::RunSnapshot,
+) -> io::Result<Snapshot> {
+    project_inventory(root, &observed.plan, &observed.events, Vec::new())
 }
 
 fn verify_inventory(root: &Path, mut snapshot: Snapshot) -> io::Result<Snapshot> {
@@ -329,6 +387,13 @@ fn project_inventory(
         .collect();
     let mut scopes = plan.get("scopes").cloned();
     let mut node_interfaces = None;
+    let mut recorded = Recorded::default();
+    // The latest scopes_updated `instances` and `pending`, and every listing recorded; borrowed
+    // until the loop ends, so each listed entry is cloned once.
+    let (mut newest_instances, mut newest_pending) = (None, None);
+    let mut listings: Vec<&Vec<Value>> = Vec::new();
+    let mut waits: Vec<&Vec<Value>> = Vec::new();
+    let mut planned_phases = BTreeSet::new();
     let mut state = "planned".to_string();
     let mut recorded_run_name = None;
     let mut saw_first_start = false;
@@ -359,6 +424,14 @@ fn project_inventory(
                         .cloned()
                         .unwrap_or(Value::Null),
                 );
+                (newest_instances, newest_pending) = super::scopes::expansion(event, &mut warnings);
+                listings.extend(newest_instances);
+                waits.extend(newest_pending.and_then(Value::as_array));
+            }
+            Some("phase_planned") => {
+                if let Some(phase) = event.get("phase").and_then(Value::as_u64) {
+                    planned_phases.insert(phase);
+                }
             }
             Some("run_started") => {
                 if !saw_first_start {
@@ -409,7 +482,16 @@ fn project_inventory(
                 } else {
                     continue;
                 };
+                recorded.started.insert(id.to_string());
                 let current = &mut nodes[index];
+                // A plan instance's own step and take stay; a node only the run knows takes
+                // them from its start.
+                if current.step.is_none() {
+                    current.step = text(event, "step").map(str::to_string);
+                }
+                if current.take.is_none() {
+                    current.take = takes(event.get("take"));
+                }
                 // Runtime evidence is authoritative even when a dynamically-created node
                 // failed or was blocked before dispatch. Absence preserves older records.
                 if let Some(uses) = text(event, "uses") {
@@ -489,6 +571,7 @@ fn project_inventory(
             if current.state == "running" {
                 current.state = "failed".into();
                 current.error = Some("The run ended before this step finished.".into());
+                current.interrupted = true;
             } else if current.state == "pending" {
                 current.state = "skipped".into();
             }
@@ -500,13 +583,72 @@ fn project_inventory(
             node.interface_bindings = bindings.get(&node.id).cloned();
         }
     }
-    scopes = super::scopes::project_run(
+    // An id keeps the entry of the newest listing that names it.
+    for entry in listings.iter().rev().copied().flatten() {
+        if let Some(id) = text(entry, "id")
+            && !recorded.listed.contains_key(id)
+        {
+            recorded.listed.insert(id.to_string(), entry.clone());
+        }
+    }
+    for entry in waits.iter().rev().copied().flatten() {
+        if let Some(path) = text(entry, "path")
+            && !recorded.waited.contains_key(path)
+        {
+            recorded.waited.insert(path.to_string(), entry.clone());
+        }
+    }
+    recorded.instances = newest_instances.cloned();
+    let recorded_pending = newest_pending.cloned();
+    // The newest listing names what the plan and the start events did not.
+    if let Some(listing) = &recorded.instances {
+        let newest: BTreeMap<_, _> = listing
+            .iter()
+            .filter_map(|entry| Some((text(entry, "id")?, entry)))
+            .collect();
+        for current in &mut nodes {
+            let Some(entry) = newest.get(current.id.as_str()) else {
+                continue;
+            };
+            if current.step.is_none() {
+                current.step = text(entry, "step").map(str::to_string);
+            }
+            if current.take.is_none() {
+                current.take = takes(entry.get("take"));
+            }
+            if current.key.is_none() {
+                current.key = Some(text(entry, "key").map(str::to_string));
+            }
+        }
+    }
+    recorded.scopes = super::scopes::project_run(
         scopes,
         node_interfaces.as_ref(),
         plan,
         &mut nodes,
         &mut warnings,
     );
+    let scopes = recorded.scopes.clone().map(|mut scopes| {
+        super::scopes::retain_nodes(&mut scopes, &nodes);
+        scopes
+    });
+    let pending = recorded_pending.or_else(|| {
+        // An older record: the plan's repeats whose phase has not been planned yet.
+        let unplanned: Vec<Value> = plan
+            .get("pending")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter(|entry| {
+                entry
+                    .get("phase")
+                    .and_then(Value::as_u64)
+                    .is_some_and(|phase| !planned_phases.contains(&phase))
+            })
+            .cloned()
+            .collect();
+        super::scopes::valid_pending(Value::Array(unplanned))
+    });
     warnings.sort();
     warnings.dedup();
     let workflow = plan.get("workflow").cloned().unwrap_or_else(|| json!({}));
@@ -525,12 +667,14 @@ fn project_inventory(
         outputs,
         nodes,
         scopes,
+        pending,
         artifacts: Vec::new(),
         warnings,
     };
     Ok(Snapshot {
         document,
         candidates,
+        recorded,
     })
 }
 

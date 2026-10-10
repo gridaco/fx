@@ -160,11 +160,30 @@
  },
  {
   "event": "scopes_updated",
+  "instances": [
+   {
+    "id": "first#1",
+    "key": null,
+    "step": "first",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "second#1",
+    "key": null,
+    "step": "second",
+    "take": [
+     1
+    ]
+   }
+  ],
   "kind": "fx-run-events-v1",
   "node_interface_bindings": {
    "first#1": [],
    "second#1": []
   },
+  "pending": [],
   "plan": "b54bf877cc87ea7c656494d124c177a6f0d574a8f85c91401fbf0c456f52af9d",
   "scopes": []
  }

@@ -247,35 +247,43 @@ provider charged nothing.
 
 ### "Tidy up the layout"
 
-**Proposed capability; adjacent JSON authoring agreed, not implemented.** Also
-cover requests such as "Place the comparison below the variants so it makes more
-sense." User-driven canvas editing is deferred; the first consumer is an external
-agent authoring presentation data. [The layout TODO](TODO.md#agent-authored-canvas-layout)
-owns the implementation candidates and open contract decisions.
+**Ratified design, 2026-10-09; Ship A in source, 2026-10-10, unreleased; Ship B not
+implemented.** [Canvas layout](spec/layout.md) specifies it. Also cover requests such as "Place the comparison below the variants
+so it makes more sense." User-driven canvas editing is deferred; the first consumer
+is an external agent authoring presentation data.
 
-Use an optional adjacent file such as `gallery.layout.json` as shared workflow
-presentation source, with a versioned schema and one initial serialization format.
-Store grouping, ordering and supported placement intent; coordinates are derived.
-Missing metadata uses automatic layout. Exact schema, discovery for builders,
-import composition, override precedence and CLI syntax still need ratification.
-Do not advertise layout commands or fields as available in installed FX today.
+The design has two ships. Ship A gives every view an automatic left-to-right grid
+and stacks repeated instances into decks; it adds no file. Ship B adds the optional
+adjacent `<workflow id>.layout.json` (`fx-layout-v1`) in the folder of the workflow's
+takes file: declared steps placed by column and row, and each repeat drawn as a deck
+or a grid. Cells are computed by the engine; a missing file means automatic layout.
+Builders, imports, precedence, diagnostics and the layout report are settled in the
+spec. Per-run files, per-instance keys, a layout command and typed SDK access to the
+report are deferred: the layout route (and, from Ship B, `inspect`) carries the report,
+and Python and JavaScript callers will receive it untyped inside the existing
+`inspection` summary. In source, the scoped and standalone `api/layout` routes and a
+run's `api/snapshot` serve the report with automatic cells only. Nothing is in an
+installed release, and the file and `inspect` layout output arrive with Ship B: do not
+advertise them before then.
 
-The proposed operation sequence is **inspect, edit, validate, refresh and verify**:
+The operation sequence is **inspect, edit, validate, refresh and verify**:
 
-1. Read the saved graph/run and effective layout, including its supplying file,
-   revision, scopes and stable node references. Resolve the intended workflow and
-   whether the request changes its shared layout or an explicit run-only override.
-2. Edit the JSON through ordinary file tools. Address authored steps within their
-   scope; distinguish all repeated instances from one recorded instance. Preserve
-   unrelated rules and detect a conflicting file revision instead of overwriting
-   another editor's changes.
-3. Validate against the selected graph. Return structured unknown-reference,
-   unsupported-rule and conflict diagnostics. Validation must describe its scope:
-   schema/reference checks alone do not establish that the renderer solved the
-   layout or that a person finds the result clear.
-4. Refresh the view and report its actual URL, loaded layout revision and renderer
-   outcome. Historical graphs may not match current source; expose unmatched rules
-   and a usable fallback rather than silently claiming the request was satisfied.
+1. Read the saved graph/run and its layout report: supplying file, revision, state,
+   cells by declaration path, decks and diagnostics. Resolve the intended workflow; v1
+   has one shared file per workflow and no run-only override.
+2. Edit the JSON through ordinary file tools. A key addresses a declared step and
+   covers all its repeated instances; a key for one recorded instance is refused.
+   Preserve unrelated entries and detect a conflicting file revision instead of
+   overwriting another editor's changes.
+3. Validate against the selected graph through the report's structured diagnostics
+   (unknown, undrawn or imported steps, shared cells, backward edges, displaced
+   slots, invalid files, refused locations). Validation must describe its scope:
+   diagnostics alone do not establish that a person finds the result clear.
+4. Refresh the view and report its actual URL and the report's `state` and `revision`:
+   the edit is live only when `state` is `applied` and `revision` is the digest of the
+   bytes written, since a refused file reports a revision too. Historical graphs may
+   not match current source; expose unmatched entries and the fallback rather than
+   silently claiming the request was satisfied.
 
 The operation changes presentation only. It must work on saved evidence without
 importing builders, replanning, executing steps or spending. Visual grouping must
@@ -308,7 +316,7 @@ promise through documentation alone.
 | AR-14 | "Run exactly what I reviewed." | Partial: planning and execution are separate; SDK `run(plan)` retains options but the engine replans. No immutable approved-plan execution interface. | Changes between review and execution are detected or require renewed review; the agent does not mistake a saved plan or SDK object for a frozen execution snapshot. |
 | AR-15 | "Keep my project available while I work." | Current in source: init, foreground/background service, status/logs/stop, persistent catalog and run URLs; OS supervision remains future work. | Repeat/parallel starts, readiness, port conflicts, project identity, independent execution, restart persistence, and standalone use all have provider-free lifecycle evidence. |
 | AR-16 | "Name this deliverable; show my workflow history." | Current in source: create-only names, explicit same-plan resume, workflow-grouped index. | Concurrent name claims have one winner; collisions/missing names/plan mismatches/ambiguous sources refuse; latest includes failures, old active records remain visible, resume retains creation time/spend, and metadata changes no cache identity. |
-| AR-17 | "Tidy up the layout; place X below Y." | Proposed: agent-authored adjacent JSON layout; visual editing deferred. | Agent discovers exact scope/references, edits and validates layout, verifies the renderer loaded the intended revision, and reports the actual URL or actionable diagnostics. No builder execution, provider calls, execution-history changes or identity/resume changes; repeats, nested scopes and stale references have provider-free evidence. |
+| AR-17 | "Tidy up the layout; place X below Y." | Ratified design: [spec/layout.md](spec/layout.md). Ship A (automatic grid, decks, the layout report with automatic cells) in source, unreleased; Ship B (the adjacent `fx-layout-v1` file the scenario edits) not implemented; visual editing deferred. | Agent discovers exact scope/references, edits and validates layout, verifies the renderer loaded the intended revision, and reports the actual URL or actionable diagnostics. No builder execution, provider calls, execution-history changes or identity/resume changes; repeats, nested scopes and stale references have provider-free evidence. |
 | AR-18 | "Clean up last week's exploratory runs, but keep my named ones." | Implemented in source: `runs list` and `runs remove` (CLI, Python, JavaScript), and `cache prune` (CLI). | Agent lists, previews and then removes exactly the previewed runs; named, `--run` and external runs survive filters; an active run, the last pick holder and a non-run selection are refused with a code and nothing else changes; catalog and run index forget removed folders; pruning keeps every remaining run resumable and refuses a shared, busy or unreadable cache, removing nothing; provider-free CLI, conformance and SDK evidence. |
 
 For AR-04 and AR-11, [the observation checker](tools/check_observation.py) and

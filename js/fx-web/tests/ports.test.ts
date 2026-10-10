@@ -30,7 +30,7 @@ function runFromPlan(plan: GraphDocument): ViewerRun {
   return {
     kind: "fx-viewer-run-v1", workflow: plan.workflow, run_name: "recorded", state: "succeeded", stand_in: false,
     charged_usd: 0, estimate: null, inputs: {}, outputs: {}, artifacts: [], warnings: [],
-    nodes: plan.instances.map((node) => ({ id: node.id, path: node.path, title: node.path, uses: node.uses,
+    nodes: plan.instances.map((node) => ({ id: node.id, path: node.path, step: node.step, take: node.take, key: node.key, title: node.path, uses: node.uses,
       state: "succeeded", reads: node.reads, with: node.with, outputs: {}, cache: null, error: null, duration_ms: 1,
       ports: plan.types?.[node.uses].ports, bindings: node.bindings, needs: node.needs, judges: node.judges })),
   };

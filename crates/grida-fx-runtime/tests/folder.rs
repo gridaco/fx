@@ -594,9 +594,9 @@ fn plan_json_is_the_graph_with_the_run_members() {
     assert_eq!(
         document["steps"],
         json!({
-            "base": {"title": "The base picture", "description": "Drawn first", "uses": "fx/image.generate@1", "view": true},
-            "build": {"title": "A group", "description": null, "uses": null, "view": false},
-            "build.draw": {"title": null, "description": null, "uses": "fx/image.generate@1", "view": false},
+            "base": {"title": "The base picture", "description": "Drawn first", "uses": "fx/image.generate@1", "view": true, "order": 0},
+            "build": {"title": "A group", "description": null, "uses": null, "view": false, "order": 1},
+            "build.draw": {"title": null, "description": null, "uses": "fx/image.generate@1", "view": false, "order": 2},
         })
     );
     // Everything else is exactly what `grida-fx expand` prints, `problems` included.

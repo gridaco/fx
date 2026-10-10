@@ -1072,6 +1072,88 @@
  },
  {
   "event": "scopes_updated",
+  "instances": [
+   {
+    "id": "good#1",
+    "key": null,
+    "step": "good",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "refused#1",
+    "key": null,
+    "step": "refused",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "failed#1",
+    "key": null,
+    "step": "failed",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "declined#1",
+    "key": null,
+    "step": "declined",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "small#1",
+    "key": null,
+    "step": "small",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "text#1",
+    "key": null,
+    "step": "text",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "extra#1",
+    "key": null,
+    "step": "extra",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "missing#1",
+    "key": null,
+    "step": "missing",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "data#1",
+    "key": null,
+    "step": "data",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "body#1",
+    "key": null,
+    "step": "body",
+    "take": [
+     1
+    ]
+   }
+  ],
   "kind": "fx-run-events-v1",
   "node_interface_bindings": {
    "body#1": [],
@@ -1085,6 +1167,7 @@
    "small#1": [],
    "text#1": []
   },
+  "pending": [],
   "plan": "90dffdaa2038cc2fb412e3b2524442bd82ffc61f363d037b65486f78d04f1cf1",
   "scopes": []
  }

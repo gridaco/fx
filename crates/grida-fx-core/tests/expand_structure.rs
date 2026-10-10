@@ -966,6 +966,7 @@ steps:
     assert_eq!(expansion.pending.len(), 2);
     let draw = &expansion.pending[0];
     assert_eq!(draw.path, "draw");
+    assert_eq!(draw.step, "draw");
     assert_eq!(draw.max, 6);
     assert_eq!(draw.phase, 2);
     assert_eq!(draw.waiting_on, set(&["split#1"]));
@@ -976,6 +977,45 @@ steps:
     let late = instance(&expansion, "late#1");
     assert_eq!(late.waiting_on(), set(&["split#1"]));
     assert_eq!(late.identity, None);
+}
+
+#[test]
+fn a_pending_repeat_records_its_declaration_path() {
+    let case = Case::new(&[(
+        "case",
+        r#"fx: workflow/v1
+id: case
+title: Pending repeats in a group
+steps:
+  split:
+    uses: ./nodes/cases.py#shout
+    with: { text: a }
+  entity:
+    for_each: [ada, bo]
+    key: ${{ item }}
+    steps:
+      draw:
+        for_each: ${{ steps.split.outputs.items }}
+        max: 2
+        uses: ./nodes/cases.py#shout
+        with: { text: "${{ item }}" }
+"#,
+    )]);
+    let expansion = case.expand("case");
+    assert_eq!(problems(&expansion), []);
+    // The path keeps the group's keys; the step is the declaration path every item shares.
+    let pending: Vec<(&str, &str)> = expansion
+        .pending
+        .iter()
+        .map(|p| (p.path.as_str(), p.step.as_str()))
+        .collect();
+    assert_eq!(
+        pending,
+        [
+            ("entity['ada'].draw", "entity.draw"),
+            ("entity['bo'].draw", "entity.draw")
+        ]
+    );
 }
 
 #[test]

@@ -5,6 +5,7 @@
 //! loopback only and starts no workflow, provider adapter or node host. Service discovery is
 //! confined to the explicitly configured run directory.
 
+mod layout;
 mod read;
 mod scopes;
 pub mod service;
@@ -124,6 +125,7 @@ fn router(state: AppState) -> Router {
         .route("/api/view", get(view_document))
         .route("/api/run", get(run_document))
         .route("/api/snapshot", get(observation_snapshot))
+        .route("/api/layout", get(layout_report))
         .route("/api/events", get(observation_events))
         .route("/api/artifacts/{digest}", get(artifact))
         .route("/api/{*path}", get(api_missing))
@@ -216,7 +218,7 @@ fn prefix_artifacts(document: &mut RunDocument, prefix: &str) {
     }
 }
 
-/// A display projection and its cursor use the same captured event prefix.
+/// A display projection, its layout report and its cursor use the same captured event prefix.
 async fn observation_snapshot(State(state): State<Arc<AppState>>) -> Response {
     let Source::Run(root) = &state.source else {
         return observation_failure("unavailable", "A static plan has no recorded run.");
@@ -224,19 +226,48 @@ async fn observation_snapshot(State(state): State<Arc<AppState>>) -> Response {
     let root = root.clone();
     match tokio::task::spawn_blocking(move || {
         let captured = observation::snapshot(&root)?;
-        let view = read::read_observed(&root, &captured)
-            .map_err(|_| ())
-            .ok()
-            .map(|snapshot| snapshot.document);
-        Ok::<_, observation::ObservationError>((captured, view))
+        let projected = read::read_observed(&root, &captured).ok().map(|snapshot| {
+            let report = layout::run_report(&captured.plan, &snapshot, captured.cursor.clone());
+            (snapshot.document, report)
+        });
+        Ok::<_, observation::ObservationError>((captured, projected))
     })
     .await
     {
-        Ok(Ok((captured, Some(mut view)))) => {
+        Ok(Ok((captured, Some((mut view, report))))) => {
             prefix_artifacts(&mut view, &state.artifact_prefix);
             let mut value = serde_json::to_value(captured).expect("serializable snapshot");
             value["view"] = serde_json::to_value(view).expect("serializable view");
+            value["layout"] = serde_json::to_value(report).expect("serializable report");
             observed_json(value)
+        }
+        Ok(Err(error)) => observed_error(error),
+        _ => observation_failure("unavailable", "The selected run cannot be projected."),
+    }
+}
+
+/// Cells and member order for the view (spec/layout.md §6.11). A run's report reflects one
+/// captured record prefix and carries its cursor; no `ETag`, since the body changes as the run
+/// records more.
+async fn layout_report(State(state): State<Arc<AppState>>) -> Response {
+    let root = match &state.source {
+        Source::Plan(graph) => {
+            let report = serde_json::to_value(layout::plan_report(graph)).expect("serializable");
+            return observed_json(report);
+        }
+        Source::Run(root) => root.clone(),
+    };
+    match tokio::task::spawn_blocking(move || {
+        let captured = observation::snapshot(&root)?;
+        let report = read::project_records(&root, &captured)
+            .ok()
+            .map(|snapshot| layout::run_report(&captured.plan, &snapshot, captured.cursor));
+        Ok::<_, observation::ObservationError>(report)
+    })
+    .await
+    {
+        Ok(Ok(Some(report))) => {
+            observed_json(serde_json::to_value(report).expect("serializable report"))
         }
         Ok(Err(error)) => observed_error(error),
         _ => observation_failure("unavailable", "The selected run cannot be projected."),

@@ -51,6 +51,7 @@ It distinguishes implemented behavior, ratified contracts and proposed capabilit
 | 11 | **Initial publication waited for trusted publishing; that bootstrap is complete.**<br>• The original decision required the owner to set up trusted publishing (OIDC) before publication. npm sets that up only on a package that already exists, so [RELEASING.md](../../RELEASING.md) records the first-publish bootstrap. Stable `0.1.0` is now published on both registries.<br>• For source development, `tools/build_engine.py` builds the engine into a checkout's Python SDK, and [examples/](../../examples/) prove that path in CI.<br>• stage-gen takes this repository as a submodule at `third_party/fx`, with a path dependency on its `python/`, and FX can be changed in place there. Detaching later changes that dependency line, not stage-gen's imports. | the owner's direction (2026-10-06) |
 | 12 | **No cache replay.** stage-gen moves onto FX with an empty cache, and gnode is deleted in the same step, with no period of running both engines. This replaces the replay milestone 2 first planned; [milestone 2](#milestone-2-stage-gen-moves-onto-fx) says why. | the owner's decision (2026-10-06) |
 | 13 | **Run observation is a public contract.** FX will expose versioned, read-only execution events for independent consumers; the built-in viewer must use the same observation boundary. Recorded events remain authoritative. Ordered reads, cursor/replay semantics, compatibility and observer independence are specified before a follow interface is advertised as stable. [Run observation](../../spec/observation.md) records the wire interface, guarantees, lifecycle and verification. | v1 ratified and implemented in source (2026-10-08) |
+| 14 | **Canvas layout is engine-computed presentation.** The viewer lays a workflow out as a left-to-right grid of cells and stacks repeated instances into decks (Ship A). An optional `<workflow id>.layout.json` (`fx-layout-v1`) beside the workflow's takes file places declared steps by column and row (Ship B). The engine computes the cells and the member order and serves them on the scoped layout route; the browser places its own projection's cards in them, so `inspect` (from Ship B) and the browser agree. The file never enters planning, identities, caches or resume. [Canvas layout](../../spec/layout.md) holds the design. | ratified design (2026-10-09); Ship A in source (2026-10-10), unreleased |
 
 The [local service contract](../../spec/service.md) is ratified and implemented in
 source (2026-10-08): optional project initialization, a native foreground or
@@ -195,7 +196,9 @@ Milestone 2 has passed. The published preview `v0.1.0-alpha.2` has also passed i
 - The `grida fx` umbrella.
 - Views: the [local workflow-plan and run viewer](../guide/07-viewing.md), read-only
   node canvas, live observation and persistent project service are implemented in
-  source. [Custom views, portable snapshots and optional OS supervision](../../TODO.md#workflow-and-run-viewer)
+  source. The [canvas layout](../../spec/layout.md) (decision 14) is ratified; its automatic
+  grid and decks (Ship A) are in source, unreleased, and its layout file (Ship B) is not
+  implemented. [Custom views, portable snapshots and optional OS supervision](../../TODO.md#workflow-and-run-viewer)
   remain later work.
 - Standard-library node bodies in Rust, with a planned rekey (decision 8). This also makes their outputs the same bytes on every platform. Today Pillow's Linux x86-64 build writes other PNG bytes than its macOS arm64 build for some pictures, so a cache filled on one platform misses on the other for every paid call downstream of a std picture output.
 

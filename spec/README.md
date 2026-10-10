@@ -10,6 +10,7 @@ These documents define FX independently of any implementation. The Rust engine, 
 | [store.md](store.md) | The cache layout and its records |
 | [observation.md](observation.md) | Run-observation v1: consistent snapshots, bounded events, cursors and errors |
 | [service.md](service.md) | Project initialization, local service lifecycle, stable run/plan URLs and standalone inspection |
+| [layout.md](layout.md) | Canvas layout: the automatic grid and decks (Ship A, in source, unreleased) and the optional `<workflow id>.layout.json` file (Ship B, not implemented) |
 | [control.md](control.md) | Local run control: exact invocation targeting, cancellation acceptance, verified local completion and force boundaries |
 | [sdk.md](sdk.md) | SDK user jobs: named execution/resume, pinned saved records and independent observation |
 | [protocol.md](protocol.md) | The node protocol between the engine and a node host |

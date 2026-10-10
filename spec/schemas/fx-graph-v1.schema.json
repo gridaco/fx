@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:grida-fx:schema:fx-graph-v1",
   "title": "FX expanded graph (fx-graph-v1)",
-  "description": "Every step instance of a workflow with its type, values, routes, wiring, identity, state and price, and each node type's identity and source digests (`types`). `grida-fx expand` prints it, with `problems`; a run folder keeps it as plan.json (store.md \u00a78), with `plan`, `steps`, `inputs`, `view_origins` and `takes_file`, and `stand_in` for a stand-in run. Optional ports and bindings preserve named connection metadata for readers without changing identity.",
+  "description": "Every step instance of a workflow with its type, values, routes, wiring, identity, state and price, and each node type's identity and source digests (`types`). `grida-fx expand` prints it, with `problems`; a run folder keeps it as plan.json (store.md \u00a78), with `plan`, `steps`, `inputs`, `view_origins` and `takes_file`, and `stand_in` for a stand-in run. A plan a viewer serves (`plan --open`, `plan --standalone`, `view` of a workflow) adds `steps` and `takes_file`. Optional ports and bindings preserve named connection metadata for readers without changing identity.",
   "type": "object",
   "required": [
     "kind",
@@ -47,7 +47,7 @@
       "pattern": "^[0-9a-f]{64}$"
     },
     "steps": {
-      "description": "Each declared step, by its path, as a reader sees it.",
+      "description": "Each declared step, by its declaration path, as a reader sees it.",
       "type": "object",
       "additionalProperties": {
         "type": "object",
@@ -76,6 +76,11 @@
               "boolean",
               "string"
             ]
+          },
+          "order": {
+            "description": "The step's position, from 0, in a pre-order walk of the workflow's declarations: a group before its steps, each level in authored order. Readers order steps by it, since an object keeps no member order. Absent in documents written before it existed.",
+            "type": "integer",
+            "minimum": 0
           }
         }
       }
@@ -332,6 +337,10 @@
           "path": {
             "type": "string"
           },
+          "step": {
+            "description": "The declared step's path, without repeat keys: `entity.draw` for `entity['ada'].draw`. Absent in documents written before it existed.",
+            "type": "string"
+          },
           "max": {
             "type": "integer",
             "minimum": 1
@@ -343,6 +352,14 @@
           "high_usd": {
             "type": "number",
             "minimum": 0
+          },
+          "waiting_on": {
+            "description": "The ids (identity.md \u00a711) of the instances whose results its list needs, sorted and distinct. Absent in documents written before it existed.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
           }
         }
       }

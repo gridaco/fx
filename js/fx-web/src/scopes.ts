@@ -152,15 +152,16 @@ export function projectScopes(view: GraphDocument | ViewerRun, flat: CanvasGraph
     ...(node.ports ? { ports: { inputs: [...node.ports.inputs], outputs: [...node.ports.outputs], settings: [...node.ports.settings] } } : {}),
   }));
   const sourceNodes = new Map((plan ? view.instances : view.nodes).map((node) => [node.id, node]));
+  const descendants = (scope: WorkflowScope) => allNodes.filter((node) => ancestors(parents.get(node.id) ?? null).some((ancestor) => ancestor.id === scope.id));
   for (const scope of workflowScopes) {
-    const children = allNodes.filter((node) => ancestors(parents.get(node.id) ?? null).some((ancestor) => ancestor.id === scope.id));
+    const children = descendants(scope);
     const failed = children.filter((node) => node.state === "failed");
     const errors = children.filter((node) => node.state === "failed" || node.state === "blocked").flatMap((node) => {
       const source = sourceNodes.get(node.source_id);
       const message = source && ("error" in source ? source.error : source.reason);
       return message ? [{ id: node.source_id, title: node.title, message }] : [];
     });
-    nodes.push({ id: scope.id, source_id: scope.id, kind: "workflow", scope_id: scope.id, path: scope.path,
+    nodes.push({ id: scope.id, source_id: scope.id, kind: "workflow", scope_id: scope.id, path: scope.path, address: scope.step, take: scope.take, key: scope.path,
       title: scope.title || scope.path, subtitle: scope.source ?? scope.path,
       state: scopeState(children.map((node) => node.state), plan), pending: false,
       child_count: children.length, failure_count: failed.length, ...(errors.length ? { errors } : {}), ports: scopePorts(scope) });
@@ -170,8 +171,8 @@ export function projectScopes(view: GraphDocument | ViewerRun, flat: CanvasGraph
   if (active !== null) {
     const scope = byId.get(active)!;
     const ports = scopePorts(scope);
-    if (ports.inputs.length) nodes.unshift({ id: inputId!, source_id: active, kind: "boundary", scope_id: active, title: "Workflow inputs", subtitle: scope.title, state: "interface", pending: false, ports: { inputs: [], outputs: ports.inputs, settings: [] } });
-    if (ports.outputs.length) nodes.push({ id: outputId!, source_id: active, kind: "boundary", scope_id: active, title: "Workflow outputs", subtitle: scope.title, state: "interface", pending: false, ports: { inputs: ports.outputs, outputs: [], settings: [] } });
+    if (ports.inputs.length) nodes.unshift({ id: inputId!, source_id: active, kind: "boundary", side: "input", scope_id: active, title: "Workflow inputs", subtitle: scope.title, state: "interface", pending: false, ports: { inputs: [], outputs: ports.inputs, settings: [] } });
+    if (ports.outputs.length) nodes.push({ id: outputId!, source_id: active, kind: "boundary", side: "output", scope_id: active, title: "Workflow outputs", subtitle: scope.title, state: "interface", pending: false, ports: { inputs: ports.outputs, outputs: [], settings: [] } });
   }
   const displayed = new Map(nodes.map((node) => [node.id, node]));
   const interfaceBindings = [
@@ -232,7 +233,8 @@ export function projectScopes(view: GraphDocument | ViewerRun, flat: CanvasGraph
   for (const scope of workflowScopes) for (const binding of scope.input_bindings) bind(binding, scope.id, scope.id, "input");
   if (active !== null && outputId !== null) for (const binding of byId.get(active)!.output_bindings) bind(binding, outputId, active, "output");
   const frames = visibleScopes.filter((scope) => scope.kind === "group").map((scope) => ({
-    id: scope.id, title: scope.title || scope.path,
+    id: scope.id, title: scope.title || scope.path, address: scope.step, take: scope.take, key: scope.path,
+    state: scopeState(descendants(scope).map((node) => node.state), plan),
     nodes: nodes.filter((node) => (node.kind === "workflow" ? byId.get(node.scope_id!)?.parent : parents.get(node.id)) === scope.id).map((node) => node.id),
     parent: scope.parent !== active && byId.get(scope.parent ?? "")?.kind === "group" ? scope.parent : null,
   }));

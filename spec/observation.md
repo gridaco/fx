@@ -117,7 +117,9 @@ the usual stderr diagnostics and exit 2. There is no implicit follow loop.
 A standalone loopback host for a run provides the same reader through:
 
 - `GET /api/snapshot`: consistent snapshot, plus an additive `view` field containing
-  the existing `fx-viewer-run-v1` projection of exactly that prefix.
+  the existing `fx-viewer-run-v1` projection of exactly that prefix, and (in source,
+  unreleased) an additive `layout` field containing its `fx-layout-report-v1` canvas layout
+  report ([layout.md](layout.md) §6.11).
 - `GET /api/events?after=CURSOR&limit=256`: bounded events strictly after the cursor.
   Omit `after` to replay from the beginning.
 

@@ -55,6 +55,23 @@ describe("plan boundary and graph projection", () => {
     input.types = { "./nodes.py#transform": { identity: `source:${digest}`, source } };
     expect(() => parseGraph(input)).toThrow("does not match");
   });
+  test("admits declaration order and pending steps, and still reads plans without them", () => {
+    const input = graph();
+    input.steps = { read: { title: null, order: 0 }, change: { uses: "./nodes.py#transform", order: 1 }, items: { order: 2 } };
+    input.pending = [{ path: "items", step: "items", max: 4, phase: 2, high_usd: 0, waiting_on: ["read#1"] }];
+    expect(parseGraph(input)).toEqual(input);
+    expect(parseGraph(graph())).toEqual(graph());
+    for (const order of [-1, 1.5, "1", null]) {
+      const refused = graph() as unknown as Record<string, any>;
+      refused.steps = { read: { order } };
+      expect(() => parseGraph(refused)).toThrow("does not match");
+    }
+    for (const changes of [{ step: 3 }, { waiting_on: ["read#1", "read#1"] }, { waiting_on: "read#1" }, { scope: "items" }]) {
+      const refused = graph() as unknown as Record<string, any>;
+      refused.pending = [{ ...refused.pending[0], ...changes }];
+      expect(() => parseGraph(refused)).toThrow("does not match");
+    }
+  });
   test("parameter names are not interpreted as value markers", () => {
     const input = graph();
     input.instances[0].with = { pending: [1, 2, 3] };

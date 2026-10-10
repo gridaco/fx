@@ -962,3 +962,58 @@ fn run_projection_keeps_legacy_basename_for_missing_or_invalid_initial_names() {
         );
     }
 }
+
+async fn layout_of(app: Router) -> Value {
+    let response = app
+        .oneshot(Fixture::request("/api/layout").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+    assert!(response.headers().get(header::ETAG).is_none());
+    let report: Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    let schema: Value = serde_json::from_str(include_str!(
+        "../../../spec/schemas/fx-layout-report-v1.schema.json"
+    ))
+    .unwrap();
+    assert!(
+        jsonschema::validator_for(&schema)
+            .unwrap()
+            .is_valid(&report)
+    );
+    report
+}
+
+#[tokio::test]
+async fn the_layout_route_serves_automatic_cells_for_a_plan_and_a_run() {
+    let app = router(AppState {
+        source: plan_source(static_plan()).unwrap(),
+        authority: "127.0.0.1:43123".into(),
+        artifact_prefix: String::new(),
+    });
+    let report = layout_of(app).await;
+    assert_eq!(report["state"], "none");
+    assert_eq!(report["cursor"], Value::Null);
+    assert_eq!(report["cells"]["step_0"]["column"], 0);
+    assert_eq!(report["cells"]["future_items"]["source"], "automatic");
+
+    let fixture = Fixture::new("image/png");
+    let report = layout_of(fixture.app()).await;
+    assert!(report["cursor"].is_string());
+    assert!(!report["cells"].as_object().unwrap().is_empty());
+    // A run's snapshot carries the report of the same prefix.
+    let response = fixture
+        .app()
+        .oneshot(
+            Fixture::request("/api/snapshot")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let captured: Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(captured["layout"], report);
+    assert_eq!(captured["layout"]["cursor"], captured["cursor"]);
+}

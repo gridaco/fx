@@ -66,9 +66,14 @@ pub enum Event {
     CancelRequested {
         source: crate::run_control::CancelSource,
     },
+    /// The display snapshot of the current expansion (spec/store.md §8): its scopes, each
+    /// instance's interface bindings, its instances other than absent ones (`{id, step, take,
+    /// key}`, in expansion order) and its pending repeats.
     ScopesUpdated {
         scopes: Value,
         node_interface_bindings: Value,
+        instances: Value,
+        pending: Value,
     },
     RunStarted {
         workflow: String,
@@ -250,9 +255,13 @@ impl Event {
             Event::ScopesUpdated {
                 scopes,
                 node_interface_bindings,
+                instances,
+                pending,
             } => {
                 fields.put("scopes", scopes.clone());
                 fields.put("node_interface_bindings", node_interface_bindings.clone());
+                fields.put("instances", instances.clone());
+                fields.put("pending", pending.clone());
             }
             Event::RunStarted {
                 workflow,

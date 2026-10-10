@@ -1,122 +1,27 @@
-import dagre from "@dagrejs/dagre";
-import type { CanvasConnection, CanvasFrame, CanvasGraph, CanvasPort, CanvasStep } from "./graph";
+import type { CanvasGraph, LayoutReport } from "./graph";
 import { CanvasViewport } from "./controller";
 import { displayPortName } from "./ports";
+import { canvasEdgePath, layoutGraph, type CanvasLayout, type PlacedDeck, type PositionedFrame, type PositionedNode } from "./layout";
+import { deckBadge, expandedColumns, restingFront, type DeckMember } from "./deck";
+import { element, nodeCard, short } from "./card";
 
-export interface PositionedNode extends CanvasStep { x: number; y: number; width: number; height: number }
-export interface PositionedEdge extends CanvasConnection { points: { x: number; y: number }[] }
-export interface PositionedFrame extends CanvasFrame { x: number; y: number; width: number; height: number }
-export interface CanvasLayout { nodes: PositionedNode[]; edges: PositionedEdge[]; frames?: PositionedFrame[]; width: number; height: number }
+const EXPANDED_GAP = 32;
+/** §5.9: expanded decks fit the viewport down to card titles (13 px) about 11 px on screen. */
+const LEGIBLE_ZOOM = 11 / 13;
 
-const PORT_TOP = 93;
-const PORT_ROW = 34;
-
-/** Geometry depends on declarations, never on image loading or measured DOM text. */
-export function canvasNodeGeometry(node: CanvasStep) {
-  if (!node.ports) return { width: 250, height: node.preview ? 246 : 106, preview_y: 61, settings_y: 0 };
-  const rows = Math.max(node.ports.inputs.length, node.ports.outputs.length);
-  const settings_y = 83 + Math.max(1, rows) * PORT_ROW;
-  const preview_y = settings_y + (node.ports.settings.length ? 29 : 5);
-  return { width: 360, height: preview_y + (node.preview ? 140 + 16 : 0) + (node.kind === "workflow" ? 70 : 42), preview_y, settings_y };
+interface Deck {
+  placed: PlacedDeck;
+  title: string;
+  parent: SVGGElement;
+  /** Member cards; a frame card holds its nodes' cards. */
+  cards: SVGGElement[];
+  boxes: { x: number; y: number; width: number; height: number }[];
+  members: DeckMember[];
+  badge: SVGGElement;
 }
-export function canvasNodeSize(node: CanvasStep) {
-  const { width, height } = canvasNodeGeometry(node);
-  return { width, height };
-}
+interface OpenDeck { deck: Deck; veil: SVGRectElement; camera: ReturnType<CanvasViewport["getSnapshot"]> }
 
-/** A named socket's position; unknown names have no invented attachment point. */
-export function canvasPortAnchor(node: PositionedNode, direction: "input" | "output", name: string, kind?: CanvasPort["kind"]) {
-  const ports = direction === "input" ? node.ports?.inputs : node.ports?.outputs;
-  const index = ports?.findIndex((port) => port.name === name && (!kind || port.kind === kind)) ?? -1;
-  if (index < 0) return undefined;
-  return { x: node.x + (direction === "input" ? 0 : node.width), y: node.y + PORT_TOP + index * PORT_ROW };
-}
-
-export function layoutGraph(graph: CanvasGraph): CanvasLayout {
-  // Dagre places node pairs; socket routing below preserves every original connection.
-  // Its multigraph intersection pass fails on valid fan-out/join port topologies.
-  const layout = new dagre.graphlib.Graph({ compound: Boolean(graph.frames?.length) }).setGraph({ rankdir: "LR", nodesep: 42, ranksep: 100, marginx: 20, marginy: 20 }).setDefaultEdgeLabel(() => ({}));
-  const parallel = new Map<string, string[]>();
-  for (const frame of graph.frames ?? []) layout.setNode(frame.id, {});
-  for (const node of graph.nodes) layout.setNode(node.id, canvasNodeSize(node));
-  for (const frame of graph.frames ?? []) {
-    if (frame.parent) layout.setParent(frame.id, frame.parent);
-    for (const id of frame.nodes) layout.setParent(id, frame.id);
-  }
-  for (const edge of graph.edges) {
-    layout.setEdge(edge.source, edge.target);
-    const pair = JSON.stringify([edge.source, edge.target]);
-    const ids = parallel.get(pair) ?? [];
-    ids.push(edge.id);
-    parallel.set(pair, ids);
-  }
-  dagre.layout(layout);
-  const nodes: PositionedNode[] = graph.nodes.map((node) => {
-    const placed = layout.node(node.id);
-    return { ...node, x: placed.x - placed.width / 2, y: placed.y - placed.height / 2, width: placed.width, height: placed.height };
-  });
-  const byId = new Map(nodes.map((node) => [node.id, node]));
-  return {
-    nodes,
-    ...(graph.frames?.length ? { frames: graph.frames.map((frame) => {
-      const placed = layout.node(frame.id);
-      return { ...frame, x: placed.x - placed.width / 2, y: placed.y - placed.height / 2, width: placed.width, height: placed.height };
-    }) } : {}),
-    edges: graph.edges.map((edge) => {
-      const points: { x: number; y: number }[] = layout.edge(edge.source, edge.target).points ?? [];
-      const siblings = parallel.get(JSON.stringify([edge.source, edge.target]))!;
-      const lane = ((siblings.indexOf(edge.id) + 1) / (siblings.length + 1) - 0.5) * 24;
-      const source = byId.get(edge.source)!;
-      const target = byId.get(edge.target)!;
-      const from = edge.kind === "data" && edge.source_port !== undefined
-        ? canvasPortAnchor(source, "output", edge.source_port, edge.source_kind === "fact" ? "fact" : undefined)
-        : { x: source.x + source.width, y: source.y + 27 };
-      const to = edge.kind === "data" && edge.target_port
-        ? canvasPortAnchor(target, "input", edge.target_port)
-        : { x: target.x, y: target.y + 27 };
-      if (!from || !to) throw new Error(`Connection ${edge.id} refers to a missing named port.`);
-      const corridor = points.slice(1, -1).map((point) => ({ x: point.x, y: point.y + lane }));
-      return { ...edge, points: [from, { x: from.x + 16, y: from.y }, ...corridor, { x: to.x - 16, y: to.y }, to] };
-    }),
-    width: layout.graph().width ?? 0, height: layout.graph().height ?? 0,
-  };
-}
-
-/** Nearby sockets use horizontal tangents; longer routes retain Dagre's detours. */
-export function canvasEdgePath(points: PositionedEdge["points"]): string {
-  const route = points.filter((point, index) => !index || point.x !== points[index - 1].x || point.y !== points[index - 1].y);
-  if (!route.length) return "";
-  const from = route[0], to = route.at(-1)!;
-  const start = `M ${from.x} ${from.y}`;
-  // One interior Dagre waypoint connects adjacent ranks. Its center-based height
-  // need not lie between the actual sockets, so do not carry it into the curve.
-  if (points.length <= 5 && to.x > from.x) {
-    const reach = (to.x - from.x) / 2;
-    return `${start} C ${from.x + reach} ${from.y} ${to.x - reach} ${to.y} ${to.x} ${to.y}`;
-  }
-  let path = start;
-  for (let index = 1; index < route.length - 1; index++) {
-    const before = route[index - 1], corner = route[index], after = route[index + 1];
-    const incoming = Math.hypot(corner.x - before.x, corner.y - before.y);
-    const outgoing = Math.hypot(after.x - corner.x, after.y - corner.y);
-    const radius = Math.min(24, incoming / 2, outgoing / 2);
-    const entry = { x: corner.x + (before.x - corner.x) * radius / incoming, y: corner.y + (before.y - corner.y) * radius / incoming };
-    const exit = { x: corner.x + (after.x - corner.x) * radius / outgoing, y: corner.y + (after.y - corner.y) * radius / outgoing };
-    path += ` L ${entry.x} ${entry.y} Q ${corner.x} ${corner.y} ${exit.x} ${exit.y}`;
-  }
-  return route.length > 1 ? `${path} L ${to.x} ${to.y}` : path;
-}
-
-const SVG = "http://www.w3.org/2000/svg";
-function element<K extends keyof SVGElementTagNameMap>(tag: K, attributes: Record<string, string | number> = {}, text?: string): SVGElementTagNameMap[K] {
-  const node = document.createElementNS(SVG, tag);
-  for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, String(value));
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
-function short(text: string, limit: number) { return [...text].length > limit ? [...text].slice(0, limit - 1).join("") + "…" : text; }
-
-/** Imperative, read-only SVG surface. DOM listeners, selection and camera live here. */
+/** Imperative, read-only SVG surface. DOM listeners, selection, decks and camera live here. */
 export class CanvasController {
   private static nextId = 0;
   private readonly id = `fx-canvas-${++CanvasController.nextId}`;
@@ -124,9 +29,13 @@ export class CanvasController {
   private readonly content = element("g");
   private readonly viewport = new CanvasViewport();
   private readonly nodes = new Map<string, SVGGElement>();
+  private readonly frameCards = new Map<string, SVGGElement>();
   private readonly edges = new Map<string, { group: SVGGElement; source: string; target: string }>();
   private readonly incidentEdges = new Map<string, Set<string>>();
   private highlightedEdges = new Set<string>();
+  private decks: Deck[] = [];
+  private open: OpenDeck | null = null;
+  private hovered: { deck: number; card: number } | null = null;
   private viewportFrame: number | null = null;
   private readonly abort = new AbortController();
   private graphAbort = new AbortController();
@@ -134,9 +43,12 @@ export class CanvasController {
   private readonly toolbar = document.createElement("div");
   private readonly zoomLabel = document.createElement("span");
   private readonly empty = document.createElement("p");
-  private layout: CanvasLayout = { nodes: [], edges: [], width: 0, height: 0 };
+  private readonly deckBar = document.createElement("div");
+  private layout: CanvasLayout = { nodes: [], edges: [], frames: [], decks: [], width: 0, height: 0 };
+  private readonly canHover = window.matchMedia("(hover: hover)");
+  private readonly reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   private selected: string | null = null;
-  private drag: { pointer: number; x: number; y: number; startX: number; startY: number; moved: boolean; background: boolean } | null = null;
+  private drag: { pointer: number; x: number; y: number; startX: number; startY: number; moved: boolean; background: boolean; veil: boolean } | null = null;
   private didFit = false;
   private scope: string | null = null;
   private readonly cameras = new Map<string | null, { viewport: ReturnType<CanvasViewport["getSnapshot"]>; didFit: boolean }>();
@@ -152,6 +64,7 @@ export class CanvasController {
     checker.append(element("rect", { width: 16, height: 16, fill: "#fafafa" }));
     checker.append(element("path", { d: "M0 0h8v8H0z M8 8h8v8H8z", fill: "#ededf0" }));
     defs.append(marker, checker);
+    this.content.style.transformOrigin = "0 0";
     this.svg.append(defs, this.content);
     this.toolbar.className = "fx-canvas-toolbar";
     const button = (label: string, text: string, action: () => void) => {
@@ -170,12 +83,25 @@ export class CanvasController {
     button("Fit workflow", "Fit", () => this.fit());
     this.empty.className = "fx-canvas-empty";
     this.empty.textContent = "No expanded steps in this plan.";
-    container.replaceChildren(this.svg, this.toolbar, this.empty);
+    this.deckBar.className = "fx-deck-bar";
+    this.deckBar.hidden = true;
+    container.replaceChildren(this.svg, this.toolbar, this.empty, this.deckBar);
     container.addEventListener("wheel", this.onWheel, { passive: false, signal: this.abort.signal });
     this.svg.addEventListener("pointerdown", this.onPointerDown, { signal: this.abort.signal });
     this.svg.addEventListener("pointermove", this.onPointerMove, { signal: this.abort.signal });
     this.svg.addEventListener("pointerup", this.onPointerUp, { signal: this.abort.signal });
     this.svg.addEventListener("pointercancel", this.onPointerUp, { signal: this.abort.signal });
+    this.svg.addEventListener("pointerleave", () => this.hover(null), { signal: this.abort.signal });
+    // A deck card is the expand target: the capture phase runs before a card's own selection.
+    this.svg.addEventListener("click", this.onDeckClick, { capture: true, signal: this.abort.signal });
+    // Raising a card moves focus out of the canvas, so Esc listens on the document while open.
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || !this.open || event.defaultPrevented) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable]")) return;
+      event.preventDefault();
+      this.collapse();
+    }, { capture: true, signal: this.abort.signal });
     container.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && this.scope !== null && !event.defaultPrevented) { event.preventDefault(); this.onBack(); }
     }, { signal: this.abort.signal });
@@ -183,10 +109,13 @@ export class CanvasController {
     this.resize.observe(container);
     this.applyViewport();
   }
-  setGraph(graph: CanvasGraph, scope: string | null = null) {
+
+  setGraph(graph: CanvasGraph, scope: string | null = null, report: LayoutReport | null = null) {
     const navigating = scope !== this.scope;
     const restoringFocus = this.content.contains(document.activeElement);
+    const reopen = navigating || !this.open ? null : { id: this.open.deck.placed.id, camera: this.open.camera };
     this.cancelDrag();
+    this.collapse(true, !navigating);
     if (navigating) {
       this.cameras.set(this.scope, { viewport: this.viewport.getSnapshot(), didFit: this.didFit });
       this.scope = scope;
@@ -196,39 +125,62 @@ export class CanvasController {
     }
     this.graphAbort.abort();
     this.graphAbort = new AbortController();
-    this.layout = layoutGraph(graph);
-    const fragment = document.createDocumentFragment();
+    this.layout = layoutGraph(graph, report);
     this.nodes.clear();
+    this.frameCards.clear();
     this.edges.clear();
     this.incidentEdges.clear();
     this.highlightedEdges.clear();
-    const frames = this.layout.frames ?? [];
-    const frameById = new Map(frames.map((frame) => [frame.id, frame]));
-    const depth = (frame: PositionedFrame) => {
-      let count = 0, parent = frame.parent;
-      while (parent && frameById.has(parent) && count < frames.length) { count++; parent = frameById.get(parent)!.parent; }
-      return count;
-    };
-    for (const frame of [...frames].sort((a, b) => depth(a) - depth(b))) {
-      const group = element("g", { class: "fx-canvas-frame", "data-frame-id": frame.id, "aria-label": frame.title });
-      group.append(element("rect", { x: frame.x, y: frame.y, width: frame.width, height: frame.height, rx: 12 }));
-      group.append(element("text", { x: frame.x + 14, y: frame.y + 16 }, short(frame.title, 64)));
-      fragment.append(group);
+    this.hovered = null;
+    this.render();
+    this.empty.hidden = this.layout.nodes.length > 0;
+    const selected = this.selected;
+    this.selected = null;
+    this.setSelection(selected);
+    if (!this.didFit) this.fit();
+    else this.applyViewport();
+    // A live update keeps an open deck open, and closing it still returns to the camera before it opened.
+    if (reopen !== null) {
+      const index = this.decks.findIndex((deck) => deck.placed.id === reopen.id);
+      if (index >= 0) { this.expand(index, true); this.open!.camera = reopen.camera; }
+      // A deck that vanished or dropped below two members stays closed and gives the camera back.
+      else this.animateCamera(() => this.viewport.restore(reopen.camera));
     }
+    if (navigating || restoringFocus) this.container.focus({ preventScroll: true });
+  }
+
+  /** Frames nest as groups, so a frame card carries its steps and inner connections. */
+  private render() {
+    const signal = this.graphAbort.signal;
+    const frames = this.layout.frames;
+    const frameOf = new Map<string, string>();
+    for (const frame of frames) for (const id of frame.nodes) frameOf.set(id, frame.id);
+    const parentFrame = new Map(frames.map((frame) => [frame.id, frame.parent ?? null]));
+    // A frame and its ancestors, innermost first, ending at the root.
+    const chain = (id: string | null) => {
+      const ids: (string | null)[] = [];
+      for (let at = id; at !== null && !ids.includes(at); at = parentFrame.get(at) ?? null) ids.push(at);
+      ids.push(null);
+      return ids;
+    };
+    const layers = new Map<string | null, { edges: SVGGElement; cards: SVGGElement }>();
+    const layer = (frame: string | null) => layers.get(frame)!;
+    const rootEdges = element("g", { class: "fx-canvas-edges" }), rootCards = element("g", { class: "fx-canvas-cards" });
+    layers.set(null, { edges: rootEdges, cards: rootCards });
+    for (const frame of frames) {
+      const card = this.frameCard(frame);
+      const edges = element("g", { class: "fx-canvas-edges" }), cards = element("g", { class: "fx-canvas-cards" });
+      card.append(edges, cards);
+      layers.set(frame.id, { edges, cards });
+      this.frameCards.set(frame.id, card);
+    }
+    for (const frame of frames) layer(frame.parent && layers.has(frame.parent) ? frame.parent : null).cards.append(this.frameCards.get(frame.id)!);
     for (const edge of this.layout.edges) {
-      const description = edge.kind === "data"
-        ? `${displayPortName(edge.source_port!)} → ${edge.target_port}${edge.source_kind === "fact" ? " (fact)" : ""}`
-        : `${edge.kind === "control" ? "Control" : "Dependency"}: ${edge.kinds.join(", ")}`;
-      const d = canvasEdgePath(edge.points);
-      const group = element("g", { class: "fx-canvas-connection", "data-connection-id": edge.id, "data-source-node": edge.source, "data-target-node": edge.target });
-      const path = element("path", { d, class: `fx-canvas-edge fx-canvas-edge-${edge.kind ?? "dependency"}`, "data-edge-id": edge.id, "data-source-port": edge.source_port ?? "", "data-target-port": edge.target_port ?? "", "marker-end": `url(#${this.id}-arrow)`, role: "img", "aria-label": description });
-      path.append(element("title", {}, description));
-      const hit = element("path", { d, class: "fx-canvas-edge-hit", "aria-hidden": "true" });
-      hit.append(element("title", {}, description));
-      group.append(path, hit);
-      group.addEventListener("pointerenter", () => this.highlightConnections(null, edge.id), { signal: this.graphAbort.signal });
-      group.addEventListener("pointerleave", () => this.highlightConnections(null), { signal: this.graphAbort.signal });
-      fragment.append(group);
+      const from = chain(frameOf.get(edge.source) ?? null), to = chain(frameOf.get(edge.target) ?? null);
+      let common: string | null = null;
+      for (const id of from) if (to.includes(id)) { common = id; break; }
+      const group = this.edgeElement(edge);
+      layer(common).edges.append(group);
       this.edges.set(edge.id, { group, source: edge.source, target: edge.target });
       for (const id of [edge.source, edge.target]) {
         let incident = this.incidentEdges.get(id);
@@ -237,95 +189,211 @@ export class CanvasController {
       }
     }
     for (const [index, node] of this.layout.nodes.entries()) {
-      const preview = node.preview;
-      const portsLabel = node.ports ? `, inputs: ${node.ports.inputs.map((port) => `${displayPortName(port.name)} (${port.type}, ${port.kind})`).join(", ") || "none"}, outputs: ${node.ports.outputs.map((port) => `${displayPortName(port.name)} (${port.type}, ${port.kind})`).join(", ") || "none"}` : node.pending ? "" : ", port metadata not recorded";
-      const scopeLabel = node.kind === "workflow" ? `, imported workflow, ${node.child_count ?? 0} steps, ${node.failure_count ?? 0} failed` : "";
-      const label = `${node.title}, ${node.state}${scopeLabel}${portsLabel}${preview ? `, ${preview.label}, ${preview.count} image ${preview.count === 1 ? "output" : "outputs"}` : ""}`;
-      const group = element("g", { transform: `translate(${node.x},${node.y})`, class: `fx-canvas-node${node.kind === "workflow" ? " fx-canvas-workflow" : node.kind === "boundary" ? " fx-canvas-boundary" : ""}`, role: node.kind === "workflow" ? "group" : "button", tabindex: 0, "data-node-id": node.id, "data-state": node.state, "aria-label": label, ...(node.kind === "workflow" ? { "aria-current": "false" } : { "aria-pressed": "false" }) });
-      group.append(element("title", {}, `${node.title}\n${node.subtitle}\n${node.source_id}`));
-      group.append(element("rect", { width: node.width, height: node.height, rx: 11, class: node.pending ? "fx-canvas-node-box fx-canvas-pending" : "fx-canvas-node-box" }));
-      group.append(element("text", { x: 16, y: 27, class: "fx-canvas-node-title" }, short(node.title, node.ports ? 42 : 28)));
-      group.append(element("text", { x: 16, y: 47, class: "fx-canvas-node-type" }, short(node.kind === "workflow" ? node.path ?? node.subtitle : node.subtitle, node.ports ? 51 : 34)));
-      if (node.ports) {
-        group.append(element("line", { x1: 0, y1: 59, x2: node.width, y2: 59, class: "fx-canvas-node-divider" }));
-        group.append(element("text", { x: 16, y: 76, class: "fx-canvas-port-heading" }, "INPUTS"));
-        group.append(element("text", { x: node.width - 16, y: 76, "text-anchor": "end", class: "fx-canvas-port-heading" }, "OUTPUTS"));
-        for (const direction of ["input", "output"] as const) {
-          const ports = direction === "input" ? node.ports.inputs : node.ports.outputs;
-          const x = direction === "input" ? 0 : node.width;
-          const textX = direction === "input" ? 16 : node.width - 16;
-          for (const [row, port] of ports.entries()) {
-            const y = PORT_TOP + row * PORT_ROW;
-            const socket = element("g", { class: `fx-canvas-port fx-canvas-port-${port.kind}`, "data-port-name": port.name, "data-port-direction": direction, "data-port-kind": port.kind });
-            socket.append(element("title", {}, `${direction}: ${displayPortName(port.name)} · ${port.type} · ${port.kind}`));
-            socket.append(port.kind === "artifact" ? element("circle", { cx: x, cy: y, r: 4.5 })
-              : port.kind === "fact" ? element("path", { d: `M${x} ${y - 5}l5 5l-5 5l-5 -5z` })
-              : element("rect", { x: x - 4, y: y - 4, width: 8, height: 8, rx: 1 }));
-            socket.append(element("text", { x: textX, y: y + 3, "text-anchor": direction === "input" ? "start" : "end", class: "fx-canvas-port-name" }, short(displayPortName(port.name), 22)));
-            socket.append(element("text", { x: textX, y: y + 16, "text-anchor": direction === "input" ? "start" : "end", class: "fx-canvas-port-type" }, short(`${port.kind === "parameter" ? "param · " : ""}${port.type}`, 25)));
-            group.append(socket);
-          }
-          if (!ports.length) group.append(element("text", { x: textX, y: PORT_TOP + 3, "text-anchor": direction === "input" ? "start" : "end", class: "fx-canvas-port-type" }, "None"));
-        }
-        if (node.ports.settings.length) {
-          const settings = element("text", { x: 16, y: canvasNodeGeometry(node).settings_y + 10, class: "fx-canvas-settings" }, short(`Settings · ${node.ports.settings.map((setting) => setting.name).join(", ")}`, 52));
-          settings.append(element("title", {}, node.ports.settings.map((setting) => `${setting.name}: ${setting.type}`).join("\n")));
-          group.append(settings);
-        }
-      } else if (!node.pending && !preview) {
-        group.append(element("text", { x: 16, y: 64, class: "fx-canvas-port-type" }, "Port metadata not recorded"));
-      }
-      if (preview) {
-        const frame = { x: 16, y: canvasNodeGeometry(node).preview_y, width: node.width - 32, height: 140 };
-        const clipId = `${this.id}-preview-${index}`;
-        const clip = element("clipPath", { id: clipId });
-        clip.append(element("rect", { ...frame, rx: 6 }));
-        group.append(clip, element("rect", { ...frame, rx: 6, fill: `url(#${this.id}-checker)` }));
-        const image = element("image", { ...frame, preserveAspectRatio: "xMidYMid meet", "clip-path": `url(#${clipId})`, role: "img", "aria-label": preview.label, class: "fx-canvas-node-image" });
-        image.append(element("title", {}, preview.label));
-        const fallback = element("text", { x: node.width / 2, y: frame.y + frame.height / 2, "text-anchor": "middle", "dominant-baseline": "middle", class: "fx-canvas-image-error", visibility: "hidden" }, "Image unavailable");
-        image.addEventListener("error", () => {
-          image.setAttribute("visibility", "hidden");
-          fallback.setAttribute("visibility", "visible");
-          group.setAttribute("aria-label", `${node.title}, ${node.state}${portsLabel}, Image unavailable: ${preview.label}`);
-        }, { signal: this.graphAbort.signal });
-        image.setAttribute("href", preview.url);
-        group.append(image, element("rect", { ...frame, rx: 6, class: "fx-canvas-image-border" }), fallback);
-        group.append(element("text", { x: node.width - 16, y: node.height - 22, "text-anchor": "end", class: "fx-canvas-image-count" }, `${preview.count} image ${preview.count === 1 ? "output" : "outputs"}`));
-      }
-      if (node.state === "running") group.append(element("circle", { cx: 21, cy: node.height - 26, r: 3.5, class: "fx-canvas-running-indicator", "aria-hidden": "true" }));
-      group.append(element("text", { x: node.state === "running" ? 32 : 16, y: node.height - 22, class: "fx-canvas-node-state" }, node.state));
-      if (node.kind === "workflow" && node.scope_id) {
-        group.append(element("text", { x: 16, y: node.height - 48, class: (node.failure_count ?? 0) > 0 ? "fx-canvas-workflow-failure" : "fx-canvas-workflow-count" }, `${node.child_count ?? 0} steps${node.failure_count ? ` · ${node.failure_count} failed` : ""}`));
-        const open = element("g", { class: "fx-canvas-open-workflow", role: "button", tabindex: 0, "aria-label": `Open workflow ${node.title}` });
-        open.append(element("rect", { x: node.width - 144, y: node.height - 37, width: 128, height: 24, rx: 5 }));
-        open.append(element("text", { x: node.width - 80, y: node.height - 21, "text-anchor": "middle" }, "Open workflow →"));
-        const enter = () => this.onOpenScope(node.scope_id!);
-        open.addEventListener("click", (event) => { event.stopPropagation(); enter(); }, { signal: this.graphAbort.signal });
-        open.addEventListener("keydown", (event) => {
-          if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); enter(); }
-        }, { signal: this.graphAbort.signal });
-        group.addEventListener("dblclick", enter, { signal: this.graphAbort.signal });
-        group.append(open);
-      }
-      group.addEventListener("pointerenter", () => this.highlightConnections(node.id), { signal: this.graphAbort.signal });
-      group.addEventListener("pointerleave", () => this.highlightConnections(null), { signal: this.graphAbort.signal });
-      group.addEventListener("click", () => this.onSelect(node.id), { signal: this.graphAbort.signal });
+      const group = nodeCard(node, this.id, index, signal, (scope) => this.onOpenScope(scope));
+      group.addEventListener("pointerenter", () => this.highlightConnections(node.id), { signal });
+      group.addEventListener("pointerleave", () => this.highlightConnections(null), { signal });
+      group.addEventListener("click", () => this.onSelect(node.id), { signal });
       group.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); this.onSelect(node.id); }
-      }, { signal: this.graphAbort.signal });
-      fragment.append(group);
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        const hit = this.cardAt(group);
+        if (hit && !this.open) this.expand(hit.deck);
+        else this.onSelect(node.id);
+      }, { signal });
+      layer(frameOf.get(node.id) ?? null).cards.append(group);
       this.nodes.set(node.id, group);
     }
-    this.content.replaceChildren(fragment);
-    this.empty.hidden = this.layout.nodes.length > 0;
-    const selected = this.selected;
-    this.selected = null;
-    this.setSelection(selected);
-    if (!this.didFit) this.fit();
-    else this.applyViewport();
-    if (navigating || restoringFocus) this.container.focus({ preventScroll: true });
+    const items = new Map<string, PositionedNode | PositionedFrame>([...this.layout.nodes, ...frames].map((item) => [item.id, item]));
+    this.decks = this.layout.decks.map((placed, index) => this.deck(placed, index, layer(placed.frame).cards, items));
+    this.decks.forEach((_, index) => this.restDeck(index));
+    this.content.replaceChildren(rootEdges, rootCards);
   }
+
+  private frameCard(frame: PositionedFrame) {
+    const group = element("g", { class: "fx-canvas-frame", "data-frame-id": frame.id, "aria-label": frame.title });
+    group.append(element("rect", { x: frame.x, y: frame.y, width: frame.width, height: frame.height, rx: 12, class: "fx-canvas-frame-box" }));
+    group.append(element("text", { x: frame.x + 14, y: frame.y + 16 }, short(frame.title, 64)));
+    return group;
+  }
+
+  private edgeElement(edge: CanvasLayout["edges"][number]) {
+    const description = edge.kind === "data"
+      ? `${displayPortName(edge.source_port!)} → ${edge.target_port}${edge.source_kind === "fact" ? " (fact)" : ""}`
+      : `${edge.kind === "control" ? "Control" : "Dependency"}: ${edge.kinds.join(", ")}`;
+    const d = canvasEdgePath(edge.points);
+    const group = element("g", { class: "fx-canvas-connection", "data-connection-id": edge.id, "data-source-node": edge.source, "data-target-node": edge.target });
+    const path = element("path", { d, class: `fx-canvas-edge fx-canvas-edge-${edge.kind ?? "dependency"}`, "data-edge-id": edge.id, "data-source-port": edge.source_port ?? "", "data-target-port": edge.target_port ?? "", "marker-end": `url(#${this.id}-arrow)`, role: "img", "aria-label": description });
+    path.append(element("title", {}, description));
+    const hit = element("path", { d, class: "fx-canvas-edge-hit", "aria-hidden": "true" });
+    hit.append(element("title", {}, description));
+    group.append(path, hit);
+    group.addEventListener("pointerenter", () => this.highlightConnections(null, edge.id), { signal: this.graphAbort.signal });
+    group.addEventListener("pointerleave", () => this.highlightConnections(null), { signal: this.graphAbort.signal });
+    return group;
+  }
+
+  /** §5.3: the cards of one slot in one frame, a count badge above them. */
+  private deck(placed: PlacedDeck, index: number, parent: SVGGElement, items: Map<string, PositionedNode | PositionedFrame>): Deck {
+    const cards: SVGGElement[] = [];
+    const boxes: Deck["boxes"] = [];
+    for (const id of placed.members) {
+      const item = items.get(id)!;
+      boxes.push({ x: item.x, y: item.y, width: item.width, height: item.height });
+      const card = this.nodes.get(id) ?? this.frameCards.get(id)!;
+      card.classList.add("fx-deck-card");
+      card.dataset.deck = String(index);
+      card.dataset.deckCard = String(cards.length);
+      cards.push(card);
+    }
+    // §5.4 rule 4: a member that an instance outside the deck reads.
+    const inside = (id: string) => { const node = this.nodes.get(id); return node ? cards.findIndex((card) => card.contains(node)) : -1; };
+    const bound = new Set<number>();
+    for (const edge of this.edges.values()) {
+      const from = inside(edge.source);
+      if (from >= 0 && inside(edge.target) < 0) bound.add(from);
+    }
+    const members: DeckMember[] = placed.members.map((id, at) => {
+      const item = items.get(id)!;
+      return { id, state: item.state ?? "planned", key: item.key ?? null, take: item.take?.at(-1) ?? null, bound: bound.has(at) };
+    });
+    const title = items.get(placed.members[0])?.title ?? placed.address;
+    const badge = deckBadge(members);
+    const label = [badge.text, ...badge.detail].join(" · ");
+    const group = element("g", { class: `fx-deck-badge${badge.failed ? " has-failures" : ""}`, role: "button", tabindex: 0, "data-deck": index, "aria-label": `Expand ${title}, ${label}` });
+    const width = 16 + 7 * label.length;
+    group.append(element("rect", { x: placed.x, y: placed.y, width, height: 22, rx: 11 }));
+    group.append(element("text", { x: placed.x + 10, y: placed.y + 15, class: "fx-deck-badge-full" }, label));
+    group.append(element("text", { x: placed.x + 10, y: placed.y + 15, class: "fx-deck-badge-short" }, badge.short));
+    group.append(element("circle", { cx: placed.x + 11, cy: placed.y + 11, r: 5, class: "fx-deck-badge-dot" }));
+    group.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); this.expand(index); }
+    }, { signal: this.graphAbort.signal });
+    parent.append(group);
+    return { placed, title, parent, cards, boxes, members, badge: group };
+  }
+  /** The deck card that is or holds this node's card, or -1. */
+  private holding(deck: Deck, id: string) {
+    const node = this.nodes.get(id);
+    return node ? deck.cards.findIndex((card) => card.contains(node)) : -1;
+  }
+
+  /** §5.4: the resting front card goes last in its layer, the badge above it. Returns the front. */
+  private restDeck(index: number, front = restingFront(this.decks[index].members, this.selectedMember(index))) {
+    const deck = this.decks[index];
+    if (this.open?.deck === deck) return null;
+    const order = deck.cards.filter((_, card) => card !== front);
+    for (const card of [...order, deck.cards[front]]) deck.parent.append(card);
+    deck.parent.append(deck.badge);
+    // One tab stop per closed deck: its front card.
+    deck.cards.forEach((card, at) => { if (card.hasAttribute("tabindex")) card.setAttribute("tabindex", at === front ? "0" : "-1"); });
+    return deck.cards[front];
+  }
+  private selectedMember(index: number) {
+    if (this.selected === null) return null;
+    const deck = this.decks[index];
+    const at = this.holding(deck, this.selected);
+    return at >= 0 ? deck.members[at].id : null;
+  }
+
+  private cardAt(target: EventTarget | null): { deck: number; card: number } | null {
+    const card = (target as Element | null)?.closest?.<SVGGElement>(".fx-deck-card");
+    if (!card || card.dataset.deck === undefined) return null;
+    return { deck: Number(card.dataset.deck), card: Number(card.dataset.deckCard) };
+  }
+  /** Hover raises the card under the pointer; leaving it restores the resting card. */
+  private hover(target: { deck: number; card: number } | null) {
+    if (this.open || !this.canHover.matches) target = null;
+    const previous = this.hovered;
+    if (previous?.deck === target?.deck && previous?.card === target?.card) return;
+    this.hovered = target;
+    if (previous && previous.deck !== target?.deck) this.restDeck(previous.deck);
+    if (target) this.restDeck(target.deck, target.card);
+  }
+  private onDeckClick = (event: MouseEvent) => {
+    // A labelled control on a card does what it says (§5.7).
+    if ((event.target as Element).closest(".fx-canvas-open-workflow")) return;
+    const badge = (event.target as Element).closest<SVGGElement>(".fx-deck-badge");
+    const hit = badge ? { deck: Number(badge.dataset.deck), card: 0 } : this.cardAt(event.target);
+    if (!hit || this.open) return;
+    event.stopImmediatePropagation();
+    event.preventDefault();
+    this.expand(hit.deck);
+  };
+
+  private get motion() { return this.reducedMotion.matches ? 0 : 220; }
+
+  /** §5.7: the deck spreads into a grid in place over a veil; the camera fits the grid. */
+  private expand(index: number, instant = false) {
+    const deck = this.decks[index];
+    if (!deck || this.open) return;
+    this.hover(null);
+    const sizes = deck.boxes;
+    const card = { width: Math.max(...sizes.map((size) => size.width)), height: Math.max(...sizes.map((size) => size.height)) };
+    const bounds = this.container.getBoundingClientRect();
+    const columns = expandedColumns(sizes.length, card, bounds);
+    const origin = { x: deck.placed.x, y: deck.placed.y };
+    const veil = element("rect", { x: -1e6, y: -1e6, width: 2e6, height: 2e6, class: "fx-deck-veil" });
+    this.content.append(veil, ...deck.cards);
+    const camera = this.viewport.getSnapshot();
+    const duration = instant ? 0 : this.motion;
+    // Moved cards start their transition from where they rest.
+    this.content.getBoundingClientRect();
+    deck.cards.forEach((element, at) => {
+      if (element.hasAttribute("tabindex")) element.setAttribute("tabindex", "0");
+      const x = origin.x + (at % columns) * (card.width + EXPANDED_GAP), y = origin.y + Math.floor(at / columns) * (card.height + EXPANDED_GAP);
+      element.style.transition = `transform ${duration}ms ease`;
+      // A CSS transform replaces a node card's own transform attribute; a frame card has none.
+      element.style.transform = element.hasAttribute("transform") ? `translate(${x}px, ${y}px)` : `translate(${x - sizes[at].x}px, ${y - sizes[at].y}px)`;
+    });
+    veil.style.transition = `opacity ${duration}ms ease`;
+    veil.classList.add("is-shown");
+    this.open = { deck, veil, camera };
+    this.deckBar.replaceChildren();
+    const heading = document.createElement("span");
+    heading.textContent = `${deck.title} · ${deck.members.length} · Esc or click outside to close`;
+    const close = document.createElement("button");
+    close.type = "button";
+    close.textContent = "×";
+    close.setAttribute("aria-label", "Close");
+    close.addEventListener("click", () => this.collapse(), { signal: this.graphAbort.signal });
+    this.deckBar.append(heading, close);
+    this.deckBar.hidden = false;
+    if (instant) return;
+    const rows = Math.ceil(sizes.length / columns);
+    this.animateCamera(() => {
+      this.viewport.fit({ x: origin.x, y: origin.y, width: columns * (card.width + EXPANDED_GAP) - EXPANDED_GAP, height: rows * (card.height + EXPANDED_GAP) - EXPANDED_GAP }, bounds);
+      const fitted = this.viewport.getSnapshot();
+      if (fitted.zoom < LEGIBLE_ZOOM) this.viewport.restore({ zoom: LEGIBLE_ZOOM, x: 48 - origin.x * LEGIBLE_ZOOM, y: 64 - origin.y * LEGIBLE_ZOOM });
+    });
+  }
+
+  /**
+   * Slides the cards back; the selected member rests in front. A collapse the viewer asks for
+   * (Esc, ×, the veil) returns focus to the front card; an instant one, from an update or a
+   * selection, leaves focus where it is.
+   */
+  private collapse(instant = false, keepCamera = false) {
+    const open = this.open;
+    if (!open) return;
+    this.open = null;
+    this.deckBar.hidden = true;
+    const duration = instant ? 0 : this.motion;
+    for (const card of open.deck.cards) { card.style.transition = `transform ${duration}ms ease`; card.style.transform = ""; }
+    open.veil.style.transition = `opacity ${duration}ms ease`;
+    open.veil.classList.remove("is-shown");
+    if (!keepCamera) this.animateCamera(() => this.viewport.restore(open.camera), duration);
+    const settle = () => {
+      open.veil.remove();
+      for (const card of open.deck.cards) card.style.transition = "";
+      // An update may have replaced the decks meanwhile.
+      const index = this.decks.indexOf(open.deck);
+      const front = index >= 0 ? this.restDeck(index) : null;
+      if (!instant && front) (front.hasAttribute("tabindex") ? front : this.container).focus({ preventScroll: true });
+    };
+    if (duration === 0) settle();
+    else window.setTimeout(settle, duration);
+  }
+
   setSelection(id: string | null) {
     if (id === this.selected) return;
     const previous = this.selected;
@@ -337,9 +405,14 @@ export class CanvasController {
       group.classList.toggle("is-selected", key === id);
       group.setAttribute(group.getAttribute("role") === "button" ? "aria-pressed" : "aria-current", String(key === id));
     }
+    // Selecting from outside an open deck closes it; a closed deck raises the selected member.
+    if (this.open && id !== null && this.holding(this.open.deck, id) < 0) this.collapse(true);
+    this.decks.forEach((deck, index) => {
+      if ([previous, id].some((key) => key !== null && this.holding(deck, key) >= 0)) this.restDeck(index);
+    });
   }
   private highlightConnections(nodeId: string | null, edgeId: string | null = null) {
-    const next = this.drag ? new Set<string>() : nodeId !== null
+    const next = this.drag?.moved ? new Set<string>() : nodeId !== null
       ? this.incidentEdges.get(nodeId) ?? new Set<string>()
       : new Set(edgeId === null ? [] : [edgeId]);
     for (const id of this.highlightedEdges) if (!next.has(id)) this.edges.get(id)?.group.classList.remove("is-highlighted");
@@ -357,11 +430,21 @@ export class CanvasController {
     this.viewport.zoomAt(factor, { x: bounds.width / 2, y: bounds.height / 2 });
     this.applyViewport();
   }
+  /** A programmatic camera move glides; input moves stay immediate. */
+  private animateCamera(move: () => void, duration = this.motion) {
+    this.content.style.transition = duration ? `transform ${duration}ms ease` : "";
+    move();
+    this.applyViewport();
+    if (duration) window.setTimeout(() => { this.content.style.transition = ""; }, duration);
+  }
   private applyViewport() {
     if (this.viewportFrame !== null) cancelAnimationFrame(this.viewportFrame);
     this.viewportFrame = null;
     const { x, y, zoom } = this.viewport.getSnapshot();
-    this.content.setAttribute("transform", `translate(${x},${y}) scale(${zoom})`);
+    this.content.style.transform = `translate(${x}px, ${y}px) scale(${zoom})`;
+    // §5.3: a badge too small to read shows its count, then only a failure dot.
+    this.content.classList.toggle("is-zoom-small", zoom * 13 < 9);
+    this.content.classList.toggle("is-zoom-tiny", zoom * 13 < 6);
     this.zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
   }
   /** Keep every input delta, but write camera DOM only once per animation frame. */
@@ -374,30 +457,44 @@ export class CanvasController {
   }
   private onWheel = (event: WheelEvent) => {
     event.preventDefault();
+    this.content.style.transition = "";
     const bounds = this.svg.getBoundingClientRect();
     this.viewport.wheel(event, { x: event.clientX - bounds.left, y: event.clientY - bounds.top }, bounds);
     this.scheduleViewport();
   };
+  /**
+   * §5.7: a press anywhere but a labelled control may pan. Past 4 px it captures the pointer and
+   * pans, so its release clicks nothing; a still press stays a click for cards and badges.
+   */
   private onPointerDown = (event: PointerEvent) => {
-    if (event.button !== 0 || (event.target as Element).closest("[data-node-id]")) return;
-    this.drag = { pointer: event.pointerId, x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, moved: false, background: !(event.target as Element).closest("[data-connection-id]") };
-    this.highlightConnections(null);
-    this.svg.setPointerCapture(event.pointerId);
-    this.container.classList.add("is-panning");
+    const target = event.target as Element;
+    if (event.button !== 0 || target.closest(".fx-canvas-open-workflow")) return;
+    this.drag = { pointer: event.pointerId, x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, moved: false,
+      background: !target.closest("[data-node-id], [data-connection-id], .fx-deck-badge, .fx-deck-card"), veil: Boolean(target.closest(".fx-deck-veil")) };
   };
   private onPointerMove = (event: PointerEvent) => {
-    if (!this.drag || event.pointerId !== this.drag.pointer) return;
-    this.drag.moved ||= Math.hypot(event.clientX - this.drag.startX, event.clientY - this.drag.startY) > 4;
+    if (!this.drag) { this.hover(this.cardAt(event.target)); return; }
+    if (event.pointerId !== this.drag.pointer) return;
+    if (!this.drag.moved) {
+      if (Math.hypot(event.clientX - this.drag.startX, event.clientY - this.drag.startY) <= 4) return;
+      this.drag.moved = true;
+      this.content.style.transition = "";
+      this.highlightConnections(null);
+      this.svg.setPointerCapture(event.pointerId);
+      this.container.classList.add("is-panning");
+    }
     this.viewport.pan(event.clientX - this.drag.x, event.clientY - this.drag.y);
     this.drag.x = event.clientX; this.drag.y = event.clientY;
     this.scheduleViewport();
   };
   private onPointerUp = (event: PointerEvent) => {
     if (!this.drag || this.drag.pointer !== event.pointerId) return;
-    const clear = event.type === "pointerup" && this.drag.background && !this.drag.moved
-      && Math.hypot(event.clientX - this.drag.startX, event.clientY - this.drag.startY) <= 4;
+    const { moved, background, veil } = this.drag;
     this.cancelDrag();
-    if (clear) {
+    // Cards and badges answer a still press through their click events.
+    if (moved || event.type !== "pointerup") return;
+    if (this.open && veil) { this.collapse(); return; }
+    if (background) {
       this.container.focus({ preventScroll: true });
       this.setSelection(null);
       this.onSelect(null);

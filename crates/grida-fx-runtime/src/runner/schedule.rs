@@ -1014,6 +1014,7 @@ mod tests {
         e.pending.push(PendingRepeat {
             display_scope: None,
             path: "more".into(),
+            step: "more".into(),
             max: 4,
             waiting_on: ["a#1".to_string()].into(),
             per_instance_low: Usd::ZERO,

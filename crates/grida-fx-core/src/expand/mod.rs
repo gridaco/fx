@@ -202,6 +202,8 @@ pub struct PendingRepeat {
     pub display_scope: Option<String>,
     /// `prefix + name`, no own key suffix.
     pub path: String,
+    /// The declaration path (`decl_prefix + name`): no keys, no takes.
+    pub step: String,
     /// `max:`, or 1 when absent or invalid.
     pub max: u32,
     pub waiting_on: BTreeSet<String>,

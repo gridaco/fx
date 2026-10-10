@@ -98,10 +98,11 @@ use crate::store::Store;
 use dispatch::Done;
 use grida_fx_core::Error;
 use grida_fx_core::error::{ErrorKind, Problem, io_reason, unique};
-use grida_fx_core::expand::{ExpandEnv, Expansion, Instance, ResultStatus};
+use grida_fx_core::expand::{ExpandEnv, Expansion, Instance, ResultStatus, State};
 use grida_fx_core::host::NodeHost;
 use grida_fx_core::money::Usd;
 use grida_fx_core::plan::Plan;
+use grida_fx_core::plan::output::pending_document;
 use grida_fx_core::project::Planner;
 use grida_fx_core::val::Val;
 use indexmap::IndexMap;
@@ -728,20 +729,37 @@ impl Scheduler<'_> {
             .map_err(|error| Error::io(&self.events_label, &error))
     }
 
-    /// Record only changed display metadata, before the nodes that depend on its scopes.
+    /// Record only changed display metadata, before the nodes that depend on its scopes. The
+    /// snapshot lists the expansion's instances other than absent ones, which are never drawn,
+    /// in expansion order, and its pending repeats, so a reader knows every member and its step
+    /// before it starts.
     fn emit_scopes(&mut self, expansion: &Expansion) -> Result<(), Error> {
         let node_interface_bindings: BTreeMap<_, _> = expansion
             .instances
             .iter()
             .map(|(id, instance)| (id, &instance.interface_bindings))
             .collect();
+        let instances: Vec<_> = expansion
+            .ordered()
+            .filter(|instance| instance.state != State::Absent)
+            .map(|instance| {
+                serde_json::json!({
+                    "id": instance.id, "step": instance.step, "take": instance.takes,
+                    "key": instance.key,
+                })
+            })
+            .collect();
+        let pending: Vec<_> = expansion.pending.iter().map(pending_document).collect();
         let snapshot = serde_json::json!({
             "scopes": expansion.scopes, "node_interface_bindings": node_interface_bindings,
+            "instances": instances, "pending": pending,
         });
         if self.display_snapshot.as_ref() != Some(&snapshot) {
             self.emit(&Event::ScopesUpdated {
                 scopes: snapshot["scopes"].clone(),
                 node_interface_bindings: snapshot["node_interface_bindings"].clone(),
+                instances: snapshot["instances"].clone(),
+                pending: snapshot["pending"].clone(),
             })?;
             self.display_snapshot = Some(snapshot);
         }

@@ -23,12 +23,27 @@ pub mod service;
 pub mod takes;
 pub mod view;
 
+use grida_fx_core::project::Planner;
+use grida_fx_core::registry::relative_inside;
 use grida_fx_core::{Error, ErrorKind};
 use serde_json::Value;
 use std::path::Path;
 
 /// The `kind` of a run folder's `plan.json`.
 const GRAPH_KIND: &str = "fx-graph-v1";
+
+/// The workflow's takes file, relative to the planning project (its file name when it lies
+/// outside it, which planning never makes). A run's `plan.json` and a materialized plan record
+/// it as `takes_file`.
+pub(crate) fn takes_file(planner: &Planner) -> String {
+    relative_inside(&planner.project.root, &planner.takes_path).unwrap_or_else(|| {
+        planner
+            .takes_path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    })
+}
 
 /// `<label>/<name>`, for messages about a file in a run folder.
 fn inside(label: &str, name: &str) -> String {

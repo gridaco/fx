@@ -119,7 +119,16 @@ fn source_file_and_id_use_the_existing_offline_plan_without_a_run() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let expected: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let printed: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(printed.get("steps").is_none() && printed.get("takes_file").is_none());
+    // The served plan is the printed graph with the members a run's plan.json gives readers:
+    // every declared step with its declaration order, and the takes file.
+    let mut expected = printed.clone();
+    expected["steps"] = json!({
+        "draw": {"title": null, "description": null, "uses": "fx/image.generate@1", "view": false, "order": 0},
+        "refine": {"title": null, "description": null, "uses": "fx/image.edit@1", "view": false, "order": 1},
+    });
+    expected["takes_file"] = json!("preview.takes.yaml");
     for target in ["workflow.yaml", "preview"] {
         let mut command = base_command(root);
         command.args([
@@ -230,7 +239,14 @@ def build(theme):
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let expected: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let mut expected: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    // A builder's steps are declared by the document it returns; its takes file lies by its
+    // takes anchor.
+    expected["steps"] = json!({
+        "draw": {"title": null, "description": null, "uses": "fx/image.generate@1", "view": false, "order": 0},
+        "refine": {"title": null, "description": null, "uses": "fx/image.edit@1", "view": false, "order": 1},
+    });
+    expected["takes_file"] = json!("preview.takes.yaml");
     std::fs::remove_file(root.join("build-count.txt")).unwrap();
     let mut command = base_command(root);
     command.env("GRIDA_FX_PYTHON", python).args([

@@ -206,9 +206,24 @@ function checkLayout(graph: CanvasGraph, label: string) {
       assert(new Set(anchors.map((point) => `${point?.x},${point?.y}`)).size === anchors.length, `${label}/${node.source_id}: named ${side} ports share one anchor`);
     }
   }
+  // A deck's cards overlap by design (spec/layout.md §5.3): a node belongs to the deck of the
+  // card that holds it, directly or through its frames.
+  const frameOf = new Map<string, string>();
+  for (const frame of first.frames) {
+    for (const id of frame.nodes) frameOf.set(id, frame.id);
+    if (frame.parent) frameOf.set(frame.id, frame.parent);
+  }
+  const deckOf = new Map<string, string>();
+  for (const deck of first.decks) for (const member of deck.members) deckOf.set(member, deck.id);
+  const decks = (id: string) => {
+    const found = new Set<string>();
+    for (let at: string | undefined = id; at !== undefined; at = frameOf.get(at)) if (deckOf.has(at)) found.add(deckOf.get(at)!);
+    return found;
+  };
   for (let left = 0; left < first.nodes.length; left++) {
     const a = first.nodes[left];
     for (const b of first.nodes.slice(left + 1)) {
+      if ([...decks(a.id)].some((deck) => decks(b.id).has(deck))) continue;
       const overlap = a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
       assert(!overlap, `${label}: nodes overlap: ${a.source_id}, ${b.source_id}`);
     }
@@ -225,7 +240,7 @@ function checkLayout(graph: CanvasGraph, label: string) {
     const to = canvasPortAnchor(target, "input", edge.target_port);
     assert(from && to && JSON.stringify(edge.points[0]) === JSON.stringify(from) && JSON.stringify(edge.points.at(-1)) === JSON.stringify(to), `${label}: data edge ${edge.id} does not meet its named socket anchors`);
   }
-  const frames = new Map((first.frames ?? []).map((frame) => [frame.id, frame]));
+  const frames = new Map((first.frames).map((frame) => [frame.id, frame]));
   for (const frame of frames.values()) {
     assert([frame.x, frame.y, frame.width, frame.height].every(Number.isFinite) && frame.width > 0 && frame.height > 0, `${label}/${frame.id}: invalid inline group geometry`);
     const contains = (child: { x: number; y: number; width: number; height: number }) => child.x >= frame.x && child.y >= frame.y && child.x + child.width <= frame.x + frame.width && child.y + child.height <= frame.y + frame.height;

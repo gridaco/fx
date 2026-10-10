@@ -429,6 +429,123 @@ outputs:
     }
 }
 
+#[test]
+fn scope_snapshots_list_members_before_they_start_and_pending_repeats_until_they_expand() {
+    let _serial = serial();
+    let project = Project::new(&[(
+        "case",
+        "fx: workflow/v1
+id: case
+title: Members before they start
+steps:
+  list:
+    uses: ./nodes/cases.py#count
+    with: { n: 2 }
+  draw:
+    uses: ./nodes/cases.py#shout
+    with: { text: hi }
+  check:
+    uses: ./nodes/cases.py#verdict
+    judges: draw
+    with: { subject: \"${{ steps.draw.outputs.text }}\", accept_take: 1 }
+    on_reject: { regenerate: { max: 3, then: fail } }
+  loud:
+    for_each: ${{ steps.list.outputs.items.lines }}
+    max: 4
+    uses: ./nodes/cases.py#shout
+    with: { text: \"${{ item }}\" }
+",
+    )]);
+    let Some(outcome) = run_in(&project, Invocation::default(), None) else {
+        return;
+    };
+    assert!(outcome.unwrap().ok);
+    let events = project.events("runs/one");
+    let snapshots: Vec<(usize, &Value)> = events
+        .iter()
+        .enumerate()
+        .filter(|(_, event)| event["event"] == "scopes_updated")
+        .collect();
+    let schema: Value = serde_json::from_str(include_str!(
+        "../../../spec/schemas/fx-run-events-v1.schema.json"
+    ))
+    .unwrap();
+    let validator = jsonschema::validator_for(&schema).unwrap();
+    for (_, snapshot) in &snapshots {
+        assert!(validator.is_valid(snapshot), "{snapshot}");
+    }
+    let ids = |snapshot: &Value| -> Vec<String> {
+        snapshot["instances"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|instance| instance["id"].as_str().unwrap().to_string())
+            .collect()
+    };
+    // Before anything runs: the plan's instances in its order, later takes that may run
+    // included, and the repeat whose list `list` makes, with what it waits on.
+    let plan: Value =
+        serde_json::from_slice(&std::fs::read(project.root.join("runs/one/plan.json")).unwrap())
+            .unwrap();
+    let planned: Vec<Value> = plan["instances"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| json!({"id": i["id"], "step": i["step"], "take": i["take"], "key": i["key"]}))
+        .collect();
+    let (first_at, first) = snapshots[0];
+    let first_start = events
+        .iter()
+        .position(|event| event["event"] == "node_started")
+        .unwrap();
+    assert!(first_at < first_start);
+    assert_eq!(first["instances"], Value::Array(planned));
+    assert!(ids(first).contains(&"draw#3".to_string()));
+    assert_eq!(
+        first["pending"],
+        json!([{"path": "loud", "step": "loud", "max": 4, "phase": 2, "high_usd": 0,
+                "waiting_on": ["list#1"]}])
+    );
+    // Once the list exists, every item is listed with its key before the first of them starts,
+    // and nothing is pending any more.
+    let (expanded_at, expanded) = *snapshots
+        .iter()
+        .find(|(_, snapshot)| snapshot["pending"] == json!([]))
+        .unwrap();
+    let items: Vec<&Value> = expanded["instances"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|instance| instance["step"] == "loud")
+        .collect();
+    assert_eq!(
+        items,
+        [
+            &json!({"id": "loud['0']#1", "step": "loud", "take": [1], "key": "0"}),
+            &json!({"id": "loud['1']#1", "step": "loud", "take": [1], "key": "1"}),
+        ]
+    );
+    let item_start = events
+        .iter()
+        .position(|event| event["event"] == "node_started" && event["step"] == "loud")
+        .unwrap();
+    assert!(expanded_at < item_start);
+    // Once the first take is accepted the later ones are absent, so never members: the final
+    // snapshot leaves them out, though their interface bindings are still recorded.
+    let last = snapshots.last().unwrap().1;
+    let last_ids = ids(last);
+    for absent in ["draw#2", "draw#3", "check#2", "check#3"] {
+        assert!(!last_ids.contains(&absent.to_string()), "{absent}");
+        assert!(
+            last["node_interface_bindings"].get(absent).is_some(),
+            "{absent}"
+        );
+    }
+    for present in ["list#1", "draw#1", "check#1", "loud['0']#1", "loud['1']#1"] {
+        assert!(last_ids.contains(&present.to_string()), "{present}");
+    }
+}
+
 fn invocations(events: &[Value]) -> Vec<String> {
     let mut ids: Vec<String> = Vec::new();
     for event in events {

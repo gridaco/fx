@@ -1649,6 +1649,7 @@ fn pending(path: &str, max: u32, high: i64, phase: u32) -> PendingRepeat {
     PendingRepeat {
         display_scope: None,
         path: path.to_string(),
+        step: path.to_string(),
         max,
         waiting_on: BTreeSet::new(),
         per_instance_low: Usd::ZERO,

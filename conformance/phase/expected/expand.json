@@ -44,7 +44,11 @@
    "high_usd": 0.24,
    "max": 6,
    "path": "draw",
-   "phase": 2
+   "phase": 2,
+   "step": "draw",
+   "waiting_on": [
+    "split#1"
+   ]
   }
  ],
  "problems": [],

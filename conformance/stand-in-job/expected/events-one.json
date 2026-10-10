@@ -350,6 +350,32 @@
  },
  {
   "event": "scopes_updated",
+  "instances": [
+   {
+    "id": "clip#1",
+    "key": null,
+    "step": "clip",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "front#1",
+    "key": null,
+    "step": "front",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "mesh#1",
+    "key": null,
+    "step": "mesh",
+    "take": [
+     1
+    ]
+   }
+  ],
   "kind": "fx-run-events-v1",
   "node_interface_bindings": {
    "clip#1": [],
@@ -363,6 +389,7 @@
     }
    ]
   },
+  "pending": [],
   "plan": "5e564a8e0a7c403dd3f744f32cd75091b3fec1bd32de553b0234d39949f257ca",
   "scopes": []
  }

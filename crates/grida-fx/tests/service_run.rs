@@ -92,7 +92,9 @@ url = sys.argv[1]
 with urlopen(url + "api/view", timeout=5) as response:
     view = json.load(response)
 temporary = root / "opened.tmp"
-temporary.write_text(json.dumps({{"url": url, "kind": view["kind"]}}))
+receipt = {{"url": url, "kind": view["kind"]}}
+receipt.update({{name: view[name] for name in ("steps", "takes_file") if name in view}})
+temporary.write_text(json.dumps(receipt))
 temporary.replace(root / "opened.json")
 "#,
                 project.python.display()
@@ -423,6 +425,14 @@ fn opening_a_plan_registers_its_graph_without_executing_a_run_node() {
             .unwrap();
     assert_eq!(opened["kind"], "fx-graph-v1");
     assert!(opened["url"].as_str().unwrap().contains("/plans/"));
+    // The registered plan carries what a run's plan.json gives its readers.
+    assert_eq!(opened["takes_file"], "service-test.takes.yaml");
+    assert_eq!(
+        opened["steps"],
+        serde_json::json!({"wait": {
+            "title": null, "description": null, "uses": "./node.py#wait", "view": false, "order": 0,
+        }})
+    );
     assert!(!project.root().join("entered-one").exists());
     assert!(!project.root().join("runs").exists());
     let index = get_json(&format!("{}api/catalog", service["url"].as_str().unwrap()));

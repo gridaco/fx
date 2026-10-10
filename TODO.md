@@ -40,79 +40,27 @@ dependency on that application's packages, catalog, branding or view-contract na
 
 ### Agent-authored canvas layout
 
-**Status: agreed direction, 2026-10-08; schema and operations remain proposed,
-not implemented or ratified in `spec/`.** First serve requests made through an
-external agent: "Tidy up the layout" or "Place the comparison below the variants."
-Interactive node dragging and other visual editing are deferred. See the scenario
-and AR-17 in [Agent readiness](AGENT_READINESS.md#tidy-up-the-layout).
+**Status: ratified design, 2026-10-09; Ship A in source, 2026-10-10, unreleased.**
+[Canvas layout](spec/layout.md) owns the design; [AR-17](AGENT_READINESS.md#tidy-up-the-layout)
+tracks the agent scenario. Remaining work, in order:
 
-#### Authoring and ownership
+- **Ship A, what is left** ([layout.md §12](spec/layout.md#12-implementation-order)): run-view
+  placeholders for absent, empty and pending slots; merged edges on a closed deck; linked
+  decks; take decks nested inside item cards; nested expansion; double-click as one expand;
+  accessible deck and card names; keyboard order inside an expanded deck; patching unchanged
+  layouts in place and tracks that never shrink; the automatic refit and camera anchor; a
+  browser check.
+- **Ship B:** the adjacent `fx-layout-v1` file: reader, discovery, confinement and
+  diagnostics; the report's file fields and `inspect --json` output; recorded matrix axis
+  values; grid spreads and matrix tables; the conformance identity case; the guide, the
+  skill and AR-17 evidence.
 
-- Use an optional adjacent **JSON** file, for example `gallery.layout.json`
-  beside `gallery.yaml`. Treat it as shareable, version-controlled authored
-  presentation data. Start with one format; YAML/JSONC support is not required.
-  Missing layout metadata means automatic layout.
-- Define a versioned JSON Schema with a small, engine-independent vocabulary for
-  grouping, ordering and supported placement constraints. Computed coordinates
-  are derived data. Explicit labels/descriptions should survive agent and future
-  visual-editor round trips; arbitrary executable layout code is out of scope.
-- Keep layout separate from the workflow definition, execution dependencies,
-  scheduling, cache identity and recorded history. The current
-  [plan digest](spec/identity.md#10-plan-digest) includes authored workflow
-  documents: adding inline layout fields would affect resume compatibility unless
-  identity semantics were deliberately revised. A visual edit must not require a
-  new run or invalidate resume.
-- Specify predictable adjacent-file discovery and an explicit layout-file option
-  for YAML, supported builders and saved records. Settle builder naming and
-  imported-workflow composition before implementing discovery. Target recorded
-  source/entry-point identity, not a display title or workflow ID alone.
-- Address authored steps within a scope; distinguish rules for all repeated
-  instances from an override for one recorded instance. Use recorded identifiers
-  rather than deriving them from labels. Visual groups must not create execution
-  groups. Keep authored rules stable across changing matrix/repeat cardinality.
-- The adjacent file is the workflow default. Design explicit per-run overrides
-  only where needed, with visible scope and precedence; avoid a broad inheritance
-  system initially. Future portable snapshots should carry the selected layout.
-  Historical runs can differ from current source: report unmatched rules and
-  provide a usable viewing fallback without rewriting execution evidence.
-
-#### Agent operations and bounded implementation
-
-1. Inspect a saved graph/run and its effective layout, returning addressable nodes,
-   scopes, supplying file and layout revision. This path must not execute author
-   code, replan, start workflow work or call providers.
-2. Let agents edit the JSON file with ordinary file tools. Validate schema,
-   references and supported constraints through structured diagnostics; exact CLI
-   syntax remains a contract decision, not a currently supported command.
-3. Refresh the existing view and expose which layout revision was loaded, the
-   actual viewer URL, and renderer diagnostics. Distinguish structural validation,
-   successful geometric layout and human visual acceptance. If the solver runs in
-   browser JavaScript, native CLI validation alone cannot claim it ran that solver.
-4. Preserve arrangement during status-only updates. Prototype against branching,
-   imported scopes, inline groups, matrix/repeat changes and variable preview sizes.
-   Prove that layout-only edits preserve plan/step identities and resume, and that
-   stale or conflicting rules produce actionable results without disturbing runs.
-
-Start with one schema, discovery convention, explicit selection, validation and
-viewer refresh. Prefer a testable TypeScript adapter around an existing layout
-engine; defer mouse editing and a command for every individual arrangement action.
-Evaluate **ELK layered** as the leading candidate for ports, nested graphs,
-partitions and ordering. It is not a general solver for every relative constraint;
-prototype the exact supported combinations before ratifying the vocabulary.
-Full relational constraints, position pins and rules over arbitrary node sets
-remain later candidates rather than prerequisites.
-
-References from the design discussion:
-
-- [Blender frames](https://docs.blender.org/manual/en/latest/interface/controls/nodes/types/layout/frame.html)
-  for visual grouping, and [Houdini arrangement](https://www.sidefx.com/docs/houdini/network/layout.html)
-  for targeted branch layout that preserves the surrounding arrangement.
-- [ELK layered](https://eclipse.dev/elk/reference/algorithms/org-eclipse-elk-layered.html)
-  and [elkjs](https://github.com/kieler/elkjs) for the initial engine evaluation.
-- [WebCola constraints](https://github.com/tgdwyer/WebCola/wiki/Constraints)
-  and [fCoSE](https://github.com/iVis-at-Bilkent/cytoscape.js-fcose) for richer
-  alignment/relative-placement alternatives; [SetCoLa](https://idl.uw.edu/papers/setcola)
-  for applying rules to sets, potentially useful for repeated instances.
+Deferred ([spec/layout.md §11](spec/layout.md#11-deferred)): per-instance keys; `defaults`,
+`wrap` and `clusters` keys; pins; labels and descriptions; visual groups; an imported
+workflow's own file; per-run files; a CLI option or URL parameter; a URL that selects one
+member; portable snapshots carrying their layout; a write or rename command; visual
+editing; a minimap; typed SDK access to the layout report (callers receive it untyped in
+`inspection`); ELK or any other router.
 
 ## SDK invocation result capture
 

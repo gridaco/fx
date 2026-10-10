@@ -5,7 +5,8 @@ The Vite app reads `/api/view`: an `fx-service-index-v1` project catalog, an
 scoped APIs under `/p/PROJECT_ID/runs/RUN_ID/` or `/p/PROJECT_ID/plans/PLAN_ID/`.
 `@grida/fx-web` validates these boundaries and owns the vanilla
 TypeScript controllers for requests, selection, artifact previews, and the SVG
-canvas. Dagre lays out the recorded wiring. React mounts the controllers and
+canvas, which places cards in the cells the engine serves (`api/layout`, or a run's
+snapshot). React mounts the controllers and
 renders the shell and inspectors; workflow and viewport state do not live in
 React hooks. Neither browser package imports the Node SDK or executes workflows.
 

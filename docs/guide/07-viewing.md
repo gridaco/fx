@@ -51,6 +51,23 @@ sidebar below 1024 px. The canvas fills the remaining window; sidebars never sta
 Connections stay muted until you hover a wire or a node; hovering a node highlights
 all its incoming and outgoing connections.
 
+Steps sit on a grid that reads left to right: each step goes in the column after
+the steps it depends on, a column with more than three steps wraps into columns of
+three, and unconnected chains sit side by side. The engine computes the grid from
+the recorded plan, so the picture is the same for a plan and its run, and a preview
+arriving never moves a card. Group iterations are cards with their steps inside.
+
+Repeated instances of one step (for-each items, matrix combinations, takes) and the
+iterations of a repeated group are drawn as a deck: one stack of cards with a count
+badge such as `5 items`, `3 takes` or `2 items · 3 takes each`, and the number that
+failed. Hovering a card brings it to the front; moving away puts the deck back. The
+card in front at rest is the selected one, else the last that failed, else a running
+one, else the take its consumers read, else the latest that finished. Click a deck (a
+card, its edge or its badge) to spread it into a grid in place; click a card inside to
+select it, and press Esc, click outside or use × to put the deck back. Dragging pans
+from anywhere, cards included. Spreading and closing are short slides, and none under
+the system's reduced-motion setting.
+
 Cards show the node's named, typed input and output ports. A list or keyed collection
 uses one port. Solid wires join the particular output and input referenced by the
 workflow; several wires can connect the same two steps through different ports.
