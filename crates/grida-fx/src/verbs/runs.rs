@@ -846,11 +846,12 @@ fn remove_one(set: &RunSet, project: &Project, selected: Selected) -> Outcome {
         outcome.code = Some("io");
         let first = problems.first().cloned().unwrap_or_default();
         outcome.message = Some(format!(
-            "{} was left behind ({first}); run grida-fx runs remove on it to finish",
+            "{} was left behind ({first}); run {} runs remove on it to finish",
             tombstone
                 .file_name()
                 .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_default()
+                .unwrap_or_default(),
+            crate::invoker::command()
         ));
     }
     outcome
@@ -1169,8 +1170,9 @@ fn report(
     let verb = if applied { "freed" } else { "frees" };
     let shared = if cache > 0 {
         format!(
-            "; {} more stays in the cache, which shares it (grida-fx cache prune)",
-            human(cache)
+            "; {} more stays in the cache, which shares it ({} cache prune)",
+            human(cache),
+            crate::invoker::command()
         )
     } else {
         String::new()

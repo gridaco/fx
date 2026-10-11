@@ -55,8 +55,9 @@ for arg in args:
 with log.open("a") as out:
     python = os.environ.get("GRIDA_FX_PYTHON")
     sdk_python = os.environ.get("GRIDA_FX_SDK_PYTHON")
+    invoker = os.environ.get("GRIDA_FX_INVOKER")
     out.write(json.dumps({"argv": args, "cwd": os.getcwd(), "inputs": inputs, "python": python,
-                          "sdk_python": sdk_python}))
+                          "sdk_python": sdk_python, "invoker": invoker}))
     out.write("\n")
 reply = config.get(args[0] if args else "", {})
 folder = None
@@ -2017,11 +2018,32 @@ def test_the_module_names_its_own_python_for_node_bodies(
     assert fake.calls[-1]["sdk_python"] == sys.executable
 
 
+def test_the_module_runs_the_binary_as_the_python_invoker(
+    fake: Fake, project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake.reply(plan={"stdout": "plan text\n"})
+    monkeypatch.setenv("GRIDA_FX_INVOKER", "grida")
+    _module(["plan", "gallery"], project)
+    assert fake.calls[-1]["invoker"] == "python"
+
+
+def test_the_sdk_runs_the_binary_as_grida_fx_whatever_it_inherits(
+    fake: Fake, project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A node body run under `grida fx` inherits GRIDA_FX_INVOKER=grida; the SDK reads errors by
+    # the grida-fx prefix, so it never passes that on.
+    monkeypatch.setenv("GRIDA_FX_INVOKER", "grida")
+    fx.plan("gallery", cwd=project)
+    assert fake.calls[-1]["invoker"] == "grida-fx"
+
+
 def test_the_module_without_a_binary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GRIDA_FX_BIN", str(tmp_path / "missing"))
     done = _module(["--help"], tmp_path)
     assert done.returncode == 2
-    assert done.stderr == f"grida-fx: GRIDA_FX_BIN is {tmp_path / 'missing'}, which is not a file\n"
+    assert done.stderr == (
+        f"python -m grida.fx: GRIDA_FX_BIN is {tmp_path / 'missing'}, which is not a file\n"
+    )
 
 
 def test_the_module_with_a_binary_it_cannot_start(
@@ -2033,7 +2055,7 @@ def test_the_module_with_a_binary_it_cannot_start(
     monkeypatch.setenv("GRIDA_FX_BIN", str(unrunnable))
     done = _module(["plan", "x"], tmp_path)
     assert done.returncode == 2
-    assert done.stderr.startswith(f"grida-fx: cannot start {unrunnable}: ")
+    assert done.stderr.startswith(f"python -m grida.fx: cannot start {unrunnable}: ")
 
 
 def _installed(site: Path) -> Path:
@@ -2083,6 +2105,6 @@ def test_the_module_with_no_binary_anywhere_names_the_variable(
     assert done.returncode == 2
     assert done.stdout == ""
     assert done.stderr == (
-        "grida-fx: no grida-fx binary was found: this grida installation carries none, so set"
-        " GRIDA_FX_BIN to its path, or put grida-fx on PATH\n"
+        "python -m grida.fx: no grida-fx binary was found: this grida installation carries none,"
+        " so set GRIDA_FX_BIN to its path, or put grida-fx on PATH\n"
     )

@@ -24,6 +24,7 @@ import difflib
 import json
 import math
 import os
+import re
 import shlex
 import shutil
 import signal
@@ -40,6 +41,14 @@ import yaml
 ROOT = Path(__file__).resolve().parent
 COMMAND_ENV = "GRIDA_FX_CONFORMANCE_COMMAND"
 DEFAULT_COMMAND = "grida-fx"
+# The launchers of the engine and the command each one's user types (spec/distribution.md section
+# 2). Expected output is recorded through `grida-fx`; under another invoker, a command the engine
+# names at a verb in its terminal text is that invoker's.
+INVOKER_COMMANDS = {"grida-fx": "grida-fx", "grida": "grida fx", "python": "python -m grida.fx"}
+VERBS = (
+    "init|start|status|stop|logs|plan|expand|identity|price|schema|nodes|doctor|lock|run|reroll"
+    "|pick|takes|jobs|project|observe|export|inspect|cancel|runs|cache|view"
+)
 DEFAULT_TIMEOUT_S = 60.0
 CASE_KEYS = {"steps", "invalid_inputs"}
 STEP_KEYS = {
@@ -313,8 +322,15 @@ def load_case(case: Path) -> list[dict[str, Any]]:
 
 
 def run_case(
-    case: Path, work: Path, command: list[str], passed: dict[str, str], timeout_s: float
+    case: Path,
+    work: Path,
+    command: list[str],
+    passed: dict[str, str],
+    timeout_s: float,
+    texts: set[str] | None = None,
 ) -> dict[str, bytes]:
+    """Run a case's steps; returns what they save. The names of saves that are the command's own
+    terminal text (its stdout, compared as bytes) are added to `texts`."""
     steps = load_case(case)
     project = work / "project"
     home = work / "home"
@@ -372,6 +388,9 @@ def run_case(
             )
         saved.setdefault(name, output)
         saved_by.setdefault(name, number)
+        if texts is not None and "argv" in step and "read" not in step:
+            if not any(step.get(flag) for flag in FORMATS):
+                texts.add(name)
     return saved
 
 
@@ -522,7 +541,26 @@ def _normal(value: object, in_data: bool = False) -> object:
 # ------------------------------------------------------------------------------ comparing
 
 
-def compare(case: Path, saved: dict[str, bytes], strict: bool) -> Outcome:
+def as_invoked(text: bytes, invoker: str) -> bytes:
+    """Expected terminal text as `invoker`'s command prints it: `grida-fx <verb>` names the
+    invoker's command. Documents never change (spec/distribution.md section 2).
+
+    >>> as_invoked(b"next      grida-fx run case --live\\n", "grida")
+    b'next      grida fx run case --live\\n'
+    >>> as_invoked(b"grida-fx 0.1.0: inspect grida-fx status and grida-fx logs", "python")
+    b'grida-fx 0.1.0: inspect python -m grida.fx status and python -m grida.fx logs'
+    """
+    command = INVOKER_COMMANDS[invoker].encode("utf-8")
+    return re.sub(rb"\bgrida-fx (?=(?:" + VERBS.encode() + rb")\b)", command + b" ", text)
+
+
+def compare(
+    case: Path,
+    saved: dict[str, bytes],
+    strict: bool,
+    texts: frozenset[str] | set[str] = frozenset(),
+    invoker: str = "grida-fx",
+) -> Outcome:
     expected = case / "expected"
     if not expected.is_dir():
         if not saved:
@@ -537,6 +575,8 @@ def compare(case: Path, saved: dict[str, bytes], strict: bool) -> Outcome:
             problems.append(f"expected/{name} is missing")
             continue
         want = path.read_bytes()
+        if name in texts and invoker != "grida-fx":
+            want = as_invoked(want, invoker)
         if want != actual:
             problems.append(f"{name} differs\n{_diff(want, actual, f'expected/{name}', 'actual')}")
     for stale in sorted(stale_files(expected, saved)):
@@ -613,10 +653,18 @@ def main(argv: list[str] | None = None) -> int:
         help="record what the command prints as expected/; a person reviews it before commit",
     )
     parser.add_argument("--strict", action="store_true", help="a case with no expected/ yet fails")
+    parser.add_argument(
+        "--invoker",
+        choices=sorted(INVOKER_COMMANDS),
+        default="grida-fx",
+        help="the launcher the command is (default grida-fx): the command its terminal text names",
+    )
     parser.add_argument("cases", nargs="*", help="case names (default: all)")
     args = parser.parse_args(argv)
     if args.timeout <= 0:
         parser.error("--timeout must be positive")
+    if args.write and args.invoker != "grida-fx":
+        parser.error("--write records through the grida-fx invoker only")
     command = resolve_command(args.command)
     passed = passed_through()
     cases = sorted(path.parent for path in ROOT.glob("*/case.yaml"))
@@ -630,12 +678,17 @@ def main(argv: list[str] | None = None) -> int:
     outcomes: list[Outcome] = []
     for case in cases:
         with tempfile.TemporaryDirectory(prefix=f"fx-conformance-{case.name}-") as work:
+            texts: set[str] = set()
             try:
-                saved = run_case(case, Path(work), command, passed, args.timeout)
+                saved = run_case(case, Path(work), command, passed, args.timeout, texts)
             except CaseFailure as error:
                 outcome = Outcome(case.name, "FAIL", str(error))
             else:
-                outcome = write(case, saved) if args.write else compare(case, saved, args.strict)
+                outcome = (
+                    write(case, saved)
+                    if args.write
+                    else compare(case, saved, args.strict, texts, args.invoker)
+                )
         outcomes.append(outcome)
         line = f"{outcome.verdict} {case.name}"
         if outcome.detail and outcome.verdict != "PASS":
@@ -647,7 +700,10 @@ def main(argv: list[str] | None = None) -> int:
     for outcome in outcomes:
         counts[outcome.verdict] += 1
     summary = ", ".join(f"{count} {verdict.lower()}" for verdict, count in counts.items() if count)
-    print(f"conformance: {summary} ({len(outcomes)} cases, command: {shlex.join(command)})")
+    print(
+        f"conformance: {summary} ({len(outcomes)} cases, command: {shlex.join(command)}, "
+        f"invoker: {args.invoker})"
+    )
     if args.write and counts["WROTE"]:
         print(
             "conformance: expected/ now holds whatever this command printed. Review every "

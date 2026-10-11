@@ -21,6 +21,7 @@ const FAKE_ENGINE = `#!/bin/sh
 log="$FAKE_LOG"
 case "$1" in
   args) shift; for a in "$@"; do printf '%s\\n' "$a"; done; exit 0 ;;
+  invoker) printf '%s\\n' "\${GRIDA_FX_INVOKER-unset}"; exit 0 ;;
   exit) exit "$2" ;;
   kill) kill -"$2" $$; sleep 5; exit 99 ;;
   ids) echo "$$ $(ps -o pgid= -p $$ | tr -d ' ')"; exit 0 ;;
@@ -40,6 +41,9 @@ const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms));
 describe.skipIf(!node)("the grida-fx command", () => {
   const folder = temporaryFolder("cli");
   const shim = join(folder.path, "bin", "grida-fx.js");
+  // A host command's dispatch of `fx` (fixtures/host/grida/bin/grida.js does the same through
+  // the package export).
+  const host = join(folder.path, "bin", "grida.js");
   const fake = join(folder.path, "fake-engine");
   const log = join(folder.path, "log.txt");
   const env = { ...process.env, GRIDA_FX_BIN: fake, FAKE_LOG: log };
@@ -58,6 +62,16 @@ describe.skipIf(!node)("the grida-fx command", () => {
     mkdirSync(join(folder.path, "bin"));
     copyFileSync(join(packageRoot, "bin", "grida-fx.js"), shim);
     writeFileSync(join(folder.path, "package.json"), JSON.stringify({ type: "module" }));
+    writeFileSync(
+      host,
+      [
+        'import { launch } from "../dist/cli.js";',
+        "const [verb, ...rest] = process.argv.slice(2);",
+        'if (verb === "fx") launch(rest, { invoker: "grida" });',
+        "else process.exit(64);",
+        "",
+      ].join("\n"),
+    );
     writeFileSync(fake, FAKE_ENGINE);
     chmodSync(fake, 0o755);
   }, SLOW);
@@ -65,6 +79,8 @@ describe.skipIf(!node)("the grida-fx command", () => {
 
   const runShim = (args: string[], extra: Record<string, string> = {}) =>
     spawnSync("node", [shim, ...args], { env: { ...env, ...extra }, encoding: "utf8" });
+  const runHost = (args: string[], extra: Record<string, string> = {}) =>
+    spawnSync("node", [host, ...args], { env: { ...env, ...extra }, encoding: "utf8" });
 
   /** Starts the command on the waiting stand-in, once the stand-in is ready. */
   async function waiting(): Promise<ChildProcess> {
@@ -137,6 +153,32 @@ describe.skipIf(!node)("the grida-fx command", () => {
   );
 
   test(
+    "the engine learns its invoker: grida-fx from the command, grida from a host's fx",
+    () => {
+      // A value inherited from the caller is replaced, never passed on.
+      expect(runShim(["invoker"], { GRIDA_FX_INVOKER: "grida" }).stdout).toBe("grida-fx\n");
+      const hosted = runHost(["fx", "invoker"], { GRIDA_FX_INVOKER: "grida-fx" });
+      expect(hosted.status).toBe(0);
+      expect(hosted.stdout).toBe("grida\n");
+      expect(runHost(["fx", "args", "a b", "-"]).stdout).toBe("a b\n-\n");
+      expect(runHost(["fx", "exit", "5"]).status).toBe(5);
+    },
+    SLOW,
+  );
+
+  test(
+    "a hosted launcher's own messages name the command as its user types it",
+    () => {
+      const done = runHost(["fx", "--version"], { GRIDA_FX_BIN: join(folder.path, "nowhere") });
+      expect(done.status).toBe(1);
+      expect(done.stderr).toBe(
+        `grida fx: GRIDA_FX_BIN is ${join(folder.path, "nowhere")}, which is not a file\n`,
+      );
+    },
+    SLOW,
+  );
+
+  test(
     "SIGINT and SIGTERM reach the engine, once per interruption",
     async () => {
       const child = await waiting();
@@ -190,4 +232,25 @@ describe.skipIf(!node)("the grida-fx command", () => {
     },
     SLOW,
   );
+});
+
+describe("the host contract", () => {
+  test("@grida/fx/cli is exported, and names contract 1 with its invokers", async () => {
+    const manifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
+    expect(manifest.exports["./cli"]).toEqual({
+      types: "./dist/cli.d.ts",
+      default: "./dist/cli.js",
+    });
+    const cli = await import("../src/cli.js");
+    expect(cli.HOST_CONTRACT).toBe(1);
+    expect(cli.INVOKER_VARIABLE).toBe("GRIDA_FX_INVOKER");
+    expect(cli.COMMANDS).toEqual({ "grida-fx": "grida-fx", grida: "grida fx" });
+  });
+
+  test("an unknown invoker is refused before anything runs", async () => {
+    const { launch } = await import("../src/cli.js");
+    for (const invoker of ["python", "npm", "toString", ""]) {
+      expect(() => launch([], { invoker: invoker as "grida" })).toThrow(TypeError);
+    }
+  });
 });

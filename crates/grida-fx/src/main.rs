@@ -4,6 +4,7 @@ mod args;
 mod cli;
 mod engine;
 mod interrupt;
+mod invoker;
 mod print;
 mod verbs;
 

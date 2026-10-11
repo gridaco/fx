@@ -3,14 +3,17 @@
     python tools/package_release.py --binary <grida-fx> --target <triple> --out <new-folder>
 
 Add --verify to install the artifacts in clean environments and run strict
-conformance and embedded-viewer checks. CI can supply its platform-built binary
-and use this same command. The output manifest pins every artifact by SHA-256.
+conformance and embedded-viewer checks through each installed command:
+`python -m grida.fx`, `grida-fx`, and `grida fx` (the npm tarballs beside the host
+fixture, tools/check_host.py). CI can supply its platform-built binary and use this
+same command. The output manifest pins every artifact by SHA-256.
 """
 
 from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import shlex
@@ -22,13 +25,33 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+def _load(name: str, path: Path):
+    """A tool beside this one, by path: tools/ is no package."""
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+# `grida fx`'s installed checks (spec/distribution.md).
+check_host = _load("fx_check_host", Path(__file__).with_name("check_host.py"))
 TARGETS = {
     "aarch64-apple-darwin": "@grida/fx-darwin-arm64",
     "x86_64-apple-darwin": "@grida/fx-darwin-x64",
     "x86_64-unknown-linux-gnu": "@grida/fx-linux-x64-gnu",
     "aarch64-unknown-linux-gnu": "@grida/fx-linux-arm64-gnu",
 }
-CHECKS = ("wheel_conformance", "npm_conformance", "wheel_viewer", "npm_viewer")
+CHECKS = (
+    "wheel_conformance",
+    "npm_conformance",
+    "host_conformance",
+    "wheel_viewer",
+    "npm_viewer",
+    "host_viewer",
+)
 
 
 def clean_environment() -> dict[str, str]:
@@ -40,6 +63,7 @@ def clean_environment() -> dict[str, str]:
         "TRIPO_API_KEY",
         "ELEVENLABS_API_KEY",
         "GRIDA_FX_BIN",
+        "GRIDA_FX_INVOKER",
         "PYTHONPATH",
         "PYTHONHOME",
     ):
@@ -155,13 +179,23 @@ def verify(wheel: Path, npm: list[Path], out: Path) -> None:
         npm_bin = prefix / "node_modules" / ".bin" / "grida-fx"
         environment = clean_environment()
         environment["GRIDA_FX_PYTHON"] = str(python)
-        for command in ([str(python), "-m", "grida.fx"], [str(npm_bin)]):
+        # `grida fx`: the same tarballs beside the host fixture, in a prefix of their own.
+        host = temporary / "host"
+        host.mkdir()
+        grida = check_host.install([*npm, check_host.pack_fixture(temporary / "fixture")], host)
+        check_host.check(grida, check_host.workspace_version(), temporary, environment)
+        for command, invoker in (
+            ([str(python), "-m", "grida.fx"], "python"),
+            ([str(npm_bin)], "grida-fx"),
+        ):
             run([*command, "--version"], cwd=temporary, env=environment)
             run(
                 [
                     sys.executable,
                     str(ROOT / "conformance" / "run.py"),
                     "--strict",
+                    "--invoker",
+                    invoker,
                     "--command",
                     shlex.join(command),
                 ],

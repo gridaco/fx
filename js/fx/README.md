@@ -26,6 +26,12 @@ your machine:
 WSL 2, which runs the Linux packages. Linux with musl (Alpine) is not supported either. Node 18 or
 later.
 
+FX is also the `fx` verb of the npm `grida` command: a `grida` release that pins this package
+runs its engine as `grida fx <verb>`. For that host this package exports
+its launcher as `@grida/fx/cli` (`launch`, `HOST_CONTRACT`); see
+[spec/distribution.md](https://github.com/gridaco/fx/blob/main/spec/distribution.md). The SDK
+stays `import … from "@grida/fx"`.
+
 `grida-fx` reports what is missing when it finds no engine. If you install with
 `--omit=optional`, or need a binary of your own, set `GRIDA_FX_BIN` to the path of a `grida-fx`
 binary: the command and the SDK use it first.

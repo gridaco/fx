@@ -15,13 +15,14 @@ Guardrails for working in this repository. [README.md](README.md) says what FX i
 | `spec/` | The language-neutral contracts: schemas, identity, protocol, test vectors. Code follows `spec/`; a change to identity is a change to `spec/` first. |
 | `conformance/` | Cases that hold any implementation to the spec through the command line only. |
 | `python/` | The `grida` distribution; FX is `grida.fx`. |
-| `js/fx/` | `@grida/fx`, the Node SDK and command launcher; per-platform engines are packaged separately. |
+| `js/fx/` | `@grida/fx`, the Node SDK and command launcher (`@grida/fx/cli` for host commands); per-platform engines are packaged separately. |
 | `js/fx-web/`, `js/fx-react/` | Private browser-only contracts, TypeScript controllers/canvas, and thin React adapters. |
 | `web/viewer/` | Vite/React/Tailwind client, built and embedded in the engine. |
 | `www/` | Standalone Next.js/Tailwind static website mounted at `/fx`; large showcase run packages stay outside Git. |
 | `examples/` | Projects written the way a user would. CI plans every one and runs every runnable one offline through the SDK, from a fresh build (rigged-character only plans). |
 | `skills/` | Self-contained user-installable agent skills, distributed through `npx skills add gridaco/fx`; the README owns layout and authoring conventions. |
 | `fixtures/viewer/` | Canonical provider-free development harness for viewer topology, media, cache, takes, failures and recorded in-progress states; generated data stays outside the source fixture. |
+| `fixtures/host/grida/` | A stand-in for the npm `grida` command reduced to its `fx` verb; `tools/check_host.py` installs it beside packed `@grida/fx` and runs conformance through `grida fx`. |
 | `fixtures/control/` | Provider-free checkpoint and delayed-cleanup harness for cancellation acceptance, waiting, verified cleanup and resume. Copy it into a fresh project for each test. |
 | `tools/` | What runs outside the engine: the spec gate, the independent digest checker, packaging, `build_engine.py` (the engine into a checkout's SDK) and `check_examples.py`. |
 
@@ -37,6 +38,7 @@ Guardrails for working in this repository. [README.md](README.md) says what FX i
 - **Agent readiness is a design harness.** For CLI, SDK, lifecycle or public-contract changes, consult [AGENT_READINESS.md](AGENT_READINESS.md) and update affected scenarios, capability status and evidence. Keep proposed capabilities separate from implemented behavior; `spec/` remains normative.
 - **Align CLI and SDK user jobs.** When adding or changing a public operation, review how Python and JavaScript callers accomplish its useful job, including options, results, errors, and lifecycle behavior. Use native SDK objects and language ergonomics; matching every CLI verb is not required. Update applicable APIs, tests, and documentation together. Record intentional deferrals or CLI-only jobs in [AGENT_READINESS.md](AGENT_READINESS.md); [spec/sdk.md](spec/sdk.md) defines current run access.
 - **Run-control coordination stays private.** [spec/control.md](spec/control.md) specifies the same-user temporary control directory allowed to hold local paths and a control token. It is outside portable run records, caches, browser documents and logs; preserve its ownership, permissions and confinement requirements when implementing it.
+- **FX ships inside `grida`.** The main command is `grida fx`, from the npm `grida` package, which pins `@grida/fx` exactly; `grida-fx` and `python -m grida.fx` remain. [spec/distribution.md](spec/distribution.md) owns the topology, the invoker and the host contract: a change to how FX is started or named changes it first. Terminal text names the command through the invoker; documents and records always name `grida-fx`. Never add an FX command that writes provider credentials: `grida` owns those ([gridaco/fx#2](https://github.com/gridaco/fx/issues/2)).
 - **Identifiers, comments, logs and messages are in English.**
 - **Nontrivial browser UI uses vanilla TypeScript classes.** Own canvas, viewport,
   interaction and viewer state in independently testable classes. React is a thin
@@ -61,6 +63,7 @@ uv run --project python python tools/check_spec.py
 uv run --project python python conformance/run.py --command target/debug/grida-fx
 python3 tools/build_engine.py && uv run --project python python tools/check_examples.py
 python3 tools/check_viewer.py --command "$PWD/python/src/grida/fx/_bin/grida-fx"
+GRIDA_FX_PYTHON=python/.venv/bin/python uv run --project python python tools/check_host.py --engine target/debug/grida-fx
 uv run --project python python tools/check_observation.py --command target/debug/grida-fx
 uv run --project python python tools/check_control.py --command target/debug/grida-fx
 uv run --project python python tools/check_viewer_fixtures.py

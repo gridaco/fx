@@ -71,7 +71,11 @@ on work, history and spending.
 ## Current operation map
 
 Commands below use the npm launcher `grida-fx`. The Python equivalent is
-`python -m grida.fx`; it runs the same engine. Users install the packages rather
+`python -m grida.fx`; it runs the same engine. The npm `grida` command carries the same verbs as
+`grida fx <verb>` ([spec/distribution.md](spec/distribution.md): **current** in this repository,
+held by `tools/check_host.py`; **ratified design** in `grida` until its release pins `@grida/fx`).
+Usage, errors and next-step hints name the command FX was started as; documents and records are
+identical under all three. Users install the packages rather
 than cloning the repository. Confirm `--version` and the relevant `--help` first.
 `<target>` means a workflow file, workflow id, or supported Python builder target;
 individual commands can have narrower target rules.
@@ -381,6 +385,10 @@ Add targeted evidence for each changed boundary instead of rerunning paid exampl
   existing authorized scope; when an operation changes that scope, make its
   effects concrete before asking for a decision. Agents must not expose secrets
   or implement their own provider retry loop to work around a missing tool.
+- **Provider credentials:** keys come from the environment or the project's `.env` only. Reading
+  the provider credentials the `grida` command manages, which `grida` alone writes, is
+  **proposed** ([gridaco/fx#2](https://github.com/gridaco/fx/issues/2)). Agents configure keys
+  with `grida`, never through an FX command.
 - **Known correctness limits:** [ISSUES.md](ISSUES.md) tracks missing provider usage
   and an unexplained image-cost discrepancy. Do not claim complete cost explanation
   while those remain open. Unversioned node identities name their export in source

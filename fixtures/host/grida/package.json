@@ -1,0 +1,11 @@
+{
+  "name": "grida-host-fixture",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A stand-in for the npm grida command, reduced to the fx verb (spec/distribution.md).",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": { "grida": "bin/grida.js" },
+  "files": ["bin/grida.js"],
+  "dependencies": { "@grida/fx": "0.1.0" }
+}

@@ -42,7 +42,9 @@ truth. Every other manifest repeats it in its own form:
 - the crates inherit it, and `Cargo.lock` records it;
 - `python/pyproject.toml` and `python/uv.lock` use the PEP 440 form (`0.1.0-alpha.1` is `0.1.0a1`);
 - `js/fx/package.json` uses it unchanged and pins each engine package to it exactly, and
-  `js/fx/src/index.ts` exports it as `version`.
+  `js/fx/src/index.ts` exports it as `version`;
+- `fixtures/host/grida/package.json`, the stand-in for the npm `grida` command, pins
+  `@grida/fx` to it exactly, as `grida` does ([spec/distribution.md](spec/distribution.md)).
 
 To change it, edit `Cargo.toml` and each of those files. Then run `cargo update --workspace`
 and `(cd python && uv lock)`, and check the result:
@@ -223,14 +225,18 @@ The tag starts `release.yml`, which runs four jobs:
      `tools/build_wheel.py`, reads the platform tag back from the binary and refuses a
      dishonest one, and checks that the tag is the one in the table;
    - installs that wheel into a fresh Python 3.11 environment, and runs the whole conformance
-     suite (`--strict`) through `python -m grida.fx`, with that environment hosting the node
-     bodies;
+     suite (`--strict`, `--invoker python`) through `python -m grida.fx`, with that environment
+     hosting the node bodies;
    - its npm packager, `tools/build_npm.mjs`, runs under Node 18 (the oldest Node the
      packages support). It installs the tarballs into a fresh prefix, and runs the suite
      again through the installed `grida-fx` command;
    - runs `tools/check_viewer.py` through both installed commands from an isolated temporary
      directory. A synthetic graph needs no provider; loopback requests must retrieve every
      embedded frontend file byte-for-byte, without a browser or frontend runtime;
+   - runs `tools/check_host.py --tarballs` on the same two npm tarballs: installed beside the
+     stand-in for the npm `grida` command, they must pass the launcher checks, the whole suite
+     (`--invoker grida`) and the viewer check through `grida fx`
+     ([spec/distribution.md](spec/distribution.md));
    - uploads the wheel and the engine package it just tested. Every job packs `@grida/fx` the
      same way, and the `x86_64-unknown-linux-gnu` job uploads it.
 4. **publish** waits for a reviewer to approve the `release` environment. It runs only for a
@@ -241,6 +247,15 @@ The tag starts `release.yml`, which runs four jobs:
 
 A published version can never be replaced. If something is wrong after publishing, fix it,
 bump to a new version (for example `0.1.1`) and tag again.
+
+### Then `grida`
+
+`grida fx` reaches users only through a `grida` release ([spec/distribution.md](spec/distribution.md)
+§4). Once `@grida/fx` is on npm, in [gridaco/grida](https://github.com/gridaco/grida): pin
+`@grida/fx` in `packages/grida-cli/package.json` to exactly the new version, bump `grida`'s own
+version with it, and merge; `grida`'s release workflow publishes it. A pin that names an
+unpublished version cannot install, so this step always follows the FX publish. Before a host
+contract change (`HOST_CONTRACT`), change `grida`'s launcher in the same pull request.
 
 ## Checking the published release
 
@@ -263,5 +278,5 @@ fx-check/bin/python -m grida.fx --version   # grida-fx 0.1.0
 
   ```sh
   GRIDA_FX_PYTHON=fx-check/bin/python uv run --project python python conformance/run.py \
-    --strict --command "fx-check/bin/python -m grida.fx"
+    --strict --invoker python --command "fx-check/bin/python -m grida.fx"
   ```

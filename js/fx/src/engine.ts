@@ -45,13 +45,16 @@ export const INTERRUPTED = 130;
 const STOP_GRACE_MS = 10_000;
 /** How long the pipes are still read once the engine has exited. */
 const DRAIN_MS = 500;
-/** How the engine prefixes an error on stderr. */
+/** How the engine prefixes an error on stderr: the SDK always runs it as the `grida-fx` invoker
+ * (spec/distribution.md §2), whichever command started this process. */
 const ERROR_PREFIX = "grida-fx: ";
 
 /** Runs the engine with `args` and collects what it prints. */
 export async function call(args: readonly string[], options: CallOptions = {}): Promise<Exit> {
   const cwd = options.cwd ?? process.cwd();
   const env = mergeEnvironment(options.env);
+  // A value inherited from a launcher (a node body run under `grida fx`) would change the prefix.
+  env.GRIDA_FX_INVOKER = "grida-fx";
   if (args[0] === "run") {
     env.GRIDA_FX_CANCEL_SOURCE = "sdk";
   }

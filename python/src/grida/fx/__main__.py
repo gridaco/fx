@@ -4,13 +4,15 @@ the same arguments and exits with its status, so Python users never need Node
 
 The binary gets this process's environment, with ``GRIDA_FX_SDK_PYTHON`` set to this interpreter
 (``grida.fx._api.engine_environment``): node bodies run in it when neither ``GRIDA_FX_PYTHON`` nor
-a project ``.venv`` chooses a Python, so they run where ``grida`` is installed.
+a project ``.venv`` chooses a Python, so they run where ``grida`` is installed. ``GRIDA_FX_INVOKER``
+is ``python`` (``spec/distribution.md`` §2), so the engine's usage, errors and hints say
+``python -m grida.fx``, as this module's own messages do.
 
 On POSIX the process becomes the binary (``os.execve``): signals, the terminal and the exit status
 are the engine's own. Elsewhere the binary runs as a child and its exit status is returned; a
 Ctrl-C reaches the child, which stops the run, and this process waits for it. No binary found,
-or one that cannot be started: ``grida-fx: <reason>`` on stderr, exit status 2, as the engine
-reports an error.
+or one that cannot be started: ``python -m grida.fx: <reason>`` on stderr, exit status 2, as the
+engine reports an error.
 """
 
 from __future__ import annotations
@@ -19,7 +21,10 @@ import os
 import subprocess
 import sys
 
-from grida.fx._api import binary, engine_environment
+from grida.fx._api import INVOKER_VARIABLE, binary, engine_environment
+
+#: The command as its user types it, without the verb.
+COMMAND = "python -m grida.fx"
 
 
 def main() -> int:
@@ -27,9 +32,10 @@ def main() -> int:
     try:
         program = binary()
     except RuntimeError as error:
-        print(f"grida-fx: {error}", file=sys.stderr)
+        print(f"{COMMAND}: {error}", file=sys.stderr)
         return 2
     environment = engine_environment()
+    environment[INVOKER_VARIABLE] = "python"
     try:
         if os.name == "posix":
             sys.stdout.flush()
@@ -37,7 +43,7 @@ def main() -> int:
             os.execve(program, ["grida-fx", *arguments], environment)
         child = subprocess.Popen([str(program), *arguments], env=environment)
     except OSError as error:
-        print(f"grida-fx: cannot start {program}: {error.strerror or error}", file=sys.stderr)
+        print(f"{COMMAND}: cannot start {program}: {error.strerror or error}", file=sys.stderr)
         return 2
     while True:
         try:

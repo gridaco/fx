@@ -92,9 +92,12 @@ pub(crate) fn report_service(result: Result<Option<String>, Error>, requested: b
                 launch_browser(url);
             }
         }
-        Ok(None) if requested => crate::print::print_error(&Error::usage(
-            "FX service is not running. Start this project with `grida-fx start --background`, then use `grida-fx inspect RUN --open` or `grida-fx plan TARGET --open`.",
-        )),
+        Ok(None) if requested => {
+            let command = crate::invoker::command();
+            crate::print::print_error(&Error::usage(format!(
+                "FX service is not running. Start this project with `{command} start --background`, then use `{command} inspect RUN --open` or `{command} plan TARGET --open`."
+            )))
+        }
         Ok(None) => {}
         Err(error) => crate::print::print_error(&Error::usage(format!(
             "FX inspection unavailable; the command continues: {}",

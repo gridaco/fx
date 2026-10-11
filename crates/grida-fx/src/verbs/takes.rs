@@ -78,7 +78,7 @@ pub fn reroll(args: &RerollArgs) -> Result<u8, Error> {
     let live = if args.live { " --live" } else { "" };
     print_line(&labelled(
         "next",
-        &format!("grida-fx run {}{live}", run.workflow),
+        &format!("{} run {}{live}", crate::invoker::command(), run.workflow),
     ));
     Ok(0)
 }
@@ -214,7 +214,12 @@ impl RunTakes {
             .get("takes_file")
             .and_then(Value::as_str)
             .filter(|relative| is_inside(relative))
-            .ok_or_else(|| Error::usage(format!("{given} was not started by grida-fx run")))?;
+            .ok_or_else(|| {
+                Error::usage(format!(
+                    "{given} was not started by {} run",
+                    crate::invoker::command()
+                ))
+            })?;
         let project = Project::find(cwd)?;
         let path = relative
             .split('/')

@@ -14,6 +14,7 @@ These documents define FX independently of any implementation. The Rust engine, 
 | [layout.md](layout.md) | Canvas layout: the automatic grid and decks (Ship A, in source, unreleased) and the optional `<workflow id>.layout.json` file (Ship B, not implemented) |
 | [control.md](control.md) | Local run control: exact invocation targeting, cancellation acceptance, verified local completion and force boundaries |
 | [sdk.md](sdk.md) | SDK user jobs: named execution/resume, pinned saved records and independent observation |
+| [distribution.md](distribution.md) | The ways to run FX (`grida fx`, `grida-fx`, `python -m grida.fx`), the invoker, the host contract and the release order |
 | [protocol.md](protocol.md) | The node protocol between the engine and a node host |
 | [capabilities.md](capabilities.md) | Each paid capability's canonical request, its answer, and the features a route declares |
 | [providers.md](providers.md) | The transport, provider keys, how provider answers become outcomes and bills, long jobs, downloads, and the built-in route table |

@@ -34,10 +34,11 @@
 //! ([`crate::engine`]) and wait on it from there.
 
 use crate::args::split_plan_args;
+use crate::invoker::{self, Invoker};
 use crate::print::print_error;
 use crate::verbs;
 use crate::verbs::planning::PlanVerb;
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand};
 use grida_fx_core::Error;
 use std::ffi::OsString;
 use std::process::ExitCode;
@@ -548,8 +549,16 @@ pub struct ViewArgs {
 
 /// Parses `argv` (the program name first), runs the verb, and maps the outcome to an exit code.
 pub fn main(argv: Vec<OsString>) -> ExitCode {
+    let invoker = match Invoker::from_value(std::env::var_os(invoker::VARIABLE)) {
+        Ok(invoker) => invoker,
+        Err(message) => {
+            print_error(&Error::usage(message));
+            return ExitCode::from(2);
+        }
+    };
+    invoker::set(invoker);
     let (for_clap, rest) = split_plan_args(&argv);
-    let cli = match Cli::try_parse_from(for_clap) {
+    let cli = match parse(for_clap, invoker) {
         Ok(cli) => cli,
         Err(error) => {
             // Help and version print to stdout and exit 0; usage errors print to stderr, exit 2.
@@ -571,6 +580,14 @@ pub fn main(argv: Vec<OsString>) -> ExitCode {
             ExitCode::from(2)
         }
     }
+}
+
+/// Parses `argv` (the program name first) as `invoker`'s command: usage and help name the
+/// command the way that launcher's user types it (crate::invoker).
+fn parse(argv: Vec<OsString>, invoker: Invoker) -> Result<Cli, clap::Error> {
+    let mut command = Cli::command().bin_name(invoker.command());
+    let matches = command.try_get_matches_from_mut(argv)?;
+    Cli::from_arg_matches(&matches).map_err(|error| error.format(&mut command))
 }
 
 /// The stack a verb runs on. Reserved, not committed: pages are touched only as deep as the

@@ -32,7 +32,16 @@ from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO
 
 MANIFEST_KIND = "fx-local-release-v1"
-REQUIRED_CHECKS = frozenset({"wheel_conformance", "npm_conformance", "wheel_viewer", "npm_viewer"})
+REQUIRED_CHECKS = frozenset(
+    {
+        "wheel_conformance",
+        "npm_conformance",
+        "host_conformance",
+        "wheel_viewer",
+        "npm_viewer",
+        "host_viewer",
+    }
+)
 NPM_REGISTRY = "https://registry.npmjs.org"
 PYPI_REGISTRY = "https://pypi.org"
 PYPI_UPLOAD = "https://upload.pypi.org/legacy/"

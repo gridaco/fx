@@ -12,7 +12,9 @@ Every other place that states a version repeats it, in its own ecosystem's form:
   exactly it, among them every engine package js/fx/src/platforms.ts names; a ``version``
   constant exported from js/fx/src states it too;
 - every other package.json under js/ for an ``@grida/fx-*`` package (the per-platform engine
-  packages) states it.
+  packages) states it;
+- fixtures/host/grida/package.json, the stand-in for the npm ``grida`` command, pins
+  ``@grida/fx`` to exactly it, as ``grida`` does (spec/distribution.md).
 
     uv run --project python python tools/check_versions.py                       # the tree
     uv run --project python python tools/check_versions.py --tag v0.1.0-alpha.1  # and a tag
@@ -202,6 +204,10 @@ def statements(root: Path, version: str) -> Iterator[tuple[str, str | None, str]
         platform = _json(path)
         where = _where(root, path, f"{platform.get('name')} version")
         yield where, platform.get("version"), version
+
+    host = root / "fixtures" / "host" / "grida" / "package.json"
+    pinned = _json(host).get("dependencies", {}).get("@grida/fx")
+    yield _where(root, host, "dependencies @grida/fx"), pinned, version
 
 
 def platform_manifests(root: Path) -> list[Path]:

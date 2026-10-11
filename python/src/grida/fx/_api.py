@@ -522,12 +522,18 @@ def binary() -> Path:
 #: node bodies and stand-in hosts, after ``GRIDA_FX_PYTHON`` and every project ``.venv``
 #: (``spec/protocol.md`` §1, §8).
 SDK_PYTHON_VARIABLE = "GRIDA_FX_SDK_PYTHON"
+#: Which command started the engine (``spec/distribution.md`` §2). The SDK always runs it as
+#: ``grida-fx``, whose errors carry the prefix :data:`_ERROR` reads; ``python -m grida.fx`` says
+#: ``python``.
+INVOKER_VARIABLE = "GRIDA_FX_INVOKER"
 
 
 def engine_environment() -> dict[str, str]:
     """The binary's environment: this process's, with ``GRIDA_FX_SDK_PYTHON`` set to this
-    interpreter when it is known (module docstring)."""
+    interpreter when it is known (module docstring), and the ``grida-fx`` invoker, replacing one
+    inherited from a launcher (a node body run under ``grida fx``)."""
     environment = dict(os.environ)
+    environment[INVOKER_VARIABLE] = "grida-fx"
     if sys.executable:
         environment[SDK_PYTHON_VARIABLE] = sys.executable
     return environment

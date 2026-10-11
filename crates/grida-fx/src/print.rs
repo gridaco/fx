@@ -36,10 +36,11 @@ pub fn print_text(text: &str) {
     let _ = out.write_all(text.as_bytes()).and_then(|()| out.flush());
 }
 
-/// Prints `grida-fx: <message>` to stderr.
+/// Prints `<command>: <message>` to stderr, the command as its launcher's user types it
+/// ([`crate::invoker::command`]).
 pub fn print_error(error: &Error) {
     let mut err = std::io::stderr().lock();
-    let _ = writeln!(err, "grida-fx: {error}");
+    let _ = writeln!(err, "{}: {error}", crate::invoker::command());
 }
 
 /// The node host: the runtime's Python host, started lazily for the project planning opens.

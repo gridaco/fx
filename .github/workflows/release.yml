@@ -197,7 +197,7 @@ jobs:
         run: |
           "$WHEEL_PYTHON" -m grida.fx --version
           GRIDA_FX_PYTHON="$WHEEL_PYTHON" uv run --locked --project python \
-            python conformance/run.py --strict --command "$WHEEL_PYTHON -m grida.fx"
+            python conformance/run.py --strict --invoker python --command "$WHEEL_PYTHON -m grida.fx"
       - name: The installed wheel serves its embedded viewer outside the checkout
         run: >-
           "$WHEEL_PYTHON" tools/check_viewer.py
@@ -216,6 +216,12 @@ jobs:
             python conformance/run.py --strict --command "$NPM_BIN"
       - name: The installed npm package serves its embedded viewer outside the checkout
         run: python3 tools/check_viewer.py --command "$NPM_BIN"
+      # The same tarballs as the npm grida command installs them (spec/distribution.md): beside
+      # the host fixture, with conformance and the viewer check through `grida fx`.
+      - name: Conformance suite and viewer through grida fx, as installed
+        env:
+          GRIDA_FX_PYTHON: ${{ env.WHEEL_PYTHON }}
+        run: uv run --locked --project python python tools/check_host.py --tarballs "$DIST/npm"
       # Every job packs @grida/fx; one uploads it, every job uploads its own engine package.
       - name: Set the tarballs apart
         run: |

@@ -243,8 +243,9 @@ fn checks(
                         "job_outstanding",
                         format!(
                             "job {} is {state}: run the workflow again to collect it, or \
-                             grida-fx jobs --forget it once you have checked the provider",
-                            job.key
+                             {} jobs --forget it once you have checked the provider",
+                            job.key,
+                            crate::invoker::command()
                         ),
                     ));
                 }
@@ -273,8 +274,9 @@ fn checks(
             Holds::Missing => refused.push(refusal(
                 "missing_run",
                 format!(
-                    "{} is gone; if it is, forget it with grida-fx runs remove {}",
+                    "{} is gone; if it is, forget it with {} runs remove {}",
                     shown_path(&found.folder, cwd),
+                    crate::invoker::command(),
                     shown_path(&found.folder, cwd)
                 ),
             )),

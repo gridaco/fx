@@ -53,7 +53,10 @@ pub fn init(args: &InitArgs) -> Result<u8, Error> {
             "{} fx.yaml",
             if created { "Created" } else { "Using existing" }
         );
-        println!("Start the local service with grida-fx start --background.");
+        println!(
+            "Start the local service with {} start --background.",
+            crate::invoker::command()
+        );
     }
     Ok(0)
 }
@@ -310,9 +313,10 @@ pub fn start(args: &StartArgs) -> Result<u8, Error> {
         return Ok(0);
     }
     if existing["state"] != "stopped" {
-        return Err(Error::usage(
-            "the project service is unavailable or incompatible; inspect grida-fx status and grida-fx logs before retrying",
-        ));
+        let command = crate::invoker::command();
+        return Err(Error::usage(format!(
+            "the project service is unavailable or incompatible; inspect {command} status and {command} logs before retrying"
+        )));
     }
     if args.background {
         background(&project, &catalog, port, args)
@@ -523,17 +527,19 @@ fn background_with_executable(
             .is_some()
             && !process_locked(catalog).unwrap_or(false)
         {
-            return Err(Error::usage(
-                "FX service could not start; run grida-fx logs to inspect the cause",
-            ));
+            return Err(Error::usage(format!(
+                "FX service could not start; run {} logs to inspect the cause",
+                crate::invoker::command()
+            )));
         }
         if Instant::now() >= deadline {
             // This handle belongs to the child this invocation spawned, never a descriptor PID.
             let _ = child.kill();
             let _ = child.wait();
-            return Err(Error::usage(
-                "FX service did not become ready within 10 seconds; inspect grida-fx logs",
-            ));
+            return Err(Error::usage(format!(
+                "FX service did not become ready within 10 seconds; inspect {} logs",
+                crate::invoker::command()
+            )));
         }
         std::thread::sleep(Duration::from_millis(50));
     }
