@@ -54,6 +54,10 @@ the returned `verification.verified` and `problems`; a failed verification retur
 evidence rather than pretending the artifacts are valid.
 Load again to refresh the summary. Snapshot and event methods perform new reads.
 
+For portable review or publication preparation, use the record's `export` method.
+[Share a recorded run](11-exports.md) covers disclosure, omissions and immutable
+content references. Exporting spends nothing and does not publish the files.
+
 For a completed SDK execution, keep using its `RunResult` output file objects and
 delivery API. Record inspection also works on active, failed and copied runs. A
 copied record does not need its original cache or workflow source for inspection.

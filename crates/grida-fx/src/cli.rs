@@ -98,6 +98,8 @@ pub enum Verb {
     Project(ProjectArgs),
     /// read bounded recorded events or a consistent snapshot, as JSON; never executes code
     Observe(ObserveArgs),
+    /// export a terminal saved run for portable inspection; never executes or uploads
+    Export(ExportArgs),
     /// a run's summary, from its own folder
     Inspect(InspectArgs),
     /// request cancellation of one exact run invocation, without starting a service
@@ -437,6 +439,24 @@ pub struct ObserveArgs {
 }
 
 #[derive(Debug, Args, Clone)]
+pub struct ExportArgs {
+    /// one exact saved run folder
+    pub run: String,
+    /// new export directory (its parent must exist)
+    #[arg(long, value_name = "DIRECTORY")]
+    pub out: String,
+    /// include recorded inputs, parameters, schemas and textual output values
+    #[arg(long)]
+    pub include_values: bool,
+    /// include recorded error and diagnostic strings
+    #[arg(long)]
+    pub include_diagnostics: bool,
+    /// print the structured result or refusal as JSON
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args, Clone)]
 pub struct ProjectArgs {
     /// a run folder
     pub run: String,
@@ -624,6 +644,7 @@ fn dispatch(verb: Verb, rest: Vec<String>) -> Result<u8, Error> {
         Verb::Jobs(args) => verbs::jobs::run(&args),
         Verb::Project(args) => verbs::project::run(&args),
         Verb::Observe(args) => verbs::observe::run(&args),
+        Verb::Export(args) => verbs::export::run(&args),
         Verb::Inspect(args) => verbs::inspect::run(&args),
         Verb::Cancel(args) => verbs::control::cancel(&args),
         Verb::Runs(args) => verbs::runs::run(&args),

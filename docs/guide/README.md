@@ -13,7 +13,8 @@ The local FX service gives a project a stable address, a run/plan index, and a
 read-only node canvas. Start with `grida-fx init` and `grida-fx start --background`;
 standalone workflows remain supported. These service commands describe current
 source behavior: check your installed version's help before using them.
-Custom step pages and static snapshot exports remain planned.
+Custom step pages remain planned. Portable recorded-run exports are described in
+the sharing chapter; check installed help for these source capabilities.
 
 ## Chapters
 
@@ -27,6 +28,7 @@ Custom step pages and static snapshot exports remain planned.
 8. [Stopping and continuing a run](08-run-control.md): exact targeting, cancellation and verified local cleanup
 9. [Working with runs from an SDK](09-sdk-runs.md): names, saved records and independent observation
 10. [Cleaning up runs](10-cleanup.md): listing a project's runs, removing the ones you no longer need, and pruning the cache
+11. [Share a recorded run](11-exports.md): portable inspection, disclosure and immutable content
 
 ## Example projects
 

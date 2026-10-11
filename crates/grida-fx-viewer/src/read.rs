@@ -135,6 +135,15 @@ pub(crate) fn take_verified_paths() -> Vec<String> {
 }
 
 impl Snapshot {
+    /// Recorded identities and whether this run ever placed their bytes. Export selection
+    /// happens before verification so excluded attachments are never opened.
+    pub(crate) fn export_inventory(&self) -> Vec<(Artifact, bool)> {
+        self.candidates
+            .values()
+            .map(|candidate| (candidate.artifact.clone(), !candidate.paths.is_empty()))
+            .collect()
+    }
+
     /// Opens exactly recorded bytes. Validation and serving use the same file handle.
     pub fn open_artifact(&self, root: &Path, digest: &str) -> io::Result<(File, Artifact)> {
         let candidate = self
@@ -297,6 +306,30 @@ pub(crate) fn project_records(
     observed: &grida_fx_runtime::observation::RunSnapshot,
 ) -> io::Result<Snapshot> {
     project_inventory(root, &observed.plan, &observed.events, Vec::new())
+}
+
+/// Export values have one explicit encoding. Saved-plan values are plain JSON, unlike
+/// event values, so wrap them before either projection or artifact discovery interprets them.
+/// Keep the captured source plan itself unchanged for its fingerprint and layout evidence.
+pub(crate) fn project_export_records(
+    root: &Path,
+    observed: &grida_fx_runtime::observation::RunSnapshot,
+) -> io::Result<Snapshot> {
+    fn encode_plain_map(value: &mut Value) {
+        if let Some(values) = value.as_object_mut() {
+            for value in values.values_mut() {
+                *value = json!({"value": std::mem::take(value)});
+            }
+        }
+    }
+    let mut plan = observed.plan.clone();
+    encode_plain_map(&mut plan["inputs"]);
+    if let Some(instances) = plan["instances"].as_array_mut() {
+        for instance in instances {
+            encode_plain_map(&mut instance["with"]);
+        }
+    }
+    project_inventory(root, &plan, &observed.events, Vec::new())
 }
 
 fn verify_inventory(root: &Path, mut snapshot: Snapshot) -> io::Result<Snapshot> {

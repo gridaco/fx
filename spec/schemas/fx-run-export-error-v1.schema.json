@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-run-export-error-v1",
+  "title": "fx-run-export-error-v1",
+  "type": "object",
+  "required": [
+    "kind",
+    "code",
+    "message"
+  ],
+  "properties": {
+    "kind": {
+      "const": "fx-run-export-error-v1"
+    },
+    "code": {
+      "enum": [
+        "unavailable",
+        "busy",
+        "incomplete_run",
+        "invalid_record",
+        "destination_exists",
+        "destination_invalid",
+        "artifact_unavailable",
+        "write_failed"
+      ]
+    },
+    "message": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}

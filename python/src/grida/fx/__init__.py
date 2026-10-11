@@ -51,7 +51,13 @@ from grida.fx._errors import (
     EngineError,
     NodeFailure,
 )
-from grida.fx._record import RunObservationError, RunRecord, load_run, load_run_async
+from grida.fx._record import (
+    RunExportError,
+    RunObservationError,
+    RunRecord,
+    load_run,
+    load_run_async,
+)
 from grida.fx._runs import (
     RunEntry,
     RunRemoval,
@@ -89,6 +95,7 @@ __all__ = [
     "RunResult",
     "RunRecord",
     "RunObservationError",
+    "RunExportError",
     "RunControlError",
     "RunControlResult",
     "RunEntry",

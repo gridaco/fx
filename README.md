@@ -57,6 +57,9 @@ The dashboard stays at `http://127.0.0.1:8787/` by default after execution finis
 Python users can substitute `python -m grida.fx` for `grida-fx`.
 The [viewing guide](docs/guide/07-viewing.md) covers independent `--standalone`
 inspection and the older `view` command.
+To share a finished recording, current source also supports
+`grida-fx export runs/example --out review --json`; the
+[sharing guide](docs/guide/11-exports.md) explains disclosure and portable media.
 To stop execution, use `grida-fx cancel runs/example --wait`. The
 [run-control guide](docs/guide/08-run-control.md) explains targeting, cleanup and resume.
 

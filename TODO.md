@@ -12,8 +12,10 @@ Pending work and open design questions only. Supported behavior belongs in the
   execution and identity under [the store contract](spec/store.md).
 - Define precise incomplete-state evidence where inspection needs more than the
   recorded contracts provide; the client must not infer missing execution metadata.
-- Share browser components for the future website and design portable snapshots
-  that work with a local file server or any selected storage/CDN provider.
+- Preserve imported-scope membership for unused planned takes in recorded views.
+  Some skipped descendants currently appear beside the closed workflow because
+  its recorded membership omits them. Keep that evidence intact until the engine
+  supplies ownership; do not guess from display paths in the export client.
 
 **Prior implementation reference only:**
 [Stage Gen's viewer](https://github.com/softmarshmallow/stage-gen/tree/main/web/viewer)
@@ -58,7 +60,7 @@ tracks the agent scenario. Remaining work, in order:
 Deferred ([spec/layout.md §11](spec/layout.md#11-deferred)): per-instance keys; `defaults`,
 `wrap` and `clusters` keys; pins; labels and descriptions; visual groups; an imported
 workflow's own file; per-run files; a CLI option or URL parameter; a URL that selects one
-member; portable snapshots carrying their layout; a write or rename command; visual
+member; a write or rename command; visual
 editing; a minimap; typed SDK access to the layout report (callers receive it untyped in
 `inspection`); ELK or any other router.
 

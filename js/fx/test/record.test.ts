@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, cpSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  FxError, loadRun, plan, run, RunObservationError, RunRecord, toYaml, workflow,
+  FxError, loadRun, plan, run, RunExportError, RunObservationError, RunRecord, toYaml, workflow,
 } from "../src/index.js";
 import type { RunEventBatch } from "../src/index.js";
 import { repoRoot, SLOW, temporaryFolder, testEngine } from "./support.js";
@@ -65,6 +65,40 @@ function fake() {
 }
 
 describe.skipIf(!NODE || process.platform === "win32")("saved run observation", () => {
+  test("exports pinned evidence with opt-in disclosure and structured refusals", async () => {
+    const engine = fake();
+    try {
+      const record = await loadRun("case/one", engine.options);
+      const output = join(engine.path, "review");
+      const receipt = {
+        kind: "fx-run-export-result-v1" as const, manifest_sha256: "b".repeat(64), output,
+        files: 2, bytes: 120, omitted_artifacts: [{ digest: "c".repeat(64), reason: "policy_excluded" }],
+        future_field: true,
+      };
+      engine.reply({ reply: receipt });
+      expect(await record.export(output, { includeValues: true, includeDiagnostics: true })).toEqual(receipt);
+      expect(engine.log().at(-1)).toEqual([
+        "export", record.runDir, `--out=${output}`, "--json", "--include-values", "--include-diagnostics",
+      ]);
+      const refused = { kind: "fx-run-export-error-v1" as const, code: "busy", message: "Run is busy." };
+      engine.reply({ reply: refused, status: 2 });
+      const error = await record.export(output).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(RunExportError);
+      expect((error as RunExportError).code).toBe("busy");
+      expect((error as RunExportError).document).toEqual(refused);
+      for (const change of [{ files: true }, { bytes: -1 }, { manifest_sha256: "bad" }, { omitted_artifacts: [{}] }, { output: "" }]) {
+        engine.reply({ reply: { ...receipt, ...change } });
+        await expect(record.export(output)).rejects.toBeInstanceOf(FxError);
+      }
+      const before = engine.log().length;
+      for (const destination of ["", "bad\0path", 3]) {
+        await expect(record.export(destination as string)).rejects.toBeInstanceOf(TypeError);
+      }
+      await expect(record.export(output, { includeValues: 1 as unknown as boolean })).rejects.toBeInstanceOf(TypeError);
+      expect(engine.log()).toHaveLength(before);
+    } finally { engine.cleanup(); }
+  }, SLOW);
+
   test("pins one resolved folder, preserves extensions and releases the loading signal", async () => {
     const engine = fake();
     const loading = new AbortController();

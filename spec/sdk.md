@@ -83,6 +83,30 @@ result of an applied removal that cannot be read raises an error that says the r
 have taken effect. Neither result is bounded in size, since a project may hold thousands of
 runs.
 
+## Export recorded evidence
+
+Python `RunRecord.export(destination, include_values=False,
+include_diagnostics=False)` and its `export_async` counterpart, and JavaScript
+`RunRecord.export(destination, {includeValues, includeDiagnostics, signal})`,
+invoke the engine's [portable export](exports.md). The saved source folder stays
+pinned. Relative destinations resolve against the caller's current working
+directory at the method call, not the earlier inspection location.
+
+The engine requires terminal, inactive evidence and a new destination. It owns
+locking, disclosure projection, media selection, verification, atomic placement
+and export identity. SDKs never compute identities or interpret a refusal as
+permission to resume, regenerate or publish. Values and diagnostics are withheld
+by default; media and labels still need the author's publication review.
+
+Return the `fx-run-export-result-v1` receipt with wire field names preserved:
+`manifest_sha256`, `output`, `files`, `bytes`, and `omitted_artifacts`. SDKs validate
+the receipt envelope and retain unknown optional fields. The counts cover copied
+artifact files, excluding `manifest.json`. Structured engine refusals raise
+`RunExportError` carrying `code` and `document`; transport or malformed-response
+failures raise `FxError`. JavaScript's signal stops the export command, not any
+workflow. This operation has no provider calls, project-service requirement or
+CDN-account handling.
+
 ## Intentional boundaries
 
 Plans already expose graph/problems/pricing, and execution results expose output

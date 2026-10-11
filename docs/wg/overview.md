@@ -198,8 +198,9 @@ Milestone 2 has passed. The published preview `v0.1.0-alpha.2` has also passed i
   node canvas, live observation and persistent project service are implemented in
   source. The [canvas layout](../../spec/layout.md) (decision 14) is ratified; its automatic
   grid and decks (Ship A) are in source, unreleased, and its layout file (Ship B) is not
-  implemented. [Custom views, portable snapshots and optional OS supervision](../../TODO.md#workflow-and-run-viewer)
-  remain later work.
+  implemented. [Portable recorded-run exports](../../spec/exports.md) and the
+  shared static browser reader are implemented in source. [Custom views and
+  optional OS supervision](../../TODO.md#workflow-and-run-viewer) remain later work.
 - Standard-library node bodies in Rust, with a planned rekey (decision 8). This also makes their outputs the same bytes on every platform. Today Pillow's Linux x86-64 build writes other PNG bytes than its macOS arm64 build for some pictures, so a cache filled on one platform misses on the other for every paid call downstream of a std picture output.
 
 ## Identity v3

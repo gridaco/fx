@@ -31,6 +31,15 @@ class RunObservationError(FxError):
         self.document = document
 
 
+class RunExportError(FxError):
+    """A refused export, with the engine's stable ``code`` and error ``document``."""
+
+    def __init__(self, document: dict[str, Any]) -> None:
+        super().__init__(document["message"], 2)
+        self.code: str = document["code"]
+        self.document = document
+
+
 def _target(target: str | Path) -> str:
     if not isinstance(target, str | os.PathLike):
         raise TypeError("target is a run folder, workflow ID or WORKFLOW_ID/NAME selector")
@@ -148,6 +157,67 @@ class RunRecord:
     async def snapshot_async(self) -> dict[str, Any]:
         return await _observe(self.run_dir, snapshot=True, options=["--snapshot"])
 
+    def export(
+        self,
+        destination: str | Path,
+        *,
+        include_values: bool = False,
+        include_diagnostics: bool = False,
+    ) -> dict[str, Any]:
+        """Copy a terminal, inactive record into a new portable inspection directory.
+
+        Relative destinations resolve against the caller's current directory. Values and
+        diagnostic messages are withheld by default; included media still needs review
+        before publication. This does not execute the workflow or publish files.
+        """
+        _no_running_loop("RunRecord.export")
+        return asyncio.run(
+            self.export_async(
+                destination,
+                include_values=include_values,
+                include_diagnostics=include_diagnostics,
+            )
+        )
+
+    async def export_async(
+        self,
+        destination: str | Path,
+        *,
+        include_values: bool = False,
+        include_diagnostics: bool = False,
+    ) -> dict[str, Any]:
+        """Async counterpart of :meth:`export`; returns the engine's export receipt."""
+        if not isinstance(destination, str | os.PathLike):
+            raise TypeError("destination is a nonempty filesystem path")
+        target = os.fspath(destination)
+        if not isinstance(target, str) or not target or "\0" in target:
+            raise ValueError("destination is nonempty and contains no NUL")
+        if type(include_values) is not bool or type(include_diagnostics) is not bool:
+            raise TypeError("include_values and include_diagnostics are True or False")
+        args = ["export", str(self.run_dir), f"--out={Path(target).absolute()}", "--json"]
+        if include_values:
+            args.append("--include-values")
+        if include_diagnostics:
+            args.append("--include-diagnostics")
+        done = await _call(args, Path.cwd())
+        try:
+            document = json.loads(done.stdout, parse_constant=_reject_constant)
+        except ValueError:
+            raise FxError("grida-fx export printed malformed JSON", done.status) from None
+        if (
+            done.status == 2
+            and isinstance(document, dict)
+            and document.get("kind") == "fx-run-export-error-v1"
+            and _text(document.get("code"))
+            and _text(document.get("message"))
+        ):
+            raise RunExportError(document)
+        if done.status != 0:
+            raise _failure("export", done)
+        if not _export_result(document):
+            raise FxError("grida-fx export printed a malformed export result", done.status)
+        return document
+
     def events(self, after: str | None = None, limit: int = 256) -> dict[str, Any]:
         """Read one bounded event batch, from the beginning unless ``after`` is supplied."""
         _no_running_loop("RunRecord.events")
@@ -180,6 +250,29 @@ class RunRecord:
             del batch
             if not has_more:
                 await asyncio.sleep(poll_interval)
+
+
+def _export_result(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and value.get("kind") == "fx-run-export-result-v1"
+        and isinstance(value.get("manifest_sha256"), str)
+        and _DIGEST.fullmatch(value["manifest_sha256"]) is not None
+        and _text(value.get("output"))
+        and "\0" not in value["output"]
+        and type(value.get("files")) is int
+        and value["files"] >= 0
+        and type(value.get("bytes")) is int
+        and value["bytes"] >= 0
+        and isinstance(value.get("omitted_artifacts"), list)
+        and all(
+            isinstance(item, dict)
+            and isinstance(item.get("digest"), str)
+            and _DIGEST.fullmatch(item["digest"]) is not None
+            and _text(item.get("reason"))
+            for item in value["omitted_artifacts"]
+        )
+    )
 
 
 async def load_run_async(

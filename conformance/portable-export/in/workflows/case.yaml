@@ -1,0 +1,12 @@
+fx: workflow/v1
+id: case
+title: Portable synthetic result
+inputs:
+  message: {type: string, default: A private fixture message}
+steps:
+  draw:
+    uses: ./nodes/draw.py#draw
+    with: {message: "${{ inputs.message }}"}
+outputs:
+  image: ${{ steps.draw.outputs.image }}
+  text: ${{ steps.draw.outputs.text }}

@@ -58,6 +58,46 @@ export interface RunReadOptions {
   readonly signal?: AbortSignal;
 }
 
+export interface RunExportOptions extends RunReadOptions {
+  /** Include recorded values after deliberate disclosure review. Default: false. */
+  readonly includeValues?: boolean;
+  /** Include recorded diagnostic messages. Default: false. */
+  readonly includeDiagnostics?: boolean;
+}
+
+/** The engine's wire receipt. Counts cover included artifacts, excluding manifest.json. */
+export interface RunExportResult {
+  kind: "fx-run-export-result-v1";
+  manifest_sha256: string;
+  output: string;
+  files: number;
+  bytes: number;
+  omitted_artifacts: { digest: string; reason: string }[];
+  [field: string]: unknown;
+}
+
+export interface RunExportFailure {
+  kind: "fx-run-export-error-v1";
+  code: string;
+  message: string;
+  [field: string]: unknown;
+}
+
+export class RunExportError extends FxError {
+  readonly code: string;
+  readonly document: RunExportFailure;
+
+  constructor(document: RunExportFailure, done: Exit) {
+    super(document.message, {
+      exitCode: done.status, signal: done.signal, stdout: done.stdout,
+      stderr: done.stderr, args: done.args,
+    });
+    this.name = "RunExportError";
+    this.code = document.code;
+    this.document = document;
+  }
+}
+
 export interface RunEventsOptions extends RunReadOptions {
   /** Opaque acknowledged cursor; omit to read from the beginning. */
   readonly after?: string;
@@ -87,6 +127,24 @@ function event(value: unknown): value is ObservedRunEvent {
     && text(value.invocation_id) && typeof value.plan === "string"
     && /^[a-f0-9]{64}$/.test(value.plan) && Number.isSafeInteger(value.offset_ms)
     && (value.offset_ms as number) >= 0;
+}
+
+function exportResult(done: Exit): RunExportResult {
+  let value: unknown;
+  try { value = JSON.parse(done.stdout); } catch { throw failure("export", done); }
+  if (done.status === 2 && object(value) && value.kind === "fx-run-export-error-v1"
+    && text(value.code) && text(value.message)) {
+    throw new RunExportError(value as unknown as RunExportFailure, done);
+  }
+  if (done.status !== 0 || !object(value) || value.kind !== "fx-run-export-result-v1"
+    || typeof value.manifest_sha256 !== "string" || !/^[a-f0-9]{64}$/.test(value.manifest_sha256)
+    || !cursor(value.output) || !Number.isSafeInteger(value.files) || (value.files as number) < 0
+    || !Number.isSafeInteger(value.bytes) || (value.bytes as number) < 0
+    || !Array.isArray(value.omitted_artifacts) || !value.omitted_artifacts.every((item) =>
+      object(item) && typeof item.digest === "string" && /^[a-f0-9]{64}$/.test(item.digest) && text(item.reason))) {
+    throw failure("export", done);
+  }
+  return value as unknown as RunExportResult;
 }
 
 function response(done: Exit, snapshot: boolean, options: RunEventsOptions = {}): RunSnapshot | RunEventBatch {
@@ -168,6 +226,23 @@ export class RunRecord {
       ...this.context, ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
     return response(done, true) as RunSnapshot;
+  }
+
+  /** Export terminal, inactive evidence to a new directory, without execution or publication.
+   * Relative destinations resolve against the caller's current directory. Values and
+   * diagnostics are withheld by default; included media still needs publication review. */
+  async export(destination: string, options: RunExportOptions = {}): Promise<RunExportResult> {
+    if (!cursor(destination)) throw new TypeError("destination is a nonempty filesystem path without NUL");
+    for (const option of [options.includeValues, options.includeDiagnostics]) {
+      if (option !== undefined && typeof option !== "boolean") throw new TypeError("disclosure options are true or false");
+    }
+    const args = ["export", this.runDir, `--out=${resolve(destination)}`, "--json"];
+    if (options.includeValues === true) args.push("--include-values");
+    if (options.includeDiagnostics === true) args.push("--include-diagnostics");
+    const done = await call(args, {
+      ...this.context, ...(options.signal !== undefined ? { signal: options.signal } : {}),
+    });
+    return exportResult(done);
   }
 
   /** Read bounded events after a cursor, or from the beginning when after is omitted. */

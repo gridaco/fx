@@ -7,6 +7,7 @@
 pub mod cache;
 pub mod control;
 pub mod doctor;
+pub mod export;
 pub mod inspect;
 pub mod jobs;
 pub mod lock;

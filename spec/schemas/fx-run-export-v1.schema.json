@@ -1,0 +1,828 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-run-export-v1",
+  "title": "Portable recorded run inspection export (fx-run-export-v1)",
+  "type": "object",
+  "required": [
+    "kind",
+    "producer",
+    "source",
+    "disclosure",
+    "view",
+    "layout",
+    "artifacts"
+  ],
+  "properties": {
+    "kind": {
+      "const": "fx-run-export-v1"
+    },
+    "producer": {
+      "type": "object",
+      "required": [
+        "version"
+      ],
+      "properties": {
+        "version": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "source": {
+      "type": "object",
+      "required": [
+        "plan_sha256",
+        "events_sha256",
+        "event_count"
+      ],
+      "properties": {
+        "plan_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "events_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "event_count": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "disclosure": {
+      "type": "object",
+      "required": [
+        "values",
+        "diagnostics",
+        "artifacts"
+      ],
+      "properties": {
+        "values": {
+          "type": "boolean"
+        },
+        "diagnostics": {
+          "type": "boolean"
+        },
+        "artifacts": {
+          "const": "media"
+        }
+      },
+      "additionalProperties": true
+    },
+    "view": {
+      "$ref": "#/$defs/viewer"
+    },
+    "layout": {
+      "$ref": "#/$defs/layout"
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "digest",
+          "media_type",
+          "name",
+          "size",
+          "path",
+          "omitted_reason"
+        ],
+        "properties": {
+          "digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "media_type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "path": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^artifacts/[0-9a-f]{64}\\.(png|jpg|webp|gif|avif|mp4|webm|wav|mp3|ogg|flac|glb)$"
+          },
+          "omitted_reason": {
+            "enum": [
+              "policy_excluded",
+              "unplaced_input",
+              null
+            ]
+          }
+        },
+        "additionalProperties": true,
+        "oneOf": [
+          {
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "omitted_reason": {
+                "type": "null"
+              }
+            }
+          },
+          {
+            "properties": {
+              "path": {
+                "type": "null"
+              },
+              "omitted_reason": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "node": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "path",
+        "title",
+        "uses",
+        "state",
+        "reads",
+        "with",
+        "outputs",
+        "cache",
+        "error",
+        "duration_ms"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "step": {
+          "description": "The declared step's path, without repeat keys, as the plan, node_started or the latest scopes_updated records it. Absent when no record names it.",
+          "type": "string"
+        },
+        "take": {
+          "description": "One take per regenerating level, outermost first. Absent when no record names it.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "minItems": 1
+        },
+        "key": {
+          "description": "A directly repeated step's item key, null otherwise. Absent when no record names it.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "uses": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "state": {
+          "enum": [
+            "pending",
+            "running",
+            "succeeded",
+            "failed",
+            "skipped"
+          ]
+        },
+        "reads": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "with": {
+          "type": "object"
+        },
+        "outputs": {
+          "type": "object"
+        },
+        "cache": {
+          "enum": [
+            "hit",
+            "miss",
+            null
+          ]
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "duration_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "started_at": {
+          "description": "When this instance last started, UTC RFC3339 milliseconds: its invocation's recorded start plus the start event's offset. Absent when the record cannot date it.",
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+        },
+        "ports": {
+          "$ref": "#/$defs/ports"
+        },
+        "bindings": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/binding"
+          }
+        },
+        "needs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "judges": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "interface_bindings": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/interface_binding"
+          }
+        },
+        "interrupted": {
+          "description": "True when the run ended while this instance was running: it never finished, and its `state` is `failed`. Read from the recorded events, never from error text.",
+          "type": "boolean"
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "digest",
+        "kind",
+        "name",
+        "size",
+        "available",
+        "url"
+      ],
+      "properties": {
+        "digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "available": {
+          "type": "boolean"
+        },
+        "url": {
+          "type": "null"
+        }
+      }
+    },
+    "ports": {
+      "description": "Declared input/output file ports and JSON parameter schemas for display. Absent in older documents. Does not participate in identity.",
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "inputs",
+        "outputs",
+        "params"
+      ],
+      "properties": {
+        "inputs": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^(?:image|audio|video|model|text|json|annotations|file)(?:/[a-z0-9.+-]+)?(?:\\[\\]|\\{\\})?\\??$"
+          }
+        },
+        "outputs": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^(?:image|audio|video|model|text|json|annotations|file)(?:/[a-z0-9.+-]+)?(?:\\[\\]|\\{\\})?\\??$"
+          }
+        },
+        "params": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "binding": {
+      "description": "An evaluated reference from one resolved instance output or node fact to a named with entry. A compound expression or collection may have several references. Unresolved instance/take choices are omitted; readers keep dependency edges instead of guessing.",
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "source",
+        "source_port",
+        "target_port",
+        "source_kind"
+      ],
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_port": {
+          "type": "string"
+        },
+        "target_port": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "source_kind": {
+          "enum": [
+            "output",
+            "fact"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "source_kind": {
+                "const": "output"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "source_port": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "parent",
+        "kind",
+        "path",
+        "step",
+        "take",
+        "title",
+        "source",
+        "ports",
+        "input_bindings",
+        "output_bindings",
+        "nodes",
+        "pending"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^scope:.+#"
+        },
+        "parent": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "enum": [
+            "group",
+            "workflow"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "step": {
+          "type": "string",
+          "minLength": 1
+        },
+        "take": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "title": {
+          "type": "string"
+        },
+        "source": {
+          "type": "null"
+        },
+        "ports": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "inputs",
+            "outputs"
+          ],
+          "properties": {
+            "inputs": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "additionalProperties": true
+            },
+            "outputs": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              }
+            }
+          }
+        },
+        "input_bindings": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/interface_binding"
+          }
+        },
+        "output_bindings": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/interface_binding"
+          }
+        },
+        "nodes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "pending": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "interface_binding": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "source",
+        "source_port",
+        "source_kind",
+        "target_port"
+      ],
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_port": {
+          "type": "string"
+        },
+        "source_kind": {
+          "enum": [
+            "output",
+            "fact",
+            "scope_input",
+            "scope_output"
+          ]
+        },
+        "target_port": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "source_kind": {
+                "enum": [
+                  "output",
+                  "scope_input",
+                  "scope_output"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "source_port": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "pending_repeat": {
+      "description": "A repeat whose instances a later phase expands (fx-graph-v1 `pending`). `step` and `waiting_on` are absent in records written before they existed.",
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "path",
+        "max",
+        "phase",
+        "high_usd"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "step": {
+          "type": "string",
+          "minLength": 1
+        },
+        "max": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "phase": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "high_usd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "waiting_on": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "viewer": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "kind",
+        "workflow",
+        "run_name",
+        "state",
+        "stand_in",
+        "charged_usd",
+        "estimate",
+        "inputs",
+        "outputs",
+        "nodes",
+        "artifacts",
+        "warnings"
+      ],
+      "properties": {
+        "kind": {
+          "const": "fx-viewer-run-v1"
+        },
+        "workflow": {
+          "type": "object",
+          "required": [
+            "id"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": true
+        },
+        "run_name": {
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "planned",
+            "unfinished",
+            "succeeded",
+            "failed",
+            "cancelled"
+          ]
+        },
+        "stand_in": {
+          "type": "boolean"
+        },
+        "charged_usd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "estimate": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "inputs": {
+          "type": "object"
+        },
+        "outputs": {
+          "type": "object"
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/node"
+          }
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifact"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/scope"
+          },
+          "description": "Optional engine-owned display scopes. Absence means a legacy flat graph; an empty array authoritatively means no nested scopes."
+        },
+        "pending": {
+          "description": "The repeats not yet expanded: the latest scopes_updated `pending` when the record holds one, else the plan's `pending` whose phase has not been planned yet. Absent when neither is recorded.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/pending_repeat"
+          }
+        }
+      }
+    },
+    "layout": {
+      "type": "object",
+      "required": [
+        "kind",
+        "file",
+        "revision",
+        "state",
+        "cursor",
+        "diagnostics",
+        "cells",
+        "order"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "kind": {
+          "const": "fx-layout-report-v1"
+        },
+        "file": {
+          "type": "null"
+        },
+        "revision": {
+          "type": "null"
+        },
+        "state": {
+          "enum": [
+            "applied",
+            "none",
+            "refused"
+          ]
+        },
+        "cursor": {
+          "type": "null"
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "code",
+              "message"
+            ],
+            "additionalProperties": true,
+            "properties": {
+              "code": {
+                "enum": [
+                  "unknown_step",
+                  "not_drawn",
+                  "outside_document",
+                  "shared_cell",
+                  "backward_edge",
+                  "displaced",
+                  "layout_invalid",
+                  "layout_location_unknown",
+                  "layout_location_refused"
+                ]
+              },
+              "message": {
+                "type": "string"
+              },
+              "address": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "cells": {
+          "description": "Every slot's address mapped to its cell in its container (layout.md \u00a74), container by container from the root. A container's frames share its cells, so an address is an unambiguous key.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "column",
+              "row",
+              "source"
+            ],
+            "additionalProperties": true,
+            "properties": {
+              "column": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "row": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "source": {
+                "enum": [
+                  "automatic",
+                  "authored"
+                ]
+              }
+            }
+          }
+        },
+        "order": {
+          "description": "Every member, instance ids and scope ids, in order key (layout.md \u00a74 rule 4). Only the relative order of one slot's members is meaningful.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

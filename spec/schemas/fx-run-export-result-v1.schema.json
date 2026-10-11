@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-run-export-result-v1",
+  "title": "fx-run-export-result-v1",
+  "type": "object",
+  "required": [
+    "kind",
+    "manifest_sha256",
+    "output",
+    "files",
+    "bytes",
+    "omitted_artifacts"
+  ],
+  "properties": {
+    "kind": {
+      "const": "fx-run-export-result-v1"
+    },
+    "manifest_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "output": {
+      "type": "string"
+    },
+    "files": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "bytes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "omitted_artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "digest",
+          "reason"
+        ],
+        "properties": {
+          "digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "reason": {
+            "enum": [
+              "policy_excluded",
+              "unplaced_input"
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

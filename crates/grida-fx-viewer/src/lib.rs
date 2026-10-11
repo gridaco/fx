@@ -5,6 +5,7 @@
 //! loopback only and starts no workflow, provider adapter or node host. Service discovery is
 //! confined to the explicitly configured run directory.
 
+pub mod export;
 mod layout;
 mod read;
 mod scopes;

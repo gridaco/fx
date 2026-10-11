@@ -101,6 +101,93 @@ def test_direct_run_record_construction_pins_a_relative_folder(
     assert fake.invocations == [["observe", str(record.run_dir), "--limit=256"]]
 
 
+def export_receipt(tmp_path: Path) -> dict[str, Any]:
+    return {
+        "kind": "fx-run-export-result-v1",
+        "manifest_sha256": "b" * 64,
+        "output": str(tmp_path / "review"),
+        "files": 2,
+        "bytes": 120,
+        "omitted_artifacts": [{"digest": "c" * 64, "reason": "not_media"}],
+        "future_field": True,
+    }
+
+
+def test_export_pins_source_and_forwards_explicit_disclosure(
+    fake: Fake, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record = fx.load_run("case", cwd=tmp_path)
+    document = export_receipt(tmp_path)
+    fake.reply(**{"export": {"stdout": json.dumps(document)}})
+    monkeypatch.chdir(tmp_path)
+    assert record.export("review", include_values=True, include_diagnostics=True) == document
+    assert fake.invocations[-1] == [
+        "export",
+        str(record.run_dir),
+        f"--out={tmp_path}/review",
+        "--json",
+        "--include-values",
+        "--include-diagnostics",
+    ]
+
+
+def test_export_refusals_are_structured(fake: Fake, tmp_path: Path) -> None:
+    record = fx.load_run("case", cwd=tmp_path)
+    document = {"kind": "fx-run-export-error-v1", "code": "busy", "message": "Run is busy."}
+    fake.reply(**{"export": {"stdout": json.dumps(document), "status": 2}})
+    with pytest.raises(fx.RunExportError) as caught:
+        record.export(tmp_path / "review")
+    assert caught.value.code == "busy"
+    assert caught.value.document == document
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("files", True),
+        ("bytes", -1),
+        ("manifest_sha256", "bad"),
+        ("omitted_artifacts", [{}]),
+        ("output", ""),
+    ],
+)
+def test_export_rejects_malformed_success(
+    fake: Fake, tmp_path: Path, field: str, value: Any
+) -> None:
+    record = fx.load_run("case", cwd=tmp_path)
+    document = {**export_receipt(tmp_path), field: value}
+    fake.reply(**{"export": {"stdout": json.dumps(document)}})
+    with pytest.raises(fx.FxError):
+        record.export(tmp_path / "review")
+
+
+@pytest.mark.parametrize(
+    "destination,options",
+    [
+        ("", {}),
+        ("bad\0path", {}),
+        (3, {}),
+        ("review", {"include_values": 1}),
+        ("review", {"include_diagnostics": "yes"}),
+    ],
+)
+def test_bad_export_options_start_nothing(fake: Fake, destination: Any, options: dict) -> None:
+    record = fx.RunRecord(Path("run"), INSPECTION)
+    with pytest.raises((ValueError, TypeError)):
+        record.export(destination, **options)
+    assert fake.calls == []
+
+
+def test_export_async_default_disclosure(fake: Fake, tmp_path: Path) -> None:
+    document = export_receipt(tmp_path)
+    fake.reply(**{"export": {"stdout": json.dumps(document)}})
+    record = fx.RunRecord(tmp_path / "run", INSPECTION)
+    assert asyncio.run(record.export_async(tmp_path / "review")) == document
+    assert fake.invocations == [
+        ["export", str(record.run_dir), f"--out={tmp_path}/review", "--json"]
+    ]
+
+
 @pytest.mark.parametrize(
     "verification",
     [

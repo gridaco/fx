@@ -1,0 +1,83 @@
+{
+  "kind": "fx-run-export-v1",
+  "producer": {
+    "version": "0.0.0-fixture"
+  },
+  "source": {
+    "plan_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "events_sha256": "2189857d5e8fd37e8a46e7bc85faab4f9b5f573190ce1f24324f6a9f8f8fd260",
+    "event_count": 2
+  },
+  "disclosure": {
+    "values": false,
+    "diagnostics": false,
+    "artifacts": "media"
+  },
+  "view": {
+    "kind": "fx-viewer-run-v1",
+    "workflow": {
+      "id": "acme-example",
+      "title": "Synthetic example"
+    },
+    "run_name": "fixture",
+    "state": "succeeded",
+    "stand_in": true,
+    "charged_usd": 0,
+    "estimate": {
+      "low_usd": 0,
+      "high_usd": 0
+    },
+    "inputs": {
+      "message": {
+        "withheld": true
+      }
+    },
+    "outputs": {},
+    "nodes": [
+      {
+        "id": "prepare#1",
+        "path": "prepare",
+        "step": "prepare",
+        "take": [
+          1
+        ],
+        "key": null,
+        "title": "Prepare",
+        "uses": "acme/prepare@1",
+        "state": "succeeded",
+        "reads": [],
+        "with": {
+          "message": {
+            "withheld": true
+          }
+        },
+        "outputs": {},
+        "cache": "miss",
+        "error": null,
+        "duration_ms": 5,
+        "interrupted": false
+      }
+    ],
+    "artifacts": [],
+    "warnings": []
+  },
+  "layout": {
+    "kind": "fx-layout-report-v1",
+    "file": null,
+    "revision": null,
+    "state": "none",
+    "cursor": null,
+    "diagnostics": [],
+    "cells": {
+      "prepare": {
+        "column": 0,
+        "row": 0,
+        "source": "automatic"
+      }
+    },
+    "order": [
+      "prepare#1"
+    ]
+  },
+  "artifacts": []
+}

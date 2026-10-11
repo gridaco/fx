@@ -151,6 +151,26 @@ billing discrepancy has no confirmed cause. See the
 [current issues](https://github.com/gridaco/fx/blob/main/ISSUES.md) when diagnosing
 cost behavior; do not claim those gaps are fixed.
 
+## Share a recorded result
+
+When installed help exposes `export`, prepare portable inspection without running
+the workflow again:
+
+```sh
+grida-fx export ./runs/example --out ./review --json
+```
+
+Use the exact saved folder. The engine requires a terminal, inactive invocation
+and a new destination. Values and diagnostics are withheld by default; include
+them only when the user intends that disclosure. Inspect the export receipt and
+omissions, and review its actual labels/media before sharing. A refusal is not
+permission to resume, regenerate, replace a directory or publish.
+
+Python `RunRecord.export` / `export_async` and JavaScript `RunRecord.export`
+provide the same job. This source capability may be absent in older releases;
+discover the installed interface first. Website authoring and CDN uploads belong
+to the user's publishing application, with its own authorization.
+
 ## Project service and browser inspection
 
 Check `grida-fx --help` first. The service below is current source behavior; an

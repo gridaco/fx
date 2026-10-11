@@ -1,0 +1,18 @@
+# A real provider-free saved run exports one media file and explicitly omits text.
+# The command's JSON refuses collisions and unavailable sources without leaking paths.
+steps:
+- argv: [run, case, --run, runs/one, --no-view]
+  mentions: ["result    ok   spent $0.00"]
+- argv: [export, runs/one, --out, exported, --json]
+  mentions: ['"kind": "fx-run-export-result-v1"', '"files": 1', '"reason": "policy_excluded"']
+  absent: ["A private fixture message"]
+- argv: [export, runs/one, --out, exported, --json]
+  status: 2
+  save: collision.json
+  json: true
+- argv: [export, runs/absent, --out, missing, --json]
+  status: 2
+  save: unavailable.json
+  json: true
+- argv: [export, runs/one, --out, disclosed, --include-values, --include-diagnostics, --json]
+  mentions: ['"kind": "fx-run-export-result-v1"', '"files": 1']

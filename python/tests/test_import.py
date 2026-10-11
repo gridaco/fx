@@ -28,6 +28,7 @@ def test_the_sdk_imports() -> None:
         "RunObservationError",
         "RunControlError",
         "RunControlResult",
+        "RunExportError",
         "RunEntry",
         "RunRemoval",
         "RunRemovalEntry",

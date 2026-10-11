@@ -274,8 +274,9 @@ to generate and check real provider-free plans/runs covering branches, matrices,
 repeats, conditions, media, cache, failure, and takes. Generated data stays ignored;
 the fixture's expectations are the regression baseline.
 
-Custom node views, portable web snapshots, machine-wide project aggregation and
-OS-managed startup/recovery remain later work. The [service contract](../../spec/service.md)
+Portable recorded-run exports are available in current source; see
+[Share a recorded run](11-exports.md). Custom node views, machine-wide project
+aggregation and OS-managed startup/recovery remain later work. The [service contract](../../spec/service.md)
 owns current lifecycle guarantees; [TODO](../../TODO.md) records open ideas.
 
 ## Cancellation intent

@@ -28,6 +28,7 @@ export {
   loadRun, type ObservedRunEvent, type RunEventBatch, type RunEventsOptions,
   type RunFollowOptions, RunObservationError, type RunObservationFailure,
   type RunReadOptions, RunRecord, type RunSnapshot,
+  RunExportError, type RunExportFailure, type RunExportOptions, type RunExportResult,
 } from "./record.js";
 export {
   listRuns, type ListRunsOptions, type RemoveRunsOptions, removeRuns, type RunEntry,

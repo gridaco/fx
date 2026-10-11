@@ -47,6 +47,7 @@ Existing tests are starting points for evidence, not proof of every scenario her
 | Invocation | One execution attempt of that run. Resuming appends a new invocation to the same history. |
 | Step / instance | A step is authored; an instance is a concrete occurrence after repeats, takes and nesting. Use recorded identifiers instead of reconstructing them from UI labels. |
 | Artifact | A recorded output with a content identity. A path alone is not proof of success or valid content. |
+| Run export | An immutable, portable inspection package made from a terminal, inactive record. It contains selected evidence and media, with deliberate disclosure; it is separate from a resumable run folder and from publication. |
 | Cache reuse | Reuse under FX's identity and validation rules. The engine decides which work matches; the agent does not manufacture cache keys. |
 | Retry | Another engine-owned attempt within execution. It is not a new run, resume, or request for an artistic alternative. |
 | Provider call / attempt / job | A call is the requested capability work; an attempt is one engine-accounted try; a job is a provider operation that may remain pending beyond a local request. An unknown job outcome is not permission to submit it again. |
@@ -108,6 +109,14 @@ JavaScript provides promises and an async iterator. JavaScript's existing `proje
 and `inspect` exports remain. Check `RunResult.ok`, incomplete/stopped state and
 failures: a failed step can return a result rather than throw. See
 [the SDK guide](docs/guide/09-sdk-runs.md) and [contract](spec/sdk.md).
+
+Portable sharing uses `export RUN --out DIR --json`, or the saved record's
+`export` method (Python also has `export_async`). The engine owns verification,
+disclosure and identity. Refusals have structured codes; a busy or incomplete
+record never triggers an automatic resume or new generation. The public
+[export contract](spec/exports.md) is independent of website catalogs and CDN
+publishing tools. Check installed command help: this capability describes current
+source and may not be in an older published engine.
 
 SDK coverage follows useful jobs, with language-native objects rather than a
 wrapper for every CLI verb. `Plan` already exposes graph/problems/pricing;
@@ -289,8 +298,9 @@ The operation changes presentation only. It must work on saved evidence without
 importing builders, replanning, executing steps or spending. Visual grouping must
 not change execution groups or dependencies. Layout edits must preserve plan and
 step identities, cache reuse, recorded history and same-plan resume. Run-status
-updates should preserve the arrangement. Future portable snapshots should include
-their selected layout so it does not depend on the author's checkout.
+updates should preserve the arrangement. Portable run exports carry the captured
+engine layout so inspection does not depend on the author's checkout. A future
+layout-file implementation must preserve that independence.
 
 ## Engineering acceptance scenarios
 
@@ -312,12 +322,21 @@ promise through documentation alone.
 | AR-10 | "Ask before the next expensive part." | Current later-phase `--yes-up-to`, within a separate ceiling. | Incomplete run can continue with an approved threshold; no claim of a general human-approval/pause system. |
 | AR-11 | "You disconnected; catch up." | Current in source: opaque cursors, bounded replay and snapshot reattachment; process liveness remains unknown. | Retained events can be read from a valid cursor; duplicates, unknown liveness and later invocations are handled without launching another run. |
 | AR-12 | "Put the result in my project." | Current output delivery and file verification. | Exact output destinations and missing/partial results are reported; immutable stored files remain intact. |
-| AR-13 | "Do it from Python or JavaScript." | Current: planning, named execution/resume, result files, saved RunRecord inspection, snapshot/batch/async following, and exact-target control; authoring/hosting capabilities differ. | Each claimed job preserves engine semantics with native ergonomics. Recorded folders stay pinned; cursor attachment, bounded catch-up, errors, later resumes and observer cancellation have provider-free tests. Execution readiness/browser lifetime and CLI maintenance are intentionally excluded. |
+| AR-13 | "Do it from Python or JavaScript." | Current: planning, named execution/resume, result files, saved RunRecord inspection, snapshot/batch/async following, exact-target control and portable evidence export; authoring/hosting capabilities differ. | Each claimed job preserves engine semantics with native ergonomics. Recorded folders stay pinned; cursor attachment, bounded catch-up, errors, later resumes and observer cancellation have provider-free tests. Execution readiness/browser lifetime and CLI maintenance are intentionally excluded. |
 | AR-14 | "Run exactly what I reviewed." | Partial: planning and execution are separate; SDK `run(plan)` retains options but the engine replans. No immutable approved-plan execution interface. | Changes between review and execution are detected or require renewed review; the agent does not mistake a saved plan or SDK object for a frozen execution snapshot. |
 | AR-15 | "Keep my project available while I work." | Current in source: init, foreground/background service, status/logs/stop, persistent catalog and run URLs; OS supervision remains future work. | Repeat/parallel starts, readiness, port conflicts, project identity, independent execution, restart persistence, and standalone use all have provider-free lifecycle evidence. |
 | AR-16 | "Name this deliverable; show my workflow history." | Current in source: create-only names, explicit same-plan resume, workflow-grouped index. | Concurrent name claims have one winner; collisions/missing names/plan mismatches/ambiguous sources refuse; latest includes failures, old active records remain visible, resume retains creation time/spend, and metadata changes no cache identity. |
 | AR-17 | "Tidy up the layout; place X below Y." | Ratified design: [spec/layout.md](spec/layout.md). Ship A (automatic grid, decks, the layout report with automatic cells) in source, unreleased; Ship B (the adjacent `fx-layout-v1` file the scenario edits) not implemented; visual editing deferred. | Agent discovers exact scope/references, edits and validates layout, verifies the renderer loaded the intended revision, and reports the actual URL or actionable diagnostics. No builder execution, provider calls, execution-history changes or identity/resume changes; repeats, nested scopes and stale references have provider-free evidence. |
 | AR-18 | "Clean up last week's exploratory runs, but keep my named ones." | Implemented in source: `runs list` and `runs remove` (CLI, Python, JavaScript), and `cache prune` (CLI). | Agent lists, previews and then removes exactly the previewed runs; named, `--run` and external runs survive filters; an active run, the last pick holder and a non-run selection are refused with a code and nothing else changes; catalog and run index forget removed folders; pruning keeps every remaining run resumable and refuses a shared, busy or unreadable cache, removing nothing; provider-free CLI, conformance and SDK evidence. |
+| AR-19 | "Share this result so somebody else can inspect it without my local service." | Implemented in source: terminal, inactive run export through CLI, Python and JavaScript; shared static browser reader and canvas. | Select the exact run, choose disclosure, export to a new directory, and review the receipt, omissions and concrete content. Verified selected bytes, non-overwriting placement, source stability and explicit reader failures preserve the evidence; publication remains a separate authorized consumer operation. |
+
+For AR-19, [the export contract](spec/exports.md),
+[CLI conformance](conformance/portable-export/), exporter regression tests,
+SDK record tests and [browser tests](js/fx-web/tests/export.test.ts) cover the
+offline boundary. Both SDKs and the CLI produced identical manifest bytes from
+the same existing recording. Consumers use the shared reader and existing canvas;
+their catalogs and delivery tooling remain separate from the public export.
+Source support does not imply availability in an installed release.
 
 For AR-04 and AR-11, [the observation checker](tools/check_observation.py) and
 [observation v1](spec/observation.md) provide the source acceptance evidence.
