@@ -90,7 +90,7 @@ because the pin moves with `grida`'s version. `@grida/fx` and `grida-fx` never c
 
 Provider keys are FX's own today ([providers.md](providers.md) §3). Reading the provider
 credentials `grida` manages, which `grida` alone writes, is tracked in
-[gridaco/fx#2](https://github.com/gridaco/fx/issues/2).
+[gridaco/fx#45](https://github.com/gridaco/fx/issues/45).
 
 ## 5. Holding to this contract
 
