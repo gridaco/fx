@@ -1,0 +1,815 @@
+{
+ "artifacts": [
+  {
+   "digest": "001868ed05949f3442cd834636a77a8bd03d46600a1e8028f872c86cb07d3f51",
+   "media_type": "text/plain",
+   "name": "prompt",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 3418
+  },
+  {
+   "digest": "186b7ec1acabe16b45d74420afe92121e3ec260954894f8d7410d54f122c80f1",
+   "media_type": "json",
+   "name": "finish.face-pinned.json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 1202
+  },
+  {
+   "digest": "2db12ddc3c86d103d1b5637261425a58d928ec8459fa18462f5a1011a0ad169c",
+   "media_type": "json",
+   "name": "report",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 73732
+  },
+  {
+   "digest": "2fd8b31e80f9fb5619f4938e7b6262ac39b31429b388b2f18640370561d14eac",
+   "media_type": "video/mp4",
+   "name": "preview",
+   "omitted_reason": null,
+   "path": "artifacts/2fd8b31e80f9fb5619f4938e7b6262ac39b31429b388b2f18640370561d14eac.mp4",
+   "size": 2232815
+  },
+  {
+   "digest": "366b65916432391025aa582950c52318fa738cd3466c552f34e847efc6857779",
+   "media_type": "file/zip",
+   "name": "frames",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 97182868
+  },
+  {
+   "digest": "610ef03ef3210425c66c1f74c6260253820a0fa6cd084f79a02f01009fd98d71",
+   "media_type": "json",
+   "name": "report",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 312
+  },
+  {
+   "digest": "624a27d8a4e2f581849442201889abf1ce1a6b6fd5c8329990ad27f0d5c6b328",
+   "media_type": "video/x-matroska",
+   "name": "loop",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 59357234
+  },
+  {
+   "digest": "914a114247241b3badb8eb5763ce13ae50ab2737f4d53a1f64a802703da6219d",
+   "media_type": "json",
+   "name": "manifest",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 2153
+  },
+  {
+   "digest": "92e9a62324ea329f1eb30ce615c9e9812c1591da8ed86132a2ac5da368bb1b3c",
+   "media_type": "image/png",
+   "name": "contact_sheet",
+   "omitted_reason": null,
+   "path": "artifacts/92e9a62324ea329f1eb30ce615c9e9812c1591da8ed86132a2ac5da368bb1b3c.png",
+   "size": 481879
+  },
+  {
+   "digest": "af0cb3ece0896833384a326d42b654677466390395c1bbcd3ba69e00004636c6",
+   "media_type": "image/png",
+   "name": "canonical",
+   "omitted_reason": null,
+   "path": "artifacts/af0cb3ece0896833384a326d42b654677466390395c1bbcd3ba69e00004636c6.png",
+   "size": 480352
+  },
+  {
+   "digest": "b277bf10e64341d5bc7f06c944a7646cc6abbe811d5b4f739ea6ab4bdd36c5d7",
+   "media_type": "video/mp4",
+   "name": "video",
+   "omitted_reason": null,
+   "path": "artifacts/b277bf10e64341d5bc7f06c944a7646cc6abbe811d5b4f739ea6ab4bdd36c5d7.mp4",
+   "size": 2757890
+  },
+  {
+   "digest": "c503dd9a670b264e78f01b828150821475f0d788e53fb4d6b56721174211006c",
+   "media_type": "image/png",
+   "name": "traveler.png",
+   "omitted_reason": "unplaced_input",
+   "path": null,
+   "size": 1560622
+  },
+  {
+   "digest": "eb79f9107f8c3d9c50518f458fb317d2e43b360378a95c612607afd46d1ae286",
+   "media_type": "image/png",
+   "name": "image",
+   "omitted_reason": null,
+   "path": "artifacts/eb79f9107f8c3d9c50518f458fb317d2e43b360378a95c612607afd46d1ae286.png",
+   "size": 505554
+  }
+ ],
+ "disclosure": {
+  "artifacts": "media",
+  "diagnostics": false,
+  "values": false
+ },
+ "kind": "fx-run-export-v1",
+ "layout": {
+  "cells": {
+   "brief": {
+    "column": 0,
+    "row": 1,
+    "source": "automatic"
+   },
+   "finish": {
+    "column": 2,
+    "row": 0,
+    "source": "automatic"
+   },
+   "plate": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   },
+   "take": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   }
+  },
+  "cursor": null,
+  "diagnostics": [],
+  "file": null,
+  "kind": "fx-layout-report-v1",
+  "order": [
+   "plate#1",
+   "brief#1",
+   "take#1",
+   "finish#1"
+  ],
+  "revision": null,
+  "state": "none"
+ },
+ "producer": {
+  "version": "0.1.0"
+ },
+ "source": {
+  "event_count": 12,
+  "events_sha256": "a8fecd031552730eb762782f760a7ca742223a4617ad601bd76cabfff1615fdd",
+  "plan_sha256": "261fe6bda0d498660af0c67e7157c251a2cfe167239a0775352eb39436da2851"
+ },
+ "view": {
+  "artifacts": [
+   {
+    "available": false,
+    "digest": "001868ed05949f3442cd834636a77a8bd03d46600a1e8028f872c86cb07d3f51",
+    "kind": "text/plain",
+    "name": "prompt",
+    "size": 3418,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "186b7ec1acabe16b45d74420afe92121e3ec260954894f8d7410d54f122c80f1",
+    "kind": "json",
+    "name": "finish.face-pinned.json",
+    "size": 1202,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "2db12ddc3c86d103d1b5637261425a58d928ec8459fa18462f5a1011a0ad169c",
+    "kind": "json",
+    "name": "report",
+    "size": 73732,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "2fd8b31e80f9fb5619f4938e7b6262ac39b31429b388b2f18640370561d14eac",
+    "kind": "video/mp4",
+    "name": "preview",
+    "size": 2232815,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "366b65916432391025aa582950c52318fa738cd3466c552f34e847efc6857779",
+    "kind": "file/zip",
+    "name": "frames",
+    "size": 97182868,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "610ef03ef3210425c66c1f74c6260253820a0fa6cd084f79a02f01009fd98d71",
+    "kind": "json",
+    "name": "report",
+    "size": 312,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "624a27d8a4e2f581849442201889abf1ce1a6b6fd5c8329990ad27f0d5c6b328",
+    "kind": "video/x-matroska",
+    "name": "loop",
+    "size": 59357234,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "914a114247241b3badb8eb5763ce13ae50ab2737f4d53a1f64a802703da6219d",
+    "kind": "json",
+    "name": "manifest",
+    "size": 2153,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "92e9a62324ea329f1eb30ce615c9e9812c1591da8ed86132a2ac5da368bb1b3c",
+    "kind": "image/png",
+    "name": "contact_sheet",
+    "size": 481879,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "af0cb3ece0896833384a326d42b654677466390395c1bbcd3ba69e00004636c6",
+    "kind": "image/png",
+    "name": "canonical",
+    "size": 480352,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "b277bf10e64341d5bc7f06c944a7646cc6abbe811d5b4f739ea6ab4bdd36c5d7",
+    "kind": "video/mp4",
+    "name": "video",
+    "size": 2757890,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "c503dd9a670b264e78f01b828150821475f0d788e53fb4d6b56721174211006c",
+    "kind": "image/png",
+    "name": "traveler.png",
+    "size": 1560622,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "eb79f9107f8c3d9c50518f458fb317d2e43b360378a95c612607afd46d1ae286",
+    "kind": "image/png",
+    "name": "image",
+    "size": 505554,
+    "url": null
+   }
+  ],
+  "charged_usd": 0,
+  "estimate": {
+   "ceiling_usd": null,
+   "high_usd": 1,
+   "low_usd": 0.8
+  },
+  "inputs": {
+   "aspect_ratio": {
+    "withheld": true
+   },
+   "character": {
+    "withheld": true
+   },
+   "constraints": {
+    "withheld": true
+   },
+   "direction": {
+    "withheld": true
+   },
+   "finish": {
+    "withheld": true
+   },
+   "requested_motion": {
+    "withheld": true
+   },
+   "resolution": {
+    "withheld": true
+   },
+   "seconds": {
+    "withheld": true
+   }
+  },
+  "kind": "fx-viewer-run-v1",
+  "nodes": [
+   {
+    "bindings": [],
+    "cache": "hit",
+    "duration_ms": 0,
+    "error": null,
+    "id": "plate#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "image": {
+      "file": {
+       "digest": "eb79f9107f8c3d9c50518f458fb317d2e43b360378a95c612607afd46d1ae286",
+       "kind": "image/png",
+       "name": "image",
+       "size": 505554
+      }
+     },
+     "report": {
+      "file": {
+       "digest": "610ef03ef3210425c66c1f74c6260253820a0fa6cd084f79a02f01009fd98d71",
+       "kind": "json",
+       "name": "report",
+       "size": 312
+      }
+     }
+    },
+    "path": "plate",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {
+      "image": "image/png",
+      "report": "json"
+     },
+     "params": {
+      "alpha_floor": {
+       "maximum": 64,
+       "minimum": 0,
+       "type": "integer"
+      },
+      "aspect_ratio": {},
+      "padding": {
+       "maximum": 100,
+       "minimum": 1,
+       "type": "integer"
+      }
+     }
+    },
+    "reads": [],
+    "started_at": "2026-10-11T08:33:32.918Z",
+    "state": "succeeded",
+    "step": "plate",
+    "take": [
+     1
+    ],
+    "title": "Fit onto a green plate",
+    "uses": "./nodes/take.py#green_plate",
+    "with": {
+     "alpha_floor": {
+      "withheld": true
+     },
+     "aspect_ratio": {
+      "withheld": true
+     },
+     "image": {
+      "file": {
+       "digest": "c503dd9a670b264e78f01b828150821475f0d788e53fb4d6b56721174211006c",
+       "kind": "image/png",
+       "name": "traveler.png",
+       "size": 1560622
+      }
+     },
+     "padding": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": "hit",
+    "duration_ms": 0,
+    "error": null,
+    "id": "brief#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "prompt": {
+      "file": {
+       "digest": "001868ed05949f3442cd834636a77a8bd03d46600a1e8028f872c86cb07d3f51",
+       "kind": "text/plain",
+       "name": "prompt",
+       "size": 3418
+      }
+     }
+    },
+    "path": "brief",
+    "ports": {
+     "inputs": {},
+     "outputs": {
+      "prompt": "text/plain"
+     },
+     "params": {
+      "constraints": {
+       "items": {
+        "type": "string"
+       },
+       "type": "array"
+      },
+      "direction": {
+       "type": "string"
+      },
+      "requested_motion": {
+       "items": {
+        "type": "string"
+       },
+       "type": "array"
+      },
+      "seconds": {
+       "type": "integer"
+      }
+     }
+    },
+    "reads": [],
+    "started_at": "2026-10-11T08:33:32.918Z",
+    "state": "succeeded",
+    "step": "brief",
+    "take": [
+     1
+    ],
+    "title": "Write the motion brief",
+    "uses": "./nodes/take.py#idle_brief",
+    "with": {
+     "constraints": {
+      "list": [
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       }
+      ]
+     },
+     "direction": {
+      "withheld": true
+     },
+     "requested_motion": {
+      "list": [
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       }
+      ]
+     },
+     "seconds": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "brief#1",
+      "source_kind": "output",
+      "source_port": "prompt",
+      "target_port": "prompt"
+     },
+     {
+      "source": "plate#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "first_frame"
+     },
+     {
+      "source": "plate#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "last_frame"
+     }
+    ],
+    "cache": "hit",
+    "duration_ms": 0,
+    "error": null,
+    "id": "take#1",
+    "interface_bindings": [
+     {
+      "source": "brief#1",
+      "source_kind": "output",
+      "source_port": "prompt",
+      "target_port": "prompt"
+     },
+     {
+      "source": "plate#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "first_frame"
+     },
+     {
+      "source": "plate#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "last_frame"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "video": {
+      "file": {
+       "digest": "b277bf10e64341d5bc7f06c944a7646cc6abbe811d5b4f739ea6ab4bdd36c5d7",
+       "kind": "video/mp4",
+       "name": "video",
+       "size": 2757890
+      }
+     }
+    },
+    "path": "take",
+    "ports": {
+     "inputs": {
+      "first_frame": "image?",
+      "last_frame": "image?"
+     },
+     "outputs": {
+      "video": "video/mp4"
+     },
+     "params": {
+      "aspect_ratio": {
+       "type": "string"
+      },
+      "duration": {
+       "type": "number"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "resolution": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "brief#1",
+     "plate#1"
+    ],
+    "started_at": "2026-10-11T08:33:32.921Z",
+    "state": "succeeded",
+    "step": "take",
+    "take": [
+     1
+    ],
+    "title": "Generate a take",
+    "uses": "fx/video.generate@1",
+    "with": {
+     "aspect_ratio": {
+      "withheld": true
+     },
+     "duration": {
+      "withheld": true
+     },
+     "first_frame": {
+      "file": {
+       "digest": "eb79f9107f8c3d9c50518f458fb317d2e43b360378a95c612607afd46d1ae286",
+       "kind": "image/png",
+       "name": "image",
+       "size": 505554
+      }
+     },
+     "last_frame": {
+      "file": {
+       "digest": "eb79f9107f8c3d9c50518f458fb317d2e43b360378a95c612607afd46d1ae286",
+       "kind": "image/png",
+       "name": "image",
+       "size": 505554
+      }
+     },
+     "prompt": {
+      "file": {
+       "digest": "001868ed05949f3442cd834636a77a8bd03d46600a1e8028f872c86cb07d3f51",
+       "kind": "text/plain",
+       "name": "prompt",
+       "size": 3418
+      }
+     },
+     "resolution": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "take#1",
+      "source_kind": "output",
+      "source_port": "video",
+      "target_port": "video"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 36471,
+    "error": null,
+    "id": "finish#1",
+    "interface_bindings": [
+     {
+      "source": "take#1",
+      "source_kind": "output",
+      "source_port": "video",
+      "target_port": "video"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "canonical": {
+      "file": {
+       "digest": "af0cb3ece0896833384a326d42b654677466390395c1bbcd3ba69e00004636c6",
+       "kind": "image/png",
+       "name": "canonical",
+       "size": 480352
+      }
+     },
+     "contact_sheet": {
+      "file": {
+       "digest": "92e9a62324ea329f1eb30ce615c9e9812c1591da8ed86132a2ac5da368bb1b3c",
+       "kind": "image/png",
+       "name": "contact_sheet",
+       "size": 481879
+      }
+     },
+     "frames": {
+      "file": {
+       "digest": "366b65916432391025aa582950c52318fa738cd3466c552f34e847efc6857779",
+       "kind": "file/zip",
+       "name": "frames",
+       "size": 97182868
+      }
+     },
+     "loop": {
+      "file": {
+       "digest": "624a27d8a4e2f581849442201889abf1ce1a6b6fd5c8329990ad27f0d5c6b328",
+       "kind": "video/x-matroska",
+       "name": "loop",
+       "size": 59357234
+      }
+     },
+     "manifest": {
+      "file": {
+       "digest": "914a114247241b3badb8eb5763ce13ae50ab2737f4d53a1f64a802703da6219d",
+       "kind": "json",
+       "name": "manifest",
+       "size": 2153
+      }
+     },
+     "preview": {
+      "file": {
+       "digest": "2fd8b31e80f9fb5619f4938e7b6262ac39b31429b388b2f18640370561d14eac",
+       "kind": "video/mp4",
+       "name": "preview",
+       "size": 2232815
+      }
+     },
+     "report": {
+      "file": {
+       "digest": "2db12ddc3c86d103d1b5637261425a58d928ec8459fa18462f5a1011a0ad169c",
+       "kind": "json",
+       "name": "report",
+       "size": 73732
+      }
+     }
+    },
+    "path": "finish",
+    "ports": {
+     "inputs": {
+      "settings": "json?",
+      "video": "video"
+     },
+     "outputs": {
+      "canonical": "image/png",
+      "contact_sheet": "image/png",
+      "frames": "file/zip?",
+      "loop": "video/x-matroska",
+      "manifest": "json",
+      "preview": "video/mp4",
+      "report": "json"
+     },
+     "params": {}
+    },
+    "reads": [
+     "take#1"
+    ],
+    "started_at": "2026-10-11T08:33:32.922Z",
+    "state": "succeeded",
+    "step": "finish",
+    "take": [
+     1
+    ],
+    "title": "Key, loop and verify",
+    "uses": "./nodes/finish.py#finish",
+    "with": {
+     "settings": {
+      "file": {
+       "digest": "186b7ec1acabe16b45d74420afe92121e3ec260954894f8d7410d54f122c80f1",
+       "kind": "json",
+       "name": "finish.face-pinned.json",
+       "size": 1202
+      }
+     },
+     "video": {
+      "file": {
+       "digest": "b277bf10e64341d5bc7f06c944a7646cc6abbe811d5b4f739ea6ab4bdd36c5d7",
+       "kind": "video/mp4",
+       "name": "video",
+       "size": 2757890
+      }
+     }
+    }
+   }
+  ],
+  "outputs": {
+   "canonical": {
+    "file": {
+     "digest": "af0cb3ece0896833384a326d42b654677466390395c1bbcd3ba69e00004636c6",
+     "kind": "image/png",
+     "name": "canonical",
+     "size": 480352
+    }
+   },
+   "contact_sheet": {
+    "file": {
+     "digest": "92e9a62324ea329f1eb30ce615c9e9812c1591da8ed86132a2ac5da368bb1b3c",
+     "kind": "image/png",
+     "name": "contact_sheet",
+     "size": 481879
+    }
+   },
+   "frames": {
+    "file": {
+     "digest": "366b65916432391025aa582950c52318fa738cd3466c552f34e847efc6857779",
+     "kind": "file/zip",
+     "name": "frames",
+     "size": 97182868
+    }
+   },
+   "loop": {
+    "file": {
+     "digest": "624a27d8a4e2f581849442201889abf1ce1a6b6fd5c8329990ad27f0d5c6b328",
+     "kind": "video/x-matroska",
+     "name": "loop",
+     "size": 59357234
+    }
+   },
+   "manifest": {
+    "file": {
+     "digest": "914a114247241b3badb8eb5763ce13ae50ab2737f4d53a1f64a802703da6219d",
+     "kind": "json",
+     "name": "manifest",
+     "size": 2153
+    }
+   },
+   "preview": {
+    "file": {
+     "digest": "2fd8b31e80f9fb5619f4938e7b6262ac39b31429b388b2f18640370561d14eac",
+     "kind": "video/mp4",
+     "name": "preview",
+     "size": 2232815
+    }
+   },
+   "report": {
+    "file": {
+     "digest": "2db12ddc3c86d103d1b5637261425a58d928ec8459fa18462f5a1011a0ad169c",
+     "kind": "json",
+     "name": "report",
+     "size": 73732
+    }
+   }
+  },
+  "pending": [],
+  "run_name": "movie-sprite-face-pinned-01",
+  "scopes": [],
+  "stand_in": false,
+  "state": "succeeded",
+  "warnings": [],
+  "workflow": {
+   "id": "movie-sprite",
+   "title": "Movie sprite"
+  }
+ }
+}

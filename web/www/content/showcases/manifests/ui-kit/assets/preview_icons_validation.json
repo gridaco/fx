@@ -1,0 +1,155 @@
+{
+  "kind": "ui-sheet-v1",
+  "role": "preview_icons",
+  "canvas": {
+    "width": 1024,
+    "height": 1024
+  },
+  "cells": [
+    {
+      "cell": {
+        "x": 24,
+        "y": 24,
+        "width": 232,
+        "height": 232
+      },
+      "glyph": "play"
+    },
+    {
+      "cell": {
+        "x": 272,
+        "y": 24,
+        "width": 232,
+        "height": 232
+      },
+      "glyph": "pause"
+    },
+    {
+      "cell": {
+        "x": 520,
+        "y": 24,
+        "width": 232,
+        "height": 232
+      },
+      "glyph": "close"
+    },
+    {
+      "cell": {
+        "x": 768,
+        "y": 24,
+        "width": 232,
+        "height": 232
+      },
+      "glyph": "menu"
+    },
+    {
+      "cell": {
+        "x": 24,
+        "y": 272,
+        "width": 232,
+        "height": 232
+      },
+      "glyph": "gear"
+    },
+    {
+      "cell": {
+        "x": 272,
+        "y": 272,
+        "width": 232,
+        "height": 232
+      },
+      "glyph": "home"
+    },
+    {
+      "cell": {
+        "x": 520,
+        "y": 272,
+        "width": 232,
+        "height": 232
+      },
+      "glyph": "retry"
+    },
+    {
+      "cell": {
+        "x": 768,
+        "y": 272,
+        "width": 232,
+        "height": 232
+      },
+      "glyph": "check"
+    },
+    {
+      "cell": {
+        "x": 24,
+        "y": 520,
+        "width": 232,
+        "height": 232
+      },
+      "glyph": "search"
+    },
+    {
+      "cell": {
+        "x": 272,
+        "y": 520,
+        "width": 232,
+        "height": 232
+      },
+      "glyph": "hand"
+    },
+    {
+      "cell": {
+        "x": 520,
+        "y": 520,
+        "width": 232,
+        "height": 232
+      },
+      "glyph": "heart"
+    },
+    {
+      "cell": {
+        "x": 768,
+        "y": 520,
+        "width": 232,
+        "height": 232
+      },
+      "glyph": "star"
+    },
+    {
+      "cell": {
+        "x": 24,
+        "y": 768,
+        "width": 232,
+        "height": 232
+      },
+      "glyph": "arrow_left"
+    },
+    {
+      "cell": {
+        "x": 272,
+        "y": 768,
+        "width": 232,
+        "height": 232
+      },
+      "glyph": "arrow_right"
+    },
+    {
+      "cell": {
+        "x": 520,
+        "y": 768,
+        "width": 232,
+        "height": 232
+      },
+      "glyph": "sound_on"
+    },
+    {
+      "cell": {
+        "x": 768,
+        "y": 768,
+        "width": 232,
+        "height": 232
+      },
+      "glyph": "sound_off"
+    }
+  ],
+  "draw_scale": 2
+}

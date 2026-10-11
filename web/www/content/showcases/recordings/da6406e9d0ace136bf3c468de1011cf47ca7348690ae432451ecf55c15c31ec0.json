@@ -1,0 +1,7363 @@
+{
+ "artifacts": [
+  {
+   "digest": "057e1a773a963759a3e26e84afee982f4d510930f823af3930020f92ca64349f",
+   "media_type": "image/png",
+   "name": "patches[mouth_smile-mouth]",
+   "omitted_reason": null,
+   "path": "artifacts/057e1a773a963759a3e26e84afee982f4d510930f823af3930020f92ca64349f.png",
+   "size": 3675
+  },
+  {
+   "digest": "08e6ddcee2e191f1a0a69c09605c9f6b461ce222f561a963df1bc1ec235221e4",
+   "media_type": "image/png",
+   "name": "states[eyes_closed--mouth_a]",
+   "omitted_reason": null,
+   "path": "artifacts/08e6ddcee2e191f1a0a69c09605c9f6b461ce222f561a963df1bc1ec235221e4.png",
+   "size": 480176
+  },
+  {
+   "digest": "15542bf5e9ff906539d0cced5d5a69b90cd7d3f5008c27d99ec2f86336f79a12",
+   "media_type": "text/plain",
+   "name": "quality",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 4904
+  },
+  {
+   "digest": "1a89007f89952f7042796b528db235f134949dd5a95c4298644ac8bb08acc70d",
+   "media_type": "json",
+   "name": "transform",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 434
+  },
+  {
+   "digest": "2825ef1a139913bdddeef20790b449c4ca044f83f150f042442a96ebff80f981",
+   "media_type": "image/png",
+   "name": "heatmaps[eyes_closed]",
+   "omitted_reason": null,
+   "path": "artifacts/2825ef1a139913bdddeef20790b449c4ca044f83f150f042442a96ebff80f981.png",
+   "size": 336213
+  },
+  {
+   "digest": "2a76a57c60e33a4894def5891292c375a15c1ee9d5e8bf78ba01cb31a507c5e0",
+   "media_type": "image/png",
+   "name": "review[1]",
+   "omitted_reason": null,
+   "path": "artifacts/2a76a57c60e33a4894def5891292c375a15c1ee9d5e8bf78ba01cb31a507c5e0.png",
+   "size": 783510
+  },
+  {
+   "digest": "2ad0ed39db8b1b623df83102a48a7c20cc20de4eaaddff95b30a4da4a5ff35de",
+   "media_type": "json",
+   "name": "location.json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 661
+  },
+  {
+   "digest": "2e02d42da6aadacbeb2887e4fa5e76b588371ff66191d0c1549e391721be9908",
+   "media_type": "image/png",
+   "name": "donors[mouth_a]",
+   "omitted_reason": null,
+   "path": "artifacts/2e02d42da6aadacbeb2887e4fa5e76b588371ff66191d0c1549e391721be9908.png",
+   "size": 329351
+  },
+  {
+   "digest": "3203c0deb1b14887de7e5b2e80d2ac4369ec36b04488179113355babe729bc2b",
+   "media_type": "image/png",
+   "name": "states[rest--mouth_a]",
+   "omitted_reason": null,
+   "path": "artifacts/3203c0deb1b14887de7e5b2e80d2ac4369ec36b04488179113355babe729bc2b.png",
+   "size": 480873
+  },
+  {
+   "digest": "323e5abd7726246d35f0c221dda8a4d26f2996c51c1d50d195321c7d15cba075",
+   "media_type": "image/png",
+   "name": "masks[canvas_right_eye]",
+   "omitted_reason": null,
+   "path": "artifacts/323e5abd7726246d35f0c221dda8a4d26f2996c51c1d50d195321c7d15cba075.png",
+   "size": 2480
+  },
+  {
+   "digest": "340c6b742820a8b7693568e2c40ec587ee38e180e731f31ee3f7c21f7d5873f6",
+   "media_type": "json",
+   "name": "json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 2472
+  },
+  {
+   "digest": "37c1ca76bf150863d907ccadd0e85025ef6c905add023e249e58eb0c331cde10",
+   "media_type": "image/png",
+   "name": "review[4]",
+   "omitted_reason": null,
+   "path": "artifacts/37c1ca76bf150863d907ccadd0e85025ef6c905add023e249e58eb0c331cde10.png",
+   "size": 778130
+  },
+  {
+   "digest": "38b0156dc0a049af5a2b445484d457480cc62a3320e6d03974bc09660edc0b73",
+   "media_type": "json",
+   "name": "json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 219
+  },
+  {
+   "digest": "38e6eabc2e63b2ff6c5909acc32020434d7360920ac0d0f28fad1bd262e9b998",
+   "media_type": "image/png",
+   "name": "image",
+   "omitted_reason": null,
+   "path": "artifacts/38e6eabc2e63b2ff6c5909acc32020434d7360920ac0d0f28fad1bd262e9b998.png",
+   "size": 1479035
+  },
+  {
+   "digest": "3a964394edb3876a147cc78fbed84a972d0c04fc8a3e4ee6608b29a977a5d470",
+   "media_type": "image/png",
+   "name": "states[eyes_closed--mouth_smile]",
+   "omitted_reason": null,
+   "path": "artifacts/3a964394edb3876a147cc78fbed84a972d0c04fc8a3e4ee6608b29a977a5d470.png",
+   "size": 480198
+  },
+  {
+   "digest": "3ad32db2114fcf2024b8a785e3271ec4d120506782ed8230be8a8e0f2441ee44",
+   "media_type": "image/png",
+   "name": "donors[eyes_closed]",
+   "omitted_reason": null,
+   "path": "artifacts/3ad32db2114fcf2024b8a785e3271ec4d120506782ed8230be8a8e0f2441ee44.png",
+   "size": 324296
+  },
+  {
+   "digest": "3c521d43864ac15955718c845bdc7ecde9640022922cdf6254bc405fd3ddb346",
+   "media_type": "image/png",
+   "name": "heatmaps[eyes_half]",
+   "omitted_reason": null,
+   "path": "artifacts/3c521d43864ac15955718c845bdc7ecde9640022922cdf6254bc405fd3ddb346.png",
+   "size": 342068
+  },
+  {
+   "digest": "4379f071b41315841eb2bab7ddf8e39fcfd3a34a67a36e907931a35275091284",
+   "media_type": "json",
+   "name": "result",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 398
+  },
+  {
+   "digest": "4572c514ab925613c8ee71092d45c054c28a3ea4b3f97223884c36c906d2ba7c",
+   "media_type": "image/png",
+   "name": "patches[eyes_closed-canvas_left_eye]",
+   "omitted_reason": null,
+   "path": "artifacts/4572c514ab925613c8ee71092d45c054c28a3ea4b3f97223884c36c906d2ba7c.png",
+   "size": 2950
+  },
+  {
+   "digest": "471c17523928e127438da41389b3a86b7fed4829bb62804eb2064869799b6493",
+   "media_type": "text/plain",
+   "name": "atlas",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 1888
+  },
+  {
+   "digest": "4df78e21ddfbbc289e481bff3b3b314b1ff4877ce7d27feddf238e362ab8040f",
+   "media_type": "image/png",
+   "name": "review[2]",
+   "omitted_reason": null,
+   "path": "artifacts/4df78e21ddfbbc289e481bff3b3b314b1ff4877ce7d27feddf238e362ab8040f.png",
+   "size": 783502
+  },
+  {
+   "digest": "52cc119ac8e30569f32ee46610d4d85557ec6311e9886977135a2cfa0400c11b",
+   "media_type": "image/webp",
+   "name": "preview",
+   "omitted_reason": null,
+   "path": "artifacts/52cc119ac8e30569f32ee46610d4d85557ec6311e9886977135a2cfa0400c11b.webp",
+   "size": 556510
+  },
+  {
+   "digest": "554958f0e7590cf94abb15fe23519d4675f8c376bbc35b937eceab920ddd154e",
+   "media_type": "image/png",
+   "name": "image",
+   "omitted_reason": null,
+   "path": "artifacts/554958f0e7590cf94abb15fe23519d4675f8c376bbc35b937eceab920ddd154e.png",
+   "size": 780132
+  },
+  {
+   "digest": "56b9f38a5ab16e1db77357959917b7f017af332382fe4ff4a6d56bbeaf741b10",
+   "media_type": "image/png",
+   "name": "review[3]",
+   "omitted_reason": null,
+   "path": "artifacts/56b9f38a5ab16e1db77357959917b7f017af332382fe4ff4a6d56bbeaf741b10.png",
+   "size": 774739
+  },
+  {
+   "digest": "5b54a35640d34031a0bbd45fa118320dadf173d5e7ee64263d174e44b68eaa22",
+   "media_type": "image/png",
+   "name": "panel",
+   "omitted_reason": null,
+   "path": "artifacts/5b54a35640d34031a0bbd45fa118320dadf173d5e7ee64263d174e44b68eaa22.png",
+   "size": 288563
+  },
+  {
+   "digest": "67a360d6f130a77a87872e739b58e017e06af736abab5d0f77d09699d832b8d7",
+   "media_type": "image/png",
+   "name": "heatmaps[mouth_a]",
+   "omitted_reason": null,
+   "path": "artifacts/67a360d6f130a77a87872e739b58e017e06af736abab5d0f77d09699d832b8d7.png",
+   "size": 342903
+  },
+  {
+   "digest": "6cd89c40f6fd9c3922e51214a77707af95b8c4b893b0bf352796a073ae389677",
+   "media_type": "image/png",
+   "name": "masks[canvas_left_eye]",
+   "omitted_reason": null,
+   "path": "artifacts/6cd89c40f6fd9c3922e51214a77707af95b8c4b893b0bf352796a073ae389677.png",
+   "size": 2691
+  },
+  {
+   "digest": "822abfd67c1f6842f1761c3737e1b5fb53829643e95d3c5bd97f98e515e186dc",
+   "media_type": "image/png",
+   "name": "review[6]",
+   "omitted_reason": null,
+   "path": "artifacts/822abfd67c1f6842f1761c3737e1b5fb53829643e95d3c5bd97f98e515e186dc.png",
+   "size": 766929
+  },
+  {
+   "digest": "85129d756614b1573401309a9af403f63c8d7cc6ada6d074bf8d1ecaf25aaa65",
+   "media_type": "image/png",
+   "name": "states[eyes_half--mouth_a]",
+   "omitted_reason": null,
+   "path": "artifacts/85129d756614b1573401309a9af403f63c8d7cc6ada6d074bf8d1ecaf25aaa65.png",
+   "size": 480760
+  },
+  {
+   "digest": "8a3bb1e2ecca617174dbb147bd135561aa91649948442ff73cb62b0d430f7b02",
+   "media_type": "json",
+   "name": "quality.json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 1615
+  },
+  {
+   "digest": "8bc86282751ea4904a4c9a36cd90e171edf54920e3fe8f399808a44f431d27f6",
+   "media_type": "image/png",
+   "name": "review[5]",
+   "omitted_reason": null,
+   "path": "artifacts/8bc86282751ea4904a4c9a36cd90e171edf54920e3fe8f399808a44f431d27f6.png",
+   "size": 778210
+  },
+  {
+   "digest": "9749c8b4324d3e5ea1ec13ff8e8d71066e66bf65ed7a623e27e6c1772f674520",
+   "media_type": "image/png",
+   "name": "donors[mouth_smile]",
+   "omitted_reason": null,
+   "path": "artifacts/9749c8b4324d3e5ea1ec13ff8e8d71066e66bf65ed7a623e27e6c1772f674520.png",
+   "size": 330393
+  },
+  {
+   "digest": "9822b715c884760d8b0017579fb7b62cdf5f5e2b6ed19e6b2a6d82c48e6c2741",
+   "media_type": "image/png",
+   "name": "states[eyes_half--rest]",
+   "omitted_reason": null,
+   "path": "artifacts/9822b715c884760d8b0017579fb7b62cdf5f5e2b6ed19e6b2a6d82c48e6c2741.png",
+   "size": 480261
+  },
+  {
+   "digest": "98ae8d4ce43d4a75fdc424ae95b76aac3f8dded34b26eda094d39e3d44985d45",
+   "media_type": "image/png",
+   "name": "states[eyes_closed--rest]",
+   "omitted_reason": null,
+   "path": "artifacts/98ae8d4ce43d4a75fdc424ae95b76aac3f8dded34b26eda094d39e3d44985d45.png",
+   "size": 479666
+  },
+  {
+   "digest": "991f47767cf1cb7c1d161a87b4f14e97f836b4c1526c60513694583d2eb3b757",
+   "media_type": "json",
+   "name": "exactness",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 8844
+  },
+  {
+   "digest": "9b5052cac6ff78b910c323d784048f4825e094cfa2cf655b328e3f719e0a9441",
+   "media_type": "image/png",
+   "name": "guide",
+   "omitted_reason": null,
+   "path": "artifacts/9b5052cac6ff78b910c323d784048f4825e094cfa2cf655b328e3f719e0a9441.png",
+   "size": 611516
+  },
+  {
+   "digest": "a7061a63cffa41a932d51197e5dbd069b726d8a6aa65e8f78163c99813864e3c",
+   "media_type": "image/png",
+   "name": "states[rest--mouth_smile]",
+   "omitted_reason": null,
+   "path": "artifacts/a7061a63cffa41a932d51197e5dbd069b726d8a6aa65e8f78163c99813864e3c.png",
+   "size": 480898
+  },
+  {
+   "digest": "ada298d452c09898b2f263c0edfba142198f251ab9b9b924ba9d97ba45c787a2",
+   "media_type": "image/png",
+   "name": "patches[eyes_closed-canvas_right_eye]",
+   "omitted_reason": null,
+   "path": "artifacts/ada298d452c09898b2f263c0edfba142198f251ab9b9b924ba9d97ba45c787a2.png",
+   "size": 2754
+  },
+  {
+   "digest": "ae39b5c382ce3a17923c1b5cb90c7a14019f1f6d9b0f265b55fc951d487705e3",
+   "media_type": "json",
+   "name": "json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 1680
+  },
+  {
+   "digest": "af0cb3ece0896833384a326d42b654677466390395c1bbcd3ba69e00004636c6",
+   "media_type": "image/png",
+   "name": "traveler-canonical.png",
+   "omitted_reason": null,
+   "path": "artifacts/af0cb3ece0896833384a326d42b654677466390395c1bbcd3ba69e00004636c6.png",
+   "size": 480352
+  },
+  {
+   "digest": "af9e583f23c002c144be88e76f4d086476788b3e2934a4e999527f66874e353e",
+   "media_type": "json",
+   "name": "fits",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 74807
+  },
+  {
+   "digest": "b0dc37956df79003944c1a7a735db3df82fce2d3ad1089db22c529b09a3ce586",
+   "media_type": "json",
+   "name": "manifest",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 9535
+  },
+  {
+   "digest": "b156b1b7d712a34f583da408c031d46aea9a426b332d51b8fd4b873f1a9744d4",
+   "media_type": "image/png",
+   "name": "states[eyes_half--mouth_smile]",
+   "omitted_reason": null,
+   "path": "artifacts/b156b1b7d712a34f583da408c031d46aea9a426b332d51b8fd4b873f1a9744d4.png",
+   "size": 480791
+  },
+  {
+   "digest": "b3c65dcbd4ac54b93f45e376750cfa5ce4036e2406103dbc18b9f5af02b55135",
+   "media_type": "image/png",
+   "name": "masks[mouth]",
+   "omitted_reason": null,
+   "path": "artifacts/b3c65dcbd4ac54b93f45e376750cfa5ce4036e2406103dbc18b9f5af02b55135.png",
+   "size": 2856
+  },
+  {
+   "digest": "babbf1d72bc6e7d42efc5831e1c0678f2e6a7a9f8894e9637cd32c74e05425cf",
+   "media_type": "image/png",
+   "name": "patches[eyes_half-canvas_left_eye]",
+   "omitted_reason": null,
+   "path": "artifacts/babbf1d72bc6e7d42efc5831e1c0678f2e6a7a9f8894e9637cd32c74e05425cf.png",
+   "size": 3203
+  },
+  {
+   "digest": "bc37b14fea8d69ca557dd3164bc437df7ddf907bf0ee5a2a9c9a05c570fdbd5d",
+   "media_type": "image/png",
+   "name": "coordinates",
+   "omitted_reason": null,
+   "path": "artifacts/bc37b14fea8d69ca557dd3164bc437df7ddf907bf0ee5a2a9c9a05c570fdbd5d.png",
+   "size": 292921
+  },
+  {
+   "digest": "c02322728084835371deda95ebc510e24bf4a42fab80fb1878b9f5e8d3ce64ea",
+   "media_type": "image/png",
+   "name": "patches[eyes_half-canvas_right_eye]",
+   "omitted_reason": null,
+   "path": "artifacts/c02322728084835371deda95ebc510e24bf4a42fab80fb1878b9f5e8d3ce64ea.png",
+   "size": 3140
+  },
+  {
+   "digest": "c16a38710db8a18e2570d5a696d4416d9270fdd8b55f9342c505637fba1682e2",
+   "media_type": "image/png",
+   "name": "donors[eyes_half]",
+   "omitted_reason": null,
+   "path": "artifacts/c16a38710db8a18e2570d5a696d4416d9270fdd8b55f9342c505637fba1682e2.png",
+   "size": 329876
+  },
+  {
+   "digest": "c4053de78c2486b48754efaaf75722e1ed92f54927db810cc7927e8104729f04",
+   "media_type": "json",
+   "name": "geometry.json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 1993
+  },
+  {
+   "digest": "cd2759a9431fb626b2b7f12c4df9b3445aa15990cc9f279d674ec64aaaa9e61c",
+   "media_type": "image/webp",
+   "name": "animation",
+   "omitted_reason": null,
+   "path": "artifacts/cd2759a9431fb626b2b7f12c4df9b3445aa15990cc9f279d674ec64aaaa9e61c.webp",
+   "size": 630270
+  },
+  {
+   "digest": "db1b4307fd938a513482c6b9d1b23c3682d6e7a6cf47d175e06fa34dd7c8c2a4",
+   "media_type": "image/png",
+   "name": "heatmaps[mouth_smile]",
+   "omitted_reason": null,
+   "path": "artifacts/db1b4307fd938a513482c6b9d1b23c3682d6e7a6cf47d175e06fa34dd7c8c2a4.png",
+   "size": 345048
+  },
+  {
+   "digest": "de9a647728cfefa54b089fcc7823c6b0075343b0d3ee8c3c381f9e6e8e5eea11",
+   "media_type": "image/png",
+   "name": "review[8]",
+   "omitted_reason": null,
+   "path": "artifacts/de9a647728cfefa54b089fcc7823c6b0075343b0d3ee8c3c381f9e6e8e5eea11.png",
+   "size": 770469
+  },
+  {
+   "digest": "df0a373c90e5ebc4fed8b1b065c5fdbb8328e40b53c976b67f976baa73d452d1",
+   "media_type": "image/png",
+   "name": "review[7]",
+   "omitted_reason": null,
+   "path": "artifacts/df0a373c90e5ebc4fed8b1b065c5fdbb8328e40b53c976b67f976baa73d452d1.png",
+   "size": 770346
+  },
+  {
+   "digest": "e195f7e4836855765ff73b4a7bf1b3f7f20a2c7ab1c8ee5926586323f868721f",
+   "media_type": "json",
+   "name": "admission.json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 2520
+  },
+  {
+   "digest": "e3d1a2f67225af739df632149fde83f7028f82bd484d1faf41809c425cce2c69",
+   "media_type": "json",
+   "name": "spec",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 2741
+  },
+  {
+   "digest": "e463d726c1635d151f4e4a7e38ab00336728d1166f6d477a5de5e2ba60885c39",
+   "media_type": "json",
+   "name": "json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 925
+  },
+  {
+   "digest": "e4891db3ed181856f8369ac85022c53b79c9023e2d810ba3d0b00a4e407b29db",
+   "media_type": "image/png",
+   "name": "patches[mouth_a-mouth]",
+   "omitted_reason": null,
+   "path": "artifacts/e4891db3ed181856f8369ac85022c53b79c9023e2d810ba3d0b00a4e407b29db.png",
+   "size": 3684
+  },
+  {
+   "digest": "e5d1abbfab2b90b450deced5abccd72b91a7d25e250569b289b13d076cc658a4",
+   "media_type": "json",
+   "name": "manifest",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 7454
+  },
+  {
+   "digest": "f638502d8c1bc6f3d59403d52853cc6818d7942dcb2fc0f9f027f6d308dfe602",
+   "media_type": "json",
+   "name": "exactness",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 3760
+  },
+  {
+   "digest": "fffecc1be76ac151b8ef48e06725568aad31d764bd1e1daa905cca73dca5fa63",
+   "media_type": "text/plain",
+   "name": "geometry",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 4554
+  }
+ ],
+ "disclosure": {
+  "artifacts": "media",
+  "diagnostics": false,
+  "values": false
+ },
+ "kind": "fx-run-export-v1",
+ "layout": {
+  "cells": {
+   "check": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   },
+   "compose": {
+    "column": 4,
+    "row": 0,
+    "source": "automatic"
+   },
+   "compose.composition": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   },
+   "compose.quality": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "compose.quality_ok": {
+    "column": 2,
+    "row": 0,
+    "source": "automatic"
+   },
+   "deliver": {
+    "column": 5,
+    "row": 0,
+    "source": "automatic"
+   },
+   "deliver.keep": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "deliver.render": {
+    "column": 2,
+    "row": 0,
+    "source": "automatic"
+   },
+   "deliver.result": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   },
+   "draw": {
+    "column": 2,
+    "row": 0,
+    "source": "automatic"
+   },
+   "draw.admission": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   },
+   "draw.admitted": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "draw.atlas": {
+    "column": 3,
+    "row": 0,
+    "source": "automatic"
+   },
+   "draw.briefs": {
+    "column": 2,
+    "row": 0,
+    "source": "automatic"
+   },
+   "draw.guide": {
+    "column": 0,
+    "row": 1,
+    "source": "automatic"
+   },
+   "face": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "face.crop": {
+    "column": 1,
+    "row": 1,
+    "source": "automatic"
+   },
+   "face.locate": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   },
+   "face.located": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "fit": {
+    "column": 3,
+    "row": 0,
+    "source": "automatic"
+   },
+   "fit.geometry": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "fit.geometry_ok": {
+    "column": 2,
+    "row": 0,
+    "source": "automatic"
+   },
+   "fit.registration": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   }
+  },
+  "cursor": null,
+  "diagnostics": [],
+  "file": null,
+  "kind": "fx-layout-report-v1",
+  "order": [
+   "check#1",
+   "face.locate#1",
+   "scope:face#",
+   "face.located#1",
+   "face.crop#1",
+   "draw.admission#1",
+   "scope:draw#",
+   "draw.admitted#1",
+   "draw.guide#1",
+   "draw.briefs#1",
+   "draw.atlas#1",
+   "fit.registration#1",
+   "scope:fit#",
+   "fit.geometry#1",
+   "fit.geometry_ok#1",
+   "compose.composition#1",
+   "scope:compose#",
+   "compose.quality#1",
+   "compose.quality_ok#1",
+   "deliver.result#1",
+   "scope:deliver#",
+   "deliver.render#1"
+  ],
+  "revision": null,
+  "state": "none"
+ },
+ "producer": {
+  "version": "0.1.0"
+ },
+ "source": {
+  "event_count": 56,
+  "events_sha256": "b361fb61992431a8d08231a08867be412790055c50a1fea635436707661cd4b0",
+  "plan_sha256": "a1138fd6ded0ba327b3b7948113248258624da86d0bcf648112bd90ea2b5f55c"
+ },
+ "view": {
+  "artifacts": [
+   {
+    "available": true,
+    "digest": "057e1a773a963759a3e26e84afee982f4d510930f823af3930020f92ca64349f",
+    "kind": "image/png",
+    "name": "patches[mouth_smile-mouth]",
+    "size": 3675,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "08e6ddcee2e191f1a0a69c09605c9f6b461ce222f561a963df1bc1ec235221e4",
+    "kind": "image/png",
+    "name": "states[eyes_closed--mouth_a]",
+    "size": 480176,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "15542bf5e9ff906539d0cced5d5a69b90cd7d3f5008c27d99ec2f86336f79a12",
+    "kind": "text/plain",
+    "name": "quality",
+    "size": 4904,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "1a89007f89952f7042796b528db235f134949dd5a95c4298644ac8bb08acc70d",
+    "kind": "json",
+    "name": "transform",
+    "size": 434,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "2825ef1a139913bdddeef20790b449c4ca044f83f150f042442a96ebff80f981",
+    "kind": "image/png",
+    "name": "heatmaps[eyes_closed]",
+    "size": 336213,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "2a76a57c60e33a4894def5891292c375a15c1ee9d5e8bf78ba01cb31a507c5e0",
+    "kind": "image/png",
+    "name": "review[1]",
+    "size": 783510,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "2ad0ed39db8b1b623df83102a48a7c20cc20de4eaaddff95b30a4da4a5ff35de",
+    "kind": "json",
+    "name": "location.json",
+    "size": 661,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "2e02d42da6aadacbeb2887e4fa5e76b588371ff66191d0c1549e391721be9908",
+    "kind": "image/png",
+    "name": "donors[mouth_a]",
+    "size": 329351,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "3203c0deb1b14887de7e5b2e80d2ac4369ec36b04488179113355babe729bc2b",
+    "kind": "image/png",
+    "name": "states[rest--mouth_a]",
+    "size": 480873,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "323e5abd7726246d35f0c221dda8a4d26f2996c51c1d50d195321c7d15cba075",
+    "kind": "image/png",
+    "name": "masks[canvas_right_eye]",
+    "size": 2480,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "340c6b742820a8b7693568e2c40ec587ee38e180e731f31ee3f7c21f7d5873f6",
+    "kind": "json",
+    "name": "json",
+    "size": 2472,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "37c1ca76bf150863d907ccadd0e85025ef6c905add023e249e58eb0c331cde10",
+    "kind": "image/png",
+    "name": "review[4]",
+    "size": 778130,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "38b0156dc0a049af5a2b445484d457480cc62a3320e6d03974bc09660edc0b73",
+    "kind": "json",
+    "name": "json",
+    "size": 219,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "38e6eabc2e63b2ff6c5909acc32020434d7360920ac0d0f28fad1bd262e9b998",
+    "kind": "image/png",
+    "name": "image",
+    "size": 1479035,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "3a964394edb3876a147cc78fbed84a972d0c04fc8a3e4ee6608b29a977a5d470",
+    "kind": "image/png",
+    "name": "states[eyes_closed--mouth_smile]",
+    "size": 480198,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "3ad32db2114fcf2024b8a785e3271ec4d120506782ed8230be8a8e0f2441ee44",
+    "kind": "image/png",
+    "name": "donors[eyes_closed]",
+    "size": 324296,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "3c521d43864ac15955718c845bdc7ecde9640022922cdf6254bc405fd3ddb346",
+    "kind": "image/png",
+    "name": "heatmaps[eyes_half]",
+    "size": 342068,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "4379f071b41315841eb2bab7ddf8e39fcfd3a34a67a36e907931a35275091284",
+    "kind": "json",
+    "name": "result",
+    "size": 398,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "4572c514ab925613c8ee71092d45c054c28a3ea4b3f97223884c36c906d2ba7c",
+    "kind": "image/png",
+    "name": "patches[eyes_closed-canvas_left_eye]",
+    "size": 2950,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "471c17523928e127438da41389b3a86b7fed4829bb62804eb2064869799b6493",
+    "kind": "text/plain",
+    "name": "atlas",
+    "size": 1888,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "4df78e21ddfbbc289e481bff3b3b314b1ff4877ce7d27feddf238e362ab8040f",
+    "kind": "image/png",
+    "name": "review[2]",
+    "size": 783502,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "52cc119ac8e30569f32ee46610d4d85557ec6311e9886977135a2cfa0400c11b",
+    "kind": "image/webp",
+    "name": "preview",
+    "size": 556510,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "554958f0e7590cf94abb15fe23519d4675f8c376bbc35b937eceab920ddd154e",
+    "kind": "image/png",
+    "name": "image",
+    "size": 780132,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "56b9f38a5ab16e1db77357959917b7f017af332382fe4ff4a6d56bbeaf741b10",
+    "kind": "image/png",
+    "name": "review[3]",
+    "size": 774739,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "5b54a35640d34031a0bbd45fa118320dadf173d5e7ee64263d174e44b68eaa22",
+    "kind": "image/png",
+    "name": "panel",
+    "size": 288563,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "67a360d6f130a77a87872e739b58e017e06af736abab5d0f77d09699d832b8d7",
+    "kind": "image/png",
+    "name": "heatmaps[mouth_a]",
+    "size": 342903,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "6cd89c40f6fd9c3922e51214a77707af95b8c4b893b0bf352796a073ae389677",
+    "kind": "image/png",
+    "name": "masks[canvas_left_eye]",
+    "size": 2691,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "822abfd67c1f6842f1761c3737e1b5fb53829643e95d3c5bd97f98e515e186dc",
+    "kind": "image/png",
+    "name": "review[6]",
+    "size": 766929,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "85129d756614b1573401309a9af403f63c8d7cc6ada6d074bf8d1ecaf25aaa65",
+    "kind": "image/png",
+    "name": "states[eyes_half--mouth_a]",
+    "size": 480760,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "8a3bb1e2ecca617174dbb147bd135561aa91649948442ff73cb62b0d430f7b02",
+    "kind": "json",
+    "name": "quality.json",
+    "size": 1615,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "8bc86282751ea4904a4c9a36cd90e171edf54920e3fe8f399808a44f431d27f6",
+    "kind": "image/png",
+    "name": "review[5]",
+    "size": 778210,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "9749c8b4324d3e5ea1ec13ff8e8d71066e66bf65ed7a623e27e6c1772f674520",
+    "kind": "image/png",
+    "name": "donors[mouth_smile]",
+    "size": 330393,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "9822b715c884760d8b0017579fb7b62cdf5f5e2b6ed19e6b2a6d82c48e6c2741",
+    "kind": "image/png",
+    "name": "states[eyes_half--rest]",
+    "size": 480261,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "98ae8d4ce43d4a75fdc424ae95b76aac3f8dded34b26eda094d39e3d44985d45",
+    "kind": "image/png",
+    "name": "states[eyes_closed--rest]",
+    "size": 479666,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "991f47767cf1cb7c1d161a87b4f14e97f836b4c1526c60513694583d2eb3b757",
+    "kind": "json",
+    "name": "exactness",
+    "size": 8844,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "9b5052cac6ff78b910c323d784048f4825e094cfa2cf655b328e3f719e0a9441",
+    "kind": "image/png",
+    "name": "guide",
+    "size": 611516,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "a7061a63cffa41a932d51197e5dbd069b726d8a6aa65e8f78163c99813864e3c",
+    "kind": "image/png",
+    "name": "states[rest--mouth_smile]",
+    "size": 480898,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "ada298d452c09898b2f263c0edfba142198f251ab9b9b924ba9d97ba45c787a2",
+    "kind": "image/png",
+    "name": "patches[eyes_closed-canvas_right_eye]",
+    "size": 2754,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "ae39b5c382ce3a17923c1b5cb90c7a14019f1f6d9b0f265b55fc951d487705e3",
+    "kind": "json",
+    "name": "json",
+    "size": 1680,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "af0cb3ece0896833384a326d42b654677466390395c1bbcd3ba69e00004636c6",
+    "kind": "image/png",
+    "name": "traveler-canonical.png",
+    "size": 480352,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "af9e583f23c002c144be88e76f4d086476788b3e2934a4e999527f66874e353e",
+    "kind": "json",
+    "name": "fits",
+    "size": 74807,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "b0dc37956df79003944c1a7a735db3df82fce2d3ad1089db22c529b09a3ce586",
+    "kind": "json",
+    "name": "manifest",
+    "size": 9535,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "b156b1b7d712a34f583da408c031d46aea9a426b332d51b8fd4b873f1a9744d4",
+    "kind": "image/png",
+    "name": "states[eyes_half--mouth_smile]",
+    "size": 480791,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "b3c65dcbd4ac54b93f45e376750cfa5ce4036e2406103dbc18b9f5af02b55135",
+    "kind": "image/png",
+    "name": "masks[mouth]",
+    "size": 2856,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "babbf1d72bc6e7d42efc5831e1c0678f2e6a7a9f8894e9637cd32c74e05425cf",
+    "kind": "image/png",
+    "name": "patches[eyes_half-canvas_left_eye]",
+    "size": 3203,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "bc37b14fea8d69ca557dd3164bc437df7ddf907bf0ee5a2a9c9a05c570fdbd5d",
+    "kind": "image/png",
+    "name": "coordinates",
+    "size": 292921,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "c02322728084835371deda95ebc510e24bf4a42fab80fb1878b9f5e8d3ce64ea",
+    "kind": "image/png",
+    "name": "patches[eyes_half-canvas_right_eye]",
+    "size": 3140,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "c16a38710db8a18e2570d5a696d4416d9270fdd8b55f9342c505637fba1682e2",
+    "kind": "image/png",
+    "name": "donors[eyes_half]",
+    "size": 329876,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "c4053de78c2486b48754efaaf75722e1ed92f54927db810cc7927e8104729f04",
+    "kind": "json",
+    "name": "geometry.json",
+    "size": 1993,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "cd2759a9431fb626b2b7f12c4df9b3445aa15990cc9f279d674ec64aaaa9e61c",
+    "kind": "image/webp",
+    "name": "animation",
+    "size": 630270,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "db1b4307fd938a513482c6b9d1b23c3682d6e7a6cf47d175e06fa34dd7c8c2a4",
+    "kind": "image/png",
+    "name": "heatmaps[mouth_smile]",
+    "size": 345048,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "de9a647728cfefa54b089fcc7823c6b0075343b0d3ee8c3c381f9e6e8e5eea11",
+    "kind": "image/png",
+    "name": "review[8]",
+    "size": 770469,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "df0a373c90e5ebc4fed8b1b065c5fdbb8328e40b53c976b67f976baa73d452d1",
+    "kind": "image/png",
+    "name": "review[7]",
+    "size": 770346,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "e195f7e4836855765ff73b4a7bf1b3f7f20a2c7ab1c8ee5926586323f868721f",
+    "kind": "json",
+    "name": "admission.json",
+    "size": 2520,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "e3d1a2f67225af739df632149fde83f7028f82bd484d1faf41809c425cce2c69",
+    "kind": "json",
+    "name": "spec",
+    "size": 2741,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "e463d726c1635d151f4e4a7e38ab00336728d1166f6d477a5de5e2ba60885c39",
+    "kind": "json",
+    "name": "json",
+    "size": 925,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "e4891db3ed181856f8369ac85022c53b79c9023e2d810ba3d0b00a4e407b29db",
+    "kind": "image/png",
+    "name": "patches[mouth_a-mouth]",
+    "size": 3684,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "e5d1abbfab2b90b450deced5abccd72b91a7d25e250569b289b13d076cc658a4",
+    "kind": "json",
+    "name": "manifest",
+    "size": 7454,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "f638502d8c1bc6f3d59403d52853cc6818d7942dcb2fc0f9f027f6d308dfe602",
+    "kind": "json",
+    "name": "exactness",
+    "size": 3760,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "fffecc1be76ac151b8ef48e06725568aad31d764bd1e1daa905cca73dca5fa63",
+    "kind": "text/plain",
+    "name": "geometry",
+    "size": 4554,
+    "url": null
+   }
+  ],
+  "charged_usd": 1.503192,
+  "estimate": {
+   "ceiling_usd": 12,
+   "high_usd": 36.43,
+   "low_usd": 0.05
+  },
+  "inputs": {
+   "face_crop": {
+    "withheld": true
+   },
+   "portrait": {
+    "withheld": true
+   },
+   "spec": {
+    "withheld": true
+   }
+  },
+  "kind": "fx-viewer-run-v1",
+  "nodes": [
+   {
+    "bindings": [],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "check#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "check",
+    "ports": {
+     "inputs": {
+      "portrait": "image",
+      "spec": "json"
+     },
+     "outputs": {
+      "spec": "json"
+     },
+     "params": {
+      "face_crop": {
+       "type": "boolean"
+      }
+     }
+    },
+    "reads": [],
+    "state": "succeeded",
+    "step": "check",
+    "take": [
+     1
+    ],
+    "title": "Check the inputs",
+    "uses": "./nodes/motion.py#check",
+    "with": {
+     "face_crop": {
+      "withheld": true
+     },
+     "portrait": {
+      "withheld": true
+     },
+     "spec": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 8938,
+    "error": null,
+    "id": "face.locate#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "json": {
+      "file": {
+       "digest": "38b0156dc0a049af5a2b445484d457480cc62a3320e6d03974bc09660edc0b73",
+       "kind": "json",
+       "name": "json",
+       "size": 219
+      }
+     }
+    },
+    "path": "face.locate",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [],
+    "started_at": "2026-10-11T08:33:30.079Z",
+    "state": "succeeded",
+    "step": "face.locate",
+    "take": [
+     1
+    ],
+    "title": "Locate the face",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "list": [
+       {
+        "file": {
+         "digest": "af0cb3ece0896833384a326d42b654677466390395c1bbcd3ba69e00004636c6",
+         "kind": "image/png",
+         "name": "traveler-canonical.png",
+         "size": 480352
+        }
+       }
+      ]
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "schema": {
+      "file": {
+       "digest": "2ad0ed39db8b1b623df83102a48a7c20cc20de4eaaddff95b30a4da4a5ff35de",
+       "kind": "json",
+       "name": "location.json",
+       "size": 661
+      }
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "face.locate#2",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "face.locate",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [],
+    "state": "skipped",
+    "step": "face.locate",
+    "take": [
+     2
+    ],
+    "title": "Locate the face",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "withheld": true
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "schema": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "face.locate#3",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "face.locate",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [],
+    "state": "skipped",
+    "step": "face.locate",
+    "take": [
+     3
+    ],
+    "title": "Locate the face",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "withheld": true
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "schema": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "face.locate#4",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "face.locate",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [],
+    "state": "skipped",
+    "step": "face.locate",
+    "take": [
+     4
+    ],
+    "title": "Locate the face",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "withheld": true
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "schema": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "face.locate#5",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "face.locate",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [],
+    "state": "skipped",
+    "step": "face.locate",
+    "take": [
+     5
+    ],
+    "title": "Locate the face",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "withheld": true
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "schema": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "face.locate#6",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "face.locate",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [],
+    "state": "skipped",
+    "step": "face.locate",
+    "take": [
+     6
+    ],
+    "title": "Locate the face",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "withheld": true
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "schema": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "face.locate#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "location"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 331,
+    "error": null,
+    "id": "face.located#1",
+    "interface_bindings": [
+     {
+      "source": "face.locate#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "location"
+     }
+    ],
+    "interrupted": false,
+    "judges": "face.locate#1",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "face.located",
+    "ports": {
+     "inputs": {
+      "location": "json"
+     },
+     "outputs": {},
+     "params": {}
+    },
+    "reads": [
+     "face.locate#1"
+    ],
+    "started_at": "2026-10-11T08:33:39.023Z",
+    "state": "succeeded",
+    "step": "face.located",
+    "take": [
+     1
+    ],
+    "title": "Check the box",
+    "uses": "./nodes/face.py#located",
+    "with": {
+     "location": {
+      "file": {
+       "digest": "38b0156dc0a049af5a2b445484d457480cc62a3320e6d03974bc09660edc0b73",
+       "kind": "json",
+       "name": "json",
+       "size": 219
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "face.locate#2",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "location"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "face.located#2",
+    "interface_bindings": [
+     {
+      "source": "face.locate#2",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "location"
+     }
+    ],
+    "interrupted": false,
+    "judges": "face.locate#2",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "face.located",
+    "ports": {
+     "inputs": {
+      "location": "json"
+     },
+     "outputs": {},
+     "params": {}
+    },
+    "reads": [
+     "face.locate#2"
+    ],
+    "state": "skipped",
+    "step": "face.located",
+    "take": [
+     2
+    ],
+    "title": "Check the box",
+    "uses": "./nodes/face.py#located",
+    "with": {
+     "location": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "face.locate#3",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "location"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "face.located#3",
+    "interface_bindings": [
+     {
+      "source": "face.locate#3",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "location"
+     }
+    ],
+    "interrupted": false,
+    "judges": "face.locate#3",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "face.located",
+    "ports": {
+     "inputs": {
+      "location": "json"
+     },
+     "outputs": {},
+     "params": {}
+    },
+    "reads": [
+     "face.locate#3"
+    ],
+    "state": "skipped",
+    "step": "face.located",
+    "take": [
+     3
+    ],
+    "title": "Check the box",
+    "uses": "./nodes/face.py#located",
+    "with": {
+     "location": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "face.locate#4",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "location"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "face.located#4",
+    "interface_bindings": [
+     {
+      "source": "face.locate#4",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "location"
+     }
+    ],
+    "interrupted": false,
+    "judges": "face.locate#4",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "face.located",
+    "ports": {
+     "inputs": {
+      "location": "json"
+     },
+     "outputs": {},
+     "params": {}
+    },
+    "reads": [
+     "face.locate#4"
+    ],
+    "state": "skipped",
+    "step": "face.located",
+    "take": [
+     4
+    ],
+    "title": "Check the box",
+    "uses": "./nodes/face.py#located",
+    "with": {
+     "location": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "face.locate#5",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "location"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "face.located#5",
+    "interface_bindings": [
+     {
+      "source": "face.locate#5",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "location"
+     }
+    ],
+    "interrupted": false,
+    "judges": "face.locate#5",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "face.located",
+    "ports": {
+     "inputs": {
+      "location": "json"
+     },
+     "outputs": {},
+     "params": {}
+    },
+    "reads": [
+     "face.locate#5"
+    ],
+    "state": "skipped",
+    "step": "face.located",
+    "take": [
+     5
+    ],
+    "title": "Check the box",
+    "uses": "./nodes/face.py#located",
+    "with": {
+     "location": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "face.locate#6",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "location"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "face.located#6",
+    "interface_bindings": [
+     {
+      "source": "face.locate#6",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "location"
+     }
+    ],
+    "interrupted": false,
+    "judges": "face.locate#6",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "face.located",
+    "ports": {
+     "inputs": {
+      "location": "json"
+     },
+     "outputs": {},
+     "params": {}
+    },
+    "reads": [
+     "face.locate#6"
+    ],
+    "state": "skipped",
+    "step": "face.located",
+    "take": [
+     6
+    ],
+    "title": "Check the box",
+    "uses": "./nodes/face.py#located",
+    "with": {
+     "location": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "face.locate#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "location"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 95,
+    "error": null,
+    "id": "face.crop#1",
+    "interface_bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "face.locate#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "location"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "image": {
+      "file": {
+       "digest": "554958f0e7590cf94abb15fe23519d4675f8c376bbc35b937eceab920ddd154e",
+       "kind": "image/png",
+       "name": "image",
+       "size": 780132
+      }
+     },
+     "transform": {
+      "file": {
+       "digest": "1a89007f89952f7042796b528db235f134949dd5a95c4298644ac8bb08acc70d",
+       "kind": "json",
+       "name": "transform",
+       "size": 434
+      }
+     }
+    },
+    "path": "face.crop",
+    "ports": {
+     "inputs": {
+      "location": "json",
+      "portrait": "image",
+      "spec": "json"
+     },
+     "outputs": {
+      "image": "image/png",
+      "transform": "json"
+     },
+     "params": {}
+    },
+    "reads": [
+     "check#1",
+     "face.locate#1"
+    ],
+    "started_at": "2026-10-11T08:33:39.358Z",
+    "state": "succeeded",
+    "step": "face.crop",
+    "take": [
+     1
+    ],
+    "title": "Crop the face",
+    "uses": "./nodes/face.py#crop",
+    "with": {
+     "location": {
+      "file": {
+       "digest": "38b0156dc0a049af5a2b445484d457480cc62a3320e6d03974bc09660edc0b73",
+       "kind": "json",
+       "name": "json",
+       "size": 219
+      }
+     },
+     "portrait": {
+      "file": {
+       "digest": "af0cb3ece0896833384a326d42b654677466390395c1bbcd3ba69e00004636c6",
+       "kind": "image/png",
+       "name": "traveler-canonical.png",
+       "size": 480352
+      }
+     },
+     "spec": {
+      "file": {
+       "digest": "e3d1a2f67225af739df632149fde83f7028f82bd484d1faf41809c425cce2c69",
+       "kind": "json",
+       "name": "spec",
+       "size": 2741
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "face.crop#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "context"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 12038,
+    "error": null,
+    "id": "draw.admission#1",
+    "interface_bindings": [
+     {
+      "source": "face.crop#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "context"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "json": {
+      "file": {
+       "digest": "e463d726c1635d151f4e4a7e38ab00336728d1166f6d477a5de5e2ba60885c39",
+       "kind": "json",
+       "name": "json",
+       "size": 925
+      }
+     }
+    },
+    "path": "draw.admission",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "face.crop#1"
+    ],
+    "started_at": "2026-10-11T08:33:39.458Z",
+    "state": "succeeded",
+    "step": "draw.admission",
+    "take": [
+     1
+    ],
+    "title": "Decide what can move",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "list": [
+       {
+        "file": {
+         "digest": "554958f0e7590cf94abb15fe23519d4675f8c376bbc35b937eceab920ddd154e",
+         "kind": "image/png",
+         "name": "image",
+         "size": 780132
+        }
+       }
+      ]
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "schema": {
+      "file": {
+       "digest": "e195f7e4836855765ff73b4a7bf1b3f7f20a2c7ab1c8ee5926586323f868721f",
+       "kind": "json",
+       "name": "admission.json",
+       "size": 2520
+      }
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "draw.admission#2",
+    "interface_bindings": [
+     {
+      "source": "face.crop#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "context"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "draw.admission",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "face.crop#1"
+    ],
+    "state": "skipped",
+    "step": "draw.admission",
+    "take": [
+     2
+    ],
+    "title": "Decide what can move",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "withheld": true
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "schema": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "draw.admission#3",
+    "interface_bindings": [
+     {
+      "source": "face.crop#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "context"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "draw.admission",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "face.crop#1"
+    ],
+    "state": "skipped",
+    "step": "draw.admission",
+    "take": [
+     3
+    ],
+    "title": "Decide what can move",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "withheld": true
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "schema": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "draw.admission#4",
+    "interface_bindings": [
+     {
+      "source": "face.crop#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "context"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "draw.admission",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "face.crop#1"
+    ],
+    "state": "skipped",
+    "step": "draw.admission",
+    "take": [
+     4
+    ],
+    "title": "Decide what can move",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "withheld": true
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "schema": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "draw.admission#5",
+    "interface_bindings": [
+     {
+      "source": "face.crop#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "context"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "draw.admission",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "face.crop#1"
+    ],
+    "state": "skipped",
+    "step": "draw.admission",
+    "take": [
+     5
+    ],
+    "title": "Decide what can move",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "withheld": true
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "schema": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "draw.admission#6",
+    "interface_bindings": [
+     {
+      "source": "face.crop#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "context"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "draw.admission",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "face.crop#1"
+    ],
+    "state": "skipped",
+    "step": "draw.admission",
+    "take": [
+     6
+    ],
+    "title": "Decide what can move",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "withheld": true
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "schema": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "draw.admission#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "admission"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 34,
+    "error": null,
+    "id": "draw.admitted#1",
+    "interface_bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "draw.admission#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "admission"
+     }
+    ],
+    "interrupted": false,
+    "judges": "draw.admission#1",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "draw.admitted",
+    "ports": {
+     "inputs": {
+      "admission": "json",
+      "spec": "json"
+     },
+     "outputs": {},
+     "params": {}
+    },
+    "reads": [
+     "check#1",
+     "draw.admission#1"
+    ],
+    "started_at": "2026-10-11T08:33:51.501Z",
+    "state": "succeeded",
+    "step": "draw.admitted",
+    "take": [
+     1
+    ],
+    "title": "Check the decision",
+    "uses": "./nodes/motion.py#admitted",
+    "with": {
+     "admission": {
+      "file": {
+       "digest": "e463d726c1635d151f4e4a7e38ab00336728d1166f6d477a5de5e2ba60885c39",
+       "kind": "json",
+       "name": "json",
+       "size": 925
+      }
+     },
+     "spec": {
+      "file": {
+       "digest": "e3d1a2f67225af739df632149fde83f7028f82bd484d1faf41809c425cce2c69",
+       "kind": "json",
+       "name": "spec",
+       "size": 2741
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "draw.admission#2",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "admission"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "draw.admitted#2",
+    "interface_bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "draw.admission#2",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "admission"
+     }
+    ],
+    "interrupted": false,
+    "judges": "draw.admission#2",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "draw.admitted",
+    "ports": {
+     "inputs": {
+      "admission": "json",
+      "spec": "json"
+     },
+     "outputs": {},
+     "params": {}
+    },
+    "reads": [
+     "check#1",
+     "draw.admission#2"
+    ],
+    "state": "skipped",
+    "step": "draw.admitted",
+    "take": [
+     2
+    ],
+    "title": "Check the decision",
+    "uses": "./nodes/motion.py#admitted",
+    "with": {
+     "admission": {
+      "withheld": true
+     },
+     "spec": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "draw.admission#3",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "admission"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "draw.admitted#3",
+    "interface_bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "draw.admission#3",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "admission"
+     }
+    ],
+    "interrupted": false,
+    "judges": "draw.admission#3",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "draw.admitted",
+    "ports": {
+     "inputs": {
+      "admission": "json",
+      "spec": "json"
+     },
+     "outputs": {},
+     "params": {}
+    },
+    "reads": [
+     "check#1",
+     "draw.admission#3"
+    ],
+    "state": "skipped",
+    "step": "draw.admitted",
+    "take": [
+     3
+    ],
+    "title": "Check the decision",
+    "uses": "./nodes/motion.py#admitted",
+    "with": {
+     "admission": {
+      "withheld": true
+     },
+     "spec": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "draw.admission#4",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "admission"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "draw.admitted#4",
+    "interface_bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "draw.admission#4",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "admission"
+     }
+    ],
+    "interrupted": false,
+    "judges": "draw.admission#4",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "draw.admitted",
+    "ports": {
+     "inputs": {
+      "admission": "json",
+      "spec": "json"
+     },
+     "outputs": {},
+     "params": {}
+    },
+    "reads": [
+     "check#1",
+     "draw.admission#4"
+    ],
+    "state": "skipped",
+    "step": "draw.admitted",
+    "take": [
+     4
+    ],
+    "title": "Check the decision",
+    "uses": "./nodes/motion.py#admitted",
+    "with": {
+     "admission": {
+      "withheld": true
+     },
+     "spec": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "draw.admission#5",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "admission"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "draw.admitted#5",
+    "interface_bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "draw.admission#5",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "admission"
+     }
+    ],
+    "interrupted": false,
+    "judges": "draw.admission#5",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "draw.admitted",
+    "ports": {
+     "inputs": {
+      "admission": "json",
+      "spec": "json"
+     },
+     "outputs": {},
+     "params": {}
+    },
+    "reads": [
+     "check#1",
+     "draw.admission#5"
+    ],
+    "state": "skipped",
+    "step": "draw.admitted",
+    "take": [
+     5
+    ],
+    "title": "Check the decision",
+    "uses": "./nodes/motion.py#admitted",
+    "with": {
+     "admission": {
+      "withheld": true
+     },
+     "spec": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "draw.admission#6",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "admission"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "draw.admitted#6",
+    "interface_bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "draw.admission#6",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "admission"
+     }
+    ],
+    "interrupted": false,
+    "judges": "draw.admission#6",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "draw.admitted",
+    "ports": {
+     "inputs": {
+      "admission": "json",
+      "spec": "json"
+     },
+     "outputs": {},
+     "params": {}
+    },
+    "reads": [
+     "check#1",
+     "draw.admission#6"
+    ],
+    "state": "skipped",
+    "step": "draw.admitted",
+    "take": [
+     6
+    ],
+    "title": "Check the decision",
+    "uses": "./nodes/motion.py#admitted",
+    "with": {
+     "admission": {
+      "withheld": true
+     },
+     "spec": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "face.crop#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "portrait"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 621,
+    "error": null,
+    "id": "draw.guide#1",
+    "interface_bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "face.crop#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "portrait"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "coordinates": {
+      "file": {
+       "digest": "bc37b14fea8d69ca557dd3164bc437df7ddf907bf0ee5a2a9c9a05c570fdbd5d",
+       "kind": "image/png",
+       "name": "coordinates",
+       "size": 292921
+      }
+     },
+     "guide": {
+      "file": {
+       "digest": "9b5052cac6ff78b910c323d784048f4825e094cfa2cf655b328e3f719e0a9441",
+       "kind": "image/png",
+       "name": "guide",
+       "size": 611516
+      }
+     },
+     "panel": {
+      "file": {
+       "digest": "5b54a35640d34031a0bbd45fa118320dadf173d5e7ee64263d174e44b68eaa22",
+       "kind": "image/png",
+       "name": "panel",
+       "size": 288563
+      }
+     }
+    },
+    "path": "draw.guide",
+    "ports": {
+     "inputs": {
+      "portrait": "image",
+      "spec": "json"
+     },
+     "outputs": {
+      "coordinates": "image/png",
+      "guide": "image/png",
+      "panel": "image/png"
+     },
+     "params": {}
+    },
+    "reads": [
+     "check#1",
+     "face.crop#1"
+    ],
+    "started_at": "2026-10-11T08:33:51.540Z",
+    "state": "succeeded",
+    "step": "draw.guide",
+    "take": [
+     1
+    ],
+    "title": "Lay out the sheet",
+    "uses": "./nodes/motion.py#guide",
+    "with": {
+     "portrait": {
+      "file": {
+       "digest": "554958f0e7590cf94abb15fe23519d4675f8c376bbc35b937eceab920ddd154e",
+       "kind": "image/png",
+       "name": "image",
+       "size": 780132
+      }
+     },
+     "spec": {
+      "file": {
+       "digest": "e3d1a2f67225af739df632149fde83f7028f82bd484d1faf41809c425cce2c69",
+       "kind": "json",
+       "name": "spec",
+       "size": 2741
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "draw.admitted#1",
+      "source_kind": "fact",
+      "source_port": "eligible_features",
+      "target_port": "eligible"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 22,
+    "error": null,
+    "id": "draw.briefs#1",
+    "interface_bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "draw.admitted#1",
+      "source_kind": "fact",
+      "source_port": "eligible_features",
+      "target_port": "eligible"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "atlas": {
+      "file": {
+       "digest": "471c17523928e127438da41389b3a86b7fed4829bb62804eb2064869799b6493",
+       "kind": "text/plain",
+       "name": "atlas",
+       "size": 1888
+      }
+     },
+     "geometry": {
+      "file": {
+       "digest": "fffecc1be76ac151b8ef48e06725568aad31d764bd1e1daa905cca73dca5fa63",
+       "kind": "text/plain",
+       "name": "geometry",
+       "size": 4554
+      }
+     },
+     "quality": {
+      "file": {
+       "digest": "15542bf5e9ff906539d0cced5d5a69b90cd7d3f5008c27d99ec2f86336f79a12",
+       "kind": "text/plain",
+       "name": "quality",
+       "size": 4904
+      }
+     }
+    },
+    "path": "draw.briefs",
+    "ports": {
+     "inputs": {
+      "spec": "json"
+     },
+     "outputs": {
+      "atlas": "text/plain",
+      "geometry": "text/plain",
+      "quality": "text/plain"
+     },
+     "params": {
+      "eligible": {
+       "type": "array"
+      }
+     }
+    },
+    "reads": [
+     "check#1",
+     "draw.admitted#1"
+    ],
+    "started_at": "2026-10-11T08:33:51.540Z",
+    "state": "succeeded",
+    "step": "draw.briefs",
+    "take": [
+     1
+    ],
+    "title": "Write the questions",
+    "uses": "./nodes/motion.py#briefs",
+    "with": {
+     "eligible": {
+      "list": [
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       }
+      ]
+     },
+     "spec": {
+      "file": {
+       "digest": "e3d1a2f67225af739df632149fde83f7028f82bd484d1faf41809c425cce2c69",
+       "kind": "json",
+       "name": "spec",
+       "size": 2741
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "fact",
+      "source_port": "size",
+      "target_port": "size"
+     },
+     {
+      "source": "draw.briefs#1",
+      "source_kind": "output",
+      "source_port": "atlas",
+      "target_port": "prompt"
+     },
+     {
+      "source": "draw.guide#1",
+      "source_kind": "output",
+      "source_port": "guide",
+      "target_port": "image"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 94717,
+    "error": null,
+    "id": "draw.atlas#1",
+    "interface_bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "fact",
+      "source_port": "size",
+      "target_port": "size"
+     },
+     {
+      "source": "draw.briefs#1",
+      "source_kind": "output",
+      "source_port": "atlas",
+      "target_port": "prompt"
+     },
+     {
+      "source": "draw.guide#1",
+      "source_kind": "output",
+      "source_port": "guide",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "image": {
+      "file": {
+       "digest": "38e6eabc2e63b2ff6c5909acc32020434d7360920ac0d0f28fad1bd262e9b998",
+       "kind": "image/png",
+       "name": "image",
+       "size": 1479035
+      }
+     }
+    },
+    "path": "draw.atlas",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "check#1",
+     "draw.admission#1",
+     "draw.admitted#1",
+     "draw.briefs#1",
+     "draw.guide#1",
+     "face.crop#1"
+    ],
+    "started_at": "2026-10-11T08:33:52.167Z",
+    "state": "succeeded",
+    "step": "draw.atlas",
+    "take": [
+     1
+    ],
+    "title": "Draw the new states",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "file": {
+       "digest": "9b5052cac6ff78b910c323d784048f4825e094cfa2cf655b328e3f719e0a9441",
+       "kind": "image/png",
+       "name": "guide",
+       "size": 611516
+      }
+     },
+     "prompt": {
+      "file": {
+       "digest": "471c17523928e127438da41389b3a86b7fed4829bb62804eb2064869799b6493",
+       "kind": "text/plain",
+       "name": "atlas",
+       "size": 1888
+      }
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "draw.atlas#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "atlas"
+     },
+     {
+      "source": "draw.guide#1",
+      "source_kind": "output",
+      "source_port": "coordinates",
+      "target_port": "coordinates"
+     },
+     {
+      "source": "draw.guide#1",
+      "source_kind": "output",
+      "source_port": "panel",
+      "target_port": "panel"
+     },
+     {
+      "source": "face.crop#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "portrait"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 812,
+    "error": null,
+    "id": "fit.registration#1",
+    "interface_bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "draw.atlas#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "atlas"
+     },
+     {
+      "source": "draw.guide#1",
+      "source_kind": "output",
+      "source_port": "coordinates",
+      "target_port": "coordinates"
+     },
+     {
+      "source": "draw.guide#1",
+      "source_kind": "output",
+      "source_port": "panel",
+      "target_port": "panel"
+     },
+     {
+      "source": "face.crop#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "portrait"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "donors": {
+      "collection": [
+       [
+        "eyes_half",
+        {
+         "file": {
+          "digest": "c16a38710db8a18e2570d5a696d4416d9270fdd8b55f9342c505637fba1682e2",
+          "key": "eyes_half",
+          "kind": "image/png",
+          "name": "donors[eyes_half]",
+          "size": 329876
+         }
+        }
+       ],
+       [
+        "eyes_closed",
+        {
+         "file": {
+          "digest": "3ad32db2114fcf2024b8a785e3271ec4d120506782ed8230be8a8e0f2441ee44",
+          "key": "eyes_closed",
+          "kind": "image/png",
+          "name": "donors[eyes_closed]",
+          "size": 324296
+         }
+        }
+       ],
+       [
+        "mouth_smile",
+        {
+         "file": {
+          "digest": "9749c8b4324d3e5ea1ec13ff8e8d71066e66bf65ed7a623e27e6c1772f674520",
+          "key": "mouth_smile",
+          "kind": "image/png",
+          "name": "donors[mouth_smile]",
+          "size": 330393
+         }
+        }
+       ],
+       [
+        "mouth_a",
+        {
+         "file": {
+          "digest": "2e02d42da6aadacbeb2887e4fa5e76b588371ff66191d0c1549e391721be9908",
+          "key": "mouth_a",
+          "kind": "image/png",
+          "name": "donors[mouth_a]",
+          "size": 329351
+         }
+        }
+       ]
+      ]
+     },
+     "fits": {
+      "file": {
+       "digest": "af9e583f23c002c144be88e76f4d086476788b3e2934a4e999527f66874e353e",
+       "kind": "json",
+       "name": "fits",
+       "size": 74807
+      }
+     },
+     "heatmaps": {
+      "collection": [
+       [
+        "eyes_half",
+        {
+         "file": {
+          "digest": "3c521d43864ac15955718c845bdc7ecde9640022922cdf6254bc405fd3ddb346",
+          "key": "eyes_half",
+          "kind": "image/png",
+          "name": "heatmaps[eyes_half]",
+          "size": 342068
+         }
+        }
+       ],
+       [
+        "eyes_closed",
+        {
+         "file": {
+          "digest": "2825ef1a139913bdddeef20790b449c4ca044f83f150f042442a96ebff80f981",
+          "key": "eyes_closed",
+          "kind": "image/png",
+          "name": "heatmaps[eyes_closed]",
+          "size": 336213
+         }
+        }
+       ],
+       [
+        "mouth_smile",
+        {
+         "file": {
+          "digest": "db1b4307fd938a513482c6b9d1b23c3682d6e7a6cf47d175e06fa34dd7c8c2a4",
+          "key": "mouth_smile",
+          "kind": "image/png",
+          "name": "heatmaps[mouth_smile]",
+          "size": 345048
+         }
+        }
+       ],
+       [
+        "mouth_a",
+        {
+         "file": {
+          "digest": "67a360d6f130a77a87872e739b58e017e06af736abab5d0f77d09699d832b8d7",
+          "key": "mouth_a",
+          "kind": "image/png",
+          "name": "heatmaps[mouth_a]",
+          "size": 342903
+         }
+        }
+       ]
+      ]
+     },
+     "review": {
+      "list": [
+       {
+        "file": {
+         "digest": "5b54a35640d34031a0bbd45fa118320dadf173d5e7ee64263d174e44b68eaa22",
+         "kind": "image/png",
+         "name": "review[0]",
+         "size": 288563
+        }
+       },
+       {
+        "file": {
+         "digest": "bc37b14fea8d69ca557dd3164bc437df7ddf907bf0ee5a2a9c9a05c570fdbd5d",
+         "kind": "image/png",
+         "name": "review[1]",
+         "size": 292921
+        }
+       },
+       {
+        "file": {
+         "digest": "c16a38710db8a18e2570d5a696d4416d9270fdd8b55f9342c505637fba1682e2",
+         "kind": "image/png",
+         "name": "review[2]",
+         "size": 329876
+        }
+       },
+       {
+        "file": {
+         "digest": "3c521d43864ac15955718c845bdc7ecde9640022922cdf6254bc405fd3ddb346",
+         "kind": "image/png",
+         "name": "review[3]",
+         "size": 342068
+        }
+       },
+       {
+        "file": {
+         "digest": "3ad32db2114fcf2024b8a785e3271ec4d120506782ed8230be8a8e0f2441ee44",
+         "kind": "image/png",
+         "name": "review[4]",
+         "size": 324296
+        }
+       },
+       {
+        "file": {
+         "digest": "2825ef1a139913bdddeef20790b449c4ca044f83f150f042442a96ebff80f981",
+         "kind": "image/png",
+         "name": "review[5]",
+         "size": 336213
+        }
+       },
+       {
+        "file": {
+         "digest": "9749c8b4324d3e5ea1ec13ff8e8d71066e66bf65ed7a623e27e6c1772f674520",
+         "kind": "image/png",
+         "name": "review[6]",
+         "size": 330393
+        }
+       },
+       {
+        "file": {
+         "digest": "db1b4307fd938a513482c6b9d1b23c3682d6e7a6cf47d175e06fa34dd7c8c2a4",
+         "kind": "image/png",
+         "name": "review[7]",
+         "size": 345048
+        }
+       },
+       {
+        "file": {
+         "digest": "2e02d42da6aadacbeb2887e4fa5e76b588371ff66191d0c1549e391721be9908",
+         "kind": "image/png",
+         "name": "review[8]",
+         "size": 329351
+        }
+       },
+       {
+        "file": {
+         "digest": "67a360d6f130a77a87872e739b58e017e06af736abab5d0f77d09699d832b8d7",
+         "kind": "image/png",
+         "name": "review[9]",
+         "size": 342903
+        }
+       }
+      ]
+     }
+    },
+    "path": "fit.registration",
+    "ports": {
+     "inputs": {
+      "atlas": "image",
+      "coordinates": "image",
+      "panel": "image",
+      "portrait": "image",
+      "spec": "json"
+     },
+     "outputs": {
+      "donors": "image/png{}",
+      "fits": "json",
+      "heatmaps": "image/png{}",
+      "review": "image[]"
+     },
+     "params": {}
+    },
+    "reads": [
+     "check#1",
+     "draw.admission#1",
+     "draw.admitted#1",
+     "draw.atlas#1",
+     "draw.briefs#1",
+     "draw.guide#1",
+     "face.crop#1"
+    ],
+    "started_at": "2026-10-11T08:35:26.890Z",
+    "state": "succeeded",
+    "step": "fit.registration",
+    "take": [
+     1
+    ],
+    "title": "Line them up",
+    "uses": "./nodes/motion.py#registration",
+    "with": {
+     "atlas": {
+      "file": {
+       "digest": "38e6eabc2e63b2ff6c5909acc32020434d7360920ac0d0f28fad1bd262e9b998",
+       "kind": "image/png",
+       "name": "image",
+       "size": 1479035
+      }
+     },
+     "coordinates": {
+      "file": {
+       "digest": "bc37b14fea8d69ca557dd3164bc437df7ddf907bf0ee5a2a9c9a05c570fdbd5d",
+       "kind": "image/png",
+       "name": "coordinates",
+       "size": 292921
+      }
+     },
+     "panel": {
+      "file": {
+       "digest": "5b54a35640d34031a0bbd45fa118320dadf173d5e7ee64263d174e44b68eaa22",
+       "kind": "image/png",
+       "name": "panel",
+       "size": 288563
+      }
+     },
+     "portrait": {
+      "file": {
+       "digest": "554958f0e7590cf94abb15fe23519d4675f8c376bbc35b937eceab920ddd154e",
+       "kind": "image/png",
+       "name": "image",
+       "size": 780132
+      }
+     },
+     "spec": {
+      "file": {
+       "digest": "e3d1a2f67225af739df632149fde83f7028f82bd484d1faf41809c425cce2c69",
+       "kind": "json",
+       "name": "spec",
+       "size": 2741
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "draw.briefs#1",
+      "source_kind": "output",
+      "source_port": "geometry",
+      "target_port": "prompt"
+     },
+     {
+      "source": "fit.registration#1",
+      "source_kind": "output",
+      "source_port": "review",
+      "target_port": "context"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 81663,
+    "error": null,
+    "id": "fit.geometry#1",
+    "interface_bindings": [
+     {
+      "source": "draw.briefs#1",
+      "source_kind": "output",
+      "source_port": "geometry",
+      "target_port": "prompt"
+     },
+     {
+      "source": "fit.registration#1",
+      "source_kind": "output",
+      "source_port": "review",
+      "target_port": "context"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "json": {
+      "file": {
+       "digest": "340c6b742820a8b7693568e2c40ec587ee38e180e731f31ee3f7c21f7d5873f6",
+       "kind": "json",
+       "name": "json",
+       "size": 2472
+      }
+     }
+    },
+    "path": "fit.geometry",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "draw.briefs#1",
+     "fit.registration#1"
+    ],
+    "started_at": "2026-10-11T08:35:27.720Z",
+    "state": "succeeded",
+    "step": "fit.geometry",
+    "take": [
+     1
+    ],
+    "title": "Outline eyes and mouth",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "list": [
+       {
+        "file": {
+         "digest": "5b54a35640d34031a0bbd45fa118320dadf173d5e7ee64263d174e44b68eaa22",
+         "kind": "image/png",
+         "name": "review[0]",
+         "size": 288563
+        }
+       },
+       {
+        "file": {
+         "digest": "bc37b14fea8d69ca557dd3164bc437df7ddf907bf0ee5a2a9c9a05c570fdbd5d",
+         "kind": "image/png",
+         "name": "review[1]",
+         "size": 292921
+        }
+       },
+       {
+        "file": {
+         "digest": "c16a38710db8a18e2570d5a696d4416d9270fdd8b55f9342c505637fba1682e2",
+         "kind": "image/png",
+         "name": "review[2]",
+         "size": 329876
+        }
+       },
+       {
+        "file": {
+         "digest": "3c521d43864ac15955718c845bdc7ecde9640022922cdf6254bc405fd3ddb346",
+         "kind": "image/png",
+         "name": "review[3]",
+         "size": 342068
+        }
+       },
+       {
+        "file": {
+         "digest": "3ad32db2114fcf2024b8a785e3271ec4d120506782ed8230be8a8e0f2441ee44",
+         "kind": "image/png",
+         "name": "review[4]",
+         "size": 324296
+        }
+       },
+       {
+        "file": {
+         "digest": "2825ef1a139913bdddeef20790b449c4ca044f83f150f042442a96ebff80f981",
+         "kind": "image/png",
+         "name": "review[5]",
+         "size": 336213
+        }
+       },
+       {
+        "file": {
+         "digest": "9749c8b4324d3e5ea1ec13ff8e8d71066e66bf65ed7a623e27e6c1772f674520",
+         "kind": "image/png",
+         "name": "review[6]",
+         "size": 330393
+        }
+       },
+       {
+        "file": {
+         "digest": "db1b4307fd938a513482c6b9d1b23c3682d6e7a6cf47d175e06fa34dd7c8c2a4",
+         "kind": "image/png",
+         "name": "review[7]",
+         "size": 345048
+        }
+       },
+       {
+        "file": {
+         "digest": "2e02d42da6aadacbeb2887e4fa5e76b588371ff66191d0c1549e391721be9908",
+         "kind": "image/png",
+         "name": "review[8]",
+         "size": 329351
+        }
+       },
+       {
+        "file": {
+         "digest": "67a360d6f130a77a87872e739b58e017e06af736abab5d0f77d09699d832b8d7",
+         "kind": "image/png",
+         "name": "review[9]",
+         "size": 342903
+        }
+       }
+      ]
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "file": {
+       "digest": "fffecc1be76ac151b8ef48e06725568aad31d764bd1e1daa905cca73dca5fa63",
+       "kind": "text/plain",
+       "name": "geometry",
+       "size": 4554
+      }
+     },
+     "schema": {
+      "file": {
+       "digest": "c4053de78c2486b48754efaaf75722e1ed92f54927db810cc7927e8104729f04",
+       "kind": "json",
+       "name": "geometry.json",
+       "size": 1993
+      }
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "fit.registration#1",
+      "source_kind": "output",
+      "source_port": "review",
+      "target_port": "context"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "fit.geometry#2",
+    "interface_bindings": [
+     {
+      "source": "draw.briefs#1",
+      "source_kind": "output",
+      "source_port": "geometry",
+      "target_port": "prompt"
+     },
+     {
+      "source": "fit.registration#1",
+      "source_kind": "output",
+      "source_port": "review",
+      "target_port": "context"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "fit.geometry",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "draw.briefs#1",
+     "fit.registration#1"
+    ],
+    "state": "skipped",
+    "step": "fit.geometry",
+    "take": [
+     2
+    ],
+    "title": "Outline eyes and mouth",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "withheld": true
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "schema": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "fit.registration#1",
+      "source_kind": "output",
+      "source_port": "review",
+      "target_port": "context"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "fit.geometry#3",
+    "interface_bindings": [
+     {
+      "source": "draw.briefs#1",
+      "source_kind": "output",
+      "source_port": "geometry",
+      "target_port": "prompt"
+     },
+     {
+      "source": "fit.registration#1",
+      "source_kind": "output",
+      "source_port": "review",
+      "target_port": "context"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "fit.geometry",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "draw.briefs#1",
+     "fit.registration#1"
+    ],
+    "state": "skipped",
+    "step": "fit.geometry",
+    "take": [
+     3
+    ],
+    "title": "Outline eyes and mouth",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "withheld": true
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "schema": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "fit.registration#1",
+      "source_kind": "output",
+      "source_port": "review",
+      "target_port": "context"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "fit.geometry#4",
+    "interface_bindings": [
+     {
+      "source": "draw.briefs#1",
+      "source_kind": "output",
+      "source_port": "geometry",
+      "target_port": "prompt"
+     },
+     {
+      "source": "fit.registration#1",
+      "source_kind": "output",
+      "source_port": "review",
+      "target_port": "context"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "fit.geometry",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "draw.briefs#1",
+     "fit.registration#1"
+    ],
+    "state": "skipped",
+    "step": "fit.geometry",
+    "take": [
+     4
+    ],
+    "title": "Outline eyes and mouth",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "withheld": true
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "schema": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "fit.registration#1",
+      "source_kind": "output",
+      "source_port": "review",
+      "target_port": "context"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "fit.geometry#5",
+    "interface_bindings": [
+     {
+      "source": "draw.briefs#1",
+      "source_kind": "output",
+      "source_port": "geometry",
+      "target_port": "prompt"
+     },
+     {
+      "source": "fit.registration#1",
+      "source_kind": "output",
+      "source_port": "review",
+      "target_port": "context"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "fit.geometry",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "draw.briefs#1",
+     "fit.registration#1"
+    ],
+    "state": "skipped",
+    "step": "fit.geometry",
+    "take": [
+     5
+    ],
+    "title": "Outline eyes and mouth",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "withheld": true
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "schema": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "fit.registration#1",
+      "source_kind": "output",
+      "source_port": "review",
+      "target_port": "context"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "fit.geometry#6",
+    "interface_bindings": [
+     {
+      "source": "draw.briefs#1",
+      "source_kind": "output",
+      "source_port": "geometry",
+      "target_port": "prompt"
+     },
+     {
+      "source": "fit.registration#1",
+      "source_kind": "output",
+      "source_port": "review",
+      "target_port": "context"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "fit.geometry",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "draw.briefs#1",
+     "fit.registration#1"
+    ],
+    "state": "skipped",
+    "step": "fit.geometry",
+    "take": [
+     6
+    ],
+    "title": "Outline eyes and mouth",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "withheld": true
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "schema": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "draw.admitted#1",
+      "source_kind": "fact",
+      "source_port": "eligible_features",
+      "target_port": "eligible"
+     },
+     {
+      "source": "fit.geometry#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "geometry"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 78,
+    "error": null,
+    "id": "fit.geometry_ok#1",
+    "interface_bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "draw.admitted#1",
+      "source_kind": "fact",
+      "source_port": "eligible_features",
+      "target_port": "eligible"
+     },
+     {
+      "source": "fit.geometry#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "geometry"
+     }
+    ],
+    "interrupted": false,
+    "judges": "fit.geometry#1",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "fit.geometry_ok",
+    "ports": {
+     "inputs": {
+      "geometry": "json",
+      "spec": "json"
+     },
+     "outputs": {},
+     "params": {
+      "eligible": {
+       "type": "array"
+      }
+     }
+    },
+    "reads": [
+     "check#1",
+     "draw.admitted#1",
+     "fit.geometry#1"
+    ],
+    "started_at": "2026-10-11T08:36:49.389Z",
+    "state": "succeeded",
+    "step": "fit.geometry_ok",
+    "take": [
+     1
+    ],
+    "title": "Check the outlines",
+    "uses": "./nodes/motion.py#geometry_ok",
+    "with": {
+     "eligible": {
+      "list": [
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       }
+      ]
+     },
+     "geometry": {
+      "file": {
+       "digest": "340c6b742820a8b7693568e2c40ec587ee38e180e731f31ee3f7c21f7d5873f6",
+       "kind": "json",
+       "name": "json",
+       "size": 2472
+      }
+     },
+     "spec": {
+      "file": {
+       "digest": "e3d1a2f67225af739df632149fde83f7028f82bd484d1faf41809c425cce2c69",
+       "kind": "json",
+       "name": "spec",
+       "size": 2741
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "fit.geometry#2",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "geometry"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "fit.geometry_ok#2",
+    "interface_bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "draw.admitted#1",
+      "source_kind": "fact",
+      "source_port": "eligible_features",
+      "target_port": "eligible"
+     },
+     {
+      "source": "fit.geometry#2",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "geometry"
+     }
+    ],
+    "interrupted": false,
+    "judges": "fit.geometry#2",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "fit.geometry_ok",
+    "ports": {
+     "inputs": {
+      "geometry": "json",
+      "spec": "json"
+     },
+     "outputs": {},
+     "params": {
+      "eligible": {
+       "type": "array"
+      }
+     }
+    },
+    "reads": [
+     "check#1",
+     "draw.admitted#1",
+     "draw.admitted#2",
+     "draw.admitted#3",
+     "draw.admitted#4",
+     "draw.admitted#5",
+     "draw.admitted#6",
+     "fit.geometry#2"
+    ],
+    "state": "skipped",
+    "step": "fit.geometry_ok",
+    "take": [
+     2
+    ],
+    "title": "Check the outlines",
+    "uses": "./nodes/motion.py#geometry_ok",
+    "with": {
+     "eligible": {
+      "withheld": true
+     },
+     "geometry": {
+      "withheld": true
+     },
+     "spec": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "fit.geometry#3",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "geometry"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "fit.geometry_ok#3",
+    "interface_bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "draw.admitted#1",
+      "source_kind": "fact",
+      "source_port": "eligible_features",
+      "target_port": "eligible"
+     },
+     {
+      "source": "fit.geometry#3",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "geometry"
+     }
+    ],
+    "interrupted": false,
+    "judges": "fit.geometry#3",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "fit.geometry_ok",
+    "ports": {
+     "inputs": {
+      "geometry": "json",
+      "spec": "json"
+     },
+     "outputs": {},
+     "params": {
+      "eligible": {
+       "type": "array"
+      }
+     }
+    },
+    "reads": [
+     "check#1",
+     "draw.admitted#1",
+     "draw.admitted#2",
+     "draw.admitted#3",
+     "draw.admitted#4",
+     "draw.admitted#5",
+     "draw.admitted#6",
+     "fit.geometry#3"
+    ],
+    "state": "skipped",
+    "step": "fit.geometry_ok",
+    "take": [
+     3
+    ],
+    "title": "Check the outlines",
+    "uses": "./nodes/motion.py#geometry_ok",
+    "with": {
+     "eligible": {
+      "withheld": true
+     },
+     "geometry": {
+      "withheld": true
+     },
+     "spec": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "fit.geometry#4",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "geometry"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "fit.geometry_ok#4",
+    "interface_bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "draw.admitted#1",
+      "source_kind": "fact",
+      "source_port": "eligible_features",
+      "target_port": "eligible"
+     },
+     {
+      "source": "fit.geometry#4",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "geometry"
+     }
+    ],
+    "interrupted": false,
+    "judges": "fit.geometry#4",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "fit.geometry_ok",
+    "ports": {
+     "inputs": {
+      "geometry": "json",
+      "spec": "json"
+     },
+     "outputs": {},
+     "params": {
+      "eligible": {
+       "type": "array"
+      }
+     }
+    },
+    "reads": [
+     "check#1",
+     "draw.admitted#1",
+     "draw.admitted#2",
+     "draw.admitted#3",
+     "draw.admitted#4",
+     "draw.admitted#5",
+     "draw.admitted#6",
+     "fit.geometry#4"
+    ],
+    "state": "skipped",
+    "step": "fit.geometry_ok",
+    "take": [
+     4
+    ],
+    "title": "Check the outlines",
+    "uses": "./nodes/motion.py#geometry_ok",
+    "with": {
+     "eligible": {
+      "withheld": true
+     },
+     "geometry": {
+      "withheld": true
+     },
+     "spec": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "fit.geometry#5",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "geometry"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "fit.geometry_ok#5",
+    "interface_bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "draw.admitted#1",
+      "source_kind": "fact",
+      "source_port": "eligible_features",
+      "target_port": "eligible"
+     },
+     {
+      "source": "fit.geometry#5",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "geometry"
+     }
+    ],
+    "interrupted": false,
+    "judges": "fit.geometry#5",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "fit.geometry_ok",
+    "ports": {
+     "inputs": {
+      "geometry": "json",
+      "spec": "json"
+     },
+     "outputs": {},
+     "params": {
+      "eligible": {
+       "type": "array"
+      }
+     }
+    },
+    "reads": [
+     "check#1",
+     "draw.admitted#1",
+     "draw.admitted#2",
+     "draw.admitted#3",
+     "draw.admitted#4",
+     "draw.admitted#5",
+     "draw.admitted#6",
+     "fit.geometry#5"
+    ],
+    "state": "skipped",
+    "step": "fit.geometry_ok",
+    "take": [
+     5
+    ],
+    "title": "Check the outlines",
+    "uses": "./nodes/motion.py#geometry_ok",
+    "with": {
+     "eligible": {
+      "withheld": true
+     },
+     "geometry": {
+      "withheld": true
+     },
+     "spec": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "fit.geometry#6",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "geometry"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "fit.geometry_ok#6",
+    "interface_bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "draw.admitted#1",
+      "source_kind": "fact",
+      "source_port": "eligible_features",
+      "target_port": "eligible"
+     },
+     {
+      "source": "fit.geometry#6",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "geometry"
+     }
+    ],
+    "interrupted": false,
+    "judges": "fit.geometry#6",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "fit.geometry_ok",
+    "ports": {
+     "inputs": {
+      "geometry": "json",
+      "spec": "json"
+     },
+     "outputs": {},
+     "params": {
+      "eligible": {
+       "type": "array"
+      }
+     }
+    },
+    "reads": [
+     "check#1",
+     "draw.admitted#1",
+     "draw.admitted#2",
+     "draw.admitted#3",
+     "draw.admitted#4",
+     "draw.admitted#5",
+     "draw.admitted#6",
+     "fit.geometry#6"
+    ],
+    "state": "skipped",
+    "step": "fit.geometry_ok",
+    "take": [
+     6
+    ],
+    "title": "Check the outlines",
+    "uses": "./nodes/motion.py#geometry_ok",
+    "with": {
+     "eligible": {
+      "withheld": true
+     },
+     "geometry": {
+      "withheld": true
+     },
+     "spec": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "draw.admitted#1",
+      "source_kind": "fact",
+      "source_port": "eligible_features",
+      "target_port": "eligible"
+     },
+     {
+      "source": "face.crop#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "portrait"
+     },
+     {
+      "source": "fit.geometry#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "geometry"
+     },
+     {
+      "source": "fit.registration#1",
+      "source_kind": "output",
+      "source_port": "donors",
+      "target_port": "donors"
+     },
+     {
+      "source": "fit.registration#1",
+      "source_kind": "output",
+      "source_port": "fits",
+      "target_port": "fits"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 25810,
+    "error": null,
+    "id": "compose.composition#1",
+    "interface_bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "draw.admitted#1",
+      "source_kind": "fact",
+      "source_port": "eligible_features",
+      "target_port": "eligible"
+     },
+     {
+      "source": "face.crop#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "portrait"
+     },
+     {
+      "source": "fit.geometry#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "geometry"
+     },
+     {
+      "source": "fit.registration#1",
+      "source_kind": "output",
+      "source_port": "donors",
+      "target_port": "donors"
+     },
+     {
+      "source": "fit.registration#1",
+      "source_kind": "output",
+      "source_port": "fits",
+      "target_port": "fits"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "exactness": {
+      "file": {
+       "digest": "991f47767cf1cb7c1d161a87b4f14e97f836b4c1526c60513694583d2eb3b757",
+       "kind": "json",
+       "name": "exactness",
+       "size": 8844
+      }
+     },
+     "manifest": {
+      "file": {
+       "digest": "b0dc37956df79003944c1a7a735db3df82fce2d3ad1089db22c529b09a3ce586",
+       "kind": "json",
+       "name": "manifest",
+       "size": 9535
+      }
+     },
+     "masks": {
+      "collection": [
+       [
+        "canvas_left_eye",
+        {
+         "file": {
+          "digest": "6cd89c40f6fd9c3922e51214a77707af95b8c4b893b0bf352796a073ae389677",
+          "key": "canvas_left_eye",
+          "kind": "image/png",
+          "name": "masks[canvas_left_eye]",
+          "size": 2691
+         }
+        }
+       ],
+       [
+        "canvas_right_eye",
+        {
+         "file": {
+          "digest": "323e5abd7726246d35f0c221dda8a4d26f2996c51c1d50d195321c7d15cba075",
+          "key": "canvas_right_eye",
+          "kind": "image/png",
+          "name": "masks[canvas_right_eye]",
+          "size": 2480
+         }
+        }
+       ],
+       [
+        "mouth",
+        {
+         "file": {
+          "digest": "b3c65dcbd4ac54b93f45e376750cfa5ce4036e2406103dbc18b9f5af02b55135",
+          "key": "mouth",
+          "kind": "image/png",
+          "name": "masks[mouth]",
+          "size": 2856
+         }
+        }
+       ]
+      ]
+     },
+     "preview": {
+      "file": {
+       "digest": "52cc119ac8e30569f32ee46610d4d85557ec6311e9886977135a2cfa0400c11b",
+       "kind": "image/webp",
+       "name": "preview",
+       "size": 556510
+      }
+     },
+     "review": {
+      "list": [
+       {
+        "file": {
+         "digest": "554958f0e7590cf94abb15fe23519d4675f8c376bbc35b937eceab920ddd154e",
+         "kind": "image/png",
+         "name": "review[0]",
+         "size": 780132
+        }
+       },
+       {
+        "file": {
+         "digest": "2a76a57c60e33a4894def5891292c375a15c1ee9d5e8bf78ba01cb31a507c5e0",
+         "kind": "image/png",
+         "name": "review[1]",
+         "size": 783510
+        }
+       },
+       {
+        "file": {
+         "digest": "4df78e21ddfbbc289e481bff3b3b314b1ff4877ce7d27feddf238e362ab8040f",
+         "kind": "image/png",
+         "name": "review[2]",
+         "size": 783502
+        }
+       },
+       {
+        "file": {
+         "digest": "56b9f38a5ab16e1db77357959917b7f017af332382fe4ff4a6d56bbeaf741b10",
+         "kind": "image/png",
+         "name": "review[3]",
+         "size": 774739
+        }
+       },
+       {
+        "file": {
+         "digest": "37c1ca76bf150863d907ccadd0e85025ef6c905add023e249e58eb0c331cde10",
+         "kind": "image/png",
+         "name": "review[4]",
+         "size": 778130
+        }
+       },
+       {
+        "file": {
+         "digest": "8bc86282751ea4904a4c9a36cd90e171edf54920e3fe8f399808a44f431d27f6",
+         "kind": "image/png",
+         "name": "review[5]",
+         "size": 778210
+        }
+       },
+       {
+        "file": {
+         "digest": "822abfd67c1f6842f1761c3737e1b5fb53829643e95d3c5bd97f98e515e186dc",
+         "kind": "image/png",
+         "name": "review[6]",
+         "size": 766929
+        }
+       },
+       {
+        "file": {
+         "digest": "df0a373c90e5ebc4fed8b1b065c5fdbb8328e40b53c976b67f976baa73d452d1",
+         "kind": "image/png",
+         "name": "review[7]",
+         "size": 770346
+        }
+       },
+       {
+        "file": {
+         "digest": "de9a647728cfefa54b089fcc7823c6b0075343b0d3ee8c3c381f9e6e8e5eea11",
+         "kind": "image/png",
+         "name": "review[8]",
+         "size": 770469
+        }
+       }
+      ]
+     },
+     "states": {
+      "collection": [
+       [
+        "rest--rest",
+        {
+         "file": {
+          "digest": "554958f0e7590cf94abb15fe23519d4675f8c376bbc35b937eceab920ddd154e",
+          "key": "rest--rest",
+          "kind": "image/png",
+          "name": "states[rest--rest]",
+          "size": 780132
+         }
+        }
+       ],
+       [
+        "rest--mouth_smile",
+        {
+         "file": {
+          "digest": "2a76a57c60e33a4894def5891292c375a15c1ee9d5e8bf78ba01cb31a507c5e0",
+          "key": "rest--mouth_smile",
+          "kind": "image/png",
+          "name": "states[rest--mouth_smile]",
+          "size": 783510
+         }
+        }
+       ],
+       [
+        "rest--mouth_a",
+        {
+         "file": {
+          "digest": "4df78e21ddfbbc289e481bff3b3b314b1ff4877ce7d27feddf238e362ab8040f",
+          "key": "rest--mouth_a",
+          "kind": "image/png",
+          "name": "states[rest--mouth_a]",
+          "size": 783502
+         }
+        }
+       ],
+       [
+        "eyes_half--rest",
+        {
+         "file": {
+          "digest": "56b9f38a5ab16e1db77357959917b7f017af332382fe4ff4a6d56bbeaf741b10",
+          "key": "eyes_half--rest",
+          "kind": "image/png",
+          "name": "states[eyes_half--rest]",
+          "size": 774739
+         }
+        }
+       ],
+       [
+        "eyes_half--mouth_smile",
+        {
+         "file": {
+          "digest": "37c1ca76bf150863d907ccadd0e85025ef6c905add023e249e58eb0c331cde10",
+          "key": "eyes_half--mouth_smile",
+          "kind": "image/png",
+          "name": "states[eyes_half--mouth_smile]",
+          "size": 778130
+         }
+        }
+       ],
+       [
+        "eyes_half--mouth_a",
+        {
+         "file": {
+          "digest": "8bc86282751ea4904a4c9a36cd90e171edf54920e3fe8f399808a44f431d27f6",
+          "key": "eyes_half--mouth_a",
+          "kind": "image/png",
+          "name": "states[eyes_half--mouth_a]",
+          "size": 778210
+         }
+        }
+       ],
+       [
+        "eyes_closed--rest",
+        {
+         "file": {
+          "digest": "822abfd67c1f6842f1761c3737e1b5fb53829643e95d3c5bd97f98e515e186dc",
+          "key": "eyes_closed--rest",
+          "kind": "image/png",
+          "name": "states[eyes_closed--rest]",
+          "size": 766929
+         }
+        }
+       ],
+       [
+        "eyes_closed--mouth_smile",
+        {
+         "file": {
+          "digest": "df0a373c90e5ebc4fed8b1b065c5fdbb8328e40b53c976b67f976baa73d452d1",
+          "key": "eyes_closed--mouth_smile",
+          "kind": "image/png",
+          "name": "states[eyes_closed--mouth_smile]",
+          "size": 770346
+         }
+        }
+       ],
+       [
+        "eyes_closed--mouth_a",
+        {
+         "file": {
+          "digest": "de9a647728cfefa54b089fcc7823c6b0075343b0d3ee8c3c381f9e6e8e5eea11",
+          "key": "eyes_closed--mouth_a",
+          "kind": "image/png",
+          "name": "states[eyes_closed--mouth_a]",
+          "size": 770469
+         }
+        }
+       ]
+      ]
+     }
+    },
+    "path": "compose.composition",
+    "ports": {
+     "inputs": {
+      "donors": "image{}",
+      "fits": "json",
+      "geometry": "json",
+      "portrait": "image",
+      "spec": "json"
+     },
+     "outputs": {
+      "exactness": "json",
+      "manifest": "json",
+      "masks": "image/png{}",
+      "preview": "image/webp",
+      "review": "image[]",
+      "states": "image/png{}"
+     },
+     "params": {
+      "eligible": {
+       "type": "array"
+      }
+     }
+    },
+    "reads": [
+     "check#1",
+     "draw.admitted#1",
+     "face.crop#1",
+     "fit.geometry#1",
+     "fit.registration#1"
+    ],
+    "started_at": "2026-10-11T08:36:49.477Z",
+    "state": "succeeded",
+    "step": "compose.composition",
+    "take": [
+     1
+    ],
+    "title": "Build every combination",
+    "uses": "./nodes/motion.py#composition",
+    "with": {
+     "donors": {
+      "collection": [
+       [
+        "eyes_half",
+        {
+         "file": {
+          "digest": "c16a38710db8a18e2570d5a696d4416d9270fdd8b55f9342c505637fba1682e2",
+          "key": "eyes_half",
+          "kind": "image/png",
+          "name": "donors[eyes_half]",
+          "size": 329876
+         }
+        }
+       ],
+       [
+        "eyes_closed",
+        {
+         "file": {
+          "digest": "3ad32db2114fcf2024b8a785e3271ec4d120506782ed8230be8a8e0f2441ee44",
+          "key": "eyes_closed",
+          "kind": "image/png",
+          "name": "donors[eyes_closed]",
+          "size": 324296
+         }
+        }
+       ],
+       [
+        "mouth_smile",
+        {
+         "file": {
+          "digest": "9749c8b4324d3e5ea1ec13ff8e8d71066e66bf65ed7a623e27e6c1772f674520",
+          "key": "mouth_smile",
+          "kind": "image/png",
+          "name": "donors[mouth_smile]",
+          "size": 330393
+         }
+        }
+       ],
+       [
+        "mouth_a",
+        {
+         "file": {
+          "digest": "2e02d42da6aadacbeb2887e4fa5e76b588371ff66191d0c1549e391721be9908",
+          "key": "mouth_a",
+          "kind": "image/png",
+          "name": "donors[mouth_a]",
+          "size": 329351
+         }
+        }
+       ]
+      ]
+     },
+     "eligible": {
+      "list": [
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       }
+      ]
+     },
+     "fits": {
+      "file": {
+       "digest": "af9e583f23c002c144be88e76f4d086476788b3e2934a4e999527f66874e353e",
+       "kind": "json",
+       "name": "fits",
+       "size": 74807
+      }
+     },
+     "geometry": {
+      "file": {
+       "digest": "340c6b742820a8b7693568e2c40ec587ee38e180e731f31ee3f7c21f7d5873f6",
+       "kind": "json",
+       "name": "json",
+       "size": 2472
+      }
+     },
+     "portrait": {
+      "file": {
+       "digest": "554958f0e7590cf94abb15fe23519d4675f8c376bbc35b937eceab920ddd154e",
+       "kind": "image/png",
+       "name": "image",
+       "size": 780132
+      }
+     },
+     "spec": {
+      "file": {
+       "digest": "e3d1a2f67225af739df632149fde83f7028f82bd484d1faf41809c425cce2c69",
+       "kind": "json",
+       "name": "spec",
+       "size": 2741
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "compose.composition#1",
+      "source_kind": "output",
+      "source_port": "review",
+      "target_port": "context"
+     },
+     {
+      "source": "draw.briefs#1",
+      "source_kind": "output",
+      "source_port": "quality",
+      "target_port": "prompt"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 42960,
+    "error": null,
+    "id": "compose.quality#1",
+    "interface_bindings": [
+     {
+      "source": "compose.composition#1",
+      "source_kind": "output",
+      "source_port": "review",
+      "target_port": "context"
+     },
+     {
+      "source": "draw.briefs#1",
+      "source_kind": "output",
+      "source_port": "quality",
+      "target_port": "prompt"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "json": {
+      "file": {
+       "digest": "ae39b5c382ce3a17923c1b5cb90c7a14019f1f6d9b0f265b55fc951d487705e3",
+       "kind": "json",
+       "name": "json",
+       "size": 1680
+      }
+     }
+    },
+    "path": "compose.quality",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "compose.composition#1",
+     "draw.briefs#1"
+    ],
+    "started_at": "2026-10-11T08:37:15.315Z",
+    "state": "succeeded",
+    "step": "compose.quality",
+    "take": [
+     1
+    ],
+    "title": "Review the result",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "list": [
+       {
+        "file": {
+         "digest": "554958f0e7590cf94abb15fe23519d4675f8c376bbc35b937eceab920ddd154e",
+         "kind": "image/png",
+         "name": "review[0]",
+         "size": 780132
+        }
+       },
+       {
+        "file": {
+         "digest": "2a76a57c60e33a4894def5891292c375a15c1ee9d5e8bf78ba01cb31a507c5e0",
+         "kind": "image/png",
+         "name": "review[1]",
+         "size": 783510
+        }
+       },
+       {
+        "file": {
+         "digest": "4df78e21ddfbbc289e481bff3b3b314b1ff4877ce7d27feddf238e362ab8040f",
+         "kind": "image/png",
+         "name": "review[2]",
+         "size": 783502
+        }
+       },
+       {
+        "file": {
+         "digest": "56b9f38a5ab16e1db77357959917b7f017af332382fe4ff4a6d56bbeaf741b10",
+         "kind": "image/png",
+         "name": "review[3]",
+         "size": 774739
+        }
+       },
+       {
+        "file": {
+         "digest": "37c1ca76bf150863d907ccadd0e85025ef6c905add023e249e58eb0c331cde10",
+         "kind": "image/png",
+         "name": "review[4]",
+         "size": 778130
+        }
+       },
+       {
+        "file": {
+         "digest": "8bc86282751ea4904a4c9a36cd90e171edf54920e3fe8f399808a44f431d27f6",
+         "kind": "image/png",
+         "name": "review[5]",
+         "size": 778210
+        }
+       },
+       {
+        "file": {
+         "digest": "822abfd67c1f6842f1761c3737e1b5fb53829643e95d3c5bd97f98e515e186dc",
+         "kind": "image/png",
+         "name": "review[6]",
+         "size": 766929
+        }
+       },
+       {
+        "file": {
+         "digest": "df0a373c90e5ebc4fed8b1b065c5fdbb8328e40b53c976b67f976baa73d452d1",
+         "kind": "image/png",
+         "name": "review[7]",
+         "size": 770346
+        }
+       },
+       {
+        "file": {
+         "digest": "de9a647728cfefa54b089fcc7823c6b0075343b0d3ee8c3c381f9e6e8e5eea11",
+         "kind": "image/png",
+         "name": "review[8]",
+         "size": 770469
+        }
+       }
+      ]
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "file": {
+       "digest": "15542bf5e9ff906539d0cced5d5a69b90cd7d3f5008c27d99ec2f86336f79a12",
+       "kind": "text/plain",
+       "name": "quality",
+       "size": 4904
+      }
+     },
+     "schema": {
+      "file": {
+       "digest": "8a3bb1e2ecca617174dbb147bd135561aa91649948442ff73cb62b0d430f7b02",
+       "kind": "json",
+       "name": "quality.json",
+       "size": 1615
+      }
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "compose.quality#2",
+    "interface_bindings": [
+     {
+      "source": "compose.composition#1",
+      "source_kind": "output",
+      "source_port": "review",
+      "target_port": "context"
+     },
+     {
+      "source": "draw.briefs#1",
+      "source_kind": "output",
+      "source_port": "quality",
+      "target_port": "prompt"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "compose.quality",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "compose.composition#1",
+     "draw.briefs#1"
+    ],
+    "state": "skipped",
+    "step": "compose.quality",
+    "take": [
+     2
+    ],
+    "title": "Review the result",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "withheld": true
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "schema": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "compose.quality#3",
+    "interface_bindings": [
+     {
+      "source": "compose.composition#1",
+      "source_kind": "output",
+      "source_port": "review",
+      "target_port": "context"
+     },
+     {
+      "source": "draw.briefs#1",
+      "source_kind": "output",
+      "source_port": "quality",
+      "target_port": "prompt"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "compose.quality",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "compose.composition#1",
+     "draw.briefs#1"
+    ],
+    "state": "skipped",
+    "step": "compose.quality",
+    "take": [
+     3
+    ],
+    "title": "Review the result",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "withheld": true
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "schema": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "compose.quality#4",
+    "interface_bindings": [
+     {
+      "source": "compose.composition#1",
+      "source_kind": "output",
+      "source_port": "review",
+      "target_port": "context"
+     },
+     {
+      "source": "draw.briefs#1",
+      "source_kind": "output",
+      "source_port": "quality",
+      "target_port": "prompt"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "compose.quality",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "compose.composition#1",
+     "draw.briefs#1"
+    ],
+    "state": "skipped",
+    "step": "compose.quality",
+    "take": [
+     4
+    ],
+    "title": "Review the result",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "withheld": true
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "schema": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "compose.quality#5",
+    "interface_bindings": [
+     {
+      "source": "compose.composition#1",
+      "source_kind": "output",
+      "source_port": "review",
+      "target_port": "context"
+     },
+     {
+      "source": "draw.briefs#1",
+      "source_kind": "output",
+      "source_port": "quality",
+      "target_port": "prompt"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "compose.quality",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "compose.composition#1",
+     "draw.briefs#1"
+    ],
+    "state": "skipped",
+    "step": "compose.quality",
+    "take": [
+     5
+    ],
+    "title": "Review the result",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "withheld": true
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "schema": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "compose.quality#6",
+    "interface_bindings": [
+     {
+      "source": "compose.composition#1",
+      "source_kind": "output",
+      "source_port": "review",
+      "target_port": "context"
+     },
+     {
+      "source": "draw.briefs#1",
+      "source_kind": "output",
+      "source_port": "quality",
+      "target_port": "prompt"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "compose.quality",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "compose.composition#1",
+     "draw.briefs#1"
+    ],
+    "state": "skipped",
+    "step": "compose.quality",
+    "take": [
+     6
+    ],
+    "title": "Review the result",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "withheld": true
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "schema": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "compose.quality#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "quality"
+     },
+     {
+      "source": "draw.admitted#1",
+      "source_kind": "fact",
+      "source_port": "eligible_features",
+      "target_port": "eligible"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 8,
+    "error": null,
+    "id": "compose.quality_ok#1",
+    "interface_bindings": [
+     {
+      "source": "compose.quality#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "quality"
+     },
+     {
+      "source": "draw.admitted#1",
+      "source_kind": "fact",
+      "source_port": "eligible_features",
+      "target_port": "eligible"
+     }
+    ],
+    "interrupted": false,
+    "judges": "compose.quality#1",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "compose.quality_ok",
+    "ports": {
+     "inputs": {
+      "quality": "json"
+     },
+     "outputs": {},
+     "params": {
+      "eligible": {
+       "type": "array"
+      }
+     }
+    },
+    "reads": [
+     "compose.quality#1",
+     "draw.admitted#1"
+    ],
+    "started_at": "2026-10-11T08:37:58.286Z",
+    "state": "succeeded",
+    "step": "compose.quality_ok",
+    "take": [
+     1
+    ],
+    "title": "Check the review",
+    "uses": "./nodes/motion.py#quality_ok",
+    "with": {
+     "eligible": {
+      "list": [
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       }
+      ]
+     },
+     "quality": {
+      "file": {
+       "digest": "ae39b5c382ce3a17923c1b5cb90c7a14019f1f6d9b0f265b55fc951d487705e3",
+       "kind": "json",
+       "name": "json",
+       "size": 1680
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "compose.quality#2",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "quality"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "compose.quality_ok#2",
+    "interface_bindings": [
+     {
+      "source": "compose.quality#2",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "quality"
+     },
+     {
+      "source": "draw.admitted#1",
+      "source_kind": "fact",
+      "source_port": "eligible_features",
+      "target_port": "eligible"
+     }
+    ],
+    "interrupted": false,
+    "judges": "compose.quality#2",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "compose.quality_ok",
+    "ports": {
+     "inputs": {
+      "quality": "json"
+     },
+     "outputs": {},
+     "params": {
+      "eligible": {
+       "type": "array"
+      }
+     }
+    },
+    "reads": [
+     "compose.quality#2",
+     "draw.admitted#1",
+     "draw.admitted#2",
+     "draw.admitted#3",
+     "draw.admitted#4",
+     "draw.admitted#5",
+     "draw.admitted#6"
+    ],
+    "state": "skipped",
+    "step": "compose.quality_ok",
+    "take": [
+     2
+    ],
+    "title": "Check the review",
+    "uses": "./nodes/motion.py#quality_ok",
+    "with": {
+     "eligible": {
+      "withheld": true
+     },
+     "quality": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "compose.quality#3",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "quality"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "compose.quality_ok#3",
+    "interface_bindings": [
+     {
+      "source": "compose.quality#3",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "quality"
+     },
+     {
+      "source": "draw.admitted#1",
+      "source_kind": "fact",
+      "source_port": "eligible_features",
+      "target_port": "eligible"
+     }
+    ],
+    "interrupted": false,
+    "judges": "compose.quality#3",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "compose.quality_ok",
+    "ports": {
+     "inputs": {
+      "quality": "json"
+     },
+     "outputs": {},
+     "params": {
+      "eligible": {
+       "type": "array"
+      }
+     }
+    },
+    "reads": [
+     "compose.quality#3",
+     "draw.admitted#1",
+     "draw.admitted#2",
+     "draw.admitted#3",
+     "draw.admitted#4",
+     "draw.admitted#5",
+     "draw.admitted#6"
+    ],
+    "state": "skipped",
+    "step": "compose.quality_ok",
+    "take": [
+     3
+    ],
+    "title": "Check the review",
+    "uses": "./nodes/motion.py#quality_ok",
+    "with": {
+     "eligible": {
+      "withheld": true
+     },
+     "quality": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "compose.quality#4",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "quality"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "compose.quality_ok#4",
+    "interface_bindings": [
+     {
+      "source": "compose.quality#4",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "quality"
+     },
+     {
+      "source": "draw.admitted#1",
+      "source_kind": "fact",
+      "source_port": "eligible_features",
+      "target_port": "eligible"
+     }
+    ],
+    "interrupted": false,
+    "judges": "compose.quality#4",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "compose.quality_ok",
+    "ports": {
+     "inputs": {
+      "quality": "json"
+     },
+     "outputs": {},
+     "params": {
+      "eligible": {
+       "type": "array"
+      }
+     }
+    },
+    "reads": [
+     "compose.quality#4",
+     "draw.admitted#1",
+     "draw.admitted#2",
+     "draw.admitted#3",
+     "draw.admitted#4",
+     "draw.admitted#5",
+     "draw.admitted#6"
+    ],
+    "state": "skipped",
+    "step": "compose.quality_ok",
+    "take": [
+     4
+    ],
+    "title": "Check the review",
+    "uses": "./nodes/motion.py#quality_ok",
+    "with": {
+     "eligible": {
+      "withheld": true
+     },
+     "quality": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "compose.quality#5",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "quality"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "compose.quality_ok#5",
+    "interface_bindings": [
+     {
+      "source": "compose.quality#5",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "quality"
+     },
+     {
+      "source": "draw.admitted#1",
+      "source_kind": "fact",
+      "source_port": "eligible_features",
+      "target_port": "eligible"
+     }
+    ],
+    "interrupted": false,
+    "judges": "compose.quality#5",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "compose.quality_ok",
+    "ports": {
+     "inputs": {
+      "quality": "json"
+     },
+     "outputs": {},
+     "params": {
+      "eligible": {
+       "type": "array"
+      }
+     }
+    },
+    "reads": [
+     "compose.quality#5",
+     "draw.admitted#1",
+     "draw.admitted#2",
+     "draw.admitted#3",
+     "draw.admitted#4",
+     "draw.admitted#5",
+     "draw.admitted#6"
+    ],
+    "state": "skipped",
+    "step": "compose.quality_ok",
+    "take": [
+     5
+    ],
+    "title": "Check the review",
+    "uses": "./nodes/motion.py#quality_ok",
+    "with": {
+     "eligible": {
+      "withheld": true
+     },
+     "quality": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "compose.quality#6",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "quality"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "compose.quality_ok#6",
+    "interface_bindings": [
+     {
+      "source": "compose.quality#6",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "quality"
+     },
+     {
+      "source": "draw.admitted#1",
+      "source_kind": "fact",
+      "source_port": "eligible_features",
+      "target_port": "eligible"
+     }
+    ],
+    "interrupted": false,
+    "judges": "compose.quality#6",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "compose.quality_ok",
+    "ports": {
+     "inputs": {
+      "quality": "json"
+     },
+     "outputs": {},
+     "params": {
+      "eligible": {
+       "type": "array"
+      }
+     }
+    },
+    "reads": [
+     "compose.quality#6",
+     "draw.admitted#1",
+     "draw.admitted#2",
+     "draw.admitted#3",
+     "draw.admitted#4",
+     "draw.admitted#5",
+     "draw.admitted#6"
+    ],
+    "state": "skipped",
+    "step": "compose.quality_ok",
+    "take": [
+     6
+    ],
+    "title": "Check the review",
+    "uses": "./nodes/motion.py#quality_ok",
+    "with": {
+     "eligible": {
+      "withheld": true
+     },
+     "quality": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "compose.quality#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "quality"
+     },
+     {
+      "source": "draw.admission#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "admission"
+     },
+     {
+      "source": "face.locate#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "location"
+     },
+     {
+      "source": "fit.geometry#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "geometry"
+     },
+     {
+      "source": "fit.registration#1",
+      "source_kind": "output",
+      "source_port": "fits",
+      "target_port": "fits"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 16,
+    "error": null,
+    "id": "deliver.result#1",
+    "interface_bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "compose.quality#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "quality"
+     },
+     {
+      "source": "draw.admission#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "admission"
+     },
+     {
+      "source": "face.locate#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "location"
+     },
+     {
+      "source": "fit.geometry#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "geometry"
+     },
+     {
+      "source": "fit.registration#1",
+      "source_kind": "output",
+      "source_port": "fits",
+      "target_port": "fits"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "result": {
+      "file": {
+       "digest": "4379f071b41315841eb2bab7ddf8e39fcfd3a34a67a36e907931a35275091284",
+       "kind": "json",
+       "name": "result",
+       "size": 398
+      }
+     }
+    },
+    "path": "deliver.result",
+    "ports": {
+     "inputs": {
+      "admission": "json?",
+      "fits": "json?",
+      "geometry": "json?",
+      "location": "json?",
+      "quality": "json?",
+      "spec": "json"
+     },
+     "outputs": {
+      "result": "json"
+     },
+     "params": {}
+    },
+    "reads": [
+     "check#1",
+     "compose.quality#1",
+     "draw.admission#1",
+     "face.locate#1",
+     "fit.geometry#1",
+     "fit.registration#1"
+    ],
+    "started_at": "2026-10-11T08:37:58.301Z",
+    "state": "succeeded",
+    "step": "deliver.result",
+    "take": [
+     1
+    ],
+    "title": "Record the result",
+    "uses": "./nodes/motion.py#result",
+    "with": {
+     "admission": {
+      "file": {
+       "digest": "e463d726c1635d151f4e4a7e38ab00336728d1166f6d477a5de5e2ba60885c39",
+       "kind": "json",
+       "name": "json",
+       "size": 925
+      }
+     },
+     "fits": {
+      "file": {
+       "digest": "af9e583f23c002c144be88e76f4d086476788b3e2934a4e999527f66874e353e",
+       "kind": "json",
+       "name": "fits",
+       "size": 74807
+      }
+     },
+     "geometry": {
+      "file": {
+       "digest": "340c6b742820a8b7693568e2c40ec587ee38e180e731f31ee3f7c21f7d5873f6",
+       "kind": "json",
+       "name": "json",
+       "size": 2472
+      }
+     },
+     "location": {
+      "file": {
+       "digest": "38b0156dc0a049af5a2b445484d457480cc62a3320e6d03974bc09660edc0b73",
+       "kind": "json",
+       "name": "json",
+       "size": 219
+      }
+     },
+     "quality": {
+      "file": {
+       "digest": "ae39b5c382ce3a17923c1b5cb90c7a14019f1f6d9b0f265b55fc951d487705e3",
+       "kind": "json",
+       "name": "json",
+       "size": 1680
+      }
+     },
+     "spec": {
+      "file": {
+       "digest": "e3d1a2f67225af739df632149fde83f7028f82bd484d1faf41809c425cce2c69",
+       "kind": "json",
+       "name": "spec",
+       "size": 2741
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "compose.composition#1",
+      "source_kind": "output",
+      "source_port": "masks",
+      "target_port": "masks"
+     },
+     {
+      "source": "draw.admitted#1",
+      "source_kind": "fact",
+      "source_port": "eligible_features",
+      "target_port": "features"
+     },
+     {
+      "source": "face.crop#1",
+      "source_kind": "output",
+      "source_port": "transform",
+      "target_port": "transform"
+     },
+     {
+      "source": "fit.registration#1",
+      "source_kind": "output",
+      "source_port": "donors",
+      "target_port": "donors"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 4360,
+    "error": null,
+    "id": "deliver.render#1",
+    "interface_bindings": [
+     {
+      "source": "check#1",
+      "source_kind": "output",
+      "source_port": "spec",
+      "target_port": "spec"
+     },
+     {
+      "source": "compose.composition#1",
+      "source_kind": "output",
+      "source_port": "masks",
+      "target_port": "masks"
+     },
+     {
+      "source": "draw.admitted#1",
+      "source_kind": "fact",
+      "source_port": "eligible_features",
+      "target_port": "features"
+     },
+     {
+      "source": "face.crop#1",
+      "source_kind": "output",
+      "source_port": "transform",
+      "target_port": "transform"
+     },
+     {
+      "source": "fit.registration#1",
+      "source_kind": "output",
+      "source_port": "donors",
+      "target_port": "donors"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "animation": {
+      "file": {
+       "digest": "cd2759a9431fb626b2b7f12c4df9b3445aa15990cc9f279d674ec64aaaa9e61c",
+       "kind": "image/webp",
+       "name": "animation",
+       "size": 630270
+      }
+     },
+     "exactness": {
+      "file": {
+       "digest": "f638502d8c1bc6f3d59403d52853cc6818d7942dcb2fc0f9f027f6d308dfe602",
+       "kind": "json",
+       "name": "exactness",
+       "size": 3760
+      }
+     },
+     "manifest": {
+      "file": {
+       "digest": "e5d1abbfab2b90b450deced5abccd72b91a7d25e250569b289b13d076cc658a4",
+       "kind": "json",
+       "name": "manifest",
+       "size": 7454
+      }
+     },
+     "patches": {
+      "collection": [
+       [
+        "eyes_half-canvas_left_eye",
+        {
+         "file": {
+          "digest": "babbf1d72bc6e7d42efc5831e1c0678f2e6a7a9f8894e9637cd32c74e05425cf",
+          "key": "eyes_half-canvas_left_eye",
+          "kind": "image/png",
+          "name": "patches[eyes_half-canvas_left_eye]",
+          "size": 3203
+         }
+        }
+       ],
+       [
+        "eyes_half-canvas_right_eye",
+        {
+         "file": {
+          "digest": "c02322728084835371deda95ebc510e24bf4a42fab80fb1878b9f5e8d3ce64ea",
+          "key": "eyes_half-canvas_right_eye",
+          "kind": "image/png",
+          "name": "patches[eyes_half-canvas_right_eye]",
+          "size": 3140
+         }
+        }
+       ],
+       [
+        "eyes_closed-canvas_left_eye",
+        {
+         "file": {
+          "digest": "4572c514ab925613c8ee71092d45c054c28a3ea4b3f97223884c36c906d2ba7c",
+          "key": "eyes_closed-canvas_left_eye",
+          "kind": "image/png",
+          "name": "patches[eyes_closed-canvas_left_eye]",
+          "size": 2950
+         }
+        }
+       ],
+       [
+        "eyes_closed-canvas_right_eye",
+        {
+         "file": {
+          "digest": "ada298d452c09898b2f263c0edfba142198f251ab9b9b924ba9d97ba45c787a2",
+          "key": "eyes_closed-canvas_right_eye",
+          "kind": "image/png",
+          "name": "patches[eyes_closed-canvas_right_eye]",
+          "size": 2754
+         }
+        }
+       ],
+       [
+        "mouth_smile-mouth",
+        {
+         "file": {
+          "digest": "057e1a773a963759a3e26e84afee982f4d510930f823af3930020f92ca64349f",
+          "key": "mouth_smile-mouth",
+          "kind": "image/png",
+          "name": "patches[mouth_smile-mouth]",
+          "size": 3675
+         }
+        }
+       ],
+       [
+        "mouth_a-mouth",
+        {
+         "file": {
+          "digest": "e4891db3ed181856f8369ac85022c53b79c9023e2d810ba3d0b00a4e407b29db",
+          "key": "mouth_a-mouth",
+          "kind": "image/png",
+          "name": "patches[mouth_a-mouth]",
+          "size": 3684
+         }
+        }
+       ]
+      ]
+     },
+     "states": {
+      "collection": [
+       [
+        "rest--rest",
+        {
+         "file": {
+          "digest": "af0cb3ece0896833384a326d42b654677466390395c1bbcd3ba69e00004636c6",
+          "key": "rest--rest",
+          "kind": "image/png",
+          "name": "states[rest--rest]",
+          "size": 480352
+         }
+        }
+       ],
+       [
+        "rest--mouth_smile",
+        {
+         "file": {
+          "digest": "a7061a63cffa41a932d51197e5dbd069b726d8a6aa65e8f78163c99813864e3c",
+          "key": "rest--mouth_smile",
+          "kind": "image/png",
+          "name": "states[rest--mouth_smile]",
+          "size": 480898
+         }
+        }
+       ],
+       [
+        "rest--mouth_a",
+        {
+         "file": {
+          "digest": "3203c0deb1b14887de7e5b2e80d2ac4369ec36b04488179113355babe729bc2b",
+          "key": "rest--mouth_a",
+          "kind": "image/png",
+          "name": "states[rest--mouth_a]",
+          "size": 480873
+         }
+        }
+       ],
+       [
+        "eyes_half--rest",
+        {
+         "file": {
+          "digest": "9822b715c884760d8b0017579fb7b62cdf5f5e2b6ed19e6b2a6d82c48e6c2741",
+          "key": "eyes_half--rest",
+          "kind": "image/png",
+          "name": "states[eyes_half--rest]",
+          "size": 480261
+         }
+        }
+       ],
+       [
+        "eyes_half--mouth_smile",
+        {
+         "file": {
+          "digest": "b156b1b7d712a34f583da408c031d46aea9a426b332d51b8fd4b873f1a9744d4",
+          "key": "eyes_half--mouth_smile",
+          "kind": "image/png",
+          "name": "states[eyes_half--mouth_smile]",
+          "size": 480791
+         }
+        }
+       ],
+       [
+        "eyes_half--mouth_a",
+        {
+         "file": {
+          "digest": "85129d756614b1573401309a9af403f63c8d7cc6ada6d074bf8d1ecaf25aaa65",
+          "key": "eyes_half--mouth_a",
+          "kind": "image/png",
+          "name": "states[eyes_half--mouth_a]",
+          "size": 480760
+         }
+        }
+       ],
+       [
+        "eyes_closed--rest",
+        {
+         "file": {
+          "digest": "98ae8d4ce43d4a75fdc424ae95b76aac3f8dded34b26eda094d39e3d44985d45",
+          "key": "eyes_closed--rest",
+          "kind": "image/png",
+          "name": "states[eyes_closed--rest]",
+          "size": 479666
+         }
+        }
+       ],
+       [
+        "eyes_closed--mouth_smile",
+        {
+         "file": {
+          "digest": "3a964394edb3876a147cc78fbed84a972d0c04fc8a3e4ee6608b29a977a5d470",
+          "key": "eyes_closed--mouth_smile",
+          "kind": "image/png",
+          "name": "states[eyes_closed--mouth_smile]",
+          "size": 480198
+         }
+        }
+       ],
+       [
+        "eyes_closed--mouth_a",
+        {
+         "file": {
+          "digest": "08e6ddcee2e191f1a0a69c09605c9f6b461ce222f561a963df1bc1ec235221e4",
+          "key": "eyes_closed--mouth_a",
+          "kind": "image/png",
+          "name": "states[eyes_closed--mouth_a]",
+          "size": 480176
+         }
+        }
+       ]
+      ]
+     }
+    },
+    "path": "deliver.render",
+    "ports": {
+     "inputs": {
+      "donors": "image{}",
+      "masks": "image{}",
+      "portrait": "image",
+      "spec": "json",
+      "transform": "json"
+     },
+     "outputs": {
+      "animation": "image/webp",
+      "exactness": "json",
+      "manifest": "json",
+      "patches": "image/png{}",
+      "states": "image/png{}"
+     },
+     "params": {
+      "features": {
+       "type": "array"
+      }
+     }
+    },
+    "reads": [
+     "check#1",
+     "compose.composition#1",
+     "draw.admitted#1",
+     "face.crop#1",
+     "fit.registration#1"
+    ],
+    "started_at": "2026-10-11T08:37:58.301Z",
+    "state": "succeeded",
+    "step": "deliver.render",
+    "take": [
+     1
+    ],
+    "title": "Put it back at full size",
+    "uses": "./nodes/face.py#render",
+    "with": {
+     "donors": {
+      "collection": [
+       [
+        "eyes_half",
+        {
+         "file": {
+          "digest": "c16a38710db8a18e2570d5a696d4416d9270fdd8b55f9342c505637fba1682e2",
+          "key": "eyes_half",
+          "kind": "image/png",
+          "name": "donors[eyes_half]",
+          "size": 329876
+         }
+        }
+       ],
+       [
+        "eyes_closed",
+        {
+         "file": {
+          "digest": "3ad32db2114fcf2024b8a785e3271ec4d120506782ed8230be8a8e0f2441ee44",
+          "key": "eyes_closed",
+          "kind": "image/png",
+          "name": "donors[eyes_closed]",
+          "size": 324296
+         }
+        }
+       ],
+       [
+        "mouth_smile",
+        {
+         "file": {
+          "digest": "9749c8b4324d3e5ea1ec13ff8e8d71066e66bf65ed7a623e27e6c1772f674520",
+          "key": "mouth_smile",
+          "kind": "image/png",
+          "name": "donors[mouth_smile]",
+          "size": 330393
+         }
+        }
+       ],
+       [
+        "mouth_a",
+        {
+         "file": {
+          "digest": "2e02d42da6aadacbeb2887e4fa5e76b588371ff66191d0c1549e391721be9908",
+          "key": "mouth_a",
+          "kind": "image/png",
+          "name": "donors[mouth_a]",
+          "size": 329351
+         }
+        }
+       ]
+      ]
+     },
+     "features": {
+      "list": [
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       }
+      ]
+     },
+     "masks": {
+      "collection": [
+       [
+        "canvas_left_eye",
+        {
+         "file": {
+          "digest": "6cd89c40f6fd9c3922e51214a77707af95b8c4b893b0bf352796a073ae389677",
+          "key": "canvas_left_eye",
+          "kind": "image/png",
+          "name": "masks[canvas_left_eye]",
+          "size": 2691
+         }
+        }
+       ],
+       [
+        "canvas_right_eye",
+        {
+         "file": {
+          "digest": "323e5abd7726246d35f0c221dda8a4d26f2996c51c1d50d195321c7d15cba075",
+          "key": "canvas_right_eye",
+          "kind": "image/png",
+          "name": "masks[canvas_right_eye]",
+          "size": 2480
+         }
+        }
+       ],
+       [
+        "mouth",
+        {
+         "file": {
+          "digest": "b3c65dcbd4ac54b93f45e376750cfa5ce4036e2406103dbc18b9f5af02b55135",
+          "key": "mouth",
+          "kind": "image/png",
+          "name": "masks[mouth]",
+          "size": 2856
+         }
+        }
+       ]
+      ]
+     },
+     "portrait": {
+      "file": {
+       "digest": "af0cb3ece0896833384a326d42b654677466390395c1bbcd3ba69e00004636c6",
+       "kind": "image/png",
+       "name": "traveler-canonical.png",
+       "size": 480352
+      }
+     },
+     "spec": {
+      "file": {
+       "digest": "e3d1a2f67225af739df632149fde83f7028f82bd484d1faf41809c425cce2c69",
+       "kind": "json",
+       "name": "spec",
+       "size": 2741
+      }
+     },
+     "transform": {
+      "file": {
+       "digest": "1a89007f89952f7042796b528db235f134949dd5a95c4298644ac8bb08acc70d",
+       "kind": "json",
+       "name": "transform",
+       "size": 434
+      }
+     }
+    }
+   }
+  ],
+  "outputs": {
+   "animation": {
+    "file": {
+     "digest": "cd2759a9431fb626b2b7f12c4df9b3445aa15990cc9f279d674ec64aaaa9e61c",
+     "kind": "image/webp",
+     "name": "animation",
+     "size": 630270
+    }
+   },
+   "manifest": {
+    "file": {
+     "digest": "e5d1abbfab2b90b450deced5abccd72b91a7d25e250569b289b13d076cc658a4",
+     "kind": "json",
+     "name": "manifest",
+     "size": 7454
+    }
+   },
+   "patches": {
+    "collection": [
+     [
+      "eyes_half-canvas_left_eye",
+      {
+       "file": {
+        "digest": "babbf1d72bc6e7d42efc5831e1c0678f2e6a7a9f8894e9637cd32c74e05425cf",
+        "key": "eyes_half-canvas_left_eye",
+        "kind": "image/png",
+        "name": "patches[eyes_half-canvas_left_eye]",
+        "size": 3203
+       }
+      }
+     ],
+     [
+      "eyes_half-canvas_right_eye",
+      {
+       "file": {
+        "digest": "c02322728084835371deda95ebc510e24bf4a42fab80fb1878b9f5e8d3ce64ea",
+        "key": "eyes_half-canvas_right_eye",
+        "kind": "image/png",
+        "name": "patches[eyes_half-canvas_right_eye]",
+        "size": 3140
+       }
+      }
+     ],
+     [
+      "eyes_closed-canvas_left_eye",
+      {
+       "file": {
+        "digest": "4572c514ab925613c8ee71092d45c054c28a3ea4b3f97223884c36c906d2ba7c",
+        "key": "eyes_closed-canvas_left_eye",
+        "kind": "image/png",
+        "name": "patches[eyes_closed-canvas_left_eye]",
+        "size": 2950
+       }
+      }
+     ],
+     [
+      "eyes_closed-canvas_right_eye",
+      {
+       "file": {
+        "digest": "ada298d452c09898b2f263c0edfba142198f251ab9b9b924ba9d97ba45c787a2",
+        "key": "eyes_closed-canvas_right_eye",
+        "kind": "image/png",
+        "name": "patches[eyes_closed-canvas_right_eye]",
+        "size": 2754
+       }
+      }
+     ],
+     [
+      "mouth_smile-mouth",
+      {
+       "file": {
+        "digest": "057e1a773a963759a3e26e84afee982f4d510930f823af3930020f92ca64349f",
+        "key": "mouth_smile-mouth",
+        "kind": "image/png",
+        "name": "patches[mouth_smile-mouth]",
+        "size": 3675
+       }
+      }
+     ],
+     [
+      "mouth_a-mouth",
+      {
+       "file": {
+        "digest": "e4891db3ed181856f8369ac85022c53b79c9023e2d810ba3d0b00a4e407b29db",
+        "key": "mouth_a-mouth",
+        "kind": "image/png",
+        "name": "patches[mouth_a-mouth]",
+        "size": 3684
+       }
+      }
+     ]
+    ]
+   },
+   "result": {
+    "file": {
+     "digest": "4379f071b41315841eb2bab7ddf8e39fcfd3a34a67a36e907931a35275091284",
+     "kind": "json",
+     "name": "result",
+     "size": 398
+    }
+   },
+   "states": {
+    "collection": [
+     [
+      "rest--rest",
+      {
+       "file": {
+        "digest": "af0cb3ece0896833384a326d42b654677466390395c1bbcd3ba69e00004636c6",
+        "key": "rest--rest",
+        "kind": "image/png",
+        "name": "states[rest--rest]",
+        "size": 480352
+       }
+      }
+     ],
+     [
+      "rest--mouth_smile",
+      {
+       "file": {
+        "digest": "a7061a63cffa41a932d51197e5dbd069b726d8a6aa65e8f78163c99813864e3c",
+        "key": "rest--mouth_smile",
+        "kind": "image/png",
+        "name": "states[rest--mouth_smile]",
+        "size": 480898
+       }
+      }
+     ],
+     [
+      "rest--mouth_a",
+      {
+       "file": {
+        "digest": "3203c0deb1b14887de7e5b2e80d2ac4369ec36b04488179113355babe729bc2b",
+        "key": "rest--mouth_a",
+        "kind": "image/png",
+        "name": "states[rest--mouth_a]",
+        "size": 480873
+       }
+      }
+     ],
+     [
+      "eyes_half--rest",
+      {
+       "file": {
+        "digest": "9822b715c884760d8b0017579fb7b62cdf5f5e2b6ed19e6b2a6d82c48e6c2741",
+        "key": "eyes_half--rest",
+        "kind": "image/png",
+        "name": "states[eyes_half--rest]",
+        "size": 480261
+       }
+      }
+     ],
+     [
+      "eyes_half--mouth_smile",
+      {
+       "file": {
+        "digest": "b156b1b7d712a34f583da408c031d46aea9a426b332d51b8fd4b873f1a9744d4",
+        "key": "eyes_half--mouth_smile",
+        "kind": "image/png",
+        "name": "states[eyes_half--mouth_smile]",
+        "size": 480791
+       }
+      }
+     ],
+     [
+      "eyes_half--mouth_a",
+      {
+       "file": {
+        "digest": "85129d756614b1573401309a9af403f63c8d7cc6ada6d074bf8d1ecaf25aaa65",
+        "key": "eyes_half--mouth_a",
+        "kind": "image/png",
+        "name": "states[eyes_half--mouth_a]",
+        "size": 480760
+       }
+      }
+     ],
+     [
+      "eyes_closed--rest",
+      {
+       "file": {
+        "digest": "98ae8d4ce43d4a75fdc424ae95b76aac3f8dded34b26eda094d39e3d44985d45",
+        "key": "eyes_closed--rest",
+        "kind": "image/png",
+        "name": "states[eyes_closed--rest]",
+        "size": 479666
+       }
+      }
+     ],
+     [
+      "eyes_closed--mouth_smile",
+      {
+       "file": {
+        "digest": "3a964394edb3876a147cc78fbed84a972d0c04fc8a3e4ee6608b29a977a5d470",
+        "key": "eyes_closed--mouth_smile",
+        "kind": "image/png",
+        "name": "states[eyes_closed--mouth_smile]",
+        "size": 480198
+       }
+      }
+     ],
+     [
+      "eyes_closed--mouth_a",
+      {
+       "file": {
+        "digest": "08e6ddcee2e191f1a0a69c09605c9f6b461ce222f561a963df1bc1ec235221e4",
+        "key": "eyes_closed--mouth_a",
+        "kind": "image/png",
+        "name": "states[eyes_closed--mouth_a]",
+        "size": 480176
+       }
+      }
+     ]
+    ]
+   }
+  },
+  "pending": [],
+  "run_name": "portrait-motion-01",
+  "scopes": [
+   {
+    "id": "scope:face#",
+    "input_bindings": [],
+    "kind": "group",
+    "nodes": [
+     "face.locate#1",
+     "face.locate#2",
+     "face.locate#3",
+     "face.locate#4",
+     "face.locate#5",
+     "face.locate#6",
+     "face.located#1",
+     "face.located#2",
+     "face.located#3",
+     "face.located#4",
+     "face.located#5",
+     "face.located#6",
+     "face.crop#1"
+    ],
+    "output_bindings": [],
+    "parent": null,
+    "path": "face",
+    "pending": [],
+    "ports": {
+     "inputs": {},
+     "outputs": []
+    },
+    "source": null,
+    "step": "face",
+    "take": [],
+    "title": "Find the face"
+   },
+   {
+    "id": "scope:draw#",
+    "input_bindings": [],
+    "kind": "group",
+    "nodes": [
+     "draw.admission#1",
+     "draw.admission#2",
+     "draw.admission#3",
+     "draw.admission#4",
+     "draw.admission#5",
+     "draw.admission#6",
+     "draw.admitted#1",
+     "draw.admitted#2",
+     "draw.admitted#3",
+     "draw.admitted#4",
+     "draw.admitted#5",
+     "draw.admitted#6",
+     "draw.guide#1",
+     "draw.briefs#1",
+     "draw.atlas#1"
+    ],
+    "output_bindings": [],
+    "parent": null,
+    "path": "draw",
+    "pending": [],
+    "ports": {
+     "inputs": {},
+     "outputs": []
+    },
+    "source": null,
+    "step": "draw",
+    "take": [],
+    "title": "Decide and draw"
+   },
+   {
+    "id": "scope:fit#",
+    "input_bindings": [],
+    "kind": "group",
+    "nodes": [
+     "fit.registration#1",
+     "fit.geometry#1",
+     "fit.geometry#2",
+     "fit.geometry#3",
+     "fit.geometry#4",
+     "fit.geometry#5",
+     "fit.geometry#6",
+     "fit.geometry_ok#1",
+     "fit.geometry_ok#2",
+     "fit.geometry_ok#3",
+     "fit.geometry_ok#4",
+     "fit.geometry_ok#5",
+     "fit.geometry_ok#6"
+    ],
+    "output_bindings": [],
+    "parent": null,
+    "path": "fit",
+    "pending": [],
+    "ports": {
+     "inputs": {},
+     "outputs": []
+    },
+    "source": null,
+    "step": "fit",
+    "take": [],
+    "title": "Fit"
+   },
+   {
+    "id": "scope:compose#",
+    "input_bindings": [],
+    "kind": "group",
+    "nodes": [
+     "compose.composition#1",
+     "compose.quality#1",
+     "compose.quality#2",
+     "compose.quality#3",
+     "compose.quality#4",
+     "compose.quality#5",
+     "compose.quality#6",
+     "compose.quality_ok#1",
+     "compose.quality_ok#2",
+     "compose.quality_ok#3",
+     "compose.quality_ok#4",
+     "compose.quality_ok#5",
+     "compose.quality_ok#6"
+    ],
+    "output_bindings": [],
+    "parent": null,
+    "path": "compose",
+    "pending": [],
+    "ports": {
+     "inputs": {},
+     "outputs": []
+    },
+    "source": null,
+    "step": "compose",
+    "take": [],
+    "title": "Compose and review"
+   },
+   {
+    "id": "scope:deliver#",
+    "input_bindings": [],
+    "kind": "group",
+    "nodes": [
+     "deliver.result#1",
+     "deliver.render#1"
+    ],
+    "output_bindings": [],
+    "parent": null,
+    "path": "deliver",
+    "pending": [],
+    "ports": {
+     "inputs": {},
+     "outputs": []
+    },
+    "source": null,
+    "step": "deliver",
+    "take": [],
+    "title": "Deliver"
+   }
+  ],
+  "stand_in": false,
+  "state": "succeeded",
+  "warnings": [],
+  "workflow": {
+   "id": "portrait-motion",
+   "title": "Portrait motion"
+  }
+ }
+}

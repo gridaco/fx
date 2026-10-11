@@ -94,7 +94,7 @@ and [specifications](spec/) for the technical contracts.
 ## Contribute
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for source builds, examples, checks, and
-viewer development. [The overview](docs/wg/overview.md) records the
+viewer or website development. [The overview](docs/wg/overview.md) records the
 project's history and direction; [ISSUES.md](ISSUES.md) tracks known gaps.
 
 Grida FX is open source under [Apache-2.0](LICENSE).

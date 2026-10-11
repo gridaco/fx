@@ -101,6 +101,33 @@ plans and recorded runs covering branching, joins, matrices, repeats, nesting,
 media, cache reuse, takes, and failures. Generated data stays outside source fixtures.
 See the fixture README for setup, generation, and viewer commands.
 
+## Website development
+
+The standalone [www app](web/www/README.md) is a static Next.js site mounted at
+`/fx`, built separately from the embedded viewer:
+
+```sh
+bun --no-env-file run dev:www
+bun --no-env-file run check:www
+bun --no-env-file run build:www
+```
+
+The development site is at `http://127.0.0.1:3100/fx/`. Large workflow showcase
+packages stay outside Git; building the site does not execute workflows.
+
+External CDN assets must load directly in the browser. Prefer native `<img>`;
+every `next/image` use must include an explicit literal `unoptimized` prop, even
+though optimization is also disabled globally. Keep `images.remotePatterns` and
+`images.domains` empty, including wildcard patterns. Do not introduce image
+loaders, rewrites, proxies or server-side relays for CDN assets. This keeps their
+bytes off Vercel's image optimization and delivery path; the website's own HTML,
+JavaScript and local assets still incur ordinary hosting traffic.
+
+The image-policy check runs with `check:www` and the website build. The
+[www setup guide](web/www/README.md#cdn-assets) owns CDN base configuration,
+host migration and browser verification. Keep hostnames out of frozen content
+manifests and use `FX_SHOWCASE_ASSET_BASE` instead.
+
 ## Releases and safety
 
 [RELEASING.md](RELEASING.md) owns packaging, installed-package verification,

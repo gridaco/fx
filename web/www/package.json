@@ -1,0 +1,42 @@
+{
+  "name": "@grida/fx-www",
+  "version": "0.0.0",
+  "private": true,
+  "homepage": "https://grida.co/fx",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "NEXT_TELEMETRY_DISABLED=1 next dev --webpack --hostname 127.0.0.1 --port 3100",
+    "check": "bun --no-env-file run check:images && NEXT_TELEMETRY_DISABLED=1 next typegen && tsc --noEmit",
+    "check:images": "bun --no-env-file scripts/image-policy.ts",
+    "test": "bun --no-env-file test scripts/image-policy.test.ts scripts/showcases src/components/showcases src/lib/showcases",
+    "build": "bun --no-env-file scripts/showcases/build.ts",
+    "build:next": "NEXT_TELEMETRY_DISABLED=1 next build --webpack",
+    "preview": "bun --no-env-file scripts/preview.ts",
+    "prepare:showcases": "bun --no-env-file scripts/showcases/prepare.ts",
+    "verify:showcases": "bun --no-env-file scripts/showcases/verify.ts",
+    "candidate:showcases": "bun --no-env-file scripts/showcases/verify.ts --candidate",
+    "publish:tigris": "bun --no-env-file scripts/showcases/publish-tigris.ts"
+  },
+  "dependencies": {
+    "@grida/fx-react": "workspace:*",
+    "@grida/fx-web": "workspace:*",
+    "lucide-react": "1.52.0",
+    "motion": "14.0.0",
+    "next": "16.4.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "sharp": "0.35.5"
+  },
+  "devDependencies": {
+    "@babel/parser": "8.0.7",
+    "@babel/types": "8.0.6",
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/bun": "1.4.0",
+    "@types/node": "26.6.4",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "tailwindcss": "4.3.3",
+    "typescript": "7.0.2"
+  }
+}

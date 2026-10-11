@@ -1,0 +1,7 @@
+{
+  "kind": "terrain-demo-v1",
+  "resources": [
+    "assets/lookup.json",
+    "assets/atlas.png"
+  ]
+}

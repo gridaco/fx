@@ -1,0 +1,1604 @@
+{
+ "artifacts": [
+  {
+   "digest": "4d479335061c3b7fbf1c956a3344353da233ecb8999528ff2705faca72e84165",
+   "media_type": "json",
+   "name": "validation",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 7662
+  },
+  {
+   "digest": "628b89a8167bf54782e98b8578cfe601d3cc181bb34dfc59912d708f3221d138",
+   "media_type": "image/png",
+   "name": "meadow.png",
+   "omitted_reason": "unplaced_input",
+   "path": null,
+   "size": 2016648
+  },
+  {
+   "digest": "6a7d7e985eb2c049f4bd0ba7ba5085b1eea222c8dbe10b20664732be79c27286",
+   "media_type": "image/png",
+   "name": "image",
+   "omitted_reason": null,
+   "path": "artifacts/6a7d7e985eb2c049f4bd0ba7ba5085b1eea222c8dbe10b20664732be79c27286.png",
+   "size": 3558732
+  },
+  {
+   "digest": "76c90ae388454382a56864640530fc94d7b311d55c5684349438fdcb0724c4cc",
+   "media_type": "image/png",
+   "name": "image",
+   "omitted_reason": null,
+   "path": "artifacts/76c90ae388454382a56864640530fc94d7b311d55c5684349438fdcb0724c4cc.png",
+   "size": 42927
+  },
+  {
+   "digest": "7b2c0bc2529bc758dccc9e31fe04c719595c529b8730bc25e042626514e15748",
+   "media_type": "json",
+   "name": "manifest",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 2721
+  },
+  {
+   "digest": "7c0142ea291b584a4869d5254ea8e27c782bcd2c29e28235788fdab7a7cb6fa2",
+   "media_type": "json",
+   "name": "manifest",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 879
+  },
+  {
+   "digest": "b3b08886ee64739aaddb0e019a367a842783265f9b1537e343fa20e63a714728",
+   "media_type": "image/png",
+   "name": "image",
+   "omitted_reason": null,
+   "path": "artifacts/b3b08886ee64739aaddb0e019a367a842783265f9b1537e343fa20e63a714728.png",
+   "size": 1137756
+  },
+  {
+   "digest": "cd4c90c09dee2128a62d3c0877eff41bc1c411ecf1f654d53594e2067a5689bb",
+   "media_type": "image/png",
+   "name": "image",
+   "omitted_reason": null,
+   "path": "artifacts/cd4c90c09dee2128a62d3c0877eff41bc1c411ecf1f654d53594e2067a5689bb.png",
+   "size": 782542
+  }
+ ],
+ "disclosure": {
+  "artifacts": "media",
+  "diagnostics": false,
+  "values": false
+ },
+ "kind": "fx-run-export-v1",
+ "layout": {
+  "cells": {
+   "package": {
+    "column": 2,
+    "row": 0,
+    "source": "automatic"
+   },
+   "preview": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "terrain": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   },
+   "terrain.admit": {
+    "column": 2,
+    "row": 0,
+    "source": "automatic"
+   },
+   "terrain.generate": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "terrain.paint_target": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   },
+   "terrain.publish": {
+    "column": 2,
+    "row": 1,
+    "source": "automatic"
+   }
+  },
+  "cursor": null,
+  "diagnostics": [],
+  "file": null,
+  "kind": "fx-layout-report-v1",
+  "order": [
+   "scope:terrain#",
+   "terrain.paint_target#1",
+   "terrain.generate#1",
+   "terrain.admit#1",
+   "terrain.publish#1",
+   "preview#1",
+   "package#1"
+  ],
+  "revision": null,
+  "state": "none"
+ },
+ "producer": {
+  "version": "0.1.0"
+ },
+ "source": {
+  "event_count": 20,
+  "events_sha256": "d7a2c1afb5998cdf1cd2961c7e94a71c3113534ce296156670b7edfc3e540cb2",
+  "plan_sha256": "2f7ec83525a1d61975a82f587494477e7f0eba978c667e2c1407102be97bfcbc"
+ },
+ "view": {
+  "artifacts": [
+   {
+    "available": false,
+    "digest": "4d479335061c3b7fbf1c956a3344353da233ecb8999528ff2705faca72e84165",
+    "kind": "json",
+    "name": "validation",
+    "size": 7662,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "628b89a8167bf54782e98b8578cfe601d3cc181bb34dfc59912d708f3221d138",
+    "kind": "image/png",
+    "name": "meadow.png",
+    "size": 2016648,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "6a7d7e985eb2c049f4bd0ba7ba5085b1eea222c8dbe10b20664732be79c27286",
+    "kind": "image/png",
+    "name": "image",
+    "size": 3558732,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "76c90ae388454382a56864640530fc94d7b311d55c5684349438fdcb0724c4cc",
+    "kind": "image/png",
+    "name": "image",
+    "size": 42927,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "7b2c0bc2529bc758dccc9e31fe04c719595c529b8730bc25e042626514e15748",
+    "kind": "json",
+    "name": "manifest",
+    "size": 2721,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "7c0142ea291b584a4869d5254ea8e27c782bcd2c29e28235788fdab7a7cb6fa2",
+    "kind": "json",
+    "name": "manifest",
+    "size": 879,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "b3b08886ee64739aaddb0e019a367a842783265f9b1537e343fa20e63a714728",
+    "kind": "image/png",
+    "name": "image",
+    "size": 1137756,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "cd4c90c09dee2128a62d3c0877eff41bc1c411ecf1f654d53594e2067a5689bb",
+    "kind": "image/png",
+    "name": "image",
+    "size": 782542,
+    "url": null
+   }
+  ],
+  "charged_usd": 0.32,
+  "estimate": {
+   "ceiling_usd": 12,
+   "high_usd": 1.92,
+   "low_usd": 0.1
+  },
+  "inputs": {},
+  "kind": "fx-viewer-run-v1",
+  "nodes": [
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 288,
+    "error": null,
+    "id": "terrain.paint_target#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "image": {
+      "file": {
+       "digest": "76c90ae388454382a56864640530fc94d7b311d55c5684349438fdcb0724c4cc",
+       "kind": "image/png",
+       "name": "image",
+       "size": 42927
+      }
+     }
+    },
+    "path": "terrain.paint_target",
+    "ports": {
+     "inputs": {},
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "template_sha256": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [],
+    "started_at": "2026-10-11T08:24:37.175Z",
+    "state": "succeeded",
+    "step": "terrain.paint_target",
+    "take": [
+     1
+    ],
+    "title": "Pack the locked template",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/terrain/nodes.py#atlas_paint_target",
+    "with": {
+     "template_sha256": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "terrain.paint_target#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 65224,
+    "error": null,
+    "id": "terrain.generate#1",
+    "interface_bindings": [
+     {
+      "source": "terrain.paint_target#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "image": {
+      "file": {
+       "digest": "6a7d7e985eb2c049f4bd0ba7ba5085b1eea222c8dbe10b20664732be79c27286",
+       "kind": "image/png",
+       "name": "image",
+       "size": 3558732
+      }
+     }
+    },
+    "path": "terrain.generate",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "terrain.paint_target#1"
+    ],
+    "started_at": "2026-10-11T08:24:37.466Z",
+    "state": "succeeded",
+    "step": "terrain.generate",
+    "take": [
+     1
+    ],
+    "title": "Paint the 47-mask atlas",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "file": {
+       "digest": "76c90ae388454382a56864640530fc94d7b311d55c5684349438fdcb0724c4cc",
+       "kind": "image/png",
+       "name": "image",
+       "size": 42927
+      }
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "references": {
+      "list": [
+       {
+        "file": {
+         "digest": "628b89a8167bf54782e98b8578cfe601d3cc181bb34dfc59912d708f3221d138",
+         "kind": "image/png",
+         "name": "meadow.png",
+         "size": 2016648
+        }
+       }
+      ]
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "terrain.paint_target#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "terrain.generate#2",
+    "interface_bindings": [
+     {
+      "source": "terrain.paint_target#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "terrain.generate",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "terrain.paint_target#1"
+    ],
+    "state": "skipped",
+    "step": "terrain.generate",
+    "take": [
+     2
+    ],
+    "title": "Paint the 47-mask atlas",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "references": {
+      "withheld": true
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "terrain.paint_target#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "terrain.generate#3",
+    "interface_bindings": [
+     {
+      "source": "terrain.paint_target#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "terrain.generate",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "terrain.paint_target#1"
+    ],
+    "state": "skipped",
+    "step": "terrain.generate",
+    "take": [
+     3
+    ],
+    "title": "Paint the 47-mask atlas",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "references": {
+      "withheld": true
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "terrain.paint_target#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "terrain.generate#4",
+    "interface_bindings": [
+     {
+      "source": "terrain.paint_target#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "terrain.generate",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "terrain.paint_target#1"
+    ],
+    "state": "skipped",
+    "step": "terrain.generate",
+    "take": [
+     4
+    ],
+    "title": "Paint the 47-mask atlas",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "references": {
+      "withheld": true
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "terrain.paint_target#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "terrain.generate#5",
+    "interface_bindings": [
+     {
+      "source": "terrain.paint_target#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "terrain.generate",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "terrain.paint_target#1"
+    ],
+    "state": "skipped",
+    "step": "terrain.generate",
+    "take": [
+     5
+    ],
+    "title": "Paint the 47-mask atlas",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "references": {
+      "withheld": true
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "terrain.paint_target#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "terrain.generate#6",
+    "interface_bindings": [
+     {
+      "source": "terrain.paint_target#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "terrain.generate",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "terrain.paint_target#1"
+    ],
+    "state": "skipped",
+    "step": "terrain.generate",
+    "take": [
+     6
+    ],
+    "title": "Paint the 47-mask atlas",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "references": {
+      "withheld": true
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "terrain.generate#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 397,
+    "error": null,
+    "id": "terrain.admit#1",
+    "interface_bindings": [
+     {
+      "source": "terrain.generate#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": "terrain.generate#1",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "terrain.admit",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {
+      "template_sha256": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "terrain.generate#1"
+    ],
+    "started_at": "2026-10-11T08:25:42.693Z",
+    "state": "succeeded",
+    "step": "terrain.admit",
+    "take": [
+     1
+    ],
+    "title": "Hold the sheet to its cells",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/terrain/nodes.py#admit_atlas",
+    "with": {
+     "image": {
+      "file": {
+       "digest": "6a7d7e985eb2c049f4bd0ba7ba5085b1eea222c8dbe10b20664732be79c27286",
+       "kind": "image/png",
+       "name": "image",
+       "size": 3558732
+      }
+     },
+     "template_sha256": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "terrain.generate#2",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "terrain.admit#2",
+    "interface_bindings": [
+     {
+      "source": "terrain.generate#2",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": "terrain.generate#2",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "terrain.admit",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {
+      "template_sha256": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "terrain.generate#2"
+    ],
+    "state": "skipped",
+    "step": "terrain.admit",
+    "take": [
+     2
+    ],
+    "title": "Hold the sheet to its cells",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/terrain/nodes.py#admit_atlas",
+    "with": {
+     "image": {
+      "withheld": true
+     },
+     "template_sha256": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "terrain.generate#3",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "terrain.admit#3",
+    "interface_bindings": [
+     {
+      "source": "terrain.generate#3",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": "terrain.generate#3",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "terrain.admit",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {
+      "template_sha256": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "terrain.generate#3"
+    ],
+    "state": "skipped",
+    "step": "terrain.admit",
+    "take": [
+     3
+    ],
+    "title": "Hold the sheet to its cells",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/terrain/nodes.py#admit_atlas",
+    "with": {
+     "image": {
+      "withheld": true
+     },
+     "template_sha256": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "terrain.generate#4",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "terrain.admit#4",
+    "interface_bindings": [
+     {
+      "source": "terrain.generate#4",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": "terrain.generate#4",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "terrain.admit",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {
+      "template_sha256": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "terrain.generate#4"
+    ],
+    "state": "skipped",
+    "step": "terrain.admit",
+    "take": [
+     4
+    ],
+    "title": "Hold the sheet to its cells",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/terrain/nodes.py#admit_atlas",
+    "with": {
+     "image": {
+      "withheld": true
+     },
+     "template_sha256": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "terrain.generate#5",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "terrain.admit#5",
+    "interface_bindings": [
+     {
+      "source": "terrain.generate#5",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": "terrain.generate#5",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "terrain.admit",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {
+      "template_sha256": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "terrain.generate#5"
+    ],
+    "state": "skipped",
+    "step": "terrain.admit",
+    "take": [
+     5
+    ],
+    "title": "Hold the sheet to its cells",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/terrain/nodes.py#admit_atlas",
+    "with": {
+     "image": {
+      "withheld": true
+     },
+     "template_sha256": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "terrain.generate#6",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "terrain.admit#6",
+    "interface_bindings": [
+     {
+      "source": "terrain.generate#6",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": "terrain.generate#6",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "terrain.admit",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {
+      "template_sha256": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "terrain.generate#6"
+    ],
+    "state": "skipped",
+    "step": "terrain.admit",
+    "take": [
+     6
+    ],
+    "title": "Hold the sheet to its cells",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/terrain/nodes.py#admit_atlas",
+    "with": {
+     "image": {
+      "withheld": true
+     },
+     "template_sha256": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "terrain.generate#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "raw"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 698,
+    "error": null,
+    "id": "terrain.publish#1",
+    "interface_bindings": [
+     {
+      "source": "terrain.generate#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "raw"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "image": {
+      "file": {
+       "digest": "b3b08886ee64739aaddb0e019a367a842783265f9b1537e343fa20e63a714728",
+       "kind": "image/png",
+       "name": "image",
+       "size": 1137756
+      }
+     },
+     "validation": {
+      "file": {
+       "digest": "4d479335061c3b7fbf1c956a3344353da233ecb8999528ff2705faca72e84165",
+       "kind": "json",
+       "name": "validation",
+       "size": 7662
+      }
+     }
+    },
+    "path": "terrain.publish",
+    "ports": {
+     "inputs": {
+      "raw": "image"
+     },
+     "outputs": {
+      "image": "image/png",
+      "validation": "json"
+     },
+     "params": {
+      "lookup_sha256": {
+       "type": "string"
+      },
+      "template_sha256": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "terrain.generate#1",
+     "terrain.paint_target#1"
+    ],
+    "started_at": "2026-10-11T08:25:43.091Z",
+    "state": "succeeded",
+    "step": "terrain.publish",
+    "take": [
+     1
+    ],
+    "title": "Assemble the atlas",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/terrain/nodes.py#assemble_atlas",
+    "with": {
+     "lookup_sha256": {
+      "withheld": true
+     },
+     "raw": {
+      "file": {
+       "digest": "6a7d7e985eb2c049f4bd0ba7ba5085b1eea222c8dbe10b20664732be79c27286",
+       "kind": "image/png",
+       "name": "image",
+       "size": 3558732
+      }
+     },
+     "template_sha256": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "terrain.publish#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "atlas"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 92,
+    "error": null,
+    "id": "preview#1",
+    "interface_bindings": [
+     {
+      "source": "terrain.publish#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "atlas"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "image": {
+      "file": {
+       "digest": "cd4c90c09dee2128a62d3c0877eff41bc1c411ecf1f654d53594e2067a5689bb",
+       "kind": "image/png",
+       "name": "image",
+       "size": 782542
+      }
+     },
+     "manifest": {
+      "file": {
+       "digest": "7b2c0bc2529bc758dccc9e31fe04c719595c529b8730bc25e042626514e15748",
+       "kind": "json",
+       "name": "manifest",
+       "size": 2721
+      }
+     }
+    },
+    "path": "preview",
+    "ports": {
+     "inputs": {
+      "atlas": "image/png"
+     },
+     "outputs": {
+      "image": "image/png",
+      "manifest": "json"
+     },
+     "params": {
+      "rows": {
+       "type": "array"
+      }
+     }
+    },
+    "reads": [
+     "terrain.generate#1",
+     "terrain.paint_target#1",
+     "terrain.publish#1"
+    ],
+    "started_at": "2026-10-11T08:25:43.791Z",
+    "state": "succeeded",
+    "step": "preview",
+    "take": [
+     1
+    ],
+    "title": "Inspect legal tile joins",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/terrain/nodes.py#terrain_preview",
+    "with": {
+     "atlas": {
+      "file": {
+       "digest": "b3b08886ee64739aaddb0e019a367a842783265f9b1537e343fa20e63a714728",
+       "kind": "image/png",
+       "name": "image",
+       "size": 1137756
+      }
+     },
+     "rows": {
+      "list": [
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       }
+      ]
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "preview#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "files"
+     },
+     {
+      "source": "preview#1",
+      "source_kind": "output",
+      "source_port": "manifest",
+      "target_port": "files"
+     },
+     {
+      "source": "terrain.publish#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "files"
+     },
+     {
+      "source": "terrain.publish#1",
+      "source_kind": "output",
+      "source_port": "validation",
+      "target_port": "files"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 67,
+    "error": null,
+    "id": "package#1",
+    "interface_bindings": [
+     {
+      "source": "preview#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "files"
+     },
+     {
+      "source": "preview#1",
+      "source_kind": "output",
+      "source_port": "manifest",
+      "target_port": "files"
+     },
+     {
+      "source": "terrain.publish#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "files"
+     },
+     {
+      "source": "terrain.publish#1",
+      "source_kind": "output",
+      "source_port": "validation",
+      "target_port": "files"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "files": {
+      "collection": [
+       [
+        "terrain/atlas.png",
+        {
+         "file": {
+          "digest": "b3b08886ee64739aaddb0e019a367a842783265f9b1537e343fa20e63a714728",
+          "key": "terrain/atlas.png",
+          "kind": "image/png",
+          "name": "atlas.png]",
+          "size": 1137756
+         }
+        }
+       ],
+       [
+        "terrain/validation.json",
+        {
+         "file": {
+          "digest": "4d479335061c3b7fbf1c956a3344353da233ecb8999528ff2705faca72e84165",
+          "key": "terrain/validation.json",
+          "kind": "json",
+          "name": "validation.json]",
+          "size": 7662
+         }
+        }
+       ],
+       [
+        "terrain/preview.png",
+        {
+         "file": {
+          "digest": "cd4c90c09dee2128a62d3c0877eff41bc1c411ecf1f654d53594e2067a5689bb",
+          "key": "terrain/preview.png",
+          "kind": "image/png",
+          "name": "preview.png]",
+          "size": 782542
+         }
+        }
+       ],
+       [
+        "terrain/preview.json",
+        {
+         "file": {
+          "digest": "7b2c0bc2529bc758dccc9e31fe04c719595c529b8730bc25e042626514e15748",
+          "key": "terrain/preview.json",
+          "kind": "json",
+          "name": "preview.json]",
+          "size": 2721
+         }
+        }
+       ]
+      ]
+     },
+     "manifest": {
+      "file": {
+       "digest": "7c0142ea291b584a4869d5254ea8e27c782bcd2c29e28235788fdab7a7cb6fa2",
+       "kind": "json",
+       "name": "manifest",
+       "size": 879
+      }
+     }
+    },
+    "path": "package",
+    "ports": {
+     "inputs": {},
+     "outputs": {
+      "files": "file{}",
+      "manifest": "json"
+     },
+     "params": {
+      "files": {
+       "type": "object"
+      },
+      "manifest": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "preview#1",
+     "terrain.publish#1"
+    ],
+    "started_at": "2026-10-11T08:25:43.886Z",
+    "state": "succeeded",
+    "step": "package",
+    "take": [
+     1
+    ],
+    "title": "Terrain handoff files",
+    "uses": "fx/package@1",
+    "with": {
+     "files": {
+      "withheld": true
+     },
+     "manifest": {
+      "withheld": true
+     }
+    }
+   }
+  ],
+  "outputs": {
+   "atlas": {
+    "file": {
+     "digest": "b3b08886ee64739aaddb0e019a367a842783265f9b1537e343fa20e63a714728",
+     "kind": "image/png",
+     "name": "image",
+     "size": 1137756
+    }
+   },
+   "package": {
+    "collection": [
+     [
+      "terrain/atlas.png",
+      {
+       "file": {
+        "digest": "b3b08886ee64739aaddb0e019a367a842783265f9b1537e343fa20e63a714728",
+        "key": "terrain/atlas.png",
+        "kind": "image/png",
+        "name": "atlas.png]",
+        "size": 1137756
+       }
+      }
+     ],
+     [
+      "terrain/validation.json",
+      {
+       "file": {
+        "digest": "4d479335061c3b7fbf1c956a3344353da233ecb8999528ff2705faca72e84165",
+        "key": "terrain/validation.json",
+        "kind": "json",
+        "name": "validation.json]",
+        "size": 7662
+       }
+      }
+     ],
+     [
+      "terrain/preview.png",
+      {
+       "file": {
+        "digest": "cd4c90c09dee2128a62d3c0877eff41bc1c411ecf1f654d53594e2067a5689bb",
+        "key": "terrain/preview.png",
+        "kind": "image/png",
+        "name": "preview.png]",
+        "size": 782542
+       }
+      }
+     ],
+     [
+      "terrain/preview.json",
+      {
+       "file": {
+        "digest": "7b2c0bc2529bc758dccc9e31fe04c719595c529b8730bc25e042626514e15748",
+        "key": "terrain/preview.json",
+        "kind": "json",
+        "name": "preview.json]",
+        "size": 2721
+       }
+      }
+     ]
+    ]
+   },
+   "preview": {
+    "file": {
+     "digest": "cd4c90c09dee2128a62d3c0877eff41bc1c411ecf1f654d53594e2067a5689bb",
+     "kind": "image/png",
+     "name": "image",
+     "size": 782542
+    }
+   },
+   "preview_manifest": {
+    "file": {
+     "digest": "7b2c0bc2529bc758dccc9e31fe04c719595c529b8730bc25e042626514e15748",
+     "kind": "json",
+     "name": "manifest",
+     "size": 2721
+    }
+   },
+   "validation": {
+    "file": {
+     "digest": "4d479335061c3b7fbf1c956a3344353da233ecb8999528ff2705faca72e84165",
+     "kind": "json",
+     "name": "validation",
+     "size": 7662
+    }
+   }
+  },
+  "pending": [],
+  "run_name": "terrain-01",
+  "scopes": [
+   {
+    "id": "scope:terrain#",
+    "input_bindings": [],
+    "kind": "group",
+    "nodes": [
+     "terrain.paint_target#1",
+     "terrain.generate#1",
+     "terrain.generate#2",
+     "terrain.generate#3",
+     "terrain.generate#4",
+     "terrain.generate#5",
+     "terrain.generate#6",
+     "terrain.admit#1",
+     "terrain.admit#2",
+     "terrain.admit#3",
+     "terrain.admit#4",
+     "terrain.admit#5",
+     "terrain.admit#6",
+     "terrain.publish#1"
+    ],
+    "output_bindings": [],
+    "parent": null,
+    "path": "terrain",
+    "pending": [],
+    "ports": {
+     "inputs": {},
+     "outputs": []
+    },
+    "source": null,
+    "step": "terrain",
+    "take": [],
+    "title": "Golden meadow material"
+   }
+  ],
+  "stand_in": false,
+  "state": "succeeded",
+  "warnings": [],
+  "workflow": {
+   "id": "showcase-meadow-terrain",
+   "title": "Golden meadow terrain"
+  }
+ }
+}

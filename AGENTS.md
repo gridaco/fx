@@ -18,6 +18,7 @@ Guardrails for working in this repository. [README.md](README.md) says what FX i
 | `js/fx/` | `@grida/fx`, the Node SDK and command launcher; per-platform engines are packaged separately. |
 | `js/fx-web/`, `js/fx-react/` | Private browser-only contracts, TypeScript controllers/canvas, and thin React adapters. |
 | `web/viewer/` | Vite/React/Tailwind client, built and embedded in the engine. |
+| `web/www/` | Standalone Next.js/Tailwind static website mounted at `/fx`; large showcase run packages stay outside Git. |
 | `examples/` | Projects written the way a user would. CI plans every one and runs every runnable one offline through the SDK, from a fresh build (rigged-character only plans). |
 | `skills/` | Self-contained user-installable agent skills, distributed through `npx skills add gridaco/fx`; the README owns layout and authoring conventions. |
 | `fixtures/viewer/` | Canonical provider-free development harness for viewer topology, media, cache, takes, failures and recorded in-progress states; generated data stays outside the source fixture. |
@@ -52,6 +53,7 @@ Run the checks for what you touched:
 ```sh
 bun --no-env-file install --frozen-lockfile
 bun --no-env-file run check:viewer && bun --no-env-file run test:viewer && bun --no-env-file run build:viewer
+bun --no-env-file run check:www && bun --no-env-file run test:www && bun --no-env-file run build:www
 cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test --workspace
 (cd python && uv run ruff check --config pyproject.toml . ../tools ../conformance ../examples ../fixtures && uv run ruff format --check --config pyproject.toml . ../tools ../conformance/run.py ../examples ../fixtures && uv run pytest)
 (cd js/fx && bun --no-env-file run typecheck && bun --no-env-file test)

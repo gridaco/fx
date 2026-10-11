@@ -1,0 +1,377 @@
+{
+  "kind": "world-demo-v1",
+  "entities": [
+    {
+      "entity": {
+        "entity_id": "entity_mira_vale",
+        "display_name": "Mira Vale",
+        "primary_class": "actor",
+        "entity_kind": "adult human field caretaker",
+        "summary": "Mira Vale is the Weather Observatory's twenty-seven-year-old field caretaker, recognizable by her short warm-copper bob, calm attention and compact practical silhouette.",
+        "how_it_works_or_lives": "Mira walks the instrument grounds, inspects the grass around each mechanism, keeps routes open and corrects small failures before they distort an observation. She compares the Crown's motion with visible wind in the meadow and attends to the rods and clicks transmitted into the observatory. Her work is observation and deliberate repair, not weather control.",
+        "present_tension": "She must protect accurate observations while negotiating reasonable demands for harvest access, visitors and a timely axle repair.",
+        "facts": [
+          {
+            "claim": "Mira Vale is a twenty-seven-year-old woman with a round face, a short warm-copper bob above her shoulders and an easy, attentive manner."
+          },
+          {
+            "claim": "Mira wears a fitted deep blue-teal utility jacket, cream shirt, tucked rust-orange collar accent, slate trousers and brown work boots, and carries no signature prop."
+          },
+          {
+            "claim": "As field caretaker, Mira inspects grass around instruments and repairs small failures before they distort observations."
+          },
+          {
+            "claim": "Mira keeps walking routes open while also requiring untrampled grass around the Wind Crown."
+          }
+        ]
+      },
+      "image": "artifacts/entities/entity_mira_vale.png",
+      "status": "admitted",
+      "concept": {
+        "audience_question": "Who keeps small mechanical failures from corrupting the meadow's observations?",
+        "scene_premise": "At dusk inside the observatory, Mira Vale braces a loose rod linkage and tightens it into alignment before its irregular movement can distort an observation; her round face, short warm-copper bob, deep blue-teal utility jacket, cream shirt with rust-orange collar accent, slate trousers and brown work boots remain clearly visible as she works without a signature prop."
+      },
+      "relationships": [
+        {
+          "other_entity_id": "entity_windward_meadow",
+          "other_display_name": "Windward Meadow",
+          "summary": "Mira performs her field-caretaking work in Windward Meadow."
+        },
+        {
+          "other_entity_id": "entity_weather_observatory",
+          "other_display_name": "Weather Observatory",
+          "summary": "Mira serves the Weather Observatory as its field caretaker."
+        },
+        {
+          "other_entity_id": "entity_wind_crown",
+          "other_display_name": "Wind Crown",
+          "summary": "Mira maintains the Wind Crown by inspecting its verge, detecting friction and clearing small failures."
+        },
+        {
+          "other_entity_id": "entity_stilling_morning",
+          "other_display_name": "Stilling Morning",
+          "summary": "Mira participated in the Stilling Morning by finding and clearing the seed wound around the axle."
+        }
+      ],
+      "review": {
+        "verdict": "admit",
+        "what_the_image_teaches": "Mira Vale is a practical observatory caretaker who manually braces and tightens mechanical linkages. Her work prevents small equipment faults from compromising observations.",
+        "blocking_findings": [],
+        "advisory_findings": []
+      }
+    },
+    {
+      "entity": {
+        "entity_id": "entity_windward_meadow",
+        "display_name": "Windward Meadow",
+        "primary_class": "place",
+        "entity_kind": "inhabited windswept basin",
+        "summary": "Windward Meadow is a broad, peaceful and inhabited basin of golden grass and orange field flowers, bounded by blue distant hills beneath towering cream-white clouds.",
+        "how_it_works_or_lives": "Ordinary wind crosses the exposed basin, leaning grass and moving clouds in ways that can be compared with the Wind Crown's cups. Common paths pass through working ground, the western footpath is marked by an old tree, and the observatory occupies a rise above the fields. The meadow supports both shared harvest activity and weather observation.",
+        "present_tension": "Its common ground must accommodate harvest routes, protected instrument grass and visitor access without treating any one use as absolute.",
+        "facts": [
+          {
+            "claim": "Windward Meadow is a broad windswept basin of warm golden grass, orange field flowers, blue distant hills and towering cream-white clouds."
+          },
+          {
+            "claim": "A single old tree marks the meadow's western footpath."
+          },
+          {
+            "claim": "The meadow is peaceful and inhabited, and its weather is ordinary rather than supernatural."
+          },
+          {
+            "claim": "During the Stilling Morning, leaning grass and moving clouds showed that wind continued even though the Crown had stopped."
+          }
+        ]
+      },
+      "image": "artifacts/entities/entity_windward_meadow.png",
+      "status": "rejected",
+      "concept": {
+        "audience_question": "How are the meadow, western footpath, instrument rise and distant hills arranged as one inhabited place?",
+        "scene_premise": "At dawn, a few walkers cross the broad golden basin along the western footpath beneath its single old tree, while orange flowers break through the grass and the observatory rise, Wind Crown, blue hills and towering cream-white clouds establish the working meadow as one continuous landscape."
+      },
+      "relationships": [
+        {
+          "other_entity_id": "entity_mira_vale",
+          "other_display_name": "Mira Vale",
+          "summary": "Mira performs her field-caretaking work in Windward Meadow."
+        },
+        {
+          "other_entity_id": "entity_weather_observatory",
+          "other_display_name": "Weather Observatory",
+          "summary": "The Weather Observatory stands on a rise within Windward Meadow."
+        },
+        {
+          "other_entity_id": "entity_wind_crown",
+          "other_display_name": "Wind Crown",
+          "summary": "The Wind Crown stands on the observatory rise in Windward Meadow."
+        },
+        {
+          "other_entity_id": "entity_meadow_cooperative",
+          "other_display_name": "Meadow Cooperative",
+          "summary": "The Meadow Cooperative maintains the meadow's common paths."
+        },
+        {
+          "other_entity_id": "entity_stilling_morning",
+          "other_display_name": "Stilling Morning",
+          "summary": "The Stilling Morning occurred in Windward Meadow around the Wind Crown."
+        }
+      ],
+      "review": {
+        "verdict": "reject",
+        "what_the_image_teaches": "A cold reader learns that a few walkers follow a tree-marked path through a broad, windswept golden meadow toward a small observatory and three-cup wind mechanism. The image also presents the basin as connected to blue hills beneath towering clouds.",
+        "blocking_findings": [
+          "The distant invented village skyline, including a prominent church-like spire, directly contradicts the sealed visual identity's forbidden substitutions and prevents the scene from faithfully representing Windward Meadow's specified geography."
+        ],
+        "advisory_findings": [
+          "The view is an elevated ground-level panorama rather than the plan's stated aerial vantage.",
+          "The leading walker's exact passage from the old tree's shadow into pale dawn light is not clearly isolated, although the group's purposeful crossing remains legible.",
+          "A large lake is introduced beyond the basin despite not being established by the sealed record."
+        ]
+      }
+    },
+    {
+      "entity": {
+        "entity_id": "entity_weather_observatory",
+        "display_name": "Weather Observatory",
+        "primary_class": "place",
+        "entity_kind": "compact mechanical weather-observation room",
+        "summary": "The Weather Observatory is a low stone-and-timber room on a rise above Windward Meadow, linking an outdoor wind instrument to a sheltered mechanism that visitors can watch and hear.",
+        "how_it_works_or_lives": "Wind enters through wide open shutters while the threshold shelters observers from the instrument lawn. Inside, moving rods driven by the Wind Crown work with a plain circular counterweight to produce an audible click. Motion, sound and the outdoor grass provide direct physical evidence, so the mechanism does not depend on writing, screens or diagrams.",
+        "present_tension": "Its welcoming threshold may need temporary limits when visitor numbers threaten unobstructed maintenance and observation around the instrument lawn.",
+        "facts": [
+          {
+            "claim": "The observatory is a compact stone-and-timber room beneath a rust-red roof on a rise above the meadow, with teal shutters visible from the fields."
+          },
+          {
+            "claim": "Wide open shutters admit the wind, and a sheltered threshold lets visitors watch the measuring mechanism without crossing the instrument lawn."
+          },
+          {
+            "claim": "A plain circular counterweight and moving rods convert the outdoor instrument's motion into an audible click that can be understood without writing, a screen or a diagram."
+          }
+        ]
+      },
+      "image": "artifacts/entities/entity_weather_observatory.png",
+      "status": "admitted",
+      "concept": {
+        "audience_question": "How can visitors experience the observatory's physical evidence without entering the instrument lawn?",
+        "scene_premise": "During a windy day, a few visitors remain beneath the sheltered threshold of the compact stone-and-timber observatory as air passes through wide teal shutters and the connected rods move a plain circular counterweight into its audible click; the rust-red roof and room frame the view outward, but the instrument lawn remains unoccupied."
+      },
+      "relationships": [
+        {
+          "other_entity_id": "entity_mira_vale",
+          "other_display_name": "Mira Vale",
+          "summary": "Mira serves the Weather Observatory as its field caretaker."
+        },
+        {
+          "other_entity_id": "entity_windward_meadow",
+          "other_display_name": "Windward Meadow",
+          "summary": "The Weather Observatory stands on a rise within Windward Meadow."
+        },
+        {
+          "other_entity_id": "entity_wind_crown",
+          "other_display_name": "Wind Crown",
+          "summary": "The Wind Crown is mechanically connected to the Weather Observatory through rods pulled by its rotation."
+        }
+      ],
+      "review": {
+        "verdict": "admit",
+        "what_the_image_teaches": "Visitors can witness a three-cup wind instrument driving rods and a circular counterweight while remaining inside the observatory's sheltered threshold. The empty meadow around the Crown shows that observation does not require entering the instrument ground.",
+        "blocking_findings": [],
+        "advisory_findings": [
+          "The precise taut-rod, shifted-counterweight endpoint and audible-click instant cannot be confirmed from the static frame, although the connected mechanism and the group's attentive response make the class of action legible.",
+          "The required bend in the outdoor axle is not clearly visible from this angle.",
+          "The boundary of the instrument lawn is implicit rather than sharply demarcated, though the outdoor ground around the three-cup Crown is visibly unoccupied."
+        ]
+      }
+    },
+    {
+      "entity": {
+        "entity_id": "entity_wind_crown",
+        "display_name": "Wind Crown",
+        "primary_class": "thing",
+        "entity_kind": "mechanical wind instrument",
+        "summary": "The Wind Crown is a squat, weathered wind instrument whose three teal cups rotate around an exposed axle and pull the Weather Observatory's rods.",
+        "how_it_works_or_lives": "Ordinary wind pushes the broad cups, turning the axle and transmitting movement to rods inside the observatory. A short grass verge helps Mira detect friction before drag creates a false calm reading. If nearby grass leans while the cups remain still and the rods cease clicking, the instrument is obstructed rather than the weather being calm.",
+        "present_tension": "Its exposed axle is bent, and repair must balance rapid return to observation against careful preservation of the original part.",
+        "facts": [
+          {
+            "claim": "The Wind Crown is a specific squat, weathered instrument with a rust-red hoop, three broad teal cups and an exposed axle."
+          },
+          {
+            "claim": "Rotation of the Crown's cups pulls the observatory's rods."
+          },
+          {
+            "claim": "A short grass verge around the Crown lets Mira hear and see friction before a slow cup becomes an incorrect calm reading."
+          },
+          {
+            "claim": "Repairing the bent axle requires the Crown to stop for a morning, leaving the meadow without its usual observations during that interval."
+          }
+        ]
+      },
+      "image": "artifacts/entities/entity_wind_crown.png",
+      "status": "admitted",
+      "concept": {
+        "audience_question": "What does the Wind Crown look like, and how does its ordinary rotation reach the observatory?",
+        "scene_premise": "On a clear night, ordinary wind rotates the squat weathered Wind Crown, carrying its three broad teal cups around the rust-red hoop and exposed axle as the connected rods pull toward the observatory; the short grass verge remains legible around the solitary working instrument."
+      },
+      "relationships": [
+        {
+          "other_entity_id": "entity_mira_vale",
+          "other_display_name": "Mira Vale",
+          "summary": "Mira maintains the Wind Crown by inspecting its verge, detecting friction and clearing small failures."
+        },
+        {
+          "other_entity_id": "entity_windward_meadow",
+          "other_display_name": "Windward Meadow",
+          "summary": "The Wind Crown stands on the observatory rise in Windward Meadow."
+        },
+        {
+          "other_entity_id": "entity_weather_observatory",
+          "other_display_name": "Weather Observatory",
+          "summary": "The Wind Crown is mechanically connected to the Weather Observatory through rods pulled by its rotation."
+        },
+        {
+          "other_entity_id": "entity_stilling_morning",
+          "other_display_name": "Stilling Morning",
+          "summary": "The Wind Crown participated in the Stilling Morning as the stopped instrument whose rotation was restored."
+        }
+      ],
+      "review": {
+        "verdict": "admit",
+        "what_the_image_teaches": "A weathered, human-serviceable wind instrument uses exactly three teal cups on a rust-red hoop to catch ordinary night wind. Its exposed mechanism transmits that rotation through a rod linkage directly into the nearby observatory.",
+        "blocking_findings": [],
+        "advisory_findings": [
+          "The exposed axle and hub are readable, but the axle's specified bend is not visually clear.",
+          "The wind-loaded cups, leaning meadow grass, and connected linkage establish operation, but the slight mechanical delay between cup rotation and rod travel cannot be determined from the single frame."
+        ]
+      }
+    },
+    {
+      "entity": {
+        "entity_id": "entity_meadow_cooperative",
+        "display_name": "Meadow Cooperative",
+        "primary_class": "collective",
+        "entity_kind": "local growers and caretakers cooperative",
+        "summary": "The Meadow Cooperative is the local group that maintains Windward Meadow's common paths, shares its harvest and negotiates how working access can coexist with dependable weather observation.",
+        "how_it_works_or_lives": "Members coordinate path maintenance and harvest work as shared responsibilities. On cooperative work days, plain aprons bear paired teal-and-rust stripes. The group needs safe paths and dry harvesting conditions, but it also works with Mira to keep the Wind Crown functional and to distinguish calm weather from mechanical stillness.",
+        "present_tension": "The Cooperative must weigh access and timely observations against the labor and restrictions required to protect or carefully restore the Crown.",
+        "facts": [
+          {
+            "claim": "The Meadow Cooperative consists of local growers and caretakers who maintain common paths and share the meadow's harvest."
+          },
+          {
+            "claim": "The Cooperative needs safe paths and a dry harvest."
+          },
+          {
+            "claim": "The Cooperative constructively disputes verge width, possible threshold closure on a crowded morning and quick axle replacement versus restoration, with labor, access or missing observations at stake."
+          },
+          {
+            "claim": "After the Stilling Morning, the Cooperative's priorities expanded from cutting grass for access to learning how a quiet machine differs from a quiet day."
+          }
+        ]
+      },
+      "image": "artifacts/entities/entity_meadow_cooperative.png",
+      "status": "admitted",
+      "concept": {
+        "audience_question": "Who shares the meadow's harvest and keeps its common routes usable?",
+        "scene_premise": "On a clear day, a crowd of local growers and caretakers in plain aprons with paired teal-and-rust stripes harvests a broad dry swath beside a common path, with some members cutting and gathering while others clear encroaching stalks from the walking route so shared yield and safe passage remain visibly connected."
+      },
+      "relationships": [
+        {
+          "other_entity_id": "entity_windward_meadow",
+          "other_display_name": "Windward Meadow",
+          "summary": "The Meadow Cooperative maintains the meadow's common paths."
+        },
+        {
+          "other_entity_id": "entity_stilling_morning",
+          "other_display_name": "Stilling Morning",
+          "summary": "The Meadow Cooperative participated in the Stilling Morning by helping Mira clear the seed obstruction."
+        },
+        {
+          "other_entity_id": "entity_stilling_morning",
+          "other_display_name": "Stilling Morning",
+          "summary": "The Meadow Cooperative was changed by the Stilling Morning, which shifted its priorities toward distinguishing a quiet machine from a quiet day."
+        }
+      ],
+      "review": {
+        "verdict": "admit",
+        "what_the_image_teaches": "A sizable local cooperative shares the labor of cutting, gathering, carrying, and transporting a dry meadow harvest beside a common path. Their coordinated work and striped aprons identify them as a communal working institution rather than a leader-centered crew.",
+        "blocking_findings": [],
+        "advisory_findings": [
+          "Shared harvesting is immediately legible, but the specific act of cutting encroaching stalks back from the common walking route is less explicit than the broader field work.",
+          "The aprons consistently carry paired teal-and-rust stripes, though their repetition gives some members a slightly more uniform appearance than the record's emphasis on varied ordinary clothing."
+        ]
+      }
+    },
+    {
+      "entity": {
+        "entity_id": "entity_stilling_morning",
+        "display_name": "Stilling Morning",
+        "primary_class": "event",
+        "entity_kind": "brief instrument interruption",
+        "summary": "The Stilling Morning was yesterday's brief interruption when the Wind Crown stopped despite visible wind, prompting Mira and the Meadow Cooperative to clear wound grass seed and reconsider how they read the meadow.",
+        "how_it_works_or_lives": "While grass leaned and clouds moved, the Crown's cups remained still and its usual observation chain was interrupted. Mira found grass seed wound around the exposed axle, and the Cooperative helped clear it. Rotation resumed, but the bend in the axle remained, leaving restoration before the next windy harvest morning unresolved.",
+        "present_tension": "The immediate obstruction is gone, but the event has left the community with an unsettled repair choice and a sharper need to distinguish weather from instrument failure.",
+        "facts": [
+          {
+            "claim": "The Stilling Morning happened yesterday and briefly stopped the Wind Crown while grass leaned and great clouds continued moving."
+          },
+          {
+            "claim": "Mira found grass seed wound around the axle and cleared it with the Meadow Cooperative's help."
+          },
+          {
+            "claim": "The Crown turned again after the seed was cleared, but the exposed bend remained."
+          },
+          {
+            "claim": "Whether the old axle can be restored before the next windy harvest morning remains unresolved."
+          }
+        ]
+      },
+      "image": "artifacts/entities/entity_stilling_morning.png",
+      "status": "rejected",
+      "concept": {
+        "audience_question": "What physically stopped the Crown even though the meadow's wind had not stopped?",
+        "scene_premise": "During yesterday's windy morning, Mira and a few Cooperative members work close around the exposed axle as she draws the final wound loop of grass seed free; the surrounding grass leans and great clouds continue moving while the cups begin to turn again, yet the exposed axle remains visibly bent after the obstruction releases."
+      },
+      "relationships": [
+        {
+          "other_entity_id": "entity_mira_vale",
+          "other_display_name": "Mira Vale",
+          "summary": "Mira participated in the Stilling Morning by finding and clearing the seed wound around the axle."
+        },
+        {
+          "other_entity_id": "entity_meadow_cooperative",
+          "other_display_name": "Meadow Cooperative",
+          "summary": "The Meadow Cooperative participated in the Stilling Morning by helping Mira clear the seed obstruction."
+        },
+        {
+          "other_entity_id": "entity_wind_crown",
+          "other_display_name": "Wind Crown",
+          "summary": "The Wind Crown participated in the Stilling Morning as the stopped instrument whose rotation was restored."
+        },
+        {
+          "other_entity_id": "entity_windward_meadow",
+          "other_display_name": "Windward Meadow",
+          "summary": "The Stilling Morning occurred in Windward Meadow around the Wind Crown."
+        },
+        {
+          "other_entity_id": "entity_meadow_cooperative",
+          "other_display_name": "Meadow Cooperative",
+          "summary": "The Meadow Cooperative was changed by the Stilling Morning, which shifted its priorities toward distinguishing a quiet machine from a quiet day."
+        }
+      ],
+      "review": {
+        "verdict": "reject",
+        "what_the_image_teaches": "A worker and several companions manually clear windblown grass from an accessible wind-driven mechanism while the meadow remains windy. The interruption appears mechanical rather than a failure of the weather.",
+        "blocking_findings": [
+          "The mechanism contradicts the sealed construction logic: the three cups visibly revolve around a vertical rotor, while Mira clears seed from a separate straight horizontal shaft. The record requires the cups and seed obstruction to share one exposed axle with a clearly surviving bend."
+        ],
+        "advisory_findings": [
+          "The exposed axle is not the largest legible mass; the three cups and surrounding figures dominate the composition.",
+          "The purposeful seed-clearing action is clear, but the final loop slipping free and the cups beginning their first weighted turn are not visually certain in this still frame."
+        ]
+      }
+    }
+  ]
+}

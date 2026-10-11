@@ -1,0 +1,27 @@
+{
+  "kind": "ui-sheet-v1",
+  "role": "panel_frame",
+  "canvas": {
+    "width": 1024,
+    "height": 1024
+  },
+  "cells": [
+    {
+      "cell": {
+        "x": 137,
+        "y": 262,
+        "width": 751,
+        "height": 499
+      },
+      "state": "default"
+    }
+  ],
+  "insets": {
+    "top": 99,
+    "right": 96,
+    "bottom": 96,
+    "left": 96
+  },
+  "draw_scale": 2,
+  "band_fill": "tile"
+}
