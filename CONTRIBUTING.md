@@ -190,8 +190,8 @@ CI's `docs` job runs the site's check. To run it locally, with
 node ../grida/apps/docs/scripts/sources/cli.js check --repo gridaco/fx --dir .
 ```
 
-The full rules are in the Grida docs site's
-[contributing guide](https://github.com/gridaco/grida/blob/main/apps/docs/CONTRIBUTING.md#docs-from-other-repos-docs-sources).
+How Grida's docs fit together, and where each repo's docs are published:
+[gridaco/docs](https://github.com/gridaco/docs).
 
 ## Releases and safety
 
