@@ -40,6 +40,11 @@ jobs:
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test --workspace
 
+  # docs/guide and docs/wg are published on grida.co/docs (a docs source of
+  # gridaco/grida); this runs that site's rules on them: links, assets, markdown.
+  docs:
+    uses: gridaco/grida/.github/workflows/docs-source-check.yml@main
+
   # Static site checks build source only; they never prepare or upload run artifacts.
   www:
     runs-on: ubuntu-latest

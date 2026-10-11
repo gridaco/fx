@@ -159,6 +159,40 @@ The image-policy check runs with `check:www` and the website build. The
 host migration and browser verification. Keep hostnames out of frozen content
 manifests and use `FX_SHOWCASE_ASSET_BASE` instead.
 
+## Docs
+
+The [guide](docs/guide/) is published at
+[grida.co/docs/fx](https://grida.co/docs/fx) and the
+[working group](docs/wg/) at `grida.co/docs/wg/fx`. FX is a
+[docs source](https://github.com/gridaco/grida/blob/main/docs/wg/platform/docs-sources.md)
+of the Grida docs site: the pages and their assets live only here, and
+gridaco/grida pins the commit it publishes. The guide is published at the
+release the `grida` CLI pins, so a guide change reaches the site with the
+release that carries it; the working group follows `main`, weekly.
+
+Write docs as they read on GitHub:
+
+- **Links** are ordinary relative links. One to another published page stays a
+  link on the site; one to anything else here (`spec/`, `examples/`) becomes a
+  GitHub permalink at the published revision.
+- **Images** live in the published directory, beside the page (an `img/`
+  folder), and are referenced with markdown syntax:
+  `![Run canvas](./img/run-canvas.png)`. Not `<img src>`, and never an image
+  elsewhere in the repository.
+- **Kinds and size:** `png`, `jpg`, `gif`, `webp`, `svg` or `avif`, at most
+  500 KiB each. No video files: host video and link to it.
+- **Plain markdown** — nothing site-specific.
+
+CI's `docs` job runs the site's check. To run it locally, with
+[gridaco/grida](https://github.com/gridaco/grida) cloned beside this repo:
+
+```sh
+node ../grida/apps/docs/scripts/sources/cli.js check --repo gridaco/fx --dir .
+```
+
+The full rules are in the Grida docs site's
+[contributing guide](https://github.com/gridaco/grida/blob/main/apps/docs/CONTRIBUTING.md#docs-from-other-repos-docs-sources).
+
 ## Releases and safety
 
 [RELEASING.md](RELEASING.md) owns packaging, installed-package verification,
