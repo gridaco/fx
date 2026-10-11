@@ -167,6 +167,7 @@ export * from "./canvas";
 export * from "./layout";
 export * from "./deck";
 export * from "./ports";
+export * from "./state-icon";
 export * from "./navigation";
 export * from "./scopes";
 export * from "./observation";

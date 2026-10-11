@@ -386,7 +386,7 @@ Add targeted evidence for each changed boundary instead of rerunning paid exampl
   or implement their own provider retry loop to work around a missing tool.
 - **Provider credentials:** keys come from the environment or the project's `.env` only. Reading
   the provider credentials the `grida` command manages, which `grida` alone writes, is
-  **proposed** ([gridaco/fx#2](https://github.com/gridaco/fx/issues/2)). Agents configure keys
+  **proposed** ([gridaco/fx#45](https://github.com/gridaco/fx/issues/45)). Agents configure keys
   with `grida`, never through an FX command.
 - **Known correctness limits:** [ISSUES.md](ISSUES.md) tracks missing provider usage
   and an unexplained image-cost discrepancy. Do not claim complete cost explanation

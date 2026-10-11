@@ -58,19 +58,28 @@ export class CanvasController {
     container.classList.add("fx-canvas");
     container.tabIndex = -1;
     const defs = element("defs");
-    const marker = element("marker", { id: `${this.id}-arrow`, viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 6, markerHeight: 6, orient: "auto-start-reverse" });
-    marker.append(element("path", { d: "M 0 0 L 10 5 L 0 10 z", fill: "#a1a1aa" }));
+    // One arrowhead per edge kind, so each head takes its line's colour.
+    const markers = (["data", "control", "dependency"] as const).map((kind) => {
+      const marker = element("marker", { id: `${this.id}-arrow-${kind}`, viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 6, markerHeight: 6, orient: "auto-start-reverse" });
+      marker.append(element("path", { d: "M 0 0 L 10 5 L 0 10 z", class: `fx-canvas-arrow-${kind}` }));
+      return marker;
+    });
     const checker = element("pattern", { id: `${this.id}-checker`, patternUnits: "userSpaceOnUse", width: 16, height: 16 });
     checker.append(element("rect", { width: 16, height: 16, fill: "#fafafa" }));
     checker.append(element("path", { d: "M0 0h8v8H0z M8 8h8v8H8z", fill: "#ededf0" }));
-    defs.append(marker, checker);
+    const shimmer = element("linearGradient", { id: `${this.id}-shimmer` });
+    shimmer.append(
+      element("stop", { offset: 0, "stop-color": "#fff", "stop-opacity": 0 }),
+      element("stop", { offset: 0.5, "stop-color": "#fff", "stop-opacity": 0.85 }),
+      element("stop", { offset: 1, "stop-color": "#fff", "stop-opacity": 0 }),
+    );
+    defs.append(...markers, checker, shimmer);
     this.content.style.transformOrigin = "0 0";
     this.svg.append(defs, this.content);
     this.toolbar.className = "fx-canvas-toolbar";
     const button = (label: string, text: string, action: () => void) => {
       const control = document.createElement("button");
       control.type = "button";
-      control.title = label;
       control.setAttribute("aria-label", label);
       control.textContent = text;
       control.addEventListener("click", action, { signal: this.abort.signal });
@@ -231,10 +240,9 @@ export class CanvasController {
       : `${edge.kind === "control" ? "Control" : "Dependency"}: ${edge.kinds.join(", ")}`;
     const d = canvasEdgePath(edge.points);
     const group = element("g", { class: "fx-canvas-connection", "data-connection-id": edge.id, "data-source-node": edge.source, "data-target-node": edge.target });
-    const path = element("path", { d, class: `fx-canvas-edge fx-canvas-edge-${edge.kind ?? "dependency"}`, "data-edge-id": edge.id, "data-source-port": edge.source_port ?? "", "data-target-port": edge.target_port ?? "", "marker-end": `url(#${this.id}-arrow)`, role: "img", "aria-label": description });
-    path.append(element("title", {}, description));
+    const kind = edge.kind ?? "dependency";
+    const path = element("path", { d, class: `fx-canvas-edge fx-canvas-edge-${kind}`, "data-edge-id": edge.id, "data-source-port": edge.source_port ?? "", "data-target-port": edge.target_port ?? "", "marker-end": `url(#${this.id}-arrow-${kind})`, role: "img", "aria-label": description });
     const hit = element("path", { d, class: "fx-canvas-edge-hit", "aria-hidden": "true" });
-    hit.append(element("title", {}, description));
     group.append(path, hit);
     group.addEventListener("pointerenter", () => this.highlightConnections(null, edge.id), { signal: this.graphAbort.signal });
     group.addEventListener("pointerleave", () => this.highlightConnections(null), { signal: this.graphAbort.signal });

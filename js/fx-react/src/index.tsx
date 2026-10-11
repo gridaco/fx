@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
-import { ArtifactController, canPreviewText, type Artifact } from "@grida/fx-web";
+import { ArtifactController, canPreviewText, stateIcon, stateIconParts, type Artifact } from "@grida/fx-web";
 export { WorkflowCanvas, type WorkflowCanvasHandle } from "./canvas";
 
 export function money(value: number | null): string {
@@ -9,11 +9,18 @@ export function money(value: number | null): string {
   }).format(value);
 }
 
+/** A state's glyph: the same circle slot the canvas cards draw. */
+export function StateIcon({ state, size = 12 }: { state: string; size?: number }) {
+  const icon = stateIcon(state);
+  return <svg className="fx-state-icon" data-icon={icon} width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
+    <g className="fx-state-glyph">{stateIconParts(icon).map(({ tag: Tag, attributes: { class: className, ...rest } }, index) => <Tag key={index} className={String(className)} {...rest} />)}</g>
+  </svg>;
+}
+
 export function Status({ state }: { state: string }) {
   const colors: Record<string, string> = {
     succeeded: "bg-emerald-50 text-emerald-800 ring-emerald-200",
     failed: "bg-red-50 text-red-800 ring-red-200",
-    running: "bg-blue-50 text-blue-800 ring-blue-200",
     cancelling: "bg-amber-50 text-amber-800 ring-amber-200",
     cancelled: "bg-amber-50 text-amber-800 ring-amber-200",
     interrupted: "bg-amber-50 text-amber-800 ring-amber-200",
@@ -23,7 +30,7 @@ export function Status({ state }: { state: string }) {
     blocked: "bg-red-50 text-red-800 ring-red-200",
   };
   return <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] leading-3 font-medium ring-1 ring-inset ${colors[state] ?? "bg-zinc-100 text-zinc-600 ring-zinc-200"}`}>
-    <span className="size-1 rounded-full bg-current" aria-hidden="true" />
+    <StateIcon state={state} size={10} />
     {state.replaceAll("_", " ")}
   </span>;
 }
