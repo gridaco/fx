@@ -4,7 +4,7 @@
  * read their runs, and write workflow documents.
  */
 
-export const version = "0.2.0";
+export const version = "0.2.1";
 
 export {
   engineVersion,
