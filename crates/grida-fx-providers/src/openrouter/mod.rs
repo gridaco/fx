@@ -274,6 +274,7 @@ mod tests {
             keys: Keys::from_pairs(&[(KeyName::OpenRouter, "or-secret")]),
             endpoints: Endpoints::default(),
             clock: Arc::new(SystemClock::new()),
+            codex: Err(crate::codex::NOT_INSTALLED.into()),
         };
         super::client(&setup)
     }

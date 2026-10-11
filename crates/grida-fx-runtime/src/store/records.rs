@@ -385,6 +385,9 @@ pub struct CallRecord {
     pub data: Value,
     /// The cost the provider reported; `None` when it reported none.
     pub cost_usd: Option<Usd>,
+    /// What else the call consumed, as its adapter reported it (spec/store.md §3); `None` when
+    /// it reported nothing.
+    pub usage: Option<Value>,
 }
 
 impl CallRecord {
@@ -409,6 +412,9 @@ impl CallRecord {
         );
         map.insert("data".into(), self.data.clone());
         map.insert("cost_usd".into(), money_value(self.cost_usd));
+        if let Some(usage) = &self.usage {
+            map.insert("usage".into(), usage.clone());
+        }
         Value::Object(map)
     }
 
@@ -430,7 +436,7 @@ impl CallRecord {
                 "data",
                 "cost_usd",
             ],
-            &[],
+            &["usage"],
         )?;
         let files = object(&map["files"], "the files of the call record")?
             .iter()
@@ -449,6 +455,11 @@ impl CallRecord {
             files,
             data: map["data"].clone(),
             cost_usd: money(&map["cost_usd"], what)?,
+            usage: match map.get("usage") {
+                None => None,
+                Some(usage @ Value::Object(_)) => Some(usage.clone()),
+                Some(_) => return Err(format!("{what}: usage is not an object")),
+            },
         })
     }
 

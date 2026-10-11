@@ -93,6 +93,9 @@ pub struct Setup {
     pub keys: Keys,
     pub endpoints: Endpoints,
     pub clock: Arc<dyn Clock>,
+    /// The user's Codex program, or why there is none (the refusal of every Codex call). Only
+    /// [`crate::live::live_setup`] looks for one.
+    pub codex: Result<std::path::PathBuf, String>,
 }
 
 impl Setup {
@@ -118,6 +121,7 @@ impl std::fmt::Debug for Setup {
         f.debug_struct("Setup")
             .field("keys", &self.keys)
             .field("endpoints", &self.endpoints)
+            .field("codex", &self.codex)
             .finish_non_exhaustive()
     }
 }
@@ -188,6 +192,7 @@ mod tests {
             keys,
             endpoints: Endpoints::default(),
             clock: Arc::new(SystemClock::new()),
+            codex: Err(crate::codex::NOT_INSTALLED.into()),
         }
     }
 

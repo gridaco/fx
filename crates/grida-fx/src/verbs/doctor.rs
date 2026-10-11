@@ -28,8 +28,8 @@
 //!   exit status. A key's value is never printed;
 //! - one line per route of the planning project's catalog (the built-in table, then `fx.yaml`
 //!   `route_tables`), sorted by capability, then id: `route     <capability> <model@provider>
-//!   servable`, `… no key (<VARIABLE>)` or `… no adapter`, as `live::servable` answers over every
-//!   provider's adapters built on `live::offline_setup`.
+//!   servable`, `… no key (<VARIABLE>)`, `… not installed (codex)` or `… no adapter`, as
+//!   `live::servable` answers over every provider's adapters built on `live::offline_setup`.
 
 use crate::cli::DoctorArgs;
 use crate::print::{labelled, print_line};
@@ -210,6 +210,7 @@ fn route_lines(catalog: &RouteTable, keys: &Keys) -> Vec<String> {
                 Servable::Yes => "servable".to_string(),
                 Servable::NoKey(key) => format!("no key ({})", key.variable()),
                 Servable::NoAdapter => "no adapter".to_string(),
+                Servable::NoProgram(program) => format!("not installed ({program})"),
             };
             labelled("route", &format!("{capability} {id} {state}"))
         })
@@ -418,9 +419,19 @@ mod tests {
         let catalog = crate::engine::builtin_routes().unwrap();
         let lines = route_lines(&catalog, &Keys::none());
         assert_eq!(lines.len(), catalog.entries.len());
+        // The Codex route needs no key; whether it is servable depends on this machine.
+        let (codex, keyed): (Vec<&String>, Vec<&String>) =
+            lines.iter().partition(|line| line.contains("@codex "));
         assert!(
-            lines.iter().all(|line| line.contains(" no key (")),
+            keyed.iter().all(|line| line.contains(" no key (")),
             "{lines:#?}"
+        );
+        assert_eq!(codex.len(), 1);
+        assert!(
+            codex[0].ends_with("imagegen@codex servable")
+                || codex[0].ends_with("imagegen@codex not installed (codex)"),
+            "{}",
+            codex[0]
         );
         let mut sorted = lines.clone();
         sorted.sort();

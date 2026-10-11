@@ -303,6 +303,7 @@ fn the_base_url_comes_from_the_endpoints() {
             ..Endpoints::default()
         },
         clock: Arc::new(FakeClock::new()),
+        codex: Err(grida_fx_providers::codex::NOT_INSTALLED.into()),
     };
     let adapter = ElevenLabsSound::new(elevenlabs::client(&setup));
     let sent = block_on(adapter.send(&sound_call(json!({"prompt": "wooden door opens"}))));

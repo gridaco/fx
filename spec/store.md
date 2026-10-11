@@ -43,7 +43,7 @@ Every record is a JSON object whose `kind` names its schema. It is written as `c
 | Record | What it holds |
 |---|---|
 | result | What one step identity produced: its `outputs` by port, the `facts` the node reported, its `read` set, and `cost_usd`: what the run paid for the step's calls, null when it paid for none (calls answered from the cache cost nothing). |
-| call | One paid call's answer: the `files` and `data` the provider returned and `cost_usd` (null when the provider reported none), with the `capability`, `route` (id and fingerprint), canonical `request` and `take` it is keyed by. |
+| call | One paid call's answer: the `files` and `data` the provider returned and `cost_usd` (null when the provider reported none), with the `capability`, `route` (id and fingerprint), canonical `request` and `take` it is keyed by. An optional `usage` says what else the call consumed, as its adapter reported it ([providers.md](providers.md) §6): `billing` (`dollars`, or `plan` for a call on the user's own plan, whose dollar cost is unknown), and, when known, the `runtime` that served it with its version, the `agent_model` it ran, and `input_tokens`, `cached_input_tokens` and `output_tokens`. `usage` is not part of the key. |
 | job | A long provider job of one call that is not answered yet: its `state` and `handle`, with the same key fields as the call record. |
 
 **Outputs** in a result record are encoded as:

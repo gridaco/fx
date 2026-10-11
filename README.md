@@ -47,7 +47,8 @@ grida fx inspect runs/example --open
 ```
 
 A run without `--live` executes local steps and reuses cached paid results.
-New provider calls require `--live` and a spending ceiling, such as `--max-usd 5`.
+New provider calls require `--live` and a spending ceiling, such as `--max-usd 5`, unless
+every one is on [your own Codex](docs/guide/12-codex.md).
 The dashboard stays at `http://127.0.0.1:8787/` by default after execution finishes;
 `grida fx stop` stops the service. Browser opening requires `--open`.
 The [viewing guide](docs/guide/07-viewing.md) covers independent `--standalone`

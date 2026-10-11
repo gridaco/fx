@@ -11,7 +11,7 @@ publish.workspace = true
 [features]
 # The scripted FakeAdapter, the ReplayTransport, NoNetwork and FakeClock: for tests. The grida-fx
 # binary never enables it.
-testing = ["dep:png", "dep:tempfile"]
+testing = ["dep:png"]
 
 [dependencies]
 grida-fx-core.workspace = true
@@ -27,7 +27,12 @@ jsonschema.workspace = true
 # Picture reduction for structured output (spec/providers.md §9.2).
 image.workspace = true
 png = { workspace = true, optional = true }
-tempfile = { workspace = true, optional = true }
+# The scratch folder a Codex conversation runs in.
+tempfile.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+# Ending a Codex's process group (src/codex/process.rs).
+rustix = { version = "1.1", features = ["process"] }
 
 [dev-dependencies]
 tokio.workspace = true

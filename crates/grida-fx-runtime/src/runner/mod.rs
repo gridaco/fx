@@ -8,7 +8,10 @@
 //! <message>`, exit 1):
 //! 1. the plan has problems: `the plan is refused:` and one `<where>: <message>` line each;
 //! 2. a live run without a ceiling (docs/wg/overview.md, decision 5): `a live run needs a
-//!    ceiling: pass --max-usd, or set budget.max_usd in the workflow or in fx.yaml`;
+//!    ceiling: pass --max-usd, or set budget.max_usd in the workflow or in fx.yaml`. A plan
+//!    priced at $0 whose calls are all on providers that bill the user's own plan (their adapters
+//!    say so: `Billing::Plan`, the user's Codex) runs without one ([`on_the_users_plan`]), under a
+//!    ceiling of $0, and its ledger admits no other provider ([`ceiling`]);
 //! 3. a tool a live instance declares is not installed: `a program the run needs is not
 //!    installed:` and one line per tool, sorted: `<name> (for <steps, sorted, ", ">): install it,
 //!    or set GRIDA_FX_TOOL_<NAME>`;
@@ -25,7 +28,7 @@
 //! finish writing; it was left out`); remove what killed invocations left behind
 //! (`RunFolder::sweep`, `Store::sweep`); write `plan.json` once (`folder::plan_document`); replay
 //! finished steps into `planner.results` ([`replay::replay`]); open the event log; build the
-//! ledger (ceiling = the plan's) and replay it; emit `run_started {workflow, resumed, ceiling_usd,
+//! ledger (ceiling = the plan's, or $0 for a run on the user's plan) and replay it; emit `run_started {workflow, resumed, ceiling_usd,
 //! charged_usd, estimate, stand_in?}` (`resumed`: there were earlier events; `estimate` the fresh
 //! plan's; `stand_in: true` only when the engine has a stand-in, which `plan.json` records too).
 //! A stand-in run's store, every lookup and every record included, is the stand-in store the
@@ -214,22 +217,47 @@ pub fn run_with_control_ready(
     outcome
 }
 
+/// The ledger's ceiling: the plan's, else $0 for a live run, which only a plan on the user's own
+/// plan starts without one (module doc, 2). Such a ledger admits only the providers that bill a plan, so no
+/// call that a deferred repeat adds can slip past it either.
+fn ceiling(plan: &Plan, live: bool) -> Option<Usd> {
+    plan.ceiling.or(live.then_some(Usd::ZERO))
+}
+
+/// Whether a plan runs entirely on the user's own plan: priced at $0, and every call of every live
+/// instance on a provider whose adapters bill a plan (`plan_providers`, from the registry). Prices
+/// alone do not say it: a project's route table can price any route at $0.
+fn on_the_users_plan(plan: &Plan, plan_providers: &BTreeSet<String>) -> bool {
+    plan.estimate().high == Usd::ZERO
+        && plan.live().all(|instance| {
+            instance
+                .routes
+                .values()
+                .all(|route| plan_providers.contains(&route.provider))
+        })
+}
+
 /// The refusals that come before anything is written (module doc, 1 to 3), with the process's
 /// environment: a command checks them before it makes a new folder, so a refused run leaves
 /// nothing behind.
-pub fn refused(plan: &Plan, live: bool) -> Option<String> {
+pub fn refused(plan: &Plan, live: bool, plan_providers: &BTreeSet<String>) -> Option<String> {
     let env = |name: &str| std::env::var(name).ok();
-    refusal(plan, live, &env)
+    refusal(plan, live, plan_providers, &env)
 }
 
 /// The refusals that come before anything is written (module doc, 1 to 3). `env` reads the
 /// environment (tool overrides, `PATH`).
-fn refusal(plan: &Plan, live: bool, env: &dyn Fn(&str) -> Option<String>) -> Option<String> {
+fn refusal(
+    plan: &Plan,
+    live: bool,
+    plan_providers: &BTreeSet<String>,
+    env: &dyn Fn(&str) -> Option<String>,
+) -> Option<String> {
     if !plan.ok() {
         let lines: Vec<String> = plan.problems.iter().map(Problem::to_string).collect();
         return Some(format!("the plan is refused:\n{}", lines.join("\n")));
     }
-    if live && plan.ceiling.is_none() {
+    if live && plan.ceiling.is_none() && !on_the_users_plan(plan, plan_providers) {
         return Some(
             "a live run needs a ceiling: pass --max-usd, or set budget.max_usd in the workflow or \
              in fx.yaml"
@@ -392,7 +420,8 @@ fn invoke(
     ready: impl FnOnce(&ReadyRun, &Arc<RunControl>),
 ) -> Result<RunOutcome, RunError> {
     let env = |name: &str| std::env::var(name).ok();
-    if let Some(refused) = refusal(&plan, engine.live, &env) {
+    let plan_providers = engine.adapters.plan_providers();
+    if let Some(refused) = refusal(&plan, engine.live, &plan_providers, &env) {
         return Err(RunError::Refused(refused));
     }
     let digest = grida_fx_core::plan::output::plan_digest(&plan, planner).ok_or_else(|| {
@@ -466,7 +495,11 @@ fn invoke(
         }
     };
     let first = expand(planner, host);
-    let ledger = Arc::new(Ledger::new(plan.ceiling, Some(Arc::clone(&log))));
+    let mut ledger = Ledger::new(ceiling(&plan, engine.live), Some(Arc::clone(&log)));
+    if engine.live && plan.ceiling.is_none() {
+        ledger = ledger.only_on(engine.adapters.plan_providers());
+    }
+    let ledger = Arc::new(ledger);
     let scoped = first.as_ref().unwrap_or(&plan.expansion);
     ledger.replay(&prior, &|id: &str| scopes_of(scoped, id));
     let services = Arc::new(Services::run(
@@ -520,7 +553,7 @@ fn invoke(
         created_at,
         workflow: scheduler.workflow.clone(),
         resumed: !prior.is_empty(),
-        ceiling_usd: plan.ceiling,
+        ceiling_usd: scheduler.ledger.ceiling(),
         charged_usd: scheduler.ledger.charged(),
         estimate_low: estimate.low,
         estimate_high: estimate.high,
@@ -1243,6 +1276,7 @@ impl Scheduler<'_> {
             return self.cleanup_verified;
         }
         self.cleanup_verified &= self.engine.handle.block_on(self.engine.hosts.shutdown());
+        self.cleanup_verified &= self.engine.handle.block_on(self.engine.adapters.shutdown());
         if let Some(stand_in) = &self.engine.stand_in {
             self.cleanup_verified &= self.engine.handle.block_on(stand_in.shutdown());
         }
@@ -1717,16 +1751,36 @@ while (message := read()) is not None:
             Problem::new("draw.with.prompt", "image.generate needs setting prompt"),
             Problem::new("join", "no step x"),
         ];
-        let tooled = vec![instance("a#1", "a", &["blender>=4.2"], State::Planned)];
+        let mut priced = instance("a#1", "a", &["blender>=4.2"], State::Planned);
+        priced.prices = vec![grida_fx_core::expand::CallPrice {
+            capability: "image.generate".into(),
+            route: "img-a@acme".into(),
+            calls: 1,
+            low: Usd::ZERO,
+            high: Usd::parse("0.5").unwrap(),
+        }];
+        let tooled = vec![priced];
         assert_eq!(
-            refusal(&plan(tooled.clone(), problems, None), true, &nothing).as_deref(),
+            refusal(
+                &plan(tooled.clone(), problems, None),
+                true,
+                &plan_billed(),
+                &nothing
+            )
+            .as_deref(),
             Some(
                 "the plan is refused:\ndraw.with.prompt: image.generate needs setting \
                  prompt\njoin: no step x"
             )
         );
         assert_eq!(
-            refusal(&plan(tooled.clone(), Vec::new(), None), true, &nothing).as_deref(),
+            refusal(
+                &plan(tooled.clone(), Vec::new(), None),
+                true,
+                &plan_billed(),
+                &nothing
+            )
+            .as_deref(),
             Some(
                 "a live run needs a ceiling: pass --max-usd, or set budget.max_usd in the \
                  workflow or in fx.yaml"
@@ -1734,14 +1788,71 @@ while (message := read()) is not None:
         );
         let ceiling = Some(Usd::parse("1").unwrap());
         assert!(
-            refusal(&plan(tooled, Vec::new(), ceiling), true, &nothing)
-                .unwrap()
-                .starts_with("a program the run needs is not installed:")
+            refusal(
+                &plan(tooled, Vec::new(), ceiling),
+                true,
+                &plan_billed(),
+                &nothing
+            )
+            .unwrap()
+            .starts_with("a program the run needs is not installed:")
         );
         assert_eq!(
-            refusal(&plan(Vec::new(), Vec::new(), None), false, &nothing),
+            refusal(
+                &plan(Vec::new(), Vec::new(), None),
+                false,
+                &plan_billed(),
+                &nothing
+            ),
             None
         );
+        // On the user's own plan (a provider that bills a plan, priced at $0): no ceiling needed, and the
+        // run is held to $0.
+        let routed = |provider: &str| {
+            let table = format!(
+                "fx: routes/v1\nroutes:\n  - capability: image.generate\n    route: m@{provider}\n    \
+                 price: {{}}\n"
+            );
+            let document = grida_fx_core::yaml::load(table.as_bytes(), "routes.yaml").unwrap();
+            let table =
+                grida_fx_core::routes::RouteTable::from_document(&document, "routes.yaml").unwrap();
+            let route = table.entries.values().next().unwrap().clone();
+            let mut drawn = instance("b#1", "b", &[], State::Planned);
+            drawn.routes.insert("image.generate".into(), route);
+            plan(vec![drawn], Vec::new(), None)
+        };
+        let codex = routed("codex");
+        assert_eq!(refusal(&codex, true, &plan_billed(), &nothing), None);
+        assert_eq!(super::ceiling(&codex, true), Some(Usd::ZERO));
+        assert_eq!(super::ceiling(&codex, false), None);
+        // A route a project priced at $0 is not the user's plan: it still needs a ceiling.
+        assert_eq!(
+            refusal(&routed("openai"), true, &plan_billed(), &nothing).as_deref(),
+            Some(
+                "a live run needs a ceiling: pass --max-usd, or set budget.max_usd in the \
+                 workflow or in fx.yaml"
+            )
+        );
+        // No paid call at all: nothing to bound.
+        let local = plan(
+            vec![instance("c#1", "c", &[], State::Planned)],
+            Vec::new(),
+            None,
+        );
+        assert_eq!(refusal(&local, true, &plan_billed(), &nothing), None);
+        assert_eq!(
+            super::ceiling(&plan(Vec::new(), Vec::new(), ceiling_1()), true),
+            ceiling_1()
+        );
+    }
+
+    /// The providers a live run's adapters say bill a plan: Codex.
+    fn plan_billed() -> BTreeSet<String> {
+        BTreeSet::from(["codex".to_string()])
+    }
+
+    fn ceiling_1() -> Option<Usd> {
+        Some(Usd::parse("1").unwrap())
     }
 
     #[test]
@@ -1766,7 +1877,13 @@ while (message := read()) is not None:
             instance("e#1", "zed", &["blender"], State::Planned),
         ];
         assert_eq!(
-            refusal(&plan(instances, Vec::new(), None), false, &env).as_deref(),
+            refusal(
+                &plan(instances, Vec::new(), None),
+                false,
+                &plan_billed(),
+                &env
+            )
+            .as_deref(),
             Some(
                 "a program the run needs is not installed:\nblender (for scene['a'].render, \
                  scene['b'].render, zed): install it, or set GRIDA_FX_TOOL_BLENDER\nsox-ng (for \

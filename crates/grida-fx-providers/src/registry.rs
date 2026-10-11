@@ -2,13 +2,26 @@
 //! adapter for its capability is refused with `no_route` when a call on it must be sent
 //! (spec/protocol.md §6.1, §7).
 
-use crate::adapter::{Adapter, RouteRef};
+use crate::BoxFuture;
+use crate::adapter::{Adapter, Billing, RouteRef, Runtime};
 use indexmap::IndexMap;
+use std::collections::BTreeSet;
+use std::sync::Arc;
 
-/// The adapters of one invocation.
-#[derive(Debug, Clone, Default)]
+/// The adapters of one invocation, and the runtimes they share.
+#[derive(Clone, Default)]
 pub struct Adapters {
     by_route: IndexMap<(String, String), Adapter>,
+    runtimes: Vec<Arc<dyn Runtime>>,
+}
+
+impl std::fmt::Debug for Adapters {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Adapters")
+            .field("by_route", &self.by_route)
+            .field("runtimes", &self.runtimes.len())
+            .finish()
+    }
 }
 
 impl Adapters {
@@ -44,6 +57,45 @@ impl Adapters {
     /// Whether no adapter is registered.
     pub fn is_empty(&self) -> bool {
         self.by_route.is_empty()
+    }
+
+    /// Keeps a runtime the registered adapters share, to shut it down with the invocation.
+    pub fn keep_runtime(&mut self, runtime: Arc<dyn Runtime>) {
+        self.runtimes.push(runtime);
+    }
+
+    /// The runtimes kept, in order.
+    pub fn runtimes(&self) -> &[Arc<dyn Runtime>] {
+        &self.runtimes
+    }
+
+    /// The providers whose adapters bill the user's own plan ([`Billing::Plan`]). Only an
+    /// adapter makes a provider one, never a route table: the registry serves a provider by name.
+    pub fn plan_providers(&self) -> BTreeSet<String> {
+        self.by_route
+            .iter()
+            .filter(|(_, adapter)| adapter.billing() == Billing::Plan)
+            .map(|((_, provider), _)| provider.clone())
+            .collect()
+    }
+
+    /// How calls on `capability` and `provider` are billed: by the adapter serving them, else
+    /// in dollars.
+    pub fn billing(&self, capability: &str, provider: &str) -> Billing {
+        self.by_route
+            .get(&(capability.to_string(), provider.to_string()))
+            .map_or(Billing::Dollars, Adapter::billing)
+    }
+
+    /// Shuts every kept runtime down. Whether every one ended verifiably.
+    pub fn shutdown(&self) -> BoxFuture<'_, bool> {
+        Box::pin(async move {
+            let mut verified = true;
+            for runtime in &self.runtimes {
+                verified &= runtime.shutdown().await;
+            }
+            verified
+        })
     }
 }
 

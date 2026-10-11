@@ -71,6 +71,61 @@ pub struct AnsweredFile {
     pub bytes: Vec<u8>,
 }
 
+/// How a provider bills its calls (spec/providers.md §6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Billing {
+    /// In US dollars, to the account of the key FX sends: what the ceiling bounds.
+    Dollars,
+    /// Against the user's own plan in a runtime they signed into (Codex): never in dollars, and
+    /// unseen by FX. A live run whose calls all bill this way needs no ceiling.
+    Plan,
+}
+
+/// What a call consumed besides dollars, as its provider reported it (spec/store.md §5): kept in
+/// the call record, for a call that bills a plan (whose dollar cost is unknown) above all.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Usage {
+    /// The runtime that served the call and its version, such as `codex 0.160.1`.
+    pub runtime: Option<String>,
+    /// The model the runtime's agent ran (not necessarily the one that drew).
+    pub agent_model: Option<String>,
+    pub input_tokens: Option<u64>,
+    pub cached_input_tokens: Option<u64>,
+    pub output_tokens: Option<u64>,
+}
+
+impl Usage {
+    /// The record's `usage` object: the members that are known, in this order.
+    pub fn to_value(&self, billing: Billing) -> Value {
+        let mut map = serde_json::Map::new();
+        let billing = match billing {
+            Billing::Dollars => "dollars",
+            Billing::Plan => "plan",
+        };
+        map.insert("billing".into(), Value::from(billing));
+        let text = [
+            ("runtime", &self.runtime),
+            ("agent_model", &self.agent_model),
+        ];
+        for (name, value) in text {
+            if let Some(value) = value {
+                map.insert(name.into(), Value::from(value.as_str()));
+            }
+        }
+        let counts = [
+            ("input_tokens", self.input_tokens),
+            ("cached_input_tokens", self.cached_input_tokens),
+            ("output_tokens", self.output_tokens),
+        ];
+        for (name, value) in counts {
+            if let Some(value) = value {
+                map.insert(name.into(), Value::from(value));
+            }
+        }
+        Value::Object(map)
+    }
+}
+
 /// What a provider answered.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Answer {
@@ -81,6 +136,8 @@ pub struct Answer {
     /// The cost the provider reported; `None` when it reported none (the engine then charges the
     /// whole hold).
     pub cost: Option<Usd>,
+    /// What else the call consumed, when the provider said ([`Usage`]).
+    pub usage: Option<Box<Usage>>,
 }
 
 impl Answer {
@@ -90,7 +147,14 @@ impl Answer {
             files: IndexMap::new(),
             data,
             cost,
+            usage: None,
         }
+    }
+
+    /// The same answer with the usage the provider reported.
+    pub fn with_usage(mut self, usage: Usage) -> Answer {
+        self.usage = Some(Box::new(usage));
+        self
     }
 
     /// The same answer with one more file under `name` (a later file of the same name replaces
@@ -302,6 +366,11 @@ pub trait RequestAdapter: Send + Sync {
         Ok(())
     }
 
+    /// How this adapter's calls are billed ([`Billing`]); dollars unless it says otherwise.
+    fn billing(&self) -> Billing {
+        Billing::Dollars
+    }
+
     /// The redactor every reason of this adapter's calls passes through last (spec/providers.md
     /// §8). The engine's retry owner redacts with it each reason it reports: the adapter's own,
     /// its check's, and the engine's checks of the answer. A live invocation's adapters answer
@@ -326,10 +395,24 @@ pub trait LongJob: Send + Sync {
         Ok(())
     }
 
+    /// As [`RequestAdapter::billing`].
+    fn billing(&self) -> Billing {
+        Billing::Dollars
+    }
+
     /// As [`RequestAdapter::redactor`].
     fn redactor(&self) -> Redactor {
         Redactor::default()
     }
+}
+
+/// A runtime some adapters share: a program the user installed and signed into (Codex), started
+/// on an invocation's first call that needs it and kept for the others (spec/providers.md §1). The
+/// engine owns its life: it is shut down with the run ([`crate::Adapters::shutdown`]).
+pub trait Runtime: Send + Sync {
+    /// Ends the runtime and everything it started. Whether everything is verifiably ended; a
+    /// runtime that never started is.
+    fn shutdown(&self) -> BoxFuture<'_, bool>;
 }
 
 /// One registered adapter.
@@ -337,6 +420,16 @@ pub trait LongJob: Send + Sync {
 pub enum Adapter {
     Request(Arc<dyn RequestAdapter>),
     Job(Arc<dyn LongJob>),
+}
+
+impl Adapter {
+    /// How the adapter's calls are billed.
+    pub fn billing(&self) -> Billing {
+        match self {
+            Adapter::Request(adapter) => adapter.billing(),
+            Adapter::Job(adapter) => adapter.billing(),
+        }
+    }
 }
 
 impl std::fmt::Debug for Adapter {

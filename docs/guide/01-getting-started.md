@@ -35,7 +35,9 @@ FX reads each provider's key under its usual name: `OPENAI_API_KEY`, `OPENROUTER
 `.env` file in your project (one `NAME=value` per line, and keep the file out of version
 control); the environment wins. Keys never go in `fx.yaml` or a workflow, and FX never prints
 them: only a `--live` run uses them, and `grida fx doctor` says which ones it found, where, and
-which routes they make usable ([Running](05-running.md#keys-and-live-runs)).
+which routes they make usable ([Running](05-running.md#keys-and-live-runs)). No key at all? With
+Codex signed in to your ChatGPT account, images can come from
+[your own Codex](12-codex.md), with no API key.
 
 ### When FX needs Python
 

@@ -139,6 +139,7 @@ fn replay_call(image: &[u8]) -> CallRecord {
         )]),
         data: Value::Null,
         cost_usd: Some(Usd(20_000)),
+        usage: None,
     }
 }
 

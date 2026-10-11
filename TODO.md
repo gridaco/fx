@@ -258,7 +258,8 @@ installed agent, through a child process or an ACP adapter. Codex and Claude
 are initial candidates. This is optional local-user functionality; ordinary
 workflows must not assume an agent is installed, authenticated or has quota.
 Initial support is not intended for CI, servers or unattended deployment.
-Local here describes where the agent process runs, not offline inference.
+Local here describes where the agent process runs, not offline inference. The Codex image
+route (below) already speaks `codex app-server` from Rust; an agent node can reuse that client.
 
 ### Purpose and existing extension path
 
@@ -346,75 +347,55 @@ implementation; installation alone does not authorize invocation.
 
 ## Codex-backed image generation for local workflows
 
-**Status: high-priority proposal, 2026-10-08; not implemented or runtime-proven.**
-This is a separate product capability from the general local-agent node above.
-Eligible users already signed into Codex could try supported FX image workflows
-using their included image-generation allowance, without supplying a provider
-API key or entering a credit card for a separate API billing account. This is
-an important onboarding opportunity: some otherwise paid showcase workflows
-could have no additional API charge from those users' perspective. Do not
-promise unlimited free execution, account eligibility or remaining allowance.
-Initial scope is optional local Codex use, not CI or servers. Other agents are
-outside this initial scope; that is not a claim that none can generate images.
+**Status: in review, 2026-10-12** ([gridaco/fx#46](https://github.com/gridaco/fx/pull/46)), as
+the route `imagegen@codex` of `image.generate`
+([spec/providers.md §9.6](spec/providers.md#96-codex)). Users signed into Codex with ChatGPT pick
+it in `fx.yaml` and run with no provider key. `codex` bills the user's plan, not dollars: a live run whose
+calls are all on it needs no `--max-usd`, runs under a ceiling of $0 and refuses any other
+provider. Codex is a *runtime* the engine owns: one `codex app-server` per invocation, started
+on the first Codex call, shared by the rest (a thread each) and shut down with the run; its
+adapter declares `Billing::Plan`, and call records keep its `usage` (Codex version, agent model,
+tokens). It admits only a ChatGPT sign-in (`account/read`), turns off the user's MCP servers,
+apps, plugins, hooks and memories, pins low effort and the standard tier, runs Codex in its own
+process group, interrupts the turn of a cancelled call, and never resends a call. Verified with fake
+app-server processes in tests and real runs on Codex 0.160.1: transparent and opaque backgrounds
+are honoured; exact sizes are not (Codex draws about 1.57 MP in a shape it picks), so they are
+refused.
 
-### Minimal research and proof still needed
+How this meets the local-agent requirements above, and what it defers:
+- **Admission (decided 2026-10-12).** `--live` alone admits Codex; the skill asks agents to get
+  the user's go.
+- **Usage is unknown in dollars, recorded otherwise.** Answers report no cost (`None`); the $0
+  hold is charged and the record says *not reported*, and its `usage` keeps what Codex counted.
+  The plan's `usedPercent` (`account/rateLimits`) is not recorded.
+- **Attempts (decided 2026-10-12).** The engine default stands: a failed answer check is a new
+  attempt, up to 6, each a real image on the user's plan. The adapter itself never asks for one.
+- **Identity.** The route's model `imagegen` names the tool; the cache key ignores the Codex
+  version, the model and the quality Codex chose (the image model is not reported at all).
+  Documented as a moving target.
+- **Decision 5** (docs/wg/overview.md) carries the included-provider exception, awaiting
+  ratification.
 
-Official [image-generation documentation](https://learn.chatgpt.com/docs/image-generation)
-explicitly supports Codex CLI image generation and invocation through
-`$imagegen`. It currently identifies the built-in model as `gpt-image-2`, not
-`gpt-image-latest`, and says image generation counts toward general Codex usage
-limits, consuming included limits 3–5 times faster on average than similar
-non-image turns depending on quality and size. Treat model identity and usage
-rules as version-dependent evidence, not a permanent FX contract.
-[Authentication](https://learn.chatgpt.com/docs/auth) distinguishes ChatGPT
-subscription access from separately billed API-key access.
-[Non-interactive mode](https://developers.openai.com/codex/noninteractive)
-documents `codex exec`, JSONL events and schema-constrained final responses.
-These establish useful integration pieces; they do not establish a stable
-headless image-file return contract. Verify `$imagegen` availability under
-`codex exec` for supported versions/accounts and identify the actual generated
-file/tool result before advertising FX support. No inference was invoked for
-this research, and no authentication files were read.
-
-### Proposed integration
-
-- Organize this as an explicitly selected image-generation backend beneath the
-  proposed AI node family (`fx/ai/image.generate@1`, spelling still provisional),
-  rather than requiring showcase authors to disguise image generation as a
-  generic agent task. Review route/backend configuration with the AI namespace
-  proposal; do not force subscription execution into direct-API price semantics.
-- Wrap the authored prompt with a versioned instruction, for example:
-  "Use $imagegen to generate an image with the prompt below." Keep the user's
-  prompt distinct from wrapper instructions, request the declared image count
-  and output location, and prohibit API fallback or unrelated tool work.
-  A prompt alone cannot guarantee tool selection or successful generation.
-- Prefer structured tool results or generated files plus a validated manifest
-  over prose/terminal parsing. A schema-constrained answer containing a path is
-  only a locator, not proof of an artifact. Copy only verified image outputs
-  from a confined task workspace; reject missing files, traversal, symlink
-  escapes, unrelated files and text/code returned in place of generated images.
-  Validate decoding, media kind, count, dimensions and required alpha/content
-  constraints before atomically admitting outputs to the FX store.
-- Advertise only controls the adapter can actually honor. Reference inputs,
-  editing, exact sizes, transparency and other requirements need individual
-  verification; reject unsupported requirements while planning. Prompt-based
-  guidance must not masquerade as exact provider API parameters.
-- Use existing external-agent lifecycle boundaries: explicit execution opt-in,
-  user-managed login, bounded permissions, cancellation, timeout and clear
-  missing-tool/auth/quota failures. Never silently switch to API-key billing,
-  purchase credits, retry uncertain generations or report unknown external
-  usage as a settled $0. FX's dollar cap does not enforce Codex allowance.
-- Include the backend and prompt-wrapper version in identity/provenance under
-  the ratified spec. Record actual supported model/tool evidence when available;
-  never infer a hidden model from an alias or claim direct-provider equivalence.
-  Reuse the public artifact/run/view contracts for downstream steps and previews.
-
-First prove extraction and lifecycle with fake CLI events/files and invalid
-output cases. Then perform one separately authorized, bounded real Codex CLI
-image generation to establish headless support, output delivery and observed
-usage. Only after that proof should supported showcase workflows advertise the
-included-allowance option. No implementation, live generation or release is
-authorized by this TODO.
+Follow-ups:
+- **The ACP/agent node** above should sit on the same runtime contract (`adapter::Runtime`,
+  `Billing::Plan`, `Usage`), with a session per call as Codex has a thread per call.
+- **References / `image.edit`.** The app-server takes `localImage` inputs; prove that `$imagegen`
+  edits from them before declaring `image_input` or serving `image.edit`.
+- **Plan-time feature derivation.** A `WxH` size implies `exact_size` and references imply
+  `image_input`; today they are refused only when the call is made (every route would gain).
+- **Provider-level concurrency.** One Codex per machine and account; route concurrency is
+  per route and per run.
+- **Windows.** npm installs `codex.cmd`, which `find_program` does not look for; process groups
+  are Unix-only; the tests use shell fakes. A launcher trait with an in-process JSON-RPC fake
+  would make the tests portable and let the runner itself be tested (check retries, cancel).
+- **A missing Codex is refused per call**; refusing it before the run, like a declared tool, is
+  kinder.
+- **Showcases.** Advertise the Codex option in examples whose image steps need no exact size or
+  references (most set `size`).
+- **Shape hints.** Codex draws a fixed budget of about 1.57 megapixels in a shape the prompt
+  steers (1254x1254, 1024x1536, 1774x887, 1672x941; its tool has no size argument:
+  openai/codex#19175, #28723). An orientation or aspect setting could map onto that honestly;
+  `image.generate` has none today. Revisit if Codex adds a size argument.
 
 ### Deferred backends: Grok Build and Cursor
 

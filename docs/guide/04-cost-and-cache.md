@@ -72,7 +72,8 @@ In general:
 - **The ceiling comes from** `--max-usd` if given, else the workflow's `budget:`, else
   `fx.yaml`.
 - **A live run needs a ceiling.** `grida fx run --live` with none of the three is refused before
-  anything is written.
+  anything is written, unless every paid call is on [your own Codex](12-codex.md): such a run
+  needs none. It runs under a ceiling of $0, and refuses any call on another route.
 - **A later phase is priced exactly** once its list exists (a `phase_planned` event in the
   run's record). Without `--yes-up-to` the run goes on, inside the ceiling. With `--yes-up-to 12`,
   a later phase whose worst case would take the run's total past $12 does not start: the run ends

@@ -105,6 +105,43 @@
           "type": "null"
         }
       ]
+    },
+    "usage": {
+      "description": "What else the call consumed, as its adapter reported it (store.md §3; providers.md §6). Not part of the key.",
+      "type": "object",
+      "required": [
+        "billing"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "billing": {
+          "description": "`dollars`, or `plan`: the user's own plan, whose dollar cost FX does not know.",
+          "enum": [
+            "dollars",
+            "plan"
+          ]
+        },
+        "runtime": {
+          "description": "The runtime that served the call and its version, such as `codex 0.160.1`.",
+          "type": "string"
+        },
+        "agent_model": {
+          "description": "The model the runtime's agent ran.",
+          "type": "string"
+        },
+        "input_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cached_input_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "output_tokens": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
     }
   }
 }

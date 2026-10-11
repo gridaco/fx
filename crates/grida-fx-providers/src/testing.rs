@@ -36,6 +36,7 @@ pub fn setup_with_clock(transport: Arc<dyn Transport>, keys: Keys, clock: Arc<dy
         keys,
         endpoints: Endpoints::default(),
         clock,
+        codex: Err(crate::codex::NOT_INSTALLED.into()),
     }
 }
 

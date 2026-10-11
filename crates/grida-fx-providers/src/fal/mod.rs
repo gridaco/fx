@@ -309,6 +309,7 @@ mod tests {
             keys: Keys::from_pairs(&[(KeyName::Fal, "fal-secret")]),
             endpoints: crate::setup::Endpoints::default(),
             clock: Arc::new(FakeClock::new()),
+            codex: Err(crate::codex::NOT_INSTALLED.into()),
         };
         FalClients::new(&setup).run
     }
