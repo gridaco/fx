@@ -1,9 +1,12 @@
-import { useEffect, useRef } from "react";
-import { CanvasController, type CanvasGraph, type LayoutReport } from "@grida/fx-web";
+import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
+import { CanvasController, type CanvasGraph, type CanvasInset, type LayoutReport } from "@grida/fx-web";
 import "@grida/fx-web/canvas.css";
 
+/** What a host may ask of the canvas besides its props. */
+export interface WorkflowCanvasHandle { reveal(id: string, inset?: CanvasInset): void }
+
 /** React only mounts the reusable DOM controller and forwards presentation props. */
-export function WorkflowCanvas({ graph, layout = null, selected, scope = null, onSelect, onOpenScope = () => {}, onBack = () => {} }: {
+export function WorkflowCanvas({ graph, layout = null, selected, scope = null, onSelect, onOpenScope = () => {}, onBack = () => {}, ref }: {
   graph: CanvasGraph;
   layout?: LayoutReport | null;
   selected: string | null;
@@ -11,12 +14,14 @@ export function WorkflowCanvas({ graph, layout = null, selected, scope = null, o
   onSelect: (id: string | null) => void;
   onOpenScope?: (id: string) => void;
   onBack?: () => void;
+  ref?: Ref<WorkflowCanvasHandle>;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const controller = useRef<CanvasController | null>(null);
   const select = useRef(onSelect);
   const openScope = useRef(onOpenScope);
   const back = useRef(onBack);
+  useImperativeHandle(ref, () => ({ reveal: (id, inset) => controller.current?.reveal(id, inset) }), []);
   useEffect(() => { select.current = onSelect; openScope.current = onOpenScope; back.current = onBack; }, [onSelect, onOpenScope, onBack]);
   useEffect(() => {
     if (!container.current) return;

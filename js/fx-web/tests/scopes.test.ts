@@ -239,22 +239,3 @@ test("viewer navigation skips inline frames and preserves the selection on refre
   controller.openScope("scope:batch#1");
   expect(controller.getSnapshot().scope).toBeNull();
 });
-
-test("reference navigation uses explicit visible aliases and never guesses from path prefixes", async () => {
-  const controller = new ViewerController(async () => nestedPlan());
-  await controller.refresh();
-  expect(controller.referenceTarget("scope:batch.item#1", "scope_output")).toBe("scope:batch.item#1");
-  expect(controller.referenceTarget("deep.paint#1")).toBe("scope:batch.item#1");
-  expect(controller.referenceTarget("deep.paint")).toBeNull();
-  expect(controller.referenceTarget("scope:batch.item#1", "scope_input")).toBeNull();
-  controller.selectReference("deep.paint#1");
-  expect(controller.getSnapshot().selected).toBe("scope:batch.item#1");
-  controller.openScope("scope:batch.item#1");
-  expect(controller.referenceTarget("scope:batch.item#1", "scope_input")).toBe("boundary:input:scope:batch.item#1");
-  expect(controller.referenceTarget("scope:batch.item.child#1.1", "scope_output")).toBe("scope:batch.item.child#1.1");
-  expect(controller.referenceTarget("a.paint#1", "fact")).toBe("instance:a.paint#1");
-  expect(controller.referenceTarget("seed#1")).toBeNull();
-  controller.selectReference("scope:batch.item#1", "scope_input");
-  controller.selectReference("seed#1");
-  expect(controller.getSnapshot().selected).toBe("boundary:input:scope:batch.item#1");
-});

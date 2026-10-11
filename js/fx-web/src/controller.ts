@@ -1,6 +1,6 @@
 import { canvasGraph, readView, type Artifact, type CanvasGraph, type CanvasStep, type LayoutReport, type ViewerView } from "./index";
 import { WorkflowNavigation, type Breadcrumb } from "./navigation";
-import { navigationScopes, type InterfaceBinding } from "./scopes";
+import { navigationScopes } from "./scopes";
 import { cancellationRequested, ObservationError, observationReader, readLayout, type RunObservationReader } from "./observation";
 import { validateViewerApiBase } from "./route";
 
@@ -12,7 +12,6 @@ export interface ViewerState {
   selected: string | null;
   loading: boolean;
   error: string | null;
-  updated: Date | null;
   scope: string | null;
   breadcrumbs: Breadcrumb[];
   scopeNode: CanvasStep | null;
@@ -40,7 +39,7 @@ const pollingScheduler: ViewerPollingScheduler = {
 
 /** Owns reads, serial observation, navigation and selection without a presentation framework. */
 export class ViewerController {
-  private state: ViewerState = { view: null, graph: { nodes: [], edges: [] }, layout: null, selected: null, loading: true, error: null, updated: null, scope: null, breadcrumbs: [{ id: null, title: "Workflow" }], scopeNode: null, cancelling: false };
+  private state: ViewerState = { view: null, graph: { nodes: [], edges: [] }, layout: null, selected: null, loading: true, error: null, scope: null, breadcrumbs: [{ id: null, title: "Workflow" }], scopeNode: null, cancelling: false };
   private navigation = new WorkflowNavigation();
   private listeners = new Set<() => void>();
   private request: AbortController | null = null;
@@ -82,27 +81,6 @@ export class ViewerController {
     this.navigation.select(id);
     this.update({ selected: id });
   };
-  referenceTarget = (source: string, kind?: InterfaceBinding["source_kind"]): string | null => {
-    const visible = new Set(this.state.graph.nodes.map((node) => node.id));
-    const direct = kind === "scope_input" ? `boundary:input:${source}`
-      : kind === "scope_output" ? source : `instance:${source}`;
-    if (visible.has(direct)) return direct;
-    if (kind === "scope_input" || kind === "scope_output") return null;
-    const scopes = this.state.view?.scopes ?? [];
-    const byId = new Map(scopes.map((scope) => [scope.id, scope]));
-    let scope = scopes.find((scope) => scope.nodes.includes(source));
-    const visited = new Set<string>();
-    while (scope && !visited.has(scope.id)) {
-      visited.add(scope.id);
-      if (scope.kind === "workflow" && visible.has(scope.id)) return scope.id;
-      scope = scope.parent === null ? undefined : byId.get(scope.parent);
-    }
-    return null;
-  };
-  selectReference = (source: string, kind?: InterfaceBinding["source_kind"]) => {
-    const target = this.referenceTarget(source, kind);
-    if (target !== null) this.select(target);
-  };
   private project(view: ViewerView) {
     const navigation = this.navigation.getSnapshot();
     const graph = canvasGraph(view, navigation.scope, this.apiBase);
@@ -125,7 +103,7 @@ export class ViewerController {
   };
   private apply(view: ViewerView, layout: LayoutReport | null, cancelling = false) {
     this.navigation.setScopes(navigationScopes(view.scopes), view.workflow.title);
-    this.update({ view, layout, ...this.project(view), cancelling, error: null, updated: new Date() });
+    this.update({ view, layout, ...this.project(view), cancelling, error: null });
   }
   private cancelTimer() {
     if (this.timer !== null) this.scheduler.cancel(this.timer);
@@ -201,6 +179,8 @@ export class ViewerController {
 }
 
 export interface ViewportState { x: number; y: number; zoom: number }
+/** Screen pixels along each edge of the canvas that floating panels cover. */
+export interface CanvasInset { left: number; right: number; top: number; bottom: number }
 export interface CanvasWheel { deltaX: number; deltaY: number; deltaMode: number; ctrlKey: boolean }
 
 /** Screen-space camera only; it never changes graph positions or workflow data. */
@@ -228,6 +208,19 @@ export class CanvasViewport {
     const zoom = Math.max(this.minimumZoom, Math.min(3, this.state.zoom * factor));
     const ratio = zoom / this.state.zoom;
     this.state = { x: point.x - (point.x - this.state.x) * ratio, y: point.y - (point.y - this.state.y) * ratio, zoom };
+  }
+  /**
+   * Centres a box in the part of the canvas the inset leaves free. A zoom at which titles read
+   * stays; below it the camera zooms in to 100 %, and never past what fits. An inset that leaves
+   * too little room is ignored rather than squeezing the box.
+   */
+  reveal(box: { x: number; y: number; width: number; height: number }, size: { width: number; height: number }, inset: CanvasInset, legible: number) {
+    let area = { x: inset.left, y: inset.top, width: size.width - inset.left - inset.right, height: size.height - inset.top - inset.bottom };
+    if (area.width < 240 || area.height < 160) area = { x: 0, y: 0, width: size.width, height: size.height };
+    if (area.width <= 0 || area.height <= 0) return;
+    const fits = Math.min((area.width - 32) / box.width, (area.height - 32) / box.height);
+    const zoom = Math.max(this.minimumZoom, Math.min(this.state.zoom >= legible ? this.state.zoom : 1, fits));
+    this.state = { x: area.x + area.width / 2 - (box.x + box.width / 2) * zoom, y: area.y + area.height / 2 - (box.y + box.height / 2) * zoom, zoom };
   }
   fit(bounds: { x?: number; y?: number; width: number; height: number }, size: { width: number; height: number }) {
     if (size.width <= 0 || size.height <= 0) return;

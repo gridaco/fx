@@ -160,24 +160,6 @@ export async function readView(signal?: AbortSignal, apiBase = "/api"): Promise<
   return parseViewerView(await response.json(), apiBase);
 }
 
-/** Find encoded FX file references without interpreting workflow expressions. */
-export function artifactDigests(value: unknown): string[] {
-  const found = new Set<string>();
-  const visit = (item: unknown) => {
-    if (Array.isArray(item)) {
-      item.forEach(visit);
-    } else if (record(item)) {
-      if (record(item.file) && typeof item.file.digest === "string") {
-        found.add(item.file.digest);
-      } else if (typeof item.file === "string" && /^[a-f0-9]{64}$/.test(item.file)) {
-        found.add(item.file);
-      }
-      Object.values(item).forEach(visit);
-    }
-  };
-  visit(value);
-  return [...found];
-}
 import { parseGraph, type GraphDocument } from "./graph";
 export * from "./graph";
 export * from "./controller";

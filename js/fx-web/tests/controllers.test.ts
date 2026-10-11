@@ -74,6 +74,31 @@ describe("vanilla canvas viewport", () => {
     viewport.zoomAt(10, { x: 400, y: 250 });
     expect(viewport.getSnapshot().zoom).toBeCloseTo(fitted.zoom);
   });
+  test("reveal centres a card in the area the panels leave free, zooming in only to read it", () => {
+    const size = { width: 1294, height: 1205 };
+    const inset = { left: 300, right: 380, top: 50, bottom: 0 };
+    const card = { x: 2000, y: 400, width: 250, height: 106 };
+    const centre = (viewport: CanvasViewport, box = card) => {
+      const { x, y, zoom } = viewport.getSnapshot();
+      return { x: x + (box.x + box.width / 2) * zoom, y: y + (box.y + box.height / 2) * zoom, zoom };
+    };
+    const viewport = new CanvasViewport();
+    viewport.restore({ x: 0, y: 0, zoom: 0.17 });
+    viewport.reveal(card, size, inset, 11 / 13);
+    expect(centre(viewport)).toEqual({ x: 607, y: 627.5, zoom: 1 });
+    // A zoom at which titles already read stays.
+    viewport.restore({ x: 0, y: 0, zoom: 1.5 });
+    viewport.reveal(card, size, inset, 11 / 13);
+    expect(centre(viewport).zoom).toBe(1.5);
+    // A card larger than the free area zooms out until it fits.
+    const tall = { x: 0, y: 0, width: 250, height: 2000 };
+    viewport.reveal(tall, size, inset, 11 / 13);
+    expect(centre(viewport, tall).zoom).toBeCloseTo((1155 - 32) / 2000);
+    // Panels that leave too little room are ignored.
+    viewport.restore({ x: 0, y: 0, zoom: 1 });
+    viewport.reveal(card, { width: 375, height: 812 }, { left: 359, right: 0, top: 0, bottom: 0 }, 11 / 13);
+    expect(centre(viewport).x).toBeCloseTo(187.5);
+  });
   test("zoom keeps the content under the cursor fixed and respects bounds", () => {
     const viewport = new CanvasViewport();
     viewport.pan(30, 40);

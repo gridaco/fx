@@ -251,7 +251,7 @@ including those that leave the deck.
 | Enter or Space | expand | select |
 | Drag past 4 px | pan, from anywhere | pan, from anywhere, the veil included |
 | Touch, first tap | expand | select |
-| Select from the step list or a reference link | raise the target to the front; no expand, no camera move | collapse first if the target is outside |
+| Select from the step list | raise the target to the front and glide the camera to it, centred where the open panels leave room, zooming in only as far as 100 % when titles do not read; no expand | collapse first if the target is outside; a member of the open deck is already in view, so the camera stays |
 | Scope change | — | collapse at once; keep the pre-expand camera |
 | A deck inside an expanded card | — | a click expands it one level deeper. Only the innermost level is interactive; the levels around it are its veil, so a click on them collapses one level and selects nothing |
 

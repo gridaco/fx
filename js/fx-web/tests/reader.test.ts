@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { artifactDigests, parseViewerRun } from "../src/index";
+import { parseViewerRun } from "../src/index";
 
 const digest = "a".repeat(64);
 
@@ -64,13 +64,5 @@ describe("viewer read boundary", () => {
       input.artifacts[0].url = url;
       expect(() => parseViewerRun(input)).toThrow("incomplete or malformed");
     }
-  });
-
-  test("finds recorded and plain file references inside collections", () => {
-    expect(artifactDigests({ collection: [
-      ["first", { file: { digest, kind: "image/png", size: 12 } }],
-      ["second", { file: digest }],
-      ["ordinary", { value: { file: "example.png" } }],
-    ] })).toEqual([digest]);
   });
 });

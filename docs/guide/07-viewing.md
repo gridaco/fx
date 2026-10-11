@@ -38,16 +38,26 @@ browser tab has no effect on service or execution. Service commands accept
 
 ## Use the canvas
 
-Scroll with two fingers or drag the background to pan. Pinch to zoom around the
-pointer, fit the graph to the window, and select a node to inspect it. Ctrl+wheel
-also zooms; ordinary wheel scrolling pans.
-Nodes and connections cannot be edited. The step list provides the same selection
-without using the canvas.
+The canvas fills the window. A bar in its corner names the workflow and shows the
+run's state and spend, or a plan's estimate, and the path back from an imported
+workflow. Scroll with two fingers or drag the background to pan. Pinch to zoom
+around the pointer, or fit the graph to the window. Ctrl+wheel also zooms; ordinary
+wheel scrolling pans. Nodes and connections cannot be edited. Cards take keyboard
+focus, so Tab and Enter select without a pointer. The list button in the bottom-left
+corner opens the steps as a list; choosing one selects its card and moves the camera
+to it. A press anywhere outside the list closes it.
+
+Select a card to see its details over the canvas: its outputs, inputs and settings
+as values and previews, whether it was cached, how long it took, and any error.
+Select the workflow's name in the bar for the workflow's own inputs, outputs and
+notices. Esc, the background or × closes them; a second Esc closes the step list.
+Identities, digests and raw records stay on the command line
+(`grida-fx inspect runs/example --json`).
+
 Running steps have a blue card outline and tint, an activity indicator, and a
 highlighted row in the step list. The highlight follows recorded state updates
-without changing your selection or camera. Reduced-motion settings disable the indicator pulse.
-The viewer keeps a desktop layout: the inspector hides below 1280 px and the step
-sidebar below 1024 px. The canvas fills the remaining window; sidebars never stack.
+without changing your selection or camera. Reduced-motion settings disable the
+indicator pulse.
 Connections stay muted until you hover a wire or a node; hovering a node highlights
 all its incoming and outgoing connections.
 
@@ -90,8 +100,8 @@ no port metadata; the viewer never guesses connections from matching artifacts.
 
 A step that imports another workflow appears as one card with its named inputs
 and outputs. Choose **Open workflow**, or double-click the card, to inspect its
-internal steps. Use **Back**, a breadcrumb, or Escape while the canvas is focused
-to return to an enclosing workflow. Repeated imports have separate cards and
+internal steps. Use a name in the bar, or Escape while the canvas is focused, to
+return to an enclosing workflow. Repeated imports have separate cards and
 navigation paths, even when they use the same workflow file.
 Returning restores that workflow occurrence's canvas position, zoom and selection.
 Refresh preserves your location in the workflow hierarchy.
@@ -166,8 +176,8 @@ keeps its page available afterward, including for failed and cancelled runs.
 The URL still identifies that record after a service restart or same-plan resume.
 The dashboard opens each workflow's newest-created run, including a failed run.
 Expand its history for earlier names, creation times and states, or a saved plan.
-Older unfinished runs stay visible even when a newer run exists. **Project** returns
-from a canvas to that index. Resume retains the original creation time and URL.
+Older unfinished runs stay visible even when a newer run exists. The arrow in the
+bar returns from a canvas to that index. Resume retains the original creation time and URL.
 Grouping uses the recorded workflow ID and source, so changed inputs or definitions
 at that path stay together; distinct sources sharing an ID remain separate.
 Old records without sufficient source metadata remain separate rather than guessed.
@@ -227,8 +237,9 @@ The selected directory supplies `plan.json`, `events.jsonl`, and placed output
 files. YAML and Python-authored runs use these same recorded contracts; the viewer
 does not need to import their workflow modules. A stand-in run is visibly marked.
 
-Select a step to inspect its recorded values and artifacts. The viewer follows the record automatically, polling about once a second.
-Refresh also reattaches to the latest consistent snapshot. Images, text/JSON,
+Select a step to see its recorded values and artifacts. The viewer follows the record
+automatically, polling about once a second. Reloading the page also reattaches to the
+latest consistent snapshot. Images, text/JSON,
 audio, and video use generic previews; other file types can be opened in a new tab.
 
 Run canvas cards also show the first available recorded image output. A count
@@ -269,7 +280,7 @@ owns current lifecycle guarantees; [TODO](../../TODO.md) records open ideas.
 
 ## Cancellation intent
 
-The run sidebar shows `cancelling` after a recorded `cancel_requested` event and
+The bar shows `cancelling` after a recorded `cancel_requested` event and
 returns to the terminal state when that invocation ends. A resume resets the intent.
 This label does not prove the runner is still alive or that cleanup finished. Use
 [`inspect --control` or `cancel --wait`](08-run-control.md) for verified local control.

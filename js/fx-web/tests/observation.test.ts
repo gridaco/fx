@@ -138,10 +138,10 @@ describe("serial live viewer observation", () => {
     const controller = new ViewerController(async () => run(), { observation, scheduler: clock });
     await controller.refresh();
     controller.select("instance:read#1");
-    const originalGraph = controller.getSnapshot().graph, originalUpdated = controller.getSnapshot().updated;
+    const originalGraph = controller.getSnapshot().graph;
     expect(clock.delay).toBe(1000);
     await clock.tick();
-    expect(reads).toBe(1); expect(controller.getSnapshot().graph).toBe(originalGraph); expect(controller.getSnapshot().updated).toBe(originalUpdated);
+    expect(reads).toBe(1); expect(controller.getSnapshot().graph).toBe(originalGraph);
     const loading: boolean[] = []; const unsubscribe = controller.subscribe(() => loading.push(controller.getSnapshot().loading));
     next = batch("cursor-b", [{ ...event, event: "run_finished" }]);
     current = snapshot("cursor-c", "succeeded");

@@ -7,8 +7,8 @@ scoped APIs under `/p/PROJECT_ID/runs/RUN_ID/` or `/p/PROJECT_ID/plans/PLAN_ID/`
 TypeScript controllers for requests, selection, artifact previews, and the SVG
 canvas, which places cards in the cells the engine serves (`api/layout`, or a run's
 snapshot). React mounts the controllers and
-renders the shell and inspectors; workflow and viewport state do not live in
-React hooks. Neither browser package imports the Node SDK or executes workflows.
+renders the bar and the details panel that float over the canvas; workflow and
+viewport state do not live in React hooks. Neither browser package imports the Node SDK or executes workflows.
 
 `ServiceIndexProjection` groups exact recorded workflow ID/source metadata and
 selects the newest-created run, including failures. Native expandable history
@@ -17,10 +17,10 @@ Creation metadata never participates in planning or caching. Legacy entries
 without a recorded source remain separate.
 
 The canvas supports selection, pan, zoom, and fit. Two-finger/wheel scrolling pans
-both axes; trackpad pinch or Ctrl+wheel zooms around the pointer. Steps also appear in a
-keyboard-accessible list. Nodes and connections cannot be edited. Plans retain
-their planned states, estimates, unresolved values, and pending repeats; run mode
-retains recorded spend, outputs, live observation and manual Refresh.
+both axes; trackpad pinch or Ctrl+wheel zooms around the pointer. Cards take keyboard
+focus, and a corner button opens the steps as a list. Nodes and connections cannot
+be edited. Plans retain their planned states, estimates, unresolved values, and
+pending repeats; run mode retains recorded spend, outputs and live observation.
 
 From the FX repository root:
 

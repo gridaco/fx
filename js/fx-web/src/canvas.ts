@@ -1,5 +1,5 @@
 import type { CanvasGraph, LayoutReport } from "./graph";
-import { CanvasViewport } from "./controller";
+import { CanvasViewport, type CanvasInset } from "./controller";
 import { displayPortName } from "./ports";
 import { canvasEdgePath, layoutGraph, type CanvasLayout, type PlacedDeck, type PositionedFrame, type PositionedNode } from "./layout";
 import { deckBadge, expandedColumns, restingFront, type DeckMember } from "./deck";
@@ -419,6 +419,16 @@ export class CanvasController {
     this.decks.forEach((deck, index) => {
       if ([previous, id].some((key) => key !== null && this.holding(deck, key) >= 0)) this.restDeck(index);
     });
+  }
+  /**
+   * A card chosen outside the canvas, from a list: the camera glides to it, in the area the
+   * caller's panels leave free. A member of the open deck is already in view in its grid.
+   */
+  reveal(id: string, inset: CanvasInset = { left: 0, right: 0, top: 0, bottom: 0 }) {
+    const node = this.layout.nodes.find((item) => item.id === id);
+    if (!node || (this.open && this.holding(this.open.deck, id) >= 0)) return;
+    const bounds = this.container.getBoundingClientRect();
+    this.animateCamera(() => this.viewport.reveal(node, bounds, inset, LEGIBLE_ZOOM));
   }
   private highlightConnections(nodeId: string | null, edgeId: string | null = null) {
     const next = this.drag?.moved ? new Set<string>() : nodeId !== null

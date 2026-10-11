@@ -1,200 +1,189 @@
-import { StrictMode, useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
+import { StrictMode, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import { ArrowLeft, ArrowUpRight, ChevronRight, FileText, LayoutGrid, RefreshCw, Square, Workflow } from "lucide-react";
-import { ServiceIndexProjection, ViewerController, ViewerEntryController, displayPortName, type CanvasStep, type GraphDocument, type GraphInstance, type InterfaceBinding, type PendingRepeat, type PortBinding, type ServiceEntry, type ServiceIndex, type ViewerRun } from "@grida/fx-web";
-import { PortList, Status, ValueList, WorkflowCanvas, money } from "@grida/fx-react";
+import { ArrowLeft, ArrowUpRight, ChevronRight, FileText, List, RefreshCw, Square, Workflow, X } from "lucide-react";
+import { ServiceIndexProjection, ViewerController, ViewerEntryController, type Artifact, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun } from "@grida/fx-web";
+import { Status, Values, WorkflowCanvas, money, type WorkflowCanvasHandle } from "@grida/fx-react";
 import "./style.css";
-import { SidebarResize } from "./sidebar-resize";
 
 const entryController = new ViewerEntryController(window.location.pathname);
 const apiBase = entryController.route?.api_base ?? "/api";
 const controller = new ViewerController(undefined, { apiBase });
 const iconProps = { size: 14, strokeWidth: 1.5, "aria-hidden": true } as const;
 
-function JsonValue({ value }: { value: unknown }) {
-  return <pre className="fx-json">{JSON.stringify(value, null, 2)}</pre>;
+/** A titled set of named values; nothing when the set is empty. */
+function Section({ title, values, artifacts }: { title: string; values: Record<string, unknown>; artifacts: Map<string, Artifact> }) {
+  return Object.keys(values).length > 0 && <section className="fx-detail-section"><h3>{title}</h3><Values values={values} artifacts={artifacts} /></section>;
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return <section className="fx-detail-section"><h3>{title}</h3>{children}</section>;
-}
-
-function InspectorHeading({ label, title, code, state }: { label: string; title: string; code?: string; state?: string }) {
+function Heading({ title, state, meta }: { title: string; state?: string; meta?: (string | false | null | undefined)[] }) {
+  const line = meta?.filter(Boolean).join(" · ");
   return <div className="fx-detail-heading">
-    <div className="fx-detail-heading-row"><p className="fx-detail-kicker">{label}</p>{state && <Status state={state} />}</div>
-    <h2>{title}</h2>{code && <p className="fx-detail-code">{code}</p>}
+    <div className="fx-detail-heading-row"><h2>{title}</h2>{state && <Status state={state} />}</div>
+    {line && <p className="fx-detail-meta">{line}</p>}
   </div>;
 }
 
-function References({ title, ids }: { title: string; ids: string[] }) {
-  return <Section title={title}>{ids.length ? <div className="flex flex-wrap gap-2">{ids.map((id) => controller.referenceTarget(id) ? <button key={id} onClick={() => controller.selectReference(id)} className="max-w-full rounded border border-zinc-200 px-2 py-1 text-left font-mono text-[11px] break-all text-zinc-600 hover:border-zinc-400">{id}</button> : <span key={id} className="max-w-full rounded border border-zinc-100 px-2 py-1 font-mono text-[11px] break-all text-zinc-400">{id}</span>)}</div> : <p className="text-xs text-zinc-400">None recorded.</p>}</Section>;
+function duration(ms: number) {
+  if (ms < 1000) return `${ms} ms`;
+  const seconds = Math.round(ms / 100) / 10;
+  return seconds < 60 ? `${seconds} s` : `${Math.floor(seconds / 60)}m ${String(Math.round(seconds % 60)).padStart(2, "0")}s`;
 }
 
-function PortSections({ node, bindings, values }: { node?: CanvasStep; bindings?: (PortBinding | InterfaceBinding)[]; values: Record<string, unknown> }) {
-  if (!node?.ports) return <Section title="Named ports"><p className="text-xs leading-5 text-zinc-400">Port metadata was not recorded. Connections show only recorded step dependencies.</p></Section>;
-  return <>
-    <Section title="Input ports"><PortList ports={node.ports.inputs} /></Section>
-    <Section title="Output ports"><PortList ports={node.ports.outputs} /></Section>
-    <Section title="Settings">{node.ports.settings.length ? <div className="space-y-3">{node.ports.settings.map((setting) => <div key={setting.name}><p className="mb-1.5 font-mono text-[11px] text-zinc-500">{setting.name} <span className="text-zinc-400">· {setting.type}</span></p>{setting.name in values ? <JsonValue value={values[setting.name]} /> : <p className="text-xs text-zinc-400">No value recorded.</p>}</div>)}</div> : <p className="text-xs text-zinc-400">No literal settings.</p>}</Section>
-    <Section title="Resolved port connections">{bindings === undefined ? <p className="text-xs text-zinc-400">Port bindings were not recorded.</p> : bindings.length ? <ul className="divide-y divide-zinc-100">{bindings.map((binding, index) => {
-      const target = controller.referenceTarget(binding.source, binding.source_kind);
-      const source = controller.getSnapshot().graph.nodes.find((candidate) => candidate.id === target);
-      const label = `${source?.title ?? binding.source} · ${displayPortName(binding.source_port)}`;
-      return <li key={index} className="py-1.5 text-[11px] leading-4">{target ? <button onClick={() => controller.selectReference(binding.source, binding.source_kind)} className="text-left font-mono break-all text-blue-700 hover:underline">{label}</button> : <span className="font-mono break-all text-zinc-500">{label}</span>}{binding.source_kind !== "output" && <span className="ml-1 text-zinc-400">{binding.source_kind.replaceAll("_", " ")}</span>}<span className="block font-mono break-all text-zinc-500">→ {binding.target_port}</span></li>;
-    })}</ul> : <p className="text-xs leading-5 text-zinc-400">No resolved port connections. Runtime choices may still be shown as step dependencies.</p>}</Section>
-  </>;
+/** "est. $0.40" or "est. $0.40 – $1.20"; nothing for a step that pays for nothing. */
+function estimate(price: { low_usd: number; high_usd: number }, free = "") {
+  if (price.high_usd === 0) return free;
+  return `est. ${money(price.low_usd)}${price.high_usd === price.low_usd ? "" : ` – ${money(price.high_usd)}`}`;
 }
 
-function PlanInspector({ plan, instance, pending, canvasNode }: { plan: GraphDocument; instance?: GraphInstance; pending?: PendingRepeat; canvasNode?: CanvasStep }) {
-  if (pending) return <>
-    <InspectorHeading label="Pending repeat" title={pending.path} state="unexpanded" />
-    <p className="fx-detail-copy">This repeat needs a runtime value before its individual steps can be expanded.</p>
-    <dl className="mt-5 space-y-2 text-xs"><div>Maximum items: <strong>{pending.max}</strong></div><div>Phase: <strong>{pending.phase}</strong></div><div>Upper estimate: <strong>{money(pending.high_usd)}</strong></div></dl>
-  </>;
+/** Literal settings and wired inputs, split by the node's declared settings. */
+function split(values: Record<string, unknown>, node?: CanvasStep) {
+  const settings = new Set(node?.ports?.settings.map((setting) => setting.name));
+  const entries = Object.entries(values);
+  return [Object.fromEntries(entries.filter(([name]) => !settings.has(name))), Object.fromEntries(entries.filter(([name]) => settings.has(name)))];
+}
+
+function Problem({ children }: { children: ReactNode }) {
+  return <p role="alert" className="fx-detail-problem">{children}</p>;
+}
+
+function PlanDetails({ plan, instance, pending, canvasNode }: { plan: GraphDocument; instance?: GraphInstance; pending?: PendingRepeat; canvasNode?: CanvasStep }) {
+  const none = new Map<string, Artifact>();
+  if (pending) return <Heading title={pending.path} state="unexpanded" meta={[`up to ${pending.max} items`, pending.high_usd > 0 && `at most ${money(pending.high_usd)}`]} />;
   if (!instance) return <>
-    <InspectorHeading label="Plan overview" title={plan.workflow.title} />
+    <Heading title={plan.workflow.title} meta={[plan.estimate.ceiling_usd !== null && `ceiling ${money(plan.estimate.ceiling_usd)}`]} />
     {plan.workflow.description && <p className="fx-detail-copy">{plan.workflow.description}</p>}
-    <p className="fx-detail-copy">Select a step to inspect its planned values, routes, identity, and dependencies.</p>
-    <Section title="Estimated cost"><p className="font-mono text-sm">{money(plan.estimate.low_usd)} – {money(plan.estimate.high_usd)}</p><p className="mt-2 text-xs text-zinc-500">Budget ceiling: {plan.estimate.ceiling_usd === null ? "Not set" : money(plan.estimate.ceiling_usd)}</p></Section>
-    {(plan.problems?.length ?? 0) > 0 && <Section title="Plan problems"><ul className="space-y-3">{plan.problems!.map((problem, index) => <li key={index} className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800"><span className="block font-mono">{problem.where}</span>{problem.message}</li>)}</ul></Section>}
-    <Section title="Pending repeats">{plan.pending.length ? <div className="space-y-2">{plan.pending.map((item) => {
-      const id = `pending:${item.path}`;
-      const content = <><span className="block font-mono">{item.path}</span><span className="mt-1 block text-zinc-500">Up to {item.max} items · phase {item.phase}</span></>;
-      const style = "block w-full rounded-lg border border-dashed border-zinc-300 p-3 text-left text-xs";
-      return controller.getSnapshot().graph.nodes.some((node) => node.id === id) ? <button key={item.path} onClick={() => controller.select(id)} className={style}>{content}</button> : <div key={item.path} className={style}>{content}</div>;
-    })}</div> : <p className="text-xs text-zinc-400">No unexpanded repeats.</p>}</Section>
-    {plan.inputs && Object.keys(plan.inputs).length > 0 && <Section title="Recorded workflow inputs"><JsonValue value={plan.inputs} /></Section>}
-    {plan.workflow.file && <Section title="Source"><p className="font-mono text-xs break-all text-zinc-500">{plan.workflow.file}</p></Section>}
+    <Section title="Inputs" values={plan.inputs ?? {}} artifacts={none} />
   </>;
   const meta = plan.steps?.[instance.step];
-  const inputValues = Object.entries(instance.with).filter(([name]) => !canvasNode?.ports?.settings.some((setting) => setting.name === name));
+  const [inputs, settings] = split(instance.with, canvasNode);
   return <>
-    <InspectorHeading label="Planned step" title={meta?.title || instance.path} code={instance.id} state={instance.state} />
+    <Heading title={meta?.title || instance.path} state={instance.state} meta={[estimate(instance.price)]} />
     {meta?.description && <p className="fx-detail-copy">{meta.description}</p>}
-    {instance.reason && <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">{instance.reason}</p>}
-    <Section title="Node type"><p className="break-all font-mono text-xs text-zinc-600">{instance.uses}</p></Section>
-    <Section title="Step estimate"><p className="font-mono text-sm">{money(instance.price.low_usd)} – {money(instance.price.high_usd)}</p><p className="mt-2 text-xs text-zinc-500">Phase {instance.phase} · take {instance.take.join(".")}{instance.key !== null ? ` · key ${instance.key}` : ""}</p></Section>
-    <PortSections node={canvasNode} bindings={instance.interface_bindings ?? instance.bindings} values={instance.with} />
-    <Section title="Planned input values">{inputValues.length ? <div className="space-y-3">{inputValues.map(([name, value]) => <div key={name}><p className="mb-1.5 font-mono text-[11px] text-zinc-500">{name}</p><JsonValue value={value} /></div>)}</div> : <p className="text-xs text-zinc-400">No input values.</p>}</Section>
-    {instance.waiting_on.length > 0 && <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">Some values and the step identity are waiting for upstream results.</div>}
-    <References title="Reads from" ids={instance.reads} /><References title="Required steps" ids={instance.needs} /><References title="Waiting for values" ids={instance.waiting_on} />
-    <Section title="Routes">{Object.entries(instance.routes).length ? <div className="space-y-3">{Object.entries(instance.routes).map(([capability, route]) => <div key={capability}><p className="text-xs text-zinc-500">{capability}</p><p className="mt-1 font-mono text-xs break-all">{route.route}</p><details className="mt-1 text-[10px] text-zinc-400"><summary className="cursor-pointer">Route fingerprint</summary><p className="mt-1 font-mono break-all">{route.fingerprint}</p></details></div>)}</div> : <p className="text-xs text-zinc-400">No provider routes.</p>}</Section>
-    <Section title="Identities"><dl className="space-y-3 text-xs"><div><dt className="text-zinc-500">Step</dt><dd className="mt-1 font-mono break-all">{instance.identity ?? "Not known yet"}</dd></div><div><dt className="text-zinc-500">Type</dt><dd className="mt-1 font-mono break-all">{instance.type ?? "Unresolved"}</dd></div></dl></Section>
-    {instance.judges && <References title="Judges" ids={[instance.judges]} />}{instance.judged_by.length > 0 && <References title="Judged by" ids={instance.judged_by} />}
+    {instance.reason && <Problem>{instance.reason}</Problem>}
+    <Section title="Routes" values={Object.fromEntries(Object.entries(instance.routes).map(([capability, route]) => [capability, route.route]))} artifacts={none} />
+    <Section title="Inputs" values={inputs} artifacts={none} />
+    <Section title="Settings" values={settings} artifacts={none} />
   </>;
 }
 
-function RunInspector({ run, node, canvasNode }: { run: ViewerRun; node?: ViewerRun["nodes"][number]; canvasNode?: CanvasStep }) {
+function RunDetails({ run, node, canvasNode }: { run: ViewerRun; node?: ViewerRun["nodes"][number]; canvasNode?: CanvasStep }) {
+  const artifacts = new Map(run.artifacts.map((artifact) => [artifact.digest, artifact]));
   if (!node) return <>
-    <InspectorHeading label="Run overview" title={run.workflow.title} />{run.workflow.description && <p className="fx-detail-copy">{run.workflow.description}</p>}
-    <p className="fx-detail-copy">Select a step to inspect its recorded values and intermediate artifacts.</p>
-    <Section title="Workflow outputs"><ValueList values={run.outputs} artifacts={run.artifacts} empty="No workflow outputs were recorded." /></Section><Section title="Workflow inputs"><ValueList values={run.inputs} artifacts={run.artifacts} empty="No workflow inputs were recorded." /></Section>
+    <Heading title={run.workflow.title} meta={[run.run_name]} />
+    {run.workflow.description && <p className="fx-detail-copy">{run.workflow.description}</p>}
+    <Section title="Outputs" values={run.outputs} artifacts={artifacts} />
+    <Section title="Inputs" values={run.inputs} artifacts={artifacts} />
   </>;
+  const [inputs, settings] = split(node.with, canvasNode);
   return <>
-    <InspectorHeading label="Step" title={node.title || node.path} code={node.id} state={node.state} />
-    <Section title="Node type"><p className="break-all font-mono text-xs text-zinc-600">{node.uses ?? "Not recorded"}</p></Section>
-    <p className="fx-detail-copy">Cache: {node.cache ?? "Not recorded"} · Duration: {node.duration_ms === null ? "Not recorded" : `${(node.duration_ms / 1000).toLocaleString()} s`}</p>
-    {node.error && <p role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-5 whitespace-pre-wrap text-red-800">{node.error}</p>}
-    <PortSections node={canvasNode} bindings={node.interface_bindings ?? node.bindings} values={node.with} />
-    <References title="Reads from" ids={node.reads} />{node.needs && <References title="Required steps" ids={node.needs} />}{node.judges && <References title="Judges" ids={[node.judges]} />}
-    <Section title="Recorded input values"><ValueList values={Object.fromEntries(Object.entries(node.with).filter(([name]) => !canvasNode?.ports?.settings.some((setting) => setting.name === name)))} artifacts={run.artifacts} empty="No input values were recorded for this step." /></Section><Section title="Outputs"><ValueList values={node.outputs} artifacts={run.artifacts} empty="No output values were recorded for this step." /></Section>
+    <Heading title={node.title || node.path} state={node.state} meta={[node.cache === "hit" && "cached", node.duration_ms !== null && duration(node.duration_ms)]} />
+    {node.error && <Problem>{node.error}</Problem>}
+    <Section title="Outputs" values={node.outputs} artifacts={artifacts} />
+    <Section title="Inputs" values={inputs} artifacts={artifacts} />
+    <Section title="Settings" values={settings} artifacts={artifacts} />
   </>;
 }
 
-function ScopeInspector({ node, active = false }: { node: CanvasStep; active?: boolean }) {
+function ScopeDetails({ node }: { node: CanvasStep }) {
   return <>
-    <InspectorHeading label={active ? "Workflow overview" : node.kind === "workflow" ? "Imported workflow" : "Workflow interface"} title={node.title} code={node.path} state={node.state} />
-    <p className="fx-detail-code">{node.subtitle}</p>
-    {node.kind === "workflow" && <>
-      <p className="fx-detail-copy">{node.child_count ?? 0} internal steps{node.failure_count ? ` · ${node.failure_count} failed` : ""}</p>
-      {!active && <button onClick={() => node.scope_id && controller.openScope(node.scope_id)} className="fx-action mt-2">Open workflow →</button>}
-    </>}
-    {node.ports && <>
-      <Section title="Input ports"><PortList ports={node.ports.inputs} /></Section>
-      <Section title="Output ports"><PortList ports={node.ports.outputs} /></Section>
-    </>}
-    {!!node.errors?.length && <Section title="Internal failures"><ul className="space-y-3">{node.errors.map((error) => <li key={error.id} className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800"><p className="mb-1 font-medium break-all">{error.title}</p><p className="whitespace-pre-wrap break-words">{error.message}</p></li>)}</ul></Section>}
+    <Heading title={node.title} state={node.kind === "boundary" ? undefined : node.state} meta={[node.kind === "workflow" && `${node.child_count ?? 0} steps`, !!node.failure_count && `${node.failure_count} failed`]} />
+    {node.errors?.map((error) => <Problem key={error.id}><span className="block font-medium">{error.title}</span>{error.message}</Problem>)}
   </>;
-}
-
-function RunPendingInspector({ node }: { node: CanvasStep }) {
-  return <>
-    <InspectorHeading label="Pending repeat" title={node.title} code={node.source_id} state={node.state} />
-    <p className="fx-detail-copy">{node.subtitle}</p>
-  </>;
-}
-
-function Workspace({ children }: { children: ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const resize = new SidebarResize(ref.current!);
-    return () => resize.dispose();
-  }, []);
-  return <div ref={ref} className="fx-workspace">{children}</div>;
-}
-
-function ResizeHandle({ side }: { side: "left" | "right" }) {
-  return <div className="fx-sidebar-resize" data-resize={side} role="separator" aria-orientation="vertical" aria-label={`Resize ${side === "left" ? "workflow outline" : "inspector"}`} aria-valuemin={side === "left" ? 180 : 240} aria-valuemax={side === "left" ? 420 : 560} aria-valuenow={side === "left" ? 212 : 304} tabIndex={0} title="Drag to resize · Double-click to reset" />;
 }
 
 function WorkflowView() {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   useEffect(() => { void controller.refresh(); return () => controller.dispose(); }, []);
-  const { view, graph, layout, selected, loading, error, updated, scope, breadcrumbs, scopeNode, cancelling } = state;
+  const { view, graph, layout, selected, loading, error, scope, breadcrumbs, scopeNode, cancelling } = state;
+  // The workflow's own details, opened from its name; a selection or another workflow closes them.
+  const [about, setAbout] = useState(false);
+  useEffect(() => setAbout(false), [scope]);
+  const select = (id: string | null) => { setAbout(false); controller.select(id); };
   const plan = view?.kind === "fx-graph-v1" ? view : null;
   const run = view?.kind === "fx-viewer-run-v1" ? view : null;
   const selectedNode = graph.nodes.find((node) => node.id === selected);
   const instance = plan?.instances.find((node) => !selectedNode?.pending && node.id === selectedNode?.source_id);
   const pending = plan?.pending.find((node) => selectedNode?.pending && node.path === selectedNode.source_id);
   const runNode = run?.nodes.find((node) => node.id === selectedNode?.source_id);
-  const back = controller.back;
-  const refresh = <button onClick={() => void controller.refresh()} disabled={loading} className="fx-action"><RefreshCw {...iconProps} />{loading ? "Loading…" : "Refresh"}</button>;
+  const notices = [...(plan?.problems?.map((problem) => `${problem.where}: ${problem.message}`) ?? []), ...(run?.warnings ?? [])];
+  const open = selectedNode !== undefined || about;
+  // The step list is a popover: hidden until asked for, closed by a press anywhere else.
+  const [steps, setSteps] = useState(false);
+  const toggle = useRef<HTMLButtonElement>(null);
+  const popover = useRef<HTMLElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!steps) return;
+    const outside = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!popover.current?.contains(target) && !toggle.current?.contains(target)) setSteps(false);
+    };
+    document.addEventListener("pointerdown", outside, { capture: true });
+    return () => document.removeEventListener("pointerdown", outside, { capture: true });
+  }, [steps]);
+  useEffect(() => { list.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: "nearest" }); }, [selected, steps]);
+  // A step chosen from the list brings its card into the canvas the open panels leave free.
+  const pane = useRef<HTMLElement>(null);
+  const canvas = useRef<WorkflowCanvasHandle>(null);
+  const [reveal, setReveal] = useState<{ id: string } | null>(null);
+  useEffect(() => {
+    if (!reveal || !pane.current) return;
+    const box = pane.current.getBoundingClientRect();
+    const edge = (selector: string) => pane.current!.querySelector(selector)?.getBoundingClientRect();
+    canvas.current?.reveal(reveal.id, {
+      left: Math.max(0, (edge(".fx-steps")?.right ?? box.left) - box.left),
+      right: Math.max(0, box.right - (edge(".fx-details")?.left ?? box.right)),
+      top: Math.max(0, (edge(".fx-bar")?.bottom ?? box.top) - box.top),
+      bottom: 0,
+    });
+  }, [reveal]);
+  // Esc closes the details, then the step list; an open deck takes it before them, and the canvas's own Esc after.
+  useEffect(() => {
+    if (!open && !steps) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented || (event.target as Element | null)?.closest?.("input, textarea, select, [contenteditable]")) return;
+      event.preventDefault();
+      if (open) { setAbout(false); controller.select(null); } else setSteps(false);
+    };
+    document.addEventListener("keydown", close, { capture: true });
+    return () => document.removeEventListener("keydown", close, { capture: true });
+  }, [open, steps]);
   return <div className="fx-viewer">
     {error && <p role="alert" className="fx-error">{error}{view && " Showing the last loaded data."}</p>}
     {!view ? <main className="fx-unavailable"><h2>{loading ? "Opening the workflow…" : "Workflow unavailable"}</h2><p>{loading ? "Reading the selected graph or run." : "Check that the local viewer server is running."}</p>{!loading && <button onClick={() => void controller.refresh()} className="fx-action">Try again</button>}</main>
-      : <Workspace>
-        <aside aria-label="Workflow outline" className="fx-outline">
-          <div className="fx-workflow-heading">
-            {entryController.route?.project_id && <a href="/" className="fx-project-back"><ArrowLeft {...iconProps} />Project</a>}
-            <h1>{view.workflow.title || "Workflow viewer"}</h1>
-            <div className="fx-workflow-context"><span>{plan ? "Static plan" : "Run"}</span>{(run?.stand_in || plan?.stand_in) && <span className="fx-badge">Stand-in</span>}<span className="fx-readonly">Read only</span></div>
-            {run && <code className="fx-run-name">{run.run_name}</code>}
-          </div>
-          <dl className="fx-run-summary">
-            {run && <><div><dt>State</dt><dd title={cancelling ? "Cancellation requested; local cleanup is not yet verified." : undefined}><Status state={cancelling ? "cancelling" : run.state} /></dd></div><div><dt>Spend</dt><dd className="font-mono">{money(run.charged_usd)}</dd></div></>}
-            {plan && <div><dt>Expanded</dt><dd>{plan.instances.length} steps</dd></div>}
-            <div><dt>Estimate</dt><dd className="font-mono">{view.estimate ? `${money(view.estimate.low_usd)} – ${money(view.estimate.high_usd)}` : "Not recorded"}</dd></div>
-          </dl>
-          <nav aria-label="Workflow steps" className="fx-step-nav">
-            <button onClick={() => controller.select(null)} aria-current={selected === null ? "page" : undefined} className="fx-overview"><LayoutGrid {...iconProps} />{scopeNode ? "Workflow overview" : plan ? "Plan overview" : "Run overview"}</button>
-            <div className="fx-list-heading"><span>Steps</span><span>{graph.nodes.length}</span></div>
-            <div>{graph.nodes.map((node) => <button key={node.id} onClick={() => controller.select(node.id)} aria-current={selected === node.id ? "page" : undefined} data-state={node.state} aria-label={`${node.title}, ${node.state}, ${node.source_id}`} title={`${node.title} · ${node.state}\n${node.source_id}`} className="fx-step-row">
-              {node.kind === "workflow" ? <Workflow {...iconProps} /> : <Square {...iconProps} />}
-              <span className="fx-step-label"><span>{node.title}</span><code>{node.source_id}</code></span>
-              <span className="fx-state-dot" data-state={node.state} aria-hidden="true" />
-            </button>)}</div>
-          </nav>
-          {run && <div className="fx-run-controls">{refresh}<span className="fx-updated">{updated ? `Updated ${updated.toLocaleTimeString()}` : ""}</span></div>}
-          <ResizeHandle side="left" />
-        </aside>
-        <main aria-label="Workflow canvas" className="fx-canvas-pane">
-          {breadcrumbs.length > 1 && <nav aria-label="Workflow location" className="fx-location">
-            <button onClick={back} disabled={scope === null} aria-label="Back to parent workflow" className="fx-back"><ArrowLeft {...iconProps} />Back</button>
-            <div className="fx-breadcrumbs">{breadcrumbs.map((crumb, index) => <span key={crumb.id ?? "root"}>{index > 0 && <span aria-hidden="true" className="fx-breadcrumb-separator">/</span>}<button onClick={() => controller.goToScope(crumb.id)} title={crumb.id ?? crumb.title} aria-current={index === breadcrumbs.length - 1 ? "page" : undefined}>{crumb.title}</button></span>)}</div>
-          </nav>}
-          <div className="fx-canvas-surface"><WorkflowCanvas graph={graph} layout={layout} selected={selected} scope={scope} onSelect={controller.select} onOpenScope={controller.openScope} onBack={back} /></div>
-          <div className="fx-canvas-context" title={`${view.workflow.title}${run ? ` · Run ${run.run_name}` : " · Static plan"} · Read only`}>{run ? refresh : <span className="fx-badge">Static plan · Read only</span>}</div>
-          {entryController.route?.project_id && <a href="/" className="fx-project-back fx-project-back-floating"><ArrowLeft {...iconProps} />Project</a>}
-        </main>
-        <aside aria-label="Step details" className="fx-inspector">
-          <div className="fx-panel-heading"><span>Inspector</span><span className="fx-panel-hint">{selectedNode?.kind ? "Workflow" : selectedNode ? "Step" : "Overview"}</span></div>
-          <div className="fx-inspector-content">
-            {run?.warnings.length ? <details className="fx-notice"><summary>{run.warnings.length} record {run.warnings.length === 1 ? "notice" : "notices"}</summary><ul>{run.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul></details> : null}
-            {selectedNode?.kind ? <ScopeInspector node={selectedNode} /> : !selectedNode && scopeNode ? <ScopeInspector node={scopeNode} active /> : plan ? <PlanInspector plan={plan} instance={instance} pending={pending} canvasNode={selectedNode} /> : run && selectedNode?.pending ? <RunPendingInspector node={selectedNode} /> : run ? <RunInspector run={run} node={runNode} canvasNode={selectedNode} /> : null}
-          </div>
-          <ResizeHandle side="right" />
-        </aside>
-      </Workspace>}
+      : <main ref={pane} aria-label="Workflow canvas" className="fx-canvas-pane">
+        <WorkflowCanvas ref={canvas} graph={graph} layout={layout} selected={selected} scope={scope} onSelect={select} onOpenScope={controller.openScope} onBack={controller.back} />
+        <nav aria-label="Workflow location" className="fx-bar">
+          {entryController.route?.project_id && <a href="/" className="fx-bar-project" title="Project" aria-label="Project"><ArrowLeft {...iconProps} /></a>}
+          <ol className="fx-crumbs">{breadcrumbs.map((crumb, index) => <li key={crumb.id ?? "root"}>{index < breadcrumbs.length - 1
+            ? <button onClick={() => controller.goToScope(crumb.id)} title={crumb.id ?? crumb.title}>{crumb.title}</button>
+            : <button onClick={() => { controller.select(null); setAbout(!about); }} aria-current="page" aria-expanded={about}>{crumb.title}</button>}</li>)}</ol>
+          {run ? <><Status state={cancelling ? "cancelling" : run.state} />{run.charged_usd !== null && <span className="fx-bar-cost">{money(run.charged_usd)}</span>}</>
+            : view.estimate && <span className="fx-bar-cost">{estimate(view.estimate, "est. $0.00")}</span>}
+          {(run?.stand_in || plan?.stand_in) && <span className="fx-badge">Stand-in</span>}
+          {notices.length > 0 && <button onClick={() => { controller.select(null); setAbout(true); }} className="fx-bar-notice" title={notices.join("\n")}>{notices.length} {plan ? (notices.length === 1 ? "problem" : "problems") : (notices.length === 1 ? "notice" : "notices")}</button>}
+        </nav>
+        <button ref={toggle} onClick={() => setSteps(!steps)} className="fx-steps-toggle" aria-expanded={steps} aria-controls="fx-steps" aria-label="Steps" title="Steps"><List {...iconProps} size={16} /></button>
+        {steps && <nav ref={popover} id="fx-steps" aria-label="Workflow steps" className="fx-steps">
+          <p className="fx-steps-heading"><span>Steps</span><span>{graph.nodes.length}</span></p>
+          <div ref={list} className="fx-steps-list">{graph.nodes.map((node) => <button key={node.id} onClick={() => { select(node.id); setReveal({ id: node.id }); }} aria-current={selected === node.id ? "page" : undefined} data-state={node.state} aria-label={`${node.title}, ${node.state}`} title={node.source_id} className="fx-step-row">
+            <span className="fx-step-label">{node.title}</span><span className="fx-state-dot" data-state={node.state} aria-hidden="true" />
+          </button>)}</div>
+        </nav>}
+        {open && <aside aria-label="Details" className="fx-details">
+          <button onClick={() => select(null)} className="fx-details-close" aria-label="Close details" title="Close"><X {...iconProps} /></button>
+          {selectedNode?.kind ? <ScopeDetails node={selectedNode} />
+            : selectedNode ? plan ? <PlanDetails plan={plan} instance={instance} pending={pending} canvasNode={selectedNode} />
+              : selectedNode.pending ? <Heading title={selectedNode.title} state={selectedNode.state} meta={[selectedNode.subtitle]} />
+              : <RunDetails run={run!} node={runNode} canvasNode={selectedNode} />
+            : scopeNode ? <ScopeDetails node={scopeNode} />
+            : plan ? <PlanDetails plan={plan} /> : <RunDetails run={run!} />}
+          {!selectedNode && <>
+            {plan?.problems?.map((problem, index) => <Problem key={index}><span className="block font-mono">{problem.where}</span>{problem.message}</Problem>)}
+            {run?.warnings.map((warning, index) => <p key={index} className="fx-detail-notice">{warning}</p>)}
+          </>}
+        </aside>}
+      </main>}
   </div>;
 }
 
