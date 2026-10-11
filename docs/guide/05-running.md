@@ -17,7 +17,7 @@ standalone `grida-fx` command and the source setup are in
 | `grida fx inspect RUN --control [--json]` | observe an exact invocation's local control availability |
 | `grida fx cancel RUN [--invocation ID] [--wait] [--timeout DURATION] [--json]` | request cancellation; optionally verify local completion ([Run control](08-run-control.md)) |
 | `grida fx plan <target> [inputs] [--routes file]… [--max-usd N] [--check] [--expect-cached] [--json] [--open] [--standalone]` | expand, check, price; optionally open the plan canvas. Never spends. |
-| `grida fx run <target> [inputs] [--routes file]… [--live] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--name NAME \| --resume NAME \| --run folder] [--stand-in file.py#function] [--open \| --no-view] [--standalone]` | run; `--live` admits paid calls, needs a ceiling and reads the provider keys; `--name` creates a named run, `--resume` continues it, `--run` selects a folder; `--stand-in` answers paid calls with your function instead, offline ([below](#stand-ins-testing-without-a-provider)) |
+| `grida fx run <target> [inputs] [--routes file]… [--live] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--name NAME \| --resume NAME \| --run folder] [--stand-in file.py#function] [--open \| --no-view] [--standalone]` | run; `--live` admits paid calls, needs a ceiling (unless the plan's worst case is $0) and reads the provider keys; `--name` creates a named run, `--resume` continues it, `--run` selects a folder; `--stand-in` answers paid calls with your function instead, offline ([below](#stand-ins-testing-without-a-provider)) |
 | `grida fx reroll <run> <step-path> [--live]` / `grida fx pick <run> <step-path> <take>` | takes ([Cost](04-cost-and-cache.md#takes)) |
 | `grida fx takes list <target>` / `grida fx takes mv <target> <old> <new>` | inspect or repair a takes file |
 | `grida fx jobs [--forget <key>]` | the cache's long provider jobs, `settled` ones included ([Resuming](04-cost-and-cache.md#resuming)); `--forget` clears one once you have checked the provider |
@@ -100,7 +100,7 @@ amount held for it ([providers.md §10](../../spec/providers.md#10-the-built-in-
 
 | Capability | Built-in routes | Key |
 |---|---|---|
-| `image.generate` | `gpt-image-2.5-sunburst@openai` (a call, by `size`: $0.09 – $0.70), `openai/gpt-image-2.5-sunburst@openrouter` ($0.13 – $0.70), `openai/gpt-image-2.5/sunburst@fal` ($0.09 – $0.70) | each provider's |
+| `image.generate` | `gpt-image-2.5-sunburst@openai` (a call, by `size`: $0.09 – $0.70), `openai/gpt-image-2.5-sunburst@openrouter` ($0.13 – $0.70), `openai/gpt-image-2.5/sunburst@fal` ($0.09 – $0.70); `imagegen@codex` ($0 – $0: free, on [your own Codex](12-codex.md)) | each provider's; none for Codex |
 | `image.edit` | `gpt-image-2.5-sunburst@openai` (a call, by `size`: $0.09 – $0.85), `openai/gpt-image-2.5-sunburst@openrouter` ($0.13 – $0.85), `openai/gpt-image-2.5/sunburst@fal` ($0.09 – $0.85) | each provider's |
 | `structured.generate` | `openai/gpt-5.6-sol@openrouter` ($0.02 – $0.60), `openai/gpt-6-astra@openrouter` ($0.05 – $1.50) | `OPENROUTER_API_KEY` |
 | `agent.turn` | `openai/gpt-5.6-sol@openrouter` ($0.003 – $0.10), `openai/gpt-6-astra@openrouter` ($0.01 – $1.50) | `OPENROUTER_API_KEY` |
@@ -135,6 +135,11 @@ serve a type; `grida fx doctor` says which of them a live run could serve.
 provider at another address, such as a proxy). A key that is missing refuses only the calls that
 need it, before anything is sent and for nothing: the step fails, refused with `OPENAI_API_KEY is
 not set`. Without `--live` no key is used.
+
+**No API key: your Codex.** With Codex installed and signed in to your ChatGPT account, the route
+`imagegen@codex` draws images with no key and nothing to buy: it is priced at $0, and a run on
+free routes only needs no `--max-usd`. It has caveats, on sizes above all:
+[Images from your own Codex](12-codex.md).
 
 **Proxies.** A live run sends `https` requests through the proxy your environment names
 (`HTTPS_PROXY` or `ALL_PROXY`, minus the hosts in `NO_PROXY`), tunnelled, so the proxy never reads
@@ -172,13 +177,14 @@ key       FAL_KEY present (environment)
 key       TRIPO_API_KEY missing
 key       ELEVENLABS_API_KEY missing
 route     image.generate gpt-image-2.5-sunburst@openai servable
+route     image.generate imagegen@codex servable
 route     image.generate img-a@acme no adapter
 route     mesh.rig v1.0-20240301@tripo no key (TRIPO_API_KEY)
 …
 ```
 
-A route is `servable`, has `no key` (and names the variable to set), or has `no adapter` (no
-provider of FX serves it). Missing keys don't change doctor's exit status; a `.env` or base URL
+A route is `servable`, has `no key` (and names the variable to set), is `not installed (codex)`
+(no Codex found), or has `no adapter` (no provider of FX serves it). Missing keys don't change doctor's exit status; a `.env` or base URL
 that a live run would refuse does: doctor prints `keys      <why>` and exits 1.
 
 ## Inputs

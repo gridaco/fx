@@ -22,7 +22,14 @@ use serde_json::Value;
 use std::sync::Arc;
 
 /// The providers this crate serves, in the order `doctor` lists them.
-pub const PROVIDERS: [&str; 5] = ["openai", "openrouter", "fal", "tripo", "elevenlabs"];
+pub const PROVIDERS: [&str; 6] = [
+    "openai",
+    "openrouter",
+    "fal",
+    "tripo",
+    "elevenlabs",
+    "codex",
+];
 
 /// Whether a live run may reach the network ([`crate::transport::NETWORK_VARIABLE`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,17 +50,29 @@ impl Network {
 }
 
 /// The setup of a live run: the default transport (or [`crate::transport::Offline`] when the
-/// network is off) and the system clock.
+/// network is off), the system clock, and the user's Codex as the process environment finds it
+/// ([`crate::codex::find_program`]; none when the network is off). This is the only place a Codex
+/// is looked for, so no other setup can start one.
 pub fn live_setup(keys: Keys, endpoints: Endpoints, network: Network) -> Result<Setup, String> {
-    let transport: Arc<dyn crate::transport::Transport> = match network {
-        Network::On => Arc::new(HttpTransport::new(HttpConfig::default())?),
-        Network::Off => Arc::new(crate::transport::Offline),
+    let (transport, codex): (Arc<dyn crate::transport::Transport>, _) = match network {
+        Network::On => {
+            let env = |name: &str| std::env::var(name).ok();
+            let app = std::path::Path::new(crate::codex::MACOS_APP_PROGRAM);
+            let codex = crate::codex::find_program(&env, app)
+                .ok_or_else(|| crate::codex::NOT_INSTALLED.to_string());
+            (Arc::new(HttpTransport::new(HttpConfig::default())?), codex)
+        }
+        Network::Off => (
+            Arc::new(crate::transport::Offline),
+            Err(crate::codex::NETWORK_OFF.to_string()),
+        ),
     };
     Ok(Setup {
         transport,
         keys,
         endpoints,
         clock: Arc::new(SystemClock::new()),
+        codex,
     })
 }
 
@@ -66,6 +85,7 @@ pub fn offline_setup(keys: Keys) -> Setup {
         keys,
         endpoints: Endpoints::default(),
         clock: Arc::new(SystemClock::new()),
+        codex: Err(crate::codex::NOT_INSTALLED.into()),
     }
 }
 
@@ -81,6 +101,7 @@ pub fn adapters(setup: &Setup) -> Adapters {
     crate::fal::register(&mut registered, setup);
     crate::tripo::register(&mut registered, setup);
     crate::elevenlabs::register(&mut registered, setup);
+    crate::codex::register(&mut registered, setup);
     let redactor = setup.redactor();
     let mut adapters = Adapters::new();
     for (capability, provider) in registered.served() {
@@ -155,12 +176,23 @@ pub enum Servable {
     NoAdapter,
     /// An adapter serves it, but the provider's key is missing.
     NoKey(KeyName),
+    /// An adapter serves it through a program that is not installed (`codex`).
+    NoProgram(&'static str),
 }
 
-/// Whether `capability` on `provider` is servable with `keys` by `adapters`.
+/// Whether `capability` on `provider` is servable with `keys` by `adapters`. A Codex route is
+/// servable when [`crate::codex::find_program`] finds Codex in the process environment.
 pub fn servable(adapters: &Adapters, keys: &Keys, capability: &str, provider: &str) -> Servable {
     if !adapters.serves(capability, provider) {
         return Servable::NoAdapter;
+    }
+    if provider == "codex" {
+        let env = |name: &str| std::env::var(name).ok();
+        let app = std::path::Path::new(crate::codex::MACOS_APP_PROGRAM);
+        return match crate::codex::find_program(&env, app) {
+            Some(_) => Servable::Yes,
+            None => Servable::NoProgram("codex"),
+        };
     }
     match KeyName::of_provider(provider) {
         Some(key) if keys.get(key).is_none() => Servable::NoKey(key),
@@ -180,6 +212,7 @@ mod tests {
             keys,
             endpoints: Endpoints::default(),
             clock: Arc::new(FakeClock::new()),
+            codex: Err(crate::codex::NOT_INSTALLED.into()),
         }
     }
 

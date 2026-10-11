@@ -26,7 +26,8 @@
 //!   answer checks routes share, and every route's check of a capability),
 //!   [`capabilities`] (spec/capabilities.md as data), [`routes`] (the built-in route table);
 //! - one module per provider: [`openai`], [`openrouter`], [`fal`], [`tripo`], [`elevenlabs`],
-//!   each with `register(&mut Adapters, &Setup)`;
+//!   [`codex`] (the user's own Codex, started as a process), each with
+//!   `register(&mut Adapters, &Setup)`;
 //! - [`live`]: the adapters of a live run, the only place the default transport is built;
 //! - [`stand_in`]: the checks a stand-in's answer gets in a stand-in run (spec/protocol.md §5.7):
 //!   its shape, then its route's check, from adapters built keyless over a refusing transport;
@@ -41,6 +42,7 @@ pub mod adapter;
 pub mod capabilities;
 pub mod checks;
 pub mod clock;
+pub mod codex;
 pub mod elevenlabs;
 #[cfg(any(test, feature = "testing"))]
 pub mod fake;

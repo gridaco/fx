@@ -37,7 +37,7 @@ mod tests {
     #[test]
     fn the_default_table_parses() {
         let table = default_table().unwrap();
-        assert_eq!(table.entries.len(), 16);
+        assert_eq!(table.entries.len(), 17);
         let capabilities: std::collections::BTreeSet<&str> =
             table.entries.keys().map(|(c, _)| c.as_str()).collect();
         assert_eq!(capabilities.len(), 10);

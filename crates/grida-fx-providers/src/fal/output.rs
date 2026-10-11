@@ -264,6 +264,7 @@ mod tests {
             keys: Keys::from_pairs(&[(KeyName::Fal, "test-fal-key")]),
             endpoints: Endpoints::default(),
             clock: Arc::new(FakeClock::new()),
+            codex: Err(crate::codex::NOT_INSTALLED.into()),
         };
         super::super::FalClients::new(&setup).run
     }

@@ -14,7 +14,7 @@ use grida_fx_providers::registry::Adapters;
 use grida_fx_providers::routes::{DEFAULT_ROUTES, default_table};
 use grida_fx_providers::testing::{CallBuilder, block_on, media, setup, test_keys};
 use grida_fx_providers::transport::replay::NoNetwork;
-use grida_fx_providers::{elevenlabs, fal, openai, openrouter, tripo};
+use grida_fx_providers::{codex, elevenlabs, fal, openai, openrouter, tripo};
 use indexmap::IndexMap;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
@@ -121,6 +121,12 @@ fn expected_routes() -> Vec<Expected> {
         ),
         expected(
             "image.generate",
+            "imagegen@codex",
+            image_contract("fx-codex-image-v1", "1"),
+            ("0", "0"),
+        ),
+        expected(
+            "image.generate",
             "openai/gpt-image-2.5-sunburst@openrouter",
             image_contract("fx-openrouter-image-v1", "3"),
             ("0.13", "0.7"),
@@ -223,6 +229,12 @@ const CONTRACTS: &[(&str, &str, &str, Option<&str>)] = &[
         Some("1"),
     ),
     ("image.generate", "fal", "fx-fal-image-v1", None),
+    (
+        "image.generate",
+        "codex",
+        "fx-codex-image-v1",
+        Some("\"1\""),
+    ),
     ("image.edit", "fal", "fx-fal-image-v1", None),
     ("video.generate", "fal", "fal-queue", None),
     ("background.remove", "fal", "fal-run-birefnet", None),
@@ -259,13 +271,13 @@ fn read_spec(name: &str) -> String {
 }
 
 #[test]
-fn the_table_holds_16_routes_over_10_capabilities() {
+fn the_table_holds_17_routes_over_10_capabilities() {
     let table = table();
-    assert_eq!(table.entries.len(), 16);
+    assert_eq!(table.entries.len(), 17);
     let capabilities: BTreeSet<&str> = table.entries.keys().map(|(c, _)| c.as_str()).collect();
     assert_eq!(capabilities.len(), 10);
     assert!(
-        read_spec("providers.md").contains("It holds 16 routes over 10 capabilities."),
+        read_spec("providers.md").contains("It holds 17 routes over 10 capabilities."),
         "spec/providers.md §10 states the table's size"
     );
 }
@@ -448,6 +460,20 @@ fn features_say_what_the_adapters_honour() {
         assert!(has(capability, openai, "alpha") && has(capability, fal, "alpha"));
         assert!(!has(capability, openrouter, "alpha"));
     }
+    // Codex makes every background, but no exact size and nothing from references (§9.6).
+    let codex = "imagegen@codex";
+    for feature in [
+        "text_to_image",
+        "flexible_size",
+        "alpha",
+        "auto_background",
+        "opaque_background",
+    ] {
+        assert!(has("image.generate", codex, feature), "{feature}");
+    }
+    for feature in ["exact_size", "custom_exact_size", "image_input"] {
+        assert!(!has("image.generate", codex, feature), "{feature}");
+    }
     assert!(has("image.edit", openai, "mask") && has("image.edit", fal, "mask"));
     assert!(!has("image.edit", openrouter, "mask"));
     // Every edit route takes input pictures; every generate route refuses references.
@@ -536,6 +562,7 @@ fn pacing_is_declared_where_spec_providers_10_says() {
         );
         let concurrency = match (route.capability.as_str(), id.as_str()) {
             ("mesh.generate" | "mesh.rig" | "video.generate", _) => Some(1),
+            ("image.generate", "imagegen@codex") => Some(1),
             ("structured.generate", _) => Some(4),
             ("agent.turn", "openai/gpt-6-astra@openrouter") => Some(1),
             _ => None,
@@ -566,6 +593,11 @@ fn prices_and_tiers_parse() {
                     ("720p", usd("0.1"), usd("0.125")),
                 ]
             );
+        } else if route.provider == "codex" {
+            // Free to FX (spec/providers.md §10).
+            assert_eq!((price.low, price.high), (Usd::ZERO, Usd::ZERO));
+            assert_eq!(price.unit, PriceUnit::Call);
+            assert!(price.tiers.is_empty() && price.by.is_none());
         } else if route.capability.starts_with("image.") {
             assert_eq!(price.unit, PriceUnit::Call, "{}", route.id());
             assert_eq!(price.by.as_deref(), Some("size"), "{}", route.id());
@@ -689,7 +721,7 @@ fn the_image_routes_price_by_size() {
     };
     let mut checked = 0;
     for route in table.entries.values() {
-        if !route.capability.starts_with("image.") {
+        if !route.capability.starts_with("image.") || route.provider == "codex" {
             continue;
         }
         let id = route.id();
@@ -782,7 +814,7 @@ fn the_video_route_prices_by_second_and_tier() {
 
 #[test]
 fn the_adapters_name_their_contracts_as_the_table_does() {
-    let constants: [(&str, &str, &str); 13] = [
+    let constants: [(&str, &str, &str); 14] = [
         ("image.generate", "openai", openai::ADAPTER),
         ("image.edit", "openai", openai::ADAPTER),
         (
@@ -811,6 +843,7 @@ fn the_adapters_name_their_contracts_as_the_table_does() {
             openrouter::music::CONTRACT_ADAPTER,
         ),
         ("image.generate", "fal", fal::image::CONTRACT_ADAPTER),
+        ("image.generate", "codex", codex::ADAPTER),
         ("video.generate", "fal", fal::video::CONTRACT_ADAPTER),
         (
             "background.remove",
@@ -831,6 +864,7 @@ fn the_adapters_name_their_contracts_as_the_table_does() {
     );
     assert_eq!(openai::ADAPTER_BEHAVIOR, "1");
     assert_eq!(openrouter::image::CONTRACT_BEHAVIOR, "3");
+    assert_eq!(codex::ADAPTER_BEHAVIOR, "1");
 }
 
 /// A value of `ty` for a request that only has to pass the capability check (spec/capabilities.md
@@ -852,8 +886,9 @@ fn sample(builder: &mut CallBuilder, ty: MemberType) -> Value {
 }
 
 /// Every built-in route gets past its adapter's contract check and the capability check
-/// (spec/providers.md §5 steps 1–2): with no keys, each call is refused for its key (step 3), so
-/// no table entry points a model at a wire its adapter refuses.
+/// (spec/providers.md §5 steps 1–2): with no keys, each call is refused for its key (step 3), or
+/// the Codex route for its program, which no test setup has, so no table entry points a model at
+/// a wire its adapter refuses.
 #[test]
 fn every_route_passes_its_adapter_s_contract_and_capability_checks() {
     let registry = adapters(&setup(Arc::new(NoNetwork), Keys::none()));
@@ -880,6 +915,10 @@ fn every_route_passes_its_adapter_s_contract_and_capability_checks() {
             },
             None => panic!("{id}: no adapter serves {}", route.capability),
         };
+        if route.provider == "codex" {
+            assert_eq!(reason, codex::NOT_INSTALLED, "{id}");
+            continue;
+        }
         let key = KeyName::of_provider(&route.provider)
             .unwrap_or_else(|| panic!("{id}: no key names provider {}", route.provider));
         assert_eq!(reason, key.missing(), "{id} {}", route.capability);

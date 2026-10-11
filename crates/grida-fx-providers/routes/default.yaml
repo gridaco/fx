@@ -5,7 +5,10 @@
 # quotes: what a call costs is settled from what the provider reports, else the whole hold
 # (spec/providers.md §6).
 #
-# The image routes are priced per call, in tiers by `size`. A tier's low is the output tokens at
+# The Codex route (imagegen@codex) runs on the user's own signed-in Codex, which counts it against
+# their plan: it is free to FX, $0, and one runs at a time (spec/providers.md §9.6).
+#
+# The other image routes are priced per call, in tiers by `size`. A tier's low is the output tokens at
 # quality max for that size, measured or derived from a measured bill; its high adds an allowance
 # for the prompt and the input pictures, and on OpenRouter covers twice the output
 # (spec/providers.md §10). A size the tiers do not list (`auto`, none, or any other WxH) takes the
@@ -286,6 +289,22 @@ routes:
   - webp_output
   contract:
     adapter: fx-openai-image-v1
+    adapter_behavior: '1'
+- capability: image.generate
+  route: imagegen@codex
+  price:
+    low_usd: 0
+    high_usd: 0
+  concurrency: 1
+  features:
+  - alpha
+  - auto_background
+  - flexible_size
+  - opaque_background
+  - png_output
+  - text_to_image
+  contract:
+    adapter: fx-codex-image-v1
     adapter_behavior: '1'
 - capability: image.generate
   route: openai/gpt-image-2.5-sunburst@openrouter

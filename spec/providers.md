@@ -10,6 +10,7 @@ Words: an **adapter** turns one capability call into provider requests. A **send
 - Adapters exist only in a **live** invocation (`grida-fx run --live`). Without `--live` nothing that can reach a provider is constructed: every call that is not answered from the call cache is refused (`not_live`), and a recorded call replays offline ([store.md](store.md) §4).
 - A **stand-in run** ([protocol.md](protocol.md) §5.7) is never live, and uses only the adapters' checks: it holds each stand-in's answer to the check of the adapter registered for the route's capability and provider (§4.4). Those adapters are built with no keys over a transport that refuses every exchange (§2 item 8), and nothing but their checks is called.
 - An adapter is constructed whether or not its provider's key is present. A call without the key is refused before anything is sent (§5).
+- **One adapter runs a program instead of a transport:** Codex (§9.6) starts the user's own signed-in `codex` command. Only a live invocation looks for that program, and only when the network is on (§2 item 8), so no other invocation and no test can start it.
 - An adapter MUST NOT retry, pace, sleep (except while polling a long job, §7) or write to the store: it returns bytes and data, and the engine stores them. It MUST be safe to drop at any point: it starts no detached task and leaves nothing behind.
 
 ## 2. The transport
@@ -105,7 +106,7 @@ An adapter MUST refuse a call before any byte leaves (`Refused`, $0, `capability
 
 1. **The route's contract is not one this adapter serves.** The `adapter` (and `adapter_behavior`, where §9 names one) in the route's contract MUST be the adapter's own when present: `<route> is not a <capability> route this adapter serves`. A member that is absent or `null` is not checked, so a route a project declares without a contract is served. The registry is keyed by capability and provider, not model, so this is the only guard against a table pointing a model at the wrong wire.
 2. **The request does not fit its capability** ([capabilities.md](capabilities.md) §1). A member the capability does not define, a required member that is absent or `null`, or a member of the wrong type. The refusals of the later steps assume a request that passed this one: a required member is present, and every member has its type.
-3. **The provider's key is missing**: `<VARIABLE> is not set`.
+3. **The provider's key is missing**: `<VARIABLE> is not set`. For Codex, which has no key, its program is missing instead (§9.6).
 4. **A value the route cannot take**: blank text, a number out of range, an unknown enum value, a size the route does not serve, too many pictures, or a mask on a route without masks. Each provider's sentences are in §9.
 5. **A file**: a file value whose digest the call does not carry, a store copy that cannot be read or is empty (`<member> has no bytes to send`), or a file of a kind the route does not take.
 
@@ -371,13 +372,40 @@ Each provider's section is normative for its adapters. Status rows override §4.
 - **Statuses:** §4.3 as written: a 408 is `NotReceived` (ElevenLabs did not read the whole request), and a 4xx other than 408 and 429 costs `None`.
 - **Reasons:** the labels are `ElevenLabs sound generation` and `ElevenLabs speech generation`. The error body's `detail.message` is never quoted.
 
+### 9.6 Codex
+
+- **Capability:** `image.generate`, on the user's own Codex: the `codex` command, signed in with the user's ChatGPT account. Contract `adapter`: `fx-codex-image-v1`, behaviour `"1"`, the string. The behaviour names the turn's instructions below; a change to them is a new behaviour.
+- **No key, no transport.** The adapter starts `codex app-server` and speaks its JSON-RPC, one JSON message per line on stdin and stdout. Codex owns the sign-in, the model, the network and the usage. FX never reads Codex's credential files, and starts Codex without the variables of §3 and without `CODEX_API_KEY`, so Codex cannot fall back to billing an API account. Codex's stderr is dropped. FX also turns off the user's turn-end notification, memories and hooks for these conversations (`-c notify=[]`, `-c features.memories=false`, `-c features.hooks=false`).
+- **The program:** `GRIDA_FX_TOOL_CODEX` when set and not blank (none when it names no file), else the first `codex` on `PATH`, else `/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex` when it exists. A live invocation looks for it once; with the network off it is not looked for.
+- **Limits:** deadline 600 s per send, from starting Codex to the end of the turn; a message from Codex is at most 64 MiB.
+- **Refusals (§5), in this order:**
+  - the route (§5 step 1) and the request (§5 step 2);
+  - a blank `prompt`: `an image call needs its prompt as text`;
+  - a `size` other than `auto`: `Codex image generation takes no exact size: use size auto, and fx/image.resize@1 after it`. Codex picks its own sizes: asked in its instructions for 1024x1024, 2560x1440 and 1152x2496, it drew 1254x1254, 1774x887 and 1024x1536, so an exact size would only fail the check, attempt after attempt;
+  - a `background` other than `auto`, `opaque` or `transparent`: `background must be auto, opaque or transparent`;
+  - references (a non-empty `references`): `Codex image generation takes no references`;
+  - no program: `Codex is not installed: install it with npm install -g @openai/codex and sign in with codex login, or set GRIDA_FX_TOOL_CODEX`; with the network off: `Codex was not started: GRIDA_FX_NETWORK is off`. A program that cannot be started is refused too: `Codex image generation cannot start codex: <reason>`.
+- **One send:**
+  1. `initialize`, then the `initialized` notification;
+  2. `thread/start` in an empty scratch folder FX removes afterwards, with `sandbox: read-only`, `approvalPolicy: never` and `ephemeral: true`;
+  3. `turn/start` with one text input: `Use $imagegen to generate exactly one image from the prompt between the <prompt> tags. Give it the prompt as written.`; then, for `background: transparent`, ` Give it a transparent background (an alpha channel).`, or for `opaque`, ` Give it an opaque background, with no transparent pixels.`; then ` Do not run commands, read or edit files, use any other tool or ask questions. When the image is made, reply with one short sentence.`; a blank line; then `<prompt>`, the prompt verbatim, and `</prompt>`, each on its own line. Codex honours the background: a transparent image comes back with an alpha channel and a cut-out subject;
+  4. notifications until `turn/completed`. A request Codex sends meanwhile (an approval, a question) is answered with error `-32601`: FX grants nothing.
+- **Answer.** The turn's first `imageGeneration` item that completes: its `result` must be strict base64 of the image. The answer is file `image` (its kind sniffed from the bytes; the check wants `image/png`) and `data: null`. Cost: `Some(0)`: the route is free to FX, and Codex counts the image against the user's own plan.
+- **Outcomes.** Until Codex accepts the turn, nothing has been generated: a refusal of `initialize`, `thread/start` or `turn/start`, Codex exiting, unreadable output or the deadline passing is `NotReceived`. Once the turn is running a generation may already have been made, so every failure is `Failed { cost: Some(0), retryable: false }` and is never repeated:
+  - an image item with a `failure` of type `usageLimitExceeded`: `the Codex usage limit is reached; it resets at unix time <resetsAt>` (without the time when Codex gives none); any other failure: `Codex's image generation failed (<type>)`; an item that did not complete: `Codex's image generation ended <status>`; a `result` that is not base64: `Codex's image is not valid base64`;
+  - a turn that completes without an image: its error's message, else `Codex answered without an image`;
+  - Codex exiting, unreadable output, or the deadline passing (FX asks Codex to stop the turn with `turn/interrupt`, then ends the process).
+- **Check:** the image checks of [capabilities.md](capabilities.md) §2.
+- **Reasons:** the label is `Codex image generation`.
+
 ## 10. The built-in route table
 
 FX ships a default route table, embedded in `grida-fx`. It is the first table of the catalog ([identity.md](identity.md) §7): a project's `route_tables` override its entries, and any `--routes` file leaves it out.
 
-- It holds 16 routes over 10 capabilities. Every route MUST be served by an adapter of §9, and every capability is defined in [capabilities.md](capabilities.md).
+- It holds 17 routes over 10 capabilities. Every route MUST be served by an adapter of §9, and every capability is defined in [capabilities.md](capabilities.md).
 - **Prices are planning allowances** in US dollars, not provider quotes. What a call costs is settled from what the provider reports, or else from the whole hold (§6). The video route is priced per second, in tiers by `resolution`.
-- **The image routes are priced per call, in tiers by `size`** ([identity.md](identity.md) §12). A tier is named by the exact size text, such as `1024x1024`. A request whose `size` no tier names (`auto`, none, or any other `<W>x<H>`) is priced at the route's whole range. The plan prices a step by its `size`, and each attempt's hold is the high price of the request's own tier ([protocol.md](protocol.md) §6.1 step 6).
+- **The Codex route, `imagegen@codex`, is free:** $0 to $0, untiered. It runs on the user's own Codex plan, which FX neither sees nor bills (§9.6). It declares `text_to_image`, `flexible_size`, `alpha`, `auto_background`, `opaque_background` and `png_output`, the controls its adapter honours: no exact size, and no references.
+- **The other image routes are priced per call, in tiers by `size`** ([identity.md](identity.md) §12). A tier is named by the exact size text, such as `1024x1024`. A request whose `size` no tier names (`auto`, none, or any other `<W>x<H>`) is priced at the route's whole range. The plan prices a step by its `size`, and each attempt's hold is the high price of the request's own tier ([protocol.md](protocol.md) §6.1 step 6).
   - A tier's low is the image output at quality max for that size, at $30 per million output tokens, rounded down to the cent. The output is measured or, where only a call's bill is known, derived from that bill less an estimate of its input. The estimate is the same for every such bill: the measured input of one comparable call, a prompt and one input picture ($0.006314). Each such bill is below every high of its tier. A tier's high adds an allowance for the input, rounded up to the cent: $0.07 for a generate's prompt, and $0.21 for an edit's 16 input pictures and long prompt.
   - The whole range contains every tier: $0.09 to $0.70 for a generate and to $0.85 for an edit, from $0.13 on OpenRouter.
   - **OpenAI's highs are what an OpenAI call is booked at.** OpenAI reports token usage but no cost (§9.1), so every OpenAI image call is booked at its whole hold, and a high below what a call can cost would under-count it. Each OpenAI high leaves room for one image output at its size, measured or derived as above. The fal routes serve the same model in the same envelope, and take the same prices.
@@ -389,7 +417,7 @@ FX ships a default route table, embedded in `grida-fx`. It is the first table of
   - The image routes carry `adapter_behavior` as a string (`"1"`, `"3"`), and every other route carries it as the integer `1`. Each adapter serves its behaviour only as spelled here: the string and the number are different contracts, with different fingerprints.
   - The two `openai/gpt-6-astra` routes carry the `request_policy` of §9.2, and the structured one also `pictures: unchanged`.
 - **Features** are the names [capabilities.md](capabilities.md) lists for each capability, and a route declares only what its adapter honours. So the OpenRouter image routes declare neither `alpha` nor `mask`, and no `image.generate` route declares `image_input`, since every one refuses references (§9).
-- **Pacing is not identity.** The OpenAI and OpenRouter image routes declare `requests_per_minute: 150`, which the engine applies per route. The Tripo routes and the video route declare `concurrency: 1`. The structured routes declare `concurrency: 4`, and the `openai/gpt-6-astra` agent route declares `concurrency: 1`.
+- **Pacing is not identity.** The OpenAI and OpenRouter image routes declare `requests_per_minute: 150`, which the engine applies per route. The Tripo routes, the video route and the Codex route declare `concurrency: 1`. The structured routes declare `concurrency: 4`, and the `openai/gpt-6-astra` agent route declares `concurrency: 1`.
 - **Shipped without a route:** `background.remove` has an adapter on fal, but no route until fal's price for it is recorded. `vision.annotate`, `vision.review` and `structured.review` have no adapter. Calls on any of these are `no_route` unless a project's table adds a route.
 
 ## 11. Changes from stage-gen's engine

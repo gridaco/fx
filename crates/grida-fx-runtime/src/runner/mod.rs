@@ -7,8 +7,10 @@
 //! Before anything is written, in order (each is [`RunError::Refused`], printed `refused:
 //! <message>`, exit 1):
 //! 1. the plan has problems: `the plan is refused:` and one `<where>: <message>` line each;
-//! 2. a live run without a ceiling (docs/wg/overview.md, decision 5): `a live run needs a
-//!    ceiling: pass --max-usd, or set budget.max_usd in the workflow or in fx.yaml`;
+//! 2. a live run without a ceiling whose plan can cost more than $0 (docs/wg/overview.md,
+//!    decision 5): `a live run needs a ceiling: pass --max-usd, or set budget.max_usd in the
+//!    workflow or in fx.yaml`. A plan whose worst case is $0 (only free routes, such as Codex's)
+//!    runs without one, under a ceiling of $0 ([`ceiling`]);
 //! 3. a tool a live instance declares is not installed: `a program the run needs is not
 //!    installed:` and one line per tool, sorted: `<name> (for <steps, sorted, ", ">): install it,
 //!    or set GRIDA_FX_TOOL_<NAME>`;
@@ -214,6 +216,12 @@ pub fn run_with_control_ready(
     outcome
 }
 
+/// The ledger's ceiling: the plan's, else $0 for a live run, which only a plan whose worst case is
+/// $0 starts without one (module doc, 2), so no priced call can slip past it.
+fn ceiling(plan: &Plan, live: bool) -> Option<Usd> {
+    plan.ceiling.or(live.then_some(Usd::ZERO))
+}
+
 /// The refusals that come before anything is written (module doc, 1 to 3), with the process's
 /// environment: a command checks them before it makes a new folder, so a refused run leaves
 /// nothing behind.
@@ -229,7 +237,7 @@ fn refusal(plan: &Plan, live: bool, env: &dyn Fn(&str) -> Option<String>) -> Opt
         let lines: Vec<String> = plan.problems.iter().map(Problem::to_string).collect();
         return Some(format!("the plan is refused:\n{}", lines.join("\n")));
     }
-    if live && plan.ceiling.is_none() {
+    if live && plan.ceiling.is_none() && plan.estimate().high > Usd::ZERO {
         return Some(
             "a live run needs a ceiling: pass --max-usd, or set budget.max_usd in the workflow or \
              in fx.yaml"
@@ -466,7 +474,10 @@ fn invoke(
         }
     };
     let first = expand(planner, host);
-    let ledger = Arc::new(Ledger::new(plan.ceiling, Some(Arc::clone(&log))));
+    let ledger = Arc::new(Ledger::new(
+        ceiling(&plan, engine.live),
+        Some(Arc::clone(&log)),
+    ));
     let scoped = first.as_ref().unwrap_or(&plan.expansion);
     ledger.replay(&prior, &|id: &str| scopes_of(scoped, id));
     let services = Arc::new(Services::run(
@@ -1717,7 +1728,15 @@ while (message := read()) is not None:
             Problem::new("draw.with.prompt", "image.generate needs setting prompt"),
             Problem::new("join", "no step x"),
         ];
-        let tooled = vec![instance("a#1", "a", &["blender>=4.2"], State::Planned)];
+        let mut priced = instance("a#1", "a", &["blender>=4.2"], State::Planned);
+        priced.prices = vec![grida_fx_core::expand::CallPrice {
+            capability: "image.generate".into(),
+            route: "img-a@acme".into(),
+            calls: 1,
+            low: Usd::ZERO,
+            high: Usd::parse("0.5").unwrap(),
+        }];
+        let tooled = vec![priced];
         assert_eq!(
             refusal(&plan(tooled.clone(), problems, None), true, &nothing).as_deref(),
             Some(
@@ -1742,6 +1761,20 @@ while (message := read()) is not None:
             refusal(&plan(Vec::new(), Vec::new(), None), false, &nothing),
             None
         );
+        // A worst case of $0 (free routes only) needs no ceiling, and runs under $0.
+        let free = vec![instance("b#1", "b", &[], State::Planned)];
+        let free = plan(free, Vec::new(), None);
+        assert_eq!(refusal(&free, true, &nothing), None);
+        assert_eq!(super::ceiling(&free, true), Some(Usd::ZERO));
+        assert_eq!(super::ceiling(&free, false), None);
+        assert_eq!(
+            super::ceiling(&plan(Vec::new(), Vec::new(), ceiling_1()), true),
+            ceiling_1()
+        );
+    }
+
+    fn ceiling_1() -> Option<Usd> {
+        Some(Usd::parse("1").unwrap())
     }
 
     #[test]

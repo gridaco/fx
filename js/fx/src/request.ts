@@ -23,7 +23,7 @@ export interface PlanOptions extends CallOptions {
   /** Arguments of a builder target `file.py:function` (`--arg NAME=VALUE`). */
   readonly args?: Readonly<Record<string, string | number | boolean>>;
   /** The ceiling in US dollars (`--max-usd`); a live run needs one (here, in the workflow or in
-   * fx.yaml). */
+   * fx.yaml) unless its plan's worst case is $0. */
   readonly maxUsd?: number | string;
 }
 
