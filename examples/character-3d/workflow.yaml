@@ -1,0 +1,311 @@
+fx: workflow/v1
+id: character-3d
+title: 3D character
+description: >-
+  A written brief, or a character's parts, in; one rigged, reviewed character at game scale
+  out. Agents draw reference pictures, Tripo builds a textured mesh of each part from them,
+  an agent stands the parts up as one character in Blender, and the skeleton comes from Tripo
+  or from an agent. Independent reviewers judge every stage on renders, and the character is
+  admitted only when its numbers and its pictures both pass. An assembly or rig still
+  rejected after its own takes rebuilds the body, a bounded number of times.
+
+inputs:
+  brief:
+    type: file
+    kind: text/markdown
+    optional: true
+    description: The character, in your words; references and parts are drawn from it
+  parts:
+    type: map
+    values: { type: file, kind: model }
+    optional: true
+    description: The character's parts by role (FBX or GLB), instead of a brief
+  reference:
+    type: file
+    kind: image
+    optional: true
+    description: >-
+      A picture of the character: the references are drawn from it, or with supplied parts,
+      the assembly is fitted to it
+  profile:
+    type: string
+    enum: [sd_human_fixed_hands_v1, sd_human_grouped_hands_v1, sd_cat_grouped_paws_v1]
+    default: sd_human_fixed_hands_v1
+    description: Anatomy, parts, joints, review heights; it decides the rig lane
+  partition:
+    type: string
+    enum: [whole, head_body_hair]
+    default: whole
+    description: One whole mesh, or head, body and hair (the fixed-hand profile only)
+  review:
+    type: string
+    enum: [required, none]
+    default: required
+    description: Independent reviews at every stage, or none (delivered unreviewed)
+  quality_bar:
+    type: string
+    enum: [low, medium]
+    default: low
+    description: The gameplay height a reviewer judges at
+  rounds: { type: integer, minimum: 1, maximum: 3, default: 2, description: Takes per reviewed stage }
+  rebuilds: { type: integer, minimum: 1, maximum: 3, default: 2, description: Builds of the body in all }
+  through:
+    type: string
+    enum: [rig, assembly]
+    default: rig
+    description: Stop after the assembly, or go on to the rig
+  preservation:
+    type: string
+    enum: [audit, restore_normals]
+    default: audit
+    description: What the provider lane does when its rig changed the mesh's normals
+  mesh:
+    face_limit: { type: integer, minimum: 48, maximum: 25000, default: 10000 }
+    quad: { type: boolean, default: true }
+    pbr: { type: boolean, default: true }
+    texture: { type: boolean, default: true }
+  limits:
+    producer_turns: { type: integer, minimum: 1, maximum: 40, default: 16 }
+    reviewer_turns: { type: integer, minimum: 1, maximum: 40, default: 6 }
+    reference_images: { type: integer, minimum: 1, maximum: 16, default: 6 }
+    crops: { type: integer, minimum: 1, maximum: 128, default: 32 }
+    revisions: { type: integer, minimum: 1, maximum: 32, default: 6 }
+    recent_images: { type: integer, minimum: 1, maximum: 64, default: 24 }
+
+budget: { max_usd: 30 }
+
+assert:
+  - check: ${{ (inputs.brief && !inputs.parts) || (inputs.parts && !inputs.brief) }}
+    message: give a brief to draw the character from, or its parts, not both
+
+tables:
+  lane:
+    sd_human_fixed_hands_v1: provider
+    sd_human_grouped_hands_v1: agent
+    sd_cat_grouped_paws_v1: agent
+
+steps:
+  setup:
+    title: Compile the profile
+    description: >-
+      The profile's anatomy, parts, joints, criteria and review heights, with the partition
+      applied, held to the character rules while planning: a profile or partition they refuse
+      stops the plan before anything is paid for.
+    at: plan
+    uses: ./nodes/setup.py#setup
+    with:
+      profile: ${{ inputs.profile }}
+      partition: ${{ inputs.partition }}
+      review: ${{ inputs.review }}
+      quality_bar: ${{ inputs.quality_bar }}
+      entry: ${{ inputs.brief && 'brief' || 'parts' }}
+      parts: ${{ inputs.parts }}
+
+  references:
+    title: Draw the references
+    description: >-
+      An agent draws a canonical picture of the character and a front and back of every part,
+      and submits them as one bundle; a reviewer that did not draw them judges the bundle. A
+      rejected bundle is drawn again, told what the review found.
+    if: ${{ inputs.brief }}
+    steps:
+      draw:
+        title: Draw the references
+        uses: ./nodes/references.py#draw
+        with:
+          brief: ${{ inputs.brief }}
+          reference: ${{ inputs.reference }}
+          profile: ${{ steps.setup.outputs.profile }}
+          review: ${{ inputs.review }}
+          feedback: ${{ feedback }}
+          max_steps: ${{ inputs.limits.producer_turns }}
+          generations: ${{ inputs.limits.reference_images }}
+          crops: ${{ inputs.limits.crops }}
+          recent_images: ${{ inputs.limits.recent_images }}
+        view: true
+      review:
+        title: Review the references
+        if: ${{ inputs.review == 'required' }}
+        uses: ./nodes/references.py#review
+        with:
+          brief: ${{ inputs.brief }}
+          canonical: ${{ steps.draw.outputs.canonical }}
+          views: ${{ steps.draw.outputs.views }}
+          bundle: ${{ steps.draw.outputs.bundle }}
+          profile: ${{ steps.setup.outputs.profile }}
+          bar: ${{ steps.setup.outputs.bar }}
+          max_steps: ${{ inputs.limits.reviewer_turns }}
+    regenerate:
+      max: ${{ inputs.rounds }}
+      until: ${{ inputs.review == 'none' || steps.review.facts.verdict == 'accept' }}
+      feedback: true
+
+  build:
+    title: Build the body
+    description: >-
+      Parts, assembly and rig, built once and rebuilt when the assembly or the rig is still
+      rejected after its own takes. Each part is generated by Tripo from its reference views
+      (or taken as supplied), normalized and reviewed; an agent stands the parts up as one
+      character, reviewed at the bar's heights; the skeleton comes from Tripo, finished
+      locally, or from an agent, and is reviewed on a labeled atlas of every pose.
+    steps:
+      part:
+        title: Make each part
+        for_each: ${{ steps.setup.facts.roles }}
+        key: ${{ item }}
+        steps:
+          views:
+            title: Pick the part's views
+            if: ${{ inputs.brief }}
+            uses: ./nodes/references.py#role_views
+            with:
+              views: ${{ steps.references.draw.outputs.views }}
+              role: ${{ item }}
+          mesh:
+            title: Generate the mesh
+            if: ${{ inputs.brief }}
+            uses: fx/mesh.generate@1
+            with:
+              views: ${{ steps.views.outputs.sides }}
+              face_limit: ${{ inputs.mesh.face_limit }}
+              quad: ${{ inputs.mesh.quad }}
+              pbr: ${{ inputs.mesh.pbr }}
+              texture: ${{ inputs.mesh.texture }}
+          normalize:
+            title: Normalize the mesh
+            uses: ./nodes/parts.py#normalize
+            with:
+              mesh: ${{ steps.mesh.outputs.model ?? (inputs.parts && inputs.parts[item]) }}
+              role: ${{ item }}
+          review:
+            title: Review the part
+            if: ${{ inputs.review == 'required' && inputs.brief }}
+            uses: ./nodes/parts.py#review
+            with:
+              model: ${{ steps.normalize.outputs.model }}
+              report: ${{ steps.normalize.outputs.report }}
+              views: ${{ steps.views.outputs.views }}
+              profile: ${{ steps.setup.outputs.profile }}
+              bar: ${{ steps.setup.outputs.bar }}
+              role: ${{ item }}
+              max_steps: ${{ inputs.limits.reviewer_turns }}
+        regenerate:
+          max: ${{ inputs.rounds }}
+          until: >-
+            ${{ inputs.review == 'none' || !inputs.brief
+            || steps.review.facts.verdict == 'accept' }}
+
+      assembly:
+        title: Assemble the character
+        steps:
+          assemble:
+            title: Stand the parts up
+            uses: ./nodes/assembly.py#assemble
+            with:
+              parts: ${{ steps.part.*.normalize.outputs.model }}
+              reports: ${{ steps.part.*.normalize.outputs.report }}
+              canonical: ${{ steps.references.draw.outputs.canonical || inputs.reference }}
+              profile: ${{ steps.setup.outputs.profile }}
+              review: ${{ inputs.review }}
+              feedback: ${{ feedback }}
+              max_steps: ${{ inputs.limits.producer_turns }}
+              revisions: ${{ inputs.limits.revisions }}
+              recent_images: ${{ inputs.limits.recent_images }}
+            view: true
+          review:
+            title: Review the assembly
+            if: ${{ inputs.review == 'required' }}
+            uses: ./nodes/assembly.py#review
+            with:
+              model: ${{ steps.assemble.outputs.model }}
+              record: ${{ steps.assemble.outputs.record }}
+              canonical: ${{ steps.references.draw.outputs.canonical || inputs.reference }}
+              profile: ${{ steps.setup.outputs.profile }}
+              bar: ${{ steps.setup.outputs.bar }}
+              max_steps: ${{ inputs.limits.reviewer_turns }}
+        regenerate:
+          max: ${{ inputs.rounds }}
+          until: ${{ inputs.review == 'none' || steps.review.facts.verdict == 'accept' }}
+          feedback: true
+          then: continue
+
+      rig:
+        title: Rig the character
+        if: ${{ inputs.through == 'rig' && steps.assembly.review.facts.verdict != 'reject' }}
+        steps:
+          task:
+            title: Rig with Tripo
+            if: ${{ lookup(tables.lane, inputs.profile) == 'provider' }}
+            uses: fx/mesh.rig@1
+            with:
+              model: ${{ steps.assembly.assemble.outputs.model }}
+              allow_negative_check: true
+          finish:
+            title: Finish the provider rig
+            if: ${{ lookup(tables.lane, inputs.profile) == 'provider' }}
+            uses: ./nodes/rig.py#finish
+            with:
+              rigged: ${{ steps.task.outputs.model }}
+              assembly: ${{ steps.assembly.assemble.outputs.model }}
+              assembly_record: ${{ steps.assembly.assemble.outputs.record }}
+              profile: ${{ steps.setup.outputs.profile }}
+              preservation: ${{ inputs.preservation }}
+          agent:
+            title: Rig with an agent
+            if: ${{ lookup(tables.lane, inputs.profile) == 'agent' }}
+            uses: ./nodes/rig.py#agent
+            with:
+              assembly: ${{ steps.assembly.assemble.outputs.model }}
+              assembly_record: ${{ steps.assembly.assemble.outputs.record }}
+              profile: ${{ steps.setup.outputs.profile }}
+              review: ${{ inputs.review }}
+              feedback: ${{ feedback }}
+              max_steps: ${{ inputs.limits.producer_turns }}
+              revisions: ${{ inputs.limits.revisions }}
+              recent_images: ${{ inputs.limits.recent_images }}
+          review:
+            title: Review the rig
+            if: ${{ inputs.review == 'required' }}
+            uses: ./nodes/rig.py#review
+            with:
+              model: ${{ steps.finish.outputs.model || steps.agent.outputs.model }}
+              record: ${{ steps.finish.outputs.record || steps.agent.outputs.record }}
+              profile: ${{ steps.setup.outputs.profile }}
+              bar: ${{ steps.setup.outputs.bar }}
+            view: true
+        regenerate:
+          max: ${{ lookup(tables.lane, inputs.profile) == 'agent' && inputs.rounds || 1 }}
+          until: ${{ inputs.review == 'none' || steps.review.facts.verdict == 'accept' }}
+          feedback: true
+          then: continue
+    regenerate:
+      max: ${{ inputs.rebuilds }}
+      until: >-
+        ${{ inputs.review == 'none'
+        || (inputs.through == 'assembly' && steps.assembly.review.facts.verdict == 'accept')
+        || steps.rig.review.facts.verdict == 'accept' }}
+      then: continue
+
+  result:
+    title: Admit the character
+    description: >-
+      With reviews, the character is accepted only when its review accepted it and its numbers
+      hold; without, it is delivered unreviewed only when its export is intact. Its findings
+      travel with it.
+    uses: ./nodes/result.py#result
+    with:
+      profile: ${{ steps.setup.outputs.profile }}
+      rig: ${{ steps.build.rig.finish.outputs.model || steps.build.rig.agent.outputs.model }}
+      rig_record: ${{ steps.build.rig.finish.outputs.record || steps.build.rig.agent.outputs.record }}
+      rig_review: ${{ steps.build.rig.review.outputs.review }}
+      assembly: ${{ steps.build.assembly.assemble.outputs.model }}
+      assembly_record: ${{ steps.build.assembly.assemble.outputs.record }}
+      assembly_review: ${{ steps.build.assembly.review.outputs.review }}
+      review_mode: ${{ inputs.review }}
+      through: ${{ inputs.through }}
+
+outputs:
+  character: ${{ steps.result.outputs.character }}
+  result: ${{ steps.result.outputs.result }}
+  references: ${{ steps.references.draw.outputs.canonical }}
+  atlas: ${{ steps.build.rig.review.outputs.atlas }}

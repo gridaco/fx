@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "profile_id": "sd_cat_grouped_paws_v1",
+  "anatomy": {
+    "human": false,
+    "species_group": "cat",
+    "locomotion": "biped"
+  },
+  "description": "Round stylized cat with short hindlimbs, an oversized head including ears, rounded paws and an attached long tail. Clothing is optional; visible anatomy remains feline.",
+  "coordinate_system": "gltf_y_up_z_front",
+  "target_height": 2.0,
+  "required_parts": [
+    "body",
+    "head",
+    "tail"
+  ],
+  "part_binding": {
+    "body": "deform",
+    "head": "head_attachment",
+    "tail": "tail_chain"
+  },
+  "articulation": {
+    "body": "stylized_biped_with_spine_neck_shoulders_elbows_paw_wrists_hips_knees_ankles",
+    "paws": "two_grouped_curl_segments_per_forepaw",
+    "opposing_thumbs": "not_required",
+    "ears": "rigid_head_attachment",
+    "tail": "three_connected_deform_bones",
+    "tail_wag": true,
+    "facial_expressions": "deferred",
+    "secondary_motion": "authored_tail_wag_only_no_physics"
+  },
+  "surface_policy": {
+    "default": "matte",
+    "head": "unlit",
+    "texture_edits": "disabled_in_parts_to_rig_proof"
+  },
+  "seams": {
+    "head_body": "A scarf may conceal a neck overlap. Gaps, exposed neck plates and obvious deformation fail. Report overlap concealment instead of claiming a welded surface.",
+    "tail_body": "A small overlap may conceal the tail root. The tail must remain attached in every reviewed pose; report separate topology honestly."
+  },
+  "motion_semantics": {
+    "shoulder_raise": "Bilateral forelimb raise for shoulder attachment and deformation inspection.",
+    "elbow_bend": "Forelimb bend for elbow deformation inspection.",
+    "knee_bend": "Biped hindlimb bend for knee deformation inspection.",
+    "paw_curl": "Soft grouped paw squeeze toward the observed palm; no opposing thumb is required.",
+    "cheer": "Restrained biped cheer with soft paw squeeze and optional tail wag.",
+    "tail_wag": "Optional attached tail-chain wag; inspect root and curved surface stability."
+  },
+  "review": {
+    "target_character_height_pixels": [
+      120,
+      180
+    ],
+    "inspection_height_pixels": 600,
+    "required_views": [
+      "front",
+      "back",
+      "left",
+      "right",
+      "three_quarter"
+    ],
+    "required_motion": "cheer",
+    "required_diagnostics": [
+      "rest",
+      "shoulder_raise",
+      "elbow_bend",
+      "knee_bend",
+      "paw_curl"
+    ],
+    "optional_diagnostics": [
+      "tail_wag"
+    ],
+    "criteria": [
+      "recognizable round cat rather than a human body with a cat head",
+      "head and ears remain attached and eyes remain readable",
+      "neck overlap remains concealed without exposed plates or gaps",
+      "no detached or flying accessories",
+      "stable shoulders, elbows, hips and short hindlimbs",
+      "soft grouped paws curl toward the observed palm without sharp underside pinching",
+      "opposing thumbs and separately animated digits are not required",
+      "tail remains attached without abrupt root stretching in reviewed motion",
+      "feet remain connected",
+      "original textures and UVs preserved",
+      "material policy survives exported GLB"
+    ],
+    "assembly_criteria": [
+      "forward_orientation",
+      "reference_proportions",
+      "face_visibility",
+      "head_body_attachment",
+      "tail_attachment",
+      "texture_integrity"
+    ],
+    "rig_criteria": [
+      "required_joints_and_weights",
+      "rest_shape",
+      "shoulder_deformation",
+      "elbow_deformation",
+      "knee_deformation",
+      "palmward_paw_curl",
+      "accessory_attachment",
+      "head_neck_attachment",
+      "coherent_cheer",
+      "exported_material_policy",
+      "tail_attachment"
+    ]
+  }
+}

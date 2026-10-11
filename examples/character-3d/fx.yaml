@@ -1,0 +1,7 @@
+fx: project/v1
+routes:
+  agent.turn: openai/gpt-6-astra@openrouter
+  image.generate: openai/gpt-image-2.5-sunburst@openrouter
+  image.edit: openai/gpt-image-2.5-sunburst@openrouter
+  mesh.generate: P2-20260801@tripo
+  mesh.rig: v1.0-20240301@tripo

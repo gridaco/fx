@@ -1,0 +1,107 @@
+fx: workflow/v1
+id: meadow-parallax
+title: Meadow from concept to parallax
+description: Derive three depth layers from a supplied concept image, prepare horizontal repeats, and compose them.
+
+inputs:
+  concept:
+    type: file
+    kind: image
+    description: The pre-generated complete scene that defines the composition and art direction.
+
+  render_preview:
+    type: boolean
+    default: true
+    description: Render a local animated preview in addition to the reusable layers.
+
+steps:
+  far:
+    title: Distant sky and landscape
+    uses: fx/image.edit@1
+    requires: [image_input, opaque_background, exact_size]
+    with:
+      image: ${{ inputs.concept }}
+      prompt: ./prompts/meadow/far.md
+      size: 1536x1024
+      background: opaque
+
+  middle:
+    title: Tree and golden meadow
+    uses: fx/image.edit@1
+    requires: [image_input, alpha, exact_size]
+    with:
+      image: ${{ inputs.concept }}
+      prompt: ./prompts/meadow/middle.md
+      size: 1536x1024
+      background: transparent
+
+  middle_alpha:
+    uses: fx/image.check_alpha@1
+    judges: middle
+    with: { image: "${{ steps.middle.outputs.image }}" }
+    on_reject: fail
+
+  foreground:
+    title: Close grasses and flowers
+    uses: fx/image.edit@1
+    requires: [image_input, alpha, exact_size]
+    with:
+      image: ${{ inputs.concept }}
+      prompt: ./prompts/meadow/foreground.md
+      size: 1536x1024
+      background: transparent
+
+  foreground_alpha:
+    uses: fx/image.check_alpha@1
+    judges: foreground
+    with: { image: "${{ steps.foreground.outputs.image }}" }
+    on_reject: fail
+
+  parallax:
+    title: Make the layers repeat
+    uses: ./workflows/looping-parallax.yaml
+    with:
+      canvas: { width: 1536, height: 1024 }
+      layers:
+        - id: far
+          file: ${{ steps.far.outputs.image }}
+          order: 0
+          parallax: 0.12
+          offset_y: 0
+          repeat: repaint
+        - id: middle
+          file: ${{ steps.middle.outputs.image }}
+          order: 1
+          parallax: 0.4
+          offset_y: 0
+          repeat: repaint
+        - id: foreground
+          file: ${{ steps.foreground.outputs.image }}
+          order: 2
+          parallax: 0.85
+          offset_y: 0
+          repeat: repaint
+
+  render_preview:
+    title: Render the forward-loop preview
+    if: ${{ inputs.render_preview }}
+    uses: ./nodes/render_preview.py#render_preview
+    with:
+      layers: ${{ steps.parallax.outputs.layers }}
+      manifest: ${{ steps.parallax.outputs.manifest }}
+      width: 960
+      fps: 24
+      duration_seconds: 16
+      layer_wraps: { far: 1, middle: 1, foreground: 3 }
+
+outputs:
+  concept: ${{ inputs.concept }}
+  source_far: ${{ steps.far.outputs.image }}
+  source_middle: ${{ steps.middle.outputs.image }}
+  source_foreground: ${{ steps.foreground.outputs.image }}
+  manifest: ${{ steps.parallax.outputs.manifest }}
+  preview: ${{ steps.parallax.outputs.preview }}
+  layers: ${{ steps.parallax.outputs.layers }}
+  preview_video: ${{ steps.render_preview.outputs.animation }}
+  preview_poster: ${{ steps.render_preview.outputs.poster }}
+  preview_report: ${{ steps.render_preview.outputs.report }}

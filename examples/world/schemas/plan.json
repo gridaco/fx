@@ -1,0 +1,252 @@
+{
+  "$defs": {
+    "ConceptPlan": {
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "pattern": "^[a-z][a-z0-9_]{1,95}$",
+          "title": "Entity Id",
+          "type": "string"
+        },
+        "concept_mode": {
+          "enum": [
+            "environmental_identity_portrait",
+            "in_world_action",
+            "representative_public_manifestation",
+            "establishing_environment",
+            "inhabited_environment",
+            "hero_object_in_use",
+            "representative_specimen_in_context",
+            "visible_system_instance",
+            "witnessed_event_moment",
+            "practiced_or_contested_idea"
+          ],
+          "title": "Concept Mode",
+          "type": "string"
+        },
+        "primary_purpose": {
+          "enum": [
+            "orient",
+            "identify",
+            "differentiate",
+            "manifest",
+            "connect",
+            "historicize",
+            "humanize",
+            "immerse",
+            "invite"
+          ],
+          "title": "Primary Purpose",
+          "type": "string"
+        },
+        "lesson_key": {
+          "pattern": "^[a-z][a-z0-9_]{1,95}$",
+          "title": "Lesson Key",
+          "type": "string"
+        },
+        "audience_question": {
+          "minLength": 1,
+          "title": "Audience Question",
+          "type": "string"
+        },
+        "visible_fact_ids": {
+          "items": {
+            "pattern": "^[a-z][a-z0-9_]{1,95}$",
+            "type": "string"
+          },
+          "title": "Visible Fact Ids",
+          "type": "array"
+        },
+        "visible_relationship_ids": {
+          "items": {
+            "pattern": "^[a-z][a-z0-9_]{1,95}$",
+            "type": "string"
+          },
+          "title": "Visible Relationship Ids",
+          "type": "array"
+        },
+        "scene_premise": {
+          "minLength": 1,
+          "title": "Scene Premise",
+          "type": "string"
+        },
+        "signature_motif": {
+          "$ref": "#/$defs/SignatureMotif"
+        },
+        "in_frame_contrast": {
+          "minLength": 1,
+          "title": "In Frame Contrast",
+          "type": "string"
+        },
+        "unique_contribution": {
+          "minLength": 1,
+          "title": "Unique Contribution",
+          "type": "string"
+        },
+        "scene_register": {
+          "$ref": "#/$defs/SceneRegister"
+        }
+      },
+      "required": [
+        "entity_id",
+        "concept_mode",
+        "primary_purpose",
+        "lesson_key",
+        "audience_question",
+        "visible_fact_ids",
+        "visible_relationship_ids",
+        "scene_premise",
+        "signature_motif",
+        "in_frame_contrast",
+        "unique_contribution",
+        "scene_register"
+      ],
+      "title": "ConceptPlan",
+      "type": "object"
+    },
+    "SceneRegister": {
+      "additionalProperties": false,
+      "properties": {
+        "scale": {
+          "enum": [
+            "intimate",
+            "human",
+            "architectural",
+            "landscape"
+          ],
+          "title": "Scale",
+          "type": "string"
+        },
+        "time_of_day": {
+          "enum": [
+            "dawn",
+            "day",
+            "dusk",
+            "night"
+          ],
+          "title": "Time Of Day",
+          "type": "string"
+        },
+        "weather": {
+          "enum": [
+            "clear",
+            "overcast",
+            "wind",
+            "fog",
+            "rain",
+            "storm",
+            "snow"
+          ],
+          "title": "Weather",
+          "type": "string"
+        },
+        "weather_justification": {
+          "minLength": 1,
+          "title": "Weather Justification",
+          "type": "string"
+        },
+        "setting": {
+          "enum": [
+            "interior",
+            "exterior",
+            "threshold"
+          ],
+          "title": "Setting",
+          "type": "string"
+        },
+        "population": {
+          "enum": [
+            "solitary",
+            "few",
+            "crowd"
+          ],
+          "title": "Population",
+          "type": "string"
+        },
+        "energy": {
+          "enum": [
+            "still",
+            "working",
+            "urgent"
+          ],
+          "title": "Energy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scale",
+        "time_of_day",
+        "weather",
+        "weather_justification",
+        "setting",
+        "population",
+        "energy"
+      ],
+      "title": "SceneRegister",
+      "type": "object"
+    },
+    "SignatureMotif": {
+      "additionalProperties": false,
+      "description": "What a viewer would sketch in three strokes to tell this image from every other.",
+      "properties": {
+        "action_verb": {
+          "pattern": "^[a-z][a-z0-9_]{1,95}$",
+          "title": "Action Verb",
+          "type": "string"
+        },
+        "dominant_prop": {
+          "pattern": "^[a-z][a-z0-9_]{1,95}$",
+          "title": "Dominant Prop",
+          "type": "string"
+        },
+        "vantage": {
+          "enum": [
+            "eye_level",
+            "low_angle",
+            "high_angle",
+            "aerial",
+            "over_shoulder",
+            "from_within"
+          ],
+          "title": "Vantage",
+          "type": "string"
+        }
+      },
+      "required": [
+        "action_verb",
+        "dominant_prop",
+        "vantage"
+      ],
+      "title": "SignatureMotif",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "universe_id": {
+      "pattern": "^[a-z][a-z0-9_]{1,95}$",
+      "title": "Universe Id",
+      "type": "string"
+    },
+    "set_rationale": {
+      "minLength": 1,
+      "title": "Set Rationale",
+      "type": "string"
+    },
+    "plans": {
+      "items": {
+        "$ref": "#/$defs/ConceptPlan"
+      },
+      "title": "Plans",
+      "type": "array"
+    }
+  },
+  "required": [
+    "universe_id",
+    "set_rationale",
+    "plans"
+  ],
+  "title": "GalleryPlan",
+  "type": "object",
+  "description": "universe structured output for universe.plan"
+}

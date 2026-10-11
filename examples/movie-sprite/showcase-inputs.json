@@ -1,0 +1,23 @@
+{
+  "schema": "fx_showcase_inputs_v1",
+  "delivery_base": "https://grida-fx-showcase-spike-20261011.t3.tigrisfiles.io",
+  "inputs": [
+    {
+      "filename": "traveler.png",
+      "path": "showcases/d9f747984514a9b5febfb376c66f97ce79da343f0ab463f0c1fefe0750da08df/movie-sprite/assets/source.png",
+      "sha256": "c503dd9a670b264e78f01b828150821475f0d788e53fb4d6b56721174211006c",
+      "bytes": 1560622
+    },
+    {
+      "filename": "take.mp4",
+      "path": "runs/973a5ab85063543f2a1193fdc56b50c66cf1160c657a06e9221d92fb9288af14/artifacts/b277bf10e64341d5bc7f06c944a7646cc6abbe811d5b4f739ea6ab4bdd36c5d7.mp4",
+      "sha256": "b277bf10e64341d5bc7f06c944a7646cc6abbe811d5b4f739ea6ab4bdd36c5d7",
+      "bytes": 2757890
+    }
+  ],
+  "origin": {
+    "kind": "ai_generated",
+    "description": "Original artwork and recorded media from the approved FX showcase campaign.",
+    "publication": "Previously published in the approved showcase; this manifest grants no additional media license."
+  }
+}

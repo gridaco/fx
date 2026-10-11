@@ -157,6 +157,37 @@ def looping_parallax_refused(home: Path) -> str:
     return "far_cliffs mirrored; the repaint of near_masts is refused at $0"
 
 
+def meadow_parallax(home: Path) -> str:
+    options = {"input_files": ["inputs/meadow-fixture.yaml"]}
+    plan = planned("workflows/meadow.yaml", home, inputs={"render_preview": True}, **options)
+    low, high = plan.estimate()
+    expect(0 < low <= high, f"meadow-parallax is estimated at {(low, high)}")
+    paths = {instance["path"] for instance in plan.document.get("instances", [])}
+    expect(
+        {"far", "middle", "foreground", "render_preview"} <= paths,
+        "the meadow plan is missing extraction or its optional preview renderer",
+    )
+    without_preview = planned("workflows/meadow.yaml", home, **options)
+    expect(
+        all(
+            instance["path"] != "render_preview"
+            for instance in without_preview.document["instances"]
+        ),
+        "disabling the meadow preview still plans its renderer",
+    )
+    return f"concept extraction and optional local preview planned at ${low:.2f} - ${high:.2f}"
+
+
+def meadow_parallax_refused(home: Path) -> str:
+    run = fx.run("workflows/meadow.yaml", input_files=["inputs/meadow-fixture.yaml"], cwd=home)
+    refused(run, "the meadow run")
+    expect(
+        not any(event.get("event") == "budget_reserved" for event in run.events),
+        "the offline meadow run reserved a provider attempt",
+    )
+    return "concept-to-layer generation is refused offline at $0"
+
+
 def concept_gallery(home: Path) -> str:
     plan = planned("concept-gallery", home, input_files=["inputs/tidebell.yaml"])
     low, high = plan.estimate()
@@ -200,6 +231,8 @@ CHECKS: dict[str, tuple[str, Callable[[Path], str]]] = {
     "image-recolor": ("image-recolor", image_recolor),
     "looping-parallax": ("looping-parallax", looping_parallax),
     "looping-parallax:refused": ("looping-parallax", looping_parallax_refused),
+    "looping-parallax:meadow": ("looping-parallax", meadow_parallax),
+    "looping-parallax:meadow-refused": ("looping-parallax", meadow_parallax_refused),
     "concept-gallery": ("concept-gallery", concept_gallery),
     "concept-gallery:refused": ("concept-gallery", concept_gallery_refused),
     "game-build": ("game-build", game_build),
@@ -229,7 +262,9 @@ def main(names: list[str]) -> int:
         with tempfile.TemporaryDirectory(prefix="fx-example-") as scratch:
             home = Path(scratch) / example
             shutil.copytree(
-                EXAMPLES / example, home, ignore=shutil.ignore_patterns(".fx", "runs", ".venv")
+                EXAMPLES / example,
+                home,
+                ignore=shutil.ignore_patterns(".fx", "runs", ".venv", ".showcase-inputs"),
             )
             try:
                 print(f"ok   {name}: {check(home)}")

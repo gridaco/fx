@@ -1,0 +1,45 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Loop</title>
+<style>
+  body { margin: 0; padding: 8px; font: 12px system-ui, sans-serif; color: CanvasText; background: Canvas; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+  video { display: block; max-height: 60vh; max-width: 100%; background: #000; }
+  img { display: block; max-width: 100%; max-height: 60vh; }
+  dl { display: grid; grid-template-columns: auto auto; gap: 2px 10px; margin: 0; }
+  dt { opacity: 0.7; }
+  dd { margin: 0; }
+  .fail { color: #c33; }
+</style>
+<div class="row">
+  <video id="preview" controls loop muted autoplay playsinline></video>
+  <dl id="facts"></dl>
+</div>
+<p>Sampled frames on light, dark and checkerboard grounds:</p>
+<img id="sheet" alt="contact sheet">
+<script type="module">
+  // The finish step's view. Browsers cannot play the lossless Matroska loop with its
+  // transparency, so the preview plays (over a dark ground) and the contact sheet shows
+  // the alpha; the manifest and the processing report give the rest.
+  import { context as read } from "/_views/view.js";
+  const context = await read();
+  const { preview, contact_sheet: sheet, manifest, report } = context.outputs;
+  document.title = context.step.title;
+  document.getElementById("preview").src = preview.url;
+  document.getElementById("sheet").src = sheet.url;
+  const facts = document.getElementById("facts");
+  const rows = [
+    ["size", `${manifest.value.width}×${manifest.value.height}`],
+    ["frames", manifest.value.frame_count],
+    ["plays", `${manifest.value.playback_seconds} s at ${manifest.value.playback_fps.toFixed(3)} fps`],
+    ["alpha", manifest.value.alpha_mode],
+  ];
+  const checks = Object.entries(report.value).filter(([, value]) => typeof value === "boolean");
+  for (const [name, passed] of checks) rows.push([name.replaceAll("_", " "), passed ? "yes" : "no"]);
+  for (const [name, value] of rows) {
+    const term = Object.assign(document.createElement("dt"), { textContent: name });
+    const detail = Object.assign(document.createElement("dd"), { textContent: String(value) });
+    if (value === "no") detail.className = "fail";
+    facts.append(term, detail);
+  }
+</script>

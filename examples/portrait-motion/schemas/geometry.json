@@ -1,0 +1,103 @@
+{
+  "$defs": {
+    "Coordinate": {
+      "type": "number"
+    },
+    "FeatureId": {
+      "enum": [
+        "canvas_left_eye",
+        "canvas_right_eye",
+        "mouth"
+      ],
+      "type": "string"
+    },
+    "NonemptyText": {
+      "maxLength": 2000,
+      "minLength": 1,
+      "type": "string"
+    },
+    "Point": {
+      "items": {
+        "$ref": "#/$defs/Coordinate"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
+    },
+    "_GeometryFeature": {
+      "additionalProperties": false,
+      "properties": {
+        "feature_id": {
+          "$ref": "#/$defs/FeatureId"
+        },
+        "points": {
+          "items": {
+            "$ref": "#/$defs/Point"
+          },
+          "maxItems": 64,
+          "minItems": 3,
+          "title": "Points",
+          "type": "array"
+        }
+      },
+      "required": [
+        "feature_id",
+        "points"
+      ],
+      "title": "_GeometryFeature",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "cannot_segment"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "coordinate_space": {
+      "const": "registered_panel_pixels",
+      "title": "Coordinate Space",
+      "type": "string"
+    },
+    "canvas_size": {
+      "items": {
+        "minimum": 1,
+        "type": "integer"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "title": "Canvas Size",
+      "type": "array"
+    },
+    "features": {
+      "items": {
+        "$ref": "#/$defs/_GeometryFeature"
+      },
+      "maxItems": 3,
+      "title": "Features",
+      "type": "array"
+    },
+    "reason": {
+      "$ref": "#/$defs/NonemptyText"
+    }
+  },
+  "required": [
+    "schema_version",
+    "status",
+    "coordinate_space",
+    "canvas_size",
+    "features",
+    "reason"
+  ],
+  "title": "_Geometry",
+  "type": "object"
+}

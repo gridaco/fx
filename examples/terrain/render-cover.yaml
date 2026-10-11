@@ -1,0 +1,23 @@
+fx: workflow/v1
+id: terrain-cover
+title: 47-tile terrain cover
+description: Build 47 standing on shared ground from one terrain tilemap, locally at $0.
+
+inputs:
+  atlas:
+    type: file
+    kind: image
+    description: A canonical 1440x480 terrain atlas with 120px cells
+
+steps:
+  cover:
+    title: Build 47 on shared terrain ground
+    uses: ./cover.py#terrain_cover
+    with:
+      atlas: ${{ inputs.atlas }}
+    view: true
+
+outputs:
+  cover: ${{ steps.cover.outputs.cover }}
+  cover_manifest: ${{ steps.cover.outputs.layout }}
+  atlas: ${{ steps.cover.outputs.atlas }}

@@ -1,0 +1,6 @@
+fx: project/v1
+budget:
+  max_usd: 25
+routes:
+  structured.generate: openai/gpt-5.6-sol@openrouter
+  image.generate: openai/gpt-image-2.5-sunburst@openrouter

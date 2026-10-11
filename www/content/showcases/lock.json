@@ -1,9 +1,9 @@
 {
   "kind": "fx-showcase-lock-v1",
   "release": {
-    "sha256": "bb4edef644e07e31ed7f1e4336fc5b9d43e9ad3231610c14ca0bf348ff4ac4f3",
-    "path": "showcases/bb4edef644e07e31ed7f1e4336fc5b9d43e9ad3231610c14ca0bf348ff4ac4f3/manifest.json",
-    "fixture": "manifests/bb4edef644e07e31ed7f1e4336fc5b9d43e9ad3231610c14ca0bf348ff4ac4f3.json"
+    "sha256": "d9f747984514a9b5febfb376c66f97ce79da343f0ab463f0c1fefe0750da08df",
+    "path": "showcases/d9f747984514a9b5febfb376c66f97ce79da343f0ab463f0c1fefe0750da08df/manifest.json",
+    "fixture": "manifests/d9f747984514a9b5febfb376c66f97ce79da343f0ab463f0c1fefe0750da08df.json"
   },
   "workflows": {
     "character-3d": {
@@ -71,6 +71,22 @@
       },
       "recordings": [
         {
+          "id": "meadow-forward-01",
+          "label": "Layers and forward-loop preview",
+          "kind": "fx-run-export-v1",
+          "path": "runs/abe44ccedb750bf05633886c052545079f97aee6e83f7161b2611295e4249d3d/manifest.json",
+          "sha256": "abe44ccedb750bf05633886c052545079f97aee6e83f7161b2611295e4249d3d",
+          "fixture": "recordings/abe44ccedb750bf05633886c052545079f97aee6e83f7161b2611295e4249d3d.json"
+        },
+        {
+          "id": "meadow-preview-01",
+          "label": "Layers and animated preview",
+          "kind": "fx-run-export-v1",
+          "path": "runs/1698fdd421e441b0204af1834dc221e1766b30d9d6d5299440bb7770c82979ee/manifest.json",
+          "sha256": "1698fdd421e441b0204af1834dc221e1766b30d9d6d5299440bb7770c82979ee",
+          "fixture": "recordings/1698fdd421e441b0204af1834dc221e1766b30d9d6d5299440bb7770c82979ee.json"
+        },
+        {
           "id": "meadow-01",
           "label": "Layer preparation",
           "kind": "fx-run-export-v1",
@@ -85,20 +101,28 @@
         "contract": "portrait-motion-demo-v1",
         "manifest": {
           "path": "portrait-motion/manifest.json",
-          "sha256": "168dd0e46521bbe8cf96f9f0900337a6415f74381c82a688641a6ae5a295d475",
-          "bytes": 175,
+          "sha256": "19ac698f2dcce52c62e722e05b9dca985965aab11756e0a458aee1bc9a842944",
+          "bytes": 151,
           "media_type": "application/json"
         },
         "metadata": [
           {
             "path": "portrait-motion/assets/face-manifest.json",
-            "sha256": "507bca632e8e65f4966376d7f92bd27aa681c347b6d6fc57411999d67a3bf463",
-            "bytes": 2938,
+            "sha256": "2b0ae0750adad612df613ac679f4e3d03aa1e0a6e7579fe53ce2790a17099bb5",
+            "bytes": 2944,
             "media_type": "application/json"
           }
         ]
       },
       "recordings": [
+        {
+          "id": "nami-face-01",
+          "label": "Nami facial patches",
+          "kind": "fx-run-export-v1",
+          "path": "runs/b35ef1984d95307e9bb16741640d5df33d7786a52fa7933d23502072347cabc1/manifest.json",
+          "sha256": "b35ef1984d95307e9bb16741640d5df33d7786a52fa7933d23502072347cabc1",
+          "fixture": "recordings/b35ef1984d95307e9bb16741640d5df33d7786a52fa7933d23502072347cabc1.json"
+        },
         {
           "id": "portrait-motion-01",
           "label": "Independent expressions",
@@ -114,6 +138,14 @@
           "path": "runs/6484e9b03533b6ab66acebd49802a1d1893b940d0a7d94317272366b8255a60a/manifest.json",
           "sha256": "6484e9b03533b6ab66acebd49802a1d1893b940d0a7d94317272366b8255a60a",
           "fixture": "recordings/6484e9b03533b6ab66acebd49802a1d1893b940d0a7d94317272366b8255a60a.json"
+        },
+        {
+          "id": "nami-source-03",
+          "label": "Nami source illustration",
+          "kind": "fx-run-export-v1",
+          "path": "runs/d5e5e5e05908a4e6107f7d5a6001ff8d2290eacbf6649235141addedd449d45e/manifest.json",
+          "sha256": "d5e5e5e05908a4e6107f7d5a6001ff8d2290eacbf6649235141addedd449d45e",
+          "fixture": "recordings/d5e5e5e05908a4e6107f7d5a6001ff8d2290eacbf6649235141addedd449d45e.json"
         }
       ]
     },
@@ -149,6 +181,38 @@
           "path": "runs/732df2335d87c9d865351cff997090d0db0b34060cecb8c99757f32201f4ceb5/manifest.json",
           "sha256": "732df2335d87c9d865351cff997090d0db0b34060cecb8c99757f32201f4ceb5",
           "fixture": "recordings/732df2335d87c9d865351cff997090d0db0b34060cecb8c99757f32201f4ceb5.json"
+        },
+        {
+          "id": "terrain-cover-01",
+          "label": "Local cover composition",
+          "kind": "fx-run-export-v1",
+          "path": "runs/a9761cf81d2651101d44dc21d113da1f28519b776c16ddf05dc3f1640150baaa/manifest.json",
+          "sha256": "a9761cf81d2651101d44dc21d113da1f28519b776c16ddf05dc3f1640150baaa",
+          "fixture": "recordings/a9761cf81d2651101d44dc21d113da1f28519b776c16ddf05dc3f1640150baaa.json"
+        },
+        {
+          "id": "terrain-cover-02",
+          "label": "Tile-built 47 on the ground",
+          "kind": "fx-run-export-v1",
+          "path": "runs/ea2bef04b75fe9668ab14ba75968f1a45d9faf9faf628e417498dcd9ac32afcf/manifest.json",
+          "sha256": "ea2bef04b75fe9668ab14ba75968f1a45d9faf9faf628e417498dcd9ac32afcf",
+          "fixture": "recordings/ea2bef04b75fe9668ab14ba75968f1a45d9faf9faf628e417498dcd9ac32afcf.json"
+        },
+        {
+          "id": "terrain-cover-03",
+          "label": "Headless current-state terrain loop",
+          "kind": "fx-run-export-v1",
+          "path": "runs/0553b37969585b28dcb405beb141c80b5c5264dab442db59bb8cc757d0348d8e/manifest.json",
+          "sha256": "0553b37969585b28dcb405beb141c80b5c5264dab442db59bb8cc757d0348d8e",
+          "fixture": "recordings/0553b37969585b28dcb405beb141c80b5c5264dab442db59bb8cc757d0348d8e.json"
+        },
+        {
+          "id": "terrain-cover-04",
+          "label": "Full-frame ground with current-state terrain loop",
+          "kind": "fx-run-export-v1",
+          "path": "runs/9e7658de4aa6d43d8774a7d5ab76b3ea8c29f883a1acab2be7fdab29765f32ca/manifest.json",
+          "sha256": "9e7658de4aa6d43d8774a7d5ab76b3ea8c29f883a1acab2be7fdab29765f32ca",
+          "fixture": "recordings/9e7658de4aa6d43d8774a7d5ab76b3ea8c29f883a1acab2be7fdab29765f32ca.json"
         }
       ]
     },

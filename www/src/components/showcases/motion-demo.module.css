@@ -14,6 +14,11 @@
 .layerControls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-left: auto; }
 .parallaxStage { overflow: hidden; border-radius: 12px; background: var(--color-muted); }
 .parallaxStage canvas { width: 100%; height: auto; display: block; cursor: grab; touch-action: none; }
+.guideControls { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-top: 12px; font-size: 12px; }
+.guideLegend { display: inline-flex; flex-wrap: wrap; gap: 14px; color: var(--color-muted-foreground); font-size: 11px; }
+.guideLegend > span { display: inline-flex; align-items: center; gap: 6px; }
+.joinMark, .repaintMark { display: inline-block; width: 18px; border-top: 2px solid #ef4444; }
+.joinMark { border-top-style: dashed; }
 .movieStages { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
 .movieStages[data-comparing="true"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .movieStages figure { margin: 0; min-width: 0; }
@@ -38,6 +43,13 @@
 .expressionControls label { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 7px; color: var(--color-muted-foreground); }
 .expressionControls select { width: 100%; color: var(--color-foreground); }
 .hint { font-size: 12px; line-height: 1.6; color: var(--color-muted-foreground); margin: 0; }
+.portraitLayout[data-face-only="true"] { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.portraitLayout[data-face-only="true"] .figureStage { width: min(100%, 720px); height: auto; aspect-ratio: var(--portrait-aspect, 1); margin-inline: auto; }
+.portraitLayout[data-face-only="true"] .figureStage canvas, .portraitLayout[data-face-only="true"] .figureStage img { width: 100%; height: auto; }
+.portraitLayout[data-face-only="true"] .portraitControls { width: min(100%, 720px); margin-inline: auto; flex-direction: row; align-items: center; flex-wrap: wrap; gap: 14px 20px; }
+.portraitLayout[data-face-only="true"] .selection { text-align: left; }
+.portraitLayout[data-face-only="true"] .expressionControls { flex-direction: row; width: 260px; max-width: 100%; margin-left: auto; }
+.portraitLayout[data-face-only="true"] .hint { width: 100%; }
 .status { margin: 10px 0 0; min-height: 1em; font-size: 11px; color: var(--color-muted-foreground); }
 .status:empty { display: none; }
 @media (max-width: 640px) {

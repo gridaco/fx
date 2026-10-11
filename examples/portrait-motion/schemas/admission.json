@@ -1,0 +1,123 @@
+{
+  "$defs": {
+    "Confidence": {
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ],
+      "type": "string"
+    },
+    "FeatureId": {
+      "enum": [
+        "canvas_left_eye",
+        "canvas_right_eye",
+        "mouth"
+      ],
+      "type": "string"
+    },
+    "NonemptyText": {
+      "maxLength": 2000,
+      "minLength": 1,
+      "type": "string"
+    },
+    "ReasonCode": {
+      "enum": [
+        "clear_feature",
+        "opaque_fully_hidden",
+        "ambiguous_subject",
+        "insufficient_resolution",
+        "partial_occlusion",
+        "uncertain_boundary",
+        "unsupported_source_state",
+        "low_confidence"
+      ],
+      "type": "string"
+    },
+    "_AdmissionFeature": {
+      "additionalProperties": false,
+      "properties": {
+        "feature_id": {
+          "$ref": "#/$defs/FeatureId"
+        },
+        "route": {
+          "enum": [
+            "direct",
+            "hidden",
+            "unsupported"
+          ],
+          "title": "Route",
+          "type": "string"
+        },
+        "source_state": {
+          "enum": [
+            "open",
+            "closed",
+            "rest",
+            "unknown"
+          ],
+          "title": "Source State",
+          "type": "string"
+        },
+        "reason": {
+          "$ref": "#/$defs/ReasonCode"
+        },
+        "evidence": {
+          "$ref": "#/$defs/NonemptyText"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence"
+        }
+      },
+      "required": [
+        "feature_id",
+        "route",
+        "source_state",
+        "reason",
+        "evidence",
+        "confidence"
+      ],
+      "title": "_AdmissionFeature",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "subject_count": {
+      "minimum": 0,
+      "title": "Subject Count",
+      "type": "integer"
+    },
+    "subject_unambiguous": {
+      "title": "Subject Unambiguous",
+      "type": "boolean"
+    },
+    "image_readable": {
+      "title": "Image Readable",
+      "type": "boolean"
+    },
+    "features": {
+      "items": {
+        "$ref": "#/$defs/_AdmissionFeature"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "title": "Features",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "subject_count",
+    "subject_unambiguous",
+    "image_readable",
+    "features"
+  ],
+  "title": "_Admission",
+  "type": "object"
+}

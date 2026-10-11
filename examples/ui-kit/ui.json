@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "kind": "ui-art-v1",
+  "references": [
+    {
+      "reference_id": "meadow",
+      "source": ".showcase-inputs/meadow.png",
+      "source_sha256": "628b89a8167bf54782e98b8578cfe601d3cc181bb34dfc59912d708f3221d138",
+      "rights_status": "unreviewed",
+      "rights_basis": [
+        "Original AI-generated meadow artwork from text only; no third-party image reference."
+      ]
+    }
+  ],
+  "panel_frame": {
+    "reference_ids": [
+      "meadow"
+    ],
+    "alpha_policy": "transparent_exterior_opaque_body_v1",
+    "layout": "nine_slice_panel_1024_v1",
+    "prompt": "A warm cream opaque panel surface framed with deep teal painted wood and a thin rust accent. Slightly softened corners, calm broad cream interior with fine paper grain, restrained grass-leaf motifs confined to the corners. Prioritize clear readable content space and clean scalable edges. No text or symbols baked into the panel."
+  },
+  "button_rect": {
+    "reference_ids": [
+      "meadow"
+    ],
+    "alpha_policy": "transparent_exterior_opaque_body_v1",
+    "layout": "nine_slice_button_sheet_4x1024_v1",
+    "prompt": "Four coherent states of one rectangular cream button with deep teal painted frame and restrained rust accent: normal calm, hover subtly lighter with warm rust edge, pressed visibly inset and slightly darker, disabled desaturated but legible. Keep identical shape, insets, and geometry in all four states. Quiet cream center for later labels, no baked text or glyphs."
+  },
+  "preview_icons": {
+    "reference_ids": [
+      "meadow"
+    ],
+    "alpha_policy": "transparent_exterior_opaque_glyph_v1",
+    "layout": "icon_grid_4x4_1024_preview_v1",
+    "prompt": "A coherent sixteen-icon set, exactly the named symbols supplied by the layout, painted in deep teal with warm cream highlights and small rust accents. Bold compact readable silhouettes, consistent stroke weight and restrained hand-painted texture. Icons have transparent exterior and no buttons, labels, letters, numbers, frames, or text."
+  }
+}

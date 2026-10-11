@@ -88,6 +88,10 @@ so and only plan.
 
 The examples' fixture pictures are code-drawn. Recreate them from the repository
 root with `uv run --project python python examples/draw_placeholders.py`.
+Website showcase sources also live under `examples/`, with application-specific
+dependencies declared locally. Generated inputs are optional checksum-verified CDN
+downloads; they are not committed or needed by CI. See the examples guide for
+offline fixtures and the distinction between maintained source and saved recordings.
 
 ## Verify your changes
 
@@ -113,6 +117,9 @@ uv run --project python python tools/check_spec.py
 cargo build --locked -p grida-fx
 uv run --project python python conformance/run.py --command target/debug/grida-fx
 uv run --project python python tools/check_examples.py
+# Larger showcase examples also need FFmpeg on PATH.
+uv pip install --python python/.venv/bin/python -r examples/requirements-ci.txt
+python/.venv/bin/python tools/check_showcase_examples.py
 ```
 
 Build the debug engine before using `target/debug/grida-fx`; the source-build

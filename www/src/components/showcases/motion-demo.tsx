@@ -3,18 +3,20 @@
 import { useEffect, useRef } from "react";
 import { MovieDemoController, ParallaxDemoController, PortraitDemoController } from "./motion-controller";
 import styles from "./motion-demo.module.css";
+import type { ParallaxGuideLayer } from "./parallax-guides";
 
 type MotionSlug = "parallax" | "movie-sprite" | "portrait-motion";
+const NO_GUIDES: readonly ParallaxGuideLayer[] = [];
 
 /** React supplies the document; independently owned classes handle playback. */
-export function MotionDemo({ slug, assetBase }: { slug: MotionSlug; assetBase: string }) {
+export function MotionDemo({ slug, assetBase, parallaxGuides = NO_GUIDES }: { slug: MotionSlug; assetBase: string; parallaxGuides?: readonly ParallaxGuideLayer[] }) {
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!root.current) return;
-    const Controller = slug === "parallax" ? ParallaxDemoController : slug === "movie-sprite" ? MovieDemoController : PortraitDemoController;
-    const controller = new Controller(root.current, assetBase);
+    const controller = slug === "parallax" ? new ParallaxDemoController(root.current, assetBase, parallaxGuides)
+      : slug === "movie-sprite" ? new MovieDemoController(root.current, assetBase) : new PortraitDemoController(root.current, assetBase);
     return () => controller.dispose();
-  }, [slug, assetBase]);
+  }, [slug, assetBase, parallaxGuides]);
 
   const asset = (path: string) => `${assetBase.replace(/\/$/, "")}/${path}`;
   return <div ref={root} className={`fx-demo ${styles.demo}`}>
@@ -30,6 +32,13 @@ export function MotionDemo({ slug, assetBase }: { slug: MotionSlug; assetBase: s
           {["far", "middle", "foreground"].map(name => <label key={name} className={styles.inline}><input type="checkbox" defaultChecked disabled data-layer={name} />{name[0].toUpperCase() + name.slice(1)}</label>)}
         </div>
       </div>
+      {parallaxGuides.length > 0 && <div className={styles.guideControls}>
+        <label className={styles.inline}><input type="checkbox" data-guides disabled />Show joins</label>
+        <span className={styles.guideLegend} data-guide-legend hidden>
+          <span><i className={styles.joinMark} aria-hidden="true" />Repeat join</span>
+          {parallaxGuides.some(layer => layer.repaintReach !== undefined) && <span><i className={styles.repaintMark} aria-hidden="true" />Repaint boundary</span>}
+        </span>
+      </div>}
     </> : slug === "movie-sprite" ? <>
       <div className={styles.movieStages} data-movie-stages data-comparing="false">
         <figure>
@@ -54,15 +63,15 @@ export function MotionDemo({ slug, assetBase }: { slug: MotionSlug; assetBase: s
       </div>
       <Timeline />
     </> : <>
-      <div className={styles.portraitLayout}>
+      <div className={styles.portraitLayout} data-portrait-layout data-face-only="true">
         <div className={styles.figureStage} data-stage data-background="checker">
-          <canvas data-portrait width={720} height={1280} aria-label="Character with separately composited body, eyes and mouth" />
+          <canvas data-portrait width={896} height={896} aria-label="Portrait with independent eye and mouth patches" />
           <img data-fallback src={asset("assets/animation.webp")} loading="lazy" alt="Authored facial animation" hidden />
         </div>
         <div className={styles.portraitControls}>
-          <div className={styles.zoomStage}><canvas data-face-zoom width={231} height={231} aria-label="Face detail at its native size" /></div>
+          <div className={styles.zoomStage} data-face-detail hidden><canvas data-face-zoom width={231} height={231} aria-label="Face detail at its native size" /></div>
           <output data-selection className={styles.selection}>Open eyes · Rest</output>
-          <div className={styles.segment} aria-label="Animation layers">
+          <div className={styles.segment} data-body-controls hidden aria-label="Animation layers">
             <button type="button" data-mode="combined" aria-pressed="true">Body + face</button>
             <button type="button" data-mode="body" aria-pressed="false">Body</button>
             <button type="button" data-mode="face" aria-pressed="false">Face</button>
@@ -75,7 +84,7 @@ export function MotionDemo({ slug, assetBase }: { slug: MotionSlug; assetBase: s
           <p className={styles.hint}>Eyes and mouth are independent patches. The original transparency stays intact.</p>
         </div>
       </div>
-      <video data-body src={asset("assets/body.webm")} crossOrigin="anonymous" muted loop playsInline preload="metadata" hidden />
+      <video data-body crossOrigin="anonymous" muted loop playsInline preload="none" hidden />
       <div className={styles.toolbar}><PlaybackControls /><BackgroundControls /></div>
       <Timeline />
     </>}

@@ -9,7 +9,7 @@ export const uiGlyphs = ["play", "pause", "close", "menu", "gear", "home", "retr
 export const characterRuntimeFiles = ["vendor/model-viewer.min.js", "vendor/meshopt_decoder.module.js", "vendor/meshopt-ready.js", "vendor/draco/draco_decoder.js", "vendor/draco/draco_decoder.wasm", "vendor/draco/draco_wasm_wrapper.js", "vendor/basis/basis_transcoder.js", "vendor/basis/basis_transcoder.wasm"] as const;
 export const demoResourceFiles = {
   "movie-sprite": ["assets/loop.webm", "assets/loop.webp", "assets/canonical.png", "assets/original-unpinned-preview.mp4"],
-  "portrait-motion": ["assets/face-manifest.json", "assets/body.webm", "assets/canonical.png", "assets/animation.webp"],
+  "portrait-motion": ["assets/face-manifest.json", "assets/canonical.png", "assets/animation.webp"],
   terrain: ["assets/lookup.json", "assets/atlas.png"],
   "ui-kit": ["assets/panel_frame.png", "assets/panel_frame_validation.json", "assets/button_rect.png", "assets/button_rect_validation.json", "assets/preview_icons.png", "assets/preview_icons_validation.json", "assets/meadow.png"],
 } as const;

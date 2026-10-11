@@ -151,6 +151,10 @@ jobs:
       - run: uv sync --locked --project python
       - run: python3 tools/build_engine.py
       - run: uv run --locked --project python python tools/check_examples.py
+      # Showcase processing libraries belong to examples, not to the distributed SDK.
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: uv pip install --python python/.venv/bin/python -r examples/requirements-ci.txt
+      - run: python/.venv/bin/python tools/check_showcase_examples.py
       - run: uv run --locked --project python python tools/check_viewer_fixtures.py
       - run: uv run --locked --project python python tools/check_observation.py --command "$PWD/python/src/grida/fx/_bin/grida-fx"
       - run: uv run --locked --project python python tools/check_control.py --command "$PWD/python/src/grida/fx/_bin/grida-fx"

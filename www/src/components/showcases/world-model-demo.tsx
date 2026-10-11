@@ -58,6 +58,7 @@ export function WorldModelDemo({ slug, assetBase }: { slug: "world" | "character
           "camera-controls": "",
           "interaction-prompt": "none",
           "shadow-intensity": "0.5",
+          "tone-mapping": "neutral",
           exposure: "1",
           "camera-orbit": "25deg 78deg auto",
           "touch-action": "pan-y",

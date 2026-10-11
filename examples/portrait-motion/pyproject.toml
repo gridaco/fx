@@ -1,0 +1,14 @@
+[project]
+name = "fx-example-portrait-motion"
+version = "0.0.0"
+requires-python = ">=3.11"
+dependencies = [
+    "grida>=0.2,<0.3",
+    "numpy>=2.2,<3",
+    "scipy>=1.15,<2",
+    "pydantic>=2.11,<3",
+    "pyyaml>=6",
+]
+
+[tool.uv]
+package = false

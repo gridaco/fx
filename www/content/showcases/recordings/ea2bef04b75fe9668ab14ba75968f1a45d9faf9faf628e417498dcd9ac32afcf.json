@@ -1,0 +1,307 @@
+{
+ "artifacts": [
+  {
+   "digest": "2f2d9261953b2debf6adac68714fd20c2f8520935ccf96544198cafbccb791e4",
+   "media_type": "video/mp4",
+   "name": "video",
+   "omitted_reason": null,
+   "path": "artifacts/2f2d9261953b2debf6adac68714fd20c2f8520935ccf96544198cafbccb791e4.mp4",
+   "size": 195292
+  },
+  {
+   "digest": "615dad47ba9064452c776be11d56bea8a74b67a6ebbfe95df3c72b570c7dbdc9",
+   "media_type": "image/webp",
+   "name": "cover",
+   "omitted_reason": null,
+   "path": "artifacts/615dad47ba9064452c776be11d56bea8a74b67a6ebbfe95df3c72b570c7dbdc9.webp",
+   "size": 216402
+  },
+  {
+   "digest": "671c54e231dc8bd696b07a99d2c0d9bf32215f2b38a7729b8bb3de28bcf4201b",
+   "media_type": "json",
+   "name": "layout",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 31459
+  },
+  {
+   "digest": "b3b08886ee64739aaddb0e019a367a842783265f9b1537e343fa20e63a714728",
+   "media_type": "image/png",
+   "name": "atlas.png",
+   "omitted_reason": null,
+   "path": "artifacts/b3b08886ee64739aaddb0e019a367a842783265f9b1537e343fa20e63a714728.png",
+   "size": 1137756
+  }
+ ],
+ "disclosure": {
+  "artifacts": "media",
+  "diagnostics": false,
+  "values": true
+ },
+ "kind": "fx-run-export-v1",
+ "layout": {
+  "cells": {
+   "animate": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "cover": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   }
+  },
+  "cursor": null,
+  "diagnostics": [],
+  "file": null,
+  "kind": "fx-layout-report-v1",
+  "order": [
+   "cover#1",
+   "animate#1"
+  ],
+  "revision": null,
+  "state": "none"
+ },
+ "producer": {
+  "version": "0.2.0"
+ },
+ "source": {
+  "event_count": 8,
+  "events_sha256": "70e1c1715f3794f069d4821c684291841e596462055ac37b22fa2efbc7aeedea",
+  "plan_sha256": "6a9924e9772d9fb1e94b23d3da0a67c4df5c6e0dd3879a8ee10bc1bcfb50c189"
+ },
+ "view": {
+  "artifacts": [
+   {
+    "available": true,
+    "digest": "2f2d9261953b2debf6adac68714fd20c2f8520935ccf96544198cafbccb791e4",
+    "kind": "video/mp4",
+    "name": "video",
+    "size": 195292,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "615dad47ba9064452c776be11d56bea8a74b67a6ebbfe95df3c72b570c7dbdc9",
+    "kind": "image/webp",
+    "name": "cover",
+    "size": 216402,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "671c54e231dc8bd696b07a99d2c0d9bf32215f2b38a7729b8bb3de28bcf4201b",
+    "kind": "json",
+    "name": "layout",
+    "size": 31459,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "b3b08886ee64739aaddb0e019a367a842783265f9b1537e343fa20e63a714728",
+    "kind": "image/png",
+    "name": "atlas.png",
+    "size": 1137756,
+    "url": null
+   }
+  ],
+  "charged_usd": 0,
+  "estimate": {
+   "ceiling_usd": 0,
+   "high_usd": 0,
+   "low_usd": 0
+  },
+  "inputs": {
+   "atlas": {
+    "value": {
+     "file": "b3b08886ee64739aaddb0e019a367a842783265f9b1537e343fa20e63a714728"
+    }
+   }
+  },
+  "kind": "fx-viewer-run-v1",
+  "nodes": [
+   {
+    "bindings": [],
+    "cache": "hit",
+    "duration_ms": 0,
+    "error": null,
+    "id": "cover#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "atlas": {
+      "file": {
+       "digest": "b3b08886ee64739aaddb0e019a367a842783265f9b1537e343fa20e63a714728",
+       "kind": "image/png",
+       "name": "atlas",
+       "size": 1137756
+      }
+     },
+     "cover": {
+      "file": {
+       "digest": "615dad47ba9064452c776be11d56bea8a74b67a6ebbfe95df3c72b570c7dbdc9",
+       "kind": "image/webp",
+       "name": "cover",
+       "size": 216402
+      }
+     },
+     "layout": {
+      "file": {
+       "digest": "671c54e231dc8bd696b07a99d2c0d9bf32215f2b38a7729b8bb3de28bcf4201b",
+       "kind": "json",
+       "name": "layout",
+       "size": 31459
+      }
+     }
+    },
+    "path": "cover",
+    "ports": {
+     "inputs": {
+      "atlas": "image/png"
+     },
+     "outputs": {
+      "atlas": "image/png",
+      "cover": "image/webp",
+      "layout": "json"
+     },
+     "params": {}
+    },
+    "reads": [],
+    "started_at": "2026-10-11T18:29:13.547Z",
+    "state": "succeeded",
+    "step": "cover",
+    "take": [
+     1
+    ],
+    "title": "Compose 47 on the ground",
+    "uses": "./cover.py#terrain_cover",
+    "with": {
+     "atlas": {
+      "file": {
+       "digest": "b3b08886ee64739aaddb0e019a367a842783265f9b1537e343fa20e63a714728",
+       "kind": "image/png",
+       "name": "atlas.png",
+       "size": 1137756
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "cover#1",
+      "source_kind": "output",
+      "source_port": "atlas",
+      "target_port": "atlas"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 738,
+    "error": null,
+    "id": "animate#1",
+    "interface_bindings": [
+     {
+      "source": "cover#1",
+      "source_kind": "output",
+      "source_port": "atlas",
+      "target_port": "atlas"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "video": {
+      "file": {
+       "digest": "2f2d9261953b2debf6adac68714fd20c2f8520935ccf96544198cafbccb791e4",
+       "kind": "video/mp4",
+       "name": "video",
+       "size": 195292
+      }
+     }
+    },
+    "path": "animate",
+    "ports": {
+     "inputs": {
+      "atlas": "image/png"
+     },
+     "outputs": {
+      "video": "video/mp4"
+     },
+     "params": {}
+    },
+    "reads": [
+     "cover#1"
+    ],
+    "started_at": "2026-10-11T18:29:13.550Z",
+    "state": "succeeded",
+    "step": "animate",
+    "take": [
+     1
+    ],
+    "title": "Assemble the terrain digits",
+    "uses": "./cover_motion.py#terrain_cover_motion",
+    "with": {
+     "atlas": {
+      "file": {
+       "digest": "b3b08886ee64739aaddb0e019a367a842783265f9b1537e343fa20e63a714728",
+       "kind": "image/png",
+       "name": "atlas",
+       "size": 1137756
+      }
+     }
+    }
+   }
+  ],
+  "outputs": {
+   "atlas": {
+    "file": {
+     "digest": "b3b08886ee64739aaddb0e019a367a842783265f9b1537e343fa20e63a714728",
+     "kind": "image/png",
+     "name": "atlas",
+     "size": 1137756
+    }
+   },
+   "cover": {
+    "file": {
+     "digest": "615dad47ba9064452c776be11d56bea8a74b67a6ebbfe95df3c72b570c7dbdc9",
+     "kind": "image/webp",
+     "name": "cover",
+     "size": 216402
+    }
+   },
+   "cover_manifest": {
+    "file": {
+     "digest": "671c54e231dc8bd696b07a99d2c0d9bf32215f2b38a7729b8bb3de28bcf4201b",
+     "kind": "json",
+     "name": "layout",
+     "size": 31459
+    }
+   },
+   "cover_video": {
+    "file": {
+     "digest": "2f2d9261953b2debf6adac68714fd20c2f8520935ccf96544198cafbccb791e4",
+     "kind": "video/mp4",
+     "name": "video",
+     "size": 195292
+    }
+   }
+  },
+  "pending": [],
+  "run_name": "terrain-cover-02-final",
+  "scopes": [],
+  "stand_in": false,
+  "state": "succeeded",
+  "warnings": [],
+  "workflow": {
+   "description": "Build the digits 47 from the atlas on a terrain base, and render a local loop at $0.",
+   "id": "terrain-cover-video",
+   "title": "Animated 47-tile terrain cover"
+  }
+ }
+}

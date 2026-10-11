@@ -1,0 +1,3 @@
+fx: project/v1
+routes:
+  image.generate: gpt-image-2.5-sunburst@openai

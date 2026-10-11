@@ -1,0 +1,4 @@
+fx: project/v1
+sources: [nodes]
+routes:
+  video.generate: google/gemini-omni-flash/v1.1/image-to-video@fal

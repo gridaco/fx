@@ -1,0 +1,182 @@
+{
+ "artifacts": [
+  {
+   "digest": "7bbdc102d986ea0a2dfaa6fa0001904a83d8ece6168b60bd939a2eb186485296",
+   "media_type": "image/png",
+   "name": "nami-reference.png",
+   "omitted_reason": "unplaced_input",
+   "path": null,
+   "size": 1427797
+  },
+  {
+   "digest": "d756d24f955f60e0c480aaae88e2fce2bdd44716aaf38c3ed39617a3004c0e98",
+   "media_type": "image/png",
+   "name": "image",
+   "omitted_reason": null,
+   "path": "artifacts/d756d24f955f60e0c480aaae88e2fce2bdd44716aaf38c3ed39617a3004c0e98.png",
+   "size": 5147660
+  }
+ ],
+ "disclosure": {
+  "artifacts": "media",
+  "diagnostics": false,
+  "values": false
+ },
+ "kind": "fx-run-export-v1",
+ "layout": {
+  "cells": {
+   "portrait": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   }
+  },
+  "cursor": null,
+  "diagnostics": [],
+  "file": null,
+  "kind": "fx-layout-report-v1",
+  "order": [
+   "portrait#1"
+  ],
+  "revision": null,
+  "state": "none"
+ },
+ "producer": {
+  "version": "0.1.0"
+ },
+ "source": {
+  "event_count": 9,
+  "events_sha256": "c7b0b5b2f68b2339629cfa2dee8511a9af0a605e507fba568a181f4829d90ecf",
+  "plan_sha256": "bdc34ee602410417d1661f0227e50986a813a1154f15c605ba80e8c07a99f53b"
+ },
+ "view": {
+  "artifacts": [
+   {
+    "available": false,
+    "digest": "7bbdc102d986ea0a2dfaa6fa0001904a83d8ece6168b60bd939a2eb186485296",
+    "kind": "image/png",
+    "name": "nami-reference.png",
+    "size": 1427797,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "d756d24f955f60e0c480aaae88e2fce2bdd44716aaf38c3ed39617a3004c0e98",
+    "kind": "image/png",
+    "name": "image",
+    "size": 5147660,
+    "url": null
+   }
+  ],
+  "charged_usd": 0.85,
+  "estimate": {
+   "ceiling_usd": 3,
+   "high_usd": 0.85,
+   "low_usd": 0.09
+  },
+  "inputs": {
+   "reference": {
+    "withheld": true
+   }
+  },
+  "kind": "fx-viewer-run-v1",
+  "nodes": [
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 120907,
+    "error": null,
+    "id": "portrait#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "image": {
+      "file": {
+       "digest": "d756d24f955f60e0c480aaae88e2fce2bdd44716aaf38c3ed39617a3004c0e98",
+       "kind": "image/png",
+       "name": "image",
+       "size": 5147660
+      }
+     }
+    },
+    "path": "portrait",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [],
+    "started_at": "2026-10-11T19:32:07.016Z",
+    "state": "succeeded",
+    "step": "portrait",
+    "take": [
+     1
+    ],
+    "title": "Draw a clear resting face",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "file": {
+       "digest": "7bbdc102d986ea0a2dfaa6fa0001904a83d8ece6168b60bd939a2eb186485296",
+       "kind": "image/png",
+       "name": "nami-reference.png",
+       "size": 1427797
+      }
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   }
+  ],
+  "outputs": {
+   "portrait": {
+    "file": {
+     "digest": "d756d24f955f60e0c480aaae88e2fce2bdd44716aaf38c3ed39617a3004c0e98",
+     "kind": "image/png",
+     "name": "image",
+     "size": 5147660
+    }
+   }
+  },
+  "pending": [],
+  "run_name": "source-03",
+  "scopes": [],
+  "stand_in": false,
+  "state": "succeeded",
+  "warnings": [],
+  "workflow": {
+   "id": "portrait-face-source",
+   "title": "Prepare a facial animation source"
+  }
+ }
+}

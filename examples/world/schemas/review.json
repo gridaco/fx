@@ -1,0 +1,96 @@
+{
+  "$defs": {
+    "ReviewCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "check_id": {
+          "pattern": "^[a-z][a-z0-9_]{1,95}$",
+          "title": "Check Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "fail"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "finding": {
+          "minLength": 1,
+          "title": "Finding",
+          "type": "string"
+        }
+      },
+      "required": [
+        "check_id",
+        "status",
+        "finding"
+      ],
+      "title": "ReviewCheck",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "review_id": {
+      "const": "universe_independent_semantic_review",
+      "title": "Review Id",
+      "type": "string"
+    },
+    "reviewer_role": {
+      "const": "independent_semantic_reviewer",
+      "title": "Reviewer Role",
+      "type": "string"
+    },
+    "verdict": {
+      "enum": [
+        "pass",
+        "fail"
+      ],
+      "title": "Verdict",
+      "type": "string"
+    },
+    "checks": {
+      "items": {
+        "$ref": "#/$defs/ReviewCheck"
+      },
+      "minItems": 6,
+      "title": "Checks",
+      "type": "array"
+    },
+    "blocking_findings": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Blocking Findings",
+      "type": "array"
+    },
+    "advisory_findings": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Advisory Findings",
+      "type": "array"
+    },
+    "conclusion": {
+      "minLength": 1,
+      "title": "Conclusion",
+      "type": "string"
+    }
+  },
+  "required": [
+    "review_id",
+    "reviewer_role",
+    "verdict",
+    "checks",
+    "blocking_findings",
+    "advisory_findings",
+    "conclusion"
+  ],
+  "title": "SemanticReview",
+  "type": "object",
+  "description": "universe structured output for universe.review"
+}

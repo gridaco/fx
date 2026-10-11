@@ -1,0 +1,247 @@
+fx: workflow/v1
+id: portrait-motion
+title: Portrait motion
+description: >-
+  One finished sprite in; eyes and mouth a game can drive separately out. The face is found
+  and cropped, a reviewer decides which eyes and mouth can safely change, and an image model
+  draws every new state in one sheet. Each drawing is aligned to the original, every
+  combination is reviewed, and the accepted patches go back on the sprite at full size.
+
+inputs:
+  portrait:
+    type: file
+    kind: image
+    description: >-
+      The finished sprite as a PNG. Without a face crop it is the portrait itself: opaque, at
+      the spec's canvas.
+  spec:
+    type: file
+    kind: json
+    description: >-
+      The working canvas and its sheet grid, one drawing instruction per cell, the eyes and
+      mouth asked for, and a sample timeline
+  face_crop:
+    type: boolean
+    default: true
+    description: Locate the face and animate a square crop of it, then place it back
+
+steps:
+  check:
+    title: Check the inputs
+    description: >-
+      The spec is read and the portrait held to it before anything is paid for: a face crop
+      needs a square canvas; a portrait animated whole must be opaque and exactly the canvas.
+    at: plan
+    uses: ./nodes/motion.py#check
+    with:
+      portrait: ${{ inputs.portrait }}
+      spec: ${{ inputs.spec }}
+      face_crop: ${{ inputs.face_crop }}
+
+  face:
+    title: Find the face
+    description: >-
+      A vision model returns only a box around the face; it never judges whether the face can
+      move. The workspace is cut from the full sprite with padding on every side and resized
+      once to the spec's canvas.
+    if: ${{ inputs.face_crop }}
+    steps:
+      locate:
+        title: Locate the face
+        uses: fx/structured.generate@1
+        with:
+          prompt: ./prompts/locate.md
+          schema: ./schemas/location.json
+          context: ["${{ inputs.portrait }}"]
+          max_tokens: 2500
+
+      located:
+        title: Check the box
+        uses: ./nodes/face.py#located
+        judges: locate
+        with:
+          location: ${{ steps.locate.outputs.json }}
+        on_reject: { regenerate: { max: 6, then: fail } }
+
+      crop:
+        title: Crop the face
+        if: ${{ steps.located.facts.status == 'located' }}
+        uses: ./nodes/face.py#crop
+        with:
+          portrait: ${{ inputs.portrait }}
+          location: ${{ steps.locate.outputs.json }}
+          spec: ${{ steps.check.outputs.spec }}
+        view: true
+
+  draw:
+    title: Decide and draw
+    description: >-
+      A reviewer decides which eyes and mouth can safely change. The image model then draws
+      every new state in one sheet, each cell an edit of the same portrait, so they share one
+      hand.
+    if: ${{ !inputs.face_crop || steps.face.crop.outputs.image }}
+    steps:
+      admission:
+        title: Decide what can move
+        uses: fx/structured.generate@1
+        with:
+          prompt: ./prompts/admission.md
+          schema: ./schemas/admission.json
+          context: ["${{ steps.face.crop.outputs.image || inputs.portrait }}"]
+          max_tokens: 12000
+
+      admitted:
+        title: Check the decision
+        uses: ./nodes/motion.py#admitted
+        judges: admission
+        with:
+          admission: ${{ steps.admission.outputs.json }}
+          spec: ${{ steps.check.outputs.spec }}
+        on_reject: { regenerate: { max: 6, then: fail } }
+
+      guide:
+        title: Lay out the sheet
+        if: ${{ steps.admitted.facts.eligible_features }}
+        uses: ./nodes/motion.py#guide
+        with:
+          portrait: ${{ steps.face.crop.outputs.image || inputs.portrait }}
+          spec: ${{ steps.check.outputs.spec }}
+        view: true
+
+      briefs:
+        title: Write the questions
+        if: ${{ steps.admitted.facts.eligible_features }}
+        uses: ./nodes/motion.py#briefs
+        with:
+          spec: ${{ steps.check.outputs.spec }}
+          eligible: ${{ steps.admitted.facts.eligible_features }}
+
+      atlas:
+        title: Draw the new states
+        uses: fx/image.edit@1
+        with:
+          image: ${{ steps.guide.outputs.guide }}
+          prompt: ${{ steps.briefs.outputs.atlas }}
+          size: ${{ steps.check.facts.size }}
+          background: opaque
+        view: true
+
+  fit:
+    title: Fit
+    description: >-
+      Each new drawing is aligned to the original, and one that moved or changed scale is
+      refused. A vision model outlines the eyes and mouth that may change.
+    steps:
+      registration:
+        title: Line them up
+        uses: ./nodes/motion.py#registration
+        with:
+          portrait: ${{ steps.face.crop.outputs.image || inputs.portrait }}
+          atlas: ${{ steps.draw.atlas.outputs.image }}
+          panel: ${{ steps.draw.guide.outputs.panel }}
+          coordinates: ${{ steps.draw.guide.outputs.coordinates }}
+          spec: ${{ steps.check.outputs.spec }}
+
+      geometry:
+        title: Outline eyes and mouth
+        if: ${{ steps.registration.facts.passed }}
+        uses: fx/structured.generate@1
+        with:
+          prompt: ${{ steps.draw.briefs.outputs.geometry }}
+          schema: ./schemas/geometry.json
+          context: ${{ steps.registration.outputs.review }}
+          max_tokens: 12000
+
+      geometry_ok:
+        title: Check the outlines
+        uses: ./nodes/motion.py#geometry_ok
+        judges: geometry
+        with:
+          geometry: ${{ steps.geometry.outputs.json }}
+          spec: ${{ steps.check.outputs.spec }}
+          eligible: ${{ steps.draw.admitted.facts.eligible_features }}
+        on_reject: { regenerate: { max: 6, then: fail } }
+
+  compose:
+    title: Compose and review
+    description: >-
+      Every eyes-and-mouth combination is built from those outlines, then judged by a reviewer
+      that did not draw them.
+    if: ${{ steps.fit.geometry_ok.facts.status == 'pass' }}
+    steps:
+      composition:
+        title: Build every combination
+        uses: ./nodes/motion.py#composition
+        with:
+          portrait: ${{ steps.face.crop.outputs.image || inputs.portrait }}
+          donors: ${{ steps.fit.registration.outputs.donors }}
+          fits: ${{ steps.fit.registration.outputs.fits }}
+          geometry: ${{ steps.fit.geometry.outputs.json }}
+          spec: ${{ steps.check.outputs.spec }}
+          eligible: ${{ steps.draw.admitted.facts.eligible_features }}
+        view: true
+
+      quality:
+        title: Review the result
+        uses: fx/structured.generate@1
+        with:
+          prompt: ${{ steps.draw.briefs.outputs.quality }}
+          schema: ./schemas/quality.json
+          context: ${{ steps.composition.outputs.review }}
+          max_tokens: 12000
+
+      quality_ok:
+        title: Check the review
+        uses: ./nodes/motion.py#quality_ok
+        judges: quality
+        with:
+          quality: ${{ steps.quality.outputs.json }}
+          eligible: ${{ steps.draw.admitted.facts.eligible_features }}
+        on_reject: { regenerate: { max: 6, then: fail } }
+
+  deliver:
+    title: Deliver
+    description: >-
+      Only accepted features are kept, and the result says which, or where the run refused
+      and why. With a face crop, the patches go back on the original sprite at full size, and
+      every pixel outside them is checked unchanged.
+    steps:
+      result:
+        title: Record the result
+        uses: ./nodes/motion.py#result
+        with:
+          spec: ${{ steps.check.outputs.spec }}
+          location: ${{ steps.face.locate.outputs.json }}
+          admission: ${{ steps.draw.admission.outputs.json }}
+          fits: ${{ steps.fit.registration.outputs.fits }}
+          geometry: ${{ steps.fit.geometry.outputs.json }}
+          quality: ${{ steps.compose.quality.outputs.json }}
+
+      keep:
+        title: Keep what passed
+        if: ${{ !inputs.face_crop && steps.compose.quality_ok.facts.status == 'pass' }}
+        uses: ./nodes/motion.py#keep
+        with:
+          states: ${{ steps.compose.composition.outputs.states }}
+          animation: ${{ steps.compose.composition.outputs.preview }}
+          manifest: ${{ steps.compose.composition.outputs.manifest }}
+
+      render:
+        title: Put it back at full size
+        if: ${{ inputs.face_crop && steps.compose.quality_ok.facts.status == 'pass' }}
+        uses: ./nodes/face.py#render
+        with:
+          portrait: ${{ inputs.portrait }}
+          transform: ${{ steps.face.crop.outputs.transform }}
+          donors: ${{ steps.fit.registration.outputs.donors }}
+          masks: ${{ steps.compose.composition.outputs.masks }}
+          spec: ${{ steps.check.outputs.spec }}
+          features: ${{ steps.draw.admitted.facts.eligible_features }}
+        view: true
+
+outputs:
+  result: ${{ steps.deliver.result.outputs.result }}
+  animation: ${{ steps.deliver.render.outputs.animation || steps.deliver.keep.outputs.animation }}
+  states: ${{ steps.deliver.render.outputs.states || steps.deliver.keep.outputs.states }}
+  patches: ${{ steps.deliver.render.outputs.patches }}
+  manifest: ${{ steps.deliver.render.outputs.manifest || steps.deliver.keep.outputs.manifest }}

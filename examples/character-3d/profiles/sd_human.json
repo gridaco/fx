@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "profile_id": "sd_human_grouped_hands_v1",
+  "anatomy": {
+    "human": true,
+    "species_group": "human",
+    "locomotion": "biped"
+  },
+  "description": "Stylized small human character with an oversized head, read primarily at mobile-game viewing distance.",
+  "coordinate_system": "gltf_y_up_z_front",
+  "target_height": 2.0,
+  "required_parts": [
+    "body",
+    "head",
+    "hair"
+  ],
+  "part_binding": {
+    "body": "deform",
+    "head": "head_attachment",
+    "hair": "head_attachment"
+  },
+  "articulation": {
+    "body": "biped_with_spine_neck_shoulders_elbows_wrists_hips_knees_ankles",
+    "hands": "grouped_fingers_and_separate_thumb",
+    "fingers": "One or two grouped finger joints per hand plus a thumb; only basic palmward curl is required.",
+    "facial_expressions": "deferred",
+    "secondary_motion": "deferred"
+  },
+  "surface_policy": {
+    "default": "matte",
+    "head": "unlit",
+    "texture_edits": "disabled_in_parts_to_rig_proof"
+  },
+  "seams": {
+    "head_body": "Clothing may conceal a neck overlap, but gaps, detached parts and obvious distortion fail. Report concealment instead of claiming welding."
+  },
+  "review": {
+    "target_character_height_pixels": [
+      120,
+      180
+    ],
+    "inspection_height_pixels": 600,
+    "required_views": [
+      "front",
+      "back",
+      "left",
+      "right",
+      "three_quarter"
+    ],
+    "required_motion": "cheer",
+    "required_diagnostics": [
+      "rest",
+      "shoulder_raise",
+      "elbow_bend",
+      "knee_bend",
+      "hand_curl"
+    ],
+    "criteria": [
+      "recognizable coherent character",
+      "head and hair fit without eye occlusion",
+      "no detached or flying accessories",
+      "stable shoulder and hip deformation",
+      "grouped fingers curl toward palm",
+      "feet remain connected",
+      "original textures and UVs preserved",
+      "material policy survives exported GLB"
+    ],
+    "assembly_criteria": [
+      "forward_orientation",
+      "reference_proportions",
+      "face_visibility",
+      "head_body_attachment",
+      "hair_attachment",
+      "texture_integrity"
+    ],
+    "rig_criteria": [
+      "required_joints_and_weights",
+      "rest_shape",
+      "shoulder_deformation",
+      "elbow_deformation",
+      "knee_deformation",
+      "palmward_hand_curl",
+      "accessory_attachment",
+      "head_neck_attachment",
+      "coherent_cheer",
+      "exported_material_policy"
+    ]
+  }
+}

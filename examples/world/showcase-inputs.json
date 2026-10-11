@@ -1,0 +1,17 @@
+{
+  "schema": "fx_showcase_inputs_v1",
+  "delivery_base": "https://grida-fx-showcase-spike-20261011.t3.tigrisfiles.io",
+  "inputs": [
+    {
+      "filename": "meadow.png",
+      "path": "runs/8610653e0b02cfb004a05163e512e86bca6b8d0368484a2bf413bfb285b461c3/artifacts/628b89a8167bf54782e98b8578cfe601d3cc181bb34dfc59912d708f3221d138.png",
+      "sha256": "628b89a8167bf54782e98b8578cfe601d3cc181bb34dfc59912d708f3221d138",
+      "bytes": 2016648
+    }
+  ],
+  "origin": {
+    "kind": "ai_generated",
+    "description": "Original artwork and recorded media from the approved FX showcase campaign.",
+    "publication": "Previously published in the approved showcase; this manifest grants no additional media license."
+  }
+}

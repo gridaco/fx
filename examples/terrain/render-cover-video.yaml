@@ -1,0 +1,30 @@
+fx: workflow/v1
+id: terrain-cover-video
+title: Animated 47-tile terrain cover
+description: Simulate an evolving tile grid with the 47-mask lookup and render a headless local loop at $0.
+
+inputs:
+  atlas:
+    type: file
+    kind: image
+    description: A canonical 1440x480 terrain atlas with 120px cells
+
+steps:
+  cover:
+    title: Compose 47 on the ground
+    uses: ./cover.py#terrain_cover
+    with:
+      atlas: ${{ inputs.atlas }}
+    view: true
+  animate:
+    title: Simulate and retile the terrain digits
+    uses: ./cover_motion.py#terrain_cover_motion
+    with:
+      atlas: ${{ steps.cover.outputs.atlas }}
+    view: true
+
+outputs:
+  cover: ${{ steps.cover.outputs.cover }}
+  cover_manifest: ${{ steps.cover.outputs.layout }}
+  cover_video: ${{ steps.animate.outputs.video }}
+  atlas: ${{ steps.cover.outputs.atlas }}

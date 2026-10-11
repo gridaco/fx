@@ -17,7 +17,7 @@ export function RecordedCanvas({ recordings, children }: { recordings: readonly 
   return <div ref={root} className={styles.presentation}>
     <div role="tablist" aria-label="Workflow presentation" className={styles.tabs}>
       <button role="tab" data-mode="overview" id="workflow-overview-tab" aria-controls="workflow-overview" aria-selected="true">Overview</button>
-      <button role="tab" data-mode="graph" id="workflow-graph-tab" aria-controls="workflow-graph" aria-selected="false" tabIndex={-1}>Canvas</button>
+      <button role="tab" data-mode="graph" id="workflow-graph-tab" aria-controls="workflow-graph" aria-selected="false" tabIndex={-1}>Workflow</button>
     </div>
     <div role="tabpanel" id="workflow-overview" aria-labelledby="workflow-overview-tab" data-overview>{children}</div>
     <div role="tabpanel" id="workflow-graph" aria-labelledby="workflow-graph-tab" data-graph hidden className={styles.graphPanel}>

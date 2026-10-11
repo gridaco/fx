@@ -1,5 +1,6 @@
 import { parseDemo, parseFace, parseParallax, type ShowcaseSlug } from "../../lib/showcases/contracts";
 import { loadShowcaseJson } from "../../lib/showcases/load";
+import { parallaxGuideLines, validateParallaxGuides, type ParallaxGuideLayer } from "./parallax-guides";
 
 type Expression = { eyes: string; mouth: string };
 type TimelineEntry = Expression & { duration_ms: number };
@@ -88,14 +89,16 @@ type ParallaxManifest = {
 export class ParallaxDemoController extends MotionController {
   private readonly canvas = this.element<HTMLCanvasElement>("canvas");
   private readonly context = this.canvas.getContext("2d")!;
-  private layers: (ParallaxManifest["layers"][number] & { image: HTMLImageElement; visible: boolean })[] = [];
+  private layers: (ParallaxManifest["layers"][number] & { image: HTMLImageElement; pattern: CanvasPattern; visible: boolean })[] = [];
   private scroll = 0;
   private speed = 100;
   private playing = !matchMedia("(prefers-reduced-motion: reduce)").matches;
   private drag: { id: number; x: number } | null = null;
   private previous = 0;
+  private guides: ReadonlyMap<string, ParallaxGuideLayer> = new Map();
+  private showGuides = false;
 
-  constructor(root: HTMLElement, assetBase: string) {
+  constructor(root: HTMLElement, assetBase: string, private readonly guideLayers: readonly ParallaxGuideLayer[] = []) {
     super(root, assetBase);
     const signal = this.events.signal;
     this.element<HTMLButtonElement>("[data-play]").addEventListener("click", () => {
@@ -112,6 +115,16 @@ export class ParallaxDemoController extends MotionController {
       if (layer) layer.visible = input.checked;
       this.draw();
     }, { signal }));
+    const guideToggle = this.root.querySelector<HTMLInputElement>("[data-guides]");
+    if (guideToggle) { guideToggle.checked = false; guideToggle.disabled = true; }
+    const guideLegend = this.root.querySelector<HTMLElement>("[data-guide-legend]");
+    if (guideLegend) guideLegend.hidden = true;
+    guideToggle?.addEventListener("change", event => {
+      this.showGuides = this.guides.size > 0 && (event.target as HTMLInputElement).checked;
+      const legend = this.root.querySelector<HTMLElement>("[data-guide-legend]");
+      if (legend) legend.hidden = !this.showGuides;
+      this.draw();
+    }, { signal });
     this.canvas.addEventListener("pointerdown", event => {
       if (event.button !== 0) return;
       this.drag = { id: event.pointerId, x: event.clientX };
@@ -140,14 +153,29 @@ export class ParallaxDemoController extends MotionController {
 
   private async load() {
     const manifest = await this.json("parallax", "manifest.json", parseParallax);
-    const layers = await Promise.all(manifest.layers.map(async spec => ({ ...spec, image: await this.image(spec.file), visible: true })));
+    const layers = await Promise.all(manifest.layers.map(async spec => {
+      const image = await this.image(spec.file);
+      const pattern = this.context.createPattern(image, "repeat-x");
+      if (!pattern) throw new Error("This preview could not prepare its repeating layers.");
+      return { ...spec, image, pattern, visible: true };
+    }));
     if (this.disposed) return;
     this.canvas.width = manifest.canvas.width;
     this.canvas.height = manifest.canvas.height;
     this.layers = layers.sort((a, b) => a.order - b.order);
+    let guideFailure: string | null = null;
+    try {
+      this.guides = validateParallaxGuides(this.guideLayers, layers.map(layer => ({
+        id: layer.id, file: layer.file, width: layer.image.naturalWidth, height: layer.image.naturalHeight,
+      })));
+      const toggle = this.root.querySelector<HTMLInputElement>("[data-guides]");
+      if (toggle) toggle.disabled = !this.guides.size;
+    } catch (error) {
+      guideFailure = `Join guides unavailable: ${error instanceof Error ? error.message : "Layer geometry does not match."}`;
+    }
     this.root.querySelectorAll<HTMLButtonElement>("[data-play], [data-reset]").forEach(button => { button.disabled = false; });
     this.root.querySelectorAll<HTMLInputElement>("[data-layer]").forEach(input => { input.disabled = false; });
-    this.status("Drag the scene to move through its layers.");
+    this.status(guideFailure ?? "Drag the scene to move through its layers.");
     this.draw();
     this.frame = requestAnimationFrame(time => this.tick(time));
   }
@@ -158,11 +186,38 @@ export class ParallaxDemoController extends MotionController {
     this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
     for (const layer of this.layers) {
       if (!layer.visible) continue;
-      const width = layer.image.naturalWidth;
-      const offset = -this.scroll * layer.parallax;
-      const start = ((offset % width) + width) % width - width;
-      for (let x = start; x < this.canvas.width; x += width) this.context.drawImage(layer.image, x, layer.offset_y);
+      const offset = (-this.scroll * layer.parallax) % layer.image.naturalWidth;
+      // One periodic surface avoids separately antialiased tile edges at fractional offsets.
+      layer.pattern.setTransform({ a: 1, b: 0, c: 0, d: 1, e: offset, f: layer.offset_y });
+      this.context.fillStyle = layer.pattern;
+      this.context.fillRect(0, layer.offset_y, this.canvas.width, layer.image.naturalHeight);
     }
+    // Draw after the whole composite so opaque foreground layers cannot cover the guides.
+    if (!this.showGuides) return;
+    const placements = this.layers.flatMap(layer => {
+      const guide = this.guides.get(layer.id);
+      return guide ? [{ guide, offset_y: layer.offset_y, parallax: layer.parallax, visible: layer.visible }] : [];
+    });
+    const lines = parallaxGuideLines(placements, this.scroll, this.canvas, this.showGuides);
+    if (!lines.length) return;
+    this.context.save();
+    this.context.strokeStyle = "#ef4444";
+    this.context.lineWidth = 3;
+    this.context.shadowColor = "#fff";
+    this.context.shadowBlur = 2;
+    for (const line of lines) {
+      this.context.save();
+      this.context.beginPath();
+      this.context.rect(0, line.top, this.canvas.width, line.bottom - line.top);
+      this.context.clip();
+      this.context.setLineDash(line.kind === "join" ? [12, 8] : []);
+      this.context.beginPath();
+      this.context.moveTo(line.x, line.top);
+      this.context.lineTo(line.x, line.bottom);
+      this.context.stroke();
+      this.context.restore();
+    }
+    this.context.restore();
   }
 
   private tick(now: number) {
@@ -267,22 +322,25 @@ export class PortraitDemoController extends MotionController {
   private canonical!: HTMLImageElement;
   private patches: { feature_id: string; state_id: string; pixels: PatchPixel[] }[] = [];
   private region!: { left: number; top: number; width: number; height: number };
-  private mode = "combined";
+  private mode = "face";
   private playing = !matchMedia("(prefers-reduced-motion: reduce)").matches;
   private automatic = true;
-  private bodyAvailable = true;
+  private bodyAvailable = false;
   private duration = 8;
   private time = 0;
   private rate = 1;
   private previous = 0;
   private dirty = true;
+  private renderedExpression: Expression | null = null;
 
   constructor(root: HTMLElement, assetBase: string) {
     super(root, assetBase);
     const signal = this.events.signal;
     this.video.addEventListener("error", () => {
+      if (!this.bodyAvailable) return;
       this.bodyAvailable = false;
       this.setMode("face");
+      this.bodyLayout(false);
       this.status("Body video is unavailable in this browser. Face controls remain available.");
       this.root.querySelectorAll<HTMLButtonElement>('[data-mode="body"], [data-mode="combined"]').forEach(button => { button.disabled = true; });
     }, { signal });
@@ -323,12 +381,15 @@ export class PortraitDemoController extends MotionController {
   }
 
   private async load() {
-    await this.json("portrait-motion", "manifest.json", value => parseDemo("portrait-motion", value));
+    const resources = await this.json("portrait-motion", "manifest.json", value => parseDemo("portrait-motion", value));
+    const body = resources.includes("assets/body.webm") ? "assets/body.webm" : null;
     const [manifest, canonical] = await Promise.all([this.json("portrait-motion", "assets/face-manifest.json", parseFace), this.image("assets/canonical.png")]);
     if (manifest.patch_application !== "replace_selected_rgb_preserve_original_alpha" || !manifest.feather_already_baked) throw new Error("This preview uses an unsupported face patch format.");
+    if (canonical.naturalWidth !== manifest.source_size[0] || canonical.naturalHeight !== manifest.source_size[1]) throw new Error("The canonical portrait dimensions do not match its manifest.");
     this.manifest = manifest;
     this.canonical = canonical;
     [this.canvas.width, this.canvas.height] = manifest.source_size;
+    this.element<HTMLElement>("[data-stage]").style.setProperty("--portrait-aspect", `${this.canvas.width} / ${this.canvas.height}`);
     [this.zoom.width, this.zoom.height] = manifest.patch_size;
     const [left, top] = manifest.offset_xy;
     const [width, height] = manifest.patch_size;
@@ -352,7 +413,14 @@ export class PortraitDemoController extends MotionController {
       return { ...record, pixels };
     }));
     if (this.disposed) return;
-    if (this.bodyAvailable) this.status("");
+    this.bodyAvailable = body !== null;
+    this.bodyLayout(this.bodyAvailable);
+    this.setMode(this.bodyAvailable ? "combined" : "face");
+    if (body) {
+      this.video.src = this.url(body);
+      this.video.load();
+    }
+    this.status("");
     this.syncPlayback();
     this.frame = requestAnimationFrame(time => this.tick(time));
   }
@@ -360,7 +428,7 @@ export class PortraitDemoController extends MotionController {
   private syncPlayback() {
     this.element<HTMLButtonElement>("[data-play]").textContent = this.playing ? "Pause" : "Play";
     if (this.playing && this.bodyAvailable) void this.video.play().catch(() => {
-      if (this.disposed) return;
+      if (this.disposed || !this.bodyAvailable) return;
       this.playing = false;
       this.element<HTMLButtonElement>("[data-play]").textContent = "Play";
     }); else this.video.pause();
@@ -373,27 +441,40 @@ export class PortraitDemoController extends MotionController {
     this.dirty = true;
   }
 
+  private bodyLayout(available: boolean) {
+    this.element<HTMLElement>("[data-portrait-layout]").dataset.faceOnly = String(!available);
+    this.element<HTMLElement>("[data-body-controls]").hidden = !available;
+    this.element<HTMLElement>("[data-face-detail]").hidden = !available;
+  }
+
   private draw() {
     const ctx = this.context;
-    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    if (this.mode !== "face" && this.bodyAvailable && this.video.readyState >= 2) ctx.drawImage(this.video, 0, 0); else ctx.drawImage(this.canonical, 0, 0);
     const selected = this.automatic ? selectExpression(this.manifest.timeline, this.time) : {
       eyes: this.element<HTMLSelectElement>("[data-eyes]").value,
       mouth: this.element<HTMLSelectElement>("[data-mouth]").value,
     };
-    if (this.mode !== "body") {
-      const { left, top, width, height } = this.region;
-      const image = ctx.getImageData(left, top, width, height);
-      for (const patch of this.patches) {
-        const group = patch.feature_id === "mouth" ? "mouth" : "eyes";
-        if (patch.state_id === selected[group]) replacePatchRgb(image.data, patch.pixels);
+    // Face expressions are discrete; native pixel readback is needed only when the image changes.
+    const movingBody = this.mode !== "face" && this.bodyAvailable;
+    if (this.dirty || movingBody || selected.eyes !== this.renderedExpression?.eyes || selected.mouth !== this.renderedExpression?.mouth) {
+      ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+      if (movingBody && this.video.readyState >= 2) ctx.drawImage(this.video, 0, 0); else ctx.drawImage(this.canonical, 0, 0);
+      if (this.mode !== "body") {
+        const { left, top, width, height } = this.region;
+        const image = ctx.getImageData(left, top, width, height);
+        for (const patch of this.patches) {
+          const group = patch.feature_id === "mouth" ? "mouth" : "eyes";
+          if (patch.state_id === selected[group]) replacePatchRgb(image.data, patch.pixels);
+        }
+        ctx.putImageData(image, left, top);
       }
-      ctx.putImageData(image, left, top);
+      if (this.bodyAvailable) {
+        const [left, top] = this.manifest.offset_xy;
+        const [width, height] = this.manifest.patch_size;
+        this.zoomContext.clearRect(0, 0, width, height);
+        this.zoomContext.drawImage(this.canvas, left, top, width, height, 0, 0, width, height);
+      }
+      this.renderedExpression = selected;
     }
-    const [left, top] = this.manifest.offset_xy;
-    const [width, height] = this.manifest.patch_size;
-    this.zoomContext.clearRect(0, 0, width, height);
-    this.zoomContext.drawImage(this.canvas, left, top, width, height, 0, 0, width, height);
     const eyeLabels: Record<string, string> = { rest: "Open eyes", eyes_half: "Half blink", eyes_closed: "Closed eyes" };
     const mouthLabels: Record<string, string> = { rest: "Rest", mouth_smile: "Smile", mouth_a: "Open A" };
     this.element<HTMLOutputElement>("[data-selection]").textContent = this.mode === "body" ? "Original rest expression" : `${eyeLabels[selected.eyes]} · ${mouthLabels[selected.mouth]}`;

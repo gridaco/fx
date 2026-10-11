@@ -1,0 +1,10 @@
+Animate this illustrated sprite as a subtle recurring idle for repeated playback during dialogue.
+Use the identical start and end images as the resting pose. Preserve the subject's identity, proportions, clothing, accessories, illustration style and color palette.
+By default, keep the head, neck and shoulders fixed throughout: preserve their exact screen positions, angles, scale and resting outlines. Retain the original head tilt and shoulder line. No head straightening, turn, tilt, nod or bob; no neck movement; no shoulder lift, drop, shrug, roll or sway. Keep hair roots and the attachment points of accessories worn on the head or shoulders anchored to those stationary parts.
+Place restrained local movement elsewhere, where appropriate to the supplied sprite: forearms, wrists, hands, loose hair or ear tips, and loose clothing. Breathing may produce a tiny, slow vertical rise and fall below the fixed shoulder line, without changing body proportions or volume. Do not drive these motions with shoulder breathing, a whole-body pulse, torso rocking, balance corrections or external wind. Preserve the resting pose, planted feet, hand gestures and contact points. Unmentioned parts need not move.
+Hold the facial features, gaze and expression still by default. Explicitly requested blinks, mouth motion or expressions may animate locally without releasing the fixed head, neck or shoulders.
+Supplied artistic direction may override a motion default only for the explicitly named part. A request for breathing, chest, hair or hand motion does not implicitly permit head, neck or shoulder movement. If user directions conflict, follow the user's Constraints section.
+Keep the camera, scale, framing, lighting and uniform green backing fixed. Keep the full subject inside the frame. Add no scene, text, extra objects, cuts, particles, cast shadow or sound.
+Use smooth, understated overlapping movement with a natural return to the starting pose and compatible motion through the loop boundary.
+
+Loop duration: ${{ seconds }} seconds.
