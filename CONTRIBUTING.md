@@ -103,7 +103,7 @@ See the fixture README for setup, generation, and viewer commands.
 
 ## Website development
 
-The standalone [www app](web/www/README.md) is a static Next.js site mounted at
+The standalone [www app](www/README.md) is a static Next.js site mounted at
 `/fx`, built separately from the embedded viewer:
 
 ```sh
@@ -124,7 +124,7 @@ bytes off Vercel's image optimization and delivery path; the website's own HTML,
 JavaScript and local assets still incur ordinary hosting traffic.
 
 The image-policy check runs with `check:www` and the website build. The
-[www setup guide](web/www/README.md#cdn-assets) owns CDN base configuration,
+[www setup guide](www/README.md#cdn-assets) owns CDN base configuration,
 host migration and browser verification. Keep hostnames out of frozen content
 manifests and use `FX_SHOWCASE_ASSET_BASE` instead.
 

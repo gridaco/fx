@@ -4,16 +4,16 @@
   "homepage": "https://grida.co/fx",
   "license": "Apache-2.0",
   "packageManager": "bun@1.4.0",
-  "workspaces": ["web/viewer", "web/www", "js/fx-web", "js/fx-react"],
+  "workspaces": ["web/viewer", "www", "js/fx-web", "js/fx-react"],
   "scripts": {
     "build:viewer": "bun --no-env-file run --cwd web/viewer build",
     "check:viewer": "bun --no-env-file run --cwd web/viewer check",
     "test:viewer": "bun --no-env-file test js/fx-web/tests",
     "dev:viewer": "bun --no-env-file run --cwd web/viewer dev",
-    "dev:www": "bun --no-env-file run --cwd web/www dev",
-    "check:www": "bun --no-env-file run --cwd web/www check",
-    "test:www": "bun --no-env-file run --cwd web/www test",
-    "build:www": "bun --no-env-file run --cwd web/www build",
-    "preview:www": "bun --no-env-file run --cwd web/www preview"
+    "dev:www": "bun --no-env-file run --cwd www dev",
+    "check:www": "bun --no-env-file run --cwd www check",
+    "test:www": "bun --no-env-file run --cwd www test",
+    "build:www": "bun --no-env-file run --cwd www build",
+    "preview:www": "bun --no-env-file run --cwd www preview"
   }
 }

@@ -37,6 +37,8 @@ the preview port. Choose the asset base **before building**, as described below.
 `site.config.ts` owns the `/fx` prefix and public links. A production host must
 mount the contents of `out/` under `/fx/`, including `/fx/_next/`. Hosting, domain
 routing and replacing the existing Grida route are separate deployment work.
+The app lives at root `www/`; update any hosting Root Directory setting to `www`
+when moving an existing configuration.
 See [Next static exports](https://nextjs.org/docs/app/guides/static-exports) and
 [basePath](https://nextjs.org/docs/app/api-reference/config/next-config-js/basePath).
 
@@ -83,7 +85,7 @@ wrappers, helper imports and prop spreads. Use `<img>` for reusable wrappers.
 `check:www` and the build run the image-policy guard; run it alone with:
 
 ```sh
-bun --no-env-file run --cwd web/www check:images
+bun --no-env-file run --cwd www check:images
 ```
 
 Tests verify explicit unoptimized URLs and rejection of accidental optimized
@@ -104,7 +106,7 @@ ordinary website traffic.
 - `src/app/`: landing, workflow index, seven detail pages and metadata.
 - `src/lib/showcases/` and `content/showcases/`: private website adapters and
   small frozen content pins; see [showcase maintenance](docs/showcases.md).
-- `../../js/fx-web` and `../../js/fx-react`: reusable export reader, canvas,
+- `../js/fx-web` and `../js/fx-react`: reusable export reader, canvas,
   class-owned interaction and thin React adapters. The website imports these;
   FX's engine knows nothing about this catalog or its CDN.
 - `public/brand/` and `public/landing/`: curated local artwork. Preserve the

@@ -1,0 +1,13 @@
+# Dependencies and Next.js build output.
+/node_modules/
+/.next/
+/out/
+
+# Generated TypeScript files.
+/next-env.d.ts
+*.tsbuildinfo
+
+# Local showcase staging and preview media; never raw run data in public/.
+/.showcases/
+/public/showcases/
+/public/runs/

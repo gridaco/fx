@@ -8,13 +8,6 @@
 .DS_Store
 /js/**/dist/
 /web/viewer/dist/
-/web/www/.next/
-/web/www/out/
-/web/www/next-env.d.ts
-/web/www/tsconfig.tsbuildinfo
-# Local showcase staging and preview media; never raw run data in public/.
-/web/www/.showcases/
-/web/www/public/showcases/
 
 # Secrets never enter the repository.
 .env

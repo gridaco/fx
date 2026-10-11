@@ -1,7 +1,7 @@
 # Showcase maintenance
 
 This is private tooling for FX's website, not a public workflow packaging API.
-The reusable recorded-run contract is [`fx-run-export-v1`](../../../spec/exports.md).
+The reusable recorded-run contract is [`fx-run-export-v1`](../../spec/exports.md).
 See the [first-time setup and CDN policy](../README.md#cdn-assets) for browser delivery.
 
 ## Content boundaries
@@ -44,9 +44,9 @@ the campaign approval covers only its explicitly inventoried original bundles.
 
 ```sh
 # From the FX repository root; export saved runs separately with grida-fx export.
-bun --no-env-file run --cwd web/www prepare:showcases \
+bun --no-env-file run --cwd www prepare:showcases \
   /absolute/path/to/reviewed-campaign /absolute/path/to/run-exports
-bun --no-env-file run --cwd web/www verify:showcases --media --recordings
+bun --no-env-file run --cwd www verify:showcases --media --recordings
 bun --no-env-file run build:www
 PORT=3101 bun --no-env-file run preview:www
 ```
@@ -68,7 +68,7 @@ rendering. Failure is visible instead of becoming an empty or changed canvas.
 
 ```sh
 # Use the same base that was supplied to the successful website build.
-bun --no-env-file run --cwd web/www candidate:showcases \
+bun --no-env-file run --cwd www candidate:showcases \
   https://assets.example.com/root
 ```
 
@@ -90,7 +90,7 @@ the system temporary directory rather than a project dotenv scope:
 
 ```sh
 # Explicit publication only, after content review and public bucket setup.
-bun --no-env-file run --cwd web/www publish:tigris \
+bun --no-env-file run --cwd www publish:tigris \
   my-public-bucket https://my-public-object-host.example --configure-cors
 ```
 

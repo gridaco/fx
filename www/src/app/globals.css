@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@source "../../../../js/fx-react/src";
+@source "../../../js/fx-react/src";
 
 /* Minimal Grida www tokens; this app owns its reset and has no shadcn dependency. */
 @theme {

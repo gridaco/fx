@@ -43,7 +43,7 @@
         "vite": "8.3.3",
       },
     },
-    "web/www": {
+    "www": {
       "name": "@grida/fx-www",
       "version": "0.0.0",
       "dependencies": {
@@ -88,7 +88,7 @@
 
     "@grida/fx-web": ["@grida/fx-web@workspace:js/fx-web"],
 
-    "@grida/fx-www": ["@grida/fx-www@workspace:web/www"],
+    "@grida/fx-www": ["@grida/fx-www@workspace:www"],
 
     "@img/colour": ["@img/colour@1.1.0", "", {}, "sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ=="],
 
