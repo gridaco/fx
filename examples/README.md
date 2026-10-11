@@ -34,7 +34,7 @@ The alias uses the checkout's SDK and Python environment, so node bodies can fin
 
 ## From the packages
 
-`npm install -g @grida/fx` installs the stable `grida-fx` command, and
+`npm install -g grida` installs `grida fx`, the command these READMEs use, and
 `pip install grida` installs the Python SDK with the same engine inside
 ([Getting started](../docs/guide/01-getting-started.md#install)).
 

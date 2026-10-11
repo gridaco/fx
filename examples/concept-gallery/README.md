@@ -23,7 +23,7 @@ concept-gallery/
 From this folder:
 
 ```bash
-grida-fx plan concept-gallery --synopsis inputs/tidebell/synopsis.md \
+grida fx plan concept-gallery --synopsis inputs/tidebell/synopsis.md \
   --direction inputs/tidebell/direction.md --poster inputs/tidebell/poster.png
 ```
 
@@ -49,8 +49,8 @@ estimate  $0.09 – $28.40   ceiling $12.00   ⚠ the worst case exceeds the cei
   ([Cost, cache and takes](../../docs/guide/04-cost-and-cache.md#before-spending-the-plan)).
 
 ```bash
-grida-fx run concept-gallery --inputs inputs/tidebell.yaml --live --max-usd 12
-grida-fx reroll runs/concept-gallery/<date>-1 "entity['bellwright'].draw"
+grida fx run concept-gallery --inputs inputs/tidebell.yaml --live --max-usd 12
+grida fx reroll runs/concept-gallery/<date>-1 "entity['bellwright'].draw"
 ```
 
 Without `--live`, the run resizes the poster and then refuses the first paid call, at $0.
@@ -94,7 +94,7 @@ resolve to the same model, whatever the routes say later.
 - **A "source lock" node.** Inputs are keyed by content automatically.
 - **An executor with two phases and a hand-off file.** The repeat over `propose`'s entities is the
   phase boundary.
-- **A reroll ledger.** That is `grida-fx reroll`, plus the takes file.
+- **A reroll ledger.** That is `grida fx reroll`, plus the takes file.
 - **Record and close handlers, a manifest reducer, attempt ledgers.** That is `fx/package@1`
   with a manifest laid out in YAML, and the run record.
 

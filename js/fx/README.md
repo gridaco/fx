@@ -1,16 +1,20 @@
 # @grida/fx
 
-Grida FX for JavaScript and TypeScript: the `grida-fx` command, and an SDK to write workflow
-files and to plan, price and run them. Grida FX is a workflow engine for generative asset
+Grida FX for JavaScript and TypeScript: an SDK to write workflow files and to plan, price and
+run them, and the standalone `grida-fx` command. Grida FX is a workflow engine for generative asset
 pipelines: write a workflow file, and FX plans it, prices it before anything is spent, caches
 every paid call by its request, and records the run. It works with your own provider keys.
 
-Stable releases start at `0.1.0` and use npm's default `latest` tag. Prereleases use `next`.
+To run FX from a terminal, install the Grida CLI: `npm install -g grida`, then `grida fx --help`.
+It pins this package. Install `@grida/fx` itself for the SDK, or for `grida-fx` on its own (in a
+service you host, say):
 
 ```sh
 npm install @grida/fx     # or: npm install -g @grida/fx
 npx grida-fx --help
 ```
+
+Stable releases use npm's default `latest` tag. Prereleases use `next`.
 
 The engine is a native binary. npm installs it with this package, as an optional dependency for
 your machine:
@@ -26,11 +30,8 @@ your machine:
 WSL 2, which runs the Linux packages. Linux with musl (Alpine) is not supported either. Node 18 or
 later.
 
-FX is also the `fx` verb of the npm `grida` command: a `grida` release that pins this package
-runs its engine as `grida fx <verb>`. For that host this package exports
-its launcher as `@grida/fx/cli` (`launch`, `HOST_CONTRACT`); see
-[spec/distribution.md](https://github.com/gridaco/fx/blob/main/spec/distribution.md). The SDK
-stays `import … from "@grida/fx"`.
+For the `grida` command, this package exports its launcher as `@grida/fx/cli` (`launch`,
+`HOST_CONTRACT`); see [spec/distribution.md](https://github.com/gridaco/fx/blob/main/spec/distribution.md).
 
 `grida-fx` reports what is missing when it finds no engine. If you install with
 `--omit=optional`, or need a binary of your own, set `GRIDA_FX_BIN` to the path of a `grida-fx`

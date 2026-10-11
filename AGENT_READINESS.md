@@ -70,12 +70,11 @@ on work, history and spending.
 
 ## Current operation map
 
-Commands below use the npm launcher `grida-fx`. The Python equivalent is
-`python -m grida.fx`; it runs the same engine. The npm `grida` command carries the same verbs as
-`grida fx <verb>` ([spec/distribution.md](spec/distribution.md): **current** in this repository,
-held by `tools/check_host.py`; **ratified design** in `grida` until its release pins `@grida/fx`).
-Usage, errors and next-step hints name the command FX was started as; documents and records are
-identical under all three. Users install the packages rather
+Commands below use `grida fx`, from the npm `grida` command, which pins `@grida/fx`
+([spec/distribution.md](spec/distribution.md); **current**, held by `tools/check_host.py`). The
+standalone `grida-fx` (npm `@grida/fx`) and `python -m grida.fx` take the same verbs and run the
+same engine. Usage, errors and next-step hints name the command FX was started as; documents and
+records are identical under all three. Users install the packages rather
 than cloning the repository. Confirm `--version` and the relevant `--help` first.
 `<target>` means a workflow file, workflow id, or supported Python builder target;
 individual commands can have narrower target rules.
@@ -148,13 +147,13 @@ price it, then execute within the user's authorized scope. An illustrative local
 sequence, with paths replaced by the user's actual files, is:
 
 ```sh
-grida-fx init
-grida-fx start --background --json
-grida-fx status --json
-grida-fx schema workflows/example.yaml
-grida-fx plan workflows/example.yaml --inputs inputs.yaml --check --json
-grida-fx run workflows/example.yaml --inputs inputs.yaml --run runs/example --open
-grida-fx inspect runs/example --verify --json
+grida fx init
+grida fx start --background --json
+grida fx status --json
+grida fx schema workflows/example.yaml
+grida fx plan workflows/example.yaml --inputs inputs.yaml --check --json
+grida fx run workflows/example.yaml --inputs inputs.yaml --run runs/example --open
+grida fx inspect runs/example --verify --json
 ```
 
 These are individual operations, not an unconditional script. Resolve validation

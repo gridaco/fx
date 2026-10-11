@@ -28,8 +28,8 @@ Every other capability uses a route of FX's built-in table: images on
 the rig on Tripo. From this folder:
 
 ```bash
-grida-fx doctor rigged-character   # Blender 5.2 found; OPENAI_API_KEY, OPENROUTER_API_KEY and TRIPO_API_KEY set
-grida-fx plan   rigged-character --brief inputs/wren.md --partition head_body
+grida fx doctor rigged-character   # Blender 5.2 found; OPENAI_API_KEY, OPENROUTER_API_KEY and TRIPO_API_KEY set
+grida fx plan   rigged-character --brief inputs/wren.md --partition head_body
 ```
 
 ```
@@ -60,9 +60,9 @@ The low end, $3.06, is what surely runs: the first take of everything, at the lo
 a run before it crosses $30, whatever the regeneration does.
 
 ```bash
-grida-fx run rigged-character --brief inputs/wren.md --partition head_body --live --max-usd 30
+grida fx run rigged-character --brief inputs/wren.md --partition head_body --live --max-usd 30
 # ... laptop dies during body.assemble take 2 ...
-grida-fx run rigged-character --brief inputs/wren.md --partition head_body --live --max-usd 30
+grida fx run rigged-character --brief inputs/wren.md --partition head_body --live --max-usd 30
 # references, both parts: cached. assemble take 2: the agent's paid turns are replayed from the
 # record, and the agent continues from its last tool result. The rig job, if it was submitted, is
 # collected, never resubmitted.
@@ -85,7 +85,7 @@ grida-fx run rigged-character --brief inputs/wren.md --partition head_body --liv
 - **Runner classes, a mode table and graph splicing.** That's the workflow file.
 - **Stage recovery with hash-chained checkpoints, budget pools, tool journals, run locks.** That's
   the runner, the takes, the capability record and the ceiling.
-- **A Blender probe node.** That's `tools=` plus `grida-fx doctor`.
+- **A Blender probe node.** That's `tools=` plus `grida fx doctor`.
 - **Separate submit and collect nodes for rigging.** That's one `mesh.rig` job.
 - **Admit and select nodes for each review round.** Those are judges with
   `regenerate`, and `select`.

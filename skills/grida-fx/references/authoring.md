@@ -21,9 +21,8 @@ Keep workflows in `workflows/` and custom Python nodes in `nodes/`. This gives
 local paths a consistent project home. The greeting example below is a small
 end-to-end check after installing FX and its Python runtime.
 
-For browser inspection, current source uses `start --background` once per project,
-then `plan --open`, `run --open`, and `inspect --open`. Check installed help before
-using those flags. Older releases can use `view TARGET` or `view --run DIR` with
+For browser inspection, FX 0.2 and later use `start --background` once per project,
+then `plan --open`, `run --open`, and `inspect --open`. Older releases can use `view TARGET` or `view --run DIR` with
 the browser flags their help advertises; do not silently switch to a source build.
 
 ## Workflow rules that affect authoring
@@ -122,7 +121,7 @@ before introducing a capability or judge.
 
 **Cache limitation of older engines, including the 0.1.0 release:** distinct
 unversioned exports in one source module can share a type identity, so one step
-can be answered with another's cached result. Check what `grida-fx expand <target>`
+can be answered with another's cached result. Check what `grida fx expand <target>`
 prints under `types`: a fixed engine names an unversioned type
 `<path>#<attr>@source:<digest>`, an affected one prints a bare `source:<digest>`.
 On an affected engine, put distinct unversioned node bodies in separate files, or

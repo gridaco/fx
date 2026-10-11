@@ -9,6 +9,37 @@ agents discover and compose FX operations. Use its scenarios when changing the
 CLI, SDKs, lifecycle or public contracts, and update supported behavior and evidence
 alongside those changes.
 
+## Ways to run FX
+
+User-facing documentation, the website and the skill show one command: `grida fx`, from the
+Grida CLI. The same engine has three launchers ([spec/distribution.md](spec/distribution.md)):
+
+| Command | Installed with | For |
+|---|---|---|
+| `grida fx <verb>` | `npm install -g grida` (Node.js 24+), which pins `@grida/fx` exactly | Everyone; the documented way |
+| `grida-fx <verb>` | `npm install @grida/fx` (Node.js 18+), or `npx @grida/fx` | The JavaScript SDK, and FX on its own: a service you host, a CI image, an FX version pinned apart from `grida` |
+| `python -m grida.fx <verb>` | `pip install grida` (Python 3.11+) | The Python SDK, and machines without Node |
+
+All three take the same verbs. Usage, errors and next-step hints name the command that was run;
+plans, records and exports are byte-identical under each (the invoker, `GRIDA_FX_INVOKER`).
+
+- **Engine packages.** `@grida/fx` brings the native engine as one optional dependency per
+  platform: `@grida/fx-darwin-arm64`, `@grida/fx-darwin-x64`, `@grida/fx-linux-x64-gnu` and
+  `@grida/fx-linux-arm64-gnu`. Installing with `--omit=optional` leaves the engine out. Python
+  wheels carry the engine inside (`grida/fx/_bin/grida-fx`), so Python users need no Node.
+- **Platforms.** macOS on Apple silicon and Intel, and Linux on x64 and arm64 with glibc 2.28 or
+  later. Native Windows is not supported, because the engine's runner uses Unix process groups and
+  signals; WSL 2 runs the Linux packages. Alpine and other musl systems are not supported. On an
+  unsupported platform `grida fx` explains this and exits 1; the rest of `grida` is unaffected.
+- **Your own engine.** `GRIDA_FX_BIN` points every launcher and both SDKs at a `grida-fx` binary,
+  such as a source build or one built for another platform.
+- **Python node bodies.** Python nodes, builders and the local built-ins (`image.resize`,
+  `files.copy`, `package`, …) need the Python package even when FX runs through npm;
+  `GRIDA_FX_PYTHON` selects the interpreter.
+- **Versions.** Each `grida` release pins one FX version, and FX releases first
+  ([RELEASING.md](RELEASING.md#then-grida)). `grida` names a newer release itself; `@grida/fx`
+  and `grida-fx` never check for updates.
+
 ## Build from source
 
 Source development needs Git, Rust/Cargo ([rustup.rs](https://rustup.rs)),

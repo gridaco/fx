@@ -2,7 +2,7 @@ export const installOptions = [
   {
     id: "npm",
     label: "npm",
-    command: "npm install -g @grida/fx",
+    command: "npm install -g grida",
   },
   {
     id: "python",

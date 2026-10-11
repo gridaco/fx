@@ -57,7 +57,7 @@ ones are local and run on Python):
   it returns both;
 - `files.copy@1`: `file` → `file`.
 
-`grida-fx nodes` lists every type. `grida-fx nodes speech.generate` shows one type's settings,
+`grida fx nodes` lists every type. `grida fx nodes speech.generate` shows one type's settings,
 outputs and the routes that can serve it.
 
 ## Writing a node type in Python
@@ -132,13 +132,13 @@ values, or a JSON Schema dict.
 | `ctx.out.png(img)`, `.json(obj)`, `.text(s)`, `.bytes(data, kind)` | produce an output value to return. FX writes a JSON value itself, in one canonical layout, so every SDK writes the same bytes. |
 | `ctx.out.path(name)` then `ctx.out.file(path)` | for tools that write a file themselves: get a path, then return it |
 | `ctx.work_path(name)`, `ctx.state` | scratch space and state for this node's run (tools, agents) |
-| `ctx.fact(name, value)` | report a node fact, a small value about this result: a score, a verdict, a measurement. Workflows read it as `steps.<name>.facts.<fact>` in `if:` and judges, and `grida-fx inspect` shows it. |
+| `ctx.fact(name, value)` | report a node fact, a small value about this result: a score, a verdict, a measurement. Workflows read it as `steps.<name>.facts.<fact>` in `if:` and judges, and `grida fx inspect` shows it. |
 | `ctx.annotate(shape=…, label=…, color=…, tag=…, **fields)` | add a mark to this node's `annotations` output |
 | `ctx.capability(...)`, or typed: `ctx.image_generate(...)`, `ctx.image_edit(...)`, `ctx.structured_generate(...)` | a paid call through FX: routed, priced, budgeted, retried by the engine, recorded, call-cached. Results give files (`result.image`) and conveniences (`result.pil()`). |
 | `ctx.agent(...)` | a tool-using model loop (below) |
 | `ctx.tool("ffmpeg").run([...argv])` | an external program you declared, run in a session of its own and stopped with everything it started at a timeout |
 | `ctx.prompt(path, **vars)` | render one of your declared `resources` with `${{ }}` |
-| `ctx.progress(text, fraction)` | shown live by `grida-fx run` |
+| `ctx.progress(text, fraction)` | shown live by `grida fx run` |
 | `ctx.cancelled` | check it in long loops; FX also stops you at the step timeout |
 | `raise ctx.fail(message)` | a broken result: the step fails with your message (not a take) |
 
@@ -258,7 +258,7 @@ tools = ["blender", "ffmpeg"]
 ```
 
 What that gets you:
-- `grida-fx doctor` checks that the tools exist, and a run refuses to start, before any spend, when
+- `grida fx doctor` checks that the tools exist, and a run refuses to start, before any spend, when
   a step that may run declares one that is missing.
 - `GRIDA_FX_TOOL_<NAME>` points at a particular build
   (`GRIDA_FX_TOOL_BLENDER=/opt/blender/blender`); otherwise the tool is found on `PATH`.
@@ -283,10 +283,10 @@ project you choose how that identity is set:
   kept by request, so only calls whose request actually changed bill again.
 - **Set `version=3`:** the identity changes only when you bump the number. Use this once a node is
   stable and its local work is expensive.
-  - `grida-fx lock` records the source digest in `fx.lock`. A source change without a bump makes
-    `grida-fx plan` stop and ask: bump, or confirm "no change in behaviour" with
-    `grida-fx lock --same nodes/mirror.py#mirror_repeat`.
-  - A versioned node with no `fx.lock` entry yet plans normally; `grida-fx lock --check` reports
+  - `grida fx lock` records the source digest in `fx.lock`. A source change without a bump makes
+    `grida fx plan` stop and ask: bump, or confirm "no change in behaviour" with
+    `grida fx lock --same nodes/mirror.py#mirror_repeat`.
+  - A versioned node with no `fx.lock` entry yet plans normally; `grida fx lock --check` reports
     it as unlocked.
 
 Built-in node types always carry versions; their major version is in `uses:`.

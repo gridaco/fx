@@ -7,9 +7,9 @@ of the project service, including SDK launches, `--no-view` and projectless runs
 ## Select, request, verify
 
 ```sh
-grida-fx inspect gallery/baseline --control --json
-grida-fx cancel gallery/baseline
-grida-fx cancel gallery/baseline --wait --timeout 30s --json
+grida fx inspect gallery/baseline --control --json
+grida fx cancel gallery/baseline
+grida fx cancel gallery/baseline --wait --timeout 30s --json
 ```
 
 The target is an explicit run folder, such as `runs/example`, or an exact
@@ -23,7 +23,7 @@ It is separate from ordinary `inspect --json` and cannot serve or open a browser
 For agents, retain the inspected invocation and guard the request:
 
 ```sh
-grida-fx cancel gallery/baseline --invocation INVOCATION_ID --wait --json
+grida fx cancel gallery/baseline --invocation INVOCATION_ID --wait --json
 ```
 
 A newer invocation refuses this guard, including when it has already finished.

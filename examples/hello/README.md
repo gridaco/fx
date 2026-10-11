@@ -19,8 +19,8 @@ hello/
 From this folder:
 
 ```bash
-grida-fx plan hello --inputs inputs/badges.yaml
-grida-fx run  hello --inputs inputs/badges.yaml
+grida fx plan hello --inputs inputs/badges.yaml
+grida fx run  hello --inputs inputs/badges.yaml
 ```
 
 ```

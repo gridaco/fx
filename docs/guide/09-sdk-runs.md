@@ -1,8 +1,7 @@
 # Working with runs from an SDK
 
 Use Python or JavaScript to execute workflows, return to saved records, and observe
-work running in another process. These APIs describe current source; older
-installed releases may not include them. Neither SDK needs a running FX service
+work running in another process. These APIs need FX 0.2 or later. Neither SDK needs a running FX service
 for record access. [SDK run access](../../spec/sdk.md) defines their boundary.
 
 ## Give a result a name

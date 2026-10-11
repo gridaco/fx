@@ -13,54 +13,49 @@ bring your own provider keys, and turn a one-off script into something you can r
 
 ## Install
 
-Choose npm for the CLI and JavaScript SDK:
+FX comes with the Grida CLI:
 
 ```sh
-npm install -g @grida/fx
-grida-fx --version
+npm install -g grida
+grida fx --version
 ```
 
-Or Python for the SDK, custom nodes, and builders:
+The CLI needs Node.js 24 or later and carries the FX version it was released with, so updating
+`grida` updates FX. FX runs on macOS, and on Linux (x64 and arm64) with glibc 2.28 or later; on
+Windows, use WSL 2.
+
+Write custom nodes and builders in Python with the Python SDK:
 
 ```sh
 pip install grida
-python -m grida.fx --version
 ```
 
-Both packages include the same native engine and its web viewer. Installed users
-need no Rust toolchain, Bun, Docker, or frontend build. You can also use
-`npx @grida/fx` without a global installation.
-
-npm needs Node 18+; Python needs Python 3.11+. FX supports macOS on Apple silicon
-and Intel, and Linux on x64 and arm64 with glibc 2.28+. Windows users can use WSL 2;
-native Windows and Alpine/musl are not supported yet. Python nodes, builders, and
-local image operations need the Python package, even when launched through npm.
+The JavaScript SDK is `@grida/fx`. To run FX without the Grida CLI (in a service you host, say),
+see [ways to run FX](CONTRIBUTING.md#ways-to-run-fx).
 
 ## Plan. Run. Inspect.
 
-Current source adds a persistent project dashboard and exact-run cancellation.
-Check your installed `--help` first; older published releases may lack these commands.
-For an existing workflow, start the service once:
+FX keeps a project dashboard and records every run. For an existing workflow, start the
+service once:
 
 ```sh
-grida-fx init
-grida-fx start --background
-grida-fx plan workflows/example.yaml --open
-grida-fx run workflows/example.yaml --run runs/example --open
-grida-fx inspect runs/example --open
+grida fx init
+grida fx start --background
+grida fx plan workflows/example.yaml --open
+grida fx run workflows/example.yaml --run runs/example --open
+grida fx inspect runs/example --open
 ```
 
 A run without `--live` executes local steps and reuses cached paid results.
 New provider calls require `--live` and a spending ceiling, such as `--max-usd 5`.
 The dashboard stays at `http://127.0.0.1:8787/` by default after execution finishes;
-`grida-fx stop` stops the service. Browser opening requires `--open`.
-Python users can substitute `python -m grida.fx` for `grida-fx`.
+`grida fx stop` stops the service. Browser opening requires `--open`.
 The [viewing guide](docs/guide/07-viewing.md) covers independent `--standalone`
 inspection and the older `view` command.
-To share a finished recording, current source also supports
-`grida-fx export runs/example --out review --json`; the
+To share a finished recording, use
+`grida fx export runs/example --out review --json`; the
 [sharing guide](docs/guide/11-exports.md) explains disclosure and portable media.
-To stop execution, use `grida-fx cancel runs/example --wait`. The
+To stop execution, use `grida fx cancel runs/example --wait`. The
 [run-control guide](docs/guide/08-run-control.md) explains targeting, cleanup and resume.
 
 Start with [the guide](docs/guide/01-getting-started.md), or explore the

@@ -2,35 +2,35 @@
 
 ## CLI
 
-The command is `grida-fx` (from `npm install -g @grida/fx`, or `npx @grida/fx`). Without Node,
-the `grida` Python package runs the same engine: `python -m grida.fx <verb>` takes the same
-arguments. Install it with `pip install grida`. Both packages are published as stable
-releases; [the source setup](../../CONTRIBUTING.md#build-from-source) is for development.
+The command is `grida fx`, from `npm install -g grida`. Without Node, the `grida` Python package
+runs the same engine: `python -m grida.fx <verb>` takes the same arguments (`pip install grida`).
+Usage, errors and hints name the command you ran; what FX records is the same either way. The
+standalone `grida-fx` command and the source setup are in
+[CONTRIBUTING.md](../../CONTRIBUTING.md#ways-to-run-fx).
 
 | Command | |
 |---|---|
-| `grida-fx init [directory] [--json]` | establish a project without overwriting existing configuration |
-| `grida-fx start [--project directory] [--port N] [--background] [--open] [--json]` | serve the project's dashboard and recorded runs; foreground by default |
-| `grida-fx status [--project directory] [--json]` / `stop [--project directory] [--json]` | inspect or stop that project's service |
-| `grida-fx logs [--project directory] [--lines N]` | read a bounded tail of service logs |
-| `grida-fx inspect RUN --control [--json]` | observe an exact invocation's local control availability |
-| `grida-fx cancel RUN [--invocation ID] [--wait] [--timeout DURATION] [--json]` | request cancellation; optionally verify local completion ([Run control](08-run-control.md)) |
-| `grida-fx plan <target> [inputs] [--routes file]… [--max-usd N] [--check] [--expect-cached] [--json] [--open] [--standalone]` | expand, check, price; optionally open the plan canvas. Never spends. |
-| `grida-fx run <target> [inputs] [--routes file]… [--live] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--name NAME \| --resume NAME \| --run folder] [--stand-in file.py#function] [--open \| --no-view] [--standalone]` | run; `--live` admits paid calls, needs a ceiling and reads the provider keys; `--name` creates a named run, `--resume` continues it, `--run` selects a folder; `--stand-in` answers paid calls with your function instead, offline ([below](#stand-ins-testing-without-a-provider)) |
-| `grida-fx reroll <run> <step-path> [--live]` / `grida-fx pick <run> <step-path> <take>` | takes ([Cost](04-cost-and-cache.md#takes)) |
-| `grida-fx takes list <target>` / `grida-fx takes mv <target> <old> <new>` | inspect or repair a takes file |
-| `grida-fx jobs [--forget <key>]` | the cache's long provider jobs, `settled` ones included ([Resuming](04-cost-and-cache.md#resuming)); `--forget` clears one once you have checked the provider |
-| `grida-fx inspect <folder or workflow id or workflow id/name> [--verify] [--json] [--open] [--standalone]` | summary; a workflow ID selects its newest-created run; `--verify` re-checks every placed file; `--open` opens its canvas |
-| `grida-fx nodes [type]` | built-in and project node types, with settings and routes |
-| `grida-fx schema <target>` | the JSON Schema its `inputs:` compile to |
-| `grida-fx doctor [target]` | the keys, routes and tools a workflow needs ([below](#keys-and-live-runs)) |
-| `grida-fx lock [where] [--same <node>]… [--check]` | node version locks; repeat `--same` to confirm several |
-| `grida-fx expand`, `identity`, `price <target> [inputs]` | the expanded graph, each instance's identity, the price by phase, as JSON |
-| `grida-fx project <run>` | a run's record projected to its state, as JSON |
-| `grida-fx observe <run> [--after cursor] [--limit 256]` / `observe <run> --snapshot` | consistent snapshot or bounded recorded events, as JSON ([contract](../../spec/observation.md)) |
+| `grida fx init [directory] [--json]` | establish a project without overwriting existing configuration |
+| `grida fx start [--project directory] [--port N] [--background] [--open] [--json]` | serve the project's dashboard and recorded runs; foreground by default |
+| `grida fx status [--project directory] [--json]` / `stop [--project directory] [--json]` | inspect or stop that project's service |
+| `grida fx logs [--project directory] [--lines N]` | read a bounded tail of service logs |
+| `grida fx inspect RUN --control [--json]` | observe an exact invocation's local control availability |
+| `grida fx cancel RUN [--invocation ID] [--wait] [--timeout DURATION] [--json]` | request cancellation; optionally verify local completion ([Run control](08-run-control.md)) |
+| `grida fx plan <target> [inputs] [--routes file]… [--max-usd N] [--check] [--expect-cached] [--json] [--open] [--standalone]` | expand, check, price; optionally open the plan canvas. Never spends. |
+| `grida fx run <target> [inputs] [--routes file]… [--live] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--name NAME \| --resume NAME \| --run folder] [--stand-in file.py#function] [--open \| --no-view] [--standalone]` | run; `--live` admits paid calls, needs a ceiling and reads the provider keys; `--name` creates a named run, `--resume` continues it, `--run` selects a folder; `--stand-in` answers paid calls with your function instead, offline ([below](#stand-ins-testing-without-a-provider)) |
+| `grida fx reroll <run> <step-path> [--live]` / `grida fx pick <run> <step-path> <take>` | takes ([Cost](04-cost-and-cache.md#takes)) |
+| `grida fx takes list <target>` / `grida fx takes mv <target> <old> <new>` | inspect or repair a takes file |
+| `grida fx jobs [--forget <key>]` | the cache's long provider jobs, `settled` ones included ([Resuming](04-cost-and-cache.md#resuming)); `--forget` clears one once you have checked the provider |
+| `grida fx inspect <folder or workflow id or workflow id/name> [--verify] [--json] [--open] [--standalone]` | summary; a workflow ID selects its newest-created run; `--verify` re-checks every placed file; `--open` opens its canvas |
+| `grida fx nodes [type]` | built-in and project node types, with settings and routes |
+| `grida fx schema <target>` | the JSON Schema its `inputs:` compile to |
+| `grida fx doctor [target]` | the keys, routes and tools a workflow needs ([below](#keys-and-live-runs)) |
+| `grida fx lock [where] [--same <node>]… [--check]` | node version locks; repeat `--same` to confirm several |
+| `grida fx expand`, `identity`, `price <target> [inputs]` | the expanded graph, each instance's identity, the price by phase, as JSON |
+| `grida fx project <run>` | a run's record projected to its state, as JSON |
+| `grida fx observe <run> [--after cursor] [--limit 256]` / `observe <run> --snapshot` | consistent snapshot or bounded recorded events, as JSON ([contract](../../spec/observation.md)) |
 
-`grida-fx --help` lists what your installation has. These service commands describe
-current source behavior; installed packages gain it when that source is released.
+`grida fx --help` lists what your installation has; the service commands need FX 0.2 or later.
 Use `init`, then `start --background` for normal project work. The service uses
 loopback port 8787 by default and keeps run pages available after execution exits.
 `run` prints an available run URL after initialization and before run-phase steps;
@@ -40,11 +40,11 @@ Execution still works when the service is stopped.
 ## Name a run or continue it
 
 ```sh
-grida-fx run character-rig
-grida-fx run character-rig --name character_1_rig_ready
-grida-fx run character-rig --resume character_1_rig_ready
-grida-fx inspect character-rig --open
-grida-fx inspect character-rig/character_1_rig_ready --open
+grida fx run character-rig
+grida fx run character-rig --name character_1_rig_ready
+grida fx run character-rig --resume character_1_rig_ready
+grida fx inspect character-rig --open
+grida fx inspect character-rig/character_1_rig_ready --open
 ```
 
 Without a name, each command creates a fresh run record; matching cached results
@@ -62,9 +62,9 @@ use an actual run folder to select one precisely. A changed workflow definition
 or inputs needs a fresh run, and stays under the same workflow in the index.
 
 Put workflow inputs that overlap CLI options after `--`, or use `--inputs FILE`:
-`grida-fx run greeting --name baseline -- --name Ada`. Plan commands still accept
-`grida-fx plan greeting --name Ada` as an authored input. Check installed help:
-named runs, like the project service, describe current source until released.
+`grida fx run greeting --name baseline -- --name Ada`. Plan commands still accept
+`grida fx plan greeting --name Ada` as an authored input. Named runs, like the project service,
+need FX 0.2 or later.
 
 For independent tests and probes, `run --standalone` hosts its own viewer on an
 available port until execution ends. Projectless runs use this model by default.
@@ -78,7 +78,7 @@ output cannot be combined with browser-serving flags. See
 `--deliver` found its output. `1` when it read everything and refused or stopped: a plan with
 problems, a run refused before it started (a live run without a ceiling, a folder that holds
 another plan), a run that is not ok, an output that `--deliver` did not find. `2` for unreadable
-input or a command-line mistake, with `grida-fx: <message>` on stderr. `130` for
+input or a command-line mistake, with `grida fx: <message>` on stderr. `130` for
 process-owned interruption, including planning, or accepted run cancellation
 (Ctrl-C, SIGTERM or `cancel`): owned node hosts are cleaned up and completed work
 is kept ([Resuming](04-cost-and-cache.md#resuming)). If finalization already won,
@@ -117,8 +117,8 @@ range above ([providers.md §10](../../spec/providers.md#10-the-built-in-route-t
 A project picks one with `routes:` in `fx.yaml` (or a step's `route:`). To change a price or add
 a route, list a table under `route_tables:`: its entry for the same capability and route replaces
 the built-in one. A route on a provider FX has no adapter for still plans and prices, but a live
-call on it is refused (`no adapter serves …`). `grida-fx nodes <type>` lists the routes that
-serve a type; `grida-fx doctor` says which of them a live run could serve.
+call on it is refused (`no adapter serves …`). `grida fx nodes <type>` lists the routes that
+serve a type; `grida fx doctor` says which of them a live run could serve.
 
 `<target>` is one of:
 - a workflow file (`workflows/gallery.yaml`);
@@ -158,14 +158,14 @@ adapters as usual, but nothing leaves the machine: every provider request is ref
 sent, and the step fails with a message that names `GRIDA_FX_NETWORK`, for nothing. Tests of live
 paths use it.
 
-**Checking keys and routes.** `grida-fx doctor` prints, after the engine and Python lines, where
+**Checking keys and routes.** `grida fx doctor` prints, after the engine and Python lines, where
 each key comes from and which routes a live run could serve, for the project you run from (the
 built-in table and its `route_tables`); with a target, the tools and node types the workflow needs
 follow:
 
 ```
-engine    grida-fx 0.1.0
-python    .venv/bin/python (grida 0.1.0)
+engine    grida-fx 0.2.0
+python    .venv/bin/python (grida 0.2.0)
 key       OPENAI_API_KEY present (.env)
 key       OPENROUTER_API_KEY missing
 key       FAL_KEY present (environment)
@@ -223,9 +223,9 @@ runs/concept-gallery/2026-10-02-1/
   for a take inside a regenerating group). Every take a run made is there, and
   `inspect --verify` checks each one.
 - **`events.jsonl` is the source of truth** (an `fx-run-events-v1` log); `inspect` and `project`
-  are built from it. `plan.json` is the same `fx-graph-v1` document `grida-fx expand` prints, and
+  are built from it. `plan.json` is the same `fx-graph-v1` document `grida fx expand` prints, and
   names the takes file `reroll` and `pick` write.
-- **Removing is safe:** results live in the cache. `grida-fx runs remove` removes runs you no
+- **Removing is safe:** results live in the cache. `grida fx runs remove` removes runs you no
   longer need ([Cleaning up runs](10-cleanup.md)); it never takes a running run.
 - **Copying is safe:** a run folder can be inspected on another machine.
 
@@ -255,30 +255,30 @@ not run again, even under `retry="engine"`.
 
 **After a run.** These commands never run a step or spend anything:
 
-- **`grida-fx inspect <run>`:** the run's state and a count of its steps' states, what it spent,
+- **`grida fx inspect <run>`:** the run's state and a count of its steps' states, what it spent,
   and each failure. Given a workflow id instead of a folder, it reads that workflow's newest run.
   `--verify` rehashes every file its steps placed and exits 1 if one differs from its record;
   `--json` prints the same summary as JSON, each step with its files.
-- **`grida-fx project <run>`:** the record projected to its state, as JSON: each instance's
+- **`grida fx project <run>`:** the record projected to its state, as JSON: each instance's
   `state` (`running`, `succeeded`, `failed` or `skipped`), with `cache` and `facts` when it
   succeeded or `error` when it did not, and the latest `run_started`, `run_finished` and
   `run_cancelled` events.
-- **`grida-fx reroll <run> <step-path>`:** writes the take after the latest one this run drew of
+- **`grida fx reroll <run> <step-path>`:** writes the take after the latest one this run drew of
   that step into the takes file the run's `plan.json` names, and prints the next command:
 
   ```
   icon.takes.yaml: draw uses take 2 from now on
-  next      grida-fx run icon
+  next      grida fx run icon
   ```
 
-- **`grida-fx pick <run> <step-path> <take>`:** writes that take into the takes file, with the
+- **`grida fx pick <run> <step-path> <take>`:** writes that take into the takes file, with the
   digest of the first port holding one file in the outputs that take finished with in this run
   (a take this run never finished is written without one). A later run fails the step if the
   take no longer produces that file ([Cost](04-cost-and-cache.md#rerolls-and-picks)).
-- **`grida-fx takes list <target>`:** one line per entry of a workflow's takes file,
+- **`grida fx takes list <target>`:** one line per entry of a workflow's takes file,
   `<step-path>  take <n>[  <digest>]`; `takes mv <target> <old> <new>` moves an entry to a step's
   new path and refuses to overwrite another entry. Neither takes a builder target.
-- **`grida-fx jobs`:** the cache's long provider jobs, one line each: `<key>  <state>  <capability>
+- **`grida fx jobs`:** the cache's long provider jobs, one line each: `<key>  <state>  <capability>
   on <route>, take <n>`. A `submitting` job FX could not confirm ends with why, naming the
   provider's job id when it returned one. `--forget <key>` removes one, so the next run submits
   its call anew.
@@ -288,7 +288,7 @@ not run again, even under `retry="engine"`.
 From the [game-build](../../examples/game-build/) example's `kitewharf/assets/`:
 
 ```bash
-grida-fx run level_art.py:build --arg level=../levels/docks.toml --live \
+grida fx run level_art.py:build --arg level=../levels/docks.toml --live \
   --deliver plate=../game/art/docks/ground.png \
   --deliver icons=../game/art/docks/icons/{key}.png
 ```
@@ -371,7 +371,7 @@ is asked only the rest.
   function it lacks, is refused before the run starts (exit 2).
 
   ```bash
-  grida-fx run icon --stand-in tests/stand_in.py#answer -- --name "copper lantern"
+  grida fx run icon --stand-in tests/stand_in.py#answer -- --name "copper lantern"
   ```
 
   ```
@@ -559,6 +559,6 @@ def test_a_declined_drawing_is_not_live(project):
 ## Agents
 
 A coding agent drives FX through the same command. It can write a workflow file and `plan` it:
-a plan is free, so an agent can iterate on a workflow before spending anything. `grida-fx schema`
+a plan is free, so an agent can iterate on a workflow before spending anything. `grida fx schema`
 gives it the JSON Schema of a workflow's inputs, and `plan --json`, `inspect --json`, `expand` and
 `price` give it JSON to read. A run that may spend still needs `--live` and a ceiling.

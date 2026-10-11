@@ -21,7 +21,7 @@ looping-parallax/
 From this folder. Offline, at $0, with no keys:
 
 ```bash
-grida-fx run looping-parallax --inputs inputs/mirror-only.yaml
+grida fx run looping-parallax --inputs inputs/mirror-only.yaml
 ```
 
 Both layers are mirrored: each comes out twice as wide, its right edge meeting its left. The run
@@ -30,8 +30,8 @@ folder's `outputs/` holds the layers, `manifest.json` and `preview.png`.
 With a repaint, which needs `OPENAI_API_KEY`:
 
 ```bash
-grida-fx plan looping-parallax --inputs inputs/harbor.yaml
-grida-fx run  looping-parallax --inputs inputs/harbor.yaml --live --max-usd 2
+grida fx plan looping-parallax --inputs inputs/harbor.yaml
+grida fx run  looping-parallax --inputs inputs/harbor.yaml --live --max-usd 2
 ```
 
 ```
