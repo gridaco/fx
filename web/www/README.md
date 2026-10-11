@@ -113,8 +113,8 @@ ordinary website traffic.
 
 Follow root `AGENTS.md`: nontrivial interaction belongs in independently testable
 TypeScript classes; React mounts and presents them. Bundle Lucide icons. The
-curated Grida home examples illustrate possible workflows, not installed FX
-workflows or recorded execution evidence. No workflow runs inside the page.
+curated Grida home landscape illustrates a possible workflow, not an installed FX
+workflow or recorded execution evidence. No workflow runs inside the page.
 
 ## Search, branding and deployment
 
