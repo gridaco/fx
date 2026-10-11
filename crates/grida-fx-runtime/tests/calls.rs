@@ -528,7 +528,8 @@ async fn an_engine_that_is_not_live_makes_no_paid_call() {
 async fn a_run_without_a_ceiling_admits_only_the_users_own_plan() {
     let dir = tempfile::tempdir().unwrap();
     // The adapter would answer; the ledger refuses first, before anything is reserved.
-    let ledger = Ledger::new(Some(Usd::ZERO), None).only_on(&grida_fx_providers::live::INCLUDED);
+    let ledger = Ledger::new(Some(Usd::ZERO), None)
+        .only_on(std::collections::BTreeSet::from(["codex".to_string()]));
     assert!(ledger.admits("codex") && !ledger.admits("acme"));
     let services = live_with(
         engine(dir.path(), Adapters::new(), true),
@@ -1171,6 +1172,7 @@ fn seed_lantern(store: &Store) {
             )]),
             data: Value::Null,
             cost_usd: Some(Usd(20_000)),
+            usage: None,
         })
         .unwrap();
 }
@@ -1186,6 +1188,7 @@ fn answered(bytes: &[u8], cost: Option<Usd>) -> Answer {
         )]),
         data: json!({"revised_prompt": "a lantern"}),
         cost,
+        usage: None,
     }
 }
 
@@ -1877,6 +1880,7 @@ async fn a_judge_built_in_reports_its_verdict_and_facts() {
         files: IndexMap::new(),
         data: json!({"verdict": "accept", "facts": {"score": 0.9, "cost_usd": 3}, "json": {"ok": true}}),
         cost: Some(Usd(2_000)),
+        usage: None,
     })]);
     let mut adapters = Adapters::new();
     adapters.register("structured.review", "acme", fake.as_request());

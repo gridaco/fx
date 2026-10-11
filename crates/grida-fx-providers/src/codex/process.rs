@@ -2,11 +2,11 @@
 //!
 //! Each Codex runs in a process group of its own, registered here until it is ended. Its MCP
 //! servers and helpers join that group, so ending the group ends them too:
-//! - a conversation that ends is asked to stop first (stdin closed, then `SIGTERM` to the group),
-//!   and the group is then killed ([`Group::finish`]);
-//! - a conversation that is dropped (its run was cancelled) kills the group ([`Group`]'s `Drop`);
+//! - a runtime that shuts down asks Codex to stop first (stdin closed, then `SIGTERM` to the
+//!   group), and then kills the group ([`Group::finish`]);
+//! - a runtime that is dropped without shutting down kills the group ([`Group`]'s `Drop`);
 //! - a command that exits on an interrupt kills every group and lets none start after
-//!   ([`end_every_codex`]); a run's cleanup kills any that is left ([`kill_every_codex`]).
+//!   ([`end_every_codex`]).
 //!
 //! Process groups are a Unix notion: elsewhere `kill_on_drop` ends Codex itself, and nothing else.
 
@@ -53,10 +53,10 @@ impl Group {
         Some(Group(id))
     }
 
-    /// Ends a conversation whose stdin is closed: Codex gets [`GRACE`] to exit, then the group gets
+    /// Ends a Codex whose stdin is closed: it gets [`GRACE`] to exit, then the group gets
     /// `SIGTERM` and [`GRACE`] more, then the group is killed (also when Codex exited by itself, for
-    /// whatever it left in the group).
-    pub(super) async fn finish(mut self, child: &mut Child) {
+    /// whatever it left in the group). Whether the group verifiably ended.
+    pub(super) async fn finish(mut self, child: &mut Child) -> bool {
         if tokio::time::timeout(GRACE, child.wait()).await.is_err() {
             if let Some(id) = self.0 {
                 signal(id, Signal::Term);
@@ -66,13 +66,16 @@ impl Group {
                 let _ = child.wait().await;
             }
         }
-        self.end();
+        self.end()
     }
 
-    fn end(&mut self) {
-        if let Some(id) = self.0.take() {
-            groups().live.retain(|&live| live != id);
-            signal(id, Signal::Kill);
+    fn end(&mut self) -> bool {
+        match self.0.take() {
+            Some(id) => {
+                groups().live.retain(|&live| live != id);
+                signal(id, Signal::Kill)
+            }
+            None => true,
         }
     }
 }
@@ -92,14 +95,6 @@ pub fn end_every_codex() -> bool {
         groups.closed = true;
         std::mem::take(&mut groups.live)
     };
-    live.into_iter()
-        .fold(true, |verified, id| verified & signal(id, Signal::Kill))
-}
-
-/// Kills every Codex group this process started and has not ended: for a run's cleanup, after its
-/// calls ended. Whether every group was verifiably ended.
-pub fn kill_every_codex() -> bool {
-    let live = std::mem::take(&mut groups().live);
     live.into_iter()
         .fold(true, |verified, id| verified & signal(id, Signal::Kill))
 }

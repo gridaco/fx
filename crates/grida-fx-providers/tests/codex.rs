@@ -1,57 +1,80 @@
-//! The Codex adapter (spec/providers.md §9.6) against fake Codex programs: shell scripts that speak
-//! the app-server's side of the conversation. No real Codex is ever started.
+//! The Codex adapter and runtime (spec/providers.md §9.6) against fake Codex programs: shell
+//! scripts that speak the app-server's side of the conversation. No real Codex is ever started.
+//!
+//! The runtime's reader and writer run on the tokio runtime that started them, so each test runs
+//! its calls, and the shutdown, on one runtime ([`on_one_runtime`]).
 #![cfg(unix)]
 
 use base64::Engine;
-use grida_fx_providers::adapter::{Answer, RequestAdapter, Sent};
-use grida_fx_providers::codex::{self, CodexImages};
-use grida_fx_providers::testing::{CallBuilder, TestCall, block_on, media};
+use grida_fx_providers::adapter::{Answer, Billing, RequestAdapter, Runtime, Sent};
+use grida_fx_providers::codex::{self, CodexImages, CodexRuntime};
+use grida_fx_providers::testing::{CallBuilder, TestCall, media};
 use serde_json::{Value, json};
+use std::future::Future;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-/// Answers `codex mcp list --json` with one enabled and one disabled server; refuses anything
-/// but an app-server whose settings turn off apps, plugins and the enabled server.
+/// Counts each start in `starts` (`mcp` or `app-server`), answers `codex mcp list --json` with one
+/// enabled and one disabled server, and refuses anything but an app-server whose settings turn
+/// off apps, plugins and the enabled server.
 const LISTING: &str = r#"#!/bin/sh
+here="$(dirname "$0")"
 case "$*" in
   *"features.apps=false"*"features.plugins=false"*"mcp list --json"*)
+    echo mcp >> "$here/starts"
     echo '[{"name":"acme-docs","enabled":true},{"name":"acme-off","enabled":false}]'; exit 0 ;;
 esac
 case "$1" in app-server) ;; *) exit 9 ;; esac
 case "$*" in *"features.apps=false"*"features.plugins=false"*"mcp_servers.acme-docs.enabled=false"*) ;; *) exit 9 ;; esac
 case "$*" in *acme-off*) exit 9 ;; esac
+echo app-server >> "$here/starts"
 "#;
 
 /// `initialize`, then `initialized`, then `account/read` (a ChatGPT sign-in).
 const SIGNED_IN: &str = r#"read -r line
-echo '{"id":1,"result":{"userAgent":"fake"}}'
+echo '{"id":1,"result":{"userAgent":"grida-fx/0.160.1 (Fake OS)"}}'
 read -r line
 read -r line
 echo '{"id":2,"result":{"account":{"type":"chatgpt","planType":"plus"},"requiresOpenaiAuth":true}}'
 "#;
 
-/// `thread/start`, checked for its sandbox and approvals; then reads `turn/start`, checked for the
-/// prompt and the pinned effort and tier.
-const THREAD: &str = r#"read -r line
+/// A call's `thread/start` (answered with id `thread`), checked for its sandbox and approvals;
+/// then its `turn/start`, checked for the prompt and the pinned effort and tier, and accepted.
+fn call_script(thread_id: u64, thread: &str, turn: &str) -> String {
+    format!(
+        r#"read -r line
 case "$line" in *'"sandbox":"read-only"'*) ;; *) exit 8 ;; esac
 case "$line" in *'"approvalPolicy":"never"'*) ;; *) exit 8 ;; esac
 case "$line" in *'"ephemeral":true'*) ;; *) exit 8 ;; esac
-echo '{"id":3,"result":{"thread":{"id":"thread-a"},"model":"m","modelProvider":"openai"}}'
+echo '{{"id":{thread_id},"result":{{"thread":{{"id":"{thread}"}},"model":"agent-5.5","modelProvider":"openai"}}}}'
 read -r line
 case "$line" in *'<prompt>\na red kite\n</prompt>'*'"effort":"low","serviceTierForTurn":"default"'*) ;; *) exit 7 ;; esac
-"#;
+echo '{{"id":{},"result":{{"turn":{{"id":"{turn}","status":"inProgress"}}}}}}'
+"#,
+        thread_id + 1
+    )
+}
 
-const ACCEPTED: &str = r#"echo '{"id":4,"result":{"turn":{"id":"turn-a","status":"inProgress"}}}'
-"#;
+/// The first call's turn completes (after the client's `turn/interrupt`, read here).
+fn completed(thread: &str, turn: &str) -> String {
+    echo(
+        json!({"method": "turn/completed", "params": {"threadId": thread,
+        "turn": {"id": turn, "status": "completed", "error": null}}}),
+    ) + "read -r line\n"
+}
 
-const COMPLETED: &str = r#"echo '{"method":"turn/completed","params":{"threadId":"thread-a","turn":{"id":"turn-a","status":"completed","error":null}}}'
-read -r line
-"#;
-
-/// Everything up to and including Codex accepting the turn.
+/// Everything up to and including Codex accepting the first call's turn.
 fn opening() -> String {
-    format!("{LISTING}{SIGNED_IN}{THREAD}{ACCEPTED}")
+    format!(
+        "{LISTING}{SIGNED_IN}{}",
+        call_script(3, "thread-a", "turn-a")
+    )
+}
+
+fn completed_a() -> String {
+    completed("thread-a", "turn-a")
 }
 
 struct Fake {
@@ -62,6 +85,15 @@ struct Fake {
 impl Fake {
     fn marker(&self, name: &str) -> PathBuf {
         self.dir.path().join(name)
+    }
+
+    /// The starts the fake counted: `mcp` and `app-server` lines.
+    fn starts(&self) -> Vec<String> {
+        std::fs::read_to_string(self.marker("starts"))
+            .unwrap_or_default()
+            .lines()
+            .map(str::to_string)
+            .collect()
     }
 }
 
@@ -78,20 +110,25 @@ fn echo(message: Value) -> String {
     format!("echo '{message}'\n")
 }
 
-fn item(thread: &str, item: Value) -> String {
+fn item(thread: &str, turn: &str, item: Value) -> String {
     echo(json!({"method": "item/completed",
-        "params": {"threadId": thread, "turnId": "turn-a", "item": item}}))
+        "params": {"threadId": thread, "turnId": turn, "item": item}}))
 }
 
-fn generated(bytes: &[u8]) -> String {
+fn image_item(thread: &str, turn: &str, bytes: &[u8]) -> String {
     item(
-        "thread-a",
+        thread,
+        turn,
         json!({
             "type": "imageGeneration", "id": "ig-a", "status": "completed",
             "revisedPrompt": "a red kite", "savedPath": null,
             "result": base64::engine::general_purpose::STANDARD.encode(bytes),
         }),
     )
+}
+
+fn generated(bytes: &[u8]) -> String {
+    image_item("thread-a", "turn-a", bytes)
 }
 
 fn call(request: Value) -> TestCall {
@@ -101,19 +138,48 @@ fn call(request: Value) -> TestCall {
         .build()
 }
 
-fn adapter_with(fake: &Fake, start: u64, whole: u64) -> CodexImages {
-    CodexImages::with_program(Ok(fake.program.clone()))
-        .with_deadlines(Duration::from_secs(start), Duration::from_secs(whole))
+fn kite() -> TestCall {
+    call(json!({"prompt": "a red kite"}))
 }
 
-fn send_with(adapter: &CodexImages) -> (Sent, TestCall) {
-    let call = call(json!({"prompt": "a red kite"}));
-    let sent = block_on(adapter.send(&call.call));
-    (sent, call)
+/// A runtime over `program`, and an adapter over it with these deadlines.
+fn images(
+    program: Result<PathBuf, String>,
+    start: u64,
+    whole: u64,
+) -> (Arc<CodexRuntime>, CodexImages) {
+    let runtime = Arc::new(CodexRuntime::new(program));
+    let adapter = CodexImages::new(Arc::clone(&runtime))
+        .with_deadlines(Duration::from_secs(start), Duration::from_secs(whole));
+    (runtime, adapter)
 }
 
+/// Runs `test` on one tokio runtime, then shuts the Codex runtime down, as the engine does after
+/// a run; returns what `test` returned and whether the shutdown verified.
+fn on_one_runtime<T, F: Future<Output = T>>(
+    program: Result<PathBuf, String>,
+    start: u64,
+    whole: u64,
+    test: impl FnOnce(CodexImages) -> F,
+) -> (T, bool) {
+    let tokio = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    tokio.block_on(async {
+        let (runtime, adapter) = images(program, start, whole);
+        let out = test(adapter).await;
+        let verified = runtime.shutdown().await;
+        (out, verified)
+    })
+}
+
+/// One call to `fake`, and the runtime shut down.
 fn send(fake: &Fake) -> Sent {
-    send_with(&adapter_with(fake, 20, 30)).0
+    on_one_runtime(Ok(fake.program.clone()), 20, 30, |adapter| async move {
+        adapter.send(&kite().call).await
+    })
+    .0
 }
 
 fn failed(reason: &str) -> Sent {
@@ -156,12 +222,33 @@ fn gone(pid_file: &Path) -> bool {
 }
 
 #[test]
-fn a_generated_image_is_the_answer_and_reports_no_cost() {
+fn a_generated_image_is_the_answer_with_codex_s_usage_and_no_cost() {
     let png = media::png(4, 3, None);
-    let fake = fake(&format!("{}{}{COMPLETED}", opening(), generated(&png)));
-    let adapter = adapter_with(&fake, 20, 30);
-    let (sent, call) = send_with(&adapter);
+    let usage = echo(
+        json!({"method": "thread/tokenUsage/updated", "params": {"threadId": "thread-a",
+        "turnId": "turn-a", "tokenUsage": {"total": {"inputTokens": 17393, "cachedInputTokens": 0,
+            "outputTokens": 72}}}}),
+    );
+    let fake = fake(&format!(
+        "{}{}{usage}{}",
+        opening(),
+        generated(&png),
+        completed_a()
+    ));
+    let call = kite();
+    let ((sent, checked), verified) =
+        on_one_runtime(Ok(fake.program.clone()), 20, 30, |adapter| async move {
+            let sent = adapter.send(&call.call).await;
+            let checked = match &sent {
+                Sent::Answered(answer) => adapter.check(&call.call, answer),
+                _ => Ok(()),
+            };
+            assert_eq!(adapter.billing(), Billing::Plan);
+            (sent, checked)
+        });
     let answer = answered(sent);
+    assert!(verified);
+    assert_eq!(checked, Ok(()));
     assert_eq!(
         answer.cost, None,
         "Codex reports no cost: the route's hold is charged"
@@ -169,7 +256,42 @@ fn a_generated_image_is_the_answer_and_reports_no_cost() {
     assert_eq!(answer.data, Value::Null);
     assert_eq!(answer.files["image"].kind, "image/png");
     assert_eq!(answer.files["image"].bytes, png);
-    assert_eq!(adapter.check(&call.call, &answer), Ok(()));
+    let usage = answer.usage.expect("Codex's usage");
+    assert_eq!(
+        usage.to_value(Billing::Plan),
+        json!({"billing": "plan", "runtime": "codex 0.160.1", "agent_model": "agent-5.5",
+            "input_tokens": 17393, "cached_input_tokens": 0, "output_tokens": 72})
+    );
+}
+
+#[test]
+fn one_codex_serves_every_call_of_an_invocation() {
+    let (png_a, png_b) = (media::png(2, 2, None), media::png(3, 3, None));
+    let script = format!(
+        "{}{}{}{}{}read -r line\n",
+        opening(),
+        generated(&png_a),
+        completed_a(),
+        call_script(5, "thread-b", "turn-b").replace("thread-a", "thread-b"),
+        image_item("thread-b", "turn-b", &png_b) + &completed("thread-b", "turn-b"),
+    );
+    let fake = fake(&script);
+    let (bytes, verified) =
+        on_one_runtime(Ok(fake.program.clone()), 20, 30, |adapter| async move {
+            let first = answered(adapter.send(&kite().call).await);
+            let second = answered(adapter.send(&kite().call).await);
+            (
+                first.files["image"].bytes.clone(),
+                second.files["image"].bytes.clone(),
+            )
+        });
+    assert_eq!(bytes, (png_a, png_b));
+    assert!(verified);
+    assert_eq!(
+        fake.starts(),
+        ["mcp", "app-server"],
+        "listed once, started once"
+    );
 }
 
 #[test]
@@ -177,6 +299,7 @@ fn the_rest_of_the_turn_is_interrupted_once_the_image_arrives() {
     let png = media::png(2, 2, None);
     let wait = r#"read -r line
 case "$line" in *'"method":"turn/interrupt"'*'"turnId":"turn-a"'*) touch "$(dirname "$0")/interrupted" ;; esac
+echo '{"method":"turn/completed","params":{"threadId":"thread-a","turn":{"id":"turn-a","status":"interrupted","error":null}}}'
 read -r line
 "#;
     let fake = fake(&format!("{}{}{wait}", opening(), generated(&png)));
@@ -185,10 +308,36 @@ read -r line
 }
 
 #[test]
+fn a_dropped_call_interrupts_its_turn() {
+    let wait = r#"read -r line
+case "$line" in *'"method":"turn/interrupt"'*'"turnId":"turn-a"'*) touch "$(dirname "$0")/interrupted" ;; esac
+read -r line
+"#;
+    let fake = fake(&format!("{}{wait}", opening()));
+    let marker = fake.marker("interrupted");
+    let (_, verified) = on_one_runtime(Ok(fake.program.clone()), 20, 30, |adapter| async move {
+        // The run is cancelled while the turn is drawing: the call's future is dropped.
+        let dropped =
+            tokio::time::timeout(Duration::from_secs(2), adapter.send(&kite().call)).await;
+        assert!(dropped.is_err());
+        let started = Instant::now();
+        while !marker.exists() && started.elapsed() < Duration::from_secs(3) {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    });
+    assert!(
+        fake.marker("interrupted").exists(),
+        "the turn was not interrupted"
+    );
+    assert!(verified);
+}
+
+#[test]
 fn only_this_thread_and_turn_count() {
     let png = media::png(2, 2, None);
     let other_image = item(
         "thread-sub",
+        "turn-sub",
         json!({"type": "imageGeneration", "id": "ig-sub", "status": "completed", "result": "%%%"}),
     );
     let other_turn = echo(
@@ -196,9 +345,10 @@ fn only_this_thread_and_turn_count() {
         "turn": {"id": "turn-sub", "status": "completed", "error": null}}}),
     );
     let script = format!(
-        "{}{other_image}{other_turn}{}{COMPLETED}",
+        "{}{other_image}{other_turn}{}{}",
         opening(),
-        generated(&png)
+        generated(&png),
+        completed_a()
     );
     assert_eq!(answered(send(&fake(&script))).files["image"].bytes, png);
 }
@@ -206,10 +356,12 @@ fn only_this_thread_and_turn_count() {
 #[test]
 fn notifications_before_the_turn_s_reply_are_kept() {
     let png = media::png(2, 2, None);
-    let script = format!(
-        "{LISTING}{SIGNED_IN}{THREAD}{}{ACCEPTED}{COMPLETED}",
-        generated(&png)
-    );
+    // The image arrives between turn/start and its response.
+    let accepted =
+        "echo '{\"id\":4,\"result\":{\"turn\":{\"id\":\"turn-a\",\"status\":\"inProgress\"}}}'\n";
+    let opening = opening().replace(accepted, &(generated(&png) + accepted));
+    assert_ne!(opening, self::opening());
+    let script = format!("{opening}{}", completed_a());
     assert_eq!(answered(send(&fake(&script))).files["image"].bytes, png);
 }
 
@@ -218,10 +370,11 @@ fn the_first_good_image_wins_over_a_failed_one() {
     let png = media::png(2, 2, None);
     let bad = item(
         "thread-a",
+        "turn-a",
         json!({"type": "imageGeneration", "id": "ig-0", "status": "failed", "result": "",
             "failure": {"type": "contentPolicy"}}),
     );
-    let script = format!("{}{bad}{}{COMPLETED}", opening(), generated(&png));
+    let script = format!("{}{bad}{}{}", opening(), generated(&png), completed_a());
     assert_eq!(answered(send(&fake(&script))).files["image"].bytes, png);
 }
 
@@ -232,12 +385,12 @@ fn requests_from_codex_are_declined_and_the_turn_goes_on() {
 read -r line
 case "$line" in *'"id":"ask-1"'*'-32601'*) ;; *) exit 6 ;; esac
 "#;
-    let script = format!("{}{ask}{}{COMPLETED}", opening(), generated(&png));
+    let script = format!("{}{ask}{}{}", opening(), generated(&png), completed_a());
     assert!(matches!(send(&fake(&script)), Sent::Answered(_)));
 }
 
 #[test]
-fn only_a_chatgpt_sign_in_may_draw() {
+fn only_a_chatgpt_sign_in_may_draw_and_a_refusal_holds_for_the_invocation() {
     let account = |result: Value| {
         format!(
             "{LISTING}read -r line\necho '{{\"id\":1,\"result\":{{}}}}'\nread -r line\nread -r \
@@ -245,11 +398,29 @@ fn only_a_chatgpt_sign_in_may_draw() {
             echo(json!({"id": 2, "result": result}))
         )
     };
+    let signed_out = fake(&account(
+        json!({"account": null, "requiresOpenaiAuth": true}),
+    ));
+    let (sent, verified) = on_one_runtime(
+        Ok(signed_out.program.clone()),
+        20,
+        30,
+        |adapter| async move {
+            let first = adapter.send(&kite().call).await;
+            let second = adapter.send(&kite().call).await;
+            assert_eq!(first, second);
+            first
+        },
+    );
     assert_eq!(
-        send(&fake(&account(
-            json!({"account": null, "requiresOpenaiAuth": true})
-        ))),
+        sent,
         refused("Codex is not signed in: run codex login and sign in with ChatGPT")
+    );
+    assert!(verified);
+    assert_eq!(
+        signed_out.starts(),
+        ["mcp", "app-server"],
+        "not asked again"
     );
     assert_eq!(
         send(&fake(&account(
@@ -274,6 +445,34 @@ fn only_a_chatgpt_sign_in_may_draw() {
 }
 
 #[test]
+fn a_codex_that_exited_is_replaced_by_the_next_call() {
+    let png = media::png(2, 2, None);
+    // The first Codex exits during the first call's turn; the second serves the second call.
+    let script = format!(
+        r#"{LISTING}if [ "$(grep -c app-server "$(dirname "$0")/starts")" = 1 ]; then
+{}exit 0
+fi
+{}{}{}"#,
+        opening().trim_start_matches(LISTING),
+        opening().trim_start_matches(LISTING),
+        generated(&png),
+        completed_a()
+    );
+    let fake = fake(&script);
+    let (sent, _) = on_one_runtime(Ok(fake.program.clone()), 20, 30, |adapter| async move {
+        let first = adapter.send(&kite().call).await;
+        let second = adapter.send(&kite().call).await;
+        (first, second)
+    });
+    assert_eq!(
+        sent.0,
+        failed("Codex image generation failed: Codex exited")
+    );
+    assert!(matches!(sent.1, Sent::Answered(_)), "{:?}", sent.1);
+    assert_eq!(fake.starts(), ["mcp", "app-server", "mcp", "app-server"]);
+}
+
+#[test]
 fn servers_that_cannot_be_listed_are_a_refusal() {
     assert_eq!(
         send(&fake("#!/bin/sh\nexit 1\n")),
@@ -285,10 +484,11 @@ fn servers_that_cannot_be_listed_are_a_refusal() {
 fn a_usage_limit_ends_the_call_with_its_reset_time() {
     let limited = item(
         "thread-a",
+        "turn-a",
         json!({"type": "imageGeneration", "id": "ig-a", "status": "failed", "result": "",
             "failure": {"type": "usageLimitExceeded", "limitId": "codex", "resetsAt": 1792311096}}),
     );
-    let script = format!("{}{limited}{COMPLETED}", opening());
+    let script = format!("{}{limited}{}", opening(), completed_a());
     assert_eq!(
         send(&fake(&script)),
         failed(
@@ -300,7 +500,7 @@ fn a_usage_limit_ends_the_call_with_its_reset_time() {
 
 #[test]
 fn a_turn_without_an_image_fails_with_codex_s_error_kind_only() {
-    let script = format!("{}{COMPLETED}", opening());
+    let script = format!("{}{}", opening(), completed_a());
     assert_eq!(
         send(&fake(&script)),
         failed("Codex image generation failed: Codex answered without an image")
@@ -320,19 +520,24 @@ fn a_turn_without_an_image_fails_with_codex_s_error_kind_only() {
 
 #[test]
 fn bytes_that_are_not_a_png_fail_the_check() {
-    let fake_png = fake(&format!(
-        "{}{}{COMPLETED}",
+    let not_png = fake(&format!(
+        "{}{}{}",
         opening(),
-        generated(b"not a picture")
+        generated(b"not a picture"),
+        completed_a()
     ));
-    let adapter = adapter_with(&fake_png, 20, 30);
-    let (sent, call) = send_with(&adapter);
-    assert!(adapter.check(&call.call, &answered(sent)).is_err());
+    let call = kite();
+    let (checked, _) = on_one_runtime(Ok(not_png.program.clone()), 20, 30, |adapter| async move {
+        let answer = answered(adapter.send(&call.call).await);
+        adapter.check(&call.call, &answer)
+    });
+    assert!(checked.is_err());
     let garbled = item(
         "thread-a",
+        "turn-a",
         json!({"type": "imageGeneration", "id": "ig-a", "status": "completed", "result": "%%%"}),
     );
-    let script = format!("{}{garbled}{COMPLETED}", opening());
+    let script = format!("{}{garbled}{}", opening(), completed_a());
     assert_eq!(
         send(&fake(&script)),
         failed("Codex image generation failed: Codex's image is not valid base64")
@@ -353,10 +558,12 @@ fn nothing_is_ever_resent() {
         failed("Codex image generation was not started: Codex sent a line that is not JSON")
     );
     // Once turn/start is written, a generation may have started.
-    let refused_turn = format!(
-        "{LISTING}{SIGNED_IN}{THREAD}{}read -r line\n",
-        echo(json!({"id": 4, "error": {"code": -32600, "message": "/Users/someone/x"}}))
-    );
+    let accepted =
+        "echo '{\"id\":4,\"result\":{\"turn\":{\"id\":\"turn-a\",\"status\":\"inProgress\"}}}'\n";
+    let refused_turn = opening().replace(
+        accepted,
+        &echo(json!({"id": 4, "error": {"code": -32600, "message": "/Users/someone/x"}})),
+    ) + "read -r line\n";
     assert_eq!(
         send(&fake(&refused_turn)),
         failed("Codex image generation failed: Codex refused turn/start (error -32600)")
@@ -368,14 +575,19 @@ fn nothing_is_ever_resent() {
 }
 
 #[test]
-fn deadlines_stop_codex_before_and_after_the_turn_is_asked_for() {
+fn deadlines_stop_a_call_before_and_after_its_turn_is_asked_for() {
     let quick = |fake: &Fake, start: u64, whole: u64| {
-        let started = Instant::now();
-        let sent = send_with(&adapter_with(fake, start, whole)).0;
+        let began = Instant::now();
+        let (sent, _) = on_one_runtime(
+            Ok(fake.program.clone()),
+            start,
+            whole,
+            |adapter| async move { adapter.send(&kite().call).await },
+        );
         assert!(
-            started.elapsed() < Duration::from_secs(whole + 8),
+            began.elapsed() < Duration::from_secs(whole + 10),
             "{:?}",
-            started.elapsed()
+            began.elapsed()
         );
         sent
     };
@@ -385,10 +597,13 @@ fn deadlines_stop_codex_before_and_after_the_turn_is_asked_for() {
         failed("Codex image generation was not started: Codex did not start the turn within 1 s")
     );
     // turn/start was written and never answered: the turn may be running.
-    let unanswered = fake(&format!("{LISTING}{SIGNED_IN}{THREAD}exec sleep 30\n"));
+    let accepted =
+        "echo '{\"id\":4,\"result\":{\"turn\":{\"id\":\"turn-a\",\"status\":\"inProgress\"}}}'\n";
+    let unanswered = fake(&(opening().replace(accepted, "") + "exec sleep 30\n"));
+    // Long enough for a busy machine to start the fake; the first call starts Codex too.
     assert_eq!(
-        quick(&unanswered, 2, 10),
-        failed("Codex image generation failed: Codex did not start the turn within 2 s")
+        quick(&unanswered, 5, 15),
+        failed("Codex image generation failed: Codex did not start the turn within 5 s")
     );
     // Long enough for a busy machine to start the fake and accept the turn.
     let running = fake(&format!("{}exec sleep 30\n", opening()));
@@ -399,33 +614,36 @@ fn deadlines_stop_codex_before_and_after_the_turn_is_asked_for() {
 }
 
 #[test]
-fn nothing_codex_started_survives_it() {
+fn nothing_codex_started_survives_the_shutdown() {
     let png = media::png(2, 2, None);
     let helper = r#"sleep 30 &
 echo $! > "$(dirname "$0")/helper.pid"
 "#;
     let finished = fake(&format!(
-        "{}{helper}{}{COMPLETED}",
+        "{}{helper}{}{}",
         opening(),
-        generated(&png)
+        generated(&png),
+        completed_a()
     ));
     assert!(matches!(send(&finished), Sent::Answered(_)));
     assert!(
         gone(&finished.marker("helper.pid")),
         "a helper in Codex's group outlived it"
     );
-    // The same when the deadline ends the conversation.
+    // The same when a deadline ended the call and Codex kept running until the shutdown.
     let stalled = fake(&format!("{}{helper}exec sleep 30\n", opening()));
-    assert!(matches!(
-        send_with(&adapter_with(&stalled, 5, 3)).0,
-        Sent::Failed { .. }
-    ));
+    let (sent, verified) =
+        on_one_runtime(Ok(stalled.program.clone()), 5, 3, |adapter| async move {
+            adapter.send(&kite().call).await
+        });
+    assert!(matches!(sent, Sent::Failed { .. }));
+    assert!(verified);
     assert!(gone(&stalled.marker("helper.pid")));
 }
 
 #[test]
 fn the_check_holds_the_image_to_the_background_asked_for() {
-    let adapter = CodexImages::with_program(Err(codex::NOT_INSTALLED.into()));
+    let (_, adapter) = images(Err(codex::NOT_INSTALLED.into()), 20, 30);
     let answer = |png: Vec<u8>| Answer::new(Value::Null, None).with_file("image", "image/png", png);
     let asked = call(json!({"prompt": "p", "size": "auto", "background": "transparent"}));
     assert_eq!(
@@ -440,31 +658,39 @@ fn the_check_holds_the_image_to_the_background_asked_for() {
 
 #[test]
 fn what_codex_cannot_honour_is_refused_before_it_starts() {
-    let adapter = CodexImages::with_program(Ok(PathBuf::from("/nonexistent/codex")));
-    for (request, reason) in [
-        (
-            json!({"prompt": "p", "size": "1024x1024"}),
-            codex::NO_EXACT_SIZE,
-        ),
-        (
-            json!({"prompt": "p", "references": [{"file": "a"}]}),
-            "Codex image generation takes no references",
-        ),
-        (
-            json!({"prompt": "p", "seed": 1}),
-            "image.generate takes no member seed",
-        ),
-    ] {
-        assert_eq!(block_on(adapter.send(&call(request).call)), refused(reason));
-    }
-    let missing = CodexImages::with_program(Err(codex::NETWORK_OFF.into()));
-    assert_eq!(
-        block_on(missing.send(&call(json!({"prompt": "p"})).call)),
-        refused(codex::NETWORK_OFF)
+    let (sent, verified) = on_one_runtime(
+        Ok(PathBuf::from("/nonexistent/codex")),
+        20,
+        30,
+        |adapter| async move {
+            let mut sent = Vec::new();
+            for request in [
+                json!({"prompt": "p", "size": "1024x1024"}),
+                json!({"prompt": "p", "references": [{"file": "a"}]}),
+                json!({"prompt": "p", "seed": 1}),
+                // The program vanished after it was found.
+                json!({"prompt": "p"}),
+            ] {
+                sent.push(adapter.send(&call(request).call).await);
+            }
+            sent
+        },
     );
-    // The program vanished after it was found.
+    assert!(verified);
     assert_eq!(
-        block_on(adapter.send(&call(json!({"prompt": "p"})).call)),
-        refused("Codex's MCP servers could not be listed, so they cannot be turned off")
+        sent,
+        [
+            refused(codex::NO_EXACT_SIZE),
+            refused("Codex image generation takes no references"),
+            refused("image.generate takes no member seed"),
+            refused("Codex's MCP servers could not be listed, so they cannot be turned off"),
+        ]
     );
+    let (sent, _) = on_one_runtime(
+        Err(codex::NETWORK_OFF.into()),
+        20,
+        30,
+        |adapter| async move { adapter.send(&kite().call).await },
+    );
+    assert_eq!(sent, refused(codex::NETWORK_OFF));
 }

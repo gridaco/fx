@@ -197,7 +197,7 @@ fn plan_and_run(
         print_line(&text);
         return Ok(1);
     }
-    if let Some(message) = runner::refused(&plan, engine.live) {
+    if let Some(message) = runner::refused(&plan, engine.live, &engine.adapters.plan_providers()) {
         // Before any folder is made.
         print_line(&text);
         print_line(&format!("refused: {message}"));

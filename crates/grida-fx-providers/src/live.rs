@@ -10,7 +10,8 @@
 
 use crate::BoxFuture;
 use crate::adapter::{
-    Adapter, Answer, CallRequest, Collected, LongJob, RequestAdapter, RouteRef, Sent, Submitted,
+    Adapter, Answer, Billing, CallRequest, Collected, LongJob, RequestAdapter, RouteRef, Sent,
+    Submitted,
 };
 use crate::clock::SystemClock;
 use crate::keys::{KeyName, Keys};
@@ -30,11 +31,6 @@ pub const PROVIDERS: [&str; 6] = [
     "elevenlabs",
     "codex",
 ];
-
-/// The providers that bill the user's own plan, never in dollars: a live run whose calls are all on
-/// them needs no ceiling (spec/providers.md §10). Only an adapter of this crate makes a provider
-/// one, never a route table, since the registry serves a provider by its name.
-pub const INCLUDED: [&str; 1] = ["codex"];
 
 /// Whether a live run may reach the network ([`crate::transport::NETWORK_VARIABLE`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -131,6 +127,9 @@ pub fn adapters(setup: &Setup) -> Adapters {
         };
         adapters.register(&capability, &provider, redacting);
     }
+    for runtime in registered.runtimes() {
+        adapters.keep_runtime(Arc::clone(runtime));
+    }
     adapters
 }
 
@@ -150,6 +149,10 @@ impl RequestAdapter for Redacting<dyn RequestAdapter> {
         self.inner.check(call, answer)
     }
 
+    fn billing(&self) -> Billing {
+        self.inner.billing()
+    }
+
     fn redactor(&self) -> Redactor {
         self.redactor.clone()
     }
@@ -166,6 +169,10 @@ impl LongJob for Redacting<dyn LongJob> {
 
     fn check(&self, call: &CallRequest, answer: &Answer) -> Result<(), String> {
         self.inner.check(call, answer)
+    }
+
+    fn billing(&self) -> Billing {
+        self.inner.billing()
     }
 
     fn redactor(&self) -> Redactor {

@@ -131,14 +131,16 @@ image on your plan.
 - Each image counts against your Codex plan's usage limits, which FX can neither see nor
   enforce. OpenAI says image generation uses them
   [3–5 times faster](https://learn.chatgpt.com/docs/image-generation) on average than similar
-  turns without images. A run's `spent $0.00` is FX's bill, not your plan's.
+  turns without images. A run's `spent $0.00` is FX's bill, not your plan's. What Codex did count
+  is kept in each call's record in the cache (`usage`: the Codex version, and the tokens of the
+  turn), marked as billed to your plan.
 - At the limit, the step fails with the time the limit resets, and is not retried:
 
   ```text
   failed    draw#1: Codex image generation failed: the Codex usage limit is reached; it resets at unix time 1792311096
   ```
 
-- FX draws only on a ChatGPT sign-in. Before each image it asks Codex how it is signed in, and
+- FX draws only on a ChatGPT sign-in. When it starts Codex it asks how Codex is signed in, and
   refuses, before anything is drawn, a Codex signed in with an API key (`codex login
   --with-api-key`), which would bill an API account. It also hides your provider keys and
   `CODEX_API_KEY` from Codex.
@@ -146,7 +148,8 @@ image on your plan.
 ### Slower, and one at a time
 
 An image takes about 20 seconds, and the route draws one at a time, so a workflow of 20 images
-takes several minutes. The cache works as on any route: a step that already drew its image does
+takes several minutes. The first image of a run also starts Codex, which the run then keeps for
+the others. The cache works as on any route: a step that already drew its image does
 not call Codex again.
 
 ### Not the same picture as an API route
@@ -177,16 +180,18 @@ Codex at all: `Codex was not started: GRIDA_FX_NETWORK is off`.
 
 ### What runs on your machine
 
-- FX starts `codex app-server` for each image, in an empty scratch folder it removes afterwards,
-  with a read-only sandbox and no approvals; anything Codex asks FX to approve is declined. The
+- FX starts one `codex app-server` for a run, on its first Codex image, and ends it with the run.
+  Each image gets a thread of its own, in an empty scratch folder FX removes afterwards, with a
+  read-only sandbox and no approvals; anything Codex asks FX to approve is declined. The
   read-only sandbox stops writes, not reads: Codex is asked to use no tool but its image tool,
   and nothing else is offered to it (below).
 - Your own Codex tools are off for these conversations: your MCP servers (FX lists them with
   `codex mcp list` and turns each off), apps, plugins, hooks, memories and the turn-end
   notification. Your reasoning effort and service tier are not used either: an image turn runs at
   low effort and the standard tier, so it spends your plan no faster than it must.
-- Codex runs in a process group of its own, with everything it starts. When the image is made,
-  the run is cancelled or FX exits, FX ends the whole group.
+- Codex runs in a process group of its own, with everything it starts. When the run ends, is
+  cancelled, or FX exits, FX ends the whole group; a step that is cancelled while Codex draws asks
+  Codex to stop that image.
 - FX never reads Codex's sign-in files.
 - Codex keeps its own copy of each image under `~/.codex/generated_images/`. FX keeps the one in
   its store and never touches Codex's.

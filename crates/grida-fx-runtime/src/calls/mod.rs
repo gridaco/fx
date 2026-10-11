@@ -916,7 +916,11 @@ impl Lead<'_> {
             answer.cost
         };
         let reported = answer.cost;
-        let record = self.publish(request, route_entry, answer, reported)?;
+        let usage = answer
+            .usage
+            .as_ref()
+            .map(|usage| usage.to_value(adapter.billing()));
+        let record = self.publish(request, route_entry, answer, reported, usage)?;
         if let Some(reason) = unrecorded {
             return Err(CallError::Fault(reason));
         }
@@ -951,6 +955,7 @@ impl Lead<'_> {
         route: RouteEntry,
         answer: Answer,
         reported: Option<Usd>,
+        usage: Option<Value>,
     ) -> Result<CallRecord, CallError> {
         let store = &self.services.engine.store;
         let mut entries = IndexMap::new();
@@ -978,6 +983,7 @@ impl Lead<'_> {
             files: entries,
             data: answer.data,
             cost_usd: reported,
+            usage,
         };
         store
             .save_call(&record)
@@ -1105,7 +1111,7 @@ impl Lead<'_> {
             fingerprint: route.fingerprint(),
         };
         let ended = self
-            .publish(request.clone(), route_entry, answer, Some(Usd::ZERO))
+            .publish(request.clone(), route_entry, answer, Some(Usd::ZERO), None)
             .and_then(|record| replayed(&record))
             .and_then(|record| from_record(store, files, &record));
         let (answered, data) = match ended {

@@ -344,36 +344,35 @@ implementation; installation alone does not authorize invocation.
 **Status: in review, 2026-10-12** ([gridaco/fx#46](https://github.com/gridaco/fx/pull/46)), as
 the route `imagegen@codex` of `image.generate`
 ([spec/providers.md §9.6](spec/providers.md#96-codex)). Users signed into Codex with ChatGPT pick
-it in `fx.yaml` and run with no provider key. `codex` is an *included provider*: a live run whose
+it in `fx.yaml` and run with no provider key. `codex` bills the user's plan, not dollars: a live run whose
 calls are all on it needs no `--max-usd`, runs under a ceiling of $0 and refuses any other
-provider. The adapter speaks `codex app-server` JSON-RPC (its typed `imageGeneration` item
-carries the image), admits only a ChatGPT sign-in (`account/read`), turns off the user's MCP
-servers, apps, plugins, hooks and memories, pins low effort and the standard tier, runs Codex in
-its own process group that FX always ends, and never resends a call. Verified with fake
+provider. Codex is a *runtime* the engine owns: one `codex app-server` per invocation, started
+on the first Codex call, shared by the rest (a thread each) and shut down with the run; its
+adapter declares `Billing::Plan`, and call records keep its `usage` (Codex version, agent model,
+tokens). It admits only a ChatGPT sign-in (`account/read`), turns off the user's MCP servers,
+apps, plugins, hooks and memories, pins low effort and the standard tier, runs Codex in its own
+process group, interrupts the turn of a cancelled call, and never resends a call. Verified with fake
 app-server processes in tests and real runs on Codex 0.160.1: transparent and opaque backgrounds
 are honoured; exact sizes are not (Codex draws about 1.57 MP in a shape it picks), so they are
 refused.
 
 How this meets the local-agent requirements above, and what it defers:
-- **Admission (owner decision).** `--live` alone admits Codex; the skill asks agents to get the
-  user's go. An explicit opt-in (`--allow codex`, or a project setting) is the alternative.
-- **Usage is unknown, not $0.** Answers report no cost (`None`); the $0 hold is charged and the
-  record says *not reported*. Usage evidence (tokens, `account/rateLimits` `usedPercent`) and
-  provenance (Codex version, the model Codex chose) have no record field yet; `data` cannot hold
-  them (`image.generate` answers `data: null`).
-- **Attempts (owner decision).** The adapter never asks for a resend, but a failed answer check
-  is still a new engine attempt, and each is a real image on the user's plan. A per-provider
-  attempt policy (included providers: at most 2) needs the retry owner's spec.
+- **Admission (decided 2026-10-12).** `--live` alone admits Codex; the skill asks agents to get
+  the user's go.
+- **Usage is unknown in dollars, recorded otherwise.** Answers report no cost (`None`); the $0
+  hold is charged and the record says *not reported*, and its `usage` keeps what Codex counted.
+  The plan's `usedPercent` (`account/rateLimits`) is not recorded.
+- **Attempts (decided 2026-10-12).** The engine default stands: a failed answer check is a new
+  attempt, up to 6, each a real image on the user's plan. The adapter itself never asks for one.
 - **Identity.** The route's model `imagegen` names the tool; the cache key ignores the Codex
-  version, the model and the quality Codex chose. Documented as a moving target.
+  version, the model and the quality Codex chose (the image model is not reported at all).
+  Documented as a moving target.
 - **Decision 5** (docs/wg/overview.md) carries the included-provider exception, awaiting
   ratification.
 
 Follow-ups:
-- **An external-runtime adapter kind.** Codex is fitted into the route/adapter seam meant for HTTP
-  clients billed in dollars. A runtime kind (engine-owned process lifecycle, `External` billing
-  with usage evidence, its own admission and attempt policy, a runtime-chosen model with reported
-  provenance) is the general shape; the ACP/agent node above should share it.
+- **The ACP/agent node** above should sit on the same runtime contract (`adapter::Runtime`,
+  `Billing::Plan`, `Usage`), with a session per call as Codex has a thread per call.
 - **References / `image.edit`.** The app-server takes `localImage` inputs; prove that `$imagegen`
   edits from them before declaring `image_input` or serving `image.edit`.
 - **Plan-time feature derivation.** A `WxH` size implies `exact_size` and references imply

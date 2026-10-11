@@ -239,6 +239,7 @@ mod tests {
             files: IndexMap::new(),
             data,
             cost,
+            usage: None,
         }
     }
 
