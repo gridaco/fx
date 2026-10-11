@@ -17,7 +17,7 @@ export async function replaceDemo(slug: ShowcaseSlug, source: string, options: {
   const releaseBytes = await confinedFile(content, lock.release.fixture);
   if (sha256(releaseBytes) !== lock.release.sha256) throw new Error("Frozen release manifest changed.");
   const previous = parseRelease(JSON.parse(releaseBytes.toString()));
-  await verifyShowcases({ content });
+  await verifyShowcases({ content, previousDemo: slug });
   const previousRoot = join(delivery, "showcases", lock.release.sha256);
   if (sha256(await confinedFile(previousRoot, "manifest.json")) !== lock.release.sha256) throw new Error("Staged release manifest changed.");
 

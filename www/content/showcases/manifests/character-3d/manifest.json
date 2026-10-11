@@ -2,115 +2,110 @@
   "kind": "character-3d-demo-v1",
   "models": [
     {
-      "url": "assets/model-c132eeedd6992fbb.glb",
+      "url": "assets/model-normalized.glb",
       "stage": "build.part__character__.normalize#1.1.1",
-      "bytes": 5178252
+      "bytes": 5384984
     },
     {
-      "url": "assets/model-234ea6329fecca6a.glb",
+      "url": "assets/nami-assembly.glb",
       "stage": "build.assembly.assemble#1.1.1",
-      "bytes": 5178372
+      "bytes": 5385104
     },
     {
-      "url": "assets/model-2f11a0d963518169.glb",
+      "url": "assets/nami-provider-rig.glb",
       "stage": "build.rig.task#1.1.1",
-      "bytes": 5396824
+      "bytes": 5848068
     },
     {
-      "url": "assets/model-165d619de74db479.glb",
-      "stage": "build.rig.finish#1.1.1",
-      "bytes": 5417780
-    },
-    {
-      "url": "assets/model-165d619de74db479.glb",
+      "url": "assets/model-corrected.glb",
       "stage": "result",
-      "bytes": 5417780
+      "bytes": 5869020
     }
   ],
   "images": [
     {
-      "url": "assets/image-6868ddd42acc9f72.png",
-      "label": "references.draw#1.1 / canonical",
+      "url": "assets/nami-sd.png",
+      "label": "Nami no-hood SD canonical",
       "source_label": "references.draw#1.1 / canonical"
     },
     {
-      "url": "assets/image-f3043ea2f972d461.png",
+      "url": "assets/nami-front.png",
       "label": "sides / front",
       "source_label": "sides / front"
     },
     {
-      "url": "assets/image-e7ba8a62cfba8365.png",
+      "url": "assets/nami-back.png",
       "label": "sides / back",
       "source_label": "sides / back"
     },
     {
-      "url": "assets/image-38c6eadb818fb977.png",
-      "label": "Rig diagnostic · rest, five views",
+      "url": "assets/nami-atlas-00.png",
+      "label": "Rig diagnostic \u00b7 rest, five views",
       "source_label": "atlas / 0"
     },
     {
-      "url": "assets/image-e4c5d400d50c608c.png",
-      "label": "Rig diagnostic · shoulder_raise at 0.75s, five views",
+      "url": "assets/nami-atlas-01.png",
+      "label": "Rig diagnostic \u00b7 shoulder_raise at 0.75s, five views",
       "source_label": "atlas / 1"
     },
     {
-      "url": "assets/image-c0f74875a0d647c8.png",
-      "label": "Rig diagnostic · elbow_bend at 0.75s, five views",
+      "url": "assets/nami-atlas-02.png",
+      "label": "Rig diagnostic \u00b7 elbow_bend at 0.75s, five views",
       "source_label": "atlas / 2"
     },
     {
-      "url": "assets/image-26828df09fc300ed.png",
-      "label": "Rig diagnostic · knee_bend at 0.75s, five views",
+      "url": "assets/nami-atlas-03.png",
+      "label": "Rig diagnostic \u00b7 knee_bend at 0.75s, five views",
       "source_label": "atlas / 3"
     },
     {
-      "url": "assets/image-ee239e6189c14193.png",
-      "label": "Rig diagnostic · wrist_bend at 0.75s, five views",
+      "url": "assets/nami-atlas-04.png",
+      "label": "Rig diagnostic \u00b7 wrist_bend at 0.75s, five views",
       "source_label": "atlas / 4"
     },
     {
-      "url": "assets/image-886572b76a0a3eda.png",
-      "label": "Rig diagnostic · cheer at 1.5s, five views",
+      "url": "assets/nami-atlas-05.png",
+      "label": "Rig diagnostic \u00b7 cheer at 1.5s, five views",
       "source_label": "atlas / 5"
     },
     {
-      "url": "assets/image-78a570b9e236e984.png",
-      "label": "Face inspection · front and three-quarter",
+      "url": "assets/nami-atlas-06.png",
+      "label": "Face inspection \u00b7 front and three-quarter",
       "source_label": "atlas / 6"
     },
     {
-      "url": "assets/image-5ff00a7b26ec90c8.png",
-      "label": "Torso comparison · rest",
+      "url": "assets/nami-atlas-07.png",
+      "label": "Torso comparison \u00b7 rest",
       "source_label": "atlas / 7"
     },
     {
-      "url": "assets/image-ecf8538833e63215.png",
-      "label": "Torso comparison · shoulder_raise at 0.75s",
+      "url": "assets/nami-atlas-08.png",
+      "label": "Torso comparison \u00b7 shoulder_raise at 0.75s",
       "source_label": "atlas / 8"
     },
     {
-      "url": "assets/image-9792af41df7c5c21.png",
-      "label": "Torso comparison · elbow_bend at 0.75s",
+      "url": "assets/nami-atlas-09.png",
+      "label": "Torso comparison \u00b7 elbow_bend at 0.75s",
       "source_label": "atlas / 9"
     },
     {
-      "url": "assets/image-b09b1115cf8e441e.png",
-      "label": "Torso comparison · knee_bend at 0.75s",
+      "url": "assets/nami-atlas-10.png",
+      "label": "Torso comparison \u00b7 knee_bend at 0.75s",
       "source_label": "atlas / 10"
     },
     {
-      "url": "assets/image-41124b6d0b5fbd94.png",
-      "label": "Torso comparison · wrist_bend at 0.75s",
+      "url": "assets/nami-atlas-11.png",
+      "label": "Torso comparison \u00b7 wrist_bend at 0.75s",
       "source_label": "atlas / 11"
     },
     {
-      "url": "assets/image-bf2ce6811eb4be39.png",
-      "label": "Torso comparison · cheer at 1.5s",
+      "url": "assets/nami-atlas-12.png",
+      "label": "Torso comparison \u00b7 cheer at 1.5s",
       "source_label": "atlas / 12"
     }
   ],
   "result": {
-    "status": "accepted"
+    "status": "sampled motion checks passed"
   },
   "runtime_qualified": false
 }

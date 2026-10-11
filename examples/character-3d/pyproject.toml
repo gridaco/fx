@@ -2,7 +2,7 @@
 name = "fx-character-3d-example"
 version = "0.0.0"
 requires-python = ">=3.11"
-dependencies = ["grida>=0.2.0,<0.3", "jsonschema>=4.23,<5", "numpy>=2,<3"]
+dependencies = ["grida>=0.2.0,<0.3", "jsonschema>=4.23,<5", "numpy>=2,<3", "Pillow>=11,<13"]
 
 [tool.uv]
 package = false

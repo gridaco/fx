@@ -1,0 +1,4362 @@
+{
+ "asset_id": "rig",
+ "inventory": {
+  "bones": [
+   {
+    "armature": "Armature",
+    "deform": true,
+    "head": [
+     -0.04104340821504593,
+     1.4907142542597285e-7,
+     0.0540861152112484
+    ],
+    "name": "Root",
+    "parent": null,
+    "tail": [
+     -0.8641724586486816,
+     1.4907142542597285e-7,
+     0.05408608913421631
+    ]
+   },
+   {
+    "armature": "Armature",
+    "deform": true,
+    "head": [
+     -0.04104340821504593,
+     0.8231292366981506,
+     0.054086122661828995
+    ],
+    "name": "mixamorig:Hips",
+    "parent": "Root",
+    "tail": [
+     -0.04104340076446533,
+     0.8943186402320862,
+     0.051145847886800766
+    ]
+   },
+   {
+    "armature": "Armature",
+    "deform": true,
+    "head": [
+     -0.041043397039175034,
+     0.8943186402320862,
+     0.05114584416151047
+    ],
+    "name": "mixamorig:Spine",
+    "parent": "mixamorig:Hips",
+    "tail": [
+     -0.04104340076446533,
+     0.9953390955924988,
+     0.04697347804903984
+    ]
+   },
+   {
+    "armature": "Armature",
+    "deform": true,
+    "head": [
+     -0.04104341194033623,
+     0.9953390955924988,
+     0.04697348177433014
+    ],
+    "name": "mixamorig:Spine1",
+    "parent": "mixamorig:Spine",
+    "tail": [
+     -0.041043415665626526,
+     1.096359133720398,
+     0.042801134288311005
+    ]
+   },
+   {
+    "armature": "Armature",
+    "deform": true,
+    "head": [
+     -0.041043415665626526,
+     1.096359133720398,
+     0.0428011380136013
+    ],
+    "name": "mixamorig:Spine2",
+    "parent": "mixamorig:Spine1",
+    "tail": [
+     -0.041043419390916824,
+     1.197261095046997,
+     0.038633670657873154
+    ]
+   },
+   {
+    "armature": "Armature",
+    "deform": true,
+    "head": [
+     -0.041043419390916824,
+     1.1973564624786377,
+     0.03862973302602768
+    ],
+    "name": "mixamorig:Neck",
+    "parent": "mixamorig:Spine2",
+    "tail": [
+     -0.04104342311620712,
+     1.2753819227218628,
+     0.035407111048698425
+    ]
+   },
+   {
+    "armature": "Armature",
+    "deform": true,
+    "head": [
+     -0.04104342311620712,
+     1.2753819227218628,
+     0.03540710732340813
+    ],
+    "name": "mixamorig:Head",
+    "parent": "mixamorig:Neck",
+    "tail": [
+     -0.04104342684149742,
+     1.353407382965088,
+     0.03218448534607887
+    ]
+   },
+   {
+    "armature": "Armature",
+    "deform": true,
+    "head": [
+     -0.040894199162721634,
+     1.1972968578338623,
+     0.03864200413227081
+    ],
+    "name": "mixamorig:LeftShoulder",
+    "parent": "mixamorig:Spine2",
+    "tail": [
+     0.10830071568489075,
+     1.2154358625411987,
+     0.04771154746413231
+    ]
+   },
+   {
+    "armature": "Armature",
+    "deform": true,
+    "head": [
+     0.10832549631595612,
+     1.2152334451675415,
+     0.047705959528684616
+    ],
+    "name": "mixamorig:LeftArm",
+    "parent": "mixamorig:LeftShoulder",
+    "tail": [
+     0.2692660093307495,
+     1.0293594598770142,
+     0.05039244890213013
+    ]
+   },
+   {
+    "armature": "Armature",
+    "deform": true,
+    "head": [
+     0.26928240060806274,
+     1.0293737649917603,
+     0.05039812624454498
+    ],
+    "name": "mixamorig:LeftForeArm",
+    "parent": "mixamorig:LeftArm",
+    "tail": [
+     0.3884681165218353,
+     0.9251446723937988,
+     0.05778348445892334
+    ]
+   },
+   {
+    "armature": "Armature",
+    "deform": true,
+    "head": [
+     0.38846489787101746,
+     0.9251412749290466,
+     0.05778713524341583
+    ],
+    "name": "mixamorig:LeftHand",
+    "parent": "mixamorig:LeftForeArm",
+    "tail": [
+     0.4931390881538391,
+     0.8082189559936523,
+     0.0800580307841301
+    ]
+   },
+   {
+    "armature": "Armature",
+    "deform": true,
+    "head": [
+     -0.041192639619112015,
+     1.1972604990005493,
+     0.0386238768696785
+    ],
+    "name": "mixamorig:RightShoulder",
+    "parent": "mixamorig:Spine2",
+    "tail": [
+     -0.19039137661457062,
+     1.1791210174560547,
+     0.029554100707173347
+    ]
+   },
+   {
+    "armature": "Armature",
+    "deform": true,
+    "head": [
+     -0.19037598371505737,
+     1.1789882183074951,
+     0.029567984864115715
+    ],
+    "name": "mixamorig:RightArm",
+    "parent": "mixamorig:RightShoulder",
+    "tail": [
+     -0.3150944113731384,
+     1.029327392578125,
+     0.03494281694293022
+    ]
+   },
+   {
+    "armature": "Armature",
+    "deform": true,
+    "head": [
+     -0.31509995460510254,
+     1.0293327569961548,
+     0.03496294468641281
+    ],
+    "name": "mixamorig:RightForeArm",
+    "parent": "mixamorig:RightArm",
+    "tail": [
+     -0.4460538923740387,
+     0.8843337297439575,
+     0.06047235056757927
+    ]
+   },
+   {
+    "armature": "Armature",
+    "deform": true,
+    "head": [
+     -0.44605085253715515,
+     0.8843303918838501,
+     0.060468897223472595
+    ],
+    "name": "mixamorig:RightHand",
+    "parent": "mixamorig:RightForeArm",
+    "tail": [
+     -0.5517109036445618,
+     0.7180163860321045,
+     0.0604688785970211
+    ]
+   },
+   {
+    "armature": "Armature",
+    "deform": true,
+    "head": [
+     0.08691616356372833,
+     0.8431745171546936,
+     0.060453541576862335
+    ],
+    "name": "mixamorig:LeftUpLeg",
+    "parent": "mixamorig:Hips",
+    "tail": [
+     0.15404769778251648,
+     0.48030656576156616,
+     0.04499820992350578
+    ]
+   },
+   {
+    "armature": "Armature",
+    "deform": true,
+    "head": [
+     0.15403546392917633,
+     0.480306476354599,
+     0.044948335736989975
+    ],
+    "name": "mixamorig:LeftLeg",
+    "parent": "mixamorig:LeftUpLeg",
+    "tail": [
+     0.21927545964717865,
+     0.06168365105986595,
+     -0.022707877680659294
+    ]
+   },
+   {
+    "armature": "Armature",
+    "deform": true,
+    "head": [
+     0.21924656629562378,
+     0.06167444959282875,
+     -0.02267841249704361
+    ],
+    "name": "mixamorig:LeftFoot",
+    "parent": "mixamorig:LeftLeg",
+    "tail": [
+     0.1894107162952423,
+     0.05813228711485863,
+     0.00775757385417819
+    ]
+   },
+   {
+    "armature": "Armature",
+    "deform": true,
+    "head": [
+     0.1894107311964035,
+     0.058132272213697433,
+     0.007757570594549179
+    ],
+    "name": "mixamorig:LeftToeBase",
+    "parent": "mixamorig:LeftFoot",
+    "tail": [
+     0.15957486629486084,
+     0.05459010973572731,
+     0.03819354251027107
+    ]
+   },
+   {
+    "armature": "Armature",
+    "deform": true,
+    "head": [
+     -0.16895070672035217,
+     0.802399218082428,
+     0.04768509417772293
+    ],
+    "name": "mixamorig:RightUpLeg",
+    "parent": "mixamorig:Hips",
+    "tail": [
+     -0.18392053246498108,
+     0.4803326427936554,
+     0.029538294300436974
+    ]
+   },
+   {
+    "armature": "Armature",
+    "deform": true,
+    "head": [
+     -0.1839098483324051,
+     0.48033416271209717,
+     0.029504826292395592
+    ],
+    "name": "mixamorig:RightLeg",
+    "parent": "mixamorig:RightUpLeg",
+    "tail": [
+     -0.19152255356311798,
+     0.08888309448957443,
+     -0.026074426248669624
+    ]
+   },
+   {
+    "armature": "Armature",
+    "deform": true,
+    "head": [
+     -0.19150575995445251,
+     0.0888781026005745,
+     -0.02604047954082489
+    ],
+    "name": "mixamorig:RightFoot",
+    "parent": "mixamorig:RightLeg",
+    "tail": [
+     -0.1747778207063675,
+     0.07716189324855804,
+     0.007018567528575659
+    ]
+   },
+   {
+    "armature": "Armature",
+    "deform": true,
+    "head": [
+     -0.1747778356075287,
+     0.07716192305088043,
+     0.007018569856882095
+    ],
+    "name": "mixamorig:RightToeBase",
+    "parent": "mixamorig:RightFoot",
+    "tail": [
+     -0.15804988145828247,
+     0.06544571369886398,
+     0.040077608078718185
+    ]
+   }
+  ],
+  "bounds": {
+   "dimensions": [
+    1.0444549295631056,
+    2.0000000223197305,
+    0.7572057689901701
+   ],
+   "max": [
+    0.522227375374591,
+    1.9999996722342885,
+    0.378602929198566
+   ],
+   "min": [
+    -0.5222275541885146,
+    -3.5008544197103546e-7,
+    -0.37860283979160414
+   ]
+  },
+  "clips": [
+   {
+    "bindings": [
+     {
+      "frame_range": [
+       0,
+       120
+      ],
+      "owner": "Armature"
+     }
+    ],
+    "name": "cheer"
+   },
+   {
+    "bindings": [
+     {
+      "frame_range": [
+       0,
+       60
+      ],
+      "owner": "Armature"
+     }
+    ],
+    "name": "elbow_bend"
+   },
+   {
+    "bindings": [
+     {
+      "frame_range": [
+       0,
+       60
+      ],
+      "owner": "Armature"
+     }
+    ],
+    "name": "knee_bend"
+   },
+   {
+    "bindings": [
+     {
+      "frame_range": [
+       0,
+       60
+      ],
+      "owner": "Armature"
+     }
+    ],
+    "name": "rest"
+   },
+   {
+    "bindings": [
+     {
+      "frame_range": [
+       0,
+       60
+      ],
+      "owner": "Armature"
+     }
+    ],
+    "name": "shoulder_raise"
+   },
+   {
+    "bindings": [
+     {
+      "frame_range": [
+       0,
+       60
+      ],
+      "owner": "Armature"
+     }
+    ],
+    "name": "wrist_bend"
+   }
+  ],
+  "components_artifact": "components.json",
+  "images": [
+   {
+    "color_space": "sRGB",
+    "has_data": true,
+    "height": 2048,
+    "name": "tripo_image_8b479343_0",
+    "packed": true,
+    "packed_sha256": "1f870d9b5b31aa273c7617252ef17a44fc0560501278bb0daf36579a53651623",
+    "width": 2048
+   },
+   {
+    "color_space": "Non-Color",
+    "has_data": true,
+    "height": 2048,
+    "name": "tripo_image_8b479343_3",
+    "packed": true,
+    "packed_sha256": "1e37591b3ef9947d20eb09c44b01eee03e045a7eb0b5e3146edc9fd5b2636858",
+    "width": 2048
+   }
+  ],
+  "index_space": "evaluated_blender_mesh_vertices_and_loop_triangles_not_raw_glb_vertex_records",
+  "mesh_count": 1,
+  "meshes": [
+   {
+    "analysis_weld_topology": {
+     "boundary_edges": 29,
+     "collapsed_triangles_after_analysis_weld": 0,
+     "component_count": 4,
+     "components": [
+      {
+       "bounds": {
+        "dimensions": [
+         1.0444549295631056,
+         2.0000000223197305,
+         0.7572057689901701
+        ],
+        "max": [
+         0.522227375374591,
+         1.9999996722342885,
+         0.378602929198566
+        ],
+        "min": [
+         -0.5222275541885146,
+         -3.5008544197103546e-7,
+         -0.37860283979160414
+        ]
+       },
+       "index": 0,
+       "vertex_count": 21305
+      },
+      {
+       "bounds": {
+        "dimensions": [
+         0.1612041794536001,
+         0.09281920833473123,
+         0.08402648812374514
+        ],
+        "max": [
+         -0.08745455220612541,
+         0.2794333828431519,
+         0.17830394635772961
+        ],
+        "min": [
+         -0.24865873165972552,
+         0.18661417450842066,
+         0.09427745823398448
+        ]
+       },
+       "index": 1,
+       "vertex_count": 625
+      },
+      {
+       "bounds": {
+        "dimensions": [
+         0.16121146612098958,
+         0.09281877620108236,
+         0.08402519172279854
+        ],
+        "max": [
+         0.24865703292745067,
+         0.279433144424587,
+         0.1783091766649969
+        ],
+        "min": [
+         0.0874455668064611,
+         0.18661436822350463,
+         0.09428398494219836
+        ]
+       },
+       "index": 2,
+       "vertex_count": 613
+      },
+      {
+       "bounds": {
+        "dimensions": [
+         0.13385445571813204,
+         0.1416712914901197,
+         0.09672687371212962
+        ],
+        "max": [
+         0.37860283979160414,
+         1.7664875229904666,
+         0.2799219620274318
+        ],
+        "min": [
+         0.2447483840734721,
+         1.624816231500347,
+         0.18319508831530218
+        ]
+       },
+       "index": 3,
+       "vertex_count": 226
+      }
+     ],
+     "nonmanifold_edges": 10,
+     "referenced_vertices": 22769,
+     "tolerance": 0.0000023799678077149673,
+     "unreferenced_vertices": 0,
+     "welded_vertices": 10863
+    },
+    "bounds": {
+     "dimensions": [
+      1.0444549295631056,
+      2.0000000223197305,
+      0.7572057689901701
+     ],
+     "max": [
+      0.522227375374591,
+      1.9999996722342885,
+      0.378602929198566
+     ],
+     "min": [
+      -0.5222275541885146,
+      -3.5008544197103546e-7,
+      -0.37860283979160414
+     ]
+    },
+    "degenerate_triangles": 0,
+    "geometry_archive": "mesh-000.npz",
+    "indexed_topology": {
+     "boundary_edges": 19980,
+     "component_count": 1932,
+     "nonmanifold_edges": 0
+    },
+    "materials": [
+     "tripo_mat_8b479343"
+    ],
+    "modifiers": [
+     {
+      "name": "Armature",
+      "type": "ARMATURE"
+     }
+    ],
+    "name": "character__mesh_00",
+    "native_polygon_counts": {
+     "ngons": 0,
+     "quads": 0,
+     "triangles": 21718
+    },
+    "shape_keys": [],
+    "surface_area": 5.870360556933122,
+    "triangles": 21718,
+    "uv_layers": [
+     {
+      "corner_count": 65154,
+      "name": "UVMap"
+     }
+    ],
+    "vertices": 22769,
+    "weighted_vertex_groups_source_mesh": {
+     "mixamorig:Head": 10603,
+     "mixamorig:Hips": 1851,
+     "mixamorig:LeftArm": 5453,
+     "mixamorig:LeftFoot": 710,
+     "mixamorig:LeftForeArm": 1258,
+     "mixamorig:LeftHand": 954,
+     "mixamorig:LeftLeg": 2998,
+     "mixamorig:LeftShoulder": 4210,
+     "mixamorig:LeftToeBase": 2130,
+     "mixamorig:LeftUpLeg": 2350,
+     "mixamorig:Neck": 572,
+     "mixamorig:RightArm": 1782,
+     "mixamorig:RightFoot": 706,
+     "mixamorig:RightForeArm": 1110,
+     "mixamorig:RightHand": 560,
+     "mixamorig:RightLeg": 2970,
+     "mixamorig:RightShoulder": 1072,
+     "mixamorig:RightToeBase": 2201,
+     "mixamorig:RightUpLeg": 1982,
+     "mixamorig:Spine": 1649,
+     "mixamorig:Spine1": 2339,
+     "mixamorig:Spine2": 667
+    }
+   }
+  ],
+  "nearest_points": [],
+  "slices": [],
+  "topology_limitations": "Connectivity and proximity clusters are measured evidence, not anatomical segmentation or deformation readiness. Proximity welding is transitive and analysis-only; source geometry is unchanged.",
+  "triangles": 21718,
+  "vertices": 22769
+ },
+ "local_weight_correction": {
+  "all_nonweight_binary_bytes_unchanged": true,
+  "animation_tracks_and_amplitudes_unchanged": true,
+  "changed_joint_index_count": 0,
+  "changed_vertex_count": 514,
+  "changed_weight_slot_count": 1702,
+  "description": "Explicit local lower-body weight correction of provider-authored rig; not an unmodified provider rig.",
+  "joint_weight_changes": [
+   {
+    "changed_vertices": 199,
+    "joint": "mixamorig:Hips",
+    "mass_after": 9.967437744140625,
+    "mass_before": 9.233901977539062
+   },
+   {
+    "changed_vertices": 210,
+    "joint": "mixamorig:Spine",
+    "mass_after": 9.581880569458008,
+    "mass_before": 8.832441329956055
+   },
+   {
+    "changed_vertices": 232,
+    "joint": "mixamorig:Spine1",
+    "mass_after": 14.373177528381348,
+    "mass_before": 13.472465515136719
+   },
+   {
+    "changed_vertices": 90,
+    "joint": "mixamorig:LeftArm",
+    "mass_after": 0,
+    "mass_before": 4.58403205871582
+   },
+   {
+    "changed_vertices": 301,
+    "joint": "mixamorig:LeftForeArm",
+    "mass_after": 0,
+    "mass_before": 29.304691314697266
+   },
+   {
+    "changed_vertices": 142,
+    "joint": "mixamorig:RightForeArm",
+    "mass_after": 0,
+    "mass_before": 14.677602767944336
+   },
+   {
+    "changed_vertices": 372,
+    "joint": "mixamorig:LeftUpLeg",
+    "mass_after": 348.55926513671875,
+    "mass_before": 316.025146484375
+   },
+   {
+    "changed_vertices": 156,
+    "joint": "mixamorig:RightUpLeg",
+    "mass_after": 131.51824951171875,
+    "mass_before": 117.8697280883789
+   }
+  ],
+  "json_document_unchanged": true,
+  "mesh_positions_normals_uv_triangles_materials_textures_unchanged": true,
+  "output_sha256": "5c0d91039150a4db1eec6828d88a277cf6599074c0d21a72a504401538f4ed45",
+  "rest_surface_default_audit": {
+   "ambiguous_normal_correspondence_vertices": 24,
+   "ambiguous_normals_resolved_by_provider_normal": 24,
+   "appearance_preserved": true,
+   "appearance_scope": "Matched surface texture slots, sampled UV transforms, samplers, base-color tint, vertex colors and opacity; light response and normals are separate policies.",
+   "decoded_image_identity": {},
+   "image_identity": [
+    {
+     "identity": "1e37591b3ef9947d20eb09c44b01eee03e045a7eb0b5e3146edc9fd5b2636858",
+     "provider_index": 0,
+     "raw_sha256": "1e37591b3ef9947d20eb09c44b01eee03e045a7eb0b5e3146edc9fd5b2636858"
+    },
+    {
+     "identity": "1f870d9b5b31aa273c7617252ef17a44fc0560501278bb0daf36579a53651623",
+     "provider_index": 1,
+     "raw_sha256": "1f870d9b5b31aa273c7617252ef17a44fc0560501278bb0daf36579a53651623"
+    },
+    {
+     "identity": "26ceebc8b8b6f86f5197a65eb05866a00d310b823849f9ffbe3b3dfc0f1d6338",
+     "provider_index": 2,
+     "raw_sha256": "26ceebc8b8b6f86f5197a65eb05866a00d310b823849f9ffbe3b3dfc0f1d6338"
+    }
+   ],
+   "material_limit": "Serialization inequality is not evidence of a visible material defect.",
+   "materials_json_equal": true,
+   "position_error_source_units": {
+    "count": 22769,
+    "max": 3.9993560660002974e-7,
+    "median": 0,
+    "min": 0,
+    "p95": 0,
+    "p99": 3.838563928524728e-8
+   },
+   "provider_image_payloads_all_from_source": true,
+   "provider_image_sha256": [
+    "1e37591b3ef9947d20eb09c44b01eee03e045a7eb0b5e3146edc9fd5b2636858",
+    "1f870d9b5b31aa273c7617252ef17a44fc0560501278bb0daf36579a53651623",
+    "26ceebc8b8b6f86f5197a65eb05866a00d310b823849f9ffbe3b3dfc0f1d6338"
+   ],
+   "provider_images_pixel_identical_to_source": true,
+   "provider_vertex_count": 22769,
+   "registration": "explicit_verified_similarity",
+   "source_image_sha256": [
+    "1e37591b3ef9947d20eb09c44b01eee03e045a7eb0b5e3146edc9fd5b2636858",
+    "1f870d9b5b31aa273c7617252ef17a44fc0560501278bb0daf36579a53651623",
+    "26ceebc8b8b6f86f5197a65eb05866a00d310b823849f9ffbe3b3dfc0f1d6338"
+   ],
+   "source_to_provider": [
+    [
+     1,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     1,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     1,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     1
+    ]
+   ],
+   "source_vertex_count": 22769,
+   "status": "surface_correspondence_verified",
+   "texture_binding_preserved": true,
+   "triangle_connectivity_and_winding_equal": true,
+   "uv_max_error": 0
+  },
+  "schema_version": 1,
+  "selection": {
+   "central_component_vertex_count": 7111,
+   "method": "static_rest_waist_cut_induced_triangle_component_with_coincident_uv_seam_weld",
+   "nonarm_weight_min_before": 0.6707865595817566,
+   "scope": "Central lower body including skirt and hidden thigh/skin; not a garment-only mask. Static selection never samples animation.",
+   "seam_weld_tolerance_world": 0.000003,
+   "selected_bounds": {
+    "max": [
+     0.31411791510942577,
+     0.9496827950136262,
+     0.2535411076609567
+    ],
+    "min": [
+     -0.3141139828689166,
+     0.742550337121862,
+     -0.1411808628740435
+    ]
+   },
+   "selected_vertex_count": 514,
+   "vertex_indices": [
+    2530,
+    2801,
+    2802,
+    2803,
+    3300,
+    3301,
+    3335,
+    3336,
+    3480,
+    3481,
+    3482,
+    3556,
+    3557,
+    3588,
+    3589,
+    3590,
+    3591,
+    3868,
+    3869,
+    3891,
+    3892,
+    3920,
+    3921,
+    3960,
+    3961,
+    3962,
+    3963,
+    4042,
+    4103,
+    4104,
+    4130,
+    4131,
+    4224,
+    4225,
+    4226,
+    4227,
+    4295,
+    4296,
+    4548,
+    4549,
+    4550,
+    4627,
+    4628,
+    4656,
+    4752,
+    4753,
+    4754,
+    4755,
+    4779,
+    4780,
+    4781,
+    4782,
+    4799,
+    4800,
+    4801,
+    4912,
+    4952,
+    4953,
+    4954,
+    4955,
+    5041,
+    5042,
+    5043,
+    5087,
+    5088,
+    5212,
+    5213,
+    5239,
+    5240,
+    5241,
+    5245,
+    5246,
+    5247,
+    5368,
+    5369,
+    5370,
+    5371,
+    5393,
+    5394,
+    5456,
+    5457,
+    5503,
+    5504,
+    5616,
+    5617,
+    5689,
+    5690,
+    5691,
+    5692,
+    5695,
+    5696,
+    5735,
+    5736,
+    5755,
+    5756,
+    5757,
+    5758,
+    5759,
+    5802,
+    5855,
+    5856,
+    5899,
+    5900,
+    5901,
+    5902,
+    5991,
+    5992,
+    6076,
+    6077,
+    6078,
+    6109,
+    6110,
+    6111,
+    6112,
+    6131,
+    6132,
+    6147,
+    6148,
+    6149,
+    6167,
+    6168,
+    6195,
+    6196,
+    6197,
+    6198,
+    6199,
+    6222,
+    6223,
+    6264,
+    6265,
+    6268,
+    6286,
+    6287,
+    6288,
+    6289,
+    6290,
+    6291,
+    6292,
+    6293,
+    6324,
+    6325,
+    6343,
+    6366,
+    6399,
+    6400,
+    6401,
+    6402,
+    6403,
+    6404,
+    6405,
+    6427,
+    6428,
+    6520,
+    6523,
+    6524,
+    6570,
+    6571,
+    6572,
+    6575,
+    6576,
+    6577,
+    6578,
+    6579,
+    6580,
+    6639,
+    6640,
+    6641,
+    6644,
+    6645,
+    6646,
+    6667,
+    6668,
+    6752,
+    6753,
+    6754,
+    6755,
+    6831,
+    6832,
+    6833,
+    6834,
+    6891,
+    6892,
+    6893,
+    6894,
+    6895,
+    6931,
+    6932,
+    6933,
+    6934,
+    6986,
+    6987,
+    6988,
+    6989,
+    7090,
+    7091,
+    7092,
+    7093,
+    7094,
+    7095,
+    7136,
+    7137,
+    7138,
+    7139,
+    7166,
+    7167,
+    7168,
+    7215,
+    7216,
+    7217,
+    7250,
+    7251,
+    7252,
+    7284,
+    7285,
+    7286,
+    7287,
+    7288,
+    7289,
+    7290,
+    7327,
+    7350,
+    7351,
+    7378,
+    7379,
+    7380,
+    7381,
+    7407,
+    7408,
+    7439,
+    7440,
+    7441,
+    7496,
+    7497,
+    7498,
+    7533,
+    7552,
+    7553,
+    7600,
+    7601,
+    7602,
+    7627,
+    7628,
+    7643,
+    7644,
+    7704,
+    7705,
+    7740,
+    7741,
+    7743,
+    7772,
+    7773,
+    7774,
+    7775,
+    7776,
+    7777,
+    7798,
+    7799,
+    7800,
+    7828,
+    7893,
+    7894,
+    7895,
+    7896,
+    7897,
+    7915,
+    7952,
+    7953,
+    7954,
+    7955,
+    7956,
+    7972,
+    7973,
+    7974,
+    8023,
+    8024,
+    8025,
+    8026,
+    8027,
+    8111,
+    8112,
+    8132,
+    8133,
+    8171,
+    8188,
+    8189,
+    8208,
+    8209,
+    8210,
+    8211,
+    8261,
+    8262,
+    8263,
+    8264,
+    8312,
+    8313,
+    8314,
+    8365,
+    8366,
+    8385,
+    8386,
+    8387,
+    8483,
+    8484,
+    8514,
+    8515,
+    8516,
+    8517,
+    8518,
+    8519,
+    8584,
+    8585,
+    8586,
+    8587,
+    8588,
+    8589,
+    8606,
+    8607,
+    8654,
+    8655,
+    8670,
+    8671,
+    8672,
+    8673,
+    8674,
+    8675,
+    8676,
+    8815,
+    8816,
+    8817,
+    8818,
+    8819,
+    8896,
+    8897,
+    8898,
+    8944,
+    8945,
+    8946,
+    8947,
+    8977,
+    8978,
+    8993,
+    8994,
+    8995,
+    8996,
+    8997,
+    8998,
+    8999,
+    9000,
+    9001,
+    9002,
+    9003,
+    9004,
+    9005,
+    9056,
+    9057,
+    9058,
+    9067,
+    9068,
+    9069,
+    9070,
+    9226,
+    9227,
+    9228,
+    9323,
+    9324,
+    9325,
+    9326,
+    9327,
+    9344,
+    9345,
+    9346,
+    9347,
+    16942,
+    16943,
+    16944,
+    17157,
+    17158,
+    17238,
+    17239,
+    17442,
+    17443,
+    17444,
+    17596,
+    17597,
+    17598,
+    17599,
+    17637,
+    17638,
+    17811,
+    17844,
+    17845,
+    17947,
+    17950,
+    17951,
+    17977,
+    17978,
+    18046,
+    18047,
+    18048,
+    18067,
+    18265,
+    18266,
+    18267,
+    18499,
+    18500,
+    18604,
+    18605,
+    18631,
+    18808,
+    18809,
+    18860,
+    18861,
+    18967,
+    18968,
+    19043,
+    19091,
+    19092,
+    19109,
+    19160,
+    19161,
+    19307,
+    19308,
+    19333,
+    19334,
+    19385,
+    19386,
+    19436,
+    19437,
+    19438,
+    19474,
+    19475,
+    19476,
+    19537,
+    19538,
+    19539,
+    19592,
+    19593,
+    19610,
+    19611,
+    19612,
+    19699,
+    19700,
+    19732,
+    19733,
+    19734,
+    19735,
+    19736,
+    19775,
+    19776,
+    19777,
+    19778,
+    19779,
+    19780,
+    19800,
+    19801,
+    19842,
+    19843,
+    19865,
+    19866,
+    19867,
+    19868,
+    19869,
+    19870,
+    19871,
+    19995,
+    19996,
+    19997,
+    19998,
+    19999,
+    20000,
+    20001,
+    20082,
+    20083,
+    20084,
+    20085,
+    20086,
+    20087,
+    20088,
+    20089,
+    20090,
+    20091,
+    20114,
+    20130,
+    20131,
+    20132,
+    20133,
+    20134,
+    20135,
+    20136,
+    20137,
+    20138,
+    20139,
+    20140,
+    20174,
+    20175,
+    20176,
+    20177,
+    20198,
+    20199,
+    20200,
+    20326,
+    20327,
+    20328,
+    20329,
+    20434,
+    20435,
+    20436,
+    20437,
+    20438,
+    20439,
+    20458,
+    20459,
+    20460,
+    20461
+   ],
+   "vertex_indices_sha256": "b16d80d3fe1d419901ea49afe630f1c0b9340e2f572b3bffe5768e15607b2184",
+   "waist_cut_y_world": 0.95
+  },
+  "source_sha256": "73cfe88743514eb1f3eb939314107d5b69d609a9ddd422058c1d98d7ec903dcc"
+ },
+ "metrics": {
+  "blocking_findings": []
+ },
+ "open_issues": [
+  "extra_rear_blossom",
+  "game_and_runtime_qualification_pending"
+ ],
+ "original_rig_report": {
+  "report": {
+   "clips": [
+    {
+     "author": "deterministic local diagnostic",
+     "channel_count": 1,
+     "duration_seconds": 2,
+     "fps": 24,
+     "hand_claim": "wrist rotation only; no finger or thumb articulation added",
+     "mapped_joints": [
+      "head"
+     ],
+     "name": "rest",
+     "review_times_seconds": [
+      0,
+      0.5,
+      1,
+      1.5,
+      2
+     ],
+     "sample_count": 49
+    },
+    {
+     "author": "deterministic local diagnostic",
+     "channel_count": 2,
+     "duration_seconds": 2,
+     "fps": 24,
+     "hand_claim": "wrist rotation only; no finger or thumb articulation added",
+     "mapped_joints": [
+      "left_upper_arm",
+      "right_upper_arm"
+     ],
+     "name": "shoulder_raise",
+     "review_times_seconds": [
+      0,
+      0.5,
+      1,
+      1.5,
+      2
+     ],
+     "sample_count": 49
+    },
+    {
+     "author": "deterministic local diagnostic",
+     "channel_count": 2,
+     "duration_seconds": 2,
+     "fps": 24,
+     "hand_claim": "wrist rotation only; no finger or thumb articulation added",
+     "mapped_joints": [
+      "left_forearm",
+      "right_forearm"
+     ],
+     "name": "elbow_bend",
+     "review_times_seconds": [
+      0,
+      0.5,
+      1,
+      1.5,
+      2
+     ],
+     "sample_count": 49
+    },
+    {
+     "author": "deterministic local diagnostic",
+     "channel_count": 2,
+     "duration_seconds": 2,
+     "fps": 24,
+     "hand_claim": "wrist rotation only; no finger or thumb articulation added",
+     "mapped_joints": [
+      "left_lower_leg",
+      "right_lower_leg"
+     ],
+     "name": "knee_bend",
+     "review_times_seconds": [
+      0,
+      0.5,
+      1,
+      1.5,
+      2
+     ],
+     "sample_count": 49
+    },
+    {
+     "author": "deterministic local diagnostic",
+     "channel_count": 2,
+     "duration_seconds": 2,
+     "fps": 24,
+     "hand_claim": "wrist rotation only; no finger or thumb articulation added",
+     "mapped_joints": [
+      "left_hand",
+      "right_hand"
+     ],
+     "name": "wrist_bend",
+     "review_times_seconds": [
+      0,
+      0.5,
+      1,
+      1.5,
+      2
+     ],
+     "sample_count": 49
+    },
+    {
+     "author": "deterministic local diagnostic",
+     "channel_count": 5,
+     "duration_seconds": 4,
+     "fps": 24,
+     "hand_claim": "wrist rotation only; no finger or thumb articulation added",
+     "mapped_joints": [
+      "left_upper_arm",
+      "left_forearm",
+      "right_upper_arm",
+      "right_forearm",
+      "chest"
+     ],
+     "name": "cheer",
+     "review_times_seconds": [
+      0,
+      1,
+      2,
+      3,
+      4
+     ],
+     "sample_count": 97
+    }
+   ],
+   "code_version": "provider_rig_v2_output_space",
+   "coordinate_system": {
+    "anatomical_front": "unverified_until_explicitly_oriented",
+    "blender_to_gltf": [
+     [
+      1,
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      1,
+      0
+     ],
+     [
+      0,
+      -1,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0,
+      1
+     ]
+    ],
+    "gltf_to_blender": [
+     [
+      1,
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      -1,
+      0
+     ],
+     [
+      0,
+      1,
+      0,
+      0
+     ],
+     [
+      0,
+      0,
+      0,
+      1
+     ]
+    ],
+    "length_unit": "scene_unit_after_format_importer_unit_conversion_no_worker_height_normalization",
+    "public": "gltf_right_handed_x_right_y_up_z_nominal_front"
+   },
+   "external_rig": {
+    "anatomical_front": "measured_from_mapped_leg_axis_when_diagnostics_requested",
+    "bounds": {
+     "dimensions": [
+      1.0444550417201768,
+      2.0000000000000027,
+      0.7572057545692951
+     ],
+     "max": [
+      0.5222274574979507,
+      1.9999999999999998,
+      0.37860286505708607
+     ],
+     "min": [
+      -0.5222275842222259,
+      -2.9621154463319452e-15,
+      -0.378602889512209
+     ]
+    },
+    "controlled_weighted_nodes": {
+     "chest": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+     ],
+     "head": [
+      0
+     ],
+     "left_foot": [
+      13,
+      14
+     ],
+     "left_forearm": [
+      2,
+      3
+     ],
+     "left_hand": [
+      2
+     ],
+     "left_lower_leg": [
+      13,
+      14,
+      15
+     ],
+     "left_shoulder": [
+      2,
+      3,
+      4,
+      5
+     ],
+     "left_toes": [
+      13
+     ],
+     "left_upper_arm": [
+      2,
+      3,
+      4
+     ],
+     "left_upper_leg": [
+      13,
+      14,
+      15,
+      16
+     ],
+     "neck": [
+      0,
+      1
+     ],
+     "pelvis": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21
+     ],
+     "right_foot": [
+      17,
+      18
+     ],
+     "right_forearm": [
+      6,
+      7
+     ],
+     "right_hand": [
+      6
+     ],
+     "right_lower_leg": [
+      17,
+      18,
+      19
+     ],
+     "right_shoulder": [
+      6,
+      7,
+      8,
+      9
+     ],
+     "right_toes": [
+      17
+     ],
+     "right_upper_arm": [
+      6,
+      7,
+      8
+     ],
+     "right_upper_leg": [
+      17,
+      18,
+      19,
+      20
+     ],
+     "spine_lower": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+     ],
+     "spine_upper": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+     ]
+    },
+    "image_count": 3,
+    "joint_count": 23,
+    "joints": [
+     {
+      "name": "mixamorig:Head",
+      "node_index": 0,
+      "parent_node_index": 1,
+      "world_matrix": [
+       [
+        1.377895673259472e-7,
+        -2.2428359006938846e-7,
+        1.999999702914073,
+        -0.04104343361198009
+       ],
+       [
+        -0.08253392594440144,
+        1.998295844517565,
+        2.358813921053246e-7,
+        1.275382207416858
+       ],
+       [
+        -1.9982958952265764,
+        -0.08253392995792751,
+        1.3427254946605352e-7,
+        0.03540709415635896
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     {
+      "name": "mixamorig:Neck",
+      "node_index": 1,
+      "parent_node_index": 10,
+      "world_matrix": [
+       [
+        3.758472259924624e-7,
+        -2.242836087554022e-7,
+        1.9999997029140426,
+        -0.04104342698537864
+       ],
+       [
+        -0.0825339222222778,
+        1.9982958446712955,
+        2.457053281379013e-7,
+        1.1973566424797508
+       ],
+       [
+        -1.998295895380277,
+        -0.08253392623583243,
+        3.721274055431691e-7,
+        0.03862972329908283
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     {
+      "name": "mixamorig:LeftHand",
+      "node_index": 2,
+      "parent_node_index": 3,
+      "world_matrix": [
+       [
+        0.4162109767371529,
+        1.3207773592233332,
+        -1.443022794313287,
+        0.3884649892317751
+       ],
+       [
+        -2.3234600080024315e-7,
+        -1.475322570497927,
+        -1.3503413078751934,
+        0.9251415144567633
+       ],
+       [
+        -1.9562121162712414,
+        0.281013644466202,
+        -0.30702262496962957,
+        0.057787115935492725
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     {
+      "name": "mixamorig:LeftForeArm",
+      "node_index": 3,
+      "parent_node_index": 4,
+      "world_matrix": [
+       [
+        0.1236924607666133,
+        1.5038832348780746,
+        -1.3126441278890955,
+        0.26928238603468646
+       ],
+       [
+        -4.5345481029801515e-7,
+        -1.3151613857034787,
+        -1.5067676875935565,
+        1.0293741552697546
+       ],
+       [
+        -1.9961708430267722,
+        0.09318821764368654,
+        -0.08133745924475912,
+        0.05039809713238199
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     {
+      "name": "mixamorig:LeftArm",
+      "node_index": 4,
+      "parent_node_index": 5,
+      "world_matrix": [
+       [
+        0.033379828142814386,
+        1.3090854329344819,
+        -1.5116812479352937,
+        0.10832541234275876
+       ],
+       [
+        -2.0978881713415443e-7,
+        -1.5118916825132276,
+        -1.309267560258299,
+        1.2152337044629589
+       ],
+       [
+        -1.9997208921706726,
+        0.021851748564914918,
+        -0.02523321515567377,
+        0.047705945069688574
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     {
+      "name": "mixamorig:LeftShoulder",
+      "node_index": 5,
+      "parent_node_index": 10,
+      "world_matrix": [
+       [
+        0.11959109798556229,
+        1.9817751095236869,
+        0.24138071613371367,
+        -0.04089422541179726
+       ],
+       [
+        0.014540355226828089,
+        0.2409423758395865,
+        -1.9853799314067544,
+        1.1972969872080181
+       ],
+       [
+        -1.9963679229401556,
+        0.12047179516033234,
+        -5.596009272912372e-7,
+        0.03864200425808618
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     {
+      "name": "mixamorig:RightHand",
+      "node_index": 6,
+      "parent_node_index": 7,
+      "world_matrix": [
+       [
+        -6.008221876963038e-7,
+        -1.07247802642997,
+        1.6881321667373437,
+        -0.4460508603692669
+       ],
+       [
+        1.4889752558699954e-7,
+        -1.688132247964482,
+        -1.072478066916774,
+        0.8843306038235464
+       ],
+       [
+        1.9999998283204248,
+        -2.068426259160816e-7,
+        5.900880312020851e-7,
+        0.06046889598465427
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     {
+      "name": "mixamorig:RightForeArm",
+      "node_index": 7,
+      "parent_node_index": 8,
+      "world_matrix": [
+       [
+        0.38240561621350877,
+        -1.3292173088349701,
+        1.4446268281628476,
+        -0.31509998065290007
+       ],
+       [
+        1.340760705237365e-7,
+        -1.471780088862766,
+        -1.3542017989593247,
+        1.0293329402530607
+       ],
+       [
+        1.963100929661344,
+        0.25892730042062323,
+        -0.28140842078322875,
+        0.034962957924657034
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     {
+      "name": "mixamorig:RightArm",
+      "node_index": 8,
+      "parent_node_index": 9,
+      "world_matrix": [
+       [
+        0.08611137967891293,
+        -1.279888465156163,
+        1.5344281435046017,
+        -0.19037601116413694
+       ],
+       [
+        1.3879556298376783e-7,
+        -1.5358521284859006,
+        -1.2810766493676622,
+        1.1789883326220885
+       ],
+       [
+        1.9981451740855676,
+        0.055157742573002086,
+        -0.06612708633848374,
+        0.029567993598270545
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     {
+      "name": "mixamorig:RightShoulder",
+      "node_index": 9,
+      "parent_node_index": 10,
+      "world_matrix": [
+       [
+        0.11959123558310072,
+        -1.9817750931410032,
+        -0.2413809665343755,
+        -0.041192647189636174
+       ],
+       [
+        0.014539775108599565,
+        -0.24094264659151246,
+        1.9853800416800806,
+        1.197260474777001
+       ],
+       [
+        -1.996367918893051,
+        -0.12047185138317938,
+        -3.264765792432289e-8,
+        0.03862387070291148
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     {
+      "name": "mixamorig:Spine2",
+      "node_index": 10,
+      "parent_node_index": 11,
+      "world_matrix": [
+       [
+        3.674545272335574e-7,
+        -2.3316822692016655e-7,
+        1.999999702914043,
+        -0.041043414818944156
+       ],
+       [
+        -0.08253385894630576,
+        1.9982958472847274,
+        2.542360246910083e-7,
+        1.096359196944002
+       ],
+       [
+        -1.9982958979937118,
+        -0.08253386295985937,
+        3.633752231495625e-7,
+        0.04280113760128975
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     {
+      "name": "mixamorig:Spine1",
+      "node_index": 11,
+      "parent_node_index": 12,
+      "world_matrix": [
+       [
+        -3.467493380137748e-7,
+        -2.328225899311472e-7,
+        1.9999997029140466,
+        -0.04104340456395838
+       ],
+       [
+        -0.08253379194824119,
+        1.9982959691596132,
+        2.2441767527641745e-7,
+        0.9953390623542342
+       ],
+       [
+        -1.998295900760879,
+        -0.0825338008811135,
+        -3.5020593870350543e-7,
+        0.046973477915280865
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     {
+      "name": "mixamorig:Spine",
+      "node_index": 12,
+      "parent_node_index": 21,
+      "world_matrix": [
+       [
+        5.831774909903882e-7,
+        -2.328219123030129e-7,
+        1.9999997029139918,
+        -0.04104339797632303
+       ],
+       [
+        -0.08253389616745502,
+        1.9982959648551348,
+        2.6279222753003025e-7,
+        0.8943186753204877
+       ],
+       [
+        -1.998295896456347,
+        -0.08253390510043704,
+        5.789286990924149e-7,
+        0.05114584466109597
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     {
+      "name": "mixamorig:LeftToeBase",
+      "node_index": 13,
+      "parent_node_index": 14,
+      "world_matrix": [
+       [
+        -1.4282242174579296,
+        -1.3952524861318867,
+        -0.11595819977887352,
+        0.18941072507661713
+       ],
+       [
+        -4.169759552212599e-7,
+        -0.1656466720659841,
+        1.993127725695003,
+        0.05813241704225391
+       ],
+       [
+        -1.400064993073894,
+        1.4233186954200032,
+        0.11829001246743324,
+        0.007757551777796791
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     {
+      "name": "mixamorig:LeftFoot",
+      "node_index": 14,
+      "parent_node_index": 15,
+      "world_matrix": [
+       [
+        -1.4282248863820164,
+        -1.3952519330223379,
+        -0.11595762361386361,
+        0.21924655182129973
+       ],
+       [
+        3.1562489623661663e-7,
+        -0.16564667451429244,
+        1.9931278451117826,
+        0.06167459055445936
+       ],
+       [
+        -1.4000643106938444,
+        1.4233194048484048,
+        0.11829058070085197,
+        -0.022678484267522583
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     {
+      "name": "mixamorig:LeftLeg",
+      "node_index": 15,
+      "parent_node_index": 16,
+      "world_matrix": [
+       [
+        0.048557949479054924,
+        0.30411768737268763,
+        1.9761466431525536,
+        0.1540355068542708
+       ],
+       [
+        -0.31162082210219827,
+        -1.9514211312748448,
+        0.3079700112236677,
+        0.48030659756969224
+       ],
+       [
+        1.9749798769567894,
+        -0.3153816189099108,
+        0.000006398914818460041,
+        0.04494834088229767
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     {
+      "name": "mixamorig:LeftUpLeg",
+      "node_index": 16,
+      "parent_node_index": 21,
+      "world_matrix": [
+       [
+        0.015217959045095382,
+        0.363512893001259,
+        1.9666286544733382,
+        0.08691618488209045
+       ],
+       [
+        -0.0822944969587791,
+        -1.9649051620971862,
+        0.36383140605563136,
+        0.843174558340664
+       ],
+       [
+        1.998251138480306,
+        -0.08368956709918327,
+        0.000006824978324625197,
+        0.06045354286299638
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     {
+      "name": "mixamorig:RightToeBase",
+      "node_index": 17,
+      "parent_node_index": 18,
+      "world_matrix": [
+       [
+        -1.784597528034111,
+        0.8609888854046688,
+        0.2722657818160175,
+        -0.1747769538870738
+       ],
+       [
+        0.000005183633976675733,
+        -0.6030182695123115,
+        1.906926195474252,
+        0.07716182409669756
+       ],
+       [
+        0.9029927018581527,
+        1.7015135570997975,
+        0.5380576800637802,
+        0.007018653915076602
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     {
+      "name": "mixamorig:RightFoot",
+      "node_index": 18,
+      "parent_node_index": 19,
+      "world_matrix": [
+       [
+        -1.7845986749952067,
+        0.8609879283235403,
+        0.2722609334378723,
+        -0.1915053961585373
+       ],
+       [
+        1.3781547487934365e-7,
+        -0.6030185528183181,
+        1.9069258558374733,
+        0.08887805593673972
+       ],
+       [
+        0.9029904351868115,
+        1.7015136607230419,
+        0.5380604508161341,
+        -0.026040626699268755
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     {
+      "name": "mixamorig:RightLeg",
+      "node_index": 19,
+      "parent_node_index": 20,
+      "world_matrix": [
+       [
+        -0.005413357038915077,
+        -0.03849964758909882,
+        1.999676600784698,
+        -0.18390986090459183
+       ],
+       [
+        -0.2810419008169912,
+        -1.9797729958614974,
+        -0.03888237186730733,
+        0.4803340793187583
+       ],
+       [
+        1.9801603498520872,
+        -0.28109436764336604,
+        -0.0000514711074606866,
+        0.02950485153234436
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     {
+      "name": "mixamorig:RightUpLeg",
+      "node_index": 20,
+      "parent_node_index": 21,
+      "world_matrix": [
+       [
+        -0.005166375452097051,
+        -0.09271383200481055,
+        1.9978977674217273,
+        -0.16895076057414868
+       ],
+       [
+        -0.11227213406814904,
+        -1.9946854192705876,
+        -0.09286019996865826,
+        0.802399169836858
+       ],
+       [
+        1.9968518994906637,
+        -0.11239019086546595,
+        -0.00005197644863690499,
+        0.047685101913468246
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     {
+      "name": "mixamorig:Hips",
+      "node_index": 21,
+      "parent_node_index": 22,
+      "world_matrix": [
+       [
+        1.9999997713711186,
+        6.939018441952124e-8,
+        -1.775457049142983e-7,
+        -0.04104340956951496
+       ],
+       [
+        -5.5901602114331e-8,
+        1.998295963317835,
+        0.08253393621367784,
+        0.8231292786179056
+       ],
+       [
+        1.8611384736108863e-7,
+        -0.08253394232157672,
+        1.9982959633178279,
+        0.05408612828846297
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     {
+      "name": "Root",
+      "node_index": 22,
+      "parent_node_index": 24,
+      "world_matrix": [
+       [
+        0,
+        -1.9999998844725058,
+        0,
+        -0.04104340956951496
+       ],
+       [
+        0,
+        0,
+        1.9999998844725058,
+        1.4907142542983796e-7
+       ],
+       [
+        -1.9999998844725058,
+        0,
+        0,
+        0.0540861158123218
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     }
+    ],
+    "material_count": 1,
+    "meshes": [
+     {
+      "bounds": {
+       "dimensions": [
+        1.0444550417201768,
+        2.0000000000000027,
+        0.7572057545692951
+       ],
+       "max": [
+        0.5222274574979507,
+        1.9999999999999998,
+        0.37860286505708607
+       ],
+       "min": [
+        -0.5222275842222259,
+        -2.9621154463319452e-15,
+        -0.378602889512209
+       ]
+      },
+      "joint_usage": {
+       "chest": {
+        "mean_weight": 0.004216020505078782,
+        "vertices_above_0_05": 614,
+        "vertices_above_1e_8": 667
+       },
+       "head": {
+        "mean_weight": 0.42488209760687806,
+        "vertices_above_0_05": 10585,
+        "vertices_above_1e_8": 10603
+       },
+       "left_foot": {
+        "mean_weight": 0.009576011804589944,
+        "vertices_above_0_05": 592,
+        "vertices_above_1e_8": 710
+       },
+       "left_forearm": {
+        "mean_weight": 0.020345865277243236,
+        "vertices_above_0_05": 968,
+        "vertices_above_1e_8": 1559
+       },
+       "left_hand": {
+        "mean_weight": 0.025704602602266625,
+        "vertices_above_0_05": 875,
+        "vertices_above_1e_8": 954
+       },
+       "left_lower_leg": {
+        "mean_weight": 0.08607575507145582,
+        "vertices_above_0_05": 2876,
+        "vertices_above_1e_8": 2998
+       },
+       "left_shoulder": {
+        "mean_weight": 0.028404784674696593,
+        "vertices_above_0_05": 3281,
+        "vertices_above_1e_8": 4210
+       },
+       "left_toes": {
+        "mean_weight": 0.03200436481730939,
+        "vertices_above_0_05": 1901,
+        "vertices_above_1e_8": 2130
+       },
+       "left_upper_arm": {
+        "mean_weight": 0.032769819861840736,
+        "vertices_above_0_05": 4292,
+        "vertices_above_1e_8": 5543
+       },
+       "left_upper_leg": {
+        "mean_weight": 0.05281995410531552,
+        "vertices_above_0_05": 2212,
+        "vertices_above_1e_8": 2350
+       },
+       "neck": {
+        "mean_weight": 0.004647607137402661,
+        "vertices_above_0_05": 470,
+        "vertices_above_1e_8": 572
+       },
+       "pelvis": {
+        "mean_weight": 0.014360850066476846,
+        "vertices_above_0_05": 1583,
+        "vertices_above_1e_8": 1851
+       },
+       "right_foot": {
+        "mean_weight": 0.009812642985571128,
+        "vertices_above_0_05": 586,
+        "vertices_above_1e_8": 706
+       },
+       "right_forearm": {
+        "mean_weight": 0.02693417117050162,
+        "vertices_above_0_05": 1175,
+        "vertices_above_1e_8": 1252
+       },
+       "right_hand": {
+        "mean_weight": 0.015192695894247132,
+        "vertices_above_0_05": 527,
+        "vertices_above_1e_8": 560
+       },
+       "right_lower_leg": {
+        "mean_weight": 0.08162024264455145,
+        "vertices_above_0_05": 2820,
+        "vertices_above_1e_8": 2970
+       },
+       "right_shoulder": {
+        "mean_weight": 0.010286151008754641,
+        "vertices_above_0_05": 758,
+        "vertices_above_1e_8": 1072
+       },
+       "right_toes": {
+        "mean_weight": 0.03592133520402233,
+        "vertices_above_0_05": 2047,
+        "vertices_above_1e_8": 2201
+       },
+       "right_upper_arm": {
+        "mean_weight": 0.014061484730869067,
+        "vertices_above_0_05": 1366,
+        "vertices_above_1e_8": 1782
+       },
+       "right_upper_leg": {
+        "mean_weight": 0.03860095471712766,
+        "vertices_above_0_05": 1835,
+        "vertices_above_1e_8": 1982
+       },
+       "spine_lower": {
+        "mean_weight": 0.010486198438978899,
+        "vertices_above_0_05": 1397,
+        "vertices_above_1e_8": 1649
+       },
+       "spine_upper": {
+        "mean_weight": 0.021276389870060024,
+        "vertices_above_0_05": 2033,
+        "vertices_above_1e_8": 2339
+       }
+      },
+      "name": "character__mesh_00",
+      "node_index": 23,
+      "part_role": null,
+      "primitive_index": 0,
+      "skinned": true,
+      "triangle_count": 21718,
+      "vertex_count": 22769
+     }
+    ],
+    "semantic_mapping": {
+     "chest": {
+      "head": [
+       -0.041043414818944156,
+       1.096359196944002,
+       0.04280113760128975
+      ],
+      "name": "mixamorig:Spine2",
+      "node_index": 10,
+      "parent_node_index": 11,
+      "world_matrix": [
+       [
+        3.674545272335574e-7,
+        -2.3316822692016655e-7,
+        1.999999702914043,
+        -0.041043414818944156
+       ],
+       [
+        -0.08253385894630576,
+        1.9982958472847274,
+        2.542360246910083e-7,
+        1.096359196944002
+       ],
+       [
+        -1.9982958979937118,
+        -0.08253386295985937,
+        3.633752231495625e-7,
+        0.04280113760128975
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     "head": {
+      "head": [
+       -0.04104343361198009,
+       1.275382207416858,
+       0.03540709415635896
+      ],
+      "name": "mixamorig:Head",
+      "node_index": 0,
+      "parent_node_index": 1,
+      "world_matrix": [
+       [
+        1.377895673259472e-7,
+        -2.2428359006938846e-7,
+        1.999999702914073,
+        -0.04104343361198009
+       ],
+       [
+        -0.08253392594440144,
+        1.998295844517565,
+        2.358813921053246e-7,
+        1.275382207416858
+       ],
+       [
+        -1.9982958952265764,
+        -0.08253392995792751,
+        1.3427254946605352e-7,
+        0.03540709415635896
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     "left_foot": {
+      "head": [
+       0.21924655182129973,
+       0.06167459055445936,
+       -0.022678484267522583
+      ],
+      "name": "mixamorig:LeftFoot",
+      "node_index": 14,
+      "parent_node_index": 15,
+      "world_matrix": [
+       [
+        -1.4282248863820164,
+        -1.3952519330223379,
+        -0.11595762361386361,
+        0.21924655182129973
+       ],
+       [
+        3.1562489623661663e-7,
+        -0.16564667451429244,
+        1.9931278451117826,
+        0.06167459055445936
+       ],
+       [
+        -1.4000643106938444,
+        1.4233194048484048,
+        0.11829058070085197,
+        -0.022678484267522583
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     "left_forearm": {
+      "head": [
+       0.26928238603468646,
+       1.0293741552697546,
+       0.05039809713238199
+      ],
+      "name": "mixamorig:LeftForeArm",
+      "node_index": 3,
+      "parent_node_index": 4,
+      "world_matrix": [
+       [
+        0.1236924607666133,
+        1.5038832348780746,
+        -1.3126441278890955,
+        0.26928238603468646
+       ],
+       [
+        -4.5345481029801515e-7,
+        -1.3151613857034787,
+        -1.5067676875935565,
+        1.0293741552697546
+       ],
+       [
+        -1.9961708430267722,
+        0.09318821764368654,
+        -0.08133745924475912,
+        0.05039809713238199
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     "left_hand": {
+      "head": [
+       0.3884649892317751,
+       0.9251415144567633,
+       0.057787115935492725
+      ],
+      "name": "mixamorig:LeftHand",
+      "node_index": 2,
+      "parent_node_index": 3,
+      "world_matrix": [
+       [
+        0.4162109767371529,
+        1.3207773592233332,
+        -1.443022794313287,
+        0.3884649892317751
+       ],
+       [
+        -2.3234600080024315e-7,
+        -1.475322570497927,
+        -1.3503413078751934,
+        0.9251415144567633
+       ],
+       [
+        -1.9562121162712414,
+        0.281013644466202,
+        -0.30702262496962957,
+        0.057787115935492725
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     "left_lower_leg": {
+      "head": [
+       0.1540355068542708,
+       0.48030659756969224,
+       0.04494834088229767
+      ],
+      "name": "mixamorig:LeftLeg",
+      "node_index": 15,
+      "parent_node_index": 16,
+      "world_matrix": [
+       [
+        0.048557949479054924,
+        0.30411768737268763,
+        1.9761466431525536,
+        0.1540355068542708
+       ],
+       [
+        -0.31162082210219827,
+        -1.9514211312748448,
+        0.3079700112236677,
+        0.48030659756969224
+       ],
+       [
+        1.9749798769567894,
+        -0.3153816189099108,
+        0.000006398914818460041,
+        0.04494834088229767
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     "left_shoulder": {
+      "head": [
+       -0.04089422541179726,
+       1.1972969872080181,
+       0.03864200425808618
+      ],
+      "name": "mixamorig:LeftShoulder",
+      "node_index": 5,
+      "parent_node_index": 10,
+      "world_matrix": [
+       [
+        0.11959109798556229,
+        1.9817751095236869,
+        0.24138071613371367,
+        -0.04089422541179726
+       ],
+       [
+        0.014540355226828089,
+        0.2409423758395865,
+        -1.9853799314067544,
+        1.1972969872080181
+       ],
+       [
+        -1.9963679229401556,
+        0.12047179516033234,
+        -5.596009272912372e-7,
+        0.03864200425808618
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     "left_toes": {
+      "head": [
+       0.18941072507661713,
+       0.05813241704225391,
+       0.007757551777796791
+      ],
+      "name": "mixamorig:LeftToeBase",
+      "node_index": 13,
+      "parent_node_index": 14,
+      "world_matrix": [
+       [
+        -1.4282242174579296,
+        -1.3952524861318867,
+        -0.11595819977887352,
+        0.18941072507661713
+       ],
+       [
+        -4.169759552212599e-7,
+        -0.1656466720659841,
+        1.993127725695003,
+        0.05813241704225391
+       ],
+       [
+        -1.400064993073894,
+        1.4233186954200032,
+        0.11829001246743324,
+        0.007757551777796791
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     "left_upper_arm": {
+      "head": [
+       0.10832541234275876,
+       1.2152337044629589,
+       0.047705945069688574
+      ],
+      "name": "mixamorig:LeftArm",
+      "node_index": 4,
+      "parent_node_index": 5,
+      "world_matrix": [
+       [
+        0.033379828142814386,
+        1.3090854329344819,
+        -1.5116812479352937,
+        0.10832541234275876
+       ],
+       [
+        -2.0978881713415443e-7,
+        -1.5118916825132276,
+        -1.309267560258299,
+        1.2152337044629589
+       ],
+       [
+        -1.9997208921706726,
+        0.021851748564914918,
+        -0.02523321515567377,
+        0.047705945069688574
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     "left_upper_leg": {
+      "head": [
+       0.08691618488209045,
+       0.843174558340664,
+       0.06045354286299638
+      ],
+      "name": "mixamorig:LeftUpLeg",
+      "node_index": 16,
+      "parent_node_index": 21,
+      "world_matrix": [
+       [
+        0.015217959045095382,
+        0.363512893001259,
+        1.9666286544733382,
+        0.08691618488209045
+       ],
+       [
+        -0.0822944969587791,
+        -1.9649051620971862,
+        0.36383140605563136,
+        0.843174558340664
+       ],
+       [
+        1.998251138480306,
+        -0.08368956709918327,
+        0.000006824978324625197,
+        0.06045354286299638
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     "neck": {
+      "head": [
+       -0.04104342698537864,
+       1.1973566424797508,
+       0.03862972329908283
+      ],
+      "name": "mixamorig:Neck",
+      "node_index": 1,
+      "parent_node_index": 10,
+      "world_matrix": [
+       [
+        3.758472259924624e-7,
+        -2.242836087554022e-7,
+        1.9999997029140426,
+        -0.04104342698537864
+       ],
+       [
+        -0.0825339222222778,
+        1.9982958446712955,
+        2.457053281379013e-7,
+        1.1973566424797508
+       ],
+       [
+        -1.998295895380277,
+        -0.08253392623583243,
+        3.721274055431691e-7,
+        0.03862972329908283
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     "pelvis": {
+      "head": [
+       -0.04104340956951496,
+       0.8231292786179056,
+       0.05408612828846297
+      ],
+      "name": "mixamorig:Hips",
+      "node_index": 21,
+      "parent_node_index": 22,
+      "world_matrix": [
+       [
+        1.9999997713711186,
+        6.939018441952124e-8,
+        -1.775457049142983e-7,
+        -0.04104340956951496
+       ],
+       [
+        -5.5901602114331e-8,
+        1.998295963317835,
+        0.08253393621367784,
+        0.8231292786179056
+       ],
+       [
+        1.8611384736108863e-7,
+        -0.08253394232157672,
+        1.9982959633178279,
+        0.05408612828846297
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     "right_foot": {
+      "head": [
+       -0.1915053961585373,
+       0.08887805593673972,
+       -0.026040626699268755
+      ],
+      "name": "mixamorig:RightFoot",
+      "node_index": 18,
+      "parent_node_index": 19,
+      "world_matrix": [
+       [
+        -1.7845986749952067,
+        0.8609879283235403,
+        0.2722609334378723,
+        -0.1915053961585373
+       ],
+       [
+        1.3781547487934365e-7,
+        -0.6030185528183181,
+        1.9069258558374733,
+        0.08887805593673972
+       ],
+       [
+        0.9029904351868115,
+        1.7015136607230419,
+        0.5380604508161341,
+        -0.026040626699268755
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     "right_forearm": {
+      "head": [
+       -0.31509998065290007,
+       1.0293329402530607,
+       0.034962957924657034
+      ],
+      "name": "mixamorig:RightForeArm",
+      "node_index": 7,
+      "parent_node_index": 8,
+      "world_matrix": [
+       [
+        0.38240561621350877,
+        -1.3292173088349701,
+        1.4446268281628476,
+        -0.31509998065290007
+       ],
+       [
+        1.340760705237365e-7,
+        -1.471780088862766,
+        -1.3542017989593247,
+        1.0293329402530607
+       ],
+       [
+        1.963100929661344,
+        0.25892730042062323,
+        -0.28140842078322875,
+        0.034962957924657034
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     "right_hand": {
+      "head": [
+       -0.4460508603692669,
+       0.8843306038235464,
+       0.06046889598465427
+      ],
+      "name": "mixamorig:RightHand",
+      "node_index": 6,
+      "parent_node_index": 7,
+      "world_matrix": [
+       [
+        -6.008221876963038e-7,
+        -1.07247802642997,
+        1.6881321667373437,
+        -0.4460508603692669
+       ],
+       [
+        1.4889752558699954e-7,
+        -1.688132247964482,
+        -1.072478066916774,
+        0.8843306038235464
+       ],
+       [
+        1.9999998283204248,
+        -2.068426259160816e-7,
+        5.900880312020851e-7,
+        0.06046889598465427
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     "right_lower_leg": {
+      "head": [
+       -0.18390986090459183,
+       0.4803340793187583,
+       0.02950485153234436
+      ],
+      "name": "mixamorig:RightLeg",
+      "node_index": 19,
+      "parent_node_index": 20,
+      "world_matrix": [
+       [
+        -0.005413357038915077,
+        -0.03849964758909882,
+        1.999676600784698,
+        -0.18390986090459183
+       ],
+       [
+        -0.2810419008169912,
+        -1.9797729958614974,
+        -0.03888237186730733,
+        0.4803340793187583
+       ],
+       [
+        1.9801603498520872,
+        -0.28109436764336604,
+        -0.0000514711074606866,
+        0.02950485153234436
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     "right_shoulder": {
+      "head": [
+       -0.041192647189636174,
+       1.197260474777001,
+       0.03862387070291148
+      ],
+      "name": "mixamorig:RightShoulder",
+      "node_index": 9,
+      "parent_node_index": 10,
+      "world_matrix": [
+       [
+        0.11959123558310072,
+        -1.9817750931410032,
+        -0.2413809665343755,
+        -0.041192647189636174
+       ],
+       [
+        0.014539775108599565,
+        -0.24094264659151246,
+        1.9853800416800806,
+        1.197260474777001
+       ],
+       [
+        -1.996367918893051,
+        -0.12047185138317938,
+        -3.264765792432289e-8,
+        0.03862387070291148
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     "right_toes": {
+      "head": [
+       -0.1747769538870738,
+       0.07716182409669756,
+       0.007018653915076602
+      ],
+      "name": "mixamorig:RightToeBase",
+      "node_index": 17,
+      "parent_node_index": 18,
+      "world_matrix": [
+       [
+        -1.784597528034111,
+        0.8609888854046688,
+        0.2722657818160175,
+        -0.1747769538870738
+       ],
+       [
+        0.000005183633976675733,
+        -0.6030182695123115,
+        1.906926195474252,
+        0.07716182409669756
+       ],
+       [
+        0.9029927018581527,
+        1.7015135570997975,
+        0.5380576800637802,
+        0.007018653915076602
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     "right_upper_arm": {
+      "head": [
+       -0.19037601116413694,
+       1.1789883326220885,
+       0.029567993598270545
+      ],
+      "name": "mixamorig:RightArm",
+      "node_index": 8,
+      "parent_node_index": 9,
+      "world_matrix": [
+       [
+        0.08611137967891293,
+        -1.279888465156163,
+        1.5344281435046017,
+        -0.19037601116413694
+       ],
+       [
+        1.3879556298376783e-7,
+        -1.5358521284859006,
+        -1.2810766493676622,
+        1.1789883326220885
+       ],
+       [
+        1.9981451740855676,
+        0.055157742573002086,
+        -0.06612708633848374,
+        0.029567993598270545
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     "right_upper_leg": {
+      "head": [
+       -0.16895076057414868,
+       0.802399169836858,
+       0.047685101913468246
+      ],
+      "name": "mixamorig:RightUpLeg",
+      "node_index": 20,
+      "parent_node_index": 21,
+      "world_matrix": [
+       [
+        -0.005166375452097051,
+        -0.09271383200481055,
+        1.9978977674217273,
+        -0.16895076057414868
+       ],
+       [
+        -0.11227213406814904,
+        -1.9946854192705876,
+        -0.09286019996865826,
+        0.802399169836858
+       ],
+       [
+        1.9968518994906637,
+        -0.11239019086546595,
+        -0.00005197644863690499,
+        0.047685101913468246
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     "spine_lower": {
+      "head": [
+       -0.04104339797632303,
+       0.8943186753204877,
+       0.05114584466109597
+      ],
+      "name": "mixamorig:Spine",
+      "node_index": 12,
+      "parent_node_index": 21,
+      "world_matrix": [
+       [
+        5.831774909903882e-7,
+        -2.328219123030129e-7,
+        1.9999997029139918,
+        -0.04104339797632303
+       ],
+       [
+        -0.08253389616745502,
+        1.9982959648551348,
+        2.6279222753003025e-7,
+        0.8943186753204877
+       ],
+       [
+        -1.998295896456347,
+        -0.08253390510043704,
+        5.789286990924149e-7,
+        0.05114584466109597
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     },
+     "spine_upper": {
+      "head": [
+       -0.04104340456395838,
+       0.9953390623542342,
+       0.046973477915280865
+      ],
+      "name": "mixamorig:Spine1",
+      "node_index": 11,
+      "parent_node_index": 12,
+      "world_matrix": [
+       [
+        -3.467493380137748e-7,
+        -2.328225899311472e-7,
+        1.9999997029140466,
+        -0.04104340456395838
+       ],
+       [
+        -0.08253379194824119,
+        1.9982959691596132,
+        2.2441767527641745e-7,
+        0.9953390623542342
+       ],
+       [
+        -1.998295900760879,
+        -0.0825338008811135,
+        -3.5020593870350543e-7,
+        0.046973477915280865
+       ],
+       [
+        0,
+        0,
+        0,
+        1
+       ]
+      ]
+     }
+    },
+    "skin_count": 1,
+    "unsupported_control_semantics": [],
+    "zero_weight_semantics": []
+   },
+   "geometry": {
+    "bounds": {
+     "dimensions": [
+      1.0444550417201768,
+      2.0000000000000027,
+      0.7572057545692951
+     ],
+     "max": [
+      0.5222274574979507,
+      1.9999999999999998,
+      0.37860286505708607
+     ],
+     "min": [
+      -0.5222275842222259,
+      -2.9621154463319452e-15,
+      -0.378602889512209
+     ]
+    },
+    "meshes": [
+     {
+      "bounds": {
+       "dimensions": [
+        1.0444550417201768,
+        2.0000000000000027,
+        0.7572057545692951
+       ],
+       "max": [
+        0.5222274574979507,
+        1.9999999999999998,
+        0.37860286505708607
+       ],
+       "min": [
+        -0.5222275842222259,
+        -2.9621154463319452e-15,
+        -0.378602889512209
+       ]
+      },
+      "joint_usage": {
+       "chest": {
+        "mean_weight": 0.004216020505078782,
+        "vertices_above_0_05": 614,
+        "vertices_above_1e_8": 667
+       },
+       "head": {
+        "mean_weight": 0.42488209760687806,
+        "vertices_above_0_05": 10585,
+        "vertices_above_1e_8": 10603
+       },
+       "left_foot": {
+        "mean_weight": 0.009576011804589944,
+        "vertices_above_0_05": 592,
+        "vertices_above_1e_8": 710
+       },
+       "left_forearm": {
+        "mean_weight": 0.020345865277243236,
+        "vertices_above_0_05": 968,
+        "vertices_above_1e_8": 1559
+       },
+       "left_hand": {
+        "mean_weight": 0.025704602602266625,
+        "vertices_above_0_05": 875,
+        "vertices_above_1e_8": 954
+       },
+       "left_lower_leg": {
+        "mean_weight": 0.08607575507145582,
+        "vertices_above_0_05": 2876,
+        "vertices_above_1e_8": 2998
+       },
+       "left_shoulder": {
+        "mean_weight": 0.028404784674696593,
+        "vertices_above_0_05": 3281,
+        "vertices_above_1e_8": 4210
+       },
+       "left_toes": {
+        "mean_weight": 0.03200436481730939,
+        "vertices_above_0_05": 1901,
+        "vertices_above_1e_8": 2130
+       },
+       "left_upper_arm": {
+        "mean_weight": 0.032769819861840736,
+        "vertices_above_0_05": 4292,
+        "vertices_above_1e_8": 5543
+       },
+       "left_upper_leg": {
+        "mean_weight": 0.05281995410531552,
+        "vertices_above_0_05": 2212,
+        "vertices_above_1e_8": 2350
+       },
+       "neck": {
+        "mean_weight": 0.004647607137402661,
+        "vertices_above_0_05": 470,
+        "vertices_above_1e_8": 572
+       },
+       "pelvis": {
+        "mean_weight": 0.014360850066476846,
+        "vertices_above_0_05": 1583,
+        "vertices_above_1e_8": 1851
+       },
+       "right_foot": {
+        "mean_weight": 0.009812642985571128,
+        "vertices_above_0_05": 586,
+        "vertices_above_1e_8": 706
+       },
+       "right_forearm": {
+        "mean_weight": 0.02693417117050162,
+        "vertices_above_0_05": 1175,
+        "vertices_above_1e_8": 1252
+       },
+       "right_hand": {
+        "mean_weight": 0.015192695894247132,
+        "vertices_above_0_05": 527,
+        "vertices_above_1e_8": 560
+       },
+       "right_lower_leg": {
+        "mean_weight": 0.08162024264455145,
+        "vertices_above_0_05": 2820,
+        "vertices_above_1e_8": 2970
+       },
+       "right_shoulder": {
+        "mean_weight": 0.010286151008754641,
+        "vertices_above_0_05": 758,
+        "vertices_above_1e_8": 1072
+       },
+       "right_toes": {
+        "mean_weight": 0.03592133520402233,
+        "vertices_above_0_05": 2047,
+        "vertices_above_1e_8": 2201
+       },
+       "right_upper_arm": {
+        "mean_weight": 0.014061484730869067,
+        "vertices_above_0_05": 1366,
+        "vertices_above_1e_8": 1782
+       },
+       "right_upper_leg": {
+        "mean_weight": 0.03860095471712766,
+        "vertices_above_0_05": 1835,
+        "vertices_above_1e_8": 1982
+       },
+       "spine_lower": {
+        "mean_weight": 0.010486198438978899,
+        "vertices_above_0_05": 1397,
+        "vertices_above_1e_8": 1649
+       },
+       "spine_upper": {
+        "mean_weight": 0.021276389870060024,
+        "vertices_above_0_05": 2033,
+        "vertices_above_1e_8": 2339
+       }
+      },
+      "name": "character__mesh_00",
+      "node_index": 23,
+      "part_role": null,
+      "primitive_index": 0,
+      "skinned": true,
+      "triangle_count": 21718,
+      "vertex_count": 22769
+     }
+    ]
+   },
+   "limitations": [
+    "No replacement body rig, skin weights, grouped fingers, or independent hair rig authored.",
+    "Finite numerical samples do not establish anatomical or visual acceptance."
+   ],
+   "material_changes": [
+    {
+     "after": {
+      "doubleSided": true,
+      "extensions": {
+       "KHR_materials_specular": {
+        "specularFactor": 0.08
+       }
+      },
+      "name": "tripo_mat_8b479343",
+      "normalTexture": {
+       "index": 0,
+       "scale": 0.15
+      },
+      "pbrMetallicRoughness": {
+       "baseColorTexture": {
+        "index": 1
+       },
+       "metallicFactor": 0,
+       "roughnessFactor": 1
+      }
+     },
+     "before": {
+      "doubleSided": true,
+      "name": "tripo_mat_8b479343",
+      "normalTexture": {
+       "index": 0
+      },
+      "pbrMetallicRoughness": {
+       "baseColorTexture": {
+        "index": 1
+       },
+       "metallicRoughnessTexture": {
+        "index": 2
+       }
+      }
+     },
+     "material_index": 0,
+     "policy": "matte"
+    }
+   ],
+   "material_policy": "matte",
+   "motion_preservation": {
+    "existing_provider_animations_unchanged": true,
+    "original_binary_prefix_exact": true,
+    "original_provider_nodes_exact": true,
+    "output_transform_excluded_fields": [
+     "nodes",
+     "scenes"
+    ],
+    "provider_fields_exact": [
+     "skins",
+     "meshes",
+     "materials",
+     "textures",
+     "images",
+     "samplers",
+     "extensionsUsed",
+     "extensionsRequired",
+     "scene"
+    ]
+   },
+   "native_format": "glb",
+   "normal_restoration": null,
+   "normalization": {
+    "byte_exact": true,
+    "native_format": "glb",
+    "normalized_sha256": "2a77277b4ec5fcccdac89507354cf1c3400765279d8ff3d54261316185fb94a8",
+    "operation": "validated byte-exact GLB control",
+    "source_sha256": "2a77277b4ec5fcccdac89507354cf1c3400765279d8ff3d54261316185fb94a8",
+    "source_unchanged": true
+   },
+   "operation": "provider_rig",
+   "output": {
+    "path": "animated.glb",
+    "sha256": "73cfe88743514eb1f3eb939314107d5b69d609a9ddd422058c1d98d7ec903dcc"
+   },
+   "output_transform": {
+    "after_bounds": {
+     "dimensions": [
+      1.0444550417201768,
+      2.0000000000000027,
+      0.7572057545692951
+     ],
+     "max": [
+      0.5222274574979507,
+      1.9999999999999998,
+      0.37860286505708607
+     ],
+     "min": [
+      -0.5222275842222259,
+      -2.9621154463319452e-15,
+      -0.378602889512209
+     ]
+    },
+    "before_bounds": {
+     "dimensions": [
+      0.5222275510259085,
+      1.0000000577637504,
+      0.3786028991541697
+     ],
+     "max": [
+      0.2611137438318837,
+      0.9999999832280334,
+      0.18930144346330377
+     ],
+     "min": [
+      -0.2611138071940248,
+      -7.453571702038129e-8,
+      -0.18930145569086596
+     ]
+    },
+    "existing_node_locals_exact": true,
+    "ground_after": -2.9621154463319452e-15,
+    "ground_before": -7.453571702038129e-8,
+    "height_after": 2.0000000000000027,
+    "height_before": 1.0000000577637504,
+    "inverse_bind_matrices_and_weights_exact": true,
+    "local_animation_channels_exact": true,
+    "matrix": [
+     [
+      1.9999998844725058,
+      0,
+      0,
+      0
+     ],
+     [
+      0,
+      1.9999998844725058,
+      0,
+      1.4907142542983796e-7
+     ],
+     [
+      0,
+      0,
+      1.9999998844725058,
+      0
+     ],
+     [
+      0,
+      0,
+      0,
+      1
+     ]
+    ],
+    "node_index": 25,
+    "operation": "uniform_common_scene_parent",
+    "original_scene_roots": [
+     24
+    ],
+    "postcondition_basis": "Referenced world-space vertices evaluated with actual skin binds",
+    "postcondition_passed": true,
+    "postcondition_relative_tolerance": 0.000001,
+    "target_height": 2,
+    "translation": [
+     0,
+     1.4907142542983796e-7,
+     0
+    ],
+    "uniform_scale": 1.9999998844725058,
+    "verified_export_sha256": "73cfe88743514eb1f3eb939314107d5b69d609a9ddd422058c1d98d7ec903dcc"
+   },
+   "preservation": {
+    "ambiguous_normal_correspondence_vertices": 0,
+    "ambiguous_normals_resolved_by_provider_normal": 0,
+    "appearance_preserved": true,
+    "appearance_scope": "Matched surface texture slots, sampled UV transforms, samplers, base-color tint, vertex colors and opacity; light response and normals are separate policies.",
+    "decoded_image_identity": {},
+    "image_identity": [
+     {
+      "identity": "1e37591b3ef9947d20eb09c44b01eee03e045a7eb0b5e3146edc9fd5b2636858",
+      "provider_index": 0,
+      "raw_sha256": "1e37591b3ef9947d20eb09c44b01eee03e045a7eb0b5e3146edc9fd5b2636858"
+     },
+     {
+      "identity": "1f870d9b5b31aa273c7617252ef17a44fc0560501278bb0daf36579a53651623",
+      "provider_index": 1,
+      "raw_sha256": "1f870d9b5b31aa273c7617252ef17a44fc0560501278bb0daf36579a53651623"
+     },
+     {
+      "identity": "26ceebc8b8b6f86f5197a65eb05866a00d310b823849f9ffbe3b3dfc0f1d6338",
+      "provider_index": 2,
+      "raw_sha256": "26ceebc8b8b6f86f5197a65eb05866a00d310b823849f9ffbe3b3dfc0f1d6338"
+     }
+    ],
+    "material_limit": "Serialization inequality is not evidence of a visible material defect.",
+    "materials_json_equal": true,
+    "position_error_source_units": {
+     "count": 22769,
+     "max": 0.000007790498179168242,
+     "median": 0.000004355580553751896,
+     "min": 5.580519502563263e-7,
+     "p95": 0.000006995909586159116,
+     "p99": 0.000007550044794009927
+    },
+    "provider_image_payloads_all_from_source": true,
+    "provider_image_sha256": [
+     "1e37591b3ef9947d20eb09c44b01eee03e045a7eb0b5e3146edc9fd5b2636858",
+     "1f870d9b5b31aa273c7617252ef17a44fc0560501278bb0daf36579a53651623",
+     "26ceebc8b8b6f86f5197a65eb05866a00d310b823849f9ffbe3b3dfc0f1d6338"
+    ],
+    "provider_images_pixel_identical_to_source": true,
+    "provider_vertex_count": 22769,
+    "registration": "explicit_verified_similarity",
+    "source_image_sha256": [
+     "1e37591b3ef9947d20eb09c44b01eee03e045a7eb0b5e3146edc9fd5b2636858",
+     "1f870d9b5b31aa273c7617252ef17a44fc0560501278bb0daf36579a53651623",
+     "26ceebc8b8b6f86f5197a65eb05866a00d310b823849f9ffbe3b3dfc0f1d6338"
+    ],
+    "source_to_provider": [
+     [
+      0.49999809397656797,
+      0.0000017775592566680326,
+      -0.0000019517278395600685,
+      -0.0000020110114415710427
+     ],
+     [
+      -0.0000017775661150456336,
+      0.4999980939772901,
+      -0.0000017569941745938088,
+      5.95198526238746e-7
+     ],
+     [
+      0.000001951721593189355,
+      0.0000017570011132463172,
+      0.49999809397664063,
+      -0.0000022408976368499873
+     ],
+     [
+      0,
+      0,
+      0,
+      1
+     ]
+    ],
+    "source_vertex_count": 22768,
+    "status": "surface_correspondence_verified",
+    "texture_binding_preserved": true,
+    "triangle_connectivity_and_winding_equal": true,
+    "uv_max_error": 0
+   },
+   "provider_calls": 0,
+   "raw_external_rig": {
+    "path": "raw-external-rig.json",
+    "sha256": "ff1becdb01dba840737d3bc253ee82bfa508a562e8f94c754b687893646728b8"
+   },
+   "raw_normalized": {
+    "path": "raw-normalized.glb",
+    "sha256": "2a77277b4ec5fcccdac89507354cf1c3400765279d8ff3d54261316185fb94a8"
+   },
+   "schema_version": 1,
+   "source_sha256": "2a77277b4ec5fcccdac89507354cf1c3400765279d8ff3d54261316185fb94a8",
+   "source_unchanged": true,
+   "status": "completed_unreviewed",
+   "visual_review": "required_separately"
+  },
+  "scope": "Historical provider rig finishing before the explicit local lower-body weight correction",
+  "source_sha256": "73cfe88743514eb1f3eb939314107d5b69d609a9ddd422058c1d98d7ec903dcc"
+ },
+ "part_roles": {
+  "character__mesh_00": "character"
+ },
+ "recovery": {
+  "default_preservation_gates_unchanged": true,
+  "measured_transform": {
+   "above_default_position_radius": 0,
+   "all_preservation_gates_checked": true,
+   "audit_report": {
+    "ambiguous_normal_correspondence_vertices": 0,
+    "ambiguous_normals_resolved_by_provider_normal": 0,
+    "appearance_preserved": true,
+    "appearance_scope": "Matched surface texture slots, sampled UV transforms, samplers, base-color tint, vertex colors and opacity; light response and normals are separate policies.",
+    "decoded_image_identity": {},
+    "image_identity": [
+     {
+      "identity": "1e37591b3ef9947d20eb09c44b01eee03e045a7eb0b5e3146edc9fd5b2636858",
+      "provider_index": 0,
+      "raw_sha256": "1e37591b3ef9947d20eb09c44b01eee03e045a7eb0b5e3146edc9fd5b2636858"
+     },
+     {
+      "identity": "1f870d9b5b31aa273c7617252ef17a44fc0560501278bb0daf36579a53651623",
+      "provider_index": 1,
+      "raw_sha256": "1f870d9b5b31aa273c7617252ef17a44fc0560501278bb0daf36579a53651623"
+     },
+     {
+      "identity": "26ceebc8b8b6f86f5197a65eb05866a00d310b823849f9ffbe3b3dfc0f1d6338",
+      "provider_index": 2,
+      "raw_sha256": "26ceebc8b8b6f86f5197a65eb05866a00d310b823849f9ffbe3b3dfc0f1d6338"
+     }
+    ],
+    "material_limit": "Serialization inequality is not evidence of a visible material defect.",
+    "materials_json_equal": true,
+    "position_error_source_units": {
+     "count": 22769,
+     "max": 0.000007790498179168242,
+     "median": 0.000004355580553751896,
+     "min": 5.580519502563263e-7,
+     "p95": 0.000006995909586159116,
+     "p99": 0.000007550044794009927
+    },
+    "provider_image_payloads_all_from_source": true,
+    "provider_image_sha256": [
+     "1e37591b3ef9947d20eb09c44b01eee03e045a7eb0b5e3146edc9fd5b2636858",
+     "1f870d9b5b31aa273c7617252ef17a44fc0560501278bb0daf36579a53651623",
+     "26ceebc8b8b6f86f5197a65eb05866a00d310b823849f9ffbe3b3dfc0f1d6338"
+    ],
+    "provider_images_pixel_identical_to_source": true,
+    "provider_vertex_count": 22769,
+    "registration": "explicit_verified_similarity",
+    "source_image_sha256": [
+     "1e37591b3ef9947d20eb09c44b01eee03e045a7eb0b5e3146edc9fd5b2636858",
+     "1f870d9b5b31aa273c7617252ef17a44fc0560501278bb0daf36579a53651623",
+     "26ceebc8b8b6f86f5197a65eb05866a00d310b823849f9ffbe3b3dfc0f1d6338"
+    ],
+    "source_to_provider": [
+     [
+      0.49999809397656797,
+      0.0000017775592566680326,
+      -0.0000019517278395600685,
+      -0.0000020110114415710427
+     ],
+     [
+      -0.0000017775661150456336,
+      0.4999980939772901,
+      -0.0000017569941745938088,
+      5.95198526238746e-7
+     ],
+     [
+      0.000001951721593189355,
+      0.0000017570011132463172,
+      0.49999809397664063,
+      -0.0000022408976368499873
+     ],
+     [
+      0,
+      0,
+      0,
+      1
+     ]
+    ],
+    "source_vertex_count": 22768,
+    "status": "surface_correspondence_verified",
+    "texture_binding_preserved": true,
+    "triangle_connectivity_and_winding_equal": true,
+    "uv_max_error": 0
+   },
+   "audit_verdict": "passed_unchanged_default_gates",
+   "default_max_position_error": 0.00001,
+   "default_uv_tolerance": 0.000001,
+   "max_position_error_source_units": 0.000007790498179168242,
+   "method": "Positive uniform similarity measured using UV-matched positions, minimax residual fit; finite exact transform subsequently checked.",
+   "position_error_p95_source_units": 0.000006995909586159116,
+   "position_match_max_uv_error": 0,
+   "provider_sha256": "2a77277b4ec5fcccdac89507354cf1c3400765279d8ff3d54261316185fb94a8",
+   "schema_version": 1,
+   "scope": "Read-only candidate transform measurement, exact input bytes unchanged; same default preservation tolerances.",
+   "source_sha256": "013667face278a1dbbbb8be1bb3ef49274e75a413226959d7b0f88a658d511a5",
+   "source_to_provider": [
+    [
+     0.49999809397656797,
+     0.0000017775592566680326,
+     -0.0000019517278395600685,
+     -0.0000020110114415710427
+    ],
+    [
+     -0.0000017775661150456336,
+     0.4999980939772901,
+     -0.0000017569941745938088,
+     5.95198526238746e-7
+    ],
+    [
+     0.000001951721593189355,
+     0.0000017570011132463172,
+     0.49999809397664063,
+     -0.0000022408976368499873
+    ],
+    [
+     0,
+     0,
+     0,
+     1
+    ]
+   ]
+  },
+  "original_failed_run_preserved": true,
+  "output_sha256": "73cfe88743514eb1f3eb939314107d5b69d609a9ddd422058c1d98d7ec903dcc",
+  "provider_calls": 0,
+  "retained_provider_sha256": "2a77277b4ec5fcccdac89507354cf1c3400765279d8ff3d54261316185fb94a8",
+  "scope": "Historical recovery before the explicit local correction",
+  "source_assembly_sha256": "013667face278a1dbbbb8be1bb3ef49274e75a413226959d7b0f88a658d511a5",
+  "status": "completed_unreviewed"
+ },
+ "required_but_missing_weights": [],
+ "rig_plan": {
+  "clips": [
+   {
+    "author": "deterministic local diagnostic",
+    "channel_count": 1,
+    "duration_seconds": 2,
+    "fps": 24,
+    "hand_claim": "wrist rotation only; no finger or thumb articulation added",
+    "mapped_joints": [
+     "head"
+    ],
+    "name": "rest",
+    "review_times_seconds": [
+     0,
+     0.5,
+     1,
+     1.5,
+     2
+    ],
+    "sample_count": 49
+   },
+   {
+    "author": "deterministic local diagnostic",
+    "channel_count": 2,
+    "duration_seconds": 2,
+    "fps": 24,
+    "hand_claim": "wrist rotation only; no finger or thumb articulation added",
+    "mapped_joints": [
+     "left_upper_arm",
+     "right_upper_arm"
+    ],
+    "name": "shoulder_raise",
+    "review_times_seconds": [
+     0,
+     0.5,
+     1,
+     1.5,
+     2
+    ],
+    "sample_count": 49
+   },
+   {
+    "author": "deterministic local diagnostic",
+    "channel_count": 2,
+    "duration_seconds": 2,
+    "fps": 24,
+    "hand_claim": "wrist rotation only; no finger or thumb articulation added",
+    "mapped_joints": [
+     "left_forearm",
+     "right_forearm"
+    ],
+    "name": "elbow_bend",
+    "review_times_seconds": [
+     0,
+     0.5,
+     1,
+     1.5,
+     2
+    ],
+    "sample_count": 49
+   },
+   {
+    "author": "deterministic local diagnostic",
+    "channel_count": 2,
+    "duration_seconds": 2,
+    "fps": 24,
+    "hand_claim": "wrist rotation only; no finger or thumb articulation added",
+    "mapped_joints": [
+     "left_lower_leg",
+     "right_lower_leg"
+    ],
+    "name": "knee_bend",
+    "review_times_seconds": [
+     0,
+     0.5,
+     1,
+     1.5,
+     2
+    ],
+    "sample_count": 49
+   },
+   {
+    "author": "deterministic local diagnostic",
+    "channel_count": 2,
+    "duration_seconds": 2,
+    "fps": 24,
+    "hand_claim": "wrist rotation only; no finger or thumb articulation added",
+    "mapped_joints": [
+     "left_hand",
+     "right_hand"
+    ],
+    "name": "wrist_bend",
+    "review_times_seconds": [
+     0,
+     0.5,
+     1,
+     1.5,
+     2
+    ],
+    "sample_count": 49
+   },
+   {
+    "author": "deterministic local diagnostic",
+    "channel_count": 5,
+    "duration_seconds": 4,
+    "fps": 24,
+    "hand_claim": "wrist rotation only; no finger or thumb articulation added",
+    "mapped_joints": [
+     "left_upper_arm",
+     "left_forearm",
+     "right_upper_arm",
+     "right_forearm",
+     "chest"
+    ],
+    "name": "cheer",
+    "review_times_seconds": [
+     0,
+     1,
+     2,
+     3,
+     4
+    ],
+    "sample_count": 97
+   }
+  ],
+  "rig_author": "provider_with_explicit_local_lower_body_weight_correction",
+  "source_sha256": "013667face278a1dbbbb8be1bb3ef49274e75a413226959d7b0f88a658d511a5"
+ },
+ "rig_report": {
+  "animation_tracks_and_amplitudes_unchanged": true,
+  "author": "provider_with_explicit_local_lower_body_weight_correction",
+  "clips": [
+   {
+    "author": "deterministic local diagnostic",
+    "channel_count": 1,
+    "duration_seconds": 2,
+    "fps": 24,
+    "hand_claim": "wrist rotation only; no finger or thumb articulation added",
+    "mapped_joints": [
+     "head"
+    ],
+    "name": "rest",
+    "review_times_seconds": [
+     0,
+     0.5,
+     1,
+     1.5,
+     2
+    ],
+    "sample_count": 49
+   },
+   {
+    "author": "deterministic local diagnostic",
+    "channel_count": 2,
+    "duration_seconds": 2,
+    "fps": 24,
+    "hand_claim": "wrist rotation only; no finger or thumb articulation added",
+    "mapped_joints": [
+     "left_upper_arm",
+     "right_upper_arm"
+    ],
+    "name": "shoulder_raise",
+    "review_times_seconds": [
+     0,
+     0.5,
+     1,
+     1.5,
+     2
+    ],
+    "sample_count": 49
+   },
+   {
+    "author": "deterministic local diagnostic",
+    "channel_count": 2,
+    "duration_seconds": 2,
+    "fps": 24,
+    "hand_claim": "wrist rotation only; no finger or thumb articulation added",
+    "mapped_joints": [
+     "left_forearm",
+     "right_forearm"
+    ],
+    "name": "elbow_bend",
+    "review_times_seconds": [
+     0,
+     0.5,
+     1,
+     1.5,
+     2
+    ],
+    "sample_count": 49
+   },
+   {
+    "author": "deterministic local diagnostic",
+    "channel_count": 2,
+    "duration_seconds": 2,
+    "fps": 24,
+    "hand_claim": "wrist rotation only; no finger or thumb articulation added",
+    "mapped_joints": [
+     "left_lower_leg",
+     "right_lower_leg"
+    ],
+    "name": "knee_bend",
+    "review_times_seconds": [
+     0,
+     0.5,
+     1,
+     1.5,
+     2
+    ],
+    "sample_count": 49
+   },
+   {
+    "author": "deterministic local diagnostic",
+    "channel_count": 2,
+    "duration_seconds": 2,
+    "fps": 24,
+    "hand_claim": "wrist rotation only; no finger or thumb articulation added",
+    "mapped_joints": [
+     "left_hand",
+     "right_hand"
+    ],
+    "name": "wrist_bend",
+    "review_times_seconds": [
+     0,
+     0.5,
+     1,
+     1.5,
+     2
+    ],
+    "sample_count": 49
+   },
+   {
+    "author": "deterministic local diagnostic",
+    "channel_count": 5,
+    "duration_seconds": 4,
+    "fps": 24,
+    "hand_claim": "wrist rotation only; no finger or thumb articulation added",
+    "mapped_joints": [
+     "left_upper_arm",
+     "left_forearm",
+     "right_upper_arm",
+     "right_forearm",
+     "chest"
+    ],
+    "name": "cheer",
+    "review_times_seconds": [
+     0,
+     1,
+     2,
+     3,
+     4
+    ],
+    "sample_count": 97
+   }
+  ],
+  "output": {
+   "sha256": "5c0d91039150a4db1eec6828d88a277cf6599074c0d21a72a504401538f4ed45"
+  },
+  "rest_surface_preservation": {
+   "ambiguous_normal_correspondence_vertices": 24,
+   "ambiguous_normals_resolved_by_provider_normal": 24,
+   "appearance_preserved": true,
+   "appearance_scope": "Matched surface texture slots, sampled UV transforms, samplers, base-color tint, vertex colors and opacity; light response and normals are separate policies.",
+   "decoded_image_identity": {},
+   "image_identity": [
+    {
+     "identity": "1e37591b3ef9947d20eb09c44b01eee03e045a7eb0b5e3146edc9fd5b2636858",
+     "provider_index": 0,
+     "raw_sha256": "1e37591b3ef9947d20eb09c44b01eee03e045a7eb0b5e3146edc9fd5b2636858"
+    },
+    {
+     "identity": "1f870d9b5b31aa273c7617252ef17a44fc0560501278bb0daf36579a53651623",
+     "provider_index": 1,
+     "raw_sha256": "1f870d9b5b31aa273c7617252ef17a44fc0560501278bb0daf36579a53651623"
+    },
+    {
+     "identity": "26ceebc8b8b6f86f5197a65eb05866a00d310b823849f9ffbe3b3dfc0f1d6338",
+     "provider_index": 2,
+     "raw_sha256": "26ceebc8b8b6f86f5197a65eb05866a00d310b823849f9ffbe3b3dfc0f1d6338"
+    }
+   ],
+   "material_limit": "Serialization inequality is not evidence of a visible material defect.",
+   "materials_json_equal": true,
+   "position_error_source_units": {
+    "count": 22769,
+    "max": 3.9993560660002974e-7,
+    "median": 0,
+    "min": 0,
+    "p95": 0,
+    "p99": 3.838563928524728e-8
+   },
+   "provider_image_payloads_all_from_source": true,
+   "provider_image_sha256": [
+    "1e37591b3ef9947d20eb09c44b01eee03e045a7eb0b5e3146edc9fd5b2636858",
+    "1f870d9b5b31aa273c7617252ef17a44fc0560501278bb0daf36579a53651623",
+    "26ceebc8b8b6f86f5197a65eb05866a00d310b823849f9ffbe3b3dfc0f1d6338"
+   ],
+   "provider_images_pixel_identical_to_source": true,
+   "provider_vertex_count": 22769,
+   "registration": "explicit_verified_similarity",
+   "source_image_sha256": [
+    "1e37591b3ef9947d20eb09c44b01eee03e045a7eb0b5e3146edc9fd5b2636858",
+    "1f870d9b5b31aa273c7617252ef17a44fc0560501278bb0daf36579a53651623",
+    "26ceebc8b8b6f86f5197a65eb05866a00d310b823849f9ffbe3b3dfc0f1d6338"
+   ],
+   "source_to_provider": [
+    [
+     1,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     1,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     1,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     1
+    ]
+   ],
+   "source_vertex_count": 22769,
+   "status": "surface_correspondence_verified",
+   "texture_binding_preserved": true,
+   "triangle_connectivity_and_winding_equal": true,
+   "uv_max_error": 0
+  },
+  "schema_version": 1,
+  "semantic_review": {
+   "accepted": true,
+   "cost_usd": 0,
+   "criteria": [
+    {
+     "criterion": "required_joints_and_weights",
+     "passed": true,
+     "reason": "Required mapping has no missing semantics or blocking findings; normalized nonnegative weights independently verified."
+    },
+    {
+     "criterion": "rest_shape",
+     "passed": true,
+     "reason": "Coherent anatomy and face; no new silhouette corruption at rest."
+    },
+    {
+     "criterion": "shoulder_deformation",
+     "passed": true,
+     "reason": "Raised arms retain their motion; skirt now stays seated around hips instead of arm-driven lateral flares."
+    },
+    {
+     "criterion": "elbow_deformation",
+     "passed": true,
+     "reason": "Elbows bend and hands remain within cuffs; corrected skirt remains seated."
+    },
+    {
+     "criterion": "knee_deformation",
+     "passed": true,
+     "reason": "Both knees articulate without visible collapsed/spiked legs or detached feet in supplied sample."
+    },
+    {
+     "criterion": "wrist_and_hand_attachment",
+     "passed": true,
+     "reason": "Fixed hands stay attached while wrist diagnostic plays; no claim of finger articulation."
+    },
+    {
+     "criterion": "accessory_attachment",
+     "passed": true,
+     "reason": "Hair, blossoms, neck bow, cuffs and boots remain visibly attached in sampled views."
+    },
+    {
+     "criterion": "head_neck_attachment",
+     "passed": true,
+     "reason": "Head remains seated and face unobstructed in rest and cheer."
+    },
+    {
+     "criterion": "coherent_cheer",
+     "passed": true,
+     "reason": "Cheer remains visible; arms/chest motion no longer pulls lateral skirt hems upward."
+    },
+    {
+     "criterion": "exported_material_policy",
+     "passed": true,
+     "reason": "Textures and matte surface presentation remain coherent; all original material/image bytes unchanged by correction."
+    }
+   ],
+   "diagnostic_atlas_sha256": [
+    "c02b6b25cd1ddedf0db69ee47e1961edae2539986104dc28fe97b0bf798031b6",
+    "f593bc5c7d558692f83155b37202532fdc6f3ce116010e07d8005113d34313e6",
+    "fadb2282fb7f29e27d74126f951793958e64a1fc87f774ef9021904082fef09f",
+    "3c66956a99514ceb95a435b635a8d12a4d14fb5b46861cb2c349f7268422d6ba",
+    "8f47020f15d4040bf37392a0c2090aa7f6b90b50bd4868f768fedf92344f8c00",
+    "32bee366e2b715bd1d16e43f0a74cec01649637402eee58c340762bcdf9eb735",
+    "a85dac8e3d6d40c01a8e08e6606ef648c7f837512251424971a774121aad0875",
+    "4e86e0c5657d77d9152809159c5c5979f63346735768a723999826cb28d735b2",
+    "64056fc07b7cd136e2693f7ebe079c57b1b2561aa8c83debb0a2184463f6e4da",
+    "1b76ce714dcc73d79e18dc93266bf3e3e0f199781352651226a4c806fe0ab8bf",
+    "7af06454c5d29335ae858029ebea49abfe94f18340e14c9a36e71bc2dcdbb7d6",
+    "560b545c8dccd824f4324e47fd617b63abe3af3c7aabf2effa65a29bcc7c684a",
+    "71311d5bab66ac7abaefe95ae76da482467cfaa283b984a3d85f33b8cc1cbfa5"
+   ],
+   "model_sha256": "5c0d91039150a4db1eec6828d88a277cf6599074c0d21a72a504401538f4ed45",
+   "numeric_summary": {
+    "all_nonweight_accessors_exact": true,
+    "all_nonweight_binary_bytes_exact": true,
+    "animations_and_amplitudes_exact": true,
+    "arm_weights_after_exactly_zero": true,
+    "central_component_count": 7111,
+    "changed_weight_slots": 1702,
+    "indices_sha256": "b16d80d3fe1d419901ea49afe630f1c0b9340e2f572b3bffe5768e15607b2184",
+    "joint_indices_exact": true,
+    "json_document_exact": true,
+    "proportional_existing_nonarm_weights_verified": true,
+    "selected_count": 514,
+    "weight_row_sum_max_error": 1.1920928955078125e-7
+   },
+   "provider_calls": 0,
+   "quality_bar": {
+    "cell_character_height_pixels": 240,
+    "face_character_height_pixels": 600,
+    "level": "low",
+    "torso_character_height_pixels": 1024,
+    "verdict_character_height_pixels": 120
+   },
+   "remaining_limits": [
+    "Extra rear blossom remains; exact canonical identity fidelity is not restored by weight correction.",
+    "This is a provider rig with an explicitly disclosed local 514-vertex lower-body weight correction, not an unchanged provider rig.",
+    "Only original declared sample times and views were reviewed, not every continuous animation frame or an in-engine gameplay test.",
+    "Fixed-hand profile has no demonstrated finger/thumb articulation, facial rig, cloth simulation or secondary hair motion.",
+    "Low bar is 120px gameplay height. Close-up/high-quality character acceptance is not claimed."
+   ],
+   "schema_version": 1,
+   "scope": "Independent low-bar sampled review of the exact corrected Nami rig, produced by another agent. No continuous-motion or game-engine qualification.",
+   "verdict": "pass_unchanged_low_bar_sampled_motion_gate"
+  },
+  "semantic_review_scope": "Unchanged low-bar diagnostic samples; not continuous-motion or game-engine qualification",
+  "source_sha256": "73cfe88743514eb1f3eb939314107d5b69d609a9ddd422058c1d98d7ec903dcc"
+ },
+ "source_sha256": "5c0d91039150a4db1eec6828d88a277cf6599074c0d21a72a504401538f4ed45"
+}

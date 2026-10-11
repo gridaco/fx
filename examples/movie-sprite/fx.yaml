@@ -1,4 +1,5 @@
 fx: project/v1
 sources: [nodes]
+route_tables: [routes.yaml]
 routes:
-  video.generate: google/gemini-omni-flash/v1.1/image-to-video@fal
+  video.generate: fal-ai/wan/v2.7/image-to-video@fal

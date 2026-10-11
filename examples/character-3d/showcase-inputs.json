@@ -1,0 +1,47 @@
+{
+  "schema": "fx_showcase_inputs_v1",
+  "delivery_base": "https://grida-fx-showcase-spike-20261011.t3.tigrisfiles.io",
+  "inputs": [
+    {
+      "filename": "nami-sd.png",
+      "path": "showcases/c054fe7c605cb3052de956de77e64b588171d842e7dc9ae4c751ac2b44d5d8c7/character-3d/assets/nami-sd.png",
+      "sha256": "c5149034bfd086f23a47cf481485c4f9803f043d504431337b549e8b0d840bd6",
+      "bytes": 899088
+    },
+    {
+      "filename": "nami-front.png",
+      "path": "showcases/c054fe7c605cb3052de956de77e64b588171d842e7dc9ae4c751ac2b44d5d8c7/character-3d/assets/nami-front.png",
+      "sha256": "e7c4bced48b895beb13264252dce17efaab7bf6b6fb689aaec4df07a4e46cec5",
+      "bytes": 1162072
+    },
+    {
+      "filename": "nami-back.png",
+      "path": "showcases/c054fe7c605cb3052de956de77e64b588171d842e7dc9ae4c751ac2b44d5d8c7/character-3d/assets/nami-back.png",
+      "sha256": "9810662ee4ce826e157360b5de725bf781dd428189f0ded15c35111cbf629aed",
+      "bytes": 1024236
+    },
+    {
+      "filename": "nami-assembly.glb",
+      "path": "showcases/c054fe7c605cb3052de956de77e64b588171d842e7dc9ae4c751ac2b44d5d8c7/character-3d/assets/nami-assembly.glb",
+      "sha256": "013667face278a1dbbbb8be1bb3ef49274e75a413226959d7b0f88a658d511a5",
+      "bytes": 5385104
+    },
+    {
+      "filename": "nami-provider-rig.glb",
+      "path": "showcases/c054fe7c605cb3052de956de77e64b588171d842e7dc9ae4c751ac2b44d5d8c7/character-3d/assets/nami-provider-rig.glb",
+      "sha256": "2a77277b4ec5fcccdac89507354cf1c3400765279d8ff3d54261316185fb94a8",
+      "bytes": 5848068
+    },
+    {
+      "filename": "nami-assembly-record.json",
+      "path": "showcases/c054fe7c605cb3052de956de77e64b588171d842e7dc9ae4c751ac2b44d5d8c7/character-3d/assets/nami-assembly-record.json",
+      "sha256": "104f03d191f985e84d0b91da431a4a7c3fb3ce4d4b6354a83444d7b3b7a677ff",
+      "bytes": 3386
+    }
+  ],
+  "origin": {
+    "kind": "ai_generated",
+    "description": "Original Nami no-hood SD adaptation and exact retained artifacts from its recorded reference, mesh, assembly and provider-rig trial. The exact-asset free replay applies measured finishing and a disclosed lower-body weight correction.",
+    "publication": "Reviewed for the authorized FX showcase; this manifest grants no additional media license."
+  }
+}

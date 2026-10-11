@@ -4,13 +4,15 @@
 
 - ``character.png`` and ``take.yaml``, to plan the paid take: ``uv run python -m grida.fx plan
   movie-sprite --inputs <dir>/take.yaml``;
-- ``actor.mkv``, ``finish.json`` and ``clip.yaml``, to finish that clip for free: ``uv run
-  python -m grida.fx run movie-sprite --inputs <dir>/clip.yaml`` (the clip needs FFmpeg).
+- ``actor.mkv``, ``trim.json``, ``finish.json`` and ``clip.yaml``, to trim and key that
+  green-backed clip for free: ``uv run python -m grida.fx run movie-sprite --inputs
+  <dir>/clip.yaml`` (the clip needs FFmpeg).
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import subprocess
@@ -56,10 +58,10 @@ TAKE = {
     "character": "character.png",
     "direction": "A calm standing idle for this simple geometric figure.",
     "seconds": 3,
-    "resolution": "360p",
+    "resolution": "720p",
 }
-#: Finishing the supplied clip, which is already transparent and already loops.
-CLIP = {"footage": "actor.mkv", "finish": "finish.json"}
+#: Trim the supplied green-backed clip's full interval, then key its exact loop.
+CLIP = {"footage": "actor.mkv", "trim": "trim.json", "finish": "finish.json"}
 
 
 def write_inputs(target: Path) -> Path:
@@ -74,7 +76,11 @@ def write_inputs(target: Path) -> Path:
 def make_inputs(target: Path) -> None:
     """Write the take's inputs, and a lossless clip with the settings that finish it."""
     write_inputs(target)
-    frames = [make_frame(index) for index in range(FRAME_COUNT)]
+    frames = []
+    for index in range(FRAME_COUNT):
+        plate = Image.new("RGBA", (WIDTH, HEIGHT), (0, 255, 0, 255))
+        plate.alpha_composite(make_frame(index))
+        frames.append(plate)
     subprocess.run(
         [
             "ffmpeg",
@@ -97,7 +103,7 @@ def make_inputs(target: Path) -> None:
             "-level",
             "3",
             "-pix_fmt",
-            "bgra",
+            "bgr0",
             str(target / "actor.mkv"),
         ],
         input=b"".join(frame.tobytes() for frame in frames),
@@ -107,11 +113,23 @@ def make_inputs(target: Path) -> None:
     (target / "finish.json").write_text(
         json.dumps(
             {
-                "source_mode": "finished",
+                "source_mode": "chroma",
                 "loop_closure": "none",
                 "playback_seconds": 3,
                 "export_frames": True,
                 "preview_max_size": [WIDTH, HEIGHT],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (target / "trim.json").write_text(
+        json.dumps(
+            {
+                "source_sha256": hashlib.sha256((target / "actor.mkv").read_bytes()).hexdigest(),
+                "start_frame": 0,
+                "end_frame": FRAME_COUNT,
             },
             indent=2,
         )

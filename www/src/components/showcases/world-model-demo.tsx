@@ -54,7 +54,7 @@ export function WorldModelDemo({ slug, assetBase }: { slug: "world" | "character
       <div className="relative mt-4 flex h-[min(65vh,600px)] min-h-80 items-center justify-center overflow-hidden rounded-lg bg-muted">
         {createElement("model-viewer", {
           "data-character-model": "",
-          alt: "Mira Vale, the meadow caretaker, as a textured 3D character",
+          alt: "Nami as a textured, rigged SD character",
           "camera-controls": "",
           "interaction-prompt": "none",
           "shadow-intensity": "0.5",
@@ -65,7 +65,7 @@ export function WorldModelDemo({ slug, assetBase }: { slug: "world" | "character
           className: "block h-full w-full",
         })}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img data-model-reference alt="Mira Vale character reference" hidden className="h-full w-full object-contain p-5" />
+        <img data-model-reference alt="Nami rig-ready character reference" hidden className="h-full w-full object-contain p-5" />
         <span data-model-loading className="pointer-events-none absolute bottom-4 rounded-full bg-background/90 px-3 py-1.5 text-xs text-muted-foreground">Loading the 3D viewer…</span>
       </div>
       <div className="mt-4 flex flex-wrap items-center justify-between gap-4">

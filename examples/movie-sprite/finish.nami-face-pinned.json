@@ -1,0 +1,54 @@
+{
+  "source_mode": "chroma",
+  "playback_seconds": 8,
+  "loop_closure": "flow",
+  "seam_frames": 12,
+  "flow_proxy_width": 720,
+  "max_flow_pixels": 36,
+  "fixed_regions": [
+    {
+      "polygon_xy": [
+        [
+          210,
+          75
+        ],
+        [
+          430,
+          75
+        ],
+        [
+          460,
+          330
+        ],
+        [
+          195,
+          330
+        ]
+      ]
+    }
+  ],
+  "moving_guards": [],
+  "local_repairs": [],
+  "outside_feather_pixels": 12,
+  "preview_max_size": [
+    720,
+    1280
+  ],
+  "export_frames": true,
+  "source_sha256": "45c0188eeb842ee23ff578deb22e57f465f722da3b695af41d2d9e393fdcc3af",
+  "coordinate_size": [
+    720,
+    1280
+  ],
+  "chroma": {
+    "key_rgb": [
+      0,
+      255,
+      0
+    ],
+    "key_excess": 128,
+    "foreground_excess": 8,
+    "minimum_alpha": 24,
+    "despill_radius_pixels": 3
+  }
+}

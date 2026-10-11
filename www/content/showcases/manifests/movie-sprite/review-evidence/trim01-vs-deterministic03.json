@@ -1,0 +1,13 @@
+{
+  "trim-run-01": {
+    "source_sha256": "00bd5edee1355da9b57101275aea78436b0f458af970ea2aba8516dabda1a7d6",
+    "decoded_framehash_sha256": "5168618ed00e0c9c1d6ff85e7d1995f0f5e1a89a7d1440b66d4eacc4d5b869ec",
+    "frame_count": 216
+  },
+  "trim-run-03": {
+    "source_sha256": "45c0188eeb842ee23ff578deb22e57f465f722da3b695af41d2d9e393fdcc3af",
+    "decoded_framehash_sha256": "5168618ed00e0c9c1d6ff85e7d1995f0f5e1a89a7d1440b66d4eacc4d5b869ec",
+    "frame_count": 216
+  },
+  "native_framehash_identical": true
+}

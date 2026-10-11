@@ -1,0 +1,2032 @@
+{
+ "artifacts": [
+  {
+   "digest": "013667face278a1dbbbb8be1bb3ef49274e75a413226959d7b0f88a658d511a5",
+   "media_type": "model/gltf-binary",
+   "name": "nami-assembly.glb",
+   "omitted_reason": null,
+   "path": "artifacts/013667face278a1dbbbb8be1bb3ef49274e75a413226959d7b0f88a658d511a5.glb",
+   "size": 5385104
+  },
+  {
+   "digest": "050d4483f0f7ef1837ae7ba9b4567f0d8c29dcdc0ba1570b5eebd7ff48300bb3",
+   "media_type": "image/png",
+   "name": "images[3]",
+   "omitted_reason": null,
+   "path": "artifacts/050d4483f0f7ef1837ae7ba9b4567f0d8c29dcdc0ba1570b5eebd7ff48300bb3.png",
+   "size": 475402
+  },
+  {
+   "digest": "058e086f07e490b0651d3c03c92c5cc36fa94b3e0586dd20d01d77120271b20e",
+   "media_type": "image/png",
+   "name": "atlas[11]",
+   "omitted_reason": null,
+   "path": "artifacts/058e086f07e490b0651d3c03c92c5cc36fa94b3e0586dd20d01d77120271b20e.png",
+   "size": 442829
+  },
+  {
+   "digest": "0b38ae0ace224f14f5da005dba3905cbdbdac96f788c4477ae5003572cbea43a",
+   "media_type": "json",
+   "name": "nami-preservation.json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 4209
+  },
+  {
+   "digest": "104f03d191f985e84d0b91da431a4a7c3fb3ce4d4b6354a83444d7b3b7a677ff",
+   "media_type": "json",
+   "name": "nami-assembly-record.json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 3386
+  },
+  {
+   "digest": "2071cc1d9978e4df63ed8c30f6991f5b35e84ed1939f3ef94917ab649738c0fe",
+   "media_type": "json",
+   "name": "nami-review.json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 4653
+  },
+  {
+   "digest": "2a77277b4ec5fcccdac89507354cf1c3400765279d8ff3d54261316185fb94a8",
+   "media_type": "model/gltf-binary",
+   "name": "nami-provider-rig.glb",
+   "omitted_reason": null,
+   "path": "artifacts/2a77277b4ec5fcccdac89507354cf1c3400765279d8ff3d54261316185fb94a8.glb",
+   "size": 5848068
+  },
+  {
+   "digest": "3061a18a8cc8408280392d620b08cfe6449ed58a4a877a1eefc5845192368e61",
+   "media_type": "image/png",
+   "name": "atlas[1]",
+   "omitted_reason": null,
+   "path": "artifacts/3061a18a8cc8408280392d620b08cfe6449ed58a4a877a1eefc5845192368e61.png",
+   "size": 251468
+  },
+  {
+   "digest": "40af77fcd0cddbfb4d4dde03963bb13537f1b8d4176984c5bcb7aadd97e930b1",
+   "media_type": "image/png",
+   "name": "atlas[9]",
+   "omitted_reason": null,
+   "path": "artifacts/40af77fcd0cddbfb4d4dde03963bb13537f1b8d4176984c5bcb7aadd97e930b1.png",
+   "size": 446088
+  },
+  {
+   "digest": "4a066edc896a245b9915a8094a9a6bfdb68df30a8fb4d73897da39f225106204",
+   "media_type": "image/png",
+   "name": "atlas[0]",
+   "omitted_reason": null,
+   "path": "artifacts/4a066edc896a245b9915a8094a9a6bfdb68df30a8fb4d73897da39f225106204.png",
+   "size": 246504
+  },
+  {
+   "digest": "566fdb9b15e7cc61637a0e922d8d8695fe213cb9db0d5b4472e39a6bf550f543",
+   "media_type": "image/png",
+   "name": "images[1]",
+   "omitted_reason": null,
+   "path": "artifacts/566fdb9b15e7cc61637a0e922d8d8695fe213cb9db0d5b4472e39a6bf550f543.png",
+   "size": 481380
+  },
+  {
+   "digest": "5893cc04d9642f69bf9b4c15b63a06257326d6adc90b64d3c070567f275be8cd",
+   "media_type": "json",
+   "name": "record",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 80016
+  },
+  {
+   "digest": "58e1cd83978b10992dbfe6b728a0e7fe2660c7dad20f81fad2ecc58b1100bf26",
+   "media_type": "image/png",
+   "name": "atlas[8]",
+   "omitted_reason": null,
+   "path": "artifacts/58e1cd83978b10992dbfe6b728a0e7fe2660c7dad20f81fad2ecc58b1100bf26.png",
+   "size": 420094
+  },
+  {
+   "digest": "5c0d91039150a4db1eec6828d88a277cf6599074c0d21a72a504401538f4ed45",
+   "media_type": "model/gltf-binary",
+   "name": "model",
+   "omitted_reason": null,
+   "path": "artifacts/5c0d91039150a4db1eec6828d88a277cf6599074c0d21a72a504401538f4ed45.glb",
+   "size": 5869020
+  },
+  {
+   "digest": "5d58fd7a1b5ce62752c46934b2fe095c92164e135bec657283e7e60638d43f80",
+   "media_type": "image/png",
+   "name": "atlas[4]",
+   "omitted_reason": null,
+   "path": "artifacts/5d58fd7a1b5ce62752c46934b2fe095c92164e135bec657283e7e60638d43f80.png",
+   "size": 248291
+  },
+  {
+   "digest": "6bbfb7ee2524a5a2598767d0545a24a6e60a4984e020a14e61675d2f0ed00fa8",
+   "media_type": "model/gltf-binary",
+   "name": "selection_mask",
+   "omitted_reason": null,
+   "path": "artifacts/6bbfb7ee2524a5a2598767d0545a24a6e60a4984e020a14e61675d2f0ed00fa8.glb",
+   "size": 6233436
+  },
+  {
+   "digest": "73cfe88743514eb1f3eb939314107d5b69d609a9ddd422058c1d98d7ec903dcc",
+   "media_type": "model/gltf-binary",
+   "name": "model",
+   "omitted_reason": null,
+   "path": "artifacts/73cfe88743514eb1f3eb939314107d5b69d609a9ddd422058c1d98d7ec903dcc.glb",
+   "size": 5869020
+  },
+  {
+   "digest": "74e666a43243032e1e4ea561d8fea6b4edc03fc4df6b76e3422818af522a5ee5",
+   "media_type": "image/png",
+   "name": "atlas[5]",
+   "omitted_reason": null,
+   "path": "artifacts/74e666a43243032e1e4ea561d8fea6b4edc03fc4df6b76e3422818af522a5ee5.png",
+   "size": 246439
+  },
+  {
+   "digest": "753d4379964b8287834b420dbfeda3e33021b8a8376b4dcd3e3e25e8548f96a0",
+   "media_type": "image/png",
+   "name": "atlas[6]",
+   "omitted_reason": null,
+   "path": "artifacts/753d4379964b8287834b420dbfeda3e33021b8a8376b4dcd3e3e25e8548f96a0.png",
+   "size": 237755
+  },
+  {
+   "digest": "7f99b7ebae31f607efbf5cc660f08070141126d7b7dffd42b5136be2c3a13aa9",
+   "media_type": "image/png",
+   "name": "atlas[3]",
+   "omitted_reason": null,
+   "path": "artifacts/7f99b7ebae31f607efbf5cc660f08070141126d7b7dffd42b5136be2c3a13aa9.png",
+   "size": 259881
+  },
+  {
+   "digest": "8f0bc2183592f15feaf0dae959ae2e353b8e15b4a4526406a867beda0e969db5",
+   "media_type": "json",
+   "name": "evidence",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 15698
+  },
+  {
+   "digest": "9065f161a5cf61a82e8f245bd85f02cf9adf61134531824e05bc079303dc30ee",
+   "media_type": "image/png",
+   "name": "atlas[7]",
+   "omitted_reason": null,
+   "path": "artifacts/9065f161a5cf61a82e8f245bd85f02cf9adf61134531824e05bc079303dc30ee.png",
+   "size": 439418
+  },
+  {
+   "digest": "9810662ee4ce826e157360b5de725bf781dd428189f0ded15c35111cbf629aed",
+   "media_type": "image/png",
+   "name": "nami-back.png",
+   "omitted_reason": null,
+   "path": "artifacts/9810662ee4ce826e157360b5de725bf781dd428189f0ded15c35111cbf629aed.png",
+   "size": 1024236
+  },
+  {
+   "digest": "99396050b72d75f52f9637ac876b8692da16598dc74945368fcbfe7d230e3589",
+   "media_type": "json",
+   "name": "record",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 69543
+  },
+  {
+   "digest": "a25a93e81f232d4b7913a257d1cf12521d7c12d584e824037adfec87f5576da7",
+   "media_type": "json",
+   "name": "record",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 92828
+  },
+  {
+   "digest": "a90eceb5ada6ea6eb5991fb37a0ffa0d46a8b1632db71e3e3f39dae0ebb00827",
+   "media_type": "json",
+   "name": "nami-weights.json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 7922
+  },
+  {
+   "digest": "a9a1fe3326240256465f22cc8f731bd39ca5a166015baf5df99cb083553ab2fb",
+   "media_type": "json",
+   "name": "preservation",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 2582
+  },
+  {
+   "digest": "b3d8f3aa3a1cfdcf8dbce271e8de030bda0bde28ee72704c9305a4fd1aec14ab",
+   "media_type": "json",
+   "name": "result",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 955
+  },
+  {
+   "digest": "b5a67fcf1ad2fa8b685813ebf6d1ce08d613a1ad6a9db2a0977f8d9f2dfcff39",
+   "media_type": "image/png",
+   "name": "atlas[2]",
+   "omitted_reason": null,
+   "path": "artifacts/b5a67fcf1ad2fa8b685813ebf6d1ce08d613a1ad6a9db2a0977f8d9f2dfcff39.png",
+   "size": 249950
+  },
+  {
+   "digest": "b78e3e0b0d2530640b920443bbaa17ae67e549ea71a353cd882b679244f4f2b5",
+   "media_type": "json",
+   "name": "profile",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 3037
+  },
+  {
+   "digest": "b9358e51d03df62833e88eab7e8c18b30b1097ed8c100418d34abb3bc56fc3cc",
+   "media_type": "application/zip",
+   "name": "worker_evidence",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 10895596
+  },
+  {
+   "digest": "c5149034bfd086f23a47cf481485c4f9803f043d504431337b549e8b0d840bd6",
+   "media_type": "image/png",
+   "name": "nami-sd.png",
+   "omitted_reason": null,
+   "path": "artifacts/c5149034bfd086f23a47cf481485c4f9803f043d504431337b549e8b0d840bd6.png",
+   "size": 899088
+  },
+  {
+   "digest": "c9a694504bf004cf1fd32e9dcc1a07c04304a52083aea34cb563a4fd1735cbf7",
+   "media_type": "json",
+   "name": "audit",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 9662
+  },
+  {
+   "digest": "cc0a10e2cc424f2d550449a51055b1f46babaefb7df55950d9971a08d523219f",
+   "media_type": "image/png",
+   "name": "images[2]",
+   "omitted_reason": null,
+   "path": "artifacts/cc0a10e2cc424f2d550449a51055b1f46babaefb7df55950d9971a08d523219f.png",
+   "size": 477077
+  },
+  {
+   "digest": "e1c082bc4dfb9e799ade2c86b412e056771d6bd6e969517e827451245aafd803",
+   "media_type": "image/png",
+   "name": "images[0]",
+   "omitted_reason": null,
+   "path": "artifacts/e1c082bc4dfb9e799ade2c86b412e056771d6bd6e969517e827451245aafd803.png",
+   "size": 482089
+  },
+  {
+   "digest": "e7c4bced48b895beb13264252dce17efaab7bf6b6fb689aaec4df07a4e46cec5",
+   "media_type": "image/png",
+   "name": "nami-front.png",
+   "omitted_reason": null,
+   "path": "artifacts/e7c4bced48b895beb13264252dce17efaab7bf6b6fb689aaec4df07a4e46cec5.png",
+   "size": 1162072
+  },
+  {
+   "digest": "f00923e10a79bd7f883ee90a15af3eaa0757d4f573e3f01b451d61b25e771db9",
+   "media_type": "json",
+   "name": "evidence",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 18060
+  },
+  {
+   "digest": "f69d6bef9e2d570d58c8c96c6ae5494be018a34300b627fcb44a4f72299e8b57",
+   "media_type": "image/png",
+   "name": "atlas[10]",
+   "omitted_reason": null,
+   "path": "artifacts/f69d6bef9e2d570d58c8c96c6ae5494be018a34300b627fcb44a4f72299e8b57.png",
+   "size": 457335
+  },
+  {
+   "digest": "f90410f206e1d5c11dcad2804e3b631865fc6a0d7db74db937266c411e24b223",
+   "media_type": "image/png",
+   "name": "atlas[12]",
+   "omitted_reason": null,
+   "path": "artifacts/f90410f206e1d5c11dcad2804e3b631865fc6a0d7db74db937266c411e24b223.png",
+   "size": 409711
+  },
+  {
+   "digest": "fe00b14ba91b591791e43e8a78ff0058d6a7b4998993e62a6f4e8a9b276fe673",
+   "media_type": "json",
+   "name": "bar",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 4336
+  }
+ ],
+ "disclosure": {
+  "artifacts": "media",
+  "diagnostics": true,
+  "values": true
+ },
+ "kind": "fx-run-export-v1",
+ "layout": {
+  "cells": {
+   "correct": {
+    "column": 2,
+    "row": 0,
+    "source": "automatic"
+   },
+   "cover": {
+    "column": 6,
+    "row": 0,
+    "source": "automatic"
+   },
+   "diagnostics": {
+    "column": 3,
+    "row": 1,
+    "source": "automatic"
+   },
+   "finish": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "qualify": {
+    "column": 4,
+    "row": 0,
+    "source": "automatic"
+   },
+   "selection": {
+    "column": 3,
+    "row": 0,
+    "source": "automatic"
+   },
+   "setup": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   },
+   "sources": {
+    "column": 5,
+    "row": 0,
+    "source": "automatic"
+   }
+  },
+  "cursor": null,
+  "diagnostics": [],
+  "file": null,
+  "kind": "fx-layout-report-v1",
+  "order": [
+   "sources#1",
+   "setup#1",
+   "finish#1",
+   "correct#1",
+   "selection#1",
+   "diagnostics#1",
+   "qualify#1"
+  ],
+  "revision": null,
+  "state": "none"
+ },
+ "producer": {
+  "version": "0.2.0"
+ },
+ "source": {
+  "event_count": 16,
+  "events_sha256": "607291e7d3ea228000e763ee05892234ecdbdc54e1a32c16c5834fc4888991be",
+  "plan_sha256": "1dfa8b64f01e0da85513591d59222e1414b14dae2fff68d5fc8e0cfbda824d35"
+ },
+ "view": {
+  "artifacts": [
+   {
+    "available": true,
+    "digest": "013667face278a1dbbbb8be1bb3ef49274e75a413226959d7b0f88a658d511a5",
+    "kind": "model/gltf-binary",
+    "name": "nami-assembly.glb",
+    "size": 5385104,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "050d4483f0f7ef1837ae7ba9b4567f0d8c29dcdc0ba1570b5eebd7ff48300bb3",
+    "kind": "image/png",
+    "name": "images[3]",
+    "size": 475402,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "058e086f07e490b0651d3c03c92c5cc36fa94b3e0586dd20d01d77120271b20e",
+    "kind": "image/png",
+    "name": "atlas[11]",
+    "size": 442829,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "0b38ae0ace224f14f5da005dba3905cbdbdac96f788c4477ae5003572cbea43a",
+    "kind": "json",
+    "name": "nami-preservation.json",
+    "size": 4209,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "104f03d191f985e84d0b91da431a4a7c3fb3ce4d4b6354a83444d7b3b7a677ff",
+    "kind": "json",
+    "name": "nami-assembly-record.json",
+    "size": 3386,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "2071cc1d9978e4df63ed8c30f6991f5b35e84ed1939f3ef94917ab649738c0fe",
+    "kind": "json",
+    "name": "nami-review.json",
+    "size": 4653,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "2a77277b4ec5fcccdac89507354cf1c3400765279d8ff3d54261316185fb94a8",
+    "kind": "model/gltf-binary",
+    "name": "nami-provider-rig.glb",
+    "size": 5848068,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "3061a18a8cc8408280392d620b08cfe6449ed58a4a877a1eefc5845192368e61",
+    "kind": "image/png",
+    "name": "atlas[1]",
+    "size": 251468,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "40af77fcd0cddbfb4d4dde03963bb13537f1b8d4176984c5bcb7aadd97e930b1",
+    "kind": "image/png",
+    "name": "atlas[9]",
+    "size": 446088,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "4a066edc896a245b9915a8094a9a6bfdb68df30a8fb4d73897da39f225106204",
+    "kind": "image/png",
+    "name": "atlas[0]",
+    "size": 246504,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "566fdb9b15e7cc61637a0e922d8d8695fe213cb9db0d5b4472e39a6bf550f543",
+    "kind": "image/png",
+    "name": "images[1]",
+    "size": 481380,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "5893cc04d9642f69bf9b4c15b63a06257326d6adc90b64d3c070567f275be8cd",
+    "kind": "json",
+    "name": "record",
+    "size": 80016,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "58e1cd83978b10992dbfe6b728a0e7fe2660c7dad20f81fad2ecc58b1100bf26",
+    "kind": "image/png",
+    "name": "atlas[8]",
+    "size": 420094,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "5c0d91039150a4db1eec6828d88a277cf6599074c0d21a72a504401538f4ed45",
+    "kind": "model/gltf-binary",
+    "name": "model",
+    "size": 5869020,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "5d58fd7a1b5ce62752c46934b2fe095c92164e135bec657283e7e60638d43f80",
+    "kind": "image/png",
+    "name": "atlas[4]",
+    "size": 248291,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "6bbfb7ee2524a5a2598767d0545a24a6e60a4984e020a14e61675d2f0ed00fa8",
+    "kind": "model/gltf-binary",
+    "name": "selection_mask",
+    "size": 6233436,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "73cfe88743514eb1f3eb939314107d5b69d609a9ddd422058c1d98d7ec903dcc",
+    "kind": "model/gltf-binary",
+    "name": "model",
+    "size": 5869020,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "74e666a43243032e1e4ea561d8fea6b4edc03fc4df6b76e3422818af522a5ee5",
+    "kind": "image/png",
+    "name": "atlas[5]",
+    "size": 246439,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "753d4379964b8287834b420dbfeda3e33021b8a8376b4dcd3e3e25e8548f96a0",
+    "kind": "image/png",
+    "name": "atlas[6]",
+    "size": 237755,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "7f99b7ebae31f607efbf5cc660f08070141126d7b7dffd42b5136be2c3a13aa9",
+    "kind": "image/png",
+    "name": "atlas[3]",
+    "size": 259881,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "8f0bc2183592f15feaf0dae959ae2e353b8e15b4a4526406a867beda0e969db5",
+    "kind": "json",
+    "name": "evidence",
+    "size": 15698,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "9065f161a5cf61a82e8f245bd85f02cf9adf61134531824e05bc079303dc30ee",
+    "kind": "image/png",
+    "name": "atlas[7]",
+    "size": 439418,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "9810662ee4ce826e157360b5de725bf781dd428189f0ded15c35111cbf629aed",
+    "kind": "image/png",
+    "name": "nami-back.png",
+    "size": 1024236,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "99396050b72d75f52f9637ac876b8692da16598dc74945368fcbfe7d230e3589",
+    "kind": "json",
+    "name": "record",
+    "size": 69543,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "a25a93e81f232d4b7913a257d1cf12521d7c12d584e824037adfec87f5576da7",
+    "kind": "json",
+    "name": "record",
+    "size": 92828,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "a90eceb5ada6ea6eb5991fb37a0ffa0d46a8b1632db71e3e3f39dae0ebb00827",
+    "kind": "json",
+    "name": "nami-weights.json",
+    "size": 7922,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "a9a1fe3326240256465f22cc8f731bd39ca5a166015baf5df99cb083553ab2fb",
+    "kind": "json",
+    "name": "preservation",
+    "size": 2582,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "b3d8f3aa3a1cfdcf8dbce271e8de030bda0bde28ee72704c9305a4fd1aec14ab",
+    "kind": "json",
+    "name": "result",
+    "size": 955,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "b5a67fcf1ad2fa8b685813ebf6d1ce08d613a1ad6a9db2a0977f8d9f2dfcff39",
+    "kind": "image/png",
+    "name": "atlas[2]",
+    "size": 249950,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "b78e3e0b0d2530640b920443bbaa17ae67e549ea71a353cd882b679244f4f2b5",
+    "kind": "json",
+    "name": "profile",
+    "size": 3037,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "b9358e51d03df62833e88eab7e8c18b30b1097ed8c100418d34abb3bc56fc3cc",
+    "kind": "application/zip",
+    "name": "worker_evidence",
+    "size": 10895596,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "c5149034bfd086f23a47cf481485c4f9803f043d504431337b549e8b0d840bd6",
+    "kind": "image/png",
+    "name": "nami-sd.png",
+    "size": 899088,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "c9a694504bf004cf1fd32e9dcc1a07c04304a52083aea34cb563a4fd1735cbf7",
+    "kind": "json",
+    "name": "audit",
+    "size": 9662,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "cc0a10e2cc424f2d550449a51055b1f46babaefb7df55950d9971a08d523219f",
+    "kind": "image/png",
+    "name": "images[2]",
+    "size": 477077,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "e1c082bc4dfb9e799ade2c86b412e056771d6bd6e969517e827451245aafd803",
+    "kind": "image/png",
+    "name": "images[0]",
+    "size": 482089,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "e7c4bced48b895beb13264252dce17efaab7bf6b6fb689aaec4df07a4e46cec5",
+    "kind": "image/png",
+    "name": "nami-front.png",
+    "size": 1162072,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "f00923e10a79bd7f883ee90a15af3eaa0757d4f573e3f01b451d61b25e771db9",
+    "kind": "json",
+    "name": "evidence",
+    "size": 18060,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "f69d6bef9e2d570d58c8c96c6ae5494be018a34300b627fcb44a4f72299e8b57",
+    "kind": "image/png",
+    "name": "atlas[10]",
+    "size": 457335,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "f90410f206e1d5c11dcad2804e3b631865fc6a0d7db74db937266c411e24b223",
+    "kind": "image/png",
+    "name": "atlas[12]",
+    "size": 409711,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "fe00b14ba91b591791e43e8a78ff0058d6a7b4998993e62a6f4e8a9b276fe673",
+    "kind": "json",
+    "name": "bar",
+    "size": 4336,
+    "url": null
+   }
+  ],
+  "charged_usd": 0,
+  "estimate": {
+   "ceiling_usd": 0,
+   "high_usd": 0,
+   "low_usd": 0
+  },
+  "inputs": {
+   "assembly": {
+    "value": {
+     "file": "013667face278a1dbbbb8be1bb3ef49274e75a413226959d7b0f88a658d511a5"
+    }
+   },
+   "assembly_record": {
+    "value": {
+     "file": "104f03d191f985e84d0b91da431a4a7c3fb3ce4d4b6354a83444d7b3b7a677ff"
+    }
+   },
+   "back": {
+    "value": {
+     "file": "9810662ee4ce826e157360b5de725bf781dd428189f0ded15c35111cbf629aed"
+    }
+   },
+   "front": {
+    "value": {
+     "file": "e7c4bced48b895beb13264252dce17efaab7bf6b6fb689aaec4df07a4e46cec5"
+    }
+   },
+   "measurement": {
+    "value": {
+     "file": "0b38ae0ace224f14f5da005dba3905cbdbdac96f788c4477ae5003572cbea43a"
+    }
+   },
+   "parameters": {
+    "value": {
+     "file": "a90eceb5ada6ea6eb5991fb37a0ffa0d46a8b1632db71e3e3f39dae0ebb00827"
+    }
+   },
+   "reference": {
+    "value": {
+     "file": "c5149034bfd086f23a47cf481485c4f9803f043d504431337b549e8b0d840bd6"
+    }
+   },
+   "render_cover": {
+    "value": false
+   },
+   "review": {
+    "value": {
+     "file": "2071cc1d9978e4df63ed8c30f6991f5b35e84ed1939f3ef94917ab649738c0fe"
+    }
+   },
+   "rigged": {
+    "value": {
+     "file": "2a77277b4ec5fcccdac89507354cf1c3400765279d8ff3d54261316185fb94a8"
+    }
+   }
+  },
+  "kind": "fx-viewer-run-v1",
+  "nodes": [
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 163,
+    "error": null,
+    "id": "sources#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "assembly": {
+      "file": {
+       "digest": "013667face278a1dbbbb8be1bb3ef49274e75a413226959d7b0f88a658d511a5",
+       "kind": "model/gltf-binary",
+       "name": "assembly",
+       "size": 5385104
+      }
+     },
+     "back": {
+      "file": {
+       "digest": "9810662ee4ce826e157360b5de725bf781dd428189f0ded15c35111cbf629aed",
+       "kind": "image/png",
+       "name": "back",
+       "size": 1024236
+      }
+     },
+     "front": {
+      "file": {
+       "digest": "e7c4bced48b895beb13264252dce17efaab7bf6b6fb689aaec4df07a4e46cec5",
+       "kind": "image/png",
+       "name": "front",
+       "size": 1162072
+      }
+     },
+     "reference": {
+      "file": {
+       "digest": "c5149034bfd086f23a47cf481485c4f9803f043d504431337b549e8b0d840bd6",
+       "kind": "image/png",
+       "name": "reference",
+       "size": 899088
+      }
+     },
+     "review": {
+      "file": {
+       "digest": "2071cc1d9978e4df63ed8c30f6991f5b35e84ed1939f3ef94917ab649738c0fe",
+       "kind": "json",
+       "name": "review",
+       "size": 4653
+      }
+     },
+     "rigged": {
+      "file": {
+       "digest": "2a77277b4ec5fcccdac89507354cf1c3400765279d8ff3d54261316185fb94a8",
+       "kind": "model/gltf-binary",
+       "name": "rigged",
+       "size": 5848068
+      }
+     }
+    },
+    "path": "sources",
+    "ports": {
+     "inputs": {
+      "assembly": "model/gltf-binary",
+      "back": "image/png",
+      "front": "image/png",
+      "reference": "image/png",
+      "review": "json",
+      "rigged": "model/gltf-binary"
+     },
+     "outputs": {
+      "assembly": "model/gltf-binary",
+      "back": "image/png",
+      "front": "image/png",
+      "reference": "image/png",
+      "review": "json",
+      "rigged": "model/gltf-binary"
+     },
+     "params": {}
+    },
+    "reads": [],
+    "started_at": "2026-10-11T21:33:52.790Z",
+    "state": "succeeded",
+    "step": "sources",
+    "take": [
+     1
+    ],
+    "title": "Retain the exact canonical and source artifacts",
+    "uses": "./nodes/nami_sources.py#retain_sources",
+    "with": {
+     "assembly": {
+      "file": {
+       "digest": "013667face278a1dbbbb8be1bb3ef49274e75a413226959d7b0f88a658d511a5",
+       "kind": "model/gltf-binary",
+       "name": "nami-assembly.glb",
+       "size": 5385104
+      }
+     },
+     "back": {
+      "file": {
+       "digest": "9810662ee4ce826e157360b5de725bf781dd428189f0ded15c35111cbf629aed",
+       "kind": "image/png",
+       "name": "nami-back.png",
+       "size": 1024236
+      }
+     },
+     "front": {
+      "file": {
+       "digest": "e7c4bced48b895beb13264252dce17efaab7bf6b6fb689aaec4df07a4e46cec5",
+       "kind": "image/png",
+       "name": "nami-front.png",
+       "size": 1162072
+      }
+     },
+     "reference": {
+      "file": {
+       "digest": "c5149034bfd086f23a47cf481485c4f9803f043d504431337b549e8b0d840bd6",
+       "kind": "image/png",
+       "name": "nami-sd.png",
+       "size": 899088
+      }
+     },
+     "review": {
+      "file": {
+       "digest": "2071cc1d9978e4df63ed8c30f6991f5b35e84ed1939f3ef94917ab649738c0fe",
+       "kind": "json",
+       "name": "nami-review.json",
+       "size": 4653
+      }
+     },
+     "rigged": {
+      "file": {
+       "digest": "2a77277b4ec5fcccdac89507354cf1c3400765279d8ff3d54261316185fb94a8",
+       "kind": "model/gltf-binary",
+       "name": "nami-provider-rig.glb",
+       "size": 5848068
+      }
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "setup#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "setup",
+    "ports": {
+     "inputs": {
+      "parts": "model{}?"
+     },
+     "outputs": {
+      "bar": "json",
+      "profile": "json"
+     },
+     "params": {
+      "entry": {
+       "enum": [
+        "brief",
+        "parts"
+       ]
+      },
+      "partition": {
+       "enum": [
+        "whole",
+        "head_body_hair"
+       ]
+      },
+      "profile": {
+       "enum": [
+        "sd_human_fixed_hands_v1",
+        "sd_human_grouped_hands_v1",
+        "sd_cat_grouped_paws_v1"
+       ]
+      },
+      "quality_bar": {
+       "enum": [
+        "low",
+        "medium"
+       ]
+      },
+      "review": {
+       "enum": [
+        "required",
+        "none"
+       ]
+      }
+     }
+    },
+    "reads": [],
+    "state": "succeeded",
+    "step": "setup",
+    "take": [
+     1
+    ],
+    "title": "Compile the unchanged low-bar profile",
+    "uses": "./nodes/setup.py#setup",
+    "with": {
+     "entry": {
+      "value": "brief"
+     },
+     "partition": {
+      "value": "whole"
+     },
+     "profile": {
+      "value": "sd_human_fixed_hands_v1"
+     },
+     "quality_bar": {
+      "value": "low"
+     },
+     "review": {
+      "value": "required"
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "profile",
+      "target_port": "profile"
+     }
+    ],
+    "cache": "hit",
+    "duration_ms": 1,
+    "error": null,
+    "id": "finish#1",
+    "interface_bindings": [
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "profile",
+      "target_port": "profile"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "model": {
+      "file": {
+       "digest": "73cfe88743514eb1f3eb939314107d5b69d609a9ddd422058c1d98d7ec903dcc",
+       "kind": "model/gltf-binary",
+       "name": "model",
+       "size": 5869020
+      }
+     },
+     "preservation": {
+      "file": {
+       "digest": "a9a1fe3326240256465f22cc8f731bd39ca5a166015baf5df99cb083553ab2fb",
+       "kind": "json",
+       "name": "preservation",
+       "size": 2582
+      }
+     },
+     "record": {
+      "file": {
+       "digest": "99396050b72d75f52f9637ac876b8692da16598dc74945368fcbfe7d230e3589",
+       "kind": "json",
+       "name": "record",
+       "size": 69543
+      }
+     },
+     "worker_evidence": {
+      "file": {
+       "digest": "b9358e51d03df62833e88eab7e8c18b30b1097ed8c100418d34abb3bc56fc3cc",
+       "kind": "application/zip",
+       "name": "worker_evidence",
+       "size": 10895596
+      }
+     }
+    },
+    "path": "finish",
+    "ports": {
+     "inputs": {
+      "assembly": "model/gltf-binary",
+      "assembly_record": "json",
+      "measurement": "json",
+      "profile": "json",
+      "rigged": "model/gltf-binary"
+     },
+     "outputs": {
+      "model": "model/gltf-binary",
+      "preservation": "json",
+      "record": "json",
+      "worker_evidence": "file"
+     },
+     "params": {}
+    },
+    "reads": [
+     "setup#1"
+    ],
+    "started_at": "2026-10-11T21:33:52.790Z",
+    "state": "succeeded",
+    "step": "finish",
+    "take": [
+     1
+    ],
+    "title": "Finish the retained provider rig with measured alignment",
+    "uses": "./nodes/nami_recovery.py#finish",
+    "with": {
+     "assembly": {
+      "file": {
+       "digest": "013667face278a1dbbbb8be1bb3ef49274e75a413226959d7b0f88a658d511a5",
+       "kind": "model/gltf-binary",
+       "name": "nami-assembly.glb",
+       "size": 5385104
+      }
+     },
+     "assembly_record": {
+      "file": {
+       "digest": "104f03d191f985e84d0b91da431a4a7c3fb3ce4d4b6354a83444d7b3b7a677ff",
+       "kind": "json",
+       "name": "nami-assembly-record.json",
+       "size": 3386
+      }
+     },
+     "measurement": {
+      "file": {
+       "digest": "0b38ae0ace224f14f5da005dba3905cbdbdac96f788c4477ae5003572cbea43a",
+       "kind": "json",
+       "name": "nami-preservation.json",
+       "size": 4209
+      }
+     },
+     "profile": {
+      "file": {
+       "digest": "b78e3e0b0d2530640b920443bbaa17ae67e549ea71a353cd882b679244f4f2b5",
+       "kind": "json",
+       "name": "profile",
+       "size": 3037
+      }
+     },
+     "rigged": {
+      "file": {
+       "digest": "2a77277b4ec5fcccdac89507354cf1c3400765279d8ff3d54261316185fb94a8",
+       "kind": "model/gltf-binary",
+       "name": "nami-provider-rig.glb",
+       "size": 5848068
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "finish#1",
+      "source_kind": "output",
+      "source_port": "model",
+      "target_port": "model"
+     },
+     {
+      "source": "finish#1",
+      "source_kind": "output",
+      "source_port": "record",
+      "target_port": "record"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "profile",
+      "target_port": "profile"
+     }
+    ],
+    "cache": "hit",
+    "duration_ms": 1,
+    "error": null,
+    "id": "correct#1",
+    "interface_bindings": [
+     {
+      "source": "finish#1",
+      "source_kind": "output",
+      "source_port": "model",
+      "target_port": "model"
+     },
+     {
+      "source": "finish#1",
+      "source_kind": "output",
+      "source_port": "record",
+      "target_port": "record"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "profile",
+      "target_port": "profile"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "audit": {
+      "file": {
+       "digest": "c9a694504bf004cf1fd32e9dcc1a07c04304a52083aea34cb563a4fd1735cbf7",
+       "kind": "json",
+       "name": "audit",
+       "size": 9662
+      }
+     },
+     "model": {
+      "file": {
+       "digest": "5c0d91039150a4db1eec6828d88a277cf6599074c0d21a72a504401538f4ed45",
+       "kind": "model/gltf-binary",
+       "name": "model",
+       "size": 5869020
+      }
+     },
+     "record": {
+      "file": {
+       "digest": "5893cc04d9642f69bf9b4c15b63a06257326d6adc90b64d3c070567f275be8cd",
+       "kind": "json",
+       "name": "record",
+       "size": 80016
+      }
+     },
+     "selection_mask": {
+      "file": {
+       "digest": "6bbfb7ee2524a5a2598767d0545a24a6e60a4984e020a14e61675d2f0ed00fa8",
+       "kind": "model/gltf-binary",
+       "name": "selection_mask",
+       "size": 6233436
+      }
+     }
+    },
+    "path": "correct",
+    "ports": {
+     "inputs": {
+      "model": "model/gltf-binary",
+      "parameters": "json",
+      "profile": "json",
+      "record": "json"
+     },
+     "outputs": {
+      "audit": "json",
+      "model": "model/gltf-binary",
+      "record": "json",
+      "selection_mask": "model/gltf-binary"
+     },
+     "params": {}
+    },
+    "reads": [
+     "finish#1",
+     "setup#1"
+    ],
+    "started_at": "2026-10-11T21:33:52.795Z",
+    "state": "succeeded",
+    "step": "correct",
+    "take": [
+     1
+    ],
+    "title": "Remove the measured lower-body arm influences",
+    "uses": "./nodes/nami_correction.py#correct",
+    "with": {
+     "model": {
+      "file": {
+       "digest": "73cfe88743514eb1f3eb939314107d5b69d609a9ddd422058c1d98d7ec903dcc",
+       "kind": "model/gltf-binary",
+       "name": "model",
+       "size": 5869020
+      }
+     },
+     "parameters": {
+      "file": {
+       "digest": "a90eceb5ada6ea6eb5991fb37a0ffa0d46a8b1632db71e3e3f39dae0ebb00827",
+       "kind": "json",
+       "name": "nami-weights.json",
+       "size": 7922
+      }
+     },
+     "profile": {
+      "file": {
+       "digest": "b78e3e0b0d2530640b920443bbaa17ae67e549ea71a353cd882b679244f4f2b5",
+       "kind": "json",
+       "name": "profile",
+       "size": 3037
+      }
+     },
+     "record": {
+      "file": {
+       "digest": "99396050b72d75f52f9637ac876b8692da16598dc74945368fcbfe7d230e3589",
+       "kind": "json",
+       "name": "record",
+       "size": 69543
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "correct#1",
+      "source_kind": "output",
+      "source_port": "selection_mask",
+      "target_port": "model"
+     }
+    ],
+    "cache": "hit",
+    "duration_ms": 0,
+    "error": null,
+    "id": "selection#1",
+    "interface_bindings": [
+     {
+      "source": "correct#1",
+      "source_kind": "output",
+      "source_port": "selection_mask",
+      "target_port": "model"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "evidence": {
+      "file": {
+       "digest": "8f0bc2183592f15feaf0dae959ae2e353b8e15b4a4526406a867beda0e969db5",
+       "kind": "json",
+       "name": "evidence",
+       "size": 15698
+      }
+     },
+     "images": {
+      "list": [
+       {
+        "file": {
+         "digest": "e1c082bc4dfb9e799ade2c86b412e056771d6bd6e969517e827451245aafd803",
+         "kind": "image/png",
+         "name": "images[0]",
+         "size": 482089
+        }
+       },
+       {
+        "file": {
+         "digest": "566fdb9b15e7cc61637a0e922d8d8695fe213cb9db0d5b4472e39a6bf550f543",
+         "kind": "image/png",
+         "name": "images[1]",
+         "size": 481380
+        }
+       },
+       {
+        "file": {
+         "digest": "cc0a10e2cc424f2d550449a51055b1f46babaefb7df55950d9971a08d523219f",
+         "kind": "image/png",
+         "name": "images[2]",
+         "size": 477077
+        }
+       },
+       {
+        "file": {
+         "digest": "050d4483f0f7ef1837ae7ba9b4567f0d8c29dcdc0ba1570b5eebd7ff48300bb3",
+         "kind": "image/png",
+         "name": "images[3]",
+         "size": 475402
+        }
+       }
+      ]
+     }
+    },
+    "path": "selection",
+    "ports": {
+     "inputs": {
+      "model": "model/gltf-binary"
+     },
+     "outputs": {
+      "evidence": "json",
+      "images": "image[]"
+     },
+     "params": {}
+    },
+    "reads": [
+     "correct#1"
+    ],
+    "started_at": "2026-10-11T21:33:52.803Z",
+    "state": "succeeded",
+    "step": "selection",
+    "take": [
+     1
+    ],
+    "title": "Render the static correction selection",
+    "uses": "./nodes/nami_correction.py#selection",
+    "with": {
+     "model": {
+      "file": {
+       "digest": "6bbfb7ee2524a5a2598767d0545a24a6e60a4984e020a14e61675d2f0ed00fa8",
+       "kind": "model/gltf-binary",
+       "name": "selection_mask",
+       "size": 6233436
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "correct#1",
+      "source_kind": "output",
+      "source_port": "model",
+      "target_port": "model"
+     },
+     {
+      "source": "correct#1",
+      "source_kind": "output",
+      "source_port": "record",
+      "target_port": "record"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "bar",
+      "target_port": "bar"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "profile",
+      "target_port": "profile"
+     }
+    ],
+    "cache": "hit",
+    "duration_ms": 0,
+    "error": null,
+    "id": "diagnostics#1",
+    "interface_bindings": [
+     {
+      "source": "correct#1",
+      "source_kind": "output",
+      "source_port": "model",
+      "target_port": "model"
+     },
+     {
+      "source": "correct#1",
+      "source_kind": "output",
+      "source_port": "record",
+      "target_port": "record"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "bar",
+      "target_port": "bar"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "profile",
+      "target_port": "profile"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "atlas": {
+      "list": [
+       {
+        "file": {
+         "digest": "4a066edc896a245b9915a8094a9a6bfdb68df30a8fb4d73897da39f225106204",
+         "kind": "image/png",
+         "name": "atlas[0]",
+         "size": 246504
+        }
+       },
+       {
+        "file": {
+         "digest": "3061a18a8cc8408280392d620b08cfe6449ed58a4a877a1eefc5845192368e61",
+         "kind": "image/png",
+         "name": "atlas[1]",
+         "size": 251468
+        }
+       },
+       {
+        "file": {
+         "digest": "b5a67fcf1ad2fa8b685813ebf6d1ce08d613a1ad6a9db2a0977f8d9f2dfcff39",
+         "kind": "image/png",
+         "name": "atlas[2]",
+         "size": 249950
+        }
+       },
+       {
+        "file": {
+         "digest": "7f99b7ebae31f607efbf5cc660f08070141126d7b7dffd42b5136be2c3a13aa9",
+         "kind": "image/png",
+         "name": "atlas[3]",
+         "size": 259881
+        }
+       },
+       {
+        "file": {
+         "digest": "5d58fd7a1b5ce62752c46934b2fe095c92164e135bec657283e7e60638d43f80",
+         "kind": "image/png",
+         "name": "atlas[4]",
+         "size": 248291
+        }
+       },
+       {
+        "file": {
+         "digest": "74e666a43243032e1e4ea561d8fea6b4edc03fc4df6b76e3422818af522a5ee5",
+         "kind": "image/png",
+         "name": "atlas[5]",
+         "size": 246439
+        }
+       },
+       {
+        "file": {
+         "digest": "753d4379964b8287834b420dbfeda3e33021b8a8376b4dcd3e3e25e8548f96a0",
+         "kind": "image/png",
+         "name": "atlas[6]",
+         "size": 237755
+        }
+       },
+       {
+        "file": {
+         "digest": "9065f161a5cf61a82e8f245bd85f02cf9adf61134531824e05bc079303dc30ee",
+         "kind": "image/png",
+         "name": "atlas[7]",
+         "size": 439418
+        }
+       },
+       {
+        "file": {
+         "digest": "58e1cd83978b10992dbfe6b728a0e7fe2660c7dad20f81fad2ecc58b1100bf26",
+         "kind": "image/png",
+         "name": "atlas[8]",
+         "size": 420094
+        }
+       },
+       {
+        "file": {
+         "digest": "40af77fcd0cddbfb4d4dde03963bb13537f1b8d4176984c5bcb7aadd97e930b1",
+         "kind": "image/png",
+         "name": "atlas[9]",
+         "size": 446088
+        }
+       },
+       {
+        "file": {
+         "digest": "f69d6bef9e2d570d58c8c96c6ae5494be018a34300b627fcb44a4f72299e8b57",
+         "kind": "image/png",
+         "name": "atlas[10]",
+         "size": 457335
+        }
+       },
+       {
+        "file": {
+         "digest": "058e086f07e490b0651d3c03c92c5cc36fa94b3e0586dd20d01d77120271b20e",
+         "kind": "image/png",
+         "name": "atlas[11]",
+         "size": 442829
+        }
+       },
+       {
+        "file": {
+         "digest": "f90410f206e1d5c11dcad2804e3b631865fc6a0d7db74db937266c411e24b223",
+         "kind": "image/png",
+         "name": "atlas[12]",
+         "size": 409711
+        }
+       }
+      ]
+     },
+     "evidence": {
+      "file": {
+       "digest": "f00923e10a79bd7f883ee90a15af3eaa0757d4f573e3f01b451d61b25e771db9",
+       "kind": "json",
+       "name": "evidence",
+       "size": 18060
+      }
+     }
+    },
+    "path": "diagnostics",
+    "ports": {
+     "inputs": {
+      "bar": "json",
+      "model": "model/gltf-binary",
+      "profile": "json",
+      "record": "json"
+     },
+     "outputs": {
+      "atlas": "image[]",
+      "evidence": "json"
+     },
+     "params": {}
+    },
+    "reads": [
+     "correct#1",
+     "setup#1"
+    ],
+    "started_at": "2026-10-11T21:33:52.804Z",
+    "state": "succeeded",
+    "step": "diagnostics",
+    "take": [
+     1
+    ],
+    "title": "Render the unchanged rig diagnostic poses",
+    "uses": "./nodes/nami_recovery.py#diagnostics",
+    "with": {
+     "bar": {
+      "file": {
+       "digest": "fe00b14ba91b591791e43e8a78ff0058d6a7b4998993e62a6f4e8a9b276fe673",
+       "kind": "json",
+       "name": "bar",
+       "size": 4336
+      }
+     },
+     "model": {
+      "file": {
+       "digest": "5c0d91039150a4db1eec6828d88a277cf6599074c0d21a72a504401538f4ed45",
+       "kind": "model/gltf-binary",
+       "name": "model",
+       "size": 5869020
+      }
+     },
+     "profile": {
+      "file": {
+       "digest": "b78e3e0b0d2530640b920443bbaa17ae67e549ea71a353cd882b679244f4f2b5",
+       "kind": "json",
+       "name": "profile",
+       "size": 3037
+      }
+     },
+     "record": {
+      "file": {
+       "digest": "5893cc04d9642f69bf9b4c15b63a06257326d6adc90b64d3c070567f275be8cd",
+       "kind": "json",
+       "name": "record",
+       "size": 80016
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "correct#1",
+      "source_kind": "output",
+      "source_port": "audit",
+      "target_port": "audit"
+     },
+     {
+      "source": "correct#1",
+      "source_kind": "output",
+      "source_port": "model",
+      "target_port": "model"
+     },
+     {
+      "source": "correct#1",
+      "source_kind": "output",
+      "source_port": "record",
+      "target_port": "record"
+     },
+     {
+      "source": "diagnostics#1",
+      "source_kind": "output",
+      "source_port": "evidence",
+      "target_port": "evidence"
+     }
+    ],
+    "cache": "hit",
+    "duration_ms": 1,
+    "error": null,
+    "id": "qualify#1",
+    "interface_bindings": [
+     {
+      "source": "correct#1",
+      "source_kind": "output",
+      "source_port": "audit",
+      "target_port": "audit"
+     },
+     {
+      "source": "correct#1",
+      "source_kind": "output",
+      "source_port": "model",
+      "target_port": "model"
+     },
+     {
+      "source": "correct#1",
+      "source_kind": "output",
+      "source_port": "record",
+      "target_port": "record"
+     },
+     {
+      "source": "diagnostics#1",
+      "source_kind": "output",
+      "source_port": "evidence",
+      "target_port": "evidence"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "record": {
+      "file": {
+       "digest": "a25a93e81f232d4b7913a257d1cf12521d7c12d584e824037adfec87f5576da7",
+       "kind": "json",
+       "name": "record",
+       "size": 92828
+      }
+     },
+     "result": {
+      "file": {
+       "digest": "b3d8f3aa3a1cfdcf8dbce271e8de030bda0bde28ee72704c9305a4fd1aec14ab",
+       "kind": "json",
+       "name": "result",
+       "size": 955
+      }
+     }
+    },
+    "path": "qualify",
+    "ports": {
+     "inputs": {
+      "audit": "json",
+      "evidence": "json",
+      "model": "model/gltf-binary",
+      "record": "json",
+      "review": "json"
+     },
+     "outputs": {
+      "record": "json",
+      "result": "json"
+     },
+     "params": {}
+    },
+    "reads": [
+     "correct#1",
+     "diagnostics#1"
+    ],
+    "started_at": "2026-10-11T21:33:52.828Z",
+    "state": "succeeded",
+    "step": "qualify",
+    "take": [
+     1
+    ],
+    "title": "Bind the corrected model and independent sampled review",
+    "uses": "./nodes/nami_qualify.py#qualify",
+    "with": {
+     "audit": {
+      "file": {
+       "digest": "c9a694504bf004cf1fd32e9dcc1a07c04304a52083aea34cb563a4fd1735cbf7",
+       "kind": "json",
+       "name": "audit",
+       "size": 9662
+      }
+     },
+     "evidence": {
+      "file": {
+       "digest": "f00923e10a79bd7f883ee90a15af3eaa0757d4f573e3f01b451d61b25e771db9",
+       "kind": "json",
+       "name": "evidence",
+       "size": 18060
+      }
+     },
+     "model": {
+      "file": {
+       "digest": "5c0d91039150a4db1eec6828d88a277cf6599074c0d21a72a504401538f4ed45",
+       "kind": "model/gltf-binary",
+       "name": "model",
+       "size": 5869020
+      }
+     },
+     "record": {
+      "file": {
+       "digest": "5893cc04d9642f69bf9b4c15b63a06257326d6adc90b64d3c070567f275be8cd",
+       "kind": "json",
+       "name": "record",
+       "size": 80016
+      }
+     },
+     "review": {
+      "file": {
+       "digest": "2071cc1d9978e4df63ed8c30f6991f5b35e84ed1939f3ef94917ab649738c0fe",
+       "kind": "json",
+       "name": "nami-review.json",
+       "size": 4653
+      }
+     }
+    }
+   }
+  ],
+  "outputs": {
+   "assembly": {
+    "file": {
+     "digest": "013667face278a1dbbbb8be1bb3ef49274e75a413226959d7b0f88a658d511a5",
+     "kind": "model/gltf-binary",
+     "name": "assembly",
+     "size": 5385104
+    }
+   },
+   "atlas": {
+    "list": [
+     {
+      "file": {
+       "digest": "4a066edc896a245b9915a8094a9a6bfdb68df30a8fb4d73897da39f225106204",
+       "kind": "image/png",
+       "name": "atlas[0]",
+       "size": 246504
+      }
+     },
+     {
+      "file": {
+       "digest": "3061a18a8cc8408280392d620b08cfe6449ed58a4a877a1eefc5845192368e61",
+       "kind": "image/png",
+       "name": "atlas[1]",
+       "size": 251468
+      }
+     },
+     {
+      "file": {
+       "digest": "b5a67fcf1ad2fa8b685813ebf6d1ce08d613a1ad6a9db2a0977f8d9f2dfcff39",
+       "kind": "image/png",
+       "name": "atlas[2]",
+       "size": 249950
+      }
+     },
+     {
+      "file": {
+       "digest": "7f99b7ebae31f607efbf5cc660f08070141126d7b7dffd42b5136be2c3a13aa9",
+       "kind": "image/png",
+       "name": "atlas[3]",
+       "size": 259881
+      }
+     },
+     {
+      "file": {
+       "digest": "5d58fd7a1b5ce62752c46934b2fe095c92164e135bec657283e7e60638d43f80",
+       "kind": "image/png",
+       "name": "atlas[4]",
+       "size": 248291
+      }
+     },
+     {
+      "file": {
+       "digest": "74e666a43243032e1e4ea561d8fea6b4edc03fc4df6b76e3422818af522a5ee5",
+       "kind": "image/png",
+       "name": "atlas[5]",
+       "size": 246439
+      }
+     },
+     {
+      "file": {
+       "digest": "753d4379964b8287834b420dbfeda3e33021b8a8376b4dcd3e3e25e8548f96a0",
+       "kind": "image/png",
+       "name": "atlas[6]",
+       "size": 237755
+      }
+     },
+     {
+      "file": {
+       "digest": "9065f161a5cf61a82e8f245bd85f02cf9adf61134531824e05bc079303dc30ee",
+       "kind": "image/png",
+       "name": "atlas[7]",
+       "size": 439418
+      }
+     },
+     {
+      "file": {
+       "digest": "58e1cd83978b10992dbfe6b728a0e7fe2660c7dad20f81fad2ecc58b1100bf26",
+       "kind": "image/png",
+       "name": "atlas[8]",
+       "size": 420094
+      }
+     },
+     {
+      "file": {
+       "digest": "40af77fcd0cddbfb4d4dde03963bb13537f1b8d4176984c5bcb7aadd97e930b1",
+       "kind": "image/png",
+       "name": "atlas[9]",
+       "size": 446088
+      }
+     },
+     {
+      "file": {
+       "digest": "f69d6bef9e2d570d58c8c96c6ae5494be018a34300b627fcb44a4f72299e8b57",
+       "kind": "image/png",
+       "name": "atlas[10]",
+       "size": 457335
+      }
+     },
+     {
+      "file": {
+       "digest": "058e086f07e490b0651d3c03c92c5cc36fa94b3e0586dd20d01d77120271b20e",
+       "kind": "image/png",
+       "name": "atlas[11]",
+       "size": 442829
+      }
+     },
+     {
+      "file": {
+       "digest": "f90410f206e1d5c11dcad2804e3b631865fc6a0d7db74db937266c411e24b223",
+       "kind": "image/png",
+       "name": "atlas[12]",
+       "size": 409711
+      }
+     }
+    ]
+   },
+   "back": {
+    "file": {
+     "digest": "9810662ee4ce826e157360b5de725bf781dd428189f0ded15c35111cbf629aed",
+     "kind": "image/png",
+     "name": "back",
+     "size": 1024236
+    }
+   },
+   "character": {
+    "file": {
+     "digest": "5c0d91039150a4db1eec6828d88a277cf6599074c0d21a72a504401538f4ed45",
+     "kind": "model/gltf-binary",
+     "name": "model",
+     "size": 5869020
+    }
+   },
+   "correction": {
+    "file": {
+     "digest": "c9a694504bf004cf1fd32e9dcc1a07c04304a52083aea34cb563a4fd1735cbf7",
+     "kind": "json",
+     "name": "audit",
+     "size": 9662
+    }
+   },
+   "evidence": {
+    "file": {
+     "digest": "f00923e10a79bd7f883ee90a15af3eaa0757d4f573e3f01b451d61b25e771db9",
+     "kind": "json",
+     "name": "evidence",
+     "size": 18060
+    }
+   },
+   "front": {
+    "file": {
+     "digest": "e7c4bced48b895beb13264252dce17efaab7bf6b6fb689aaec4df07a4e46cec5",
+     "kind": "image/png",
+     "name": "front",
+     "size": 1162072
+    }
+   },
+   "preservation": {
+    "file": {
+     "digest": "a9a1fe3326240256465f22cc8f731bd39ca5a166015baf5df99cb083553ab2fb",
+     "kind": "json",
+     "name": "preservation",
+     "size": 2582
+    }
+   },
+   "provider_rig": {
+    "file": {
+     "digest": "2a77277b4ec5fcccdac89507354cf1c3400765279d8ff3d54261316185fb94a8",
+     "kind": "model/gltf-binary",
+     "name": "rigged",
+     "size": 5848068
+    }
+   },
+   "record": {
+    "file": {
+     "digest": "a25a93e81f232d4b7913a257d1cf12521d7c12d584e824037adfec87f5576da7",
+     "kind": "json",
+     "name": "record",
+     "size": 92828
+    }
+   },
+   "recovered_rig": {
+    "file": {
+     "digest": "73cfe88743514eb1f3eb939314107d5b69d609a9ddd422058c1d98d7ec903dcc",
+     "kind": "model/gltf-binary",
+     "name": "model",
+     "size": 5869020
+    }
+   },
+   "references": {
+    "file": {
+     "digest": "c5149034bfd086f23a47cf481485c4f9803f043d504431337b549e8b0d840bd6",
+     "kind": "image/png",
+     "name": "reference",
+     "size": 899088
+    }
+   },
+   "result": {
+    "file": {
+     "digest": "b3d8f3aa3a1cfdcf8dbce271e8de030bda0bde28ee72704c9305a4fd1aec14ab",
+     "kind": "json",
+     "name": "result",
+     "size": 955
+    }
+   },
+   "review": {
+    "file": {
+     "digest": "2071cc1d9978e4df63ed8c30f6991f5b35e84ed1939f3ef94917ab649738c0fe",
+     "kind": "json",
+     "name": "review",
+     "size": 4653
+    }
+   },
+   "selection": {
+    "list": [
+     {
+      "file": {
+       "digest": "e1c082bc4dfb9e799ade2c86b412e056771d6bd6e969517e827451245aafd803",
+       "kind": "image/png",
+       "name": "images[0]",
+       "size": 482089
+      }
+     },
+     {
+      "file": {
+       "digest": "566fdb9b15e7cc61637a0e922d8d8695fe213cb9db0d5b4472e39a6bf550f543",
+       "kind": "image/png",
+       "name": "images[1]",
+       "size": 481380
+      }
+     },
+     {
+      "file": {
+       "digest": "cc0a10e2cc424f2d550449a51055b1f46babaefb7df55950d9971a08d523219f",
+       "kind": "image/png",
+       "name": "images[2]",
+       "size": 477077
+      }
+     },
+     {
+      "file": {
+       "digest": "050d4483f0f7ef1837ae7ba9b4567f0d8c29dcdc0ba1570b5eebd7ff48300bb3",
+       "kind": "image/png",
+       "name": "images[3]",
+       "size": 475402
+      }
+     }
+    ]
+   }
+  },
+  "pending": [],
+  "run_name": "public-replay-run-02",
+  "scopes": [],
+  "stand_in": false,
+  "state": "succeeded",
+  "warnings": [],
+  "workflow": {
+   "description": "Replay the recorded Nami rig's measured preservation alignment, explicit lower-body weight correction and unchanged diagnostic clips. All inputs are exact published artifacts. This free asset-specific replay is separate from the paid generation.",
+   "id": "nami-rig-replay",
+   "title": "Nami retained rig finishing"
+  }
+ }
+}

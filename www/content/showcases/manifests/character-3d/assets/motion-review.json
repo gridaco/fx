@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "scope": "Independent low-bar sampled review of the exact corrected Nami rig, produced by another agent. No continuous-motion or game-engine qualification.",
+  "model_sha256": "5c0d91039150a4db1eec6828d88a277cf6599074c0d21a72a504401538f4ed45",
+  "accepted": true,
+  "verdict": "pass_unchanged_low_bar_sampled_motion_gate",
+  "quality_bar": {
+    "level": "low",
+    "verdict_character_height_pixels": 120,
+    "cell_character_height_pixels": 240,
+    "face_character_height_pixels": 600,
+    "torso_character_height_pixels": 1024
+  },
+  "numeric_summary": {
+    "selected_count": 514,
+    "central_component_count": 7111,
+    "indices_sha256": "b16d80d3fe1d419901ea49afe630f1c0b9340e2f572b3bffe5768e15607b2184",
+    "json_document_exact": true,
+    "all_nonweight_binary_bytes_exact": true,
+    "all_nonweight_accessors_exact": true,
+    "joint_indices_exact": true,
+    "proportional_existing_nonarm_weights_verified": true,
+    "arm_weights_after_exactly_zero": true,
+    "changed_weight_slots": 1702,
+    "weight_row_sum_max_error": 1.1920928955078125e-07,
+    "animations_and_amplitudes_exact": true
+  },
+  "remaining_limits": [
+    "Extra rear blossom remains; exact canonical identity fidelity is not restored by weight correction.",
+    "This is a provider rig with an explicitly disclosed local 514-vertex lower-body weight correction, not an unchanged provider rig.",
+    "Only original declared sample times and views were reviewed, not every continuous animation frame or an in-engine gameplay test.",
+    "Fixed-hand profile has no demonstrated finger/thumb articulation, facial rig, cloth simulation or secondary hair motion.",
+    "Low bar is 120px gameplay height. Close-up/high-quality character acceptance is not claimed."
+  ],
+  "provider_calls": 0,
+  "cost_usd": 0,
+  "criteria": [
+    {
+      "criterion": "required_joints_and_weights",
+      "passed": true,
+      "reason": "Required mapping has no missing semantics or blocking findings; normalized nonnegative weights independently verified."
+    },
+    {
+      "criterion": "rest_shape",
+      "passed": true,
+      "reason": "Coherent anatomy and face; no new silhouette corruption at rest."
+    },
+    {
+      "criterion": "shoulder_deformation",
+      "passed": true,
+      "reason": "Raised arms retain their motion; skirt now stays seated around hips instead of arm-driven lateral flares."
+    },
+    {
+      "criterion": "elbow_deformation",
+      "passed": true,
+      "reason": "Elbows bend and hands remain within cuffs; corrected skirt remains seated."
+    },
+    {
+      "criterion": "knee_deformation",
+      "passed": true,
+      "reason": "Both knees articulate without visible collapsed/spiked legs or detached feet in supplied sample."
+    },
+    {
+      "criterion": "wrist_and_hand_attachment",
+      "passed": true,
+      "reason": "Fixed hands stay attached while wrist diagnostic plays; no claim of finger articulation."
+    },
+    {
+      "criterion": "accessory_attachment",
+      "passed": true,
+      "reason": "Hair, blossoms, neck bow, cuffs and boots remain visibly attached in sampled views."
+    },
+    {
+      "criterion": "head_neck_attachment",
+      "passed": true,
+      "reason": "Head remains seated and face unobstructed in rest and cheer."
+    },
+    {
+      "criterion": "coherent_cheer",
+      "passed": true,
+      "reason": "Cheer remains visible; arms/chest motion no longer pulls lateral skirt hems upward."
+    },
+    {
+      "criterion": "exported_material_policy",
+      "passed": true,
+      "reason": "Textures and matte surface presentation remain coherent; all original material/image bytes unchanged by correction."
+    }
+  ],
+  "diagnostic_atlas_sha256": [
+    "c02b6b25cd1ddedf0db69ee47e1961edae2539986104dc28fe97b0bf798031b6",
+    "f593bc5c7d558692f83155b37202532fdc6f3ce116010e07d8005113d34313e6",
+    "fadb2282fb7f29e27d74126f951793958e64a1fc87f774ef9021904082fef09f",
+    "3c66956a99514ceb95a435b635a8d12a4d14fb5b46861cb2c349f7268422d6ba",
+    "8f47020f15d4040bf37392a0c2090aa7f6b90b50bd4868f768fedf92344f8c00",
+    "32bee366e2b715bd1d16e43f0a74cec01649637402eee58c340762bcdf9eb735",
+    "a85dac8e3d6d40c01a8e08e6606ef648c7f837512251424971a774121aad0875",
+    "4e86e0c5657d77d9152809159c5c5979f63346735768a723999826cb28d735b2",
+    "64056fc07b7cd136e2693f7ebe079c57b1b2561aa8c83debb0a2184463f6e4da",
+    "1b76ce714dcc73d79e18dc93266bf3e3e0f199781352651226a4c806fe0ab8bf",
+    "7af06454c5d29335ae858029ebea49abfe94f18340e14c9a36e71bc2dcdbb7d6",
+    "560b545c8dccd824f4324e47fd617b63abe3af3c7aabf2effa65a29bcc7c684a",
+    "71311d5bab66ac7abaefe95ae76da482467cfaa283b984a3d85f33b8cc1cbfa5"
+  ]
+}

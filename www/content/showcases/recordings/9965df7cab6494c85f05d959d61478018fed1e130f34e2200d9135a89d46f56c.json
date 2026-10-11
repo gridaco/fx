@@ -1,0 +1,855 @@
+{
+ "artifacts": [
+  {
+   "digest": "00bd5edee1355da9b57101275aea78436b0f458af970ea2aba8516dabda1a7d6",
+   "media_type": "video/x-matroska",
+   "name": "video",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 95451064
+  },
+  {
+   "digest": "04c1b9d27edee9faf1d2a3a5a7c1bc662a0617bb9b0d213c843e1dc041af1749",
+   "media_type": "json",
+   "name": "manifest",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 2369
+  },
+  {
+   "digest": "1029ded25f09744c28e6b2fbd11eb1905e0a3bcc2103de4c0b8f331a63437a24",
+   "media_type": "video/mp4",
+   "name": "video.mp4",
+   "omitted_reason": "unplaced_input",
+   "path": null,
+   "size": 2995802
+  },
+  {
+   "digest": "334862aca8e6d4cbc56a82a7e5cb0c3acdbbe3c23a6c3aaa6c28633675c2f37d",
+   "media_type": "file/zip",
+   "name": "frames",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 142632204
+  },
+  {
+   "digest": "47fea1b7367819976f949796afb0c5f9bed66a60e465d25677ab46489e3a3383",
+   "media_type": "video/mp4",
+   "name": "preview",
+   "omitted_reason": null,
+   "path": "artifacts/47fea1b7367819976f949796afb0c5f9bed66a60e465d25677ab46489e3a3383.mp4",
+   "size": 3076351
+  },
+  {
+   "digest": "48606389e317edaf39ffc4767d53990a2d4f3553f41cb54394c179067731aea6",
+   "media_type": "image/webp",
+   "name": "cover.webp",
+   "omitted_reason": null,
+   "path": "artifacts/48606389e317edaf39ffc4767d53990a2d4f3553f41cb54394c179067731aea6.webp",
+   "size": 1457614
+  },
+  {
+   "digest": "4f56d9a224dd682d8fb60e69841b7f9c0e3d81a7e420806b623168b64c7ff334",
+   "media_type": "image/png",
+   "name": "contact_sheet",
+   "omitted_reason": null,
+   "path": "artifacts/4f56d9a224dd682d8fb60e69841b7f9c0e3d81a7e420806b623168b64c7ff334.png",
+   "size": 559402
+  },
+  {
+   "digest": "57b28e28074ed0a6bff119706c3dc4b9fbfe8d4753a40afd269ea1bce5130c0e",
+   "media_type": "image/webp",
+   "name": "loop.webp",
+   "omitted_reason": null,
+   "path": "artifacts/57b28e28074ed0a6bff119706c3dc4b9fbfe8d4753a40afd269ea1bce5130c0e.webp",
+   "size": 5753672
+  },
+  {
+   "digest": "5e2d61a8b62809bbdd4cc88545db629001566065b66b7d884c0b7aa1520fc1b2",
+   "media_type": "json",
+   "name": "trim.nami.json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 131
+  },
+  {
+   "digest": "68b936542dccac7e349452d766a493a1d5fafb008813151a459b241221f38640",
+   "media_type": "json",
+   "name": "finish.nami-trimmed-face-pinned.json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 880
+  },
+  {
+   "digest": "68ed2141f6ed8e2cc9af82967d23a9110688cc9b1c633a5ff23a111b7c9a1675",
+   "media_type": "json",
+   "name": "report",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 81743
+  },
+  {
+   "digest": "761c9f4075d6779388293d25aadfccae82f01c5e4ce30c7246d91d5c370d5a92",
+   "media_type": "video/webm",
+   "name": "loop.webm",
+   "omitted_reason": null,
+   "path": "artifacts/761c9f4075d6779388293d25aadfccae82f01c5e4ce30c7246d91d5c370d5a92.webm",
+   "size": 1754064
+  },
+  {
+   "digest": "7f4ff94fe49ce2deddc21cd655ae8b8120ea7ba25d10533dc3baad291da813cb",
+   "media_type": "image/png",
+   "name": "canonical",
+   "omitted_reason": null,
+   "path": "artifacts/7f4ff94fe49ce2deddc21cd655ae8b8120ea7ba25d10533dc3baad291da813cb.png",
+   "size": 645876
+  },
+  {
+   "digest": "85d391f7da3ca8a4c55ad1ad5b904a6330f23348282dbdad98fa98087831bf28",
+   "media_type": "json",
+   "name": "report",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 543
+  },
+  {
+   "digest": "90b9cacfc7c3703007dc1f9885dc705fd00643ddc5240358ef87a822f1960a03",
+   "media_type": "image/png",
+   "name": "nami.png",
+   "omitted_reason": null,
+   "path": "artifacts/90b9cacfc7c3703007dc1f9885dc705fd00643ddc5240358ef87a822f1960a03.png",
+   "size": 5542543
+  },
+  {
+   "digest": "a82edea59bab6de8cf47578fa3fc0dc7d6b03e30db6f2c7d56092907a21a9709",
+   "media_type": "video/x-matroska",
+   "name": "loop",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 91055739
+  },
+  {
+   "digest": "bc5eaf213fa2be57054af7df46a755b7adaed9206730952ab145b1f7e71d4670",
+   "media_type": "json",
+   "name": "provenance",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 722
+  }
+ ],
+ "disclosure": {
+  "artifacts": "media",
+  "diagnostics": false,
+  "values": true
+ },
+ "kind": "fx-run-export-v1",
+ "layout": {
+  "cells": {
+   "brief": {
+    "column": 4,
+    "row": 0,
+    "source": "automatic"
+   },
+   "finish": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "plate": {
+    "column": 3,
+    "row": 0,
+    "source": "automatic"
+   },
+   "publication": {
+    "column": 2,
+    "row": 0,
+    "source": "automatic"
+   },
+   "take": {
+    "column": 5,
+    "row": 0,
+    "source": "automatic"
+   },
+   "trim": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   }
+  },
+  "cursor": null,
+  "diagnostics": [],
+  "file": null,
+  "kind": "fx-layout-report-v1",
+  "order": [
+   "trim#1",
+   "finish#1",
+   "publication#1"
+  ],
+  "revision": null,
+  "state": "none"
+ },
+ "producer": {
+  "version": "0.2.0"
+ },
+ "source": {
+  "event_count": 10,
+  "events_sha256": "9419f3a09a8318cdb393bbf2c6231e13682dbc130bd53f465bc7ef90cdcf7d76",
+  "plan_sha256": "cdc1bf3d52b28c6e15957557af0dfd8db61f652ca04eada5b3a167523f7474cd"
+ },
+ "view": {
+  "artifacts": [
+   {
+    "available": false,
+    "digest": "00bd5edee1355da9b57101275aea78436b0f458af970ea2aba8516dabda1a7d6",
+    "kind": "video/x-matroska",
+    "name": "video",
+    "size": 95451064,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "04c1b9d27edee9faf1d2a3a5a7c1bc662a0617bb9b0d213c843e1dc041af1749",
+    "kind": "json",
+    "name": "manifest",
+    "size": 2369,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "1029ded25f09744c28e6b2fbd11eb1905e0a3bcc2103de4c0b8f331a63437a24",
+    "kind": "video/mp4",
+    "name": "video.mp4",
+    "size": 2995802,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "334862aca8e6d4cbc56a82a7e5cb0c3acdbbe3c23a6c3aaa6c28633675c2f37d",
+    "kind": "file/zip",
+    "name": "frames",
+    "size": 142632204,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "47fea1b7367819976f949796afb0c5f9bed66a60e465d25677ab46489e3a3383",
+    "kind": "video/mp4",
+    "name": "preview",
+    "size": 3076351,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "48606389e317edaf39ffc4767d53990a2d4f3553f41cb54394c179067731aea6",
+    "kind": "image/webp",
+    "name": "cover.webp",
+    "size": 1457614,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "4f56d9a224dd682d8fb60e69841b7f9c0e3d81a7e420806b623168b64c7ff334",
+    "kind": "image/png",
+    "name": "contact_sheet",
+    "size": 559402,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "57b28e28074ed0a6bff119706c3dc4b9fbfe8d4753a40afd269ea1bce5130c0e",
+    "kind": "image/webp",
+    "name": "loop.webp",
+    "size": 5753672,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "5e2d61a8b62809bbdd4cc88545db629001566065b66b7d884c0b7aa1520fc1b2",
+    "kind": "json",
+    "name": "trim.nami.json",
+    "size": 131,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "68b936542dccac7e349452d766a493a1d5fafb008813151a459b241221f38640",
+    "kind": "json",
+    "name": "finish.nami-trimmed-face-pinned.json",
+    "size": 880,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "68ed2141f6ed8e2cc9af82967d23a9110688cc9b1c633a5ff23a111b7c9a1675",
+    "kind": "json",
+    "name": "report",
+    "size": 81743,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "761c9f4075d6779388293d25aadfccae82f01c5e4ce30c7246d91d5c370d5a92",
+    "kind": "video/webm",
+    "name": "loop.webm",
+    "size": 1754064,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "7f4ff94fe49ce2deddc21cd655ae8b8120ea7ba25d10533dc3baad291da813cb",
+    "kind": "image/png",
+    "name": "canonical",
+    "size": 645876,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "85d391f7da3ca8a4c55ad1ad5b904a6330f23348282dbdad98fa98087831bf28",
+    "kind": "json",
+    "name": "report",
+    "size": 543,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "90b9cacfc7c3703007dc1f9885dc705fd00643ddc5240358ef87a822f1960a03",
+    "kind": "image/png",
+    "name": "nami.png",
+    "size": 5542543,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "a82edea59bab6de8cf47578fa3fc0dc7d6b03e30db6f2c7d56092907a21a9709",
+    "kind": "video/x-matroska",
+    "name": "loop",
+    "size": 91055739,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "bc5eaf213fa2be57054af7df46a755b7adaed9206730952ab145b1f7e71d4670",
+    "kind": "json",
+    "name": "provenance",
+    "size": 722,
+    "url": null
+   }
+  ],
+  "charged_usd": 0,
+  "estimate": {
+   "ceiling_usd": null,
+   "high_usd": 0,
+   "low_usd": 0
+  },
+  "inputs": {
+   "browser_animation": {
+    "value": {
+     "file": "57b28e28074ed0a6bff119706c3dc4b9fbfe8d4753a40afd269ea1bce5130c0e"
+    }
+   },
+   "browser_cover": {
+    "value": {
+     "file": "48606389e317edaf39ffc4767d53990a2d4f3553f41cb54394c179067731aea6"
+    }
+   },
+   "browser_video": {
+    "value": {
+     "file": "761c9f4075d6779388293d25aadfccae82f01c5e4ce30c7246d91d5c370d5a92"
+    }
+   },
+   "finish": {
+    "value": {
+     "file": "68b936542dccac7e349452d766a493a1d5fafb008813151a459b241221f38640"
+    }
+   },
+   "footage": {
+    "value": {
+     "file": "1029ded25f09744c28e6b2fbd11eb1905e0a3bcc2103de4c0b8f331a63437a24"
+    }
+   },
+   "publication_source": {
+    "value": {
+     "file": "90b9cacfc7c3703007dc1f9885dc705fd00643ddc5240358ef87a822f1960a03"
+    }
+   },
+   "trim": {
+    "value": {
+     "file": "5e2d61a8b62809bbdd4cc88545db629001566065b66b7d884c0b7aa1520fc1b2"
+    }
+   }
+  },
+  "kind": "fx-viewer-run-v1",
+  "nodes": [
+   {
+    "bindings": [],
+    "cache": "hit",
+    "duration_ms": 0,
+    "error": null,
+    "id": "trim#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "report": {
+      "file": {
+       "digest": "85d391f7da3ca8a4c55ad1ad5b904a6330f23348282dbdad98fa98087831bf28",
+       "kind": "json",
+       "name": "report",
+       "size": 543
+      }
+     },
+     "video": {
+      "file": {
+       "digest": "00bd5edee1355da9b57101275aea78436b0f458af970ea2aba8516dabda1a7d6",
+       "kind": "video/x-matroska",
+       "name": "video",
+       "size": 95451064
+      }
+     }
+    },
+    "path": "trim",
+    "ports": {
+     "inputs": {
+      "settings": "json",
+      "video": "video"
+     },
+     "outputs": {
+      "report": "json",
+      "video": "video/x-matroska"
+     },
+     "params": {}
+    },
+    "reads": [],
+    "started_at": "2026-10-11T21:39:21.725Z",
+    "state": "succeeded",
+    "step": "trim",
+    "take": [
+     1
+    ],
+    "title": "Select a frame interval",
+    "uses": "./nodes/trim.py#trim",
+    "with": {
+     "settings": {
+      "file": {
+       "digest": "5e2d61a8b62809bbdd4cc88545db629001566065b66b7d884c0b7aa1520fc1b2",
+       "kind": "json",
+       "name": "trim.nami.json",
+       "size": 131
+      }
+     },
+     "video": {
+      "file": {
+       "digest": "1029ded25f09744c28e6b2fbd11eb1905e0a3bcc2103de4c0b8f331a63437a24",
+       "kind": "video/mp4",
+       "name": "video.mp4",
+       "size": 2995802
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "trim#1",
+      "source_kind": "output",
+      "source_port": "video",
+      "target_port": "video"
+     }
+    ],
+    "cache": "hit",
+    "duration_ms": 1,
+    "error": null,
+    "id": "finish#1",
+    "interface_bindings": [
+     {
+      "source": "trim#1",
+      "source_kind": "output",
+      "source_port": "video",
+      "target_port": "video"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "canonical": {
+      "file": {
+       "digest": "7f4ff94fe49ce2deddc21cd655ae8b8120ea7ba25d10533dc3baad291da813cb",
+       "kind": "image/png",
+       "name": "canonical",
+       "size": 645876
+      }
+     },
+     "contact_sheet": {
+      "file": {
+       "digest": "4f56d9a224dd682d8fb60e69841b7f9c0e3d81a7e420806b623168b64c7ff334",
+       "kind": "image/png",
+       "name": "contact_sheet",
+       "size": 559402
+      }
+     },
+     "frames": {
+      "file": {
+       "digest": "334862aca8e6d4cbc56a82a7e5cb0c3acdbbe3c23a6c3aaa6c28633675c2f37d",
+       "kind": "file/zip",
+       "name": "frames",
+       "size": 142632204
+      }
+     },
+     "loop": {
+      "file": {
+       "digest": "a82edea59bab6de8cf47578fa3fc0dc7d6b03e30db6f2c7d56092907a21a9709",
+       "kind": "video/x-matroska",
+       "name": "loop",
+       "size": 91055739
+      }
+     },
+     "manifest": {
+      "file": {
+       "digest": "04c1b9d27edee9faf1d2a3a5a7c1bc662a0617bb9b0d213c843e1dc041af1749",
+       "kind": "json",
+       "name": "manifest",
+       "size": 2369
+      }
+     },
+     "preview": {
+      "file": {
+       "digest": "47fea1b7367819976f949796afb0c5f9bed66a60e465d25677ab46489e3a3383",
+       "kind": "video/mp4",
+       "name": "preview",
+       "size": 3076351
+      }
+     },
+     "report": {
+      "file": {
+       "digest": "68ed2141f6ed8e2cc9af82967d23a9110688cc9b1c633a5ff23a111b7c9a1675",
+       "kind": "json",
+       "name": "report",
+       "size": 81743
+      }
+     }
+    },
+    "path": "finish",
+    "ports": {
+     "inputs": {
+      "settings": "json?",
+      "video": "video"
+     },
+     "outputs": {
+      "canonical": "image/png",
+      "contact_sheet": "image/png",
+      "frames": "file/zip?",
+      "loop": "video/x-matroska",
+      "manifest": "json",
+      "preview": "video/mp4",
+      "report": "json"
+     },
+     "params": {}
+    },
+    "reads": [
+     "trim#1"
+    ],
+    "started_at": "2026-10-11T21:39:21.728Z",
+    "state": "succeeded",
+    "step": "finish",
+    "take": [
+     1
+    ],
+    "title": "Key, loop and verify",
+    "uses": "./nodes/finish.py#finish",
+    "with": {
+     "settings": {
+      "file": {
+       "digest": "68b936542dccac7e349452d766a493a1d5fafb008813151a459b241221f38640",
+       "kind": "json",
+       "name": "finish.nami-trimmed-face-pinned.json",
+       "size": 880
+      }
+     },
+     "video": {
+      "file": {
+       "digest": "00bd5edee1355da9b57101275aea78436b0f458af970ea2aba8516dabda1a7d6",
+       "kind": "video/x-matroska",
+       "name": "video",
+       "size": 95451064
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "finish#1",
+      "source_kind": "output",
+      "source_port": "loop",
+      "target_port": "native_loop"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 512,
+    "error": null,
+    "id": "publication#1",
+    "interface_bindings": [
+     {
+      "source": "finish#1",
+      "source_kind": "output",
+      "source_port": "loop",
+      "target_port": "native_loop"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "cover": {
+      "file": {
+       "digest": "48606389e317edaf39ffc4767d53990a2d4f3553f41cb54394c179067731aea6",
+       "kind": "image/webp",
+       "name": "cover",
+       "size": 1457614
+      }
+     },
+     "loop_image": {
+      "file": {
+       "digest": "57b28e28074ed0a6bff119706c3dc4b9fbfe8d4753a40afd269ea1bce5130c0e",
+       "kind": "image/webp",
+       "name": "loop_image",
+       "size": 5753672
+      }
+     },
+     "provenance": {
+      "file": {
+       "digest": "bc5eaf213fa2be57054af7df46a755b7adaed9206730952ab145b1f7e71d4670",
+       "kind": "json",
+       "name": "provenance",
+       "size": 722
+      }
+     },
+     "source": {
+      "file": {
+       "digest": "90b9cacfc7c3703007dc1f9885dc705fd00643ddc5240358ef87a822f1960a03",
+       "kind": "image/png",
+       "name": "source",
+       "size": 5542543
+      }
+     },
+     "webm": {
+      "file": {
+       "digest": "761c9f4075d6779388293d25aadfccae82f01c5e4ce30c7246d91d5c370d5a92",
+       "kind": "video/webm",
+       "name": "webm",
+       "size": 1754064
+      }
+     }
+    },
+    "path": "publication",
+    "ports": {
+     "inputs": {
+      "cover": "image",
+      "loop_image": "image",
+      "native_loop": "video",
+      "source": "image",
+      "webm": "video"
+     },
+     "outputs": {
+      "cover": "image/webp",
+      "loop_image": "image/webp",
+      "provenance": "json",
+      "source": "image/png",
+      "webm": "video/webm"
+     },
+     "params": {
+      "expected": {
+       "additionalProperties": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+       },
+       "type": "object"
+      },
+      "projection_script_sha256": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "finish#1"
+    ],
+    "started_at": "2026-10-11T21:39:21.735Z",
+    "state": "succeeded",
+    "step": "publication",
+    "take": [
+     1
+    ],
+    "title": "Freeze reviewed browser media",
+    "uses": "./nodes/publication_media.py#freeze_browser_projection",
+    "with": {
+     "cover": {
+      "file": {
+       "digest": "48606389e317edaf39ffc4767d53990a2d4f3553f41cb54394c179067731aea6",
+       "kind": "image/webp",
+       "name": "cover.webp",
+       "size": 1457614
+      }
+     },
+     "expected": {
+      "value": {
+       "cover": "48606389e317edaf39ffc4767d53990a2d4f3553f41cb54394c179067731aea6",
+       "loop_image": "57b28e28074ed0a6bff119706c3dc4b9fbfe8d4753a40afd269ea1bce5130c0e",
+       "native_loop": "a82edea59bab6de8cf47578fa3fc0dc7d6b03e30db6f2c7d56092907a21a9709",
+       "source": "90b9cacfc7c3703007dc1f9885dc705fd00643ddc5240358ef87a822f1960a03",
+       "webm": "761c9f4075d6779388293d25aadfccae82f01c5e4ce30c7246d91d5c370d5a92"
+      }
+     },
+     "loop_image": {
+      "file": {
+       "digest": "57b28e28074ed0a6bff119706c3dc4b9fbfe8d4753a40afd269ea1bce5130c0e",
+       "kind": "image/webp",
+       "name": "loop.webp",
+       "size": 5753672
+      }
+     },
+     "native_loop": {
+      "file": {
+       "digest": "a82edea59bab6de8cf47578fa3fc0dc7d6b03e30db6f2c7d56092907a21a9709",
+       "kind": "video/x-matroska",
+       "name": "loop",
+       "size": 91055739
+      }
+     },
+     "projection_script_sha256": {
+      "value": "ab54336c864441fbfb1227306d271474e2dd139579febdea977ebdfdb6fe38a0"
+     },
+     "source": {
+      "file": {
+       "digest": "90b9cacfc7c3703007dc1f9885dc705fd00643ddc5240358ef87a822f1960a03",
+       "kind": "image/png",
+       "name": "nami.png",
+       "size": 5542543
+      }
+     },
+     "webm": {
+      "file": {
+       "digest": "761c9f4075d6779388293d25aadfccae82f01c5e4ce30c7246d91d5c370d5a92",
+       "kind": "video/webm",
+       "name": "loop.webm",
+       "size": 1754064
+      }
+     }
+    }
+   }
+  ],
+  "outputs": {
+   "canonical": {
+    "file": {
+     "digest": "7f4ff94fe49ce2deddc21cd655ae8b8120ea7ba25d10533dc3baad291da813cb",
+     "kind": "image/png",
+     "name": "canonical",
+     "size": 645876
+    }
+   },
+   "contact_sheet": {
+    "file": {
+     "digest": "4f56d9a224dd682d8fb60e69841b7f9c0e3d81a7e420806b623168b64c7ff334",
+     "kind": "image/png",
+     "name": "contact_sheet",
+     "size": 559402
+    }
+   },
+   "cover": {
+    "file": {
+     "digest": "48606389e317edaf39ffc4767d53990a2d4f3553f41cb54394c179067731aea6",
+     "kind": "image/webp",
+     "name": "cover",
+     "size": 1457614
+    }
+   },
+   "frames": {
+    "file": {
+     "digest": "334862aca8e6d4cbc56a82a7e5cb0c3acdbbe3c23a6c3aaa6c28633675c2f37d",
+     "kind": "file/zip",
+     "name": "frames",
+     "size": 142632204
+    }
+   },
+   "loop": {
+    "file": {
+     "digest": "a82edea59bab6de8cf47578fa3fc0dc7d6b03e30db6f2c7d56092907a21a9709",
+     "kind": "video/x-matroska",
+     "name": "loop",
+     "size": 91055739
+    }
+   },
+   "loop_image": {
+    "file": {
+     "digest": "57b28e28074ed0a6bff119706c3dc4b9fbfe8d4753a40afd269ea1bce5130c0e",
+     "kind": "image/webp",
+     "name": "loop_image",
+     "size": 5753672
+    }
+   },
+   "manifest": {
+    "file": {
+     "digest": "04c1b9d27edee9faf1d2a3a5a7c1bc662a0617bb9b0d213c843e1dc041af1749",
+     "kind": "json",
+     "name": "manifest",
+     "size": 2369
+    }
+   },
+   "preview": {
+    "file": {
+     "digest": "47fea1b7367819976f949796afb0c5f9bed66a60e465d25677ab46489e3a3383",
+     "kind": "video/mp4",
+     "name": "preview",
+     "size": 3076351
+    }
+   },
+   "provenance": {
+    "file": {
+     "digest": "bc5eaf213fa2be57054af7df46a755b7adaed9206730952ab145b1f7e71d4670",
+     "kind": "json",
+     "name": "provenance",
+     "size": 722
+    }
+   },
+   "report": {
+    "file": {
+     "digest": "68ed2141f6ed8e2cc9af82967d23a9110688cc9b1c633a5ff23a111b7c9a1675",
+     "kind": "json",
+     "name": "report",
+     "size": 81743
+    }
+   },
+   "source": {
+    "file": {
+     "digest": "90b9cacfc7c3703007dc1f9885dc705fd00643ddc5240358ef87a822f1960a03",
+     "kind": "image/png",
+     "name": "source",
+     "size": 5542543
+    }
+   },
+   "webm": {
+    "file": {
+     "digest": "761c9f4075d6779388293d25aadfccae82f01c5e4ce30c7246d91d5c370d5a92",
+     "kind": "video/webm",
+     "name": "webm",
+     "size": 1754064
+    }
+   }
+  },
+  "pending": [],
+  "run_name": "publication-run-01",
+  "scopes": [],
+  "stand_in": false,
+  "state": "succeeded",
+  "warnings": [],
+  "workflow": {
+   "description": "One character picture in; a transparent idle loop out. The picture is fitted onto a green plate and drawn once by a video model, with the same picture at both ends of the take. The take is finished locally: keyed to transparency, the face held still so blinks and mouth shapes can be added separately, the loop closed, and every frame checked. A clip made elsewhere can be finished instead of drawing a take.",
+   "id": "movie-sprite",
+   "title": "Nami sprite finishing and browser projection"
+  }
+ }
+}

@@ -1,0 +1,226 @@
+{
+ "artifacts": [
+  {
+   "digest": "0beced4837f848ca3d55ed8f51c2c6f2fe1154c36ea7e7a8a9cc066423a18e23",
+   "media_type": "json",
+   "name": "capture",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 1471
+  },
+  {
+   "digest": "5c0d91039150a4db1eec6828d88a277cf6599074c0d21a72a504401538f4ed45",
+   "media_type": "model/gltf-binary",
+   "name": "model.glb",
+   "omitted_reason": "unplaced_input",
+   "path": null,
+   "size": 5869020
+  },
+  {
+   "digest": "661e4db8c53c9d463061c95d9d892426402b625fbf15b6c8d2235938caaacb49",
+   "media_type": "video/mp4",
+   "name": "video",
+   "omitted_reason": null,
+   "path": "artifacts/661e4db8c53c9d463061c95d9d892426402b625fbf15b6c8d2235938caaacb49.mp4",
+   "size": 224918
+  },
+  {
+   "digest": "f52fd231f1df4b465a0ff77b61711ac7ca32ad1c2a71f1b86155b9df28daa96a",
+   "media_type": "image/webp",
+   "name": "poster",
+   "omitted_reason": null,
+   "path": "artifacts/f52fd231f1df4b465a0ff77b61711ac7ca32ad1c2a71f1b86155b9df28daa96a.webp",
+   "size": 17876
+  }
+ ],
+ "disclosure": {
+  "artifacts": "media",
+  "diagnostics": true,
+  "values": true
+ },
+ "kind": "fx-run-export-v1",
+ "layout": {
+  "cells": {
+   "cover": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   }
+  },
+  "cursor": null,
+  "diagnostics": [],
+  "file": null,
+  "kind": "fx-layout-report-v1",
+  "order": [
+   "cover#1"
+  ],
+  "revision": null,
+  "state": "none"
+ },
+ "producer": {
+  "version": "0.2.0"
+ },
+ "source": {
+  "event_count": 6,
+  "events_sha256": "6628489951858e7f174e5cd61fb4c790ed8abe4e9b03b70509b4d62d2bd6aec9",
+  "plan_sha256": "c5ef3c9d2e1953ab3be7fdddd04cc77a37d0da4c25d39c631ac2f0e2733fea65"
+ },
+ "view": {
+  "artifacts": [
+   {
+    "available": false,
+    "digest": "0beced4837f848ca3d55ed8f51c2c6f2fe1154c36ea7e7a8a9cc066423a18e23",
+    "kind": "json",
+    "name": "capture",
+    "size": 1471,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "5c0d91039150a4db1eec6828d88a277cf6599074c0d21a72a504401538f4ed45",
+    "kind": "model/gltf-binary",
+    "name": "model.glb",
+    "size": 5869020,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "661e4db8c53c9d463061c95d9d892426402b625fbf15b6c8d2235938caaacb49",
+    "kind": "video/mp4",
+    "name": "video",
+    "size": 224918,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "f52fd231f1df4b465a0ff77b61711ac7ca32ad1c2a71f1b86155b9df28daa96a",
+    "kind": "image/webp",
+    "name": "poster",
+    "size": 17876,
+    "url": null
+   }
+  ],
+  "charged_usd": 0,
+  "estimate": {
+   "ceiling_usd": 0,
+   "high_usd": 0,
+   "low_usd": 0
+  },
+  "inputs": {
+   "model": {
+    "value": {
+     "file": "5c0d91039150a4db1eec6828d88a277cf6599074c0d21a72a504401538f4ed45"
+    }
+   }
+  },
+  "kind": "fx-viewer-run-v1",
+  "nodes": [
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 95663,
+    "error": null,
+    "id": "cover#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "capture": {
+      "file": {
+       "digest": "0beced4837f848ca3d55ed8f51c2c6f2fe1154c36ea7e7a8a9cc066423a18e23",
+       "kind": "json",
+       "name": "capture",
+       "size": 1471
+      }
+     },
+     "poster": {
+      "file": {
+       "digest": "f52fd231f1df4b465a0ff77b61711ac7ca32ad1c2a71f1b86155b9df28daa96a",
+       "kind": "image/webp",
+       "name": "poster",
+       "size": 17876
+      }
+     },
+     "video": {
+      "file": {
+       "digest": "661e4db8c53c9d463061c95d9d892426402b625fbf15b6c8d2235938caaacb49",
+       "kind": "video/mp4",
+       "name": "video",
+       "size": 224918
+      }
+     }
+    },
+    "path": "cover",
+    "ports": {
+     "inputs": {
+      "model": "model/gltf-binary"
+     },
+     "outputs": {
+      "capture": "json",
+      "poster": "image/webp",
+      "video": "video/mp4"
+     },
+     "params": {}
+    },
+    "reads": [],
+    "started_at": "2026-10-11T21:34:33.635Z",
+    "state": "succeeded",
+    "step": "cover",
+    "take": [
+     1
+    ],
+    "title": "Capture the rig clip",
+    "uses": "./nodes/nami_cover.py#render_cover",
+    "with": {
+     "model": {
+      "file": {
+       "digest": "5c0d91039150a4db1eec6828d88a277cf6599074c0d21a72a504401538f4ed45",
+       "kind": "model/gltf-binary",
+       "name": "model.glb",
+       "size": 5869020
+      }
+     }
+    }
+   }
+  ],
+  "outputs": {
+   "capture": {
+    "file": {
+     "digest": "0beced4837f848ca3d55ed8f51c2c6f2fe1154c36ea7e7a8a9cc066423a18e23",
+     "kind": "json",
+     "name": "capture",
+     "size": 1471
+    }
+   },
+   "cover": {
+    "file": {
+     "digest": "f52fd231f1df4b465a0ff77b61711ac7ca32ad1c2a71f1b86155b9df28daa96a",
+     "kind": "image/webp",
+     "name": "poster",
+     "size": 17876
+    }
+   },
+   "cover_video": {
+    "file": {
+     "digest": "661e4db8c53c9d463061c95d9d892426402b625fbf15b6c8d2235938caaacb49",
+     "kind": "video/mp4",
+     "name": "video",
+     "size": 224918
+    }
+   }
+  },
+  "pending": [],
+  "run_name": "cover-run-06",
+  "scopes": [],
+  "stand_in": false,
+  "state": "succeeded",
+  "warnings": [],
+  "workflow": {
+   "description": "A browser-free capture of the actual corrected rig with fixed framing and native materials.",
+   "id": "nami-rig-cover",
+   "title": "Nami rig clip cover"
+  }
+ }
+}

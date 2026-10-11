@@ -1,0 +1,66 @@
+{
+ "background_rgb": [
+  245,
+  245,
+  245
+ ],
+ "camera_motion": false,
+ "duration_seconds": 6,
+ "fixed_camera_matrix_gltf": [
+  [
+   0.9175556253099241,
+   -0.04351624346230935,
+   0.39521894061019286,
+   2.9282989329642604
+  ],
+  [
+   0,
+   0.9939928260942029,
+   0.1094452450920534,
+   1.8094888784332284
+  ],
+  [
+   -0.3976074376343004,
+   -0.10042210029763696,
+   0.9120437091004451,
+   6.884737178624649
+  ],
+  [
+   0,
+   0,
+   0,
+   1
+  ]
+ ],
+ "fps": 24,
+ "frame_count": 144,
+ "framing": {
+  "fully_in_frame": true,
+  "height_pixels": 504.0000056959801,
+  "measurement": "Triangle-referenced vertices of unhidden evaluated meshes, in continuous top-left-origin pixel-edge coordinates. Transparency and occlusion are not raster-tested; the diagnostic ground is excluded.",
+  "pixel_bounds": {
+   "max": [
+    630.8752431045439,
+    552.0000028479901
+   ],
+   "min": [
+    329.1247568954559,
+    47.99999715201001
+   ]
+  },
+  "point_count": 2208593,
+  "width_pixels": 301.75048620908797
+ },
+ "geometry_and_glb_unchanged": true,
+ "height": 600,
+ "material_policy": "native_exported_matte",
+ "model_sha256": "5c0d91039150a4db1eec6828d88a277cf6599074c0d21a72a504401538f4ed45",
+ "playback_rate": 0.6666666666666666,
+ "renderer": "Blender Cycles CPU",
+ "schema": "character_rig_cover_v1",
+ "semantic_review_status": "capture_pending_independent_review",
+ "single_frame_lighting_preview": false,
+ "source_clip": "cheer",
+ "source_clip_duration_seconds": 4,
+ "width": 960
+}

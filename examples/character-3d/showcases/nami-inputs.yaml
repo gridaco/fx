@@ -1,0 +1,10 @@
+rigged: ../.showcase-inputs/nami-provider-rig.glb
+assembly: ../.showcase-inputs/nami-assembly.glb
+assembly_record: ../.showcase-inputs/nami-assembly-record.json
+measurement: nami-preservation.json
+parameters: nami-weights.json
+reference: ../.showcase-inputs/nami-sd.png
+front: ../.showcase-inputs/nami-front.png
+back: ../.showcase-inputs/nami-back.png
+review: nami-review.json
+render_cover: true

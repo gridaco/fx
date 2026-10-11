@@ -6,7 +6,8 @@ it, outlines the features, reviews every combination and restores accepted patch
 at the original size. The source alpha and pixels outside the patches stay intact.
 
 This is the source used by the [portrait motion showcase](https://grida.co/fx/workflows/portrait-motion).
-Its input is a 2048×2048 closeup of an original rabbit-hood character.
+Its input is a 2048×2048 closeup of Nami, the original rabbit-hood character
+also used by the sprite and rigged-character showcases.
 This example focuses on
 facial patches; it does not need a body animation or the movie-sprite example.
 The helpers in `nodes/_portrait_motion/` belong to this example, not the FX API.

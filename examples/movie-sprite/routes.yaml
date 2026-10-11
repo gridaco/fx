@@ -1,0 +1,28 @@
+# Project-owned route, not a change to FX's built-in video default.
+# Schema and public rates checked 2026-10-12:
+# https://fal.ai/models/fal-ai/wan/v2.7/image-to-video/api
+# https://fal.ai/models/fal-ai/wan/v2.7/image-to-video
+# Vendor rates are $0.10/s at 720p and $0.15/s at 1080p. Highs add 25% planning
+# allowance; an unreported bill is booked at that high, not treated as free.
+fx: routes/v1
+routes:
+  - capability: video.generate
+    route: fal-ai/wan/v2.7/image-to-video@fal
+    price:
+      low_usd: 0.1
+      high_usd: 0.1875
+      unit: second
+      max_units: 10
+      by: resolution
+      tiers:
+        720p:
+          low_usd: 0.1
+          high_usd: 0.125
+        1080p:
+          low_usd: 0.15
+          high_usd: 0.1875
+    features: [first_last_frame]
+    concurrency: 1
+    contract:
+      adapter: fal-queue
+      adapter_behavior: 1

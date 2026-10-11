@@ -1,0 +1,101 @@
+fx: workflow/v1
+id: nami-rig-replay
+title: Nami retained rig finishing
+description: >-
+  Replay the recorded Nami rig's measured preservation alignment, explicit lower-body
+  weight correction and unchanged diagnostic clips. All inputs are exact published
+  artifacts. This free asset-specific replay is separate from the paid generation.
+inputs:
+  rigged: {type: file, kind: model/gltf-binary}
+  assembly: {type: file, kind: model/gltf-binary}
+  assembly_record: {type: file, kind: json}
+  measurement: {type: file, kind: json}
+  parameters: {type: file, kind: json}
+  reference: {type: file, kind: image}
+  front: {type: file, kind: image}
+  back: {type: file, kind: image}
+  review: {type: file, kind: json}
+  render_cover: {type: boolean, default: true}
+budget: {max_usd: 0}
+steps:
+  sources:
+    title: Retain the exact canonical and source artifacts
+    uses: ./nodes/nami_sources.py#retain_sources
+    with:
+      reference: ${{ inputs.reference }}
+      front: ${{ inputs.front }}
+      back: ${{ inputs.back }}
+      assembly: ${{ inputs.assembly }}
+      rigged: ${{ inputs.rigged }}
+      review: ${{ inputs.review }}
+  setup:
+    title: Compile the unchanged low-bar profile
+    at: plan
+    uses: ./nodes/setup.py#setup
+    with: {profile: sd_human_fixed_hands_v1, partition: whole, review: required, quality_bar: low, entry: brief}
+  finish:
+    title: Finish the retained provider rig with measured alignment
+    uses: ./nodes/nami_recovery.py#finish
+    with:
+      rigged: ${{ inputs.rigged }}
+      assembly: ${{ inputs.assembly }}
+      assembly_record: ${{ inputs.assembly_record }}
+      measurement: ${{ inputs.measurement }}
+      profile: ${{ steps.setup.outputs.profile }}
+    view: true
+  correct:
+    title: Remove the measured lower-body arm influences
+    uses: ./nodes/nami_correction.py#correct
+    with:
+      model: ${{ steps.finish.outputs.model }}
+      record: ${{ steps.finish.outputs.record }}
+      parameters: ${{ inputs.parameters }}
+      profile: ${{ steps.setup.outputs.profile }}
+    view: true
+  selection:
+    title: Render the static correction selection
+    uses: ./nodes/nami_correction.py#selection
+    with: {model: '${{ steps.correct.outputs.selection_mask }}'}
+    view: true
+  diagnostics:
+    title: Render the unchanged rig diagnostic poses
+    uses: ./nodes/nami_recovery.py#diagnostics
+    with:
+      model: ${{ steps.correct.outputs.model }}
+      record: ${{ steps.correct.outputs.record }}
+      profile: ${{ steps.setup.outputs.profile }}
+      bar: ${{ steps.setup.outputs.bar }}
+    view: true
+  qualify:
+    title: Bind the corrected model and independent sampled review
+    uses: ./nodes/nami_qualify.py#qualify
+    with:
+      model: ${{ steps.correct.outputs.model }}
+      record: ${{ steps.correct.outputs.record }}
+      audit: ${{ steps.correct.outputs.audit }}
+      evidence: ${{ steps.diagnostics.outputs.evidence }}
+      review: ${{ inputs.review }}
+  cover:
+    title: Capture the actual rig clip
+    if: ${{ inputs.render_cover }}
+    uses: ./nodes/nami_cover.py#render_cover
+    with: {model: '${{ steps.correct.outputs.model }}'}
+outputs:
+  character: ${{ steps.correct.outputs.model }}
+  result: ${{ steps.qualify.outputs.result }}
+  record: ${{ steps.qualify.outputs.record }}
+  references: ${{ steps.sources.outputs.reference }}
+  front: ${{ steps.sources.outputs.front }}
+  back: ${{ steps.sources.outputs.back }}
+  assembly: ${{ steps.sources.outputs.assembly }}
+  provider_rig: ${{ steps.sources.outputs.rigged }}
+  recovered_rig: ${{ steps.finish.outputs.model }}
+  preservation: ${{ steps.finish.outputs.preservation }}
+  correction: ${{ steps.correct.outputs.audit }}
+  selection: ${{ steps.selection.outputs.images }}
+  atlas: ${{ steps.diagnostics.outputs.atlas }}
+  evidence: ${{ steps.diagnostics.outputs.evidence }}
+  review: ${{ steps.sources.outputs.review }}
+  cover_video: ${{ steps.cover.outputs.video }}
+  cover: ${{ steps.cover.outputs.poster }}
+  capture: ${{ steps.cover.outputs.capture }}

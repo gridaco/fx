@@ -56,8 +56,8 @@ export const workflowDetails: Record<Workflow["slug"], Details> = {
     stages: [
       { title: "Prepare", description: "Fit the original character onto a flat green plate and write one motion brief." },
       { title: "Generate", description: "Make one eight-second video take, keeping the camera and pose steady." },
-      { title: "Finish", description: "Remove green, pin the drifting face locally, and close the loop." },
-      { title: "Reuse", description: "Keep the first finished frame as the canonical image for facial animation." },
+      { title: "Finish", description: "Trim the noisy endpoints, remove green, hold the face locally, and close the loop." },
+      { title: "Reuse", description: "Deliver the transparent loop and its exact first frame for later compositing." },
     ],
     outputs: [
       { path: "assets/loop.webm", description: "The transparent body idle for browser playback." },
@@ -65,7 +65,7 @@ export const workflowDetails: Record<Workflow["slug"], Details> = {
       { path: "assets/canonical.png", description: "The exact first frame of the finished loop." },
       { path: "assets/contact-sheet.png", description: "Sampled frames for reviewing motion and edges." },
     ],
-    inputs: "character: .showcase-inputs/traveler.png\n# Full motion direction and constraints are in showcase.yaml.\nseconds: 8\nresolution: 720p\naspect_ratio: \"9:16\"\n# Settings for a new take; the recorded face pin is separate.\nfinish: finish.initial.json",
+    inputs: "character: .showcase-inputs/nami.png\n# Full motion direction and constraints are in showcase.yaml.\nseconds: 8\nresolution: 720p\naspect_ratio: \"9:16\"\n# Settings for a new take; the recorded face pin is separate.\nfinish: finish.initial.json",
     agent: ["Build an FX workflow that turns ", {"label": "this character", "path": "assets/source.png"}, " into an eight-second body idle. Keep the face still for separate expressions. Plan offline, then ask me for a spending ceiling before generating a take. Show me the take before finishing it. Make keying, loop closure, and any face pin local steps so I can revise them without paying for another video. Deliver the transparent loop and its exact first frame."],
     works: ["Gentle breathing, hair settling, and small idle motion", "A fixed camera and a character that stays in its pose", "Characters without green clothing or props"],
     related: "portrait-motion",
@@ -90,23 +90,23 @@ export const workflowDetails: Record<Workflow["slug"], Details> = {
     related: "movie-sprite",
   },
   "character-3d": {
-    introduction: "The drawing is only the first hand-off. Front and back references lead to a textured mesh, then an assembled character and a skeleton. Local checks and diagnostic poses make those hand-offs visible. This example lets you inspect the stages rather than judging only the final turntable.",
+    introduction: "Nami’s rig-ready illustration guides front and back references, a textured mesh and a skeleton. The recorded trial needed measured local finishing and an explicit lower-body weight correction. Inspect those stages, the corrected model and its diagnostic poses separately.",
     stages: [
-      { title: "Reference", description: "Draw and review consistent front and back views from an original brief." },
+      { title: "Reference", description: "Draw and review front and back views guided by Nami’s rig-ready illustration." },
       { title: "Mesh", description: "Build a textured whole-body model from the admitted references." },
       { title: "Assemble", description: "Normalize its orientation, scale, and grounding with local tools." },
-      { title: "Rig", description: "Bind a skeleton, inspect test poses, and export the skinned GLB." },
+      { title: "Rig", description: "Bind a skeleton, correct the measured lower-body weights, and inspect diagnostic poses." },
     ],
     outputs: [
-      { path: "assets/model-165d619de74db479.glb", description: "The textured, skinned character with six diagnostic clips." },
-      { path: "assets/image-6868ddd42acc9f72.png", description: "The reviewed canonical reference." },
+      { path: "assets/model-corrected.glb", description: "The textured, skinned character with six diagnostic clips." },
+      { path: "assets/nami-sd.png", description: "The reviewed canonical reference." },
       { path: "rig-six-clips.jpg", description: "Rest, shoulder, elbow, knee, wrist, and cheer poses." },
       { path: "manifest.json", description: "Model stages, review evidence, and qualification status." },
     ],
-    inputs: "brief: brief.md\nprofile: sd_human_fixed_hands_v1\npartition: whole\nquality_bar: low\nreview: required\nthrough: rig",
-    agent: ["Build an FX workflow for an original adult character with short hair, a compact outfit, and fixed mitten hands. Use ", {"label": "this generated reference", "path": "assets/image-6868ddd42acc9f72.png"}, " as a guide to proportions. Start from my own brief and make reviewed front and back references, generate a textured whole-body mesh, normalize it locally, then rig it. Inspect diagnostic poses and preserve every review. Check local tool availability and plan offline before asking for a provider ceiling. Do not call pipeline acceptance game-runtime qualification."],
+    inputs: "brief: brief.md\nreference: ../../.showcase-inputs/nami-sd.png\nprofile: sd_human_fixed_hands_v1\npartition: whole\nquality_bar: low\nreview: required\nthrough: rig",
+    agent: ["Build an FX workflow for an original adult character with short hair, a compact outfit, and fixed mitten hands. Use ", {"label": "this generated reference", "path": "assets/nami-sd.png"}, " as a guide to proportions. Start from my own brief and make reviewed front and back references, generate a textured whole-body mesh, normalize it locally, then rig it. Inspect diagnostic poses and preserve every review. Check local tool availability and plan offline before asking for a provider ceiling. Do not call pipeline acceptance game-runtime qualification."],
     works: ["Compact adult SD characters with short hair", "Fixed mitten hands and close-fitting clothing", "Inspecting skeleton deformation before engine integration"],
-    related: "world",
+    related: "movie-sprite",
   },
   "terrain": {
     introduction: "Generate a fixed set of 47 terrain tiles, validate the atlas layout, and use a neighborhood lookup to select each tile. The painter uses the delivered atlas and lookup directly.",
@@ -151,7 +151,7 @@ export const workflowDetails: Record<Workflow["slug"], Details> = {
 /** Consumption patterns use the selected bundle's actual relative resources. */
 export function assetExample(slug: Workflow["slug"], base: string): { language: string; code: string } {
   if (slug === "movie-sprite") return { language: "HTML", code: `<video autoplay loop muted playsinline\n  poster="${base}/assets/canonical.png">\n  <source src="${base}/assets/loop.webm"\n    type="video/webm">\n</video>\n\n<!-- Animated image alternative -->\n<img src="${base}/assets/loop.webp"\n  alt="Character idle">` };
-  if (slug === "character-3d") return { language: "HTML", code: `<!-- Load the bundled model-viewer component first. -->\n<script type="module"\n  src="${base}/vendor/model-viewer.min.js"></script>\n\n<model-viewer camera-controls autoplay\n  animation-name="cheer"\n  src="${base}/assets/model-165d619de74db479.glb">\n</model-viewer>` };
+  if (slug === "character-3d") return { language: "HTML", code: `<!-- Load the bundled model-viewer component first. -->\n<script type="module"\n  src="${base}/vendor/model-viewer.min.js"></script>\n\n<model-viewer camera-controls autoplay\n  animation-name="cheer"\n  src="${base}/assets/model-corrected.glb">\n</model-viewer>` };
   if (slug === "world") return { language: "JavaScript", code: `const base = "${base}";\nconst response = await fetch(base + "/manifest.json");\nconst world = await response.json();\n\nfor (const item of world.entities) {\n  const image = new Image();\n  image.src = base + "/" + item.image;\n  image.alt = item.entity.display_name;\n  document.body.append(image);\n}` };
   if (slug === "parallax") return { language: "JavaScript", code: `const base = "${base}";\nconst scene = await fetch(base + "/manifest.json")\n  .then((response) => response.json());\n\n// In your renderer, each layer moves at its own rate.\nfor (const layer of scene.layers) {\n  const image = new Image();\n  image.src = base + "/" + layer.file;\n  const x = -cameraX * layer.parallax;\n  // Repeat the decoded image horizontally at x.\n}` };
   if (slug === "portrait-motion") return { language: "JavaScript", code: `const base = "${base}";\nconst face = await fetch(base + "/assets/face-manifest.json")\n  .then((response) => response.json());\n\nconst [x, y] = face.offset_xy;\nconst closedEyes = face.patches.filter((patch) =>\n  patch.state_id === "eyes_closed");\n\n// At (x, y), replace RGB only where patch alpha is 255.\n// Preserve the source frame's alpha; do not blend twice.\n// Start from the canonical frame for each selection.` };

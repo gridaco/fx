@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "scope": "Read-only candidate transform measurement, exact input bytes unchanged; same default preservation tolerances.",
+  "source_sha256": "013667face278a1dbbbb8be1bb3ef49274e75a413226959d7b0f88a658d511a5",
+  "provider_sha256": "2a77277b4ec5fcccdac89507354cf1c3400765279d8ff3d54261316185fb94a8",
+  "method": "Positive uniform similarity measured using UV-matched positions, minimax residual fit; finite exact transform subsequently checked.",
+  "source_to_provider": [
+    [
+      0.49999809397656797,
+      1.7775592566680326e-06,
+      -1.9517278395600685e-06,
+      -2.0110114415710427e-06
+    ],
+    [
+      -1.7775661150456336e-06,
+      0.4999980939772901,
+      -1.7569941745938088e-06,
+      5.95198526238746e-07
+    ],
+    [
+      1.951721593189355e-06,
+      1.7570011132463172e-06,
+      0.49999809397664063,
+      -2.2408976368499873e-06
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "max_position_error_source_units": 7.790498179168242e-06,
+  "position_error_p95_source_units": 6.995909586159116e-06,
+  "default_max_position_error": 1e-05,
+  "default_uv_tolerance": 1e-06,
+  "position_match_max_uv_error": 0.0,
+  "above_default_position_radius": 0,
+  "all_preservation_gates_checked": true,
+  "audit_verdict": "passed_unchanged_default_gates",
+  "audit_report": {
+    "status": "surface_correspondence_verified",
+    "source_to_provider": [
+      [
+        0.49999809397656797,
+        1.7775592566680326e-06,
+        -1.9517278395600685e-06,
+        -2.0110114415710427e-06
+      ],
+      [
+        -1.7775661150456336e-06,
+        0.4999980939772901,
+        -1.7569941745938088e-06,
+        5.95198526238746e-07
+      ],
+      [
+        1.951721593189355e-06,
+        1.7570011132463172e-06,
+        0.49999809397664063,
+        -2.2408976368499873e-06
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "registration": "explicit_verified_similarity",
+    "position_error_source_units": {
+      "count": 22769,
+      "min": 5.580519502563263e-07,
+      "median": 4.355580553751896e-06,
+      "p95": 6.995909586159116e-06,
+      "p99": 7.550044794009927e-06,
+      "max": 7.790498179168242e-06
+    },
+    "uv_max_error": 0.0,
+    "triangle_connectivity_and_winding_equal": true,
+    "source_vertex_count": 22768,
+    "provider_vertex_count": 22769,
+    "ambiguous_normal_correspondence_vertices": 0,
+    "ambiguous_normals_resolved_by_provider_normal": 0,
+    "provider_image_payloads_all_from_source": true,
+    "source_image_sha256": [
+      "1e37591b3ef9947d20eb09c44b01eee03e045a7eb0b5e3146edc9fd5b2636858",
+      "1f870d9b5b31aa273c7617252ef17a44fc0560501278bb0daf36579a53651623",
+      "26ceebc8b8b6f86f5197a65eb05866a00d310b823849f9ffbe3b3dfc0f1d6338"
+    ],
+    "provider_image_sha256": [
+      "1e37591b3ef9947d20eb09c44b01eee03e045a7eb0b5e3146edc9fd5b2636858",
+      "1f870d9b5b31aa273c7617252ef17a44fc0560501278bb0daf36579a53651623",
+      "26ceebc8b8b6f86f5197a65eb05866a00d310b823849f9ffbe3b3dfc0f1d6338"
+    ],
+    "materials_json_equal": true,
+    "material_limit": "Serialization inequality is not evidence of a visible material defect.",
+    "texture_binding_preserved": true,
+    "appearance_preserved": true,
+    "provider_images_pixel_identical_to_source": true,
+    "image_identity": [
+      {
+        "provider_index": 0,
+        "raw_sha256": "1e37591b3ef9947d20eb09c44b01eee03e045a7eb0b5e3146edc9fd5b2636858",
+        "identity": "1e37591b3ef9947d20eb09c44b01eee03e045a7eb0b5e3146edc9fd5b2636858"
+      },
+      {
+        "provider_index": 1,
+        "raw_sha256": "1f870d9b5b31aa273c7617252ef17a44fc0560501278bb0daf36579a53651623",
+        "identity": "1f870d9b5b31aa273c7617252ef17a44fc0560501278bb0daf36579a53651623"
+      },
+      {
+        "provider_index": 2,
+        "raw_sha256": "26ceebc8b8b6f86f5197a65eb05866a00d310b823849f9ffbe3b3dfc0f1d6338",
+        "identity": "26ceebc8b8b6f86f5197a65eb05866a00d310b823849f9ffbe3b3dfc0f1d6338"
+      }
+    ],
+    "decoded_image_identity": {},
+    "appearance_scope": "Matched surface texture slots, sampled UV transforms, samplers, base-color tint, vertex colors and opacity; light response and normals are separate policies."
+  }
+}

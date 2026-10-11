@@ -2,6 +2,8 @@ import { parseRunExport, type RunExport } from "@grida/fx-web";
 import parallaxPreview from "../../../content/showcases/recordings/abe44ccedb750bf05633886c052545079f97aee6e83f7161b2611295e4249d3d.json";
 import terrainCover from "../../../content/showcases/recordings/9e7658de4aa6d43d8774a7d5ab76b3ea8c29f883a1acab2be7fdab29765f32ca.json";
 import portraitAnimation from "../../../content/showcases/recordings/b35ef1984d95307e9bb16741640d5df33d7786a52fa7933d23502072347cabc1.json";
+import namiRigCover from "../../../content/showcases/recordings/66e774f7e345639ad30c78ecfcc09d647539fe8f8ed48957eca6aeb06dd13fb0.json";
+import namiSprite from "../../../content/showcases/recordings/9fc0a16498f4f88d904de8b1584f3df3967e99a67793274c19e4c4144958ab3f.json";
 import { deliveryUrl, showcaseLock, workflowAssetPath } from "./catalog";
 import { object, text, type ShowcaseLock, type ShowcaseSlug } from "./contracts";
 
@@ -21,10 +23,14 @@ type OutputCover = { recording: string } & CoverFraming & (
 const outputCovers: Partial<Record<ShowcaseSlug, OutputCover>> = {
   parallax: { kind: "video", recording: "meadow-forward-01", video: "preview_video", poster: "preview_poster" },
   terrain: { kind: "video", recording: "terrain-cover-04", video: "cover_video", poster: "cover" },
+  "movie-sprite": { kind: "animated_image", recording: "nami-sprite-02", image: "cover", fit: "cover", position: "center" },
+  "character-3d": { kind: "video", recording: "nami-rig-cover-01", video: "cover_video", poster: "cover", fit: "cover", position: "center" },
   "portrait-motion": { kind: "animated_image", recording: "nami-face-01", image: "animation", fit: "cover", position: "center" },
 };
 
 const documents: Record<string, unknown> = {
+  "recordings/9fc0a16498f4f88d904de8b1584f3df3967e99a67793274c19e4c4144958ab3f.json": namiSprite,
+  "recordings/66e774f7e345639ad30c78ecfcc09d647539fe8f8ed48957eca6aeb06dd13fb0.json": namiRigCover,
   "recordings/abe44ccedb750bf05633886c052545079f97aee6e83f7161b2611295e4249d3d.json": parallaxPreview,
   "recordings/9e7658de4aa6d43d8774a7d5ab76b3ea8c29f883a1acab2be7fdab29765f32ca.json": terrainCover,
   "recordings/b35ef1984d95307e9bb16741640d5df33d7786a52fa7933d23502072347cabc1.json": portraitAnimation,
@@ -64,5 +70,7 @@ export function workflowCover(slug: ShowcaseSlug, lock: ShowcaseLock = showcaseL
     src: deliveryUrl(`runs/${pin.sha256}/${video.path}`),
     poster: deliveryUrl(`runs/${pin.sha256}/${poster.path}`),
     mediaType: video.media_type as "video/mp4" | "video/webm",
+    fit: selection.fit,
+    position: selection.position,
   };
 }

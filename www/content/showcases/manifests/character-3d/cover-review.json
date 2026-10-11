@@ -1,0 +1,25 @@
+{
+  "schema": "character_rig_cover_review_v1",
+  "model_sha256": "5c0d91039150a4db1eec6828d88a277cf6599074c0d21a72a504401538f4ed45",
+  "cover_sha256": "f52fd231f1df4b465a0ff77b61711ac7ca32ad1c2a71f1b86155b9df28daa96a",
+  "cover_video_sha256": "661e4db8c53c9d463061c95d9d892426402b625fbf15b6c8d2235938caaacb49",
+  "capture_sha256": "0beced4837f848ca3d55ed8f51c2c6f2fe1154c36ea7e7a8a9cc066423a18e23",
+  "accepted": true,
+  "reviewer": "independent_agent",
+  "scope": "12 chronological samples and decoded endpoint frames 0, 1, 142, 143 of the final headless MP4; no browser playback or game-engine qualification.",
+  "verdict": "Warm Nami SD identity, centered full-body silhouette, real arm lift, torso dip and return; skirt stays seated and face/boots remain coherent. No sampled framing escape. Loop endpoints visually near matching rest pose; lossy video is not pixel-exact.",
+  "video": {
+    "width": 960,
+    "height": 600,
+    "frames": 144,
+    "fps": 24,
+    "duration_seconds": 6
+  },
+  "remaining_limits": [
+    "Extra rear blossom remains.",
+    "SD adaptation deliberately uses a short bob and no hood.",
+    "No continuous game-engine qualification."
+  ],
+  "provider_calls": 0,
+  "cost_usd": 0
+}

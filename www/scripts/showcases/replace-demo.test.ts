@@ -6,6 +6,7 @@ import { parseLock, parseRelease, type ShowcaseSlug } from "../../src/lib/showca
 import { confinedFile, contentRoot, fileRef, jsonBytes, plainWrite, sha256, verifiedFile } from "./io";
 import { replaceDemo } from "./replace-demo";
 import { verifyShowcases } from "./verify";
+import { workflowDetails } from "../../src/lib/workflow-details";
 
 /** Codec-free media makes the release integrity tests independent of generated artwork. */
 async function fixture(root: string, slug: ShowcaseSlug = "movie-sprite") {
@@ -91,5 +92,25 @@ test("invalid, missing and private bundle resources fail before replacing curren
       expect(await confinedFile(item.content, "lock.json")).toEqual(before);
       expect(await confinedFile(item.content, `manifests/${item.slug}/manifest.json`)).toEqual(metadata);
     } finally { await rm(root, { recursive: true, force: true }); }
+  }
+});
+
+
+test("replacement validates new page downloads against its candidate without requiring them in the old release", async () => {
+  const root = await mkdtemp(join(await realpath(tmpdir()), "fx-replace-page-assets-"));
+  const before = workflowDetails["movie-sprite"].outputs;
+  try {
+    const item = await fixture(root);
+    workflowDetails["movie-sprite"].outputs = [...before, { path: "assets/new-record.md", description: "New recorded evidence" }];
+    await expect(verifyShowcases({ content: item.content })).rejects.toThrow("Missing page asset movie-sprite/assets/new-record.md");
+    const lock = await confinedFile(item.content, "lock.json");
+    await expect(replaceDemo(item.slug, item.source, item)).rejects.toThrow("Missing page asset movie-sprite/assets/new-record.md");
+    expect(await confinedFile(item.content, "lock.json")).toEqual(lock);
+    await plainWrite(join(item.source, "assets/new-record.md"), Buffer.from("new evidence"));
+    const result = await replaceDemo(item.slug, item.source, item);
+    await expect(verifyShowcases({ content: item.content })).resolves.toHaveProperty("release", result.release);
+  } finally {
+    workflowDetails["movie-sprite"].outputs = before;
+    await rm(root, { recursive: true, force: true });
   }
 });

@@ -3,6 +3,18 @@
   "delivery_base": "https://grida-fx-showcase-spike-20261011.t3.tigrisfiles.io",
   "inputs": [
     {
+      "filename": "nami.png",
+      "path": "runs/9fc0a16498f4f88d904de8b1584f3df3967e99a67793274c19e4c4144958ab3f/artifacts/90b9cacfc7c3703007dc1f9885dc705fd00643ddc5240358ef87a822f1960a03.png",
+      "sha256": "90b9cacfc7c3703007dc1f9885dc705fd00643ddc5240358ef87a822f1960a03",
+      "bytes": 5542543
+    },
+    {
+      "filename": "nami-take.mp4",
+      "path": "runs/da3f0a64c58e032118d3a56b8b1d1e120fa1a539b84b041273c7efd85821170f/artifacts/1029ded25f09744c28e6b2fbd11eb1905e0a3bcc2103de4c0b8f331a63437a24.mp4",
+      "sha256": "1029ded25f09744c28e6b2fbd11eb1905e0a3bcc2103de4c0b8f331a63437a24",
+      "bytes": 2995802
+    },
+    {
       "filename": "traveler.png",
       "path": "showcases/d9f747984514a9b5febfb376c66f97ce79da343f0ab463f0c1fefe0750da08df/movie-sprite/assets/source.png",
       "sha256": "c503dd9a670b264e78f01b828150821475f0d788e53fb4d6b56721174211006c",
@@ -17,7 +29,7 @@
   ],
   "origin": {
     "kind": "ai_generated",
-    "description": "Original artwork and recorded media from the approved FX showcase campaign.",
-    "publication": "Previously published in the approved showcase; this manifest grants no additional media license."
+    "description": "Original repository-owned Nami artwork and recorded Wan2.7 video from the approved FX showcase campaign. Nami source alpha is normalized to 0\u2013255; RGB pixels and 2048\u00d73072 dimensions are unchanged. Historical traveler inputs remain for their optional presets.",
+    "publication": "Reviewed Nami showcase replacements are published under explicit campaign authorization; this input manifest grants no additional media license."
   }
 }

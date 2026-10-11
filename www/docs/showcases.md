@@ -173,14 +173,16 @@ bun --no-env-file run --cwd www prepare:demo \
 
 This single-writer tool needs the current release's bytes in
 `www/.showcases/delivery`. It verifies those bytes and the frozen metadata,
-validates the new bundle against the current readers, then stages a new immutable
+validates the new bundle against the current readers and page downloads, then stages a new immutable
 release and updates its frozen metadata and content lock. All other demos and
 every recording retain their content and order, including the selected default
 Workflow recording. It does not append a run or publish assets. Append a new
 recording separately when needed, then run the media and build checks and
 explicitly publish the new `showcases/<sha256>/` namespace before deployment.
 Earlier immutable release directories remain available for rollback; generated
-artwork and raw run data stay outside Git.
+artwork and raw run data stay outside Git. Page filenames may change with a demo:
+the predecessor still passes its frozen metadata and media integrity checks, while
+new page references must all exist in the candidate before the lock can change.
 
 ### Shared character across examples
 
@@ -197,21 +199,24 @@ for a different image are not interchangeable because the character name matches
 Retain the source illustration, finished canonical frame and derived rig as
 distinct artifacts rather than replacing their provenance with a common label.
 
-Current migration status: the facial showcase uses Nami; the sprite and 3D
-showcases still use their earlier characters. Nami's sprite replacement is
-blocked by the current video provider, and its corrected hood-free rig remains
-under visual review. Do not mark the family migration complete or replace only
-a cover while its page still demonstrates another character.
+All three current demos, source attachments, downloads, primary Workflow
+recordings and covers use independently reviewed Nami material. The sprite uses
+the original adult rabbit-hood illustration and its recorded video take; its
+local finish trims raw frames [12, 228), plays the resulting 7.2 seconds over an
+8-second loop, and holds source-bound face, adjacent head and finger regions.
+The facial patches use a separate high-resolution registered Nami portrait.
+The 3D example uses a hood-free, short-haired SD adaptation, followed by measured
+surface-preserving finishing and an explicit lower-body weight correction.
+Its runtime qualification remains pending. Earlier character recordings remain
+available as historical evidence, without becoming the current demos.
 
-Once the replacements are reviewed, update each demo, primary Workflow recording,
-source attachments, download metadata and cover together. Review the three covers
-as a set: consistent neutral backing and visual weight, deliberate positioning,
-and gentle motion that demonstrates the output. Use the sprite's actual idle,
-the face's actual patch animation, and a rendered rig clip; avoid decorative
-floating or scaling. Fill the existing cover frame and compose the rendered
-media to preserve the subject. Keep reduced-motion posters, offscreen video
-pausing and direct CDN delivery. Cover polishing is website work and free local
-rendering, not a reason to rerun paid generation.
+The covers use actual sprite idle, facial patch animation and a headlessly
+rendered rig cheer clip, reviewed together for identity, framing and motion.
+Keep reduced-motion posters, offscreen video pausing and direct CDN delivery.
+A new run requires updating the demo, primary recording, source and download
+pins, and cover together, then independently reviewing those exact bytes.
+Cover polishing is website work and free local rendering, not a reason to rerun
+paid generation.
 
 ## Validate clients and content
 

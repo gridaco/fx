@@ -44,7 +44,7 @@ inputs:
     description: Length of the take
   resolution:
     type: string
-    enum: [360p, 720p, 1080p, 4k]
+    enum: [720p, 1080p]
     default: 720p
   aspect_ratio:
     type: string
@@ -55,6 +55,12 @@ inputs:
     kind: json
     optional: true
     description: Finishing settings (keying, held regions, loop closure, playback length)
+
+  trim:
+    type: file
+    kind: json
+    optional: true
+    description: Optional source-bound frame interval, applied before finishing
 
 assert:
   - check: ${{ (inputs.character && !inputs.footage) || (inputs.footage && !inputs.character) }}
@@ -105,6 +111,18 @@ steps:
       aspect_ratio: ${{ inputs.aspect_ratio }}
     view: true
 
+  trim:
+    title: Select a frame interval
+    description: >-
+      Optional, explicit source-bound removal of unwanted leading or trailing frames.
+      No generation or interpolation.
+    if: ${{ inputs.trim }}
+    uses: ./nodes/trim.py#trim
+    with:
+      video: ${{ steps.take.outputs.video || inputs.footage }}
+      settings: ${{ inputs.trim }}
+    view: true
+
   finish:
     title: Key, loop and verify
     description: >-
@@ -113,7 +131,7 @@ steps:
       the finishing settings reruns only this step.
     uses: ./nodes/finish.py#finish
     with:
-      video: ${{ steps.take.outputs.video || inputs.footage }}
+      video: ${{ steps.trim.outputs.video || steps.take.outputs.video || inputs.footage }}
       settings: ${{ inputs.finish }}
     view: ./views/loop.html
 

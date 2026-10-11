@@ -31,9 +31,9 @@ export const workflowSources = {
     folder: "movie-sprite",
     target: "workflow.yaml",
     inputs: "showcase.yaml",
-    max_usd: 2,
+    max_usd: 3,
     setup: "uv sync\nsource .venv/bin/activate\npython ../fetch_showcase_inputs.py .",
-    note: "Install FFmpeg and ffprobe on PATH. showcase.yaml generates a new take. Use finish-showcase.yaml without --live to finish the downloaded take at $0; its face pin is bound to that exact footage.",
+    note: "Install FFmpeg and ffprobe on PATH. showcase.yaml generates a new take. Use finish-showcase.yaml without --live to replay the recorded trim and local finishing at $0; its held regions are bound to that exact footage.",
   },
   "portrait-motion": {
     folder: "portrait-motion",
@@ -46,10 +46,10 @@ export const workflowSources = {
   "character-3d": {
     folder: "character-3d",
     target: "workflow.yaml",
-    inputs: "inputs/meadow-caretaker/inputs.yaml",
+    inputs: "inputs/nami/inputs.yaml",
     max_usd: 30,
-    setup: "uv sync\nsource .venv/bin/activate",
-    note: "Install Blender as described in the example. This workflow starts from the included text brief and draws its own references. The separate source-artwork project preserves the original 2D illustration workflow.",
+    setup: "uv sync\nsource .venv/bin/activate\npython ../fetch_showcase_inputs.py .",
+    note: "Install Blender as described in the example. Nami’s rig-ready illustration guides the generated references. The example also includes a provider-free replay of the measured finishing, disclosed weight correction, diagnostics and rendered cover.",
   },
   terrain: {
     folder: "terrain",

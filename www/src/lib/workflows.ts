@@ -23,7 +23,7 @@ export const workflows = [
     description: "Animate a character illustration, remove the background, and finish a transparent idle loop.",
     input: "Character illustration",
     output: "Transparent idle loop",
-    note: "The finished loop uses a local face pin to correct blinking and drift in the generated take.",
+    note: "A recorded trim and local held face stabilize the generated take; finishing makes no further provider calls.",
   },
   {
     slug: "portrait-motion",
@@ -37,9 +37,9 @@ export const workflows = [
     slug: "character-3d",
     title: "Rigged 3D character",
     description: "Generate reference views, build and rig a textured mesh, and export a GLB with diagnostic animation clips.",
-    input: "Character brief",
+    input: "Character brief and reference",
     output: "Skinned GLB and six clips",
-    note: "The asset pipeline accepted this model. Game and runtime qualification are still pending.",
+    note: "The recorded rig includes a local lower-body weight correction. Game and runtime qualification are still pending.",
   },
   {
     slug: "terrain",
