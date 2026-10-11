@@ -1,0 +1,109 @@
+{
+  "$defs": {
+    "RegionPalette": {
+      "additionalProperties": false,
+      "properties": {
+        "region": {
+          "minLength": 1,
+          "title": "Region",
+          "type": "string"
+        },
+        "palette": {
+          "minLength": 1,
+          "title": "Palette",
+          "type": "string"
+        }
+      },
+      "required": [
+        "region",
+        "palette"
+      ],
+      "title": "RegionPalette",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "universe_id": {
+      "pattern": "^[a-z][a-z0-9_]{1,95}$",
+      "title": "Universe Id",
+      "type": "string"
+    },
+    "medium_id": {
+      "pattern": "^[a-z][a-z0-9_]{1,95}$",
+      "title": "Medium Id",
+      "type": "string"
+    },
+    "world_silhouette_language": {
+      "minLength": 1,
+      "title": "World Silhouette Language",
+      "type": "string"
+    },
+    "architecture_grammar": {
+      "minLength": 1,
+      "title": "Architecture Grammar",
+      "type": "string"
+    },
+    "costume_grammar": {
+      "minLength": 1,
+      "title": "Costume Grammar",
+      "type": "string"
+    },
+    "material_language": {
+      "minLength": 1,
+      "title": "Material Language",
+      "type": "string"
+    },
+    "palette_by_region": {
+      "items": {
+        "$ref": "#/$defs/RegionPalette"
+      },
+      "minItems": 2,
+      "title": "Palette By Region",
+      "type": "array"
+    },
+    "scale_anchors": {
+      "minLength": 1,
+      "title": "Scale Anchors",
+      "type": "string"
+    },
+    "technology_and_ecology_rules": {
+      "minLength": 1,
+      "title": "Technology And Ecology Rules",
+      "type": "string"
+    },
+    "forbidden_substitutions": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "minItems": 3,
+      "title": "Forbidden Substitutions",
+      "type": "array"
+    },
+    "poster_observation_ids_used": {
+      "items": {
+        "pattern": "^[a-z][a-z0-9_]{1,95}$",
+        "type": "string"
+      },
+      "title": "Poster Observation Ids Used",
+      "type": "array"
+    }
+  },
+  "required": [
+    "universe_id",
+    "medium_id",
+    "world_silhouette_language",
+    "architecture_grammar",
+    "costume_grammar",
+    "material_language",
+    "palette_by_region",
+    "scale_anchors",
+    "technology_and_ecology_rules",
+    "forbidden_substitutions",
+    "poster_observation_ids_used"
+  ],
+  "title": "GlobalDirection",
+  "type": "object",
+  "description": "universe structured output for universe.direction.global"
+}

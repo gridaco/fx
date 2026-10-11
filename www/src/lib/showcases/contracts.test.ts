@@ -15,6 +15,17 @@ describe("locked showcase adapters", () => {
       for (const path of resources) expect(safePath(path)).toBe(path);
     }
   });
+  test("face-only portrait demos keep native patch assets mandatory and body motion optional", async () => {
+    const legacy = { kind: "portrait-motion-demo-v1", resources: ["assets/face-manifest.json", "assets/body.webm", "assets/canonical.png", "assets/animation.webp"] };
+    expect(parseDemo("portrait-motion", legacy)).toContain("assets/body.webm");
+    const resources = legacy.resources.filter(path => path !== "assets/body.webm");
+    expect(parseDemo("portrait-motion", { ...legacy, resources })).toEqual(resources);
+    for (const required of ["assets/face-manifest.json", "assets/canonical.png", "assets/animation.webp"]) {
+      expect(() => parseDemo("portrait-motion", { ...legacy, resources: resources.filter(path => path !== required) })).toThrow("Incomplete");
+    }
+    const face = parseFace(await fixture("manifests/portrait-motion/assets/face-manifest.json"));
+    expect(parseFace({ ...face, source_size: [896, 896], patch_size: [640, 640], offset_xy: [128, 64] }).source_size).toEqual([896, 896]);
+  });
   test("unknown kinds and unsafe resource paths cannot render", async () => {
     const data = await demo("parallax") as Record<string, unknown>;
     expect(() => parseParallax({ ...data, kind: "parallax-demo-v2" })).toThrow("Unsupported");

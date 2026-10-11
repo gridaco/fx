@@ -1,0 +1,22 @@
+brief: brief.md
+reference: ../../.showcase-inputs/nami-sd.png
+profile: sd_human_fixed_hands_v1
+partition: whole
+review: required
+quality_bar: low
+rounds: 2
+rebuilds: 1
+through: rig
+preservation: audit
+mesh:
+  face_limit: 10000
+  quad: true
+  pbr: true
+  texture: true
+limits:
+  producer_turns: 12
+  reviewer_turns: 4
+  reference_images: 4
+  crops: 16
+  revisions: 3
+  recent_images: 12

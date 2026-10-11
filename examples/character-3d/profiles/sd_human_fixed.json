@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "profile_id": "sd_human_fixed_hands_v1",
+  "anatomy": {
+    "human": true,
+    "species_group": "human",
+    "locomotion": "biped"
+  },
+  "description": "Provider-rigged short-haired SD human, fixed mitten hands and moving wrists; no grip, facial expressions or secondary motion.",
+  "coordinate_system": "gltf_y_up_z_front",
+  "target_height": 2.0,
+  "required_parts": [
+    "body",
+    "head",
+    "hair"
+  ],
+  "part_binding": {
+    "body": "provider_skin",
+    "head": "provider_skin",
+    "hair": "provider_skin"
+  },
+  "articulation": {
+    "body": "biped_with_spine_neck_shoulders_elbows_wrists_hips_knees_ankles",
+    "hands": "fixed_mitten_with_wrist_motion",
+    "fingers": "Not required. No fist, grip or individual finger movement is promised.",
+    "facial_expressions": "deferred",
+    "secondary_motion": "deferred"
+  },
+  "surface_policy": {
+    "default": "matte",
+    "texture_edits": "disabled"
+  },
+  "seams": {
+    "head_body": "Clothing may conceal a neck overlap, but gaps, detached parts and obvious distortion fail. Report concealment instead of claiming welding."
+  },
+  "review": {
+    "target_character_height_pixels": [
+      120,
+      180
+    ],
+    "inspection_height_pixels": 600,
+    "required_views": [
+      "front",
+      "back",
+      "left",
+      "right",
+      "three_quarter"
+    ],
+    "required_motion": "cheer",
+    "required_diagnostics": [
+      "rest",
+      "shoulder_raise",
+      "elbow_bend",
+      "knee_bend",
+      "wrist_bend"
+    ],
+    "criteria": [
+      "recognizable coherent character",
+      "head and hair fit without eye occlusion",
+      "no detached or flying accessories",
+      "stable shoulder and hip deformation",
+      "fixed hands remain attached while wrists move",
+      "feet remain connected",
+      "original textures and UVs preserved",
+      "material policy survives exported GLB"
+    ],
+    "assembly_criteria": [
+      "forward_orientation",
+      "reference_proportions",
+      "face_visibility",
+      "head_body_attachment",
+      "hair_attachment",
+      "texture_integrity"
+    ],
+    "rig_criteria": [
+      "required_joints_and_weights",
+      "rest_shape",
+      "shoulder_deformation",
+      "elbow_deformation",
+      "knee_deformation",
+      "wrist_and_hand_attachment",
+      "accessory_attachment",
+      "head_neck_attachment",
+      "coherent_cheer",
+      "exported_material_policy"
+    ]
+  },
+  "required_joint_semantics": [
+    "pelvis",
+    "spine_lower",
+    "spine_upper",
+    "chest",
+    "neck",
+    "head",
+    "left_shoulder",
+    "left_upper_arm",
+    "left_forearm",
+    "left_hand",
+    "left_upper_leg",
+    "left_lower_leg",
+    "left_foot",
+    "left_toes",
+    "right_shoulder",
+    "right_upper_arm",
+    "right_forearm",
+    "right_hand",
+    "right_upper_leg",
+    "right_lower_leg",
+    "right_foot",
+    "right_toes"
+  ]
+}

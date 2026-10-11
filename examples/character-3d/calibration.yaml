@@ -1,0 +1,59 @@
+fx: workflow/v1
+id: character-3d-calibration
+title: 3D character reviewer calibration
+description: >-
+  One frozen, labelled rig judged by the character-3d workflow's own rig reviewer at the bar
+  a qualification runs at. Episodes of it, compared with labels the reviewer never sees,
+  calibrate the reviewer; nothing is made or admitted. Run each episode in its own project,
+  so no episode reuses another's answer.
+
+inputs:
+  subject:
+    type: file
+    kind: json
+    description: The frozen subject (rig_review_subject_v2) with the facts it was labelled under
+  candidate:
+    type: file
+    kind: model
+    description: The finished provider-rig export the subject names
+  quality_bar:
+    type: string
+    enum: [low, medium]
+    default: low
+    description: The gameplay height the reviewer judges at
+
+budget: { max_usd: 5 }
+
+steps:
+  setup:
+    title: Compile the profile
+    at: plan
+    uses: ./nodes/setup.py#setup
+    with:
+      profile: sd_human_fixed_hands_v1
+      partition: whole
+      review: required
+      quality_bar: ${{ inputs.quality_bar }}
+      entry: brief
+
+  subject:
+    title: Measure the subject
+    uses: ./nodes/calibration.py#subject
+    with:
+      subject: ${{ inputs.subject }}
+      candidate: ${{ inputs.candidate }}
+      profile: ${{ steps.setup.outputs.profile }}
+
+  review:
+    title: Review the rig
+    uses: ./nodes/rig.py#review
+    with:
+      model: ${{ inputs.candidate }}
+      record: ${{ steps.subject.outputs.record }}
+      profile: ${{ steps.setup.outputs.profile }}
+      bar: ${{ steps.setup.outputs.bar }}
+    view: true
+
+outputs:
+  review: ${{ steps.review.outputs.review }}
+  atlas: ${{ steps.review.outputs.atlas }}

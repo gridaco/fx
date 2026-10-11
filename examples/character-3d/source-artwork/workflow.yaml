@@ -1,0 +1,16 @@
+fx: workflow/v1
+id: meadow-traveler-source
+title: Meadow traveler · Source artwork
+description: An original adult field caretaker, drawn from text as a reusable transparent workflow input.
+steps:
+  draw:
+    title: Draw the original character
+    uses: fx/image.generate@1
+    requires: [alpha]
+    with:
+      prompt: ./character.md
+      size: 1024x1536
+      background: transparent
+    view: true
+outputs:
+  character: ${{ steps.draw.outputs.image }}

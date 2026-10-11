@@ -1,0 +1,22 @@
+{
+  "schema": "independent_public_movie_sprite_replay_v1",
+  "accepted": true,
+  "provider_calls": 0,
+  "cost_usd": 0,
+  "source": "Fresh copied public workflow.yaml and finish-showcase.yaml with original hash-pinned Nami take; no shared project cache.",
+  "cache_misses": [
+    "trim",
+    "finish"
+  ],
+  "trim_sha256": "45c0188eeb842ee23ff578deb22e57f465f722da3b695af41d2d9e393fdcc3af",
+  "frame_count": 216,
+  "playback_fps": 27.0,
+  "all_216_reviewed_rgba_frames_exact": true,
+  "verified_checks": [
+    "all_native_frames_lossless_verified",
+    "canonical_first_frame_exact",
+    "loop_endpoints_exact",
+    "middle_motion_preserved_outside_authored_fields"
+  ],
+  "remaining_scope": "Native FFV1+PNG-frame identity and workflow execution; browser playback and other toolchain builds not tested."
+}

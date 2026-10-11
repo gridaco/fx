@@ -1,0 +1,16 @@
+fx: workflow/v1
+id: nami-rig-cover
+title: Nami rig clip cover
+description: A browser-free capture of the actual corrected rig with fixed framing and native materials.
+inputs:
+  model: {type: file, kind: model/gltf-binary}
+budget: {max_usd: 0}
+steps:
+  cover:
+    title: Capture the rig clip
+    uses: ./nodes/nami_cover.py#render_cover
+    with: {model: '${{ inputs.model }}'}
+outputs:
+  cover_video: ${{ steps.cover.outputs.video }}
+  cover: ${{ steps.cover.outputs.poster }}
+  capture: ${{ steps.cover.outputs.capture }}

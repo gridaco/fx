@@ -1,0 +1,11 @@
+{
+  "bundle-accepted-trim-v1": {
+    "decoded_rgba_framehash_sha256": "977209046a07dbff7628245c8337b4db5f7f7906b76bb14a4e390a1bc604791e",
+    "frame_count": 216
+  },
+  "bundle": {
+    "decoded_rgba_framehash_sha256": "977209046a07dbff7628245c8337b4db5f7f7906b76bb14a4e390a1bc604791e",
+    "frame_count": 216
+  },
+  "all_rgba_frames_timestamps_identical": true
+}

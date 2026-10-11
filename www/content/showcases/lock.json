@@ -1,9 +1,9 @@
 {
   "kind": "fx-showcase-lock-v1",
   "release": {
-    "sha256": "bb4edef644e07e31ed7f1e4336fc5b9d43e9ad3231610c14ca0bf348ff4ac4f3",
-    "path": "showcases/bb4edef644e07e31ed7f1e4336fc5b9d43e9ad3231610c14ca0bf348ff4ac4f3/manifest.json",
-    "fixture": "manifests/bb4edef644e07e31ed7f1e4336fc5b9d43e9ad3231610c14ca0bf348ff4ac4f3.json"
+    "sha256": "c054fe7c605cb3052de956de77e64b588171d842e7dc9ae4c751ac2b44d5d8c7",
+    "path": "showcases/c054fe7c605cb3052de956de77e64b588171d842e7dc9ae4c751ac2b44d5d8c7/manifest.json",
+    "fixture": "manifests/c054fe7c605cb3052de956de77e64b588171d842e7dc9ae4c751ac2b44d5d8c7.json"
   },
   "workflows": {
     "character-3d": {
@@ -11,13 +11,64 @@
         "contract": "character-3d-demo-v1",
         "manifest": {
           "path": "character-3d/manifest.json",
-          "sha256": "839b3da0bb89d9d8f8f899b09e635cee4531b738b2f8145e14887a00004dae11",
-          "bytes": 3266,
+          "sha256": "ab88ca39fc82b9b522412ed0f48e2d0f49934996b957ea231b13ade76d2c0cc8",
+          "bytes": 3021,
           "media_type": "application/json"
         },
-        "metadata": []
+        "metadata": [
+          {
+            "path": "character-3d/assets/correction-audit.json",
+            "sha256": "c9a694504bf004cf1fd32e9dcc1a07c04304a52083aea34cb563a4fd1735cbf7",
+            "bytes": 9662,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-3d/assets/motion-review.json",
+            "sha256": "2071cc1d9978e4df63ed8c30f6991f5b35e84ed1939f3ef94917ab649738c0fe",
+            "bytes": 4653,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-3d/assets/nami-assembly-record.json",
+            "sha256": "104f03d191f985e84d0b91da431a4a7c3fb3ce4d4b6354a83444d7b3b7a677ff",
+            "bytes": 3386,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-3d/assets/result.json",
+            "sha256": "b3d8f3aa3a1cfdcf8dbce271e8de030bda0bde28ee72704c9305a4fd1aec14ab",
+            "bytes": 955,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-3d/assets/rig-record.json",
+            "sha256": "a25a93e81f232d4b7913a257d1cf12521d7c12d584e824037adfec87f5576da7",
+            "bytes": 92828,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-3d/capture.json",
+            "sha256": "0beced4837f848ca3d55ed8f51c2c6f2fe1154c36ea7e7a8a9cc066423a18e23",
+            "bytes": 1471,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-3d/cover-review.json",
+            "sha256": "484f13e8c79d9bb10c2a4b9fa8d25aa378d0545203b5fe51b841132792d9380e",
+            "bytes": 1210,
+            "media_type": "application/json"
+          }
+        ]
       },
       "recordings": [
+        {
+          "id": "nami-rig-01",
+          "label": "Nami measured finishing, correction and diagnostics",
+          "kind": "fx-run-export-v1",
+          "path": "runs/4fc376b1999097d450cce298b03efde93033b19791ace80cd0c01766b52860d3/manifest.json",
+          "sha256": "4fc376b1999097d450cce298b03efde93033b19791ace80cd0c01766b52860d3",
+          "fixture": "recordings/4fc376b1999097d450cce298b03efde93033b19791ace80cd0c01766b52860d3.json"
+        },
         {
           "id": "character-3d-01",
           "label": "Character construction",
@@ -25,6 +76,22 @@
           "path": "runs/e05f365915d46cd673b092fbe3e28769d6ac86b4b75633cdf447f2603ad23b4e/manifest.json",
           "sha256": "e05f365915d46cd673b092fbe3e28769d6ac86b4b75633cdf447f2603ad23b4e",
           "fixture": "recordings/e05f365915d46cd673b092fbe3e28769d6ac86b4b75633cdf447f2603ad23b4e.json"
+        },
+        {
+          "id": "nami-generation-01",
+          "label": "Nami references and paid mesh · initial finishing refused",
+          "kind": "fx-run-export-v1",
+          "path": "runs/64f589e4b8f26c8b87bacd34d55bf52fc044ff3e248c8ba58c0a929afdb1c860/manifest.json",
+          "sha256": "64f589e4b8f26c8b87bacd34d55bf52fc044ff3e248c8ba58c0a929afdb1c860",
+          "fixture": "recordings/64f589e4b8f26c8b87bacd34d55bf52fc044ff3e248c8ba58c0a929afdb1c860.json"
+        },
+        {
+          "id": "nami-rig-cover-01",
+          "label": "Nami cheer clip · headless cover",
+          "kind": "fx-run-export-v1",
+          "path": "runs/66e774f7e345639ad30c78ecfcc09d647539fe8f8ed48957eca6aeb06dd13fb0/manifest.json",
+          "sha256": "66e774f7e345639ad30c78ecfcc09d647539fe8f8ed48957eca6aeb06dd13fb0",
+          "fixture": "recordings/66e774f7e345639ad30c78ecfcc09d647539fe8f8ed48957eca6aeb06dd13fb0.json"
         }
       ]
     },
@@ -33,13 +100,96 @@
         "contract": "movie-sprite-demo-v1",
         "manifest": {
           "path": "movie-sprite/manifest.json",
-          "sha256": "7daad88380352af9dfe0a1148b0697fbea509bea1f608410d95b2d3d2d8b072b",
-          "bytes": 178,
+          "sha256": "ec2eb92658d98677f32e8bf6940524fd671c7463e8dad089c784e91407778227",
+          "bytes": 12811,
           "media_type": "application/json"
         },
-        "metadata": []
+        "metadata": [
+          {
+            "path": "movie-sprite/review-evidence/comparison03-independent.json",
+            "sha256": "50c7274c6086700af260163df0cfd32add33c70553d6b7ce5a7e3da7db407d2b",
+            "bytes": 1414,
+            "media_type": "application/json"
+          },
+          {
+            "path": "movie-sprite/review-evidence/finish-manifest.json",
+            "sha256": "8efaf130be942c9a28c06f91fbf5b2ec3bd24c75a22849f4133af2bbee9f4147",
+            "bytes": 2369,
+            "media_type": "application/json"
+          },
+          {
+            "path": "movie-sprite/review-evidence/finish-report.json",
+            "sha256": "03993a21f4af293cdac9491a7e0bfe0517e02ada27873157e26575c4b4f11bc9",
+            "bytes": 81743,
+            "media_type": "application/json"
+          },
+          {
+            "path": "movie-sprite/review-evidence/finish-settings.json",
+            "sha256": "230d837289bb8b989d916833a0c84e5e450a143fb7422e93c17bbb665c5dc736",
+            "bytes": 880,
+            "media_type": "application/json"
+          },
+          {
+            "path": "movie-sprite/review-evidence/finish02-vs-deterministic03.json",
+            "sha256": "4ef6ab3d271960535db53b15062f23a8ff11ae48b62b8d09cecff69ef03ff1ba",
+            "bytes": 2026,
+            "media_type": "application/json"
+          },
+          {
+            "path": "movie-sprite/review-evidence/public-replay-review.json",
+            "sha256": "21f3b8b2206cfb9f9b4fa610a0a87fb507c9898d1c36ae19ce16768d58b67228",
+            "bytes": 806,
+            "media_type": "application/json"
+          },
+          {
+            "path": "movie-sprite/review-evidence/sprite-final-review-03.json",
+            "sha256": "6e64620f864fe0486627b0e52127f5b87fe7baa4857ea60cd18cf12405082620",
+            "bytes": 9447,
+            "media_type": "application/json"
+          },
+          {
+            "path": "movie-sprite/review-evidence/trim-report.json",
+            "sha256": "f16b5ca10f40a59572c356c249c2aac3b629832c317cb1e07a3bb2cdf15bf78a",
+            "bytes": 572,
+            "media_type": "application/json"
+          },
+          {
+            "path": "movie-sprite/review-evidence/trim-reproducibility-review.json",
+            "sha256": "74c8b462b4c3ee493d93e65b917cc927f7f93098514cfd27c07b8befffe27f54",
+            "bytes": 839,
+            "media_type": "application/json"
+          },
+          {
+            "path": "movie-sprite/review-evidence/trim01-vs-deterministic03.json",
+            "sha256": "3e5868417867f5f7fcbe933c2a38651699a13b38b0045e8c4d9783d05a6e8d98",
+            "bytes": 513,
+            "media_type": "application/json"
+          },
+          {
+            "path": "movie-sprite/review-evidence/webm02-vs03.json",
+            "sha256": "f4f1932063fb0ef4d08dd741dc857cafd4f7f537c700f99ef66f360b99afe65c",
+            "bytes": 362,
+            "media_type": "application/json"
+          }
+        ]
       },
       "recordings": [
+        {
+          "id": "nami-sprite-02",
+          "label": "Nami transparent idle · deterministic local finishing",
+          "kind": "fx-run-export-v1",
+          "path": "runs/9fc0a16498f4f88d904de8b1584f3df3967e99a67793274c19e4c4144958ab3f/manifest.json",
+          "sha256": "9fc0a16498f4f88d904de8b1584f3df3967e99a67793274c19e4c4144958ab3f",
+          "fixture": "recordings/9fc0a16498f4f88d904de8b1584f3df3967e99a67793274c19e4c4144958ab3f.json"
+        },
+        {
+          "id": "nami-sprite-01",
+          "label": "Nami transparent idle · recorded local finishing",
+          "kind": "fx-run-export-v1",
+          "path": "runs/9965df7cab6494c85f05d959d61478018fed1e130f34e2200d9135a89d46f56c/manifest.json",
+          "sha256": "9965df7cab6494c85f05d959d61478018fed1e130f34e2200d9135a89d46f56c",
+          "fixture": "recordings/9965df7cab6494c85f05d959d61478018fed1e130f34e2200d9135a89d46f56c.json"
+        },
         {
           "id": "movie-sprite-02",
           "label": "Generated take",
@@ -55,6 +205,14 @@
           "path": "runs/6484e9b03533b6ab66acebd49802a1d1893b940d0a7d94317272366b8255a60a/manifest.json",
           "sha256": "6484e9b03533b6ab66acebd49802a1d1893b940d0a7d94317272366b8255a60a",
           "fixture": "recordings/6484e9b03533b6ab66acebd49802a1d1893b940d0a7d94317272366b8255a60a.json"
+        },
+        {
+          "id": "nami-wan-take-01",
+          "label": "Nami video take · initial finish refused",
+          "kind": "fx-run-export-v1",
+          "path": "runs/da3f0a64c58e032118d3a56b8b1d1e120fa1a539b84b041273c7efd85821170f/manifest.json",
+          "sha256": "da3f0a64c58e032118d3a56b8b1d1e120fa1a539b84b041273c7efd85821170f",
+          "fixture": "recordings/da3f0a64c58e032118d3a56b8b1d1e120fa1a539b84b041273c7efd85821170f.json"
         }
       ]
     },
@@ -71,6 +229,22 @@
       },
       "recordings": [
         {
+          "id": "meadow-forward-01",
+          "label": "Layers and forward-loop preview",
+          "kind": "fx-run-export-v1",
+          "path": "runs/abe44ccedb750bf05633886c052545079f97aee6e83f7161b2611295e4249d3d/manifest.json",
+          "sha256": "abe44ccedb750bf05633886c052545079f97aee6e83f7161b2611295e4249d3d",
+          "fixture": "recordings/abe44ccedb750bf05633886c052545079f97aee6e83f7161b2611295e4249d3d.json"
+        },
+        {
+          "id": "meadow-preview-01",
+          "label": "Layers and animated preview",
+          "kind": "fx-run-export-v1",
+          "path": "runs/1698fdd421e441b0204af1834dc221e1766b30d9d6d5299440bb7770c82979ee/manifest.json",
+          "sha256": "1698fdd421e441b0204af1834dc221e1766b30d9d6d5299440bb7770c82979ee",
+          "fixture": "recordings/1698fdd421e441b0204af1834dc221e1766b30d9d6d5299440bb7770c82979ee.json"
+        },
+        {
           "id": "meadow-01",
           "label": "Layer preparation",
           "kind": "fx-run-export-v1",
@@ -85,20 +259,28 @@
         "contract": "portrait-motion-demo-v1",
         "manifest": {
           "path": "portrait-motion/manifest.json",
-          "sha256": "168dd0e46521bbe8cf96f9f0900337a6415f74381c82a688641a6ae5a295d475",
-          "bytes": 175,
+          "sha256": "19ac698f2dcce52c62e722e05b9dca985965aab11756e0a458aee1bc9a842944",
+          "bytes": 151,
           "media_type": "application/json"
         },
         "metadata": [
           {
             "path": "portrait-motion/assets/face-manifest.json",
-            "sha256": "507bca632e8e65f4966376d7f92bd27aa681c347b6d6fc57411999d67a3bf463",
-            "bytes": 2938,
+            "sha256": "2b0ae0750adad612df613ac679f4e3d03aa1e0a6e7579fe53ce2790a17099bb5",
+            "bytes": 2944,
             "media_type": "application/json"
           }
         ]
       },
       "recordings": [
+        {
+          "id": "nami-face-01",
+          "label": "Nami facial patches",
+          "kind": "fx-run-export-v1",
+          "path": "runs/b35ef1984d95307e9bb16741640d5df33d7786a52fa7933d23502072347cabc1/manifest.json",
+          "sha256": "b35ef1984d95307e9bb16741640d5df33d7786a52fa7933d23502072347cabc1",
+          "fixture": "recordings/b35ef1984d95307e9bb16741640d5df33d7786a52fa7933d23502072347cabc1.json"
+        },
         {
           "id": "portrait-motion-01",
           "label": "Independent expressions",
@@ -114,6 +296,14 @@
           "path": "runs/6484e9b03533b6ab66acebd49802a1d1893b940d0a7d94317272366b8255a60a/manifest.json",
           "sha256": "6484e9b03533b6ab66acebd49802a1d1893b940d0a7d94317272366b8255a60a",
           "fixture": "recordings/6484e9b03533b6ab66acebd49802a1d1893b940d0a7d94317272366b8255a60a.json"
+        },
+        {
+          "id": "nami-source-03",
+          "label": "Nami source illustration",
+          "kind": "fx-run-export-v1",
+          "path": "runs/d5e5e5e05908a4e6107f7d5a6001ff8d2290eacbf6649235141addedd449d45e/manifest.json",
+          "sha256": "d5e5e5e05908a4e6107f7d5a6001ff8d2290eacbf6649235141addedd449d45e",
+          "fixture": "recordings/d5e5e5e05908a4e6107f7d5a6001ff8d2290eacbf6649235141addedd449d45e.json"
         }
       ]
     },
@@ -149,6 +339,38 @@
           "path": "runs/732df2335d87c9d865351cff997090d0db0b34060cecb8c99757f32201f4ceb5/manifest.json",
           "sha256": "732df2335d87c9d865351cff997090d0db0b34060cecb8c99757f32201f4ceb5",
           "fixture": "recordings/732df2335d87c9d865351cff997090d0db0b34060cecb8c99757f32201f4ceb5.json"
+        },
+        {
+          "id": "terrain-cover-01",
+          "label": "Local cover composition",
+          "kind": "fx-run-export-v1",
+          "path": "runs/a9761cf81d2651101d44dc21d113da1f28519b776c16ddf05dc3f1640150baaa/manifest.json",
+          "sha256": "a9761cf81d2651101d44dc21d113da1f28519b776c16ddf05dc3f1640150baaa",
+          "fixture": "recordings/a9761cf81d2651101d44dc21d113da1f28519b776c16ddf05dc3f1640150baaa.json"
+        },
+        {
+          "id": "terrain-cover-02",
+          "label": "Tile-built 47 on the ground",
+          "kind": "fx-run-export-v1",
+          "path": "runs/ea2bef04b75fe9668ab14ba75968f1a45d9faf9faf628e417498dcd9ac32afcf/manifest.json",
+          "sha256": "ea2bef04b75fe9668ab14ba75968f1a45d9faf9faf628e417498dcd9ac32afcf",
+          "fixture": "recordings/ea2bef04b75fe9668ab14ba75968f1a45d9faf9faf628e417498dcd9ac32afcf.json"
+        },
+        {
+          "id": "terrain-cover-03",
+          "label": "Headless current-state terrain loop",
+          "kind": "fx-run-export-v1",
+          "path": "runs/0553b37969585b28dcb405beb141c80b5c5264dab442db59bb8cc757d0348d8e/manifest.json",
+          "sha256": "0553b37969585b28dcb405beb141c80b5c5264dab442db59bb8cc757d0348d8e",
+          "fixture": "recordings/0553b37969585b28dcb405beb141c80b5c5264dab442db59bb8cc757d0348d8e.json"
+        },
+        {
+          "id": "terrain-cover-04",
+          "label": "Full-frame ground with current-state terrain loop",
+          "kind": "fx-run-export-v1",
+          "path": "runs/9e7658de4aa6d43d8774a7d5ab76b3ea8c29f883a1acab2be7fdab29765f32ca/manifest.json",
+          "sha256": "9e7658de4aa6d43d8774a7d5ab76b3ea8c29f883a1acab2be7fdab29765f32ca",
+          "fixture": "recordings/9e7658de4aa6d43d8774a7d5ab76b3ea8c29f883a1acab2be7fdab29765f32ca.json"
         }
       ]
     },

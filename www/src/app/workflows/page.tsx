@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { pageMetadata } from "../../lib/metadata";
-import { workflowAsset, workflows } from "../../lib/workflows";
+import { workflows } from "../../lib/workflows";
+import { workflowCover } from "../../lib/showcases/covers";
+import { WorkflowCover } from "../../components/showcases/workflow-cover";
 
-const description = "Explore real Grida FX workflows: layered worlds, animated characters, 3D models, terrain, and interface kits. Try the results yourself.";
+const description = "Explore reusable Grida FX workflows for parallax backgrounds, illustrated storyworlds, transparent sprite loops, facial patches, rigged 3D characters, 47-tile terrain atlases, and nine-slice UI kits.";
 
 export const metadata = pageMetadata("Workflows — Grida FX — Grida", description, "workflows");
 
@@ -16,7 +18,7 @@ export default function WorkflowsPage() {
       {workflows.map((workflow, index) => <li key={workflow.slug}>
         <article className="grid items-center gap-5 md:grid-cols-[1.7fr_1fr] md:gap-10">
           <Link href={`/workflows/${workflow.slug}`} className="block aspect-[8/5] overflow-hidden rounded-xl bg-muted" aria-label={`Explore ${workflow.title}`}>
-            <img src={workflowAsset(workflow, "cover.webp")} alt={workflow.title} width={960} height={600} loading={index === 0 ? "eager" : "lazy"} className="size-full object-cover" />
+            <WorkflowCover media={workflowCover(workflow.slug)} title={workflow.title} eager={index === 0} />
           </Link>
           <div>
             <h2 className="text-2xl font-semibold tracking-tight"><Link href={`/workflows/${workflow.slug}`}>{workflow.title}</Link></h2>

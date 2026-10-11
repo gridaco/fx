@@ -1,0 +1,16 @@
+{
+ "character_name": "Nami",
+ "local_weight_correction_vertex_count": 514,
+ "provider_calls": 0,
+ "remaining_limits": [
+  "Extra rear blossom remains; exact canonical identity fidelity is not restored by weight correction.",
+  "This is a provider rig with an explicitly disclosed local 514-vertex lower-body weight correction, not an unchanged provider rig.",
+  "Only original declared sample times and views were reviewed, not every continuous animation frame or an in-engine gameplay test.",
+  "Fixed-hand profile has no demonstrated finger/thumb articulation, facial rig, cloth simulation or secondary hair motion.",
+  "Low bar is 120px gameplay height. Close-up/high-quality character acceptance is not claimed."
+ ],
+ "rig_author": "provider_with_explicit_local_lower_body_weight_correction",
+ "runtime_qualified": false,
+ "source_sha256": "5c0d91039150a4db1eec6828d88a277cf6599074c0d21a72a504401538f4ed45",
+ "status": "sampled motion checks passed"
+}

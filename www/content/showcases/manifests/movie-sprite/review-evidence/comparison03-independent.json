@@ -1,0 +1,42 @@
+{
+  "comparison_preview_sha256": "71e9b33095a5a53fa6f155c10e85b1a021f4e39ccfca57fa78f50cc0aed1c094",
+  "source_trim_sha256": "45c0188eeb842ee23ff578deb22e57f465f722da3b695af41d2d9e393fdcc3af",
+  "manifest": {
+    "source": "trim-run-03",
+    "source_video_sha256": "45c0188eeb842ee23ff578deb22e57f465f722da3b695af41d2d9e393fdcc3af",
+    "source_frame_interval": [
+      12,
+      228
+    ],
+    "frame_count": 216,
+    "playback_fps": 27,
+    "playback_seconds": 8,
+    "keyed": false,
+    "held_region_applied": false,
+    "loop_flow_applied": false,
+    "audio": false,
+    "operation": "Encode the same retained original frame interval at the finished playback rate for synchronized comparison; no face pin, chroma key or optical-flow closure."
+  },
+  "decoded_frames": 216,
+  "finished_timeline_frames": 216,
+  "comparison_timeline_frames": 216,
+  "first_timestamps": [
+    0.0,
+    0.0
+  ],
+  "last_timestamps": [
+    7.963,
+    7.962963
+  ],
+  "max_same_frame_timestamp_delta_seconds": 0.00048100000000017573,
+  "lossy_comparison_vs_native_mean_bgr_error": 1.2798512876033783,
+  "lossy_comparison_vs_native_max_frame_mean_bgr_error": 1.5806185007095337,
+  "sampled_frames": [
+    0,
+    54,
+    108,
+    162,
+    215
+  ],
+  "limits": "Original comparison remains unkeyed, unheld and without flow closure. Equal source interval and playback timing do not imply identical finished pixels or loop endpoints."
+}

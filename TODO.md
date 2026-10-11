@@ -64,6 +64,12 @@ member; a write or rename command; visual
 editing; a minimap; typed SDK access to the layout report (callers receive it untyped in
 `inspection`); ELK or any other router.
 
+## Website utility recipes
+
+- Extract a standalone single-image repeat-seam workflow from the parallax
+  showcase, with reusable image outputs and an optional preview. Deferred until
+  the owner's explicit go; preserve the existing full parallax example.
+
 ## SDK invocation result capture
 
 Define invocation-pinned execution-result capture if needed. Existing SDK

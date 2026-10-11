@@ -1,0 +1,7 @@
+# Optional showcase processing dependencies; these are not dependencies of FX.
+numpy>=2.2,<3
+scipy>=1.15,<2
+pydantic>=2.11,<3
+opencv-python-headless>=4.13,<5
+pyyaml>=6,<7
+jsonschema>=4.23,<5

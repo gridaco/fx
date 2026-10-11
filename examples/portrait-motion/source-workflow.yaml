@@ -1,0 +1,20 @@
+fx: workflow/v1
+id: portrait-face-source
+title: Prepare a facial animation source
+description: An optional separate image edit produces an unobstructed resting face before the facial-patch workflow.
+inputs:
+  reference:
+    type: file
+    kind: image
+steps:
+  portrait:
+    title: Draw a clear resting face
+    uses: fx/image.edit@1
+    with:
+      image: ${{ inputs.reference }}
+      prompt: ./prompts/source-closeup.md
+      size: 2048x2048
+      background: opaque
+    view: true
+outputs:
+  portrait: ${{ steps.portrait.outputs.image }}

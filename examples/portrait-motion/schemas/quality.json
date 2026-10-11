@@ -1,0 +1,85 @@
+{
+  "$defs": {
+    "FeatureId": {
+      "enum": [
+        "canvas_left_eye",
+        "canvas_right_eye",
+        "mouth"
+      ],
+      "type": "string"
+    },
+    "NonemptyText": {
+      "maxLength": 2000,
+      "minLength": 1,
+      "type": "string"
+    },
+    "_QualityFeature": {
+      "additionalProperties": false,
+      "properties": {
+        "feature_id": {
+          "$ref": "#/$defs/FeatureId"
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "fail"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "reason": {
+          "$ref": "#/$defs/NonemptyText"
+        }
+      },
+      "required": [
+        "feature_id",
+        "status",
+        "reason"
+      ],
+      "title": "_QualityFeature",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "fail"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "features": {
+      "items": {
+        "$ref": "#/$defs/_QualityFeature"
+      },
+      "maxItems": 3,
+      "minItems": 1,
+      "title": "Features",
+      "type": "array"
+    },
+    "reason": {
+      "$ref": "#/$defs/NonemptyText"
+    },
+    "temporal_review": {
+      "const": "not_performed",
+      "title": "Temporal Review",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "status",
+    "features",
+    "reason",
+    "temporal_review"
+  ],
+  "title": "_Quality",
+  "type": "object"
+}

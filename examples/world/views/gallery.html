@@ -1,0 +1,99 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Universe</title>
+<style>
+  body { margin: 0; padding: 12px; font: 13px/1.45 system-ui, sans-serif; color: CanvasText; background: Canvas; }
+  header { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 12px; }
+  header img { width: 120px; height: auto; flex: none; }
+  h1 { margin: 0 0 4px; font-size: 18px; }
+  .meta { opacity: 0.7; font-size: 12px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+  .chips button { font: inherit; font-size: 11px; padding: 2px 8px; border: 1px solid #8886; background: none;
+                  color: inherit; cursor: pointer; }
+  .chips button[aria-pressed="true"] { border-color: currentColor; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+  .card { border: 1px solid #8884; padding: 4px; cursor: pointer; background: none; color: inherit;
+          font: inherit; text-align: left; }
+  .card img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; background: #8882; }
+  .card .name { margin-top: 4px; font-weight: 600; }
+  .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #d33; margin-left: 4px; }
+  dialog { max-width: min(900px, 94vw); border: 1px solid #8886; color: CanvasText; background: Canvas; }
+  dialog img { max-width: 100%; max-height: 60vh; display: block; margin-bottom: 8px; }
+  dialog pre { white-space: pre-wrap; font: inherit; margin: 0; }
+</style>
+<header>
+  <img id="poster" alt="poster">
+  <div>
+    <h1 id="title"></h1>
+    <div class="meta" id="counts"></div>
+    <p id="premise"></p>
+  </div>
+</header>
+<div class="chips" id="classes"></div>
+<main class="grid" id="grid"></main>
+<dialog id="detail"><form method="dialog"><button>close</button></form><img id="detail-image" alt=""><pre id="detail-text"></pre></dialog>
+<script type="module">
+  // The universe workflow's own view (scope: workflow): the world first, then one card per
+  // entity with its concept image; a rejected image keeps its place, with a red dot.
+  import { context as read } from "/_views/view.js";
+  const context = await read();
+  const world = context.outputs.universe?.value ?? {};
+  const proposal = world.proposal ?? {};
+  document.title = world.title ?? context.run.workflow;
+  document.getElementById("title").textContent = world.title ?? "Universe";
+  document.getElementById("premise").textContent = proposal.premise?.claim ?? "";
+  const poster = context.steps.world?.steps?.poster_small?.outputs?.image;
+  if (poster) document.getElementById("poster").src = poster.url;
+  const instances = context.steps.entity?.instances ?? [];
+  const cards = instances.map((instance) => ({
+    key: instance.key,
+    image: instance.steps.draw?.outputs?.image,
+    record: instance.steps.record,
+  }));
+  const admitted = cards.filter((card) => card.record?.facts?.status === "admitted").length;
+  document.getElementById("counts").textContent =
+    `${cards.length} entities · ${admitted} admitted · run ${context.run.status}`;
+  const classes = [...new Set(cards.map((card) => card.record?.facts?.primary_class).filter(Boolean))];
+  let shown = null;
+  const chips = document.getElementById("classes");
+  for (const name of ["all", ...classes]) {
+    const chip = Object.assign(document.createElement("button"), { textContent: name, type: "button" });
+    chip.setAttribute("aria-pressed", String(name === "all"));
+    chip.onclick = () => {
+      shown = name === "all" ? null : name;
+      for (const other of chips.children) other.setAttribute("aria-pressed", String(other === chip));
+      draw();
+    };
+    chips.append(chip);
+  }
+  const grid = document.getElementById("grid");
+  const detail = document.getElementById("detail");
+  async function open(card) {
+    document.getElementById("detail-image").src = card.image?.url ?? "";
+    const markdown = card.record?.outputs?.markdown;
+    document.getElementById("detail-text").textContent = markdown
+      ? await (await fetch(markdown.url)).text()
+      : "This entity has no record yet.";
+    detail.showModal();
+  }
+  function draw() {
+    grid.replaceChildren();
+    for (const card of cards) {
+      const facts = card.record?.facts ?? {};
+      if (shown && facts.primary_class !== shown) continue;
+      const button = Object.assign(document.createElement("button"), { className: "card", type: "button" });
+      const image = document.createElement("img");
+      if (card.image) image.src = card.image.url;
+      image.alt = facts.display_name ?? card.key;
+      const name = Object.assign(document.createElement("div"), { className: "name" });
+      name.textContent = facts.display_name ?? card.key;
+      if (facts.status === "rejected") name.append(Object.assign(document.createElement("span"), { className: "dot", title: "rejected by its review" }));
+      const kind = Object.assign(document.createElement("div"), { className: "meta" });
+      kind.textContent = facts.primary_class ?? "";
+      button.append(image, name, kind);
+      button.onclick = () => open(card);
+      grid.append(button);
+    }
+  }
+  draw();
+</script>

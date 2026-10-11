@@ -1,0 +1,303 @@
+fx: workflow/v1
+id: universe
+title: Universe
+description: >-
+  A poster, a synopsis and a direction in; a reviewed storyworld and one concept image per
+  entity out. The world's entities, relationships and open questions are proposed, checked
+  and independently reviewed; once the world is admitted, every entity gets one directed
+  concept image, reviewed against its record.
+
+inputs:
+  universe_id: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}$" }
+  title: { type: string, min_length: 1, max_length: 200 }
+  medium:
+    type: string
+    enum: [anime_2d, live_action]
+    description: The production language every direction and image is held to
+  poster:
+    type: file
+    kind: image
+    description: Visual evidence and art grammar only; its typography and layout are never facts
+  synopsis:
+    type: file
+    kind: text/markdown
+    description: The world's explicit facts, one paragraph per idea
+  direction:
+    type: file
+    kind: text/markdown
+    description: How far the world may be expanded, as "- <requirement_id>:" bullets
+  census:
+    min_entities: { type: integer, minimum: 1, maximum: 200 }
+    max_entities: { type: integer, minimum: 1, maximum: 200 }
+  rights:
+    status: { type: string, enum: [unreviewed, cleared], default: unreviewed }
+    basis: { type: list, items: { type: string }, min_items: 1 }
+
+assert:
+  - check: ${{ inputs.census.min_entities <= inputs.census.max_entities }}
+    message: the census's min_entities is above its max_entities
+
+tables:
+  size_by_mode:
+    environmental_identity_portrait: 1712x2560
+    in_world_action: 2560x1712
+    representative_public_manifestation: 2560x1440
+    establishing_environment: 2560x1440
+    inhabited_environment: 2560x1712
+    hero_object_in_use: 1712x2560
+    representative_specimen_in_context: 2560x1712
+    visible_system_instance: 2560x1712
+    witnessed_event_moment: 2560x1440
+    practiced_or_contested_idea: 2560x1712
+
+steps:
+  world:
+    title: Propose and admit the world
+    description: >-
+      The world's entities, facts, relationships and open questions are proposed from the
+      synopsis and direction, with the poster as visual evidence only; deterministic judges hold
+      the proposal and the gallery plan to their rules, an independent review must pass them,
+      and only then is the world admitted.
+    steps:
+      source:
+        title: Number the sources
+        at: plan
+        uses: ./world_example/nodes/world.py#source
+        with:
+          synopsis: ${{ inputs.synopsis }}
+          direction: ${{ inputs.direction }}
+          medium: ${{ inputs.medium }}
+
+      poster_small:
+        title: Reduce the poster
+        uses: fx/image.resize@1
+        with: { image: "${{ inputs.poster }}", longest_side: 1600 }
+
+      propose:
+        title: Propose the world
+        uses: fx/structured.generate@1
+        with:
+          prompt: ./prompts/propose.md
+          system: ./prompts/system.md
+          schema: ./schemas/proposal.json
+          context: ["${{ steps.poster_small.outputs.image }}"]
+          vars: { source: "${{ steps.source.outputs.source }}" }
+          max_tokens: 90000
+        view: true
+
+      proposal_ok:
+        title: Check the proposal
+        uses: ./world_example/nodes/judges.py#proposal_ok
+        judges: propose
+        with:
+          proposal: ${{ steps.propose.outputs.json }}
+          source: ${{ steps.source.outputs.source }}
+          universe_id: ${{ inputs.universe_id }}
+          min_entities: ${{ inputs.census.min_entities }}
+          max_entities: ${{ inputs.census.max_entities }}
+        on_reject: { regenerate: { max: 6, then: fail } }
+
+      projection:
+        title: Project the world for the planner
+        uses: ./world_example/nodes/world.py#projection
+        with: { proposal: "${{ steps.propose.outputs.json }}" }
+
+      plan:
+        title: Plan the gallery as a set
+        uses: fx/structured.generate@1
+        with:
+          prompt: ./prompts/plan.md
+          system: ./prompts/system.md
+          schema: ./schemas/plan.json
+          vars: { projection: "${{ steps.projection.outputs.text }}" }
+          max_tokens: 60000
+
+      plan_ok:
+        title: Check the plan
+        uses: ./world_example/nodes/judges.py#plan_ok
+        judges: plan
+        with:
+          plan: ${{ steps.plan.outputs.json }}
+          proposal: ${{ steps.propose.outputs.json }}
+        on_reject: { regenerate: { max: 6, then: fail } }
+
+      review:
+        title: Review the world independently
+        uses: fx/structured.generate@1
+        with:
+          prompt: ./prompts/review.md
+          system: ./prompts/system.md
+          schema: ./schemas/review.json
+          context: ["${{ steps.poster_small.outputs.image }}"]
+          vars:
+            evaluation:
+              proposal: ${{ steps.proposal_ok.facts }}
+              plan: ${{ steps.plan_ok.facts }}
+            source: ${{ steps.source.outputs.source }}
+            proposal: ${{ steps.propose.outputs.json }}
+            plan: ${{ steps.plan.outputs.json }}
+          max_tokens: 20000
+        view: true
+
+      admit:
+        title: Admit the world
+        uses: ./world_example/nodes/world.py#admit
+        with:
+          proposal: ${{ steps.propose.outputs.json }}
+          plan: ${{ steps.plan.outputs.json }}
+          review: ${{ steps.review.outputs.json }}
+          medium: ${{ inputs.medium }}
+
+  look:
+    title: Compile the visual grammar
+    description: >-
+      One shared grammar for the whole set, in the medium's own words: silhouettes,
+      architecture, costume, materials, palettes, and the substitutions an image must never
+      make.
+    steps:
+      projection:
+        title: Project the world for its grammar
+        uses: ./world_example/nodes/world.py#grammar_projection
+        with: { universe: "${{ steps.world.admit.outputs.universe }}" }
+
+      grammar:
+        title: Compile the grammar
+        uses: fx/structured.generate@1
+        with:
+          prompt: ./prompts/direction-global.md
+          system: ./prompts/system.md
+          schema: ./schemas/global-direction.json
+          context: ["${{ steps.world.poster_small.outputs.image }}"]
+          vars:
+            source: ${{ steps.world.source.outputs.source }}
+            projection: ${{ steps.projection.outputs.text }}
+          max_tokens: 16000
+
+      grammar_ok:
+        title: Check the grammar
+        uses: ./world_example/nodes/judges.py#grammar_ok
+        judges: grammar
+        with:
+          grammar: ${{ steps.grammar.outputs.json }}
+          universe: ${{ steps.world.admit.outputs.universe }}
+          source: ${{ steps.world.source.outputs.source }}
+        on_reject: { regenerate: { max: 6, then: fail } }
+
+  entity:
+    title: Draw each entity
+    description: >-
+      Each admitted entity is directed, drawn fresh with no references, and reviewed against
+      its record. A rejected image stays in the gallery, marked; a new take is drawn only when
+      asked for (a reroll).
+    for_each: ${{ steps.world.admit.outputs.universe.plan.plans }}
+    key: ${{ item.entity_id }}
+    max: ${{ inputs.census.max_entities }}
+    steps:
+      context:
+        title: Gather the entity's record
+        uses: ./world_example/nodes/entities.py#entity_context
+        with:
+          universe: ${{ steps.world.admit.outputs.universe }}
+          entity_id: ${{ item.entity_id }}
+
+      direct:
+        title: Direct the image
+        uses: fx/structured.generate@1
+        with:
+          prompt: ./prompts/direction-entity.md
+          system: ./prompts/system.md
+          schema: ./schemas/entity-direction.json
+          vars:
+            source: ${{ steps.world.source.outputs.source }}
+            entity_id: ${{ item.entity_id }}
+            grammar: ${{ steps.look.grammar.outputs.json }}
+            context: ${{ steps.context.outputs.text }}
+          max_tokens: 12000
+
+      direct_ok:
+        title: Check the direction
+        uses: ./world_example/nodes/judges.py#direction_ok
+        judges: direct
+        with:
+          direction: ${{ steps.direct.outputs.json }}
+          universe: ${{ steps.world.admit.outputs.universe }}
+          source: ${{ steps.world.source.outputs.source }}
+          entity_id: ${{ item.entity_id }}
+        on_reject: { regenerate: { max: 6, then: fail } }
+
+      brief:
+        title: Write the image instruction
+        uses: ./world_example/nodes/entities.py#image_prompt
+        with:
+          direction: ${{ steps.direct.outputs.json }}
+          grammar: ${{ steps.look.grammar.outputs.json }}
+          source: ${{ steps.world.source.outputs.source }}
+          entity_id: ${{ item.entity_id }}
+
+      draw:
+        title: Draw the concept image
+        uses: fx/image.generate@1
+        with:
+          prompt: ${{ steps.brief.outputs.prompt }}
+          size: ${{ lookup(tables.size_by_mode, item.concept_mode) }}
+          background: opaque
+        view: true
+
+      sealed:
+        title: Seal what the reviewer sees
+        uses: ./world_example/nodes/entities.py#review_record
+        with:
+          universe: ${{ steps.world.admit.outputs.universe }}
+          direction: ${{ steps.direct.outputs.json }}
+          entity_id: ${{ item.entity_id }}
+
+      review:
+        title: Review the image
+        uses: fx/structured.generate@1
+        with:
+          prompt: ./prompts/review-image.md
+          system: ./prompts/system.md
+          schema: ./schemas/image-review.json
+          context: ["${{ steps.draw.outputs.image }}"]
+          vars:
+            source: ${{ steps.world.source.outputs.source }}
+            entity_id: ${{ item.entity_id }}
+            record: ${{ steps.sealed.outputs.text }}
+          max_tokens: 8000
+
+      record:
+        title: Write the entity's record
+        uses: ./world_example/nodes/entities.py#record
+        with:
+          universe: ${{ steps.world.admit.outputs.universe }}
+          direction: ${{ steps.direct.outputs.json }}
+          review: ${{ steps.review.outputs.json }}
+          image: ${{ steps.draw.outputs.image }}
+          entity_id: ${{ item.entity_id }}
+
+  close:
+    title: Package the gallery
+    description: >-
+      The admitted world and every entity's image, record and readable page, laid out as one
+      folder beside a manifest of each entity's status and the rights the run was given.
+    uses: fx/package@1
+    with:
+      files:
+        "universe.json": ${{ steps.world.admit.outputs.universe }}
+        "entities/{key}.png": ${{ steps.entity.*.draw.outputs.image }}
+        "entities/{key}.json": ${{ steps.entity.*.record.outputs.record }}
+        "entities/{key}.md": ${{ steps.entity.*.record.outputs.markdown }}
+      manifest:
+        universe_id: ${{ inputs.universe_id }}
+        title: ${{ inputs.title }}
+        medium: ${{ inputs.medium }}
+        rights: ${{ inputs.rights }}
+        publication_authorized: false
+        entities: ${{ steps.entity.*.record.facts }}
+
+outputs:
+  universe: ${{ steps.world.admit.outputs.universe }}
+  gallery: ${{ steps.close.outputs.files }}
+  manifest: ${{ steps.close.outputs.manifest }}
+
+view: ./views/gallery.html

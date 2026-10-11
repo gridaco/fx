@@ -1,0 +1,3422 @@
+{
+ "artifacts": [
+  {
+   "digest": "013667face278a1dbbbb8be1bb3ef49274e75a413226959d7b0f88a658d511a5",
+   "media_type": "model/gltf-binary",
+   "name": "model",
+   "omitted_reason": null,
+   "path": "artifacts/013667face278a1dbbbb8be1bb3ef49274e75a413226959d7b0f88a658d511a5.glb",
+   "size": 5385104
+  },
+  {
+   "digest": "104f03d191f985e84d0b91da431a4a7c3fb3ce4d4b6354a83444d7b3b7a677ff",
+   "media_type": "json",
+   "name": "record",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 3386
+  },
+  {
+   "digest": "18059d8b7eb08f8d1822ce6a8373ff9f578832ba85f62c2818b4e2b453bf7814",
+   "media_type": "json",
+   "name": "bundle",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 1508
+  },
+  {
+   "digest": "2a77277b4ec5fcccdac89507354cf1c3400765279d8ff3d54261316185fb94a8",
+   "media_type": "model/gltf-binary",
+   "name": "model",
+   "omitted_reason": null,
+   "path": "artifacts/2a77277b4ec5fcccdac89507354cf1c3400765279d8ff3d54261316185fb94a8.glb",
+   "size": 5848068
+  },
+  {
+   "digest": "45611455de213e84f0fc119f001fa5852ff9e2aa9016a4e69a084e7ac0db32a6",
+   "media_type": "json",
+   "name": "review",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 17015
+  },
+  {
+   "digest": "597a842fc1bb409b43033a432234d27cb4259454ebfbde52ea2db2731aecd5c1",
+   "media_type": "text/markdown",
+   "name": "brief.md",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 3327
+  },
+  {
+   "digest": "7c375e24a34bb1e701b18130a82d07fd6c16d094931e6796308bbb2332b8e3f7",
+   "media_type": "json",
+   "name": "review",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 48212
+  },
+  {
+   "digest": "9810662ee4ce826e157360b5de725bf781dd428189f0ded15c35111cbf629aed",
+   "media_type": "image/png",
+   "name": "views[character-back]",
+   "omitted_reason": null,
+   "path": "artifacts/9810662ee4ce826e157360b5de725bf781dd428189f0ded15c35111cbf629aed.png",
+   "size": 1024236
+  },
+  {
+   "digest": "a6eff995c41c4e31cf2d220cb928140a9d0b944a53244f1789f973e488c54721",
+   "media_type": "json",
+   "name": "review",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 4070
+  },
+  {
+   "digest": "b78e3e0b0d2530640b920443bbaa17ae67e549ea71a353cd882b679244f4f2b5",
+   "media_type": "json",
+   "name": "profile",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 3037
+  },
+  {
+   "digest": "c16b55e2f2621aedb2e07b0ab9a6abffcfcb19f6ebeb8939089073598b0afc22",
+   "media_type": "json",
+   "name": "report",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 2067
+  },
+  {
+   "digest": "c2dca41fdf5626d345660b3d88e955361189c74d746f2c9efd68f4cbe9203af5",
+   "media_type": "json",
+   "name": "review",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 5848
+  },
+  {
+   "digest": "c5149034bfd086f23a47cf481485c4f9803f043d504431337b549e8b0d840bd6",
+   "media_type": "image/png",
+   "name": "nami-sd.png",
+   "omitted_reason": null,
+   "path": "artifacts/c5149034bfd086f23a47cf481485c4f9803f043d504431337b549e8b0d840bd6.png",
+   "size": 899088
+  },
+  {
+   "digest": "c6134539a5ac12a9f8ffc4b86bc4b0a1958c629bf658713d51146aa554dec6b6",
+   "media_type": "model/fbx",
+   "name": "model",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 2608348
+  },
+  {
+   "digest": "d4978bbe30a8af1029cc981fac0fd98a55dd06134316e0a9f9d07716b0df2a94",
+   "media_type": "model/gltf-binary",
+   "name": "model",
+   "omitted_reason": null,
+   "path": "artifacts/d4978bbe30a8af1029cc981fac0fd98a55dd06134316e0a9f9d07716b0df2a94.glb",
+   "size": 5384984
+  },
+  {
+   "digest": "e7c4bced48b895beb13264252dce17efaab7bf6b6fb689aaec4df07a4e46cec5",
+   "media_type": "image/png",
+   "name": "views[character-front]",
+   "omitted_reason": null,
+   "path": "artifacts/e7c4bced48b895beb13264252dce17efaab7bf6b6fb689aaec4df07a4e46cec5.png",
+   "size": 1162072
+  },
+  {
+   "digest": "f895584255e6961bf1f9e33779bb7a5a531934ef23a221b4d01a82dbf9883a8a",
+   "media_type": "json",
+   "name": "record",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 496
+  },
+  {
+   "digest": "fe00b14ba91b591791e43e8a78ff0058d6a7b4998993e62a6f4e8a9b276fe673",
+   "media_type": "json",
+   "name": "bar",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 4336
+  }
+ ],
+ "disclosure": {
+  "artifacts": "media",
+  "diagnostics": true,
+  "values": true
+ },
+ "kind": "fx-run-export-v1",
+ "layout": {
+  "cells": {
+   "build": {
+    "column": 2,
+    "row": 0,
+    "source": "automatic"
+   },
+   "build.assembly": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "build.assembly.assemble": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   },
+   "build.assembly.review": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "build.part": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   },
+   "build.part.mesh": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "build.part.normalize": {
+    "column": 2,
+    "row": 0,
+    "source": "automatic"
+   },
+   "build.part.review": {
+    "column": 3,
+    "row": 0,
+    "source": "automatic"
+   },
+   "build.part.views": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   },
+   "build.rig": {
+    "column": 2,
+    "row": 0,
+    "source": "automatic"
+   },
+   "build.rig.agent": {
+    "column": 3,
+    "row": 0,
+    "source": "automatic"
+   },
+   "build.rig.finish": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "build.rig.review": {
+    "column": 2,
+    "row": 0,
+    "source": "automatic"
+   },
+   "build.rig.task": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   },
+   "references": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "references.draw": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   },
+   "references.review": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "result": {
+    "column": 3,
+    "row": 0,
+    "source": "automatic"
+   },
+   "setup": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   }
+  },
+  "cursor": null,
+  "diagnostics": [],
+  "file": null,
+  "kind": "fx-layout-report-v1",
+  "order": [
+   "setup#1",
+   "references.draw#1.1",
+   "scope:references#1",
+   "references.review#1.1",
+   "build.part['character'].views#1.1.1",
+   "scope:build#1",
+   "scope:build.part['character']#1.1",
+   "build.part['character'].mesh#1.1.1",
+   "build.part['character'].normalize#1.1.1",
+   "build.part['character'].review#1.1.1",
+   "build.assembly.assemble#1.1.1",
+   "scope:build.assembly#1.1",
+   "build.assembly.review#1.1.1",
+   "build.rig.task#1.1.1",
+   "scope:build.rig#1.1",
+   "build.rig.finish#1.1.1",
+   "build.rig.review#1.1.1",
+   "result#1"
+  ],
+  "revision": null,
+  "state": "none"
+ },
+ "producer": {
+  "version": "0.2.0"
+ },
+ "source": {
+  "event_count": 95,
+  "events_sha256": "5a1b74ad5f08e8e7f9db5121bd254e71a23d457bc941ad20d64c5cd1ab60642c",
+  "plan_sha256": "b36a26f3e32d9cc076632abc33281eda5ce7028b1f3d23ffbdfeab3791956256"
+ },
+ "view": {
+  "artifacts": [
+   {
+    "available": true,
+    "digest": "013667face278a1dbbbb8be1bb3ef49274e75a413226959d7b0f88a658d511a5",
+    "kind": "model/gltf-binary",
+    "name": "model",
+    "size": 5385104,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "104f03d191f985e84d0b91da431a4a7c3fb3ce4d4b6354a83444d7b3b7a677ff",
+    "kind": "json",
+    "name": "record",
+    "size": 3386,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "18059d8b7eb08f8d1822ce6a8373ff9f578832ba85f62c2818b4e2b453bf7814",
+    "kind": "json",
+    "name": "bundle",
+    "size": 1508,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "2a77277b4ec5fcccdac89507354cf1c3400765279d8ff3d54261316185fb94a8",
+    "kind": "model/gltf-binary",
+    "name": "model",
+    "size": 5848068,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "45611455de213e84f0fc119f001fa5852ff9e2aa9016a4e69a084e7ac0db32a6",
+    "kind": "json",
+    "name": "review",
+    "size": 17015,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "597a842fc1bb409b43033a432234d27cb4259454ebfbde52ea2db2731aecd5c1",
+    "kind": "text/markdown",
+    "name": "brief.md",
+    "size": 3327,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "7c375e24a34bb1e701b18130a82d07fd6c16d094931e6796308bbb2332b8e3f7",
+    "kind": "json",
+    "name": "review",
+    "size": 48212,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "9810662ee4ce826e157360b5de725bf781dd428189f0ded15c35111cbf629aed",
+    "kind": "image/png",
+    "name": "views[character-back]",
+    "size": 1024236,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "a6eff995c41c4e31cf2d220cb928140a9d0b944a53244f1789f973e488c54721",
+    "kind": "json",
+    "name": "review",
+    "size": 4070,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "b78e3e0b0d2530640b920443bbaa17ae67e549ea71a353cd882b679244f4f2b5",
+    "kind": "json",
+    "name": "profile",
+    "size": 3037,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "c16b55e2f2621aedb2e07b0ab9a6abffcfcb19f6ebeb8939089073598b0afc22",
+    "kind": "json",
+    "name": "report",
+    "size": 2067,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "c2dca41fdf5626d345660b3d88e955361189c74d746f2c9efd68f4cbe9203af5",
+    "kind": "json",
+    "name": "review",
+    "size": 5848,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "c5149034bfd086f23a47cf481485c4f9803f043d504431337b549e8b0d840bd6",
+    "kind": "image/png",
+    "name": "nami-sd.png",
+    "size": 899088,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "c6134539a5ac12a9f8ffc4b86bc4b0a1958c629bf658713d51146aa554dec6b6",
+    "kind": "model/fbx",
+    "name": "model",
+    "size": 2608348,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "d4978bbe30a8af1029cc981fac0fd98a55dd06134316e0a9f9d07716b0df2a94",
+    "kind": "model/gltf-binary",
+    "name": "model",
+    "size": 5384984,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "e7c4bced48b895beb13264252dce17efaab7bf6b6fb689aaec4df07a4e46cec5",
+    "kind": "image/png",
+    "name": "views[character-front]",
+    "size": 1162072,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "f895584255e6961bf1f9e33779bb7a5a531934ef23a221b4d01a82dbf9883a8a",
+    "kind": "json",
+    "name": "record",
+    "size": 496,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "fe00b14ba91b591791e43e8a78ff0058d6a7b4998993e62a6f4e8a9b276fe673",
+    "kind": "json",
+    "name": "bar",
+    "size": 4336,
+    "url": null
+   }
+  ],
+  "charged_usd": 5.532964,
+  "estimate": {
+   "ceiling_usd": 30,
+   "high_usd": 128.9,
+   "low_usd": 2.6
+  },
+  "inputs": {
+   "brief": {
+    "value": {
+     "file": "597a842fc1bb409b43033a432234d27cb4259454ebfbde52ea2db2731aecd5c1"
+    }
+   },
+   "limits": {
+    "value": {
+     "crops": 16,
+     "producer_turns": 12,
+     "recent_images": 12,
+     "reference_images": 4,
+     "reviewer_turns": 4,
+     "revisions": 3
+    }
+   },
+   "mesh": {
+    "value": {
+     "face_limit": 10000,
+     "pbr": true,
+     "quad": true,
+     "texture": true
+    }
+   },
+   "partition": {
+    "value": "whole"
+   },
+   "preservation": {
+    "value": "audit"
+   },
+   "profile": {
+    "value": "sd_human_fixed_hands_v1"
+   },
+   "quality_bar": {
+    "value": "low"
+   },
+   "rebuilds": {
+    "value": 1
+   },
+   "reference": {
+    "value": {
+     "file": "c5149034bfd086f23a47cf481485c4f9803f043d504431337b549e8b0d840bd6"
+    }
+   },
+   "review": {
+    "value": "required"
+   },
+   "rounds": {
+    "value": 2
+   },
+   "through": {
+    "value": "rig"
+   }
+  },
+  "kind": "fx-viewer-run-v1",
+  "nodes": [
+   {
+    "bindings": [],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "setup#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "setup",
+    "ports": {
+     "inputs": {
+      "parts": "model{}?"
+     },
+     "outputs": {
+      "bar": "json",
+      "profile": "json"
+     },
+     "params": {
+      "entry": {
+       "enum": [
+        "brief",
+        "parts"
+       ]
+      },
+      "partition": {
+       "enum": [
+        "whole",
+        "head_body_hair"
+       ]
+      },
+      "profile": {
+       "enum": [
+        "sd_human_fixed_hands_v1",
+        "sd_human_grouped_hands_v1",
+        "sd_cat_grouped_paws_v1"
+       ]
+      },
+      "quality_bar": {
+       "enum": [
+        "low",
+        "medium"
+       ]
+      },
+      "review": {
+       "enum": [
+        "required",
+        "none"
+       ]
+      }
+     }
+    },
+    "reads": [],
+    "state": "succeeded",
+    "step": "setup",
+    "take": [
+     1
+    ],
+    "title": "Compile the profile",
+    "uses": "./nodes/setup.py#setup",
+    "with": {
+     "entry": {
+      "value": "brief"
+     },
+     "partition": {
+      "value": "whole"
+     },
+     "parts": {
+      "value": null
+     },
+     "profile": {
+      "value": "sd_human_fixed_hands_v1"
+     },
+     "quality_bar": {
+      "value": "low"
+     },
+     "review": {
+      "value": "required"
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "profile",
+      "target_port": "profile"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 187971,
+    "error": null,
+    "id": "references.draw#1.1",
+    "interface_bindings": [
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "profile",
+      "target_port": "profile"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "bundle": {
+      "file": {
+       "digest": "18059d8b7eb08f8d1822ce6a8373ff9f578832ba85f62c2818b4e2b453bf7814",
+       "kind": "json",
+       "name": "bundle",
+       "size": 1508
+      }
+     },
+     "canonical": {
+      "file": {
+       "digest": "c5149034bfd086f23a47cf481485c4f9803f043d504431337b549e8b0d840bd6",
+       "kind": "image/png",
+       "name": "canonical",
+       "size": 899088
+      }
+     },
+     "views": {
+      "collection": [
+       [
+        "character-front",
+        {
+         "file": {
+          "digest": "e7c4bced48b895beb13264252dce17efaab7bf6b6fb689aaec4df07a4e46cec5",
+          "key": "character-front",
+          "kind": "image/png",
+          "name": "views[character-front]",
+          "size": 1162072
+         }
+        }
+       ],
+       [
+        "character-back",
+        {
+         "file": {
+          "digest": "9810662ee4ce826e157360b5de725bf781dd428189f0ded15c35111cbf629aed",
+          "key": "character-back",
+          "kind": "image/png",
+          "name": "views[character-back]",
+          "size": 1024236
+         }
+        }
+       ]
+      ]
+     }
+    },
+    "path": "references.draw",
+    "ports": {
+     "inputs": {
+      "brief": "text",
+      "profile": "json",
+      "reference": "image?"
+     },
+     "outputs": {
+      "bundle": "json",
+      "canonical": "image/png",
+      "views": "image/png{}"
+     },
+     "params": {
+      "crops": {
+       "default": 32,
+       "maximum": 128,
+       "minimum": 1,
+       "type": "integer"
+      },
+      "feedback": {
+       "default": null,
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "generations": {
+       "default": 6,
+       "maximum": 16,
+       "minimum": 1,
+       "type": "integer"
+      },
+      "max_steps": {
+       "default": 16,
+       "maximum": 40,
+       "minimum": 1,
+       "type": "integer"
+      },
+      "recent_images": {
+       "default": 24,
+       "maximum": 64,
+       "minimum": 1,
+       "type": "integer"
+      },
+      "review": {
+       "enum": [
+        "required",
+        "none"
+       ]
+      }
+     }
+    },
+    "reads": [
+     "setup#1"
+    ],
+    "started_at": "2026-10-11T20:31:28.765Z",
+    "state": "succeeded",
+    "step": "references.draw",
+    "take": [
+     1,
+     1
+    ],
+    "title": "Draw the references",
+    "uses": "./nodes/references.py#draw",
+    "with": {
+     "brief": {
+      "file": {
+       "digest": "597a842fc1bb409b43033a432234d27cb4259454ebfbde52ea2db2731aecd5c1",
+       "kind": "text/markdown",
+       "name": "brief.md",
+       "size": 3327
+      }
+     },
+     "crops": {
+      "value": 16
+     },
+     "feedback": {
+      "none": true
+     },
+     "generations": {
+      "value": 4
+     },
+     "max_steps": {
+      "value": 12
+     },
+     "profile": {
+      "file": {
+       "digest": "b78e3e0b0d2530640b920443bbaa17ae67e549ea71a353cd882b679244f4f2b5",
+       "kind": "json",
+       "name": "profile",
+       "size": 3037
+      }
+     },
+     "recent_images": {
+      "value": 12
+     },
+     "reference": {
+      "file": {
+       "digest": "c5149034bfd086f23a47cf481485c4f9803f043d504431337b549e8b0d840bd6",
+       "kind": "image/png",
+       "name": "nami-sd.png",
+       "size": 899088
+      }
+     },
+     "review": {
+      "value": "required"
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "references.draw#1.1",
+      "source_kind": "output",
+      "source_port": "bundle",
+      "target_port": "bundle"
+     },
+     {
+      "source": "references.draw#1.1",
+      "source_kind": "output",
+      "source_port": "canonical",
+      "target_port": "canonical"
+     },
+     {
+      "source": "references.draw#1.1",
+      "source_kind": "output",
+      "source_port": "views",
+      "target_port": "views"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "bar",
+      "target_port": "bar"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "profile",
+      "target_port": "profile"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 39319,
+    "error": null,
+    "id": "references.review#1.1",
+    "interface_bindings": [
+     {
+      "source": "references.draw#1.1",
+      "source_kind": "output",
+      "source_port": "bundle",
+      "target_port": "bundle"
+     },
+     {
+      "source": "references.draw#1.1",
+      "source_kind": "output",
+      "source_port": "canonical",
+      "target_port": "canonical"
+     },
+     {
+      "source": "references.draw#1.1",
+      "source_kind": "output",
+      "source_port": "views",
+      "target_port": "views"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "bar",
+      "target_port": "bar"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "profile",
+      "target_port": "profile"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "review": {
+      "file": {
+       "digest": "a6eff995c41c4e31cf2d220cb928140a9d0b944a53244f1789f973e488c54721",
+       "kind": "json",
+       "name": "review",
+       "size": 4070
+      }
+     }
+    },
+    "path": "references.review",
+    "ports": {
+     "inputs": {
+      "bar": "json",
+      "brief": "text",
+      "bundle": "json",
+      "canonical": "image",
+      "profile": "json",
+      "views": "image{}"
+     },
+     "outputs": {
+      "review": "json"
+     },
+     "params": {
+      "max_steps": {
+       "default": 6,
+       "maximum": 40,
+       "minimum": 1,
+       "type": "integer"
+      }
+     }
+    },
+    "reads": [
+     "references.draw#1.1",
+     "setup#1"
+    ],
+    "started_at": "2026-10-11T20:34:36.748Z",
+    "state": "succeeded",
+    "step": "references.review",
+    "take": [
+     1,
+     1
+    ],
+    "title": "Review the references",
+    "uses": "./nodes/references.py#review",
+    "with": {
+     "bar": {
+      "file": {
+       "digest": "fe00b14ba91b591791e43e8a78ff0058d6a7b4998993e62a6f4e8a9b276fe673",
+       "kind": "json",
+       "name": "bar",
+       "size": 4336
+      }
+     },
+     "brief": {
+      "file": {
+       "digest": "597a842fc1bb409b43033a432234d27cb4259454ebfbde52ea2db2731aecd5c1",
+       "kind": "text/markdown",
+       "name": "brief.md",
+       "size": 3327
+      }
+     },
+     "bundle": {
+      "file": {
+       "digest": "18059d8b7eb08f8d1822ce6a8373ff9f578832ba85f62c2818b4e2b453bf7814",
+       "kind": "json",
+       "name": "bundle",
+       "size": 1508
+      }
+     },
+     "canonical": {
+      "file": {
+       "digest": "c5149034bfd086f23a47cf481485c4f9803f043d504431337b549e8b0d840bd6",
+       "kind": "image/png",
+       "name": "canonical",
+       "size": 899088
+      }
+     },
+     "max_steps": {
+      "value": 4
+     },
+     "profile": {
+      "file": {
+       "digest": "b78e3e0b0d2530640b920443bbaa17ae67e549ea71a353cd882b679244f4f2b5",
+       "kind": "json",
+       "name": "profile",
+       "size": 3037
+      }
+     },
+     "views": {
+      "collection": [
+       [
+        "character-front",
+        {
+         "file": {
+          "digest": "e7c4bced48b895beb13264252dce17efaab7bf6b6fb689aaec4df07a4e46cec5",
+          "key": "character-front",
+          "kind": "image/png",
+          "name": "views[character-front]",
+          "size": 1162072
+         }
+        }
+       ],
+       [
+        "character-back",
+        {
+         "file": {
+          "digest": "9810662ee4ce826e157360b5de725bf781dd428189f0ded15c35111cbf629aed",
+          "key": "character-back",
+          "kind": "image/png",
+          "name": "views[character-back]",
+          "size": 1024236
+         }
+        }
+       ]
+      ]
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "profile",
+      "target_port": "profile"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "references.draw#2.1",
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "references.draw",
+    "ports": {
+     "inputs": {
+      "brief": "text",
+      "profile": "json",
+      "reference": "image?"
+     },
+     "outputs": {
+      "bundle": "json",
+      "canonical": "image/png",
+      "views": "image/png{}"
+     },
+     "params": {
+      "crops": {
+       "default": 32,
+       "maximum": 128,
+       "minimum": 1,
+       "type": "integer"
+      },
+      "feedback": {
+       "default": null,
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "generations": {
+       "default": 6,
+       "maximum": 16,
+       "minimum": 1,
+       "type": "integer"
+      },
+      "max_steps": {
+       "default": 16,
+       "maximum": 40,
+       "minimum": 1,
+       "type": "integer"
+      },
+      "recent_images": {
+       "default": 24,
+       "maximum": 64,
+       "minimum": 1,
+       "type": "integer"
+      },
+      "review": {
+       "enum": [
+        "required",
+        "none"
+       ]
+      }
+     }
+    },
+    "reads": [
+     "setup#1"
+    ],
+    "state": "skipped",
+    "step": "references.draw",
+    "take": [
+     2,
+     1
+    ],
+    "title": "Draw the references",
+    "uses": "./nodes/references.py#draw",
+    "with": {
+     "brief": {
+      "value": {
+       "file": "597a842fc1bb409b43033a432234d27cb4259454ebfbde52ea2db2731aecd5c1"
+      }
+     },
+     "crops": {
+      "value": 16
+     },
+     "feedback": {
+      "value": {}
+     },
+     "generations": {
+      "value": 4
+     },
+     "max_steps": {
+      "value": 12
+     },
+     "profile": {
+      "value": {
+       "file": "b78e3e0b0d2530640b920443bbaa17ae67e549ea71a353cd882b679244f4f2b5"
+      }
+     },
+     "recent_images": {
+      "value": 12
+     },
+     "reference": {
+      "value": {
+       "file": "c5149034bfd086f23a47cf481485c4f9803f043d504431337b549e8b0d840bd6"
+      }
+     },
+     "review": {
+      "value": "required"
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "bar",
+      "target_port": "bar"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "profile",
+      "target_port": "profile"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "references.review#2.1",
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "references.review",
+    "ports": {
+     "inputs": {
+      "bar": "json",
+      "brief": "text",
+      "bundle": "json",
+      "canonical": "image",
+      "profile": "json",
+      "views": "image{}"
+     },
+     "outputs": {
+      "review": "json"
+     },
+     "params": {
+      "max_steps": {
+       "default": 6,
+       "maximum": 40,
+       "minimum": 1,
+       "type": "integer"
+      }
+     }
+    },
+    "reads": [
+     "references.draw#2.1",
+     "setup#1"
+    ],
+    "state": "skipped",
+    "step": "references.review",
+    "take": [
+     2,
+     1
+    ],
+    "title": "Review the references",
+    "uses": "./nodes/references.py#review",
+    "with": {
+     "bar": {
+      "value": {
+       "file": "fe00b14ba91b591791e43e8a78ff0058d6a7b4998993e62a6f4e8a9b276fe673"
+      }
+     },
+     "brief": {
+      "value": {
+       "file": "597a842fc1bb409b43033a432234d27cb4259454ebfbde52ea2db2731aecd5c1"
+      }
+     },
+     "bundle": {
+      "value": {
+       "pending": [
+        "references.draw#2.1"
+       ]
+      }
+     },
+     "canonical": {
+      "value": {
+       "pending": [
+        "references.draw#2.1"
+       ]
+      }
+     },
+     "max_steps": {
+      "value": 4
+     },
+     "profile": {
+      "value": {
+       "file": "b78e3e0b0d2530640b920443bbaa17ae67e549ea71a353cd882b679244f4f2b5"
+      }
+     },
+     "views": {
+      "value": {
+       "pending": [
+        "references.draw#2.1"
+       ]
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "references.draw#1.1",
+      "source_kind": "output",
+      "source_port": "views",
+      "target_port": "views"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "fact",
+      "source_port": "roles",
+      "target_port": "role"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 6,
+    "error": null,
+    "id": "build.part['character'].views#1.1.1",
+    "interface_bindings": [
+     {
+      "source": "references.draw#1.1",
+      "source_kind": "output",
+      "source_port": "views",
+      "target_port": "views"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "fact",
+      "source_port": "roles",
+      "target_port": "role"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "sides": {
+      "collection": [
+       [
+        "front",
+        {
+         "file": {
+          "digest": "e7c4bced48b895beb13264252dce17efaab7bf6b6fb689aaec4df07a4e46cec5",
+          "key": "front",
+          "kind": "image/png",
+          "name": "sides[front]",
+          "size": 1162072
+         }
+        }
+       ],
+       [
+        "back",
+        {
+         "file": {
+          "digest": "9810662ee4ce826e157360b5de725bf781dd428189f0ded15c35111cbf629aed",
+          "key": "back",
+          "kind": "image/png",
+          "name": "sides[back]",
+          "size": 1024236
+         }
+        }
+       ]
+      ]
+     },
+     "views": {
+      "collection": [
+       [
+        "front",
+        {
+         "file": {
+          "digest": "e7c4bced48b895beb13264252dce17efaab7bf6b6fb689aaec4df07a4e46cec5",
+          "key": "front",
+          "kind": "image/png",
+          "name": "views[front]",
+          "size": 1162072
+         }
+        }
+       ],
+       [
+        "back",
+        {
+         "file": {
+          "digest": "9810662ee4ce826e157360b5de725bf781dd428189f0ded15c35111cbf629aed",
+          "key": "back",
+          "kind": "image/png",
+          "name": "views[back]",
+          "size": 1024236
+         }
+        }
+       ]
+      ]
+     }
+    },
+    "path": "build.part['character'].views",
+    "ports": {
+     "inputs": {
+      "views": "image{}"
+     },
+     "outputs": {
+      "sides": "image{}",
+      "views": "image{}"
+     },
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "references.draw#1.1"
+    ],
+    "started_at": "2026-10-11T20:35:16.075Z",
+    "state": "succeeded",
+    "step": "build.part.views",
+    "take": [
+     1,
+     1,
+     1
+    ],
+    "title": "build.part['character'].views",
+    "uses": "./nodes/references.py#role_views",
+    "with": {
+     "role": {
+      "value": "character"
+     },
+     "views": {
+      "collection": [
+       [
+        "character-front",
+        {
+         "file": {
+          "digest": "e7c4bced48b895beb13264252dce17efaab7bf6b6fb689aaec4df07a4e46cec5",
+          "key": "character-front",
+          "kind": "image/png",
+          "name": "views[character-front]",
+          "size": 1162072
+         }
+        }
+       ],
+       [
+        "character-back",
+        {
+         "file": {
+          "digest": "9810662ee4ce826e157360b5de725bf781dd428189f0ded15c35111cbf629aed",
+          "key": "character-back",
+          "kind": "image/png",
+          "name": "views[character-back]",
+          "size": 1024236
+         }
+        }
+       ]
+      ]
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "build.part['character'].views#1.1.1",
+      "source_kind": "output",
+      "source_port": "sides",
+      "target_port": "views"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 106930,
+    "error": null,
+    "id": "build.part['character'].mesh#1.1.1",
+    "interface_bindings": [
+     {
+      "source": "build.part['character'].views#1.1.1",
+      "source_kind": "output",
+      "source_port": "sides",
+      "target_port": "views"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "model": {
+      "file": {
+       "digest": "c6134539a5ac12a9f8ffc4b86bc4b0a1958c629bf658713d51146aa554dec6b6",
+       "kind": "model/fbx",
+       "name": "model",
+       "size": 2608348
+      }
+     }
+    },
+    "path": "build.part['character'].mesh",
+    "ports": {
+     "inputs": {
+      "views": "image{}"
+     },
+     "outputs": {
+      "model": "model"
+     },
+     "params": {
+      "face_limit": {
+       "type": "integer",
+       "x-fx-optional": true
+      },
+      "pbr": {
+       "default": false,
+       "type": "boolean"
+      },
+      "quad": {
+       "default": false,
+       "type": "boolean"
+      },
+      "texture": {
+       "default": true,
+       "type": "boolean"
+      }
+     }
+    },
+    "reads": [
+     "build.part['character'].views#1.1.1",
+     "references.draw#1.1"
+    ],
+    "started_at": "2026-10-11T20:35:16.091Z",
+    "state": "succeeded",
+    "step": "build.part.mesh",
+    "take": [
+     1,
+     1,
+     1
+    ],
+    "title": "build.part['character'].mesh",
+    "uses": "fx/mesh.generate@1",
+    "with": {
+     "face_limit": {
+      "value": 10000
+     },
+     "pbr": {
+      "value": true
+     },
+     "quad": {
+      "value": true
+     },
+     "texture": {
+      "value": true
+     },
+     "views": {
+      "collection": [
+       [
+        "front",
+        {
+         "file": {
+          "digest": "e7c4bced48b895beb13264252dce17efaab7bf6b6fb689aaec4df07a4e46cec5",
+          "key": "front",
+          "kind": "image/png",
+          "name": "sides[front]",
+          "size": 1162072
+         }
+        }
+       ],
+       [
+        "back",
+        {
+         "file": {
+          "digest": "9810662ee4ce826e157360b5de725bf781dd428189f0ded15c35111cbf629aed",
+          "key": "back",
+          "kind": "image/png",
+          "name": "sides[back]",
+          "size": 1024236
+         }
+        }
+       ]
+      ]
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "build.part['character'].mesh#1.1.1",
+      "source_kind": "output",
+      "source_port": "model",
+      "target_port": "mesh"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "fact",
+      "source_port": "roles",
+      "target_port": "role"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 1822,
+    "error": null,
+    "id": "build.part['character'].normalize#1.1.1",
+    "interface_bindings": [
+     {
+      "source": "build.part['character'].mesh#1.1.1",
+      "source_kind": "output",
+      "source_port": "model",
+      "target_port": "mesh"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "fact",
+      "source_port": "roles",
+      "target_port": "role"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "model": {
+      "file": {
+       "digest": "d4978bbe30a8af1029cc981fac0fd98a55dd06134316e0a9f9d07716b0df2a94",
+       "kind": "model/gltf-binary",
+       "name": "model",
+       "size": 5384984
+      }
+     },
+     "report": {
+      "file": {
+       "digest": "c16b55e2f2621aedb2e07b0ab9a6abffcfcb19f6ebeb8939089073598b0afc22",
+       "kind": "json",
+       "name": "report",
+       "size": 2067
+      }
+     }
+    },
+    "path": "build.part['character'].normalize",
+    "ports": {
+     "inputs": {
+      "mesh": "model"
+     },
+     "outputs": {
+      "model": "model/gltf-binary?",
+      "report": "json"
+     },
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "build.part['character'].mesh#1.1.1",
+     "build.part['character'].views#1.1.1",
+     "references.draw#1.1"
+    ],
+    "started_at": "2026-10-11T20:37:03.030Z",
+    "state": "succeeded",
+    "step": "build.part.normalize",
+    "take": [
+     1,
+     1,
+     1
+    ],
+    "title": "build.part['character'].normalize",
+    "uses": "./nodes/parts.py#normalize",
+    "with": {
+     "mesh": {
+      "file": {
+       "digest": "c6134539a5ac12a9f8ffc4b86bc4b0a1958c629bf658713d51146aa554dec6b6",
+       "kind": "model/fbx",
+       "name": "model",
+       "size": 2608348
+      }
+     },
+     "role": {
+      "value": "character"
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "build.part['character'].normalize#1.1.1",
+      "source_kind": "output",
+      "source_port": "model",
+      "target_port": "model"
+     },
+     {
+      "source": "build.part['character'].normalize#1.1.1",
+      "source_kind": "output",
+      "source_port": "report",
+      "target_port": "report"
+     },
+     {
+      "source": "build.part['character'].views#1.1.1",
+      "source_kind": "output",
+      "source_port": "views",
+      "target_port": "views"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "bar",
+      "target_port": "bar"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "profile",
+      "target_port": "profile"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "fact",
+      "source_port": "roles",
+      "target_port": "role"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 61990,
+    "error": null,
+    "id": "build.part['character'].review#1.1.1",
+    "interface_bindings": [
+     {
+      "source": "build.part['character'].normalize#1.1.1",
+      "source_kind": "output",
+      "source_port": "model",
+      "target_port": "model"
+     },
+     {
+      "source": "build.part['character'].normalize#1.1.1",
+      "source_kind": "output",
+      "source_port": "report",
+      "target_port": "report"
+     },
+     {
+      "source": "build.part['character'].views#1.1.1",
+      "source_kind": "output",
+      "source_port": "views",
+      "target_port": "views"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "bar",
+      "target_port": "bar"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "profile",
+      "target_port": "profile"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "fact",
+      "source_port": "roles",
+      "target_port": "role"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "review": {
+      "file": {
+       "digest": "45611455de213e84f0fc119f001fa5852ff9e2aa9016a4e69a084e7ac0db32a6",
+       "kind": "json",
+       "name": "review",
+       "size": 17015
+      }
+     }
+    },
+    "path": "build.part['character'].review",
+    "ports": {
+     "inputs": {
+      "bar": "json",
+      "model": "model/gltf-binary?",
+      "profile": "json",
+      "report": "json",
+      "views": "image{}"
+     },
+     "outputs": {
+      "review": "json"
+     },
+     "params": {
+      "max_steps": {
+       "default": 6,
+       "maximum": 40,
+       "minimum": 1,
+       "type": "integer"
+      },
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "build.part['character'].mesh#1.1.1",
+     "build.part['character'].normalize#1.1.1",
+     "build.part['character'].views#1.1.1",
+     "references.draw#1.1",
+     "setup#1"
+    ],
+    "started_at": "2026-10-11T20:37:04.862Z",
+    "state": "succeeded",
+    "step": "build.part.review",
+    "take": [
+     1,
+     1,
+     1
+    ],
+    "title": "build.part['character'].review",
+    "uses": "./nodes/parts.py#review",
+    "with": {
+     "bar": {
+      "file": {
+       "digest": "fe00b14ba91b591791e43e8a78ff0058d6a7b4998993e62a6f4e8a9b276fe673",
+       "kind": "json",
+       "name": "bar",
+       "size": 4336
+      }
+     },
+     "max_steps": {
+      "value": 4
+     },
+     "model": {
+      "file": {
+       "digest": "d4978bbe30a8af1029cc981fac0fd98a55dd06134316e0a9f9d07716b0df2a94",
+       "kind": "model/gltf-binary",
+       "name": "model",
+       "size": 5384984
+      }
+     },
+     "profile": {
+      "file": {
+       "digest": "b78e3e0b0d2530640b920443bbaa17ae67e549ea71a353cd882b679244f4f2b5",
+       "kind": "json",
+       "name": "profile",
+       "size": 3037
+      }
+     },
+     "report": {
+      "file": {
+       "digest": "c16b55e2f2621aedb2e07b0ab9a6abffcfcb19f6ebeb8939089073598b0afc22",
+       "kind": "json",
+       "name": "report",
+       "size": 2067
+      }
+     },
+     "role": {
+      "value": "character"
+     },
+     "views": {
+      "collection": [
+       [
+        "front",
+        {
+         "file": {
+          "digest": "e7c4bced48b895beb13264252dce17efaab7bf6b6fb689aaec4df07a4e46cec5",
+          "key": "front",
+          "kind": "image/png",
+          "name": "views[front]",
+          "size": 1162072
+         }
+        }
+       ],
+       [
+        "back",
+        {
+         "file": {
+          "digest": "9810662ee4ce826e157360b5de725bf781dd428189f0ded15c35111cbf629aed",
+          "key": "back",
+          "kind": "image/png",
+          "name": "views[back]",
+          "size": 1024236
+         }
+        }
+       ]
+      ]
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "setup#1",
+      "source_kind": "fact",
+      "source_port": "roles",
+      "target_port": "role"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "build.part['character'].views#1.2.1",
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "build.part['character'].views",
+    "ports": {
+     "inputs": {
+      "views": "image{}"
+     },
+     "outputs": {
+      "sides": "image{}",
+      "views": "image{}"
+     },
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "references.draw#1.1",
+     "references.draw#2.1",
+     "references.review#1.1",
+     "references.review#2.1"
+    ],
+    "state": "skipped",
+    "step": "build.part.views",
+    "take": [
+     1,
+     2,
+     1
+    ],
+    "title": "build.part['character'].views",
+    "uses": "./nodes/references.py#role_views",
+    "with": {
+     "role": {
+      "value": "character"
+     },
+     "views": {
+      "value": {
+       "pending": [
+        "references.draw#1.1",
+        "references.draw#2.1",
+        "references.review#1.1",
+        "references.review#2.1"
+       ]
+      }
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "build.part['character'].mesh#1.2.1",
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "build.part['character'].mesh",
+    "ports": {
+     "inputs": {
+      "views": "image{}"
+     },
+     "outputs": {
+      "model": "model"
+     },
+     "params": {
+      "face_limit": {
+       "type": "integer",
+       "x-fx-optional": true
+      },
+      "pbr": {
+       "default": false,
+       "type": "boolean"
+      },
+      "quad": {
+       "default": false,
+       "type": "boolean"
+      },
+      "texture": {
+       "default": true,
+       "type": "boolean"
+      }
+     }
+    },
+    "reads": [
+     "build.part['character'].views#1.2.1"
+    ],
+    "state": "skipped",
+    "step": "build.part.mesh",
+    "take": [
+     1,
+     2,
+     1
+    ],
+    "title": "build.part['character'].mesh",
+    "uses": "fx/mesh.generate@1",
+    "with": {
+     "face_limit": {
+      "value": 10000
+     },
+     "pbr": {
+      "value": true
+     },
+     "quad": {
+      "value": true
+     },
+     "texture": {
+      "value": true
+     },
+     "views": {
+      "value": {
+       "pending": [
+        "build.part['character'].views#1.2.1"
+       ]
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "setup#1",
+      "source_kind": "fact",
+      "source_port": "roles",
+      "target_port": "role"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "build.part['character'].normalize#1.2.1",
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "build.part['character'].normalize",
+    "ports": {
+     "inputs": {
+      "mesh": "model"
+     },
+     "outputs": {
+      "model": "model/gltf-binary?",
+      "report": "json"
+     },
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "build.part['character'].mesh#1.2.1"
+    ],
+    "state": "skipped",
+    "step": "build.part.normalize",
+    "take": [
+     1,
+     2,
+     1
+    ],
+    "title": "build.part['character'].normalize",
+    "uses": "./nodes/parts.py#normalize",
+    "with": {
+     "mesh": {
+      "value": {
+       "pending": [
+        "build.part['character'].mesh#1.2.1"
+       ]
+      }
+     },
+     "role": {
+      "value": "character"
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "bar",
+      "target_port": "bar"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "profile",
+      "target_port": "profile"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "fact",
+      "source_port": "roles",
+      "target_port": "role"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "build.part['character'].review#1.2.1",
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "build.part['character'].review",
+    "ports": {
+     "inputs": {
+      "bar": "json",
+      "model": "model/gltf-binary?",
+      "profile": "json",
+      "report": "json",
+      "views": "image{}"
+     },
+     "outputs": {
+      "review": "json"
+     },
+     "params": {
+      "max_steps": {
+       "default": 6,
+       "maximum": 40,
+       "minimum": 1,
+       "type": "integer"
+      },
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "build.part['character'].normalize#1.2.1",
+     "build.part['character'].views#1.2.1",
+     "setup#1"
+    ],
+    "state": "skipped",
+    "step": "build.part.review",
+    "take": [
+     1,
+     2,
+     1
+    ],
+    "title": "build.part['character'].review",
+    "uses": "./nodes/parts.py#review",
+    "with": {
+     "bar": {
+      "value": {
+       "file": "fe00b14ba91b591791e43e8a78ff0058d6a7b4998993e62a6f4e8a9b276fe673"
+      }
+     },
+     "max_steps": {
+      "value": 4
+     },
+     "model": {
+      "value": {
+       "pending": [
+        "build.part['character'].normalize#1.2.1"
+       ]
+      }
+     },
+     "profile": {
+      "value": {
+       "file": "b78e3e0b0d2530640b920443bbaa17ae67e549ea71a353cd882b679244f4f2b5"
+      }
+     },
+     "report": {
+      "value": {
+       "pending": [
+        "build.part['character'].normalize#1.2.1"
+       ]
+      }
+     },
+     "role": {
+      "value": "character"
+     },
+     "views": {
+      "value": {
+       "pending": [
+        "build.part['character'].views#1.2.1"
+       ]
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "build.part['character'].normalize#1.1.1",
+      "source_kind": "output",
+      "source_port": "model",
+      "target_port": "parts"
+     },
+     {
+      "source": "build.part['character'].normalize#1.1.1",
+      "source_kind": "output",
+      "source_port": "report",
+      "target_port": "reports"
+     },
+     {
+      "source": "references.draw#1.1",
+      "source_kind": "output",
+      "source_port": "canonical",
+      "target_port": "canonical"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "profile",
+      "target_port": "profile"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 62668,
+    "error": null,
+    "id": "build.assembly.assemble#1.1.1",
+    "interface_bindings": [
+     {
+      "source": "build.part['character'].normalize#1.1.1",
+      "source_kind": "output",
+      "source_port": "model",
+      "target_port": "parts"
+     },
+     {
+      "source": "build.part['character'].normalize#1.1.1",
+      "source_kind": "output",
+      "source_port": "report",
+      "target_port": "reports"
+     },
+     {
+      "source": "references.draw#1.1",
+      "source_kind": "output",
+      "source_port": "canonical",
+      "target_port": "canonical"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "profile",
+      "target_port": "profile"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "model": {
+      "file": {
+       "digest": "013667face278a1dbbbb8be1bb3ef49274e75a413226959d7b0f88a658d511a5",
+       "kind": "model/gltf-binary",
+       "name": "model",
+       "size": 5385104
+      }
+     },
+     "record": {
+      "file": {
+       "digest": "104f03d191f985e84d0b91da431a4a7c3fb3ce4d4b6354a83444d7b3b7a677ff",
+       "kind": "json",
+       "name": "record",
+       "size": 3386
+      }
+     }
+    },
+    "path": "build.assembly.assemble",
+    "ports": {
+     "inputs": {
+      "canonical": "image?",
+      "parts": "model{}?",
+      "profile": "json",
+      "reports": "json{}"
+     },
+     "outputs": {
+      "model": "model/gltf-binary",
+      "record": "json"
+     },
+     "params": {
+      "feedback": {
+       "default": null,
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "max_steps": {
+       "default": 16,
+       "maximum": 40,
+       "minimum": 1,
+       "type": "integer"
+      },
+      "recent_images": {
+       "default": 24,
+       "maximum": 64,
+       "minimum": 1,
+       "type": "integer"
+      },
+      "review": {
+       "enum": [
+        "required",
+        "none"
+       ]
+      },
+      "revisions": {
+       "default": 6,
+       "maximum": 32,
+       "minimum": 1,
+       "type": "integer"
+      }
+     }
+    },
+    "reads": [
+     "build.part['character'].mesh#1.1.1",
+     "build.part['character'].normalize#1.1.1",
+     "build.part['character'].review#1.1.1",
+     "build.part['character'].views#1.1.1",
+     "references.draw#1.1",
+     "setup#1"
+    ],
+    "started_at": "2026-10-11T20:38:06.862Z",
+    "state": "succeeded",
+    "step": "build.assembly.assemble",
+    "take": [
+     1,
+     1,
+     1
+    ],
+    "title": "Stand the parts up",
+    "uses": "./nodes/assembly.py#assemble",
+    "with": {
+     "canonical": {
+      "file": {
+       "digest": "c5149034bfd086f23a47cf481485c4f9803f043d504431337b549e8b0d840bd6",
+       "kind": "image/png",
+       "name": "canonical",
+       "size": 899088
+      }
+     },
+     "feedback": {
+      "none": true
+     },
+     "max_steps": {
+      "value": 12
+     },
+     "parts": {
+      "collection": [
+       [
+        "character",
+        {
+         "file": {
+          "digest": "d4978bbe30a8af1029cc981fac0fd98a55dd06134316e0a9f9d07716b0df2a94",
+          "key": "character",
+          "kind": "model/gltf-binary",
+          "name": "model",
+          "size": 5384984
+         }
+        }
+       ]
+      ]
+     },
+     "profile": {
+      "file": {
+       "digest": "b78e3e0b0d2530640b920443bbaa17ae67e549ea71a353cd882b679244f4f2b5",
+       "kind": "json",
+       "name": "profile",
+       "size": 3037
+      }
+     },
+     "recent_images": {
+      "value": 12
+     },
+     "reports": {
+      "collection": [
+       [
+        "character",
+        {
+         "file": {
+          "digest": "c16b55e2f2621aedb2e07b0ab9a6abffcfcb19f6ebeb8939089073598b0afc22",
+          "key": "character",
+          "kind": "json",
+          "name": "report",
+          "size": 2067
+         }
+        }
+       ]
+      ]
+     },
+     "review": {
+      "value": "required"
+     },
+     "revisions": {
+      "value": 3
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "build.assembly.assemble#1.1.1",
+      "source_kind": "output",
+      "source_port": "model",
+      "target_port": "model"
+     },
+     {
+      "source": "build.assembly.assemble#1.1.1",
+      "source_kind": "output",
+      "source_port": "record",
+      "target_port": "record"
+     },
+     {
+      "source": "references.draw#1.1",
+      "source_kind": "output",
+      "source_port": "canonical",
+      "target_port": "canonical"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "bar",
+      "target_port": "bar"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "profile",
+      "target_port": "profile"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 40259,
+    "error": null,
+    "id": "build.assembly.review#1.1.1",
+    "interface_bindings": [
+     {
+      "source": "build.assembly.assemble#1.1.1",
+      "source_kind": "output",
+      "source_port": "model",
+      "target_port": "model"
+     },
+     {
+      "source": "build.assembly.assemble#1.1.1",
+      "source_kind": "output",
+      "source_port": "record",
+      "target_port": "record"
+     },
+     {
+      "source": "references.draw#1.1",
+      "source_kind": "output",
+      "source_port": "canonical",
+      "target_port": "canonical"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "bar",
+      "target_port": "bar"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "profile",
+      "target_port": "profile"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "review": {
+      "file": {
+       "digest": "7c375e24a34bb1e701b18130a82d07fd6c16d094931e6796308bbb2332b8e3f7",
+       "kind": "json",
+       "name": "review",
+       "size": 48212
+      }
+     }
+    },
+    "path": "build.assembly.review",
+    "ports": {
+     "inputs": {
+      "bar": "json",
+      "canonical": "image?",
+      "model": "model/gltf-binary",
+      "profile": "json",
+      "record": "json"
+     },
+     "outputs": {
+      "review": "json"
+     },
+     "params": {
+      "max_steps": {
+       "default": 6,
+       "maximum": 40,
+       "minimum": 1,
+       "type": "integer"
+      }
+     }
+    },
+    "reads": [
+     "build.assembly.assemble#1.1.1",
+     "build.part['character'].mesh#1.1.1",
+     "build.part['character'].normalize#1.1.1",
+     "build.part['character'].review#1.1.1",
+     "build.part['character'].views#1.1.1",
+     "references.draw#1.1",
+     "setup#1"
+    ],
+    "started_at": "2026-10-11T20:39:09.539Z",
+    "state": "succeeded",
+    "step": "build.assembly.review",
+    "take": [
+     1,
+     1,
+     1
+    ],
+    "title": "Review the assembly",
+    "uses": "./nodes/assembly.py#review",
+    "with": {
+     "bar": {
+      "file": {
+       "digest": "fe00b14ba91b591791e43e8a78ff0058d6a7b4998993e62a6f4e8a9b276fe673",
+       "kind": "json",
+       "name": "bar",
+       "size": 4336
+      }
+     },
+     "canonical": {
+      "file": {
+       "digest": "c5149034bfd086f23a47cf481485c4f9803f043d504431337b549e8b0d840bd6",
+       "kind": "image/png",
+       "name": "canonical",
+       "size": 899088
+      }
+     },
+     "max_steps": {
+      "value": 4
+     },
+     "model": {
+      "file": {
+       "digest": "013667face278a1dbbbb8be1bb3ef49274e75a413226959d7b0f88a658d511a5",
+       "kind": "model/gltf-binary",
+       "name": "model",
+       "size": 5385104
+      }
+     },
+     "profile": {
+      "file": {
+       "digest": "b78e3e0b0d2530640b920443bbaa17ae67e549ea71a353cd882b679244f4f2b5",
+       "kind": "json",
+       "name": "profile",
+       "size": 3037
+      }
+     },
+     "record": {
+      "file": {
+       "digest": "104f03d191f985e84d0b91da431a4a7c3fb3ce4d4b6354a83444d7b3b7a677ff",
+       "kind": "json",
+       "name": "record",
+       "size": 3386
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "profile",
+      "target_port": "profile"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "build.assembly.assemble#1.2.1",
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "build.assembly.assemble",
+    "ports": {
+     "inputs": {
+      "canonical": "image?",
+      "parts": "model{}?",
+      "profile": "json",
+      "reports": "json{}"
+     },
+     "outputs": {
+      "model": "model/gltf-binary",
+      "record": "json"
+     },
+     "params": {
+      "feedback": {
+       "default": null,
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "max_steps": {
+       "default": 16,
+       "maximum": 40,
+       "minimum": 1,
+       "type": "integer"
+      },
+      "recent_images": {
+       "default": 24,
+       "maximum": 64,
+       "minimum": 1,
+       "type": "integer"
+      },
+      "review": {
+       "enum": [
+        "required",
+        "none"
+       ]
+      },
+      "revisions": {
+       "default": 6,
+       "maximum": 32,
+       "minimum": 1,
+       "type": "integer"
+      }
+     }
+    },
+    "reads": [
+     "build.part['character'].mesh#1.1.1",
+     "build.part['character'].mesh#1.2.1",
+     "build.part['character'].normalize#1.1.1",
+     "build.part['character'].normalize#1.2.1",
+     "build.part['character'].review#1.1.1",
+     "build.part['character'].review#1.2.1",
+     "build.part['character'].views#1.1.1",
+     "build.part['character'].views#1.2.1",
+     "references.draw#1.1",
+     "references.draw#2.1",
+     "references.review#1.1",
+     "references.review#2.1",
+     "setup#1"
+    ],
+    "state": "skipped",
+    "step": "build.assembly.assemble",
+    "take": [
+     1,
+     2,
+     1
+    ],
+    "title": "Stand the parts up",
+    "uses": "./nodes/assembly.py#assemble",
+    "with": {
+     "canonical": {
+      "value": {
+       "pending": [
+        "references.draw#1.1",
+        "references.draw#2.1",
+        "references.review#1.1",
+        "references.review#2.1"
+       ]
+      }
+     },
+     "feedback": {
+      "value": {}
+     },
+     "max_steps": {
+      "value": 12
+     },
+     "parts": {
+      "value": {
+       "collection": [
+        [
+         "character",
+         {
+          "pending": [
+           "build.part['character'].mesh#1.1.1",
+           "build.part['character'].mesh#1.2.1",
+           "build.part['character'].normalize#1.1.1",
+           "build.part['character'].normalize#1.2.1",
+           "build.part['character'].review#1.1.1",
+           "build.part['character'].review#1.2.1",
+           "build.part['character'].views#1.1.1",
+           "build.part['character'].views#1.2.1"
+          ]
+         }
+        ]
+       ]
+      }
+     },
+     "profile": {
+      "value": {
+       "file": "b78e3e0b0d2530640b920443bbaa17ae67e549ea71a353cd882b679244f4f2b5"
+      }
+     },
+     "recent_images": {
+      "value": 12
+     },
+     "reports": {
+      "value": {
+       "collection": [
+        [
+         "character",
+         {
+          "pending": [
+           "build.part['character'].mesh#1.1.1",
+           "build.part['character'].mesh#1.2.1",
+           "build.part['character'].normalize#1.1.1",
+           "build.part['character'].normalize#1.2.1",
+           "build.part['character'].review#1.1.1",
+           "build.part['character'].review#1.2.1",
+           "build.part['character'].views#1.1.1",
+           "build.part['character'].views#1.2.1"
+          ]
+         }
+        ]
+       ]
+      }
+     },
+     "review": {
+      "value": "required"
+     },
+     "revisions": {
+      "value": 3
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "bar",
+      "target_port": "bar"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "profile",
+      "target_port": "profile"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "build.assembly.review#1.2.1",
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "build.assembly.review",
+    "ports": {
+     "inputs": {
+      "bar": "json",
+      "canonical": "image?",
+      "model": "model/gltf-binary",
+      "profile": "json",
+      "record": "json"
+     },
+     "outputs": {
+      "review": "json"
+     },
+     "params": {
+      "max_steps": {
+       "default": 6,
+       "maximum": 40,
+       "minimum": 1,
+       "type": "integer"
+      }
+     }
+    },
+    "reads": [
+     "build.assembly.assemble#1.2.1",
+     "references.draw#1.1",
+     "references.draw#2.1",
+     "references.review#1.1",
+     "references.review#2.1",
+     "setup#1"
+    ],
+    "state": "skipped",
+    "step": "build.assembly.review",
+    "take": [
+     1,
+     2,
+     1
+    ],
+    "title": "Review the assembly",
+    "uses": "./nodes/assembly.py#review",
+    "with": {
+     "bar": {
+      "value": {
+       "file": "fe00b14ba91b591791e43e8a78ff0058d6a7b4998993e62a6f4e8a9b276fe673"
+      }
+     },
+     "canonical": {
+      "value": {
+       "pending": [
+        "references.draw#1.1",
+        "references.draw#2.1",
+        "references.review#1.1",
+        "references.review#2.1"
+       ]
+      }
+     },
+     "max_steps": {
+      "value": 4
+     },
+     "model": {
+      "value": {
+       "pending": [
+        "build.assembly.assemble#1.2.1"
+       ]
+      }
+     },
+     "profile": {
+      "value": {
+       "file": "b78e3e0b0d2530640b920443bbaa17ae67e549ea71a353cd882b679244f4f2b5"
+      }
+     },
+     "record": {
+      "value": {
+       "pending": [
+        "build.assembly.assemble#1.2.1"
+       ]
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "build.assembly.assemble#1.1.1",
+      "source_kind": "output",
+      "source_port": "model",
+      "target_port": "model"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 26953,
+    "error": null,
+    "id": "build.rig.task#1.1.1",
+    "interface_bindings": [
+     {
+      "source": "build.assembly.assemble#1.1.1",
+      "source_kind": "output",
+      "source_port": "model",
+      "target_port": "model"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "model": {
+      "file": {
+       "digest": "2a77277b4ec5fcccdac89507354cf1c3400765279d8ff3d54261316185fb94a8",
+       "kind": "model/gltf-binary",
+       "name": "model",
+       "size": 5848068
+      }
+     }
+    },
+    "path": "build.rig.task",
+    "ports": {
+     "inputs": {
+      "model": "model"
+     },
+     "outputs": {
+      "model": "model/gltf-binary"
+     },
+     "params": {
+      "allow_negative_check": {
+       "default": false,
+       "type": "boolean"
+      },
+      "rig_type": {
+       "default": "biped",
+       "type": "string"
+      },
+      "skeleton": {
+       "default": "mixamo",
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "build.assembly.assemble#1.1.1"
+    ],
+    "started_at": "2026-10-11T20:39:49.806Z",
+    "state": "succeeded",
+    "step": "build.rig.task",
+    "take": [
+     1,
+     1,
+     1
+    ],
+    "title": "Rig with Tripo",
+    "uses": "fx/mesh.rig@1",
+    "with": {
+     "allow_negative_check": {
+      "value": true
+     },
+     "model": {
+      "file": {
+       "digest": "013667face278a1dbbbb8be1bb3ef49274e75a413226959d7b0f88a658d511a5",
+       "kind": "model/gltf-binary",
+       "name": "model",
+       "size": 5385104
+      }
+     },
+     "rig_type": {
+      "value": "biped"
+     },
+     "skeleton": {
+      "value": "mixamo"
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "build.assembly.assemble#1.1.1",
+      "source_kind": "output",
+      "source_port": "model",
+      "target_port": "assembly"
+     },
+     {
+      "source": "build.assembly.assemble#1.1.1",
+      "source_kind": "output",
+      "source_port": "record",
+      "target_port": "assembly_record"
+     },
+     {
+      "source": "build.rig.task#1.1.1",
+      "source_kind": "output",
+      "source_port": "model",
+      "target_port": "rigged"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "profile",
+      "target_port": "profile"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 1441,
+    "error": null,
+    "id": "build.rig.finish#1.1.1",
+    "interface_bindings": [
+     {
+      "source": "build.assembly.assemble#1.1.1",
+      "source_kind": "output",
+      "source_port": "model",
+      "target_port": "assembly"
+     },
+     {
+      "source": "build.assembly.assemble#1.1.1",
+      "source_kind": "output",
+      "source_port": "record",
+      "target_port": "assembly_record"
+     },
+     {
+      "source": "build.rig.task#1.1.1",
+      "source_kind": "output",
+      "source_port": "model",
+      "target_port": "rigged"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "profile",
+      "target_port": "profile"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "record": {
+      "file": {
+       "digest": "f895584255e6961bf1f9e33779bb7a5a531934ef23a221b4d01a82dbf9883a8a",
+       "kind": "json",
+       "name": "record",
+       "size": 496
+      }
+     }
+    },
+    "path": "build.rig.finish",
+    "ports": {
+     "inputs": {
+      "assembly": "model/gltf-binary",
+      "assembly_record": "json",
+      "profile": "json",
+      "rigged": "model/gltf-binary"
+     },
+     "outputs": {
+      "model": "model/gltf-binary?",
+      "record": "json"
+     },
+     "params": {
+      "preservation": {
+       "enum": [
+        "audit",
+        "restore_normals"
+       ]
+      }
+     }
+    },
+    "reads": [
+     "build.assembly.assemble#1.1.1",
+     "build.rig.task#1.1.1",
+     "setup#1"
+    ],
+    "started_at": "2026-10-11T20:40:16.766Z",
+    "state": "succeeded",
+    "step": "build.rig.finish",
+    "take": [
+     1,
+     1,
+     1
+    ],
+    "title": "Finish the provider rig",
+    "uses": "./nodes/rig.py#finish",
+    "with": {
+     "assembly": {
+      "file": {
+       "digest": "013667face278a1dbbbb8be1bb3ef49274e75a413226959d7b0f88a658d511a5",
+       "kind": "model/gltf-binary",
+       "name": "model",
+       "size": 5385104
+      }
+     },
+     "assembly_record": {
+      "file": {
+       "digest": "104f03d191f985e84d0b91da431a4a7c3fb3ce4d4b6354a83444d7b3b7a677ff",
+       "kind": "json",
+       "name": "record",
+       "size": 3386
+      }
+     },
+     "preservation": {
+      "value": "audit"
+     },
+     "profile": {
+      "file": {
+       "digest": "b78e3e0b0d2530640b920443bbaa17ae67e549ea71a353cd882b679244f4f2b5",
+       "kind": "json",
+       "name": "profile",
+       "size": 3037
+      }
+     },
+     "rigged": {
+      "file": {
+       "digest": "2a77277b4ec5fcccdac89507354cf1c3400765279d8ff3d54261316185fb94a8",
+       "kind": "model/gltf-binary",
+       "name": "model",
+       "size": 5848068
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "build.rig.finish#1.1.1",
+      "source_kind": "output",
+      "source_port": "model",
+      "target_port": "model"
+     },
+     {
+      "source": "build.rig.finish#1.1.1",
+      "source_kind": "output",
+      "source_port": "record",
+      "target_port": "record"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "bar",
+      "target_port": "bar"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "profile",
+      "target_port": "profile"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 15,
+    "error": null,
+    "id": "build.rig.review#1.1.1",
+    "interface_bindings": [
+     {
+      "source": "build.rig.finish#1.1.1",
+      "source_kind": "output",
+      "source_port": "model",
+      "target_port": "model"
+     },
+     {
+      "source": "build.rig.finish#1.1.1",
+      "source_kind": "output",
+      "source_port": "record",
+      "target_port": "record"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "bar",
+      "target_port": "bar"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "profile",
+      "target_port": "profile"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "atlas": {
+      "list": []
+     },
+     "review": {
+      "file": {
+       "digest": "c2dca41fdf5626d345660b3d88e955361189c74d746f2c9efd68f4cbe9203af5",
+       "kind": "json",
+       "name": "review",
+       "size": 5848
+      }
+     }
+    },
+    "path": "build.rig.review",
+    "ports": {
+     "inputs": {
+      "bar": "json",
+      "model": "model/gltf-binary?",
+      "profile": "json",
+      "record": "json"
+     },
+     "outputs": {
+      "atlas": "image/png[]",
+      "review": "json"
+     },
+     "params": {}
+    },
+    "reads": [
+     "build.assembly.assemble#1.1.1",
+     "build.rig.finish#1.1.1",
+     "build.rig.task#1.1.1",
+     "setup#1"
+    ],
+    "started_at": "2026-10-11T20:40:18.215Z",
+    "state": "succeeded",
+    "step": "build.rig.review",
+    "take": [
+     1,
+     1,
+     1
+    ],
+    "title": "Review the rig",
+    "uses": "./nodes/rig.py#review",
+    "with": {
+     "bar": {
+      "file": {
+       "digest": "fe00b14ba91b591791e43e8a78ff0058d6a7b4998993e62a6f4e8a9b276fe673",
+       "kind": "json",
+       "name": "bar",
+       "size": 4336
+      }
+     },
+     "model": {
+      "none": true
+     },
+     "profile": {
+      "file": {
+       "digest": "b78e3e0b0d2530640b920443bbaa17ae67e549ea71a353cd882b679244f4f2b5",
+       "kind": "json",
+       "name": "profile",
+       "size": 3037
+      }
+     },
+     "record": {
+      "file": {
+       "digest": "f895584255e6961bf1f9e33779bb7a5a531934ef23a221b4d01a82dbf9883a8a",
+       "kind": "json",
+       "name": "record",
+       "size": 496
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "build.assembly.assemble#1.1.1",
+      "source_kind": "output",
+      "source_port": "model",
+      "target_port": "assembly"
+     },
+     {
+      "source": "build.assembly.assemble#1.1.1",
+      "source_kind": "output",
+      "source_port": "record",
+      "target_port": "assembly_record"
+     },
+     {
+      "source": "build.assembly.review#1.1.1",
+      "source_kind": "output",
+      "source_port": "review",
+      "target_port": "assembly_review"
+     },
+     {
+      "source": "build.rig.finish#1.1.1",
+      "source_kind": "output",
+      "source_port": "model",
+      "target_port": "rig"
+     },
+     {
+      "source": "build.rig.finish#1.1.1",
+      "source_kind": "output",
+      "source_port": "record",
+      "target_port": "rig_record"
+     },
+     {
+      "source": "build.rig.review#1.1.1",
+      "source_kind": "output",
+      "source_port": "review",
+      "target_port": "rig_review"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "profile",
+      "target_port": "profile"
+     }
+    ],
+    "cache": null,
+    "duration_ms": 3,
+    "error": "the rig failed the geometry preservation audit on every build",
+    "id": "result#1",
+    "interface_bindings": [
+     {
+      "source": "build.assembly.assemble#1.1.1",
+      "source_kind": "output",
+      "source_port": "model",
+      "target_port": "assembly"
+     },
+     {
+      "source": "build.assembly.assemble#1.1.1",
+      "source_kind": "output",
+      "source_port": "record",
+      "target_port": "assembly_record"
+     },
+     {
+      "source": "build.assembly.review#1.1.1",
+      "source_kind": "output",
+      "source_port": "review",
+      "target_port": "assembly_review"
+     },
+     {
+      "source": "build.rig.finish#1.1.1",
+      "source_kind": "output",
+      "source_port": "model",
+      "target_port": "rig"
+     },
+     {
+      "source": "build.rig.finish#1.1.1",
+      "source_kind": "output",
+      "source_port": "record",
+      "target_port": "rig_record"
+     },
+     {
+      "source": "build.rig.review#1.1.1",
+      "source_kind": "output",
+      "source_port": "review",
+      "target_port": "rig_review"
+     },
+     {
+      "source": "setup#1",
+      "source_kind": "output",
+      "source_port": "profile",
+      "target_port": "profile"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "result",
+    "ports": {
+     "inputs": {
+      "assembly": "model/gltf-binary?",
+      "assembly_record": "json?",
+      "assembly_review": "json?",
+      "profile": "json",
+      "rig": "model/gltf-binary?",
+      "rig_record": "json?",
+      "rig_review": "json?"
+     },
+     "outputs": {
+      "character": "model/gltf-binary",
+      "result": "json"
+     },
+     "params": {
+      "review_mode": {
+       "enum": [
+        "required",
+        "none"
+       ]
+      },
+      "through": {
+       "enum": [
+        "rig",
+        "assembly"
+       ]
+      }
+     }
+    },
+    "reads": [
+     "build.assembly.assemble#1.1.1",
+     "build.assembly.review#1.1.1",
+     "build.rig.finish#1.1.1",
+     "build.rig.review#1.1.1",
+     "setup#1"
+    ],
+    "started_at": "2026-10-11T20:40:18.238Z",
+    "state": "failed",
+    "step": "result",
+    "take": [
+     1
+    ],
+    "title": "Admit the character",
+    "uses": "./nodes/result.py#result",
+    "with": {
+     "assembly": {
+      "file": {
+       "digest": "013667face278a1dbbbb8be1bb3ef49274e75a413226959d7b0f88a658d511a5",
+       "kind": "model/gltf-binary",
+       "name": "model",
+       "size": 5385104
+      }
+     },
+     "assembly_record": {
+      "file": {
+       "digest": "104f03d191f985e84d0b91da431a4a7c3fb3ce4d4b6354a83444d7b3b7a677ff",
+       "kind": "json",
+       "name": "record",
+       "size": 3386
+      }
+     },
+     "assembly_review": {
+      "file": {
+       "digest": "7c375e24a34bb1e701b18130a82d07fd6c16d094931e6796308bbb2332b8e3f7",
+       "kind": "json",
+       "name": "review",
+       "size": 48212
+      }
+     },
+     "profile": {
+      "file": {
+       "digest": "b78e3e0b0d2530640b920443bbaa17ae67e549ea71a353cd882b679244f4f2b5",
+       "kind": "json",
+       "name": "profile",
+       "size": 3037
+      }
+     },
+     "review_mode": {
+      "value": "required"
+     },
+     "rig": {
+      "none": true
+     },
+     "rig_record": {
+      "file": {
+       "digest": "f895584255e6961bf1f9e33779bb7a5a531934ef23a221b4d01a82dbf9883a8a",
+       "kind": "json",
+       "name": "record",
+       "size": 496
+      }
+     },
+     "rig_review": {
+      "file": {
+       "digest": "c2dca41fdf5626d345660b3d88e955361189c74d746f2c9efd68f4cbe9203af5",
+       "kind": "json",
+       "name": "review",
+       "size": 5848
+      }
+     },
+     "through": {
+      "value": "rig"
+     }
+    }
+   }
+  ],
+  "outputs": {
+   "atlas": {
+    "list": []
+   },
+   "character": {
+    "value": {
+     "failed": "result#1"
+    }
+   },
+   "references": {
+    "file": {
+     "digest": "c5149034bfd086f23a47cf481485c4f9803f043d504431337b549e8b0d840bd6",
+     "kind": "image/png",
+     "name": "canonical",
+     "size": 899088
+    }
+   },
+   "result": {
+    "value": {
+     "failed": "result#1"
+    }
+   }
+  },
+  "pending": [],
+  "run_name": "3d-run-01",
+  "scopes": [
+   {
+    "id": "scope:references#1",
+    "input_bindings": [],
+    "kind": "group",
+    "nodes": [
+     "references.draw#1.1",
+     "references.review#1.1"
+    ],
+    "output_bindings": [],
+    "parent": null,
+    "path": "references",
+    "pending": [],
+    "ports": {
+     "inputs": {},
+     "outputs": []
+    },
+    "source": null,
+    "step": "references",
+    "take": [
+     1
+    ],
+    "title": "Draw the references"
+   },
+   {
+    "id": "scope:build#1",
+    "input_bindings": [],
+    "kind": "group",
+    "nodes": [],
+    "output_bindings": [],
+    "parent": null,
+    "path": "build",
+    "pending": [],
+    "ports": {
+     "inputs": {},
+     "outputs": []
+    },
+    "source": null,
+    "step": "build",
+    "take": [
+     1
+    ],
+    "title": "Build the body"
+   },
+   {
+    "id": "scope:build.assembly#1.1",
+    "input_bindings": [],
+    "kind": "group",
+    "nodes": [
+     "build.assembly.assemble#1.1.1",
+     "build.assembly.review#1.1.1"
+    ],
+    "output_bindings": [],
+    "parent": "scope:build#1",
+    "path": "build.assembly",
+    "pending": [],
+    "ports": {
+     "inputs": {},
+     "outputs": []
+    },
+    "source": null,
+    "step": "build.assembly",
+    "take": [
+     1,
+     1
+    ],
+    "title": "Assemble the character"
+   },
+   {
+    "id": "scope:build.part['character']#1.1",
+    "input_bindings": [],
+    "kind": "group",
+    "nodes": [
+     "build.part['character'].views#1.1.1",
+     "build.part['character'].mesh#1.1.1",
+     "build.part['character'].normalize#1.1.1",
+     "build.part['character'].review#1.1.1"
+    ],
+    "output_bindings": [],
+    "parent": "scope:build#1",
+    "path": "build.part['character']",
+    "pending": [],
+    "ports": {
+     "inputs": {},
+     "outputs": []
+    },
+    "source": null,
+    "step": "build.part",
+    "take": [
+     1,
+     1
+    ],
+    "title": "Make each part"
+   },
+   {
+    "id": "scope:build.rig#1.1",
+    "input_bindings": [],
+    "kind": "group",
+    "nodes": [
+     "build.rig.task#1.1.1",
+     "build.rig.finish#1.1.1",
+     "build.rig.review#1.1.1"
+    ],
+    "output_bindings": [],
+    "parent": "scope:build#1",
+    "path": "build.rig",
+    "pending": [],
+    "ports": {
+     "inputs": {},
+     "outputs": []
+    },
+    "source": null,
+    "step": "build.rig",
+    "take": [
+     1,
+     1
+    ],
+    "title": "Rig the character"
+   }
+  ],
+  "stand_in": false,
+  "state": "failed",
+  "warnings": [],
+  "workflow": {
+   "description": "A written brief, or a character's parts, in; one rigged, reviewed character at game scale out. Agents draw reference pictures, Tripo builds a textured mesh of each part from them, an agent stands the parts up as one character in Blender, and the skeleton comes from Tripo or from an agent. Independent reviewers judge every stage on renders, and the character is admitted only when its numbers and its pictures both pass. An assembly or rig still rejected after its own takes rebuilds the body, a bounded number of times.",
+   "id": "character-3d",
+   "title": "3D character"
+  }
+ }
+}

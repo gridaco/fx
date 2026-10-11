@@ -1,0 +1,304 @@
+{
+ "artifacts": [
+  {
+   "digest": "a4621731541667a062a752405e41814ff0040069ef6f4bbda02ee5eaa73308ff",
+   "media_type": "video/mp4",
+   "name": "video",
+   "omitted_reason": null,
+   "path": "artifacts/a4621731541667a062a752405e41814ff0040069ef6f4bbda02ee5eaa73308ff.mp4",
+   "size": 229325
+  },
+  {
+   "digest": "b3b08886ee64739aaddb0e019a367a842783265f9b1537e343fa20e63a714728",
+   "media_type": "image/png",
+   "name": "atlas.png",
+   "omitted_reason": null,
+   "path": "artifacts/b3b08886ee64739aaddb0e019a367a842783265f9b1537e343fa20e63a714728.png",
+   "size": 1137756
+  },
+  {
+   "digest": "e103b0be751bf77a8a7e0c25925c341773f965aee4092f0f42760fb1d0023b42",
+   "media_type": "image/webp",
+   "name": "cover",
+   "omitted_reason": null,
+   "path": "artifacts/e103b0be751bf77a8a7e0c25925c341773f965aee4092f0f42760fb1d0023b42.webp",
+   "size": 278520
+  },
+  {
+   "digest": "eff007da3088437c37bc142bc47a16c63aed3310dc9a1defb76f6c673add3166",
+   "media_type": "json",
+   "name": "layout",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 35455
+  }
+ ],
+ "disclosure": {
+  "artifacts": "media",
+  "diagnostics": false,
+  "values": false
+ },
+ "kind": "fx-run-export-v1",
+ "layout": {
+  "cells": {
+   "animate": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "cover": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   }
+  },
+  "cursor": null,
+  "diagnostics": [],
+  "file": null,
+  "kind": "fx-layout-report-v1",
+  "order": [
+   "cover#1",
+   "animate#1"
+  ],
+  "revision": null,
+  "state": "none"
+ },
+ "producer": {
+  "version": "0.2.0"
+ },
+ "source": {
+  "event_count": 8,
+  "events_sha256": "8a4090865b6b1e07f0fcc7ea34c0f198446d25b0a125bbfe9ad82bc20558c7e8",
+  "plan_sha256": "fa68302c201382d8eef88e44a2f5dda82601b48fadf3a8743680dc6f12ec6e1e"
+ },
+ "view": {
+  "artifacts": [
+   {
+    "available": true,
+    "digest": "a4621731541667a062a752405e41814ff0040069ef6f4bbda02ee5eaa73308ff",
+    "kind": "video/mp4",
+    "name": "video",
+    "size": 229325,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "b3b08886ee64739aaddb0e019a367a842783265f9b1537e343fa20e63a714728",
+    "kind": "image/png",
+    "name": "atlas.png",
+    "size": 1137756,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "e103b0be751bf77a8a7e0c25925c341773f965aee4092f0f42760fb1d0023b42",
+    "kind": "image/webp",
+    "name": "cover",
+    "size": 278520,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "eff007da3088437c37bc142bc47a16c63aed3310dc9a1defb76f6c673add3166",
+    "kind": "json",
+    "name": "layout",
+    "size": 35455,
+    "url": null
+   }
+  ],
+  "charged_usd": 0,
+  "estimate": {
+   "ceiling_usd": 15,
+   "high_usd": 0,
+   "low_usd": 0
+  },
+  "inputs": {
+   "atlas": {
+    "withheld": true
+   }
+  },
+  "kind": "fx-viewer-run-v1",
+  "nodes": [
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 596,
+    "error": null,
+    "id": "cover#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "atlas": {
+      "file": {
+       "digest": "b3b08886ee64739aaddb0e019a367a842783265f9b1537e343fa20e63a714728",
+       "kind": "image/png",
+       "name": "atlas",
+       "size": 1137756
+      }
+     },
+     "cover": {
+      "file": {
+       "digest": "e103b0be751bf77a8a7e0c25925c341773f965aee4092f0f42760fb1d0023b42",
+       "kind": "image/webp",
+       "name": "cover",
+       "size": 278520
+      }
+     },
+     "layout": {
+      "file": {
+       "digest": "eff007da3088437c37bc142bc47a16c63aed3310dc9a1defb76f6c673add3166",
+       "kind": "json",
+       "name": "layout",
+       "size": 35455
+      }
+     }
+    },
+    "path": "cover",
+    "ports": {
+     "inputs": {
+      "atlas": "image/png"
+     },
+     "outputs": {
+      "atlas": "image/png",
+      "cover": "image/webp",
+      "layout": "json"
+     },
+     "params": {}
+    },
+    "reads": [],
+    "started_at": "2026-10-11T18:54:53.419Z",
+    "state": "succeeded",
+    "step": "cover",
+    "take": [
+     1
+    ],
+    "title": "Compose 47 on the ground",
+    "uses": "./cover.py#terrain_cover",
+    "with": {
+     "atlas": {
+      "file": {
+       "digest": "b3b08886ee64739aaddb0e019a367a842783265f9b1537e343fa20e63a714728",
+       "kind": "image/png",
+       "name": "atlas.png",
+       "size": 1137756
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "cover#1",
+      "source_kind": "output",
+      "source_port": "atlas",
+      "target_port": "atlas"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 6121,
+    "error": null,
+    "id": "animate#1",
+    "interface_bindings": [
+     {
+      "source": "cover#1",
+      "source_kind": "output",
+      "source_port": "atlas",
+      "target_port": "atlas"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "video": {
+      "file": {
+       "digest": "a4621731541667a062a752405e41814ff0040069ef6f4bbda02ee5eaa73308ff",
+       "kind": "video/mp4",
+       "name": "video",
+       "size": 229325
+      }
+     }
+    },
+    "path": "animate",
+    "ports": {
+     "inputs": {
+      "atlas": "image/png"
+     },
+     "outputs": {
+      "video": "video/mp4"
+     },
+     "params": {}
+    },
+    "reads": [
+     "cover#1"
+    ],
+    "started_at": "2026-10-11T18:54:54.018Z",
+    "state": "succeeded",
+    "step": "animate",
+    "take": [
+     1
+    ],
+    "title": "Simulate and retile the terrain digits",
+    "uses": "./cover_motion.py#terrain_cover_motion",
+    "with": {
+     "atlas": {
+      "file": {
+       "digest": "b3b08886ee64739aaddb0e019a367a842783265f9b1537e343fa20e63a714728",
+       "kind": "image/png",
+       "name": "atlas",
+       "size": 1137756
+      }
+     }
+    }
+   }
+  ],
+  "outputs": {
+   "atlas": {
+    "file": {
+     "digest": "b3b08886ee64739aaddb0e019a367a842783265f9b1537e343fa20e63a714728",
+     "kind": "image/png",
+     "name": "atlas",
+     "size": 1137756
+    }
+   },
+   "cover": {
+    "file": {
+     "digest": "e103b0be751bf77a8a7e0c25925c341773f965aee4092f0f42760fb1d0023b42",
+     "kind": "image/webp",
+     "name": "cover",
+     "size": 278520
+    }
+   },
+   "cover_manifest": {
+    "file": {
+     "digest": "eff007da3088437c37bc142bc47a16c63aed3310dc9a1defb76f6c673add3166",
+     "kind": "json",
+     "name": "layout",
+     "size": 35455
+    }
+   },
+   "cover_video": {
+    "file": {
+     "digest": "a4621731541667a062a752405e41814ff0040069ef6f4bbda02ee5eaa73308ff",
+     "kind": "video/mp4",
+     "name": "video",
+     "size": 229325
+    }
+   }
+  },
+  "pending": [],
+  "run_name": "terrain-cover-04-final",
+  "scopes": [],
+  "stand_in": false,
+  "state": "succeeded",
+  "warnings": [],
+  "workflow": {
+   "id": "terrain-cover-video",
+   "title": "Animated 47-tile terrain cover"
+  }
+ }
+}

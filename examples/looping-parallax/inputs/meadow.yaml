@@ -1,0 +1,2 @@
+# Download the public concept with: python fetch_showcase_input.py
+concept: ../.showcase-inputs/meadow-concept.png

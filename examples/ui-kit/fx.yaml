@@ -1,0 +1,6 @@
+fx: project/v1
+budget:
+  max_usd: 15
+routes:
+  image.edit: gpt-image-2.5-sunburst@openai
+  structured.generate: openai/gpt-6-astra@openrouter

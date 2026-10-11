@@ -1,0 +1,23 @@
+{
+  "schema": "fx_showcase_inputs_v1",
+  "delivery_base": "https://grida-fx-showcase-spike-20261011.t3.tigrisfiles.io",
+  "inputs": [
+    {
+      "filename": "nami-face.png",
+      "path": "runs/d5e5e5e05908a4e6107f7d5a6001ff8d2290eacbf6649235141addedd449d45e/artifacts/d756d24f955f60e0c480aaae88e2fce2bdd44716aaf38c3ed39617a3004c0e98.png",
+      "sha256": "d756d24f955f60e0c480aaae88e2fce2bdd44716aaf38c3ed39617a3004c0e98",
+      "bytes": 5147660
+    },
+    {
+      "filename": "nami-reference.png",
+      "path": "showcases/d9f747984514a9b5febfb376c66f97ce79da343f0ab463f0c1fefe0750da08df/portrait-motion/assets/reference.png",
+      "sha256": "7bbdc102d986ea0a2dfaa6fa0001904a83d8ece6168b60bd939a2eb186485296",
+      "bytes": 1427797
+    }
+  ],
+  "origin": {
+    "kind": "ai_generated",
+    "description": "Original rabbit-hood character, prepared as a high-resolution facial animation source from the public Nami reference described in README.md.",
+    "publication": "Reviewed for the authorized FX showcase; this manifest grants no additional media license."
+  }
+}

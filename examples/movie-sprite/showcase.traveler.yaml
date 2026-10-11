@@ -1,0 +1,23 @@
+character: .showcase-inputs/traveler.png
+direction: >-
+  An original adult meadow traveler in a painterly illustrated adventure style rests
+  quietly while listening. Preserve the short hair, friendly neutral face, blue-teal
+  utility jacket, cream shirt, rust-orange scarf, dark trousers and brown boots.
+  Keep a warm, attentive presence with understated motion that remains pleasant
+  during repeated playback. This is a body idle for later independent facial patches.
+requested_motion:
+  - A very small, slow breathing cycle in the jacket and shirt below the fixed shoulders.
+  - The free scarf tips below the neck settle gently through a tiny arc, without wind.
+  - A subtle relaxation of the fingers, keeping the hands in their original resting places.
+constraints:
+  - Keep the face, eyes, eyelids, eyebrows, mouth, head, neck and shoulders completely still.
+  - No blinking, speaking, expression changes, head turns, nods, head tilt correction or gaze changes.
+  - Keep both boots planted and every silhouette inside the frame; no steps or balance shifts.
+  - No overall body rocking, torso sway, camera motion, zoom, lighting change or perspective change.
+  - Keep scarf attachment points fixed; no large flutter, swinging cloth or added accessories.
+  - Preserve the source identity, facial proportions, colors, painterly edges and clothing details.
+  - Retain a perfectly flat green background with no shadow, scene, particles, text or sound.
+seconds: 8
+resolution: 720p
+aspect_ratio: "9:16"
+finish: finish.initial.json

@@ -21,12 +21,58 @@ Its internal paths omit the release digest to avoid self-reference. Recorded
 canvases use `runs/<export-manifest-sha256>/...` and may select multiple labeled
 runs. Generation and finishing graphs stay distinct.
 
-Overview presents native website demos and authored usage content. Canvas uses
+Overview presents native website demos and authored usage content. Workflow uses
 the shared FX export reader and the installed viewer's canvas. These records are
 frozen, without polling or local lifecycle/file actions. Omissions remain
 explicit; the inspector distinguishes withheld values from empty ones. The
 Overview's demo manifest is a website projection, not the recording's run record.
 Custom generation workflows and nodes shown here are not installed by FX.
+
+Every showcase's complete authoring project lives under `examples/`, including its
+private node helpers, prompts, schemas and authored settings:
+
+| Page | Maintained source |
+|---|---|
+| Parallax | [`examples/looping-parallax/`](../../examples/looping-parallax/), `workflows/meadow.yaml` |
+| World | [`examples/world/`](../../examples/world/), `workflow.yaml` |
+| Movie sprite | [`examples/movie-sprite/`](../../examples/movie-sprite/), `workflow.yaml` |
+| Portrait motion | [`examples/portrait-motion/`](../../examples/portrait-motion/), `workflow.yaml` |
+| 3D character | [`examples/character-3d/`](../../examples/character-3d/), `workflow.yaml`; independent `source-artwork/` |
+| Terrain | [`examples/terrain/`](../../examples/terrain/), `workflow.py:build` |
+| UI kit | [`examples/ui-kit/`](../../examples/ui-kit/), `workflow.py:build` |
+
+`src/lib/showcases/sources.ts` binds each page's source link and CLI commands to
+these projects; tests check their targets and inputs exist. Generated inputs stay
+on the CDN, with checksum-verified download metadata in each consuming example.
+[`examples/fetch_showcase_inputs.py`](../../examples/fetch_showcase_inputs.py) supports
+an explicit `--base-url` when identical pinned bytes move to another host. Parallax
+retains its single-input download command. Neither downloader calls a provider.
+
+Examples are maintained and checked against the current engine; website recordings
+remain immutable evidence of the particular saved runs. Editing source does not silently
+replace a recording or regenerate artwork. Fresh live runs use the caller's provider
+account and can produce different results. Movie finishing can replay the recorded paid
+take locally, while its source-bound face pin must not be reused for new footage.
+
+Before/after comparisons are authored in `src/lib/showcases/comparisons.ts`.
+Each pair selects exact node outputs (or keyed collection entries) from a frozen
+recording, then resolves its included image files directly on the configured CDN.
+Missing recordings, outputs or included-image references fail the website build. Keep both images on
+the same registered canvas; do not stretch different layouts into a comparison.
+The reusable image slider owns only presentation and needs no new content export.
+For a repeat seam, its wrap view places the source's tail beside its head and
+crops both images identically. Ticks locate the join without covering it; dashed
+bounds show this run's fixed repaint band. This shows the assembled repair, not
+an unrecorded provider conditioning image or an adaptive cut path.
+
+The main parallax demo's **Show joins** toggle draws red repeat joins and repaint
+boundaries over the moving layers. Its annotations live in
+`src/lib/showcases/parallax-guides.ts` and are bound to the frozen release,
+recording and selected image digests at build time. Loaded native dimensions are
+also checked before enabling the overlay. The current run repainted only the far
+layer; the mirrored middle and already-looping foreground have repeat markers
+only. A new run requires reviewing these authored annotations, without adding an
+engine or export feature just for the website.
 
 ## Prepare reviewed content
 
@@ -56,6 +102,121 @@ content lock, and copies local preview bytes into ignored `public/showcases/`
 and `public/runs/`. It refuses different existing immutable content. Large media,
 raw runs, approvals, staging directories and verification receipts stay outside Git.
 Small frozen documents let source checks/builds run without media or a CDN.
+
+### Add a recorded preview
+
+A workflow can keep its reusable assets as named outputs and optionally render
+another output for a cover. Select the recording and its image or video/poster outputs in
+`src/lib/showcases/covers.ts`; missing or unavailable outputs fail the build.
+The shared cover displays native CDN images or videos, defers video loading until
+visible, pauses offscreen, and uses the poster for reduced motion. It does not
+reimplement each workflow's renderer in the index.
+
+The parallax recording `meadow-forward-01` adds a local FFmpeg rendering step to
+the saved layer workflow. Its predecessor results were reused from the original
+cache, without provider calls. The 16-second video scrolls forward continuously:
+the far, middle and foreground layers complete 1, 1 and 3 whole repeats. This
+retimes the preview to close its temporal loop; original images and runtime
+scroll factors remain unchanged. At the 960-pixel preview width, the layer speeds
+are 60, 120 and 180 pixels per second. The recording retains the original factors
+and reports its actual preview timing separately. Consumers can disable the
+`render_preview` input and use the layer images alone. Earlier recordings remain
+available.
+
+The animated terrain cover uses the free `render-cover-video.yaml` workflow in
+[`examples/terrain/`](../../examples/terrain/). It reads the exact published atlas
+and maintains a real binary tile grid in Python. Cells are removed top to bottom
+and rebuilt bottom to top; each frame selects tiles from its current neighbors
+using the canonical 47-mask lookup. Ground occupancy stays fixed while its tile
+edges change where digits disconnect and reconnect. The ground continues past
+the frame's left, right and bottom edges. The complete “47” holds at
+both ends of the loop. Rendering needs no browser or provider; the website only
+plays the MP4 with its WebP poster. The still layout records the completed grid.
+Each changing silhouette is composed from its current grid state. Its `terrain-cover-04`
+recording is separate from the original generation; the cover resolver selects
+its named `cover_video` and `cover` outputs. The still-only `render-cover.yaml`
+does not need FFmpeg. The original atlas, demo and approved media release stay
+unchanged.
+
+The portrait cover selects the native animated WebP from `nami-face-01`'s
+`animation` output. It fills the card with a centered landscape crop.
+The published static cover is its native `picture` reduced-motion fallback.
+The image loads lazily; unlike videos, an animated WebP cannot pause offscreen.
+This selection reuses existing reviewed media and needs no new generation.
+
+After separately reviewing a new exported recording and any added media, append
+it without rebuilding or replacing the approved media release:
+
+```sh
+bun --no-env-file run --cwd www prepare:recording \
+  parallax meadow-forward-01 "Layers and forward-loop preview" \
+  /absolute/path/to/exported-run --primary
+```
+
+This single-writer tool verifies export hashes and portability, stages immutable
+bytes, then atomically updates the content lock. A recording ID cannot be reused
+for different evidence. `--primary` selects the default Workflow recording while
+retaining earlier recordings. Existing comparison and annotation bindings remain
+explicitly pinned to their original recording. Add the frozen document to the
+cover resolver when selecting new root outputs. Run the media and build checks,
+then explicitly publish the new immutable `runs/<sha256>/` namespace. Raw runs,
+large media and review receipts remain outside Git.
+
+To replace one reviewed interactive demo, supply a complete website-owned bundle
+containing `manifest.json`, `cover.webp`, its referenced resources and page
+downloads:
+
+```sh
+bun --no-env-file run --cwd www prepare:demo \
+  portrait-motion /absolute/path/to/reviewed-demo-bundle
+```
+
+This single-writer tool needs the current release's bytes in
+`www/.showcases/delivery`. It verifies those bytes and the frozen metadata,
+validates the new bundle against the current readers and page downloads, then stages a new immutable
+release and updates its frozen metadata and content lock. All other demos and
+every recording retain their content and order, including the selected default
+Workflow recording. It does not append a run or publish assets. Append a new
+recording separately when needed, then run the media and build checks and
+explicitly publish the new `showcases/<sha256>/` namespace before deployment.
+Earlier immutable release directories remain available for rollback; generated
+artwork and raw run data stay outside Git. Page filenames may change with a demo:
+the predecessor still passes its frozen metadata and media integrity checks, while
+new page references must all exist in the candidate before the lock can change.
+
+### Shared character across examples
+
+The transparent sprite loop, facial animation patches and rigged 3D character
+showcases form one character family: **Nami**. Use the same approved character
+identity and retain each representation's source lineage. The rig-ready SD
+adaptation may simplify hair and clothing for deformation; a different character
+must not become its cover, source attachment or demo fallback.
+
+The facial example may use a separate high-resolution crop of Nami. When facial
+patches are demonstrated over the finished sprite, they must share its registered
+2D source: use that sprite's exact canonical first frame and regenerate or refit patches against it. Patches made
+for a different image are not interchangeable because the character name matches.
+Retain the source illustration, finished canonical frame and derived rig as
+distinct artifacts rather than replacing their provenance with a common label.
+
+All three current demos, source attachments, downloads, primary Workflow
+recordings and covers use independently reviewed Nami material. The sprite uses
+the original adult rabbit-hood illustration and its recorded video take; its
+local finish trims raw frames [12, 228), plays the resulting 7.2 seconds over an
+8-second loop, and holds source-bound face, adjacent head and finger regions.
+The facial patches use a separate high-resolution registered Nami portrait.
+The 3D example uses a hood-free, short-haired SD adaptation, followed by measured
+surface-preserving finishing and an explicit lower-body weight correction.
+Its runtime qualification remains pending. Earlier character recordings remain
+available as historical evidence, without becoming the current demos.
+
+The covers use actual sprite idle, facial patch animation and a headlessly
+rendered rig cheer clip, reviewed together for identity, framing and motion.
+Keep reduced-motion posters, offscreen video pausing and direct CDN delivery.
+A new run requires updating the demo, primary recording, source and download
+pins, and cover together, then independently reviewing those exact bytes.
+Cover polishing is website work and free local rendering, not a reason to rerun
+paid generation.
 
 ## Validate clients and content
 

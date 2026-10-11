@@ -9,7 +9,7 @@ function parseMetadata(path: string, value: unknown) {
   else if (path.endsWith("lookup.json")) parseTerrainLookup(value);
   else if (path.endsWith("_validation.json")) parseSheet(value);
 }
-export async function verifyShowcases(options: { content?: string; delivery?: string; requireRecordings?: boolean } = {}) {
+export async function verifyShowcases(options: { content?: string; delivery?: string; requireRecordings?: boolean; previousDemo?: ShowcaseSlug } = {}) {
   const content = options.content ?? contentRoot;
   const lockBytes = await confinedFile(content, "lock.json"), lock = parseLock(JSON.parse(lockBytes.toString()));
   const releaseBytes = await confinedFile(content, lock.release.fixture);
@@ -24,7 +24,8 @@ export async function verifyShowcases(options: { content?: string; delivery?: st
     const metadata = [item.demo.manifest, ...item.demo.metadata];
     const details = workflowDetails[slug as ShowcaseSlug];
     const required = [`${slug}/cover.webp`, ...details.outputs.map(item => `${slug}/${item.path}`), ...details.agent.filter(item => typeof item !== "string").map(item => `${item.workflow ?? slug}/${item.path}`)];
-    for (const path of required) if (!release.files.some(file => file.path === path)) throw new Error(`Missing page asset ${path}.`);
+    // A replaced demo may have new page filenames. Its candidate is checked in full.
+    for (const path of required) if (!path.startsWith(`${options.previousDemo}/`) && !release.files.some(file => file.path === path)) throw new Error(`Missing page asset ${path}.`);
     for (const file of metadata) {
       const bytes = await verifiedFile(join(content, "manifests"), file);
       const value = JSON.parse(bytes.toString());

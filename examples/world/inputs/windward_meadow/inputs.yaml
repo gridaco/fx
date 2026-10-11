@@ -1,0 +1,14 @@
+universe_id: windward_meadow
+title: Where the Meadow Listens
+medium: anime_2d
+poster: ../../.showcase-inputs/meadow.png
+synopsis: synopsis.md
+direction: expansion-direction.md
+census:
+  min_entities: 6
+  max_entities: 6
+rights:
+  status: unreviewed
+  basis:
+    - Original brand-neutral storyworld authored for this example.
+    - The supplied meadow poster is original AI-generated artwork from text only; no third-party image reference.

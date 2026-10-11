@@ -1,0 +1,200 @@
+{
+  "kind": "independent-movie-sprite-review-v1",
+  "reviewer": "nami_video_route",
+  "producer_is_reviewer": false,
+  "browser_qa": false,
+  "provider_calls": 0,
+  "verdict": "pass_scoped",
+  "sprite": {
+    "semantic_verdict": "pass_scoped",
+    "native_facts": {
+      "frame_count": 216,
+      "dimensions": [
+        720,
+        1280
+      ],
+      "first_last_rgba_exact": true,
+      "canonical_first_rgba_exact": true,
+      "held_head_interior_max_rgba_delta": 0,
+      "maximum_island_ge16_count": 0,
+      "max_outside_main_pixels": 2,
+      "max_largest_island": 1,
+      "island_frames": [],
+      "canonical_sha256": "7f4ff94fe49ce2deddc21cd655ae8b8120ea7ba25d10533dc3baad291da813cb",
+      "loop_sha256": "a82edea59bab6de8cf47578fa3fc0dc7d6b03e30db6f2c7d56092907a21a9709",
+      "report_sha256": "03993a21f4af293cdac9491a7e0bfe0517e02ada27873157e26575c4b4f11bc9",
+      "decoded_ffv1_frames": 216,
+      "ffv1_vs_native_png_mismatch_frames": [],
+      "accepted_output_byte_identity_vs_finish02": true,
+      "source_container_determinism": "Bitexact trim verified on FFmpeg 9.0.1; cross-version/build compressed-byte identity is not promised.",
+      "manifest_sha256": "8efaf130be942c9a28c06f91fbf5b2ec3bd24c75a22849f4133af2bbee9f4147"
+    },
+    "source_trim": {
+      "raw_source_sha256": "1029ded25f09744c28e6b2fbd11eb1905e0a3bcc2103de4c0b8f331a63437a24",
+      "start_frame": 12,
+      "end_frame_exclusive": 228,
+      "source_interval_seconds": 7.2,
+      "trimmed_sha256": "45c0188eeb842ee23ff578deb22e57f465f722da3b695af41d2d9e393fdcc3af",
+      "playback_seconds": 8,
+      "playback_fps": 27,
+      "alpha_preservation": "Optional trim currently converts opaque/chroma footage; existing alpha is not preserved."
+    },
+    "held_region_description": "Face, adjacent head and part of raised fingers; source-bound to the trimmed first frame.",
+    "observations": [
+      "Inspected native full-body and upper-body samples on dark and pale backgrounds; recognizable original adult Nami with coherent hood, hair, fingers, clothing and crossed-leg stance.",
+      "No visible floating pink artifacts after explicit endpoint trim; zero alpha islands of at least sixteen pixels in all 216 native frames.",
+      "No visible discontinuity at sampled held hair, neck or hand boundaries. Held head interior remains pixel-identical.",
+      "All 216 decoded FFV1 frames independently match corresponding native PNGs; canonical and loop endpoints match exactly."
+    ],
+    "limits": [
+      "Motion is intentionally small.",
+      "Up to two isolated single alpha pixels remain in a frame; no visible effect in reviewed imagery.",
+      "Semantic review uses chronological sampled images and full numerical checks; no realtime browser review."
+    ],
+    "cover": {
+      "sha256": "48606389e317edaf39ffc4767d53990a2d4f3553f41cb54394c179067731aea6",
+      "dimensions": [
+        960,
+        600
+      ],
+      "frame_count": 96,
+      "duration_ms": 8000,
+      "first_last_rgba_exact": false,
+      "first_last_rgb_mean_abs_delta": 0.3651597201824188,
+      "sampled_frames": [
+        0,
+        24,
+        48,
+        72,
+        95
+      ],
+      "animated_artifact": "publication-export-02/artifacts/48606389e317edaf39ffc4767d53990a2d4f3553f41cb54394c179067731aea6.webp",
+      "reduced_motion_poster": {
+        "sha256": "4477b148e8c0d5959e3cf4a673e15734360b167b97f55a7eb506db5b22f4ad90",
+        "dimensions": [
+          960,
+          600
+        ],
+        "frame_count": 1,
+        "composition_matches_sampled_cover": true
+      },
+      "semantic_verdict": "pass_scoped",
+      "observations": [
+        "Centered full-body adult Nami on quiet pale matte; hood tips, hands and boots remain in frame.",
+        "Inspected five actual chronological animated WebP samples; body idle stays restrained with a stable expression and no visible floating background artifacts."
+      ],
+      "limits": [
+        "Lossy animated cover first/last pixels are not exact; native transparent loop endpoints are exact.",
+        "No browser realtime playback review."
+      ]
+    },
+    "diagnostic_images": [
+      "sprite-finish02-contrasting-samples.png",
+      "sprite-finish02-native-held-boundary.png",
+      "sprite-cover-actual-samples.png"
+    ],
+    "final_projection": {
+      "semantic_verdict": "pass_scoped",
+      "webm_sha256": "26dce5695d37de3dd3294738142fccea5c7cc524a4889ee412a6b6ea7cc80fd7",
+      "webm_vs_accepted_v1_all_rgba_frames_timestamps_identical": true,
+      "cover_animated_sha256": "48606389e317edaf39ffc4767d53990a2d4f3553f41cb54394c179067731aea6",
+      "cover_static_sha256": "4477b148e8c0d5959e3cf4a673e15734360b167b97f55a7eb506db5b22f4ad90",
+      "cover_and_animated_loop_unchanged_by_hash": true,
+      "comparison": {
+        "comparison_preview_sha256": "71e9b33095a5a53fa6f155c10e85b1a021f4e39ccfca57fa78f50cc0aed1c094",
+        "source_trim_sha256": "45c0188eeb842ee23ff578deb22e57f465f722da3b695af41d2d9e393fdcc3af",
+        "manifest": {
+          "source": "trim-run-03",
+          "source_video_sha256": "45c0188eeb842ee23ff578deb22e57f465f722da3b695af41d2d9e393fdcc3af",
+          "source_frame_interval": [
+            12,
+            228
+          ],
+          "frame_count": 216,
+          "playback_fps": 27,
+          "playback_seconds": 8,
+          "keyed": false,
+          "held_region_applied": false,
+          "loop_flow_applied": false,
+          "audio": false,
+          "operation": "Encode the same retained original frame interval at the finished playback rate for synchronized comparison; no face pin, chroma key or optical-flow closure."
+        },
+        "decoded_frames": 216,
+        "finished_timeline_frames": 216,
+        "comparison_timeline_frames": 216,
+        "first_timestamps": [
+          0.0,
+          0.0
+        ],
+        "last_timestamps": [
+          7.963,
+          7.962963
+        ],
+        "max_same_frame_timestamp_delta_seconds": 0.00048100000000017573,
+        "lossy_comparison_vs_native_mean_bgr_error": 1.2798512876033783,
+        "lossy_comparison_vs_native_max_frame_mean_bgr_error": 1.5806185007095337,
+        "sampled_frames": [
+          0,
+          54,
+          108,
+          162,
+          215
+        ],
+        "limits": "Original comparison remains unkeyed, unheld and without flow closure. Equal source interval and playback timing do not imply identical finished pixels or loop endpoints."
+      },
+      "observations": [
+        "Regenerated WebM container differs but all 216 decoded RGBA frames and timestamps equal the previously accepted projection.",
+        "Animated cover, static cover, animated loop WebP and canonical PNG remain byte-identical to accepted art.",
+        "Unpinned comparison keeps the same [12,228) source interval, 216 frames and eight-second playback; frame presentation times align with finished WebM to within 0.000481 seconds.",
+        "Inspected native-versus-comparison frame 0,54,108,162,215; matching character poses are preserved with expected H264 compression."
+      ],
+      "limits": [
+        "No browser playback review. Numeric timeline alignment is not a browser synchronization measurement.",
+        "Unpinned source comparison is deliberately not keyed, held or flow-closed; its endpoint pixels need not match."
+      ],
+      "export": {
+        "path": "publication-export-02/manifest.json",
+        "sha256": "9fc0a16498f4f88d904de8b1584f3df3967e99a67793274c19e4c4144958ab3f",
+        "placed_artifacts_verified": [
+          {
+            "path": "artifacts/26dce5695d37de3dd3294738142fccea5c7cc524a4889ee412a6b6ea7cc80fd7.webm",
+            "sha256": "26dce5695d37de3dd3294738142fccea5c7cc524a4889ee412a6b6ea7cc80fd7",
+            "bytes": 1754064
+          },
+          {
+            "path": "artifacts/47fea1b7367819976f949796afb0c5f9bed66a60e465d25677ab46489e3a3383.mp4",
+            "sha256": "47fea1b7367819976f949796afb0c5f9bed66a60e465d25677ab46489e3a3383",
+            "bytes": 3076351
+          },
+          {
+            "path": "artifacts/48606389e317edaf39ffc4767d53990a2d4f3553f41cb54394c179067731aea6.webp",
+            "sha256": "48606389e317edaf39ffc4767d53990a2d4f3553f41cb54394c179067731aea6",
+            "bytes": 1457614
+          },
+          {
+            "path": "artifacts/4f56d9a224dd682d8fb60e69841b7f9c0e3d81a7e420806b623168b64c7ff334.png",
+            "sha256": "4f56d9a224dd682d8fb60e69841b7f9c0e3d81a7e420806b623168b64c7ff334",
+            "bytes": 559402
+          },
+          {
+            "path": "artifacts/57b28e28074ed0a6bff119706c3dc4b9fbfe8d4753a40afd269ea1bce5130c0e.webp",
+            "sha256": "57b28e28074ed0a6bff119706c3dc4b9fbfe8d4753a40afd269ea1bce5130c0e",
+            "bytes": 5753672
+          },
+          {
+            "path": "artifacts/7f4ff94fe49ce2deddc21cd655ae8b8120ea7ba25d10533dc3baad291da813cb.png",
+            "sha256": "7f4ff94fe49ce2deddc21cd655ae8b8120ea7ba25d10533dc3baad291da813cb",
+            "bytes": 645876
+          },
+          {
+            "path": "artifacts/90b9cacfc7c3703007dc1f9885dc705fd00643ddc5240358ef87a822f1960a03.png",
+            "sha256": "90b9cacfc7c3703007dc1f9885dc705fd00643ddc5240358ef87a822f1960a03",
+            "bytes": 5542543
+          }
+        ],
+        "selected_root_outputs_match_reviewed_digests": true
+      }
+    }
+  },
+  "identity": "Original adult Nami source, coherent with facial patch showcase and deliberately adapted hood-free SD rig."
+}

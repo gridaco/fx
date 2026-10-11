@@ -19,7 +19,7 @@ Guardrails for working in this repository. [README.md](README.md) says what FX i
 | `js/fx-web/`, `js/fx-react/` | Private browser-only contracts, TypeScript controllers/canvas, and thin React adapters. |
 | `web/viewer/` | Vite/React/Tailwind client, built and embedded in the engine. |
 | `www/` | Standalone Next.js/Tailwind static website mounted at `/fx`; large showcase run packages stay outside Git. |
-| `examples/` | Projects written the way a user would. CI plans every one and runs every runnable one offline through the SDK, from a fresh build (rigged-character only plans). |
+| `examples/` | User projects and complete website showcase sources. CI plans their graphs and exercises free paths or paid-call refusal with synthesized inputs (rigged-character only plans). Optional processing libraries belong to each example; generated artwork stays outside Git. |
 | `skills/` | Self-contained user-installable agent skills, distributed through `npx skills add gridaco/fx`; the README owns layout and authoring conventions. |
 | `fixtures/viewer/` | Canonical provider-free development harness for viewer topology, media, cache, takes, failures and recorded in-progress states; generated data stays outside the source fixture. |
 | `fixtures/host/grida/` | A stand-in for the npm `grida` command reduced to its `fx` verb; `tools/check_host.py` installs it beside packed `@grida/fx` and runs conformance through `grida fx`. |
@@ -67,6 +67,9 @@ cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test --w
 uv run --project python python tools/check_spec.py
 uv run --project python python conformance/run.py --command target/debug/grida-fx
 python3 tools/build_engine.py && uv run --project python python tools/check_examples.py
+# Showcase examples: install FFmpeg on PATH; these libraries are not SDK dependencies.
+uv pip install --python python/.venv/bin/python -r examples/requirements-ci.txt
+python/.venv/bin/python tools/check_showcase_examples.py
 python3 tools/check_viewer.py --command "$PWD/python/src/grida/fx/_bin/grida-fx"
 GRIDA_FX_PYTHON=python/.venv/bin/python uv run --project python python tools/check_host.py --engine target/debug/grida-fx
 uv run --project python python tools/check_observation.py --command target/debug/grida-fx

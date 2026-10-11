@@ -14,6 +14,8 @@
     "build:next": "NEXT_TELEMETRY_DISABLED=1 next build --webpack",
     "preview": "bun --no-env-file scripts/preview.ts",
     "prepare:showcases": "bun --no-env-file scripts/showcases/prepare.ts",
+    "prepare:demo": "bun --no-env-file scripts/showcases/replace-demo.ts",
+    "prepare:recording": "bun --no-env-file scripts/showcases/recording.ts",
     "verify:showcases": "bun --no-env-file scripts/showcases/verify.ts",
     "candidate:showcases": "bun --no-env-file scripts/showcases/verify.ts --candidate",
     "publish:tigris": "bun --no-env-file scripts/showcases/publish-tigris.ts"

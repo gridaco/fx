@@ -1,0 +1,3 @@
+footage: .showcase-inputs/nami-take.mp4
+trim: trim.nami.json
+finish: finish.nami-face-pinned.json

@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "width": 1024,
+  "height": 1024,
+  "columns": 2,
+  "rows": 2,
+  "requested_features": ["canvas_left_eye", "canvas_right_eye", "mouth"],
+  "feather_panel_px": 3.0,
+  "states": [
+    {"state_id": "eyes_half", "feature_group": "eyes", "instruction": "A halfway blink: upper lids lowered halfway, lower portions of the original irises visible. Keep lower lids and eye corners fixed."},
+    {"state_id": "eyes_closed", "feature_group": "eyes", "instruction": "Both admitted eyes gently fully closed. Replace all original open-eye artwork with clean skin and delicate closed lash lines, no old outer lashes or ghosts."},
+    {"state_id": "mouth_smile", "feature_group": "mouth", "instruction": "A modest warmer smile, with a small narrow strip of upper teeth. Preserve lip color and jaw; no cheek, chin or eye changes."},
+    {"state_id": "mouth_a", "feature_group": "mouth", "instruction": "A modest open mouth pronouncing A, readable dark interior and natural lips. Preserve jaw and chin; no shout or eye changes."}
+  ],
+  "playback": [
+    {"eyes": "rest", "mouth": "rest", "duration_ms": 1000},
+    {"eyes": "eyes_half", "mouth": "rest", "duration_ms": 80},
+    {"eyes": "eyes_closed", "mouth": "rest", "duration_ms": 120},
+    {"eyes": "eyes_half", "mouth": "rest", "duration_ms": 80},
+    {"eyes": "rest", "mouth": "rest", "duration_ms": 520},
+    {"eyes": "rest", "mouth": "mouth_a", "duration_ms": 160},
+    {"eyes": "rest", "mouth": "mouth_smile", "duration_ms": 180},
+    {"eyes": "rest", "mouth": "rest", "duration_ms": 120},
+    {"eyes": "rest", "mouth": "mouth_a", "duration_ms": 240},
+    {"eyes": "eyes_half", "mouth": "mouth_smile", "duration_ms": 80},
+    {"eyes": "eyes_closed", "mouth": "mouth_smile", "duration_ms": 120},
+    {"eyes": "eyes_half", "mouth": "mouth_a", "duration_ms": 80},
+    {"eyes": "rest", "mouth": "mouth_a", "duration_ms": 240},
+    {"eyes": "rest", "mouth": "rest", "duration_ms": 500},
+    {"eyes": "rest", "mouth": "mouth_smile", "duration_ms": 180},
+    {"eyes": "rest", "mouth": "mouth_a", "duration_ms": 180},
+    {"eyes": "rest", "mouth": "mouth_smile", "duration_ms": 200},
+    {"eyes": "rest", "mouth": "rest", "duration_ms": 700},
+    {"eyes": "eyes_half", "mouth": "rest", "duration_ms": 80},
+    {"eyes": "eyes_closed", "mouth": "rest", "duration_ms": 120},
+    {"eyes": "eyes_half", "mouth": "rest", "duration_ms": 80},
+    {"eyes": "rest", "mouth": "rest", "duration_ms": 2940}
+  ]
+}

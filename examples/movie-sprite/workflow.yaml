@@ -1,0 +1,145 @@
+fx: workflow/v1
+id: movie-sprite
+title: Movie sprite
+description: >-
+  One character picture in; a transparent idle loop out. The picture is fitted onto a green
+  plate and drawn once by a video model, with the same picture at both ends of the take.
+  The take is finished locally: keyed to transparency, the face held still so blinks and
+  mouth shapes can be added separately, the loop closed, and every frame checked. A clip
+  made elsewhere can be finished instead of drawing a take.
+
+inputs:
+  character:
+    type: file
+    kind: image
+    optional: true
+    description: The character on a transparent background; the take is drawn from it
+  footage:
+    type: file
+    kind: video
+    optional: true
+    description: A clip to finish instead of drawing a take (MP4, or Matroska with alpha)
+  direction:
+    type: string
+    max_length: 4000
+    default: ""
+    description: The general direction for the motion, in your own words
+  requested_motion:
+    type: list
+    items: { type: string, max_length: 2000 }
+    max_items: 16
+    default: []
+    description: Motion you ask for, one line each
+  constraints:
+    type: list
+    items: { type: string, max_length: 2000 }
+    max_items: 16
+    default: []
+    description: What must not happen; these win over the template's defaults
+  seconds:
+    type: integer
+    minimum: 3
+    maximum: 10
+    default: 8
+    description: Length of the take
+  resolution:
+    type: string
+    enum: [720p, 1080p]
+    default: 720p
+  aspect_ratio:
+    type: string
+    enum: ["9:16", "16:9"]
+    default: "9:16"
+  finish:
+    type: file
+    kind: json
+    optional: true
+    description: Finishing settings (keying, held regions, loop closure, playback length)
+
+  trim:
+    type: file
+    kind: json
+    optional: true
+    description: Optional source-bound frame interval, applied before finishing
+
+assert:
+  - check: ${{ (inputs.character && !inputs.footage) || (inputs.footage && !inputs.character) }}
+    message: give a character to draw a take from, or footage to finish, not both
+
+steps:
+  plate:
+    title: Fit onto a green plate
+    description: >-
+      The character's visible silhouette is cropped, scaled uniformly into the take's
+      frame with a margin, and composited onto flat green. The plate is both ends of the
+      take, so its pixels are part of the paid request.
+    if: ${{ inputs.character }}
+    uses: ./nodes/take.py#green_plate
+    with:
+      image: ${{ inputs.character }}
+      aspect_ratio: ${{ inputs.aspect_ratio }}
+    view: true
+
+  brief:
+    title: Write the motion brief
+    description: >-
+      The standing-idle template, then your direction, the motion you ask for and your
+      constraints. With no direction at all, a quiet listening idle is asked for.
+    if: ${{ inputs.character }}
+    uses: ./nodes/take.py#idle_brief
+    with:
+      seconds: ${{ inputs.seconds }}
+      direction: ${{ inputs.direction }}
+      requested_motion: ${{ inputs.requested_motion }}
+      constraints: ${{ inputs.constraints }}
+
+  take:
+    title: Generate a take
+    description: >-
+      One video call animates the plate, with the same picture at both ends. A new take is
+      a deliberate new draw (a reroll), never a silent retry; a run that stops while
+      the clip renders collects it next time instead of paying for it again.
+    if: ${{ inputs.character }}
+    uses: fx/video.generate@1
+    requires: [first_last_frame]
+    with:
+      prompt: ${{ steps.brief.outputs.prompt }}
+      first_frame: ${{ steps.plate.outputs.image }}
+      last_frame: ${{ steps.plate.outputs.image }}
+      duration: ${{ inputs.seconds }}
+      resolution: ${{ inputs.resolution }}
+      aspect_ratio: ${{ inputs.aspect_ratio }}
+    view: true
+
+  trim:
+    title: Select a frame interval
+    description: >-
+      Optional, explicit source-bound removal of unwanted leading or trailing frames.
+      No generation or interpolation.
+    if: ${{ inputs.trim }}
+    uses: ./nodes/trim.py#trim
+    with:
+      video: ${{ steps.take.outputs.video || inputs.footage }}
+      settings: ${{ inputs.trim }}
+    view: true
+
+  finish:
+    title: Key, loop and verify
+    description: >-
+      Free and local: green is removed, the face is held to the first frame, the loop is
+      closed by optical flow, and every frame is decoded again and checked. Changing only
+      the finishing settings reruns only this step.
+    uses: ./nodes/finish.py#finish
+    with:
+      video: ${{ steps.trim.outputs.video || steps.take.outputs.video || inputs.footage }}
+      settings: ${{ inputs.finish }}
+    view: ./views/loop.html
+
+outputs:
+  loop: ${{ steps.finish.outputs.loop }}
+  canonical: ${{ steps.finish.outputs.canonical }}
+  preview: ${{ steps.finish.outputs.preview }}
+  contact_sheet: ${{ steps.finish.outputs.contact_sheet }}
+  manifest: ${{ steps.finish.outputs.manifest }}
+  report: ${{ steps.finish.outputs.report }}
+  frames: ${{ steps.finish.outputs.frames }}

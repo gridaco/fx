@@ -1,0 +1,171 @@
+{
+  "$defs": {
+    "ActionBeat": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "minLength": 1,
+          "title": "Agent",
+          "type": "string"
+        },
+        "goal": {
+          "minLength": 1,
+          "title": "Goal",
+          "type": "string"
+        },
+        "obstacle": {
+          "minLength": 1,
+          "title": "Obstacle",
+          "type": "string"
+        },
+        "intervention": {
+          "minLength": 1,
+          "title": "Intervention",
+          "type": "string"
+        },
+        "visible_state_change": {
+          "minLength": 1,
+          "title": "Visible State Change",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent",
+        "goal",
+        "obstacle",
+        "intervention",
+        "visible_state_change"
+      ],
+      "title": "ActionBeat",
+      "type": "object"
+    },
+    "VisualIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "silhouette": {
+          "minLength": 1,
+          "title": "Silhouette",
+          "type": "string"
+        },
+        "proportions": {
+          "minLength": 1,
+          "title": "Proportions",
+          "type": "string"
+        },
+        "construction_logic": {
+          "minLength": 1,
+          "title": "Construction Logic",
+          "type": "string"
+        },
+        "materials": {
+          "minLength": 1,
+          "title": "Materials",
+          "type": "string"
+        },
+        "color_placement": {
+          "minLength": 1,
+          "title": "Color Placement",
+          "type": "string"
+        },
+        "scale_anchor": {
+          "minLength": 1,
+          "title": "Scale Anchor",
+          "type": "string"
+        },
+        "wear_and_history": {
+          "minLength": 1,
+          "title": "Wear And History",
+          "type": "string"
+        },
+        "characteristic_motion_or_use": {
+          "minLength": 1,
+          "title": "Characteristic Motion Or Use",
+          "type": "string"
+        },
+        "forbidden_substitutions": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Forbidden Substitutions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "silhouette",
+        "proportions",
+        "construction_logic",
+        "materials",
+        "color_placement",
+        "scale_anchor",
+        "wear_and_history",
+        "characteristic_motion_or_use",
+        "forbidden_substitutions"
+      ],
+      "title": "VisualIdentity",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "entity_id": {
+      "pattern": "^[a-z][a-z0-9_]{1,95}$",
+      "title": "Entity Id",
+      "type": "string"
+    },
+    "primary_subject": {
+      "minLength": 1,
+      "title": "Primary Subject",
+      "type": "string"
+    },
+    "action_beat": {
+      "$ref": "#/$defs/ActionBeat"
+    },
+    "immediate_environment": {
+      "minLength": 1,
+      "title": "Immediate Environment",
+      "type": "string"
+    },
+    "composition_and_camera": {
+      "minLength": 1,
+      "title": "Composition And Camera",
+      "type": "string"
+    },
+    "visual_identity": {
+      "$ref": "#/$defs/VisualIdentity"
+    },
+    "register_realization": {
+      "minLength": 1,
+      "title": "Register Realization",
+      "type": "string"
+    },
+    "continuity_notes": {
+      "minLength": 1,
+      "title": "Continuity Notes",
+      "type": "string"
+    },
+    "avoid": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Avoid",
+      "type": "array"
+    }
+  },
+  "required": [
+    "entity_id",
+    "primary_subject",
+    "action_beat",
+    "immediate_environment",
+    "composition_and_camera",
+    "visual_identity",
+    "register_realization",
+    "continuity_notes",
+    "avoid"
+  ],
+  "title": "EntityDirection",
+  "type": "object",
+  "description": "universe structured output for universe.direction.entity"
+}

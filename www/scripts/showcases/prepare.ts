@@ -13,7 +13,12 @@ function project(slug: ShowcaseSlug, value: Record<string, unknown>): Record<str
   if (slug === "parallax") return parseParallax({ kind, ...pick(value, ["canvas", "layers"]) });
   if (slug === "world") return parseWorld({ kind, entities: value.entities });
   if (slug === "character-3d") return parseCharacter({ kind, ...pick(value, ["models", "images", "result", "runtime_qualified"]) });
-  const resources = demoResourceFiles[slug];
+  const resources: string[] = [...demoResourceFiles[slug]];
+  if (slug === "portrait-motion") {
+    const body = value.body as Record<string, unknown> | undefined;
+    const listed = Array.isArray(value.resources) && value.resources.includes("assets/body.webm");
+    if (listed || body?.browser_derivative === "assets/body.webm") resources.push("assets/body.webm");
+  }
   return { kind, resources };
 }
 function metadata(path: string, value: unknown): unknown {

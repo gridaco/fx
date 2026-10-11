@@ -1,0 +1,11 @@
+# Mira Vale, meadow observatory caretaker
+
+One original adult woman, aged twenty-seven, the field caretaker of a small wind and weather observatory in a golden meadow. Create a compact SD human with a clear adult face and an approximately 2.5-head-tall silhouette: large round head, short strong body, short limbs and stable broad feet. Her expression is calm and capable, friendly without reading as a child.
+
+Short warm-copper hair in one simple close-fitting bob, clear of the shoulders, visible eyebrows, unobstructed eyes and face; no long strands, ponytail, hat or hair accessories. The hair should form a solid low profile around the head. Use a fitted deep blue-teal utility jacket ending at the waist over a cream shirt, one small rust-orange collar tab, plain slate trousers and simple brown ankle work boots. The jacket is closed and closely fitted, with a plain hem and no flaps. Materials are matte and softly painted with broad readable color blocks and limited detail. Preserve the blue-teal/cream/rust/slate/brown palette in every view.
+
+Hands are fixed rounded mitten forms attached at the wrists, with no individual fingers, fist, grip or articulation requirement. Both hands are empty. No carried prop, bag, strap, tool belt, scarf, cape, long coat, skirt, loose cloth, jewelry or detachable accessory. The complete character is one coherent whole mesh; body, head and hair may have visible material regions but require no separate moving pieces.
+
+References should show the complete unclipped body in a relaxed neutral A-pose on an opaque plain background, with enough separation at the arms and legs for silhouette and later rigging. Consistent front and back views of the same character; no action scene, environment, labels, costume variants or extra characters. Aim for a simple low-profile riggable form with clear shoulder, elbow, hip, knee and wrist locations. The wrists move while the mitten shapes remain fixed. Diagnostic cheer and joint bends should remain readable at 120px character height. Do not reproduce an existing character or a named artist's style.
+
+This is a bounded development pilot, not qualification or publication. Independent stage reviews and structural checks decide acceptance; a generated reference or mesh alone is not a supported playable character.

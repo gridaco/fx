@@ -3,16 +3,128 @@
   "patch_application": "replace_selected_rgb_preserve_original_alpha",
   "feather_already_baked": true,
   "source_size": [
-    720,
-    1280
+    2048,
+    2048
   ],
   "patch_size": [
-    231,
-    231
+    2138,
+    2138
   ],
   "offset_xy": [
-    235,
-    39
+    -103,
+    -125
+  ],
+  "timeline": [
+    {
+      "duration_ms": 1000,
+      "eyes": "rest",
+      "mouth": "rest"
+    },
+    {
+      "duration_ms": 80,
+      "eyes": "eyes_half",
+      "mouth": "rest"
+    },
+    {
+      "duration_ms": 120,
+      "eyes": "eyes_closed",
+      "mouth": "rest"
+    },
+    {
+      "duration_ms": 80,
+      "eyes": "eyes_half",
+      "mouth": "rest"
+    },
+    {
+      "duration_ms": 520,
+      "eyes": "rest",
+      "mouth": "rest"
+    },
+    {
+      "duration_ms": 160,
+      "eyes": "rest",
+      "mouth": "mouth_a"
+    },
+    {
+      "duration_ms": 180,
+      "eyes": "rest",
+      "mouth": "mouth_smile"
+    },
+    {
+      "duration_ms": 120,
+      "eyes": "rest",
+      "mouth": "rest"
+    },
+    {
+      "duration_ms": 240,
+      "eyes": "rest",
+      "mouth": "mouth_a"
+    },
+    {
+      "duration_ms": 80,
+      "eyes": "eyes_half",
+      "mouth": "mouth_smile"
+    },
+    {
+      "duration_ms": 120,
+      "eyes": "eyes_closed",
+      "mouth": "mouth_smile"
+    },
+    {
+      "duration_ms": 80,
+      "eyes": "eyes_half",
+      "mouth": "mouth_a"
+    },
+    {
+      "duration_ms": 240,
+      "eyes": "rest",
+      "mouth": "mouth_a"
+    },
+    {
+      "duration_ms": 500,
+      "eyes": "rest",
+      "mouth": "rest"
+    },
+    {
+      "duration_ms": 180,
+      "eyes": "rest",
+      "mouth": "mouth_smile"
+    },
+    {
+      "duration_ms": 180,
+      "eyes": "rest",
+      "mouth": "mouth_a"
+    },
+    {
+      "duration_ms": 200,
+      "eyes": "rest",
+      "mouth": "mouth_smile"
+    },
+    {
+      "duration_ms": 700,
+      "eyes": "rest",
+      "mouth": "rest"
+    },
+    {
+      "duration_ms": 80,
+      "eyes": "eyes_half",
+      "mouth": "rest"
+    },
+    {
+      "duration_ms": 120,
+      "eyes": "eyes_closed",
+      "mouth": "rest"
+    },
+    {
+      "duration_ms": 80,
+      "eyes": "eyes_half",
+      "mouth": "rest"
+    },
+    {
+      "duration_ms": 2940,
+      "eyes": "rest",
+      "mouth": "rest"
+    }
   ],
   "patches": [
     {
@@ -44,118 +156,6 @@
       "feature_id": "mouth",
       "key": "mouth_a-mouth",
       "state_id": "mouth_a"
-    }
-  ],
-  "timeline": [
-    {
-      "eyes": "rest",
-      "mouth": "rest",
-      "duration_ms": 1000
-    },
-    {
-      "eyes": "eyes_half",
-      "mouth": "rest",
-      "duration_ms": 80
-    },
-    {
-      "eyes": "eyes_closed",
-      "mouth": "rest",
-      "duration_ms": 120
-    },
-    {
-      "eyes": "eyes_half",
-      "mouth": "rest",
-      "duration_ms": 80
-    },
-    {
-      "eyes": "rest",
-      "mouth": "rest",
-      "duration_ms": 520
-    },
-    {
-      "eyes": "rest",
-      "mouth": "mouth_a",
-      "duration_ms": 160
-    },
-    {
-      "eyes": "rest",
-      "mouth": "mouth_smile",
-      "duration_ms": 180
-    },
-    {
-      "eyes": "rest",
-      "mouth": "rest",
-      "duration_ms": 120
-    },
-    {
-      "eyes": "rest",
-      "mouth": "mouth_a",
-      "duration_ms": 240
-    },
-    {
-      "eyes": "eyes_half",
-      "mouth": "mouth_smile",
-      "duration_ms": 80
-    },
-    {
-      "eyes": "eyes_closed",
-      "mouth": "mouth_smile",
-      "duration_ms": 120
-    },
-    {
-      "eyes": "eyes_half",
-      "mouth": "mouth_a",
-      "duration_ms": 80
-    },
-    {
-      "eyes": "rest",
-      "mouth": "mouth_a",
-      "duration_ms": 240
-    },
-    {
-      "eyes": "rest",
-      "mouth": "rest",
-      "duration_ms": 500
-    },
-    {
-      "eyes": "rest",
-      "mouth": "mouth_smile",
-      "duration_ms": 180
-    },
-    {
-      "eyes": "rest",
-      "mouth": "mouth_a",
-      "duration_ms": 180
-    },
-    {
-      "eyes": "rest",
-      "mouth": "mouth_smile",
-      "duration_ms": 200
-    },
-    {
-      "eyes": "rest",
-      "mouth": "rest",
-      "duration_ms": 700
-    },
-    {
-      "eyes": "eyes_half",
-      "mouth": "rest",
-      "duration_ms": 80
-    },
-    {
-      "eyes": "eyes_closed",
-      "mouth": "rest",
-      "duration_ms": 120
-    },
-    {
-      "eyes": "eyes_half",
-      "mouth": "rest",
-      "duration_ms": 80
-    },
-    {
-      "eyes": "rest",
-      "mouth": "rest",
-      "duration_ms": 2940
     }
   ]
 }

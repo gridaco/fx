@@ -1,0 +1,83 @@
+{
+  "source_mode": "chroma",
+  "playback_seconds": 8,
+  "loop_closure": "flow",
+  "seam_frames": 12,
+  "flow_proxy_width": 720,
+  "max_flow_pixels": 36,
+  "fixed_regions": [
+    {
+      "polygon_xy": [
+        [
+          315,
+          106
+        ],
+        [
+          338,
+          93
+        ],
+        [
+          362,
+          93
+        ],
+        [
+          382,
+          107
+        ],
+        [
+          391,
+          129
+        ],
+        [
+          393,
+          163
+        ],
+        [
+          387,
+          189
+        ],
+        [
+          370,
+          214
+        ],
+        [
+          351,
+          223
+        ],
+        [
+          332,
+          214
+        ],
+        [
+          307,
+          189
+        ],
+        [
+          296,
+          164
+        ],
+        [
+          292,
+          145
+        ],
+        [
+          300,
+          124
+        ]
+      ]
+    }
+  ],
+  "moving_guards": [],
+  "local_repairs": [],
+  "outside_feather_pixels": 10,
+  "preview_max_size": [
+    720,
+    1280
+  ],
+  "export_frames": true,
+  "source_sha256": "b277bf10e64341d5bc7f06c944a7646cc6abbe811d5b4f739ea6ab4bdd36c5d7",
+  "coordinate_size": [
+    720,
+    1280
+  ]
+}

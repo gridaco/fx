@@ -1,0 +1,3 @@
+portrait: .showcase-inputs/nami-face.png
+spec: inputs/face-closeup.json
+face_crop: true

@@ -1,0 +1,123 @@
+{
+ "assembly_parameters": [
+  {
+   "part_id": "character",
+   "rotation_degrees_xyz": [
+    0,
+    -90,
+    0
+   ],
+   "translation": [
+    0,
+    1,
+    0
+   ],
+   "uniform_scale": 2.00097703957
+  }
+ ],
+ "asset_id": "assembly_01",
+ "inventory": {
+  "bones": [],
+  "bounds": {
+   "dimensions": [
+    1.0444552898406982,
+    2,
+    0.7572056651115417
+   ],
+   "max": [
+    0.5222276449203491,
+    2,
+    0.3786028325557709
+   ],
+   "min": [
+    -0.5222276449203491,
+    0,
+    -0.3786028325557709
+   ]
+  },
+  "clips": [],
+  "images": [
+   {
+    "color_space": "sRGB",
+    "has_data": true,
+    "height": 2048,
+    "name": "tripo_image_8b479343_0",
+    "packed": true,
+    "packed_sha256": "1f870d9b5b31aa273c7617252ef17a44fc0560501278bb0daf36579a53651623",
+    "width": 2048
+   },
+   {
+    "color_space": "Non-Color",
+    "has_data": true,
+    "height": 2048,
+    "name": "tripo_image_8b479343_2-tripo_image_8b479343_1",
+    "packed": true,
+    "packed_sha256": "26ceebc8b8b6f86f5197a65eb05866a00d310b823849f9ffbe3b3dfc0f1d6338",
+    "width": 2048
+   },
+   {
+    "color_space": "Non-Color",
+    "has_data": true,
+    "height": 2048,
+    "name": "tripo_image_8b479343_3",
+    "packed": true,
+    "packed_sha256": "1e37591b3ef9947d20eb09c44b01eee03e045a7eb0b5e3146edc9fd5b2636858",
+    "width": 2048
+   }
+  ],
+  "index_space": "evaluated_blender_mesh_vertices_and_loop_triangles_not_raw_glb_vertex_records",
+  "mesh_count": 1,
+  "meshes": [
+   {
+    "bounds": {
+     "dimensions": [
+      1.0444552898406982,
+      2,
+      0.7572056651115417
+     ],
+     "max": [
+      0.5222276449203491,
+      2,
+      0.3786028325557709
+     ],
+     "min": [
+      -0.5222276449203491,
+      0,
+      -0.3786028325557709
+     ]
+    },
+    "materials": [
+     "tripo_mat_8b479343"
+    ],
+    "modifiers": [],
+    "name": "character__mesh_00",
+    "native_polygon_counts": {
+     "ngons": 0,
+     "quads": 0,
+     "triangles": 21718
+    },
+    "shape_keys": [],
+    "triangles": 21718,
+    "uv_layers": [
+     {
+      "corner_count": 65154,
+      "name": "UVMap"
+     }
+    ],
+    "vertices": 22768,
+    "weighted_vertex_groups_source_mesh": {}
+   }
+  ],
+  "triangles": 21718,
+  "vertices": 22768
+ },
+ "open_issues": [
+  "The supplied character and exported candidate contain no bones, skin weights or animation clips. Articulation, attachment under motion and cheer remain unverified and require the rigging stage.",
+  "Inherited topology retains four analysis-connected components, 29 boundary edges and 10 nonmanifold edges. These were not repaired in this orientation-only assembly stage."
+ ],
+ "part_roles": {
+  "character__mesh_00": "character"
+ },
+ "rationale": "Oriented the supplied whole character from observed +X-facing anatomy to +Z using a -90-degree Y rotation. Applied uniform scale 2.00097703957 and translation [0,1,0]; exported bounds confirm height 2.0 and minimum Y=0. Inspected the export from front, back, both sides and three-quarter using numeric cameras and the matte-policy preview. Face and both eyes remain readable, with no obvious floating accessories or substantial attachment gaps in these views. Original proportions, 21,718 triangles, UVMap and all three packed texture hashes are retained. The collar conceals part of the neck junction; no welding or geometry repair is claimed.",
+ "source_sha256": "013667face278a1dbbbb8be1bb3ef49274e75a413226959d7b0f88a658d511a5"
+}
