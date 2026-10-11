@@ -1,0 +1,618 @@
+{
+  "canonical": {
+    "cell_px": 120,
+    "height": 480,
+    "placeholder_cell": [
+      10,
+      1
+    ],
+    "placeholder_transparent_in_canonical": true,
+    "published_transparent_pixels": 0,
+    "sha256": "b3b08886ee64739aaddb0e019a367a842783265f9b1537e343fa20e63a714728",
+    "width": 1440
+  },
+  "canonicalizer": "terrain-atlas-paintover-canonicalization-v10",
+  "classification": "direct_pass",
+  "connector_rgb_mean": 8.863095238095237,
+  "construction": {
+    "appearance_owner": "image-model-cell-paintover",
+    "connector_harmonization": "none",
+    "registration": "fixed-pitch-exact-canvas-v1",
+    "topology_owner": "locked-packaged-template-comparison-and-lookup"
+  },
+  "dynamic_tilemap_compatible": true,
+  "hillside_tile_object_share": 0.0556,
+  "kind": "terrain-atlas-paintover-canonicalization-validation-v1",
+  "lookup_masks": 47,
+  "lookup_sha256": "936ca67530044fd1eca32474caab1ad51c436f1382ff63b0bc895f08c76fb34a",
+  "maps": {
+    "concavity_and_hole": {
+      "coordinates": [
+        [
+          null,
+          null,
+          [
+            1,
+            0
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            3,
+            0
+          ],
+          null,
+          null
+        ],
+        [
+          null,
+          [
+            8,
+            0
+          ],
+          [
+            7,
+            1
+          ],
+          null,
+          null,
+          null,
+          null,
+          [
+            4,
+            1
+          ],
+          [
+            11,
+            0
+          ],
+          null
+        ],
+        [
+          [
+            8,
+            0
+          ],
+          [
+            5,
+            1
+          ],
+          [
+            11,
+            2
+          ],
+          null,
+          [
+            8,
+            0
+          ],
+          [
+            11,
+            0
+          ],
+          null,
+          [
+            8,
+            1
+          ],
+          [
+            6,
+            1
+          ],
+          [
+            11,
+            0
+          ]
+        ],
+        [
+          [
+            8,
+            3
+          ],
+          [
+            9,
+            3
+          ],
+          [
+            6,
+            3
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            5,
+            3
+          ],
+          [
+            6,
+            3
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            5,
+            3
+          ],
+          [
+            9,
+            3
+          ],
+          [
+            11,
+            3
+          ]
+        ]
+      ],
+      "direct": {
+        "connector_alpha_mismatch_fraction": 0,
+        "connector_band_fraction": 0.2,
+        "connector_mean_absolute_rgb_error": 7.737301587301587,
+        "shared_edges": 35
+      },
+      "rows": [
+        "0011111100",
+        "0110000110",
+        "1110110111",
+        "1111111111"
+      ]
+    },
+    "one_cell_floating": {
+      "coordinates": [
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          [
+            1,
+            3
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            3,
+            3
+          ],
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      ],
+      "direct": {
+        "connector_alpha_mismatch_fraction": 0,
+        "connector_band_fraction": 0.2,
+        "connector_mean_absolute_rgb_error": 8.863095238095237,
+        "shared_edges": 7
+      },
+      "rows": [
+        "0000000000",
+        "0111111110",
+        "0000000000"
+      ]
+    },
+    "solid_ground": {
+      "coordinates": [
+        [
+          [
+            8,
+            0
+          ],
+          [
+            10,
+            0
+          ],
+          [
+            10,
+            0
+          ],
+          [
+            10,
+            0
+          ],
+          [
+            10,
+            0
+          ],
+          [
+            10,
+            0
+          ],
+          [
+            10,
+            0
+          ],
+          [
+            10,
+            0
+          ],
+          [
+            10,
+            0
+          ],
+          [
+            11,
+            0
+          ]
+        ],
+        [
+          [
+            8,
+            1
+          ],
+          [
+            9,
+            2
+          ],
+          [
+            9,
+            2
+          ],
+          [
+            9,
+            2
+          ],
+          [
+            9,
+            2
+          ],
+          [
+            9,
+            2
+          ],
+          [
+            9,
+            2
+          ],
+          [
+            9,
+            2
+          ],
+          [
+            9,
+            2
+          ],
+          [
+            11,
+            2
+          ]
+        ],
+        [
+          [
+            8,
+            1
+          ],
+          [
+            9,
+            2
+          ],
+          [
+            9,
+            2
+          ],
+          [
+            9,
+            2
+          ],
+          [
+            9,
+            2
+          ],
+          [
+            9,
+            2
+          ],
+          [
+            9,
+            2
+          ],
+          [
+            9,
+            2
+          ],
+          [
+            9,
+            2
+          ],
+          [
+            11,
+            2
+          ]
+        ],
+        [
+          [
+            8,
+            3
+          ],
+          [
+            9,
+            3
+          ],
+          [
+            9,
+            3
+          ],
+          [
+            9,
+            3
+          ],
+          [
+            9,
+            3
+          ],
+          [
+            9,
+            3
+          ],
+          [
+            9,
+            3
+          ],
+          [
+            9,
+            3
+          ],
+          [
+            9,
+            3
+          ],
+          [
+            11,
+            3
+          ]
+        ]
+      ],
+      "direct": {
+        "connector_alpha_mismatch_fraction": 0,
+        "connector_band_fraction": 0.2,
+        "connector_mean_absolute_rgb_error": 6.436237373737374,
+        "shared_edges": 66
+      },
+      "rows": [
+        "1111111111",
+        "1111111111",
+        "1111111111",
+        "1111111111"
+      ]
+    },
+    "steps": {
+      "coordinates": [
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          [
+            8,
+            0
+          ],
+          [
+            10,
+            0
+          ],
+          [
+            11,
+            0
+          ]
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          [
+            8,
+            0
+          ],
+          [
+            10,
+            0
+          ],
+          [
+            5,
+            1
+          ],
+          [
+            9,
+            2
+          ],
+          [
+            11,
+            2
+          ]
+        ],
+        [
+          null,
+          null,
+          null,
+          [
+            8,
+            0
+          ],
+          [
+            10,
+            0
+          ],
+          [
+            5,
+            1
+          ],
+          [
+            9,
+            2
+          ],
+          [
+            9,
+            2
+          ],
+          [
+            9,
+            2
+          ],
+          [
+            11,
+            2
+          ]
+        ],
+        [
+          null,
+          [
+            1,
+            3
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            5,
+            3
+          ],
+          [
+            9,
+            3
+          ],
+          [
+            9,
+            3
+          ],
+          [
+            9,
+            3
+          ],
+          [
+            9,
+            3
+          ],
+          [
+            9,
+            3
+          ],
+          [
+            11,
+            3
+          ]
+        ]
+      ],
+      "direct": {
+        "connector_alpha_mismatch_fraction": 0,
+        "connector_band_fraction": 0.2,
+        "connector_mean_absolute_rgb_error": 6.839285714285714,
+        "shared_edges": 35
+      },
+      "rows": [
+        "0000000111",
+        "0000011111",
+        "0001111111",
+        "0111111111"
+      ]
+    }
+  },
+  "material_source_contract": "terrain-atlas-paintover-source-v9",
+  "mean_join_tone_step": 3.8677,
+  "paint_target_sha256": "76c90ae388454382a56864640530fc94d7b311d55c5684349438fdcb0724c4cc",
+  "schema_version": 1,
+  "smooth_slopes_supported": false,
+  "source": {
+    "height": 960,
+    "mode": "RGB",
+    "sha256": "6a7d7e985eb2c049f4bd0ba7ba5085b1eea222c8dbe10b20664732be79c27286",
+    "width": 2880
+  },
+  "source_validation": {
+    "buried_tile_object_share_mean": 0.184,
+    "contract": "terrain-atlas-paintover-source-v9",
+    "hillside_tile_object_share": 0.0556,
+    "kind": "terrain-atlas-paintover-source-validation-v1",
+    "mean_join_tone_step": 3.8677,
+    "paint_target": {
+      "cell_px": 240,
+      "id": "terrain-atlas-paint-target-v3",
+      "sha256": "76c90ae388454382a56864640530fc94d7b311d55c5684349438fdcb0724c4cc"
+    },
+    "painted_material_mean_standard_deviation": 29.135852,
+    "registration": "fixed-pitch-exact-canvas-v1",
+    "schema_version": 1,
+    "source": {
+      "height": 960,
+      "mode": "RGB",
+      "sha256": "6a7d7e985eb2c049f4bd0ba7ba5085b1eea222c8dbe10b20664732be79c27286",
+      "width": 2880
+    },
+    "thresholds": {
+      "maximum_join_tone_step": 65,
+      "minimum_painted_material_standard_deviation": 2,
+      "paint_canvas": "2880x960"
+    },
+    "worst_join_tone_step": 27.2512
+  },
+  "template_sha256": "cccc9a429162eed8715060b6755c06cc460adce7f54c565633dd099ab0ce7781",
+  "thresholds": {
+    "maximum_join_tone_step": 65,
+    "paint_canvas": "2880x960"
+  },
+  "topology": "terrain-atlas-3x3-minimal-v1",
+  "worst_join_tone_step": 27.2512
+}

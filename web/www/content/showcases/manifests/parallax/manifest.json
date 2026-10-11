@@ -1,0 +1,30 @@
+{
+  "kind": "parallax-demo-v1",
+  "canvas": {
+    "width": 1536,
+    "height": 1024
+  },
+  "layers": [
+    {
+      "id": "far",
+      "file": "layers/far.png",
+      "offset_y": 0,
+      "order": 0,
+      "parallax": 0.12
+    },
+    {
+      "id": "middle",
+      "file": "layers/middle.png",
+      "offset_y": 0,
+      "order": 1,
+      "parallax": 0.4
+    },
+    {
+      "id": "foreground",
+      "file": "layers/foreground.png",
+      "offset_y": 0,
+      "order": 2,
+      "parallax": 0.85
+    }
+  ]
+}

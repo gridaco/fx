@@ -1,0 +1,9 @@
+{
+  "kind": "movie-sprite-demo-v1",
+  "resources": [
+    "assets/loop.webm",
+    "assets/loop.webp",
+    "assets/canonical.png",
+    "assets/original-unpinned-preview.mp4"
+  ]
+}

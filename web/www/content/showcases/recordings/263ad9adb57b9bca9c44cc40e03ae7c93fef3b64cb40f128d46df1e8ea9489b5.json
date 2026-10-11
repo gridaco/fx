@@ -1,0 +1,4798 @@
+{
+ "artifacts": [
+  {
+   "digest": "10cdb7f926051aaf56684c44e7cd396325e4295c0960e1d71747d138a6c4f394",
+   "media_type": "image/png",
+   "name": "image",
+   "omitted_reason": null,
+   "path": "artifacts/10cdb7f926051aaf56684c44e7cd396325e4295c0960e1d71747d138a6c4f394.png",
+   "size": 897456
+  },
+  {
+   "digest": "119ac8a541f8bf492d282ea3cab51338c21bbdac90d6bfbf6494c958aba6b8b5",
+   "media_type": "json",
+   "name": "schema",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 687
+  },
+  {
+   "digest": "16474ea2f9c670342d3cfee1c2b4c415b73638b22b8d31483f4e197d9e200f46",
+   "media_type": "image/png",
+   "name": "image",
+   "omitted_reason": null,
+   "path": "artifacts/16474ea2f9c670342d3cfee1c2b4c415b73638b22b8d31483f4e197d9e200f46.png",
+   "size": 874036
+  },
+  {
+   "digest": "1809e01b6e9f28327b16f9647c9c6f6f50d78633bd8a667bfdbc16f6158f3e47",
+   "media_type": "json",
+   "name": "validation",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 8608
+  },
+  {
+   "digest": "36fb800e1f870e2b5dd2fa3389d5b9e6d3f0cfc2ae3dced3d6124af4972cbdaf",
+   "media_type": "json",
+   "name": "json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 755
+  },
+  {
+   "digest": "4a72a7b184e2a1ee67c68366271ec1ed908e13a8b5259368fdce8da98209d23b",
+   "media_type": "image/png",
+   "name": "image",
+   "omitted_reason": null,
+   "path": "artifacts/4a72a7b184e2a1ee67c68366271ec1ed908e13a8b5259368fdce8da98209d23b.png",
+   "size": 1298705
+  },
+  {
+   "digest": "60999477d14f2e91b0a9836a34941150b3933d8a5227ffcaef894e4db04cab28",
+   "media_type": "image/png",
+   "name": "image",
+   "omitted_reason": null,
+   "path": "artifacts/60999477d14f2e91b0a9836a34941150b3933d8a5227ffcaef894e4db04cab28.png",
+   "size": 5906
+  },
+  {
+   "digest": "628b89a8167bf54782e98b8578cfe601d3cc181bb34dfc59912d708f3221d138",
+   "media_type": "image/png",
+   "name": "meadow.png",
+   "omitted_reason": "unplaced_input",
+   "path": null,
+   "size": 2016648
+  },
+  {
+   "digest": "6b40d271eadf1912b2303aac22d1018ef277f960547104bfcccf084da3159b81",
+   "media_type": "json",
+   "name": "validation",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 26695
+  },
+  {
+   "digest": "6eedb4f4ec25bb58d978c9d462cba865600dc479eee44fd7e4bf89074b160c40",
+   "media_type": "image/png",
+   "name": "evidence",
+   "omitted_reason": null,
+   "path": "artifacts/6eedb4f4ec25bb58d978c9d462cba865600dc479eee44fd7e4bf89074b160c40.png",
+   "size": 724513
+  },
+  {
+   "digest": "7db584c2ddc106f2e1aa36a421db5129bd10cbc2095b1227d088e4ab5dc74ae8",
+   "media_type": "json",
+   "name": "json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 729
+  },
+  {
+   "digest": "99411c8b378862e9f69c173036fe746bb10c3ae4c4686caa469faabdc494bc97",
+   "media_type": "image/png",
+   "name": "image",
+   "omitted_reason": null,
+   "path": "artifacts/99411c8b378862e9f69c173036fe746bb10c3ae4c4686caa469faabdc494bc97.png",
+   "size": 904359
+  },
+  {
+   "digest": "99c2798bc54618732af45643ae6f66dce691679ac2ada919470d27606abee80d",
+   "media_type": "image/png",
+   "name": "image",
+   "omitted_reason": null,
+   "path": "artifacts/99c2798bc54618732af45643ae6f66dce691679ac2ada919470d27606abee80d.png",
+   "size": 6561
+  },
+  {
+   "digest": "9cfb0c52e0691dfd25f9e9dac635d717b79d5f1849fef24abbd93320d0fef292",
+   "media_type": "image/png",
+   "name": "image",
+   "omitted_reason": null,
+   "path": "artifacts/9cfb0c52e0691dfd25f9e9dac635d717b79d5f1849fef24abbd93320d0fef292.png",
+   "size": 928855
+  },
+  {
+   "digest": "a5ab831bac7f63f638e0b821fe4350c3f088e53c6c2477f9034010fa71cb991a",
+   "media_type": "image/png",
+   "name": "image",
+   "omitted_reason": null,
+   "path": "artifacts/a5ab831bac7f63f638e0b821fe4350c3f088e53c6c2477f9034010fa71cb991a.png",
+   "size": 5476
+  },
+  {
+   "digest": "aaf99cbdc1d30b443dd552ebd5cf2337c75c3b1edbf52fad3a5e1aafaf97bb62",
+   "media_type": "json",
+   "name": "schema",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 626
+  },
+  {
+   "digest": "ba52e5acb6d7111610b8bd22bd19d310f8bf398613cba7d3412bd8bb30eee67a",
+   "media_type": "json",
+   "name": "json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 798
+  },
+  {
+   "digest": "bccd58645408a8d00e5ac2ae52fb929347c98a1be2b25ddf7ca71c101fd647f1",
+   "media_type": "image/png",
+   "name": "evidence",
+   "omitted_reason": null,
+   "path": "artifacts/bccd58645408a8d00e5ac2ae52fb929347c98a1be2b25ddf7ca71c101fd647f1.png",
+   "size": 693632
+  },
+  {
+   "digest": "c85f61ac9c21f1014cc3ad50315ea50be269c6f01e70b11d63e30a4fbe49e79d",
+   "media_type": "json",
+   "name": "manifest",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 1083
+  },
+  {
+   "digest": "dc1f2cebd9364a84ef8bc8e2ae6ca8ba418a777a782343eb347ee5e99bb694eb",
+   "media_type": "image/png",
+   "name": "image",
+   "omitted_reason": null,
+   "path": "artifacts/dc1f2cebd9364a84ef8bc8e2ae6ca8ba418a777a782343eb347ee5e99bb694eb.png",
+   "size": 1288144
+  },
+  {
+   "digest": "e8819af062fae3f6e515bab85e9ce8d7f0a04652647a47324e45e127cb84aab3",
+   "media_type": "json",
+   "name": "validation",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 20274
+  },
+  {
+   "digest": "ed20561c86bb462753dc0ae5622ec2f96b5834bfdfac97a1982a6716706e0d59",
+   "media_type": "image/png",
+   "name": "evidence",
+   "omitted_reason": null,
+   "path": "artifacts/ed20561c86bb462753dc0ae5622ec2f96b5834bfdfac97a1982a6716706e0d59.png",
+   "size": 423319
+  }
+ ],
+ "disclosure": {
+  "artifacts": "media",
+  "diagnostics": false,
+  "values": false
+ },
+ "kind": "fx-run-export-v1",
+ "layout": {
+  "cells": {
+   "button_rect": {
+    "column": 0,
+    "row": 1,
+    "source": "automatic"
+   },
+   "button_rect.admit": {
+    "column": 2,
+    "row": 0,
+    "source": "automatic"
+   },
+   "button_rect.generate": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "button_rect.publish": {
+    "column": 2,
+    "row": 1,
+    "source": "automatic"
+   },
+   "button_rect.review": {
+    "column": 3,
+    "row": 1,
+    "source": "automatic"
+   },
+   "button_rect.review_schema": {
+    "column": 0,
+    "row": 1,
+    "source": "automatic"
+   },
+   "button_rect.template": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   },
+   "package": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "panel_frame": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   },
+   "panel_frame.admit": {
+    "column": 2,
+    "row": 0,
+    "source": "automatic"
+   },
+   "panel_frame.generate": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "panel_frame.publish": {
+    "column": 2,
+    "row": 1,
+    "source": "automatic"
+   },
+   "panel_frame.review": {
+    "column": 3,
+    "row": 1,
+    "source": "automatic"
+   },
+   "panel_frame.review_schema": {
+    "column": 0,
+    "row": 1,
+    "source": "automatic"
+   },
+   "panel_frame.template": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   },
+   "preview_icons": {
+    "column": 0,
+    "row": 2,
+    "source": "automatic"
+   },
+   "preview_icons.admit": {
+    "column": 2,
+    "row": 0,
+    "source": "automatic"
+   },
+   "preview_icons.generate": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "preview_icons.publish": {
+    "column": 2,
+    "row": 1,
+    "source": "automatic"
+   },
+   "preview_icons.review": {
+    "column": 3,
+    "row": 1,
+    "source": "automatic"
+   },
+   "preview_icons.review_schema": {
+    "column": 0,
+    "row": 1,
+    "source": "automatic"
+   },
+   "preview_icons.template": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   }
+  },
+  "cursor": null,
+  "diagnostics": [],
+  "file": null,
+  "kind": "fx-layout-report-v1",
+  "order": [
+   "panel_frame.template#1",
+   "scope:panel_frame#",
+   "panel_frame.generate#1",
+   "panel_frame.admit#1",
+   "panel_frame.publish#1",
+   "panel_frame.review_schema#1",
+   "panel_frame.review#1",
+   "button_rect.template#1",
+   "scope:button_rect#",
+   "button_rect.generate#1",
+   "button_rect.admit#1",
+   "button_rect.publish#1",
+   "button_rect.review_schema#1",
+   "button_rect.review#1",
+   "preview_icons.template#1",
+   "scope:preview_icons#",
+   "preview_icons.generate#1",
+   "preview_icons.admit#1",
+   "preview_icons.publish#1",
+   "preview_icons.review_schema#1",
+   "preview_icons.review#1",
+   "package#1"
+  ],
+  "revision": null,
+  "state": "none"
+ },
+ "producer": {
+  "version": "0.1.0"
+ },
+ "source": {
+  "event_count": 63,
+  "events_sha256": "7c6df180e2931efc7d8b154a28e1a6fd29644111f39be7d7fc5c18fdbba2b64c",
+  "plan_sha256": "8fa4da0a8c3cb2a152c1240e48cf83e1122d2932702ea171cd441c5ac6108350"
+ },
+ "view": {
+  "artifacts": [
+   {
+    "available": true,
+    "digest": "10cdb7f926051aaf56684c44e7cd396325e4295c0960e1d71747d138a6c4f394",
+    "kind": "image/png",
+    "name": "image",
+    "size": 897456,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "119ac8a541f8bf492d282ea3cab51338c21bbdac90d6bfbf6494c958aba6b8b5",
+    "kind": "json",
+    "name": "schema",
+    "size": 687,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "16474ea2f9c670342d3cfee1c2b4c415b73638b22b8d31483f4e197d9e200f46",
+    "kind": "image/png",
+    "name": "image",
+    "size": 874036,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "1809e01b6e9f28327b16f9647c9c6f6f50d78633bd8a667bfdbc16f6158f3e47",
+    "kind": "json",
+    "name": "validation",
+    "size": 8608,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "36fb800e1f870e2b5dd2fa3389d5b9e6d3f0cfc2ae3dced3d6124af4972cbdaf",
+    "kind": "json",
+    "name": "json",
+    "size": 755,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "4a72a7b184e2a1ee67c68366271ec1ed908e13a8b5259368fdce8da98209d23b",
+    "kind": "image/png",
+    "name": "image",
+    "size": 1298705,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "60999477d14f2e91b0a9836a34941150b3933d8a5227ffcaef894e4db04cab28",
+    "kind": "image/png",
+    "name": "image",
+    "size": 5906,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "628b89a8167bf54782e98b8578cfe601d3cc181bb34dfc59912d708f3221d138",
+    "kind": "image/png",
+    "name": "meadow.png",
+    "size": 2016648,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "6b40d271eadf1912b2303aac22d1018ef277f960547104bfcccf084da3159b81",
+    "kind": "json",
+    "name": "validation",
+    "size": 26695,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "6eedb4f4ec25bb58d978c9d462cba865600dc479eee44fd7e4bf89074b160c40",
+    "kind": "image/png",
+    "name": "evidence",
+    "size": 724513,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "7db584c2ddc106f2e1aa36a421db5129bd10cbc2095b1227d088e4ab5dc74ae8",
+    "kind": "json",
+    "name": "json",
+    "size": 729,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "99411c8b378862e9f69c173036fe746bb10c3ae4c4686caa469faabdc494bc97",
+    "kind": "image/png",
+    "name": "image",
+    "size": 904359,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "99c2798bc54618732af45643ae6f66dce691679ac2ada919470d27606abee80d",
+    "kind": "image/png",
+    "name": "image",
+    "size": 6561,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "9cfb0c52e0691dfd25f9e9dac635d717b79d5f1849fef24abbd93320d0fef292",
+    "kind": "image/png",
+    "name": "image",
+    "size": 928855,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "a5ab831bac7f63f638e0b821fe4350c3f088e53c6c2477f9034010fa71cb991a",
+    "kind": "image/png",
+    "name": "image",
+    "size": 5476,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "aaf99cbdc1d30b443dd552ebd5cf2337c75c3b1edbf52fad3a5e1aafaf97bb62",
+    "kind": "json",
+    "name": "schema",
+    "size": 626,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "ba52e5acb6d7111610b8bd22bd19d310f8bf398613cba7d3412bd8bb30eee67a",
+    "kind": "json",
+    "name": "json",
+    "size": 798,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "bccd58645408a8d00e5ac2ae52fb929347c98a1be2b25ddf7ca71c101fd647f1",
+    "kind": "image/png",
+    "name": "evidence",
+    "size": 693632,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "c85f61ac9c21f1014cc3ad50315ea50be269c6f01e70b11d63e30a4fbe49e79d",
+    "kind": "json",
+    "name": "manifest",
+    "size": 1083,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "dc1f2cebd9364a84ef8bc8e2ae6ca8ba418a777a782343eb347ee5e99bb694eb",
+    "kind": "image/png",
+    "name": "image",
+    "size": 1288144,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "e8819af062fae3f6e515bab85e9ce8d7f0a04652647a47324e45e127cb84aab3",
+    "kind": "json",
+    "name": "validation",
+    "size": 20274,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "ed20561c86bb462753dc0ae5622ec2f96b5834bfdfac97a1982a6716706e0d59",
+    "kind": "image/png",
+    "name": "evidence",
+    "size": 423319,
+    "url": null
+   }
+  ],
+  "charged_usd": 1.818882,
+  "estimate": {
+   "ceiling_usd": 15,
+   "high_usd": 12.24,
+   "low_usd": 0.78
+  },
+  "inputs": {},
+  "kind": "fx-viewer-run-v1",
+  "nodes": [
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 194,
+    "error": null,
+    "id": "panel_frame.template#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "image": {
+      "file": {
+       "digest": "a5ab831bac7f63f638e0b821fe4350c3f088e53c6c2477f9034010fa71cb991a",
+       "kind": "image/png",
+       "name": "image",
+       "size": 5476
+      }
+     }
+    },
+    "path": "panel_frame.template",
+    "ports": {
+     "inputs": {},
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [],
+    "started_at": "2026-10-11T08:24:38.894Z",
+    "state": "succeeded",
+    "step": "panel_frame.template",
+    "take": [
+     1
+    ],
+    "title": "Render the layout template",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/ui-kit/nodes.py#ui_template",
+    "with": {
+     "role": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "panel_frame.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 99055,
+    "error": null,
+    "id": "panel_frame.generate#1",
+    "interface_bindings": [
+     {
+      "source": "panel_frame.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "image": {
+      "file": {
+       "digest": "9cfb0c52e0691dfd25f9e9dac635d717b79d5f1849fef24abbd93320d0fef292",
+       "kind": "image/png",
+       "name": "image",
+       "size": 928855
+      }
+     }
+    },
+    "path": "panel_frame.generate",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "panel_frame.template#1"
+    ],
+    "started_at": "2026-10-11T08:24:39.096Z",
+    "state": "succeeded",
+    "step": "panel_frame.generate",
+    "take": [
+     1
+    ],
+    "title": "Paint the panel_frame sheet",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "file": {
+       "digest": "628b89a8167bf54782e98b8578cfe601d3cc181bb34dfc59912d708f3221d138",
+       "kind": "image/png",
+       "name": "meadow.png",
+       "size": 2016648
+      }
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "references": {
+      "list": [
+       {
+        "file": {
+         "digest": "a5ab831bac7f63f638e0b821fe4350c3f088e53c6c2477f9034010fa71cb991a",
+         "kind": "image/png",
+         "name": "image",
+         "size": 5476
+        }
+       }
+      ]
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "panel_frame.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "panel_frame.generate#2",
+    "interface_bindings": [
+     {
+      "source": "panel_frame.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "panel_frame.generate",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "panel_frame.template#1"
+    ],
+    "state": "skipped",
+    "step": "panel_frame.generate",
+    "take": [
+     2
+    ],
+    "title": "Paint the panel_frame sheet",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "references": {
+      "withheld": true
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "panel_frame.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "panel_frame.generate#3",
+    "interface_bindings": [
+     {
+      "source": "panel_frame.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "panel_frame.generate",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "panel_frame.template#1"
+    ],
+    "state": "skipped",
+    "step": "panel_frame.generate",
+    "take": [
+     3
+    ],
+    "title": "Paint the panel_frame sheet",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "references": {
+      "withheld": true
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "panel_frame.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "panel_frame.generate#4",
+    "interface_bindings": [
+     {
+      "source": "panel_frame.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "panel_frame.generate",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "panel_frame.template#1"
+    ],
+    "state": "skipped",
+    "step": "panel_frame.generate",
+    "take": [
+     4
+    ],
+    "title": "Paint the panel_frame sheet",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "references": {
+      "withheld": true
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "panel_frame.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "panel_frame.generate#5",
+    "interface_bindings": [
+     {
+      "source": "panel_frame.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "panel_frame.generate",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "panel_frame.template#1"
+    ],
+    "state": "skipped",
+    "step": "panel_frame.generate",
+    "take": [
+     5
+    ],
+    "title": "Paint the panel_frame sheet",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "references": {
+      "withheld": true
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "panel_frame.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "panel_frame.generate#6",
+    "interface_bindings": [
+     {
+      "source": "panel_frame.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "panel_frame.generate",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "panel_frame.template#1"
+    ],
+    "state": "skipped",
+    "step": "panel_frame.generate",
+    "take": [
+     6
+    ],
+    "title": "Paint the panel_frame sheet",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "references": {
+      "withheld": true
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "panel_frame.generate#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 111,
+    "error": null,
+    "id": "panel_frame.admit#1",
+    "interface_bindings": [
+     {
+      "source": "panel_frame.generate#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": "panel_frame.generate#1",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "panel_frame.admit",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "panel_frame.generate#1"
+    ],
+    "started_at": "2026-10-11T08:26:18.155Z",
+    "state": "succeeded",
+    "step": "panel_frame.admit",
+    "take": [
+     1
+    ],
+    "title": "Hold the sheet to its gate",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/ui-kit/nodes.py#admit_ui_sheet",
+    "with": {
+     "image": {
+      "file": {
+       "digest": "9cfb0c52e0691dfd25f9e9dac635d717b79d5f1849fef24abbd93320d0fef292",
+       "kind": "image/png",
+       "name": "image",
+       "size": 928855
+      }
+     },
+     "role": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "panel_frame.generate#2",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "panel_frame.admit#2",
+    "interface_bindings": [
+     {
+      "source": "panel_frame.generate#2",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": "panel_frame.generate#2",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "panel_frame.admit",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "panel_frame.generate#2"
+    ],
+    "state": "skipped",
+    "step": "panel_frame.admit",
+    "take": [
+     2
+    ],
+    "title": "Hold the sheet to its gate",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/ui-kit/nodes.py#admit_ui_sheet",
+    "with": {
+     "image": {
+      "withheld": true
+     },
+     "role": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "panel_frame.generate#3",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "panel_frame.admit#3",
+    "interface_bindings": [
+     {
+      "source": "panel_frame.generate#3",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": "panel_frame.generate#3",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "panel_frame.admit",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "panel_frame.generate#3"
+    ],
+    "state": "skipped",
+    "step": "panel_frame.admit",
+    "take": [
+     3
+    ],
+    "title": "Hold the sheet to its gate",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/ui-kit/nodes.py#admit_ui_sheet",
+    "with": {
+     "image": {
+      "withheld": true
+     },
+     "role": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "panel_frame.generate#4",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "panel_frame.admit#4",
+    "interface_bindings": [
+     {
+      "source": "panel_frame.generate#4",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": "panel_frame.generate#4",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "panel_frame.admit",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "panel_frame.generate#4"
+    ],
+    "state": "skipped",
+    "step": "panel_frame.admit",
+    "take": [
+     4
+    ],
+    "title": "Hold the sheet to its gate",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/ui-kit/nodes.py#admit_ui_sheet",
+    "with": {
+     "image": {
+      "withheld": true
+     },
+     "role": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "panel_frame.generate#5",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "panel_frame.admit#5",
+    "interface_bindings": [
+     {
+      "source": "panel_frame.generate#5",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": "panel_frame.generate#5",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "panel_frame.admit",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "panel_frame.generate#5"
+    ],
+    "state": "skipped",
+    "step": "panel_frame.admit",
+    "take": [
+     5
+    ],
+    "title": "Hold the sheet to its gate",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/ui-kit/nodes.py#admit_ui_sheet",
+    "with": {
+     "image": {
+      "withheld": true
+     },
+     "role": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "panel_frame.generate#6",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "panel_frame.admit#6",
+    "interface_bindings": [
+     {
+      "source": "panel_frame.generate#6",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": "panel_frame.generate#6",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "panel_frame.admit",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "panel_frame.generate#6"
+    ],
+    "state": "skipped",
+    "step": "panel_frame.admit",
+    "take": [
+     6
+    ],
+    "title": "Hold the sheet to its gate",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/ui-kit/nodes.py#admit_ui_sheet",
+    "with": {
+     "image": {
+      "withheld": true
+     },
+     "role": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "panel_frame.generate#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "raw"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 354,
+    "error": null,
+    "id": "panel_frame.publish#1",
+    "interface_bindings": [
+     {
+      "source": "panel_frame.generate#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "raw"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "evidence": {
+      "file": {
+       "digest": "6eedb4f4ec25bb58d978c9d462cba865600dc479eee44fd7e4bf89074b160c40",
+       "kind": "image/png",
+       "name": "evidence",
+       "size": 724513
+      }
+     },
+     "image": {
+      "file": {
+       "digest": "99411c8b378862e9f69c173036fe746bb10c3ae4c4686caa469faabdc494bc97",
+       "kind": "image/png",
+       "name": "image",
+       "size": 904359
+      }
+     },
+     "validation": {
+      "file": {
+       "digest": "1809e01b6e9f28327b16f9647c9c6f6f50d78633bd8a667bfdbc16f6158f3e47",
+       "kind": "json",
+       "name": "validation",
+       "size": 8608
+      }
+     }
+    },
+    "path": "panel_frame.publish",
+    "ports": {
+     "inputs": {
+      "raw": "image"
+     },
+     "outputs": {
+      "evidence": "image/png",
+      "image": "image/png",
+      "validation": "json"
+     },
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "panel_frame.generate#1",
+     "panel_frame.template#1"
+    ],
+    "started_at": "2026-10-11T08:26:18.268Z",
+    "state": "succeeded",
+    "step": "panel_frame.publish",
+    "take": [
+     1
+    ],
+    "title": "Normalize the sheet",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/ui-kit/nodes.py#publish_ui_sheet",
+    "with": {
+     "raw": {
+      "file": {
+       "digest": "9cfb0c52e0691dfd25f9e9dac635d717b79d5f1849fef24abbd93320d0fef292",
+       "kind": "image/png",
+       "name": "image",
+       "size": 928855
+      }
+     },
+     "role": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 176,
+    "error": null,
+    "id": "panel_frame.review_schema#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "schema": {
+      "file": {
+       "digest": "119ac8a541f8bf492d282ea3cab51338c21bbdac90d6bfbf6494c958aba6b8b5",
+       "kind": "json",
+       "name": "schema",
+       "size": 687
+      }
+     }
+    },
+    "path": "panel_frame.review_schema",
+    "ports": {
+     "inputs": {},
+     "outputs": {
+      "schema": "json"
+     },
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [],
+    "started_at": "2026-10-11T08:24:38.894Z",
+    "state": "succeeded",
+    "step": "panel_frame.review_schema",
+    "take": [
+     1
+    ],
+    "title": "The review's shape",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/ui-kit/nodes.py#ui_review_schema",
+    "with": {
+     "role": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "panel_frame.publish#1",
+      "source_kind": "output",
+      "source_port": "evidence",
+      "target_port": "context"
+     },
+     {
+      "source": "panel_frame.publish#1",
+      "source_kind": "output",
+      "source_port": "validation",
+      "target_port": "prompt"
+     },
+     {
+      "source": "panel_frame.review_schema#1",
+      "source_kind": "output",
+      "source_port": "schema",
+      "target_port": "schema"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 24894,
+    "error": null,
+    "id": "panel_frame.review#1",
+    "interface_bindings": [
+     {
+      "source": "panel_frame.publish#1",
+      "source_kind": "output",
+      "source_port": "evidence",
+      "target_port": "context"
+     },
+     {
+      "source": "panel_frame.publish#1",
+      "source_kind": "output",
+      "source_port": "validation",
+      "target_port": "prompt"
+     },
+     {
+      "source": "panel_frame.review_schema#1",
+      "source_kind": "output",
+      "source_port": "schema",
+      "target_port": "schema"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "json": {
+      "file": {
+       "digest": "36fb800e1f870e2b5dd2fa3389d5b9e6d3f0cfc2ae3dced3d6124af4972cbdaf",
+       "kind": "json",
+       "name": "json",
+       "size": 755
+      }
+     }
+    },
+    "path": "panel_frame.review",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "panel_frame.publish#1",
+     "panel_frame.review_schema#1"
+    ],
+    "started_at": "2026-10-11T08:26:18.626Z",
+    "state": "succeeded",
+    "step": "panel_frame.review",
+    "take": [
+     1
+    ],
+    "title": "Review the panel_frame sheet",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "list": [
+       {
+        "file": {
+         "digest": "6eedb4f4ec25bb58d978c9d462cba865600dc479eee44fd7e4bf89074b160c40",
+         "kind": "image/png",
+         "name": "evidence",
+         "size": 724513
+        }
+       },
+       {
+        "file": {
+         "digest": "628b89a8167bf54782e98b8578cfe601d3cc181bb34dfc59912d708f3221d138",
+         "kind": "image/png",
+         "name": "meadow.png",
+         "size": 2016648
+        }
+       }
+      ]
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "schema": {
+      "file": {
+       "digest": "119ac8a541f8bf492d282ea3cab51338c21bbdac90d6bfbf6494c958aba6b8b5",
+       "kind": "json",
+       "name": "schema",
+       "size": 687
+      }
+     },
+     "system": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 182,
+    "error": null,
+    "id": "button_rect.template#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "image": {
+      "file": {
+       "digest": "60999477d14f2e91b0a9836a34941150b3933d8a5227ffcaef894e4db04cab28",
+       "kind": "image/png",
+       "name": "image",
+       "size": 5906
+      }
+     }
+    },
+    "path": "button_rect.template",
+    "ports": {
+     "inputs": {},
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [],
+    "started_at": "2026-10-11T08:24:38.894Z",
+    "state": "succeeded",
+    "step": "button_rect.template",
+    "take": [
+     1
+    ],
+    "title": "Render the layout template",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/ui-kit/nodes.py#ui_template",
+    "with": {
+     "role": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "button_rect.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 101424,
+    "error": null,
+    "id": "button_rect.generate#1",
+    "interface_bindings": [
+     {
+      "source": "button_rect.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "image": {
+      "file": {
+       "digest": "10cdb7f926051aaf56684c44e7cd396325e4295c0960e1d71747d138a6c4f394",
+       "kind": "image/png",
+       "name": "image",
+       "size": 897456
+      }
+     }
+    },
+    "path": "button_rect.generate",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "button_rect.template#1"
+    ],
+    "started_at": "2026-10-11T08:24:39.083Z",
+    "state": "succeeded",
+    "step": "button_rect.generate",
+    "take": [
+     1
+    ],
+    "title": "Paint the button_rect sheet",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "file": {
+       "digest": "628b89a8167bf54782e98b8578cfe601d3cc181bb34dfc59912d708f3221d138",
+       "kind": "image/png",
+       "name": "meadow.png",
+       "size": 2016648
+      }
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "references": {
+      "list": [
+       {
+        "file": {
+         "digest": "60999477d14f2e91b0a9836a34941150b3933d8a5227ffcaef894e4db04cab28",
+         "kind": "image/png",
+         "name": "image",
+         "size": 5906
+        }
+       }
+      ]
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "button_rect.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "button_rect.generate#2",
+    "interface_bindings": [
+     {
+      "source": "button_rect.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "button_rect.generate",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "button_rect.template#1"
+    ],
+    "state": "skipped",
+    "step": "button_rect.generate",
+    "take": [
+     2
+    ],
+    "title": "Paint the button_rect sheet",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "references": {
+      "withheld": true
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "button_rect.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "button_rect.generate#3",
+    "interface_bindings": [
+     {
+      "source": "button_rect.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "button_rect.generate",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "button_rect.template#1"
+    ],
+    "state": "skipped",
+    "step": "button_rect.generate",
+    "take": [
+     3
+    ],
+    "title": "Paint the button_rect sheet",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "references": {
+      "withheld": true
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "button_rect.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "button_rect.generate#4",
+    "interface_bindings": [
+     {
+      "source": "button_rect.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "button_rect.generate",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "button_rect.template#1"
+    ],
+    "state": "skipped",
+    "step": "button_rect.generate",
+    "take": [
+     4
+    ],
+    "title": "Paint the button_rect sheet",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "references": {
+      "withheld": true
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "button_rect.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "button_rect.generate#5",
+    "interface_bindings": [
+     {
+      "source": "button_rect.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "button_rect.generate",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "button_rect.template#1"
+    ],
+    "state": "skipped",
+    "step": "button_rect.generate",
+    "take": [
+     5
+    ],
+    "title": "Paint the button_rect sheet",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "references": {
+      "withheld": true
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "button_rect.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "button_rect.generate#6",
+    "interface_bindings": [
+     {
+      "source": "button_rect.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "button_rect.generate",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "button_rect.template#1"
+    ],
+    "state": "skipped",
+    "step": "button_rect.generate",
+    "take": [
+     6
+    ],
+    "title": "Paint the button_rect sheet",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "references": {
+      "withheld": true
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "button_rect.generate#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 234,
+    "error": null,
+    "id": "button_rect.admit#1",
+    "interface_bindings": [
+     {
+      "source": "button_rect.generate#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": "button_rect.generate#1",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "button_rect.admit",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "button_rect.generate#1"
+    ],
+    "started_at": "2026-10-11T08:26:20.514Z",
+    "state": "succeeded",
+    "step": "button_rect.admit",
+    "take": [
+     1
+    ],
+    "title": "Hold the sheet to its gate",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/ui-kit/nodes.py#admit_ui_sheet",
+    "with": {
+     "image": {
+      "file": {
+       "digest": "10cdb7f926051aaf56684c44e7cd396325e4295c0960e1d71747d138a6c4f394",
+       "kind": "image/png",
+       "name": "image",
+       "size": 897456
+      }
+     },
+     "role": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "button_rect.generate#2",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "button_rect.admit#2",
+    "interface_bindings": [
+     {
+      "source": "button_rect.generate#2",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": "button_rect.generate#2",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "button_rect.admit",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "button_rect.generate#2"
+    ],
+    "state": "skipped",
+    "step": "button_rect.admit",
+    "take": [
+     2
+    ],
+    "title": "Hold the sheet to its gate",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/ui-kit/nodes.py#admit_ui_sheet",
+    "with": {
+     "image": {
+      "withheld": true
+     },
+     "role": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "button_rect.generate#3",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "button_rect.admit#3",
+    "interface_bindings": [
+     {
+      "source": "button_rect.generate#3",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": "button_rect.generate#3",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "button_rect.admit",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "button_rect.generate#3"
+    ],
+    "state": "skipped",
+    "step": "button_rect.admit",
+    "take": [
+     3
+    ],
+    "title": "Hold the sheet to its gate",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/ui-kit/nodes.py#admit_ui_sheet",
+    "with": {
+     "image": {
+      "withheld": true
+     },
+     "role": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "button_rect.generate#4",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "button_rect.admit#4",
+    "interface_bindings": [
+     {
+      "source": "button_rect.generate#4",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": "button_rect.generate#4",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "button_rect.admit",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "button_rect.generate#4"
+    ],
+    "state": "skipped",
+    "step": "button_rect.admit",
+    "take": [
+     4
+    ],
+    "title": "Hold the sheet to its gate",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/ui-kit/nodes.py#admit_ui_sheet",
+    "with": {
+     "image": {
+      "withheld": true
+     },
+     "role": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "button_rect.generate#5",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "button_rect.admit#5",
+    "interface_bindings": [
+     {
+      "source": "button_rect.generate#5",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": "button_rect.generate#5",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "button_rect.admit",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "button_rect.generate#5"
+    ],
+    "state": "skipped",
+    "step": "button_rect.admit",
+    "take": [
+     5
+    ],
+    "title": "Hold the sheet to its gate",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/ui-kit/nodes.py#admit_ui_sheet",
+    "with": {
+     "image": {
+      "withheld": true
+     },
+     "role": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "button_rect.generate#6",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "button_rect.admit#6",
+    "interface_bindings": [
+     {
+      "source": "button_rect.generate#6",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": "button_rect.generate#6",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "button_rect.admit",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "button_rect.generate#6"
+    ],
+    "state": "skipped",
+    "step": "button_rect.admit",
+    "take": [
+     6
+    ],
+    "title": "Hold the sheet to its gate",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/ui-kit/nodes.py#admit_ui_sheet",
+    "with": {
+     "image": {
+      "withheld": true
+     },
+     "role": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "button_rect.generate#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "raw"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 593,
+    "error": null,
+    "id": "button_rect.publish#1",
+    "interface_bindings": [
+     {
+      "source": "button_rect.generate#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "raw"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "evidence": {
+      "file": {
+       "digest": "ed20561c86bb462753dc0ae5622ec2f96b5834bfdfac97a1982a6716706e0d59",
+       "kind": "image/png",
+       "name": "evidence",
+       "size": 423319
+      }
+     },
+     "image": {
+      "file": {
+       "digest": "16474ea2f9c670342d3cfee1c2b4c415b73638b22b8d31483f4e197d9e200f46",
+       "kind": "image/png",
+       "name": "image",
+       "size": 874036
+      }
+     },
+     "validation": {
+      "file": {
+       "digest": "6b40d271eadf1912b2303aac22d1018ef277f960547104bfcccf084da3159b81",
+       "kind": "json",
+       "name": "validation",
+       "size": 26695
+      }
+     }
+    },
+    "path": "button_rect.publish",
+    "ports": {
+     "inputs": {
+      "raw": "image"
+     },
+     "outputs": {
+      "evidence": "image/png",
+      "image": "image/png",
+      "validation": "json"
+     },
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "button_rect.generate#1",
+     "button_rect.template#1"
+    ],
+    "started_at": "2026-10-11T08:26:20.750Z",
+    "state": "succeeded",
+    "step": "button_rect.publish",
+    "take": [
+     1
+    ],
+    "title": "Normalize the sheet",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/ui-kit/nodes.py#publish_ui_sheet",
+    "with": {
+     "raw": {
+      "file": {
+       "digest": "10cdb7f926051aaf56684c44e7cd396325e4295c0960e1d71747d138a6c4f394",
+       "kind": "image/png",
+       "name": "image",
+       "size": 897456
+      }
+     },
+     "role": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 171,
+    "error": null,
+    "id": "button_rect.review_schema#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "schema": {
+      "file": {
+       "digest": "119ac8a541f8bf492d282ea3cab51338c21bbdac90d6bfbf6494c958aba6b8b5",
+       "kind": "json",
+       "name": "schema",
+       "size": 687
+      }
+     }
+    },
+    "path": "button_rect.review_schema",
+    "ports": {
+     "inputs": {},
+     "outputs": {
+      "schema": "json"
+     },
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [],
+    "started_at": "2026-10-11T08:24:38.894Z",
+    "state": "succeeded",
+    "step": "button_rect.review_schema",
+    "take": [
+     1
+    ],
+    "title": "The review's shape",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/ui-kit/nodes.py#ui_review_schema",
+    "with": {
+     "role": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "button_rect.publish#1",
+      "source_kind": "output",
+      "source_port": "evidence",
+      "target_port": "context"
+     },
+     {
+      "source": "button_rect.publish#1",
+      "source_kind": "output",
+      "source_port": "validation",
+      "target_port": "prompt"
+     },
+     {
+      "source": "button_rect.review_schema#1",
+      "source_kind": "output",
+      "source_port": "schema",
+      "target_port": "schema"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 16118,
+    "error": null,
+    "id": "button_rect.review#1",
+    "interface_bindings": [
+     {
+      "source": "button_rect.publish#1",
+      "source_kind": "output",
+      "source_port": "evidence",
+      "target_port": "context"
+     },
+     {
+      "source": "button_rect.publish#1",
+      "source_kind": "output",
+      "source_port": "validation",
+      "target_port": "prompt"
+     },
+     {
+      "source": "button_rect.review_schema#1",
+      "source_kind": "output",
+      "source_port": "schema",
+      "target_port": "schema"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "json": {
+      "file": {
+       "digest": "7db584c2ddc106f2e1aa36a421db5129bd10cbc2095b1227d088e4ab5dc74ae8",
+       "kind": "json",
+       "name": "json",
+       "size": 729
+      }
+     }
+    },
+    "path": "button_rect.review",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "button_rect.publish#1",
+     "button_rect.review_schema#1"
+    ],
+    "started_at": "2026-10-11T08:26:21.348Z",
+    "state": "succeeded",
+    "step": "button_rect.review",
+    "take": [
+     1
+    ],
+    "title": "Review the button_rect sheet",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "list": [
+       {
+        "file": {
+         "digest": "ed20561c86bb462753dc0ae5622ec2f96b5834bfdfac97a1982a6716706e0d59",
+         "kind": "image/png",
+         "name": "evidence",
+         "size": 423319
+        }
+       },
+       {
+        "file": {
+         "digest": "628b89a8167bf54782e98b8578cfe601d3cc181bb34dfc59912d708f3221d138",
+         "kind": "image/png",
+         "name": "meadow.png",
+         "size": 2016648
+        }
+       }
+      ]
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "schema": {
+      "file": {
+       "digest": "119ac8a541f8bf492d282ea3cab51338c21bbdac90d6bfbf6494c958aba6b8b5",
+       "kind": "json",
+       "name": "schema",
+       "size": 687
+      }
+     },
+     "system": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 198,
+    "error": null,
+    "id": "preview_icons.template#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "image": {
+      "file": {
+       "digest": "99c2798bc54618732af45643ae6f66dce691679ac2ada919470d27606abee80d",
+       "kind": "image/png",
+       "name": "image",
+       "size": 6561
+      }
+     }
+    },
+    "path": "preview_icons.template",
+    "ports": {
+     "inputs": {},
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [],
+    "started_at": "2026-10-11T08:24:38.894Z",
+    "state": "succeeded",
+    "step": "preview_icons.template",
+    "take": [
+     1
+    ],
+    "title": "Render the layout template",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/ui-kit/nodes.py#ui_template",
+    "with": {
+     "role": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "preview_icons.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 116029,
+    "error": null,
+    "id": "preview_icons.generate#1",
+    "interface_bindings": [
+     {
+      "source": "preview_icons.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "image": {
+      "file": {
+       "digest": "4a72a7b184e2a1ee67c68366271ec1ed908e13a8b5259368fdce8da98209d23b",
+       "kind": "image/png",
+       "name": "image",
+       "size": 1298705
+      }
+     }
+    },
+    "path": "preview_icons.generate",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "preview_icons.template#1"
+    ],
+    "started_at": "2026-10-11T08:24:39.097Z",
+    "state": "succeeded",
+    "step": "preview_icons.generate",
+    "take": [
+     1
+    ],
+    "title": "Paint the preview_icons sheet",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "file": {
+       "digest": "628b89a8167bf54782e98b8578cfe601d3cc181bb34dfc59912d708f3221d138",
+       "kind": "image/png",
+       "name": "meadow.png",
+       "size": 2016648
+      }
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "references": {
+      "list": [
+       {
+        "file": {
+         "digest": "99c2798bc54618732af45643ae6f66dce691679ac2ada919470d27606abee80d",
+         "kind": "image/png",
+         "name": "image",
+         "size": 6561
+        }
+       }
+      ]
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "preview_icons.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "preview_icons.generate#2",
+    "interface_bindings": [
+     {
+      "source": "preview_icons.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "preview_icons.generate",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "preview_icons.template#1"
+    ],
+    "state": "skipped",
+    "step": "preview_icons.generate",
+    "take": [
+     2
+    ],
+    "title": "Paint the preview_icons sheet",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "references": {
+      "withheld": true
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "preview_icons.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "preview_icons.generate#3",
+    "interface_bindings": [
+     {
+      "source": "preview_icons.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "preview_icons.generate",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "preview_icons.template#1"
+    ],
+    "state": "skipped",
+    "step": "preview_icons.generate",
+    "take": [
+     3
+    ],
+    "title": "Paint the preview_icons sheet",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "references": {
+      "withheld": true
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "preview_icons.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "preview_icons.generate#4",
+    "interface_bindings": [
+     {
+      "source": "preview_icons.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "preview_icons.generate",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "preview_icons.template#1"
+    ],
+    "state": "skipped",
+    "step": "preview_icons.generate",
+    "take": [
+     4
+    ],
+    "title": "Paint the preview_icons sheet",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "references": {
+      "withheld": true
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "preview_icons.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "preview_icons.generate#5",
+    "interface_bindings": [
+     {
+      "source": "preview_icons.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "preview_icons.generate",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "preview_icons.template#1"
+    ],
+    "state": "skipped",
+    "step": "preview_icons.generate",
+    "take": [
+     5
+    ],
+    "title": "Paint the preview_icons sheet",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "references": {
+      "withheld": true
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "preview_icons.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "preview_icons.generate#6",
+    "interface_bindings": [
+     {
+      "source": "preview_icons.template#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "references"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "preview_icons.generate",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "preview_icons.template#1"
+    ],
+    "state": "skipped",
+    "step": "preview_icons.generate",
+    "take": [
+     6
+    ],
+    "title": "Paint the preview_icons sheet",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "references": {
+      "withheld": true
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "preview_icons.generate#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 32,
+    "error": null,
+    "id": "preview_icons.admit#1",
+    "interface_bindings": [
+     {
+      "source": "preview_icons.generate#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": "preview_icons.generate#1",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "preview_icons.admit",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "preview_icons.generate#1"
+    ],
+    "started_at": "2026-10-11T08:26:35.131Z",
+    "state": "succeeded",
+    "step": "preview_icons.admit",
+    "take": [
+     1
+    ],
+    "title": "Hold the sheet to its gate",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/ui-kit/nodes.py#admit_ui_sheet",
+    "with": {
+     "image": {
+      "file": {
+       "digest": "4a72a7b184e2a1ee67c68366271ec1ed908e13a8b5259368fdce8da98209d23b",
+       "kind": "image/png",
+       "name": "image",
+       "size": 1298705
+      }
+     },
+     "role": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "preview_icons.generate#2",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "preview_icons.admit#2",
+    "interface_bindings": [
+     {
+      "source": "preview_icons.generate#2",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": "preview_icons.generate#2",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "preview_icons.admit",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "preview_icons.generate#2"
+    ],
+    "state": "skipped",
+    "step": "preview_icons.admit",
+    "take": [
+     2
+    ],
+    "title": "Hold the sheet to its gate",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/ui-kit/nodes.py#admit_ui_sheet",
+    "with": {
+     "image": {
+      "withheld": true
+     },
+     "role": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "preview_icons.generate#3",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "preview_icons.admit#3",
+    "interface_bindings": [
+     {
+      "source": "preview_icons.generate#3",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": "preview_icons.generate#3",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "preview_icons.admit",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "preview_icons.generate#3"
+    ],
+    "state": "skipped",
+    "step": "preview_icons.admit",
+    "take": [
+     3
+    ],
+    "title": "Hold the sheet to its gate",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/ui-kit/nodes.py#admit_ui_sheet",
+    "with": {
+     "image": {
+      "withheld": true
+     },
+     "role": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "preview_icons.generate#4",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "preview_icons.admit#4",
+    "interface_bindings": [
+     {
+      "source": "preview_icons.generate#4",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": "preview_icons.generate#4",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "preview_icons.admit",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "preview_icons.generate#4"
+    ],
+    "state": "skipped",
+    "step": "preview_icons.admit",
+    "take": [
+     4
+    ],
+    "title": "Hold the sheet to its gate",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/ui-kit/nodes.py#admit_ui_sheet",
+    "with": {
+     "image": {
+      "withheld": true
+     },
+     "role": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "preview_icons.generate#5",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "preview_icons.admit#5",
+    "interface_bindings": [
+     {
+      "source": "preview_icons.generate#5",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": "preview_icons.generate#5",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "preview_icons.admit",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "preview_icons.generate#5"
+    ],
+    "state": "skipped",
+    "step": "preview_icons.admit",
+    "take": [
+     5
+    ],
+    "title": "Hold the sheet to its gate",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/ui-kit/nodes.py#admit_ui_sheet",
+    "with": {
+     "image": {
+      "withheld": true
+     },
+     "role": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "preview_icons.generate#6",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "preview_icons.admit#6",
+    "interface_bindings": [
+     {
+      "source": "preview_icons.generate#6",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": "preview_icons.generate#6",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "preview_icons.admit",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "preview_icons.generate#6"
+    ],
+    "state": "skipped",
+    "step": "preview_icons.admit",
+    "take": [
+     6
+    ],
+    "title": "Hold the sheet to its gate",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/ui-kit/nodes.py#admit_ui_sheet",
+    "with": {
+     "image": {
+      "withheld": true
+     },
+     "role": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "preview_icons.generate#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "raw"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 233,
+    "error": null,
+    "id": "preview_icons.publish#1",
+    "interface_bindings": [
+     {
+      "source": "preview_icons.generate#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "raw"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "evidence": {
+      "file": {
+       "digest": "bccd58645408a8d00e5ac2ae52fb929347c98a1be2b25ddf7ca71c101fd647f1",
+       "kind": "image/png",
+       "name": "evidence",
+       "size": 693632
+      }
+     },
+     "image": {
+      "file": {
+       "digest": "dc1f2cebd9364a84ef8bc8e2ae6ca8ba418a777a782343eb347ee5e99bb694eb",
+       "kind": "image/png",
+       "name": "image",
+       "size": 1288144
+      }
+     },
+     "validation": {
+      "file": {
+       "digest": "e8819af062fae3f6e515bab85e9ce8d7f0a04652647a47324e45e127cb84aab3",
+       "kind": "json",
+       "name": "validation",
+       "size": 20274
+      }
+     }
+    },
+    "path": "preview_icons.publish",
+    "ports": {
+     "inputs": {
+      "raw": "image"
+     },
+     "outputs": {
+      "evidence": "image/png",
+      "image": "image/png",
+      "validation": "json"
+     },
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [
+     "preview_icons.generate#1",
+     "preview_icons.template#1"
+    ],
+    "started_at": "2026-10-11T08:26:35.166Z",
+    "state": "succeeded",
+    "step": "preview_icons.publish",
+    "take": [
+     1
+    ],
+    "title": "Normalize the sheet",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/ui-kit/nodes.py#publish_ui_sheet",
+    "with": {
+     "raw": {
+      "file": {
+       "digest": "4a72a7b184e2a1ee67c68366271ec1ed908e13a8b5259368fdce8da98209d23b",
+       "kind": "image/png",
+       "name": "image",
+       "size": 1298705
+      }
+     },
+     "role": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 194,
+    "error": null,
+    "id": "preview_icons.review_schema#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "schema": {
+      "file": {
+       "digest": "aaf99cbdc1d30b443dd552ebd5cf2337c75c3b1edbf52fad3a5e1aafaf97bb62",
+       "kind": "json",
+       "name": "schema",
+       "size": 626
+      }
+     }
+    },
+    "path": "preview_icons.review_schema",
+    "ports": {
+     "inputs": {},
+     "outputs": {
+      "schema": "json"
+     },
+     "params": {
+      "role": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [],
+    "started_at": "2026-10-11T08:24:38.894Z",
+    "state": "succeeded",
+    "step": "preview_icons.review_schema",
+    "take": [
+     1
+    ],
+    "title": "The review's shape",
+    "uses": "./local/fx-showcases/campaign-2026-10-11/projects/ui-kit/nodes.py#ui_review_schema",
+    "with": {
+     "role": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "preview_icons.publish#1",
+      "source_kind": "output",
+      "source_port": "evidence",
+      "target_port": "context"
+     },
+     {
+      "source": "preview_icons.review_schema#1",
+      "source_kind": "output",
+      "source_port": "schema",
+      "target_port": "schema"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 21216,
+    "error": null,
+    "id": "preview_icons.review#1",
+    "interface_bindings": [
+     {
+      "source": "preview_icons.publish#1",
+      "source_kind": "output",
+      "source_port": "evidence",
+      "target_port": "context"
+     },
+     {
+      "source": "preview_icons.review_schema#1",
+      "source_kind": "output",
+      "source_port": "schema",
+      "target_port": "schema"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "json": {
+      "file": {
+       "digest": "ba52e5acb6d7111610b8bd22bd19d310f8bf398613cba7d3412bd8bb30eee67a",
+       "kind": "json",
+       "name": "json",
+       "size": 798
+      }
+     }
+    },
+    "path": "preview_icons.review",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "preview_icons.publish#1",
+     "preview_icons.review_schema#1"
+    ],
+    "started_at": "2026-10-11T08:26:35.403Z",
+    "state": "succeeded",
+    "step": "preview_icons.review",
+    "take": [
+     1
+    ],
+    "title": "Review the preview_icons sheet",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "list": [
+       {
+        "file": {
+         "digest": "bccd58645408a8d00e5ac2ae52fb929347c98a1be2b25ddf7ca71c101fd647f1",
+         "kind": "image/png",
+         "name": "evidence",
+         "size": 693632
+        }
+       },
+       {
+        "file": {
+         "digest": "628b89a8167bf54782e98b8578cfe601d3cc181bb34dfc59912d708f3221d138",
+         "kind": "image/png",
+         "name": "meadow.png",
+         "size": 2016648
+        }
+       }
+      ]
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "schema": {
+      "file": {
+       "digest": "aaf99cbdc1d30b443dd552ebd5cf2337c75c3b1edbf52fad3a5e1aafaf97bb62",
+       "kind": "json",
+       "name": "schema",
+       "size": 626
+      }
+     },
+     "system": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "button_rect.publish#1",
+      "source_kind": "output",
+      "source_port": "evidence",
+      "target_port": "files"
+     },
+     {
+      "source": "button_rect.publish#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "files"
+     },
+     {
+      "source": "button_rect.publish#1",
+      "source_kind": "output",
+      "source_port": "validation",
+      "target_port": "files"
+     },
+     {
+      "source": "button_rect.review#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "files"
+     },
+     {
+      "source": "panel_frame.publish#1",
+      "source_kind": "output",
+      "source_port": "evidence",
+      "target_port": "files"
+     },
+     {
+      "source": "panel_frame.publish#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "files"
+     },
+     {
+      "source": "panel_frame.publish#1",
+      "source_kind": "output",
+      "source_port": "validation",
+      "target_port": "files"
+     },
+     {
+      "source": "panel_frame.review#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "files"
+     },
+     {
+      "source": "preview_icons.publish#1",
+      "source_kind": "output",
+      "source_port": "evidence",
+      "target_port": "files"
+     },
+     {
+      "source": "preview_icons.publish#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "files"
+     },
+     {
+      "source": "preview_icons.publish#1",
+      "source_kind": "output",
+      "source_port": "validation",
+      "target_port": "files"
+     },
+     {
+      "source": "preview_icons.review#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "files"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 128,
+    "error": null,
+    "id": "package#1",
+    "interface_bindings": [
+     {
+      "source": "button_rect.publish#1",
+      "source_kind": "output",
+      "source_port": "evidence",
+      "target_port": "files"
+     },
+     {
+      "source": "button_rect.publish#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "files"
+     },
+     {
+      "source": "button_rect.publish#1",
+      "source_kind": "output",
+      "source_port": "validation",
+      "target_port": "files"
+     },
+     {
+      "source": "button_rect.review#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "files"
+     },
+     {
+      "source": "panel_frame.publish#1",
+      "source_kind": "output",
+      "source_port": "evidence",
+      "target_port": "files"
+     },
+     {
+      "source": "panel_frame.publish#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "files"
+     },
+     {
+      "source": "panel_frame.publish#1",
+      "source_kind": "output",
+      "source_port": "validation",
+      "target_port": "files"
+     },
+     {
+      "source": "panel_frame.review#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "files"
+     },
+     {
+      "source": "preview_icons.publish#1",
+      "source_kind": "output",
+      "source_port": "evidence",
+      "target_port": "files"
+     },
+     {
+      "source": "preview_icons.publish#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "files"
+     },
+     {
+      "source": "preview_icons.publish#1",
+      "source_kind": "output",
+      "source_port": "validation",
+      "target_port": "files"
+     },
+     {
+      "source": "preview_icons.review#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "files"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "files": {
+      "collection": [
+       [
+        "ui/panel_frame.png",
+        {
+         "file": {
+          "digest": "99411c8b378862e9f69c173036fe746bb10c3ae4c4686caa469faabdc494bc97",
+          "key": "ui/panel_frame.png",
+          "kind": "image/png",
+          "name": "panel_frame.png]",
+          "size": 904359
+         }
+        }
+       ],
+       [
+        "ui/panel_frame.validation.json",
+        {
+         "file": {
+          "digest": "1809e01b6e9f28327b16f9647c9c6f6f50d78633bd8a667bfdbc16f6158f3e47",
+          "key": "ui/panel_frame.validation.json",
+          "kind": "json",
+          "name": "panel_frame.validation.json]",
+          "size": 8608
+         }
+        }
+       ],
+       [
+        "ui/panel_frame.evidence.png",
+        {
+         "file": {
+          "digest": "6eedb4f4ec25bb58d978c9d462cba865600dc479eee44fd7e4bf89074b160c40",
+          "key": "ui/panel_frame.evidence.png",
+          "kind": "image/png",
+          "name": "panel_frame.evidence.png]",
+          "size": 724513
+         }
+        }
+       ],
+       [
+        "ui/panel_frame.review.json",
+        {
+         "file": {
+          "digest": "36fb800e1f870e2b5dd2fa3389d5b9e6d3f0cfc2ae3dced3d6124af4972cbdaf",
+          "key": "ui/panel_frame.review.json",
+          "kind": "json",
+          "name": "panel_frame.review.json]",
+          "size": 755
+         }
+        }
+       ],
+       [
+        "ui/button_rect.png",
+        {
+         "file": {
+          "digest": "16474ea2f9c670342d3cfee1c2b4c415b73638b22b8d31483f4e197d9e200f46",
+          "key": "ui/button_rect.png",
+          "kind": "image/png",
+          "name": "button_rect.png]",
+          "size": 874036
+         }
+        }
+       ],
+       [
+        "ui/button_rect.validation.json",
+        {
+         "file": {
+          "digest": "6b40d271eadf1912b2303aac22d1018ef277f960547104bfcccf084da3159b81",
+          "key": "ui/button_rect.validation.json",
+          "kind": "json",
+          "name": "button_rect.validation.json]",
+          "size": 26695
+         }
+        }
+       ],
+       [
+        "ui/button_rect.evidence.png",
+        {
+         "file": {
+          "digest": "ed20561c86bb462753dc0ae5622ec2f96b5834bfdfac97a1982a6716706e0d59",
+          "key": "ui/button_rect.evidence.png",
+          "kind": "image/png",
+          "name": "button_rect.evidence.png]",
+          "size": 423319
+         }
+        }
+       ],
+       [
+        "ui/button_rect.review.json",
+        {
+         "file": {
+          "digest": "7db584c2ddc106f2e1aa36a421db5129bd10cbc2095b1227d088e4ab5dc74ae8",
+          "key": "ui/button_rect.review.json",
+          "kind": "json",
+          "name": "button_rect.review.json]",
+          "size": 729
+         }
+        }
+       ],
+       [
+        "ui/preview_icons.png",
+        {
+         "file": {
+          "digest": "dc1f2cebd9364a84ef8bc8e2ae6ca8ba418a777a782343eb347ee5e99bb694eb",
+          "key": "ui/preview_icons.png",
+          "kind": "image/png",
+          "name": "preview_icons.png]",
+          "size": 1288144
+         }
+        }
+       ],
+       [
+        "ui/preview_icons.validation.json",
+        {
+         "file": {
+          "digest": "e8819af062fae3f6e515bab85e9ce8d7f0a04652647a47324e45e127cb84aab3",
+          "key": "ui/preview_icons.validation.json",
+          "kind": "json",
+          "name": "preview_icons.validation.json]",
+          "size": 20274
+         }
+        }
+       ],
+       [
+        "ui/preview_icons.evidence.png",
+        {
+         "file": {
+          "digest": "bccd58645408a8d00e5ac2ae52fb929347c98a1be2b25ddf7ca71c101fd647f1",
+          "key": "ui/preview_icons.evidence.png",
+          "kind": "image/png",
+          "name": "preview_icons.evidence.png]",
+          "size": 693632
+         }
+        }
+       ],
+       [
+        "ui/preview_icons.review.json",
+        {
+         "file": {
+          "digest": "ba52e5acb6d7111610b8bd22bd19d310f8bf398613cba7d3412bd8bb30eee67a",
+          "key": "ui/preview_icons.review.json",
+          "kind": "json",
+          "name": "preview_icons.review.json]",
+          "size": 798
+         }
+        }
+       ]
+      ]
+     },
+     "manifest": {
+      "file": {
+       "digest": "c85f61ac9c21f1014cc3ad50315ea50be269c6f01e70b11d63e30a4fbe49e79d",
+       "kind": "json",
+       "name": "manifest",
+       "size": 1083
+      }
+     }
+    },
+    "path": "package",
+    "ports": {
+     "inputs": {},
+     "outputs": {
+      "files": "file{}",
+      "manifest": "json"
+     },
+     "params": {
+      "files": {
+       "type": "object"
+      },
+      "manifest": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "button_rect.generate#1",
+     "button_rect.publish#1",
+     "button_rect.review#1",
+     "button_rect.review_schema#1",
+     "button_rect.template#1",
+     "panel_frame.generate#1",
+     "panel_frame.publish#1",
+     "panel_frame.review#1",
+     "panel_frame.review_schema#1",
+     "panel_frame.template#1",
+     "preview_icons.generate#1",
+     "preview_icons.publish#1",
+     "preview_icons.review#1",
+     "preview_icons.review_schema#1",
+     "preview_icons.template#1"
+    ],
+    "started_at": "2026-10-11T08:26:56.625Z",
+    "state": "succeeded",
+    "step": "package",
+    "take": [
+     1
+    ],
+    "title": "UI handoff files",
+    "uses": "fx/package@1",
+    "with": {
+     "files": {
+      "withheld": true
+     },
+     "manifest": {
+      "withheld": true
+     }
+    }
+   }
+  ],
+  "outputs": {
+   "button_rect": {
+    "file": {
+     "digest": "16474ea2f9c670342d3cfee1c2b4c415b73638b22b8d31483f4e197d9e200f46",
+     "kind": "image/png",
+     "name": "image",
+     "size": 874036
+    }
+   },
+   "button_rect_evidence": {
+    "file": {
+     "digest": "ed20561c86bb462753dc0ae5622ec2f96b5834bfdfac97a1982a6716706e0d59",
+     "kind": "image/png",
+     "name": "evidence",
+     "size": 423319
+    }
+   },
+   "button_rect_review": {
+    "file": {
+     "digest": "7db584c2ddc106f2e1aa36a421db5129bd10cbc2095b1227d088e4ab5dc74ae8",
+     "kind": "json",
+     "name": "json",
+     "size": 729
+    }
+   },
+   "button_rect_validation": {
+    "file": {
+     "digest": "6b40d271eadf1912b2303aac22d1018ef277f960547104bfcccf084da3159b81",
+     "kind": "json",
+     "name": "validation",
+     "size": 26695
+    }
+   },
+   "package": {
+    "collection": [
+     [
+      "ui/panel_frame.png",
+      {
+       "file": {
+        "digest": "99411c8b378862e9f69c173036fe746bb10c3ae4c4686caa469faabdc494bc97",
+        "key": "ui/panel_frame.png",
+        "kind": "image/png",
+        "name": "panel_frame.png]",
+        "size": 904359
+       }
+      }
+     ],
+     [
+      "ui/panel_frame.validation.json",
+      {
+       "file": {
+        "digest": "1809e01b6e9f28327b16f9647c9c6f6f50d78633bd8a667bfdbc16f6158f3e47",
+        "key": "ui/panel_frame.validation.json",
+        "kind": "json",
+        "name": "panel_frame.validation.json]",
+        "size": 8608
+       }
+      }
+     ],
+     [
+      "ui/panel_frame.evidence.png",
+      {
+       "file": {
+        "digest": "6eedb4f4ec25bb58d978c9d462cba865600dc479eee44fd7e4bf89074b160c40",
+        "key": "ui/panel_frame.evidence.png",
+        "kind": "image/png",
+        "name": "panel_frame.evidence.png]",
+        "size": 724513
+       }
+      }
+     ],
+     [
+      "ui/panel_frame.review.json",
+      {
+       "file": {
+        "digest": "36fb800e1f870e2b5dd2fa3389d5b9e6d3f0cfc2ae3dced3d6124af4972cbdaf",
+        "key": "ui/panel_frame.review.json",
+        "kind": "json",
+        "name": "panel_frame.review.json]",
+        "size": 755
+       }
+      }
+     ],
+     [
+      "ui/button_rect.png",
+      {
+       "file": {
+        "digest": "16474ea2f9c670342d3cfee1c2b4c415b73638b22b8d31483f4e197d9e200f46",
+        "key": "ui/button_rect.png",
+        "kind": "image/png",
+        "name": "button_rect.png]",
+        "size": 874036
+       }
+      }
+     ],
+     [
+      "ui/button_rect.validation.json",
+      {
+       "file": {
+        "digest": "6b40d271eadf1912b2303aac22d1018ef277f960547104bfcccf084da3159b81",
+        "key": "ui/button_rect.validation.json",
+        "kind": "json",
+        "name": "button_rect.validation.json]",
+        "size": 26695
+       }
+      }
+     ],
+     [
+      "ui/button_rect.evidence.png",
+      {
+       "file": {
+        "digest": "ed20561c86bb462753dc0ae5622ec2f96b5834bfdfac97a1982a6716706e0d59",
+        "key": "ui/button_rect.evidence.png",
+        "kind": "image/png",
+        "name": "button_rect.evidence.png]",
+        "size": 423319
+       }
+      }
+     ],
+     [
+      "ui/button_rect.review.json",
+      {
+       "file": {
+        "digest": "7db584c2ddc106f2e1aa36a421db5129bd10cbc2095b1227d088e4ab5dc74ae8",
+        "key": "ui/button_rect.review.json",
+        "kind": "json",
+        "name": "button_rect.review.json]",
+        "size": 729
+       }
+      }
+     ],
+     [
+      "ui/preview_icons.png",
+      {
+       "file": {
+        "digest": "dc1f2cebd9364a84ef8bc8e2ae6ca8ba418a777a782343eb347ee5e99bb694eb",
+        "key": "ui/preview_icons.png",
+        "kind": "image/png",
+        "name": "preview_icons.png]",
+        "size": 1288144
+       }
+      }
+     ],
+     [
+      "ui/preview_icons.validation.json",
+      {
+       "file": {
+        "digest": "e8819af062fae3f6e515bab85e9ce8d7f0a04652647a47324e45e127cb84aab3",
+        "key": "ui/preview_icons.validation.json",
+        "kind": "json",
+        "name": "preview_icons.validation.json]",
+        "size": 20274
+       }
+      }
+     ],
+     [
+      "ui/preview_icons.evidence.png",
+      {
+       "file": {
+        "digest": "bccd58645408a8d00e5ac2ae52fb929347c98a1be2b25ddf7ca71c101fd647f1",
+        "key": "ui/preview_icons.evidence.png",
+        "kind": "image/png",
+        "name": "preview_icons.evidence.png]",
+        "size": 693632
+       }
+      }
+     ],
+     [
+      "ui/preview_icons.review.json",
+      {
+       "file": {
+        "digest": "ba52e5acb6d7111610b8bd22bd19d310f8bf398613cba7d3412bd8bb30eee67a",
+        "key": "ui/preview_icons.review.json",
+        "kind": "json",
+        "name": "preview_icons.review.json]",
+        "size": 798
+       }
+      }
+     ]
+    ]
+   },
+   "panel_frame": {
+    "file": {
+     "digest": "99411c8b378862e9f69c173036fe746bb10c3ae4c4686caa469faabdc494bc97",
+     "kind": "image/png",
+     "name": "image",
+     "size": 904359
+    }
+   },
+   "panel_frame_evidence": {
+    "file": {
+     "digest": "6eedb4f4ec25bb58d978c9d462cba865600dc479eee44fd7e4bf89074b160c40",
+     "kind": "image/png",
+     "name": "evidence",
+     "size": 724513
+    }
+   },
+   "panel_frame_review": {
+    "file": {
+     "digest": "36fb800e1f870e2b5dd2fa3389d5b9e6d3f0cfc2ae3dced3d6124af4972cbdaf",
+     "kind": "json",
+     "name": "json",
+     "size": 755
+    }
+   },
+   "panel_frame_validation": {
+    "file": {
+     "digest": "1809e01b6e9f28327b16f9647c9c6f6f50d78633bd8a667bfdbc16f6158f3e47",
+     "kind": "json",
+     "name": "validation",
+     "size": 8608
+    }
+   },
+   "preview_icons": {
+    "file": {
+     "digest": "dc1f2cebd9364a84ef8bc8e2ae6ca8ba418a777a782343eb347ee5e99bb694eb",
+     "kind": "image/png",
+     "name": "image",
+     "size": 1288144
+    }
+   },
+   "preview_icons_evidence": {
+    "file": {
+     "digest": "bccd58645408a8d00e5ac2ae52fb929347c98a1be2b25ddf7ca71c101fd647f1",
+     "kind": "image/png",
+     "name": "evidence",
+     "size": 693632
+    }
+   },
+   "preview_icons_review": {
+    "file": {
+     "digest": "ba52e5acb6d7111610b8bd22bd19d310f8bf398613cba7d3412bd8bb30eee67a",
+     "kind": "json",
+     "name": "json",
+     "size": 798
+    }
+   },
+   "preview_icons_validation": {
+    "file": {
+     "digest": "e8819af062fae3f6e515bab85e9ce8d7f0a04652647a47324e45e127cb84aab3",
+     "kind": "json",
+     "name": "validation",
+     "size": 20274
+    }
+   }
+  },
+  "pending": [],
+  "run_name": "ui-kit-01",
+  "scopes": [
+   {
+    "id": "scope:panel_frame#",
+    "input_bindings": [],
+    "kind": "group",
+    "nodes": [
+     "panel_frame.template#1",
+     "panel_frame.generate#1",
+     "panel_frame.generate#2",
+     "panel_frame.generate#3",
+     "panel_frame.generate#4",
+     "panel_frame.generate#5",
+     "panel_frame.generate#6",
+     "panel_frame.admit#1",
+     "panel_frame.admit#2",
+     "panel_frame.admit#3",
+     "panel_frame.admit#4",
+     "panel_frame.admit#5",
+     "panel_frame.admit#6",
+     "panel_frame.publish#1",
+     "panel_frame.review_schema#1",
+     "panel_frame.review#1"
+    ],
+    "output_bindings": [],
+    "parent": null,
+    "path": "panel_frame",
+    "pending": [],
+    "ports": {
+     "inputs": {},
+     "outputs": []
+    },
+    "source": null,
+    "step": "panel_frame",
+    "take": [],
+    "title": "Panel Frame"
+   },
+   {
+    "id": "scope:button_rect#",
+    "input_bindings": [],
+    "kind": "group",
+    "nodes": [
+     "button_rect.template#1",
+     "button_rect.generate#1",
+     "button_rect.generate#2",
+     "button_rect.generate#3",
+     "button_rect.generate#4",
+     "button_rect.generate#5",
+     "button_rect.generate#6",
+     "button_rect.admit#1",
+     "button_rect.admit#2",
+     "button_rect.admit#3",
+     "button_rect.admit#4",
+     "button_rect.admit#5",
+     "button_rect.admit#6",
+     "button_rect.publish#1",
+     "button_rect.review_schema#1",
+     "button_rect.review#1"
+    ],
+    "output_bindings": [],
+    "parent": null,
+    "path": "button_rect",
+    "pending": [],
+    "ports": {
+     "inputs": {},
+     "outputs": []
+    },
+    "source": null,
+    "step": "button_rect",
+    "take": [],
+    "title": "Button Rect"
+   },
+   {
+    "id": "scope:preview_icons#",
+    "input_bindings": [],
+    "kind": "group",
+    "nodes": [
+     "preview_icons.template#1",
+     "preview_icons.generate#1",
+     "preview_icons.generate#2",
+     "preview_icons.generate#3",
+     "preview_icons.generate#4",
+     "preview_icons.generate#5",
+     "preview_icons.generate#6",
+     "preview_icons.admit#1",
+     "preview_icons.admit#2",
+     "preview_icons.admit#3",
+     "preview_icons.admit#4",
+     "preview_icons.admit#5",
+     "preview_icons.admit#6",
+     "preview_icons.publish#1",
+     "preview_icons.review_schema#1",
+     "preview_icons.review#1"
+    ],
+    "output_bindings": [],
+    "parent": null,
+    "path": "preview_icons",
+    "pending": [],
+    "ports": {
+     "inputs": {},
+     "outputs": []
+    },
+    "source": null,
+    "step": "preview_icons",
+    "take": [],
+    "title": "Preview Icons"
+   }
+  ],
+  "stand_in": false,
+  "state": "succeeded",
+  "warnings": [],
+  "workflow": {
+   "id": "showcase-meadow-ui",
+   "title": "Meadow interface kit"
+  }
+ }
+}

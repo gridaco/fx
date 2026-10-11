@@ -1,0 +1,52 @@
+.demo { width: 100%; color: var(--color-foreground); }
+.demo button, .demo select { border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-background); color: inherit; font: inherit; font-size: 12px; line-height: 1.4; padding: 7px 10px; cursor: pointer; }
+.demo button:hover { background: var(--color-muted); }
+.demo button[aria-pressed="true"] { background: var(--color-muted); border-color: color-mix(in srgb, var(--color-foreground) 25%, transparent); }
+.demo button:disabled, .demo select:disabled, .demo input:disabled { opacity: .45; cursor: default; }
+.demo input { accent-color: var(--color-primary); }
+.demo [hidden] { display: none !important; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; font-size: 12px; }
+.inline { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.inline input[type="range"] { width: 88px; }
+.inline input[type="checkbox"] { width: 13px; height: 13px; }
+.toolbar > .inline { margin-left: 8px; }
+.numeric { font-variant-numeric: tabular-nums; font-size: 11px; color: var(--color-muted-foreground); white-space: nowrap; }
+.layerControls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-left: auto; }
+.parallaxStage { overflow: hidden; border-radius: 12px; background: var(--color-muted); }
+.parallaxStage canvas { width: 100%; height: auto; display: block; cursor: grab; touch-action: none; }
+.movieStages { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.movieStages[data-comparing="true"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.movieStages figure { margin: 0; min-width: 0; }
+.movieStages figcaption { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-top: 9px; font-size: 12px; }
+.movieStages figcaption span { color: var(--color-muted-foreground); font-size: 11px; }
+.figureStage { display: flex; align-items: center; justify-content: center; height: clamp(360px, 52vw, 580px); border-radius: 12px; overflow: hidden; background: var(--color-muted); }
+.figureStage[data-background="checker"], .zoomStage { background-color: var(--color-background); background-image: conic-gradient(var(--color-muted) 25%, transparent 0 50%, var(--color-muted) 0 75%, transparent 0); background-size: 20px 20px; }
+.figureStage[data-background="paper"] { background: var(--color-muted); }
+.figureStage[data-background="slate"] { background: #343a40; }
+.figureStage video, .figureStage img, .figureStage canvas { display: block; width: auto; height: 100%; max-width: 100%; object-fit: contain; }
+.figureStage video, .figureStage img { width: 100%; }
+.timeline { display: flex; align-items: center; gap: 14px; margin-top: 14px; }
+.timeline input { flex: 1; min-width: 0; }
+.backgrounds { display: flex; gap: 5px; margin-left: auto; }
+.portraitLayout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 280px); gap: 24px; align-items: center; }
+.portraitControls { display: flex; flex-direction: column; align-items: stretch; gap: 17px; font-size: 12px; }
+.zoomStage { align-self: center; border-radius: 10px; overflow: hidden; width: min(100%, 231px); aspect-ratio: 1; }
+.zoomStage canvas { display: block; width: 100%; height: 100%; }
+.selection { text-align: center; color: var(--color-muted-foreground); font-size: 11px; }
+.segment { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; }
+.expressionControls { display: flex; gap: 12px; }
+.expressionControls label { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 7px; color: var(--color-muted-foreground); }
+.expressionControls select { width: 100%; color: var(--color-foreground); }
+.hint { font-size: 12px; line-height: 1.6; color: var(--color-muted-foreground); margin: 0; }
+.status { margin: 10px 0 0; min-height: 1em; font-size: 11px; color: var(--color-muted-foreground); }
+.status:empty { display: none; }
+@media (max-width: 640px) {
+  .portraitLayout { grid-template-columns: minmax(0, 1fr) minmax(145px, .7fr); gap: 12px; }
+  .portraitLayout .figureStage { height: 420px; }
+  .portraitControls { gap: 12px; }
+  .zoomStage { width: min(100%, 180px); }
+  .expressionControls { flex-direction: column; gap: 8px; }
+  .segment { justify-content: flex-start; }
+  .layerControls { margin-left: 0; }
+  .movieStages figcaption { flex-direction: column; gap: 2px; }
+}

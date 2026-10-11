@@ -1,0 +1,9 @@
+{
+  "kind": "portrait-motion-demo-v1",
+  "resources": [
+    "assets/face-manifest.json",
+    "assets/body.webm",
+    "assets/canonical.png",
+    "assets/animation.webp"
+  ]
+}

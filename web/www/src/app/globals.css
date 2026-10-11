@@ -1,0 +1,61 @@
+@import "tailwindcss";
+@source "../../../../js/fx-react/src";
+
+/* Minimal Grida www tokens; this app owns its reset and has no shadcn dependency. */
+@theme {
+  --color-background: oklch(1 0 0);
+  --color-foreground: oklch(0.145 0 0);
+  --color-primary: oklch(0.205 0 0);
+  --color-muted: oklch(0.97 0 0);
+  --color-muted-foreground: oklch(0.556 0 0);
+  --color-border: oklch(0.922 0 0);
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+@layer base {
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--color-background); color: var(--color-foreground); }
+  * { border-color: var(--color-border); }
+  :focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
+  ::selection { background: #dedee3; }
+}
+
+.fx-site-container {
+  @apply container mx-auto px-4 2xl:max-w-[1400px];
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
+.fx-function-mark {
+  font-family: "Times New Roman", Times, serif;
+  font-style: italic;
+  line-height: 1;
+  letter-spacing: -0.1em;
+}
+
+.fx-landing-cta { transition: background-color 140ms ease-out; }
+
+/* Native demos share the website's chrome; artwork keeps its own colors. */
+.fx-demo { color: var(--color-foreground); color-scheme: light; }
+.fx-demo button, .fx-demo select {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.fx-demo button:hover { background: var(--color-muted); }
+.fx-demo button[aria-pressed="true"] { background: var(--color-muted); border-color: color-mix(in srgb, var(--color-foreground) 25%, transparent); color: var(--color-foreground); }
+.fx-demo button:disabled, .fx-demo select:disabled { opacity: .45; cursor: default; }
+.fx-demo input[type="range"] { accent-color: var(--color-primary); }
+.fx-demo [role="status"] { color: var(--color-muted-foreground); font-size: 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-landing-cta { transition: none; }
+}

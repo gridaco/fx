@@ -1,0 +1,232 @@
+{
+  "kind": "fx-showcase-lock-v1",
+  "release": {
+    "sha256": "bb4edef644e07e31ed7f1e4336fc5b9d43e9ad3231610c14ca0bf348ff4ac4f3",
+    "path": "showcases/bb4edef644e07e31ed7f1e4336fc5b9d43e9ad3231610c14ca0bf348ff4ac4f3/manifest.json",
+    "fixture": "manifests/bb4edef644e07e31ed7f1e4336fc5b9d43e9ad3231610c14ca0bf348ff4ac4f3.json"
+  },
+  "workflows": {
+    "character-3d": {
+      "demo": {
+        "contract": "character-3d-demo-v1",
+        "manifest": {
+          "path": "character-3d/manifest.json",
+          "sha256": "839b3da0bb89d9d8f8f899b09e635cee4531b738b2f8145e14887a00004dae11",
+          "bytes": 3266,
+          "media_type": "application/json"
+        },
+        "metadata": []
+      },
+      "recordings": [
+        {
+          "id": "character-3d-01",
+          "label": "Character construction",
+          "kind": "fx-run-export-v1",
+          "path": "runs/e05f365915d46cd673b092fbe3e28769d6ac86b4b75633cdf447f2603ad23b4e/manifest.json",
+          "sha256": "e05f365915d46cd673b092fbe3e28769d6ac86b4b75633cdf447f2603ad23b4e",
+          "fixture": "recordings/e05f365915d46cd673b092fbe3e28769d6ac86b4b75633cdf447f2603ad23b4e.json"
+        }
+      ]
+    },
+    "movie-sprite": {
+      "demo": {
+        "contract": "movie-sprite-demo-v1",
+        "manifest": {
+          "path": "movie-sprite/manifest.json",
+          "sha256": "7daad88380352af9dfe0a1148b0697fbea509bea1f608410d95b2d3d2d8b072b",
+          "bytes": 178,
+          "media_type": "application/json"
+        },
+        "metadata": []
+      },
+      "recordings": [
+        {
+          "id": "movie-sprite-02",
+          "label": "Generated take",
+          "kind": "fx-run-export-v1",
+          "path": "runs/973a5ab85063543f2a1193fdc56b50c66cf1160c657a06e9221d92fb9288af14/manifest.json",
+          "sha256": "973a5ab85063543f2a1193fdc56b50c66cf1160c657a06e9221d92fb9288af14",
+          "fixture": "recordings/973a5ab85063543f2a1193fdc56b50c66cf1160c657a06e9221d92fb9288af14.json"
+        },
+        {
+          "id": "movie-sprite-face-pinned-01",
+          "label": "Local finishing",
+          "kind": "fx-run-export-v1",
+          "path": "runs/6484e9b03533b6ab66acebd49802a1d1893b940d0a7d94317272366b8255a60a/manifest.json",
+          "sha256": "6484e9b03533b6ab66acebd49802a1d1893b940d0a7d94317272366b8255a60a",
+          "fixture": "recordings/6484e9b03533b6ab66acebd49802a1d1893b940d0a7d94317272366b8255a60a.json"
+        }
+      ]
+    },
+    "parallax": {
+      "demo": {
+        "contract": "parallax-demo-v1",
+        "manifest": {
+          "path": "parallax/manifest.json",
+          "sha256": "30d4a11c63733a6f0bffc28c778114575dacd30bc531c807d77e53dc54b8d016",
+          "bytes": 505,
+          "media_type": "application/json"
+        },
+        "metadata": []
+      },
+      "recordings": [
+        {
+          "id": "meadow-01",
+          "label": "Layer preparation",
+          "kind": "fx-run-export-v1",
+          "path": "runs/8610653e0b02cfb004a05163e512e86bca6b8d0368484a2bf413bfb285b461c3/manifest.json",
+          "sha256": "8610653e0b02cfb004a05163e512e86bca6b8d0368484a2bf413bfb285b461c3",
+          "fixture": "recordings/8610653e0b02cfb004a05163e512e86bca6b8d0368484a2bf413bfb285b461c3.json"
+        }
+      ]
+    },
+    "portrait-motion": {
+      "demo": {
+        "contract": "portrait-motion-demo-v1",
+        "manifest": {
+          "path": "portrait-motion/manifest.json",
+          "sha256": "168dd0e46521bbe8cf96f9f0900337a6415f74381c82a688641a6ae5a295d475",
+          "bytes": 175,
+          "media_type": "application/json"
+        },
+        "metadata": [
+          {
+            "path": "portrait-motion/assets/face-manifest.json",
+            "sha256": "507bca632e8e65f4966376d7f92bd27aa681c347b6d6fc57411999d67a3bf463",
+            "bytes": 2938,
+            "media_type": "application/json"
+          }
+        ]
+      },
+      "recordings": [
+        {
+          "id": "portrait-motion-01",
+          "label": "Independent expressions",
+          "kind": "fx-run-export-v1",
+          "path": "runs/da6406e9d0ace136bf3c468de1011cf47ca7348690ae432451ecf55c15c31ec0/manifest.json",
+          "sha256": "da6406e9d0ace136bf3c468de1011cf47ca7348690ae432451ecf55c15c31ec0",
+          "fixture": "recordings/da6406e9d0ace136bf3c468de1011cf47ca7348690ae432451ecf55c15c31ec0.json"
+        },
+        {
+          "id": "movie-sprite-face-pinned-01",
+          "label": "Body motion",
+          "kind": "fx-run-export-v1",
+          "path": "runs/6484e9b03533b6ab66acebd49802a1d1893b940d0a7d94317272366b8255a60a/manifest.json",
+          "sha256": "6484e9b03533b6ab66acebd49802a1d1893b940d0a7d94317272366b8255a60a",
+          "fixture": "recordings/6484e9b03533b6ab66acebd49802a1d1893b940d0a7d94317272366b8255a60a.json"
+        }
+      ]
+    },
+    "terrain": {
+      "demo": {
+        "contract": "terrain-demo-v1",
+        "manifest": {
+          "path": "terrain/manifest.json",
+          "sha256": "b84b47bdb69adef0c1988165c75b18e890684b644e14b1b7731dab20fdfebff7",
+          "bytes": 103,
+          "media_type": "application/json"
+        },
+        "metadata": [
+          {
+            "path": "terrain/assets/lookup.json",
+            "sha256": "ef0b3f86aab3806a7b839a5e3a74a9fa821fca6dad9795bd54f90ea12590ee76",
+            "bytes": 2080,
+            "media_type": "application/json"
+          },
+          {
+            "path": "terrain/assets/validation.json",
+            "sha256": "a9a3960999e1378dcc8dc7cb9bdbd5bd36245dc35c5b7de805aadce5a56687ec",
+            "bytes": 10575,
+            "media_type": "application/json"
+          }
+        ]
+      },
+      "recordings": [
+        {
+          "id": "terrain-01",
+          "label": "Terrain atlas",
+          "kind": "fx-run-export-v1",
+          "path": "runs/732df2335d87c9d865351cff997090d0db0b34060cecb8c99757f32201f4ceb5/manifest.json",
+          "sha256": "732df2335d87c9d865351cff997090d0db0b34060cecb8c99757f32201f4ceb5",
+          "fixture": "recordings/732df2335d87c9d865351cff997090d0db0b34060cecb8c99757f32201f4ceb5.json"
+        }
+      ]
+    },
+    "ui-kit": {
+      "demo": {
+        "contract": "ui-kit-demo-v1",
+        "manifest": {
+          "path": "ui-kit/manifest.json",
+          "sha256": "62cac6c2656eaf97f24a77b5a93206c9a0f1e6388e1f5911c7c2a13223481abf",
+          "bytes": 297,
+          "media_type": "application/json"
+        },
+        "metadata": [
+          {
+            "path": "ui-kit/assets/button_rect_validation.json",
+            "sha256": "4470c61ada4e258d68d8d565564a2d1d8653b426cf3a1425322698149a7d66d0",
+            "bytes": 826,
+            "media_type": "application/json"
+          },
+          {
+            "path": "ui-kit/assets/panel_frame_validation.json",
+            "sha256": "b8b8129624e92de0b2f93a266f755bde6f2408daee9e614f4839033374c57ee3",
+            "bytes": 396,
+            "media_type": "application/json"
+          },
+          {
+            "path": "ui-kit/assets/preview_icons_validation.json",
+            "sha256": "fb46ee7aa1a84e7ab3baa24ae431917838f730c79cf924d0bd8ab282975c7662",
+            "bytes": 2409,
+            "media_type": "application/json"
+          }
+        ]
+      },
+      "recordings": [
+        {
+          "id": "ui-kit-01",
+          "label": "Interface kit",
+          "kind": "fx-run-export-v1",
+          "path": "runs/263ad9adb57b9bca9c44cc40e03ae7c93fef3b64cb40f128d46df1e8ea9489b5/manifest.json",
+          "sha256": "263ad9adb57b9bca9c44cc40e03ae7c93fef3b64cb40f128d46df1e8ea9489b5",
+          "fixture": "recordings/263ad9adb57b9bca9c44cc40e03ae7c93fef3b64cb40f128d46df1e8ea9489b5.json"
+        }
+      ]
+    },
+    "world": {
+      "demo": {
+        "contract": "world-demo-v1",
+        "manifest": {
+          "path": "world/manifest.json",
+          "sha256": "1203761edfdff1894897bc5e2628e57c061a93cfda17862baa15d4cda8a2457c",
+          "bytes": 24175,
+          "media_type": "application/json"
+        },
+        "metadata": [
+          {
+            "path": "world/artifacts/universe.json",
+            "sha256": "0b8a99d0adff4bc97203420c6f81a39fc2fbb28f6ed524dd38406bd0bb1a7dcc",
+            "bytes": 64802,
+            "media_type": "application/json"
+          },
+          {
+            "path": "world/selection.json",
+            "sha256": "6d90a2a8abb1043f82bdedfe8eb0de28cff7e739f15e9ff6c2c6ae8f81f46a73",
+            "bytes": 1033,
+            "media_type": "application/json"
+          }
+        ]
+      },
+      "recordings": [
+        {
+          "id": "concept-world-01",
+          "label": "World and illustrations",
+          "kind": "fx-run-export-v1",
+          "path": "runs/f001ecba4a5858fd8624c092d2a3a301def41293154c6dcafece6300840e7ff5/manifest.json",
+          "sha256": "f001ecba4a5858fd8624c092d2a3a301def41293154c6dcafece6300840e7ff5",
+          "fixture": "recordings/f001ecba4a5858fd8624c092d2a3a301def41293154c6dcafece6300840e7ff5.json"
+        }
+      ]
+    }
+  }
+}

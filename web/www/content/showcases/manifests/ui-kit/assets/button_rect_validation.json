@@ -1,0 +1,54 @@
+{
+  "kind": "ui-sheet-v1",
+  "role": "button_rect",
+  "canvas": {
+    "width": 1024,
+    "height": 1024
+  },
+  "cells": [
+    {
+      "cell": {
+        "x": 190,
+        "y": 210,
+        "width": 644,
+        "height": 115
+      },
+      "state": "normal"
+    },
+    {
+      "cell": {
+        "x": 190,
+        "y": 377,
+        "width": 644,
+        "height": 115
+      },
+      "state": "hover"
+    },
+    {
+      "cell": {
+        "x": 190,
+        "y": 544,
+        "width": 644,
+        "height": 114
+      },
+      "state": "pressed"
+    },
+    {
+      "cell": {
+        "x": 190,
+        "y": 710,
+        "width": 644,
+        "height": 116
+      },
+      "state": "disabled"
+    }
+  ],
+  "insets": {
+    "top": 44,
+    "right": 48,
+    "bottom": 42,
+    "left": 49
+  },
+  "draw_scale": 2,
+  "band_fill": "stretch"
+}

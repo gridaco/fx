@@ -1,0 +1,31 @@
+{
+  "kind": "local-showcase-selection-v1",
+  "publication_authorized": false,
+  "selection_basis": "Four pipeline-admitted images. Cross-scene mechanical continuity remains unresolved; this selection is not artistic approval.",
+  "entities": [
+    {
+      "entity_id": "entity_mira_vale",
+      "title": "Mira Vale",
+      "image": "artifacts/entities/entity_mira_vale.png",
+      "pipeline_image_verdict": "admitted"
+    },
+    {
+      "entity_id": "entity_weather_observatory",
+      "title": "Weather Observatory",
+      "image": "artifacts/entities/entity_weather_observatory.png",
+      "pipeline_image_verdict": "admitted"
+    },
+    {
+      "entity_id": "entity_wind_crown",
+      "title": "Wind Crown",
+      "image": "artifacts/entities/entity_wind_crown.png",
+      "pipeline_image_verdict": "admitted"
+    },
+    {
+      "entity_id": "entity_meadow_cooperative",
+      "title": "Meadow Cooperative",
+      "image": "artifacts/entities/entity_meadow_cooperative.png",
+      "pipeline_image_verdict": "admitted"
+    }
+  ]
+}

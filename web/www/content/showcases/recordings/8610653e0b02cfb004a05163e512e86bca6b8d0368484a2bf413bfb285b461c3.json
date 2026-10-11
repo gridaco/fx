@@ -1,0 +1,2454 @@
+{
+ "artifacts": [
+  {
+   "digest": "00035730370704be072e519fcb6aec37f4eb6264e25d39dcf4a0dacff69e5bb7",
+   "media_type": "json",
+   "name": "manifest",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 409
+  },
+  {
+   "digest": "05b1f4f6c878e855fdc81454297908792f237082b8c642951e2bf3940dc20f77",
+   "media_type": "image/png",
+   "name": "image",
+   "omitted_reason": null,
+   "path": "artifacts/05b1f4f6c878e855fdc81454297908792f237082b8c642951e2bf3940dc20f77.png",
+   "size": 1322336
+  },
+  {
+   "digest": "35b88b0c973ba03c699b945d2b4e4dfc9f54f171f62448648c6e22cd9290c4a6",
+   "media_type": "image/png",
+   "name": "image",
+   "omitted_reason": null,
+   "path": "artifacts/35b88b0c973ba03c699b945d2b4e4dfc9f54f171f62448648c6e22cd9290c4a6.png",
+   "size": 1917825
+  },
+  {
+   "digest": "628b89a8167bf54782e98b8578cfe601d3cc181bb34dfc59912d708f3221d138",
+   "media_type": "image/png",
+   "name": "meadow-concept-text-only-v1.png",
+   "omitted_reason": null,
+   "path": "artifacts/628b89a8167bf54782e98b8578cfe601d3cc181bb34dfc59912d708f3221d138.png",
+   "size": 2016648
+  },
+  {
+   "digest": "a3b63aa237a18012fa8155c53bbe332de92c3b6d82a07024082adc328c245360",
+   "media_type": "image/png",
+   "name": "image",
+   "omitted_reason": null,
+   "path": "artifacts/a3b63aa237a18012fa8155c53bbe332de92c3b6d82a07024082adc328c245360.png",
+   "size": 895710
+  },
+  {
+   "digest": "ae4729b3380181005453f3b7e0c005b4776482e57888b0a855b7a47a52edd863",
+   "media_type": "image/png",
+   "name": "image",
+   "omitted_reason": null,
+   "path": "artifacts/ae4729b3380181005453f3b7e0c005b4776482e57888b0a855b7a47a52edd863.png",
+   "size": 1428529
+  },
+  {
+   "digest": "c3d7c46a294c9baf5d671db8cb007503ed46005d328b4c53f7446ae9122a6301",
+   "media_type": "image/png",
+   "name": "preview",
+   "omitted_reason": null,
+   "path": "artifacts/c3d7c46a294c9baf5d671db8cb007503ed46005d328b4c53f7446ae9122a6301.png",
+   "size": 2125374
+  },
+  {
+   "digest": "c4e872038aed0fae37b5e31016a45d66bdb6472e6e3fa39deac3fb8c5232ca76",
+   "media_type": "image/png",
+   "name": "image",
+   "omitted_reason": null,
+   "path": "artifacts/c4e872038aed0fae37b5e31016a45d66bdb6472e6e3fa39deac3fb8c5232ca76.png",
+   "size": 2117117
+  },
+  {
+   "digest": "d4401f4634cb7a37c6e24291ee0f5c0869b2216638a0440bcdea2d1ea173dcbd",
+   "media_type": "image/png",
+   "name": "image",
+   "omitted_reason": null,
+   "path": "artifacts/d4401f4634cb7a37c6e24291ee0f5c0869b2216638a0440bcdea2d1ea173dcbd.png",
+   "size": 2640383
+  },
+  {
+   "digest": "e32c11bdee599ace94cbcf04d591e5277509ae21f112bb2bb6486d23b70aea57",
+   "media_type": "image/png",
+   "name": "image",
+   "omitted_reason": null,
+   "path": "artifacts/e32c11bdee599ace94cbcf04d591e5277509ae21f112bb2bb6486d23b70aea57.png",
+   "size": 1452257
+  }
+ ],
+ "disclosure": {
+  "artifacts": "media",
+  "diagnostics": false,
+  "values": false
+ },
+ "kind": "fx-run-export-v1",
+ "layout": {
+  "cells": {
+   "far": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   },
+   "foreground": {
+    "column": 0,
+    "row": 2,
+    "source": "automatic"
+   },
+   "foreground_alpha": {
+    "column": 1,
+    "row": 2,
+    "source": "automatic"
+   },
+   "middle": {
+    "column": 0,
+    "row": 1,
+    "source": "automatic"
+   },
+   "middle_alpha": {
+    "column": 1,
+    "row": 1,
+    "source": "automatic"
+   },
+   "parallax": {
+    "column": 2,
+    "row": 0,
+    "source": "automatic"
+   },
+   "parallax.compose": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "parallax.layer": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   },
+   "parallax.layer.chosen": {
+    "column": 2,
+    "row": 0,
+    "source": "automatic"
+   },
+   "parallax.layer.loops_already": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   },
+   "parallax.layer.mirror": {
+    "column": 0,
+    "row": 2,
+    "source": "automatic"
+   },
+   "parallax.layer.repaint": {
+    "column": 0,
+    "row": 1,
+    "source": "automatic"
+   },
+   "parallax.layer.seam_ok": {
+    "column": 1,
+    "row": 1,
+    "source": "automatic"
+   }
+  },
+  "cursor": null,
+  "diagnostics": [],
+  "file": null,
+  "kind": "fx-layout-report-v1",
+  "order": [
+   "far#1",
+   "middle#1",
+   "middle_alpha#1",
+   "foreground#1",
+   "foreground_alpha#1",
+   "parallax.layer['far'].loops_already#1",
+   "scope:parallax#",
+   "scope:parallax.layer['far']#",
+   "parallax.layer['far'].repaint#1",
+   "parallax.layer['far'].repaint#2",
+   "parallax.layer['far'].seam_ok#1",
+   "parallax.layer['far'].seam_ok#2",
+   "parallax.layer['far'].mirror#1",
+   "parallax.layer['far'].chosen#1",
+   "parallax.layer['middle'].loops_already#1",
+   "scope:parallax.layer['middle']#",
+   "parallax.layer['middle'].repaint#1",
+   "parallax.layer['middle'].repaint#2",
+   "parallax.layer['middle'].seam_ok#1",
+   "parallax.layer['middle'].seam_ok#2",
+   "parallax.layer['middle'].mirror#1",
+   "parallax.layer['middle'].chosen#1",
+   "parallax.layer['foreground'].loops_already#1",
+   "scope:parallax.layer['foreground']#",
+   "parallax.layer['foreground'].repaint#1",
+   "parallax.layer['foreground'].repaint#2",
+   "parallax.layer['foreground'].seam_ok#1",
+   "parallax.layer['foreground'].seam_ok#2",
+   "parallax.layer['foreground'].mirror#1",
+   "parallax.layer['foreground'].chosen#1",
+   "parallax.compose#1"
+  ],
+  "revision": null,
+  "state": "none"
+ },
+ "producer": {
+  "version": "0.1.0"
+ },
+ "source": {
+  "event_count": 65,
+  "events_sha256": "92a239ef1e04689f5bab949a28b4007abea5aff882b75871e103ea8f7a9eaf54",
+  "plan_sha256": "75bcfcaa32e9413d0cf7067306fcde7dea221066ff00c1667c95987d9a664ab3"
+ },
+ "view": {
+  "artifacts": [
+   {
+    "available": false,
+    "digest": "00035730370704be072e519fcb6aec37f4eb6264e25d39dcf4a0dacff69e5bb7",
+    "kind": "json",
+    "name": "manifest",
+    "size": 409,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "05b1f4f6c878e855fdc81454297908792f237082b8c642951e2bf3940dc20f77",
+    "kind": "image/png",
+    "name": "image",
+    "size": 1322336,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "35b88b0c973ba03c699b945d2b4e4dfc9f54f171f62448648c6e22cd9290c4a6",
+    "kind": "image/png",
+    "name": "image",
+    "size": 1917825,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "628b89a8167bf54782e98b8578cfe601d3cc181bb34dfc59912d708f3221d138",
+    "kind": "image/png",
+    "name": "meadow-concept-text-only-v1.png",
+    "size": 2016648,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "a3b63aa237a18012fa8155c53bbe332de92c3b6d82a07024082adc328c245360",
+    "kind": "image/png",
+    "name": "image",
+    "size": 895710,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "ae4729b3380181005453f3b7e0c005b4776482e57888b0a855b7a47a52edd863",
+    "kind": "image/png",
+    "name": "image",
+    "size": 1428529,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "c3d7c46a294c9baf5d671db8cb007503ed46005d328b4c53f7446ae9122a6301",
+    "kind": "image/png",
+    "name": "preview",
+    "size": 2125374,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "c4e872038aed0fae37b5e31016a45d66bdb6472e6e3fa39deac3fb8c5232ca76",
+    "kind": "image/png",
+    "name": "image",
+    "size": 2117117,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "d4401f4634cb7a37c6e24291ee0f5c0869b2216638a0440bcdea2d1ea173dcbd",
+    "kind": "image/png",
+    "name": "image",
+    "size": 2640383,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "e32c11bdee599ace94cbcf04d591e5277509ae21f112bb2bb6486d23b70aea57",
+    "kind": "image/png",
+    "name": "image",
+    "size": 1452257,
+    "url": null
+   }
+  ],
+  "charged_usd": 3.69,
+  "estimate": {
+   "ceiling_usd": 10,
+   "high_usd": 6.24,
+   "low_usd": 0.48
+  },
+  "inputs": {
+   "concept": {
+    "withheld": true
+   }
+  },
+  "kind": "fx-viewer-run-v1",
+  "nodes": [
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 95793,
+    "error": null,
+    "id": "far#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "image": {
+      "file": {
+       "digest": "35b88b0c973ba03c699b945d2b4e4dfc9f54f171f62448648c6e22cd9290c4a6",
+       "kind": "image/png",
+       "name": "image",
+       "size": 1917825
+      }
+     }
+    },
+    "path": "far",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [],
+    "state": "succeeded",
+    "step": "far",
+    "take": [
+     1
+    ],
+    "title": "Distant sky and landscape",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "file": {
+       "digest": "628b89a8167bf54782e98b8578cfe601d3cc181bb34dfc59912d708f3221d138",
+       "kind": "image/png",
+       "name": "meadow-concept-text-only-v1.png",
+       "size": 2016648
+      }
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 96698,
+    "error": null,
+    "id": "middle#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "image": {
+      "file": {
+       "digest": "05b1f4f6c878e855fdc81454297908792f237082b8c642951e2bf3940dc20f77",
+       "kind": "image/png",
+       "name": "image",
+       "size": 1322336
+      }
+     }
+    },
+    "path": "middle",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [],
+    "state": "succeeded",
+    "step": "middle",
+    "take": [
+     1
+    ],
+    "title": "Tree and golden meadow",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "file": {
+       "digest": "628b89a8167bf54782e98b8578cfe601d3cc181bb34dfc59912d708f3221d138",
+       "kind": "image/png",
+       "name": "meadow-concept-text-only-v1.png",
+       "size": 2016648
+      }
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "middle#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 127,
+    "error": null,
+    "id": "middle_alpha#1",
+    "interface_bindings": [
+     {
+      "source": "middle#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": "middle#1",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "middle_alpha",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {
+      "expect": {}
+     }
+    },
+    "reads": [
+     "middle#1"
+    ],
+    "state": "succeeded",
+    "step": "middle_alpha",
+    "take": [
+     1
+    ],
+    "title": "middle_alpha",
+    "uses": "fx/image.check_alpha@1",
+    "with": {
+     "expect": {
+      "withheld": true
+     },
+     "image": {
+      "file": {
+       "digest": "05b1f4f6c878e855fdc81454297908792f237082b8c642951e2bf3940dc20f77",
+       "kind": "image/png",
+       "name": "image",
+       "size": 1322336
+      }
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 76271,
+    "error": null,
+    "id": "foreground#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "image": {
+      "file": {
+       "digest": "a3b63aa237a18012fa8155c53bbe332de92c3b6d82a07024082adc328c245360",
+       "kind": "image/png",
+       "name": "image",
+       "size": 895710
+      }
+     }
+    },
+    "path": "foreground",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "mask": "image?",
+      "references": "image[]?"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "background": {},
+      "prompt": {
+       "type": "string"
+      },
+      "size": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [],
+    "state": "succeeded",
+    "step": "foreground",
+    "take": [
+     1
+    ],
+    "title": "Close grasses and flowers",
+    "uses": "fx/image.edit@1",
+    "with": {
+     "background": {
+      "withheld": true
+     },
+     "image": {
+      "file": {
+       "digest": "628b89a8167bf54782e98b8578cfe601d3cc181bb34dfc59912d708f3221d138",
+       "kind": "image/png",
+       "name": "meadow-concept-text-only-v1.png",
+       "size": 2016648
+      }
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "size": {
+      "withheld": true
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "foreground#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 143,
+    "error": null,
+    "id": "foreground_alpha#1",
+    "interface_bindings": [
+     {
+      "source": "foreground#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": "foreground#1",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "foreground_alpha",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {
+      "expect": {}
+     }
+    },
+    "reads": [
+     "foreground#1"
+    ],
+    "state": "succeeded",
+    "step": "foreground_alpha",
+    "take": [
+     1
+    ],
+    "title": "foreground_alpha",
+    "uses": "fx/image.check_alpha@1",
+    "with": {
+     "expect": {
+      "withheld": true
+     },
+     "image": {
+      "file": {
+       "digest": "a3b63aa237a18012fa8155c53bbe332de92c3b6d82a07024082adc328c245360",
+       "kind": "image/png",
+       "name": "image",
+       "size": 895710
+      }
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 29,
+    "error": null,
+    "id": "parallax.layer['far'].loops_already#1",
+    "interface_bindings": [
+     {
+      "source": "scope:parallax#",
+      "source_kind": "scope_input",
+      "source_port": "layers",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "parallax.layer['far'].loops_already",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {}
+    },
+    "reads": [],
+    "state": "succeeded",
+    "step": "parallax.layer.loops_already",
+    "take": [
+     1
+    ],
+    "title": "parallax.layer['far'].loops_already",
+    "uses": "./nodes/seams.py#loops_already",
+    "with": {
+     "image": {
+      "file": {
+       "digest": "35b88b0c973ba03c699b945d2b4e4dfc9f54f171f62448648c6e22cd9290c4a6",
+       "kind": "image/png",
+       "name": "image",
+       "size": 1917825
+      }
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 89265,
+    "error": null,
+    "id": "parallax.layer['far'].repaint#1",
+    "interface_bindings": [
+     {
+      "source": "scope:parallax#",
+      "source_kind": "scope_input",
+      "source_port": "layers",
+      "target_port": "image"
+     },
+     {
+      "source": "scope:parallax#",
+      "source_kind": "scope_input",
+      "source_port": "layers",
+      "target_port": "opaque"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "image": {
+      "file": {
+       "digest": "c4e872038aed0fae37b5e31016a45d66bdb6472e6e3fa39deac3fb8c5232ca76",
+       "kind": "image/png",
+       "name": "image",
+       "size": 2117117
+      }
+     }
+    },
+    "path": "parallax.layer['far'].repaint",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "opaque": {
+       "type": "boolean"
+      }
+     }
+    },
+    "reads": [],
+    "state": "succeeded",
+    "step": "parallax.layer.repaint",
+    "take": [
+     1
+    ],
+    "title": "parallax.layer['far'].repaint",
+    "uses": "./nodes/seams.py#layer_repaint",
+    "with": {
+     "image": {
+      "file": {
+       "digest": "35b88b0c973ba03c699b945d2b4e4dfc9f54f171f62448648c6e22cd9290c4a6",
+       "kind": "image/png",
+       "name": "image",
+       "size": 1917825
+      }
+     },
+     "opaque": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "far#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     },
+     {
+      "source": "far#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "opaque"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "parallax.layer['far'].repaint#2",
+    "interface_bindings": [
+     {
+      "source": "scope:parallax#",
+      "source_kind": "scope_input",
+      "source_port": "layers",
+      "target_port": "image"
+     },
+     {
+      "source": "scope:parallax#",
+      "source_kind": "scope_input",
+      "source_port": "layers",
+      "target_port": "opaque"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "parallax.layer['far'].repaint",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "opaque": {
+       "type": "boolean"
+      }
+     }
+    },
+    "reads": [
+     "far#1"
+    ],
+    "state": "skipped",
+    "step": "parallax.layer.repaint",
+    "take": [
+     2
+    ],
+    "title": "parallax.layer['far'].repaint",
+    "uses": "./nodes/seams.py#layer_repaint",
+    "with": {
+     "image": {
+      "withheld": true
+     },
+     "opaque": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "parallax.layer['far'].repaint#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 65,
+    "error": null,
+    "id": "parallax.layer['far'].seam_ok#1",
+    "interface_bindings": [
+     {
+      "source": "parallax.layer['far'].repaint#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     },
+     {
+      "source": "scope:parallax#",
+      "source_kind": "scope_input",
+      "source_port": "layers",
+      "target_port": "source"
+     }
+    ],
+    "interrupted": false,
+    "judges": "parallax.layer['far'].repaint#1",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "parallax.layer['far'].seam_ok",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "source": "image"
+     },
+     "outputs": {},
+     "params": {}
+    },
+    "reads": [
+     "parallax.layer['far'].repaint#1"
+    ],
+    "state": "succeeded",
+    "step": "parallax.layer.seam_ok",
+    "take": [
+     1
+    ],
+    "title": "parallax.layer['far'].seam_ok",
+    "uses": "./nodes/seams.py#seam_check",
+    "with": {
+     "image": {
+      "file": {
+       "digest": "c4e872038aed0fae37b5e31016a45d66bdb6472e6e3fa39deac3fb8c5232ca76",
+       "kind": "image/png",
+       "name": "image",
+       "size": 2117117
+      }
+     },
+     "source": {
+      "file": {
+       "digest": "35b88b0c973ba03c699b945d2b4e4dfc9f54f171f62448648c6e22cd9290c4a6",
+       "kind": "image/png",
+       "name": "image",
+       "size": 1917825
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "far#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "source"
+     },
+     {
+      "source": "parallax.layer['far'].repaint#2",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "parallax.layer['far'].seam_ok#2",
+    "interface_bindings": [
+     {
+      "source": "parallax.layer['far'].repaint#2",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     },
+     {
+      "source": "scope:parallax#",
+      "source_kind": "scope_input",
+      "source_port": "layers",
+      "target_port": "source"
+     }
+    ],
+    "interrupted": false,
+    "judges": "parallax.layer['far'].repaint#2",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "parallax.layer['far'].seam_ok",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "source": "image"
+     },
+     "outputs": {},
+     "params": {}
+    },
+    "reads": [
+     "far#1",
+     "parallax.layer['far'].repaint#2"
+    ],
+    "state": "skipped",
+    "step": "parallax.layer.seam_ok",
+    "take": [
+     2
+    ],
+    "title": "parallax.layer['far'].seam_ok",
+    "uses": "./nodes/seams.py#seam_check",
+    "with": {
+     "image": {
+      "withheld": true
+     },
+     "source": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "far#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "parallax.layer['far'].mirror#1",
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "parallax.layer['far'].mirror",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "axis": {}
+     }
+    },
+    "reads": [
+     "far#1"
+    ],
+    "state": "skipped",
+    "step": "parallax.layer.mirror",
+    "take": [
+     1
+    ],
+    "title": "parallax.layer['far'].mirror",
+    "uses": "fx/image.mirror_repeat@1",
+    "with": {
+     "axis": {
+      "withheld": true
+     },
+     "image": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "parallax.layer['far'].repaint#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "first_of"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 0,
+    "error": null,
+    "id": "parallax.layer['far'].chosen#1",
+    "interface_bindings": [
+     {
+      "source": "parallax.layer['far'].repaint#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "first_of"
+     },
+     {
+      "source": "scope:parallax#",
+      "source_kind": "scope_input",
+      "source_port": "layers",
+      "target_port": "first_of"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "value": {
+      "file": {
+       "digest": "c4e872038aed0fae37b5e31016a45d66bdb6472e6e3fa39deac3fb8c5232ca76",
+       "kind": "image/png",
+       "name": "image",
+       "size": 2117117
+      }
+     }
+    },
+    "path": "parallax.layer['far'].chosen",
+    "ports": {
+     "inputs": {},
+     "outputs": {
+      "value": "file?"
+     },
+     "params": {
+      "first_of": {
+       "type": "array"
+      }
+     }
+    },
+    "reads": [
+     "parallax.layer['far'].loops_already#1",
+     "parallax.layer['far'].repaint#1",
+     "parallax.layer['far'].seam_ok#1"
+    ],
+    "state": "succeeded",
+    "step": "parallax.layer.chosen",
+    "take": [
+     1
+    ],
+    "title": "parallax.layer['far'].chosen",
+    "uses": "fx/select@1",
+    "with": {
+     "first_of": {
+      "list": [
+       {
+        "file": {
+         "digest": "c4e872038aed0fae37b5e31016a45d66bdb6472e6e3fa39deac3fb8c5232ca76",
+         "kind": "image/png",
+         "name": "image",
+         "size": 2117117
+        }
+       },
+       {
+        "withheld": true
+       },
+       {
+        "file": {
+         "digest": "35b88b0c973ba03c699b945d2b4e4dfc9f54f171f62448648c6e22cd9290c4a6",
+         "kind": "image/png",
+         "name": "image",
+         "size": 1917825
+        }
+       }
+      ]
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 30,
+    "error": null,
+    "id": "parallax.layer['middle'].loops_already#1",
+    "interface_bindings": [
+     {
+      "source": "scope:parallax#",
+      "source_kind": "scope_input",
+      "source_port": "layers",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "parallax.layer['middle'].loops_already",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {}
+    },
+    "reads": [],
+    "state": "succeeded",
+    "step": "parallax.layer.loops_already",
+    "take": [
+     1
+    ],
+    "title": "parallax.layer['middle'].loops_already",
+    "uses": "./nodes/seams.py#loops_already",
+    "with": {
+     "image": {
+      "file": {
+       "digest": "05b1f4f6c878e855fdc81454297908792f237082b8c642951e2bf3940dc20f77",
+       "kind": "image/png",
+       "name": "image",
+       "size": 1322336
+      }
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 83987,
+    "error": null,
+    "id": "parallax.layer['middle'].repaint#1",
+    "interface_bindings": [
+     {
+      "source": "scope:parallax#",
+      "source_kind": "scope_input",
+      "source_port": "layers",
+      "target_port": "image"
+     },
+     {
+      "source": "scope:parallax#",
+      "source_kind": "scope_input",
+      "source_port": "layers",
+      "target_port": "opaque"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "image": {
+      "file": {
+       "digest": "ae4729b3380181005453f3b7e0c005b4776482e57888b0a855b7a47a52edd863",
+       "kind": "image/png",
+       "name": "image",
+       "size": 1428529
+      }
+     }
+    },
+    "path": "parallax.layer['middle'].repaint",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "opaque": {
+       "type": "boolean"
+      }
+     }
+    },
+    "reads": [],
+    "state": "succeeded",
+    "step": "parallax.layer.repaint",
+    "take": [
+     1
+    ],
+    "title": "parallax.layer['middle'].repaint",
+    "uses": "./nodes/seams.py#layer_repaint",
+    "with": {
+     "image": {
+      "file": {
+       "digest": "05b1f4f6c878e855fdc81454297908792f237082b8c642951e2bf3940dc20f77",
+       "kind": "image/png",
+       "name": "image",
+       "size": 1322336
+      }
+     },
+     "opaque": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 82442,
+    "error": null,
+    "id": "parallax.layer['middle'].repaint#2",
+    "interface_bindings": [
+     {
+      "source": "scope:parallax#",
+      "source_kind": "scope_input",
+      "source_port": "layers",
+      "target_port": "image"
+     },
+     {
+      "source": "scope:parallax#",
+      "source_kind": "scope_input",
+      "source_port": "layers",
+      "target_port": "opaque"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "image": {
+      "file": {
+       "digest": "e32c11bdee599ace94cbcf04d591e5277509ae21f112bb2bb6486d23b70aea57",
+       "kind": "image/png",
+       "name": "image",
+       "size": 1452257
+      }
+     }
+    },
+    "path": "parallax.layer['middle'].repaint",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "opaque": {
+       "type": "boolean"
+      }
+     }
+    },
+    "reads": [],
+    "state": "succeeded",
+    "step": "parallax.layer.repaint",
+    "take": [
+     2
+    ],
+    "title": "parallax.layer['middle'].repaint",
+    "uses": "./nodes/seams.py#layer_repaint",
+    "with": {
+     "image": {
+      "file": {
+       "digest": "05b1f4f6c878e855fdc81454297908792f237082b8c642951e2bf3940dc20f77",
+       "kind": "image/png",
+       "name": "image",
+       "size": 1322336
+      }
+     },
+     "opaque": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "parallax.layer['middle'].repaint#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 58,
+    "error": null,
+    "id": "parallax.layer['middle'].seam_ok#1",
+    "interface_bindings": [
+     {
+      "source": "parallax.layer['middle'].repaint#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     },
+     {
+      "source": "scope:parallax#",
+      "source_kind": "scope_input",
+      "source_port": "layers",
+      "target_port": "source"
+     }
+    ],
+    "interrupted": false,
+    "judges": "parallax.layer['middle'].repaint#1",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "parallax.layer['middle'].seam_ok",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "source": "image"
+     },
+     "outputs": {},
+     "params": {}
+    },
+    "reads": [
+     "parallax.layer['middle'].repaint#1"
+    ],
+    "state": "succeeded",
+    "step": "parallax.layer.seam_ok",
+    "take": [
+     1
+    ],
+    "title": "parallax.layer['middle'].seam_ok",
+    "uses": "./nodes/seams.py#seam_check",
+    "with": {
+     "image": {
+      "file": {
+       "digest": "ae4729b3380181005453f3b7e0c005b4776482e57888b0a855b7a47a52edd863",
+       "kind": "image/png",
+       "name": "image",
+       "size": 1428529
+      }
+     },
+     "source": {
+      "file": {
+       "digest": "05b1f4f6c878e855fdc81454297908792f237082b8c642951e2bf3940dc20f77",
+       "kind": "image/png",
+       "name": "image",
+       "size": 1322336
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "parallax.layer['middle'].repaint#2",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 58,
+    "error": null,
+    "id": "parallax.layer['middle'].seam_ok#2",
+    "interface_bindings": [
+     {
+      "source": "parallax.layer['middle'].repaint#2",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     },
+     {
+      "source": "scope:parallax#",
+      "source_kind": "scope_input",
+      "source_port": "layers",
+      "target_port": "source"
+     }
+    ],
+    "interrupted": false,
+    "judges": "parallax.layer['middle'].repaint#2",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "parallax.layer['middle'].seam_ok",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "source": "image"
+     },
+     "outputs": {},
+     "params": {}
+    },
+    "reads": [
+     "parallax.layer['middle'].repaint#2"
+    ],
+    "state": "succeeded",
+    "step": "parallax.layer.seam_ok",
+    "take": [
+     2
+    ],
+    "title": "parallax.layer['middle'].seam_ok",
+    "uses": "./nodes/seams.py#seam_check",
+    "with": {
+     "image": {
+      "file": {
+       "digest": "e32c11bdee599ace94cbcf04d591e5277509ae21f112bb2bb6486d23b70aea57",
+       "kind": "image/png",
+       "name": "image",
+       "size": 1452257
+      }
+     },
+     "source": {
+      "file": {
+       "digest": "05b1f4f6c878e855fdc81454297908792f237082b8c642951e2bf3940dc20f77",
+       "kind": "image/png",
+       "name": "image",
+       "size": 1322336
+      }
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 276,
+    "error": null,
+    "id": "parallax.layer['middle'].mirror#1",
+    "interface_bindings": [
+     {
+      "source": "scope:parallax#",
+      "source_kind": "scope_input",
+      "source_port": "layers",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "image": {
+      "file": {
+       "digest": "d4401f4634cb7a37c6e24291ee0f5c0869b2216638a0440bcdea2d1ea173dcbd",
+       "kind": "image/png",
+       "name": "image",
+       "size": 2640383
+      }
+     }
+    },
+    "path": "parallax.layer['middle'].mirror",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "axis": {}
+     }
+    },
+    "reads": [],
+    "state": "succeeded",
+    "step": "parallax.layer.mirror",
+    "take": [
+     1
+    ],
+    "title": "parallax.layer['middle'].mirror",
+    "uses": "fx/image.mirror_repeat@1",
+    "with": {
+     "axis": {
+      "withheld": true
+     },
+     "image": {
+      "file": {
+       "digest": "05b1f4f6c878e855fdc81454297908792f237082b8c642951e2bf3940dc20f77",
+       "kind": "image/png",
+       "name": "image",
+       "size": 1322336
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "parallax.layer['middle'].mirror#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "first_of"
+     },
+     {
+      "source": "parallax.layer['middle'].repaint#2",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "first_of"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 0,
+    "error": null,
+    "id": "parallax.layer['middle'].chosen#1",
+    "interface_bindings": [
+     {
+      "source": "parallax.layer['middle'].mirror#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "first_of"
+     },
+     {
+      "source": "parallax.layer['middle'].repaint#2",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "first_of"
+     },
+     {
+      "source": "scope:parallax#",
+      "source_kind": "scope_input",
+      "source_port": "layers",
+      "target_port": "first_of"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "value": {
+      "file": {
+       "digest": "d4401f4634cb7a37c6e24291ee0f5c0869b2216638a0440bcdea2d1ea173dcbd",
+       "kind": "image/png",
+       "name": "image",
+       "size": 2640383
+      }
+     }
+    },
+    "path": "parallax.layer['middle'].chosen",
+    "ports": {
+     "inputs": {},
+     "outputs": {
+      "value": "file?"
+     },
+     "params": {
+      "first_of": {
+       "type": "array"
+      }
+     }
+    },
+    "reads": [
+     "parallax.layer['middle'].loops_already#1",
+     "parallax.layer['middle'].mirror#1",
+     "parallax.layer['middle'].repaint#1",
+     "parallax.layer['middle'].repaint#2",
+     "parallax.layer['middle'].seam_ok#2"
+    ],
+    "state": "succeeded",
+    "step": "parallax.layer.chosen",
+    "take": [
+     1
+    ],
+    "title": "parallax.layer['middle'].chosen",
+    "uses": "fx/select@1",
+    "with": {
+     "first_of": {
+      "list": [
+       {
+        "withheld": true
+       },
+       {
+        "file": {
+         "digest": "d4401f4634cb7a37c6e24291ee0f5c0869b2216638a0440bcdea2d1ea173dcbd",
+         "kind": "image/png",
+         "name": "image",
+         "size": 2640383
+        }
+       },
+       {
+        "file": {
+         "digest": "05b1f4f6c878e855fdc81454297908792f237082b8c642951e2bf3940dc20f77",
+         "kind": "image/png",
+         "name": "image",
+         "size": 1322336
+        }
+       }
+      ]
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 24,
+    "error": null,
+    "id": "parallax.layer['foreground'].loops_already#1",
+    "interface_bindings": [
+     {
+      "source": "scope:parallax#",
+      "source_kind": "scope_input",
+      "source_port": "layers",
+      "target_port": "image"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "parallax.layer['foreground'].loops_already",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {},
+     "params": {}
+    },
+    "reads": [],
+    "state": "succeeded",
+    "step": "parallax.layer.loops_already",
+    "take": [
+     1
+    ],
+    "title": "parallax.layer['foreground'].loops_already",
+    "uses": "./nodes/seams.py#loops_already",
+    "with": {
+     "image": {
+      "file": {
+       "digest": "a3b63aa237a18012fa8155c53bbe332de92c3b6d82a07024082adc328c245360",
+       "kind": "image/png",
+       "name": "image",
+       "size": 895710
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "far#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     },
+     {
+      "source": "far#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "opaque"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "parallax.layer['foreground'].repaint#1",
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "parallax.layer['foreground'].repaint",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "opaque": {
+       "type": "boolean"
+      }
+     }
+    },
+    "reads": [
+     "foreground#1",
+     "foreground_alpha#1"
+    ],
+    "state": "skipped",
+    "step": "parallax.layer.repaint",
+    "take": [
+     1
+    ],
+    "title": "parallax.layer['foreground'].repaint",
+    "uses": "./nodes/seams.py#layer_repaint",
+    "with": {
+     "image": {
+      "withheld": true
+     },
+     "opaque": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "far#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     },
+     {
+      "source": "far#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "opaque"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "parallax.layer['foreground'].repaint#2",
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "parallax.layer['foreground'].repaint",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "opaque": {
+       "type": "boolean"
+      }
+     }
+    },
+    "reads": [
+     "foreground#1",
+     "foreground_alpha#1"
+    ],
+    "state": "skipped",
+    "step": "parallax.layer.repaint",
+    "take": [
+     2
+    ],
+    "title": "parallax.layer['foreground'].repaint",
+    "uses": "./nodes/seams.py#layer_repaint",
+    "with": {
+     "image": {
+      "withheld": true
+     },
+     "opaque": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "far#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "source"
+     },
+     {
+      "source": "parallax.layer['foreground'].repaint#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "parallax.layer['foreground'].seam_ok#1",
+    "interface_bindings": [
+     {
+      "source": "scope:parallax#",
+      "source_kind": "scope_input",
+      "source_port": "layers",
+      "target_port": "source"
+     }
+    ],
+    "interrupted": false,
+    "judges": "parallax.layer['foreground'].repaint#1",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "parallax.layer['foreground'].seam_ok",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "source": "image"
+     },
+     "outputs": {},
+     "params": {}
+    },
+    "reads": [
+     "foreground#1",
+     "foreground_alpha#1",
+     "parallax.layer['foreground'].repaint#1"
+    ],
+    "state": "skipped",
+    "step": "parallax.layer.seam_ok",
+    "take": [
+     1
+    ],
+    "title": "parallax.layer['foreground'].seam_ok",
+    "uses": "./nodes/seams.py#seam_check",
+    "with": {
+     "image": {
+      "withheld": true
+     },
+     "source": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "far#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "source"
+     },
+     {
+      "source": "parallax.layer['foreground'].repaint#2",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "parallax.layer['foreground'].seam_ok#2",
+    "interrupted": false,
+    "judges": "parallax.layer['foreground'].repaint#2",
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "parallax.layer['foreground'].seam_ok",
+    "ports": {
+     "inputs": {
+      "image": "image",
+      "source": "image"
+     },
+     "outputs": {},
+     "params": {}
+    },
+    "reads": [
+     "foreground#1",
+     "foreground_alpha#1",
+     "parallax.layer['foreground'].repaint#2"
+    ],
+    "state": "skipped",
+    "step": "parallax.layer.seam_ok",
+    "take": [
+     2
+    ],
+    "title": "parallax.layer['foreground'].seam_ok",
+    "uses": "./nodes/seams.py#seam_check",
+    "with": {
+     "image": {
+      "withheld": true
+     },
+     "source": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "far#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "image"
+     }
+    ],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "parallax.layer['foreground'].mirror#1",
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "parallax.layer['foreground'].mirror",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {
+      "image": "image/png"
+     },
+     "params": {
+      "axis": {}
+     }
+    },
+    "reads": [
+     "foreground#1",
+     "foreground_alpha#1"
+    ],
+    "state": "skipped",
+    "step": "parallax.layer.mirror",
+    "take": [
+     1
+    ],
+    "title": "parallax.layer['foreground'].mirror",
+    "uses": "fx/image.mirror_repeat@1",
+    "with": {
+     "axis": {
+      "withheld": true
+     },
+     "image": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 0,
+    "error": null,
+    "id": "parallax.layer['foreground'].chosen#1",
+    "interface_bindings": [
+     {
+      "source": "scope:parallax#",
+      "source_kind": "scope_input",
+      "source_port": "layers",
+      "target_port": "first_of"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "value": {
+      "file": {
+       "digest": "a3b63aa237a18012fa8155c53bbe332de92c3b6d82a07024082adc328c245360",
+       "kind": "image/png",
+       "name": "image",
+       "size": 895710
+      }
+     }
+    },
+    "path": "parallax.layer['foreground'].chosen",
+    "ports": {
+     "inputs": {},
+     "outputs": {
+      "value": "file?"
+     },
+     "params": {
+      "first_of": {
+       "type": "array"
+      }
+     }
+    },
+    "reads": [
+     "parallax.layer['foreground'].loops_already#1"
+    ],
+    "state": "succeeded",
+    "step": "parallax.layer.chosen",
+    "take": [
+     1
+    ],
+    "title": "parallax.layer['foreground'].chosen",
+    "uses": "fx/select@1",
+    "with": {
+     "first_of": {
+      "list": [
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       },
+       {
+        "file": {
+         "digest": "a3b63aa237a18012fa8155c53bbe332de92c3b6d82a07024082adc328c245360",
+         "kind": "image/png",
+         "name": "image",
+         "size": 895710
+        }
+       }
+      ]
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "far#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "specs"
+     },
+     {
+      "source": "foreground#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "specs"
+     },
+     {
+      "source": "middle#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "specs"
+     },
+     {
+      "source": "parallax.layer['far'].chosen#1",
+      "source_kind": "output",
+      "source_port": "value",
+      "target_port": "layers"
+     },
+     {
+      "source": "parallax.layer['foreground'].chosen#1",
+      "source_kind": "output",
+      "source_port": "value",
+      "target_port": "layers"
+     },
+     {
+      "source": "parallax.layer['middle'].chosen#1",
+      "source_kind": "output",
+      "source_port": "value",
+      "target_port": "layers"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 295,
+    "error": null,
+    "id": "parallax.compose#1",
+    "interface_bindings": [
+     {
+      "source": "parallax.layer['far'].chosen#1",
+      "source_kind": "output",
+      "source_port": "value",
+      "target_port": "layers"
+     },
+     {
+      "source": "parallax.layer['foreground'].chosen#1",
+      "source_kind": "output",
+      "source_port": "value",
+      "target_port": "layers"
+     },
+     {
+      "source": "parallax.layer['middle'].chosen#1",
+      "source_kind": "output",
+      "source_port": "value",
+      "target_port": "layers"
+     },
+     {
+      "source": "scope:parallax#",
+      "source_kind": "scope_input",
+      "source_port": "canvas",
+      "target_port": "canvas"
+     },
+     {
+      "source": "scope:parallax#",
+      "source_kind": "scope_input",
+      "source_port": "layers",
+      "target_port": "specs"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "manifest": {
+      "file": {
+       "digest": "00035730370704be072e519fcb6aec37f4eb6264e25d39dcf4a0dacff69e5bb7",
+       "kind": "json",
+       "name": "manifest",
+       "size": 409
+      }
+     },
+     "preview": {
+      "file": {
+       "digest": "c3d7c46a294c9baf5d671db8cb007503ed46005d328b4c53f7446ae9122a6301",
+       "kind": "image/png",
+       "name": "preview",
+       "size": 2125374
+      }
+     }
+    },
+    "path": "parallax.compose",
+    "ports": {
+     "inputs": {
+      "layers": "image{}"
+     },
+     "outputs": {
+      "manifest": "json",
+      "preview": "image/png"
+     },
+     "params": {
+      "canvas": {
+       "type": "object"
+      },
+      "specs": {
+       "type": "array"
+      }
+     }
+    },
+    "reads": [
+     "parallax.layer['far'].chosen#1",
+     "parallax.layer['far'].loops_already#1",
+     "parallax.layer['far'].repaint#1",
+     "parallax.layer['far'].seam_ok#1",
+     "parallax.layer['foreground'].chosen#1",
+     "parallax.layer['foreground'].loops_already#1",
+     "parallax.layer['middle'].chosen#1",
+     "parallax.layer['middle'].loops_already#1",
+     "parallax.layer['middle'].mirror#1",
+     "parallax.layer['middle'].repaint#1",
+     "parallax.layer['middle'].repaint#2",
+     "parallax.layer['middle'].seam_ok#2"
+    ],
+    "state": "succeeded",
+    "step": "parallax.compose",
+    "take": [
+     1
+    ],
+    "title": "parallax.compose",
+    "uses": "./nodes/compose.py#compose",
+    "with": {
+     "canvas": {
+      "withheld": true
+     },
+     "layers": {
+      "collection": [
+       [
+        "far",
+        {
+         "file": {
+          "digest": "c4e872038aed0fae37b5e31016a45d66bdb6472e6e3fa39deac3fb8c5232ca76",
+          "key": "far",
+          "kind": "image/png",
+          "name": "image",
+          "size": 2117117
+         }
+        }
+       ],
+       [
+        "middle",
+        {
+         "file": {
+          "digest": "d4401f4634cb7a37c6e24291ee0f5c0869b2216638a0440bcdea2d1ea173dcbd",
+          "key": "middle",
+          "kind": "image/png",
+          "name": "image",
+          "size": 2640383
+         }
+        }
+       ],
+       [
+        "foreground",
+        {
+         "file": {
+          "digest": "a3b63aa237a18012fa8155c53bbe332de92c3b6d82a07024082adc328c245360",
+          "key": "foreground",
+          "kind": "image/png",
+          "name": "image",
+          "size": 895710
+         }
+        }
+       ]
+      ]
+     },
+     "specs": {
+      "list": [
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       }
+      ]
+     }
+    }
+   }
+  ],
+  "outputs": {
+   "concept": {
+    "file": {
+     "digest": "628b89a8167bf54782e98b8578cfe601d3cc181bb34dfc59912d708f3221d138",
+     "kind": "image/png",
+     "name": "meadow-concept-text-only-v1.png",
+     "size": 2016648
+    }
+   },
+   "layers": {
+    "collection": [
+     [
+      "far",
+      {
+       "file": {
+        "digest": "c4e872038aed0fae37b5e31016a45d66bdb6472e6e3fa39deac3fb8c5232ca76",
+        "key": "far",
+        "kind": "image/png",
+        "name": "image",
+        "size": 2117117
+       }
+      }
+     ],
+     [
+      "middle",
+      {
+       "file": {
+        "digest": "d4401f4634cb7a37c6e24291ee0f5c0869b2216638a0440bcdea2d1ea173dcbd",
+        "key": "middle",
+        "kind": "image/png",
+        "name": "image",
+        "size": 2640383
+       }
+      }
+     ],
+     [
+      "foreground",
+      {
+       "file": {
+        "digest": "a3b63aa237a18012fa8155c53bbe332de92c3b6d82a07024082adc328c245360",
+        "key": "foreground",
+        "kind": "image/png",
+        "name": "image",
+        "size": 895710
+       }
+      }
+     ]
+    ]
+   },
+   "manifest": {
+    "file": {
+     "digest": "00035730370704be072e519fcb6aec37f4eb6264e25d39dcf4a0dacff69e5bb7",
+     "kind": "json",
+     "name": "manifest",
+     "size": 409
+    }
+   },
+   "preview": {
+    "file": {
+     "digest": "c3d7c46a294c9baf5d671db8cb007503ed46005d328b4c53f7446ae9122a6301",
+     "kind": "image/png",
+     "name": "preview",
+     "size": 2125374
+    }
+   },
+   "source_far": {
+    "file": {
+     "digest": "35b88b0c973ba03c699b945d2b4e4dfc9f54f171f62448648c6e22cd9290c4a6",
+     "kind": "image/png",
+     "name": "image",
+     "size": 1917825
+    }
+   },
+   "source_foreground": {
+    "file": {
+     "digest": "a3b63aa237a18012fa8155c53bbe332de92c3b6d82a07024082adc328c245360",
+     "kind": "image/png",
+     "name": "image",
+     "size": 895710
+    }
+   },
+   "source_middle": {
+    "file": {
+     "digest": "05b1f4f6c878e855fdc81454297908792f237082b8c642951e2bf3940dc20f77",
+     "kind": "image/png",
+     "name": "image",
+     "size": 1322336
+    }
+   }
+  },
+  "pending": [],
+  "run_name": "meadow-01",
+  "scopes": [
+   {
+    "id": "scope:parallax#",
+    "input_bindings": [
+     {
+      "source": "far#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "layers"
+     },
+     {
+      "source": "foreground#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "layers"
+     },
+     {
+      "source": "middle#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "layers"
+     }
+    ],
+    "kind": "workflow",
+    "nodes": [
+     "parallax.compose#1"
+    ],
+    "output_bindings": [
+     {
+      "source": "parallax.compose#1",
+      "source_kind": "output",
+      "source_port": "manifest",
+      "target_port": "manifest"
+     },
+     {
+      "source": "parallax.compose#1",
+      "source_kind": "output",
+      "source_port": "preview",
+      "target_port": "preview"
+     },
+     {
+      "source": "parallax.layer['far'].chosen#1",
+      "source_kind": "output",
+      "source_port": "value",
+      "target_port": "layers"
+     },
+     {
+      "source": "parallax.layer['foreground'].chosen#1",
+      "source_kind": "output",
+      "source_port": "value",
+      "target_port": "layers"
+     },
+     {
+      "source": "parallax.layer['middle'].chosen#1",
+      "source_kind": "output",
+      "source_port": "value",
+      "target_port": "layers"
+     }
+    ],
+    "parent": null,
+    "path": "parallax",
+    "pending": [],
+    "ports": {
+     "inputs": {
+      "canvas": {},
+      "layers": {
+       "items": {},
+       "type": "list"
+      }
+     },
+     "outputs": [
+      "manifest",
+      "preview",
+      "layers"
+     ]
+    },
+    "source": null,
+    "step": "parallax",
+    "take": [],
+    "title": "Make the layers repeat"
+   },
+   {
+    "id": "scope:parallax.layer['far']#",
+    "input_bindings": [],
+    "kind": "group",
+    "nodes": [
+     "parallax.layer['far'].loops_already#1",
+     "parallax.layer['far'].repaint#1",
+     "parallax.layer['far'].repaint#2",
+     "parallax.layer['far'].seam_ok#1",
+     "parallax.layer['far'].seam_ok#2",
+     "parallax.layer['far'].chosen#1"
+    ],
+    "output_bindings": [],
+    "parent": "scope:parallax#",
+    "path": "parallax.layer['far']",
+    "pending": [],
+    "ports": {
+     "inputs": {},
+     "outputs": []
+    },
+    "source": null,
+    "step": "parallax.layer",
+    "take": [],
+    "title": "layer"
+   },
+   {
+    "id": "scope:parallax.layer['middle']#",
+    "input_bindings": [],
+    "kind": "group",
+    "nodes": [
+     "parallax.layer['middle'].loops_already#1",
+     "parallax.layer['middle'].repaint#1",
+     "parallax.layer['middle'].repaint#2",
+     "parallax.layer['middle'].seam_ok#1",
+     "parallax.layer['middle'].seam_ok#2",
+     "parallax.layer['middle'].mirror#1",
+     "parallax.layer['middle'].chosen#1"
+    ],
+    "output_bindings": [],
+    "parent": "scope:parallax#",
+    "path": "parallax.layer['middle']",
+    "pending": [],
+    "ports": {
+     "inputs": {},
+     "outputs": []
+    },
+    "source": null,
+    "step": "parallax.layer",
+    "take": [],
+    "title": "layer"
+   },
+   {
+    "id": "scope:parallax.layer['foreground']#",
+    "input_bindings": [],
+    "kind": "group",
+    "nodes": [
+     "parallax.layer['foreground'].loops_already#1",
+     "parallax.layer['foreground'].chosen#1",
+     "parallax.layer['foreground'].seam_ok#1"
+    ],
+    "output_bindings": [],
+    "parent": "scope:parallax#",
+    "path": "parallax.layer['foreground']",
+    "pending": [],
+    "ports": {
+     "inputs": {},
+     "outputs": []
+    },
+    "source": null,
+    "step": "parallax.layer",
+    "take": [],
+    "title": "layer"
+   }
+  ],
+  "stand_in": false,
+  "state": "succeeded",
+  "warnings": [],
+  "workflow": {
+   "id": "meadow-parallax",
+   "title": "Meadow from concept to parallax"
+  }
+ }
+}

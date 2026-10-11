@@ -40,6 +40,24 @@ jobs:
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test --workspace
 
+  # Static site checks build source only; they never prepare or upload run artifacts.
+  www:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.0"
+      - run: bun --no-env-file install --frozen-lockfile
+      - run: bun --no-env-file run check:www
+      - run: bun --no-env-file run test:www
+      - run: bun --no-env-file run build:www
+
   python:
     runs-on: ubuntu-latest
     defaults:

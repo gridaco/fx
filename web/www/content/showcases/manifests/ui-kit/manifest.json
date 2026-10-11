@@ -1,0 +1,12 @@
+{
+  "kind": "ui-kit-demo-v1",
+  "resources": [
+    "assets/panel_frame.png",
+    "assets/panel_frame_validation.json",
+    "assets/button_rect.png",
+    "assets/button_rect_validation.json",
+    "assets/preview_icons.png",
+    "assets/preview_icons_validation.json",
+    "assets/meadow.png"
+  ]
+}
