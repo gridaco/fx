@@ -5,7 +5,7 @@ export const fx_description = "Grida FX connects models, local tools, and checks
 
 /** Emit complete social metadata per page: Next replaces nested metadata objects. */
 export function pageMetadata(title: string, description: string, path = ""): Metadata {
-  const url = `${site.url}/${path}`;
+  const url = path ? `${site.url}/${path}` : site.url;
   const images = [{
     url: `${site.url}/social-preview.png`,
     width: 1200,

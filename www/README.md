@@ -13,7 +13,7 @@ bun --no-env-file install --frozen-lockfile
 bun --no-env-file run dev:www
 ```
 
-Open `http://127.0.0.1:3100/fx/`. Ctrl-C stops the server; source edits refresh
+Open `http://127.0.0.1:3100/fx`. Ctrl-C stops the server; source edits refresh
 the page. The landing artwork is included. **Working workflow demos also require
 an asset source**: set the CDN base below, or prepare the ignored local media
 using the [showcase guide](docs/showcases.md#prepare-reviewed-content).
@@ -31,7 +31,7 @@ bun --no-env-file run preview:www
 
 These checks and builds work offline with the committed frozen metadata; they do
 not download assets, execute workflows or publish anything. The preview serves
-`out/` at `http://127.0.0.1:3100/fx/` without Next.js. Use `PORT=3101` to change
+`out/` at `http://127.0.0.1:3100/fx` without Next.js. Use `PORT=3101` to change
 the preview port. Choose the asset base **before building**, as described below.
 
 `site.config.ts` owns the `/fx` prefix and public links. A production host must

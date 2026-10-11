@@ -16,19 +16,22 @@ const server = Bun.serve({
   async fetch(request) {
     if (!["GET", "HEAD"].includes(request.method)) return new Response(null, { status: 405, headers: { Allow: "GET, HEAD" } });
     const url = new URL(request.url);
-    if (url.pathname === "/" || url.pathname === site.base_path) {
-      return Response.redirect(new URL(`${site.base_path}/${url.search}`, url), 308);
+    if (url.pathname === "/") return Response.redirect(new URL(`${site.base_path}${url.search}`, url), 308);
+    // grida.co serves slash-less URLs; mirror its redirect so links are checked as deployed.
+    if (url.pathname.length > 1 && url.pathname.endsWith("/")) {
+      return Response.redirect(new URL(`${url.pathname.replace(/\/+$/, "")}${url.search}`, url), 308);
     }
     let path: string;
     try { path = decodeURIComponent(url.pathname); }
     catch { return new Response("Invalid path", { status: 400 }); }
-    if (!path.startsWith(`${site.base_path}/`)) return new Response("Not found", { status: 404 });
+    if (path !== site.base_path && !path.startsWith(`${site.base_path}/`)) return new Response("Not found", { status: 404 });
     const relative = path.slice(site.base_path.length + 1);
     if (relative.includes("\0") || relative.includes("\\") || relative.split("/").some((part) => part === ".." || part.startsWith("."))) {
       return new Response("Not found", { status: 404 });
     }
-    let candidate = resolve(root, relative);
-    if ((await stat(candidate).catch(() => null))?.isDirectory()) candidate = resolve(candidate, "index.html");
+    // Slash-less export: /fx -> index.html, /fx/a -> a.html, assets as-is.
+    let candidate = relative ? resolve(root, relative) : resolve(root, "index.html");
+    if (!(await stat(candidate).catch(() => null))?.isFile()) candidate = `${candidate}.html`;
     const confined = await realpath(candidate).catch(() => null);
     if (!confined || !confined.startsWith(`${root}${sep}`) || !(await stat(confined)).isFile()) {
       return new Response(request.method === "HEAD" ? null : Bun.file(resolve(root, "404.html")), { status: 404, headers: { "Content-Type": "text/html; charset=utf-8" } });
@@ -38,4 +41,4 @@ const server = Bun.serve({
   },
 });
 
-console.log(`FX www preview: http://${server.hostname}:${server.port}${site.base_path}/`);
+console.log(`FX www preview: http://${server.hostname}:${server.port}${site.base_path}`);

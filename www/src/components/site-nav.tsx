@@ -19,7 +19,7 @@ export function SiteNav() {
             className="rounded-full px-4 py-2 text-sm font-medium text-zinc-600 hover:text-foreground aria-[current=page]:bg-white aria-[current=page]:text-foreground aria-[current=page]:shadow-sm sm:px-6">
             About
           </Link>
-          <Link href="/workflows/" aria-current={segment === "workflows" ? "page" : undefined}
+          <Link href="/workflows" aria-current={segment === "workflows" ? "page" : undefined}
             className="rounded-full px-4 py-2 text-sm font-medium text-zinc-600 hover:text-foreground aria-[current=page]:bg-white aria-[current=page]:text-foreground aria-[current=page]:shadow-sm sm:px-6">
             Workflows
           </Link>

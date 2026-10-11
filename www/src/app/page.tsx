@@ -13,7 +13,7 @@ const software = {
   "@type": "SoftwareSourceCode",
   name: "Grida FX",
   description: fx_description,
-  url: `${site.url}/`,
+  url: site.url,
   codeRepository: site.repository_url,
   programmingLanguage: ["Rust", "Python", "TypeScript"],
   license: "https://www.apache.org/licenses/LICENSE-2.0",
@@ -32,7 +32,7 @@ export default function HomePage() {
       </section>
       <LandingShowcase />
       <section id="start" aria-label="Explore or install Grida FX" className="grid w-full max-w-sm gap-5">
-        <Link href="/workflows/" className="fx-landing-cta inline-flex h-11 items-center justify-self-start gap-2 rounded-full bg-primary px-5 text-sm font-medium text-white hover:bg-primary/90">
+        <Link href="/workflows" className="fx-landing-cta inline-flex h-11 items-center justify-self-start gap-2 rounded-full bg-primary px-5 text-sm font-medium text-white hover:bg-primary/90">
           Explore workflows <ArrowRight size={16} aria-hidden="true" />
         </Link>
         <GettingStarted />

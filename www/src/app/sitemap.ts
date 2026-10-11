@@ -6,8 +6,8 @@ export const dynamic = "force-static";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
-    { url: `${site.url}/` },
-    { url: `${site.url}/workflows/` },
-    ...workflows.map(({ slug }) => ({ url: `${site.url}/workflows/${slug}/` })),
+    { url: site.url },
+    { url: `${site.url}/workflows` },
+    ...workflows.map(({ slug }) => ({ url: `${site.url}/workflows/${slug}` })),
   ];
 }

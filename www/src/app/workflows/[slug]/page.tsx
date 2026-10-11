@@ -23,7 +23,7 @@ export async function generateMetadata({ params }: Props) {
   const { slug } = await params;
   const workflow = workflows.find((entry) => entry.slug === slug);
   if (!workflow) notFound();
-  return pageMetadata(`${workflow.title} — Grida FX — Grida`, workflow.description, `workflows/${workflow.slug}/`);
+  return pageMetadata(`${workflow.title} — Grida FX — Grida`, workflow.description, `workflows/${workflow.slug}`);
 }
 
 export default async function WorkflowPage({ params }: Props) {
@@ -51,7 +51,7 @@ export default async function WorkflowPage({ params }: Props) {
   ];
 
   return <main id="main" className="fx-site-container py-10 md:py-14">
-    <Link href="/workflows/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft size={15} aria-hidden="true" /> Workflows</Link>
+    <Link href="/workflows" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft size={15} aria-hidden="true" /> Workflows</Link>
     <header className="mt-7">
       <div className="max-w-2xl">
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{workflow.title}</h1>
@@ -113,7 +113,7 @@ export default async function WorkflowPage({ params }: Props) {
     </section>
 
     </RecordedCanvas>
-    <Link href={`/workflows/${related.slug}/`} className="mt-14 flex items-center justify-between gap-6 rounded-xl border p-6">
+    <Link href={`/workflows/${related.slug}`} className="mt-14 flex items-center justify-between gap-6 rounded-xl border p-6">
       <div><p className="text-xs text-muted-foreground">Keep exploring</p><p className="mt-2 text-lg font-medium tracking-tight">{related.title}</p></div>
       <ArrowRight size={20} aria-hidden="true" />
     </Link>
