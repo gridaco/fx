@@ -18,17 +18,32 @@
 .fx-canvas-pending { stroke-dasharray: 6 4; fill: #fafafa; }
 .fx-canvas-node:hover .fx-canvas-node-box { stroke: #71717a; }
 .fx-canvas-node.is-selected .fx-canvas-node-box, .fx-canvas-node:focus-visible .fx-canvas-node-box { stroke: #2563eb; stroke-width: 2px; }
-.fx-canvas-node[data-state="running"] .fx-canvas-node-box { fill: #eff6ff; stroke: #2563eb; stroke-width: 2px; vector-effect: non-scaling-stroke; }
-.fx-canvas-node[data-state="running"].is-selected .fx-canvas-node-box, .fx-canvas-node[data-state="running"]:focus-visible .fx-canvas-node-box { stroke: #1d4ed8; stroke-width: 3px; }
-.fx-canvas-node[data-state="running"] .fx-canvas-node-state { fill: #1d4ed8; font-weight: 600; }
-.fx-canvas-running-indicator { fill: #2563eb; animation: fx-running-indicator 1.6s ease-in-out infinite; }
-@keyframes fx-running-indicator { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
-@media (prefers-reduced-motion: reduce) { .fx-canvas-running-indicator { animation: none; } }
+.fx-canvas-node[data-state="running"] .fx-canvas-node-state { font-weight: 600; }
+/* State glyphs (state-icon.ts): one circle slot for every state; only the glyph is coloured. */
+.fx-state-icon { flex-shrink: 0; overflow: visible; }
+.fx-state-disc { fill: #8c959f; }
+.fx-state-mark { fill: none; stroke: #fff; stroke-width: 1.75px; stroke-linecap: round; stroke-linejoin: round; }
+.fx-state-ring { fill: none; stroke: #8c959f; stroke-width: 1.5px; }
+.fx-state-icon[data-icon="succeeded"] .fx-state-disc { fill: #1f883d; }
+.fx-state-icon[data-icon="failed"] .fx-state-disc { fill: #cf222e; }
+.fx-state-icon[data-icon="skipped"] .fx-state-mark { stroke: #8c959f; stroke-width: 1.5px; }
+.fx-state-icon[data-icon="maybe"] .fx-state-ring { stroke-dasharray: 2.75 2.75; }
+.fx-state-track { fill: none; stroke: #dbab0a; stroke-opacity: .4; stroke-width: 2px; }
+.fx-state-arc { fill: none; stroke: #bf8700; stroke-width: 2px; stroke-linecap: round; }
+.fx-state-core { fill: #bf8700; }
+.fx-state-icon[data-icon="running"] .fx-state-glyph { transform-box: fill-box; transform-origin: center; animation: fx-state-spin 1s linear infinite; }
+@keyframes fx-state-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .fx-state-icon .fx-state-glyph { animation: none; } }
 .fx-canvas-node-title { fill: #27272a; font: 600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 .fx-canvas-node-type { fill: #71717a; font: 10px "SFMono-Regular", Consolas, monospace; }
 .fx-canvas-node-state { fill: #52525b; font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 .fx-canvas-node-image { pointer-events: none; }
 .fx-canvas-image-border { fill: none; stroke: #e4e4e7; stroke-width: 1px; pointer-events: none; }
+/* A running step's reserved image frame: a band sweeps across a tint until the preview arrives. */
+.fx-canvas-shimmer-base { fill: #f4f4f5; }
+.fx-canvas-shimmer-band { transform-box: fill-box; transform-origin: center; transform: translateX(-20%) skewX(-20deg); animation: fx-canvas-shimmer 1.6s ease-in-out infinite; }
+@keyframes fx-canvas-shimmer { to { transform: translateX(220%) skewX(-20deg); } }
+@media (prefers-reduced-motion: reduce) { .fx-canvas-shimmer-band { animation: none; } }
 .fx-canvas-image-error { fill: #71717a; font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; pointer-events: none; }
 .fx-canvas-image-count { fill: #a1a1aa; font: 10px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 .fx-canvas-toolbar { position: absolute; bottom: 16px; left: 16px; display: flex; align-items: center; gap: 1px; padding: 3px; border: 1px solid #e4e4e7; border-radius: 9px; background: #fff; box-shadow: 0 2px 5px #00000008; }
@@ -44,6 +59,8 @@
 .fx-canvas-edge-data { stroke: #6084b2; }
 .fx-canvas-edge-control { stroke: #a1a1aa; stroke-dasharray: 6 4; }
 .fx-canvas-edge-dependency { stroke: #a1a1aa; stroke-dasharray: 2 4; }
+.fx-canvas-arrow-data { fill: #6084b2; }
+.fx-canvas-arrow-control, .fx-canvas-arrow-dependency { fill: #a1a1aa; }
 .fx-canvas-node-divider { stroke: #f0f0f2; stroke-width: 1px; }
 .fx-canvas-port-heading { fill: #a1a1aa; font: 8px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing: 1px; }
 .fx-canvas-port circle, .fx-canvas-port rect, .fx-canvas-port path { fill: #fff; stroke-width: 1.5px; }

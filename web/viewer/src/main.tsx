@@ -2,7 +2,7 @@ import { StrictMode, useEffect, useRef, useState, useSyncExternalStore, type Rea
 import { createRoot } from "react-dom/client";
 import { ArrowLeft, ArrowUpRight, ChevronRight, FileText, List, RefreshCw, Square, Workflow, X } from "lucide-react";
 import { ServiceIndexProjection, ViewerController, ViewerEntryController, type Artifact, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun } from "@grida/fx-web";
-import { Status, Values, WorkflowCanvas, money, type WorkflowCanvasHandle } from "@grida/fx-react";
+import { StateIcon, Status, Values, WorkflowCanvas, money, type WorkflowCanvasHandle } from "@grida/fx-react";
 import "./style.css";
 
 const entryController = new ViewerEntryController(window.location.pathname);
@@ -167,7 +167,7 @@ function WorkflowView() {
         {steps && <nav ref={popover} id="fx-steps" aria-label="Workflow steps" className="fx-steps">
           <p className="fx-steps-heading"><span>Steps</span><span>{graph.nodes.length}</span></p>
           <div ref={list} className="fx-steps-list">{graph.nodes.map((node) => <button key={node.id} onClick={() => { select(node.id); setReveal({ id: node.id }); }} aria-current={selected === node.id ? "page" : undefined} data-state={node.state} aria-label={`${node.title}, ${node.state}`} title={node.source_id} className="fx-step-row">
-            <span className="fx-step-label">{node.title}</span><span className="fx-state-dot" data-state={node.state} aria-hidden="true" />
+            <span className="fx-step-label">{node.title}</span><StateIcon state={node.state} />
           </button>)}</div>
         </nav>}
         {open && <aside aria-label="Details" className="fx-details">

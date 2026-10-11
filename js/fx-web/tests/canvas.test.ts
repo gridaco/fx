@@ -214,5 +214,5 @@ test("absent instances never join a deck, and an image output reserves its previ
 test("a running card counts up from its start, never below zero", () => {
   const start = Date.parse("2026-10-11T09:00:00.000Z");
   expect([0, 8_999, 64_000, 3_599_000, 7_500_000, -5_000].map((elapsed) => runningLabel(start, start + elapsed)))
-    .toEqual(["running · 0s", "running · 8s", "running · 1m 04s", "running · 59m 59s", "running · 2h 05m", "running · 0s"]);
+    .toEqual(["0s", "8s", "1m 04s", "59m 59s", "2h 05m", "0s"]);
 });
