@@ -127,6 +127,8 @@ impl State {
 #[derive(Debug)]
 pub struct Ledger {
     ceiling: Option<Usd>,
+    /// The only providers whose calls this run admits, for a run on the user's own plan.
+    only: Option<&'static [&'static str]>,
     events: Option<Arc<EventLog>>,
     state: Mutex<State>,
 }
@@ -135,9 +137,22 @@ impl Ledger {
     pub fn new(ceiling: Option<Usd>, events: Option<Arc<EventLog>>) -> Ledger {
         Ledger {
             ceiling,
+            only: None,
             events,
             state: Mutex::new(State::default()),
         }
+    }
+
+    /// The same ledger, admitting calls on `providers` only: a live run without a ceiling runs
+    /// on the user's own plan, and nothing else (spec/protocol.md §6.1 step 5).
+    pub fn only_on(mut self, providers: &'static [&'static str]) -> Ledger {
+        self.only = Some(providers);
+        self
+    }
+
+    /// Whether this run admits a call on `provider`.
+    pub fn admits(&self, provider: &str) -> bool {
+        self.only.is_none_or(|only| only.contains(&provider))
     }
 
     /// Replays a folder's earlier events (module doc). `scopes_of` gives an instance id's scopes.

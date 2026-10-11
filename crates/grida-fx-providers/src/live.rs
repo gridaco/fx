@@ -31,6 +31,11 @@ pub const PROVIDERS: [&str; 6] = [
     "codex",
 ];
 
+/// The providers that bill the user's own plan, never in dollars: a live run whose calls are all on
+/// them needs no ceiling (spec/providers.md §10). Only an adapter of this crate makes a provider
+/// one, never a route table, since the registry serves a provider by its name.
+pub const INCLUDED: [&str; 1] = ["codex"];
+
 /// Whether a live run may reach the network ([`crate::transport::NETWORK_VARIABLE`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Network {

@@ -47,9 +47,10 @@ This page says how to set it up, what it does well, and where it differs from th
    grida fx run kite --live
    ```
 
-   A run whose steps are all free needs no `--max-usd`: its plan is priced at $0, and FX runs it
-   under a ceiling of $0, so a step on a priced route cannot slip in without one
-   ([Cost, cache and takes](04-cost-and-cache.md)).
+   A run whose paid calls are all on Codex needs no `--max-usd`. FX runs it under a ceiling of $0
+   and refuses a call on any other route, so a priced step cannot slip in without one
+   ([Cost, cache and takes](04-cost-and-cache.md)). It still spends your Codex plan: an agent
+   running FX for you should ask you first, as for any live run.
 
 ## What it honours
 
@@ -122,7 +123,8 @@ only when the shapes already match.
 Codex makes transparent images itself: the subject comes back cut out, with soft edges and glows
 kept as partial transparency. FX holds each answer to the setting: a picture asked for as
 transparent must have an alpha channel, and one asked for as opaque must have no transparent
-pixels. An answer that fails is drawn again, as on any route.
+pixels. An answer that fails is drawn again, as on any route, and each new attempt is another
+image on your plan.
 
 ### Your plan's limits apply
 
@@ -136,8 +138,10 @@ pixels. An answer that fails is drawn again, as on any route.
   failed    draw#1: Codex image generation failed: the Codex usage limit is reached; it resets at unix time 1792311096
   ```
 
-- FX never falls back to an API key: it hides your provider keys and `CODEX_API_KEY` from Codex,
-  so Codex cannot bill an API account instead of your plan.
+- FX draws only on a ChatGPT sign-in. Before each image it asks Codex how it is signed in, and
+  refuses, before anything is drawn, a Codex signed in with an API key (`codex login
+  --with-api-key`), which would bill an API account. It also hides your provider keys and
+  `CODEX_API_KEY` from Codex.
 
 ### Slower, and one at a time
 
@@ -157,12 +161,13 @@ not call Codex again.
 - **Switching a step to or from Codex draws it anew**: the route is part of the step's identity
   ([Cost, cache and takes](04-cost-and-cache.md)).
 
-### Once Codex starts drawing, a failure is not repeated
+### A failure is not repeated
 
-If Codex exits, stalls past 10 minutes, or answers without an image after it has started the
-turn, the step fails and FX does not draw it again on its own: an image may already have been
-made and counted against your plan. Run again to try again. A failure before Codex starts
-drawing (Codex not starting, or refusing the request) is retried as a connection failure is.
+If Codex exits, stalls, or answers without an image, the step fails and FX does not ask Codex
+again on its own: once Codex has been asked to draw, an image may already have been made and
+counted against your plan, and a Codex that failed before that will most likely fail the same
+way again. Run again to try again. (Within a turn, Codex retries its own requests to OpenAI; that
+is Codex's.)
 
 ### Local only
 
@@ -173,18 +178,23 @@ Codex at all: `Codex was not started: GRIDA_FX_NETWORK is off`.
 ### What runs on your machine
 
 - FX starts `codex app-server` for each image, in an empty scratch folder it removes afterwards,
-  with a read-only sandbox and no approvals; anything Codex asks FX to approve is declined.
+  with a read-only sandbox and no approvals; anything Codex asks FX to approve is declined. The
+  read-only sandbox stops writes, not reads: Codex is asked to use no tool but its image tool,
+  and nothing else is offered to it (below).
+- Your own Codex tools are off for these conversations: your MCP servers (FX lists them with
+  `codex mcp list` and turns each off), apps, plugins, hooks, memories and the turn-end
+  notification. Your reasoning effort and service tier are not used either: an image turn runs at
+  low effort and the standard tier, so it spends your plan no faster than it must.
+- Codex runs in a process group of its own, with everything it starts. When the image is made,
+  the run is cancelled or FX exits, FX ends the whole group.
 - FX never reads Codex's sign-in files.
-- Your Codex settings still load. FX turns off the turn-end notification, memories and hooks for
-  these conversations, but your MCP servers and plugins still start with each image, which makes
-  each one slower.
 - Codex keeps its own copy of each image under `~/.codex/generated_images/`. FX keeps the one in
   its store and never touches Codex's.
 - Your prompts and images go to OpenAI under your ChatGPT account's terms, as when you use Codex
   yourself.
 - FX talks to Codex through `codex app-server`, which Codex marks experimental. It was tested with
-  Codex 0.160.1; a Codex update can change it, and a step that no longer understands Codex fails
-  before Codex draws anything.
+  Codex 0.160.1; a Codex update can change it. A step that no longer understands Codex fails, and
+  may fail after Codex has drawn (an image FX cannot recognise is lost to it).
 
 ## When it fails
 
@@ -194,7 +204,9 @@ Codex at all: `Codex was not started: GRIDA_FX_NETWORK is off`.
 | `Codex image generation takes no exact size: …` | Leave `size` out, and size the picture after it (above). |
 | `Codex image generation takes no references` | Use an API route for that step. |
 | `… the Codex usage limit is reached; it resets at …` | Wait for the reset, or use an API route. |
-| `Codex image generation was not sent: Codex refused …` | Check `codex login status`; sign in again if needed. |
+| `Codex is not signed in: …`, or `Codex is signed in with an API key, …` | Run `codex login` and sign in with ChatGPT. |
+| `Codex's MCP servers could not be listed, …` | Check that `codex mcp list` works; update Codex. |
+| `Codex image generation was not started: …` | Check that `codex app-server` starts; update Codex. |
 | `Codex image generation failed: Codex answered without an image` | Run again; rephrase a prompt Codex will not draw. |
 | `Codex was not started: GRIDA_FX_NETWORK is off` | Unset `GRIDA_FX_NETWORK`. |
 

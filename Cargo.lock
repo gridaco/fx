@@ -731,6 +731,7 @@ dependencies = [
  "png",
  "regex",
  "reqwest",
+ "rustix",
  "serde_json",
  "sha2 0.10.9",
  "tempfile",

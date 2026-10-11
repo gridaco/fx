@@ -17,7 +17,7 @@ standalone `grida-fx` command and the source setup are in
 | `grida fx inspect RUN --control [--json]` | observe an exact invocation's local control availability |
 | `grida fx cancel RUN [--invocation ID] [--wait] [--timeout DURATION] [--json]` | request cancellation; optionally verify local completion ([Run control](08-run-control.md)) |
 | `grida fx plan <target> [inputs] [--routes file]… [--max-usd N] [--check] [--expect-cached] [--json] [--open] [--standalone]` | expand, check, price; optionally open the plan canvas. Never spends. |
-| `grida fx run <target> [inputs] [--routes file]… [--live] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--name NAME \| --resume NAME \| --run folder] [--stand-in file.py#function] [--open \| --no-view] [--standalone]` | run; `--live` admits paid calls, needs a ceiling (unless the plan's worst case is $0) and reads the provider keys; `--name` creates a named run, `--resume` continues it, `--run` selects a folder; `--stand-in` answers paid calls with your function instead, offline ([below](#stand-ins-testing-without-a-provider)) |
+| `grida fx run <target> [inputs] [--routes file]… [--live] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--name NAME \| --resume NAME \| --run folder] [--stand-in file.py#function] [--open \| --no-view] [--standalone]` | run; `--live` admits paid calls, needs a ceiling (unless every call is on your own Codex) and reads the provider keys; `--name` creates a named run, `--resume` continues it, `--run` selects a folder; `--stand-in` answers paid calls with your function instead, offline ([below](#stand-ins-testing-without-a-provider)) |
 | `grida fx reroll <run> <step-path> [--live]` / `grida fx pick <run> <step-path> <take>` | takes ([Cost](04-cost-and-cache.md#takes)) |
 | `grida fx takes list <target>` / `grida fx takes mv <target> <old> <new>` | inspect or repair a takes file |
 | `grida fx jobs [--forget <key>]` | the cache's long provider jobs, `settled` ones included ([Resuming](04-cost-and-cache.md#resuming)); `--forget` clears one once you have checked the provider |
@@ -137,8 +137,8 @@ need it, before anything is sent and for nothing: the step fails, refused with `
 not set`. Without `--live` no key is used.
 
 **No API key: your Codex.** With Codex installed and signed in to your ChatGPT account, the route
-`imagegen@codex` draws images with no key and nothing to buy: it is priced at $0, and a run on
-free routes only needs no `--max-usd`. It has caveats, on sizes above all:
+`imagegen@codex` draws images with no key and nothing to buy: it is priced at $0, and a run whose
+calls are all on it needs no `--max-usd`. It has caveats, on sizes above all:
 [Images from your own Codex](12-codex.md).
 
 **Proxies.** A live run sends `https` requests through the proxy your environment names

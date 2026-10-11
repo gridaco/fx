@@ -529,6 +529,8 @@ pub fn end_every_host() {
         std::mem::take(&mut groups.live)
     };
     kill_groups_now(&live);
+    // Codex conversations (spec/providers.md §9.6) own process groups too.
+    grida_fx_providers::codex::end_every_codex();
 }
 
 /// Sends `SIGKILL` directly to every owned group. Only successful delivery or the kernel's

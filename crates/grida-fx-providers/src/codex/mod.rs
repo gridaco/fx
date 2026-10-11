@@ -1,8 +1,9 @@
-//! Codex: `image.generate` through the user's own signed-in Codex (spec/providers.md §9.6).
+//! Codex: `image.generate` through the user's own Codex, signed in with ChatGPT
+//! (spec/providers.md §9.6).
 //!
-//! No key and no HTTP: the adapter starts `codex app-server` and speaks its JSON-RPC, one JSON
-//! message per line on stdin and stdout. Codex owns sign-in, the model and the usage; FX never
-//! reads its credential files. One send, in order:
+//! No key and no HTTP: the adapter starts `codex app-server` and speaks its JSON-RPC
+//! ([`session`]). Codex owns sign-in, the model and the usage; FX never reads its credential
+//! files. One send, in order:
 //! 1. the route: capability `image.generate` on provider `codex`, and a contract whose `adapter`
 //!    (when present) is [`ADAPTER`] and whose `adapter_behavior` (when present) is
 //!    [`ADAPTER_BEHAVIOR`];
@@ -10,33 +11,38 @@
 //! 3. values: a blank prompt, a `size` other than `auto` (Codex picks its own sizes: asked for
 //!    1024x1024 it drew 1254x1254), an unknown `background`, references;
 //! 4. the program the setup found ([`find_program`], which only [`crate::live::live_setup`]
-//!    calls): `GRIDA_FX_TOOL_CODEX`, else `codex` on `PATH`, else the copy inside the ChatGPT app
-//!    on macOS; none is `Sent::Refused` with [`NOT_INSTALLED`] (or [`NETWORK_OFF`]);
-//! 5. one exchange ([`exchange`]): `initialize`, `thread/start` (an empty scratch folder, a
-//!    read-only sandbox, no approvals, not persisted), `turn/start` with [`instructions`], then
-//!    notifications until `turn/completed`. The answer is the turn's `imageGeneration` item.
+//!    calls); none is `Sent::Refused` with [`NOT_INSTALLED`] (or [`NETWORK_OFF`]);
+//! 5. the user's MCP servers, listed so each can be turned off ([`mcp_servers`]);
+//! 6. one conversation, in an empty scratch folder, with Codex in a process group of its own
+//!    ([`process`]): `initialize`, `account/read` (only a ChatGPT sign-in is admitted),
+//!    `thread/start` (read-only sandbox, no approvals, not persisted), `turn/start` with
+//!    [`instructions`], then this turn's notifications until its first good `imageGeneration`
+//!    item.
 //!
-//! Outcomes: anything before Codex accepts the turn is `NotReceived`, so the engine may start
-//! again; once the turn is running a generation may already have been made, so every failure is
-//! `Failed { retryable: false }`. The route is free to FX (Codex counts it against the user's own
-//! plan), so every cost is $0. Codex's stderr is dropped and its environment loses the allowlisted
-//! provider keys and `CODEX_API_KEY`, so it never falls back to API-key billing.
+//! Outcomes: a refusal before the turn (no program, no ChatGPT sign-in, another model provider)
+//! is `Sent::Refused`. Every other failure is `Failed { cost: None, retryable: false }`: before
+//! the turn it is most likely to happen again; once `turn/start` is written an image may already
+//! have been made. Nothing is ever resent. Codex reports no cost, so an answer's cost is `None`:
+//! the route's hold, $0, is what is charged.
+
+mod process;
+mod session;
+
+pub use process::{end_every_codex, kill_every_codex};
 
 use crate::BoxFuture;
 use crate::adapter::{Adapter, Answer, CallRequest, RequestAdapter, RouteRef, Sent};
 use crate::capabilities;
-use crate::keys::KeyName;
 use crate::registry::Adapters;
 use crate::setup::Setup;
 use crate::wire;
-use grida_fx_core::money::Usd;
-use serde_json::{Value, json};
+use serde_json::Value;
+use session::Session;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
-use std::time::Duration;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, ChildStdin, Command};
+use std::time::{Duration, Instant};
+use tokio::process::Command;
 
 /// The label of every reason.
 pub const LABEL: &str = "Codex image generation";
@@ -44,12 +50,15 @@ pub const LABEL: &str = "Codex image generation";
 /// The route contract's `adapter` this adapter serves.
 pub const ADAPTER: &str = "fx-codex-image-v1";
 
-/// The route contract's `adapter_behavior` this adapter serves. It names [`instructions`]: a
-/// change to them is a new behaviour.
+/// The route contract's `adapter_behavior` this adapter serves. It names [`instructions`] and
+/// the settings of [`session`]: a change to either is a new behaviour.
 pub const ADAPTER_BEHAVIOR: &str = "1";
 
-/// The whole-exchange deadline of one send.
+/// The whole-conversation deadline of one send.
 pub const DEADLINE: Duration = Duration::from_secs(600);
+
+/// The deadline for Codex to accept the turn, within [`DEADLINE`].
+pub const START_DEADLINE: Duration = Duration::from_secs(60);
 
 /// The variable that names the program, as for any tool (spec/protocol.md §5.6).
 pub const PROGRAM_VARIABLE: &str = "GRIDA_FX_TOOL_CODEX";
@@ -57,9 +66,6 @@ pub const PROGRAM_VARIABLE: &str = "GRIDA_FX_TOOL_CODEX";
 /// Where the ChatGPT app for macOS keeps its own copy of the command.
 pub const MACOS_APP_PROGRAM: &str =
     "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex";
-
-/// The longest line Codex may send (an image arrives base64 on one line).
-const MAX_LINE_BYTES: usize = 64 * 1024 * 1024;
 
 /// The refusal when no program was found.
 pub const NOT_INSTALLED: &str = "Codex is not installed: install it with npm install -g \
@@ -73,17 +79,45 @@ pub const NO_EXACT_SIZE: &str = "Codex image generation takes no exact size: use
 /// The refusal when `GRIDA_FX_NETWORK` is off: Codex generates over the network.
 pub const NETWORK_OFF: &str = "Codex was not started: GRIDA_FX_NETWORK is off";
 
-/// The variables Codex never inherits: with one of these it could bill an API account instead of
-/// the user's plan.
-const WITHHELD: [&str; 2] = ["CODEX_API_KEY", "OPENAI_API_KEY"];
+/// Variables Codex never inherits besides the allowlisted ones ([`crate::keys::ALLOWED`]): with
+/// any of them it could bill, or send its requests, somewhere other than the user's plan.
+const ALSO_WITHHELD: [&str; 5] = [
+    "CODEX_API_KEY",
+    "OPENAI_ORG_ID",
+    "OPENAI_ORGANIZATION",
+    "OPENAI_PROJECT",
+    "OPENAI_PROJECT_ID",
+];
 
-/// Settings for every Codex this adapter starts: nothing of the user's that runs on a turn's end
-/// or remembers it.
-const OVERRIDES: [&str; 3] = [
+/// Settings for every Codex this adapter starts: nothing of the user's runs on a turn's end,
+/// remembers it, hooks into it or offers it apps, plugins or (with [`mcp_servers`]) MCP tools.
+const SETTINGS: [&str; 5] = [
     "notify=[]",
     "features.memories=false",
     "features.hooks=false",
+    "features.apps=false",
+    "features.plugins=false",
 ];
+
+/// The deadline of listing the user's MCP servers.
+const LIST_DEADLINE: Duration = Duration::from_secs(30);
+
+/// Why a conversation ended without an image.
+#[derive(Debug)]
+enum Stop {
+    /// Codex cannot draw on the user's plan: `Sent::Refused`.
+    Refused(String),
+    Failed(String),
+}
+
+impl Stop {
+    #[cfg(test)]
+    fn reason(self) -> String {
+        match self {
+            Stop::Refused(reason) | Stop::Failed(reason) => reason,
+        }
+    }
+}
 
 /// The adapter (module doc).
 #[derive(Debug, Clone)]
@@ -91,6 +125,7 @@ pub struct CodexImages {
     /// The program, or the refusal of every call.
     program: Result<PathBuf, String>,
     deadline: Duration,
+    start_deadline: Duration,
 }
 
 impl CodexImages {
@@ -104,12 +139,14 @@ impl CodexImages {
         CodexImages {
             program,
             deadline: DEADLINE,
+            start_deadline: START_DEADLINE,
         }
     }
 
-    /// The same adapter with another deadline (tests).
-    pub fn with_deadline(mut self, deadline: Duration) -> CodexImages {
-        self.deadline = deadline;
+    /// The same adapter with other deadlines (tests).
+    pub fn with_deadlines(mut self, start: Duration, whole: Duration) -> CodexImages {
+        self.start_deadline = start;
+        self.deadline = whole;
         self
     }
 
@@ -130,7 +167,7 @@ impl RequestAdapter for CodexImages {
                 Ok(prepared) => prepared,
                 Err(reason) => return Sent::Refused { reason },
             };
-            exchange(&program, &text, self.deadline).await
+            exchange(&program, &text, self.start_deadline, self.deadline).await
         })
     }
 
@@ -152,19 +189,53 @@ pub fn register(adapters: &mut Adapters, setup: &Setup) {
     );
 }
 
-/// The program (step 4): `GRIDA_FX_TOOL_CODEX` when set and not blank (and then only when it
-/// names a file), else the first `codex` on `PATH`, else `app` when it exists.
+/// The program (step 4), as an absolute path to an executable file:
+/// - `GRIDA_FX_TOOL_CODEX` when set and not blank (relative to the working directory), and
+///   nothing else when it names no executable file;
+/// - else the first `codex` in an absolute `PATH` entry (empty and relative entries are skipped,
+///   so a project's own folder never supplies it);
+/// - else `app` when it is executable.
 pub fn find_program(env: &dyn Fn(&str) -> Option<String>, app: &Path) -> Option<PathBuf> {
     if let Some(named) = env(PROGRAM_VARIABLE).filter(|v| !v.trim().is_empty()) {
         let named = PathBuf::from(named);
-        return named.is_file().then_some(named);
+        let named = if named.is_absolute() {
+            named
+        } else {
+            std::env::current_dir().ok()?.join(named)
+        };
+        return executable(&named).then_some(named);
     }
     let on_path = env("PATH").and_then(|path| {
         std::env::split_paths(&path)
+            .filter(|dir| dir.is_absolute())
             .map(|dir| dir.join("codex"))
-            .find(|candidate| candidate.is_file())
+            .find(|candidate| executable(candidate))
     });
-    on_path.or_else(|| app.is_file().then(|| app.to_path_buf()))
+    on_path.or_else(|| executable(app).then(|| app.to_path_buf()))
+}
+
+/// A regular file this user may run (on Unix, any execute bit).
+fn executable(path: &Path) -> bool {
+    let Ok(metadata) = std::fs::metadata(path) else {
+        return false;
+    };
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        metadata.is_file() && metadata.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        metadata.is_file()
+    }
+}
+
+/// Every variable Codex never inherits.
+pub fn withheld() -> impl Iterator<Item = &'static str> {
+    crate::keys::ALLOWED
+        .iter()
+        .copied()
+        .chain(ALSO_WITHHELD.iter().copied())
 }
 
 /// The turn's text: fixed instructions, a sentence for a transparent or opaque background, then
@@ -251,34 +322,100 @@ impl<'a> Values<'a> {
     }
 }
 
-/// Step 5: one Codex, one thread, one turn (module doc).
-async fn exchange(program: &Path, text: &str, deadline: Duration) -> Sent {
-    let folder = match tempfile::Builder::new().prefix("grida-fx-codex-").tempdir() {
-        Ok(folder) => folder,
-        Err(error) => {
-            let reason = grida_fx_core::error::io_reason(&error);
-            return Sent::not_received(format!("{LABEL} was not started: {reason}"));
-        }
-    };
+/// A command that starts `program` with `args` in `folder`: Codex's own environment, less
+/// [`withheld`]; no stderr; in a process group of its own; killed when dropped.
+fn command(program: &Path, args: &[String], folder: &Path) -> Command {
     let mut command = Command::new(program);
-    command.arg("app-server");
-    for setting in OVERRIDES {
-        command.args(["-c", setting]);
-    }
-    for variable in WITHHELD
-        .iter()
-        .copied()
-        .chain(KeyName::ALL.map(KeyName::variable))
-    {
+    command.args(args).current_dir(folder);
+    for variable in withheld() {
         command.env_remove(variable);
     }
     command
-        .current_dir(folder.path())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .kill_on_drop(true);
-    let mut child = match command.spawn() {
+    #[cfg(unix)]
+    command.process_group(0);
+    command
+}
+
+/// `-c` settings, `features.apps` and `features.plugins` off first.
+fn settings(extra: impl IntoIterator<Item = String>) -> Vec<String> {
+    SETTINGS
+        .iter()
+        .map(|setting| setting.to_string())
+        .chain(extra)
+        .flat_map(|setting| ["-c".to_string(), setting])
+        .collect()
+}
+
+/// Step 5: a setting that turns off each MCP server the user's Codex would start, as `codex mcp
+/// list --json` names them with apps and plugins off (a server only a plugin defines cannot be
+/// named: Codex refuses its setting). A list Codex will not give is a refusal: those servers' tools
+/// would otherwise be offered to the turn.
+async fn mcp_servers(program: &Path, folder: &Path) -> Result<Vec<String>, String> {
+    let refused =
+        || "Codex's MCP servers could not be listed, so they cannot be turned off".to_string();
+    let mut args = settings([]);
+    args.extend(["mcp", "list", "--json"].map(String::from));
+    let mut command = command(program, &args, folder);
+    command.stdin(Stdio::null());
+    let output = match tokio::time::timeout(LIST_DEADLINE, command.output()).await {
+        Ok(Ok(output)) if output.status.success() => output,
+        _ => return Err(refused()),
+    };
+    let listed: Value = serde_json::from_slice(&output.stdout).map_err(|_| refused())?;
+    let servers = listed.as_array().ok_or_else(refused)?;
+    servers
+        .iter()
+        .filter(|server| server.get("enabled").and_then(Value::as_bool) != Some(false))
+        .map(|server| {
+            let name = server
+                .get("name")
+                .and_then(Value::as_str)
+                .ok_or_else(refused)?;
+            Ok(format!("mcp_servers.{}.enabled=false", toml_key(name)))
+        })
+        .collect()
+}
+
+/// A TOML key: bare when it may be, else a basic string.
+fn toml_key(name: &str) -> String {
+    let bare = !name.is_empty()
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-');
+    if bare {
+        name.to_string()
+    } else {
+        Value::from(name).to_string()
+    }
+}
+
+/// Steps 5 and 6: one Codex, one thread, one turn (module doc).
+async fn exchange(
+    program: &Path,
+    text: &str,
+    start_deadline: Duration,
+    deadline: Duration,
+) -> Sent {
+    let began = Instant::now();
+    // Declared first, so it is removed last: after Codex and its group have ended.
+    let folder = match tempfile::Builder::new().prefix("grida-fx-codex-").tempdir() {
+        Ok(folder) => folder,
+        Err(error) => {
+            let reason = grida_fx_core::error::io_reason(&error);
+            return failed(format!("{LABEL} was not started: {reason}"));
+        }
+    };
+    let servers = match mcp_servers(program, folder.path()).await {
+        Ok(servers) => servers,
+        Err(reason) => return Sent::Refused { reason },
+    };
+    let mut args = vec!["app-server".to_string()];
+    args.extend(settings(servers));
+    let mut child = match command(program, &args, folder.path()).spawn() {
         Ok(child) => child,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             return Sent::Refused {
@@ -294,347 +431,100 @@ async fn exchange(program: &Path, text: &str, deadline: Duration) -> Sent {
             };
         }
     };
-    let mut session = match Session::new(&mut child) {
-        Some(session) => session,
-        None => return Sent::not_received(format!("{LABEL} was not started: no pipes")),
+    let Some(group) = process::Group::enlist(&mut child) else {
+        return failed(format!("{LABEL} was not started: the command is stopping"));
     };
-    let outcome = tokio::time::timeout(deadline, session.run(folder.path(), text)).await;
-    let sent = match outcome {
-        Ok(sent) => sent,
+    let Some(mut session) = Session::new(&mut child) else {
+        return failed(format!("{LABEL} was not started: no pipes"));
+    };
+    let outcome = conversation(
+        &mut session,
+        folder.path(),
+        text,
+        start_deadline,
+        deadline,
+        began,
+    )
+    .await;
+    session.close();
+    drop(session);
+    group.finish(&mut child).await;
+    match outcome {
+        Ok(bytes) => {
+            let kind = wire::sniff_image(&bytes).unwrap_or("application/octet-stream");
+            Sent::Answered(Answer::new(Value::Null, None).with_file("image", kind, bytes))
+        }
+        Err(Stop::Refused(reason)) => Sent::Refused { reason },
+        Err(Stop::Failed(reason)) => failed(reason),
+    }
+}
+
+/// The conversation under its deadlines, every stop as a reason that says whether the turn had
+/// been asked for.
+async fn conversation(
+    session: &mut Session,
+    folder: &Path,
+    text: &str,
+    start_deadline: Duration,
+    deadline: Duration,
+    began: Instant,
+) -> Result<Vec<u8>, Stop> {
+    let label = |session: &Session, reason: String| {
+        if session.turn_requested {
+            format!("{LABEL} failed: {reason}")
+        } else {
+            format!("{LABEL} was not started: {reason}")
+        }
+    };
+    let started = tokio::time::timeout(start_deadline, session.start(folder, text)).await;
+    let started = match started {
+        Ok(started) => started,
         Err(_) => {
             session.interrupt().await;
-            if session.turn.is_some() {
-                Sent::Failed {
-                    reason: format!("{LABEL} did not finish within {} s", deadline.as_secs()),
-                    cost: Some(Usd::ZERO),
-                    retryable: false,
-                }
-            } else {
-                Sent::not_received(format!(
-                    "{LABEL} did not start a turn within {} s",
-                    deadline.as_secs()
-                ))
-            }
+            let reason = format!(
+                "Codex did not start the turn within {} s",
+                start_deadline.as_secs()
+            );
+            return Err(Stop::Failed(label(session, reason)));
         }
     };
-    // Closing stdin lets Codex end its own children; a Codex that lingers is killed.
-    drop(session);
-    if tokio::time::timeout(Duration::from_secs(2), child.wait())
-        .await
-        .is_err()
-    {
-        let _ = child.start_kill();
-        let _ = child.wait().await;
+    if let Err(stop) = started {
+        return Err(match stop {
+            Stop::Refused(reason) => Stop::Refused(reason),
+            Stop::Failed(reason) => Stop::Failed(label(session, reason)),
+        });
     }
-    sent
-}
-
-/// One app-server conversation.
-struct Session {
-    stdin: ChildStdin,
-    lines: tokio::io::Lines<BufReader<tokio::process::ChildStdout>>,
-    next_id: u64,
-    thread: Option<String>,
-    /// Set once Codex accepts the turn: from then on a failure may have spent a generation.
-    turn: Option<String>,
-}
-
-/// What one message from Codex is.
-enum Message {
-    Response {
-        id: u64,
-        result: Result<Value, String>,
-    },
-    Notification {
-        method: String,
-        params: Value,
-    },
-    Request {
-        id: Value,
-    },
-}
-
-impl Session {
-    fn new(child: &mut Child) -> Option<Session> {
-        let stdin = child.stdin.take()?;
-        let stdout = child.stdout.take()?;
-        Some(Session {
-            stdin,
-            lines: BufReader::new(stdout).lines(),
-            next_id: 0,
-            thread: None,
-            turn: None,
-        })
-    }
-
-    async fn run(&mut self, folder: &Path, text: &str) -> Sent {
-        let started = async {
-            let info =
-                json!({"clientInfo": {"name": "grida-fx", "version": env!("CARGO_PKG_VERSION")}});
-            self.call("initialize", info).await?;
-            self.write(&json!({"jsonrpc": "2.0", "method": "initialized"}))
-                .await?;
-            let thread = self
-                .call(
-                    "thread/start",
-                    json!({
-                        "cwd": folder.to_string_lossy(),
-                        "sandbox": "read-only",
-                        "approvalPolicy": "never",
-                        "ephemeral": true,
-                    }),
-                )
-                .await?;
-            let thread = text_at(&thread, &["thread", "id"])
-                .ok_or_else(|| Stop::NotReceived("Codex started no thread".into()))?;
-            self.thread = Some(thread.clone());
-            let input = json!([{"type": "text", "text": text}]);
-            let turn = self
-                .call("turn/start", json!({"threadId": thread, "input": input}))
-                .await?;
-            self.turn = Some(text_at(&turn, &["turn", "id"]).unwrap_or_default());
-            Ok::<(), Stop>(())
-        };
-        if let Err(stop) = started.await {
-            return stop.sent();
-        }
-        match self.until_completed().await {
-            Ok(sent) => sent,
-            Err(stop) => stop.sent(),
-        }
-    }
-
-    /// Reads notifications until the turn completes; the answer is its first finished image.
-    async fn until_completed(&mut self) -> Result<Sent, Stop> {
-        let mut image: Option<Result<Vec<u8>, String>> = None;
-        loop {
-            match self.read().await? {
-                Message::Notification { method, params } if method == "item/completed" => {
-                    let item = &params["item"];
-                    if item["type"] == "imageGeneration" && image.is_none() {
-                        image = Some(image_of(item));
-                    }
-                }
-                Message::Notification { method, params } if method == "turn/completed" => {
-                    return Ok(finished(&params["turn"], image));
-                }
-                Message::Notification { .. } | Message::Response { .. } => {}
-                Message::Request { id } => self.decline(id).await?,
-            }
-        }
-    }
-
-    /// Sends a request and waits for its response, answering what Codex asks meanwhile.
-    async fn call(&mut self, method: &str, params: Value) -> Result<Value, Stop> {
-        self.next_id += 1;
-        let id = self.next_id;
-        self.write(&json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}))
-            .await?;
-        loop {
-            match self.read().await? {
-                Message::Response {
-                    id: answered,
-                    result,
-                } if answered == id => {
-                    return result.map_err(|message| {
-                        Stop::NotReceived(format!("Codex refused {method}: {message}"))
-                    });
-                }
-                Message::Request { id } => self.decline(id).await?,
-                _ => {}
-            }
-        }
-    }
-
-    /// Asks Codex to stop the running turn; best effort.
-    async fn interrupt(&mut self) {
-        if let (Some(thread), Some(turn)) = (self.thread.clone(), self.turn.clone()) {
-            self.next_id += 1;
-            let message = json!({"jsonrpc": "2.0", "id": self.next_id, "method": "turn/interrupt",
-                "params": {"threadId": thread, "turnId": turn}});
-            let _ = tokio::time::timeout(Duration::from_secs(2), self.write(&message)).await;
-        }
-    }
-
-    /// Refuses a request from Codex (an approval, a question): this adapter grants nothing.
-    async fn decline(&mut self, id: Value) -> Result<(), Stop> {
-        let error = json!({"code": -32601, "message": "grida-fx answers no requests"});
-        self.write(&json!({"jsonrpc": "2.0", "id": id, "error": error}))
-            .await
-    }
-
-    async fn write(&mut self, message: &Value) -> Result<(), Stop> {
-        let mut line = message.to_string();
-        line.push('\n');
-        let written = async {
-            self.stdin.write_all(line.as_bytes()).await?;
-            self.stdin.flush().await
-        };
-        written.await.map_err(|error| {
-            self.stop(format!(
-                "Codex stopped reading: {}",
-                grida_fx_core::error::io_reason(&error)
-            ))
-        })
-    }
-
-    async fn read(&mut self) -> Result<Message, Stop> {
-        loop {
-            let line = match self.lines.next_line().await {
-                Ok(Some(line)) => line,
-                Ok(None) => return Err(self.stop("Codex exited".into())),
-                Err(error) => {
-                    return Err(self.stop(format!(
-                        "Codex's output is unreadable: {}",
-                        grida_fx_core::error::io_reason(&error)
-                    )));
-                }
-            };
-            if line.len() > MAX_LINE_BYTES {
-                return Err(self.stop("Codex sent a message over 64 MiB".into()));
-            }
-            if line.trim().is_empty() {
-                continue;
-            }
-            let Ok(value) = serde_json::from_str::<Value>(&line) else {
-                return Err(self.stop("Codex sent a line that is not JSON".into()));
-            };
-            if let Some(message) = message_of(value) {
-                return Ok(message);
-            }
-        }
-    }
-
-    /// A stop: not received until the turn is running, then failed.
-    fn stop(&self, reason: String) -> Stop {
-        if self.turn.is_some() {
-            Stop::Failed(reason)
-        } else {
-            Stop::NotReceived(reason)
+    let left = deadline.saturating_sub(began.elapsed());
+    match tokio::time::timeout(left, session.image()).await {
+        Ok(Ok(bytes)) => Ok(bytes),
+        Ok(Err(stop)) => Err(Stop::Failed(label(session, stop_reason(stop)))),
+        Err(_) => {
+            session.interrupt().await;
+            let reason = format!("Codex did not finish within {} s", deadline.as_secs());
+            Err(Stop::Failed(label(session, reason)))
         }
     }
 }
 
-/// Why a conversation ended early.
-enum Stop {
-    NotReceived(String),
-    Failed(String),
-}
-
-impl Stop {
-    fn sent(self) -> Sent {
-        match self {
-            Stop::NotReceived(reason) => {
-                Sent::not_received(format!("{LABEL} was not sent: {reason}"))
-            }
-            Stop::Failed(reason) => failed(format!("{LABEL} failed: {reason}")),
-        }
+fn stop_reason(stop: Stop) -> String {
+    match stop {
+        Stop::Refused(reason) | Stop::Failed(reason) => reason,
     }
 }
 
-/// A failure after the turn started: never retried, and free.
+/// A failure: never retried, and charged the route's hold ($0) since Codex reports no cost.
 fn failed(reason: String) -> Sent {
     Sent::Failed {
         reason,
-        cost: Some(Usd::ZERO),
+        cost: None,
         retryable: false,
-    }
-}
-
-/// One line's message, or `None` for anything else JSON-RPC allows.
-fn message_of(value: Value) -> Option<Message> {
-    let method = value
-        .get("method")
-        .and_then(Value::as_str)
-        .map(str::to_string);
-    let id = value.get("id").cloned();
-    match (method, id) {
-        (Some(_), Some(id)) => Some(Message::Request { id }),
-        (Some(method), None) => Some(Message::Notification {
-            method,
-            params: value.get("params").cloned().unwrap_or(Value::Null),
-        }),
-        (None, Some(id)) => {
-            let id = id.as_u64()?;
-            let result = match value.get("error") {
-                Some(error) => Err(error
-                    .get("message")
-                    .and_then(Value::as_str)
-                    .unwrap_or("an error")
-                    .to_string()),
-                None => Ok(value.get("result").cloned().unwrap_or(Value::Null)),
-            };
-            Some(Message::Response { id, result })
-        }
-        (None, None) => None,
-    }
-}
-
-/// The text at `path` in `value`.
-fn text_at(value: &Value, path: &[&str]) -> Option<String> {
-    path.iter()
-        .try_fold(value, |at, key| at.get(key))
-        .and_then(Value::as_str)
-        .map(str::to_string)
-}
-
-/// An `imageGeneration` item's bytes, or why it has none.
-fn image_of(item: &Value) -> Result<Vec<u8>, String> {
-    if let Some(failure) = item.get("failure").filter(|f| !f.is_null()) {
-        return Err(failure_reason(failure));
-    }
-    let status = item.get("status").and_then(Value::as_str).unwrap_or("");
-    if status != "completed" {
-        return Err(format!("Codex's image generation ended {status}"));
-    }
-    item.get("result")
-        .and_then(Value::as_str)
-        .and_then(wire::strict_base64)
-        .filter(|bytes| !bytes.is_empty())
-        .ok_or_else(|| "Codex's image is not valid base64".to_string())
-}
-
-/// An image failure as a sentence.
-fn failure_reason(failure: &Value) -> String {
-    if failure["type"] == "usageLimitExceeded" {
-        return match failure.get("resetsAt").and_then(Value::as_i64) {
-            Some(at) => format!("the Codex usage limit is reached; it resets at unix time {at}"),
-            None => "the Codex usage limit is reached".to_string(),
-        };
-    }
-    let kind = failure
-        .get("type")
-        .and_then(Value::as_str)
-        .unwrap_or("unknown");
-    format!("Codex's image generation failed ({kind})")
-}
-
-/// The outcome of a completed turn.
-fn finished(turn: &Value, image: Option<Result<Vec<u8>, String>>) -> Sent {
-    match image {
-        Some(Ok(bytes)) => {
-            let kind = wire::sniff_image(&bytes).unwrap_or("application/octet-stream");
-            Sent::Answered(
-                Answer::new(Value::Null, Some(Usd::ZERO)).with_file("image", kind, bytes),
-            )
-        }
-        Some(Err(reason)) => failed(format!("{LABEL} failed: {reason}")),
-        None => {
-            let error = turn
-                .get("error")
-                .and_then(|e| e.get("message"))
-                .and_then(Value::as_str);
-            match error {
-                Some(message) => failed(format!("{LABEL} failed: {message}")),
-                None => failed(format!("{LABEL} failed: Codex answered without an image")),
-            }
-        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     fn route(provider: &str, contract: Value) -> RouteRef {
         RouteRef {
@@ -736,63 +626,93 @@ mod tests {
 
     #[test]
     fn the_program_is_the_variable_then_path_then_the_app() {
+        use std::os::unix::fs::PermissionsExt;
         let dir = tempfile::tempdir().unwrap();
-        let on_path = dir.path().join("codex");
+        let program = |name: &str, mode: u32| {
+            let path = dir.path().join(name);
+            std::fs::write(&path, "").unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
+            path
+        };
+        let bin = dir.path().join("bin");
+        std::fs::create_dir(&bin).unwrap();
+        let on_path = bin.join("codex");
         std::fs::write(&on_path, "").unwrap();
-        let app = dir.path().join("app-codex");
-        std::fs::write(&app, "").unwrap();
-        let path = dir.path().to_string_lossy().to_string();
-        let env = |pairs: &'static [(&'static str, &'static str)], path: Option<String>| {
+        std::fs::set_permissions(&on_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let app = program("app-codex", 0o755);
+        let plain = program("plain-codex", 0o644);
+        let env = |pairs: Vec<(&'static str, String)>| {
             move |name: &str| {
-                if name == "PATH" {
-                    return path.clone();
-                }
                 pairs
                     .iter()
                     .find(|(n, _)| *n == name)
-                    .map(|(_, v)| v.to_string())
+                    .map(|(_, v)| v.clone())
             }
         };
-        let named = env(
-            &[(PROGRAM_VARIABLE, "/nonexistent/codex")],
-            Some(path.clone()),
-        );
+        let path = bin.to_string_lossy().to_string();
+        let shown = |p: &Path| p.to_string_lossy().to_string();
+        // A named program is the only one, and must be executable.
+        let named = env(vec![
+            (PROGRAM_VARIABLE, shown(&app)),
+            ("PATH", path.clone()),
+        ]);
         assert_eq!(
-            find_program(&named, &app),
-            None,
-            "a named program is the only one"
-        );
-        let app_text: &'static str = Box::leak(app.to_string_lossy().into_owned().into_boxed_str());
-        let pairs: &'static [(&'static str, &'static str)] =
-            Box::leak(vec![(PROGRAM_VARIABLE, app_text)].into_boxed_slice());
-        let existing = env(pairs, Some(path.clone()));
-        assert_eq!(
-            find_program(&existing, &dir.path().join("missing")),
+            find_program(&named, Path::new("/missing")),
             Some(app.clone())
         );
-        let blank = env(&[(PROGRAM_VARIABLE, " ")], Some(path.clone()));
+        let missing = env(vec![
+            (PROGRAM_VARIABLE, "/nonexistent/codex".into()),
+            ("PATH", path.clone()),
+        ]);
+        assert_eq!(find_program(&missing, &app), None);
+        let not_runnable = env(vec![(PROGRAM_VARIABLE, shown(&plain))]);
+        assert_eq!(find_program(&not_runnable, &app), None);
+        // A relative name becomes absolute.
+        let relative = env(vec![(PROGRAM_VARIABLE, "some/codex".into())]);
+        let found = find_program(&relative, &app);
+        assert!(found.is_none_or(|p| p.is_absolute()));
+        // Then PATH, absolute entries only; then the app.
+        let blank = env(vec![(PROGRAM_VARIABLE, " ".into()), ("PATH", path.clone())]);
         assert_eq!(find_program(&blank, &app), Some(on_path));
-        let none = env(&[], None);
-        assert_eq!(find_program(&none, &app), Some(app.clone()));
-        assert_eq!(find_program(&none, &dir.path().join("missing")), None);
+        let relative_path = env(vec![(
+            "PATH",
+            format!("bin{}", if cfg!(windows) { ";" } else { ":" }),
+        )]);
+        assert_eq!(find_program(&relative_path, &app), Some(app.clone()));
+        assert_eq!(find_program(&env(vec![]), &plain), None);
     }
 
     #[test]
-    fn failures_name_the_usage_limit() {
-        let item = json!({"type": "imageGeneration", "status": "failed", "result": "",
-            "failure": {"type": "usageLimitExceeded", "limitId": "codex", "resetsAt": 1792311096}});
+    fn codex_inherits_no_key_and_no_account_setting() {
+        let withheld: Vec<&str> = withheld().collect();
+        for variable in crate::keys::ALLOWED.iter().chain(&ALSO_WITHHELD) {
+            assert!(withheld.contains(variable), "{variable}");
+        }
+        assert!(withheld.contains(&"OPENAI_API_KEY") && withheld.contains(&"OPENAI_BASE_URL"));
+    }
+
+    #[test]
+    fn settings_turn_off_apps_and_plugins_before_named_servers() {
         assert_eq!(
-            image_of(&item),
-            Err("the Codex usage limit is reached; it resets at unix time 1792311096".into())
+            settings(["mcp_servers.acme.enabled=false".to_string()]),
+            [
+                "-c",
+                "notify=[]",
+                "-c",
+                "features.memories=false",
+                "-c",
+                "features.hooks=false",
+                "-c",
+                "features.apps=false",
+                "-c",
+                "features.plugins=false",
+                "-c",
+                "mcp_servers.acme.enabled=false",
+            ]
         );
-        let unfinished = json!({"type": "imageGeneration", "status": "in_progress", "result": ""});
-        assert_eq!(
-            image_of(&unfinished),
-            Err("Codex's image generation ended in_progress".into())
-        );
-        assert_eq!(
-            finished(&json!({"status": "completed", "error": null}), None),
-            failed("Codex image generation failed: Codex answered without an image".into())
-        );
+        assert_eq!(toml_key("node_repl"), "node_repl");
+        assert_eq!(toml_key("acme-docs"), "acme-docs");
+        assert_eq!(toml_key("acme docs"), "\"acme docs\"");
+        assert_eq!(toml_key("a\"b"), "\"a\\\"b\"");
     }
 }

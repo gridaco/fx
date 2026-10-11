@@ -37,7 +37,7 @@ control); the environment wins. Keys never go in `fx.yaml` or a workflow, and FX
 them: only a `--live` run uses them, and `grida fx doctor` says which ones it found, where, and
 which routes they make usable ([Running](05-running.md#keys-and-live-runs)). No key at all? With
 Codex signed in to your ChatGPT account, images can come from
-[your own Codex](12-codex.md), for free.
+[your own Codex](12-codex.md), with no API key.
 
 ### When FX needs Python
 

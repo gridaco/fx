@@ -24,7 +24,9 @@
 //!    job record with the key is removed (spec/store.md §5). Emits `call {cached: true, cost_usd:
 //!    0}`.
 //! 5. live: a run that is not live refuses with `not_live`: `<capability> on <route id> is a paid
-//!    call; run with --live`.
+//!    call; run with --live`. A live run without a ceiling (one on the user's own plan) refuses a
+//!    call on any provider its ledger does not admit with `not_live` too: `<capability> on <route
+//!    id> is a paid call, and this run has no ceiling: pass --max-usd (…)`.
 //! 6. the adapter: none serving the route is `no_route`: `no adapter serves <capability> on <route
 //!    id>`. This is checked after the cache and the live check, so recorded calls replay offline
 //!    and without adapters (spec/protocol.md §6.1 step 4; spec/store.md §4).
@@ -719,6 +721,18 @@ impl Lead<'_> {
                 ));
             }
         };
+
+        // 5, in a run without a ceiling: only the user's own plan.
+        if !ledger.admits(&route.provider) {
+            return Err(known.error(
+                ErrorCode::NotLive,
+                format!(
+                    "{capability} on {route_id} is a paid call, and this run has no ceiling: \
+                     pass --max-usd (only calls on your own plan, such as imagegen@codex, run \
+                     without one)"
+                ),
+            ));
+        }
 
         // 6. The adapter.
         let Some(adapter) = services.engine.adapters.serving(&route_ref).cloned() else {

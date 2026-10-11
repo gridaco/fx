@@ -341,25 +341,50 @@ implementation; installation alone does not authorize invocation.
 
 ## Codex-backed image generation for local workflows
 
-**Status: implemented 2026-10-12** as the route `imagegen@codex` of `image.generate`
-([spec/providers.md §9.6](spec/providers.md#96-codex)). Users signed into Codex pick it in
-`fx.yaml` and run with no provider key; the route is $0 to FX, and a live run whose plan is $0
-needs no `--max-usd` (it runs under a ceiling of $0). The adapter speaks `codex app-server`
-JSON-RPC (its typed `imageGeneration` item carries the image), runs in an empty read-only scratch
-folder, withholds provider keys and `CODEX_API_KEY`, and never retries after the turn starts.
-Verified with fake app-server processes in tests and real runs on Codex 0.160.1: transparent and
-opaque backgrounds are honoured; exact sizes are not (Codex picks its own), so they are refused.
+**Status: in review, 2026-10-12** ([gridaco/fx#46](https://github.com/gridaco/fx/pull/46)), as
+the route `imagegen@codex` of `image.generate`
+([spec/providers.md §9.6](spec/providers.md#96-codex)). Users signed into Codex with ChatGPT pick
+it in `fx.yaml` and run with no provider key. `codex` is an *included provider*: a live run whose
+calls are all on it needs no `--max-usd`, runs under a ceiling of $0 and refuses any other
+provider. The adapter speaks `codex app-server` JSON-RPC (its typed `imageGeneration` item
+carries the image), admits only a ChatGPT sign-in (`account/read`), turns off the user's MCP
+servers, apps, plugins, hooks and memories, pins low effort and the standard tier, runs Codex in
+its own process group that FX always ends, and never resends a call. Verified with fake
+app-server processes in tests and real runs on Codex 0.160.1: transparent and opaque backgrounds
+are honoured; exact sizes are not (Codex draws about 1.57 MP in a shape it picks), so they are
+refused.
 
-Follow-ups, not yet done:
+How this meets the local-agent requirements above, and what it defers:
+- **Admission (owner decision).** `--live` alone admits Codex; the skill asks agents to get the
+  user's go. An explicit opt-in (`--allow codex`, or a project setting) is the alternative.
+- **Usage is unknown, not $0.** Answers report no cost (`None`); the $0 hold is charged and the
+  record says *not reported*. Usage evidence (tokens, `account/rateLimits` `usedPercent`) and
+  provenance (Codex version, the model Codex chose) have no record field yet; `data` cannot hold
+  them (`image.generate` answers `data: null`).
+- **Attempts (owner decision).** The adapter never asks for a resend, but a failed answer check
+  is still a new engine attempt, and each is a real image on the user's plan. A per-provider
+  attempt policy (included providers: at most 2) needs the retry owner's spec.
+- **Identity.** The route's model `imagegen` names the tool; the cache key ignores the Codex
+  version, the model and the quality Codex chose. Documented as a moving target.
+- **Decision 5** (docs/wg/overview.md) carries the included-provider exception, awaiting
+  ratification.
+
+Follow-ups:
+- **An external-runtime adapter kind.** Codex is fitted into the route/adapter seam meant for HTTP
+  clients billed in dollars. A runtime kind (engine-owned process lifecycle, `External` billing
+  with usage evidence, its own admission and attempt policy, a runtime-chosen model with reported
+  provenance) is the general shape; the ACP/agent node above should share it.
 - **References / `image.edit`.** The app-server takes `localImage` inputs; prove that `$imagegen`
   edits from them before declaring `image_input` or serving `image.edit`.
-- **Usage evidence.** Codex reports token usage and `account/rateLimits` (`usedPercent`); the call
-  record has nowhere to keep them yet. Recording them needs a record field, not `data`
-  (`image.generate` answers `data: null`).
-- **The user's Codex setup still loads.** `-c` overrides turn off notify, memories and hooks, but
-  the user's MCP servers and plugins still start with each conversation (slower, more input
-  tokens). The app-server has no `--ignore-user-config`; find a supported way to start clean.
-- **Windows.** The adapter is portable, but its tests use shell-script fakes and run on Unix only.
+- **Plan-time feature derivation.** A `WxH` size implies `exact_size` and references imply
+  `image_input`; today they are refused only when the call is made (every route would gain).
+- **Provider-level concurrency.** One Codex per machine and account; route concurrency is
+  per route and per run.
+- **Windows.** npm installs `codex.cmd`, which `find_program` does not look for; process groups
+  are Unix-only; the tests use shell fakes. A launcher trait with an in-process JSON-RPC fake
+  would make the tests portable and let the runner itself be tested (check retries, cancel).
+- **A missing Codex is refused per call**; refusing it before the run, like a declared tool, is
+  kinder.
 - **Showcases.** Advertise the Codex option in examples whose image steps need no exact size or
   references (most set `size`).
 - **Shape hints.** Codex draws a fixed budget of about 1.57 megapixels in a shape the prompt

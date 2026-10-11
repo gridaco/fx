@@ -124,6 +124,9 @@ A paid run requires the user's intent to make those calls and an agreed dollar
 cap. Existing authorization remains valid within its scope. Inspect the plan's
 routes and estimate, then pass the cap explicitly as `--live --max-usd N`, where
 `N` is that agreed cap. A budget in a file or an estimate is not user authorization.
+A run whose image steps use `imagegen@codex` needs no `--max-usd`, but it spends
+the user's own Codex plan: get the user's go for it as for any live run, and do
+not switch a step to Codex, or away from it, without asking.
 Use `grida fx doctor workflows/example.yaml` to diagnose prerequisites; let FX
 load credentials. Do not read or print `.env` or secret values, or embed them in
 workflow files. Never add provider retries outside FX or bypass the ceiling with
