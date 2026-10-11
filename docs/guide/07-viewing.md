@@ -2,17 +2,16 @@
 
 The local FX service keeps a project's plans and recorded runs available at one
 loopback address. Its bundled viewer displays each workflow on a read-only canvas.
-These commands describe current source behavior; check your installed version's
-`--help` because older published packages may not include the service yet.
+The service needs FX 0.2 or later; `grida fx --version` names yours.
 
 ## Start the project service
 
 From your project directory:
 
 ```sh
-grida-fx init
-grida-fx start --background --open
-grida-fx status --json
+grida fx init
+grida fx start --background --open
+grida fx status --json
 ```
 
 `init` preserves an existing `fx.yaml` or creates a minimal one. The dashboard is
@@ -27,8 +26,8 @@ It survives the launching command and terminal, but does not install automatic
 crash restart or login/boot activation. No Docker or frontend server is needed.
 
 ```sh
-grida-fx logs --lines 50
-grida-fx stop
+grida fx logs --lines 50
+grida fx stop
 ```
 
 `stop` closes the selected project's service without deleting records or stopping
@@ -52,7 +51,7 @@ as values and previews, whether it was cached, how long it took, and any error.
 Select the workflow's name in the bar for the workflow's own inputs, outputs and
 notices. Esc, the background or × closes them; a second Esc closes the step list.
 Identities, digests and raw records stay on the command line
-(`grida-fx inspect runs/example --json`).
+(`grida fx inspect runs/example --json`).
 
 Running steps have a blue card outline and tint, an activity indicator, and a
 highlighted row in the step list. The highlight follows recorded state updates
@@ -123,9 +122,9 @@ dependencies remain dashed connections.
 With the project service running, name the same target you would execute:
 
 ```sh
-grida-fx plan workflows/gallery.yaml --inputs inputs.yaml --open
-grida-fx plan gallery --caption "A copper lantern" --open
-grida-fx plan assets.py:build --arg theme=dusk --open
+grida fx plan workflows/gallery.yaml --inputs inputs.yaml --open
+grida fx plan gallery --caption "A copper lantern" --open
+grida fx plan assets.py:build --arg theme=dusk --open
 ```
 
 FX plans once, saves the resulting `fx-graph-v1`, and opens its project page.
@@ -146,9 +145,9 @@ replan when source changes. Browser-serving flags cannot be mixed with `--json`.
 ## Open a recorded run
 
 ```sh
-grida-fx inspect runs/example --open
-grida-fx inspect example --open
-grida-fx inspect example/baseline --open
+grida fx inspect runs/example --open
+grida fx inspect example --open
+grida fx inspect example/baseline --open
 ```
 
 This registers and opens the selected record in the running project service.
@@ -161,8 +160,8 @@ without browser flags.
 ## Watch execution
 
 ```sh
-grida-fx start --background
-grida-fx run workflows/example.yaml --run runs/example --open
+grida fx start --background
+grida fx run workflows/example.yaml --run runs/example --open
 ```
 
 After planning and run initialization, `run` reports its usable project run URL
@@ -190,8 +189,8 @@ None of these commands starts a background process implicitly.
 Run views follow the public [observation contract](../../spec/observation.md):
 
 ```sh
-grida-fx observe runs/example --snapshot
-grida-fx observe runs/example --after CURSOR --limit 256
+grida fx observe runs/example --snapshot
+grida fx observe runs/example --after CURSOR --limit 256
 ```
 
 Apply a batch before saving its returned opaque cursor. A terminal event ends
@@ -205,9 +204,9 @@ execution; they do not provide a live browser or observation handle.
 For tests, probes and one-off work, retain an independent viewer:
 
 ```sh
-grida-fx run workflows/example.yaml --standalone --open
-grida-fx plan workflows/example.yaml --standalone --open
-grida-fx inspect runs/example --standalone --open
+grida fx run workflows/example.yaml --standalone --open
+grida fx plan workflows/example.yaml --standalone --open
+grida fx inspect runs/example --standalone --open
 ```
 
 No `init` or `start` is needed. This explicit mode works inside an existing
@@ -227,8 +226,8 @@ saved-plan and run viewing. It still supports `--open`, an exact `--port N`, and
 loading author code:
 
 ```sh
-grida-fx expand workflows/gallery.yaml --inputs inputs.yaml > graph.json
-grida-fx view --plan graph.json --open
+grida fx expand workflows/gallery.yaml --inputs inputs.yaml > graph.json
+grida fx view --plan graph.json --open
 ```
 
 ## Run records and artifacts
@@ -274,7 +273,7 @@ to generate and check real provider-free plans/runs covering branches, matrices,
 repeats, conditions, media, cache, failure, and takes. Generated data stays ignored;
 the fixture's expectations are the regression baseline.
 
-Portable recorded-run exports are available in current source; see
+To share a recorded run as a portable package, see
 [Share a recorded run](11-exports.md). Custom node views, machine-wide project
 aggregation and OS-managed startup/recovery remain later work. The [service contract](../../spec/service.md)
 owns current lifecycle guarantees; [TODO](../../TODO.md) records open ideas.

@@ -1,6 +1,6 @@
 # Cleaning up runs
 
-Every `grida-fx run` without `--run` or `--name` makes a new folder, so a workflow you are
+Every `grida fx run` without `--run` or `--name` makes a new folder, so a workflow you are
 still shaping leaves dozens of exploratory runs behind, and the cache keeps every picture they
 drew. `runs list` shows what a project holds, `runs remove` takes away the runs you no longer
 need, and `cache prune` gives back the disk their results took. None of them calls a provider or
@@ -9,8 +9,8 @@ runs a node.
 ## See what you have
 
 ```sh
-grida-fx runs list
-grida-fx runs list --workflow rig --json
+grida fx runs list
+grida fx runs list --workflow rig --json
 ```
 
 ```text
@@ -39,16 +39,16 @@ Name the runs, or select them with filters. Nothing is removed without `--yes`: 
 command says what it would do.
 
 ```sh
-grida-fx runs remove --workflow rig --state failed
-grida-fx runs remove --workflow rig --state failed --yes
-grida-fx runs remove runs/rig/2026-10-09-3 rig/old_baseline --yes
+grida fx runs remove --workflow rig --state failed
+grida fx runs remove --workflow rig --state failed --yes
+grida fx runs remove runs/rig/2026-10-09-3 rig/old_baseline --yes
 ```
 
 ```text
 would remove  runs/rig/2026-10-09-3  (failed)
 would remove  runs/rig/2026-10-08-1  (failed)
 passed    1 named (filters select dated runs only; name a run to remove it)
-frees     1.2 kB; 48.3 MB more stays in the cache, which shares it (grida-fx cache prune)
+frees     1.2 kB; 48.3 MB more stays in the cache, which shares it (grida fx cache prune)
 next      add --yes to remove them
 ```
 
@@ -76,8 +76,8 @@ frees only its own record (`plan.json`, `events.jsonl`) and any file that had to
 bytes come back when you prune the cache of what no remaining run names:
 
 ```sh
-grida-fx cache prune
-grida-fx cache prune --yes
+grida fx cache prune
+grida fx cache prune --yes
 ```
 
 ```text
@@ -101,10 +101,10 @@ Pruning refuses, and removes nothing, while it cannot be sure what is still need
   that project is gone or uses a cache of its own, pass `--forget-user ID`, with the id the refusal
   names.
 - **Something is running**, a provider job is not collected yet (run the workflow again, or
-  `grida-fx jobs --forget` it once you have checked the provider), a run cannot be read, or a run
+  `grida fx jobs --forget` it once you have checked the provider), a run cannot be read, or a run
   was interrupted by an engine older than this one. The refusal says which and what to do.
 - **Upgrade first.** Runs and plans of this version hold the cache's lock while they write it,
-  and a prune waits for none of them. An older `grida-fx` running at the same time is seen only
+  and a prune waits for none of them. An older FX engine running at the same time is seen only
   through its run folder; upgrade every engine that writes the cache, including ones an SDK
   bundles, before you prune.
 

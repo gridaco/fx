@@ -9,25 +9,32 @@ FX builds generated assets the way a build system builds code:
 ## Install
 
 ```bash
-npm install -g @grida/fx   # the grida-fx command (or without installing: npx @grida/fx)
-pip install grida         # the Python SDK, for nodes and builders you write in Python
-grida-fx doctor           # checks the keys and tools your workflows need
+npm install -g grida   # the grida command, with FX as grida fx (Node.js 24 or later)
+pip install grida      # the Python SDK, for nodes and builders you write in Python
+grida fx doctor        # checks the keys and tools your workflows need
 ```
 
-Both packages are published as stable releases starting at `0.1.0` and carry the same engine.
-No repository clone or Rust toolchain is needed. For source development, see
-[CONTRIBUTING.md](../../CONTRIBUTING.md#build-from-source).
-FX runs on macOS, and on Linux with glibc 2.28 or later, on x64 and arm64. Native Windows is not
-supported, because the engine's runner uses Unix process groups and signals: use WSL 2
-([the platforms](../../README.md#install)). Python users who don't want Node run
-it as `python -m grida.fx <verb>` (`python -m grida.fx doctor`), or through the Python API
-([Running](05-running.md#from-python)). This guide writes `grida-fx`.
+`grida` carries the FX version it was released with; updating `grida` updates FX. No repository
+clone or Rust toolchain is needed. FX runs on macOS, and on Linux with glibc 2.28 or later, on x64
+and arm64. On Windows, use WSL 2.
+
+This guide writes `grida fx`. You may also meet FX as `grida-fx` or `python -m grida.fx`: these are
+the same FX, started another way, and take the same commands (`grida-fx plan` is `grida fx plan`).
+
+- `grida-fx` is FX on its own, from the `@grida/fx` package, which is also the JavaScript SDK.
+  Projects that depend on `@grida/fx`, and servers or CI images that need only FX, use it.
+- `python -m grida.fx` is FX from the Python package, for Python users who don't want Node
+  ([Running](05-running.md#from-python)).
+
+They share project files, the cache and run records. `--version` prints the FX version under any
+of them, so you can tell two installations apart. Setting them up, and source development, are in
+[CONTRIBUTING.md](../../CONTRIBUTING.md#ways-to-run-fx).
 
 FX reads each provider's key under its usual name: `OPENAI_API_KEY`, `OPENROUTER_API_KEY`,
 `FAL_KEY`, `TRIPO_API_KEY`, `ELEVENLABS_API_KEY`. Set them in the environment, or put them in a
 `.env` file in your project (one `NAME=value` per line, and keep the file out of version
 control); the environment wins. Keys never go in `fx.yaml` or a workflow, and FX never prints
-them: only a `--live` run uses them, and `grida-fx doctor` says which ones it found, where, and
+them: only a `--live` run uses them, and `grida fx doctor` says which ones it found, where, and
 which routes they make usable ([Running](05-running.md#keys-and-live-runs)).
 
 ### When FX needs Python
@@ -48,22 +55,21 @@ The first workflow below uses `image.check_alpha`, so it needs Python.
 
 ## A project
 
-A project is a folder with an `fx.yaml` in it. In current source, the standard
-setup is:
+A project is a folder with an `fx.yaml` in it. The standard setup is:
 
 ```sh
-grida-fx init
-grida-fx start --background
-grida-fx status --json
+grida fx init
+grida fx start --background
+grida fx status --json
 ```
 
 `init` creates only a minimal `fx.yaml`; it preserves existing configuration and
 does not install dependencies or start anything. `start` serves the bundled
 dashboard at `http://127.0.0.1:8787/`. Add `--open` to open it, or omit
-`--background` to keep the service in your terminal. `grida-fx stop` stops the
+`--background` to keep the service in your terminal. `grida fx stop` stops the
 service without stopping workflows or deleting their records. Background mode
 survives the launching command; it does not install crash or login supervision.
-Check `grida-fx --help` first: older published versions may lack these commands.
+These commands need FX 0.2 or later; `grida fx --version` names yours.
 
 As you author workflows and run them, a project can look like this:
 
@@ -74,9 +80,9 @@ my-assets/
   nodes/              # your own node types (optional)
   prompts/            # prompt templates (optional)
   inputs/             # files you feed in
-  runs/               # every run, one folder each   (created by grida-fx)
-  .fx/cache/          # content-addressed results    (created by grida-fx)
-  .fx/service/        # local service state and catalog (created by grida-fx)
+  runs/               # every run, one folder each   (created by FX)
+  .fx/cache/          # content-addressed results    (created by FX)
+  .fx/service/        # local service state and catalog (created by FX)
 ```
 
 The initializer leaves routes and budgets to you. For the paid example below,
@@ -92,11 +98,11 @@ routes:                       # which model serves each capability by default
 # workflows: [workflows, ../tools/art/workflows]   # where a workflow id is looked for
 ```
 
-`grida-fx nodes image.generate` lists the routes that can serve a capability: FX's built-in
+`grida fx nodes image.generate` lists the routes that can serve a capability: FX's built-in
 route table, plus the tables your project lists under `route_tables:` (read after it, so their
 entries win).
 
-**Where workflows are found.** A workflow named by its id (`grida-fx run icon`) is looked for among
+**Where workflows are found.** A workflow named by its id (`grida fx run icon`) is looked for among
 the `.yaml` and `.yml` files at the project root, then in `workflows/` and every folder below it. A
 monorepo that keeps its workflows elsewhere lists their folders under `workflows:`, searched in the
 order given; each is relative to the project or absolute, and may lie outside the project. The list
@@ -148,7 +154,7 @@ outputs:
 ## Plan, then run
 
 ```bash
-grida-fx plan workflows/icon.yaml --name "copper lantern"
+grida fx plan workflows/icon.yaml --name "copper lantern"
 ```
 
 ```
@@ -165,14 +171,14 @@ size (`gpt-image-2.5-sunburst@openai` at `1024x1024`: $0.21 – $0.29 a call), w
 tables can override.
 
 ```bash
-grida-fx run workflows/icon.yaml --live -- --name "copper lantern"
+grida fx run workflows/icon.yaml --live -- --name "copper lantern"
 ```
 
 `--live` is required whenever a run may call a paid provider. Without it nothing is spent: local
 steps still run, a paid call the cache already answered is replayed, and any other paid call
 fails its step (`image.generate on gpt-image-2.5-sunburst@openai is a paid call; run with --live`). A live
 run also needs a ceiling, here the project's `budget:`. The run's folder holds its outputs;
-`grida-fx inspect` summarises it.
+`grida fx inspect` summarises it.
 
 With the local service running, add `--open` to a plan or run to open its canvas.
 The run URL stays available after execution finishes. A missing service does not
@@ -187,9 +193,9 @@ title, and nothing re-runs. [Cost, cache and takes](04-cost-and-cache.md) has th
 Don't like the icon? Ask for another take of that one step:
 
 ```bash
-grida-fx reroll runs/icon/2026-10-02-1 draw     # take 2 from now on; take 1 stays in the cache
-grida-fx run workflows/icon.yaml --live -- --name "copper lantern"    # draws take 2
-grida-fx pick   runs/icon/2026-10-02-2 draw 1   # changed your mind: back to take 1, free
+grida fx reroll runs/icon/2026-10-02-1 draw     # take 2 from now on; take 1 stays in the cache
+grida fx run workflows/icon.yaml --live -- --name "copper lantern"    # draws take 2
+grida fx pick   runs/icon/2026-10-02-2 draw 1   # changed your mind: back to take 1, free
 ```
 
 `reroll` and `pick` write your choice into `icon.takes.yaml` beside the workflow; every run

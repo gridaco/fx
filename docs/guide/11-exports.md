@@ -3,10 +3,10 @@
 A portable export contains a recorded workflow graph, node states, engine layout
 and selected media. Use it for a review, documentation, a static demonstration,
 or an inspectable result shared with a collaborator. This describes current
-source; check `grida-fx export --help` before using an older installed release.
+source; check `grida fx export --help` before using an older installed release.
 
 ```sh
-grida-fx export ./runs/example --out ./review --json
+grida fx export ./runs/example --out ./review --json
 ```
 
 The source must be inactive with a terminal invocation. Failed and cancelled
@@ -29,7 +29,7 @@ The default includes structure, status, timing, recorded cost and supported medi
 Recorded values and diagnostic messages are withheld. Include them deliberately:
 
 ```sh
-grida-fx export ./runs/example --out ./detailed-review \
+grida fx export ./runs/example --out ./detailed-review \
   --include-values --include-diagnostics --json
 ```
 

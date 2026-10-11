@@ -13,14 +13,14 @@ Use a Python with `grida` and Pillow installed, and an FX engine with its embedd
 
 ```bash
 python make_input.py
-grida-fx init
-grida-fx start --background
-grida-fx plan image-recolor --inputs inputs/example.yaml
-grida-fx plan image-recolor --inputs inputs/example.yaml --open
+grida fx init
+grida fx start --background
+grida fx plan image-recolor --inputs inputs/example.yaml
+grida fx plan image-recolor --inputs inputs/example.yaml --open
 ```
 
-These service commands describe current source. Check installed `--help`; older
-releases use the compatibility viewer described in the [viewing guide](../../docs/guide/07-viewing.md#standalone-inspection).
+The service commands need FX 0.2 or later; older releases use the compatibility viewer
+described in the [viewing guide](../../docs/guide/07-viewing.md#standalone-inspection).
 
 The plan prints:
 
@@ -35,8 +35,8 @@ The plan canvas shows the graph without running the nodes. Keep the service runn
 then execute and inspect the recorded inputs, intermediate images, final images, and durations:
 
 ```bash
-grida-fx run image-recolor --inputs inputs/example.yaml --run runs/first --open
-grida-fx inspect runs/first --open
+grida fx run image-recolor --inputs inputs/example.yaml --run runs/first --open
+grida fx inspect runs/first --open
 ```
 
 `runs/first/outputs/before.png` is the normalized input and `after.png` is the recolored
@@ -45,7 +45,7 @@ outputs have the same digest. Each step's placed image also lives under `runs/fi
 
 `run --open` opens its page before run-phase execution. The page follows the five-second
 wait automatically and remains available after the command exits. A plan page stays static.
-Use `grida-fx stop` when finished inspecting; stopping the service does not stop a workflow.
+Use `grida fx stop` when finished inspecting; stopping the service does not stop a workflow.
 
 Run again with `--run runs/second`: all three nodes use the cache, including the delay, so
 there is no second five-second wait. A new run folder alone does not bypass the cache.

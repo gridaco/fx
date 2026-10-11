@@ -14,7 +14,7 @@ written GitHub Actions. The meaning is different, and that matters:
 
 ```yaml
 fx: workflow/v1
-id: concept-gallery              # stable id, used in runs/ and by `grida-fx run concept-gallery`
+id: concept-gallery              # stable id, used in runs/ and by `grida fx run concept-gallery`
 title: Concept gallery
 description: A reviewed storyworld and one concept image per entity.
 
@@ -65,7 +65,7 @@ inputs:
 - **Types:** `string`, `integer`, `number`, `boolean`, `file` (with `kind`), `files`, `list`, `map`,
   and nested objects.
 - **Keywords** are snake_case (`max_items`, `unique_items`, `min_length` ...).
-- **It compiles to JSON Schema.** `grida-fx schema <workflow>` prints the result.
+- **It compiles to JSON Schema.** `grida fx schema <workflow>` prints the result.
 
 **One declaration feeds three things:**
 - `--synopsis path.md` flags (the kebab-case form of each name);
@@ -108,7 +108,7 @@ workflow file it is written in, the way local actions are in GitHub Actions. Tha
 absolute path is refused.
 
 Nothing is fetched from elsewhere while planning. A registry of workflows and nodes comes later,
-and it copies: `grida-fx add <item>` will put a copy in your project, used through a `./` path like
+and it copies: `grida fx add <item>` will put a copy in your project, used through a `./` path like
 your own files.
 
 Every step field:
@@ -349,8 +349,8 @@ steps:
 
 - **An assertion over plan-time values** refuses the plan, before anything runs or bills.
 - **An assertion over run-time values** is checked as soon as they exist. It stops the step (and
-  everything depending on it) with your message, which is shown by `grida-fx run` and
-  `grida-fx inspect`.
+  everything depending on it) with your message, which is shown by `grida fx run` and
+  `grida fx inspect`.
 
 ## Budgets
 
@@ -378,7 +378,7 @@ outputs:
   manifest: ${{ steps.close.outputs.manifest }}
 ```
 
-Outputs are what `grida-fx run` reports and delivers, and what another workflow sees when it uses
+Outputs are what `grida fx run` reports and delivers, and what another workflow sees when it uses
 this one as a step.
 
 ## Workflows as steps

@@ -106,8 +106,8 @@ From `kitewharf/assets/`. Its `fx.yaml` routes both image capabilities to
 `OPENAI_API_KEY`:
 
 ```bash
-grida-fx plan level_art.py:build --arg level=../levels/docks.toml
-grida-fx run  level_art.py:build --arg level=../levels/docks.toml --live --max-usd 5 \
+grida fx plan level_art.py:build --arg level=../levels/docks.toml
+grida fx run  level_art.py:build --arg level=../levels/docks.toml --live --max-usd 5 \
   --deliver plate=../game/art/docks/ground.png \
   --deliver icons=../game/art/docks/icons/{key}.png \
   --deliver sky=../game/art/docks/sky/{key}.png
@@ -155,7 +155,7 @@ for level in Path("../levels").glob("*.toml"):
 ## CI, with no spend
 
 ```bash
-grida-fx plan level_art.py:build --arg level=../levels/docks.toml --check --expect-cached
+grida fx plan level_art.py:build --arg level=../levels/docks.toml --check --expect-cached
 ```
 
 - **`--check`** fails on any error: a missing tool, an unknown node type, a failed assertion, a

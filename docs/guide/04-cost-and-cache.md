@@ -29,7 +29,7 @@ is answered from the cache.
 From the folder of the [concept gallery](../../examples/concept-gallery/) example:
 
 ```bash
-grida-fx plan concept-gallery --inputs inputs/tidebell.yaml --max-usd 12
+grida fx plan concept-gallery --inputs inputs/tidebell.yaml --max-usd 12
 ```
 
 ```
@@ -53,14 +53,14 @@ $0.60 a call, the reviewer $0.05 – $1.50, an image edit $0.13 – $0.85, or it
   route's whole range; once the list exists, each is priced at its size's tier ($0.79 at most).
 
 **Where prices come from.** Every paid call is priced by its route's entry in a route table. FX
-ships a built-in table with a route for each model and provider it can call (`grida-fx nodes
+ships a built-in table with a route for each model and provider it can call (`grida fx nodes
 <type>` lists them); a project's `route_tables:` are read after it and override its entries, and
 `--routes` files replace it. The built-in prices are planning allowances, not provider quotes:
 they size the plan and every reservation against your ceiling, but a call costs what its provider
 reports, and when a provider reports nothing, the call is charged its whole reservation.
 
 In general:
-- **The plan never calls a provider.** It is also how you check a workflow in CI: `grida-fx plan
+- **The plan never calls a provider.** It is also how you check a workflow in CI: `grida fx plan
   --check` fails on any error, with no spend.
 - **Calls priced by length** (speech by characters, music by seconds) use the step's `max_chars` or
   `duration`, or the route's worst case, and show as a range.
@@ -71,7 +71,7 @@ In general:
   Everything finished is kept, and the run ends `failed`, naming each step that did not finish.
 - **The ceiling comes from** `--max-usd` if given, else the workflow's `budget:`, else
   `fx.yaml`.
-- **A live run needs a ceiling.** `grida-fx run --live` with none of the three is refused before
+- **A live run needs a ceiling.** `grida fx run --live` with none of the three is refused before
   anything is written.
 - **A later phase is priced exactly** once its list exists (a `phase_planned` event in the
   run's record). Without `--yes-up-to` the run goes on, inside the ceiling. With `--yes-up-to 12`,
@@ -95,7 +95,7 @@ In general:
 ```
 
 ```bash
-grida-fx run voiced-scenes --inputs inputs/scenes.yaml --live --max-usd 30
+grida fx run voiced-scenes --inputs inputs/scenes.yaml --live --max-usd 30
 ```
 
 - **Nested ceilings:** each scene has its own ceiling of 3, inside the run's 30. Every paid call
@@ -132,34 +132,34 @@ every take is kept.
 
 | `pick:` | |
 |---|---|
-| `manual` (default) | take 1, until you `grida-fx pick` another |
+| `manual` (default) | take 1, until you `grida fx pick` another |
 | `first_accepted` | the first take its judge accepts |
 | `best: { by: <fact>, order: lowest \| highest }` | the take with the best value of a fact a judge reported |
 
 ### Rerolls and picks
 
 ```bash
-grida-fx reroll runs/concept-gallery/2026-10-02-1 "entity['bellwright'].draw"
+grida fx reroll runs/concept-gallery/2026-10-02-1 "entity['bellwright'].draw"
 #   → take 2 from now on; the next run draws it, and only that step and what depends on it re-run
 
-grida-fx pick runs/voiced-scenes/2026-10-02-1 "scene['s04'].music" 3
+grida fx pick runs/voiced-scenes/2026-10-02-1 "scene['s04'].music" 3
 #   → take 3 is used from now on: free, it is already in the cache
 ```
 
 **The takes file:**
 - **Where:** your choices live next to the workflow file, in `<workflow id>.takes.yaml`. For a
   Python builder, that is next to the module that constructs the `Workflow`.
-- **What it holds:** each entry is the step path and the take; `grida-fx pick` also records the
+- **What it holds:** each entry is the step path and the take; `grida fx pick` also records the
   digest of the result you chose:
 
   ```yaml
-  # concept-gallery.takes.yaml: written by `grida-fx reroll` and `grida-fx pick`; commit it
+  # concept-gallery.takes.yaml: written by `grida fx reroll` and `grida fx pick`; commit it
   "entity['bellwright'].draw": { take: 2, result: "6c1f0a9d3be2471c58e09f4d2a7b61c3e8d5f0a2b4c6e8d1f3a5b7c9e0d2f4a6" }
   ```
 - **It is an input of every run,** so a teammate with access to the same cache gets the same
   pictures. With a fresh cache, take 2 is drawn anew.
 - **The plan notes an entry whose step no longer exists** (you renamed it), and
-  `grida-fx takes mv <workflow> old new` moves it.
+  `grida fx takes mv <workflow> old new` moves it.
 - **A pick is checked.** When a picked step runs again and its take no longer produces the
   result you picked (a fresh cache drew it anew, or its request changed: a prompt edit, a new
   duration), the step fails with `take <n> of <path> no longer produces the picked result …;
@@ -187,9 +187,9 @@ from the record. Resume preserves history, creation time and accumulated spendin
 A long provider job that was submitted but not collected (rigging, video) is collected, not
 submitted again. If FX can't tell whether a submission reached the provider, it fails that step
 rather than risk paying twice, and the rest of the run goes on: check the provider's dashboard,
-then clear the job with `grida-fx jobs --forget <key>` so the next run submits it.
+then clear the job with `grida fx jobs --forget <key>` so the next run submits it.
 
-`grida-fx jobs` lists every job record in the cache, one line each (its key, its state, the
+`grida fx jobs` lists every job record in the cache, one line each (its key, its state, the
 capability and route, the take, and why a submission could not be confirmed, with the provider's
 job id when it returned one, so you can find the job on its dashboard):
 
