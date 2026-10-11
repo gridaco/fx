@@ -16,11 +16,19 @@ grida fx doctor        # checks the keys and tools your workflows need
 
 `grida` carries the FX version it was released with; updating `grida` updates FX. No repository
 clone or Rust toolchain is needed. FX runs on macOS, and on Linux with glibc 2.28 or later, on x64
-and arm64. On Windows, use WSL 2. Python users who don't want Node run the same engine as
-`python -m grida.fx <verb>` (`python -m grida.fx doctor`), or through the Python API
-([Running](05-running.md#from-python)). This guide writes `grida fx`. FX on its own (the
-`@grida/fx` package and its `grida-fx` command, for a service you host, say) and source development
-are in [CONTRIBUTING.md](../../CONTRIBUTING.md#ways-to-run-fx).
+and arm64. On Windows, use WSL 2.
+
+This guide writes `grida fx`. You may also meet FX as `grida-fx` or `python -m grida.fx`: these are
+the same FX, started another way, and take the same commands (`grida-fx plan` is `grida fx plan`).
+
+- `grida-fx` is FX on its own, from the `@grida/fx` package, which is also the JavaScript SDK.
+  Projects that depend on `@grida/fx`, and servers or CI images that need only FX, use it.
+- `python -m grida.fx` is FX from the Python package, for Python users who don't want Node
+  ([Running](05-running.md#from-python)).
+
+They share project files, the cache and run records. `--version` prints the FX version under any
+of them, so you can tell two installations apart. Setting them up, and source development, are in
+[CONTRIBUTING.md](../../CONTRIBUTING.md#ways-to-run-fx).
 
 FX reads each provider's key under its usual name: `OPENAI_API_KEY`, `OPENROUTER_API_KEY`,
 `FAL_KEY`, `TRIPO_API_KEY`, `ELEVENLABS_API_KEY`. Set them in the environment, or put them in a

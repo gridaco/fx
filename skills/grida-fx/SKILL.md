@@ -24,6 +24,23 @@ grida fx --version
 grida fx --help
 ```
 
+### `grida fx` and `grida-fx` are the same FX
+
+FX can be started three ways. All three are the same FX: the same verbs and
+options, the same project files, cache and run records.
+
+- `grida fx <verb>`: FX inside the Grida CLI (`npm install -g grida`). This is the
+  usual way; updating `grida` updates FX.
+- `grida-fx <verb>`: FX on its own, installed with the `@grida/fx` package (the
+  JavaScript SDK). Found where a project depends on `@grida/fx`, or on a server or
+  CI image that needs only FX.
+- `python -m grida.fx <verb>`: FX from the Python package (`grida` on PyPI).
+
+Use whichever the project already has. Help, errors and hints name the command
+you ran; follow them as written. Two installations can hold different FX versions:
+`--version` prints the FX version for any of them (`grida-fx 0.2.0`), including
+under `grida fx`.
+
 Choose the installation appropriate to the project:
 
 ```sh
@@ -47,11 +64,10 @@ These examples target FX 0.2. The Python version floor matters: the older
 the user's platform, report that rather than silently accepting an older package
 or switching to a source build. Follow the project's lockfile when it pins FX.
 
-The commands below use `grida fx`; substitute `npx grida fx`, `npx grida-fx` (in a
-project with `@grida/fx`), or `python -m grida.fx` as appropriate. All take the
-same verbs and run the same engine. The Python package does not install a console
-command. npm's native engine is an optional dependency of `@grida/fx`: do not
-omit optional dependencies when installing.
+The commands below use `grida fx`; substitute `npx grida fx`, `npx grida-fx`, or
+`python -m grida.fx` as the project calls for. The Python package installs no
+console command. Installing `@grida/fx` without optional dependencies leaves out
+FX itself, so do not omit them.
 
 FX supports macOS and Linux with glibc on x64/arm64; confirm a package is
 available for the particular platform. Native Windows and Alpine/musl are not
