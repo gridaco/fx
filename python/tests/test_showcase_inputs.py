@@ -153,11 +153,14 @@ def test_symlink_destinations_are_refused(tmp_path, kind):
 def test_committed_inputs_are_bound_to_included_public_website_bytes():
     content = ROOT / "www/content/showcases"
     lock = json.loads((content / "lock.json").read_text())
-    release = json.loads((content / lock["release"]["fixture"]).read_text())
-    resources = {
-        f"showcases/{lock['release']['sha256']}/{item['path']}": (item["sha256"], item["bytes"])
-        for item in release["files"]
-    }
+    assert (content / lock["release"]["fixture"]).is_file()
+    # Every committed release, the current one and the historical ones kept for older recordings:
+    # the delivery store is addressed by release digest, so an older release's files stay public.
+    resources = {}
+    for fixture in sorted((content / "manifests").glob("*.json")):
+        release = json.loads(fixture.read_text())
+        for item in release["files"]:
+            resources[f"showcases/{fixture.stem}/{item['path']}"] = (item["sha256"], item["bytes"])
     for entry in lock["workflows"].values():
         for recording in entry["recordings"]:
             document = json.loads((content / recording["fixture"]).read_text())
