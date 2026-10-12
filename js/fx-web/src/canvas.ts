@@ -278,10 +278,14 @@ export class CanvasController {
     const badge = deckBadge(members);
     const label = [badge.text, ...badge.detail].join(" · ");
     const group = element("g", { class: `fx-deck-badge${badge.failed ? " has-failures" : ""}`, role: "button", tabindex: 0, "data-deck": index, "aria-label": `Expand ${title}, ${label}` });
-    const width = 16 + 7 * label.length;
-    group.append(element("rect", { x: placed.x, y: placed.y, width, height: 22, rx: 11 }));
-    group.append(element("text", { x: placed.x + 10, y: placed.y + 15, class: "fx-deck-badge-full" }, label));
-    group.append(element("text", { x: placed.x + 10, y: placed.y + 15, class: "fx-deck-badge-short" }, badge.short));
+    // One pill per level of detail, each as wide as its own label: SVG does not size a rect to
+    // its text, and the zoom shows one label at a time (canvas.css).
+    // The label is centred, so an estimate of its width leaves even padding on both sides.
+    for (const [text, level] of [[label, "full"], [badge.short, "short"]]) {
+      const width = 20 + Math.ceil(6.2 * text.length);
+      group.append(element("rect", { x: placed.x, y: placed.y, width, height: 22, rx: 11, class: `fx-deck-badge-${level}` }));
+      group.append(element("text", { x: placed.x + width / 2, y: placed.y + 15, "text-anchor": "middle", class: `fx-deck-badge-${level}` }, text));
+    }
     group.append(element("circle", { cx: placed.x + 11, cy: placed.y + 11, r: 5, class: "fx-deck-badge-dot" }));
     group.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") { event.preventDefault(); this.expand(index); }
