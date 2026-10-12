@@ -251,8 +251,8 @@ describe.skipIf(!NODE || process.platform === "win32")("saved run observation", 
 const engine = testEngine();
 const offline = {
   GRIDA_FX_BIN: engine ?? "", GRIDA_FX_DISABLE_DOTENV: "1", GRIDA_FX_NETWORK: "off",
-  OPENAI_API_KEY: undefined, OPENROUTER_API_KEY: undefined, FAL_KEY: undefined,
-  TRIPO_API_KEY: undefined, ELEVENLABS_API_KEY: undefined,
+  GG_API_KEY: undefined, OPENAI_API_KEY: undefined, OPENROUTER_API_KEY: undefined,
+  FAL_KEY: undefined, TRIPO_API_KEY: undefined, ELEVENLABS_API_KEY: undefined,
 };
 
 describe.skipIf(engine === null)("named SDK journeys against the engine", () => {

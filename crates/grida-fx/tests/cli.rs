@@ -18,9 +18,10 @@ fn repository() -> PathBuf {
         .unwrap()
 }
 
-/// The variables no child inherits: the five provider keys and the four base URLs
+/// The variables no child inherits: the six provider keys and the five base URLs
 /// (spec/providers.md §3).
-const PROVIDER_VARIABLES: [&str; 9] = [
+const PROVIDER_VARIABLES: [&str; 11] = [
+    "GG_API_KEY",
     "OPENAI_API_KEY",
     "OPENROUTER_API_KEY",
     "FAL_KEY",
@@ -30,6 +31,7 @@ const PROVIDER_VARIABLES: [&str; 9] = [
     "OPENROUTER_BASE_URL",
     "FAL_BASE_URL",
     "ELEVENLABS_BASE_URL",
+    "GG_BASE_URL",
 ];
 
 /// `grida-fx` in `cwd` with a minimal environment: no provider key or base URL, the network off
@@ -232,7 +234,8 @@ fn integrated_nodes_shows_one_type() {
          \x20 setting vars: {{\"default\": {{}}, \"type\": \"object\"}}\n\
          \x20 output  image: image/png\n\
          \x20 routes  gpt-image-2.5-sunburst@openai, imagegen@codex, \
-         openai/gpt-image-2.5-sunburst@openrouter, openai/gpt-image-2.5/sunburst@fal\n",
+         openai/gpt-image-2.5-sunburst@gg, openai/gpt-image-2.5-sunburst@openrouter, \
+         openai/gpt-image-2.5/sunburst@fal\n",
         "fx/image.generate@1"
     );
     for name in ["image.generate", "fx/image.generate@1"] {
@@ -268,7 +271,8 @@ fn integrated_nodes_shows_the_projects_routes() {
     assert!(
         stdout(&output).ends_with(
             "  routes  gpt-image-2.5-sunburst@openai, imagegen@codex, img-a@acme, img-b@acme, \
-             openai/gpt-image-2.5-sunburst@openrouter, openai/gpt-image-2.5/sunburst@fal\n"
+             openai/gpt-image-2.5-sunburst@gg, openai/gpt-image-2.5-sunburst@openrouter, \
+             openai/gpt-image-2.5/sunburst@fal\n"
         ),
         "{}",
         stdout(&output)
@@ -328,15 +332,16 @@ fn integrated_doctor_without_a_target() {
     let text = stdout(&output);
     let lines: Vec<&str> = text.lines().collect();
     // engine, python, a key per provider, a route per built-in route.
-    assert_eq!(lines.len(), 2 + 5 + 17, "{text}");
+    assert_eq!(lines.len(), 2 + 6 + 26, "{text}");
     assert_eq!(
         lines[0],
         format!("engine    grida-fx {}", env!("CARGO_PKG_VERSION"))
     );
     assert!(lines[1].starts_with("python    "), "{text}");
     assert_eq!(
-        lines[2..7],
+        lines[2..8],
         [
+            "key       GG_API_KEY missing",
             "key       OPENAI_API_KEY missing",
             "key       OPENROUTER_API_KEY missing",
             "key       FAL_KEY missing",
@@ -344,7 +349,7 @@ fn integrated_doctor_without_a_target() {
             "key       ELEVENLABS_API_KEY missing",
         ]
     );
-    let routes = &lines[7..];
+    let routes = &lines[8..];
     assert!(routes.iter().all(|l| l.starts_with("route     ")), "{text}");
     let codex = "route     image.generate imagegen@codex not installed (codex)";
     assert!(
@@ -382,6 +387,7 @@ fn integrated_doctor_says_which_keys_are_present_and_never_their_values() {
     assert_eq!(
         keys,
         [
+            "key       GG_API_KEY missing",
             "key       OPENAI_API_KEY missing",
             "key       OPENROUTER_API_KEY missing",
             "key       FAL_KEY present (environment)",
@@ -427,13 +433,15 @@ fn integrated_doctor_lists_the_projects_routes() {
                 "route     image.generate gpt-image-2.5-sunburst@openai no key (OPENAI_API_KEY)",
                 "route     image.generate imagegen@codex not installed (codex)",
                 "route     image.generate img-a@acme no adapter",
+                "route     image.generate openai/gpt-image-2.5-sunburst@gg no key \
+                 (GG_API_KEY)",
                 "route     image.generate openai/gpt-image-2.5-sunburst@openrouter no key \
                  (OPENROUTER_API_KEY)",
                 "route     image.generate openai/gpt-image-2.5/sunburst@fal no key (FAL_KEY)",
             ],
             "{argv:?}"
         );
-        assert_eq!(text.lines().filter(|l| l.starts_with("route ")).count(), 18);
+        assert_eq!(text.lines().filter(|l| l.starts_with("route ")).count(), 27);
     }
 }
 
@@ -597,7 +605,8 @@ fn integrated_doctor_refuses_a_malformed_key_file() {
     assert!(lines[2].contains("FAL_KEY"), "{text}");
     assert!(lines[2].contains("line 2"), "{text}");
     // The rest is told from the process environment alone.
-    assert_eq!(lines[3], "key       OPENAI_API_KEY missing", "{text}");
+    assert_eq!(lines[3], "key       GG_API_KEY missing", "{text}");
+    assert_eq!(lines[4], "key       OPENAI_API_KEY missing", "{text}");
     assert!(
         text.contains("\nkey       TRIPO_API_KEY present (environment)\n"),
         "{text}"

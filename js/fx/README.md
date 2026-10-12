@@ -3,7 +3,8 @@
 Grida FX for JavaScript and TypeScript: an SDK to write workflow files and to plan, price and
 run them, and the standalone `grida-fx` command. Grida FX is a workflow engine for generative asset
 pipelines: write a workflow file, and FX plans it, prices it before anything is spent, caches
-every paid call by its request, and records the run. It works with your own provider keys.
+every paid call by its request, and records the run. It works with one Grida Gateway key
+(`GG_API_KEY`), or your own provider keys.
 
 To run FX from a terminal, install the Grida CLI: `npm install -g grida`, then `grida fx --help`.
 It pins this package. Install `@grida/fx` itself for the SDK, or for `grida-fx` on its own (in a

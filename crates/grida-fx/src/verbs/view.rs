@@ -148,17 +148,7 @@ fn browser_command(url: &str) -> Command {
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    for name in [
-        "OPENAI_API_KEY",
-        "OPENROUTER_API_KEY",
-        "FAL_KEY",
-        "TRIPO_API_KEY",
-        "ELEVENLABS_API_KEY",
-        "OPENAI_BASE_URL",
-        "OPENROUTER_BASE_URL",
-        "FAL_BASE_URL",
-        "ELEVENLABS_BASE_URL",
-    ] {
+    for name in grida_fx_providers::keys::ALLOWED {
         command.env_remove(name);
     }
     command

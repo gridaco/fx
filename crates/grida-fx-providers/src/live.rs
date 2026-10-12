@@ -22,8 +22,9 @@ use crate::transport::http::{HttpConfig, HttpTransport};
 use serde_json::Value;
 use std::sync::Arc;
 
-/// The providers this crate serves, in the order `doctor` lists them.
-pub const PROVIDERS: [&str; 6] = [
+/// The providers this crate serves, in the order `doctor` lists them: Grida Gateway first.
+pub const PROVIDERS: [&str; 7] = [
+    "gg",
     "openai",
     "openrouter",
     "fal",
@@ -97,6 +98,7 @@ pub fn offline_setup(keys: Keys) -> Setup {
 /// (spec/providers.md §8).
 pub fn adapters(setup: &Setup) -> Adapters {
     let mut registered = Adapters::new();
+    crate::gg::register(&mut registered, setup);
     crate::openai::register(&mut registered, setup);
     crate::openrouter::register(&mut registered, setup);
     crate::fal::register(&mut registered, setup);

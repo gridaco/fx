@@ -4,7 +4,7 @@
 objects of this world. Have a different model check the proposal against the synopsis. Then draw
 one concept image per entity, reviewed by another model. I'll reroll the ones I don't like."
 
-Every call goes through OpenRouter, so one key serves the whole run: `OPENROUTER_API_KEY`.
+Every call goes through Grida Gateway, so one key serves the whole run: `GG_API_KEY`.
 
 ```
 concept-gallery/
@@ -36,13 +36,13 @@ estimate  $0.09 – $28.40   ceiling $12.00   ⚠ the worst case exceeds the cei
 ```
 
 - **Phase 1:** `propose` and `grammar` are one call each to the writer model
-  (`openai/gpt-5.6-sol@openrouter`, $0.02 – $0.60 a call), and `admit` one to the reviewer
-  (`openai/gpt-6-astra@openrouter`, $0.05 – $1.50). Each of `propose`'s two judges may ask for a
+  (`openai/gpt-5.6-sol@gg`, $0.02 – $0.60 a call), and `admit` one to the reviewer
+  (`openai/gpt-6-astra@gg`, $0.05 – $1.50). Each of `propose`'s two judges may ask for a
   second take of it, which `admit` reviews again: 3 – 5 calls.
 - **Phase 2:** up to `max_entities` entities (8 unless you say) × (`direct` $0.60 + `draw` $0.85
   + `review` $1.50) at worst = $23.60, priced exactly once phase 1 has made the list. Until then
   an entity's size is unknown, so `draw` is priced at the route's whole range; then each is
-  priced at its size's tier: $0.79 for a character or a place, $0.64 for an object.
+  priced at its size's tier: $0.50 for a character or a place, $0.43 for an object.
 - **The ceiling** is the project's $12 (`fx.yaml`), or `--max-usd`: the run stops before crossing
   it. The figures are each route's allowance, a worst case; what a call costs is settled from
   what the provider reports

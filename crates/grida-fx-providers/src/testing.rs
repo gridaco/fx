@@ -17,6 +17,7 @@ use std::sync::Arc;
 /// Made-up keys, one per provider: `test-<provider>-key`.
 pub fn test_keys() -> Keys {
     Keys::from_pairs(&[
+        (KeyName::GridaGateway, "test-gg-key"),
         (KeyName::OpenAi, "test-openai-key"),
         (KeyName::OpenRouter, "test-openrouter-key"),
         (KeyName::Fal, "test-fal-key"),

@@ -133,7 +133,11 @@ workflow files. Never add provider retries outside FX or bypass the ceiling with
 direct provider calls.
 
 Routes are `model@provider` choices for capabilities. Use the installed node
-catalog and current provider documentation when choosing them. Project
+catalog and current provider documentation when choosing them. Prefer the
+Grida Gateway routes (`@gg`) when setting up a project: one key, `GG_API_KEY`,
+serves text, images, video and 3D, so a user needs no account per provider.
+Keep a route the user chose on another provider, and do not switch an existing
+project's routes without asking: a new route is a new cache key. Project
 `route_tables:` overlays the built-in table; explicit `--routes` files replace
 the built-in table. Do not invent prices to make a refused plan pass.
 

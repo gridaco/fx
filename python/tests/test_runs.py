@@ -523,6 +523,7 @@ def test_real_engine_lists_previews_removes_and_lists_again(
         pytest.skip("needs the engine beside the SDK")
     monkeypatch.setenv("GRIDA_FX_BIN", str(engine))
     for key in (
+        "GG_API_KEY",
         "OPENAI_API_KEY",
         "OPENROUTER_API_KEY",
         "FAL_KEY",

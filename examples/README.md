@@ -20,9 +20,10 @@ source stays in Git, while generated artwork and saved runs stay outside it.
 | [rigged-character](rigged-character/) | an illustrative graph with APIs FX has not implemented | plans only; use character-3d for the runnable pipeline |
 
 Every example plans offline. A run without `--live` executes free steps and refuses paid
-calls at $0. Live execution uses your own keys, within the ceiling supplied with
-`--max-usd` ([Running](../docs/guide/05-running.md#keys-and-live-runs)). A ceiling limits
-spending; it does not guarantee completion or artistic quality.
+calls at $0. Live execution uses your keys, within the ceiling supplied with
+`--max-usd` ([Running](../docs/guide/05-running.md#keys-and-live-runs)): the routes on Grida
+Gateway (`@gg`) all take one key, `GG_API_KEY`, and the others their provider's. A
+ceiling limits spending; it does not guarantee completion or artistic quality.
 
 ## Use an example
 

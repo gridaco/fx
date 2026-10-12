@@ -21,7 +21,14 @@ import grida.fx as fx
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES = ROOT / "examples"
-KEYS = ("OPENAI_API_KEY", "OPENROUTER_API_KEY", "FAL_KEY", "TRIPO_API_KEY", "ELEVENLABS_API_KEY")
+KEYS = (
+    "GG_API_KEY",
+    "OPENAI_API_KEY",
+    "OPENROUTER_API_KEY",
+    "FAL_KEY",
+    "TRIPO_API_KEY",
+    "ELEVENLABS_API_KEY",
+)
 
 
 def run_script(home: Path, script: str, *args: str) -> None:

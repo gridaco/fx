@@ -10,7 +10,7 @@ Grida FX is a workflow engine for generative asset pipelines. You write a workfl
 - caches every paid call by its request;
 - records the run.
 
-FX is a standalone product, made by Grida. Think of the Vercel AI SDK without its gateway: FX talks to providers (fal, OpenAI, OpenRouter, Tripo, ElevenLabs, …) with the user's own keys. Grida's gateway (GG) will later be one more provider, and the Grida ecosystem will get first-class support. Neither is needed for FX to work.
+FX is a standalone product, made by Grida. Think of the Vercel AI SDK without its gateway: FX talks to providers (fal, OpenAI, OpenRouter, Tripo, ElevenLabs, …) with the user's own keys. Grida's gateway (GG) is one more provider, the recommended start: one key, `GG_API_KEY`, serves FX's text, image, video and 3D routes ([providers.md](../../spec/providers.md) §9.7). The Grida ecosystem will get first-class support. Neither is needed for FX to work.
 
 ## Where it comes from
 
@@ -38,7 +38,7 @@ It distinguishes implemented behavior, ratified contracts and proposed capabilit
 
 | | Decision | Status |
 |---|---|---|
-| 1 | **FX is standalone.** It owns its provider adapters, and users bring their own keys from the environment (`OPENROUTER_API_KEY`, `FAL_KEY`, …; later `GG_API_KEY`). FX depends on no Grida package. | ratified |
+| 1 | **FX is standalone.** It owns its provider adapters, and users bring their own keys from the environment (`GG_API_KEY`, `OPENROUTER_API_KEY`, `FAL_KEY`, …). FX depends on no Grida package. | ratified |
 | 2 | **The engine is written in Rust.** TypeScript users must not need Python, and Python users must not need Node. A native binary is the one runtime both can carry. | ratified |
 | 3 | **A protocol, not FFI.** There are no napi, PyO3 or WASM bindings.<br>• SDKs and node bodies talk to the engine through a node protocol: JSON-RPC 2.0 over stdio, framed as in LSP.<br>• An `initialize` handshake carries the protocol version, because a project's SDK and the installed engine will drift. | ratified |
 | 4 | **The engine is the only place with engine logic.** Expressions, identity, prompt rendering, the agent loop and file facts all live in the binary. SDKs only build documents, author nodes and host node bodies, so every SDK produces the same cache keys for the same request. | proposal |

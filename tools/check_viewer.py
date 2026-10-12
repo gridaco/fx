@@ -25,6 +25,7 @@ from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parent.parent
 PROVIDER_KEYS = (
+    "GG_API_KEY",
     "OPENAI_API_KEY",
     "OPENROUTER_API_KEY",
     "FAL_KEY",

@@ -54,6 +54,7 @@ def main() -> None:
 
     environment = os.environ.copy()
     for name in (
+        "GG_API_KEY",
         "OPENAI_API_KEY",
         "OPENROUTER_API_KEY",
         "FAL_KEY",
@@ -63,6 +64,7 @@ def main() -> None:
         "OPENROUTER_BASE_URL",
         "FAL_BASE_URL",
         "ELEVENLABS_BASE_URL",
+        "GG_BASE_URL",
     ):
         environment.pop(name, None)
     environment["GRIDA_FX_DISABLE_DOTENV"] = "1"

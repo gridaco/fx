@@ -395,6 +395,7 @@ fn defaults_hold_without_base_urls() {
     assert_eq!(
         Endpoints::default(),
         Endpoints {
+            gg: "https://gateway.grida.ai/v1".into(),
             openai: "https://api.openai.com/v1".into(),
             openrouter: "https://openrouter.ai/api/v1".into(),
             fal_run: "https://fal.run".into(),

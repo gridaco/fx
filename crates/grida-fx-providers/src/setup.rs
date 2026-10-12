@@ -13,7 +13,8 @@ use crate::transport::{Credential, HttpRequest, HttpResponse, Transport, Transpo
 use std::sync::Arc;
 
 /// The base-URL variables a project may set (spec/providers.md §3). Tripo has none.
-pub const BASE_URL_VARIABLES: [&str; 4] = [
+pub const BASE_URL_VARIABLES: [&str; 5] = [
+    "GG_BASE_URL",
     "OPENAI_BASE_URL",
     "OPENROUTER_BASE_URL",
     "FAL_BASE_URL",
@@ -23,6 +24,8 @@ pub const BASE_URL_VARIABLES: [&str; 4] = [
 /// Each provider's API base, normalized ([`crate::wire::normalize_base_url`]): no trailing `/`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Endpoints {
+    /// Grida Gateway's API (`GG_BASE_URL`), its OpenAI-compatible `/v1` base.
+    pub gg: String,
     pub openai: String,
     pub openrouter: String,
     /// fal's synchronous host (`FAL_BASE_URL`).
@@ -36,6 +39,7 @@ pub struct Endpoints {
 impl Default for Endpoints {
     fn default() -> Endpoints {
         Endpoints {
+            gg: "https://gateway.grida.ai/v1".into(),
             openai: "https://api.openai.com/v1".into(),
             openrouter: "https://openrouter.ai/api/v1".into(),
             fal_run: "https://fal.run".into(),
@@ -54,7 +58,8 @@ impl Endpoints {
     pub fn from_environment(environment: &Environment, keys: &Keys) -> Result<Endpoints, String> {
         let mut endpoints = Endpoints::default();
         let secrets = keys.secrets();
-        let slots: [(&str, &str, &mut String); 4] = [
+        let slots: [(&str, &str, &mut String); 5] = [
+            ("GG_BASE_URL", "Grida Gateway", &mut endpoints.gg),
             ("OPENAI_BASE_URL", "OpenAI", &mut endpoints.openai),
             (
                 "OPENROUTER_BASE_URL",
@@ -229,12 +234,13 @@ mod tests {
         assert_eq!(
             endpoints,
             Endpoints {
-                openai: "https://proxy-0.example.test".into(),
-                openrouter: "https://proxy-1.example.test".into(),
-                fal_run: "https://proxy-2.example.test".into(),
+                gg: "https://proxy-0.example.test".into(),
+                openai: "https://proxy-1.example.test".into(),
+                openrouter: "https://proxy-2.example.test".into(),
+                fal_run: "https://proxy-3.example.test".into(),
                 fal_queue: Endpoints::default().fal_queue,
                 tripo: Endpoints::default().tripo,
-                elevenlabs: "https://proxy-3.example.test".into(),
+                elevenlabs: "https://proxy-4.example.test".into(),
             }
         );
     }

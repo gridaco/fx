@@ -538,6 +538,7 @@ def test_real_engine_named_collision_resume_and_pinned_loading(
         pytest.skip("needs the engine beside the SDK")
     monkeypatch.setenv("GRIDA_FX_BIN", str(engine))
     for key in (
+        "GG_API_KEY",
         "OPENAI_API_KEY",
         "OPENROUTER_API_KEY",
         "FAL_KEY",
@@ -582,6 +583,7 @@ def test_real_engine_observation_cancellation_leaves_workflow_running_and_follow
         pytest.skip("needs the engine beside the SDK")
     monkeypatch.setenv("GRIDA_FX_BIN", str(engine))
     for key in (
+        "GG_API_KEY",
         "OPENAI_API_KEY",
         "OPENROUTER_API_KEY",
         "FAL_KEY",

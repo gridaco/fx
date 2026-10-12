@@ -423,3 +423,26 @@ Design the initial contract to allow explicit backend selection without
 hard-coding Codex as the only possible implementation. Add these adapters only
 after the Codex integration is proven and each candidate meets the same
 lifecycle, capability, validation and honest usage-reporting requirements.
+
+## Grida Gateway follow-ups
+
+**Status: in review, 2026-10-12.** Grida Gateway (`@gg`, [spec/providers.md
+§9.7](spec/providers.md#97-grida-gateway)) serves text, agent turns, images, video, 3D models and
+rigs with one key, `GG_API_KEY`, and is what the docs recommend first. FX books a GG call at
+GG's settled charge, read from the response or its billing readback; one that has not settled
+within a short wait is booked at its whole hold.
+
+- **Spending caps on the wire.** GG takes `X-GG-Max-Cost-Mills` and refuses, for free, a request
+  whose reservation passes it. FX does not send its hold there yet: GG's GPT Image reservation
+  ($1 per started megapixel) is above every image route's high, so each image call would be
+  refused. Send it once GG's reservations fit inside FX's allowances, or price the GG image
+  routes from GG's own reservation policy.
+- **Late settlement.** A charge that settles after the wait is never booked; the record keeps
+  the whole hold. A later `runs`/`jobs` reconciliation could read the billing of recorded calls.
+- **More GG routes.** Single-image 3D (`three-d.tripo.p2.image`, Hunyuan, Trellis), other video
+  models (Veo, Seedance, Grok Imagine) and image models (FLUX, Seedream, Recraft) are enabled on
+  GG; each needs a price, its features and a live check before it enters the built-in table.
+- **The `grida` credential store** ([gridaco/fx#45](https://github.com/gridaco/fx/issues/45))
+  should hold `GG_API_KEY` like any other provider key.
+- **Showcase examples** still name OpenAI, OpenRouter, fal and Tripo routes: moving them to GG
+  changes every cache key, so it waits for their next recorded run.

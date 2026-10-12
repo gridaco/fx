@@ -36,6 +36,7 @@ ROOT = Path(__file__).resolve().parent.parent
 FIXTURE = ROOT / "fixtures" / "host" / "grida"
 NPM_FLAGS = ("--no-save", "--no-audit", "--no-fund", "--ignore-scripts")
 PROVIDER_KEYS = (
+    "GG_API_KEY",
     "OPENAI_API_KEY",
     "OPENROUTER_API_KEY",
     "FAL_KEY",

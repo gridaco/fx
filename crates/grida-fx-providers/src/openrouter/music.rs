@@ -26,7 +26,7 @@
 //! `Failed { cost, retryable: true }` with that cost when one was seen (spec/providers.md §4.4).
 //! Deadline 900 s; response cap 128 MiB. `check`: the MP3 signature.
 
-use super::{BODY_TOO_LARGE, body_exceeds, classify, not_served, serves, with_request_id};
+use super::{BODY_TOO_LARGE, classify, not_served, serves, with_request_id};
 use crate::BoxFuture;
 use crate::adapter::{Answer, CallRequest, RequestAdapter, Sent};
 use crate::redact::Redactor;
@@ -100,7 +100,7 @@ impl OpenRouterMusic {
             "audio": {"format": FORMAT},
             "stream": true,
         });
-        if body_exceeds(&body, super::MAX_REQUEST_BYTES) {
+        if wire::body_exceeds(&body, super::MAX_REQUEST_BYTES) {
             return Err(BODY_TOO_LARGE.into());
         }
         Ok(HttpRequest::new(

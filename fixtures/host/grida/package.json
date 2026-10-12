@@ -7,5 +7,5 @@
   "type": "module",
   "bin": { "grida": "bin/grida.js" },
   "files": ["bin/grida.js"],
-  "dependencies": { "@grida/fx": "0.3.0" }
+  "dependencies": { "@grida/fx": "0.4.0" }
 }

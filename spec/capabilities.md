@@ -184,14 +184,14 @@ A clip from a prompt and frames. A long job.
 |---|---|---|---|
 | `prompt` | text | required | |
 | `duration` | number | optional | seconds; a route may take whole seconds only |
-| `resolution` | text | optional | a route's tier name, such as `720p` |
+| `resolution` | text | optional | a route's tier name, such as `720p`, or `<W>x<H>` where a route takes an exact size |
 | `aspect_ratio` | text | optional | such as `9:16` |
 | `first_frame` | file | optional | the opening frame; a route may require it |
 | `last_frame` | file | optional | the closing frame; needs `first_frame` |
 
 **Answer:** the file `video` (`video/mp4`). `data` is `{"facts": {"width", "height", "duration_seconds", "fps"}}`, with numbers from the clip's file facts ([facts.md](facts.md)).
 
-**A route's check:** the clip's size and duration against the request ([providers.md](providers.md) §9.3).
+**A route's check:** the clip's size and duration against the request ([providers.md](providers.md) §9.3, §9.7).
 
 **Features:**
 
