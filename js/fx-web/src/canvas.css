@@ -28,6 +28,9 @@
 .fx-state-icon[data-icon="failed"] .fx-state-disc { fill: #cf222e; }
 .fx-state-icon[data-icon="skipped"] .fx-state-mark { stroke: #8c959f; stroke-width: 1.5px; }
 .fx-state-icon[data-icon="maybe"] .fx-state-ring { stroke-dasharray: 2.75 2.75; }
+/* Waiting for a route's slot: the running colour, held still. */
+.fx-state-icon[data-icon="waiting"] .fx-state-ring { stroke: #bf8700; }
+.fx-state-hands { fill: none; stroke: #bf8700; stroke-width: 1.5px; stroke-linecap: round; stroke-linejoin: round; }
 .fx-state-track { fill: none; stroke: #dbab0a; stroke-opacity: .4; stroke-width: 2px; }
 .fx-state-arc { fill: none; stroke: #bf8700; stroke-width: 2px; stroke-linecap: round; }
 .fx-state-core { fill: #bf8700; }

@@ -293,8 +293,8 @@ pub struct RerollArgs {
     pub run: String,
     /// a step path as the run shows it (`entity['ada'].draw`)
     pub step: String,
-    /// say `--live` in the advice printed after
-    #[arg(long)]
+    /// accepted and ignored: the advice printed after says `--live` when the run was live
+    #[arg(long, hide = true)]
     pub live: bool,
 }
 

@@ -81,7 +81,7 @@ impl Target {
 
 /// Whether a target names a workflow file by its suffix (`.yaml`, `.yml`, `.json`, case
 /// sensitive).
-fn is_workflow_file(target: &str) -> bool {
+pub fn is_workflow_file(target: &str) -> bool {
     matches!(
         Path::new(target).extension().and_then(|s| s.to_str()),
         Some("yaml" | "yml" | "json")

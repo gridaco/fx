@@ -84,6 +84,20 @@ pub(super) fn check_account(read: &Value) -> Result<(), Stop> {
     }
 }
 
+/// The error code of a request Codex's app-server rejected on arrival because it is overloaded:
+/// the request was provably not received (spec/providers.md §9.6).
+pub(super) const OVERLOADED: i64 = -32001;
+
+/// The reason of a request rejected with [`OVERLOADED`].
+pub(super) const OVERLOADED_REASON: &str = "Codex is overloaded (error -32001)";
+
+/// Asks Codex to stop `turn` of `thread`. Its id is text, so its answer, which nobody waits for,
+/// is never taken for another request's.
+pub(super) fn interrupt(thread: &str, turn: &str) -> Value {
+    serde_json::json!({"jsonrpc": "2.0", "id": format!("interrupt-{turn}"),
+        "method": "turn/interrupt", "params": {"threadId": thread, "turnId": turn}})
+}
+
 /// The text at `path` in `value`.
 pub(super) fn text_at(value: &Value, path: &[&str]) -> Option<String> {
     path.iter()
@@ -117,6 +131,23 @@ pub(super) fn image_of(item: &Value) -> Result<Vec<u8>, String> {
         .and_then(wire::strict_base64)
         .filter(|bytes| !bytes.is_empty())
         .ok_or_else(|| "Codex's image is not valid base64".to_string())
+}
+
+/// Whether a failed `imageGeneration` item, or a turn that completed without an image, says the
+/// user's Codex usage limit is reached: `Some(resets_at)`, the unix time it resets when Codex
+/// gives it.
+pub(super) fn usage_limit(item: Option<&Value>, turn: Option<&Value>) -> Option<Option<i64>> {
+    if let Some(failure) = item.and_then(|item| item.get("failure"))
+        && failure["type"] == "usageLimitExceeded"
+    {
+        return Some(failure.get("resetsAt").and_then(Value::as_i64));
+    }
+    let info = &turn?["error"]["codexErrorInfo"];
+    let limited = info == "usageLimitExceeded"
+        || info
+            .as_object()
+            .is_some_and(|variant| variant.contains_key("usageLimitExceeded"));
+    limited.then_some(None)
 }
 
 /// Why a turn that completed without an image did: its error's kind (`codexErrorInfo`, a closed

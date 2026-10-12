@@ -121,6 +121,12 @@ fn expected_routes() -> Vec<Expected> {
         ),
         expected(
             "image.edit",
+            "imagegen@codex",
+            image_contract("fx-codex-image-v1", "2"),
+            ("0", "0"),
+        ),
+        expected(
+            "image.edit",
             "openai/gpt-image-2.5-sunburst@gg",
             gg_image.clone(),
             ("0.09", "0.85"),
@@ -146,7 +152,7 @@ fn expected_routes() -> Vec<Expected> {
         expected(
             "image.generate",
             "imagegen@codex",
-            image_contract("fx-codex-image-v1", "1"),
+            image_contract("fx-codex-image-v1", "2"),
             ("0", "0"),
         ),
         expected(
@@ -303,8 +309,9 @@ const CONTRACTS: &[(&str, &str, &str, Option<&str>)] = &[
         "image.generate",
         "codex",
         "fx-codex-image-v1",
-        Some("\"1\""),
+        Some("\"2\""),
     ),
+    ("image.edit", "codex", "fx-codex-image-v1", Some("\"2\"")),
     ("image.edit", "fal", "fx-fal-image-v1", None),
     ("video.generate", "fal", "fal-queue", None),
     ("background.remove", "fal", "fal-run-birefnet", None),
@@ -341,13 +348,13 @@ fn read_spec(name: &str) -> String {
 }
 
 #[test]
-fn the_table_holds_26_routes_over_10_capabilities() {
+fn the_table_holds_27_routes_over_10_capabilities() {
     let table = table();
-    assert_eq!(table.entries.len(), 26);
+    assert_eq!(table.entries.len(), 27);
     let capabilities: BTreeSet<&str> = table.entries.keys().map(|(c, _)| c.as_str()).collect();
     assert_eq!(capabilities.len(), 10);
     assert!(
-        read_spec("providers.md").contains("It holds 26 routes over 10 capabilities."),
+        read_spec("providers.md").contains("It holds 27 routes over 10 capabilities."),
         "spec/providers.md §10 states the table's size"
     );
 }
@@ -537,23 +544,28 @@ fn features_say_what_the_adapters_honour() {
             assert!(!has(capability, gg, feature), "{capability} {feature}");
         }
     }
-    // Codex makes every background, but no exact size and nothing from references (§9.6).
+    // Codex makes every background and draws from pictures, but takes no exact size and no
+    // mask (§9.6).
     let codex = "imagegen@codex";
-    for feature in [
-        "text_to_image",
-        "flexible_size",
-        "alpha",
-        "auto_background",
-        "opaque_background",
-    ] {
-        assert!(has("image.generate", codex, feature), "{feature}");
+    for capability in ["image.generate", "image.edit"] {
+        for feature in [
+            "flexible_size",
+            "alpha",
+            "auto_background",
+            "opaque_background",
+            "image_input",
+        ] {
+            assert!(has(capability, codex, feature), "{capability} {feature}");
+        }
+        for feature in ["exact_size", "custom_exact_size", "mask"] {
+            assert!(!has(capability, codex, feature), "{capability} {feature}");
+        }
     }
-    for feature in ["exact_size", "custom_exact_size", "image_input"] {
-        assert!(!has("image.generate", codex, feature), "{feature}");
-    }
+    assert!(has("image.generate", codex, "text_to_image"));
+    assert!(!has("image.edit", codex, "text_to_image"));
     assert!(has("image.edit", openai, "mask") && has("image.edit", fal, "mask"));
     assert!(!has("image.edit", openrouter, "mask") && !has("image.edit", gg, "mask"));
-    // Every edit route takes input pictures; every generate route refuses references.
+    // Every edit route takes input pictures; every other generate route refuses references.
     for id in [gg, openai, openrouter, fal] {
         assert!(has("image.edit", id, "image_input"), "{id}");
         assert!(!has("image.generate", id, "image_input"), "{id}");
@@ -612,8 +624,9 @@ fn every_example_table_declares_only_what_fx_honours() {
             if !registry.serves(&route.capability, &route.provider) {
                 continue;
             }
-            // Every image.generate adapter of FX refuses references (spec/providers.md §9).
-            if route.capability == "image.generate" {
+            // Every image.generate adapter of FX but Codex's refuses references (spec/providers.md
+            // §9).
+            if route.capability == "image.generate" && route.provider != "codex" {
                 assert!(!route.features.contains("image_input"), "{label}: {id}");
             }
             // OpenRouter's image adapter refuses a mask and a transparent background (§9.2).
@@ -639,7 +652,8 @@ fn pacing_is_declared_where_spec_providers_10_says() {
         );
         let concurrency = match (route.capability.as_str(), id.as_str()) {
             ("mesh.generate" | "mesh.rig" | "video.generate", _) => Some(1),
-            ("image.generate", "imagegen@codex") => Some(1),
+            // One Codex draws several images at once (spec/providers.md §10).
+            ("image.generate" | "image.edit", "imagegen@codex") => Some(3),
             // GG keeps one unsettled GPT Image call per organization (spec/providers.md §10).
             ("image.generate" | "image.edit", "openai/gpt-image-2.5-sunburst@gg") => Some(1),
             ("structured.generate", _) => Some(4),
@@ -899,7 +913,7 @@ fn the_video_route_prices_by_second_and_tier() {
 
 #[test]
 fn the_adapters_name_their_contracts_as_the_table_does() {
-    let constants: [(&str, &str, &str); 21] = [
+    let constants: [(&str, &str, &str); 22] = [
         ("image.generate", "gg", gg::image::ADAPTER),
         ("image.edit", "gg", gg::image::ADAPTER),
         ("structured.generate", "gg", gg::chat::STRUCTURED_ADAPTER),
@@ -936,6 +950,7 @@ fn the_adapters_name_their_contracts_as_the_table_does() {
         ),
         ("image.generate", "fal", fal::image::CONTRACT_ADAPTER),
         ("image.generate", "codex", codex::ADAPTER),
+        ("image.edit", "codex", codex::ADAPTER),
         ("video.generate", "fal", fal::video::CONTRACT_ADAPTER),
         (
             "background.remove",
@@ -957,7 +972,29 @@ fn the_adapters_name_their_contracts_as_the_table_does() {
     assert_eq!(openai::ADAPTER_BEHAVIOR, "1");
     assert_eq!(gg::image::ADAPTER_BEHAVIOR, "1");
     assert_eq!(openrouter::image::CONTRACT_BEHAVIOR, "3");
-    assert_eq!(codex::ADAPTER_BEHAVIOR, "1");
+    assert_eq!(codex::ADAPTER_BEHAVIOR, "2");
+}
+
+/// spec/providers.md §10: a route that takes input pictures declares the most its adapter takes,
+/// except GG's, whose models' limits GG checks; a route that takes none declares nothing.
+#[test]
+fn input_picture_limits_are_the_adapters_own() {
+    for route in table().entries.values() {
+        let id = route.id();
+        let limit = match (route.capability.as_str(), route.provider.as_str()) {
+            ("image.generate" | "image.edit", "codex") => Some(codex::MAX_PICTURES),
+            ("image.edit", "openai") => Some(openai::MAX_INPUT_IMAGES),
+            ("image.edit", "openrouter") => Some(openrouter::image::MAX_PICTURES),
+            ("image.edit", "fal") => Some(fal::image::MAX_PICTURES),
+            _ => None,
+        };
+        assert_eq!(
+            route.max_input_pictures.map(|n| n as usize),
+            limit,
+            "{} {id}",
+            route.capability
+        );
+    }
 }
 
 /// A value of `ty` for a request that only has to pass the capability check (spec/capabilities.md

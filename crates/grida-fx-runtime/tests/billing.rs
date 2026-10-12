@@ -47,6 +47,7 @@ fn route(capability: &str, model: &str, high: i64) -> Route {
         features: Default::default(),
         concurrency: None,
         requests_per_minute: None,
+        max_input_pictures: None,
         contract: json!({}),
     }
 }
@@ -81,6 +82,7 @@ fn rig_in(root: &Path, adapters: Adapters, live: bool, ceiling: Option<Usd>) -> 
             label: "python3".into(),
             project_root: root.to_path_buf(),
             sources: Vec::new(),
+            check_version: false,
         },
         &root.join(".fx/cache"),
         1,
@@ -610,6 +612,7 @@ fn rig_with_log(root: &Path, adapters: Adapters, log: Arc<EventLog>) -> Rig {
             label: "python3".into(),
             project_root: root.to_path_buf(),
             sources: Vec::new(),
+            check_version: false,
         },
         &root.join(".fx/cache"),
         1,

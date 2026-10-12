@@ -3,8 +3,8 @@
 //! found in a file is ever signalled, and no service command executes workflow code.
 
 use crate::cli::{InitArgs, LogsArgs, ServiceArgs, StartArgs};
-use grida_fx_core::Error;
 use grida_fx_core::docs::project::Project;
+use grida_fx_core::{Error, ErrorKind};
 use grida_fx_viewer::service::Catalog;
 use serde_json::{Value, json};
 use std::fs::{File, OpenOptions};
@@ -19,6 +19,9 @@ const WAIT: Duration = Duration::from_secs(10);
 const DESCRIPTOR: &str = "instance.json";
 const LOCK: &str = "process.lock";
 const LOG: &str = "service.log";
+/// The environment variable a background start sets on the service it launches: this attempt's
+/// tag, 16 lowercase hex characters, which the service's error line carries (spec/service.md §3).
+const ATTEMPT: &str = "GRIDA_FX_SERVICE_ATTEMPT";
 
 pub fn init(args: &InitArgs) -> Result<u8, Error> {
     let root = Path::new(args.directory.as_deref().unwrap_or("."));
@@ -288,6 +291,26 @@ fn chosen_port(catalog: &Catalog, explicit: Option<u16>) -> Result<u16, Error> {
 }
 
 pub fn start(args: &StartArgs) -> Result<u8, Error> {
+    let started = start_service(args);
+    // A service a background start launched tags its error line with that attempt, so that
+    // concurrent attempts sharing the log never report each other's cause.
+    match (started, attempt_tag().filter(|_| !args.background)) {
+        (Err(error), Some(tag)) => {
+            eprintln!("{}: attempt {tag}: {error}", crate::invoker::command());
+            Ok(2)
+        }
+        (started, _) => started,
+    }
+}
+
+/// This attempt's tag from the environment, when it is one (16 lowercase hex characters).
+fn attempt_tag() -> Option<String> {
+    std::env::var(ATTEMPT).ok().filter(|tag| {
+        tag.len() == 16 && tag.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+    })
+}
+
+fn start_service(args: &StartArgs) -> Result<u8, Error> {
     let project = project(args.project.as_deref())?;
     let catalog = catalog(&project)?;
     let port = chosen_port(&catalog, args.port)?;
@@ -370,7 +393,7 @@ fn foreground(catalog: Catalog, port: u16, args: &StartArgs) -> Result<u8, Error
         .map_err(|error| Error::io("service runtime", &error))?;
     let result = runtime.block_on(async {
         let (server, stopped) = grida_fx_viewer::service::bind(catalog.clone(), port, instance.clone(), token.clone()).await
-            .map_err(|error| Error::io("FX service port (choose --port if it is occupied)", &error))?;
+            .map_err(|error| bind_error(port, &error))?;
         let descriptor = json!({"port": port, "project_id": catalog.project_id(), "instance_id": instance, "pid": std::process::id(), "token": token});
         save(&catalog.state_dir().join(DESCRIPTOR), &descriptor).map_err(|error| Error::io("service descriptor", &error))?;
         save(&catalog.state_dir().join("settings.json"), &json!({"port": port})).map_err(|error| Error::io("service settings", &error))?;
@@ -413,6 +436,71 @@ fn foreground(catalog: Catalog, port: u16, args: &StartArgs) -> Result<u8, Error
     result
 }
 
+/// A refused listener names the port and the next step (spec/service.md §3); unavailable local
+/// state keeps its own label. A background start relays this sentence as its cause.
+fn bind_error(port: u16, error: &io::Error) -> Error {
+    let listening = error
+        .get_ref()
+        .is_some_and(|inner| inner.is::<grida_fx_viewer::service::ListenFailed>());
+    if !listening {
+        return Error::io("FX service", error);
+    }
+    match error.kind() {
+        io::ErrorKind::AddrInUse => Error::new(
+            ErrorKind::Io,
+            format!("port {port} is in use; choose another with --port N"),
+        ),
+        io::ErrorKind::PermissionDenied => Error::new(
+            ErrorKind::Io,
+            format!("port {port} is not permitted for this user; choose another with --port N"),
+        ),
+        _ => Error::io(&format!("port {port}"), error),
+    }
+}
+
+/// The cause this attempt's service reported: its last `<command>: attempt <tag>: ` error line
+/// written after `offset`, the log's length when the attempt began. An earlier attempt's lines
+/// are never read, and a concurrent attempt's carry another tag.
+fn attempt_cause(log: &mut File, offset: u64, tag: &str) -> Option<String> {
+    const BOUND: u64 = 64 * 1024;
+    let length = log.metadata().ok()?.len();
+    // A concurrent start may have reset the log below this attempt's offset: nothing is read.
+    let start = offset.max(length.saturating_sub(BOUND));
+    log.seek(SeekFrom::Start(start)).ok()?;
+    let mut bytes = Vec::new();
+    log.take(BOUND).read_to_end(&mut bytes).ok()?;
+    let prefix = format!("{}: attempt {tag}: ", crate::invoker::command());
+    let text = String::from_utf8_lossy(&bytes);
+    let line = text
+        .lines()
+        .rev()
+        .find_map(|line| line.strip_prefix(&prefix))?;
+    let cause: String = line
+        .chars()
+        .filter(|character| !character.is_control())
+        .take(500)
+        .collect();
+    Some(cause.trim().to_owned()).filter(|cause| !cause.is_empty())
+}
+
+/// A background start that ended without a ready service: one line on stderr and, with `--json`,
+/// the stopped status carrying the same cause (spec/service.md §3). `logs` is suggested only
+/// when the service reported nothing more specific.
+fn startup_failed(catalog: &Catalog, json: bool, cause: &str, see_logs: bool) -> Error {
+    if json {
+        let mut value = status_value(catalog, "stopped");
+        value["cause"] = json!(cause);
+        if let Err(error) = print_status(&value, true) {
+            return error;
+        }
+    }
+    let mut message = format!("FX service could not start: {cause}");
+    if see_logs {
+        message.push_str(&format!("; inspect {} logs", crate::invoker::command()));
+    }
+    Error::usage(message)
+}
+
 fn background(
     project: &Project,
     catalog: &Catalog,
@@ -432,17 +520,21 @@ fn background_with_executable(
 ) -> Result<u8, Error> {
     let log = owned_file(&catalog.state_dir().join(LOG), true)
         .map_err(|error| Error::io("service log", &error))?;
-    if log
+    let mut attempt = log
         .metadata()
         .map_err(|error| Error::io("service log", &error))?
-        .len()
-        > 1024 * 1024
-    {
+        .len();
+    if attempt > 1024 * 1024 {
         // Service logs contain lifecycle diagnostics only, never request bodies or run output.
         // Bound retained diagnostics across repeated starts without creating a log subsystem.
         log.set_len(0)
             .map_err(|error| Error::io("service log", &error))?;
+        attempt = 0;
     }
+    // Read only after the child has exited; its appended writes never depend on this offset.
+    let mut reader = log
+        .try_clone()
+        .map_err(|error| Error::io("service log", &error))?;
     let mut command = Command::new(executable);
     command
         .args(["start", "--project"])
@@ -460,6 +552,8 @@ fn background_with_executable(
         command.env_remove(name);
     }
     command.env("GRIDA_FX_DISABLE_DOTENV", "1");
+    let tag = random_id().map_err(|error| Error::io("service attempt", &error))?[..16].to_owned();
+    command.env(ATTEMPT, &tag);
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -517,19 +611,26 @@ fn background_with_executable(
             .is_some()
             && !process_locked(catalog).unwrap_or(false)
         {
-            return Err(Error::usage(format!(
-                "FX service could not start; run {} logs to inspect the cause",
-                crate::invoker::command()
-            )));
+            return Err(match attempt_cause(&mut reader, attempt, &tag) {
+                Some(cause) => startup_failed(catalog, args.json, &cause, false),
+                None => startup_failed(
+                    catalog,
+                    args.json,
+                    "the service exited without reporting a cause",
+                    true,
+                ),
+            });
         }
         if Instant::now() >= deadline {
             // This handle belongs to the child this invocation spawned, never a descriptor PID.
             let _ = child.kill();
             let _ = child.wait();
-            return Err(Error::usage(format!(
-                "FX service did not become ready within 10 seconds; inspect {} logs",
-                crate::invoker::command()
-            )));
+            return Err(startup_failed(
+                catalog,
+                args.json,
+                "the service did not become ready within 10 seconds",
+                true,
+            ));
         }
         std::thread::sleep(Duration::from_millis(50));
     }
@@ -640,6 +741,55 @@ fn registered_url(catalog: &Catalog, path: &str, _open: bool) -> Result<Option<S
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
+
+    /// Starts a background service through `launcher` after an earlier attempt left `stale` in
+    /// the log, and returns the command error.
+    fn failed_start(launcher: &str, stale: &str) -> Error {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("fx.yaml"), "fx: project/v1\n").unwrap();
+        let project = Project::find(root.path()).unwrap();
+        let catalog = catalog(&project).unwrap();
+        std::fs::write(catalog.state_dir().join(LOG), stale).unwrap();
+        let executable = root.path().join("launcher");
+        grida_fx_providers::testing::write_program(&executable, launcher);
+        let args = StartArgs {
+            project: None,
+            port: Some(1),
+            background: true,
+            open: false,
+            json: false,
+        };
+        background_with_executable(&project, &catalog, 1, &args, &executable).unwrap_err()
+    }
+
+    /// The failure names the cause this attempt's service wrote, not one an earlier attempt left
+    /// or a concurrent attempt wrote after it.
+    #[test]
+    fn a_failed_background_start_reports_its_own_cause() {
+        let command = crate::invoker::command();
+        let error = failed_start(
+            &format!(
+                "#!/bin/sh\nprintf '%s\\n' \"{command}: attempt ${ATTEMPT}: port 1 is in use; choose another with --port N\" >&2\n\
+                 printf '%s\\n' '{command}: attempt 0123456789abcdef: a concurrent attempt' >&2\n\
+                 printf '%s\\n' '{command}: an untagged line' >&2\nexit 2\n"
+            ),
+            &format!("{command}: attempt 0123456789abcdef: an earlier attempt's cause\n"),
+        );
+        assert_eq!(
+            error.message,
+            "FX service could not start: port 1 is in use; choose another with --port N"
+        );
+        let error = failed_start(
+            &format!("#!/bin/sh\nprintf '%s\\n' '{command}: an untagged line' >&2\nexit 3\n"),
+            &format!("{command}: an earlier attempt's cause\n"),
+        );
+        assert_eq!(
+            error.message,
+            format!(
+                "FX service could not start: the service exited without reporting a cause; inspect {command} logs"
+            )
+        );
+    }
 
     /// The competing winner becomes ready while this caller's own child has not entered FX
     /// yet. Returning another winner's URL must also retire that outstanding child, otherwise

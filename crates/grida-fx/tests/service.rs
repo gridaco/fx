@@ -228,6 +228,17 @@ fn occupied_port_is_refused_and_unrelated_listener_is_preserved() {
         &["start", "--background", "--port", &port, "--json"],
     );
     assert_eq!(output.status.code(), Some(2));
+    // The cause is reported in the failing command itself, not only in the log.
+    let cause = format!("port {port} is in use; choose another with --port N");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr).trim_end(),
+        format!("grida-fx: FX service could not start: {cause}")
+    );
+    let failed: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(failed["kind"], "fx-service-status-v1");
+    assert_eq!(failed["state"], "stopped");
+    assert_eq!(failed["url"], Value::Null);
+    assert_eq!(failed["cause"], cause);
     let stopped = success(execute(service.path(), &["stop", "--json"]));
     assert_eq!(stopped["state"], "stopped");
     assert_eq!(occupied.local_addr().unwrap().port().to_string(), port);

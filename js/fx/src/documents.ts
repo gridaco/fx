@@ -143,8 +143,11 @@ export interface RunFinished extends RunEvent {
 
 /** One instance in {@link Projection}. */
 export interface ProjectedInstance {
-  state: "running" | "succeeded" | "failed" | "skipped";
+  /** `waiting`: started, its paid call waiting for its route's slot (older records never have it). */
+  state: "running" | "waiting" | "succeeded" | "failed" | "skipped";
   path: string;
+  /** Waiting: the route it waits for. */
+  waiting_for?: string | null;
   /** Succeeded: whether its result came from the cache. */
   cache?: "hit" | "miss" | null;
   /** Succeeded: the facts its body reported. */
@@ -167,9 +170,11 @@ export interface Projection {
 export interface InspectedStep {
   id: string;
   path: string;
-  state: "succeeded" | "failed" | "skipped" | "running" | "pending";
+  state: "succeeded" | "failed" | "skipped" | "running" | "waiting" | "pending";
   error?: string;
   cache?: "hit" | "miss";
+  /** Waiting: the route whose slot it waits for. */
+  waiting_for?: string;
   /** Its files, where the run placed them: paths relative to the run folder. */
   files: { path: string; digest: string; size: number }[];
 }

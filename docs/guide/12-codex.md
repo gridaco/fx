@@ -25,6 +25,7 @@ This page says how to set it up, what it does well, and where it differs from th
    ```
 
    ```text
+   route     image.edit imagegen@codex servable
    route     image.generate imagegen@codex servable
    ```
 
@@ -36,6 +37,7 @@ This page says how to set it up, what it does well, and where it differs from th
    ```yaml
    routes:
      image.generate: imagegen@codex
+     image.edit: imagegen@codex
    ```
 
    Or for one step only, with `route: imagegen@codex` on that step: a project can draw its
@@ -54,16 +56,45 @@ This page says how to set it up, what it does well, and where it differs from th
 
 ## What it honours
 
-| `fx/image.generate@1` setting | On `imagegen@codex` |
+| `fx/image.generate@1` and `fx/image.edit@1` setting | On `imagegen@codex` |
 |---|---|
 | `prompt` | yes, wrapped in short instructions to Codex (below) |
 | `background: auto` or `opaque` | yes |
 | `background: transparent` | yes: a cut-out subject with an alpha channel |
 | `size: auto`, or no `size` | yes: Codex picks the size |
-| `size: <W>x<H>` | **no**: refused before Codex starts |
-| `references` | **no**: refused before Codex starts |
+| `size: <W>x<H>` | **no**: refused while planning |
+| `references`, and an edit's `image` | yes: at most 5 pictures in all, PNG, JPEG or WebP |
+| `mask` | **no**: refused while planning |
 
-`fx/image.edit@1` has no Codex route.
+### Drawing from pictures
+
+Give a step pictures and Codex draws from them: the same character in a new pose, a sketch
+redrawn in a style, a picture edited. In the prompt, call them by their place in the list,
+`input image 1`, `input image 2`, ...; an edit's `image` is input image 1, then its `references`.
+
+```yaml
+steps:
+  hero:
+    uses: fx/image.generate@1
+    with: { prompt: "A small fox mascot, full body, facing the viewer.", background: transparent }
+  waving:
+    uses: fx/image.generate@1
+    with:
+      prompt: "The fox in input image 1, waving with one paw. Keep its colours and markings."
+      background: transparent
+      references: ["${{ steps.hero.outputs.image }}"]
+```
+
+Drawing every pose from one picture keeps a character the same from picture to picture, which a
+description alone does not. FX copies the pictures into the image's own scratch folder and names
+them to Codex's image tool, which reads them at full resolution.
+
+Codex takes at most 5 pictures in one image. More are refused while planning, at $0, as are
+references on a route that takes none:
+
+```text
+refused   waving.with.references: imagegen@codex takes at most 5 input pictures, not 6
+```
 
 ## Caveats
 
@@ -83,16 +114,22 @@ chooses. The prompt steers the shape; nothing steers the pixel count. In our tes
 | 1152x2496 | 1024x1536 | 1,572,864 |
 | 2560x1440 | 1774x887 | 1,573,538 |
 | no size, "a wide establishing shot" | 1672x941 | 1,573,352 |
+| no size, "about 4:1" | 2172x724 | 1,572,528 |
+| no size, "about 1:3" | 724x2172 | 1,572,528 |
+| an edit of a 1000x400 picture | 1984x793 | 1,573,312 |
+
+The shape follows the wording between about 1:3 and 3:1, never further. With pictures, it
+follows the first picture's shape unless the prompt asks for another.
 
 So a picture from Codex is never larger than about 1.57 megapixels, and a 2K or 4K size is out of
 reach on this route. This is what Codex does today, not a documented promise: a Codex update can
 change it.
 
-So FX refuses a step with an exact `size` on this route, at $0, rather than letting each image
-fail the size check and be drawn again:
+So the plan refuses a step with an exact `size` on this route, at $0, rather than letting each
+image fail the size check and be drawn again:
 
 ```text
-failed    draw#1: Codex image generation takes no exact size: use size auto, and fx/image.resize@1 after it
+refused   draw.with.size: imagegen@codex does not support exact_size
 ```
 
 Say the shape you want in the prompt ("on a square canvas", "portrait", "a wide shot"), leave
@@ -122,8 +159,8 @@ only when the shapes already match.
 
 Codex makes transparent images itself: the subject comes back cut out, with soft edges and glows
 kept as partial transparency. FX holds each answer to the setting: a picture asked for as
-transparent must have an alpha channel, and one asked for as opaque must have no transparent
-pixels. An answer that fails is drawn again, as on any route, and each new attempt is another
+transparent must have transparent pixels (an alpha channel alone, under a painted checkerboard,
+is not enough), and one asked for as opaque must have no transparent pixels. An answer that fails is drawn again, as on any route, and each new attempt is another
 image on your plan.
 
 ### Your plan's limits apply
@@ -140,22 +177,33 @@ image on your plan.
   failed    draw#1: Codex image generation failed: the Codex usage limit is reached; it resets at unix time 1792311096
   ```
 
+  The run's other Codex steps then start nothing until that time, so a long run stops spending
+  turns on a plan that cannot draw. They fail with
+  `the Codex usage limit is reached; it resets at unix time …, and no Codex call starts before then`.
+
 - FX draws only on a ChatGPT sign-in. When it starts Codex it asks how Codex is signed in, and
   refuses, before anything is drawn, a Codex signed in with an API key (`codex login
   --with-api-key`), which would bill an API account. It also hides your provider keys and
   `CODEX_API_KEY` from Codex.
 
-### Slower, and one at a time
+### Slower, three at a time
 
-An image takes about 20 seconds, and the route draws one at a time, so a workflow of 20 images
-takes several minutes. The first image of a run also starts Codex, which the run then keeps for
-the others. The cache works as on any route: a step that already drew its image does
-not call Codex again.
+An image takes 20 to 60 seconds, and the route draws three at a time, so a workflow of 20 images
+takes a few minutes. Both Codex routes share those three. Steps that wait for one are shown as
+`waiting`, not `running`. The first image of a run also starts Codex, which the run then keeps for
+the others. To draw more or fewer at once, set the route's `concurrency` in `fx.yaml`:
+
+```yaml
+routes:
+  image.generate: { route: imagegen@codex, concurrency: 2 }
+```
+
+The cache works as on any route: a step that already drew its image does not call Codex again.
 
 ### Not the same picture as an API route
 
-- **The prompt is wrapped.** FX asks Codex, in fixed instructions, to make exactly one image from
-  your prompt as written; Codex's image tool may still revise it. The same prompt on an API route
+- **The prompt is wrapped.** FX asks Codex, in fixed instructions, to call its image tool once
+  with your prompt as written and your pictures; Codex's image tool may still revise the prompt. The same prompt on an API route
   draws a different picture.
 - **The model is Codex's.** Codex chooses it, and its quality; FX neither picks nor records
   them. Others have seen Codex report `gpt-image-2-codex` at quality `auto`
@@ -167,7 +215,7 @@ not call Codex again.
 ### A failure is not repeated
 
 If Codex exits, stalls, or answers without an image, the step fails and FX does not ask Codex
-again on its own: once Codex has been asked to draw, an image may already have been made and
+again on its own (the one exception is a Codex too busy to take the request, which never saw it): once Codex has been asked to draw, an image may already have been made and
 counted against your plan, and a Codex that failed before that will most likely fail the same
 way again. Run again to try again. (Within a turn, Codex retries its own requests to OpenAI; that
 is Codex's.)
@@ -181,13 +229,14 @@ Codex at all: `Codex was not started: GRIDA_FX_NETWORK is off`.
 ### What runs on your machine
 
 - FX starts one `codex app-server` for a run, on its first Codex image, and ends it with the run.
-  Each image gets a thread of its own, in an empty scratch folder FX removes afterwards, with a
-  read-only sandbox and no approvals; anything Codex asks FX to approve is declined. The
-  read-only sandbox stops writes, not reads: Codex is asked to use no tool but its image tool,
-  and nothing else is offered to it (below).
+  Each image gets a thread of its own, in a scratch folder holding only copies of its pictures,
+  which FX removes afterwards, with a read-only sandbox and no approvals; anything Codex asks FX
+  to approve is declined. The read-only sandbox stops writes, not reads: Codex is asked to use no
+  tool but its image tool, and nothing else is offered to it (below).
 - Your own Codex tools are off for these conversations: your MCP servers (FX lists them with
   `codex mcp list` and turns each off), apps, plugins, hooks, memories and the turn-end
-  notification. Your reasoning effort and service tier are not used either: an image turn runs at
+  notification. So are Codex's other tools (its shell, web search, browser and computer use,
+  sub-agents, image viewer and skills), which also halves what each image spends of the context. Your reasoning effort and service tier are not used either: an image turn runs at
   low effort and the standard tier, so it spends your plan no faster than it must.
 - Codex runs in a process group of its own, with everything it starts. When the run ends, is
   cancelled, or FX exits, FX ends the whole group; a step that is cancelled while Codex draws asks
@@ -206,8 +255,9 @@ Codex at all: `Codex was not started: GRIDA_FX_NETWORK is off`.
 | The step says | What to do |
 |---|---|
 | `Codex is not installed: …` | Install Codex and run `codex login`, or set `GRIDA_FX_TOOL_CODEX`. |
-| `Codex image generation takes no exact size: …` | Leave `size` out, and size the picture after it (above). |
-| `Codex image generation takes no references` | Use an API route for that step. |
+| `imagegen@codex does not support exact_size` | Leave `size` out, and size the picture after it (above). |
+| `imagegen@codex takes at most 5 input pictures, …` | Give the step fewer pictures, or use an API route for it. |
+| `… is image/gif; Codex takes PNG, JPEG or WebP` | Convert the picture first. |
 | `… the Codex usage limit is reached; it resets at …` | Wait for the reset, or use an API route. |
 | `Codex is not signed in: …`, or `Codex is signed in with an API key, …` | Run `codex login` and sign in with ChatGPT. |
 | `Codex's MCP servers could not be listed, …` | Check that `codex mcp list` works; update Codex. |

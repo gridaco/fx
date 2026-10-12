@@ -194,7 +194,8 @@ consumers bind (§5.4, rule 4).
   badge band. It stops growing at n = 4; the badge carries n. Tracks are sized from footprints
   (§4, rule 11), so a deck never reaches a neighbouring slot.
 - Badge text: `5 items`, `3 takes`, `2 items · 3 takes each` (`up to 3 takes` when item decks
-  differ), then `· 1 failed` in the failed colour and `· 1 not run` for takes that never started.
+  differ), then `· 1 failed` in the failed colour, `· 1 waiting` for members waiting for their
+  route's slot (store.md §8) and `· 1 not run` for takes that never started.
   Counts come from recorded state and recorded take arrays, never from id strings.
 - The badge sits inside the footprint, scales with the canvas and uses theme tokens. Too small to
   read, it shows `×5`; smaller still, it hides and a failed count stays as a colour dot.
@@ -208,7 +209,7 @@ The front card at rest is the first that applies; "first" and "last" are by orde
 
 1. the selected member;
 2. the last failed member; in the plan view a `blocked` member counts as failed;
-3. the first running member (run view);
+3. the first running member, else the first `waiting` one (run view);
 4. in a take deck, the take consumers bind: the take that instances outside the deck record
    reading (`reads`, and in the run view `bindings`). That is the picked take (`pick:` or the
    takes file), or for a regenerating step its last take: the accepted one, or the one `then:`

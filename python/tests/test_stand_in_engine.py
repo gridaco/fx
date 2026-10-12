@@ -51,11 +51,14 @@ routes:
 ROUTES = """\
 fx: routes/v1
 routes:
-  - { capability: image.generate, route: img-a@acme, price: { low_usd: 0.01, high_usd: 0.04 } }
+  - capability: image.generate
+    route: img-a@acme
+    price: { low_usd: 0.01, high_usd: 0.04 }
+    features: [exact_size, opaque_background]
   - capability: image.edit
     route: img-a@acme
     price: { low_usd: 0.01, high_usd: 0.04 }
-    features: [image_input]
+    features: [image_input, exact_size, opaque_background]
 """
 
 WORKFLOW = """\

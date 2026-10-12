@@ -362,6 +362,16 @@ app-server processes in tests and real runs on Codex 0.160.1: transparent and op
 are honoured; exact sizes are not (Codex draws about 1.57 MP in a shape it picks), so they are
 refused.
 
+**0.5.0 (2026-10-12):** the route also serves `image.edit`, and both take up to 5 input
+pictures (gridaco/fx#50). They are copied into the call's scratch folder and named to the image tool
+as `referenced_image_paths`; probes showed attachments are Codex's "best-effort" mode. The turn
+names the tool (`image_gen.imagegen`) instead of the `$imagegen` skill, and Codex's own tools are
+switched off, which halves a turn's context (behaviour `"2"`). The plan derives features from a
+step's own request and checks each route's `max_input_pictures`. The Codex routes run 3 at a
+time, and a waiting call is recorded and shown as `waiting` (gridaco/fx#53). A usage limit stops
+the invocation's later Codex calls until it resets. A call dropped before Codex named its turn
+still interrupts it (gridaco/fx#48), and `-32001` is not received.
+
 How this meets the local-agent requirements above, and what it defers:
 - **Admission (decided 2026-10-12).** `--live` alone admits Codex; the skill asks agents to get
   the user's go.
@@ -379,21 +389,20 @@ How this meets the local-agent requirements above, and what it defers:
 Follow-ups:
 - **The ACP/agent node** above should sit on the same runtime contract (`adapter::Runtime`,
   `Billing::Plan`, `Usage`), with a session per call as Codex has a thread per call.
-- **References / `image.edit`.** The app-server takes `localImage` inputs; prove that `$imagegen`
-  edits from them before declaring `image_input` or serving `image.edit`.
-- **Plan-time feature derivation.** A `WxH` size implies `exact_size` and references imply
-  `image_input`; today they are refused only when the call is made (every route would gain).
-- **Provider-level concurrency.** One Codex per machine and account; route concurrency is
-  per route and per run.
+- **Concurrency across invocations.** One Codex account may serve several runs at once; route
+  concurrency is per route id and per invocation.
+- **Plan-time derivation for nodes' own calls.** A Python node's `ctx.image_generate` is checked
+  only by the adapter, when the call is made.
 - **Windows.** npm installs `codex.cmd`, which `find_program` does not look for; process groups
   are Unix-only; the tests use shell fakes. A launcher trait with an in-process JSON-RPC fake
   would make the tests portable and let the runner itself be tested (check retries, cancel).
 - **A missing Codex is refused per call**; refusing it before the run, like a declared tool, is
   kinder.
-- **Showcases.** Advertise the Codex option in examples whose image steps need no exact size or
-  references (most set `size`).
+- **Showcases.** Advertise the Codex option in examples whose image steps need no exact size
+  (most set `size`); `examples/pet` runs on Codex alone.
 - **Shape hints.** Codex draws a fixed budget of about 1.57 megapixels in a shape the prompt
-  steers (1254x1254, 1024x1536, 1774x887, 1672x941; its tool has no size argument:
+  steers between 1:3 and 3:1 (1254x1254, 1024x1536, 1774x887, 1672x941, 2172x724, 724x2172; with
+  pictures, the first one's shape; its tool has no size argument:
   openai/codex#19175, #28723). An orientation or aspect setting could map onto that honestly;
   `image.generate` has none today. Revisit if Codex adds a size argument.
 

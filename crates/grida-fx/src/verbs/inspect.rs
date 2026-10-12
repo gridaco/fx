@@ -14,7 +14,11 @@
 //! The steps: each plan instance that is not absent, in plan order, then each instance only the
 //! log names, in the order the log first names it. The last `node_*` event decides a step's state
 //! (`node_finished` succeeded, `node_failed` failed, `node_skipped` skipped, `node_started`
-//! running, or failed with `the run ended before this step finished` once the run ended); with no
+//! running, or failed with `the run ended before this step finished` once the run ended); a
+//! started step with an open wait for a route is `waiting` instead of running, for the route
+//! of its earliest open wait (spec/store.md §8): a wait opens at a `call_waiting` and closes at
+//! the `call_admitted` of the same `call`, or at the step's next `node_*` or `node_retry` event
+//! or any `run_started`, which leave it behind; with no
 //! event: `succeeded` for a plan state `done` (an `at: plan` step), else `skipped` once the run
 //! ended (with the plan's reason), else `pending`. A failed or skipped step's error is the
 //! event's `error`, else its `reason`. The run's state: `planned`, `unfinished` after
@@ -38,8 +42,9 @@
 //! verified  <n> files                              (--verify, nothing differs)
 //! ```
 //! `--json`: `{"run": {workflow, folder, state, charged_usd, steps: [{id, path, state, error?,
-//! cache?, files: [{path, digest, size}]}], stand_in?}, "verification"?: {verified, problems}}`,
-//! where `folder` is the folder as named and `charged_usd` is null before the run ended. A
+//! cache?, waiting_for?, files: [{path, digest, size}]}], stand_in?}, "verification"?: {verified,
+//! problems}}`, where `folder` is the folder as named, `charged_usd` is null before the run ended
+//! and `waiting_for` is the route a `waiting` step waits for (when recorded). A
 //! stand-in run (spec/store.md §8, "Stand-in runs"), whose `plan.json` or a `run_started` says
 //! `stand_in: true`, has `  ·  stand-in` after the header's folder name and `stand_in: true` in
 //! `run`. Exit 1 when
@@ -149,6 +154,8 @@ struct StepView {
     state: &'static str,
     error: Option<String>,
     cache: Option<String>,
+    /// The route a `waiting` step waits for.
+    waiting_for: Option<String>,
     files: Vec<Placed>,
 }
 
@@ -173,6 +180,9 @@ struct Entry {
     plan_state: Option<String>,
     plan_reason: Option<String>,
     last: Option<Value>,
+    /// The latest start's open waits for a route, in the order they began: each `call_waiting`'s
+    /// call key (`None` when the event names none) and route.
+    waits: IndexMap<Option<String>, Option<String>>,
 }
 
 impl RunView {
@@ -193,6 +203,7 @@ impl RunView {
                     plan_state: state.map(str::to_string),
                     plan_reason: text(instance, "reason").map(str::to_string),
                     last: None,
+                    waits: IndexMap::new(),
                 },
             );
         }
@@ -202,6 +213,10 @@ impl RunView {
         for event in events {
             match event_name(event) {
                 Some("run_started") => {
+                    // A new invocation leaves every earlier wait behind.
+                    for entry in entries.values_mut() {
+                        entry.waits.clear();
+                    }
                     state = "unfinished";
                     stand_in |= event.get("stand_in") == Some(&Value::Bool(true));
                 }
@@ -226,11 +241,38 @@ impl RunView {
                         plan_state: None,
                         plan_reason: None,
                         last: None,
+                        waits: IndexMap::new(),
                     });
                     if name == "node_started" {
                         entry.path = path.to_string();
                     }
                     entry.last = Some(event.clone());
+                    entry.waits.clear();
+                }
+                Some("node_retry") => {
+                    // A new attempt leaves its step's waits behind.
+                    if let Some(entry) = text(event, "id").and_then(|id| entries.get_mut(id)) {
+                        entry.waits.clear();
+                    }
+                }
+                Some(name @ ("call_waiting" | "call_admitted")) => {
+                    // Only a step's start in progress waits for a route.
+                    let Some(entry) =
+                        text(event, "id")
+                            .and_then(|id| entries.get_mut(id))
+                            .filter(|entry| {
+                                entry.last.as_ref().and_then(event_name) == Some("node_started")
+                            })
+                    else {
+                        continue;
+                    };
+                    let call = text(event, "call").map(str::to_string);
+                    if name == "call_waiting" {
+                        let route = text(event, "route").map(str::to_string);
+                        entry.waits.entry(call).or_insert(route);
+                    } else {
+                        entry.waits.shift_remove(&call);
+                    }
                 }
                 _ => {}
             }
@@ -267,6 +309,7 @@ fn step_view(id: String, entry: Entry, ended: bool) -> StepView {
         state: "pending",
         error: None,
         cache: None,
+        waiting_for: None,
         files: Vec::new(),
     };
     let error_of = |event: &Value| {
@@ -295,7 +338,13 @@ fn step_view(id: String, entry: Entry, ended: bool) -> StepView {
             view.state = "failed";
             view.error = Some("the run ended before this step finished".into());
         }
-        Some(_) => view.state = "running",
+        Some(_) => match entry.waits.into_values().next() {
+            Some(route) => {
+                view.state = "waiting";
+                view.waiting_for = route;
+            }
+            None => view.state = "running",
+        },
         None if entry.plan_state.as_deref() == Some("done") => view.state = "succeeded",
         None if ended => {
             view.state = "skipped";
@@ -483,6 +532,9 @@ fn json_document(view: &RunView, folder: &str, verification: Option<&Verificatio
             if let Some(cache) = &step.cache {
                 entry.insert("cache".into(), json!(cache));
             }
+            if let Some(route) = &step.waiting_for {
+                entry.insert("waiting_for".into(), json!(route));
+            }
             let files: Vec<Value> = step
                 .files
                 .iter()
@@ -643,6 +695,91 @@ mod tests {
         assert_eq!(view.state, "cancelled");
         assert_eq!(view.steps[0].state, "failed");
         assert_eq!(view.charged, Some(json!(0)));
+    }
+
+    #[test]
+    fn a_step_waiting_for_its_route_is_counted_as_waiting() {
+        let call = |name: &str, id: &str, key: char, route: &str| {
+            event(
+                name,
+                json!({"id": id, "capability": "image.generate", "route": route,
+                       "call": key.to_string().repeat(64)}),
+            )
+        };
+        let events = vec![
+            event("run_started", json!({})),
+            event("node_started", json!({"id": "ok#1", "path": "ok"})),
+            event("node_started", json!({"id": "nope#1", "path": "nope"})),
+            event("node_started", json!({"id": "after#1", "path": "after"})),
+            // Two calls of one body wait at once; one admitted, the step still waits.
+            call("call_waiting", "ok#1", 'a', "img-a@acme"),
+            call("call_waiting", "ok#1", 'b', "img-b@acme"),
+            call("call_admitted", "ok#1", 'a', "img-a@acme"),
+            // An admission of no open wait closes nothing; a new attempt closes them all.
+            call("call_waiting", "nope#1", 'c', "img-a@acme"),
+            call("call_admitted", "nope#1", 'd', "img-a@acme"),
+            event(
+                "node_retry",
+                json!({"id": "nope#1", "attempt": 2, "error": "e"}),
+            ),
+            call("call_admitted", "nope#1", 'c', "img-a@acme"),
+            // Waiting again after its admission, as a step with several calls does.
+            call("call_waiting", "after#1", 'e', "img-a@acme"),
+            call("call_admitted", "after#1", 'e', "img-a@acme"),
+            call("call_waiting", "after#1", 'f', "img-a@acme"),
+            // A step that has not started, or has ended, waits for nothing.
+            call("call_waiting", "slow#1", 'g', "img-a@acme"),
+        ];
+        let states = |events: &[Value]| -> Vec<(String, &'static str, Option<String>)> {
+            RunView::new(&plan(), events).steps[..3]
+                .iter()
+                .map(|s| (s.id.clone(), s.state, s.waiting_for.clone()))
+                .collect()
+        };
+        let owned = |id: &str, state: &'static str, route: Option<&str>| {
+            (id.to_string(), state, route.map(str::to_string))
+        };
+        assert_eq!(
+            states(&events),
+            [
+                owned("ok#1", "waiting", Some("img-b@acme")),
+                owned("nope#1", "running", None),
+                owned("after#1", "waiting", Some("img-a@acme")),
+            ]
+        );
+        let view = RunView::new(&plan(), &events);
+        assert_eq!(view.steps[5].state, "pending");
+        assert_eq!(
+            text_lines(&view, "w1", None)[1],
+            "state     unfinished   6 steps: 2 pending, 1 running, 1 succeeded, 2 waiting"
+        );
+        let steps = json_document(&view, "w1", None)["run"]["steps"].clone();
+        assert_eq!(steps[0]["state"], "waiting");
+        assert_eq!(steps[0]["waiting_for"], "img-b@acme");
+        assert!(steps[1].get("waiting_for").is_none());
+        // The other call's admission ends the step's wait.
+        let mut admitted = events.clone();
+        admitted.push(call("call_admitted", "ok#1", 'b', "img-b@acme"));
+        assert_eq!(states(&admitted)[0], owned("ok#1", "running", None));
+        // A new invocation leaves the waits of the last one behind.
+        let mut resumed = events.clone();
+        resumed.push(event("run_started", json!({})));
+        assert!(
+            states(&resumed)
+                .iter()
+                .all(|(_, state, _)| *state == "running")
+        );
+        // A new start, and the run's end, leave no wait behind.
+        let mut restarted = events.clone();
+        restarted.push(event("node_started", json!({"id": "ok#1", "path": "ok"})));
+        assert_eq!(RunView::new(&plan(), &restarted).steps[0].state, "running");
+        restarted.push(event(
+            "run_cancelled",
+            json!({"reason": "interrupted", "charged_usd": 0}),
+        ));
+        let ended = RunView::new(&plan(), &restarted);
+        assert!(ended.steps.iter().all(|s| s.state != "waiting"));
+        assert_eq!(ended.steps[2].state, "failed");
     }
 
     #[test]

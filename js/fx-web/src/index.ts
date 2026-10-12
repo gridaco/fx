@@ -31,6 +31,12 @@ export interface RunNode {
   duration_ms: number | null;
   /** When this instance last started, UTC; absent when the record cannot date it. */
   started_at?: string;
+  /** A `waiting` instance's route, whose slot its paid call waits for. */
+  waiting_for?: string;
+  /** When a `waiting` instance's earliest open wait began, UTC; absent when the record cannot date it. */
+  waiting_since?: string;
+  /** How long its latest start waited in admitted waits, overlaps counted once; its work is the time since `started_at` less this. */
+  waited_ms?: number;
   ports?: NodePorts;
   bindings?: PortBinding[];
   needs?: string[];
@@ -96,6 +102,9 @@ function node(value: unknown): value is RunNode {
     && nullableString(value.error)
     && nullableNumber(value.duration_ms)
     && (value.started_at === undefined || utcTimestamp(value.started_at))
+    && (value.waiting_for === undefined || typeof value.waiting_for === "string")
+    && (value.waiting_since === undefined || utcTimestamp(value.waiting_since))
+    && (value.waited_ms === undefined || (typeof value.waited_ms === "number" && Number.isSafeInteger(value.waited_ms) && value.waited_ms >= 0))
     && (value.ports === undefined || isNodePorts(value.ports))
     && (value.bindings === undefined || isPortBindings(value.bindings))
     && (value.needs === undefined || strings(value.needs))

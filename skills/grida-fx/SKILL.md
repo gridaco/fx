@@ -127,8 +127,9 @@ routes and estimate, then pass the cap explicitly as `--live --max-usd N`, where
 A run whose image steps use `imagegen@codex` needs no `--max-usd`, but it spends
 the user's own Codex plan: get the user's go for it as for any live run, and do
 not switch a step to Codex, or away from it, without asking.
-Use `grida fx doctor workflows/example.yaml` to diagnose prerequisites; let FX
-load credentials. Do not read or print `.env` or secret values, or embed them in
+Use `grida fx doctor workflows/example.yaml` to diagnose prerequisites: its
+first `uses` lines say whether each route the workflow's paid steps use is
+servable, and it exits 1 when one is not. Let FX load credentials. Do not read or print `.env` or secret values, or embed them in
 workflow files. Never add provider retries outside FX or bypass the ceiling with
 direct provider calls.
 
@@ -169,7 +170,8 @@ To place results in the user's destination, use `--deliver output=path` during
 are immutable: copy them out rather than editing cache paths. A new run folder
 does not force fresh generation. For intentional alternatives, inspect the
 installed `reroll`, `pick`, and `takes` help; a reroll can spend and needs the same
-authorization discipline as a run.
+authorization discipline as a run. Their `next` line repeats the run, `--live` included
+when it was live: confirm before running it, as for the original run.
 
 Report the actual run folder, completed/failed/incomplete state, delivered files,
 and FX's recorded cost. Distinguish an estimate, engine-booked cost, and provider

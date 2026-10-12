@@ -54,6 +54,16 @@
    },
    "event": "run_started",
    "plan": "f8049c5ace41009444bc273417975607ecb1a626af3ac478aedc72be062fab0d",
+   "repeat": {
+    "inputs": [
+     "inputs.yaml"
+    ],
+    "live": false,
+    "routes": [
+     "routes.yaml"
+    ],
+    "workflow": "case"
+   },
    "resumed": false,
    "workflow": "case"
   }

@@ -619,6 +619,7 @@ mod tests {
             label: "python3".into(),
             project_root: "/work/acme".into(),
             sources: Vec::new(),
+            check_version: false,
         };
         let pool = HostPool::new(spec.clone(), 0);
         assert_eq!(pool.leases.available_permits(), 1);
@@ -635,6 +636,7 @@ mod tests {
             label: "python3".into(),
             project_root: "/work/acme".into(),
             sources: Vec::new(),
+            check_version: false,
         };
         let pool = Arc::new(HostPool::new(spec, 1));
         send(&pool.lease());
@@ -688,6 +690,7 @@ time.sleep(60)
             label: "python-stub".into(),
             project_root: dir.path().to_path_buf(),
             sources: Vec::new(),
+            check_version: false,
         };
         (dir, spec)
     }
@@ -776,6 +779,7 @@ time.sleep(60)
                 label: "python3".into(),
                 project_root: "/work/acme".into(),
                 sources: Vec::new(),
+                check_version: false,
             },
             1,
         );
@@ -794,6 +798,7 @@ time.sleep(60)
                 label: "python3".into(),
                 project_root: "/work/acme".into(),
                 sources: Vec::new(),
+                check_version: false,
             },
             1,
         );
@@ -827,6 +832,7 @@ time.sleep(60)
             label: "python-deaf".into(),
             project_root: dir.path().to_path_buf(),
             sources: Vec::new(),
+            check_version: false,
         };
         let pool = Arc::new(HostPool::new(spec, 1).with_grace(Duration::from_millis(300)));
         let params = RunParams {

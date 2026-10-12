@@ -90,6 +90,9 @@ pub enum Event {
         estimate_high: Usd,
         /// A stand-in run (spec/protocol.md §5.7): `stand_in: true`, written only when true.
         stand_in: bool,
+        /// The arguments that repeat the run (spec/store.md §8, "Repeating a run"), written only
+        /// when the invocation has them.
+        repeat: Option<Value>,
     },
     PhasePlanned {
         phase: u32,
@@ -161,6 +164,22 @@ pub enum Event {
         /// A stand-in answered the call (spec/protocol.md §6.1, "Stand-in answers"): `stand_in:
         /// true`, written only when true.
         stand_in: bool,
+    },
+    /// A call that could not take its route's slot at once, written before it waits
+    /// (spec/store.md §8, "Waiting for a route").
+    CallWaiting {
+        id: String,
+        capability: String,
+        route: String,
+        /// The call key, which pairs the wait with its admission.
+        call: String,
+    },
+    /// The waiting call took its slot.
+    CallAdmitted {
+        id: String,
+        capability: String,
+        route: String,
+        call: String,
     },
     BudgetReserved {
         node_id: String,
@@ -238,6 +257,8 @@ impl Event {
             Event::NodeSkipped { .. } => "node_skipped",
             Event::NodeRetry { .. } => "node_retry",
             Event::Call { .. } => "call",
+            Event::CallWaiting { .. } => "call_waiting",
+            Event::CallAdmitted { .. } => "call_admitted",
             Event::BudgetReserved { .. } => "budget_reserved",
             Event::BudgetSettled { .. } => "budget_settled",
             Event::BudgetRefused { .. } => "budget_refused",
@@ -275,6 +296,7 @@ impl Event {
                 estimate_low,
                 estimate_high,
                 stand_in,
+                repeat,
             } => {
                 fields.text("workflow", workflow);
                 if let Some(name) = name {
@@ -290,6 +312,9 @@ impl Event {
                 fields.put("estimate", Value::Object(estimate));
                 if *stand_in {
                     fields.put("stand_in", Value::Bool(true));
+                }
+                if let Some(repeat) = repeat {
+                    fields.put("repeat", repeat.clone());
                 }
             }
             Event::PhasePlanned {
@@ -423,6 +448,23 @@ impl Event {
                 fields.text("id", id);
                 fields.put("attempt", Value::from(*attempt));
                 fields.text("error", error);
+            }
+            Event::CallWaiting {
+                id,
+                capability,
+                route,
+                call,
+            }
+            | Event::CallAdmitted {
+                id,
+                capability,
+                route,
+                call,
+            } => {
+                fields.text("id", id);
+                fields.text("capability", capability);
+                fields.text("route", route);
+                fields.text("call", call);
             }
             Event::Call {
                 id,

@@ -1,0 +1,39 @@
+# The `next` line of `reroll` and `pick` repeats the run their folder holds (spec/store.md §8
+# "Repeating a run"). A run of the workflow file with an inputs file, a route table and a
+# ceiling records them in its `run_started` (`repeat`, paths relative to the project's root), and
+# `reroll` prints the command with each of them; that run was not live, so it has no `--live`.
+# A run given a workflow input flag cannot be repeated from its record: `pick` advises running
+# the workflow again instead of printing a command that would plan other inputs.
+steps:
+- argv:
+  - run
+  - workflows/case.yaml
+  - --inputs
+  - inputs/hello.yaml
+  - --routes
+  - routes.yaml
+  - --max-usd
+  - "1.50"
+  - --run
+  - runs/one
+- argv:
+  - reroll
+  - runs/one
+  - a
+  save: reroll.txt
+- argv:
+  - run
+  - case
+  - --routes
+  - routes.yaml
+  - --run
+  - runs/two
+  - --
+  - --text
+  - hi
+- argv:
+  - pick
+  - runs/two
+  - a
+  - "1"
+  save: pick.txt

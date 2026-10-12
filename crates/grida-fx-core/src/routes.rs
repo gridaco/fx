@@ -1,8 +1,8 @@
 //! Routes, route tables and per-call prices (identity.md §7, §12; spec/schemas/fx-routes-v1).
 //!
 //! A route is `<model>@<provider>`, split at the last `@`. Its fingerprint hashes capability,
-//! model, provider and contract (`{}` when none) under `kind: fx-route-v1`; price, features and
-//! concurrency are not part of it.
+//! model, provider and contract (`{}` when none) under `kind: fx-route-v1`; price, features,
+//! input-picture limit and concurrency are not part of it.
 //!
 //! The catalog is built from tables in this order (identity.md §7): the built-in default table
 //! (left out when any `--routes` file is given), then `fx.yaml` `route_tables` in order, then each
@@ -94,6 +94,9 @@ pub struct Route {
     pub provider: String,
     pub price: RoutePrice,
     pub features: BTreeSet<String>,
+    /// The most input pictures one call takes (spec/capabilities.md §1); `None`: no limit is
+    /// declared.
+    pub max_input_pictures: Option<u32>,
     pub concurrency: Option<u32>,
     pub requests_per_minute: Option<u32>,
     /// The declared contract object; `{}` when none.
@@ -333,6 +336,7 @@ fn parse_route(entry: &Value, at: &str) -> std::result::Result<Route, String> {
         provider,
         price,
         features,
+        max_input_pictures: count("max_input_pictures")?,
         concurrency: count("concurrency")?,
         requests_per_minute: count("requests_per_minute")?,
         contract,
@@ -472,6 +476,7 @@ mod tests {
         let read = table(json!([
             {"capability": "image.generate", "route": "vendor/IMG-A@acme", "price": {"usd": 0.04},
              "features": ["mask", "alpha"], "concurrency": 2, "requests_per_minute": 60,
+             "max_input_pictures": 5,
              "contract": {"sizes": ["1024x1024"]}},
             {"capability": "image.generate", "route": "img-b@acme",
              "price": {"low_usd": 0.01, "high_usd": 0.04}},
@@ -486,6 +491,7 @@ mod tests {
         assert_eq!(a.features, BTreeSet::from(["alpha".into(), "mask".into()]));
         assert_eq!(a.concurrency, Some(2));
         assert_eq!(a.requests_per_minute, Some(60));
+        assert_eq!(a.max_input_pictures, Some(5));
         assert_eq!(a.contract, json!({"sizes": ["1024x1024"]}));
         let b = &read.entries[1];
         assert_eq!((b.price.low, b.price.high), (Usd(10_000), Usd(40_000)));

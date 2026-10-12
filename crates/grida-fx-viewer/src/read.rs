@@ -8,6 +8,7 @@ use grida_fx_core::value::{is_digest, parse_json};
 use grida_fx_runtime::folder::{
     capped, keyed_path, named, step_file_path, step_folder, takes_of_id,
 };
+use indexmap::IndexMap;
 use serde::Serialize;
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
@@ -77,8 +78,35 @@ pub struct Node {
     /// `started_at` plus the start's `offset_ms`. Omitted when the record cannot date it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub started_at: Option<String>,
+    /// The route a `waiting` instance waits for a slot of: its earliest open wait's `route`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub waiting_for: Option<String>,
+    /// When a `waiting` instance's earliest open wait began, dated as `started_at` is.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub waiting_since: Option<String>,
+    /// How long this start waited for route slots: the time during which at least one of its
+    /// waits that its `call_admitted` ended was open. Omitted when none ended so.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub waited_ms: Option<u64>,
+    /// This start's open waits, in the order they began, by call key (spec/store.md §8).
+    #[serde(skip)]
+    waits: IndexMap<Option<String>, Wait>,
+    /// The waits of this start that their admission ended: invocation, began and ended
+    /// `offset_ms`.
+    #[serde(skip)]
+    waited: Vec<(String, u64, u64)>,
     /// The run ended while this instance was running (its `state` is then `failed`).
     pub interrupted: bool,
+}
+
+/// One open wait for a route's slot.
+#[derive(Debug)]
+struct Wait {
+    route: Option<String>,
+    /// When it began, dated as `started_at` is.
+    since: Option<String>,
+    /// Its invocation and `offset_ms`, which time it once it is admitted.
+    at: Option<(String, u64)>,
 }
 
 /// A recorded file, including files whose bytes are not in the selected folder.
@@ -272,8 +300,81 @@ fn node(value: &Value, steps: &Map<String, Value>, types: &Map<String, Value>) -
         error: text(value, "reason").map(str::to_string),
         duration_ms: None,
         started_at: None,
+        waiting_for: None,
+        waiting_since: None,
+        waited_ms: None,
+        waits: IndexMap::new(),
+        waited: Vec::new(),
         interrupted: false,
     })
+}
+
+impl Node {
+    /// Leaves every open wait behind untimed, keeping how long the admitted ones took.
+    fn end_waits(&mut self) {
+        self.waits.clear();
+        self.show_waits();
+    }
+
+    /// Shows a start in progress `waiting` for its earliest open wait, or `running` without one.
+    fn show_waits(&mut self) {
+        if !matches!(self.state.as_str(), "running" | "waiting") {
+            self.waiting_for = None;
+            self.waiting_since = None;
+            return;
+        }
+        let first = self.waits.values().next();
+        self.state = if first.is_some() {
+            "waiting"
+        } else {
+            "running"
+        }
+        .into();
+        self.waiting_for = first.and_then(|wait| wait.route.clone());
+        self.waiting_since = first.and_then(|wait| wait.since.clone());
+    }
+
+    /// Times an admitted wait: `waited_ms` counts the time at least one admitted wait was open,
+    /// so waits that overlap are not counted twice.
+    fn admit(&mut self, wait: Wait, now: Option<(&str, u64)>) {
+        let (Some((invocation, began)), Some((now_invocation, now))) = (wait.at, now) else {
+            return;
+        };
+        if invocation != now_invocation {
+            return;
+        }
+        self.waited.push((invocation, began, now.max(began)));
+        self.waited.sort();
+        let mut total = 0;
+        let mut open: Option<(&str, u64, u64)> = None;
+        for (invocation, began, ended) in &self.waited {
+            match open {
+                Some((current, from, until)) if current == invocation && *began <= until => {
+                    open = Some((current, from, until.max(*ended)));
+                }
+                _ => {
+                    total += open.map_or(0, |(_, from, until)| until - from);
+                    open = Some((invocation, *began, *ended));
+                }
+            }
+        }
+        total += open.map_or(0, |(_, from, until)| until - from);
+        self.waited_ms = Some(total);
+    }
+}
+
+/// When an event happened, UTC RFC3339 milliseconds: its invocation's recorded start plus its
+/// `offset_ms`. `None` when the record cannot date it.
+fn dated(starts: &BTreeMap<&str, chrono::DateTime<chrono::Utc>>, event: &Value) -> Option<String> {
+    let start = starts.get(text(event, "invocation_id")?)?;
+    let offset = event
+        .get("offset_ms")
+        .and_then(Value::as_u64)
+        .and_then(|offset| i64::try_from(offset).ok())
+        .and_then(chrono::TimeDelta::try_milliseconds)?;
+    start
+        .checked_add_signed(offset)
+        .map(|time| time.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
 }
 
 /// A recorded take array: one positive integer per regenerating level.
@@ -481,6 +582,10 @@ fn project_inventory(
                 ) {
                     invocation_starts.insert(invocation, start.to_utc());
                 }
+                // A new invocation leaves every earlier wait behind (spec/store.md §8).
+                for current in &mut nodes {
+                    current.end_waits();
+                }
                 if !saw_first_start {
                     recorded_run_name = text(event, "name")
                         .filter(|name| super::service::safe_name(name))
@@ -570,17 +675,9 @@ fn project_inventory(
                         current.cache = None;
                         current.outputs = json!({});
                         current.duration_ms = None;
-                        current.started_at = text(event, "invocation_id")
-                            .and_then(|invocation| invocation_starts.get(invocation))
-                            .zip(
-                                event
-                                    .get("offset_ms")
-                                    .and_then(Value::as_u64)
-                                    .and_then(|offset| i64::try_from(offset).ok())
-                                    .and_then(chrono::TimeDelta::try_milliseconds),
-                            )
-                            .and_then(|(start, offset)| start.checked_add_signed(offset))
-                            .map(|time| time.to_rfc3339_opts(chrono::SecondsFormat::Millis, true));
+                        current.started_at = dated(&invocation_starts, event);
+                        current.waited_ms = None;
+                        current.waited.clear();
                         if let Some(path) = text(event, "path") {
                             current.path = path.into();
                         }
@@ -620,14 +717,49 @@ fn project_inventory(
                 if name != "node_started" {
                     current.duration_ms = event.get("duration_ms").and_then(Value::as_u64);
                 }
+                // A start or an end leaves any wait behind; an ended start keeps how long it
+                // waited.
+                current.end_waits();
+            }
+            Some("node_retry") => {
+                // A new attempt leaves its step's waits behind (spec/store.md §8).
+                if let Some(current) =
+                    text(event, "id").and_then(|id| nodes.iter_mut().find(|entry| entry.id == id))
+                {
+                    current.end_waits();
+                }
+            }
+            Some(name @ ("call_waiting" | "call_admitted")) => {
+                // Only the start in progress waits for a route (spec/store.md §8).
+                let Some(current) = text(event, "id")
+                    .and_then(|id| nodes.iter_mut().find(|entry| entry.id == id))
+                    .filter(|entry| matches!(entry.state.as_str(), "running" | "waiting"))
+                else {
+                    continue;
+                };
+                let at = text(event, "invocation_id")
+                    .zip(event.get("offset_ms").and_then(Value::as_u64));
+                let call = text(event, "call").map(str::to_string);
+                if name == "call_waiting" {
+                    current.waits.entry(call).or_insert_with(|| Wait {
+                        route: text(event, "route").map(str::to_string),
+                        since: dated(&invocation_starts, event),
+                        at: at.map(|(invocation, offset)| (invocation.into(), offset)),
+                    });
+                } else if let Some(wait) = current.waits.shift_remove(&call) {
+                    // An admission of no open wait closes nothing.
+                    current.admit(wait, at);
+                }
+                current.show_waits();
             }
             _ => {}
         }
     }
     if matches!(state.as_str(), "succeeded" | "failed" | "cancelled") {
         for current in &mut nodes {
-            if current.state == "running" {
+            if matches!(current.state.as_str(), "running" | "waiting") {
                 current.state = "failed".into();
+                current.end_waits();
                 current.error = Some("The run ended before this step finished.".into());
                 current.interrupted = true;
             } else if current.state == "pending" {

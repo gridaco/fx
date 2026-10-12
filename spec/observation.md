@@ -81,6 +81,18 @@ Its additive `cancel_requested` event follows the unknown-event compatibility ru
 below. The bundled viewer derives cancellation intent from this event; its
 existing run-state enum remains unchanged.
 
+The additive `call_waiting` and `call_admitted` events ([store.md](store.md) §8,
+"Waiting for a route") follow the same rule. The `fx-viewer-run-v1` projection adds
+the instance state `waiting`: a started instance that has not ended and has an open
+wait, as store.md §8 defines one (closed by the `call_admitted` of the same `call`, or
+left behind by a new start, attempt or invocation). Such a node carries `waiting_for`
+(the route of its earliest open wait) and, when datable, `waiting_since` (that wait's
+start, dated as `started_at`). Each node's latest start also carries `waited_ms`, the
+time during which at least one of its admitted waits was open, once one has been
+admitted; the work it did is the time since `started_at` less that. A run that ends while a node waits marks it failed and
+`interrupted` as for `running`. A record without these events projects exactly as
+before. `waiting` is an instance state only; the run-state enum is unchanged.
+
 A CLI run plans and validates, initializes its record and flushes `run_started`,
 then announces an available viewing URL before run-phase execution. Planning may
 execute declared local `at: plan` nodes before that URL exists. In project mode,

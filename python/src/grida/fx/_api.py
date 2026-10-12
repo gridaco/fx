@@ -788,6 +788,7 @@ async def _call_owned(
     loop = asyncio.get_running_loop()
     environment = engine_environment()
     if args and args[0] == "run":
+        # Also tells the engine the inputs file is temporary: the run records no `repeat`.
         environment["GRIDA_FX_CANCEL_SOURCE"] = "sdk"
     try:
         transport, protocol = await loop.subprocess_exec(

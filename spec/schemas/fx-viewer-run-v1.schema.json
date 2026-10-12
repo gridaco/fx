@@ -168,10 +168,12 @@
           "enum": [
             "pending",
             "running",
+            "waiting",
             "succeeded",
             "failed",
             "skipped"
-          ]
+          ],
+          "description": "`waiting` is a started instance that has not ended and has an open wait: a `call_waiting` not yet closed by the `call_admitted` of the same `call`, by the instance starting again or making a new attempt (`node_retry`), or by a new invocation (`run_started`) (store.md \u00a78). A body that makes several calls at once is `waiting` while any of them waits, though another may be drawing. `running` is any other started instance that has not ended."
         },
         "reads": {
           "type": "array",
@@ -210,6 +212,21 @@
           "type": "string",
           "format": "date-time",
           "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+        },
+        "waiting_for": {
+          "description": "The route a `waiting` instance waits for a slot of: the `route` of its earliest open wait. Present only while `state` is `waiting`.",
+          "type": "string"
+        },
+        "waiting_since": {
+          "description": "When the wait `waiting_for` describes began, dated as `started_at` is: the `call_waiting` of the instance's earliest open wait. Present only while `state` is `waiting` and the record can date it.",
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+        },
+        "waited_ms": {
+          "description": "How long the instance's latest start waited for route slots, over the waits that the `call_admitted` of the same `call` ended in the invocation they began in: the time during which at least one of them was open, so waits that overlap count once. A wait left behind by a new attempt or a new invocation is not counted. The work it did since `started_at` is the time since then less this. Absent when no wait of that start was admitted, as in every older record.",
+          "type": "integer",
+          "minimum": 0
         },
         "ports": {
           "$ref": "#/$defs/ports"

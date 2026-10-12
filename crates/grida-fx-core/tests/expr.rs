@@ -132,6 +132,15 @@ fn scope() -> MapScope {
     let names = [
         ("x", list(&[num(1.0), num(2.0), num(3.0)])),
         ("m", obj(&[("a", num(1.0)), ("b", Val::Null)])),
+        ("inputs", obj(&[("size", Val::Null)])),
+        (
+            "steps",
+            obj(&[(
+                "w",
+                obj(&[("outputs", obj(&[("image", s("x"))])), ("facts", obj(&[]))]),
+            )]),
+        ),
+        ("tables", obj(&[("rows", list(&[obj(&[("id", s("a"))])]))])),
         ("s", s("abc")),
         ("n", Val::Null),
         ("M", Val::Missing),
@@ -625,6 +634,61 @@ fn coalescing() {
     assert_eq!(ok("M.x.y ?? 'd'"), s("d"));
     assert_eq!(ok("1 ?? unknown"), num(1.0));
     assert_eq!(ok("n ?? M ?? 4"), num(4.0));
+}
+
+#[test]
+fn coalescing_a_missing_field() {
+    // A field an object lacks, as `??`'s whole left operand, falls back (spec/expressions.md §2).
+    assert_eq!(ok("m.zz ?? 'd'"), s("d"));
+    assert_eq!(ok("m['zz'] ?? 'd'"), s("d"));
+    assert_eq!(ok("(m.zz) ?? 'd'"), s("d"));
+    assert_eq!(ok("m.zz ?? D.zz ?? 4"), num(4.0));
+    // Present fields keep their value; a present null falls back as before.
+    assert_eq!(ok("m.a ?? 'd'"), num(1.0));
+    assert_eq!(ok("m.b ?? 'd'"), s("d"));
+    // Nested: only the last access may be missing.
+    assert_eq!(ok("L[4].zz ?? 'd'"), s("d"));
+    assert_eq!(ok("j.zz ?? 'd'"), s("d"));
+    assert_eq!(ok("j.list ?? 'd'"), list(&[num(5.0), num(6.0)]));
+    assert_eq!(ok("facts(f).fps ?? 24"), num(24.0));
+    assert_eq!(err("m.zz.y ?? 'd'"), "no field 'zz'");
+    assert_eq!(err("m.zz[0] ?? 'd'"), "no field 'zz'");
+    // A missing field anywhere else still fails.
+    assert_eq!(err("m.zz"), "no field 'zz'");
+    assert_eq!(err("m.zz == null"), "no field 'zz'");
+    assert_eq!(err("len(m.zz) ?? 0"), "no field 'zz'");
+    assert_eq!(err("!m.zz ?? 0"), "no field 'zz'");
+    assert_eq!(err("(m.zz == null) ?? 0"), "no field 'zz'");
+    assert_eq!(err("n ?? m.zz"), "no field 'zz'");
+    assert_eq!(err("m.zz || 'd'"), "no field 'zz'");
+    // Only a missing member of an object: other refusals stand.
+    assert_eq!(err("x.name ?? 'd'"), "a list has no field 'name'");
+    assert_eq!(err("s.x ?? 'd'"), "text has no field 'x'");
+    assert_eq!(err("m[1] ?? 'd'"), "no entry 1");
+    assert_eq!(err("x[5] ?? 'd'"), "index 5 is outside a list of 3");
+    assert_eq!(
+        err("f.width ?? 'd'"),
+        "a file has no field 'width'; use facts(file).width"
+    );
+    assert_eq!(err("zz.a ?? 'd'"), "unknown name 'zz'");
+    // A name the workflow declares must exist: an input not given is null, a missing one is a
+    // misspelling. Fields inside their values fall back.
+    assert_eq!(ok("inputs.size ?? 'auto'"), s("auto"));
+    assert_eq!(err("inputs.sise ?? 'auto'"), "no field 'sise'");
+    assert_eq!(err("inputs['sise'] ?? 'auto'"), "no entry 'sise'");
+    assert_eq!(err("tables.rowz ?? 'd'"), "no field 'rowz'");
+    assert_eq!(ok("tables.rows[0].note ?? 'none'"), s("none"));
+    // A step's outputs are declared by its type; its facts are what its body reported.
+    assert_eq!(err("steps.w.outputs.imgae ?? 'd'"), "no field 'imgae'");
+    assert_eq!(ok("steps.w.facts.verdict ?? 'accept'"), s("accept"));
+    // Missing, failed and pending targets behave as before.
+    assert_eq!(ok("M.zz ?? 'd'"), s("d"));
+    assert_eq!(ok("F.zz ?? 'd'"), Val::Failed("a#1".into()));
+    assert_eq!(refs(&ok("P.zz ?? 'd'")), ["a#1"]);
+    assert_eq!(ok("P.zz ?? 'd'"), ok("P.zz ?? 'd'"));
+    assert_eq!(refs(&ok("P.zz ?? Q")), ["a#1", "b#1"]);
+    // The index is evaluated before the item, and may itself be pending.
+    assert_eq!(refs(&ok("m[P] ?? 'd'")), ["a#1"]);
 }
 
 #[test]
@@ -1213,6 +1277,15 @@ fn views_are_delegated_and_finished() {
         ["rep['bo']#1"]
     );
     assert_eq!(view_eval("rep['zz']").unwrap_err().0, "no instance ['zz']");
+    // `??` defaults only a field an object lacks: a step's unknown names are still refused.
+    assert_eq!(
+        view_eval("node.foo ?? 1").unwrap_err().0,
+        "a step has outputs, facts and take, not 'foo'"
+    );
+    assert_eq!(
+        view_eval("rep['zz'] ?? 1").unwrap_err().0,
+        "no instance ['zz']"
+    );
     // A `.*` result finishes into a collection.
     assert_eq!(
         view_eval("done.text").unwrap(),

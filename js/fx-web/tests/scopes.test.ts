@@ -84,6 +84,27 @@ describe("hierarchical graph projection", () => {
     expect(canvasGraph(parseViewerRun(view), "scope:batch.item#1").nodes.find((node) => node.id === "instance:a.paint#1"))
       .toMatchObject({ state: "running", started_at: "2026-10-11T09:01:00.000Z" });
   });
+  test("a step waiting for its route carries the route and its wait, and so does a workflow whose steps all wait", () => {
+    const view = run(nestedPlan());
+    const at = (id: string) => view.nodes.find((node) => node.id === id)!;
+    Object.assign(at("a.paint#1"), { state: "waiting", started_at: "2026-10-11T09:00:00.000Z", waiting_for: "img-a@acme", waiting_since: "2026-10-11T09:01:00.000Z", waited_ms: 4_000 });
+    Object.assign(at("deep.paint#1"), { state: "waiting", waiting_for: "img-a@acme", waiting_since: "2026-10-11T09:00:40.000Z" });
+    for (const [field, value] of [["waiting_since", "soon"], ["waited_ms", -1], ["waited_ms", 1.5], ["waiting_for", 7]] as const) {
+      const malformed = structuredClone(view);
+      Object.assign(malformed.nodes.find((node) => node.id === "a.paint#1")!, { [field]: value });
+      expect(() => parseViewerRun(malformed)).toThrow();
+    }
+    expect(canvasGraph(parseViewerRun(view)).nodes.find((node) => node.id === "scope:batch.item#1"))
+      .toMatchObject({ state: "waiting", waiting_for: "img-a@acme", waiting_since: "2026-10-11T09:00:40.000Z" });
+    expect(canvasGraph(parseViewerRun(view), "scope:batch.item#1").nodes.find((node) => node.id === "instance:a.paint#1"))
+      .toMatchObject({ state: "waiting", waiting_for: "img-a@acme", waiting_since: "2026-10-11T09:01:00.000Z", waited_ms: 4_000 });
+    // Waiting for two routes, the workflow names none; one running step makes it running.
+    at("deep.paint#1").waiting_for = "img-b@acme";
+    expect(canvasGraph(parseViewerRun(view)).nodes.find((node) => node.id === "scope:batch.item#1")!.waiting_for).toBeUndefined();
+    at("deep.paint#1").state = "running";
+    expect(canvasGraph(parseViewerRun(view)).nodes.find((node) => node.id === "scope:batch.item#1"))
+      .toMatchObject({ state: "running", started_at: "2026-10-11T09:00:00.000Z" });
+  });
   test("collapses imported occurrences inside an expanded group and preserves exact public aliases", () => {
     const plan = nestedPlan();
     const before = JSON.stringify(plan);

@@ -1,0 +1,178 @@
+fx: workflow/v1
+id: pet
+title: Pet
+description: >-
+  An animated pet from a description or a picture, drawn by your own Codex: one picture of the
+  pet first, then one strip of poses per state drawn from it, cut into equal cells and laid out
+  as one sprite sheet, with a preview of each state. With the default states, the sheet and its
+  pet.json are a pet the Codex app loads.
+
+inputs:
+  id:          { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,39}$", description: "The pet's folder name: ~/.codex/pets/<id>" }
+  name:        { type: string, min_length: 1, max_length: 40 }
+  description: { type: string, min_length: 1, max_length: 200, description: "One sentence about the pet" }
+  look:        { type: string, min_length: 1, description: "The pet in words: shape, colours, face and markings, the same in every state" }
+  reference:   { type: file, kind: image, optional: true, description: "A picture of the pet to start from: a drawing, a photo of a toy, a character" }
+  style:       { type: string, enum: [sticker, pixel, plush, clay, vector, toy, painterly], default: sticker }
+  states:                                   # leave it out for Codex's nine states (tables.codex_states)
+    type: list
+    optional: true
+    min_items: 1
+    max_items: 16
+    items:
+      id:        { type: string, pattern: "^[a-z0-9][a-z0-9-]*$" }
+      frames:    { type: integer, minimum: 1, maximum: 8 }
+      action:    { type: string, optional: true }                 # what the pet does, for the drawing
+      mirror_of: { type: string, optional: true }                 # flip that state's frames instead of drawing
+      durations: { type: list, items: { type: integer, minimum: 20 }, optional: true }   # ms per frame
+  cell_width:  { type: integer, default: 192, minimum: 32, maximum: 512 }
+  cell_height: { type: integer, default: 208, minimum: 32, maximum: 512 }
+
+tables:
+  styles:
+    sticker:   a clean sticker illustration with a bold dark outline, flat colours and one soft shade
+    pixel:     crisp pixel art with a small palette, hard pixel edges and no blur
+    plush:     a soft plush toy with a visible fabric texture and neat seams
+    clay:      a handmade clay figure with soft matte surfaces
+    vector:    flat vector art built from simple geometric shapes, with no outline
+    toy:       a glossy vinyl toy in soft studio light
+    painterly: a storybook painting with soft, visible brushwork
+  codex_states:                             # the rows of Codex's pet sheet, in its order and timing
+    - id: idle
+      frames: 6
+      durations: [280, 110, 110, 140, 140, 320]
+      action: resting in place, calm and quiet. It breathes, so its body rises and falls a little, and blinks once. No walking, waving or new objects.
+    - id: running-right
+      frames: 8
+      durations: [120, 120, 120, 120, 120, 120, 120, 220]
+      action: running to the right. It faces right and runs with a clear alternating stride, its body bobbing with each step.
+    - id: running-left
+      frames: 8
+      durations: [120, 120, 120, 120, 120, 120, 120, 220]
+      mirror_of: running-right
+    - id: waving
+      frames: 4
+      durations: [140, 140, 140, 280]
+      action: waving hello. It raises one arm or paw, waves it, and lowers it again.
+    - id: jumping
+      frames: 5
+      durations: [140, 140, 140, 140, 280]
+      action: jumping in place. It crouches, springs up, reaches the top of the jump, comes down and lands.
+    - id: failed
+      frames: 8
+      durations: [140, 140, 140, 140, 140, 140, 140, 240]
+      action: something went wrong. It slumps into a sad, droopy pose with downcast eyes; a tear or a small puff of smoke may touch its body.
+    - id: waiting
+      frames: 6
+      durations: [150, 150, 150, 150, 150, 260]
+      action: waiting for an answer. It looks up expectantly and shifts hopefully, as if it has asked a question.
+    - id: running
+      frames: 6
+      durations: [120, 120, 120, 120, 120, 220]
+      action: busy at work on a task, staying in place. A focused face, busy empty paws or hands, small bobs of effort. It holds nothing, and does not walk or run.
+    - id: review
+      frames: 6
+      durations: [150, 150, 150, 150, 150, 280]
+      action: looking over finished work. It leans in, tilts its head with interest, blinks slowly and nods.
+
+let:
+  states: ${{ inputs.states ?? tables.codex_states }}
+
+steps:
+  sketch:                                   # the pet from its look alone
+    if: ${{ inputs.reference == null }}
+    uses: fx/image.generate@1
+    with:
+      prompt: ./prompts/base.md
+      background: transparent
+      vars:
+        source: ""
+        style: ${{ lookup(tables.styles, inputs.style) }}
+
+  redraw:                                   # the pet from the reference picture
+    if: ${{ inputs.reference != null }}
+    uses: fx/image.edit@1
+    with:
+      image: ${{ inputs.reference }}
+      prompt: ./prompts/base.md
+      background: transparent
+      vars:
+        source: "Draw the character in input image 1: keep its shape, proportions, colours, face and markings, and draw it anew in the style below. "
+        style: ${{ lookup(tables.styles, inputs.style) }}
+
+  base:                                     # the picture every state is drawn from
+    uses: fx/select@1
+    with: { first_of: ["${{ steps.redraw.outputs.image }}", "${{ steps.sketch.outputs.image }}"] }
+
+  state:
+    title: Draw each state
+    for_each: ${{ let.states }}
+    key: ${{ item.id }}
+    if: ${{ (item.mirror_of ?? null) == null }}   # else `sheet` flips its source's row
+    steps:
+      draw:                                 # one strip of poses, on Codex, from the base picture
+        uses: fx/image.generate@1
+        with:
+          prompt: ./prompts/row.md
+          background: transparent
+          references: ["${{ steps.base.outputs.value }}"]
+          vars:
+            frames: ${{ item.frames }}
+            action: ${{ item.action ?? item.id }}
+            style: ${{ lookup(tables.styles, inputs.style) }}
+
+      poses:                                # the right number of poses, none cut by the edge
+        uses: ./nodes/sprite.py#poses
+        judges: draw
+        with: { strip: "${{ steps.draw.outputs.image }}", frames: "${{ item.frames }}" }
+        on_reject: { regenerate: { max: 3, then: fail } }
+
+      row:                                  # the poses in equal cells, at one scale
+        uses: ./nodes/sprite.py#row
+        with:
+          strip: ${{ steps.draw.outputs.image }}
+          frames: ${{ item.frames }}
+          cell_width: ${{ inputs.cell_width }}
+          cell_height: ${{ inputs.cell_height }}
+
+  sheet:                                    # every row, in the order of the states
+    uses: ./nodes/sprite.py#sheet
+    with:
+      rows: ${{ steps.state.*.row.outputs.image }}
+      states: ${{ let.states }}
+      cell_width: ${{ inputs.cell_width }}
+      cell_height: ${{ inputs.cell_height }}
+      id: ${{ inputs.id }}
+      name: ${{ inputs.name }}
+      description: ${{ inputs.description }}
+
+  preview:                                  # each state played back at its own timing
+    for_each: ${{ let.states }}
+    key: ${{ item.id }}
+    uses: ./nodes/sprite.py#preview
+    with:
+      sheet: ${{ steps.sheet.outputs.spritesheet }}
+      states: ${{ let.states }}
+      state: ${{ item.id }}
+      cell_width: ${{ inputs.cell_width }}
+      cell_height: ${{ inputs.cell_height }}
+
+  pack:                                     # the pet's folder; pet.json only for Codex's layout
+    uses: fx/package@1
+    with:
+      files:
+        "pet.json": ${{ steps.sheet.outputs.pet }}
+        "spritesheet.webp": ${{ steps.sheet.outputs.spritesheet }}
+        "sprite.json": ${{ steps.sheet.outputs.layout }}
+        "previews/{key}.gif": ${{ steps.preview.*.outputs.image }}
+      manifest:
+        id: ${{ inputs.id }}
+        name: ${{ inputs.name }}
+
+outputs:
+  base:        ${{ steps.base.outputs.value }}
+  spritesheet: ${{ steps.sheet.outputs.spritesheet }}
+  pet:         ${{ steps.sheet.outputs.pet }}
+  layout:      ${{ steps.sheet.outputs.layout }}
+  previews:    ${{ steps.preview.*.outputs.image }}
+  files:       ${{ steps.pack.outputs.files }}

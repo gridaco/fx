@@ -144,7 +144,7 @@ route_fingerprint = digest({
 })
 ```
 
-Price, features, concurrency and pacing are not part of it: repricing a route never invalidates a cache.
+Price, features, input-picture limits, concurrency and pacing are not part of it: repricing a route never invalidates a cache.
 
 **Route tables.** The catalog is built from these tables, in this order:
 1. the built-in default table, left out when any `--routes` file is given;

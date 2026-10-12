@@ -15,6 +15,7 @@ pub mod nodes;
 pub mod observe;
 pub mod planning;
 pub mod project;
+mod repeat;
 pub mod run;
 mod run_catalog;
 mod run_set;

@@ -950,6 +950,7 @@ fn the_real_python_host_answers_for_a_stand_in() {
         python,
         project_root: root.clone(),
         sources: Vec::new(),
+        check_version: false,
     };
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -1071,6 +1072,7 @@ fn a_stand_in_host_that_exits_with_its_pipes_held_is_seen_to_go() {
         python,
         project_root: cwd.clone(),
         sources: Vec::new(),
+        check_version: false,
     };
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()

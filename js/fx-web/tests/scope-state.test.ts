@@ -8,6 +8,8 @@ test("scope summaries keep static uncertainty and runtime failure truthful", () 
   expect(scopeState(["done", "absent"], true)).toBe("done");
   expect(scopeState(["failed", "planned"], true)).toBe("failed");
   expect(scopeState(["running", "failed"], false)).toBe("running");
+  expect(scopeState(["waiting", "running", "pending"], false)).toBe("running");
+  expect(scopeState(["waiting", "failed", "succeeded"], false)).toBe("waiting");
   expect(scopeState(["succeeded", "failed"], false)).toBe("failed");
   expect(scopeState(["succeeded", "skipped"], false)).toBe("succeeded");
   expect(scopeState(["skipped", "absent"], false)).toBe("skipped");

@@ -10,7 +10,10 @@
 //! each response to the request waiting for it and each notification to the thread it names, and
 //! declines every request Codex sends (an approval, a question). A call has a thread of its own
 //! ([`Connection::start_thread`]); a response to `thread/start` opens the thread's notifications
-//! before the reader reads on, so none is missed.
+//! before the reader reads on, so none is missed. A response to `turn/start` whose call is gone
+//! (dropped before Codex named its turn) has the reader interrupt the turn it names
+//! ([`Connection::start_turn`]). A request Codex rejects as overloaded was not received
+//! ([`super::Stop::NotReceived`]).
 //!
 //! A connection whose Codex exited is replaced by the next call. Shutting down closes stdin and
 //! ends the process group ([`super::process::Group::finish`]).
@@ -44,6 +47,12 @@ enum Pending {
     Plain(oneshot::Sender<Result<Value, i64>>),
     /// A `thread/start`: its thread's notifications open with the response.
     Thread(oneshot::Sender<ThreadOpened>),
+    /// A `turn/start` of `thread`: the reader interrupts the turn it starts when nobody is left
+    /// to read the response.
+    Turn {
+        thread: String,
+        answer: oneshot::Sender<Result<Value, i64>>,
+    },
 }
 
 /// What the reader and the callers share.
@@ -146,11 +155,29 @@ impl Connection {
     pub(super) async fn request(&self, method: &'static str, params: Value) -> Result<Value, Stop> {
         let (answer, response) = oneshot::channel();
         self.send(method, params, Pending::Plain(answer))?;
-        match response.await {
+        self.answer(method, response.await)
+    }
+
+    /// Sends `turn/start` on `thread` and waits for its response. Dropped before it, the call
+    /// leaves the response to the reader, which interrupts the turn it names.
+    pub(super) async fn start_turn(&self, thread: &str, params: Value) -> Result<Value, Stop> {
+        let (answer, response) = oneshot::channel();
+        let pending = Pending::Turn {
+            thread: thread.to_string(),
+            answer,
+        };
+        self.send("turn/start", params, pending)?;
+        self.answer("turn/start", response.await)
+    }
+
+    fn answer(
+        &self,
+        method: &str,
+        response: Result<Result<Value, i64>, oneshot::error::RecvError>,
+    ) -> Result<Value, Stop> {
+        match response {
             Ok(Ok(result)) => Ok(result),
-            Ok(Err(code)) => Err(Stop::Failed(format!(
-                "Codex refused {method} (error {code})"
-            ))),
+            Ok(Err(code)) => Err(refusal(method, code)),
             Err(_) => Err(Stop::Failed(self.ended())),
         }
     }
@@ -165,9 +192,7 @@ impl Connection {
         match response.await {
             Ok((Ok(result), Some(notes))) => Ok((result, notes)),
             Ok((Ok(_), None)) => Err(Stop::Failed("Codex started no thread".into())),
-            Ok((Err(code), _)) => Err(Stop::Failed(format!(
-                "Codex refused thread/start (error {code})"
-            ))),
+            Ok((Err(code), _)) => Err(refusal("thread/start", code)),
             Err(_) => Err(Stop::Failed(self.ended())),
         }
     }
@@ -191,6 +216,15 @@ impl Connection {
             let _ = task.await;
         }
         verified
+    }
+}
+
+/// An error response to `method`: not received when Codex was overloaded, else a failure.
+fn refusal(method: &str, code: i64) -> Stop {
+    if code == protocol::OVERLOADED {
+        Stop::NotReceived(protocol::OVERLOADED_REASON.into())
+    } else {
+        Stop::Failed(format!("Codex refused {method} (error {code})"))
     }
 }
 
@@ -242,6 +276,15 @@ fn route(routes: &Routes, writer: &mpsc::WeakUnboundedSender<Value>, message: Me
                     notes
                 });
                 let _ = answer.send((result, notes));
+            }
+            Some(Pending::Turn { thread, answer }) => {
+                // The call is gone: stop the turn nobody will read.
+                if let Err(Ok(result)) = answer.send(result)
+                    && let Some(turn) = protocol::text_at(&result, &["turn", "id"])
+                    && let Some(writer) = writer.upgrade()
+                {
+                    let _ = writer.send(protocol::interrupt(&thread, &turn));
+                }
             }
             None => {}
         },
@@ -304,6 +347,9 @@ pub struct CodexRuntime {
     /// The program, or the refusal of every call.
     program: Result<PathBuf, String>,
     state: tokio::sync::Mutex<State>,
+    /// The user's usage limit, once a call found it reached: `Some(resets_at)`, the unix time it
+    /// resets when Codex gave it. No call starts while it holds.
+    limit: Mutex<Option<Option<i64>>>,
 }
 
 impl CodexRuntime {
@@ -311,6 +357,33 @@ impl CodexRuntime {
         CodexRuntime {
             program,
             state: tokio::sync::Mutex::new(State::Idle),
+            limit: Mutex::new(None),
+        }
+    }
+
+    /// A call found the usage limit reached; it holds until `resets_at` (for the rest of the
+    /// invocation when Codex gave no time).
+    pub(super) fn reached(&self, resets_at: Option<i64>) {
+        *locked(&self.limit) = Some(resets_at);
+    }
+
+    /// The refusal of a new call while the usage limit holds, at unix time `now`.
+    pub(super) fn limited(&self, now: i64) -> Option<String> {
+        let mut limit = locked(&self.limit);
+        match *limit {
+            None => None,
+            Some(Some(at)) if now >= at => {
+                *limit = None;
+                None
+            }
+            Some(Some(at)) => Some(format!(
+                "the Codex usage limit is reached; it resets at unix time {at}, and no Codex \
+                 call starts before then"
+            )),
+            Some(None) => Some(
+                "the Codex usage limit is reached, and no Codex call starts again in this run"
+                    .to_string(),
+            ),
         }
     }
 

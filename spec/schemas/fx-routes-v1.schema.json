@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:grida-fx:schema:fx-routes-v1",
   "title": "FX route table (fx: routes/v1)",
-  "description": "Which `model@provider` serves a capability, what it costs, the features it supports, its pacing, and the contract that enters its fingerprint (identity.md §7). Tables combine in the order identity.md §7 gives: a later table's entry for the same capability and route replaces an earlier one.",
+  "description": "Which `model@provider` serves a capability, what it costs, the features it supports, how many input pictures it takes, its pacing, and the contract that enters its fingerprint (identity.md §7). Tables combine in the order identity.md §7 gives: a later table's entry for the same capability and route replaces an earlier one.",
   "type": "object",
   "required": [
     "fx",
@@ -160,6 +160,11 @@
               "minLength": 1
             },
             "uniqueItems": true
+          },
+          "max_input_pictures": {
+            "description": "The most input pictures one call takes (`image` and `references`; a mask does not count). A step whose request would carry more is refused while planning (capabilities.md §1).",
+            "type": "integer",
+            "minimum": 1
           },
           "concurrency": {
             "description": "The most calls of this route at once.",

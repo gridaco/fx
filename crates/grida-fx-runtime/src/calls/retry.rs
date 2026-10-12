@@ -192,6 +192,16 @@ impl HoldBook for Ledger {
     }
 }
 
+/// What the call path records about a send's wait for its route's slot (spec/store.md §8,
+/// "Waiting for a route"): told only when a send cannot take its slot at once.
+pub trait Waits: Send + Sync {
+    /// The send waits for its slot (`call_waiting`).
+    fn waiting(&self);
+    /// The waiting send took its slot (`call_admitted`). Not told for a wait the run's
+    /// cancellation ended.
+    fn admitted(&self);
+}
+
 /// An engine-side check of an answer's canonical form ([`Attempts::check`]): a refusal is a
 /// sentence, and the attempt is failed as billed.
 pub type AnswerCheck<'a> = dyn Fn(&Answer) -> Result<(), String> + Sync + 'a;
@@ -226,6 +236,8 @@ pub struct Attempts<'a> {
     pub book: &'a dyn HoldBook,
     pub jobs: &'a dyn JobBook,
     pub pacing: &'a dyn Admission,
+    /// Told about each send's wait for its slot; `None` records nothing.
+    pub waits: Option<&'a dyn Waits>,
     pub cancel: &'a Cancel,
     /// Invocation admission: every send/resend/collection shares cancellation acceptance.
     pub control: Option<&'a Arc<crate::run_control::RunControl>>,
@@ -679,11 +691,23 @@ impl Attempts<'_> {
         if self.cancel.is_cancelled() {
             return None;
         }
+        let waited = std::sync::atomic::AtomicBool::new(false);
+        let waiting = || {
+            waited.store(true, std::sync::atomic::Ordering::Relaxed);
+            if let Some(waits) = self.waits {
+                waits.waiting();
+            }
+        };
         let slot = tokio::select! {
             biased;
             () = self.cancel.cancelled() => None,
-            slot = self.pacing.admit(route_id, self.limit, self.rpm, self.cancel) => slot,
+            slot = self.pacing.admit(route_id, self.limit, self.rpm, self.cancel, &waiting) => slot,
         }?;
+        if waited.load(std::sync::atomic::Ordering::Relaxed)
+            && let Some(waits) = self.waits
+        {
+            waits.admitted();
+        }
         let admission = match self.control {
             Some(control) => Some(control.admit()?),
             None => None,
@@ -904,6 +928,7 @@ mod tests {
             _limit: Option<u32>,
             _rpm: Option<u32>,
             _cancel: &'a Cancel,
+            _waiting: &'a (dyn Fn() + Sync),
         ) -> BoxFuture<'a, Option<Slot>> {
             Box::pin(async { Some(Slot::free()) })
         }
@@ -978,6 +1003,7 @@ mod tests {
                 book: &Book,
                 jobs: &Book,
                 pacing: &Book,
+                waits: None,
                 cancel: &self.cancel,
                 backoff: Backoff {
                     initial: Duration::ZERO,

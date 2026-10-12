@@ -1,0 +1,11 @@
+# `??` defaults a field a table row lacks: rows keep only the fields written, so `item.note` is
+# absent from the second row. Under `??` it falls back; elsewhere it would be refused.
+steps:
+- argv:
+  - expand
+  - case
+  - --routes
+  - routes.yaml
+  save: expand.json
+  json: true
+  status: 0

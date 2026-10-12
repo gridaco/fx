@@ -10,8 +10,10 @@
 # prices of the same model elsewhere. A call is booked at GG's settled charge, else at its whole
 # hold (spec/providers.md §9.7, §10).
 #
-# The Codex route (imagegen@codex) runs on the user's own signed-in Codex, which counts it against
-# their plan: it is free to FX, $0, and one runs at a time (spec/providers.md §9.6).
+# The Codex routes (imagegen@codex, for image.generate and image.edit) run on the user's own
+# signed-in Codex, which counts them against their plan: they are free to FX, $0, take at most 5
+# input pictures, and share one route id, so at most three of their calls run at once on the
+# invocation's one Codex (spec/providers.md §9.6, §10).
 #
 # The other image routes are priced per call, in tiers by `size`. A tier's low is the output tokens at
 # quality max for that size, measured or derived from a measured bill; its high adds an allowance
@@ -23,8 +25,8 @@
 # the route serves: editing one changes those keys. Its `adapter` (and, for the Grida Gateway,
 # OpenAI and OpenRouter routes, `adapter_behavior`) is the one spec/providers.md §9 names for the
 # capability's adapter on that provider. The image routes carry `adapter_behavior` as a string,
-# every other route as the integer 1. Price, features, concurrency and requests_per_minute are
-# not identity.
+# every other route as the integer 1. Price, features, max_input_pictures, concurrency and
+# requests_per_minute are not identity.
 #
 # Features are the names spec/capabilities.md lists for each capability. tests/routes.rs holds
 # this file to both specs and to the adapters of grida-fx-providers.
@@ -134,6 +136,7 @@ routes:
         low_usd: 0.1
         high_usd: 0.32
   requests_per_minute: 150
+  max_input_pictures: 16
   features:
   - alpha
   - authored_prompt_passthrough
@@ -151,6 +154,23 @@ routes:
   contract:
     adapter: fx-openai-image-v1
     adapter_behavior: '1'
+- capability: image.edit
+  route: imagegen@codex
+  price:
+    low_usd: 0
+    high_usd: 0
+  concurrency: 3
+  max_input_pictures: 5
+  features:
+  - alpha
+  - auto_background
+  - flexible_size
+  - image_input
+  - opaque_background
+  - png_output
+  contract:
+    adapter: fx-codex-image-v1
+    adapter_behavior: '2'
 - capability: image.edit
   route: openai/gpt-image-2.5-sunburst@gg
   price:
@@ -242,6 +262,7 @@ routes:
         low_usd: 0.28
         high_usd: 0.79
   requests_per_minute: 150
+  max_input_pictures: 16
   features:
   - authored_prompt_passthrough
   - auto_background
@@ -301,6 +322,7 @@ routes:
       2880x960:
         low_usd: 0.1
         high_usd: 0.32
+  max_input_pictures: 16
   features:
   - alpha
   - authored_prompt_passthrough
@@ -387,17 +409,19 @@ routes:
   price:
     low_usd: 0
     high_usd: 0
-  concurrency: 1
+  concurrency: 3
+  max_input_pictures: 5
   features:
   - alpha
   - auto_background
   - flexible_size
+  - image_input
   - opaque_background
   - png_output
   - text_to_image
   contract:
     adapter: fx-codex-image-v1
-    adapter_behavior: '1'
+    adapter_behavior: '2'
 - capability: image.generate
   route: openai/gpt-image-2.5-sunburst@gg
   price:

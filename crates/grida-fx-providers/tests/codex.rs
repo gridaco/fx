@@ -142,9 +142,32 @@ fn generated(bytes: &[u8]) -> String {
 
 fn call(request: Value) -> TestCall {
     CallBuilder::new("image.generate", "imagegen@codex")
-        .contract(json!({"adapter": codex::ADAPTER, "adapter_behavior": "1"}))
+        .contract(contract())
         .request(request)
         .build()
+}
+
+fn contract() -> Value {
+    json!({"adapter": codex::ADAPTER, "adapter_behavior": "2"})
+}
+
+/// A call of `capability` whose request is `request` plus the pictures `make` stores.
+fn with_pictures(capability: &str, make: impl FnOnce(&mut CallBuilder) -> Value) -> TestCall {
+    let mut builder = CallBuilder::new(capability, "imagegen@codex").contract(contract());
+    let request = make(&mut builder);
+    builder.request(request).build()
+}
+
+/// Waits up to 10 s for `path` to exist.
+async fn appears(path: &Path) -> bool {
+    let started = Instant::now();
+    while !path.exists() {
+        if started.elapsed() > Duration::from_secs(10) {
+            return false;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    true
 }
 
 fn kite() -> TestCall {
@@ -525,13 +548,44 @@ fn a_usage_limit_ends_the_call_with_its_reset_time() {
             "failure": {"type": "usageLimitExceeded", "limitId": "codex", "resetsAt": 1792311096}}),
     );
     let script = format!("{}{limited}{}", opening(), completed_a());
+    // The limit holds for the invocation's later calls, which start nothing until it resets.
+    let (sent, verified) =
+        on_one_runtime(Ok(fake(&script).program), 20, 30, |adapter| async move {
+            let first = adapter.send(&kite().call).await;
+            (first, adapter.send(&kite().call).await)
+        });
+    assert!(verified);
     assert_eq!(
-        send(&fake(&script)),
+        sent.0,
         failed(
             "Codex image generation failed: the Codex usage limit is reached; it resets at unix \
              time 1792311096"
         )
     );
+    assert_eq!(
+        sent.1,
+        refused(
+            "the Codex usage limit is reached; it resets at unix time 1792311096, and no Codex \
+             call starts before then"
+        )
+    );
+    // A limit whose reset time has passed holds no more.
+    let png = media::png(2, 2, None);
+    let passed = format!(
+        "{}{}{}{}{}",
+        opening(),
+        limited.replace("1792311096", "1"),
+        // A turn that failed is not interrupted: nothing more to read.
+        completed_a().replace("read -r line\n", ""),
+        call_script(5, "thread-b", "turn-b") + &image_item("thread-b", "turn-b", &png),
+        completed("thread-b", "turn-b")
+    );
+    let (sent, _) = on_one_runtime(Ok(fake(&passed).program), 20, 30, |adapter| async move {
+        let first = adapter.send(&kite().call).await;
+        (first, adapter.send(&kite().call).await)
+    });
+    assert!(matches!(sent.0, Sent::Failed { .. }));
+    assert_eq!(answered(sent.1).files["image"].bytes, png);
 }
 
 #[test]
@@ -686,6 +740,111 @@ echo $! > "$(dirname "$0")/helper.pid"
     assert!(gone(&stalled.marker("helper.pid")));
 }
 
+/// The pictures are copies in the thread's own folder, named in order, by absolute path, as the
+/// image tool's `referenced_image_paths`; the folder is gone after the call.
+#[test]
+fn pictures_are_copied_into_the_call_s_folder_and_named_in_order() {
+    let png = media::png(2, 2, None);
+    let webp = b"RIFF\x0c\x00\x00\x00WEBPVP8 fake".to_vec();
+    let call = with_pictures("image.edit", |builder| {
+        let image = builder.file("image/png", &png);
+        let reference = builder.file("image/webp", &webp);
+        json!({"prompt": "a red kite", "image": image, "references": [reference],
+               "background": "transparent"})
+    });
+    let thread = r#"read -r line
+here="$(dirname "$0")"
+cwd=$(printf '%s' "$line" | sed 's/.*"cwd":"\([^"]*\)".*/\1/')
+printf '%s' "$cwd" > "$here/cwd"
+echo '{"id":3,"result":{"thread":{"id":"thread-a"},"model":"agent-5.5","modelProvider":"openai"}}'
+read -r line
+case "$line" in *"Set transparent_background to true. Set referenced_image_paths to these input images, in this order: \`$cwd/picture-01.png\`, \`$cwd/picture-02.webp\`. Do not run"*) ;; *) exit 7 ;; esac
+cp "$cwd/picture-01.png" "$here/seen-01"
+cp "$cwd/picture-02.webp" "$here/seen-02"
+echo '{"id":4,"result":{"turn":{"id":"turn-a","status":"inProgress"}}}'
+"#;
+    let png_out = media::png(3, 3, Some(0));
+    let fake = fake(&format!(
+        "{LISTING}{SIGNED_IN}{thread}{}{}",
+        generated(&png_out),
+        completed_a()
+    ));
+    let (sent, verified) = on_one_runtime(Ok(fake.program.clone()), 20, 30, |adapter| async move {
+        adapter.send(&call.call).await
+    });
+    assert!(verified);
+    assert_eq!(answered(sent).files["image"].bytes, png_out);
+    assert_eq!(std::fs::read(fake.marker("seen-01")).unwrap(), png);
+    assert_eq!(std::fs::read(fake.marker("seen-02")).unwrap(), webp);
+    let cwd = std::fs::read_to_string(fake.marker("cwd")).unwrap();
+    assert!(Path::new(&cwd).is_absolute());
+    assert!(!Path::new(&cwd).exists(), "the call's folder outlived it");
+}
+
+/// gridaco/fx#48: a call dropped after `turn/start` is written but before Codex answers it still
+/// stops the turn, once the answer names it.
+#[test]
+fn a_call_dropped_before_its_turn_is_named_still_interrupts_it() {
+    let png = media::png(2, 2, None);
+    let accepted =
+        "echo '{\"id\":6,\"result\":{\"turn\":{\"id\":\"turn-b\",\"status\":\"inProgress\"}}}'\n";
+    let second = call_script(5, "thread-b", "turn-b");
+    let held = format!(
+        r#"here="$(dirname "$0")"
+touch "$here/asked"
+while [ ! -f "$here/dropped" ]; do sleep 0.05; done
+{accepted}read -r line
+case "$line" in *'"method":"turn/interrupt"'*'"threadId":"thread-b","turnId":"turn-b"'*) touch "$here/interrupted" ;; esac
+read -r line
+"#
+    );
+    let fake = fake(&(first_image(&png) + &second.replace(accepted, &held)));
+    let (asked, dropped) = (fake.marker("asked"), fake.marker("dropped"));
+    let interrupted = fake.marker("interrupted");
+    let (stopped, verified) = on_a_started_codex(&fake, 20, 30, |adapter| async move {
+        let kite = kite();
+        tokio::select! {
+            sent = adapter.send(&kite.call) => panic!("the call ended: {sent:?}"),
+            seen = appears(&asked) => assert!(seen, "Codex was never asked for the turn"),
+        }
+        // The call's future is gone; only now does Codex answer turn/start.
+        std::fs::write(&dropped, "").unwrap();
+        appears(&interrupted).await
+    });
+    assert!(stopped, "the turn was not interrupted");
+    assert!(verified);
+}
+
+/// An overloaded app-server rejects a request on arrival: not received, so the engine may send the
+/// call again; the runtime goes on.
+#[test]
+fn an_overloaded_codex_did_not_receive_the_turn() {
+    let png = media::png(2, 2, None);
+    let accepted =
+        "echo '{\"id\":4,\"result\":{\"turn\":{\"id\":\"turn-a\",\"status\":\"inProgress\"}}}'\n";
+    let overloaded = echo(json!({"id": 4, "error": {"code": -32001, "message": "busy"}}));
+    let script = opening().replace(accepted, &overloaded)
+        + &call_script(5, "thread-b", "turn-b")
+        + &image_item("thread-b", "turn-b", &png)
+        + &completed("thread-b", "turn-b");
+    let (sent, verified) =
+        on_one_runtime(Ok(fake(&script).program), 20, 30, |adapter| async move {
+            let first = adapter.send(&kite().call).await;
+            let second = adapter.send(&kite().call).await;
+            (first, second)
+        });
+    assert!(verified);
+    assert_eq!(
+        sent.0,
+        Sent::NotReceived {
+            reason: "Codex image generation was not started: Codex is overloaded (error -32001)"
+                .into(),
+            retry_after: None,
+        }
+    );
+    assert_eq!(answered(sent.1).files["image"].bytes, png);
+}
+
 #[test]
 fn the_check_holds_the_image_to_the_background_asked_for() {
     let (_, adapter) = images(Err(codex::NOT_INSTALLED.into()), 20, 30);
@@ -718,6 +877,25 @@ fn what_codex_cannot_honour_is_refused_before_it_starts() {
             ] {
                 sent.push(adapter.send(&call(request).call).await);
             }
+            let png = media::png(2, 2, None);
+            let pictures = [
+                with_pictures("image.edit", |b| {
+                    let image = b.file("image/png", &png);
+                    json!({"prompt": "p", "image": image, "mask": image})
+                }),
+                with_pictures("image.generate", |b| {
+                    let image = b.file("image/png", &png);
+                    json!({"prompt": "p", "references": vec![image; 6]})
+                }),
+                with_pictures("image.generate", |b| {
+                    let image = b.file("image/png", &png);
+                    let gif = b.file("image/gif", b"GIF89a");
+                    json!({"prompt": "p", "references": [image, gif]})
+                }),
+            ];
+            for picture in &pictures {
+                sent.push(adapter.send(&picture.call).await);
+            }
             sent
         },
     );
@@ -726,9 +904,12 @@ fn what_codex_cannot_honour_is_refused_before_it_starts() {
         sent,
         [
             refused(codex::NO_EXACT_SIZE),
-            refused("Codex image generation takes no references"),
+            refused("references[0] has no bytes to send"),
             refused("image.generate takes no member seed"),
             refused("Codex's MCP servers could not be listed, so they cannot be turned off"),
+            refused("Codex image edits take no mask"),
+            refused("Codex takes at most 5 input pictures"),
+            refused("references[1] is image/gif; Codex takes PNG, JPEG or WebP"),
         ]
     );
     let (sent, _) = on_one_runtime(

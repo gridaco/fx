@@ -28,6 +28,8 @@
         "node_skipped",
         "node_retry",
         "call",
+        "call_waiting",
+        "call_admitted",
         "budget_reserved",
         "budget_settled",
         "budget_refused",
@@ -166,7 +168,7 @@
       "pattern": "^.+@[a-z0-9._-]+$"
     },
     "call": {
-      "description": "The call key (identity.md \u00a79). On `call`, the call the event reports; on `budget_reserved`, the call the hold is for, written before anything is sent (absent in older records and for a hold of no call).",
+      "description": "The call key (identity.md \u00a79). On `call`, the call the event reports; on `budget_reserved`, the call the hold is for, written before anything is sent (absent in older records and for a hold of no call); on `call_waiting` and `call_admitted`, the call whose wait they record.",
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
     },
@@ -351,6 +353,87 @@
       "type": "string",
       "format": "date-time",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+    },
+    "repeat": {
+      "description": "run_started: the arguments that run the same workflow again with the same inputs, from which reroll and pick print their next command (store.md \u00a78, Repeating a run). Paths are relative to the planning project's root (the project whose run index records the run folder), exactly as the file system names them. Absent when the record cannot repeat the invocation, and in older records. Not part of plan.json, the plan digest or any identity.",
+      "type": "object",
+      "required": [
+        "live"
+      ],
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "workflow"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "file"
+                ]
+              },
+              {
+                "required": [
+                  "function"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "file"
+          ],
+          "not": {
+            "required": [
+              "workflow"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "workflow": {
+          "description": "The workflow id the run was given.",
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "maxLength": 96
+        },
+        "file": {
+          "description": "The workflow file the run was given, or a builder's module.",
+          "$ref": "#/$defs/relative_path"
+        },
+        "function": {
+          "description": "A builder's function, with its module in file.",
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+        },
+        "inputs": {
+          "description": "The --inputs files, in the order given; absent when none.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/relative_path"
+          }
+        },
+        "routes": {
+          "description": "The --routes files, in the order given; absent when none.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/relative_path"
+          }
+        },
+        "max_usd": {
+          "description": "The --max-usd amount, when given.",
+          "type": "number",
+          "minimum": 0
+        },
+        "live": {
+          "description": "Whether the invocation admitted paid calls (--live).",
+          "type": "boolean"
+        }
+      }
     },
     "source": {
       "description": "Origin of cancellation intent for this invocation.",
@@ -554,6 +637,40 @@
       "if": {
         "properties": {
           "event": {
+            "const": "call_waiting"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "id",
+          "capability",
+          "route",
+          "call"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "call_admitted"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "id",
+          "capability",
+          "route",
+          "call"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
             "const": "budget_reserved"
           }
         }
@@ -630,6 +747,14 @@
     }
   ],
   "$defs": {
+    "relative_path": {
+      "description": "A POSIX path relative to its base: no leading `/`, no empty, `.` or `..` segment.",
+      "type": "string",
+      "pattern": "^[^/]+(?:/[^/]+)*$",
+      "not": {
+        "pattern": "(?:^|/)\\.\\.?(?:/|$)"
+      }
+    },
     "file": {
       "type": "object",
       "required": [

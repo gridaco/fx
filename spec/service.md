@@ -76,6 +76,22 @@ instance and address. Failure to bind, incompatible existing service or readines
 timeout is an explicit startup failure. An explicit occupied port is never
 silently replaced with a random one, and another project's service is never reused.
 
+A failure to bind names the port and the next step: an occupied port reads
+`port N is in use; choose another with --port N`, and a port the user may not
+bind reads `port N is not permitted for this user; choose another with --port N`.
+A background start whose service exits before readiness reports that service's
+cause in one line, `FX service could not start: CAUSE`. Each attempt chooses a
+tag, 16 random lowercase hex characters, and passes it in the service's
+environment (`GRIDA_FX_SERVICE_ATTEMPT`); a service started with a tag writes its
+error line as `<command>: attempt <tag>: CAUSE`. The cause is the last error line
+carrying this attempt's tag that the service wrote to the private log after the
+attempt began; lines an earlier attempt left, and a concurrent attempt's, are never
+reported as this attempt's cause. The tag names nothing private. A service that
+exits without such a line, or a readiness timeout, says so and points to `logs`.
+With `--json`, a failed background start still prints a `stopped` status
+document whose `cause` member carries the same cause, and the command exits 2. Whether another project's FX service holds the port is not
+reported: no machine-wide registry names it.
+
 The default port is 8787 on `127.0.0.1`. `--port` selects an exact nonzero port;
 its successful selection is retained in private local service state across stops.
 The OS does not reserve a stopped service's port. A second project may choose a
@@ -204,6 +220,8 @@ The wire and CLI result schemas are [catalog](schemas/fx-service-index-v1.schema
 configuration or unreadable local state remains a command error (exit 2).
 A stopped status has null `instance_id`, `pid`, and `url`. Failed handshakes also
 leave those fields null instead of presenting unverified service data.
+Only a failed `start --background --json` adds `cause`, a one-line sentence (§3);
+readers ignore members they do not know.
 `init --json` includes the local absolute `project_root`; this is command output,
 not a portable workflow record. `stop --json` returns the final status document,
 whereas its private HTTP endpoint acknowledges `stopping` before shutdown completes.

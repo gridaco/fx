@@ -76,7 +76,8 @@ function RunDetails({ run, node, canvasNode }: { run: ViewerRun; node?: ViewerRu
   </>;
   const [inputs, settings] = split(node.with, canvasNode);
   return <>
-    <Heading title={node.title || node.path} state={node.state} meta={[node.cache === "hit" && "cached", node.duration_ms !== null && duration(node.duration_ms)]} />
+    <Heading title={node.title || node.path} state={node.state} meta={[node.cache === "hit" && "cached", node.state === "waiting" && node.waiting_for && `for ${node.waiting_for}`,
+      node.duration_ms !== null && duration(node.duration_ms), !!node.waited_ms && `waited ${duration(node.waited_ms)} for a route`]} />
     {node.error && <Problem>{node.error}</Problem>}
     <Section title="Outputs" values={node.outputs} artifacts={artifacts} />
     <Section title="Inputs" values={inputs} artifacts={artifacts} />

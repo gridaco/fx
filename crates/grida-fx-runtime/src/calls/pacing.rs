@@ -10,7 +10,9 @@
 //!
 //! Both wait cancellably: a cancelled wait returns `None` and holds no slot. A start it had
 //! already been given under `requests_per_minute` stays taken, so the next request on the route
-//! waits as if it had been sent.
+//! waits as if it had been sent. A request that cannot go at once (no free slot, or a start still
+//! to come) is told so once, before it waits, so its wait can be recorded (spec/store.md §8,
+//! "Waiting for a route").
 //!
 //! [`Pacing`] is the one piece of call state every invocation has (`Services::pacing`), so it also
 //! carries the invocation's [`Flights`]: its calls in flight by key, the keys that ended for good,
@@ -22,7 +24,7 @@ use grida_fx_providers::BoxFuture;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::sync::{OwnedSemaphorePermit, Semaphore};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore, TryAcquireError};
 use tokio::time::Instant;
 
 /// The pacing state of one invocation, and its calls (module doc).
@@ -49,6 +51,7 @@ impl Slot {
 }
 
 /// What the retry owner waits on before each send: [`Pacing`] in a run, a fake in tests.
+/// `waiting` is called once, before the wait, when the send cannot go at once.
 pub trait Admission: Send + Sync {
     fn admit<'a>(
         &'a self,
@@ -56,6 +59,7 @@ pub trait Admission: Send + Sync {
         limit: Option<u32>,
         rpm: Option<u32>,
         cancel: &'a Cancel,
+        waiting: &'a (dyn Fn() + Sync),
     ) -> BoxFuture<'a, Option<Slot>>;
 }
 
@@ -66,8 +70,9 @@ impl Admission for Pacing {
         limit: Option<u32>,
         rpm: Option<u32>,
         cancel: &'a Cancel,
+        waiting: &'a (dyn Fn() + Sync),
     ) -> BoxFuture<'a, Option<Slot>> {
-        Box::pin(Pacing::admit(self, route_id, limit, rpm, cancel))
+        Box::pin(Pacing::admit(self, route_id, limit, rpm, cancel, waiting))
     }
 }
 
@@ -82,30 +87,43 @@ impl Pacing {
     }
 
     /// Waits for a slot of `route_id` (no limit: at once) and then for its next start under
-    /// `rpm`. `None` when `cancel` fired first.
+    /// `rpm`, calling `waiting` once before the first wait. `None` when `cancel` fired first.
     pub async fn admit(
         &self,
         route_id: &str,
         limit: Option<u32>,
         rpm: Option<u32>,
         cancel: &Cancel,
+        waiting: &(dyn Fn() + Sync),
     ) -> Option<Slot> {
         if cancel.is_cancelled() {
             return None;
         }
+        let mut told = false;
         let slot = match limit {
             None => Slot::free(),
             Some(limit) => {
                 let semaphore = self.semaphore(route_id, limit);
-                tokio::select! {
-                    biased;
-                    _ = cancel.cancelled() => return None,
-                    permit = semaphore.acquire_owned() => Slot(Some(permit.ok()?)),
+                match Arc::clone(&semaphore).try_acquire_owned() {
+                    Ok(permit) => Slot(Some(permit)),
+                    Err(TryAcquireError::Closed) => return None,
+                    Err(TryAcquireError::NoPermits) => {
+                        waiting();
+                        told = true;
+                        tokio::select! {
+                            biased;
+                            _ = cancel.cancelled() => return None,
+                            permit = semaphore.acquire_owned() => Slot(Some(permit.ok()?)),
+                        }
+                    }
                 }
             }
         };
         if let Some(rpm) = rpm.filter(|rpm| *rpm > 0) {
             let start = self.next_start(route_id, rpm);
+            if !told && start > Instant::now() {
+                waiting();
+            }
             tokio::select! {
                 biased;
                 // The slot taken is dropped with this branch: a cancelled wait holds nothing.
@@ -142,6 +160,10 @@ impl Pacing {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    /// A `waiting` that records nothing.
+    const NO_WAIT: fn() = || {};
 
     #[tokio::test(start_paused = true)]
     async fn requests_per_minute_space_the_starts() {
@@ -150,7 +172,9 @@ mod tests {
         let begin = Instant::now();
         let mut starts = Vec::new();
         for _ in 0..3 {
-            let slot = pacing.admit("img-a@acme", None, Some(60), &cancel).await;
+            let slot = pacing
+                .admit("img-a@acme", None, Some(60), &cancel, &NO_WAIT)
+                .await;
             assert!(slot.is_some());
             starts.push(Instant::now() - begin);
         }
@@ -166,7 +190,7 @@ mod tests {
         let other = Instant::now();
         assert!(
             pacing
-                .admit("llm-a@acme", None, Some(60), &cancel)
+                .admit("llm-a@acme", None, Some(60), &cancel, &NO_WAIT)
                 .await
                 .is_some()
         );
@@ -176,7 +200,7 @@ mod tests {
         let quiet = Instant::now();
         assert!(
             pacing
-                .admit("img-a@acme", None, Some(60), &cancel)
+                .admit("img-a@acme", None, Some(60), &cancel, &NO_WAIT)
                 .await
                 .is_some()
         );
@@ -187,14 +211,16 @@ mod tests {
     async fn a_limit_of_one_serializes_sends() {
         let pacing = Arc::new(Pacing::new());
         let cancel = Cancel::new();
-        let first = pacing.admit("img-a@acme", Some(1), None, &cancel).await;
+        let first = pacing
+            .admit("img-a@acme", Some(1), None, &cancel, &NO_WAIT)
+            .await;
         assert!(first.is_some());
         let waiting = {
             let pacing = Arc::clone(&pacing);
             let cancel = cancel.clone();
             tokio::spawn(async move {
                 pacing
-                    .admit("img-a@acme", Some(1), None, &cancel)
+                    .admit("img-a@acme", Some(1), None, &cancel, &NO_WAIT)
                     .await
                     .is_some()
             })
@@ -207,7 +233,7 @@ mod tests {
             let cancel = cancel.clone();
             tokio::spawn(async move {
                 pacing
-                    .admit("img-a@acme", Some(4), None, &cancel)
+                    .admit("img-a@acme", Some(4), None, &cancel, &NO_WAIT)
                     .await
                     .is_some()
             })
@@ -217,7 +243,7 @@ mod tests {
         // A route with no limit is never held up.
         assert!(
             pacing
-                .admit("free@acme", None, None, &cancel)
+                .admit("free@acme", None, None, &cancel, &NO_WAIT)
                 .await
                 .is_some()
         );
@@ -230,7 +256,9 @@ mod tests {
     async fn a_cancelled_wait_returns_none_and_holds_nothing() {
         let pacing = Arc::new(Pacing::new());
         let cancel = Cancel::new();
-        let held = pacing.admit("img-a@acme", Some(1), None, &cancel).await;
+        let held = pacing
+            .admit("img-a@acme", Some(1), None, &cancel, &NO_WAIT)
+            .await;
         assert!(held.is_some());
         let stopped = Cancel::new();
         let waiting = {
@@ -238,7 +266,7 @@ mod tests {
             let stopped = stopped.clone();
             tokio::spawn(async move {
                 pacing
-                    .admit("img-a@acme", Some(1), None, &stopped)
+                    .admit("img-a@acme", Some(1), None, &stopped, &NO_WAIT)
                     .await
                     .is_none()
             })
@@ -249,14 +277,14 @@ mod tests {
         // Cancelled already: nothing is waited for.
         assert!(
             pacing
-                .admit("other@acme", None, None, &stopped)
+                .admit("other@acme", None, None, &stopped, &NO_WAIT)
                 .await
                 .is_none()
         );
         // Cancelled during the pacing wait: the slot it took is given back.
         drop(held);
         let _first = pacing
-            .admit("paced@acme", Some(1), Some(1), &cancel)
+            .admit("paced@acme", Some(1), Some(1), &cancel, &NO_WAIT)
             .await
             .unwrap();
         drop(_first);
@@ -266,7 +294,7 @@ mod tests {
             let late = late.clone();
             tokio::spawn(async move {
                 pacing
-                    .admit("paced@acme", Some(1), Some(1), &late)
+                    .admit("paced@acme", Some(1), Some(1), &late, &NO_WAIT)
                     .await
                     .is_none()
             })
@@ -276,12 +304,58 @@ mod tests {
         assert!(paced.await.unwrap());
         let free = tokio::time::timeout(
             Duration::from_secs(120),
-            pacing.admit("paced@acme", Some(1), None, &cancel),
+            pacing.admit("paced@acme", Some(1), None, &cancel, &NO_WAIT),
         )
         .await;
         assert!(
             matches!(free, Ok(Some(_))),
             "the paced wait gave its slot back"
         );
+    }
+
+    /// A send told when it cannot go at once, once, before it waits; never when it goes at once.
+    #[tokio::test(start_paused = true)]
+    async fn a_send_that_must_wait_is_told_once_before_it_waits() {
+        let pacing = Arc::new(Pacing::new());
+        let cancel = Cancel::new();
+        let told = Arc::new(AtomicU32::new(0));
+        let tell = {
+            let told = Arc::clone(&told);
+            move || {
+                told.fetch_add(1, Ordering::SeqCst);
+            }
+        };
+        let first = pacing
+            .admit("img-a@acme", Some(1), Some(60), &cancel, &tell)
+            .await;
+        assert!(first.is_some());
+        assert_eq!(
+            told.load(Ordering::SeqCst),
+            0,
+            "the first send goes at once"
+        );
+        let second = {
+            let (pacing, cancel, tell) = (Arc::clone(&pacing), cancel.clone(), tell.clone());
+            tokio::spawn(async move {
+                let slot = pacing.admit("img-a@acme", Some(1), Some(60), &cancel, &tell);
+                slot.await.is_some()
+            })
+        };
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        assert_eq!(
+            told.load(Ordering::SeqCst),
+            1,
+            "told before it waits for the slot"
+        );
+        drop(first);
+        assert!(second.await.unwrap());
+        // It waited for both the slot and its start, and was told once.
+        assert_eq!(told.load(Ordering::SeqCst), 1);
+        // A start still to come is a wait too.
+        let paced = pacing
+            .admit("img-a@acme", None, Some(60), &cancel, &tell)
+            .await;
+        assert!(paced.is_some());
+        assert_eq!(told.load(Ordering::SeqCst), 2);
     }
 }

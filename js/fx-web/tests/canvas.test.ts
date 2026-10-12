@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { BADGE_BAND, DECK_OFFSET, canvasEdgePath, canvasNodeGeometry, canvasPreviewReserved, canvasNodeSize, canvasPortAnchor, deckBadge, layoutGraph, restingFront, type CanvasGraph, type CanvasStep, type LayoutReport } from "../src/index";
-import { runningLabel } from "../src/card";
+import { cardStatus, runningLabel } from "../src/card";
 
 function node(id: string, preview = false, address = id): CanvasStep {
   return {
@@ -209,6 +209,28 @@ test("absent instances never join a deck, and an image output reserves its previ
   const ports = { inputs: [], outputs: [{ name: "image", type: "image/png", kind: "artifact" as const }], settings: [] };
   expect(canvasPreviewReserved({ ...node("draw"), ports })).toBe(true);
   expect(canvasNodeSize({ ...node("draw"), ports })).toEqual(canvasNodeSize({ ...node("draw", true), ports }));
+});
+
+test("a waiting member rests in front after a running one, and the badge counts the waiting", () => {
+  const members = [take("a", null, 1, "waiting"), take("b", null, 2, "succeeded"), take("c", null, 3, "waiting")];
+  expect(restingFront(members, null)).toBe(0);
+  expect(restingFront([...members, take("d", null, 4, "running")], null)).toBe(3);
+  expect(deckBadge([...members, take("d", null, 4, "skipped")]).detail).toEqual(["2 waiting", "1 not run"]);
+});
+
+test("a running card counts its work, less its waits; a waiting card names its route and counts its wait", () => {
+  const started_at = "2026-10-11T09:00:00.000Z", start = Date.parse(started_at);
+  expect(cardStatus({ state: "running", started_at, waited_ms: 40_000 })).toEqual({ text: "", from: start + 40_000 });
+  expect(cardStatus({ state: "running", started_at })).toEqual({ text: "", from: start });
+  expect(cardStatus({ state: "running" })).toEqual({ text: "running" });
+  const waiting = { state: "waiting", started_at, waiting_for: "img-a@acme", waiting_since: "2026-10-11T09:01:00.000Z" };
+  const status = cardStatus(waiting);
+  expect(status).toEqual({ text: "waiting for img-a@acme · ", from: start + 60_000 });
+  expect(status.text + runningLabel(status.from!, start + 190_000)).toBe("waiting for img-a@acme · 2m 10s");
+  expect(cardStatus({ ...waiting, waiting_since: undefined })).toEqual({ text: "waiting for img-a@acme" });
+  expect(cardStatus({ state: "waiting" })).toEqual({ text: "waiting" });
+  expect(cardStatus({ ...waiting, waiting_for: "a-very-long-route@provider" }, 12).text).toBe("waiting for a-very-long… · ");
+  expect(cardStatus({ state: "succeeded", started_at })).toEqual({ text: "succeeded" });
 });
 
 test("a running card counts up from its start, never below zero", () => {

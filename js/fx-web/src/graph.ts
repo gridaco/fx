@@ -155,8 +155,13 @@ export interface CanvasImagePreview {
 }
 export interface CanvasStep {
   id: string; source_id: string; title: string; subtitle: string; state: string; pending: boolean;
-  /** When the step last started, UTC: a running card counts up from it. */
+  /** When the step last started, UTC: a running card counts up from it, less `waited_ms`. */
   started_at?: string;
+  /** How long the step's latest start waited for route slots, in waits that ended. */
+  waited_ms?: number;
+  /** A waiting step's route, and when its wait began (UTC): a waiting card counts up from it. */
+  waiting_for?: string;
+  waiting_since?: string;
   /** The recorded declaration path: the key of the layout report's cells. */
   address?: string;
   /** The recorded take and item key, which order and label a deck. */
@@ -220,7 +225,8 @@ export function flatCanvasGraph(view: GraphDocument | ViewerRun, apiBase = "/api
   const source = plan ? view.instances : view.nodes;
   const nodes: CanvasStep[] = source.map((item) => {
     const preview = plan ? undefined : imagePreview(item as ViewerRun["nodes"][number], artifacts, apiBase);
-    const started_at = plan ? undefined : (item as ViewerRun["nodes"][number]).started_at;
+    const run = plan ? undefined : item as ViewerRun["nodes"][number];
+    const started_at = run?.started_at;
     const declared = plan ? view.types?.[item.uses ?? ""]?.ports : (item as ViewerRun["nodes"][number]).ports;
     const boundParams = new Set([...(item.bindings ?? []), ...(item.interface_bindings ?? [])].map((binding) => binding.target_port));
     const ports: CanvasStep["ports"] = declared ? {
@@ -238,6 +244,9 @@ export function flatCanvasGraph(view: GraphDocument | ViewerRun, apiBase = "/api
       title: plan ? view.steps?.[(item as GraphInstance).step]?.title || item.path : (item as ViewerRun["nodes"][number]).title || item.path,
       subtitle: item.uses ?? "Type not recorded", state: item.state, pending: false,
       ...(started_at ? { started_at } : {}),
+      ...(run?.waited_ms !== undefined ? { waited_ms: run.waited_ms } : {}),
+      ...(run?.waiting_for !== undefined ? { waiting_for: run.waiting_for } : {}),
+      ...(run?.waiting_since !== undefined ? { waiting_since: run.waiting_since } : {}),
       ...(preview ? { preview } : {}), ...(ports ? { ports } : {}),
     };
   });

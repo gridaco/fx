@@ -20,6 +20,16 @@ Use `start --port N` to choose another exact port; an occupied port is an error,
 not a reason to silently pick a random port. FX remembers a successful selection.
 `status --json` reports the actual address and project/service identity.
 
+When the service cannot start, `start` says why in one line. Another project's
+service often holds the default port, and `start --background` then prints:
+
+```text
+grida fx: FX service could not start: port 8787 is in use; choose another with --port N
+```
+
+With `--json`, a failed background start also prints the `stopped` status with
+that sentence as `cause`. `grida fx logs` keeps the earlier attempts' lines.
+
 Omit `--background` to keep the service in your terminal. Background startup
 returns only after readiness and reuses a compatible service for the same project.
 It survives the launching command and terminal, but does not install automatic
@@ -68,10 +78,11 @@ arriving never moves a card. Group iterations are cards with their steps inside.
 
 Repeated instances of one step (for-each items, matrix combinations, takes) and the
 iterations of a repeated group are drawn as a deck: one stack of cards with a count
-badge such as `5 items`, `3 takes` or `2 items · 3 takes each`, and the number that
-failed. Hovering a card brings it to the front; moving away puts the deck back. The
-card in front at rest is the selected one, else the last that failed, else a running
-one, else the take its consumers read, else the latest that finished. Click a deck (a
+badge such as `5 items`, `3 takes` or `2 items · 3 takes each`, and how many failed
+and how many wait for their route. Hovering a card brings it to the front; moving
+away puts the deck back. The card in front at rest is the selected one, else the last
+that failed, else a running one, else a waiting one, else the take its consumers read,
+else the latest that finished. Click a deck (a
 card, its edge or its badge) to spread it into a grid in place; click a card inside to
 select it, and press Esc, click outside or use × to put the deck back. Dragging pans
 from anywhere, cards included. Spreading and closing are short slides, and none under
@@ -81,6 +92,17 @@ A running step counts up how long it has run (`running · 1m 04s`), and a runnin
 workflow card how long since its first step started. A count far past what the step
 usually takes points to a stalled or stopped run: the record cannot tell whether the
 process is still alive. Runs recorded before FX kept start times show `running` alone.
+
+A step whose paid call is queued for its route's slot is `waiting`, not running. A route
+with `concurrency: 1` makes one call at a time, so of eight ready image steps on one such
+route one runs and seven wait; the Codex routes draw three at a time, so three run and five
+wait. A waiting card has a still clock
+instead of the activity indicator and no image shimmer, and counts how long it has
+waited for which route (`waiting for imagegen@codex · 2m 10s`). A running step's count
+leaves out the time it waited, so it shows how long its call has been working; its
+details say how long it waited in all. A workflow card is running while any of its
+steps runs, and waiting when none runs and one waits. Runs recorded before FX
+recorded waits show such steps as running.
 
 Cards show the node's named, typed input and output ports. A list or keyed collection
 uses one port. Solid wires join the particular output and input referenced by the

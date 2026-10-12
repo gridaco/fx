@@ -16,6 +16,7 @@ Prints one line per check and exits 1 when any fails. Names given run only those
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
@@ -26,7 +27,7 @@ import traceback
 from collections.abc import Callable
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageOps
 
 import grida.fx as fx
 from grida.fx import RunResult
@@ -221,6 +222,99 @@ def game_build_refused(home: Path) -> str:
     return "the sky mirrored; the plate and the icons are refused at $0"
 
 
+PET = ["inputs/pebble.yaml"]
+PET_ROWS = [
+    ("idle", 6),
+    ("running-right", 8),
+    ("running-left", 8),
+    ("waving", 4),
+    ("jumping", 5),
+    ("failed", 8),
+    ("waiting", 6),
+    ("running", 6),
+    ("review", 6),
+]
+
+
+def pet(home: Path) -> str:
+    plan = planned("pet", home, input_files=PET)
+    expect(plan.estimate() == (0.0, 0.0), f"pet, all on Codex, is estimated at {plan.estimate()}")
+    loaded = importlib.util.spec_from_file_location("pet_stand_in", home / "stand_in.py")
+    expect(loaded is not None and loaded.loader is not None, "the pet's stand-in does not load")
+    stand_in = importlib.util.module_from_spec(loaded)
+    loaded.loader.exec_module(stand_in)
+    first = finished(
+        fx.run("pet", input_files=PET, cwd=home, stand_in=stand_in.answer), "the stand-in run"
+    )
+    width, height = 192, 208
+    with Image.open(first.outputs["spritesheet"].path) as opened:
+        sheet = opened.convert("RGBA")
+    expect(sheet.size == (8 * width, 9 * height), f"the sheet is {sheet.size}")
+
+    def cell(row: int, column: int) -> Image.Image:
+        return sheet.crop((column * width, row * height, (column + 1) * width, (row + 1) * height))
+
+    for row, (state, frames) in enumerate(PET_ROWS):
+        for column in range(8):
+            empty = cell(row, column).getchannel("A").getbbox() is None
+            expect(empty == (column >= frames), f"{state} cell {column}: empty is {empty}")
+    flipped = [ImageOps.mirror(cell(1, column)).tobytes() for column in range(8)]
+    left = [cell(2, column).tobytes() for column in range(8)]
+    expect(flipped == left, "running-left is not running-right flipped frame by frame")
+    manifest = json.loads(Path(first.outputs["pet"].path).read_text(encoding="utf-8"))
+    expect(
+        manifest
+        == {
+            "id": "pebble",
+            "displayName": "Pebble",
+            "description": "A small river stone that keeps you company while you work.",
+            "spritesheetPath": "spritesheet.webp",
+        },
+        f"pet.json is {manifest}",
+    )
+    previews = first.outputs["previews"]
+    expect(list(previews) == [state for state, _ in PET_ROWS], f"previews: {list(previews)}")
+    with Image.open(previews["waving"].path) as gif:
+        expect(gif.n_frames == 4, f"the waving preview has {gif.n_frames} frames")
+    second = finished(
+        fx.run("pet", input_files=PET, cwd=home, stand_in=stand_in.answer), "the second run"
+    )
+    # `base` is fx/select@1, which the engine runs every time: it keeps no result to read.
+    ran = [p for p, step in second.steps.items() if step.cache == "miss" and p != "base"]
+    expect(not ran, f"the second run ran these again instead of reading the cache: {ran}")
+    # From a picture: the base is an edit of it, and every strip is drawn again from that base.
+    # The picture is synthesized here.
+    reference = home / "reference.png"
+    Image.new("RGBA", (320, 320), (200, 120, 60, 255)).save(reference)
+    third = finished(
+        fx.run(
+            "pet",
+            input_files=PET,
+            inputs={"reference": str(reference)},
+            cwd=home,
+            stand_in=stand_in.answer,
+        ),
+        "the run from a picture",
+    )
+    finished_steps = set(third.steps)
+    expect("sketch" not in finished_steps, "the base was sketched although a picture was given")
+    expect("redraw" in finished_steps, "the base was not redrawn from the picture")
+    drawn = [path for path, step in third.steps.items() if path.endswith(".draw")]
+    expect(
+        drawn and all(third.steps[path].cache == "miss" for path in drawn),
+        "the strips drawn from another base picture came from the cache",
+    )
+    return (
+        "planned at $0 on Codex; a stand-in drew a base and 8 strips from it into a 9-state "
+        "Codex pet, then cached; from a picture, the base is an edit and the strips redrawn"
+    )
+
+
+def pet_refused(home: Path) -> str:
+    refused(fx.run("pet", input_files=PET, cwd=home), "the pet run")
+    return "every strip is a Codex call, refused offline at $0"
+
+
 def rigged_character(home: Path) -> str:
     plan = planned("rigged-character", home, input_files=["inputs/wren.yaml"])
     low, high = plan.estimate()
@@ -238,6 +332,8 @@ CHECKS: dict[str, tuple[str, Callable[[Path], str]]] = {
     "concept-gallery:refused": ("concept-gallery", concept_gallery_refused),
     "game-build": ("game-build", game_build),
     "game-build:refused": ("game-build", game_build_refused),
+    "pet": ("pet", pet),
+    "pet:refused": ("pet", pet_refused),
     "rigged-character": ("rigged-character", rigged_character),
 }
 

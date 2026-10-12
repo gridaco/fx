@@ -136,6 +136,9 @@ pub struct RunOptions {
     /// Where to record the folder when it lies outside the project's runs tree
     /// (`crate::run_index`).
     pub index: Option<crate::run_index::RunIndex>,
+    /// `run_started`'s `repeat` (spec/store.md §8, "Repeating a run"): the arguments that repeat
+    /// this invocation's run, when it has them.
+    pub repeat: Option<serde_json::Value>,
 }
 
 /// How an invocation ended.
@@ -558,6 +561,7 @@ fn invoke(
         estimate_low: estimate.low,
         estimate_high: estimate.high,
         stand_in: engine.stand_in_run(),
+        repeat: options.repeat.clone(),
     };
     let mut endpoint = None;
     let outcome = match scheduler.emit(&started) {
@@ -1444,6 +1448,7 @@ while (message := read()) is not None:
                         label: "python-stub".into(),
                         project_root: root.clone(),
                         sources: Vec::new(),
+                        check_version: false,
                     },
                     &root.join("cache"),
                     1,
@@ -1590,6 +1595,7 @@ while (message := read()) is not None:
                 label: "unused-python".into(),
                 project_root: root.clone(),
                 sources: Vec::new(),
+                check_version: false,
             },
             &root.join("cache"),
             1,

@@ -1,6 +1,7 @@
 import { displayPortName } from "./ports";
 import { canvasNodeGeometry, canvasPreviewReserved, PORT_ROW, PORT_TOP, type PositionedNode } from "./layout";
 import { stateIcon, stateIconParts } from "./state-icon";
+import type { CanvasStep } from "./graph";
 
 const SVG = "http://www.w3.org/2000/svg";
 
@@ -16,6 +17,25 @@ export function runningLabel(started: number, now: number) {
   const [hours, minutes, rest] = [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60];
   const two = (value: number) => String(value).padStart(2, "0");
   return hours ? `${hours}h ${two(minutes)}m` : minutes ? `${minutes}m ${two(rest)}s` : `${rest}s`;
+}
+
+/**
+ * A card's status line: a running card counts up from its start less the time it waited for
+ * route slots; a waiting one names its route and counts up from when its wait began. `from` is
+ * absent when the record cannot date it; the line is then `text` alone.
+ */
+export function cardStatus(node: Pick<CanvasStep, "state" | "started_at" | "waited_ms" | "waiting_for" | "waiting_since">, routeLimit = 18): { text: string; from?: number } {
+  const time = (value: string | undefined) => value ? Date.parse(value) : NaN;
+  if (node.state === "running") {
+    const started = time(node.started_at);
+    return Number.isNaN(started) ? { text: node.state } : { text: "", from: started + (node.waited_ms ?? 0) };
+  }
+  if (node.state === "waiting") {
+    const text = node.waiting_for ? `waiting for ${short(node.waiting_for, routeLimit)}` : "waiting";
+    const since = time(node.waiting_since);
+    return Number.isNaN(since) ? { text } : { text: `${text} · `, from: since };
+  }
+  return { text: node.state };
 }
 
 /** A state's glyph as a nested SVG square of `size` at (x, y). */
@@ -38,7 +58,8 @@ export function nodeCard(node: PositionedNode, canvasId: string, index: number, 
   const preview = node.preview;
   const portsLabel = node.ports ? `, inputs: ${node.ports.inputs.map((port) => `${displayPortName(port.name)} (${port.type}, ${port.kind})`).join(", ") || "none"}, outputs: ${node.ports.outputs.map((port) => `${displayPortName(port.name)} (${port.type}, ${port.kind})`).join(", ") || "none"}` : node.pending ? "" : ", port metadata not recorded";
   const scopeLabel = node.kind === "workflow" ? `, imported workflow, ${node.child_count ?? 0} steps, ${node.failure_count ?? 0} failed` : "";
-  const label = `${node.title}, ${node.state}${scopeLabel}${portsLabel}${preview ? `, ${preview.label}, ${preview.count} image ${preview.count === 1 ? "output" : "outputs"}` : ""}`;
+  const state = node.state === "waiting" && node.waiting_for ? `waiting for ${node.waiting_for}` : node.state;
+  const label = `${node.title}, ${state}${scopeLabel}${portsLabel}${preview ? `, ${preview.label}, ${preview.count} image ${preview.count === 1 ? "output" : "outputs"}` : ""}`;
   const group = element("g", { transform: `translate(${node.x},${node.y})`, class: `fx-canvas-node${node.kind === "workflow" ? " fx-canvas-workflow" : node.kind === "boundary" ? " fx-canvas-boundary" : ""}`, role: node.kind === "workflow" ? "group" : "button", tabindex: 0, "data-node-id": node.id, "data-state": node.state, "aria-label": label, ...(node.kind === "workflow" ? { "aria-current": "false" } : { "aria-pressed": "false" }) });
   group.append(element("rect", { width: node.width, height: node.height, rx: 11, class: node.pending ? "fx-canvas-node-box fx-canvas-pending" : "fx-canvas-node-box" }));
   group.append(element("text", { x: 16, y: 27, class: "fx-canvas-node-title" }, short(node.title, node.ports ? 42 : 28)));
@@ -81,7 +102,7 @@ export function nodeCard(node: PositionedNode, canvasId: string, index: number, 
     image.addEventListener("error", () => {
       image.setAttribute("visibility", "hidden");
       fallback.setAttribute("visibility", "visible");
-      group.setAttribute("aria-label", `${node.title}, ${node.state}${portsLabel}, Image unavailable: ${preview.label}`);
+      group.setAttribute("aria-label", `${node.title}, ${state}${portsLabel}, Image unavailable: ${preview.label}`);
     }, { signal });
     image.setAttribute("href", preview.url);
     group.append(image, element("rect", { ...frame, rx: 6, class: "fx-canvas-image-border" }), fallback);
@@ -103,11 +124,11 @@ export function nodeCard(node: PositionedNode, canvasId: string, index: number, 
     group.append(element("rect", { ...frame, rx: 6, class: "fx-canvas-image-border" }));
   }
   group.append(stateIconElement(node.state, 15, node.height - 32, 12));
-  // A dated running card carries its start; the canvas recounts it every second.
-  const started = node.state === "running" && node.started_at ? Date.parse(node.started_at) : NaN;
-  group.append(Number.isNaN(started)
-    ? element("text", { x: 32, y: node.height - 22, class: "fx-canvas-node-state" }, node.state)
-    : element("text", { x: 32, y: node.height - 22, class: "fx-canvas-node-state", "data-started": started }, runningLabel(started, Date.now())));
+  // A dated running or waiting card carries what it counts from; the canvas recounts it every second.
+  const status = cardStatus(node, node.ports ? 18 : 12);
+  group.append(status.from === undefined
+    ? element("text", { x: 32, y: node.height - 22, class: "fx-canvas-node-state" }, status.text)
+    : element("text", { x: 32, y: node.height - 22, class: "fx-canvas-node-state", "data-started": status.from, "data-prefix": status.text }, status.text + runningLabel(status.from, Date.now())));
   if (node.kind === "workflow" && node.scope_id) {
     group.append(element("text", { x: 16, y: node.height - 48, class: (node.failure_count ?? 0) > 0 ? "fx-canvas-workflow-failure" : "fx-canvas-workflow-count" }, `${node.child_count ?? 0} steps${node.failure_count ? ` · ${node.failure_count} failed` : ""}`));
     const open = element("g", { class: "fx-canvas-open-workflow", role: "button", tabindex: 0, "aria-label": `Open workflow ${node.title}` });

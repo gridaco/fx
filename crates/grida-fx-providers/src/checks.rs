@@ -313,8 +313,16 @@ mod tests {
         let transparent = CallBuilder::new("image.edit", "img-a@acme")
             .request(json!({"prompt": "p", "size": "auto", "background": "transparent"}))
             .build();
+        // An alpha channel with every pixel opaque (a painted checkerboard) is not transparent.
         assert_eq!(
             every_route(&transparent, &answer("image", "image/png", &opaque)),
+            Err("the picture asked for as transparent has no transparent pixels".into())
+        );
+        assert_eq!(
+            every_route(
+                &transparent,
+                &answer("image", "image/png", &media::png(4, 4, Some(0)))
+            ),
             Ok(())
         );
         assert_eq!(

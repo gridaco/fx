@@ -7,7 +7,7 @@
     },
     "js/fx-react": {
       "name": "@grida/fx-react",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "dependencies": {
         "@grida/fx-web": "workspace:*",
       },
@@ -20,7 +20,7 @@
     },
     "js/fx-web": {
       "name": "@grida/fx-web",
-      "version": "0.4.0",
+      "version": "0.5.0",
     },
     "web/viewer": {
       "name": "@grida/fx-viewer",

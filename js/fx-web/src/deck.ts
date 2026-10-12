@@ -29,18 +29,20 @@ export function deckBadge(members: DeckMember[]) {
     : [`${members.length} ${isTakeDeck(members) ? "takes" : "items"}`];
   const failures = members.filter((member) => failed.has(member.state)).length;
   const notRun = members.filter((member) => member.state === "skipped").length;
+  const waiting = members.filter((member) => member.state === "waiting").length;
   return {
     text: parts.join(" · "),
     short: `×${members.length}`,
     failed: failures,
-    detail: [...(failures ? [`${failures} failed`] : []), ...(notRun ? [`${notRun} not run`] : [])],
+    detail: [...(failures ? [`${failures} failed`] : []), ...(waiting ? [`${waiting} waiting`] : []), ...(notRun ? [`${notRun} not run`] : [])],
   };
 }
 
 /**
  * The member that rests in front (§5.4): the selected one, else the last failed or blocked, else
- * the first running, else in a take deck the last take read from outside it, else the last
- * succeeded, else the first. A member that never started never rests over one that did.
+ * the first running, else the first waiting for its route, else in a take deck the last take read
+ * from outside it, else the last succeeded, else the first. A member that never started never
+ * rests over one that did.
  */
 export function restingFront(members: DeckMember[], selected: string | null): number {
   const last = (test: (member: DeckMember) => boolean) => {
@@ -51,6 +53,7 @@ export function restingFront(members: DeckMember[], selected: string | null): nu
     () => members.findIndex((member) => member.id === selected),
     () => last((member) => failed.has(member.state)),
     () => members.findIndex((member) => member.state === "running"),
+    () => members.findIndex((member) => member.state === "waiting"),
     () => isTakeDeck(members) ? last((member) => member.bound === true) : -1,
     () => last((member) => succeeded.has(member.state)),
     () => last((member) => started(member.state)),

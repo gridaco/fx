@@ -1211,6 +1211,7 @@ mod tests {
                 estimate_low: Usd::ZERO,
                 estimate_high: Usd::ZERO,
                 stand_in: false,
+                repeat: None,
             })
             .unwrap();
         let control = RunControl::new(events, Cancel::new());

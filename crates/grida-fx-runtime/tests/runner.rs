@@ -241,6 +241,79 @@ impl Default for Invocation<'_> {
 
 /// Plans `invocation` in `project` and runs it; `None` when there is no Python to host nodes.
 /// `during` runs on another thread while the run goes on.
+/// spec/store.md §8, "Waiting for a route": on a route that takes one call at a time, the call
+/// that has to wait records `call_waiting` before it waits and `call_admitted` once the other
+/// call is done; the call that went at once records neither.
+#[test]
+fn a_call_that_waits_for_its_route_records_its_wait() {
+    let _serial = serial();
+    let project = Project::new(&[(
+        "case",
+        "fx: workflow/v1\nid: case\ntitle: Two at a time\nsteps:\n  one:\n    uses: \
+         fx/image.generate@1\n    with: { prompt: lantern }\n  two:\n    uses: \
+         fx/image.generate@1\n    with: { prompt: kite }\n",
+    )]);
+    std::fs::write(
+        project.root.join("fx.yaml"),
+        "fx: project/v1\nroutes:\n  image.generate: { route: img-a@acme, concurrency: 1 }\n",
+    )
+    .unwrap();
+    let slow = Slow {
+        delay: Duration::from_millis(300),
+        sends: Arc::new(std::sync::atomic::AtomicU32::new(0)),
+    };
+    let Some(outcome) = run_in(
+        &project,
+        Invocation {
+            live: true,
+            max_usd: Some("1"),
+            adapter: Some(Adapter::Request(Arc::new(slow))),
+            ..Invocation::default()
+        },
+        None,
+    ) else {
+        return;
+    };
+    assert!(outcome.unwrap().ok);
+    let events = project.events("runs/one");
+    let (waiting, admitted) = (
+        named(&events, "call_waiting"),
+        named(&events, "call_admitted"),
+    );
+    assert_eq!(
+        (waiting.len(), admitted.len()),
+        (1, 1),
+        "{:?}",
+        names(&events)
+    );
+    for event in [waiting[0], admitted[0]] {
+        assert_eq!(event["capability"], "image.generate");
+        assert_eq!(event["route"], "img-a@acme");
+    }
+    let waiter = waiting[0]["id"].as_str().unwrap();
+    assert_eq!(admitted[0]["id"], waiter);
+    // Both name the call that waited: the key its `call` event names too.
+    let key = waiting[0]["call"].as_str().unwrap();
+    assert_eq!(key.len(), 64);
+    assert_eq!(admitted[0]["call"], key);
+    assert!(
+        named(&events, "call")
+            .iter()
+            .any(|e| e["id"] == waiter && e["call"] == key)
+    );
+    // In order: the wait, the other step's call, then the admission and this step's own call.
+    let at = |name: &str, id: &str| {
+        events
+            .iter()
+            .position(|e| e["event"] == name && e["id"] == id)
+            .unwrap_or_else(|| panic!("no {name} for {id}"))
+    };
+    let other = if waiter == "one#1" { "two#1" } else { "one#1" };
+    assert!(at("call_waiting", waiter) < at("call", other));
+    assert!(at("call", other) < at("call_admitted", waiter));
+    assert!(at("call_admitted", waiter) < at("call", waiter));
+}
+
 fn run_in(
     project: &Project,
     invocation: Invocation<'_>,
@@ -281,6 +354,7 @@ fn run_in(
             label: python.display().to_string(),
             project_root: planner.home.root.clone(),
             sources: planner.home.document.sources.clone(),
+            check_version: false,
         },
         &store,
         2,

@@ -1,4 +1,7 @@
-//! A node host process (spec/protocol.md §1, §2): `<python> -P -m grida.fx.host` started with
+//! A node host process (spec/protocol.md §1, §2): when its spec asks for it
+//! (`HostSpec::check_version`), the interpreter is first probed ([`locate::probe`]) and one
+//! before Python 3.11 is refused with [`locate::too_old`]'s sentence, before anything is spawned
+//! that could print Python's usage text. Then `<python> -P -m grida.fx.host` is started with
 //! `tokio::process`, its working directory at the project root, stdin/stdout piped for the
 //! protocol, stderr inherited, `PYTHONSAFEPATH` set to `host::SAFE_PATH_MARK` when the
 //! environment leaves it unset or empty, and its own process group (Unix), so ending it ends what
@@ -42,7 +45,9 @@
 //! starts.
 
 use super::connection::{Connection, ConnectionError, Incoming};
-use super::{GRACE, HOST_ARGS, PYTHON_ADVICE, SAFE_PATH_MARK, exit_text, mismatch, program};
+use super::{
+    GRACE, HOST_ARGS, PYTHON_ADVICE, SAFE_PATH_MARK, exit_text, locate, mismatch, program,
+};
 use grida_fx_core::{ENGINE_NAME, ENGINE_VERSION};
 use grida_fx_protocol::{
     EngineInfo, ErrorCode, ErrorData, InitializeParams, InitializeResult, PROTOCOL, method,
@@ -66,6 +71,10 @@ pub struct HostSpec {
     /// Absolute: the working directory and `initialize`'s `project_root`.
     pub project_root: PathBuf,
     pub sources: Vec<String>,
+    /// Check the interpreter's version before the first start and refuse one before Python 3.11
+    /// ([`locate::probe`], spec/protocol.md §1). Set for an interpreter FX located; a caller that
+    /// names a program of its own that ignores its arguments (a test's fake host) leaves it unset.
+    pub check_version: bool,
 }
 
 /// A started, initialized host.
@@ -154,6 +163,21 @@ impl HostProcess {
                 super::read_reason(&e)
             )
         })?;
+        if spec.check_version {
+            let probed = match cancel {
+                Some(cancel) => tokio::select! {
+                    biased;
+                    () = cancel.cancelled() => {
+                        return Err("the run was stopped while its node host initialized".into());
+                    }
+                    probed = locate::probe(&spec.python) => probed,
+                },
+                None => locate::probe(&spec.python).await,
+            };
+            if let Some(refusal) = locate::too_old(&probed, shown) {
+                return Err(refusal);
+            }
+        }
         let mut command = Command::new(program(&spec.python));
         command.args(HOST_ARGS).current_dir(cwd);
         if std::env::var_os("PYTHONSAFEPATH").is_none_or(|value| value.is_empty()) {
@@ -774,6 +798,7 @@ time.sleep(60)
             label: format!("python-{name}"),
             project_root: dir.path().to_path_buf(),
             sources: Vec::new(),
+            check_version: false,
         };
         (dir, spec)
     }
@@ -969,6 +994,7 @@ while True:
             label: "no-such-python-for-fx".into(),
             project_root: dir.path().to_path_buf(),
             sources: Vec::new(),
+            check_version: false,
         };
         let failure = HostProcess::start(&spec, Arc::new(NoIncoming))
             .await
@@ -978,6 +1004,35 @@ while True:
             failure,
             "cannot start the Python node host with no-such-python-for-fx: no such file; set GRIDA_FX_PYTHON to a Python that has the grida package"
         );
+    }
+
+    #[tokio::test]
+    async fn a_python_before_3_11_is_refused_before_it_starts() {
+        let dir = tempfile::tempdir().unwrap();
+        let python = dir.path().join("python-old");
+        // Asked with `-c`, it answers as Python 3.9.6; started as a host, it leaves a mark.
+        grida_fx_providers::testing::write_program(
+            &python,
+            "#!/bin/sh\nif [ \"$1\" = -c ]; then echo 'fx-python 3.9.6 1'; exit 0; fi\ntouch \
+             \"$(dirname \"$0\")/started.txt\"\nexit 2\n",
+        );
+        let spec = HostSpec {
+            python,
+            label: "python-old".into(),
+            project_root: dir.path().to_path_buf(),
+            sources: Vec::new(),
+            check_version: true,
+        };
+        let failure = HostProcess::start(&spec, Arc::new(NoIncoming))
+            .await
+            .err()
+            .unwrap();
+        assert_eq!(
+            failure,
+            "python-old is Python 3.9.6; FX's node host needs Python 3.11 or later with grida: \
+             run uv sync or pip install grida in the project, or set GRIDA_FX_PYTHON"
+        );
+        assert!(!dir.path().join("started.txt").exists());
     }
 
     /// Every process the engine starts gets a standard input of its own, so none inherits the

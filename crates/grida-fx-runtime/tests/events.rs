@@ -39,6 +39,7 @@ fn every_event() -> Vec<Event> {
             estimate_low: Usd(10_000),
             estimate_high: Usd(40_000),
             stand_in: false,
+            repeat: None,
         },
         Event::RunStarted {
             workflow: "case".into(),
@@ -50,6 +51,10 @@ fn every_event() -> Vec<Event> {
             estimate_low: Usd::ZERO,
             estimate_high: Usd::ZERO,
             stand_in: true,
+            repeat: Some(
+                json!({"file": "workflows/case.yaml", "inputs": ["inputs/a.yaml"],
+                                "routes": ["routes.yaml"], "max_usd": 1.5, "live": true}),
+            ),
         },
         Event::PhasePlanned {
             phase: 1,
@@ -403,8 +408,12 @@ fn members_follow_the_schema_names() {
     );
     assert_eq!(fields(&events[1])["ceiling_usd"], json!(1.5));
     assert_eq!(fields(&events[1])["name"], "baseline");
-    // `stand_in` only when true.
+    // `stand_in` only when true; `repeat` only when the invocation has it.
     assert_eq!(fields(&events[1])["stand_in"], json!(true));
+    assert_eq!(
+        fields(&events[1])["repeat"]["inputs"],
+        json!(["inputs/a.yaml"])
+    );
     assert_eq!(fields(&events[3])["take"], json!([1, 2]));
     assert_eq!(fields(&events[3])["identity"], Value::Null);
     assert_eq!(

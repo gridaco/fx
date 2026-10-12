@@ -18,13 +18,13 @@ standalone `grida-fx` command and the source setup are in
 | `grida fx cancel RUN [--invocation ID] [--wait] [--timeout DURATION] [--json]` | request cancellation; optionally verify local completion ([Run control](08-run-control.md)) |
 | `grida fx plan <target> [inputs] [--routes file]… [--max-usd N] [--check] [--expect-cached] [--json] [--open] [--standalone]` | expand, check, price; optionally open the plan canvas. Never spends. |
 | `grida fx run <target> [inputs] [--routes file]… [--live] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--name NAME \| --resume NAME \| --run folder] [--stand-in file.py#function] [--open \| --no-view] [--standalone]` | run; `--live` admits paid calls, needs a ceiling (unless every call is on your own Codex) and reads the provider keys; `--name` creates a named run, `--resume` continues it, `--run` selects a folder; `--stand-in` answers paid calls with your function instead, offline ([below](#stand-ins-testing-without-a-provider)) |
-| `grida fx reroll <run> <step-path> [--live]` / `grida fx pick <run> <step-path> <take>` | takes ([Cost](04-cost-and-cache.md#takes)) |
+| `grida fx reroll <run> <step-path>` / `grida fx pick <run> <step-path> <take>` | takes ([Cost](04-cost-and-cache.md#takes)) |
 | `grida fx takes list <target>` / `grida fx takes mv <target> <old> <new>` | inspect or repair a takes file |
 | `grida fx jobs [--forget <key>]` | the cache's long provider jobs, `settled` ones included ([Resuming](04-cost-and-cache.md#resuming)); `--forget` clears one once you have checked the provider |
 | `grida fx inspect <folder or workflow id or workflow id/name> [--verify] [--json] [--open] [--standalone]` | summary; a workflow ID selects its newest-created run; `--verify` re-checks every placed file; `--open` opens its canvas |
 | `grida fx nodes [type]` | built-in and project node types, with settings and routes |
 | `grida fx schema <target>` | the JSON Schema its `inputs:` compile to |
-| `grida fx doctor [target]` | the keys, routes and tools a workflow needs ([below](#keys-and-live-runs)) |
+| `grida fx doctor [target]` | the Python, keys, routes and tools a workflow needs, the target's own routes first ([below](#keys-and-live-runs)) |
 | `grida fx lock [where] [--same <node>]… [--check]` | node version locks; repeat `--same` to confirm several |
 | `grida fx expand`, `identity`, `price <target> [inputs]` | the expanded graph, each instance's identity, the price by phase, as JSON |
 | `grida fx project <run>` | a run's record projected to its state, as JSON |
@@ -101,7 +101,7 @@ amount held for it ([providers.md §10](../../spec/providers.md#10-the-built-in-
 | Capability | Built-in routes | Key |
 |---|---|---|
 | `image.generate` | `openai/gpt-image-2.5-sunburst@gg` (a call, by `size`: $0.09 – $0.70); also `gpt-image-2.5-sunburst@openai` ($0.09 – $0.70), `openai/gpt-image-2.5-sunburst@openrouter` ($0.13 – $0.70), `openai/gpt-image-2.5/sunburst@fal` ($0.09 – $0.70); `imagegen@codex` ($0 – $0: free, on [your own Codex](12-codex.md)) | `GG_API_KEY`, else each provider's; none for Codex |
-| `image.edit` | `openai/gpt-image-2.5-sunburst@gg` (a call, by `size`: $0.09 – $0.85); also `gpt-image-2.5-sunburst@openai` ($0.09 – $0.85, and the only one with masks), `openai/gpt-image-2.5-sunburst@openrouter` ($0.13 – $0.85), `openai/gpt-image-2.5/sunburst@fal` ($0.09 – $0.85) | `GG_API_KEY`, else each provider's |
+| `image.edit` | `openai/gpt-image-2.5-sunburst@gg` (a call, by `size`: $0.09 – $0.85); also `gpt-image-2.5-sunburst@openai` ($0.09 – $0.85, and the only one with masks), `openai/gpt-image-2.5-sunburst@openrouter` ($0.13 – $0.85), `openai/gpt-image-2.5/sunburst@fal` ($0.09 – $0.85); `imagegen@codex` ($0 – $0: free, on [your own Codex](12-codex.md)) | `GG_API_KEY`, else each provider's; none for Codex |
 | `structured.generate` | `openai/gpt-5.6-sol@gg` ($0.02 – $0.60), `openai/gpt-6-astra@gg` ($0.05 – $1.50); also `openai/gpt-5.6-sol@openrouter` ($0.02 – $0.60), `openai/gpt-6-astra@openrouter` ($0.05 – $1.50) | `GG_API_KEY`, else `OPENROUTER_API_KEY` |
 | `agent.turn` | `openai/gpt-5.6-sol@gg` ($0.003 – $0.10), `openai/gpt-6-astra@gg` ($0.01 – $1.50); also `openai/gpt-5.6-sol@openrouter` ($0.003 – $0.10), `openai/gpt-6-astra@openrouter` ($0.01 – $1.50) | `GG_API_KEY`, else `OPENROUTER_API_KEY` |
 | `video.generate` | `alibaba/wan-3.0@gg` (per second, by `resolution`, at most 30 s: $0.05 – $0.20; a first frame, no last frame); also `google/gemini-omni-flash/v1.1/image-to-video@fal` (at most 10 s: $0.03 – $0.375) | `GG_API_KEY`, else `FAL_KEY` |
@@ -195,8 +195,40 @@ route     mesh.rig v1.0-20240301@tripo no key (TRIPO_API_KEY)
 ```
 
 A route is `servable`, has `no key` (and names the variable to set), is `not installed (codex)`
-(no Codex found), or has `no adapter` (no provider of FX serves it). Missing keys don't change doctor's exit status; a `.env` or base URL
-that a live run would refuse does: doctor prints `keys      <why>` and exits 1.
+(no Codex found), or has `no adapter` (no provider of FX serves it). A missing key alone doesn't change doctor's exit status, unless the target
+uses a route that needs it (below); a `.env` or base URL that a live run would refuse does: doctor
+prints `keys      <why>` and exits 1.
+
+**The target's routes come first.** With a target, `grida fx doctor <target>` lists, right after the
+Python line, the routes the workflow's paid steps use, each with whether a live run could serve it
+and how many steps use it (a repeated step counts once; groups and used workflows are included):
+
+```
+engine    grida-fx 0.5.0
+python    .venv/bin/python (grida 0.5.0)
+uses      image.generate imagegen@codex servable (8 steps)
+key       GG_API_KEY missing
+…
+```
+
+Routes are read from the workflow and `fx.yaml`, so doctor needs no inputs. A step with no route
+shows `no route`, and a route the catalog doesn't have shows `not in the catalog`. Doctor exits 1
+when any route the target uses can't be served, since that stops a live run; the full list of
+keys and routes still follows. These lines need no Python, so they print even before `uv sync`.
+Doctor takes no `--routes`: routes a run adds with `--routes` show as `not in the catalog`.
+
+**The Python line.** FX's Python node host needs Python 3.11 or later with `grida`. The Python
+line names the interpreter FX would use and says what it found:
+- `python    .venv/bin/python (grida 0.5.0)`: ready;
+- `python    python3 too old (3.9.6; FX needs 3.11+)`: run `uv sync` or `pip install grida` in
+  the project, or set `GRIDA_FX_PYTHON` to a newer Python;
+- `python    python3 no grida`: install `grida` into that Python;
+- `python    python3 NOT FOUND`: there is no such program;
+- `python    python3 cannot start: <why>`: it started and failed, for example a `grida` too old
+  for this FX.
+
+The line itself doesn't change the exit status. With a target whose nodes need Python, doctor then
+stops with the message a plan would give (exit 2).
 
 ## Inputs
 
@@ -275,23 +307,41 @@ not run again, even under `retry="engine"`.
 - **`grida fx inspect <run>`:** the run's state and a count of its steps' states, what it spent,
   and each failure. Given a workflow id instead of a folder, it reads that workflow's newest run.
   `--verify` rehashes every file its steps placed and exits 1 if one differs from its record;
-  `--json` prints the same summary as JSON, each step with its files.
+  `--json` prints the same summary as JSON, each step with its files. A started step whose paid
+  call is queued for its route's slot (a route with `concurrency: 1` runs one call at a time) is
+  counted as `waiting`, not `running`, while it waits: `67 steps: 57 pending, 1 running,
+  3 succeeded, 6 waiting`; in `--json` such a step has `waiting_for`, the route.
 - **`grida fx project <run>`:** the record projected to its state, as JSON: each instance's
-  `state` (`running`, `succeeded`, `failed` or `skipped`), with `cache` and `facts` when it
-  succeeded or `error` when it did not, and the latest `run_started`, `run_finished` and
-  `run_cancelled` events.
+  `state` (`running`, `waiting`, `succeeded`, `failed` or `skipped`), with `waiting_for` while it
+  waits for its route, `cache` and `facts` when it succeeded or `error` when it did not, and the
+  latest `run_started`, `run_finished` and `run_cancelled` events.
 - **`grida fx reroll <run> <step-path>`:** writes the take after the latest one this run drew of
-  that step into the takes file the run's `plan.json` names, and prints the next command:
+  that step into the takes file the run's `plan.json` names, and prints the command that repeats
+  the run:
 
   ```
   icon.takes.yaml: draw uses take 2 from now on
-  next      grida fx run icon
+  next      grida fx run workflows/icon.yaml --inputs inputs/lantern.yaml --max-usd 1 --live
   ```
 
 - **`grida fx pick <run> <step-path> <take>`:** writes that take into the takes file, with the
   digest of the first port holding one file in the outputs that take finished with in this run
-  (a take this run never finished is written without one). A later run fails the step if the
-  take no longer produces that file ([Cost](04-cost-and-cache.md#rerolls-and-picks)).
+  (a take this run never finished is written without one), and prints the same `next` line. A
+  later run fails the step if the take no longer produces that file
+  ([Cost](04-cost-and-cache.md#rerolls-and-picks)).
+- **The `next` line** is the run's own command, from what its record holds: the target, its
+  `--inputs` and `--routes` files (relative to where you are), `--max-usd`, and `--live` only
+  when that run's latest invocation was live: a run resumed without `--live` repeats without it.
+  It leaves out `--run`, `--name` and `--resume` (a run of another take is a new run), and
+  `--deliver` and `--yes-up-to`. A run given workflow input flags or `--arg`, a file outside the
+  project, a builder run from anywhere but the project's root, or a run started from an SDK
+  cannot be repeated from its record; then the line says `next      run icon again with the same
+  inputs and options`. So does a run whose project's run index does not record its folder (a
+  copied folder), and one whose target is a workflow id, a JSON workflow file or a builder, read
+  from another project, where that target would plan another workflow.
+- **The project:** `reroll` and `pick` write the takes file of the project that ran the run, the
+  one whose run index records its folder, wherever you run them from; a folder no project
+  records (copied from elsewhere) uses the project you are in.
 - **`grida fx takes list <target>`:** one line per entry of a workflow's takes file,
   `<step-path>  take <n>[  <digest>]`; `takes mv <target> <old> <new>` moves an entry to a step's
   new path and refuses to overwrite another entry. Neither takes a builder target.

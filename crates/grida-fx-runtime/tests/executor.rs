@@ -382,6 +382,7 @@ fn engine(handle: tokio::runtime::Handle, project: &Path, python: &Path) -> Arc<
         label: "python3".into(),
         project_root: project.to_path_buf(),
         sources: Vec::new(),
+        check_version: false,
     };
     Arc::new(Engine::new(
         handle,
@@ -783,6 +784,7 @@ fn stand_in_services(
         label: "python3".into(),
         project_root: project.to_path_buf(),
         sources: Vec::new(),
+        check_version: false,
     };
     let engine = Engine::new(
         tokio::runtime::Handle::current(),
@@ -833,6 +835,7 @@ fn calling_job(identity: &str) -> InstanceJob {
         features: Default::default(),
         concurrency: None,
         requests_per_minute: None,
+        max_input_pictures: None,
         contract: json!({}),
     };
     job.routes = IndexMap::from([("image.generate".to_string(), route)]);

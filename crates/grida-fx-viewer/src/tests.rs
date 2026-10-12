@@ -372,6 +372,117 @@ fn a_start_is_dated_from_its_invocation_start() {
     assert!(node("later#1").get("started_at").is_none());
 }
 
+#[test]
+fn a_step_waiting_for_its_route_is_waiting_and_its_waits_are_timed() {
+    let fixture = Fixture::new("image/png");
+    let mut log = FileForEvents::new(&fixture.root());
+    let at = |invocation: &str, event: Value, offset: u64| {
+        let mut event = event;
+        event["invocation_id"] = json!(invocation);
+        event["offset_ms"] = json!(offset);
+        event
+    };
+    let first = |event: Value, offset: u64| at("first", event, offset);
+    let second = |event: Value, offset: u64| at("second", event, offset);
+    let call = |name: &str, key: char, route: &str| {
+        json!({"event":name,"id":"draw#1","capability":"image.generate","route":route,
+               "call":key.to_string().repeat(64)})
+    };
+    let read = || {
+        let document =
+            serde_json::to_value(read::read_inventory(&fixture.root()).unwrap().document).unwrap();
+        document["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|node| node["id"] == "draw#1")
+            .unwrap()
+            .clone()
+    };
+    let started = json!({"event":"node_started","id":"draw#1","path":"draw","with":{},"reads":[]});
+    for event in [
+        first(
+            json!({"event":"run_started","started_at":"2026-10-11T09:00:00.000Z"}),
+            0,
+        ),
+        first(started.clone(), 1_000),
+        first(call("call_waiting", 'a', "img-a@acme"), 1_500),
+        // A second call of the same body waits too; the earliest open wait is shown.
+        first(call("call_waiting", 'b', "img-b@acme"), 3_000),
+    ] {
+        log.append(event);
+    }
+    let waiting = read();
+    assert_eq!(waiting["state"], "waiting");
+    assert_eq!(waiting["waiting_for"], "img-a@acme");
+    assert_eq!(waiting["waiting_since"], "2026-10-11T09:00:01.500Z");
+    assert!(waiting.get("waited_ms").is_none());
+    // One admitted, the step still waits, for the other call's route since that call began.
+    log.append(first(call("call_admitted", 'a', "img-a@acme"), 41_500));
+    let still = read();
+    assert_eq!(still["state"], "waiting");
+    assert_eq!(still["waiting_for"], "img-b@acme");
+    assert_eq!(still["waiting_since"], "2026-10-11T09:00:03.000Z");
+    assert_eq!(still["waited_ms"], 40_000);
+    // Both admitted, it runs; the overlapping waits count once (1.5 s to 43 s). An admission
+    // with no open wait changes nothing; a later wait of the same start adds to the time.
+    for event in [
+        first(call("call_admitted", 'b', "img-b@acme"), 43_000),
+        first(call("call_admitted", 'z', "img-a@acme"), 44_000),
+        first(call("call_waiting", 'c', "img-a@acme"), 50_000),
+        first(call("call_admitted", 'c', "img-a@acme"), 52_000),
+    ] {
+        log.append(event);
+    }
+    let running = read();
+    assert_eq!(running["state"], "running");
+    assert_eq!(running["waited_ms"], 43_500);
+    assert!(running.get("waiting_for").is_none() && running.get("waiting_since").is_none());
+    // A new attempt leaves its wait behind, untimed, even once that call is admitted.
+    log.append(first(call("call_waiting", 'd', "img-a@acme"), 55_000));
+    assert_eq!(read()["state"], "waiting");
+    log.append(first(
+        json!({"event":"node_retry","id":"draw#1","attempt":2,"error":"e"}),
+        56_000,
+    ));
+    let retried = read();
+    assert_eq!(retried["state"], "running");
+    assert!(retried.get("waiting_for").is_none());
+    log.append(first(call("call_admitted", 'd', "img-a@acme"), 57_000));
+    assert_eq!(read()["waited_ms"], 43_500);
+    // Waiting again, then the run ends: the step ended unfinished and waits for nothing.
+    log.append(first(call("call_waiting", 'e', "img-a@acme"), 60_000));
+    assert_eq!(read()["state"], "waiting");
+    log.append(first(
+        json!({"event":"run_cancelled","reason":"interrupted","charged_usd":0}),
+        61_000,
+    ));
+    let ended = read();
+    assert_eq!(ended["state"], "failed");
+    assert_eq!(ended["interrupted"], true);
+    assert_eq!(ended["waited_ms"], 43_500);
+    assert!(ended.get("waiting_for").is_none() && ended.get("waiting_since").is_none());
+    // A new invocation, its offsets from 0 again, leaves the last one's wait behind.
+    log.append(second(
+        json!({"event":"run_started","started_at":"2026-10-11T09:01:09.000Z"}),
+        0,
+    ));
+    log.append(second(call("call_admitted", 'e', "img-a@acme"), 500));
+    let resumed = read();
+    assert_eq!(resumed["state"], "running");
+    assert_eq!(resumed["waited_ms"], 43_500);
+    assert!(resumed.get("waiting_for").is_none());
+    // A new start forgets the last one's waits and times its own.
+    log.append(second(started, 1_000));
+    assert!(read().get("waited_ms").is_none());
+    log.append(second(call("call_waiting", 'f', "img-a@acme"), 2_000));
+    assert_eq!(read()["waiting_since"], "2026-10-11T09:01:11.000Z");
+    log.append(second(call("call_admitted", 'f', "img-a@acme"), 5_000));
+    let restarted = read();
+    assert_eq!(restarted["state"], "running");
+    assert_eq!(restarted["waited_ms"], 3_000);
+}
+
 pub(super) fn static_plan() -> Value {
     let instances: Vec<Value> = ["planned", "maybe", "absent", "blocked", "failed", "done"]
         .into_iter()
