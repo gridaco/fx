@@ -206,8 +206,8 @@ Python line, the routes the workflow's paid steps use, each with whether a live 
 and how many steps use it (a repeated step counts once; groups and used workflows are included):
 
 ```
-engine    grida-fx 0.5.0
-python    .venv/bin/python (grida 0.5.0)
+engine    grida-fx 0.5.1
+python    .venv/bin/python (grida 0.5.1)
 uses      image.generate imagegen@codex servable (8 steps)
 key       GG_API_KEY missing
 …
@@ -221,7 +221,7 @@ Doctor takes no `--routes`: routes a run adds with `--routes` show as `not in th
 
 **The Python line.** FX's Python node host needs Python 3.11 or later with `grida`. The Python
 line names the interpreter FX would use and says what it found:
-- `python    .venv/bin/python (grida 0.5.0)`: ready;
+- `python    .venv/bin/python (grida 0.5.1)`: ready;
 - `python    python3 too old (3.9.6; FX needs 3.11+)`: run `uv sync` or `pip install grida` in
   the project, or set `GRIDA_FX_PYTHON` to a newer Python;
 - `python    python3 no grida`: install `grida` into that Python;

@@ -10,22 +10,14 @@
         "typescript": "^5.6.0",
       },
       "optionalDependencies": {
-        "@grida/fx-darwin-arm64": "0.5.0",
-        "@grida/fx-darwin-x64": "0.5.0",
-        "@grida/fx-linux-arm64-gnu": "0.5.0",
-        "@grida/fx-linux-x64-gnu": "0.5.0",
+        "@grida/fx-darwin-arm64": "0.5.1",
+        "@grida/fx-darwin-x64": "0.5.1",
+        "@grida/fx-linux-arm64-gnu": "0.5.1",
+        "@grida/fx-linux-x64-gnu": "0.5.1",
       },
     },
   },
   "packages": {
-    "@grida/fx-darwin-arm64": ["@grida/fx-darwin-arm64@0.5.0", "", { "os": "darwin", "cpu": "arm64" }, "sha512-2jK5ih4qdTg6FtAtE31AA+J9/wpcSv0ZmQJNRUHm+KQ8HlpZ50rfCJlWxMCOF2zAUtHIbulwy8BxPTwklsOzjg=="],
-
-    "@grida/fx-darwin-x64": ["@grida/fx-darwin-x64@0.5.0", "", { "os": "darwin", "cpu": "x64" }, "sha512-l/TWInK3jUo0Q9ccFhdmTm80w+vM5XrsnYE8UihOUznLePmQwFLMhAyur7bTZnIezw5jPVEhR5ELmiwjScx6SQ=="],
-
-    "@grida/fx-linux-arm64-gnu": ["@grida/fx-linux-arm64-gnu@0.5.0", "", { "os": "linux", "cpu": "arm64" }, "sha512-cfHiDvTj2/fnjg9TsOkedkVfSe0eTAUlK6gMuTnOYX/1h81l5m4l3bPR3XtHm7rogz9VVJrcNpeItXgIcjQXKQ=="],
-
-    "@grida/fx-linux-x64-gnu": ["@grida/fx-linux-x64-gnu@0.5.0", "", { "os": "linux", "cpu": "x64" }, "sha512-Mt14aIg/zFQ0FXcxYYkBHIKryqhDRU2JiY8ua8pF+L06yS0fXnQrqguRaYbCq7Nc1oze2CSz8juJdybIz9j/QQ=="],
-
     "@types/bun": ["@types/bun@1.4.2", "", { "dependencies": { "bun-types": "1.4.2" } }, "sha512-GimotNn7+ZV0uVArItBbriZsR1oNf0+WTzPkdcFrzShI7k2norL0uzEaJT8T33dWr7O/c9ZDuAFQrctKCi72oQ=="],
 
     "@types/node": ["@types/node@26.6.4", "", { "dependencies": { "undici-types": "~8.9.0" } }, "sha512-ldVPDCzj7fsaGZrLB0NuHuTvJcsNasysBAqMolr/cgxrLd1xbqxIr3XJiPnHHJUCxj5sNF1vnRj9aWnrVh5Jcg=="],
