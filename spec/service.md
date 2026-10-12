@@ -42,7 +42,12 @@ Service commands can select their discovery directory with `--project`.
 In a directory that is missing, or empty but for `.git` and `.DS_Store`, `init`
 starts a project. Without `--template` it writes the **starter** embedded in the
 engine, in this order: `fx.yaml`, `README.md`, `AGENTS.md`, `.gitignore`,
-`.env.example` and `workflows/icon.yaml`. The starter sets no route: its one paid
+`.env.example` and `workflows/icon.yaml`, then every agent skill of the
+repository's `skills/` (each folder there holding a `SKILL.md`) under
+`.agents/skills/<skill>/`, as `npx skills add gridaco/fx` installs them. The
+engine embeds the skills of the commit it was built from. `AGENTS.md` points
+agents at the skills and asks them to give the user the live viewer's URL while
+the service runs. The starter sets no route: its one paid
 step plans as refused until the user picks a provider, and its README says how
 to install the CLI and connect one. A directory that already holds `fx.yaml` is
 validated and left as it is: nothing is written, whatever starter files it lacks,
@@ -94,13 +99,15 @@ unread. Within the template, `init` refuses, leaving the target untouched:
 - a path that is absolute or holds `..`, or an entry that is a symbolic or hard
   link, a device or a FIFO;
 - more than 1000 files, or more than 32 MiB unpacked;
+- entries under more than one top-level folder;
 - a template folder that is missing from the archive, or holds no `fx.yaml`.
 
-The template is unpacked into a temporary folder beside the target and moved in
-only when complete. Then the starter's `AGENTS.md` and `.env.example` are added
-where the template has none, and its `README.md` likewise. A template's own
-`.gitignore` keeps its lines, and gains each line of the starter's it lacks;
-without one, it gets the starter's. Nothing from a template is executed.
+The template is unpacked into a hidden temporary folder inside the target. The
+starter's `AGENTS.md`, `.env.example` and `README.md`, and each skill file under
+`.agents/skills/`, are added where the template has none. A template's own
+`.gitignore` keeps its lines and gains each line of the starter's it lacks;
+without one, it gets the starter's. Only then is the whole moved into place; on a
+failure nothing of it remains. Nothing from a template is executed.
 
 With an explicit project, ordinary `run` registers the initialized record and
 uses a compatible running service if present. It does not implicitly start a

@@ -55,6 +55,7 @@ grida fx run icon --live --max-usd 1 --open
 |---|---|
 | `fx.yaml` | project settings: routes, budget, where workflows are |
 | `workflows/` | your workflow files |
+| `AGENTS.md`, `.agents/skills/` | instructions and the FX skills for coding agents |
 | `runs/`, `.fx/` | run records and the cache, written by FX and kept out of git |
 
 ## Learn more
@@ -62,4 +63,5 @@ grida fx run icon --live --max-usd 1 --open
 - [The guide](https://github.com/gridaco/fx/blob/main/docs/guide/README.md): workflows, nodes, cost
   and cache, running, viewing
 - [Examples](https://github.com/gridaco/fx/tree/main/examples)
-- Using an agent? See `AGENTS.md`, and install the FX skill: `npx skills add gridaco/fx`
+- Using an agent? It reads `AGENTS.md` and the FX skills in `.agents/skills/`; update them with
+  `npx skills add gridaco/fx`

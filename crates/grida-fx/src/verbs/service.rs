@@ -2,7 +2,7 @@
 //! The advisory lock owns a process lifetime; HTTP authentication owns stop authority. No PID
 //! found in a file is ever signalled, and no service command executes workflow code.
 
-use crate::cli::{InitArgs, LogsArgs, ServiceArgs, StartArgs};
+use crate::cli::{LogsArgs, ServiceArgs, StartArgs};
 use grida_fx_core::docs::project::Project;
 use grida_fx_core::{Error, ErrorKind};
 use grida_fx_viewer::service::Catalog;
@@ -22,105 +22,6 @@ const LOG: &str = "service.log";
 /// The environment variable a background start sets on the service it launches: this attempt's
 /// tag, 16 lowercase hex characters, which the service's error line carries (spec/service.md §3).
 const ATTEMPT: &str = "GRIDA_FX_SERVICE_ATTEMPT";
-
-/// The starter project `init` writes into a new or empty directory, in this order
-/// (spec/service.md §2). Dotfiles are stored without their dot so that they do not act on this
-/// repository.
-const TEMPLATE: [(&str, &str); 6] = [
-    ("fx.yaml", include_str!("../../templates/init/fx.yaml")),
-    ("README.md", include_str!("../../templates/init/README.md")),
-    ("AGENTS.md", include_str!("../../templates/init/AGENTS.md")),
-    (".gitignore", include_str!("../../templates/init/gitignore")),
-    (
-        ".env.example",
-        include_str!("../../templates/init/env.example"),
-    ),
-    (
-        "workflows/icon.yaml",
-        include_str!("../../templates/init/workflows/icon.yaml"),
-    ),
-];
-
-/// Entries that leave a directory empty for `init`: a fresh `git init`, and Finder's metadata.
-const IGNORED: [&str; 2] = [".git", ".DS_Store"];
-
-pub fn init(args: &InitArgs) -> Result<u8, Error> {
-    let root = Path::new(args.directory.as_deref().unwrap_or("."));
-    let path = root.join("fx.yaml");
-    let created = if std::fs::symlink_metadata(&path).is_ok() {
-        if !path.is_file() {
-            return Err(Error::usage(
-                "fx.yaml exists but is not a project file; nothing was overwritten",
-            ));
-        }
-        false
-    } else {
-        if !is_empty(root)? {
-            let named = args.directory.as_deref().unwrap_or("this directory");
-            return Err(Error::usage(format!(
-                "{named} is not empty and has no fx.yaml; init starts a new project in an empty \
-                 directory. To make an existing folder a project, create fx.yaml holding \
-                 `fx: project/v1`"
-            )));
-        }
-        for (name, contents) in TEMPLATE {
-            let file = root.join(name);
-            if let Some(parent) = file.parent() {
-                std::fs::create_dir_all(parent)
-                    .map_err(|error| Error::io("project directory", &error))?;
-            }
-            OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&file)
-                .and_then(|mut handle| handle.write_all(contents.as_bytes()))
-                .map_err(|error| Error::io(name, &error))?;
-        }
-        true
-    };
-    // Validate an existing configuration without replacing or normalizing it.
-    let project = Project::find(root)?;
-    let files: Vec<&str> = if created {
-        TEMPLATE.iter().map(|(name, _)| *name).collect()
-    } else {
-        Vec::new()
-    };
-    let value = json!({
-        "kind": "fx-project-init-v1", "created": created,
-        "project_root": project.root, "files_created": files
-    });
-    let command = crate::invoker::command();
-    if args.json {
-        println!("{value}");
-    } else if created {
-        println!("Created {}", files.join(", "));
-        println!("Read README.md to install FX and connect an AI provider, then:");
-        if let Some(directory) = &args.directory {
-            println!("  cd {directory}");
-        }
-        println!("  {command} plan icon");
-    } else {
-        println!("Using existing fx.yaml");
-        println!("Start the local service with {command} start --background.");
-    }
-    Ok(0)
-}
-
-/// Whether `root` is missing or holds nothing but [`IGNORED`] entries.
-fn is_empty(root: &Path) -> Result<bool, Error> {
-    let entries = match std::fs::read_dir(root) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(true),
-        Err(error) => return Err(Error::io("project directory", &error)),
-    };
-    for entry in entries {
-        let entry = entry.map_err(|error| Error::io("project directory", &error))?;
-        if !IGNORED.iter().any(|name| entry.file_name() == *name) {
-            return Ok(false);
-        }
-    }
-    Ok(true)
-}
 
 fn project(where_: Option<&str>) -> Result<Project, Error> {
     let path = Path::new(where_.unwrap_or("."));
