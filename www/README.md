@@ -110,13 +110,12 @@ ordinary website traffic.
   class-owned interaction and thin React adapters. The website imports these;
   FX's engine knows nothing about this catalog or its CDN.
 - `public/brand/` and `public/landing/`: curated local artwork. Preserve the
-  [brand license](public/brand/LICENSE.txt), [landing artwork notes](public/landing/README.md)
-  and [source/reuse notes](public/landing/examples/README.md).
+  [brand license](public/brand/LICENSE.txt) and [landing artwork notes](public/landing/README.md).
 
 Follow root `AGENTS.md`: nontrivial interaction belongs in independently testable
 TypeScript classes; React mounts and presents them. Bundle Lucide icons. The
-curated Grida home landscape illustrates a possible workflow, not an installed FX
-workflow or recorded execution evidence. No workflow runs inside the page.
+landing reel shows each showcase's published result beside its recorded run, drawn by
+the same canvas as the showcase pages. No workflow runs inside the page.
 
 ## Search, branding and deployment
 

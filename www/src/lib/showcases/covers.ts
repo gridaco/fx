@@ -77,3 +77,22 @@ export function workflowCover(slug: ShowcaseSlug, lock: ShowcaseLock = showcaseL
     position: selection.position,
   };
 }
+
+/**
+ * The run the landing reel shows behind a result: the workflow's first recording, the one its
+ * Workflow tab opens on. A cover can come from a smaller run (a reel or cover render), so the
+ * canvas starts on the card holding the cover's own image when that run has it.
+ */
+export function coverRecording(slug: ShowcaseSlug, lock: ShowcaseLock = showcaseLock, recordings: Readonly<Record<string, unknown>> = documents): { url: string; sha256: string; focus: string | null } | null {
+  const pins = lock.workflows[slug]?.recordings ?? [];
+  const pin = pins[0];
+  if (!pin) return null;
+  const selection = outputCovers[slug];
+  const coverPin = selection && pins.find(item => item.id === selection.recording);
+  let focus: string | null = null;
+  if (selection && coverPin && recordings[coverPin.fixture]) {
+    const document = parseRunExport(recordings[coverPin.fixture]);
+    focus = coverArtifact(document, selection.kind === "video" ? selection.poster : selection.image, "image").digest;
+  }
+  return { url: deliveryUrl(pin.path), sha256: pin.sha256, focus };
+}

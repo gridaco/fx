@@ -29,15 +29,6 @@
   html { scroll-behavior: auto; }
 }
 
-.fx-function-mark {
-  font-family: "Times New Roman", Times, serif;
-  font-style: italic;
-  line-height: 1;
-  letter-spacing: -0.1em;
-}
-
-.fx-landing-cta { transition: background-color 140ms ease-out; }
-
 /* Native demos share the website's chrome; artwork keeps its own colors. */
 .fx-demo { color: var(--color-foreground); color-scheme: light; }
 .fx-demo button, .fx-demo select {
@@ -56,6 +47,3 @@
 .fx-demo input[type="range"] { accent-color: var(--color-primary); }
 .fx-demo [role="status"] { color: var(--color-muted-foreground); font-size: 12px; }
 
-@media (prefers-reduced-motion: reduce) {
-  .fx-landing-cta { transition: none; }
-}
