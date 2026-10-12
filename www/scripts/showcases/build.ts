@@ -3,6 +3,7 @@ import { deliveryBase } from "../../src/lib/showcases/catalog";
 import { wwwRoot } from "./io";
 import { verifyShowcases, writeBuildBinding } from "./verify";
 import { checkImagePolicy } from "../image-policy";
+import { checkSitemap } from "../sitemap";
 
 await checkImagePolicy();
 const verified = await verifyShowcases({ requireRecordings: true });
@@ -13,5 +14,6 @@ const child = Bun.spawn([process.execPath, "--no-env-file", "run", "build:next"]
 });
 const exit = await child.exited;
 if (exit) process.exit(exit);
+await checkSitemap(join(wwwRoot, "out"));
 const binding = await writeBuildBinding(base, { output: join(wwwRoot, "out"), expectedLock: verified.lock_sha256 });
 console.log(`Bound website output ${binding.output_sha256} to content ${binding.lock_sha256} at ${binding.delivery_base}.`);
