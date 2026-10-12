@@ -479,7 +479,9 @@ export class CanvasController {
     this.viewportFrame = null;
     const { x, y, zoom } = this.viewport.getSnapshot();
     this.content.style.transform = `translate(${x}px, ${y}px) scale(${zoom})`;
-    // §5.3: a badge too small to read shows its count, then only a failure dot.
+    // §5.3: a badge too small to read shows its count, then only a failure dot; --fx-text
+    // cross-fades them (canvas.css).
+    this.content.style.setProperty("--fx-text", String(zoom * 13));
     this.content.classList.toggle("is-zoom-small", zoom * 13 < 9);
     this.content.classList.toggle("is-zoom-tiny", zoom * 13 < 6);
     this.zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
