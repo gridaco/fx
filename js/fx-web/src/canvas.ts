@@ -1,6 +1,6 @@
 import { createElement, X } from "lucide";
 import type { CanvasGraph, LayoutReport } from "./graph";
-import { CanvasViewport, type CanvasInset } from "./controller";
+import { CanvasViewport, type CanvasInset, type ViewportState } from "./controller";
 import { displayPortName } from "./ports";
 import { BADGE_BAND, DECK_OFFSET, canvasEdgePath, layoutGraph, type CanvasLayout, type PlacedDeck, type PositionedFrame, type PositionedNode } from "./layout";
 import { DECK_BACK, bookmarkLayout, deckBadge, deckStack, deckTicks, expandedColumns, restingFront, tickHolds, type DeckMember } from "./deck";
@@ -677,6 +677,15 @@ export class CanvasController {
     for (const id of this.highlightedEdges) if (!next.has(id)) this.edges.get(id)?.group.classList.remove("is-highlighted");
     for (const id of next) if (!this.highlightedEdges.has(id)) this.edges.get(id)?.group.classList.add("is-highlighted");
     this.highlightedEdges = next;
+  }
+  /** The camera in screen pixels, for a page that moves it itself; input still moves it too. */
+  getCamera(): ViewportState { return this.viewport.getSnapshot(); }
+  /** Sets the camera at once, like input does; a set camera counts as framed, so a resize keeps it. */
+  setCamera(camera: ViewportState) {
+    this.content.style.transition = "";
+    this.viewport.restore(camera);
+    this.didFit = true;
+    this.applyViewport();
   }
   fit() {
     const bounds = this.container.getBoundingClientRect();
