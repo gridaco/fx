@@ -4,7 +4,7 @@
 scale them down, and give me one sheet with all of them and a folder I can ship."
 
 Nothing in it is paid: it runs offline, at $0, with no keys. It needs only a Python with `grida`
-and Pillow for its nodes ([From a clone](../README.md#from-a-clone)).
+and Pillow for its nodes ([From a clone](https://github.com/gridaco/fx/blob/main/examples/README.md#from-a-clone)).
 
 ```
 hello/
@@ -48,9 +48,9 @@ the folder.
 - **A keyed repeat.** `badge` runs once per list entry, keyed by `id`, and
   `steps.badge.*.small.outputs.image` collects the results by key.
 - **A judge.** `fx/image.check_alpha@1` judges `draw`: a badge without a clear background fails,
-  and `small` waits for the verdict ([Annotations and judges](../../docs/guide/06-annotations-and-judges.md)).
+  and `small` waits for the verdict ([Annotations and judges](https://github.com/gridaco/fx/blob/main/docs/guide/06-annotations-and-judges.md)).
 - **Built-in local steps.** `fx/image.resize@1` scales each badge; `fx/package@1` lays the
   results out by destination path, beside a manifest.
 - **The cache.** Every step's result is kept by what went into it, so a second run is free and
   instant, and a change re-runs only what it touches
-  ([Cost, cache and takes](../../docs/guide/04-cost-and-cache.md)).
+  ([Cost, cache and takes](https://github.com/gridaco/fx/blob/main/docs/guide/04-cost-and-cache.md)).

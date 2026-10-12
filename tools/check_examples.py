@@ -9,7 +9,8 @@ the SDK (or ``GRIDA_FX_BIN``); node bodies run in this interpreter (``GRIDA_FX_P
 set). Nothing runs live: the provider keys are removed from the environment, the network is off,
 and a paid call is refused at $0 with ``<capability> on <route> is a paid call; run with
 --live``. A check named ``<example>:refused`` runs a workflow that has paid steps, to hold it to
-that refusal; the others run only free steps.
+that refusal; the others run only free steps. ``self-contained`` checks, without running anything,
+that no example links outside its own folder except by absolute URL.
 
 Prints one line per check and exits 1 when any fails. Names given run only those checks.
 """
@@ -19,6 +20,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -346,13 +348,46 @@ def offline() -> None:
     os.environ.setdefault("GRIDA_FX_PYTHON", sys.executable)
 
 
+#: A markdown link's target, as written: ``[text](target)``.
+LINK = re.compile(r"\]\(([^)\s]+)\)")
+
+
+def self_contained() -> list[str]:
+    """Every markdown link in an example that leaves its folder, as ``file: target``.
+
+    An example is copied out on its own (a template, a user's project), so a link to anything
+    outside it must be an absolute URL; links within it stay relative (AGENTS.md, "Examples run").
+    """
+    found = []
+    for example in sorted(path for path in EXAMPLES.iterdir() if path.is_dir()):
+        for page in sorted(example.rglob("*.md")):
+            if any(part in {".venv", "runs", ".fx", "node_modules"} for part in page.parts):
+                continue
+            for target in LINK.findall(page.read_text(encoding="utf-8")):
+                if re.match(r"^([a-z][a-z0-9+.-]*:|#)", target):
+                    continue
+                resolved = (page.parent / target.split("#")[0]).resolve()
+                if not resolved.is_relative_to(example.resolve()):
+                    found.append(f"{page.relative_to(ROOT)}: {target}")
+    return found
+
+
 def main(names: list[str]) -> int:
-    unknown = sorted(set(names) - set(CHECKS))
+    unknown = sorted(set(names) - set(CHECKS) - {"self-contained"})
     if unknown:
         print(f"check_examples: no check {', '.join(unknown)}; the checks: {', '.join(CHECKS)}")
         return 2
     offline()
     failures = 0
+    if not names or "self-contained" in names:
+        leaving = self_contained()
+        if leaving:
+            failures += 1
+            print("FAIL self-contained: links that leave their example; make them absolute URLs:")
+            for link in leaving:
+                print(f"     {link}")
+        else:
+            print("ok   self-contained: every example links outside itself by absolute URL")
     for name, (example, check) in CHECKS.items():
         if names and name not in names:
             continue

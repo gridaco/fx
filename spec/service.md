@@ -14,7 +14,7 @@ discussion is shorthand, not a newly installed executable alias.
 
 | Command | Responsibility |
 |---|---|
-| `init [DIRECTORY] [--json]` | Establish an optional project by creating a minimal `fx.yaml`. |
+| `init [DIRECTORY] [--json]` | Start a new project from the starter files, or validate an existing `fx.yaml`. |
 | `start [--project DIRECTORY] [--port N] [--background] [--open] [--json]` | Start the local FX service; foreground by default. |
 | `status [--project DIRECTORY] [--json]` | Inspect the selected project's service using an identity/compatibility handshake. |
 | `stop [--project DIRECTORY] [--json]` | Stop only the selected service; preserve runs, plans, cache and configuration. |
@@ -38,11 +38,18 @@ file. The planning project owns the run catalog, not an imported workflow's home
 `init` is recommended onboarding, not a prerequisite for execution or serving.
 Service commands can select their discovery directory with `--project`.
 
-`init` is non-interactive. It creates only a minimal project configuration and
-does not overwrite an existing file, install dependencies, load credentials,
-start a server or execute a workflow. Repeating it on an existing valid project
-configuration is safe. Invalid existing configuration is reported rather than
-repaired or overwritten.
+`init` is non-interactive. In a directory that is missing, or empty but for
+`.git` and `.DS_Store`, it writes the starter project embedded in the engine, in
+this order: `fx.yaml`, `README.md`, `AGENTS.md`, `.gitignore`, `.env.example` and
+`workflows/icon.yaml`. The starter sets no route: its one paid step plans as
+refused until the user picks a provider, and its README says how to install the
+CLI and connect one. A directory that already holds `fx.yaml` is validated and
+left as it is: nothing is written, whatever starter files it lacks. Any other
+non-empty directory is refused (exit 2) and left untouched; a user adds FX to an
+existing folder by writing `fx.yaml` themselves. `init` never overwrites a file,
+installs dependencies, loads credentials, starts a server or executes a
+workflow. Repeating it on an existing valid project configuration is safe.
+Invalid existing configuration is reported rather than repaired or overwritten.
 
 With an explicit project, ordinary `run` registers the initialized record and
 uses a compatible running service if present. It does not implicitly start a

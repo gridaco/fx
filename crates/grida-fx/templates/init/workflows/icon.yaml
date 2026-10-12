@@ -1,0 +1,16 @@
+fx: workflow/v1
+id: icon
+title: One item icon
+
+inputs:
+  name: { type: string, description: "What the item is", default: "copper lantern" }
+
+steps:
+  draw:
+    uses: fx/image.generate@1
+    with:
+      prompt: "A single ${{ inputs.name }} game icon, square, centered, no text."
+      background: transparent
+
+outputs:
+  icon: ${{ steps.draw.outputs.image }}

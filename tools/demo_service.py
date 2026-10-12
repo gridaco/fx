@@ -21,18 +21,18 @@ SOURCE = Path(__file__).resolve().parent.parent / "fixtures" / "viewer"
 
 def main() -> None:
     project = Path(tempfile.mkdtemp(prefix="fx-service-demo-"))
+    command = [sys.executable, "-m", "grida.fx"]
+    environment = os.environ.copy()
+    environment["GRIDA_FX_DISABLE_DOTENV"] = "1"
+    # init starts a project only in an empty folder; the demo's files go in after it.
+    subprocess.run([*command, "init", str(project)], env=environment, check=True)
     (project / "nodes").mkdir()
-    (project / "workflows").mkdir()
     for name in ("media.py", "observation.py"):
         shutil.copy2(SOURCE / "nodes" / name, project / "nodes" / name)
     shutil.copy2(
         SOURCE / "workflows" / "viewer-observation.yaml",
         project / "workflows" / "viewer-observation.yaml",
     )
-    command = [sys.executable, "-m", "grida.fx"]
-    environment = os.environ.copy()
-    environment["GRIDA_FX_DISABLE_DOTENV"] = "1"
-    subprocess.run([*command, "init", str(project)], env=environment, check=True)
     prefix = shlex.join(command)
     print(f"\nProject: {project}\n")
     print(f"cd {shlex.quote(str(project))}")

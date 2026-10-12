@@ -6,8 +6,10 @@ The examples here make no provider calls.
 
 ## Project home
 
-In a fresh project, use `init` when installed help lists it; it preserves existing
-configuration. Older versions can create the same minimal `fx.yaml` manually:
+In a new, empty folder, use `init` when installed help lists it; recent releases
+write a starter project there and refuse a non-empty folder without `fx.yaml`.
+In an existing folder, or with an older version, create the minimal `fx.yaml`
+manually:
 
 ```sh
 python -m grida.fx init

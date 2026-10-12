@@ -14,7 +14,8 @@ grida fx start --background --open
 grida fx status --json
 ```
 
-`init` preserves an existing `fx.yaml` or creates a minimal one. The dashboard is
+`init` checks an existing `fx.yaml`, or starts a new project in an empty folder
+([Getting started](01-getting-started.md#a-project)). The dashboard is
 at `http://127.0.0.1:8787/` by default, with one row per recorded workflow.
 Use `start --port N` to choose another exact port; an occupied port is an error,
 not a reason to silently pick a random port. FX remembers a successful selection.

@@ -70,29 +70,66 @@ impl Drop for Service {
     }
 }
 
+const STARTER: [&str; 6] = [
+    "fx.yaml",
+    "README.md",
+    "AGENTS.md",
+    ".gitignore",
+    ".env.example",
+    "workflows/icon.yaml",
+];
+
 #[test]
-fn init_only_creates_config_and_preserves_an_existing_authored_file() {
+fn init_writes_the_starter_and_preserves_an_existing_authored_file() {
     let root = tempfile::tempdir().unwrap();
     let initialized = success(execute(root.path(), &["init", "--json"]));
     assert_eq!(initialized["kind"], "fx-project-init-v1");
     assert_eq!(initialized["created"], true);
-    assert_eq!(initialized["files_created"], json!(["fx.yaml"]));
-    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
+    assert_eq!(initialized["files_created"], json!(STARTER));
+    for name in STARTER {
+        assert!(root.path().join(name).is_file(), "{name}");
+    }
+    // The starter plans offline; its one paid step waits for the user's route.
+    let plan = execute(root.path(), &["plan", "icon"]);
+    assert!(plan.status.success());
+    assert!(String::from_utf8_lossy(&plan.stdout).contains("no route for image.generate"));
     let source = "# Authored configuration\nfx: project/v1\nruns: history\n";
     std::fs::write(root.path().join("fx.yaml"), source).unwrap();
+    std::fs::remove_file(root.path().join("README.md")).unwrap();
     let repeated = success(execute(root.path(), &["init", "--json"]));
     assert_eq!(repeated["created"], false);
+    assert_eq!(repeated["files_created"], json!([]));
     assert_eq!(
         std::fs::read_to_string(root.path().join("fx.yaml")).unwrap(),
         source
     );
+    assert!(!root.path().join("README.md").exists());
     std::fs::write(root.path().join("fx.yaml"), "invalid: configuration\n").unwrap();
     assert!(!execute(root.path(), &["init", "--json"]).status.success());
     assert_eq!(
         std::fs::read_to_string(root.path().join("fx.yaml")).unwrap(),
         "invalid: configuration\n"
     );
+}
+
+#[test]
+fn init_refuses_a_folder_with_files_and_no_project() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(root.path().join("notes.txt"), "mine\n").unwrap();
+    let refused = execute(root.path(), &["init", "--json"]);
+    assert_eq!(refused.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&refused.stderr).contains("is not empty and has no fx.yaml"));
     assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
+    // A fresh `git init` still counts as empty, and a named directory is created.
+    let fresh = tempfile::tempdir().unwrap();
+    std::fs::create_dir(fresh.path().join(".git")).unwrap();
+    assert_eq!(
+        success(execute(fresh.path(), &["init", "--json"]))["created"],
+        true
+    );
+    let named = success(execute(root.path(), &["init", "assets", "--json"]));
+    assert_eq!(named["files_created"], json!(STARTER));
+    assert!(root.path().join("assets/workflows/icon.yaml").is_file());
 }
 
 #[test]

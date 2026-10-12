@@ -82,7 +82,7 @@ individual commands can have narrower target rules.
 | Intent / tool | What an agent receives | Conditions and effects |
 |---|---|---|
 | Discover: `--version`, `--help`, `<verb> --help` | Installed version and human-readable command help | No common machine-readable capability manifest yet. |
-| Establish project: `init [directory] --json` | Resolved project and initialization outcome | Creates minimal configuration without overwriting an existing file. No dependencies, service, credentials or execution. |
+| Establish project: `init [directory] --json` | Resolved project and initialization outcome, with the files it wrote | A new or empty directory gets the starter project (`fx.yaml`, `README.md`, `AGENTS.md`, `.gitignore`, `.env.example`, `workflows/icon.yaml`), with no route set. An existing `fx.yaml` is validated and nothing is written. Any other non-empty directory is refused (exit 2): to add FX to an existing folder, write `fx.yaml` (`fx: project/v1`). Never overwrites; no dependencies, service, credentials or execution. |
 | Start service: `start --background [--project directory] [--port N] [--open] --json` | Ready service identity and actual URL | Native background process, port 8787 by default. Matching startup is idempotent; readiness checks project, instance and protocol. A failed start exits 2 with this attempt's cause in one line (an occupied port names `--port N`); `--json` also prints the `stopped` status with that `cause`. Does not execute workflows or install crash/login recovery. |
 | Manage service: `status --json`, `logs --lines N`, `stop --json` | Service identity/status, bounded logs, shutdown outcome | Select the project explicitly when needed. Stop affects inspection only; runs and records remain. Plain `start` stays foreground. |
 | Discover built-ins: `nodes [TYPE]` | Text descriptions, settings, ports and applicable routes | Lists built-in types, not a complete custom-node registry. Unknown types currently print nothing with exit 0. Listing a type does not prove every advertised capability can execute. |
@@ -147,7 +147,7 @@ price it, then execute within the user's authorized scope. An illustrative local
 sequence, with paths replaced by the user's actual files, is:
 
 ```sh
-grida fx init
+grida fx init   # a new folder; in an existing one, write fx.yaml instead
 grida fx start --background --json
 grida fx status --json
 grida fx schema workflows/example.yaml

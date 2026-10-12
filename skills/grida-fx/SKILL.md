@@ -76,15 +76,23 @@ built-ins such as `image.resize`, `files.copy`, and `package` need Python with t
 `grida` package even when invoked through npm. `GRIDA_FX_PYTHON` can select that
 interpreter. Installed viewers carry their own web client.
 
+## Set up a project
+
+For a first setup, or when a live run fails for a missing key, read
+[onboarding.md](references/onboarding.md). Connecting an AI provider needs the
+user: they create the account and key, and you verify with `grida fx doctor`.
+
 ## Author and plan
 
 For new workflows or node bodies, read [authoring.md](references/authoring.md).
 It includes runnable local examples and the supported Python/JavaScript paths.
 
-1. Inspect the existing workflow and project settings. An `fx.yaml` is optional;
-   the recommended setup is `grida fx init` when the installed help lists it. It
-   preserves existing configuration and creates no workflow or service. Keep
-   generated `runs/` and `.fx/` data out of source control.
+1. Inspect the existing workflow and project settings. An `fx.yaml` is optional.
+   For a new project, `grida fx init <folder>` when the installed help lists it;
+   to add FX to an existing folder, write `fx.yaml` (`fx: project/v1`), since
+   recent releases refuse to init a non-empty folder without one
+   ([onboarding.md](references/onboarding.md)). Keep generated `runs/` and `.fx/`
+   data out of source control.
 2. Discover the installed interface instead of guessing node fields or routes:
    `grida fx nodes`, `grida fx nodes image.generate`, and
    `grida fx schema workflows/example.yaml`.
@@ -137,6 +145,9 @@ Routes are `model@provider` choices for capabilities. Use the installed node
 catalog and current provider documentation when choosing them. Prefer the
 Grida Gateway routes (`@gg`) when setting up a project: one key, `GG_API_KEY`,
 serves text, images, video and 3D, so a user needs no account per provider.
+Sound, speech and music have no GG route; they need the provider's own key.
+[onboarding.md](references/onboarding.md) covers what to ask the user for each
+provider, including GG's key setup and its API reference.
 Keep a route the user chose on another provider, and do not switch an existing
 project's routes without asking: a new route is a new cache key. Project
 `route_tables:` overlays the built-in table; explicit `--routes` files replace
@@ -217,8 +228,8 @@ grida fx inspect runs/example --open
 ```
 
 Treat this as a sequence of tools to select from, not permission to execute a
-workflow. `init` creates only minimal `fx.yaml` configuration and never overwrites
-it. `start --background` returns after readiness and reuses a compatible service
+workflow. `init` never overwrites a file; in an existing project it only checks
+`fx.yaml`. `start --background` returns after readiness and reuses a compatible service
 for that project. Plain `start` stays foreground. The default address is
 `http://127.0.0.1:8787/`; use the actual URL from `status --json` or command output.
 An explicit `--port N` must be available and is remembered for that project.

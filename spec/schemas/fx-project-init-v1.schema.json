@@ -25,7 +25,14 @@
       "type": "array",
       "uniqueItems": true,
       "items": {
-        "const": "fx.yaml"
+        "enum": [
+          "fx.yaml",
+          "README.md",
+          "AGENTS.md",
+          ".gitignore",
+          ".env.example",
+          "workflows/icon.yaml"
+        ]
       }
     }
   }

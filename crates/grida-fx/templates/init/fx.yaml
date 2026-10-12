@@ -1,0 +1,13 @@
+fx: project/v1
+runs: runs
+cache: .fx/cache
+workflows: [workflows]
+
+# The most any one live run may spend, in US dollars; --max-usd overrides it.
+# budget:
+#   max_usd: 5
+
+# Which model serves each capability. Pick a provider first (README.md, "Connect an AI provider").
+# routes:
+#   image.generate: openai/gpt-image-2.5-sunburst@gg    # Grida Gateway (GG_API_KEY)
+#   # or imagegen@codex (your own Codex), gpt-image-2.5-sunburst@openai (OPENAI_API_KEY)

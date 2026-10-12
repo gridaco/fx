@@ -46,7 +46,7 @@ estimate  $0.09 – $28.40   ceiling $12.00   ⚠ the worst case exceeds the cei
 - **The ceiling** is the project's $12 (`fx.yaml`), or `--max-usd`: the run stops before crossing
   it. The figures are each route's allowance, a worst case; what a call costs is settled from
   what the provider reports
-  ([Cost, cache and takes](../../docs/guide/04-cost-and-cache.md#before-spending-the-plan)).
+  ([Cost, cache and takes](https://github.com/gridaco/fx/blob/main/docs/guide/04-cost-and-cache.md#before-spending-the-plan)).
 
 ```bash
 grida fx run concept-gallery --inputs inputs/tidebell.yaml --live --max-usd 12
@@ -101,5 +101,5 @@ resolve to the same model, whatever the routes say later.
 ## Planned
 
 FX's built-in review types, `fx/structured.review@1` and `fx/vision.review@1` (marks and masks,
-[Annotations and judges](../../docs/guide/06-annotations-and-judges.md)), have no provider adapter
+[Annotations and judges](https://github.com/gridaco/fx/blob/main/docs/guide/06-annotations-and-judges.md)), have no provider adapter
 yet. When they do, `reviews.py` can give way to them.

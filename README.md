@@ -36,36 +36,41 @@ pip install grida
 The JavaScript SDK is `@grida/fx`. To run FX without the Grida CLI (in a service you host, say),
 see [ways to run FX](CONTRIBUTING.md#ways-to-run-fx).
 
-One key serves FX's text, image, video and 3D routes: create a
-[Grida Gateway](https://console.grida.co) key and set `GG_API_KEY`, in the environment or a
-project `.env`. Your own OpenAI, OpenRouter, fal, Tripo or ElevenLabs keys work too
-([keys and live runs](docs/guide/05-running.md#keys-and-live-runs)).
+## AI providers
+
+FX runs your own code with no provider at all. When a step calls an AI model, pick how it reaches
+one:
+
+| | What you set up | What you get |
+|---|---|---|
+| **No provider** | nothing | a plain workflow engine: your own code, cached and recorded |
+| **Your own Codex** | Codex, signed in to ChatGPT | images, free to FX: Codex counts them against your plan |
+| **Your own keys** | `OPENAI_API_KEY`, `FAL_KEY`, `TRIPO_API_KEY`, `ELEVENLABS_API_KEY`, … | each provider's models, on each provider's account |
+| **Grida Gateway** | one `GG_API_KEY` | every modality, with one key and one bill |
+
+[Grida Gateway](https://console.grida.co/_/ai-gateway) is the shortest way in: create a key,
+set `GG_API_KEY` in the environment or a project `.env`, and FX's text, image, video and 3D steps
+run on it. Mix paths as you like; [AI providers](docs/guide/13-providers.md) lists what each one
+serves and where to get each key.
 
 ## Plan. Run. Inspect.
 
-FX keeps a project dashboard and records every run. For an existing workflow, start the
-service once:
+Start a project, then pick a route for its first workflow in `fx.yaml`:
 
 ```sh
-grida fx init
+npx grida fx init my-assets
+cd my-assets
 grida fx start --background
-grida fx plan workflows/example.yaml --open
-grida fx run workflows/example.yaml --run runs/example --open
-grida fx inspect runs/example --open
+grida fx plan icon --open
+grida fx run icon --live --max-usd 1 --open
 ```
 
-A run without `--live` executes local steps and reuses cached paid results.
-New provider calls require `--live` and a spending ceiling, such as `--max-usd 5`, unless
-every one is on [your own Codex](docs/guide/12-codex.md).
-The dashboard stays at `http://127.0.0.1:8787/` by default after execution finishes;
-`grida fx stop` stops the service. Browser opening requires `--open`.
-The [viewing guide](docs/guide/07-viewing.md) covers independent `--standalone`
-inspection and the older `view` command.
-To share a finished recording, use
-`grida fx export runs/example --out review --json`; the
-[sharing guide](docs/guide/11-exports.md) explains disclosure and portable media.
-To stop execution, use `grida fx cancel runs/example --wait`. The
-[run-control guide](docs/guide/08-run-control.md) explains targeting, cleanup and resume.
+`init` writes a starter project into an empty folder: a README that walks through installing
+and connecting a provider, an `AGENTS.md` for coding agents, and a first workflow. FX keeps a
+project dashboard and records every run.
+
+A run without `--live` executes local steps and reuses cached results. New provider calls need
+`--live` and a spending ceiling, such as `--max-usd 5`, unless every one is on your own Codex.
 
 Start with [the guide](docs/guide/01-getting-started.md), or explore the
 [examples](examples/): recolor an image with code, build a looping background,
@@ -79,21 +84,11 @@ Install the skill for workflow authoring, execution, and inspection:
 npx skills add gridaco/fx
 ```
 
-## Under the hood
+## Learn more
 
-FX is a workflow engine for asset pipelines, implemented in Rust. YAML declares
-the dependency graph; the Python and JavaScript SDKs provide programmatic authoring
-and execution APIs. Python also hosts custom node bodies and workflow builders.
-
-The engine owns planning, scheduling, result identities, caching, spending limits,
-provider retries, and run records. SDKs and node bodies use that engine rather than
-implementing their own execution or billing layer. AI generation is one application;
-ordinary code can run as workflow steps too. The bundled viewer is a read-only
-canvas for plans and recorded runs.
-
-Read the [workflow language](docs/guide/02-workflow-file.md),
-[Python SDK](python/README.md), [JavaScript SDK](js/fx/README.md),
-and [specifications](spec/) for the technical contracts.
+- [The guide](docs/guide/README.md): workflows, nodes, cost and cache, running, viewing, sharing
+- [Python SDK](python/README.md) and [JavaScript SDK](js/fx/README.md)
+- [Specifications](spec/): the language-neutral contracts
 
 ## Contribute
 
