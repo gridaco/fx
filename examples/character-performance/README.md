@@ -19,14 +19,14 @@ Install Python 3.11 or newer, [uv](https://docs.astral.sh/uv/), and FFmpeg with
 `ffprobe` on PATH. Motion transfer and the composed cast workflow are additions in
 this source revision; an older published Grida package may not include them.
 Build the FX checkout containing this example using the
-[source build instructions](https://github.com/gridaco/fx/blob/main/CONTRIBUTING.md#build-from-source),
+[source build instructions](https://github.com/gridaco/fx/blob/4323dd28a67b3d6906444bb1691d78dafa8fcca4/CONTRIBUTING.md#build-from-source),
 then install this example's dependencies:
 
 ```sh
 uv sync
 ```
 
-Follow [Use a source build with Grida](https://github.com/gridaco/fx/blob/main/CONTRIBUTING.md#use-a-source-build-with-grida-fx)
+Follow [Use a source build with Grida](https://github.com/gridaco/fx/blob/4323dd28a67b3d6906444bb1691d78dafa8fcca4/CONTRIBUTING.md#use-a-source-build-with-grida-fx)
 to select the built engine and matching Python SDK before running the recipes.
 `grida fx nodes video.motion_transfer` verifies that the selected engine exposes
 `fx/video.motion_transfer@1`. A matching installed
@@ -81,7 +81,7 @@ and the run's ceiling includes engine retries. The built-in Kling motion routes
 are alternatives selected in `fx.yaml`; the workflow supports explicit 24 or
 30 fps preparation. Wan requires 24 fps. Provider profiles and supported controls
 are documented in the
-[provider contract](https://github.com/gridaco/fx/blob/main/spec/providers.md#93-fal).
+[provider contract](https://github.com/gridaco/fx/blob/4323dd28a67b3d6906444bb1691d78dafa8fcca4/spec/providers.md#93-fal).
 
 A technically completed run can contain a rejected study. Require
 `report.review_status == "sampled_review_pass"` before treating a take as accepted.
