@@ -12,6 +12,8 @@ source stays in Git, while generated artwork and saved runs stay outside it.
 | [looping-parallax](looping-parallax/) | reusable repeating layers and the website's complete concept-to-parallax graph | mirrored layers offline; separation and seam repainting paid; optional video uses FFmpeg |
 | [world](world/) | synopsis, poster and direction into reviewed illustrated entities | free preparation offline; structured proposals and illustrations paid |
 | [movie-sprite](movie-sprite/) | an image into a video take, then transparent loop finishing | generation paid; downloaded or supplied footage finishes locally at $0 with FFmpeg |
+| [product-promo](product-promo/) | a real screen recording, structured camera/timing plan and local typography into a product-launch clip | optional plan generation paid; saved edit and exact screen pixels render locally at $0 with FFmpeg |
+| [character-performance](character-performance/) | a character illustration plus driving footage into an independently sampled, reviewed character clip | motion transfer and independent review paid; preparation and supplied-footage finishing local at $0 |
 | [portrait-motion](portrait-motion/) | independent face states, registration, native patches and combinations | state generation paid; synthesized stand-ins exercise both branches at $0 |
 | [character-3d](character-3d/) | reviewed reference views, mesh generation, Blender assembly, rigging and admission | current runnable graph; local steps need Blender, generation and review paid |
 | [terrain](terrain/) | Python builder, fixed 47-mask atlas, validation and deterministic map preview | preparation and preview local; atlas generation and review paid |
@@ -58,7 +60,7 @@ Small fixture pictures are deterministic shapes drawn by
 uv run --project python python examples/draw_placeholders.py
 ```
 
-The eight website showcase projects include their workflow declarations, private helper
+The website showcase projects include their workflow declarations, private helper
 code, prompts, schemas and authored settings. Generated reference images and the original
 movie take are optional public CDN downloads, pinned by SHA-256 and byte size. For example:
 
@@ -86,10 +88,10 @@ their free paths on fresh copies using the current checkout's SDK and embedded e
 Paid calls are refused at $0; hello also proves cache reuse. The complete parallax graph
 plans and refuses its paid calls using synthesized input.
 
-[`tools/check_showcase_examples.py`](../tools/check_showcase_examples.py) checks the other
-seven website projects with synthesized inputs, without CDN access, provider keys or dotenv
+[`tools/check_showcase_examples.py`](../tools/check_showcase_examples.py) checks the larger
+website projects with synthesized inputs, without CDN access, provider keys or dotenv
 loading. It plans the actual graphs, checks paid-call refusal, finishes a synthetic movie,
-exercises both portrait branches with stand-ins, and renders a stand-in pet's reel. The 3D graph always plans; actual local
+exercises both portrait branches with stand-ins, renders a stand-in pet's reel, and checks both video examples with synthesized media. The 3D graph always plans; actual local
 normalization requires Blender and is separately documented in that example.
 
 For these larger examples, install FFmpeg and the example-only processing dependencies

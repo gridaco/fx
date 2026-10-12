@@ -40,6 +40,28 @@ plans, records and exports are byte-identical under each (the invoker, `GRIDA_FX
   ([RELEASING.md](RELEASING.md#then-grida)). `grida` names a newer release itself; `@grida/fx`
   and `grida-fx` never check for updates.
 
+
+### Use a source build with `grida fx`
+
+An editable Python install selects the checkout for `python -m grida.fx`; the
+installed Grida CLI also needs its engine and Python interpreter selected explicitly.
+First build the checkout as described below. From an example directory, select that
+same checkout for both the engine and its Python node host:
+
+```sh
+uv sync
+export FX_SOURCE_CHECKOUT="/path/to/fx"
+uv pip install --python .venv/bin/python --editable "$FX_SOURCE_CHECKOUT/python"
+export GRIDA_FX_BIN="$FX_SOURCE_CHECKOUT/python/src/grida/fx/_bin/grida-fx"
+export GRIDA_FX_PYTHON="$PWD/.venv/bin/python"
+grida fx nodes video.motion_transfer
+```
+
+Use `uv run --no-sync` for helper scripts after this editable installation so a
+subsequent dependency sync does not replace the checkout SDK. Rebuild the engine
+when the source revision changes. These settings apply to the current shell;
+other shells use their own launcher configuration.
+
 ## Build from source
 
 Source development needs Git, Rust/Cargo ([rustup.rs](https://rustup.rs)),

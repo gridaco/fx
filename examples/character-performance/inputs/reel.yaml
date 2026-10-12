@@ -1,0 +1,10 @@
+# Published or locally delivered accepted clips with their matching reports.
+first: ../.showcase-inputs/riko-performance.mp4
+first_report: ../.showcase-inputs/riko-report.json
+first_name: Riko
+second: ../.showcase-inputs/nami-performance.mp4
+second_report: ../.showcase-inputs/nami-report.json
+second_name: Nami
+# These regions belong to the exact canonical clips and require a fresh review on new takes.
+first_region: [0.03888888888888889, 0.2765625, 0.9319444444444445, 0.68671875]
+second_region: [0.03888888888888889, 0.32265625, 0.9611111111111111, 0.6359375]

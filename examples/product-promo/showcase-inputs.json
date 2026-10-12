@@ -1,0 +1,13 @@
+{
+  "schema": "fx_showcase_inputs_v1",
+  "delivery_base": "https://fx-cdn.grida.co/showcase",
+  "purpose": "Exact canonical inputs and accepted local-composition deliveries.",
+  "inputs": [
+    {
+      "filename": "forma.mp4",
+      "path": "showcases/b45587a7593e02d5dc7ca560539b0ab549ea9292078927df837464e9510cc784/product-promo/assets/source.mp4",
+      "sha256": "20f7dfce6cd3e54760843d3ba3d7d8d2bbae3022fda1b70078bb9987453f0971",
+      "bytes": 449527
+    }
+  ]
+}

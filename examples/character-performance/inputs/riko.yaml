@@ -1,0 +1,8 @@
+character: ../.showcase-inputs/riko.webp
+motion: ../.showcase-inputs/motion.mp4
+name: Riko
+start: 0
+seconds: 4
+background: "f4eee6"
+body_fill: 0.45
+fps: 24

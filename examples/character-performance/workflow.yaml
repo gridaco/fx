@@ -1,0 +1,124 @@
+fx: workflow/v1
+id: character-performance
+title: Reference-driven character performance
+description: >-
+  A character illustration and a driving performance in; a silent character clip out.
+  The reference is trimmed explicitly, motion transfers through a video-conditioned
+  model, and an independent reviewer compares identity and synchronized frame samples.
+
+inputs:
+  character: { type: file, kind: image }
+  motion: { type: file, kind: video }
+  name: { type: string, default: Character, max_length: 80 }
+  seconds: { type: number, minimum: 3, maximum: 10, default: 4 }
+  start: { type: number, minimum: 0, maximum: 120, default: 0 }
+  background: { type: string, default: "f4eee6", max_length: 6 }
+  body_fill: { type: number, minimum: 0.4, maximum: 0.8, default: 0.6 }
+  fps: { type: integer, enum: [24, 30], default: 24 }
+  prepared:
+    type: boolean
+    default: false
+    description: Character plate and silent motion interval already prepared with prepare.yaml
+  orientation: { type: string, enum: [video, image], default: video }
+  direction:
+    type: string
+    max_length: 2000
+    default: >-
+      Preserve the illustrated character's recognizable face, hair, accessories and outfit.
+      Follow the driving performance's gestures, steps, body orientation and timing.
+      Keep the illustrated rendering style and the simple studio background.
+      One character, fixed camera, full body in frame. Preserve the reference image subject scale
+      and generous blank margins. No camera zoom. Keep hands and feet inside the frame at every pose. No titles, logos or extra people.
+
+assert:
+  - check: ${{ !inputs.prepared || inputs.start == 0 }}
+    message: prepared motion starts at zero; select its interval before this run
+
+steps:
+  prepare:
+    title: Prepare the identity and motion
+    description: >-
+      Free local processing. Fit the illustration onto an opaque studio plate without
+      repainting it; select the stated time interval and remove reference audio.
+    at: plan
+    if: ${{ !inputs.prepared }}
+    uses: ./nodes/performance.py#prepare
+    with:
+      character: ${{ inputs.character }}
+      motion: ${{ inputs.motion }}
+      seconds: ${{ inputs.seconds }}
+      start: ${{ inputs.start }}
+      background: ${{ inputs.background }}
+      body_fill: ${{ inputs.body_fill }}
+      fps: ${{ inputs.fps }}
+    view: true
+
+  inspect_prepared:
+    title: Validate supplied prepared references
+    at: plan
+    if: ${{ inputs.prepared }}
+    uses: ./nodes/performance.py#inspect_prepared
+    with:
+      character: ${{ inputs.character }}
+      motion: ${{ inputs.motion }}
+      seconds: ${{ inputs.seconds }}
+      fps: ${{ inputs.fps }}
+
+  transfer:
+    title: Transfer the performance
+    description: >-
+      The image controls appearance and the video controls action. The duration is
+      bound to the prepared reference; the provider chooses native output dimensions.
+    uses: fx/video.motion_transfer@1
+    requires: [motion_reference]
+    with:
+      character: ${{ steps.prepare.outputs.character || inputs.character }}
+      motion: ${{ steps.prepare.outputs.motion || inputs.motion }}
+      prompt: ${{ inputs.direction }}
+      duration: ${{ steps.prepare.facts.seconds || inputs.seconds }}
+      orientation: ${{ inputs.orientation }}
+      keep_original_sound: false
+    view: true
+
+  finish:
+    title: Finish and inspect every frame
+    description: >-
+      Remove generated audio, retain native framing and timing, decode the complete
+      clip, and make an identity plate plus synchronized motion/result frame samples.
+    uses: ./nodes/performance.py#finish
+    with:
+      video: ${{ steps.transfer.outputs.video }}
+      motion: ${{ steps.prepare.outputs.motion || inputs.motion }}
+      character: ${{ steps.prepare.outputs.character || inputs.character }}
+      seconds: ${{ steps.prepare.facts.seconds || inputs.seconds }}
+      name: ${{ inputs.name }}
+    view: true
+
+  review:
+    title: Independently review the sampled performance
+    uses: fx/structured.generate@1
+    requires: [image_input, structured_output]
+    with:
+      prompt: ./prompts/review.md
+      schema: ./schemas/review.json
+      context:
+        - ${{ steps.finish.outputs.identity }}
+        - ${{ steps.finish.outputs.evidence }}
+      max_tokens: 4000
+
+  admit:
+    title: Admit the reviewed take
+    uses: ./nodes/performance.py#admit
+    judges: transfer
+    with:
+      review: ${{ steps.review.outputs.json }}
+      report: ${{ steps.finish.outputs.report }}
+
+outputs:
+  video: ${{ steps.finish.outputs.video }}
+  poster: ${{ steps.finish.outputs.poster }}
+  character: ${{ steps.prepare.outputs.character || inputs.character }}
+  evidence: ${{ steps.finish.outputs.evidence }}
+  identity: ${{ steps.finish.outputs.identity }}
+  report: ${{ steps.admit.outputs.report }}
+  review: ${{ steps.review.outputs.json }}

@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "status": {"type": "string", "enum": ["pass", "fail"]},
+    "identity": {"type": "string", "enum": ["pass", "fail"]},
+    "motion_correspondence": {"type": "string", "enum": ["pass", "fail"]},
+    "anatomy_and_framing": {"type": "string", "enum": ["pass", "fail"]},
+    "style": {"type": "string", "enum": ["pass", "fail"]},
+    "observations": {"type": "array", "items": {"type": "string"}},
+    "limitations": {"type": "array", "items": {"type": "string"}},
+    "review_scope": {"type": "string", "const": "sampled_frames_and_pose_correspondence"}
+  },
+  "required": ["status", "identity", "motion_correspondence", "anatomy_and_framing", "style", "observations", "limitations", "review_scope"]
+}

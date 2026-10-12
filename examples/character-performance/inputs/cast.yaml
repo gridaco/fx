@@ -1,0 +1,11 @@
+# Two prepared canonical plates and one shared silent 24 fps reference.
+first_character: ../.showcase-inputs/riko-plate.png
+second_character: ../.showcase-inputs/nami-plate.png
+motion: ../.showcase-inputs/motion-prepared.mp4
+first_name: Riko
+second_name: Nami
+seconds: 4
+fps: 24
+# Fixed regions selected after checking every native frame; preserve all gestures.
+first_region: [0.03888888888888889, 0.2765625, 0.9319444444444445, 0.68671875]
+second_region: [0.03888888888888889, 0.32265625, 0.9611111111111111, 0.6359375]

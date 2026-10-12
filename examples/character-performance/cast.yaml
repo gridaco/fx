@@ -1,0 +1,82 @@
+fx: workflow/v1
+id: character-cast
+title: Two characters, one driving performance
+description: >-
+  Compose two instances of the reusable character-performance workflow, then
+  assemble their accepted clips with the free reel utility. Supply prepared
+  character plates and a prepared silent motion interval. Live execution spends
+  only in the two child workflows, under the engine's one shared ceiling.
+inputs:
+  first_character: { type: file, kind: image }
+  second_character: { type: file, kind: image }
+  motion: { type: file, kind: video }
+  first_name: { type: string, default: First character, max_length: 40 }
+  second_name: { type: string, default: Second character, max_length: 40 }
+  first_region:
+    type: list
+    items: { type: number, minimum: 0, maximum: 1 }
+    min_items: 4
+    max_items: 4
+    default: [0, 0, 1, 1]
+    description: "Caller-selected normalized [x, y, width, height] for local reel framing"
+  second_region:
+    type: list
+    items: { type: number, minimum: 0, maximum: 1 }
+    min_items: 4
+    max_items: 4
+    default: [0, 0, 1, 1]
+    description: "Caller-selected normalized [x, y, width, height] for local reel framing"
+  seconds: { type: number, minimum: 3, maximum: 10, default: 4 }
+  fps: { type: integer, enum: [24, 30], default: 24 }
+  direction:
+    type: string
+    max_length: 2000
+    default: >-
+      Preserve the illustrated character's recognizable face, hair, accessories and outfit.
+      Follow the driving performance's gestures, steps, body orientation and timing.
+      Keep the illustrated rendering style and the simple studio background.
+      One character, fixed camera, full body in frame. Preserve the reference image subject scale
+      and generous blank margins. No camera zoom. Keep hands and feet inside the frame at every pose. No titles, logos or extra people.
+steps:
+  first:
+    title: First reviewed character performance
+    uses: ./workflow.yaml
+    with:
+      character: ${{ inputs.first_character }}
+      motion: ${{ inputs.motion }}
+      name: ${{ inputs.first_name }}
+      seconds: ${{ inputs.seconds }}
+      direction: ${{ inputs.direction }}
+      prepared: true
+      fps: ${{ inputs.fps }}
+  second:
+    title: Second reviewed character performance
+    uses: ./workflow.yaml
+    with:
+      character: ${{ inputs.second_character }}
+      motion: ${{ inputs.motion }}
+      name: ${{ inputs.second_name }}
+      seconds: ${{ inputs.seconds }}
+      direction: ${{ inputs.direction }}
+      prepared: true
+      fps: ${{ inputs.fps }}
+  reel:
+    title: Assemble the accepted cast
+    uses: ./reel.yaml
+    with:
+      first: ${{ steps.first.outputs.video }}
+      first_report: ${{ steps.first.outputs.report }}
+      first_name: ${{ inputs.first_name }}
+      first_region: ${{ inputs.first_region }}
+      second: ${{ steps.second.outputs.video }}
+      second_report: ${{ steps.second.outputs.report }}
+      second_name: ${{ inputs.second_name }}
+      second_region: ${{ inputs.second_region }}
+outputs:
+  video: ${{ steps.reel.outputs.video }}
+  poster: ${{ steps.reel.outputs.poster }}
+  report: ${{ steps.reel.outputs.report }}
+  first_video: ${{ steps.first.outputs.video }}
+  first_report: ${{ steps.first.outputs.report }}
+  second_video: ${{ steps.second.outputs.video }}
+  second_report: ${{ steps.second.outputs.report }}

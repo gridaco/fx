@@ -1,0 +1,20 @@
+{
+  "kind": "selected_motion_reference_v1",
+  "creator": "Kampus Production",
+  "source_page": "https://www.pexels.com/video/woman-dancing-6940477/",
+  "download_url": "https://videos.pexels.com/video-files/6940477/6940477-uhd_1440_2560_25fps.mp4",
+  "sha256": "f39dc3231fbd7c028835ca4b2e5260095500c92832d35e0f0820155cb0270d71",
+  "bytes": 9911419,
+  "license": "https://www.pexels.com/license/",
+  "terms": "https://www.pexels.com/terms-of-service/",
+  "checked_date": "2026-10-13",
+  "use": "Selected driving performance for an original illustrated character animation; no training dataset is collected.",
+  "publication_boundary": "Acquire the source from its creator's stock platform. Raw and transcoded stock footage is excluded from FX's public media distribution. The transformed performance and paired review evidence are distinct compositions. No performer endorsement is implied.",
+  "inference_basis": "The license grants modification and adaptation. Selected one-shot inference is an interpretation of that grant; the terms do not expressly endorse AI motion transfer. Users must assess their own source and intended use.",
+  "selected_interval": {
+    "start_seconds": 7,
+    "duration_seconds": 3.2,
+    "prepared_fps": 30
+  },
+  "selection_reason": "A fixed frontal performance with small steps, low arm gestures and visible hands and feet. Avoid fast crossing limbs, spins and overhead reach for this illustrated-character example."
+}

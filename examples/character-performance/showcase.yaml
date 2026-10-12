@@ -1,0 +1,6 @@
+character: ./.showcase-inputs/riko-plate.png
+motion: ./.showcase-inputs/motion-prepared.mp4
+name: Riko
+seconds: 4
+prepared: true
+fps: 24

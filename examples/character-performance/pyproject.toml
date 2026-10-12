@@ -1,0 +1,8 @@
+[project]
+name = "fx-example-character-performance"
+version = "0.0.0"
+requires-python = ">=3.11"
+dependencies = ["grida>=0.5.1", "pillow>=11,<13", "pyyaml>=6,<7"]
+
+[tool.uv]
+package = false

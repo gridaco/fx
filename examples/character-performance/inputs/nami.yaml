@@ -1,0 +1,8 @@
+character: ../.showcase-inputs/nami.png
+motion: ../.showcase-inputs/motion.mp4
+name: Nami
+start: 0
+seconds: 4
+background: "f4eee6"
+body_fill: 0.4
+fps: 24

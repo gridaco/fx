@@ -1,0 +1,4 @@
+storyboard: ./dist/storyboard.png
+poster: ./dist/poster.webp
+brief: ./inputs/forma.json
+report: ./dist/report.json

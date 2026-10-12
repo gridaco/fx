@@ -1,0 +1,55 @@
+{
+  "schema": "fx_showcase_inputs_v1",
+  "delivery_base": "https://fx-cdn.grida.co/showcase",
+  "purpose": "Exact canonical inputs and accepted local-composition deliveries.",
+  "inputs": [
+    {
+      "filename": "riko.webp",
+      "path": "showcases/b45587a7593e02d5dc7ca560539b0ab549ea9292078927df837464e9510cc784/character-performance/assets/riko-original.webp",
+      "sha256": "76ef2f5d60ebe4d4f51fbdb57ec92f37ccd225876c5529d8036c3f57bdc9c832",
+      "bytes": 3493302
+    },
+    {
+      "filename": "nami.png",
+      "path": "showcases/b45587a7593e02d5dc7ca560539b0ab549ea9292078927df837464e9510cc784/character-performance/assets/nami-original.png",
+      "sha256": "90b9cacfc7c3703007dc1f9885dc705fd00643ddc5240358ef87a822f1960a03",
+      "bytes": 5542543
+    },
+    {
+      "filename": "riko-plate.png",
+      "path": "showcases/b45587a7593e02d5dc7ca560539b0ab549ea9292078927df837464e9510cc784/character-performance/assets/character.png",
+      "sha256": "6e673a9d0ff73539804d903fd8dfce205b3823d6bd964a420a94dbf230dac470",
+      "bytes": 157555
+    },
+    {
+      "filename": "nami-plate.png",
+      "path": "showcases/b45587a7593e02d5dc7ca560539b0ab549ea9292078927df837464e9510cc784/character-performance/assets/nami.png",
+      "sha256": "a2a7a41f1d589eaef3e724128ec2fd38806a02dbd3c851c49c17bdefa53ca5ff",
+      "bytes": 145623
+    },
+    {
+      "filename": "riko-performance.mp4",
+      "path": "showcases/b45587a7593e02d5dc7ca560539b0ab549ea9292078927df837464e9510cc784/character-performance/assets/riko-performance.mp4",
+      "sha256": "01ae510292dbba1f37188bf42d61d98bd6f80d72cab740cc3a303e28e8b498ca",
+      "bytes": 1161707
+    },
+    {
+      "filename": "riko-report.json",
+      "path": "showcases/b45587a7593e02d5dc7ca560539b0ab549ea9292078927df837464e9510cc784/character-performance/assets/riko-report.json",
+      "sha256": "86e03cd4d35cf03da4a9212da40827d05bebab9f997c7a4d8778ea9ee79be68b",
+      "bytes": 1965
+    },
+    {
+      "filename": "nami-performance.mp4",
+      "path": "showcases/b45587a7593e02d5dc7ca560539b0ab549ea9292078927df837464e9510cc784/character-performance/assets/nami-performance.mp4",
+      "sha256": "73daa46dfbed1b23c82fcfd5ba589f2d4c9950bfc5e32ed42eec259ed8160ace",
+      "bytes": 1032854
+    },
+    {
+      "filename": "nami-report.json",
+      "path": "showcases/b45587a7593e02d5dc7ca560539b0ab549ea9292078927df837464e9510cc784/character-performance/assets/nami-report.json",
+      "sha256": "a7e2ce29472565a19311d3c92aed26514605e9d7275ead582f1fe79a0ec31a5e",
+      "bytes": 1962
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "character_id": "sena",
+  "status": "selected_local_publication_pending",
+  "storage_root": "www/.showcases/canonical-characters/sena",
+  "default_representation": "full_body.png",
+  "source_namespace": "fx_games_local_character_cache",
+  "source_commit": "d6dd92f8c6877c5389e4d1223391b228eaa02d63",
+  "operation": "byte_identical_copy",
+  "rights_status": "upstream_reference_redistribution_unresolved",
+  "authorization_scope": "Owner selected this character for local FX workflow preparation. This selection does not establish upstream reference redistribution rights.",
+  "publication_status": "not_authorized",
+  "reference_use": "Preserved for provenance inspection only; exclude unresolved upstream reference artwork from public packages.",
+  "files": [
+    {
+      "filename": "full_body.png",
+      "sha256": "89e2d281aa96aa171f305cd0593cfa655005fb06f63ab1da29383db023d68323",
+      "bytes": 5358560
+    },
+    {
+      "filename": "provenance/generation.json",
+      "sha256": "8aaa674c514fbcf1113b871ac4f8ae2cb0fab3a8ac554e76fd514deaeac999e0",
+      "bytes": 1278
+    },
+    {
+      "filename": "provenance/prompt.txt",
+      "sha256": "018095bb5eeced3a317def0e296a21e7ccf7ffafae45cf52a53045dd453f6d6e",
+      "bytes": 5131
+    },
+    {
+      "filename": "provenance/source-review.md",
+      "sha256": "1f89950a0ad23ce1df3e8ae66564ba85d07b0c3b86c2e76906f14c3ff3bb2d26",
+      "bytes": 1854
+    },
+    {
+      "filename": "provenance/references/style-01.png",
+      "sha256": "ae1b6cf04d3833d901de4a213336acea1576f3a64bcff618575caa30eee010a2",
+      "bytes": 1113284
+    }
+  ]
+}

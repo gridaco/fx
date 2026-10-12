@@ -1,0 +1,25 @@
+fx: workflow/v1
+id: finish-character-performance
+title: Finish supplied character footage
+description: Replay the free finishing and sampled evidence stage without a provider call.
+inputs:
+  character: { type: file, kind: image }
+  motion: { type: file, kind: video }
+  video: { type: file, kind: video }
+  name: { type: string, default: Character }
+  seconds: { type: number, minimum: 3, maximum: 10, default: 4 }
+steps:
+  finish:
+    uses: ./nodes/performance.py#finish
+    with:
+      video: ${{ inputs.video }}
+      motion: ${{ inputs.motion }}
+      character: ${{ inputs.character }}
+      seconds: ${{ inputs.seconds }}
+      name: ${{ inputs.name }}
+outputs:
+  video: ${{ steps.finish.outputs.video }}
+  poster: ${{ steps.finish.outputs.poster }}
+  evidence: ${{ steps.finish.outputs.evidence }}
+  identity: ${{ steps.finish.outputs.identity }}
+  report: ${{ steps.finish.outputs.report }}

@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "character_id": "riko",
+  "status": "adopted_local",
+  "storage_root": "www/.showcases/canonical-characters/riko",
+  "default_representation": "full_body.webp",
+  "source_commit": "d6dd92f8c6877c5389e4d1223391b228eaa02d63",
+  "source_namespace": "fx_games_canonical_library",
+  "operation": "byte_identical_copy",
+  "rights_basis": "Original canonical character supplied by the owner, explicitly authorized for adoption into FX. Preserved source records describe representation-specific rights and review scope. No blanket media license is granted.",
+  "publication_status": "not_published_by_this_adoption",
+  "source_path_semantics": "Historical lineage only; resolve adopted files by filename under storage_root.",
+  "files": [
+    {
+      "filename": "README.md",
+      "sha256": "2c427ceb263351fcff4cf192662b8dc96caa6b2981e4c9d287e94ece0a20cabb",
+      "bytes": 3044,
+      "source_path": "library/characters/riko/README.md"
+    },
+    {
+      "filename": "full_body.webp",
+      "sha256": "76ef2f5d60ebe4d4f51fbdb57ec92f37ccd225876c5529d8036c3f57bdc9c832",
+      "bytes": 3493302,
+      "source_path": "library/characters/riko/full_body.webp"
+    },
+    {
+      "filename": "full_body_loose_sweater.webp",
+      "sha256": "1ebf27af018f100acf70095a341a85dac3a21a846f35e627fdaaa409bcd2b8d8",
+      "bytes": 1095030,
+      "source_path": "library/characters/riko/full_body_loose_sweater.webp"
+    },
+    {
+      "filename": "sd_3d.glb",
+      "sha256": "c3db2031bda77b7128d19d8e5b25c1c001a615390f0d50f1ff1577bd2048aca3",
+      "bytes": 4542432,
+      "source_path": "library/characters/riko/sd_3d.glb"
+    },
+    {
+      "filename": "sd_3d.json",
+      "sha256": "caccff3f495edb3bfa28d28f9463d226e778e181adc3a8b36849e04d96168388",
+      "bytes": 26809,
+      "source_path": "library/characters/riko/sd_3d.json"
+    },
+    {
+      "filename": "sd_3d.visual-review.md",
+      "sha256": "6626fba1c6a7be009d500fdc94e2ace1ae3f656a27a19fe04ec829696c1f4730",
+      "bytes": 9811,
+      "source_path": "library/characters/riko/sd_3d.visual-review.md"
+    },
+    {
+      "filename": "sd_3d.webp",
+      "sha256": "67c1ce85a0473f38150429843d0748b89d0e1c3e510019caa74d328df2e3c3b9",
+      "bytes": 43728,
+      "source_path": "library/characters/riko/sd_3d.webp"
+    },
+    {
+      "filename": "sd_flat.webp",
+      "sha256": "f01c965ff785f0a90a8e19a0f2c1c78820eb54ac50cb4b9f78ba1d264369b3dd",
+      "bytes": 208504,
+      "source_path": "library/characters/riko/sd_flat.webp"
+    }
+  ]
+}

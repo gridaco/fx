@@ -1,0 +1,28 @@
+fx: workflow/v1
+id: prepare-character-performance
+title: Prepare a character and motion reference
+description: Free preparation and validation before selecting a paid motion route.
+inputs:
+  character: { type: file, kind: image }
+  motion: { type: file, kind: video }
+  name: { type: string, default: Character }
+  seconds: { type: number, minimum: 3, maximum: 10, default: 4 }
+  start: { type: number, minimum: 0, maximum: 120, default: 0 }
+  background: { type: string, default: "f4eee6" }
+  body_fill: { type: number, minimum: 0.4, maximum: 0.8, default: 0.6 }
+  fps: { type: integer, enum: [24, 30], default: 24 }
+steps:
+  prepare:
+    uses: ./nodes/performance.py#prepare
+    with:
+      character: ${{ inputs.character }}
+      motion: ${{ inputs.motion }}
+      seconds: ${{ inputs.seconds }}
+      start: ${{ inputs.start }}
+      background: ${{ inputs.background }}
+      body_fill: ${{ inputs.body_fill }}
+      fps: ${{ inputs.fps }}
+outputs:
+  character: ${{ steps.prepare.outputs.character }}
+  motion: ${{ steps.prepare.outputs.motion }}
+  report: ${{ steps.prepare.outputs.report }}

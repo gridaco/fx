@@ -1,0 +1,47 @@
+fx: workflow/v1
+id: character-cast-reel
+title: Two accepted performances to a vertical reel
+description: >-
+  Free local composition of two silent portrait clips and matching accepted reports
+  with clear scans of every native frame. Aspect-fit complete frames or caller-selected regions, add original typography,
+  and decode the full 1080x1920, 30 fps result. No provider or artistic verdict.
+inputs:
+  first: { type: file, kind: video }
+  first_report: { type: file, kind: json }
+  first_name: { type: string, default: First character, max_length: 40 }
+  first_region:
+    type: list
+    items: { type: number, minimum: 0, maximum: 1 }
+    min_items: 4
+    max_items: 4
+    default: [0, 0, 1, 1]
+    description: "Caller-selected normalized [x, y, width, height]; default is the complete frame"
+  second: { type: file, kind: video }
+  second_report: { type: file, kind: json }
+  second_name: { type: string, default: Second character, max_length: 40 }
+  second_region:
+    type: list
+    items: { type: number, minimum: 0, maximum: 1 }
+    min_items: 4
+    max_items: 4
+    default: [0, 0, 1, 1]
+    description: "Caller-selected normalized [x, y, width, height]; default is the complete frame"
+steps:
+  compose:
+    title: Compose the reviewed performances
+    uses: ./nodes/reel.py#reel
+    with:
+      first: ${{ inputs.first }}
+      first_report: ${{ inputs.first_report }}
+      first_name: ${{ inputs.first_name }}
+      first_region: ${{ inputs.first_region }}
+      second: ${{ inputs.second }}
+      second_report: ${{ inputs.second_report }}
+      second_name: ${{ inputs.second_name }}
+      second_region: ${{ inputs.second_region }}
+      font: ./fonts/Manrope.ttf
+    view: true
+outputs:
+  video: ${{ steps.compose.outputs.video }}
+  poster: ${{ steps.compose.outputs.poster }}
+  report: ${{ steps.compose.outputs.report }}

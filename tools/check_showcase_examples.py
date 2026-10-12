@@ -108,6 +108,11 @@ def check(home: Path, name: str) -> str:
             plan_and_refuse(home, "workflow.yaml", "inputs/fixture/inputs.yaml")
             return "full graph planned; 3D and source artwork paid calls refused at $0"
         return "full graph planned; source artwork refused at $0 (Blender execution not checked)"
+    if name in ("product-promo", "character-performance"):
+        run_script(home, "check.py")
+        if name == "character-performance":
+            run_script(home, "check_reel.py")
+        return "paid refusal, actual local/stand-in video graph and cache replay checked at $0"
     if name == "pet":
         return pet_reel(home)
     raise ValueError(f"Unknown example: {name}")
@@ -156,6 +161,8 @@ def main() -> int:
         "portrait-motion",
         "character-3d",
         "pet",
+        "product-promo",
+        "character-performance",
     ]
     failures = []
     for name in names:
@@ -167,6 +174,8 @@ def main() -> int:
             "portrait-motion",
             "character-3d",
             "pet",
+            "product-promo",
+            "character-performance",
         ):
             raise SystemExit(f"Unknown showcase example: {name}")
         with tempfile.TemporaryDirectory(prefix="fx-showcase-example-") as temporary:
@@ -185,6 +194,7 @@ def main() -> int:
                     "fixture",
                     "__pycache__",
                     "uv.lock",
+                    ".env",
                 ),
             )
             try:

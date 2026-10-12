@@ -1,0 +1,73 @@
+{
+  "product": "Forma",
+  "eyebrow": "AGENT-NATIVE DESIGN",
+  "opening": [
+    "Say it.",
+    "Shape it."
+  ],
+  "closing": [
+    "Your idea.",
+    "Already taking shape."
+  ],
+  "support": "A thought becomes a canvas.",
+  "accent": "#ccff5f",
+  "background": "#f3f4ee",
+  "ink": "#14201b",
+  "intent": "Show a short conversation creating and refining a landing page on a live design canvas. The opening is a premise; the recording proves it; the ending is a concise promise.",
+  "focus_hints": [
+    {
+      "source_second": 1.7,
+      "x": 0.16,
+      "y": 0.35,
+      "reason": "The typed design request is the central interaction.",
+      "region": "request"
+    },
+    {
+      "source_second": 5.5,
+      "x": 0.65,
+      "y": 0.5,
+      "reason": "The first landing page appears on the canvas.",
+      "region": "canvas"
+    },
+    {
+      "source_second": 8.1,
+      "x": 0.16,
+      "y": 0.62,
+      "reason": "A follow-up chat request changes the design.",
+      "region": "refinement"
+    },
+    {
+      "source_second": 10.5,
+      "x": 0.65,
+      "y": 0.5,
+      "reason": "The refined design is the final outcome.",
+      "region": "canvas"
+    }
+  ],
+  "regions": {
+    "overview": [
+      0,
+      0,
+      1,
+      1
+    ],
+    "request": [
+      0.014,
+      0.154,
+      0.248,
+      0.664
+    ],
+    "canvas": [
+      0.287,
+      0.156,
+      0.974,
+      0.916
+    ],
+    "refinement": [
+      0.014,
+      0.66,
+      0.248,
+      0.844
+    ]
+  }
+}

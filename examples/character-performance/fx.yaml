@@ -1,0 +1,5 @@
+fx: project/v1
+sources: [nodes]
+routes:
+  video.motion_transfer: fal-ai/wan-motion@fal
+  structured.generate: openai/gpt-6-astra@openrouter

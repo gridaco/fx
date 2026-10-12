@@ -1,0 +1,46 @@
+fx: workflow/v1
+id: product-promo
+title: Product promo
+description: >-
+  A supplied software recording and exact-copy brief become a short launch clip.
+  Inspect the recording, propose an editable camera-and-timing plan, then render
+  exact source pixels with animated typography locally. A supplied plan skips the
+  paid proposal, so copy and timing revisions need no generation call.
+inputs:
+  footage: { type: file, kind: video, description: "A prepared, rights-cleared software recording" }
+  brief: { type: file, kind: json, description: "Exact titles, product name, colors, and shot intent" }
+  edit: { type: file, kind: json, optional: true, description: "Saved camera-and-timing plan; skips the paid proposal" }
+steps:
+  inspect:
+    title: Inspect source timing
+    uses: ./nodes/promo.py#inspect
+    with:
+      footage: ${{ inputs.footage }}
+      brief: ${{ inputs.brief }}
+    view: true
+  propose:
+    title: Plan a focused reveal
+    if: ${{ !inputs.edit }}
+    uses: fx/structured.generate@1
+    requires: [image_input, structured_output]
+    with:
+      prompt: ./prompts/edit.md
+      schema: ./schemas/edit.json
+      context: ["${{ inputs.brief }}", "${{ steps.inspect.outputs.source }}", "${{ steps.inspect.outputs.storyboard }}"]
+      max_tokens: 4500
+  render:
+    title: Animate the supplied pixels
+    uses: ./nodes/promo.py#render
+    with:
+      footage: ${{ inputs.footage }}
+      brief: ${{ inputs.brief }}
+      edit: ${{ inputs.edit || steps.propose.outputs.json }}
+      font: ./fonts/Manrope.ttf
+    view: true
+outputs:
+  video: ${{ steps.render.outputs.video }}
+  poster: ${{ steps.render.outputs.poster }}
+  report: ${{ steps.render.outputs.report }}
+  edit: ${{ steps.render.outputs.edit }}
+  storyboard: ${{ steps.render.outputs.storyboard }}
+  source: ${{ steps.inspect.outputs.source }}

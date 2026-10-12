@@ -1,0 +1,20 @@
+fx: workflow/v1
+id: promo-review
+title: Review a recorded promo
+inputs:
+  storyboard: { type: file, kind: image }
+  poster: { type: file, kind: image }
+  brief: { type: file, kind: json }
+  report: { type: file, kind: json }
+steps:
+  review:
+    uses: fx/structured.generate@1
+    route: openai/gpt-6-astra@openrouter
+    requires: [image_input, structured_output]
+    with:
+      prompt: ./prompts/review.md
+      schema: ./schemas/review.json
+      context: ["${{ inputs.storyboard }}", "${{ inputs.poster }}", "${{ inputs.brief }}", "${{ inputs.report }}"]
+      max_tokens: 5000
+outputs:
+  review: ${{ steps.review.outputs.json }}
