@@ -26,6 +26,11 @@ inputs:
     max_items: 4
     default: [0, 0, 1, 1]
     description: "Caller-selected normalized [x, y, width, height]; default is the complete frame"
+  poster_at:
+    type: number
+    minimum: 0
+    default: 1
+    description: "Poster timestamp in finished-reel seconds, rounded down to the 30 fps frame grid"
 steps:
   compose:
     title: Compose the reviewed performances
@@ -39,6 +44,7 @@ steps:
       second_report: ${{ inputs.second_report }}
       second_name: ${{ inputs.second_name }}
       second_region: ${{ inputs.second_region }}
+      poster_at: ${{ inputs.poster_at }}
       font: ./fonts/Manrope.ttf
     view: true
 outputs:

@@ -15,7 +15,7 @@ from PIL import Image, ImageDraw
 
 from grida.fx import Answer, FxError, StandInCall, plan, run
 
-from nodes.reel import _crop, _region
+from nodes.reel import _crop, _poster_frame, _region
 
 REGIONS = {"first": [0.2, 0.125, 0.6, 0.75], "second": [0.1, 0.2, 0.8, 0.6]}
 
@@ -182,6 +182,33 @@ def main() -> None:
                     ), (index, point, (r, g, b))
         with Image.open(result.outputs["poster"].path) as poster:
             assert poster.size == (1080, 1920) and poster.format == "WEBP"
+        assert report["poster"]["frame_index"] == 30
+        assert report["poster"]["at_seconds"] == 1
+        assert report["poster"]["sha256"] == result.outputs["poster"].digest
+        # Selecting the second performer changes the poster, never the clip pixels.
+        (fixtures / "second-poster.json").write_text(json.dumps({**inputs, "poster_at": 4.5}))
+        selected = run("reel.yaml", cwd=home, input_files=[".fixtures/second-poster.json"])
+        assert selected.ok and selected.cost == 0, selected.failures
+        selected_report = json.loads(selected.outputs["report"].read_bytes())
+        assert selected.outputs["video"].digest == result.outputs["video"].digest
+        assert selected.outputs["poster"].digest != result.outputs["poster"].digest
+        assert selected_report["poster"]["frame_index"] == 135
+        assert selected_report["poster"]["sha256"] == selected.outputs["poster"].digest
+        width, height = selected_report["segments"][1]["fit_size"]
+        with Image.open(selected.outputs["poster"].path) as poster:
+            r, g, b = poster.getpixel(((1080 - width) // 2 + 4, 230 + (1400 - height) // 2 + 4))
+            assert r > 180 and b > 180 and g < 70, "poster must show the second clip"
+        assert _poster_frame(4.519, 240) == 135
+        for value in (-1, 8, 9, True, float("nan"), float("inf")):
+            try:
+                _poster_frame(value, 240)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("invalid poster timestamp accepted")
+        (fixtures / "invalid-poster.json").write_text(json.dumps({**inputs, "poster_at": 8}))
+        refused = run("reel.yaml", cwd=home, input_files=[".fixtures/invalid-poster.json"])
+        assert not refused.ok and refused.cost == 0, "end-of-reel poster timestamp accepted"
         replay = run("reel.yaml", **options)
         assert replay.ok and replay.cost == 0
         assert replay.outputs["video"].digest == result.outputs["video"].digest

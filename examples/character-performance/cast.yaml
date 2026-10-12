@@ -27,6 +27,11 @@ inputs:
     default: [0, 0, 1, 1]
     description: "Caller-selected normalized [x, y, width, height] for local reel framing"
   seconds: { type: number, minimum: 3, maximum: 10, default: 4 }
+  poster_at:
+    type: number
+    minimum: 0
+    default: 1
+    description: "Poster timestamp in finished-reel seconds; must fall inside the two-clip composition"
   fps: { type: integer, enum: [24, 30], default: 24 }
   direction:
     type: string
@@ -72,6 +77,7 @@ steps:
       second_report: ${{ steps.second.outputs.report }}
       second_name: ${{ inputs.second_name }}
       second_region: ${{ inputs.second_region }}
+      poster_at: ${{ inputs.poster_at }}
 outputs:
   video: ${{ steps.reel.outputs.video }}
   poster: ${{ steps.reel.outputs.poster }}

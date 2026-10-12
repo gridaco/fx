@@ -125,6 +125,17 @@ def _crop(region: list, width: int, height: int) -> list:
     return [left, top, right - left, bottom - top]
 
 
+def _poster_frame(value: float, frames: int) -> int:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or not 0 <= value < frames / FPS
+    ):
+        raise ValueError("poster_at must name a finite timestamp inside the finished reel")
+    return min(math.floor(value * FPS), frames - 1)
+
+
 def _font(path: Path, size: int, weight: int = 650) -> ImageFont.FreeTypeFont:
     font = ImageFont.truetype(str(path), size)
     if font.get_variation_axes():
@@ -169,10 +180,11 @@ def _card(font: Path, name: str, index: int) -> Image.Image:
         "second_name": str,
         "first_region": REGION,
         "second_region": REGION,
+        "poster_at": {"type": "number", "minimum": 0, "default": 1},
     },
     outputs={"video": "video/mp4", "poster": "image/webp", "report": "json"},
     tools=["ffmpeg", "ffprobe"],
-    version=3,
+    version=4,
 )
 def reel(ctx: Ctx) -> dict:
     """Review admission is inherited; composition still needs separate visual acceptance."""
@@ -202,11 +214,8 @@ def reel(ctx: Ctx) -> dict:
             }
         )
     font = ctx.inputs["font"].path
-    segments = []
-    for index, item in enumerate(sources, 1):
-        if ctx.cancelled:
-            raise ctx.fail("cast reel composition cancelled")
-        key, path = item["key"], ctx.inputs[item["key"]].path
+    for item in sources:
+        path = ctx.inputs[item["key"]].path
         facts = _probe(ctx, path)
         if item["review"]["framing_scan"].get("frames_scanned") != facts["frames"]:
             raise ctx.fail("a source framing scan must cover every native video frame")
@@ -220,7 +229,16 @@ def reel(ctx: Ctx) -> dict:
                 "each source must be a portrait performance of 3-10 seconds at at most 60 fps"
             )
         _decode(ctx, path)
-        frame_count = round(facts["duration_seconds"] * FPS)
+        item["source"] = facts
+        item["frames"] = round(facts["duration_seconds"] * FPS)
+    frames = sum(item["frames"] for item in sources)
+    poster_frame = _poster_frame(ctx.params["poster_at"], frames)
+    segments = []
+    for index, item in enumerate(sources, 1):
+        if ctx.cancelled:
+            raise ctx.fail("cast reel composition cancelled")
+        key, path = item["key"], ctx.inputs[item["key"]].path
+        facts, frame_count = item["source"], item["frames"]
         crop = _crop(item["region"], facts["width"], facts["height"])
         scale = min(WINDOW[2] / crop[2], WINDOW[3] / crop[3])
         fitted = [math.floor(side * scale / 2) * 2 for side in crop[2:]]
@@ -334,7 +352,6 @@ def reel(ctx: Ctx) -> dict:
     )
     _decode(ctx, destination)
     finished = _probe(ctx, destination)
-    frames = sum(item["frames"] for item in sources)
     if (
         (finished["width"], finished["height"]) != SIZE
         or finished["fps"] != FPS
@@ -357,10 +374,10 @@ def reel(ctx: Ctx) -> dict:
             "-err_detect",
             "explode",
             "-y",
-            "-ss",
-            "1",
             "-i",
             str(destination),
+            "-vf",
+            f"select=eq(n\\,{poster_frame})",
             "-frames:v",
             "1",
             str(poster_path),
@@ -374,6 +391,13 @@ def reel(ctx: Ctx) -> dict:
         "finished": finished,
         "video_sha256": hashlib.sha256(destination.read_bytes()).hexdigest(),
         "font_sha256": ctx.inputs["font"].digest,
+        "poster": {
+            "requested_seconds": ctx.params["poster_at"],
+            "frame_index": poster_frame,
+            "at_seconds": poster_frame / FPS,
+            "sha256": hashlib.sha256(poster.getvalue()).hexdigest(),
+            "selection": "caller-selected timestamp, rounded down to the output frame grid",
+        },
         "segments": [
             {
                 "name": item["name"],

@@ -221,6 +221,14 @@ and source review lineage are checked. The composition's report retains
 `requires_separate_content_review`: inherited sampled passes are admission
 evidence, while the final edit still needs its own visual review.
 
+Optional `poster_at` selects a moment in finished-reel seconds. It defaults to
+1 second and must fall inside the composition; the selected frame rounds down
+to the 30 fps output grid. Changing this input changes only the poster and its
+recorded selection, not the video pixels. The report binds the exact frame index,
+timestamp and poster digest. The canonical recipe selects Riko's upright reach
+at 3.2 seconds rather than the earlier crouched pose. Reel node version 4 records
+this explicit selection.
+
 Optional `first_region` and `second_region` inputs in the reel or cast are static,
 caller-authored framing rectangles: `[x, y, width, height]`, normalized to each
 source frame. Their default is `[0, 0, 1, 1]`. The rectangle must be finite,
@@ -232,8 +240,9 @@ approve a later crop. Review the final composition for clipped ears, raised hand
 and feet before publishing it.
 
 The canonical input files select fixed regions after inspecting all 96 native
-frames of each accepted take. These regions include a 48-pixel margin around the
-observed foreground bounds. They belong to those exact clips; recheck framing
+frames of each accepted take. These regions request a 48-pixel margin around the
+observed foreground bounds, limited by the source edges; Nami's right margin is
+39 pixels. They belong to those exact clips; recheck framing
 and revise the regions when generating new performances.
 
 ## Canonical references
