@@ -1,0 +1,3 @@
+# The website's recorded Coral sheet; download it with: python ../fetch_showcase_inputs.py .
+spritesheet: ../.showcase-inputs/coral-spritesheet.webp
+layout: ../.showcase-inputs/coral-sprite.json

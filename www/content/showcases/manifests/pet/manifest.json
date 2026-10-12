@@ -1,0 +1,12 @@
+{
+  "kind": "pet-demo-v1",
+  "mirrors": {
+    "running-left": "running-right"
+  },
+  "resources": [
+    "assets/spritesheet.webp",
+    "assets/sprite.json",
+    "assets/base.png",
+    "assets/reference.png"
+  ]
+}

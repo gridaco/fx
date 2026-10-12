@@ -103,7 +103,7 @@ ordinary website traffic.
 
 ## Source and content ownership
 
-- `src/app/`: landing, workflow index, seven detail pages and metadata.
+- `src/app/`: landing, workflow index, eight detail pages and metadata.
 - `src/lib/showcases/` and `content/showcases/`: private website adapters and
   small frozen content pins; see [showcase maintenance](docs/showcases.md).
 - `../js/fx-web` and `../js/fx-react`: reusable export reader, canvas,

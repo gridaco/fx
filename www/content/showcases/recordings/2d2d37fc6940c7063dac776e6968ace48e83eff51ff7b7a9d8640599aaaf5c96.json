@@ -1,0 +1,223 @@
+{
+ "artifacts": [
+  {
+   "digest": "12f9b643e18de3a28e0febc83bc745d6772b3bd7c870628613346d0bf5fd851f",
+   "media_type": "json",
+   "name": "layout.json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 1370
+  },
+  {
+   "digest": "31493d56d5f5a4f2803c8a63358aa80658339a9f60f74366f54fe2bacdc82dc1",
+   "media_type": "image/webp",
+   "name": "spritesheet.webp",
+   "omitted_reason": "unplaced_input",
+   "path": null,
+   "size": 1628976
+  },
+  {
+   "digest": "6b2fd6ef4b512b984308a9ab80a1aea44443b6a4b1ca4b357fe40732d6e6981a",
+   "media_type": "video/mp4",
+   "name": "video",
+   "omitted_reason": null,
+   "path": "artifacts/6b2fd6ef4b512b984308a9ab80a1aea44443b6a4b1ca4b357fe40732d6e6981a.mp4",
+   "size": 337782
+  },
+  {
+   "digest": "90325f6ab29c3e61c4eb32d659c63b831abc2b02cc07e8919d396081b1b633f3",
+   "media_type": "image/webp",
+   "name": "poster",
+   "omitted_reason": null,
+   "path": "artifacts/90325f6ab29c3e61c4eb32d659c63b831abc2b02cc07e8919d396081b1b633f3.webp",
+   "size": 14370
+  }
+ ],
+ "disclosure": {
+  "artifacts": "media",
+  "diagnostics": false,
+  "values": true
+ },
+ "kind": "fx-run-export-v1",
+ "layout": {
+  "cells": {
+   "reel": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   }
+  },
+  "cursor": null,
+  "diagnostics": [],
+  "file": null,
+  "kind": "fx-layout-report-v1",
+  "order": [
+   "reel#1"
+  ],
+  "revision": null,
+  "state": "none"
+ },
+ "producer": {
+  "version": "0.5.0"
+ },
+ "source": {
+  "event_count": 6,
+  "events_sha256": "5fd31e83118431c0aafde165f7f41891ab8103e624d9a9bb80aad5ff245abf25",
+  "plan_sha256": "d8b7f506f9c977feb9db6f0b9abdcf2dc84e3acbb036d84436a4d9cc851fb289"
+ },
+ "view": {
+  "artifacts": [
+   {
+    "available": false,
+    "digest": "12f9b643e18de3a28e0febc83bc745d6772b3bd7c870628613346d0bf5fd851f",
+    "kind": "json",
+    "name": "layout.json",
+    "size": 1370,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "31493d56d5f5a4f2803c8a63358aa80658339a9f60f74366f54fe2bacdc82dc1",
+    "kind": "image/webp",
+    "name": "spritesheet.webp",
+    "size": 1628976,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "6b2fd6ef4b512b984308a9ab80a1aea44443b6a4b1ca4b357fe40732d6e6981a",
+    "kind": "video/mp4",
+    "name": "video",
+    "size": 337782,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "90325f6ab29c3e61c4eb32d659c63b831abc2b02cc07e8919d396081b1b633f3",
+    "kind": "image/webp",
+    "name": "poster",
+    "size": 14370,
+    "url": null
+   }
+  ],
+  "charged_usd": 0,
+  "estimate": {
+   "ceiling_usd": null,
+   "high_usd": 0,
+   "low_usd": 0
+  },
+  "inputs": {
+   "layout": {
+    "value": {
+     "file": "12f9b643e18de3a28e0febc83bc745d6772b3bd7c870628613346d0bf5fd851f"
+    }
+   },
+   "spritesheet": {
+    "value": {
+     "file": "31493d56d5f5a4f2803c8a63358aa80658339a9f60f74366f54fe2bacdc82dc1"
+    }
+   }
+  },
+  "kind": "fx-viewer-run-v1",
+  "nodes": [
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 1927,
+    "error": null,
+    "id": "reel#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "poster": {
+      "file": {
+       "digest": "90325f6ab29c3e61c4eb32d659c63b831abc2b02cc07e8919d396081b1b633f3",
+       "kind": "image/webp",
+       "name": "poster",
+       "size": 14370
+      }
+     },
+     "video": {
+      "file": {
+       "digest": "6b2fd6ef4b512b984308a9ab80a1aea44443b6a4b1ca4b357fe40732d6e6981a",
+       "kind": "video/mp4",
+       "name": "video",
+       "size": 337782
+      }
+     }
+    },
+    "path": "reel",
+    "ports": {
+     "inputs": {
+      "layout": "json",
+      "sheet": "image"
+     },
+     "outputs": {
+      "poster": "image/webp",
+      "video": "video/mp4"
+     },
+     "params": {}
+    },
+    "reads": [],
+    "started_at": "2026-10-12T12:29:27.349Z",
+    "state": "succeeded",
+    "step": "reel",
+    "take": [
+     1
+    ],
+    "title": "reel",
+    "uses": "./nodes/reel.py#reel",
+    "with": {
+     "layout": {
+      "file": {
+       "digest": "12f9b643e18de3a28e0febc83bc745d6772b3bd7c870628613346d0bf5fd851f",
+       "kind": "json",
+       "name": "layout.json",
+       "size": 1370
+      }
+     },
+     "sheet": {
+      "file": {
+       "digest": "31493d56d5f5a4f2803c8a63358aa80658339a9f60f74366f54fe2bacdc82dc1",
+       "kind": "image/webp",
+       "name": "spritesheet.webp",
+       "size": 1628976
+      }
+     }
+    }
+   }
+  ],
+  "outputs": {
+   "poster": {
+    "file": {
+     "digest": "90325f6ab29c3e61c4eb32d659c63b831abc2b02cc07e8919d396081b1b633f3",
+     "kind": "image/webp",
+     "name": "poster",
+     "size": 14370
+    }
+   },
+   "video": {
+    "file": {
+     "digest": "6b2fd6ef4b512b984308a9ab80a1aea44443b6a4b1ca4b357fe40732d6e6981a",
+     "kind": "video/mp4",
+     "name": "video",
+     "size": 337782
+    }
+   }
+  },
+  "pending": [],
+  "run_name": "2026-10-12-3",
+  "scopes": [],
+  "stand_in": false,
+  "state": "succeeded",
+  "warnings": [],
+  "workflow": {
+   "description": "A finished pet acting out its states as a short video that loops, with a still poster: drawn from its sprite sheet and sprite.json on this machine with FFmpeg. Nothing is drawn again, and it costs nothing.",
+   "id": "reel",
+   "title": "Pet reel"
+  }
+ }
+}

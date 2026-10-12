@@ -9,7 +9,7 @@ async function existingFile(root: string, path: string): Promise<Buffer | null> 
   return info ? confinedFile(root, path) : null;
 }
 
-/** Replace one reviewed private demo; this stages bytes locally and never publishes them. */
+/** Add or replace one reviewed private demo; this stages bytes locally and never publishes them. */
 export async function replaceDemo(slug: ShowcaseSlug, source: string, options: { content?: string; delivery?: string } = {}) {
   if (!(slug in demoContracts)) throw new Error(`Unknown showcase ${slug}.`);
   const content = resolve(options.content ?? contentRoot), delivery = resolve(options.delivery ?? deliveryRoot), bundle = resolve(source);
@@ -17,7 +17,8 @@ export async function replaceDemo(slug: ShowcaseSlug, source: string, options: {
   const releaseBytes = await confinedFile(content, lock.release.fixture);
   if (sha256(releaseBytes) !== lock.release.sha256) throw new Error("Frozen release manifest changed.");
   const previous = parseRelease(JSON.parse(releaseBytes.toString()));
-  await verifyShowcases({ content, previousDemo: slug });
+  const added = !(slug in lock.workflows);
+  await verifyShowcases(added ? { content, addedDemo: slug } : { content, previousDemo: slug });
   const previousRoot = join(delivery, "showcases", lock.release.sha256);
   if (sha256(await confinedFile(previousRoot, "manifest.json")) !== lock.release.sha256) throw new Error("Staged release manifest changed.");
 
@@ -40,7 +41,9 @@ export async function replaceDemo(slug: ShowcaseSlug, source: string, options: {
   const nextBytes = jsonBytes(release), hash = sha256(nextBytes), relative = `showcases/${hash}`, destination = join(delivery, relative);
   const nextLock = structuredClone(lock);
   nextLock.release = { sha256: hash, path: `${relative}/manifest.json`, fixture: `manifests/${hash}.json` };
-  nextLock.workflows[slug].demo = demo;
+  // A new showcase starts without recordings; append them separately.
+  if (added) nextLock.workflows[slug] = { demo, recordings: [] };
+  else nextLock.workflows[slug].demo = demo;
 
   await ensureDirectory(join(delivery, "showcases"));
   const staging = await mkdtemp(join(delivery, "showcases/.replace-demo-"));
@@ -88,7 +91,7 @@ export async function replaceDemo(slug: ShowcaseSlug, source: string, options: {
       throw error;
     }
   } finally { await rm(staging, { recursive: true, force: true }); }
-  return { showcase: slug, release: hash, previous_release: lock.release.sha256, files: inventory.length, delivery_root: delivery, lock: join(content, "lock.json") };
+  return { showcase: slug, added, release: hash, previous_release: lock.release.sha256, files: inventory.length, delivery_root: delivery, lock: join(content, "lock.json") };
 }
 
 async function atomicWrite(root: string, path: string, bytes: Buffer): Promise<void> {

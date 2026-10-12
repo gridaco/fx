@@ -1,12 +1,12 @@
 import { parseRunExport } from "@grida/fx-web";
 import recordingDocument from "../../../content/showcases/recordings/8610653e0b02cfb004a05163e512e86bca6b8d0368484a2bf413bfb285b461c3.json";
-import releaseDocument from "../../../content/showcases/manifests/f14d5307043afcd04a0f290ce636442e584b9d6b8e1c11b2aa845ecb450b08de.json";
+import releaseDocument from "../../../content/showcases/manifests/412d71164da3e787e38babfa4d99c0497cac942bf796847b3ce6608a4c8c1835.json";
 import manifestDocument from "../../../content/showcases/manifests/parallax/manifest.json";
 import type { ParallaxGuideLayer } from "../../components/showcases/parallax-guides";
 import { showcaseLock } from "./catalog";
 import { object, parseParallax, parseRelease, text } from "./contracts";
 
-const releaseSha = "f14d5307043afcd04a0f290ce636442e584b9d6b8e1c11b2aa845ecb450b08de";
+const releaseSha = "412d71164da3e787e38babfa4d99c0497cac942bf796847b3ce6608a4c8c1835";
 const recordingSha = "8610653e0b02cfb004a05163e512e86bca6b8d0368484a2bf413bfb285b461c3";
 
 // Editorial geometry for this reviewed run, not a workflow/export capability.

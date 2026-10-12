@@ -9,6 +9,7 @@ workflow always exercises paid-call refusal. Actual 3D work requires Blender.
 from __future__ import annotations
 
 import ast
+import importlib.util
 import json
 import os
 import shutil
@@ -16,6 +17,8 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+from PIL import Image
 
 import grida.fx as fx
 
@@ -105,7 +108,38 @@ def check(home: Path, name: str) -> str:
             plan_and_refuse(home, "workflow.yaml", "inputs/fixture/inputs.yaml")
             return "full graph planned; 3D and source artwork paid calls refused at $0"
         return "full graph planned; source artwork refused at $0 (Blender execution not checked)"
+    if name == "pet":
+        return pet_reel(home)
     raise ValueError(f"Unknown example: {name}")
+
+
+def pet_reel(home: Path) -> str:
+    """A stand-in draws the pet at $0; the reel then renders it with FFmpeg, also at $0."""
+    loaded = importlib.util.spec_from_file_location("pet_stand_in", home / "stand_in.py")
+    assert loaded is not None and loaded.loader is not None, "the pet's stand-in does not load"
+    stand_in = importlib.util.module_from_spec(loaded)
+    loaded.loader.exec_module(stand_in)
+    pet = fx.run("pet", cwd=home, input_files=["inputs/pebble.yaml"], stand_in=stand_in.answer)
+    assert pet.ok and pet.cost == 0, f"the stand-in pet failed: {pet.failed}"
+    sheet, layout = pet.outputs["spritesheet"].path, pet.outputs["layout"].path
+    reel = fx.run("reel", cwd=home, inputs={"spritesheet": str(sheet), "layout": str(layout)})
+    assert reel.ok and reel.cost == 0, f"the reel failed: {reel.failed}"
+    probe = subprocess.run(
+        [shutil.which("ffprobe") or "ffprobe", "-v", "error", "-select_streams", "v:0",
+         "-show_entries", "stream=width,height,codec_name,pix_fmt", "-of", "json",
+         str(reel.outputs["video"].path)],
+        text=True, capture_output=True, check=True,
+    )  # fmt: skip
+    stream = json.loads(probe.stdout)["streams"][0]
+    assert (stream["width"], stream["height"], stream["codec_name"], stream["pix_fmt"]) == (
+        960,
+        600,
+        "h264",
+        "yuv420p",
+    ), stream
+    with Image.open(reel.outputs["poster"].path) as poster:
+        assert poster.size == (960, 600), poster.size
+    return "stand-in pet drawn at $0; its reel rendered to a 960x600 H.264 loop at $0"
 
 
 def main() -> int:
@@ -121,6 +155,7 @@ def main() -> int:
         "movie-sprite",
         "portrait-motion",
         "character-3d",
+        "pet",
     ]
     failures = []
     for name in names:
@@ -131,6 +166,7 @@ def main() -> int:
             "movie-sprite",
             "portrait-motion",
             "character-3d",
+            "pet",
         ):
             raise SystemExit(f"Unknown showcase example: {name}")
         with tempfile.TemporaryDirectory(prefix="fx-showcase-example-") as temporary:

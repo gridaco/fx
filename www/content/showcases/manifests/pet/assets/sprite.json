@@ -1,0 +1,129 @@
+{
+ "cell": {
+  "height": 208,
+  "width": 192
+ },
+ "columns": 8,
+ "rows": [
+  {
+   "durations_ms": [
+    280,
+    110,
+    110,
+    140,
+    140,
+    320
+   ],
+   "frames": 6,
+   "row": 0,
+   "state": "idle"
+  },
+  {
+   "durations_ms": [
+    120,
+    120,
+    120,
+    120,
+    120,
+    120,
+    120,
+    220
+   ],
+   "frames": 8,
+   "row": 1,
+   "state": "running-right"
+  },
+  {
+   "durations_ms": [
+    120,
+    120,
+    120,
+    120,
+    120,
+    120,
+    120,
+    220
+   ],
+   "frames": 8,
+   "row": 2,
+   "state": "running-left"
+  },
+  {
+   "durations_ms": [
+    140,
+    140,
+    140,
+    280
+   ],
+   "frames": 4,
+   "row": 3,
+   "state": "waving"
+  },
+  {
+   "durations_ms": [
+    140,
+    140,
+    140,
+    140,
+    280
+   ],
+   "frames": 5,
+   "row": 4,
+   "state": "jumping"
+  },
+  {
+   "durations_ms": [
+    140,
+    140,
+    140,
+    140,
+    140,
+    140,
+    140,
+    240
+   ],
+   "frames": 8,
+   "row": 5,
+   "state": "failed"
+  },
+  {
+   "durations_ms": [
+    150,
+    150,
+    150,
+    150,
+    150,
+    260
+   ],
+   "frames": 6,
+   "row": 6,
+   "state": "waiting"
+  },
+  {
+   "durations_ms": [
+    120,
+    120,
+    120,
+    120,
+    120,
+    220
+   ],
+   "frames": 6,
+   "row": 7,
+   "state": "running"
+  },
+  {
+   "durations_ms": [
+    150,
+    150,
+    150,
+    150,
+    150,
+    280
+   ],
+   "frames": 6,
+   "row": 8,
+   "state": "review"
+  }
+ ]
+}

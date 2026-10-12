@@ -1,0 +1,10 @@
+# The website's octopus. Download its picture with: python ../fetch_showcase_inputs.py .
+id: coral
+name: Coral
+description: A small coral-pink octopus that keeps you company while you work.
+look: >-
+  a small, round, coral-pink octopus with six short curled tentacles, the two outer ones lifted
+  like arms, big round dark eyes with white highlights, rosy cheeks, a tiny open smile, three
+  pale spots on top of its head and cream suction dots under its tentacle tips
+reference: ../.showcase-inputs/coral.png
+style: sticker
