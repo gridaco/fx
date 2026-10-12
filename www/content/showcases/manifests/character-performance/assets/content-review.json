@@ -1,0 +1,137 @@
+{
+  "kind": "character_cast_content_review_v1",
+  "reviewer": "independent non-producing review agent",
+  "independence": "The reviewer did not author or render the reel.",
+  "status": "accepted",
+  "verdict": "accepted_with_declared_sampled_scope",
+  "scope": [
+    "Full-resolution reel poster and sixteen timestamped composition samples.",
+    "Full-resolution final composition frames at approximately 1.47 seconds and 5.13 seconds, targeting previously problematic hand/hair and rabbit-ear framing.",
+    "The selected Riko and Nami identity comparisons and eight synchronized driving/result pairs, reviewed independently before composition.",
+    "Read-back of composition lineage, source studio-border reports and all-native-frame foreground-union authoring evidence."
+  ],
+  "criteria": {
+    "recognizable_character_identity": "pass",
+    "illustrated_style": "pass",
+    "sampled_pose_correspondence": "pass",
+    "sampled_complete_character_framing": "pass",
+    "layout_and_typography": "pass",
+    "source_review_and_digest_lineage": "pass"
+  },
+  "observations": [
+    "Riko and Nami remain recognizable through their distinct hair, accessories, clothing and footwear; the shaded illustration style remains coherent.",
+    "The sampled sequence retains varied poses, including arm crossing, lateral reach, overhead extension, bent knees and head-side gestures.",
+    "Both hands, overhead reaches, shoes and Nami rabbit ears fit within the selected stage at the reviewed times. Additional full-size checks of the prior vulnerable intervals show clear lateral margins.",
+    "The hierarchy is clear: Meet the cast, character name, supporting line and segment label remain readable with consistent alignment and surrounding space.",
+    "The two characters appear in order in separate segments. The composition adds no unreviewed character or intended speech.",
+    "The explicit fixed crops contain every recorded foreground bounding box from the 96 native frames per character. This supports the authoring choice without replacing visual review."
+  ],
+  "timestamp_labels_reviewed_seconds": [
+    0,
+    0.53,
+    1.05,
+    1.58,
+    2.11,
+    2.63,
+    3.16,
+    3.69,
+    4.21,
+    4.74,
+    5.27,
+    5.79,
+    6.32,
+    6.85,
+    7.37,
+    7.9
+  ],
+  "framing_authoring_aid": {
+    "method": "Corner-median background with maximum RGB-channel difference above 20; union of all native-frame foreground bounds, followed by a caller-selected static crop.",
+    "role": "Authoring evidence for the chosen regions, not semantic certification or automatic subject tracking.",
+    "requested_padding_pixels": 48,
+    "padding_limit": "Native image boundaries constrain padding; Nami retains 39 pixels at the right rather than 48.",
+    "characters": {
+      "riko": {
+        "native_frames": 96,
+        "studio_border_scan": "clear",
+        "all_recorded_bounds_contained": true,
+        "non_background_union_xyxy": [
+          76,
+          402,
+          651,
+          1185
+        ],
+        "selected_crop_xyxy": [
+          28,
+          354,
+          699,
+          1233
+        ],
+        "native_margin_left_top_right_bottom_pixels": [
+          48,
+          48,
+          48,
+          48
+        ]
+      },
+      "nami": {
+        "native_frames": 96,
+        "studio_border_scan": "clear",
+        "all_recorded_bounds_contained": true,
+        "non_background_union_xyxy": [
+          76,
+          461,
+          681,
+          1179
+        ],
+        "selected_crop_xyxy": [
+          28,
+          413,
+          720,
+          1227
+        ],
+        "native_margin_left_top_right_bottom_pixels": [
+          48,
+          48,
+          39,
+          48
+        ]
+      }
+    }
+  },
+  "technical_evidence": {
+    "duration_seconds": 8,
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "decoded_frames": 240,
+    "full_decode_report": "pass",
+    "audio_stream_report": "silent",
+    "source_fps": 24,
+    "frame_rate_conversion": "Frame duplication; no temporal interpolation."
+  },
+  "audio_review": "No listening assessment; silent output is recorded as a technical stream property.",
+  "limitations": [
+    "The composition review inspected the supplied samples and targeted full-resolution frames; it did not continuously watch or semantically inspect every output frame.",
+    "Fine finger detail, every-frame anatomy, foot sliding, flicker and all intervening transitions are not certified.",
+    "Clear studio borders and contained foreground bounds are conservative pixel proxies and cannot establish semantic quality.",
+    "Conversion from 24 fps to 30 fps duplicates frames and does not add motion information.",
+    "This acceptance applies to the exact digests below and establishes no success rate or reliability on unseen inputs."
+  ],
+  "artifact_sha256": {
+    "final.mp4": "0342fbbc09e75859c694f5513522f991ffc9e39be750788b8b5e9a7fd2d56f8c",
+    "poster.webp": "9ec1e50cc51949045b68e7b609b3c459f0a3a768320b097543e485cd0eaa4aef",
+    "storyboard.png": "3b37a5cefb53a7e03a19ac4ed1adb0278b18f944df628b944ac20efc2e8443c2",
+    "report.json": "e1cbb5fe4df95097e30711f752b50c8b575c2d07a4217147b06f552eff2d1339",
+    "framing-selection.json": "c8a8c10ac8792cfe3f9cd5ec9b0124280ddb977e205e997593ca4f028d16d643",
+    "riko-performance.mp4": "01ae510292dbba1f37188bf42d61d98bd6f80d72cab740cc3a303e28e8b498ca",
+    "riko-report.json": "86e03cd4d35cf03da4a9212da40827d05bebab9f997c7a4d8778ea9ee79be68b",
+    "riko-review.json": "411424d99c477a25b8980d4460ea8d826e2f177250ad2dba368b777d8f837c27",
+    "riko-identity.png": "bb8ad8abbe444bf1cdb04712131e8f05bcbf5d86e204e153d9e268867c46c0d2",
+    "riko-evidence.png": "a806017ff989301f87dde31e7386b08cf71797a72ea706a0c8de78a721dcbcbd",
+    "nami-performance.mp4": "73daa46dfbed1b23c82fcfd5ba589f2d4c9950bfc5e32ed42eec259ed8160ace",
+    "nami-report.json": "a7e2ce29472565a19311d3c92aed26514605e9d7275ead582f1fe79a0ec31a5e",
+    "nami-review.json": "f0d78183c52616694ad3863050fce967bafbfbabc7b08ee2bdae1b069de91157",
+    "nami-identity.png": "48683e530444010bcc2230299402c6aa0ae96d471b92477f708a4ca3e36a3d3f",
+    "nami-evidence.png": "0c7518dd558cb7f39661f43a87f76a7a365babc1a2607474dbc843e476e59504"
+  }
+}

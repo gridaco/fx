@@ -3,6 +3,7 @@ export const demoContracts = {
   parallax: "parallax-demo-v1", world: "world-demo-v1", "movie-sprite": "movie-sprite-demo-v1",
   "portrait-motion": "portrait-motion-demo-v1", "character-3d": "character-3d-demo-v1",
   terrain: "terrain-demo-v1", "ui-kit": "ui-kit-demo-v1", pet: "pet-demo-v1",
+  "product-promo": "video-demo-v1", "character-performance": "video-demo-v1",
 } as const;
 export type ShowcaseSlug = keyof typeof demoContracts;
 export const uiGlyphs = ["play", "pause", "close", "menu", "gear", "home", "retry", "check", "search", "hand", "heart", "star", "arrow_left", "arrow_right", "sound_on", "sound_off"] as const;
@@ -218,8 +219,70 @@ export function parsePetDemo(value: unknown): PetDemo {
   const mirrors = Object.fromEntries(Object.entries(object(data.mirrors, "mirrors")).map(([state, source]) => [state, text(source, "mirrored state")]));
   return { kind: "pet-demo-v1", resources, mirrors };
 }
+export const videoDemoSlugs = ["product-promo", "character-performance"] as const;
+export type VideoDemoSlug = (typeof videoDemoSlugs)[number];
+export type VideoDemoMedia = { file: string; label: string; media_type: string; poster?: string };
+export type VideoDemoManifest = {
+  kind: "video-demo-v1";
+  title: string;
+  summary: string;
+  result: { file: string; poster: string; media_type: "video/mp4" | "video/webm"; width: number; height: number; duration_seconds: number };
+  inputs: (VideoDemoMedia & { id: string; role: "source" | "identity" | "motion" | "direction"; description: string })[];
+  stages: { id: string; label: string; description: string; outputs: VideoDemoMedia[] }[];
+  limitations: string[];
+};
+const videoMediaTypes = new Set(["video/mp4", "video/webm"]);
+const demoMediaTypes = new Set([...videoMediaTypes, "image/png", "image/jpeg", "image/webp", "image/avif", "application/json", "text/markdown", "text/plain"]);
+function videoMediaPath(value: unknown, media_type: string): string {
+  const file = safePath(value), extensions: Record<string, string[]> = { "video/mp4": ["mp4"], "video/webm": ["webm"], "image/png": ["png"], "image/jpeg": ["jpg", "jpeg"], "image/webp": ["webp"], "image/avif": ["avif"], "application/json": ["json"], "text/markdown": ["md"], "text/plain": ["txt"] };
+  if (!extensions[media_type]?.includes(file.split(".").at(-1)!)) throw new Error("Video demo media type differs from its filename.");
+  return file;
+}
+function videoPoster(value: unknown): string {
+  const file = safePath(value);
+  if (!/\.(?:png|jpe?g|webp|avif)$/.test(file)) throw new Error("A video poster must be a static image file.");
+  return file;
+}
+function parseVideoMedia(value: unknown): VideoDemoMedia {
+  const item = object(value), media_type = text(item.media_type, "media type"), file = videoMediaPath(item.file, media_type);
+  if (!demoMediaTypes.has(media_type)) throw new Error("Unsupported video demo media type.");
+  const poster = item.poster === undefined ? undefined : videoPoster(item.poster);
+  if (videoMediaTypes.has(media_type) && !poster) throw new Error("Video demo clips require a static poster.");
+  if (poster === file) throw new Error("A video poster must be a separate image.");
+  return { file, media_type, label: text(item.label, "media label"), ...(poster ? { poster } : {}) };
+}
+/** One bounded result with its actual conditioning inputs and recorded intermediate outputs. */
+export function parseVideoDemo(value: unknown): VideoDemoManifest {
+  const data = object(value); kind(data, "video-demo-v1");
+  const result = object(data.result), media_type = text(result.media_type, "result media type");
+  if (!videoMediaTypes.has(media_type)) throw new Error("A video demo result must be an MP4 or WebM clip.");
+  const file = videoMediaPath(result.file, media_type), poster = videoPoster(result.poster);
+  if (file === poster) throw new Error("A video poster must be a separate image.");
+  const inputs = list(data.inputs, "video inputs").map(value => {
+    const item = object(value), role = text(item.role, "input role");
+    if (!["source", "identity", "motion", "direction"].includes(role)) throw new Error("Unknown video input role.");
+    return { ...parseVideoMedia(item), id: text(item.id, "input ID"), role: role as VideoDemoManifest["inputs"][number]["role"], description: text(item.description, "input description") };
+  });
+  const stages = list(data.stages, "video stages").map(value => {
+    const item = object(value), outputs = list(item.outputs, "stage outputs").map(parseVideoMedia);
+    if (!outputs.length) throw new Error("A video stage must name its recorded outputs.");
+    return { id: text(item.id, "stage ID"), label: text(item.label, "stage label"), description: text(item.description, "stage description"), outputs };
+  });
+  if (!inputs.length || new Set(inputs.map(item => item.id)).size !== inputs.length) throw new Error("Video input IDs must be present and unique.");
+  if (!stages.length || new Set(stages.map(item => item.id)).size !== stages.length) throw new Error("Video stage IDs must be present and unique.");
+  return {
+    kind: "video-demo-v1", title: text(data.title, "video title"), summary: text(data.summary, "video summary"),
+    result: { file, poster, media_type: media_type as VideoDemoManifest["result"]["media_type"], width: integer(result.width, "video width", 1), height: integer(result.height, "video height", 1), duration_seconds: number(result.duration_seconds, "video duration", .001) },
+    inputs, stages, limitations: list(data.limitations, "video limitations").map(value => text(value, "limitation")),
+  };
+}
+export function videoDemoResources(data: VideoDemoManifest): string[] {
+  return [...new Set([data.result.file, data.result.poster, ...[...data.inputs, ...data.stages.flatMap(item => item.outputs)].flatMap(item => [item.file, ...(item.poster ? [item.poster] : [])])])];
+}
+
 /** Validates every format consumed by a bespoke demo, and returns its required relative resources. */
 export function parseDemo(slug: ShowcaseSlug, value: unknown): string[] {
+  if (slug === "product-promo" || slug === "character-performance") return videoDemoResources(parseVideoDemo(value));
   if (slug === "parallax") return parseParallax(value).layers.map(item => item.file);
   if (slug === "world") return parseWorld(value).entities.map(item => item.image);
   if (slug === "character-3d") { const data = parseCharacter(value); return [...[...data.models, ...data.images].map(item => item.url), ...characterRuntimeFiles]; }

@@ -1,0 +1,80 @@
+{
+ "closing_seconds": 2.5,
+ "editorial_note": "The camera follows the initial design request, the first full canvas reveal, the refinement request, and the refined canvas outcome, then returns to the complete interface.",
+ "focus": [
+  {
+   "at": 0,
+   "crop": [
+    0,
+    0,
+    1,
+    1
+   ],
+   "x": 0.5,
+   "y": 0.5,
+   "zoom": 1
+  },
+  {
+   "at": 1.98,
+   "crop": [
+    0.014,
+    0.154,
+    0.248,
+    0.664
+   ],
+   "x": 0.16,
+   "y": 0.35,
+   "zoom": 1
+  },
+  {
+   "at": 6.42,
+   "crop": [
+    0.287,
+    0.156,
+    0.974,
+    0.916
+   ],
+   "x": 0.65,
+   "y": 0.5,
+   "zoom": 1
+  },
+  {
+   "at": 9.45,
+   "crop": [
+    0.014,
+    0.66,
+    0.248,
+    0.844
+   ],
+   "x": 0.16,
+   "y": 0.62,
+   "zoom": 1
+  },
+  {
+   "at": 12,
+   "crop": [
+    0.287,
+    0.156,
+    0.974,
+    0.916
+   ],
+   "x": 0.65,
+   "y": 0.5,
+   "zoom": 1
+  },
+  {
+   "at": 14,
+   "crop": [
+    0,
+    0,
+    1,
+    1
+   ],
+   "x": 0.5,
+   "y": 0.5,
+   "zoom": 1
+  }
+ ],
+ "footage_seconds": 14,
+ "opening_seconds": 2
+}

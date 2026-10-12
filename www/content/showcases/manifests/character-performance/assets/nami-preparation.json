@@ -1,0 +1,50 @@
+{
+ "alpha_floor": 24,
+ "alpha_max_normalized_to": 255,
+ "background_rgb_hex": "f4eee6",
+ "body_fill": 0.4,
+ "character_sha256": "90b9cacfc7c3703007dc1f9885dc705fd00643ddc5240358ef87a822f1960a03",
+ "frame_rate_conversion": "frame duplication or removal; no interpolation",
+ "kind": "character_performance_inputs_v1",
+ "motion_source_sha256": "626dab981e36cfa5e3d483512f5bea51a202c0272bdac707e1270305bbfa34cd",
+ "offset_xy": [
+  231,
+  648
+ ],
+ "plate_size": [
+  720,
+  1280
+ ],
+ "prepared_motion": {
+  "duration_seconds": 4,
+  "fps": 24,
+  "frames": 96,
+  "height": 1280,
+  "width": 720
+ },
+ "reference_audio_removed": true,
+ "repainted": false,
+ "resized_size": [
+  257,
+  512
+ ],
+ "selected_duration_seconds": 4,
+ "selected_start_seconds": 0,
+ "source_alpha_max": 255,
+ "source_crop_xyxy": [
+  303,
+  3,
+  1832,
+  3051
+ ],
+ "source_motion": {
+  "duration_seconds": 4.72,
+  "fps": 25,
+  "height": 1920,
+  "width": 1080
+ },
+ "source_size": [
+  2048,
+  3072
+ ]
+}

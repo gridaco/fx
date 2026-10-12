@@ -1,0 +1,47 @@
+{
+ "evidence_limit": "Reviewed 12 timestamped storyboard samples from 0.00s to 18.42s, the full-size poster, exact-copy brief, and structural report—not continuous video or audio. Smooth motion, frame continuity, and listening were not verified. Silence is intentional. The structural decode pass does not establish artistic quality, and this assessment concerns the fictional demo presentation, not shipping-product capability.",
+ "marks": [
+  {
+   "criterion": 1,
+   "pass": true,
+   "reason": "“Say it. Shape it.” at 1.67s establishes the premise; the request at 5.02s, canvas at 8.37s, and warmer result at 13.40s provide a coherent demonstration and payoff."
+  },
+  {
+   "criterion": 2,
+   "pass": true,
+   "reason": "Chat drives the example: “Design a landing page for an urban garden.” is readable at 5.02s, followed by “Make it warmer.” at 11.72s and a visibly warmer canvas at 13.40s."
+  },
+  {
+   "criterion": 3,
+   "pass": true,
+   "reason": "The opening at 1.67s exactly matches “Say it.” / “Shape it.” The closing at 16.75s and 18.42s exactly matches “Your idea.” / “Already taking shape.” Capitalization, punctuation, and spelling agree with the brief."
+  },
+  {
+   "criterion": 4,
+   "pass": true,
+   "reason": "The samples show deliberate sans-serif hierarchy, aligned margins, restrained lime accents, and strong dark/light contrast. The closing reverses the palette coherently. However, the isolated refinement card at 11.72s leaves excessive unused space."
+  },
+  {
+   "criterion": 5,
+   "pass": true,
+   "reason": "The key request and refinement text are readable in their sampled closeups. Canvas samples at 8.37s and 13.40s retain the headline, illustration, CTA, and bottom content without accidental focal cropping. Secondary canvas labels are comparatively small."
+  },
+  {
+   "criterion": 6,
+   "pass": true,
+   "reason": "The initial green/yellow canvas at 8.37s and 10.05s becomes cream, peach, and terracotta at 13.40s and 15.07s after the warmth request. These related states demonstrate an outcome, not unrelated slides."
+  },
+  {
+   "criterion": 7,
+   "pass": true,
+   "reason": "No external branding, watermark, identifiable borrowed footage, or private context is visible in the supplied samples or poster. Forma and HARVEST function as the fictional product and example-page identities."
+  },
+  {
+   "criterion": 8,
+   "pass": true,
+   "reason": "The sampled premise–request–refinement–result structure is useful as a silent software-launch insert or reusable framing example. Its communication succeeds, although the detached UI crops make it less convincing as a unified workspace demonstration."
+  }
+ ],
+ "strengths": "Clear cause and effect, exact headline copy, readable central chat interactions, and a visibly meaningful palette refinement. The full-size poster communicates the relationship between conversation and canvas particularly well.",
+ "weaknesses": "The chat crops at 3.35–6.70s and especially 11.72s float in broad empty space, weakening workspace context. Retain a contextual interface view or enlarge and reposition the refinement crop. Hold the combined chat-and-canvas view shown in the poster before closing; the report describes a return to the complete interface, but the timestamped samples do not show it. Increase secondary canvas text if it is intended to be read. The artwork and palette-only revision communicate the concept but provide limited evidence of design-tool depth; a future fixture could demonstrate one additional concrete layout edit."
+}

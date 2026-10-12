@@ -1,0 +1,651 @@
+{
+ "artifacts": [
+  {
+   "digest": "20f7dfce6cd3e54760843d3ba3d7d8d2bbae3022fda1b70078bb9987453f0971",
+   "media_type": "video/mp4",
+   "name": "garden.mp4",
+   "omitted_reason": "unplaced_input",
+   "path": null,
+   "size": 449527
+  },
+  {
+   "digest": "33d02c49cba7ae8c9d2cf138a9c5b24ba74a2259dd3f6976def03c014563430f",
+   "media_type": "json",
+   "name": "source",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 351
+  },
+  {
+   "digest": "3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6",
+   "media_type": "file",
+   "name": "Manrope.ttf",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 164700
+  },
+  {
+   "digest": "3b8f41bba939707165eb507c362bc0ea2946e8b5054ae0a13c7f78a43cef9752",
+   "media_type": "image/png",
+   "name": "storyboard",
+   "omitted_reason": null,
+   "path": "artifacts/3b8f41bba939707165eb507c362bc0ea2946e8b5054ae0a13c7f78a43cef9752.png",
+   "size": 155881
+  },
+  {
+   "digest": "3bd7b25d5207af7fbc6fbcfcfc3735cc0400fe5a5d3c32a1587e16983334d523",
+   "media_type": "image/png",
+   "name": "storyboard",
+   "omitted_reason": null,
+   "path": "artifacts/3bd7b25d5207af7fbc6fbcfcfc3735cc0400fe5a5d3c32a1587e16983334d523.png",
+   "size": 187587
+  },
+  {
+   "digest": "a842b02566ecff071bbab36a02e6c482416bfaad6094cda25f9b43c87ad9a957",
+   "media_type": "json",
+   "name": "json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 1000
+  },
+  {
+   "digest": "c22107ecca5153a4c1f5d24e2e580e3b6e0b065f35c8e6df53fbaa72bb20d1b0",
+   "media_type": "json",
+   "name": "forma.json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 1472
+  },
+  {
+   "digest": "cfa9c9462065e3d1d3cf2e477a28abcccc0045521dd7584f5030ba573a2096ce",
+   "media_type": "video/mp4",
+   "name": "video",
+   "omitted_reason": null,
+   "path": "artifacts/cfa9c9462065e3d1d3cf2e477a28abcccc0045521dd7584f5030ba573a2096ce.mp4",
+   "size": 543158
+  },
+  {
+   "digest": "e3c246527d87604ca461e1d71f2523de8c37e8f73032aaed17baeaa0f91a08a4",
+   "media_type": "json",
+   "name": "report",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 1799
+  },
+  {
+   "digest": "ea05da3e86ec8fcaf37c217b935bb31d870933c34d60eabda718031987919706",
+   "media_type": "json",
+   "name": "edit.json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 1587
+  },
+  {
+   "digest": "f34b6fa611ba95d0450ed41fecaeb32ab13e0810c90d03b8109c4b83753bfa19",
+   "media_type": "image/webp",
+   "name": "poster",
+   "omitted_reason": null,
+   "path": "artifacts/f34b6fa611ba95d0450ed41fecaeb32ab13e0810c90d03b8109c4b83753bfa19.webp",
+   "size": 71092
+  }
+ ],
+ "disclosure": {
+  "artifacts": "media",
+  "diagnostics": false,
+  "values": true
+ },
+ "kind": "fx-run-export-v1",
+ "layout": {
+  "cells": {
+   "inspect": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   },
+   "propose": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "render": {
+    "column": 2,
+    "row": 0,
+    "source": "automatic"
+   }
+  },
+  "cursor": null,
+  "diagnostics": [],
+  "file": null,
+  "kind": "fx-layout-report-v1",
+  "order": [
+   "inspect#1",
+   "propose#1",
+   "render#1"
+  ],
+  "revision": null,
+  "state": "none"
+ },
+ "producer": {
+  "version": "0.5.1"
+ },
+ "source": {
+  "event_count": 10,
+  "events_sha256": "e7dc52a8ef2bb32193fbd84ddacaf445d137da5ffc21f686440384e2535f808c",
+  "plan_sha256": "ffcc13ea41aa3a5194ff847f24ddb03c755a189d768283ffffd96b1932205b38"
+ },
+ "view": {
+  "artifacts": [
+   {
+    "available": false,
+    "digest": "20f7dfce6cd3e54760843d3ba3d7d8d2bbae3022fda1b70078bb9987453f0971",
+    "kind": "video/mp4",
+    "name": "garden.mp4",
+    "size": 449527,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "33d02c49cba7ae8c9d2cf138a9c5b24ba74a2259dd3f6976def03c014563430f",
+    "kind": "json",
+    "name": "source",
+    "size": 351,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6",
+    "kind": "file",
+    "name": "Manrope.ttf",
+    "size": 164700,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "3b8f41bba939707165eb507c362bc0ea2946e8b5054ae0a13c7f78a43cef9752",
+    "kind": "image/png",
+    "name": "storyboard",
+    "size": 155881,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "3bd7b25d5207af7fbc6fbcfcfc3735cc0400fe5a5d3c32a1587e16983334d523",
+    "kind": "image/png",
+    "name": "storyboard",
+    "size": 187587,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "a842b02566ecff071bbab36a02e6c482416bfaad6094cda25f9b43c87ad9a957",
+    "kind": "json",
+    "name": "json",
+    "size": 1000,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "c22107ecca5153a4c1f5d24e2e580e3b6e0b065f35c8e6df53fbaa72bb20d1b0",
+    "kind": "json",
+    "name": "forma.json",
+    "size": 1472,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "cfa9c9462065e3d1d3cf2e477a28abcccc0045521dd7584f5030ba573a2096ce",
+    "kind": "video/mp4",
+    "name": "video",
+    "size": 543158,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "e3c246527d87604ca461e1d71f2523de8c37e8f73032aaed17baeaa0f91a08a4",
+    "kind": "json",
+    "name": "report",
+    "size": 1799,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "ea05da3e86ec8fcaf37c217b935bb31d870933c34d60eabda718031987919706",
+    "kind": "json",
+    "name": "edit.json",
+    "size": 1587,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "f34b6fa611ba95d0450ed41fecaeb32ab13e0810c90d03b8109c4b83753bfa19",
+    "kind": "image/webp",
+    "name": "poster",
+    "size": 71092,
+    "url": null
+   }
+  ],
+  "charged_usd": 0,
+  "estimate": {
+   "ceiling_usd": 0,
+   "high_usd": 0.6,
+   "low_usd": 0.02
+  },
+  "inputs": {
+   "brief": {
+    "value": {
+     "file": "c22107ecca5153a4c1f5d24e2e580e3b6e0b065f35c8e6df53fbaa72bb20d1b0"
+    }
+   },
+   "footage": {
+    "value": {
+     "file": "20f7dfce6cd3e54760843d3ba3d7d8d2bbae3022fda1b70078bb9987453f0971"
+    }
+   }
+  },
+  "kind": "fx-viewer-run-v1",
+  "nodes": [
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 1478,
+    "error": null,
+    "id": "inspect#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "source": {
+      "file": {
+       "digest": "33d02c49cba7ae8c9d2cf138a9c5b24ba74a2259dd3f6976def03c014563430f",
+       "kind": "json",
+       "name": "source",
+       "size": 351
+      }
+     },
+     "storyboard": {
+      "file": {
+       "digest": "3bd7b25d5207af7fbc6fbcfcfc3735cc0400fe5a5d3c32a1587e16983334d523",
+       "kind": "image/png",
+       "name": "storyboard",
+       "size": 187587
+      }
+     }
+    },
+    "path": "inspect",
+    "ports": {
+     "inputs": {
+      "brief": "json",
+      "footage": "video"
+     },
+     "outputs": {
+      "source": "json",
+      "storyboard": "image/png"
+     },
+     "params": {}
+    },
+    "reads": [],
+    "started_at": "2026-10-12T21:04:04.257Z",
+    "state": "succeeded",
+    "step": "inspect",
+    "take": [
+     1
+    ],
+    "title": "Inspect source timing",
+    "uses": "./nodes/promo.py#inspect",
+    "with": {
+     "brief": {
+      "file": {
+       "digest": "c22107ecca5153a4c1f5d24e2e580e3b6e0b065f35c8e6df53fbaa72bb20d1b0",
+       "kind": "json",
+       "name": "forma.json",
+       "size": 1472
+      }
+     },
+     "footage": {
+      "file": {
+       "digest": "20f7dfce6cd3e54760843d3ba3d7d8d2bbae3022fda1b70078bb9987453f0971",
+       "kind": "video/mp4",
+       "name": "garden.mp4",
+       "size": 449527
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "inspect#1",
+      "source_kind": "output",
+      "source_port": "source",
+      "target_port": "context"
+     },
+     {
+      "source": "inspect#1",
+      "source_kind": "output",
+      "source_port": "storyboard",
+      "target_port": "context"
+     }
+    ],
+    "cache": "hit",
+    "duration_ms": 0,
+    "error": null,
+    "id": "propose#1",
+    "interface_bindings": [
+     {
+      "source": "inspect#1",
+      "source_kind": "output",
+      "source_port": "source",
+      "target_port": "context"
+     },
+     {
+      "source": "inspect#1",
+      "source_kind": "output",
+      "source_port": "storyboard",
+      "target_port": "context"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "json": {
+      "file": {
+       "digest": "a842b02566ecff071bbab36a02e6c482416bfaad6094cda25f9b43c87ad9a957",
+       "kind": "json",
+       "name": "json",
+       "size": 1000
+      }
+     }
+    },
+    "path": "propose",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "default": "#ffffff",
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer",
+       "x-fx-optional": true
+      },
+      "prompt": {
+       "type": "string",
+       "x-fx-template": true
+      },
+      "system": {
+       "type": "string",
+       "x-fx-optional": true,
+       "x-fx-template": true
+      },
+      "vars": {
+       "default": {},
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "inspect#1"
+    ],
+    "started_at": "2026-10-12T21:04:05.740Z",
+    "state": "succeeded",
+    "step": "propose",
+    "take": [
+     1
+    ],
+    "title": "Plan a focused reveal",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "list": [
+       {
+        "file": {
+         "digest": "c22107ecca5153a4c1f5d24e2e580e3b6e0b065f35c8e6df53fbaa72bb20d1b0",
+         "kind": "json",
+         "name": "forma.json",
+         "size": 1472
+        }
+       },
+       {
+        "file": {
+         "digest": "33d02c49cba7ae8c9d2cf138a9c5b24ba74a2259dd3f6976def03c014563430f",
+         "kind": "json",
+         "name": "source",
+         "size": 351
+        }
+       },
+       {
+        "file": {
+         "digest": "3bd7b25d5207af7fbc6fbcfcfc3735cc0400fe5a5d3c32a1587e16983334d523",
+         "kind": "image/png",
+         "name": "storyboard",
+         "size": 187587
+        }
+       }
+      ]
+     },
+     "matte": {
+      "value": "#ffffff"
+     },
+     "max_tokens": {
+      "value": 4500
+     },
+     "prompt": {
+      "value": "Plan one focused software-launch clip from the supplied source storyboard, source metadata,\nand exact-copy brief. The storyboard is a sequential sampling of a supplied recording,\nnot a set of separate assets. Source pixels will be played continuously at an even speed.\n\nThe renderer has three consecutive parts: animated opening typography, the supplied\nrecording with smooth camera framing, and animated closing typography. Copy comes verbatim\nfrom the brief; never rewrite or invent UI behavior. Return only camera and timing decisions.\nPrefer a deliberate 17-20 second total. Use 1.6-2.8 seconds opening, 12-14 seconds footage,\nand 2-3.2 seconds closing. Keep the complete source visible at first and last body beats.\n\nFocus beats are relative seconds in the footage part, sorted, beginning at 0 and ending\nat footage_seconds. x/y are source-image fractions. zoom 1 means the whole recording card;\nzoom above 1 enlarges exact recording pixels about the focus. Use 3-6 beats, limit zoom to\n2.1, and allow at least 1 second between beats. A brief may give focus_hints with source\nseconds and source fractions: respect what matters at those times and map their timing\ninto the body duration. For a 12-second source, do not accelerate playback: use at least 12 seconds of footage.\nPoint/zoom moves inside one crop take the final 0.75 seconds before each focus beat.\nDifferent crop regions switch with clean editorial cuts 0.75 seconds before the target\nbeat, then hold. They never sweep through half-visible inactive panes.\nAllow at least 2 seconds at the final canvas-focused beat before the final wide beat.\nKeep canvas-reveal zoom at or below 1.5 so the complete key illustration stays visible.\nFavor sustained readable closeups over constant movement. Return\nan editorial note identifying what the camera is following. Do not claim to have listened\nto audio: this renderer makes a silent clip for later assembly.\n\nWhen the brief supplies named regions and region names in focus_hints, use those exact\nnormalized [left, top, right, bottom] source crop bounds on the corresponding focus beats.\nUse zoom 1 for region crops: they already frame complete content. Use [0,0,1,1] at the\nfirst and last beats. Cropping isolates active content; never infer or repaint missing UI.\nWithout named regions, use [0,0,1,1] and the point/zoom controls described above.\n"
+     },
+     "schema": {
+      "file": {
+       "digest": "ea05da3e86ec8fcaf37c217b935bb31d870933c34d60eabda718031987919706",
+       "kind": "json",
+       "name": "edit.json",
+       "size": 1587
+      }
+     },
+     "vars": {
+      "value": {}
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "propose#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "edit"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 6283,
+    "error": null,
+    "id": "render#1",
+    "interface_bindings": [
+     {
+      "source": "propose#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "edit"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "edit": {
+      "file": {
+       "digest": "a842b02566ecff071bbab36a02e6c482416bfaad6094cda25f9b43c87ad9a957",
+       "kind": "json",
+       "name": "edit",
+       "size": 1000
+      }
+     },
+     "poster": {
+      "file": {
+       "digest": "f34b6fa611ba95d0450ed41fecaeb32ab13e0810c90d03b8109c4b83753bfa19",
+       "kind": "image/webp",
+       "name": "poster",
+       "size": 71092
+      }
+     },
+     "report": {
+      "file": {
+       "digest": "e3c246527d87604ca461e1d71f2523de8c37e8f73032aaed17baeaa0f91a08a4",
+       "kind": "json",
+       "name": "report",
+       "size": 1799
+      }
+     },
+     "storyboard": {
+      "file": {
+       "digest": "3b8f41bba939707165eb507c362bc0ea2946e8b5054ae0a13c7f78a43cef9752",
+       "kind": "image/png",
+       "name": "storyboard",
+       "size": 155881
+      }
+     },
+     "video": {
+      "file": {
+       "digest": "cfa9c9462065e3d1d3cf2e477a28abcccc0045521dd7584f5030ba573a2096ce",
+       "kind": "video/mp4",
+       "name": "video",
+       "size": 543158
+      }
+     }
+    },
+    "path": "render",
+    "ports": {
+     "inputs": {
+      "brief": "json",
+      "edit": "json",
+      "font": "file",
+      "footage": "video"
+     },
+     "outputs": {
+      "edit": "json",
+      "poster": "image/webp",
+      "report": "json",
+      "storyboard": "image/png",
+      "video": "video/mp4"
+     },
+     "params": {}
+    },
+    "reads": [
+     "propose#1"
+    ],
+    "started_at": "2026-10-12T21:04:05.744Z",
+    "state": "succeeded",
+    "step": "render",
+    "take": [
+     1
+    ],
+    "title": "Animate the supplied pixels",
+    "uses": "./nodes/promo.py#render",
+    "with": {
+     "brief": {
+      "file": {
+       "digest": "c22107ecca5153a4c1f5d24e2e580e3b6e0b065f35c8e6df53fbaa72bb20d1b0",
+       "kind": "json",
+       "name": "forma.json",
+       "size": 1472
+      }
+     },
+     "edit": {
+      "file": {
+       "digest": "a842b02566ecff071bbab36a02e6c482416bfaad6094cda25f9b43c87ad9a957",
+       "kind": "json",
+       "name": "json",
+       "size": 1000
+      }
+     },
+     "font": {
+      "file": {
+       "digest": "3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6",
+       "kind": "file",
+       "name": "Manrope.ttf",
+       "size": 164700
+      }
+     },
+     "footage": {
+      "file": {
+       "digest": "20f7dfce6cd3e54760843d3ba3d7d8d2bbae3022fda1b70078bb9987453f0971",
+       "kind": "video/mp4",
+       "name": "garden.mp4",
+       "size": 449527
+      }
+     }
+    }
+   }
+  ],
+  "outputs": {
+   "edit": {
+    "file": {
+     "digest": "a842b02566ecff071bbab36a02e6c482416bfaad6094cda25f9b43c87ad9a957",
+     "kind": "json",
+     "name": "edit",
+     "size": 1000
+    }
+   },
+   "poster": {
+    "file": {
+     "digest": "f34b6fa611ba95d0450ed41fecaeb32ab13e0810c90d03b8109c4b83753bfa19",
+     "kind": "image/webp",
+     "name": "poster",
+     "size": 71092
+    }
+   },
+   "report": {
+    "file": {
+     "digest": "e3c246527d87604ca461e1d71f2523de8c37e8f73032aaed17baeaa0f91a08a4",
+     "kind": "json",
+     "name": "report",
+     "size": 1799
+    }
+   },
+   "source": {
+    "file": {
+     "digest": "33d02c49cba7ae8c9d2cf138a9c5b24ba74a2259dd3f6976def03c014563430f",
+     "kind": "json",
+     "name": "source",
+     "size": 351
+    }
+   },
+   "storyboard": {
+    "file": {
+     "digest": "3b8f41bba939707165eb507c362bc0ea2946e8b5054ae0a13c7f78a43cef9752",
+     "kind": "image/png",
+     "name": "storyboard",
+     "size": 155881
+    }
+   },
+   "video": {
+    "file": {
+     "digest": "cfa9c9462065e3d1d3cf2e477a28abcccc0045521dd7584f5030ba573a2096ce",
+     "kind": "video/mp4",
+     "name": "video",
+     "size": 543158
+    }
+   }
+  },
+  "pending": [],
+  "run_name": "canonical-portable-final",
+  "scopes": [],
+  "stand_in": false,
+  "state": "succeeded",
+  "warnings": [],
+  "workflow": {
+   "description": "A supplied software recording and exact-copy brief become a short launch clip. Inspect the recording, propose an editable camera-and-timing plan, then render exact source pixels with animated typography locally. A supplied plan skips the paid proposal, so copy and timing revisions need no generation call.",
+   "id": "product-promo",
+   "title": "Product promo"
+  }
+ }
+}

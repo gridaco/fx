@@ -12,6 +12,45 @@ type Details = {
 
 /** Page prose belongs to each showcase; it does not infer features from a run. */
 export const workflowDetails: Record<Workflow["slug"], Details> = {
+  "product-promo": {
+    introduction: "Start with a screen recording and an exact-copy brief. An image-aware model proposes a camera and timing plan, then local rendering animates typography around the supplied product pixels. Keep the plan so copy and timing can change without another model call.",
+    stages: [
+      { title: "Inspect", description: "Measure the supplied screen recording and sample its interaction." },
+      { title: "Plan", description: "Propose a focused camera and timing plan from the recording and exact-copy brief." },
+      { title: "Render", description: "Animate the supplied product pixels and typography locally." },
+      { title: "Revise", description: "Reuse the saved plan for local copy, timing and delivery changes." },
+    ],
+    outputs: [
+      { path: "assets/final.mp4", description: "The selected finished promo clip." },
+      { path: "assets/poster.webp", description: "A still from the finished clip." },
+      { path: "assets/report.json", description: "The recorded output dimensions, timing and finishing details." },
+      { path: "assets/edit.json", description: "The editable camera and timing plan used to render this clip." },
+      { path: "manifest.json", description: "The website projection of the exact inputs, stages and result." },
+    ],
+    inputs: "footage: .showcase-inputs/forma.mp4\nbrief: inputs/forma.json\n# Optional: reuse a saved edit plan to render locally without another paid call.\n# edit: .showcase-inputs/edit.json",
+    agent: ["Build an FX workflow that turns ", { label: "this screen recording", path: "assets/source.mp4" }, " and an exact-copy brief into one polished product promo clip. Inspect the interaction, propose an editable camera and timing plan, then animate the supplied pixels with typography locally. Keep the source recording and edit plan inspectable, and make saved-plan replay free of provider calls. Plan offline before selecting a live spending ceiling."],
+    works: ["A short product reveal inside a longer launch video", "A supplied screen capture with clear interaction", "Revising local timing and delivery without regenerating footage"],
+    related: "character-performance",
+  },
+  "character-performance": {
+    introduction: "A character picture establishes identity. A reference clip establishes performance. The reusable workflow prepares those inputs, generates one short take and reviews paired frame samples. This cast template runs it for Riko and Nami with the same four-second performance, then assembles their accepted clips into an eight-second reel locally.",
+    stages: [
+      { title: "Prepare", description: "Fit each identity image separately and select one silent driving interval at 24 fps." },
+      { title: "Transfer", description: "Run the same motion-transfer workflow once per character with the shared performance reference." },
+      { title: "Review", description: "Decode every native frame, apply a conservative studio-border check, and independently compare eight paired samples for identity, corresponding poses and anatomy." },
+      { title: "Compose", description: "Aspect-fit each selected fixed region into a silent, eight-second 1080 × 1920 reel at 30 fps. Match each clip to its reviewed report." },
+    ],
+    outputs: [
+      { path: "assets/final.mp4", description: "The eight-second Riko and Nami cast reel." },
+      { path: "assets/poster.webp", description: "A still from the finished cast reel." },
+      { path: "assets/report.json", description: "The local composition report, fixed framing regions, source clip digests and inherited review scope." },
+      { path: "manifest.json", description: "The exact input, stage and result projection used by this page." },
+    ],
+    inputs: "# In examples/character-performance/inputs/cast.yaml\nfirst_character: ../.showcase-inputs/riko-plate.png\nsecond_character: ../.showcase-inputs/nami-plate.png\nmotion: ../.showcase-inputs/motion-prepared.mp4\nfirst_name: Riko\nsecond_name: Nami\nseconds: 4\nfps: 24\n# Normalized [x, y, width, height], measured for these exact accepted takes.\nfirst_region: [0.03888888888888889, 0.2765625, 0.9319444444444445, 0.68671875]\nsecond_region: [0.03888888888888889, 0.32265625, 0.9611111111111111, 0.6359375]\n# Recheck framing across every frame of a fresh take; regions default to full frame.\n# Prepare the selected stock reference locally; see the source commands.",
+    agent: ["Build a reusable FX workflow that turns ", { label: "Riko's identity artwork", path: "assets/character.png" }, " or ", { label: "Nami's identity artwork", path: "assets/nami.png" }, " and a separately supplied motion reference into one short character performance. Keep identity and movement as separate visual inputs. Decode every native frame, conservatively check the studio borders, and independently compare synchronized frame samples before admitting a take. Compose two instances into a cast reel with a free local finishing stage. Default to full frames, allow explicit fixed framing regions, and aspect-fit each complete chosen region. Bind each clip to its reviewed report. Retain the stage evidence and disclose that sampled review and a pixel-based border check cannot certify continuous anatomy. Plan offline before selecting a live spending ceiling."],
+    works: ["A bounded gesture or performance from reference footage", "Reusing one performance across distinct character identities", "Composing reviewed utility outputs into a larger reel"],
+    related: "product-promo",
+  },
   "parallax": {
     introduction: "A background becomes a place when its layers move at different speeds. This meadow begins with one concept image, then separates the sky, distance, and foreground into reusable scrolling layers. The camera belongs to the application that uses them.",
     stages: [
@@ -169,6 +208,7 @@ export const workflowDetails: Record<Workflow["slug"], Details> = {
 
 /** Consumption patterns use the selected bundle's actual relative resources. */
 export function assetExample(slug: Workflow["slug"], base: string): { language: string; code: string } {
+  if (slug === "product-promo" || slug === "character-performance") return { language: "HTML", code: `<video controls playsinline preload="none"\n  src="${base}/assets/final.mp4"\n  poster="${base}/assets/poster.webp">\n</video>\n\n<!-- The manifest names its exact inputs and stage files. -->\n<a href="${base}/manifest.json">Clip manifest</a>` };
   if (slug === "movie-sprite") return { language: "HTML", code: `<video autoplay loop muted playsinline\n  poster="${base}/assets/canonical.png">\n  <source src="${base}/assets/loop.webm"\n    type="video/webm">\n</video>\n\n<!-- Animated image alternative -->\n<img src="${base}/assets/loop.webp"\n  alt="Character idle">` };
   if (slug === "character-3d") return { language: "HTML", code: `<!-- Load the bundled model-viewer component first. -->\n<script type="module"\n  src="${base}/vendor/model-viewer.min.js"></script>\n\n<model-viewer camera-controls autoplay\n  animation-name="cheer"\n  src="${base}/assets/model-corrected.glb">\n</model-viewer>` };
   if (slug === "world") return { language: "JavaScript", code: `const base = "${base}";\nconst response = await fetch(base + "/manifest.json");\nconst world = await response.json();\n\nfor (const item of world.entities) {\n  const image = new Image();\n  image.src = base + "/" + item.image;\n  image.alt = item.entity.display_name;\n  document.body.append(image);\n}` };

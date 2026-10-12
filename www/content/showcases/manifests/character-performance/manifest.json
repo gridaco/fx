@@ -1,0 +1,168 @@
+{
+  "kind": "video-demo-v1",
+  "title": "One performance. Two characters.",
+  "summary": "Riko and Nami follow the same recorded dance. Independently reviewed character clips become a vertical cast reel through free local composition.",
+  "result": {
+    "file": "assets/final.mp4",
+    "poster": "assets/poster.webp",
+    "media_type": "video/mp4",
+    "width": 1080,
+    "height": 1920,
+    "duration_seconds": 8
+  },
+  "inputs": [
+    {
+      "id": "riko",
+      "role": "identity",
+      "label": "Riko identity plate",
+      "file": "assets/character.png",
+      "media_type": "image/png",
+      "description": "An FX-owned canonical illustration fitted onto a portrait plate without repainting. The complete source illustration is included separately."
+    },
+    {
+      "id": "nami",
+      "role": "identity",
+      "label": "Nami identity plate",
+      "file": "assets/nami.png",
+      "media_type": "image/png",
+      "description": "The same Nami concept used in other FX examples, fitted with extra room for the long rabbit ears."
+    },
+    {
+      "id": "motion",
+      "role": "motion",
+      "label": "Pinned driving performance",
+      "file": "assets/motion-reference.json",
+      "media_type": "application/json",
+      "description": "A four-second interval from Polina Tankilevitch on Pexels, explicitly prepared at 24fps. Acquire the source from its publisher; raw and trimmed stock footage is excluded from FX delivery."
+    }
+  ],
+  "stages": [
+    {
+      "id": "prepare",
+      "label": "Prepare the exact references",
+      "description": "Free preparation crops transparent margins, fits existing character pixels, removes source audio, and converts the selected interval to 24fps without temporal interpolation.",
+      "outputs": [
+        {
+          "file": "assets/riko-original.webp",
+          "label": "Original Riko illustration",
+          "media_type": "image/webp"
+        },
+        {
+          "file": "assets/nami-original.png",
+          "label": "Original Nami illustration",
+          "media_type": "image/png"
+        },
+        {
+          "file": "assets/riko-preparation.json",
+          "label": "Riko preparation and digests",
+          "media_type": "application/json"
+        },
+        {
+          "file": "assets/nami-preparation.json",
+          "label": "Nami preparation and digests",
+          "media_type": "application/json"
+        }
+      ]
+    },
+    {
+      "id": "riko",
+      "label": "Transfer and independently review Riko",
+      "description": "One motion call preserves the character identity while following the real performance; a different model checks the identity and eight synchronized driving/result pairs.",
+      "outputs": [
+        {
+          "file": "assets/riko-performance.mp4",
+          "label": "Accepted Riko performance",
+          "media_type": "video/mp4",
+          "poster": "assets/riko-poster.webp"
+        },
+        {
+          "file": "assets/riko-identity.png",
+          "label": "Riko identity comparison",
+          "media_type": "image/png"
+        },
+        {
+          "file": "assets/riko-evidence.png",
+          "label": "Riko synchronized pose samples",
+          "media_type": "image/png"
+        },
+        {
+          "file": "assets/riko-report.json",
+          "label": "Riko technical and admission report",
+          "media_type": "application/json"
+        },
+        {
+          "file": "assets/riko-review.json",
+          "label": "Independent Riko review",
+          "media_type": "application/json"
+        }
+      ]
+    },
+    {
+      "id": "nami",
+      "label": "Reuse the utility for Nami",
+      "description": "The same workflow and motion reference use a different identity plate. A clipped-ear candidate was rejected; the selected candidate uses a smaller starting plate.",
+      "outputs": [
+        {
+          "file": "assets/nami-performance.mp4",
+          "label": "Accepted Nami performance",
+          "media_type": "video/mp4",
+          "poster": "assets/nami-poster.webp"
+        },
+        {
+          "file": "assets/nami-identity.png",
+          "label": "Nami identity comparison",
+          "media_type": "image/png"
+        },
+        {
+          "file": "assets/nami-evidence.png",
+          "label": "Nami synchronized pose samples",
+          "media_type": "image/png"
+        },
+        {
+          "file": "assets/nami-report.json",
+          "label": "Nami technical and admission report",
+          "media_type": "application/json"
+        },
+        {
+          "file": "assets/nami-review.json",
+          "label": "Independent Nami review",
+          "media_type": "application/json"
+        }
+      ]
+    },
+    {
+      "id": "compose",
+      "label": "Compose the accepted cast locally",
+      "description": "The full cast graph reuses the selected paid results. Explicit fixed framing regions remove empty background, with all native-frame bounds checked before selection. Local composition fits each complete chosen region, adds original typography, converts to 30fps and decodes all 240 frames.",
+      "outputs": [
+        {
+          "file": "assets/report.json",
+          "label": "Composition lineage and structural report",
+          "media_type": "application/json"
+        },
+        {
+          "file": "assets/storyboard.png",
+          "label": "Sixteen timestamped reel samples",
+          "media_type": "image/png"
+        },
+        {
+          "file": "assets/content-review.json",
+          "label": "Independent composition review and limits",
+          "media_type": "application/json"
+        },
+        {
+          "file": "assets/framing-selection.json",
+          "label": "All-frame framing selection evidence",
+          "media_type": "application/json"
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "The character utility is a bounded performance-transfer stage. The reel is an example composition; larger stories, copy, music, voiceover and platform delivery belong to the caller.",
+    "The studio-border proxy checks all native frames for edge contact; it does not establish semantic quality. Independent character review covers the identity and eight synchronized pose samples. It cannot certify every transition, fine fingers, continuous foot contact or reliability on unseen inputs.",
+    "Native character clips are 720x1280 at 24fps. Caller-selected fixed regions remove empty background before local composition into 1080x1920 at 30fps by frame duplication; no intermediate motion is generated. Output is silent.",
+    "The selected driving footage is used as an adaptation under the recorded licensing interpretation, not as a training dataset. Raw and trimmed stock footage is acquired from its publisher and is not hosted by FX.",
+    "Riko and Nami are the public cast. A third local development character is excluded because upstream reference rights remain unresolved."
+  ]
+}

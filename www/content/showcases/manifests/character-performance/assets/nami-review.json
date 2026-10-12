@@ -1,0 +1,22 @@
+{
+ "anatomy_and_framing": "pass",
+ "identity": "pass",
+ "limitations": [
+  "Only the opening comparison and eight synchronized samples were reviewed; transitions, continuous timing, smoothness and brief intervening artifacts cannot be established.",
+  "The character is small in the montage, limiting assessment of individual fingers and fine facial or accessory details, particularly where hands overlap.",
+  "No audio was assessed, and these samples do not establish reliability on unseen inputs."
+ ],
+ "motion_correspondence": "pass",
+ "observations": [
+  "The character remains recognizable: blonde-and-pink hair, soft illustrated face, black rabbit ears with pink interiors, oversized dark jacket, pink-trimmed skirt, thigh-high stockings and lace-up boots are retained.",
+  "The opening pose matches the reference's wide stance and asymmetric bent arms rather than simply reproducing the character plate.",
+  "The crossed-arm gestures at 0.56s and 2.79s, lowered arms and bent knees at 1.11s, and narrowed stance at 1.67s correspond to their reference samples.",
+  "The turn toward screen right at 2.23s, overhead arm extension at 3.34s, and compact leaning pose at 3.90s follow the reference. Sampled foot placement and weight shifts are broadly consistent.",
+  "Both arms, hands, legs and feet remain visible or plausibly overlapped. No clear missing limbs, extra limbs or severe hand merges are evident at the supplied resolution.",
+  "The entire character stays within frame, including raised hands and boots. No additional people or in-scene text appear in the generated images; captions belong to the evidence layout.",
+  "The output consistently preserves the shaded illustration style. Small changes in expression, hair arrangement and clothing details do not amount to identity loss."
+ ],
+ "review_scope": "sampled_frames_and_pose_correspondence",
+ "status": "pass",
+ "style": "pass"
+}

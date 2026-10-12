@@ -1,0 +1,100 @@
+{
+ "audio": "silent",
+ "brief_sha256": "c22107ecca5153a4c1f5d24e2e580e3b6e0b065f35c8e6df53fbaa72bb20d1b0",
+ "contract": "product-promo/v1",
+ "edit": {
+  "closing_seconds": 2.5,
+  "editorial_note": "The camera follows the initial design request, the first full canvas reveal, the refinement request, and the refined canvas outcome, then returns to the complete interface.",
+  "focus": [
+   {
+    "at": 0,
+    "crop": [
+     0,
+     0,
+     1,
+     1
+    ],
+    "x": 0.5,
+    "y": 0.5,
+    "zoom": 1
+   },
+   {
+    "at": 1.98,
+    "crop": [
+     0.014,
+     0.154,
+     0.248,
+     0.664
+    ],
+    "x": 0.16,
+    "y": 0.35,
+    "zoom": 1
+   },
+   {
+    "at": 6.42,
+    "crop": [
+     0.287,
+     0.156,
+     0.974,
+     0.916
+    ],
+    "x": 0.65,
+    "y": 0.5,
+    "zoom": 1
+   },
+   {
+    "at": 9.45,
+    "crop": [
+     0.014,
+     0.66,
+     0.248,
+     0.844
+    ],
+    "x": 0.16,
+    "y": 0.62,
+    "zoom": 1
+   },
+   {
+    "at": 12,
+    "crop": [
+     0.287,
+     0.156,
+     0.974,
+     0.916
+    ],
+    "x": 0.65,
+    "y": 0.5,
+    "zoom": 1
+   },
+   {
+    "at": 14,
+    "crop": [
+     0,
+     0,
+     1,
+     1
+    ],
+    "x": 0.5,
+    "y": 0.5,
+    "zoom": 1
+   }
+  ],
+  "footage_seconds": 14,
+  "opening_seconds": 2
+ },
+ "font_sha256": "3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6",
+ "frames": 555,
+ "full_decode": "pass",
+ "semantic_review": "required separately; structural validation is not artistic acceptance",
+ "source_playback_rate": 0.857143,
+ "source_sha256": "20f7dfce6cd3e54760843d3ba3d7d8d2bbae3022fda1b70078bb9987453f0971",
+ "ui_treatment": "supplied recording pixels, uniformly scaled and framed; no generative redraw",
+ "video": {
+  "codec": "h264",
+  "frame_rate": "30/1",
+  "has_audio": false,
+  "height": 1080,
+  "seconds": 18.5,
+  "width": 1920
+ }
+}

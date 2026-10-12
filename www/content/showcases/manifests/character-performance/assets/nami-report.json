@@ -1,0 +1,66 @@
+{
+ "audio": "removed",
+ "character": "Nami",
+ "character_plate_sha256": "a2a7a41f1d589eaef3e724128ec2fd38806a02dbd3c851c49c17bdefa53ca5ff",
+ "finished": {
+  "duration_seconds": 4,
+  "fps": 24,
+  "frames": 96,
+  "height": 1280,
+  "width": 720
+ },
+ "framing_scan": {
+  "corner_patch_pixels": 8,
+  "corner_uniformity_max_channel_threshold": 8,
+  "edge_contacts": [],
+  "foreground_edge_max_channel_threshold": 20,
+  "frame_index_base": 0,
+  "frames_scanned": 96,
+  "kind": "studio_border_scan_v1",
+  "limitation": "Uniform corners and clear borders cannot establish anatomy or every-transition quality.",
+  "scope": "all native frames; conservative plain-studio pixel proxy, not semantic certification",
+  "status": "clear",
+  "timing": "native best_effort_timestamp_time",
+  "unknown_frames": []
+ },
+ "full_decode": "pass",
+ "kind": "character_performance_finish_v1",
+ "motion_sha256": "8cad44ece6ada802cac38f45c58e3db271ea7596cdee49d4fd09168e34574762",
+ "native": {
+  "duration_seconds": 4,
+  "fps": 24,
+  "frames": 96,
+  "height": 1280,
+  "width": 720
+ },
+ "publication_status": "requires_separate_content_review",
+ "rejection_reasons": [],
+ "review_scope": "sampled_frames_and_pose_correspondence",
+ "review_sha256": "f0d78183c52616694ad3863050fce967bafbfbabc7b08ee2bdae1b069de91157",
+ "review_status": "sampled_review_pass",
+ "sample_mean_rgb_change": [
+  11.566975911458334,
+  13.031168619791666,
+  11.521321614583334,
+  11.611328125,
+  11.84521484375,
+  13.732177734375,
+  13.200520833333334
+ ],
+ "sample_times_seconds": [
+  0,
+  0.557143,
+  1.114286,
+  1.671429,
+  2.228571,
+  2.785714,
+  3.342857,
+  3.9
+ ],
+ "sampled_review_status": "pass",
+ "sampling_limit": "Eight frame pairs cannot certify every transition.",
+ "spatial_resizing_of_output": false,
+ "take_sha256": "649f715cf2a19ab67bcdf50c87d67e0d92338ae52e5ff4a6a33c189ac9a8ea66",
+ "temporal_interpolation": false,
+ "video_sha256": "73daa46dfbed1b23c82fcfd5ba589f2d4c9950bfc5e32ed42eec259ed8160ace"
+}

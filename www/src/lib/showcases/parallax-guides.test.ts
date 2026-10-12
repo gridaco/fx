@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import releaseDocument from "../../../content/showcases/manifests/412d71164da3e787e38babfa4d99c0497cac942bf796847b3ce6608a4c8c1835.json";
+import releaseDocument from "../../../content/showcases/manifests/b45587a7593e02d5dc7ca560539b0ab549ea9292078927df837464e9510cc784.json";
 import { showcaseLock } from "./catalog";
 import { parseRelease } from "./contracts";
 import { workflowParallaxGuides } from "./parallax-guides";

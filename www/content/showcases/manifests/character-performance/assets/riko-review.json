@@ -1,0 +1,21 @@
+{
+ "anatomy_and_framing": "pass",
+ "identity": "pass",
+ "limitations": [
+  "Only the opening comparison and eight synchronized samples were reviewed; intervening transitions, continuous timing, foot sliding, and flicker cannot be established.",
+  "The character is relatively small in the montage, limiting assessment of individual fingers and fine facial or accessory details.",
+  "No audio was assessed, and this review does not establish reliability on unseen inputs."
+ ],
+ "motion_correspondence": "pass",
+ "observations": [
+  "The character remains recognizable through the blonde hair with pink lengths, pink/red hair ribbons, bangs, dark choker, magenta cropped sweatshirt, dark denim shorts, and white sneakers with pink and dark accents. Facial drawing is simplified and eyes are frequently closed, without clear identity loss.",
+  "The opening pose matches the reference's wide, bent-knee stance and asymmetrically raised arms. At 0.56s, the crossed-arm gesture and head lean correspond; at 1.11s, the lowered arms and bent, lifted screen-right leg also correspond.",
+  "The narrowed stance and downward-reaching arm at 1.67s, sideways bent-arm gesture at 2.23s, and arms crossing near the face and chest at 2.79s follow the synchronized reference poses.",
+  "At 3.34s, both arms reach overhead with separated feet. At 3.90s, the character follows the reference's three-quarter body turn, closer foot placement, and hands near the shoulders/head. The sampled sequence is visibly varied rather than static or unrelated.",
+  "Both arms, hands, legs, and shoes remain present in the samples. Overlapping arms and overhead hands show no clear severe merging or extra limbs. The entire character, including raised hands and shoes, stays within frame.",
+  "The output consistently retains a shaded illustrated style. No additional people or unintended text appear within the generated scene; the headings belong to the evidence layout. Small differences in hand shape, head angle, and body lean do not materially change the sampled gestures."
+ ],
+ "review_scope": "sampled_frames_and_pose_correspondence",
+ "status": "pass",
+ "style": "pass"
+}

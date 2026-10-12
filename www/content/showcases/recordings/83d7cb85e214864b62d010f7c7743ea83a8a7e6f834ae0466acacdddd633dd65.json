@@ -1,0 +1,2332 @@
+{
+ "artifacts": [
+  {
+   "digest": "01ae510292dbba1f37188bf42d61d98bd6f80d72cab740cc3a303e28e8b498ca",
+   "media_type": "video/mp4",
+   "name": "video",
+   "omitted_reason": null,
+   "path": "artifacts/01ae510292dbba1f37188bf42d61d98bd6f80d72cab740cc3a303e28e8b498ca.mp4",
+   "size": 1161707
+  },
+  {
+   "digest": "0342fbbc09e75859c694f5513522f991ffc9e39be750788b8b5e9a7fd2d56f8c",
+   "media_type": "video/mp4",
+   "name": "video",
+   "omitted_reason": null,
+   "path": "artifacts/0342fbbc09e75859c694f5513522f991ffc9e39be750788b8b5e9a7fd2d56f8c.mp4",
+   "size": 2911018
+  },
+  {
+   "digest": "0c7518dd558cb7f39661f43a87f76a7a365babc1a2607474dbc843e476e59504",
+   "media_type": "image/png",
+   "name": "evidence",
+   "omitted_reason": null,
+   "path": "artifacts/0c7518dd558cb7f39661f43a87f76a7a365babc1a2607474dbc843e476e59504.png",
+   "size": 1672117
+  },
+  {
+   "digest": "38d5d5c67b674ff826d8fc5b44f8547b5d9521f431f0fffb3182b7ede233db25",
+   "media_type": "json",
+   "name": "report",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 1686
+  },
+  {
+   "digest": "3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6",
+   "media_type": "file",
+   "name": "Manrope.ttf",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 164700
+  },
+  {
+   "digest": "411424d99c477a25b8980d4460ea8d826e2f177250ad2dba368b777d8f837c27",
+   "media_type": "json",
+   "name": "json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 2147
+  },
+  {
+   "digest": "48683e530444010bcc2230299402c6aa0ae96d471b92477f708a4ca3e36a3d3f",
+   "media_type": "image/png",
+   "name": "identity",
+   "omitted_reason": null,
+   "path": "artifacts/48683e530444010bcc2230299402c6aa0ae96d471b92477f708a4ca3e36a3d3f.png",
+   "size": 149631
+  },
+  {
+   "digest": "4b4d909a4712c725c1188184c04b9c8bf6970e0b9842ceb594be4cab2a8ed8a8",
+   "media_type": "json",
+   "name": "report",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 1689
+  },
+  {
+   "digest": "649f715cf2a19ab67bcdf50c87d67e0d92338ae52e5ff4a6a33c189ac9a8ea66",
+   "media_type": "video/mp4",
+   "name": "video",
+   "omitted_reason": null,
+   "path": "artifacts/649f715cf2a19ab67bcdf50c87d67e0d92338ae52e5ff4a6a33c189ac9a8ea66.mp4",
+   "size": 1046207
+  },
+  {
+   "digest": "6b6dcae3de197e41d14940f01d25d97cfe047edf0da89f777abaf7d5746147c0",
+   "media_type": "video/mp4",
+   "name": "video",
+   "omitted_reason": null,
+   "path": "artifacts/6b6dcae3de197e41d14940f01d25d97cfe047edf0da89f777abaf7d5746147c0.mp4",
+   "size": 1175060
+  },
+  {
+   "digest": "6e673a9d0ff73539804d903fd8dfce205b3823d6bd964a420a94dbf230dac470",
+   "media_type": "image/png",
+   "name": "riko-plate.png",
+   "omitted_reason": "unplaced_input",
+   "path": null,
+   "size": 157555
+  },
+  {
+   "digest": "73daa46dfbed1b23c82fcfd5ba589f2d4c9950bfc5e32ed42eec259ed8160ace",
+   "media_type": "video/mp4",
+   "name": "video",
+   "omitted_reason": null,
+   "path": "artifacts/73daa46dfbed1b23c82fcfd5ba589f2d4c9950bfc5e32ed42eec259ed8160ace.mp4",
+   "size": 1032854
+  },
+  {
+   "digest": "86e03cd4d35cf03da4a9212da40827d05bebab9f997c7a4d8778ea9ee79be68b",
+   "media_type": "json",
+   "name": "report",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 1965
+  },
+  {
+   "digest": "8cad44ece6ada802cac38f45c58e3db271ea7596cdee49d4fd09168e34574762",
+   "media_type": "video/mp4",
+   "name": "motion-prepared.mp4",
+   "omitted_reason": "unplaced_input",
+   "path": null,
+   "size": 1983200
+  },
+  {
+   "digest": "99989dfb0a629c705c21196da79883c1d0f78d6bcd81b4b60b56faef316a2643",
+   "media_type": "image/webp",
+   "name": "poster",
+   "omitted_reason": null,
+   "path": "artifacts/99989dfb0a629c705c21196da79883c1d0f78d6bcd81b4b60b56faef316a2643.webp",
+   "size": 25884
+  },
+  {
+   "digest": "9ec1e50cc51949045b68e7b609b3c459f0a3a768320b097543e485cd0eaa4aef",
+   "media_type": "image/webp",
+   "name": "poster",
+   "omitted_reason": null,
+   "path": "artifacts/9ec1e50cc51949045b68e7b609b3c459f0a3a768320b097543e485cd0eaa4aef.webp",
+   "size": 50976
+  },
+  {
+   "digest": "a23d7a2250ece25277d1e51b32136dedd03d0a6b741e40ce685d8a38de5270e6",
+   "media_type": "json",
+   "name": "review.json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 775
+  },
+  {
+   "digest": "a2a7a41f1d589eaef3e724128ec2fd38806a02dbd3c851c49c17bdefa53ca5ff",
+   "media_type": "image/png",
+   "name": "nami-plate.png",
+   "omitted_reason": "unplaced_input",
+   "path": null,
+   "size": 145623
+  },
+  {
+   "digest": "a7e2ce29472565a19311d3c92aed26514605e9d7275ead582f1fe79a0ec31a5e",
+   "media_type": "json",
+   "name": "report",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 1962
+  },
+  {
+   "digest": "a806017ff989301f87dde31e7386b08cf71797a72ea706a0c8de78a721dcbcbd",
+   "media_type": "image/png",
+   "name": "evidence",
+   "omitted_reason": null,
+   "path": "artifacts/a806017ff989301f87dde31e7386b08cf71797a72ea706a0c8de78a721dcbcbd.png",
+   "size": 1674766
+  },
+  {
+   "digest": "bb8ad8abbe444bf1cdb04712131e8f05bcbf5d86e204e153d9e268867c46c0d2",
+   "media_type": "image/png",
+   "name": "identity",
+   "omitted_reason": null,
+   "path": "artifacts/bb8ad8abbe444bf1cdb04712131e8f05bcbf5d86e204e153d9e268867c46c0d2.png",
+   "size": 148183
+  },
+  {
+   "digest": "bd5858d0c99022ce35f196bc733cd67daaf0c209571565351cabdbd037ceac2f",
+   "media_type": "image/webp",
+   "name": "poster",
+   "omitted_reason": null,
+   "path": "artifacts/bd5858d0c99022ce35f196bc733cd67daaf0c209571565351cabdbd037ceac2f.webp",
+   "size": 27346
+  },
+  {
+   "digest": "e1cbb5fe4df95097e30711f752b50c8b575c2d07a4217147b06f552eff2d1339",
+   "media_type": "json",
+   "name": "report",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 2720
+  },
+  {
+   "digest": "f0d78183c52616694ad3863050fce967bafbfbabc7b08ee2bdae1b069de91157",
+   "media_type": "json",
+   "name": "json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 1900
+  }
+ ],
+ "disclosure": {
+  "artifacts": "media",
+  "diagnostics": false,
+  "values": false
+ },
+ "kind": "fx-run-export-v1",
+ "layout": {
+  "cells": {
+   "first": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   },
+   "first.admit": {
+    "column": 3,
+    "row": 0,
+    "source": "automatic"
+   },
+   "first.finish": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "first.inspect_prepared": {
+    "column": 4,
+    "row": 0,
+    "source": "automatic"
+   },
+   "first.review": {
+    "column": 2,
+    "row": 0,
+    "source": "automatic"
+   },
+   "first.transfer": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   },
+   "reel": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "reel.compose": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   },
+   "second": {
+    "column": 0,
+    "row": 1,
+    "source": "automatic"
+   },
+   "second.admit": {
+    "column": 3,
+    "row": 0,
+    "source": "automatic"
+   },
+   "second.finish": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "second.inspect_prepared": {
+    "column": 4,
+    "row": 0,
+    "source": "automatic"
+   },
+   "second.review": {
+    "column": 2,
+    "row": 0,
+    "source": "automatic"
+   },
+   "second.transfer": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   }
+  },
+  "cursor": null,
+  "diagnostics": [],
+  "file": null,
+  "kind": "fx-layout-report-v1",
+  "order": [
+   "first.inspect_prepared#1",
+   "scope:first#",
+   "first.transfer#1",
+   "first.finish#1",
+   "first.review#1",
+   "first.admit#1",
+   "scope:second#",
+   "second.inspect_prepared#1",
+   "second.transfer#1",
+   "second.finish#1",
+   "second.review#1",
+   "second.admit#1",
+   "reel.compose#1",
+   "scope:reel#"
+  ],
+  "revision": null,
+  "state": "none"
+ },
+ "producer": {
+  "version": "0.5.1"
+ },
+ "source": {
+  "event_count": 22,
+  "events_sha256": "8232fadc34b72fd9c44ba1f625b1a5fc2f6be13aa9a9c0a088b293a85571cf36",
+  "plan_sha256": "73819c534acc08a3b3b725aca224c1382919c6e912367f08811771bbc2008d87"
+ },
+ "view": {
+  "artifacts": [
+   {
+    "available": true,
+    "digest": "01ae510292dbba1f37188bf42d61d98bd6f80d72cab740cc3a303e28e8b498ca",
+    "kind": "video/mp4",
+    "name": "video",
+    "size": 1161707,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "0342fbbc09e75859c694f5513522f991ffc9e39be750788b8b5e9a7fd2d56f8c",
+    "kind": "video/mp4",
+    "name": "video",
+    "size": 2911018,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "0c7518dd558cb7f39661f43a87f76a7a365babc1a2607474dbc843e476e59504",
+    "kind": "image/png",
+    "name": "evidence",
+    "size": 1672117,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "38d5d5c67b674ff826d8fc5b44f8547b5d9521f431f0fffb3182b7ede233db25",
+    "kind": "json",
+    "name": "report",
+    "size": 1686,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6",
+    "kind": "file",
+    "name": "Manrope.ttf",
+    "size": 164700,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "411424d99c477a25b8980d4460ea8d826e2f177250ad2dba368b777d8f837c27",
+    "kind": "json",
+    "name": "json",
+    "size": 2147,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "48683e530444010bcc2230299402c6aa0ae96d471b92477f708a4ca3e36a3d3f",
+    "kind": "image/png",
+    "name": "identity",
+    "size": 149631,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "4b4d909a4712c725c1188184c04b9c8bf6970e0b9842ceb594be4cab2a8ed8a8",
+    "kind": "json",
+    "name": "report",
+    "size": 1689,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "649f715cf2a19ab67bcdf50c87d67e0d92338ae52e5ff4a6a33c189ac9a8ea66",
+    "kind": "video/mp4",
+    "name": "video",
+    "size": 1046207,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "6b6dcae3de197e41d14940f01d25d97cfe047edf0da89f777abaf7d5746147c0",
+    "kind": "video/mp4",
+    "name": "video",
+    "size": 1175060,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "6e673a9d0ff73539804d903fd8dfce205b3823d6bd964a420a94dbf230dac470",
+    "kind": "image/png",
+    "name": "riko-plate.png",
+    "size": 157555,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "73daa46dfbed1b23c82fcfd5ba589f2d4c9950bfc5e32ed42eec259ed8160ace",
+    "kind": "video/mp4",
+    "name": "video",
+    "size": 1032854,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "86e03cd4d35cf03da4a9212da40827d05bebab9f997c7a4d8778ea9ee79be68b",
+    "kind": "json",
+    "name": "report",
+    "size": 1965,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "8cad44ece6ada802cac38f45c58e3db271ea7596cdee49d4fd09168e34574762",
+    "kind": "video/mp4",
+    "name": "motion-prepared.mp4",
+    "size": 1983200,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "99989dfb0a629c705c21196da79883c1d0f78d6bcd81b4b60b56faef316a2643",
+    "kind": "image/webp",
+    "name": "poster",
+    "size": 25884,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "9ec1e50cc51949045b68e7b609b3c459f0a3a768320b097543e485cd0eaa4aef",
+    "kind": "image/webp",
+    "name": "poster",
+    "size": 50976,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "a23d7a2250ece25277d1e51b32136dedd03d0a6b741e40ce685d8a38de5270e6",
+    "kind": "json",
+    "name": "review.json",
+    "size": 775,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "a2a7a41f1d589eaef3e724128ec2fd38806a02dbd3c851c49c17bdefa53ca5ff",
+    "kind": "image/png",
+    "name": "nami-plate.png",
+    "size": 145623,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "a7e2ce29472565a19311d3c92aed26514605e9d7275ead582f1fe79a0ec31a5e",
+    "kind": "json",
+    "name": "report",
+    "size": 1962,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "a806017ff989301f87dde31e7386b08cf71797a72ea706a0c8de78a721dcbcbd",
+    "kind": "image/png",
+    "name": "evidence",
+    "size": 1674766,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "bb8ad8abbe444bf1cdb04712131e8f05bcbf5d86e204e153d9e268867c46c0d2",
+    "kind": "image/png",
+    "name": "identity",
+    "size": 148183,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "bd5858d0c99022ce35f196bc733cd67daaf0c209571565351cabdbd037ceac2f",
+    "kind": "image/webp",
+    "name": "poster",
+    "size": 27346,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "e1cbb5fe4df95097e30711f752b50c8b575c2d07a4217147b06f552eff2d1339",
+    "kind": "json",
+    "name": "report",
+    "size": 2720,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "f0d78183c52616694ad3863050fce967bafbfbabc7b08ee2bdae1b069de91157",
+    "kind": "json",
+    "name": "json",
+    "size": 1900,
+    "url": null
+   }
+  ],
+  "charged_usd": 0,
+  "estimate": {
+   "ceiling_usd": 0,
+   "high_usd": 3,
+   "low_usd": 0.1
+  },
+  "inputs": {
+   "first_character": {
+    "withheld": true
+   },
+   "first_name": {
+    "withheld": true
+   },
+   "first_region": {
+    "withheld": true
+   },
+   "fps": {
+    "withheld": true
+   },
+   "motion": {
+    "withheld": true
+   },
+   "second_character": {
+    "withheld": true
+   },
+   "second_name": {
+    "withheld": true
+   },
+   "second_region": {
+    "withheld": true
+   },
+   "seconds": {
+    "withheld": true
+   }
+  },
+  "kind": "fx-viewer-run-v1",
+  "nodes": [
+   {
+    "bindings": [],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "first.inspect_prepared#1",
+    "interface_bindings": [
+     {
+      "source": "scope:first#",
+      "source_kind": "scope_input",
+      "source_port": "character",
+      "target_port": "character"
+     },
+     {
+      "source": "scope:first#",
+      "source_kind": "scope_input",
+      "source_port": "fps",
+      "target_port": "fps"
+     },
+     {
+      "source": "scope:first#",
+      "source_kind": "scope_input",
+      "source_port": "motion",
+      "target_port": "motion"
+     },
+     {
+      "source": "scope:first#",
+      "source_kind": "scope_input",
+      "source_port": "seconds",
+      "target_port": "seconds"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "first.inspect_prepared",
+    "ports": {
+     "inputs": {
+      "character": "image",
+      "motion": "video"
+     },
+     "outputs": {
+      "report": "json"
+     },
+     "params": {
+      "fps": {
+       "type": "integer"
+      },
+      "seconds": {
+       "maximum": 10,
+       "minimum": 3,
+       "type": "number"
+      }
+     }
+    },
+    "reads": [],
+    "state": "succeeded",
+    "step": "first.inspect_prepared",
+    "take": [
+     1
+    ],
+    "title": "first.inspect_prepared",
+    "uses": "./nodes/performance.py#inspect_prepared",
+    "with": {
+     "character": {
+      "withheld": true
+     },
+     "fps": {
+      "withheld": true
+     },
+     "motion": {
+      "withheld": true
+     },
+     "seconds": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": "hit",
+    "duration_ms": 0,
+    "error": null,
+    "id": "first.transfer#1",
+    "interface_bindings": [
+     {
+      "source": "scope:first#",
+      "source_kind": "scope_input",
+      "source_port": "character",
+      "target_port": "character"
+     },
+     {
+      "source": "scope:first#",
+      "source_kind": "scope_input",
+      "source_port": "direction",
+      "target_port": "prompt"
+     },
+     {
+      "source": "scope:first#",
+      "source_kind": "scope_input",
+      "source_port": "motion",
+      "target_port": "motion"
+     },
+     {
+      "source": "scope:first#",
+      "source_kind": "scope_input",
+      "source_port": "orientation",
+      "target_port": "orientation"
+     },
+     {
+      "source": "scope:first#",
+      "source_kind": "scope_input",
+      "source_port": "seconds",
+      "target_port": "duration"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "video": {
+      "file": {
+       "digest": "6b6dcae3de197e41d14940f01d25d97cfe047edf0da89f777abaf7d5746147c0",
+       "kind": "video/mp4",
+       "name": "video",
+       "size": 1175060
+      }
+     }
+    },
+    "path": "first.transfer",
+    "ports": {
+     "inputs": {
+      "character": "image",
+      "motion": "video"
+     },
+     "outputs": {
+      "video": "video/mp4"
+     },
+     "params": {
+      "duration": {
+       "exclusiveMinimum": 0,
+       "maximum": 30,
+       "type": "number"
+      },
+      "keep_original_sound": {
+       "type": "boolean"
+      },
+      "orientation": {},
+      "prompt": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [],
+    "started_at": "2026-10-12T21:36:56.125Z",
+    "state": "succeeded",
+    "step": "first.transfer",
+    "take": [
+     1
+    ],
+    "title": "first.transfer",
+    "uses": "fx/video.motion_transfer@1",
+    "with": {
+     "character": {
+      "file": {
+       "digest": "6e673a9d0ff73539804d903fd8dfce205b3823d6bd964a420a94dbf230dac470",
+       "kind": "image/png",
+       "name": "riko-plate.png",
+       "size": 157555
+      }
+     },
+     "duration": {
+      "withheld": true
+     },
+     "keep_original_sound": {
+      "withheld": true
+     },
+     "motion": {
+      "file": {
+       "digest": "8cad44ece6ada802cac38f45c58e3db271ea7596cdee49d4fd09168e34574762",
+       "kind": "video/mp4",
+       "name": "motion-prepared.mp4",
+       "size": 1983200
+      }
+     },
+     "orientation": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "first.transfer#1",
+      "source_kind": "output",
+      "source_port": "video",
+      "target_port": "video"
+     }
+    ],
+    "cache": "hit",
+    "duration_ms": 0,
+    "error": null,
+    "id": "first.finish#1",
+    "interface_bindings": [
+     {
+      "source": "first.transfer#1",
+      "source_kind": "output",
+      "source_port": "video",
+      "target_port": "video"
+     },
+     {
+      "source": "scope:first#",
+      "source_kind": "scope_input",
+      "source_port": "character",
+      "target_port": "character"
+     },
+     {
+      "source": "scope:first#",
+      "source_kind": "scope_input",
+      "source_port": "motion",
+      "target_port": "motion"
+     },
+     {
+      "source": "scope:first#",
+      "source_kind": "scope_input",
+      "source_port": "name",
+      "target_port": "name"
+     },
+     {
+      "source": "scope:first#",
+      "source_kind": "scope_input",
+      "source_port": "seconds",
+      "target_port": "seconds"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "evidence": {
+      "file": {
+       "digest": "a806017ff989301f87dde31e7386b08cf71797a72ea706a0c8de78a721dcbcbd",
+       "kind": "image/png",
+       "name": "evidence",
+       "size": 1674766
+      }
+     },
+     "identity": {
+      "file": {
+       "digest": "bb8ad8abbe444bf1cdb04712131e8f05bcbf5d86e204e153d9e268867c46c0d2",
+       "kind": "image/png",
+       "name": "identity",
+       "size": 148183
+      }
+     },
+     "poster": {
+      "file": {
+       "digest": "bd5858d0c99022ce35f196bc733cd67daaf0c209571565351cabdbd037ceac2f",
+       "kind": "image/webp",
+       "name": "poster",
+       "size": 27346
+      }
+     },
+     "report": {
+      "file": {
+       "digest": "4b4d909a4712c725c1188184c04b9c8bf6970e0b9842ceb594be4cab2a8ed8a8",
+       "kind": "json",
+       "name": "report",
+       "size": 1689
+      }
+     },
+     "video": {
+      "file": {
+       "digest": "01ae510292dbba1f37188bf42d61d98bd6f80d72cab740cc3a303e28e8b498ca",
+       "kind": "video/mp4",
+       "name": "video",
+       "size": 1161707
+      }
+     }
+    },
+    "path": "first.finish",
+    "ports": {
+     "inputs": {
+      "character": "image",
+      "motion": "video",
+      "video": "video"
+     },
+     "outputs": {
+      "evidence": "image/png",
+      "identity": "image/png",
+      "poster": "image/webp",
+      "report": "json",
+      "video": "video/mp4"
+     },
+     "params": {
+      "name": {
+       "type": "string"
+      },
+      "seconds": {
+       "maximum": 10,
+       "minimum": 3,
+       "type": "number"
+      }
+     }
+    },
+    "reads": [
+     "first.transfer#1"
+    ],
+    "started_at": "2026-10-12T21:36:56.134Z",
+    "state": "succeeded",
+    "step": "first.finish",
+    "take": [
+     1
+    ],
+    "title": "first.finish",
+    "uses": "./nodes/performance.py#finish",
+    "with": {
+     "character": {
+      "file": {
+       "digest": "6e673a9d0ff73539804d903fd8dfce205b3823d6bd964a420a94dbf230dac470",
+       "kind": "image/png",
+       "name": "riko-plate.png",
+       "size": 157555
+      }
+     },
+     "motion": {
+      "file": {
+       "digest": "8cad44ece6ada802cac38f45c58e3db271ea7596cdee49d4fd09168e34574762",
+       "kind": "video/mp4",
+       "name": "motion-prepared.mp4",
+       "size": 1983200
+      }
+     },
+     "name": {
+      "withheld": true
+     },
+     "seconds": {
+      "withheld": true
+     },
+     "video": {
+      "file": {
+       "digest": "6b6dcae3de197e41d14940f01d25d97cfe047edf0da89f777abaf7d5746147c0",
+       "kind": "video/mp4",
+       "name": "video",
+       "size": 1175060
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "first.finish#1",
+      "source_kind": "output",
+      "source_port": "evidence",
+      "target_port": "context"
+     },
+     {
+      "source": "first.finish#1",
+      "source_kind": "output",
+      "source_port": "identity",
+      "target_port": "context"
+     }
+    ],
+    "cache": "hit",
+    "duration_ms": 0,
+    "error": null,
+    "id": "first.review#1",
+    "interface_bindings": [
+     {
+      "source": "first.finish#1",
+      "source_kind": "output",
+      "source_port": "evidence",
+      "target_port": "context"
+     },
+     {
+      "source": "first.finish#1",
+      "source_kind": "output",
+      "source_port": "identity",
+      "target_port": "context"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "json": {
+      "file": {
+       "digest": "411424d99c477a25b8980d4460ea8d826e2f177250ad2dba368b777d8f837c27",
+       "kind": "json",
+       "name": "json",
+       "size": 2147
+      }
+     }
+    },
+    "path": "first.review",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "first.finish#1"
+    ],
+    "started_at": "2026-10-12T21:36:56.148Z",
+    "state": "succeeded",
+    "step": "first.review",
+    "take": [
+     1
+    ],
+    "title": "first.review",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "list": [
+       {
+        "file": {
+         "digest": "bb8ad8abbe444bf1cdb04712131e8f05bcbf5d86e204e153d9e268867c46c0d2",
+         "kind": "image/png",
+         "name": "identity",
+         "size": 148183
+        }
+       },
+       {
+        "file": {
+         "digest": "a806017ff989301f87dde31e7386b08cf71797a72ea706a0c8de78a721dcbcbd",
+         "kind": "image/png",
+         "name": "evidence",
+         "size": 1674766
+        }
+       }
+      ]
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "schema": {
+      "file": {
+       "digest": "a23d7a2250ece25277d1e51b32136dedd03d0a6b741e40ce685d8a38de5270e6",
+       "kind": "json",
+       "name": "review.json",
+       "size": 775
+      }
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "first.finish#1",
+      "source_kind": "output",
+      "source_port": "report",
+      "target_port": "report"
+     },
+     {
+      "source": "first.review#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "review"
+     }
+    ],
+    "cache": "hit",
+    "duration_ms": 0,
+    "error": null,
+    "id": "first.admit#1",
+    "interface_bindings": [
+     {
+      "source": "first.finish#1",
+      "source_kind": "output",
+      "source_port": "report",
+      "target_port": "report"
+     },
+     {
+      "source": "first.review#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "review"
+     }
+    ],
+    "interrupted": false,
+    "judges": "first.transfer#1",
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "report": {
+      "file": {
+       "digest": "86e03cd4d35cf03da4a9212da40827d05bebab9f997c7a4d8778ea9ee79be68b",
+       "kind": "json",
+       "name": "report",
+       "size": 1965
+      }
+     }
+    },
+    "path": "first.admit",
+    "ports": {
+     "inputs": {
+      "report": "json",
+      "review": "json"
+     },
+     "outputs": {
+      "report": "json"
+     },
+     "params": {}
+    },
+    "reads": [
+     "first.finish#1",
+     "first.review#1"
+    ],
+    "started_at": "2026-10-12T21:36:56.162Z",
+    "state": "succeeded",
+    "step": "first.admit",
+    "take": [
+     1
+    ],
+    "title": "first.admit",
+    "uses": "./nodes/performance.py#admit",
+    "with": {
+     "report": {
+      "file": {
+       "digest": "4b4d909a4712c725c1188184c04b9c8bf6970e0b9842ceb594be4cab2a8ed8a8",
+       "kind": "json",
+       "name": "report",
+       "size": 1689
+      }
+     },
+     "review": {
+      "file": {
+       "digest": "411424d99c477a25b8980d4460ea8d826e2f177250ad2dba368b777d8f837c27",
+       "kind": "json",
+       "name": "json",
+       "size": 2147
+      }
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": null,
+    "duration_ms": null,
+    "error": null,
+    "id": "second.inspect_prepared#1",
+    "interface_bindings": [
+     {
+      "source": "scope:second#",
+      "source_kind": "scope_input",
+      "source_port": "character",
+      "target_port": "character"
+     },
+     {
+      "source": "scope:second#",
+      "source_kind": "scope_input",
+      "source_port": "fps",
+      "target_port": "fps"
+     },
+     {
+      "source": "scope:second#",
+      "source_kind": "scope_input",
+      "source_port": "motion",
+      "target_port": "motion"
+     },
+     {
+      "source": "scope:second#",
+      "source_kind": "scope_input",
+      "source_port": "seconds",
+      "target_port": "seconds"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {},
+    "path": "second.inspect_prepared",
+    "ports": {
+     "inputs": {
+      "character": "image",
+      "motion": "video"
+     },
+     "outputs": {
+      "report": "json"
+     },
+     "params": {
+      "fps": {
+       "type": "integer"
+      },
+      "seconds": {
+       "maximum": 10,
+       "minimum": 3,
+       "type": "number"
+      }
+     }
+    },
+    "reads": [],
+    "state": "succeeded",
+    "step": "second.inspect_prepared",
+    "take": [
+     1
+    ],
+    "title": "second.inspect_prepared",
+    "uses": "./nodes/performance.py#inspect_prepared",
+    "with": {
+     "character": {
+      "withheld": true
+     },
+     "fps": {
+      "withheld": true
+     },
+     "motion": {
+      "withheld": true
+     },
+     "seconds": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": "hit",
+    "duration_ms": 0,
+    "error": null,
+    "id": "second.transfer#1",
+    "interface_bindings": [
+     {
+      "source": "scope:second#",
+      "source_kind": "scope_input",
+      "source_port": "character",
+      "target_port": "character"
+     },
+     {
+      "source": "scope:second#",
+      "source_kind": "scope_input",
+      "source_port": "direction",
+      "target_port": "prompt"
+     },
+     {
+      "source": "scope:second#",
+      "source_kind": "scope_input",
+      "source_port": "motion",
+      "target_port": "motion"
+     },
+     {
+      "source": "scope:second#",
+      "source_kind": "scope_input",
+      "source_port": "orientation",
+      "target_port": "orientation"
+     },
+     {
+      "source": "scope:second#",
+      "source_kind": "scope_input",
+      "source_port": "seconds",
+      "target_port": "duration"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "video": {
+      "file": {
+       "digest": "649f715cf2a19ab67bcdf50c87d67e0d92338ae52e5ff4a6a33c189ac9a8ea66",
+       "kind": "video/mp4",
+       "name": "video",
+       "size": 1046207
+      }
+     }
+    },
+    "path": "second.transfer",
+    "ports": {
+     "inputs": {
+      "character": "image",
+      "motion": "video"
+     },
+     "outputs": {
+      "video": "video/mp4"
+     },
+     "params": {
+      "duration": {
+       "exclusiveMinimum": 0,
+       "maximum": 30,
+       "type": "number"
+      },
+      "keep_original_sound": {
+       "type": "boolean"
+      },
+      "orientation": {},
+      "prompt": {
+       "type": "string"
+      }
+     }
+    },
+    "reads": [],
+    "started_at": "2026-10-12T21:36:56.125Z",
+    "state": "succeeded",
+    "step": "second.transfer",
+    "take": [
+     1
+    ],
+    "title": "second.transfer",
+    "uses": "fx/video.motion_transfer@1",
+    "with": {
+     "character": {
+      "file": {
+       "digest": "a2a7a41f1d589eaef3e724128ec2fd38806a02dbd3c851c49c17bdefa53ca5ff",
+       "kind": "image/png",
+       "name": "nami-plate.png",
+       "size": 145623
+      }
+     },
+     "duration": {
+      "withheld": true
+     },
+     "keep_original_sound": {
+      "withheld": true
+     },
+     "motion": {
+      "file": {
+       "digest": "8cad44ece6ada802cac38f45c58e3db271ea7596cdee49d4fd09168e34574762",
+       "kind": "video/mp4",
+       "name": "motion-prepared.mp4",
+       "size": 1983200
+      }
+     },
+     "orientation": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "second.transfer#1",
+      "source_kind": "output",
+      "source_port": "video",
+      "target_port": "video"
+     }
+    ],
+    "cache": "hit",
+    "duration_ms": 0,
+    "error": null,
+    "id": "second.finish#1",
+    "interface_bindings": [
+     {
+      "source": "scope:second#",
+      "source_kind": "scope_input",
+      "source_port": "character",
+      "target_port": "character"
+     },
+     {
+      "source": "scope:second#",
+      "source_kind": "scope_input",
+      "source_port": "motion",
+      "target_port": "motion"
+     },
+     {
+      "source": "scope:second#",
+      "source_kind": "scope_input",
+      "source_port": "name",
+      "target_port": "name"
+     },
+     {
+      "source": "scope:second#",
+      "source_kind": "scope_input",
+      "source_port": "seconds",
+      "target_port": "seconds"
+     },
+     {
+      "source": "second.transfer#1",
+      "source_kind": "output",
+      "source_port": "video",
+      "target_port": "video"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "evidence": {
+      "file": {
+       "digest": "0c7518dd558cb7f39661f43a87f76a7a365babc1a2607474dbc843e476e59504",
+       "kind": "image/png",
+       "name": "evidence",
+       "size": 1672117
+      }
+     },
+     "identity": {
+      "file": {
+       "digest": "48683e530444010bcc2230299402c6aa0ae96d471b92477f708a4ca3e36a3d3f",
+       "kind": "image/png",
+       "name": "identity",
+       "size": 149631
+      }
+     },
+     "poster": {
+      "file": {
+       "digest": "99989dfb0a629c705c21196da79883c1d0f78d6bcd81b4b60b56faef316a2643",
+       "kind": "image/webp",
+       "name": "poster",
+       "size": 25884
+      }
+     },
+     "report": {
+      "file": {
+       "digest": "38d5d5c67b674ff826d8fc5b44f8547b5d9521f431f0fffb3182b7ede233db25",
+       "kind": "json",
+       "name": "report",
+       "size": 1686
+      }
+     },
+     "video": {
+      "file": {
+       "digest": "73daa46dfbed1b23c82fcfd5ba589f2d4c9950bfc5e32ed42eec259ed8160ace",
+       "kind": "video/mp4",
+       "name": "video",
+       "size": 1032854
+      }
+     }
+    },
+    "path": "second.finish",
+    "ports": {
+     "inputs": {
+      "character": "image",
+      "motion": "video",
+      "video": "video"
+     },
+     "outputs": {
+      "evidence": "image/png",
+      "identity": "image/png",
+      "poster": "image/webp",
+      "report": "json",
+      "video": "video/mp4"
+     },
+     "params": {
+      "name": {
+       "type": "string"
+      },
+      "seconds": {
+       "maximum": 10,
+       "minimum": 3,
+       "type": "number"
+      }
+     }
+    },
+    "reads": [
+     "second.transfer#1"
+    ],
+    "started_at": "2026-10-12T21:36:56.141Z",
+    "state": "succeeded",
+    "step": "second.finish",
+    "take": [
+     1
+    ],
+    "title": "second.finish",
+    "uses": "./nodes/performance.py#finish",
+    "with": {
+     "character": {
+      "file": {
+       "digest": "a2a7a41f1d589eaef3e724128ec2fd38806a02dbd3c851c49c17bdefa53ca5ff",
+       "kind": "image/png",
+       "name": "nami-plate.png",
+       "size": 145623
+      }
+     },
+     "motion": {
+      "file": {
+       "digest": "8cad44ece6ada802cac38f45c58e3db271ea7596cdee49d4fd09168e34574762",
+       "kind": "video/mp4",
+       "name": "motion-prepared.mp4",
+       "size": 1983200
+      }
+     },
+     "name": {
+      "withheld": true
+     },
+     "seconds": {
+      "withheld": true
+     },
+     "video": {
+      "file": {
+       "digest": "649f715cf2a19ab67bcdf50c87d67e0d92338ae52e5ff4a6a33c189ac9a8ea66",
+       "kind": "video/mp4",
+       "name": "video",
+       "size": 1046207
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "second.finish#1",
+      "source_kind": "output",
+      "source_port": "evidence",
+      "target_port": "context"
+     },
+     {
+      "source": "second.finish#1",
+      "source_kind": "output",
+      "source_port": "identity",
+      "target_port": "context"
+     }
+    ],
+    "cache": "hit",
+    "duration_ms": 0,
+    "error": null,
+    "id": "second.review#1",
+    "interface_bindings": [
+     {
+      "source": "second.finish#1",
+      "source_kind": "output",
+      "source_port": "evidence",
+      "target_port": "context"
+     },
+     {
+      "source": "second.finish#1",
+      "source_kind": "output",
+      "source_port": "identity",
+      "target_port": "context"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "json": {
+      "file": {
+       "digest": "f0d78183c52616694ad3863050fce967bafbfbabc7b08ee2bdae1b069de91157",
+       "kind": "json",
+       "name": "json",
+       "size": 1900
+      }
+     }
+    },
+    "path": "second.review",
+    "ports": {
+     "inputs": {
+      "context": "file[]?",
+      "schema": "json"
+     },
+     "outputs": {
+      "json": "json"
+     },
+     "params": {
+      "matte": {
+       "type": "string"
+      },
+      "max_tokens": {
+       "type": "integer"
+      },
+      "prompt": {
+       "type": "string"
+      },
+      "system": {
+       "type": "string"
+      },
+      "vars": {
+       "type": "object"
+      }
+     }
+    },
+    "reads": [
+     "second.finish#1"
+    ],
+    "started_at": "2026-10-12T21:36:56.155Z",
+    "state": "succeeded",
+    "step": "second.review",
+    "take": [
+     1
+    ],
+    "title": "second.review",
+    "uses": "fx/structured.generate@1",
+    "with": {
+     "context": {
+      "list": [
+       {
+        "file": {
+         "digest": "48683e530444010bcc2230299402c6aa0ae96d471b92477f708a4ca3e36a3d3f",
+         "kind": "image/png",
+         "name": "identity",
+         "size": 149631
+        }
+       },
+       {
+        "file": {
+         "digest": "0c7518dd558cb7f39661f43a87f76a7a365babc1a2607474dbc843e476e59504",
+         "kind": "image/png",
+         "name": "evidence",
+         "size": 1672117
+        }
+       }
+      ]
+     },
+     "matte": {
+      "withheld": true
+     },
+     "max_tokens": {
+      "withheld": true
+     },
+     "prompt": {
+      "withheld": true
+     },
+     "schema": {
+      "file": {
+       "digest": "a23d7a2250ece25277d1e51b32136dedd03d0a6b741e40ce685d8a38de5270e6",
+       "kind": "json",
+       "name": "review.json",
+       "size": 775
+      }
+     },
+     "vars": {
+      "withheld": true
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "second.finish#1",
+      "source_kind": "output",
+      "source_port": "report",
+      "target_port": "report"
+     },
+     {
+      "source": "second.review#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "review"
+     }
+    ],
+    "cache": "hit",
+    "duration_ms": 0,
+    "error": null,
+    "id": "second.admit#1",
+    "interface_bindings": [
+     {
+      "source": "second.finish#1",
+      "source_kind": "output",
+      "source_port": "report",
+      "target_port": "report"
+     },
+     {
+      "source": "second.review#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "review"
+     }
+    ],
+    "interrupted": false,
+    "judges": "second.transfer#1",
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "report": {
+      "file": {
+       "digest": "a7e2ce29472565a19311d3c92aed26514605e9d7275ead582f1fe79a0ec31a5e",
+       "kind": "json",
+       "name": "report",
+       "size": 1962
+      }
+     }
+    },
+    "path": "second.admit",
+    "ports": {
+     "inputs": {
+      "report": "json",
+      "review": "json"
+     },
+     "outputs": {
+      "report": "json"
+     },
+     "params": {}
+    },
+    "reads": [
+     "second.finish#1",
+     "second.review#1"
+    ],
+    "started_at": "2026-10-12T21:36:56.169Z",
+    "state": "succeeded",
+    "step": "second.admit",
+    "take": [
+     1
+    ],
+    "title": "second.admit",
+    "uses": "./nodes/performance.py#admit",
+    "with": {
+     "report": {
+      "file": {
+       "digest": "38d5d5c67b674ff826d8fc5b44f8547b5d9521f431f0fffb3182b7ede233db25",
+       "kind": "json",
+       "name": "report",
+       "size": 1686
+      }
+     },
+     "review": {
+      "file": {
+       "digest": "f0d78183c52616694ad3863050fce967bafbfbabc7b08ee2bdae1b069de91157",
+       "kind": "json",
+       "name": "json",
+       "size": 1900
+      }
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "first.admit#1",
+      "source_kind": "output",
+      "source_port": "report",
+      "target_port": "first_report"
+     },
+     {
+      "source": "first.finish#1",
+      "source_kind": "output",
+      "source_port": "video",
+      "target_port": "first"
+     },
+     {
+      "source": "second.admit#1",
+      "source_kind": "output",
+      "source_port": "report",
+      "target_port": "second_report"
+     },
+     {
+      "source": "second.finish#1",
+      "source_kind": "output",
+      "source_port": "video",
+      "target_port": "second"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 6229,
+    "error": null,
+    "id": "reel.compose#1",
+    "interface_bindings": [
+     {
+      "source": "scope:reel#",
+      "source_kind": "scope_input",
+      "source_port": "first",
+      "target_port": "first"
+     },
+     {
+      "source": "scope:reel#",
+      "source_kind": "scope_input",
+      "source_port": "first_name",
+      "target_port": "first_name"
+     },
+     {
+      "source": "scope:reel#",
+      "source_kind": "scope_input",
+      "source_port": "first_region",
+      "target_port": "first_region"
+     },
+     {
+      "source": "scope:reel#",
+      "source_kind": "scope_input",
+      "source_port": "first_report",
+      "target_port": "first_report"
+     },
+     {
+      "source": "scope:reel#",
+      "source_kind": "scope_input",
+      "source_port": "second",
+      "target_port": "second"
+     },
+     {
+      "source": "scope:reel#",
+      "source_kind": "scope_input",
+      "source_port": "second_name",
+      "target_port": "second_name"
+     },
+     {
+      "source": "scope:reel#",
+      "source_kind": "scope_input",
+      "source_port": "second_region",
+      "target_port": "second_region"
+     },
+     {
+      "source": "scope:reel#",
+      "source_kind": "scope_input",
+      "source_port": "second_report",
+      "target_port": "second_report"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "poster": {
+      "file": {
+       "digest": "9ec1e50cc51949045b68e7b609b3c459f0a3a768320b097543e485cd0eaa4aef",
+       "kind": "image/webp",
+       "name": "poster",
+       "size": 50976
+      }
+     },
+     "report": {
+      "file": {
+       "digest": "e1cbb5fe4df95097e30711f752b50c8b575c2d07a4217147b06f552eff2d1339",
+       "kind": "json",
+       "name": "report",
+       "size": 2720
+      }
+     },
+     "video": {
+      "file": {
+       "digest": "0342fbbc09e75859c694f5513522f991ffc9e39be750788b8b5e9a7fd2d56f8c",
+       "kind": "video/mp4",
+       "name": "video",
+       "size": 2911018
+      }
+     }
+    },
+    "path": "reel.compose",
+    "ports": {
+     "inputs": {
+      "first": "video",
+      "first_report": "json",
+      "font": "file",
+      "second": "video",
+      "second_report": "json"
+     },
+     "outputs": {
+      "poster": "image/webp",
+      "report": "json",
+      "video": "video/mp4"
+     },
+     "params": {
+      "first_name": {
+       "type": "string"
+      },
+      "first_region": {
+       "items": {
+        "maximum": 1,
+        "minimum": 0,
+        "type": "number"
+       },
+       "maxItems": 4,
+       "minItems": 4,
+       "type": "array"
+      },
+      "second_name": {
+       "type": "string"
+      },
+      "second_region": {
+       "items": {
+        "maximum": 1,
+        "minimum": 0,
+        "type": "number"
+       },
+       "maxItems": 4,
+       "minItems": 4,
+       "type": "array"
+      }
+     }
+    },
+    "reads": [],
+    "started_at": "2026-10-12T21:36:56.182Z",
+    "state": "succeeded",
+    "step": "reel.compose",
+    "take": [
+     1
+    ],
+    "title": "reel.compose",
+    "uses": "./nodes/reel.py#reel",
+    "with": {
+     "first": {
+      "file": {
+       "digest": "01ae510292dbba1f37188bf42d61d98bd6f80d72cab740cc3a303e28e8b498ca",
+       "kind": "video/mp4",
+       "name": "video",
+       "size": 1161707
+      }
+     },
+     "first_name": {
+      "withheld": true
+     },
+     "first_region": {
+      "list": [
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       }
+      ]
+     },
+     "first_report": {
+      "file": {
+       "digest": "86e03cd4d35cf03da4a9212da40827d05bebab9f997c7a4d8778ea9ee79be68b",
+       "kind": "json",
+       "name": "report",
+       "size": 1965
+      }
+     },
+     "font": {
+      "file": {
+       "digest": "3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6",
+       "kind": "file",
+       "name": "Manrope.ttf",
+       "size": 164700
+      }
+     },
+     "second": {
+      "file": {
+       "digest": "73daa46dfbed1b23c82fcfd5ba589f2d4c9950bfc5e32ed42eec259ed8160ace",
+       "kind": "video/mp4",
+       "name": "video",
+       "size": 1032854
+      }
+     },
+     "second_name": {
+      "withheld": true
+     },
+     "second_region": {
+      "list": [
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       },
+       {
+        "withheld": true
+       }
+      ]
+     },
+     "second_report": {
+      "file": {
+       "digest": "a7e2ce29472565a19311d3c92aed26514605e9d7275ead582f1fe79a0ec31a5e",
+       "kind": "json",
+       "name": "report",
+       "size": 1962
+      }
+     }
+    }
+   }
+  ],
+  "outputs": {
+   "first_report": {
+    "file": {
+     "digest": "86e03cd4d35cf03da4a9212da40827d05bebab9f997c7a4d8778ea9ee79be68b",
+     "kind": "json",
+     "name": "report",
+     "size": 1965
+    }
+   },
+   "first_video": {
+    "file": {
+     "digest": "01ae510292dbba1f37188bf42d61d98bd6f80d72cab740cc3a303e28e8b498ca",
+     "kind": "video/mp4",
+     "name": "video",
+     "size": 1161707
+    }
+   },
+   "poster": {
+    "file": {
+     "digest": "9ec1e50cc51949045b68e7b609b3c459f0a3a768320b097543e485cd0eaa4aef",
+     "kind": "image/webp",
+     "name": "poster",
+     "size": 50976
+    }
+   },
+   "report": {
+    "file": {
+     "digest": "e1cbb5fe4df95097e30711f752b50c8b575c2d07a4217147b06f552eff2d1339",
+     "kind": "json",
+     "name": "report",
+     "size": 2720
+    }
+   },
+   "second_report": {
+    "file": {
+     "digest": "a7e2ce29472565a19311d3c92aed26514605e9d7275ead582f1fe79a0ec31a5e",
+     "kind": "json",
+     "name": "report",
+     "size": 1962
+    }
+   },
+   "second_video": {
+    "file": {
+     "digest": "73daa46dfbed1b23c82fcfd5ba589f2d4c9950bfc5e32ed42eec259ed8160ace",
+     "kind": "video/mp4",
+     "name": "video",
+     "size": 1032854
+    }
+   },
+   "video": {
+    "file": {
+     "digest": "0342fbbc09e75859c694f5513522f991ffc9e39be750788b8b5e9a7fd2d56f8c",
+     "kind": "video/mp4",
+     "name": "video",
+     "size": 2911018
+    }
+   }
+  },
+  "pending": [],
+  "run_name": "cast-canonical-final",
+  "scopes": [
+   {
+    "id": "scope:first#",
+    "input_bindings": [],
+    "kind": "workflow",
+    "nodes": [
+     "first.inspect_prepared#1",
+     "first.transfer#1",
+     "first.finish#1",
+     "first.review#1",
+     "first.admit#1"
+    ],
+    "output_bindings": [
+     {
+      "source": "first.finish#1",
+      "source_kind": "output",
+      "source_port": "video",
+      "target_port": "video"
+     },
+     {
+      "source": "first.finish#1",
+      "source_kind": "output",
+      "source_port": "poster",
+      "target_port": "poster"
+     },
+     {
+      "source": "scope:first#",
+      "source_kind": "scope_input",
+      "source_port": "character",
+      "target_port": "character"
+     },
+     {
+      "source": "first.finish#1",
+      "source_kind": "output",
+      "source_port": "evidence",
+      "target_port": "evidence"
+     },
+     {
+      "source": "first.finish#1",
+      "source_kind": "output",
+      "source_port": "identity",
+      "target_port": "identity"
+     },
+     {
+      "source": "first.admit#1",
+      "source_kind": "output",
+      "source_port": "report",
+      "target_port": "report"
+     },
+     {
+      "source": "first.review#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "review"
+     }
+    ],
+    "parent": null,
+    "path": "first",
+    "pending": [],
+    "ports": {
+     "inputs": {
+      "background": {
+       "type": "string"
+      },
+      "body_fill": {
+       "maximum": 0.8,
+       "minimum": 0.4,
+       "type": "number"
+      },
+      "character": {
+       "type": "file"
+      },
+      "direction": {
+       "type": "string"
+      },
+      "fps": {
+       "type": "integer"
+      },
+      "motion": {
+       "type": "file"
+      },
+      "name": {
+       "type": "string"
+      },
+      "orientation": {
+       "type": "string"
+      },
+      "prepared": {
+       "type": "boolean"
+      },
+      "seconds": {
+       "maximum": 10,
+       "minimum": 3,
+       "type": "number"
+      },
+      "start": {
+       "maximum": 120,
+       "minimum": 0,
+       "type": "number"
+      }
+     },
+     "outputs": [
+      "video",
+      "poster",
+      "character",
+      "evidence",
+      "identity",
+      "report",
+      "review"
+     ]
+    },
+    "source": null,
+    "step": "first",
+    "take": [],
+    "title": "First reviewed character performance"
+   },
+   {
+    "id": "scope:second#",
+    "input_bindings": [],
+    "kind": "workflow",
+    "nodes": [
+     "second.inspect_prepared#1",
+     "second.transfer#1",
+     "second.finish#1",
+     "second.review#1",
+     "second.admit#1"
+    ],
+    "output_bindings": [
+     {
+      "source": "second.finish#1",
+      "source_kind": "output",
+      "source_port": "video",
+      "target_port": "video"
+     },
+     {
+      "source": "second.finish#1",
+      "source_kind": "output",
+      "source_port": "poster",
+      "target_port": "poster"
+     },
+     {
+      "source": "scope:second#",
+      "source_kind": "scope_input",
+      "source_port": "character",
+      "target_port": "character"
+     },
+     {
+      "source": "second.finish#1",
+      "source_kind": "output",
+      "source_port": "evidence",
+      "target_port": "evidence"
+     },
+     {
+      "source": "second.finish#1",
+      "source_kind": "output",
+      "source_port": "identity",
+      "target_port": "identity"
+     },
+     {
+      "source": "second.admit#1",
+      "source_kind": "output",
+      "source_port": "report",
+      "target_port": "report"
+     },
+     {
+      "source": "second.review#1",
+      "source_kind": "output",
+      "source_port": "json",
+      "target_port": "review"
+     }
+    ],
+    "parent": null,
+    "path": "second",
+    "pending": [],
+    "ports": {
+     "inputs": {
+      "background": {
+       "type": "string"
+      },
+      "body_fill": {
+       "maximum": 0.8,
+       "minimum": 0.4,
+       "type": "number"
+      },
+      "character": {
+       "type": "file"
+      },
+      "direction": {
+       "type": "string"
+      },
+      "fps": {
+       "type": "integer"
+      },
+      "motion": {
+       "type": "file"
+      },
+      "name": {
+       "type": "string"
+      },
+      "orientation": {
+       "type": "string"
+      },
+      "prepared": {
+       "type": "boolean"
+      },
+      "seconds": {
+       "maximum": 10,
+       "minimum": 3,
+       "type": "number"
+      },
+      "start": {
+       "maximum": 120,
+       "minimum": 0,
+       "type": "number"
+      }
+     },
+     "outputs": [
+      "video",
+      "poster",
+      "character",
+      "evidence",
+      "identity",
+      "report",
+      "review"
+     ]
+    },
+    "source": null,
+    "step": "second",
+    "take": [],
+    "title": "Second reviewed character performance"
+   },
+   {
+    "id": "scope:reel#",
+    "input_bindings": [
+     {
+      "source": "scope:first#",
+      "source_kind": "scope_output",
+      "source_port": "video",
+      "target_port": "first"
+     },
+     {
+      "source": "scope:first#",
+      "source_kind": "scope_output",
+      "source_port": "report",
+      "target_port": "first_report"
+     },
+     {
+      "source": "scope:second#",
+      "source_kind": "scope_output",
+      "source_port": "video",
+      "target_port": "second"
+     },
+     {
+      "source": "scope:second#",
+      "source_kind": "scope_output",
+      "source_port": "report",
+      "target_port": "second_report"
+     }
+    ],
+    "kind": "workflow",
+    "nodes": [
+     "reel.compose#1"
+    ],
+    "output_bindings": [
+     {
+      "source": "reel.compose#1",
+      "source_kind": "output",
+      "source_port": "video",
+      "target_port": "video"
+     },
+     {
+      "source": "reel.compose#1",
+      "source_kind": "output",
+      "source_port": "poster",
+      "target_port": "poster"
+     },
+     {
+      "source": "reel.compose#1",
+      "source_kind": "output",
+      "source_port": "report",
+      "target_port": "report"
+     }
+    ],
+    "parent": null,
+    "path": "reel",
+    "pending": [],
+    "ports": {
+     "inputs": {
+      "first": {
+       "type": "file"
+      },
+      "first_name": {
+       "type": "string"
+      },
+      "first_region": {
+       "items": {
+        "maximum": 1,
+        "minimum": 0,
+        "type": "number"
+       },
+       "type": "list"
+      },
+      "first_report": {
+       "type": "file"
+      },
+      "second": {
+       "type": "file"
+      },
+      "second_name": {
+       "type": "string"
+      },
+      "second_region": {
+       "items": {
+        "maximum": 1,
+        "minimum": 0,
+        "type": "number"
+       },
+       "type": "list"
+      },
+      "second_report": {
+       "type": "file"
+      }
+     },
+     "outputs": [
+      "video",
+      "poster",
+      "report"
+     ]
+    },
+    "source": null,
+    "step": "reel",
+    "take": [],
+    "title": "Assemble the accepted cast"
+   }
+  ],
+  "stand_in": false,
+  "state": "succeeded",
+  "warnings": [],
+  "workflow": {
+   "id": "character-cast",
+   "title": "Two characters, one driving performance"
+  }
+ }
+}

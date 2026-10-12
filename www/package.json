@@ -16,6 +16,7 @@
     "prepare:showcases": "bun --no-env-file scripts/showcases/prepare.ts",
     "prepare:demo": "bun --no-env-file scripts/showcases/replace-demo.ts",
     "prepare:recording": "bun --no-env-file scripts/showcases/recording.ts",
+    "prepare:video": "bun --no-env-file scripts/showcases/video.ts",
     "verify:showcases": "bun --no-env-file scripts/showcases/verify.ts",
     "candidate:showcases": "bun --no-env-file scripts/showcases/verify.ts --candidate",
     "publish:tigris": "bun --no-env-file scripts/showcases/publish-tigris.ts"

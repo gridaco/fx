@@ -1,9 +1,9 @@
 {
   "kind": "fx-showcase-lock-v1",
   "release": {
-    "sha256": "412d71164da3e787e38babfa4d99c0497cac942bf796847b3ce6608a4c8c1835",
-    "path": "showcases/412d71164da3e787e38babfa4d99c0497cac942bf796847b3ce6608a4c8c1835/manifest.json",
-    "fixture": "manifests/412d71164da3e787e38babfa4d99c0497cac942bf796847b3ce6608a4c8c1835.json"
+    "sha256": "b45587a7593e02d5dc7ca560539b0ab549ea9292078927df837464e9510cc784",
+    "path": "showcases/b45587a7593e02d5dc7ca560539b0ab549ea9292078927df837464e9510cc784/manifest.json",
+    "fixture": "manifests/b45587a7593e02d5dc7ca560539b0ab549ea9292078927df837464e9510cc784.json"
   },
   "workflows": {
     "character-3d": {
@@ -490,6 +490,142 @@
           "path": "runs/2d2d37fc6940c7063dac776e6968ace48e83eff51ff7b7a9d8640599aaaf5c96/manifest.json",
           "sha256": "2d2d37fc6940c7063dac776e6968ace48e83eff51ff7b7a9d8640599aaaf5c96",
           "fixture": "recordings/2d2d37fc6940c7063dac776e6968ace48e83eff51ff7b7a9d8640599aaaf5c96.json"
+        }
+      ]
+    },
+    "product-promo": {
+      "demo": {
+        "contract": "video-demo-v1",
+        "manifest": {
+          "path": "product-promo/manifest.json",
+          "sha256": "dc191a41d128dcbc105ce1a19a57c636a91b5cf1911c8d8d29319e4040ee8ff3",
+          "bytes": 3878,
+          "media_type": "application/json"
+        },
+        "metadata": [
+          {
+            "path": "product-promo/assets/brief.json",
+            "sha256": "c22107ecca5153a4c1f5d24e2e580e3b6e0b065f35c8e6df53fbaa72bb20d1b0",
+            "bytes": 1472,
+            "media_type": "application/json"
+          },
+          {
+            "path": "product-promo/assets/edit.json",
+            "sha256": "a842b02566ecff071bbab36a02e6c482416bfaad6094cda25f9b43c87ad9a957",
+            "bytes": 1000,
+            "media_type": "application/json"
+          },
+          {
+            "path": "product-promo/assets/report.json",
+            "sha256": "e3c246527d87604ca461e1d71f2523de8c37e8f73032aaed17baeaa0f91a08a4",
+            "bytes": 1799,
+            "media_type": "application/json"
+          },
+          {
+            "path": "product-promo/assets/review.json",
+            "sha256": "71967ab5d0bd75e95139c2f61df19caaf396f800dccc8aba8f86bb5bbfe24d11",
+            "bytes": 3555,
+            "media_type": "application/json"
+          },
+          {
+            "path": "product-promo/assets/source.json",
+            "sha256": "33d02c49cba7ae8c9d2cf138a9c5b24ba74a2259dd3f6976def03c014563430f",
+            "bytes": 351,
+            "media_type": "application/json"
+          }
+        ]
+      },
+      "recordings": [
+        {
+          "id": "forma-promo",
+          "label": "Forma product reveal",
+          "kind": "fx-run-export-v1",
+          "path": "runs/e563e5cd3e927eb42513896cccacc786feb08564903c8884fa435a21a4bc66ae/manifest.json",
+          "sha256": "e563e5cd3e927eb42513896cccacc786feb08564903c8884fa435a21a4bc66ae",
+          "fixture": "recordings/e563e5cd3e927eb42513896cccacc786feb08564903c8884fa435a21a4bc66ae.json"
+        }
+      ]
+    },
+    "character-performance": {
+      "demo": {
+        "contract": "video-demo-v1",
+        "manifest": {
+          "path": "character-performance/manifest.json",
+          "sha256": "8b724eb1a15003f693c85a440ef0809130ad2b6eefac29365e15f4a4beea255f",
+          "bytes": 6890,
+          "media_type": "application/json"
+        },
+        "metadata": [
+          {
+            "path": "character-performance/assets/content-review.json",
+            "sha256": "7a19ece0aa5290dc821c1bf6a958a82bc26ac3ffd5740891d353f37af439cd9b",
+            "bytes": 6201,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/assets/framing-selection.json",
+            "sha256": "c8a8c10ac8792cfe3f9cd5ec9b0124280ddb977e205e997593ca4f028d16d643",
+            "bytes": 14584,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/assets/motion-reference.json",
+            "sha256": "85057181c75d557286a1719c554e81cea866c5d92cdc74efd8a7b80cc403cdc2",
+            "bytes": 1464,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/assets/nami-preparation.json",
+            "sha256": "b9a2ab5bd41803f31d6f9d039c15621908e9c7c2e24feb5410b00cc8a1a43234",
+            "bytes": 960,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/assets/nami-report.json",
+            "sha256": "a7e2ce29472565a19311d3c92aed26514605e9d7275ead582f1fe79a0ec31a5e",
+            "bytes": 1962,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/assets/nami-review.json",
+            "sha256": "f0d78183c52616694ad3863050fce967bafbfbabc7b08ee2bdae1b069de91157",
+            "bytes": 1900,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/assets/report.json",
+            "sha256": "e1cbb5fe4df95097e30711f752b50c8b575c2d07a4217147b06f552eff2d1339",
+            "bytes": 2720,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/assets/riko-preparation.json",
+            "sha256": "215a345b4be304caf08065e17c31f0bac0a28990abba0a0359f5cb0dd15b7735",
+            "bytes": 961,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/assets/riko-report.json",
+            "sha256": "86e03cd4d35cf03da4a9212da40827d05bebab9f997c7a4d8778ea9ee79be68b",
+            "bytes": 1965,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/assets/riko-review.json",
+            "sha256": "411424d99c477a25b8980d4460ea8d826e2f177250ad2dba368b777d8f837c27",
+            "bytes": 2147,
+            "media_type": "application/json"
+          }
+        ]
+      },
+      "recordings": [
+        {
+          "id": "riko-nami-cast",
+          "label": "Riko and Nami shared performance",
+          "kind": "fx-run-export-v1",
+          "path": "runs/83d7cb85e214864b62d010f7c7743ea83a8a7e6f834ae0466acacdddd633dd65/manifest.json",
+          "sha256": "83d7cb85e214864b62d010f7c7743ea83a8a7e6f834ae0466acacdddd633dd65",
+          "fixture": "recordings/83d7cb85e214864b62d010f7c7743ea83a8a7e6f834ae0466acacdddd633dd65.json"
         }
       ]
     }

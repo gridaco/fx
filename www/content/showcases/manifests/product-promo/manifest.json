@@ -1,0 +1,98 @@
+{
+  "kind": "video-demo-v1",
+  "title": "Say it. Shape it.",
+  "summary": "An original chat-driven design recording becomes a focused software promo with exact typography, readable UI crops, and an editable camera plan.",
+  "result": {
+    "file": "assets/final.mp4",
+    "poster": "assets/poster.webp",
+    "media_type": "video/mp4",
+    "width": 1920,
+    "height": 1080,
+    "duration_seconds": 18.5
+  },
+  "inputs": [
+    {
+      "id": "footage",
+      "role": "source",
+      "label": "Original Forma recording",
+      "file": "assets/source.mp4",
+      "poster": "assets/source.webp",
+      "media_type": "video/mp4",
+      "description": "A 12-second original scripted fixture: a chat request creates a garden landing page and a follow-up warms its palette. This fictional interface does not claim shipping-product behavior."
+    },
+    {
+      "id": "brief",
+      "role": "direction",
+      "label": "Exact copy and focus hints",
+      "file": "assets/brief.json",
+      "media_type": "application/json",
+      "description": "Supplied product name, exact titles, colors, timestamp hints, and named source regions. The workflow preserves this wording and the actual recording pixels."
+    }
+  ],
+  "stages": [
+    {
+      "id": "inspect",
+      "label": "Inspect the recording",
+      "description": "Validate the source and sample its chronology before any paid call.",
+      "outputs": [
+        {
+          "file": "assets/source-storyboard.png",
+          "media_type": "image/png",
+          "label": "Source timing samples"
+        },
+        {
+          "file": "assets/source.json",
+          "media_type": "application/json",
+          "label": "Source inspection"
+        }
+      ]
+    },
+    {
+      "id": "propose",
+      "label": "Save an editable camera plan",
+      "description": "An image-aware structured model proposes the timing and crop sequence. This selected proposal was used without manual changes; authored focus hints and regions guide it.",
+      "outputs": [
+        {
+          "file": "assets/edit.json",
+          "media_type": "application/json",
+          "label": "Selected camera and timing plan"
+        }
+      ]
+    },
+    {
+      "id": "render",
+      "label": "Render exact source pixels",
+      "description": "Local typography and clean cuts frame the supplied recording. Strict full-file decoding validates delivery; the frozen production run reused the exact cached model proposal at $0.",
+      "outputs": [
+        {
+          "file": "assets/storyboard.png",
+          "media_type": "image/png",
+          "label": "Final timestamped samples"
+        },
+        {
+          "file": "assets/report.json",
+          "media_type": "application/json",
+          "label": "Structural delivery report"
+        }
+      ]
+    },
+    {
+      "id": "review",
+      "label": "Independent sampled review",
+      "description": "A different model accepted all eight criteria on timestamped frames, the full-size poster, exact-copy brief, and report.",
+      "outputs": [
+        {
+          "file": "assets/review.json",
+          "media_type": "application/json",
+          "label": "Independent review and limits"
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "This original fictional recording is a separate fixture generator; callers supply prepared, rights-cleared footage of their own product.",
+    "One silent 1920\u00d71080 composition, with even source retiming. Narration, sound design, pause removal, device mockups, and larger multishot edits belong to the caller.",
+    "Independent review covers sampled visual evidence and a static poster, not continuous motion or listening. Source and final MP4 decoding are structural checks.",
+    "The same workflow also produced a separately reviewed 19-second original poster-design variant. Two inputs are a small compatibility sample, not a general success rate."
+  ]
+}

@@ -33,6 +33,8 @@ private node helpers, prompts, schemas and authored settings:
 
 | Page | Maintained source |
 |---|---|
+| Product promo clip | [`examples/product-promo/`](../../examples/product-promo/), `workflow.yaml` |
+| Character performance | [`examples/character-performance/`](../../examples/character-performance/), `cast.yaml`; single-character utility in `workflow.yaml` |
 | Parallax | [`examples/looping-parallax/`](../../examples/looping-parallax/), `workflows/meadow.yaml` |
 | World | [`examples/world/`](../../examples/world/), `workflow.yaml` |
 | Movie sprite | [`examples/movie-sprite/`](../../examples/movie-sprite/), `workflow.yaml` |
@@ -75,7 +77,161 @@ layer; the mirrored middle and already-looping foreground have repeat markers
 only. A new run requires reviewing these authored annotations, without adding an
 engine or export feature just for the website.
 
+The combined video-example release retains all five parallax files and the exact
+`meadow-01` recording from the previous release. Its guide release pin was refreshed
+after comparing all existing demo inventories and recording selections; the geometry
+and digest checks remain in place. An unrelated release addition still requires
+this explicit review before changing the guide pin.
+
 ## Prepare reviewed content
+
+### Reference-driven video examples
+
+Product promo and character performance share the website-owned `video-demo-v1`
+projection. This presents one exact finished clip, its static poster, the supplied
+visual inputs, recorded stage outputs and scoped limitations. It does not contain
+workflow execution logic. The Workflow tab uses the same frozen FX run export as
+the other examples.
+
+Each complete reviewed bundle contains `manifest.json`, `cover.webp`,
+`assets/final.mp4`, `assets/poster.webp`, `assets/report.json` and every resource
+named by its inputs and stages. The product page's prompt attachment is
+`assets/source.mp4`; the character page's are `assets/character.png` (Riko) and
+`assets/nami.png` (Nami). Keep these
+files identical to their selected source artifacts. A motion comparison may use
+an independently reviewed still or comparison sheet when the original footage
+is acquired separately. Its label and description must explain what it shows.
+
+The character page uses `cast.yaml` with `inputs/cast.yaml`: two instances of the
+single-character `workflow.yaml`, followed by the free `reel.yaml` composition.
+Riko and Nami each use a separately prepared identity image and the same four-second
+silent driving interval at 24 fps. Preparation and reel composition make no provider
+calls. Each child workflow generates and independently reviews its own take, and
+the reel accepts only clips whose digests match their accepted reports. Finishing
+decodes every native frame and applies a conservative plain-studio border check;
+an independent review compares eight paired samples per take. Clear borders are
+a pixel-based framing proxy and do not certify continuous anatomy or every
+transition.
+
+The optional `first_region` and `second_region` inputs are normalized
+`[x, y, width, height]` rectangles. Their default preserves the whole frame. The
+canonical reel uses author-selected fixed regions to remove empty upper background
+and balance the characters, with foreground bounds measured across all 96 native
+frames per take and a 48-pixel margin. These regions belong to the exact accepted
+clips; measure every frame again when selecting framing for fresh takes. This is
+an explicit framing decision rather than automatic content
+cropping. Local composition aspect-fits each complete chosen region into a silent,
+eight-second 1080 × 1920 presentation at 30 fps; the supplied performance clips
+remain native 24 fps. Its report records the chosen regions and retains the child
+review scope. Composing accepted clips does not replace visual review of the
+assembled reel.
+
+The source commands download FX's character artwork, acquire the selected stock
+clip from its original source, then prepare both identity plates and the shared
+motion interval locally. Keep the raw and transcoded stock MP4s out of public
+bundles and recorded output placements. The page may show composed comparison
+evidence with clear source attribution; its reusable inputs remain distinct from
+the larger cast presentation. New character identities and driving footage need
+their own review.
+
+The manifest shape is:
+
+```json
+{
+  "kind": "video-demo-v1",
+  "title": "A bounded performance",
+  "summary": "One finished clip from supplied visual inputs.",
+  "result": {
+    "file": "assets/final.mp4",
+    "poster": "assets/poster.webp",
+    "media_type": "video/mp4",
+    "width": 1080,
+    "height": 1920,
+    "duration_seconds": 4
+  },
+  "inputs": [{
+    "id": "identity",
+    "label": "Character artwork",
+    "role": "identity",
+    "file": "assets/character.png",
+    "media_type": "image/png",
+    "description": "The supplied identity image."
+  }],
+  "stages": [{
+    "id": "finish",
+    "label": "Finish",
+    "description": "Export the selected take locally.",
+    "outputs": [{
+      "label": "Delivery report",
+      "file": "assets/report.json",
+      "media_type": "application/json"
+    }]
+  }],
+  "limitations": ["A single bounded performance."]
+}
+```
+
+Input roles are `source`, `identity`, `motion` and `direction`. Inputs and stage
+outputs can be images, MP4/WebM clips, JSON or plain text/Markdown downloads.
+Every video needs its own static poster. Relative paths, media declarations,
+positive dimensions and duration, unique input/stage IDs and complete resources
+are validated before rendering. Runtime manifest loading verifies the pinned
+hash and size before parsing. Native controls retain authored result audio;
+reference clips begin muted. Clips load when visible, pause offscreen and keep
+their poster for reduced motion until the visitor deliberately starts playback.
+
+After independent content review, export the selected saved FX runs. Their root
+outputs must include `video` and `poster`, byte-identical to the bundle's final
+clip and poster. `cover.webp` is an exact copy of that WebP poster. Create an
+ignored local preparation document with the two reviewed selections:
+
+```json
+{
+  "kind": "fx-video-showcases-preparation-v1",
+  "entries": [
+    {
+      "slug": "product-promo",
+      "bundle": "/absolute/path/to/product-promo-bundle",
+      "recording": {
+        "id": "product-promo-01",
+        "label": "Selected product reveal",
+        "source": "/absolute/path/to/product-promo-export"
+      }
+    },
+    {
+      "slug": "character-performance",
+      "bundle": "/absolute/path/to/character-performance-bundle",
+      "recording": {
+        "id": "character-performance-01",
+        "label": "Selected character performance",
+        "source": "/absolute/path/to/character-performance-export"
+      }
+    }
+  ]
+}
+```
+
+```sh
+bun --no-env-file run --cwd www prepare:video \
+  /absolute/path/to/ignored-video-preparation.json
+bun --no-env-file run --cwd www verify:showcases --media --recordings
+bun --no-env-file run check:www
+bun --no-env-file run test:www
+bun --no-env-file run build:www
+```
+
+`prepare:video` validates the exact result/output bindings, stages both demos in
+one immutable release, appends their selected recordings, and updates the frozen
+metadata and content lock together. The existing release bytes must be present
+in `.showcases/delivery/`. Existing demos, recordings and their order are
+preserved. A later run may update one already-added video example. The tool also
+generates `content/showcases/video-recordings.ts` with explicit imports of the
+selected frozen recordings; covers resolve their named root outputs at build
+time. It never executes a workflow, infers semantic approval or uploads media.
+Run the media verification and direct-CDN browser checks before publishing the
+new immutable `showcases/<sha256>/` and `runs/<sha256>/` paths.
+
+### Earlier campaign preparation
 
 Preparation accepts an independently reviewed campaign containing `publish/`,
 `publish-inventory.json` and its exact `review-approval.json`, plus exported saved

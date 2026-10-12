@@ -1,0 +1,66 @@
+{
+ "audio": "removed",
+ "character": "Riko",
+ "character_plate_sha256": "6e673a9d0ff73539804d903fd8dfce205b3823d6bd964a420a94dbf230dac470",
+ "finished": {
+  "duration_seconds": 4,
+  "fps": 24,
+  "frames": 96,
+  "height": 1280,
+  "width": 720
+ },
+ "framing_scan": {
+  "corner_patch_pixels": 8,
+  "corner_uniformity_max_channel_threshold": 8,
+  "edge_contacts": [],
+  "foreground_edge_max_channel_threshold": 20,
+  "frame_index_base": 0,
+  "frames_scanned": 96,
+  "kind": "studio_border_scan_v1",
+  "limitation": "Uniform corners and clear borders cannot establish anatomy or every-transition quality.",
+  "scope": "all native frames; conservative plain-studio pixel proxy, not semantic certification",
+  "status": "clear",
+  "timing": "native best_effort_timestamp_time",
+  "unknown_frames": []
+ },
+ "full_decode": "pass",
+ "kind": "character_performance_finish_v1",
+ "motion_sha256": "8cad44ece6ada802cac38f45c58e3db271ea7596cdee49d4fd09168e34574762",
+ "native": {
+  "duration_seconds": 4,
+  "fps": 24,
+  "frames": 96,
+  "height": 1280,
+  "width": 720
+ },
+ "publication_status": "requires_separate_content_review",
+ "rejection_reasons": [],
+ "review_scope": "sampled_frames_and_pose_correspondence",
+ "review_sha256": "411424d99c477a25b8980d4460ea8d826e2f177250ad2dba368b777d8f837c27",
+ "review_status": "sampled_review_pass",
+ "sample_mean_rgb_change": [
+  5.598958333333333,
+  7.096842447916667,
+  6.485026041666667,
+  6.805989583333333,
+  6.404134114583333,
+  7.870849609375,
+  7.907796223958333
+ ],
+ "sample_times_seconds": [
+  0,
+  0.557143,
+  1.114286,
+  1.671429,
+  2.228571,
+  2.785714,
+  3.342857,
+  3.9
+ ],
+ "sampled_review_status": "pass",
+ "sampling_limit": "Eight frame pairs cannot certify every transition.",
+ "spatial_resizing_of_output": false,
+ "take_sha256": "6b6dcae3de197e41d14940f01d25d97cfe047edf0da89f777abaf7d5746147c0",
+ "temporal_interpolation": false,
+ "video_sha256": "01ae510292dbba1f37188bf42d61d98bd6f80d72cab740cc3a303e28e8b498ca"
+}

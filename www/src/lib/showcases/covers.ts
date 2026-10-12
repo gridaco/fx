@@ -5,6 +5,7 @@ import portraitAnimation from "../../../content/showcases/recordings/b35ef1984d9
 import namiRigCover from "../../../content/showcases/recordings/ebf0befefd7d408fe27c07c942850e9d4c036158a6472a9a26f93824531b6aab.json";
 import namiSprite from "../../../content/showcases/recordings/c1ac112e0ea3c2800db925dafe671dda01538f45bc981235b203a0b73bb251c0.json";
 import coralReel from "../../../content/showcases/recordings/2d2d37fc6940c7063dac776e6968ace48e83eff51ff7b7a9d8640599aaaf5c96.json";
+import { videoRecordings } from "../../../content/showcases/video-recordings";
 import { deliveryUrl, showcaseLock, workflowAssetPath } from "./catalog";
 import { object, text, type ShowcaseLock, type ShowcaseSlug } from "./contracts";
 
@@ -28,9 +29,12 @@ const outputCovers: Partial<Record<ShowcaseSlug, OutputCover>> = {
   "character-3d": { kind: "video", recording: "nami-rig-cover-02", video: "cover_video", poster: "cover", fit: "cover", position: "center" },
   "portrait-motion": { kind: "animated_image", recording: "nami-face-01", image: "animation", fit: "cover", position: "center" },
   pet: { kind: "video", recording: "coral-reel-01", video: "video", poster: "poster" },
+  "product-promo": { kind: "video", recording: "primary", video: "video", poster: "poster", fit: "cover", position: "center" },
+  "character-performance": { kind: "video", recording: "primary", video: "video", poster: "poster", fit: "contain", position: "center" },
 };
 
 const documents: Record<string, unknown> = {
+  ...videoRecordings,
   "recordings/c1ac112e0ea3c2800db925dafe671dda01538f45bc981235b203a0b73bb251c0.json": namiSprite,
   "recordings/ebf0befefd7d408fe27c07c942850e9d4c036158a6472a9a26f93824531b6aab.json": namiRigCover,
   "recordings/abe44ccedb750bf05633886c052545079f97aee6e83f7161b2611295e4249d3d.json": parallaxPreview,
@@ -56,7 +60,7 @@ export function coverArtifact(document: RunExport, output: string, media: "video
 export function workflowCover(slug: ShowcaseSlug, lock: ShowcaseLock = showcaseLock, recordings: Readonly<Record<string, unknown>> = documents): WorkflowCoverMedia {
   const selection = outputCovers[slug];
   if (!selection) return { kind: "image", src: workflowAssetPath(slug, "cover.webp") };
-  const pin = lock.workflows[slug]?.recordings.find(item => item.id === selection.recording);
+  const pin = selection.recording === "primary" ? lock.workflows[slug]?.recordings[0] : lock.workflows[slug]?.recordings.find(item => item.id === selection.recording);
   if (!pin || !recordings[pin.fixture]) throw new Error(`Missing frozen cover recording: ${selection.recording}.`);
   const document = parseRunExport(recordings[pin.fixture]);
   if (selection.kind === "image" || selection.kind === "animated_image") {
@@ -88,7 +92,7 @@ export function coverRecording(slug: ShowcaseSlug, lock: ShowcaseLock = showcase
   const pin = pins[0];
   if (!pin) return null;
   const selection = outputCovers[slug];
-  const coverPin = selection && pins.find(item => item.id === selection.recording);
+  const coverPin = selection && (selection.recording === "primary" ? pins[0] : pins.find(item => item.id === selection.recording));
   let focus: string | null = null;
   if (selection && coverPin && recordings[coverPin.fixture]) {
     const document = parseRunExport(recordings[coverPin.fixture]);

@@ -9,6 +9,7 @@ import { verifyCampaign } from "./campaign";
 
 function pick(value: Record<string, unknown>, keys: string[]) { return Object.fromEntries(keys.map(key => [key, value[key]])); }
 function project(slug: ShowcaseSlug, value: Record<string, unknown>): Record<string, unknown> {
+  if (slug === "product-promo" || slug === "character-performance") throw new Error("Video demos use prepare:video with complete reviewed bundles and FX exports.");
   const kind = demoContracts[slug];
   if (slug === "parallax") return parseParallax({ kind, ...pick(value, ["canvas", "layers"]) });
   if (slug === "world") return parseWorld({ kind, entities: value.entities });

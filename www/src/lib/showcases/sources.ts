@@ -6,12 +6,30 @@ type Source = {
   inputs?: string;
   /** Absent when the project's routes are free, as on the user's own Codex. */
   max_usd?: number;
+  prerequisite?: string;
   setup: string;
   note: string;
 };
 
 /** Maintained authoring projects; frozen recordings remain separate evidence. */
 export const workflowSources = {
+  "product-promo": {
+    folder: "product-promo",
+    target: "workflow.yaml",
+    inputs: "showcase.yaml",
+    max_usd: 2,
+    setup: "uv sync\nsource .venv/bin/activate\npython fetch_inputs.py",
+    note: "Install FFmpeg and ffprobe on PATH. The input download retrieves the recorded source media. The model proposes an edit plan; rendering preserves supplied product pixels. Replaying a saved edit plan is local and needs no provider call.",
+  },
+  "character-performance": {
+    folder: "character-performance",
+    target: "cast.yaml",
+    inputs: "inputs/cast.yaml",
+    max_usd: 10,
+    prerequisite: "Install Grida and build FX from source; select the source build after uv sync below.",
+    setup: "uv sync\nsource .venv/bin/activate\n# Before continuing, select the built engine and checkout SDK in this environment:\n# https://github.com/gridaco/fx/blob/main/CONTRIBUTING.md#use-a-source-build-with-grida-fx\n# Do not sync dependencies again after selecting the checkout SDK.\npython fetch_inputs.py\npython fetch_motion.py\ngrida fx run prepare.yaml --inputs inputs/riko.yaml --max-usd 0 --deliver character=.showcase-inputs/riko-plate.png --deliver motion=.showcase-inputs/motion-prepared.mp4\ngrida fx run prepare.yaml --inputs inputs/nami.yaml --max-usd 0 --deliver character=.showcase-inputs/nami-plate.png",
+    note: "Install FFmpeg and ffprobe on PATH. Use the FX source build containing video.motion_transfer and the Wan Motion route until these are released. Sync this example first, then follow CONTRIBUTING's source-build selection recipe before running the helpers or FX commands; another dependency sync would replace that SDK selection. FX delivers the identity artwork. Acquire the selected stock footage from its source and prepare the four-second, 24 fps interval locally; raw stock footage is excluded from public FX delivery. The cast template runs the single-character utility twice under one spending ceiling. Generation and independent sampled-frame review are paid; decoding, the conservative check of every native frame's studio borders, and composition are local and free. The silent 1080 × 1920 reel runs at 30 fps and fits each explicit fixed region in full; the default region is the whole source frame.",
+  },
   parallax: {
     folder: "looping-parallax",
     target: "workflows/meadow.yaml",
@@ -78,11 +96,12 @@ export const workflowSources = {
 export function workflowSource(slug: Workflow["slug"]) {
   const source: Source = workflowSources[slug];
   const target = `${source.target}${source.inputs ? ` --inputs ${source.inputs}` : ""}`;
+  const prerequisite = source.prerequisite ?? "Install the CLI first: npm install -g grida";
   return {
     ...source,
     url: `https://github.com/gridaco/fx/tree/main/examples/${source.folder}`,
     command: source.max_usd === undefined
-      ? `# From examples/${source.folder} in the FX repository.\n# Install the CLI first: npm install -g grida\n${source.setup}\n\ngrida fx plan ${target}\n\n# Start the local service for the browser viewer.\ngrida fx start --background\n\n# After reviewing the plan, draw it live.\ngrida fx run ${target} --live --open`
-      : `# From examples/${source.folder} in the FX repository.\n# Install the CLI first: npm install -g grida\n${source.setup}\n\ngrida fx plan ${target} --max-usd ${source.max_usd}\n\n# Start the local service for the browser viewer.\ngrida fx start --background\n\n# After reviewing the plan, choose a provider spending ceiling.\ngrida fx run ${target} --live --max-usd ${source.max_usd} --open`,
+      ? `# From examples/${source.folder} in the FX repository.\n# ${prerequisite}\n${source.setup}\n\ngrida fx plan ${target}\n\n# Start the local service for the browser viewer.\ngrida fx start --background\n\n# After reviewing the plan, draw it live.\ngrida fx run ${target} --live --open`
+      : `# From examples/${source.folder} in the FX repository.\n# ${prerequisite}\n${source.setup}\n\ngrida fx plan ${target} --max-usd ${source.max_usd}\n\n# Start the local service for the browser viewer.\ngrida fx start --background\n\n# After reviewing the plan, choose a provider spending ceiling.\ngrida fx run ${target} --live --max-usd ${source.max_usd} --open`,
   };
 }

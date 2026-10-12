@@ -72,7 +72,7 @@ async function walkFiles(root: string, prefix: string, validate: (path: string) 
 }
 export function mediaType(path: string): string {
   const extension = path.split(".").at(-1)!;
-  const type = ({ png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp", gif: "image/gif", mp4: "video/mp4", webm: "video/webm", glb: "model/gltf-binary", json: "application/json", js: "text/javascript", wasm: "application/wasm", md: "text/markdown" } as Record<string, string>)[extension];
+  const type = ({ png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp", avif: "image/avif", gif: "image/gif", mp4: "video/mp4", webm: "video/webm", glb: "model/gltf-binary", json: "application/json", js: "text/javascript", wasm: "application/wasm", md: "text/markdown", txt: "text/plain" } as Record<string, string>)[extension];
   if (type) return type;
   if (/LICENSE(?:$|\.)/.test(path)) return "text/plain";
   throw new Error(`No approved media type for ${path}.`);

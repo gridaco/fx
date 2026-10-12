@@ -1,0 +1,20 @@
+{
+  "kind": "selected_motion_reference_v1",
+  "creator": "Polina Tankilevitch",
+  "source_page": "https://www.pexels.com/video/woman-dancing-actively-5385812/",
+  "download_url": "https://videos.pexels.com/video-files/5385812/5385812-hd_1080_1920_25fps.mp4",
+  "sha256": "626dab981e36cfa5e3d483512f5bea51a202c0272bdac707e1270305bbfa34cd",
+  "bytes": 2979664,
+  "license": "https://www.pexels.com/license/",
+  "terms": "https://www.pexels.com/terms-of-service/",
+  "checked_date": "2026-10-13",
+  "use": "Selected driving performance for an original illustrated character animation; no training dataset is collected.",
+  "publication_boundary": "Acquire the source from its creator's stock platform. Raw and transcoded stock footage is excluded from FX's public media distribution. The transformed performance and paired review evidence are distinct compositions. No performer endorsement is implied.",
+  "inference_basis": "The license grants modification and adaptation. Selected one-shot inference is an interpretation of that grant; the terms do not expressly endorse AI motion transfer. Users must assess their own source and intended use.",
+  "selected_interval": {
+    "start_seconds": 0,
+    "duration_seconds": 4,
+    "prepared_fps": 24
+  },
+  "selection_reason": "Fixed full-body framing and a short expressive dance with crossbody gestures, steps and an overhead reach; sampled pose correspondence was tested on the selected motion-retargeting route."
+}

@@ -10,14 +10,16 @@ function parseMetadata(path: string, value: unknown) {
   else if (path.endsWith("_validation.json")) parseSheet(value);
   else if (path.endsWith("sprite.json")) parseSpriteLayout(value);
 }
-export async function verifyShowcases(options: { content?: string; delivery?: string; requireRecordings?: boolean; previousDemo?: ShowcaseSlug; addedDemo?: ShowcaseSlug } = {}) {
+export async function verifyShowcases(options: { content?: string; delivery?: string; requireRecordings?: boolean; previousDemo?: ShowcaseSlug; addedDemo?: ShowcaseSlug; previousDemos?: readonly ShowcaseSlug[]; addedDemos?: readonly ShowcaseSlug[] } = {}) {
   const content = options.content ?? contentRoot;
   const lockBytes = await confinedFile(content, "lock.json"), lock = parseLock(JSON.parse(lockBytes.toString()));
   const releaseBytes = await confinedFile(content, lock.release.fixture);
   if (sha256(releaseBytes) !== lock.release.sha256) throw new Error("Frozen release manifest changed.");
   const release = parseRelease(JSON.parse(releaseBytes.toString()));
   // Only a showcase being added may be missing, and only from a catalog about to receive it.
-  const adapters = Object.keys(demoContracts).filter(slug => slug !== options.addedDemo || slug in lock.workflows).sort().join();
+  const additions = [...(options.addedDemos ?? []), ...(options.addedDemo ? [options.addedDemo] : [])];
+  const replacements = [...(options.previousDemos ?? []), ...(options.previousDemo ? [options.previousDemo] : [])];
+  const adapters = Object.keys(demoContracts).filter(slug => !additions.includes(slug as ShowcaseSlug) || slug in lock.workflows).sort().join();
   if (Object.keys(lock.workflows).sort().join() !== adapters || Object.keys(release.demos).sort().join() !== adapters) throw new Error("The catalog must cover every showcase adapter.");
   let metadataCount = 0, recordingsCount = 0;
   const allFiles: FileRef[] = release.files.map(file => ({ ...file, path: `showcases/${lock.release.sha256}/${file.path}` }));
@@ -28,7 +30,7 @@ export async function verifyShowcases(options: { content?: string; delivery?: st
     const details = workflowDetails[slug as ShowcaseSlug];
     const required = [`${slug}/cover.webp`, ...details.outputs.map(item => `${slug}/${item.path}`), ...details.agent.filter(item => typeof item !== "string").map(item => `${item.workflow ?? slug}/${item.path}`)];
     // A replaced demo may have new page filenames. Its candidate is checked in full.
-    for (const path of required) if (!path.startsWith(`${options.previousDemo}/`) && !release.files.some(file => file.path === path)) throw new Error(`Missing page asset ${path}.`);
+    for (const path of required) if (!replacements.some(slug => path.startsWith(`${slug}/`)) && !release.files.some(file => file.path === path)) throw new Error(`Missing page asset ${path}.`);
     for (const file of metadata) {
       const bytes = await verifiedFile(join(content, "manifests"), file);
       const value = JSON.parse(bytes.toString());

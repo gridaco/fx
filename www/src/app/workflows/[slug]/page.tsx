@@ -43,19 +43,20 @@ export default async function WorkflowPage({ params }: Props) {
   const usage = assetExample(workflow.slug, base);
   const related = workflows.find(({ slug }) => slug === details.related)!;
   const builder = workflow.slug === "terrain" || workflow.slug === "ui-kit";
+  const videoExample = workflow.slug === "product-promo" || workflow.slug === "character-performance";
   const source = workflowSource(workflow.slug);
   const prompt = details.agent.map((part) => {
     if (typeof part === "string") return part;
     const source = part.workflow ? workflows.find(({ slug }) => slug === part.workflow)! : workflow;
     const href = workflowAsset(source, part.path);
-    return { label: part.label, href, image: href };
+    return { label: part.label, href, image: /\.(?:png|jpe?g|webp|avif)$/.test(part.path) ? href : undefined };
   });
   const panes = [
     { label: "For agents", language: "Prompt", code: agentPromptText(prompt), prompt },
     { label: builder ? "Specification" : "Inputs", language: builder ? "Design example" : source.inputs!, code: details.inputs, note: builder ? "An authoring specification for the Python builder. See the source for its complete settings." : "An excerpt from the example's inputs. The complete file and its referenced settings are in the workflow source." },
     { label: "CLI", language: "Shell", code: source.command, note: `${source.note} Planning is offline; live runs use your provider account. The ceiling limits spending and does not guarantee completion.` },
     { label: "Use the assets", language: usage.language, code: usage.code, note: "Consume the recorded files directly. No engine or provider call is needed to display them. Rendering excerpts assume your application's canvas or media setup." },
-    ...(cover.kind === "video" ? [{ label: "Use the preview", language: "HTML", code: `<video src="${cover.src}"\n  poster="${cover.poster}"\n  autoplay muted loop playsinline></video>`, note: "An optional local render from the recorded workflow outputs. The original assets remain unchanged." }] : []),
+    ...(cover.kind === "video" && !videoExample ? [{ label: "Use the preview", language: "HTML", code: `<video src="${cover.src}"\n  poster="${cover.poster}"\n  autoplay muted loop playsinline></video>`, note: "An optional local render from the recorded workflow outputs. The original assets remain unchanged." }] : []),
   ];
 
   // Each block owns its padding, so the Workflow tab's canvas can use the full width.
@@ -108,7 +109,7 @@ export default async function WorkflowPage({ params }: Props) {
         <p className="mt-4 max-w-sm text-sm leading-7 text-muted-foreground">Real files from this run. Use them in your own renderer, prototype, or engine.</p>
       </div>
       <ul className="divide-y">
-        {cover.kind === "video" && <li className="py-4 first:pt-0">
+        {cover.kind === "video" && !videoExample && <li className="py-4 first:pt-0">
           <a href={cover.src} download className="group flex items-start justify-between gap-4">
             <div className="min-w-0"><p className="break-all font-mono text-xs">preview.mp4</p><p className="mt-1.5 text-sm text-muted-foreground">A looping video rendered from this run’s assets. Ready for a cover or preview.</p></div>
             <ArrowDownToLine size={15} className="mt-1 shrink-0 text-muted-foreground group-hover:text-foreground" aria-hidden="true" />
