@@ -245,6 +245,12 @@ The tag starts `release.yml`, which runs four jobs:
    to PyPI. It checks out no code. A package version that is already published is skipped,
    so you can re-run a publish that failed partway.
 
+The tag also serves `init --template` ([spec/service.md](spec/service.md) §2.1): an engine of
+this version downloads its templates from the tag's source archive on GitHub. CI's
+`tools/check_examples.py` already starts every template from an archive shaped like it, and its
+`templates` check refuses an indexed example left out by `export-ignore`, so nothing more is
+needed before tagging.
+
 A published version can never be replaced. If something is wrong after publishing, fix it,
 bump to a new version (for example `0.1.1`) and tag again.
 
@@ -270,6 +276,12 @@ npx --yes @grida/fx --version               # the same, without installing
 python3.12 -m venv fx-check                 # any Python 3.11 or later
 fx-check/bin/pip install grida
 fx-check/bin/python -m grida.fx --version   # grida-fx 0.1.0
+```
+
+Then start a project from a template, which downloads the tag's archive:
+
+```sh
+cd "$(mktemp -d)" && grida-fx init demo --template hello --json   # "source": "release"
 ```
 
 - **Provenance:** each package's npm page shows its provenance, linked to the workflow run.

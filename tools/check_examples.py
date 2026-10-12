@@ -12,19 +12,30 @@ and a paid call is refused at $0 with ``<capability> on <route> is a paid call; 
 that refusal; the others run only free steps. ``self-contained`` checks, without running anything,
 that no example links outside its own folder except by absolute URL.
 
+An example ``examples/templates.json`` offers as an ``init`` template is not copied: the engine
+starts it with ``init --template``, from an archive shaped like the release's (one top-level
+folder, the examples' tracked files as they are in the working tree) served on loopback, so each
+check runs on exactly what a user gets. ``templates`` checks that every template has a check and
+that no indexed folder is ``export-ignore``d out of the release archive.
+
 Prints one line per check and exits 1 when any fails. Names given run only those checks.
 """
 
 from __future__ import annotations
 
+import gzip
+import http.server
 import importlib.util
+import io
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
+import threading
 import traceback
 from collections.abc import Callable
 from pathlib import Path
@@ -32,7 +43,7 @@ from pathlib import Path
 from PIL import Image, ImageOps
 
 import grida.fx as fx
-from grida.fx import RunResult
+from grida.fx import RunResult, _api
 
 ROOT = Path(__file__).resolve().parent.parent
 EXAMPLES = ROOT / "examples"
@@ -372,13 +383,108 @@ def self_contained() -> list[str]:
     return found
 
 
+def templates() -> dict[str, str]:
+    """The templates ``init`` offers, by example folder name: ``{folder: template name}``."""
+    index = json.loads((EXAMPLES / "templates.json").read_text(encoding="utf-8"))
+    return {Path(entry["path"]).name: entry["name"] for entry in index["templates"]}
+
+
+def template_problems(offered: dict[str, str]) -> list[str]:
+    problems = []
+    checked = {example for example, _ in CHECKS.values()}
+    for folder, name in offered.items():
+        if folder not in checked:
+            problems.append(f"template {name} ({folder}) has no check here")
+        attribute = subprocess.run(
+            ["git", "check-attr", "export-ignore", "--", f"examples/{folder}/fx.yaml"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        if not attribute.rstrip().endswith("unspecified"):
+            problems.append(f"examples/{folder} is left out of the release archive: {attribute}")
+    return problems
+
+
+def release_archive(folders: list[str]) -> bytes:
+    """A ``.tar.gz`` shaped like the tag's source archive: a pax global header, one top-level
+    folder, and the tracked files of ``folders`` as they are in the working tree."""
+    listed = subprocess.run(
+        ["git", "ls-files", "-z", "--", *(f"examples/{folder}" for folder in folders)],
+        cwd=ROOT,
+        capture_output=True,
+        check=True,
+    ).stdout
+    buffer = io.BytesIO()
+    with tarfile.open(
+        fileobj=buffer,
+        mode="w",
+        format=tarfile.PAX_FORMAT,
+        pax_headers={"comment": "0" * 40},
+    ) as archive:
+        for name in sorted(filter(None, listed.decode().split("\0"))):
+            path = ROOT / name
+            if path.is_file():
+                archive.add(path, arcname=f"fx-check/{name}", recursive=False)
+    return gzip.compress(buffer.getvalue())
+
+
+def serve(archive: bytes) -> tuple[str, http.server.ThreadingHTTPServer]:
+    """Serves ``archive`` on loopback, as codeload serves a tag's archive."""
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802 (the handler's interface)
+            self.send_response(200)
+            self.send_header("content-type", "application/x-gzip")
+            self.send_header("content-length", str(len(archive)))
+            self.end_headers()
+            self.wfile.write(archive)
+
+        def log_message(self, *args: object) -> None:
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return f"http://127.0.0.1:{server.server_address[1]}/gridaco/fx/tar.gz/vcheck", server
+
+
+def started(name: str, home: Path, source: str) -> None:
+    """Starts ``home`` from template ``name`` with the engine's own ``init`` (network on, for the
+    loopback source only)."""
+    environment = _api.engine_environment()
+    environment.pop("GRIDA_FX_NETWORK", None)
+    command = [str(_api.binary()), "init", str(home), "--template", name]
+    result = subprocess.run(
+        [*command, "--template-source", source, "--json"],
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise Failed(f"init --template {name} failed: {result.stderr.strip()}")
+    outcome = json.loads(result.stdout)
+    expect(outcome["template"] == {"name": name, "source": "local"}, f"init said {outcome}")
+    for file in ("fx.yaml", "AGENTS.md", ".gitignore", ".agents/skills/grida-fx/SKILL.md"):
+        expect((home / file).is_file(), f"init --template {name} wrote no {file}")
+
+
 def main(names: list[str]) -> int:
-    unknown = sorted(set(names) - set(CHECKS) - {"self-contained"})
+    unknown = sorted(set(names) - set(CHECKS) - {"self-contained", "templates"})
     if unknown:
         print(f"check_examples: no check {', '.join(unknown)}; the checks: {', '.join(CHECKS)}")
         return 2
     offline()
     failures = 0
+    offered = templates()
+    if not names or "templates" in names:
+        problems = template_problems(offered)
+        if problems:
+            failures += 1
+            print("FAIL templates: " + "; ".join(problems))
+        else:
+            print(f"ok   templates: {', '.join(offered.values())} each have a check and ship")
+    url, server = serve(release_archive(sorted(offered)))
     if not names or "self-contained" in names:
         leaving = self_contained()
         if leaving:
@@ -393,12 +499,15 @@ def main(names: list[str]) -> int:
             continue
         with tempfile.TemporaryDirectory(prefix="fx-example-") as scratch:
             home = Path(scratch) / example
-            shutil.copytree(
-                EXAMPLES / example,
-                home,
-                ignore=shutil.ignore_patterns(".fx", "runs", ".venv", ".showcase-inputs"),
-            )
             try:
+                if example in offered:
+                    started(offered[example], home, url)
+                else:
+                    shutil.copytree(
+                        EXAMPLES / example,
+                        home,
+                        ignore=shutil.ignore_patterns(".fx", "runs", ".venv", ".showcase-inputs"),
+                    )
                 print(f"ok   {name}: {check(home)}")
             except Failed as failure:
                 failures += 1
@@ -406,6 +515,7 @@ def main(names: list[str]) -> int:
             except Exception:  # an SDK or engine error is a failed check, not a crash
                 failures += 1
                 print(f"FAIL {name}:\n{traceback.format_exc()}")
+    server.shutdown()
     return 1 if failures else 0
 
 
