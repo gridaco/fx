@@ -114,3 +114,33 @@ test("replacement validates new page downloads against its candidate without req
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("adding a showcase keeps every other showcase and starts the new one without recordings", async () => {
+  const root = await mkdtemp(join(await realpath(tmpdir()), "fx-add-demo-"));
+  try {
+    const item = await fixture(root, "pet");
+    // The catalog as it was before the pet: no pet demo, files or recordings.
+    const release = parseRelease(JSON.parse((await confinedFile(item.content, item.lock.release.fixture)).toString()));
+    const { pet: _, ...demos } = release.demos;
+    const earlier = { ...release, demos, files: release.files.filter(file => !file.path.startsWith("pet/")) };
+    const bytes = jsonBytes(earlier), hash = sha256(bytes), previousRoot = join(item.delivery, "showcases", hash);
+    for (const file of earlier.files) await plainWrite(join(previousRoot, file.path), await verifiedFile(item.previousRoot, file));
+    await plainWrite(join(previousRoot, "manifest.json"), bytes);
+    await plainWrite(join(item.content, "manifests", `${hash}.json`), bytes);
+    const lock = structuredClone(item.lock);
+    delete lock.workflows.pet;
+    lock.release = { sha256: hash, path: `showcases/${hash}/manifest.json`, fixture: `manifests/${hash}.json` };
+    await plainWrite(join(item.content, "lock.json"), jsonBytes(lock));
+    await expect(verifyShowcases({ content: item.content })).rejects.toThrow("every showcase adapter");
+    await expect(verifyShowcases({ content: item.content, addedDemo: "pet" })).resolves.toHaveProperty("release", hash);
+
+    const result = await replaceDemo("pet", item.source, item);
+    expect([result.added, result.previous_release]).toEqual([true, hash]);
+    const after = parseLock(JSON.parse((await confinedFile(item.content, "lock.json")).toString()));
+    expect(after.workflows.pet.recordings).toEqual([]);
+    for (const [slug, workflow] of Object.entries(lock.workflows)) expect(after.workflows[slug]).toEqual(workflow);
+    expect(await confinedFile(join(item.delivery, "showcases", result.release), "pet/cover.webp")).toEqual(Buffer.from("replacement-cover"));
+    await expect(verifyShowcases({ content: item.content })).resolves.toHaveProperty("release", result.release);
+    await expect(verifyShowcases({ content: item.content, requireRecordings: true })).rejects.toThrow("No recording selected for pet");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

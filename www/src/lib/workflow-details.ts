@@ -70,6 +70,25 @@ export const workflowDetails: Record<Workflow["slug"], Details> = {
     works: ["Standing body motion with hair and clothing follow-through", "A fixed camera and a consistent full-body character", "Characters without green clothing or props"],
     related: "portrait-motion",
   },
+  "pet": {
+    introduction: "A sprite reads as one character only if every frame is the same character. This workflow draws the character once, then draws each state from that one picture. Code counts the poses in every strip, cuts them into equal cells on a shared ground line, and lays the rows out as one sheet with their timings.",
+    stages: [
+      { title: "Draw once", description: "Redraw the reference, or draw from words, as the one picture every state follows." },
+      { title: "Draw each state", description: "Draw one strip of poses per state from that picture, with clear space between the poses." },
+      { title: "Count", description: "Find the poses in code. A strip with the wrong count, or a pose cut by its edge, is drawn again." },
+      { title: "Lay out", description: "Fit each row into equal cells at one scale, mirror a state where allowed, and write the sheet, its layout and previews." },
+    ],
+    outputs: [
+      { path: "assets/spritesheet.webp", description: "Nine states in rows of up to eight 192 × 208 frames, transparent." },
+      { path: "assets/sprite.json", description: "Each row's state, frame count and frame timings." },
+      { path: "assets/base.png", description: "The one picture every state was drawn from." },
+      { path: "assets/pet.json", description: "The pet manifest Codex loads with the sheet, written for the default nine states." },
+    ],
+    inputs: "id: coral\nname: Coral\ndescription: A small coral-pink octopus that keeps you company while you work.\nlook: >-\n  a small, round, coral-pink octopus with six short curled\n  tentacles, the two outer ones lifted like arms, ...\nreference: ../.showcase-inputs/coral.png\nstyle: sticker",
+    agent: ["Build an FX workflow that turns ", {"label": "this character", "path": "assets/reference.png"}, " into an animated sprite sheet. Draw it once as the picture every state follows, then draw each state as one strip of poses from that picture. Count the poses in code and redraw a strip with the wrong count or a pose cut off at its edge. Cut the poses into equal cells on a shared ground line, and deliver the sheet, its frame timings and a preview of each state. Plan offline before drawing anything live."],
+    works: ["Simple characters: one shape, a few colours, one marking", "Idle, gesture and travel loops of up to eight frames", "Small sheets for games, companions and interface mascots"],
+    related: "movie-sprite",
+  },
   "portrait-motion": {
     introduction: "A blink should change the eyes, not redraw the character. Starting with a native face crop, this workflow draws independent eye and mouth states, aligns them, and returns reusable patches. The surrounding pixels and original alpha stay intact.",
     stages: [
@@ -155,6 +174,7 @@ export function assetExample(slug: Workflow["slug"], base: string): { language: 
   if (slug === "world") return { language: "JavaScript", code: `const base = "${base}";\nconst response = await fetch(base + "/manifest.json");\nconst world = await response.json();\n\nfor (const item of world.entities) {\n  const image = new Image();\n  image.src = base + "/" + item.image;\n  image.alt = item.entity.display_name;\n  document.body.append(image);\n}` };
   if (slug === "parallax") return { language: "JavaScript", code: `const base = "${base}";\nconst scene = await fetch(base + "/manifest.json")\n  .then((response) => response.json());\n\n// In your renderer, each layer moves at its own rate.\nfor (const layer of scene.layers) {\n  const image = new Image();\n  image.src = base + "/" + layer.file;\n  const x = -cameraX * layer.parallax;\n  // Repeat the decoded image horizontally at x.\n}` };
   if (slug === "portrait-motion") return { language: "JavaScript", code: `const base = "${base}";\nconst face = await fetch(base + "/assets/face-manifest.json")\n  .then((response) => response.json());\n\nconst [x, y] = face.offset_xy;\nconst closedEyes = face.patches.filter((patch) =>\n  patch.state_id === "eyes_closed");\n\n// At (x, y), replace RGB only where patch alpha is 255.\n// Preserve the source frame's alpha; do not blend twice.\n// Start from the canonical frame for each selection.` };
+  if (slug === "pet") return { language: "JavaScript", code: `const base = "${base}";\nconst sprite = await fetch(base + "/assets/sprite.json")\n  .then((response) => response.json());\nconst sheet = new Image();\nsheet.src = base + "/assets/spritesheet.webp";\nawait sheet.decode();\n\n// One frame of a state; hold it for durations_ms[frame].\nconst { width, height } = sprite.cell;\nconst row = sprite.rows.find((item) => item.state === "waving");\nctx.drawImage(sheet, frame * width, row.row * height,\n  width, height, x, y, width, height);` };
   if (slug === "terrain") return { language: "JavaScript", code: `const base = "${base}";\nconst sheet = await fetch(base + "/assets/lookup.json")\n  .then((response) => response.json());\n\n// Bits: NW, N, NE, W, center, E, SW, S, SE.\nconst [column, row] = sheet.lookup["111111111"];\nconst cell = 120;\nctx.drawImage(atlas, column * cell, row * cell,\n  cell, cell, x, y, cell, cell);` };
   return { language: "JavaScript", code: `const base = "${base}";\nconst panel = await fetch(\n  base + "/assets/panel_frame_validation.json"\n).then((response) => response.json());\n\n// Use the measured geometry, not guessed border sizes.\nconsole.log(panel.cells, panel.insets);\nconsole.log(panel.band_fill, panel.draw_scale);\n// Draw fixed corners; fill the edges and center\n// according to the recorded rules.` };
 }

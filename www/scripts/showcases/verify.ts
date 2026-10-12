@@ -1,6 +1,6 @@
 import { parseRunExport } from "@grida/fx-web";
 import { basename, dirname, join, resolve } from "node:path";
-import { auditPortableMetadata, demoContracts, parseDemo, parseFace, parseLock, parseRelease, parseSheet, parseTerrainLookup, safePath, type FileRef, type ShowcaseSlug } from "../../src/lib/showcases/contracts";
+import { auditPortableMetadata, demoContracts, parseDemo, parseFace, parseLock, parseRelease, parseSheet, parseSpriteLayout, parseTerrainLookup, safePath, type FileRef, type ShowcaseSlug } from "../../src/lib/showcases/contracts";
 import { workflowDetails } from "../../src/lib/workflow-details";
 import { buildFiles, confinedBuildFile, confinedFile, contentRoot, deliveryRoot, jsonBytes, plainWrite as writeFile, sha256, verifiedFile, wwwRoot } from "./io";
 
@@ -8,14 +8,17 @@ function parseMetadata(path: string, value: unknown) {
   if (path.endsWith("face-manifest.json")) parseFace(value);
   else if (path.endsWith("lookup.json")) parseTerrainLookup(value);
   else if (path.endsWith("_validation.json")) parseSheet(value);
+  else if (path.endsWith("sprite.json")) parseSpriteLayout(value);
 }
-export async function verifyShowcases(options: { content?: string; delivery?: string; requireRecordings?: boolean; previousDemo?: ShowcaseSlug } = {}) {
+export async function verifyShowcases(options: { content?: string; delivery?: string; requireRecordings?: boolean; previousDemo?: ShowcaseSlug; addedDemo?: ShowcaseSlug } = {}) {
   const content = options.content ?? contentRoot;
   const lockBytes = await confinedFile(content, "lock.json"), lock = parseLock(JSON.parse(lockBytes.toString()));
   const releaseBytes = await confinedFile(content, lock.release.fixture);
   if (sha256(releaseBytes) !== lock.release.sha256) throw new Error("Frozen release manifest changed.");
   const release = parseRelease(JSON.parse(releaseBytes.toString()));
-  if (Object.keys(lock.workflows).sort().join() !== Object.keys(demoContracts).sort().join() || Object.keys(release.demos).sort().join() !== Object.keys(demoContracts).sort().join()) throw new Error("The catalog must cover all seven showcase adapters.");
+  // Only a showcase being added may be missing, and only from a catalog about to receive it.
+  const adapters = Object.keys(demoContracts).filter(slug => slug !== options.addedDemo || slug in lock.workflows).sort().join();
+  if (Object.keys(lock.workflows).sort().join() !== adapters || Object.keys(release.demos).sort().join() !== adapters) throw new Error("The catalog must cover every showcase adapter.");
   let metadataCount = 0, recordingsCount = 0;
   const allFiles: FileRef[] = release.files.map(file => ({ ...file, path: `showcases/${lock.release.sha256}/${file.path}` }));
   allFiles.push({ path: lock.release.path, sha256: lock.release.sha256, bytes: releaseBytes.byteLength, media_type: "application/json" });

@@ -4,6 +4,7 @@ import terrainCover from "../../../content/showcases/recordings/9e7658de4aa6d43d
 import portraitAnimation from "../../../content/showcases/recordings/b35ef1984d95307e9bb16741640d5df33d7786a52fa7933d23502072347cabc1.json";
 import namiRigCover from "../../../content/showcases/recordings/ebf0befefd7d408fe27c07c942850e9d4c036158a6472a9a26f93824531b6aab.json";
 import namiSprite from "../../../content/showcases/recordings/c1ac112e0ea3c2800db925dafe671dda01538f45bc981235b203a0b73bb251c0.json";
+import coralReel from "../../../content/showcases/recordings/2d2d37fc6940c7063dac776e6968ace48e83eff51ff7b7a9d8640599aaaf5c96.json";
 import { deliveryUrl, showcaseLock, workflowAssetPath } from "./catalog";
 import { object, text, type ShowcaseLock, type ShowcaseSlug } from "./contracts";
 
@@ -26,6 +27,7 @@ const outputCovers: Partial<Record<ShowcaseSlug, OutputCover>> = {
   "movie-sprite": { kind: "animated_image", recording: "nami-sprite-03", image: "cover", fit: "cover", position: "center" },
   "character-3d": { kind: "video", recording: "nami-rig-cover-02", video: "cover_video", poster: "cover", fit: "cover", position: "center" },
   "portrait-motion": { kind: "animated_image", recording: "nami-face-01", image: "animation", fit: "cover", position: "center" },
+  pet: { kind: "video", recording: "coral-reel-01", video: "video", poster: "poster" },
 };
 
 const documents: Record<string, unknown> = {
@@ -34,6 +36,7 @@ const documents: Record<string, unknown> = {
   "recordings/abe44ccedb750bf05633886c052545079f97aee6e83f7161b2611295e4249d3d.json": parallaxPreview,
   "recordings/9e7658de4aa6d43d8774a7d5ab76b3ea8c29f883a1acab2be7fdab29765f32ca.json": terrainCover,
   "recordings/b35ef1984d95307e9bb16741640d5df33d7786a52fa7933d23502072347cabc1.json": portraitAnimation,
+  "recordings/2d2d37fc6940c7063dac776e6968ace48e83eff51ff7b7a9d8640599aaaf5c96.json": coralReel,
 };
 const videoTypes = new Set(["video/mp4", "video/webm"]);
 const imageTypes = new Set(["image/png", "image/jpeg", "image/webp", "image/avif"]);

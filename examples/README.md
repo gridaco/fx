@@ -8,7 +8,7 @@ source stays in Git, while generated artwork and saved runs stay outside it.
 |---|---|---|
 | [hello](hello/) | custom nodes, local steps, a judge, keyed repeats, result collections and cache | entirely offline at $0 |
 | [image-recolor](image-recolor/) | image inputs, algorithmic recoloring, delays and live run viewing | entirely offline at $0 |
-| [pet](pet/) | an animated sprite from a description or a picture: one picture first, a strip per state drawn from it, a judge that counts poses, cells cut at one scale, a Codex app pet | drawing on your own Codex at $0, with no key, from reference pictures; a stand-in runs it all offline |
+| [pet](pet/) | an animated sprite from a description or a picture: one picture first, a strip per state drawn from it, a judge that counts poses, cells cut at one scale, a Codex app pet, and a reel of it as video | drawing on your own Codex at $0, with no key, from reference pictures; a stand-in runs it all offline; the reel renders locally at $0 with FFmpeg |
 | [looping-parallax](looping-parallax/) | reusable repeating layers and the website's complete concept-to-parallax graph | mirrored layers offline; separation and seam repainting paid; optional video uses FFmpeg |
 | [world](world/) | synopsis, poster and direction into reviewed illustrated entities | free preparation offline; structured proposals and illustrations paid |
 | [movie-sprite](movie-sprite/) | an image into a video take, then transparent loop finishing | generation paid; downloaded or supplied footage finishes locally at $0 with FFmpeg |
@@ -58,7 +58,7 @@ Small fixture pictures are deterministic shapes drawn by
 uv run --project python python examples/draw_placeholders.py
 ```
 
-The seven website showcase projects include their workflow declarations, private helper
+The eight website showcase projects include their workflow declarations, private helper
 code, prompts, schemas and authored settings. Generated reference images and the original
 movie take are optional public CDN downloads, pinned by SHA-256 and byte size. For example:
 
@@ -87,9 +87,9 @@ Paid calls are refused at $0; hello also proves cache reuse. The complete parall
 plans and refuses its paid calls using synthesized input.
 
 [`tools/check_showcase_examples.py`](../tools/check_showcase_examples.py) checks the other
-six website projects with synthesized inputs, without CDN access, provider keys or dotenv
+seven website projects with synthesized inputs, without CDN access, provider keys or dotenv
 loading. It plans the actual graphs, checks paid-call refusal, finishes a synthetic movie,
-and exercises both portrait branches with stand-ins. The 3D graph always plans; actual local
+exercises both portrait branches with stand-ins, and renders a stand-in pet's reel. The 3D graph always plans; actual local
 normalization requires Blender and is separately documented in that example.
 
 For these larger examples, install FFmpeg and the example-only processing dependencies

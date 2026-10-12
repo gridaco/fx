@@ -5,7 +5,7 @@ import { workflows } from "../../lib/workflows";
 import { workflowCover } from "../../lib/showcases/covers";
 import { WorkflowCover } from "../../components/showcases/workflow-cover";
 
-const description = "Explore reusable Grida FX workflows for parallax backgrounds, illustrated storyworlds, transparent sprite loops, facial patches, rigged 3D characters, 47-tile terrain atlases, and nine-slice UI kits.";
+const description = "Explore reusable Grida FX workflows for parallax backgrounds, illustrated storyworlds, transparent sprite loops, animated pets, facial patches, rigged 3D characters, 47-tile terrain atlases, and nine-slice UI kits.";
 
 export const metadata = pageMetadata("Workflows — Grida FX — Grida", description, "workflows");
 

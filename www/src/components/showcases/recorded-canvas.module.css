@@ -7,7 +7,7 @@
 .recordingBar label { display: flex; align-items: center; gap: 8px; }
 .recordingBar select { border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-background); padding: 5px 8px; color: var(--color-foreground); font: inherit; }
 .recordingBar > :last-child { color: var(--color-muted-foreground); }
-.workspace { position: relative; height: clamp(440px, 70vh, 840px); overflow: hidden; border: 1px solid var(--color-border); border-radius: 10px; }
+.workspace { position: relative; height: clamp(440px, 70vh, 840px); overflow: hidden; border-block: 1px solid var(--color-border); }
 .canvas { position: absolute; inset: 0; }
 .breadcrumbs { position: absolute; top: 12px; left: 12px; display: flex; align-items: center; max-width: calc(100% - 24px); gap: 7px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-background); padding: 8px 10px; font-size: 12px; }
 .breadcrumbs button { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }

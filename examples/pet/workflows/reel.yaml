@@ -1,0 +1,20 @@
+fx: workflow/v1
+id: reel
+title: Pet reel
+description: >-
+  A finished pet acting out its states as a short video that loops, with a still poster: drawn
+  from its sprite sheet and sprite.json on this machine with FFmpeg. Nothing is drawn again, and
+  it costs nothing.
+
+inputs:
+  spritesheet: { type: file, kind: image, description: "The pet's sprite sheet: spritesheet.webp" }
+  layout:      { type: file, kind: json, description: "Its sprite.json: the rows, their frame counts and timings" }
+
+steps:
+  reel:                                     # the pet idles, waves, runs, looks around and waits
+    uses: ./nodes/reel.py#reel
+    with: { sheet: "${{ inputs.spritesheet }}", layout: "${{ inputs.layout }}" }
+
+outputs:
+  video:  ${{ steps.reel.outputs.video }}
+  poster: ${{ steps.reel.outputs.poster }}

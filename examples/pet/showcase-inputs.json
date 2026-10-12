@@ -1,0 +1,29 @@
+{
+  "schema": "fx_showcase_inputs_v1",
+  "delivery_base": "https://grida-fx-showcase-spike-20261011.t3.tigrisfiles.io",
+  "inputs": [
+    {
+      "filename": "coral.png",
+      "path": "showcases/412d71164da3e787e38babfa4d99c0497cac942bf796847b3ce6608a4c8c1835/pet/assets/reference.png",
+      "sha256": "9f52aa91c6d6d0d6203e79c3c279b98aaf1c16a257b28165de15492b4a1147b3",
+      "bytes": 689994
+    },
+    {
+      "filename": "coral-spritesheet.webp",
+      "path": "runs/43e0b7d37da5d6cc9516ccac242331a7735c5893b7282e55034baf6e5b3f8f6d/artifacts/31493d56d5f5a4f2803c8a63358aa80658339a9f60f74366f54fe2bacdc82dc1.webp",
+      "sha256": "31493d56d5f5a4f2803c8a63358aa80658339a9f60f74366f54fe2bacdc82dc1",
+      "bytes": 1628976
+    },
+    {
+      "filename": "coral-sprite.json",
+      "path": "showcases/412d71164da3e787e38babfa4d99c0497cac942bf796847b3ce6608a4c8c1835/pet/assets/sprite.json",
+      "sha256": "12f9b643e18de3a28e0febc83bc745d6772b3bd7c870628613346d0bf5fd851f",
+      "bytes": 1370
+    }
+  ],
+  "origin": {
+    "kind": "ai_generated",
+    "description": "Coral's reference picture, generated from a text prompt, and the sprite sheet recorded from it for the FX website.",
+    "publication": "Published with the FX website's pet showcase; this manifest grants no additional media license."
+  }
+}

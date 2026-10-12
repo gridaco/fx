@@ -1,9 +1,9 @@
 {
   "kind": "fx-showcase-lock-v1",
   "release": {
-    "sha256": "f14d5307043afcd04a0f290ce636442e584b9d6b8e1c11b2aa845ecb450b08de",
-    "path": "showcases/f14d5307043afcd04a0f290ce636442e584b9d6b8e1c11b2aa845ecb450b08de/manifest.json",
-    "fixture": "manifests/f14d5307043afcd04a0f290ce636442e584b9d6b8e1c11b2aa845ecb450b08de.json"
+    "sha256": "412d71164da3e787e38babfa4d99c0497cac942bf796847b3ce6608a4c8c1835",
+    "path": "showcases/412d71164da3e787e38babfa4d99c0497cac942bf796847b3ce6608a4c8c1835/manifest.json",
+    "fixture": "manifests/412d71164da3e787e38babfa4d99c0497cac942bf796847b3ce6608a4c8c1835.json"
   },
   "workflows": {
     "character-3d": {
@@ -447,6 +447,49 @@
           "path": "runs/f001ecba4a5858fd8624c092d2a3a301def41293154c6dcafece6300840e7ff5/manifest.json",
           "sha256": "f001ecba4a5858fd8624c092d2a3a301def41293154c6dcafece6300840e7ff5",
           "fixture": "recordings/f001ecba4a5858fd8624c092d2a3a301def41293154c6dcafece6300840e7ff5.json"
+        }
+      ]
+    },
+    "pet": {
+      "demo": {
+        "contract": "pet-demo-v1",
+        "manifest": {
+          "path": "pet/manifest.json",
+          "sha256": "07e565d788c914998727b99ce50f555f0261f8d701f64eed5e33697f89c89568",
+          "bytes": 213,
+          "media_type": "application/json"
+        },
+        "metadata": [
+          {
+            "path": "pet/assets/pet.json",
+            "sha256": "6a9bd8a7a522b3f3f54211da84fd4e5e24b3af9a8454603f4e1a611db0071d4d",
+            "bytes": 168,
+            "media_type": "application/json"
+          },
+          {
+            "path": "pet/assets/sprite.json",
+            "sha256": "12f9b643e18de3a28e0febc83bc745d6772b3bd7c870628613346d0bf5fd851f",
+            "bytes": 1370,
+            "media_type": "application/json"
+          }
+        ]
+      },
+      "recordings": [
+        {
+          "id": "coral-01",
+          "label": "Sheet drawn from one picture",
+          "kind": "fx-run-export-v1",
+          "path": "runs/43e0b7d37da5d6cc9516ccac242331a7735c5893b7282e55034baf6e5b3f8f6d/manifest.json",
+          "sha256": "43e0b7d37da5d6cc9516ccac242331a7735c5893b7282e55034baf6e5b3f8f6d",
+          "fixture": "recordings/43e0b7d37da5d6cc9516ccac242331a7735c5893b7282e55034baf6e5b3f8f6d.json"
+        },
+        {
+          "id": "coral-reel-01",
+          "label": "Reel cover rendered from the sheet",
+          "kind": "fx-run-export-v1",
+          "path": "runs/2d2d37fc6940c7063dac776e6968ace48e83eff51ff7b7a9d8640599aaaf5c96/manifest.json",
+          "sha256": "2d2d37fc6940c7063dac776e6968ace48e83eff51ff7b7a9d8640599aaaf5c96",
+          "fixture": "recordings/2d2d37fc6940c7063dac776e6968ace48e83eff51ff7b7a9d8640599aaaf5c96.json"
         }
       ]
     }

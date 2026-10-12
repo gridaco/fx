@@ -2,7 +2,7 @@
 export const demoContracts = {
   parallax: "parallax-demo-v1", world: "world-demo-v1", "movie-sprite": "movie-sprite-demo-v1",
   "portrait-motion": "portrait-motion-demo-v1", "character-3d": "character-3d-demo-v1",
-  terrain: "terrain-demo-v1", "ui-kit": "ui-kit-demo-v1",
+  terrain: "terrain-demo-v1", "ui-kit": "ui-kit-demo-v1", pet: "pet-demo-v1",
 } as const;
 export type ShowcaseSlug = keyof typeof demoContracts;
 export const uiGlyphs = ["play", "pause", "close", "menu", "gear", "home", "retry", "check", "search", "hand", "heart", "star", "arrow_left", "arrow_right", "sound_on", "sound_off"] as const;
@@ -12,6 +12,7 @@ export const demoResourceFiles = {
   "portrait-motion": ["assets/face-manifest.json", "assets/canonical.png", "assets/animation.webp"],
   terrain: ["assets/lookup.json", "assets/atlas.png"],
   "ui-kit": ["assets/panel_frame.png", "assets/panel_frame_validation.json", "assets/button_rect.png", "assets/button_rect_validation.json", "assets/preview_icons.png", "assets/preview_icons_validation.json", "assets/meadow.png"],
+  pet: ["assets/spritesheet.webp", "assets/sprite.json", "assets/base.png", "assets/reference.png"],
 } as const;
 export type FileRef = { path: string; sha256: string; bytes: number; media_type: string };
 export type RecordingRef = { id: string; label: string; kind: "fx-run-export-v1"; path: string; sha256: string; fixture: string };
@@ -195,11 +196,34 @@ export function parseTerrainLookup(value: unknown): { kind: "terrain-lookup-v1";
   if (new Set(Object.values(lookup).map(pair => pair.join(","))).size !== 47) throw new Error("Terrain cells must be distinct.");
   return { kind: "terrain-lookup-v1", lookup };
 }
+export type SpriteLayout = { cell: { width: number; height: number }; columns: number; rows: { state: string; row: number; frames: number; durations_ms: number[] }[] };
+/** The sprite.json a pet run writes: equal cells, one row per state, in order. */
+export function parseSpriteLayout(value: unknown): SpriteLayout {
+  const data = object(value), cell = object(data.cell);
+  const width = integer(cell.width, "cell width", 1), height = integer(cell.height, "cell height", 1), columns = integer(data.columns, "columns", 1);
+  const rows = list(data.rows, "rows").map((value, index) => {
+    const item = object(value), frames = integer(item.frames, "frames", 1);
+    const durations_ms = list(item.durations_ms, "durations").map(value => integer(value, "duration", 1));
+    if (integer(item.row, "row") !== index || frames > columns || (durations_ms.length && durations_ms.length !== frames)) throw new Error("Invalid sprite row.");
+    return { state: text(item.state, "state"), row: index, frames, durations_ms };
+  });
+  if (!rows.length || new Set(rows.map(item => item.state)).size !== rows.length) throw new Error("Sprite states must be unique.");
+  return { cell: { width, height }, columns, rows };
+}
+export type PetDemo = { kind: "pet-demo-v1"; resources: string[]; mirrors: Record<string, string> };
+export function parsePetDemo(value: unknown): PetDemo {
+  const data = object(value); kind(data, "pet-demo-v1");
+  const resources = list(data.resources, "demo resources").map(safePath);
+  if (!demoResourceFiles.pet.every(path => resources.includes(path))) throw new Error("Incomplete demo resources.");
+  const mirrors = Object.fromEntries(Object.entries(object(data.mirrors, "mirrors")).map(([state, source]) => [state, text(source, "mirrored state")]));
+  return { kind: "pet-demo-v1", resources, mirrors };
+}
 /** Validates every format consumed by a bespoke demo, and returns its required relative resources. */
 export function parseDemo(slug: ShowcaseSlug, value: unknown): string[] {
   if (slug === "parallax") return parseParallax(value).layers.map(item => item.file);
   if (slug === "world") return parseWorld(value).entities.map(item => item.image);
   if (slug === "character-3d") { const data = parseCharacter(value); return [...[...data.models, ...data.images].map(item => item.url), ...characterRuntimeFiles]; }
+  if (slug === "pet") return parsePetDemo(value).resources;
   const data = object(value); kind(data, demoContracts[slug]);
   const resources = list(data.resources, "demo resources").map(safePath);
   if (!demoResourceFiles[slug].every(path => resources.includes(path))) throw new Error("Incomplete demo resources.");

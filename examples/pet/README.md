@@ -14,10 +14,15 @@ Codex app's own pets: nine states of up to eight 192 x 208 frames.
 pet/
   fx.yaml                  # every picture on imagegen@codex
   workflows/pet.yaml       # the whole flow, and Codex's nine states as a table
+  workflows/reel.yaml      # a finished pet acting out its states, as a video that loops
   prompts/base.md          # the one picture every state is drawn from
   prompts/row.md           # one strip of poses
   nodes/sprite.py          # find and count poses, cut a row, lay out the sheet, play a preview
+  nodes/reel.py            # the reel: the sheet played on a backdrop, encoded with FFmpeg
   inputs/pebble.yaml       # one pet
+  inputs/coral.yaml        # the website's octopus, from a picture
+  inputs/coral-reel.yaml   # its recorded sheet, for the reel
+  showcase-inputs.json     # where to download the website's picture and sheet
   stand_in.py              # answers the drawing offline, for trying it without Codex
   pyproject.toml           # the Python SDK, which the nodes use (with Pillow)
 ```
@@ -160,6 +165,34 @@ states:
 5. **`sheet`** stacks the rows in the order of the states, flips mirrored ones frame by frame, and
    writes a lossless WebP; **`preview`** plays each row at its own timing; **`pack`** lays the
    pet out as one folder.
+
+## A reel of your pet
+
+After a run, play the pet's states as a short video that loops, with a poster frame:
+
+```bash
+grida fx run reel --spritesheet runs/pet/<run>/outputs/spritesheet.webp \
+  --layout runs/pet/<run>/outputs/layout.json
+```
+
+It needs FFmpeg on PATH, draws nothing and costs nothing. With Codex's nine states the pet
+idles, waves, runs right, looks things over, runs left, waits and runs back to where it began.
+The jump is left out: its row is drawn smaller, so the whole jump fits a cell. Other states each
+play in place. `outputs/` has `video.mp4` (960 x 600, 30 fps) and `poster.webp`.
+
+## The website's octopus
+
+The [FX website](https://grida.co/fx/workflows/pet) shows Coral, drawn from
+`inputs/coral.yaml`. Its reference picture, itself generated from a text prompt, and the recorded
+sheet are public downloads:
+
+```bash
+python ../fetch_showcase_inputs.py .
+grida fx run reel --inputs inputs/coral-reel.yaml           # the website's cover, at $0
+grida fx run pet --inputs inputs/coral.yaml --live          # a new take of Coral
+```
+
+A new take draws new strips, so it differs from the recorded sheet.
 
 ## Next to Codex's own pet skill
 

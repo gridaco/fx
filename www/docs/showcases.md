@@ -36,6 +36,7 @@ private node helpers, prompts, schemas and authored settings:
 | Parallax | [`examples/looping-parallax/`](../../examples/looping-parallax/), `workflows/meadow.yaml` |
 | World | [`examples/world/`](../../examples/world/), `workflow.yaml` |
 | Movie sprite | [`examples/movie-sprite/`](../../examples/movie-sprite/), `workflow.yaml` |
+| Pet | [`examples/pet/`](../../examples/pet/), `workflows/pet.yaml`; cover from `workflows/reel.yaml` |
 | Portrait motion | [`examples/portrait-motion/`](../../examples/portrait-motion/), `workflow.yaml` |
 | 3D character | [`examples/character-3d/`](../../examples/character-3d/), `workflow.yaml`; independent `source-artwork/` |
 | Terrain | [`examples/terrain/`](../../examples/terrain/), `workflow.py:build` |
@@ -143,6 +144,14 @@ The portrait cover selects the native animated WebP from `nami-face-01`'s
 The published static cover is its native `picture` reduced-motion fallback.
 The image loads lazily; unlike videos, an animated WebP cannot pause offscreen.
 This selection reuses existing reviewed media and needs no new generation.
+
+The pet cover is a separate free run of the pet example's `reel` workflow on the
+recorded sheet and `sprite.json`. It plays the states on the previews' backdrop and encodes a
+960x600 MP4 with its first frame as a WebP poster. `coral-reel-01` selects its `video` and
+`poster` outputs. The jump is left out because its row is drawn smaller to fit the jump in a
+cell; the page's player shows every row as recorded. The recorded run, `coral-01`, keeps its
+generated strips and pose counts. Its reference picture and `sprite.json` are in the demo
+bundle, because exports carry neither input pictures nor JSON.
 
 After separately reviewing a new exported recording and any added media, append
 it without rebuilding or replacing the approved media release:

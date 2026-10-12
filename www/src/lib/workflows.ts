@@ -10,6 +10,14 @@ export const workflows = [
     note: "The middle layer uses mirrored extension, so some landmarks repeat.",
   },
   {
+    slug: "pet",
+    title: "Pet",
+    description: "An animated pet from one picture: every state drawn from it, its poses counted and cut into equal cells on one sprite sheet.",
+    input: "Character picture and description",
+    output: "Nine-state sprite sheet",
+    note: "Every strip passed its pose count on the first take. The jumping row is drawn about 8% smaller so the whole jump fits its cell. Waving and the busy state are subtle, the runs read as a bouncy scoot, and the failed loop starts and ends on a smile. The reference was itself generated from a text prompt.",
+  },
+  {
     slug: "world",
     title: "Illustrated storyworld",
     description: "Expand a synopsis and reference image into structured entities and individually reviewed illustrations.",
