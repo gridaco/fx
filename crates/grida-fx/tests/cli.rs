@@ -207,16 +207,17 @@ fn integrated_nodes_lists_every_built_in() {
     assert_eq!(status(&output), 0, "{}", stderr(&output));
     let text = stdout(&output);
     let lines: Vec<&str> = text.lines().collect();
-    assert_eq!(lines.len(), 37, "{text}");
+    assert_eq!(lines.len(), 38, "{text}");
     assert_eq!(lines[0], format!("{:34} free", "fx/annotations.filter@1"));
-    assert_eq!(lines[36], format!("{:34} judge", "fx/vision.review@1"));
+    assert_eq!(lines[37], format!("{:34} judge", "fx/vision.review@1"));
+    assert!(lines.contains(&format!("{:34} paid", "fx/video.motion_transfer@1").as_str()));
     let kinds = |kind: &str| {
         lines
             .iter()
             .filter(|l| l.ends_with(&format!(" {kind}")))
             .count()
     };
-    assert_eq!((kinds("paid"), kinds("judge"), kinds("free")), (11, 5, 21));
+    assert_eq!((kinds("paid"), kinds("judge"), kinds("free")), (12, 5, 21));
     let mut sorted = lines.clone();
     sorted.sort();
     assert_eq!(sorted, lines, "sorted by name");
@@ -332,7 +333,7 @@ fn integrated_doctor_without_a_target() {
     let text = stdout(&output);
     let lines: Vec<&str> = text.lines().collect();
     // engine, python, a key per provider, a route per built-in route.
-    assert_eq!(lines.len(), 2 + 6 + 27, "{text}");
+    assert_eq!(lines.len(), 2 + 6 + 30, "{text}");
     assert_eq!(
         lines[0],
         format!("engine    grida-fx {}", env!("CARGO_PKG_VERSION"))
@@ -457,7 +458,7 @@ fn integrated_doctor_lists_the_projects_routes() {
             ],
             "{argv:?}"
         );
-        assert_eq!(text.lines().filter(|l| l.starts_with("route ")).count(), 28);
+        assert_eq!(text.lines().filter(|l| l.starts_with("route ")).count(), 31);
     }
 }
 

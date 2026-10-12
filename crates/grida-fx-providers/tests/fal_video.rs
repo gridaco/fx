@@ -618,7 +618,7 @@ fn a_failed_job_ends_with_its_cut_error() {
     ]));
     assert_eq!(
         ended(collect(&transport, &clock, &call(json!({})))),
-        r#"fal video job failed: {"message":"x"}"#
+        "fal video job failed: {[redacted]:[redacted]}"
     );
 }
 

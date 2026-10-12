@@ -1159,7 +1159,7 @@ def test_check_spec_feature_vocabulary_agrees_with_the_spec(
 ) -> None:
     check_spec, _, _ = vocabulary
     assert _check_vocabulary(check_spec) == 0, capsys.readouterr().out
-    assert "11 capabilities and 4 renamed features agree" in capsys.readouterr().out
+    assert "12 capabilities and 4 renamed features agree" in capsys.readouterr().out
 
 
 def _drop_pbr(table: dict[str, Any]) -> None:

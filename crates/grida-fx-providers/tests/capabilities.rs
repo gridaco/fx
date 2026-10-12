@@ -20,7 +20,7 @@ use std::sync::Arc;
 const WITHOUT_ADAPTER: [&str; 3] = ["structured.review", "vision.annotate", "vision.review"];
 
 /// Each capability's section of spec/capabilities.md. Adapters cite these numbers.
-const SECTIONS: [(u32, &str); 11] = [
+const SECTIONS: [(u32, &str); 12] = [
     (2, "image.generate"),
     (3, "image.edit"),
     (4, "structured.generate"),
@@ -32,6 +32,7 @@ const SECTIONS: [(u32, &str); 11] = [
     (10, "sound.generate"),
     (11, "speech.generate"),
     (12, "background.remove"),
+    (15, "video.motion_transfer"),
 ];
 
 const ALL_TYPES: [MemberType; 10] = [

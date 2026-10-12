@@ -236,6 +236,63 @@ fn strings(values: &[&str]) -> Val {
     Val::List(values.iter().map(|v| Val::Str((*v).into())).collect())
 }
 
+#[test]
+fn used_workflow_outputs_preserve_downstream_judge_evidence() {
+    let case = Case::new(&[
+        (
+            "main",
+            r#"
+fx: workflow/v1
+id: main
+title: Main
+steps:
+  nested: { uses: ./workflows/child.yaml }
+  consume:
+    uses: ./nodes/cases.py#consume
+    with: { value: "${{ steps.nested.outputs.video }}" }
+"#,
+        ),
+        (
+            "child",
+            r#"
+fx: workflow/v1
+id: child
+title: Child
+steps:
+  produce: { uses: ./nodes/cases.py#shout, with: { text: x } }
+  evidence:
+    uses: ./nodes/cases.py#join
+    with: { parts: { item: "${{ steps.produce.outputs.text }}" } }
+  review:
+    uses: ./nodes/cases.py#verdict
+    judges: produce
+    with: { subject: "${{ steps.evidence.outputs.text }}", accept_take: 1 }
+outputs:
+  video: "${{ steps.evidence.outputs.text }}"
+"#,
+        ),
+    ]);
+    let expansion = case.expand("main");
+    assert!(
+        problems(&expansion).is_empty(),
+        "{:?}",
+        problems(&expansion)
+    );
+    assert_eq!(
+        instance(&expansion, "nested.produce#1").judged_by,
+        ["nested.review#1"]
+    );
+    assert_eq!(
+        instance(&expansion, "nested.review#1").judges.as_deref(),
+        Some("nested.produce#1")
+    );
+    assert!(
+        instance(&expansion, "consume#1")
+            .waiting_on()
+            .contains("nested.evidence#1")
+    );
+}
+
 mod port_wiring {
     use super::*;
 

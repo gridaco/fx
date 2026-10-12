@@ -426,7 +426,8 @@ fn parse_exchange(exchange: &Value, base: &Path) -> Result<Exchange, String> {
     let method = match text(request, "method")?.as_str() {
         "GET" => Method::Get,
         "POST" => Method::Post,
-        other => return Err(format!("method {other} is not GET or POST")),
+        "PUT" => Method::Put,
+        other => return Err(format!("method {other} is not GET, POST or PUT")),
     };
     let lane = match request
         .get("lane")

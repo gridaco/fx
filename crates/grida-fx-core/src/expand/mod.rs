@@ -19,8 +19,9 @@
 //! order, then a sweep of every group and used-workflow scope in the order they were registered
 //! (scopes registered during the sweep included), then the root outputs. A step expands once per
 //! scope, on demand: a reference expands what it names, so the listing order is a post-order
-//! walk driven by references. A plain step position is its condition, then its assertions, then
-//! a group, a used workflow or a node.
+//! walk driven by references. Reading a used workflow's outputs starts its members in
+//! declaration order, as a standalone workflow does. A plain step position is its condition,
+//! then its assertions, then a group, a used workflow or a node.
 //!
 //! FX decisions recorded here:
 //! - names: `fx/…`, `fx.yaml`, `grida-fx` in messages; key text of numbers is JCS (`2.0` → `2`);

@@ -782,3 +782,46 @@ routes:
   contract:
     adapter: fal-queue
     adapter_behavior: 1
+- capability: video.motion_transfer
+  route: fal-ai/kling-video/v2.6/pro/motion-control@fal
+  price:
+    low_usd: 0.112
+    high_usd: 0.14
+    unit: second
+    max_units: 30
+  features:
+  - motion_reference
+  - image_orientation
+  - original_sound
+  concurrency: 1
+  contract:
+    adapter: fal-motion-control
+    adapter_behavior: 1
+- capability: video.motion_transfer
+  route: fal-ai/kling-video/v3/pro/motion-control@fal
+  price:
+    low_usd: 0.168
+    high_usd: 0.21
+    unit: second
+    max_units: 30
+  features:
+  - motion_reference
+  - image_orientation
+  - original_sound
+  concurrency: 1
+  contract:
+    adapter: fal-motion-control
+    adapter_behavior: 1
+- capability: video.motion_transfer
+  route: fal-ai/wan-motion@fal
+  price:
+    low_usd: 0.06
+    high_usd: 0.075
+    unit: second
+    max_units: 10
+  features:
+  - motion_reference
+  concurrency: 1
+  contract:
+    adapter: fal-wan-motion
+    adapter_behavior: 1

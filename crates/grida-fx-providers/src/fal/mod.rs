@@ -1,10 +1,11 @@
-//! fal: `image.generate` and `image.edit` on the synchronous host, `video.generate` as a queue
-//! long job, and `background.remove` (spec/providers.md §9.3; spec/capabilities.md).
+//! fal: `image.generate` and `image.edit` on the synchronous host, `video.generate` and
+//! `video.motion_transfer` as queue long jobs, and `background.remove` (spec/providers.md §9.3; spec/capabilities.md).
 //!
 //! Credential `authorization: Key <FAL_KEY>`, attached only to requests to the run host
-//! (`FAL_BASE_URL`, default `https://fal.run`) and the queue host (`https://queue.fal.run`), never
-//! to a result download. Pictures go inline as data URLs under their own `image/*` kind (no
-//! multipart, no uploads); a file of another kind is refused before sending. Every adapter
+//! (`FAL_BASE_URL`, default `https://fal.run`), the queue host (`https://queue.fal.run`) and
+//! storage initiation (`https://rest.fal.ai`), never to signed uploads or result downloads.
+//! Pictures go inline as data URLs under their own `image/*` kind. Motion source MP4s use one
+//! bounded storage upload before the paid submit; every other file kind is refused. Every adapter
 //! first refuses a route whose `contract.adapter` is present and is not its own (§9.3), since the
 //! registry is keyed by provider, not model.
 //!
@@ -16,6 +17,7 @@
 pub mod background;
 pub mod image;
 mod output;
+mod storage;
 pub mod video;
 
 use crate::adapter::{Adapter, CallRequest, Sent, Submitted};
@@ -74,7 +76,7 @@ impl FalClients {
     }
 }
 
-/// Registers fal's four adapters on provider `fal`.
+/// Registers fal's image, video, motion-transfer and background adapters on provider `fal`.
 pub fn register(adapters: &mut Adapters, setup: &Setup) {
     let clients = FalClients::new(setup);
     let images = Arc::new(image::FalImages::new(clients.clone()));
@@ -84,6 +86,14 @@ pub fn register(adapters: &mut Adapters, setup: &Setup) {
         "video.generate",
         "fal",
         Adapter::Job(Arc::new(video::FalVideo::new(
+            clients.clone(),
+            Arc::clone(&setup.clock),
+        ))),
+    );
+    adapters.register(
+        "video.motion_transfer",
+        "fal",
+        Adapter::Job(Arc::new(video::FalVideo::motion_transfer(
             clients.clone(),
             Arc::clone(&setup.clock),
         ))),

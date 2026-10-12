@@ -418,3 +418,5 @@ this one as a step.
 - **The used workflow's steps become part of this run,** addressed through the step:
   `steps.icons['lantern'].outputs.icon`, or `icons['lantern'].draw` in paths.
 - **Its cache entries are shared** with standalone runs of it.
+- **Reading its outputs preserves its judge and evidence dependencies**, including reviews
+  that inspect a later processing step's output before accepting an earlier generated take.

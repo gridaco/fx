@@ -228,10 +228,10 @@ fn shaped_data(capability: &str, answer: &Answer, data: Value) -> Result<Value, 
             r#""advisory_override"}}"#
         )
         .into()),
-        "video.generate" | "mesh.generate" if !data.is_null() => Err(format!(
-            "{capability}'s data is taken from its file: answer null"
-        )),
-        "video.generate" => {
+        "video.generate" | "video.motion_transfer" | "mesh.generate" if !data.is_null() => Err(
+            format!("{capability}'s data is taken from its file: answer null"),
+        ),
+        "video.generate" | "video.motion_transfer" => {
             let clip = &answer.files["video"].bytes;
             let facts = ClipFacts::of_mp4(clip).map_err(|reason| {
                 format!("the answer's video is not a clip FX can read: {reason}")

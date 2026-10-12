@@ -22,7 +22,7 @@
 //! it to spec/capabilities.md and spec/providers.md §11.
 //!
 //! A capability step's own request (spec/capabilities.md §1): for `image.generate` and
-//! `image.edit`, the with-values imply features ([`implied_features`]), each one the route lacks
+//! `image.edit` and `video.motion_transfer`, the with-values imply features ([`implied_features`]), each one the route lacks
 //! refused at `<w>.with.<member>` as `{route} does not support {feature}` and left out of the
 //! `requires:` check; and a route's `max_input_pictures` refuses a known count of pictures above
 //! it at `<w>.with.references`: `{route} takes at most {n} input pictures, not {count}`.
@@ -78,13 +78,22 @@ fn implied_features(
     spec: &NodeSpec,
     with: &IndexMap<String, Val>,
 ) -> Vec<(&'static str, &'static str)> {
+    let mut implied = Vec::new();
+    if spec.capability.as_deref() == Some("video.motion_transfer") {
+        if matches!(with.get("orientation"), Some(Val::Str(value)) if value == "image") {
+            implied.push(("image_orientation", "orientation"));
+        }
+        if matches!(with.get("keep_original_sound"), Some(Val::Bool(true))) {
+            implied.push(("original_sound", "keep_original_sound"));
+        }
+        return implied;
+    }
     if !matches!(
         spec.capability.as_deref(),
         Some("image.generate" | "image.edit")
     ) {
-        return Vec::new();
+        return implied;
     }
-    let mut implied = Vec::new();
     if known_count(with.get("references")).is_some_and(|n| n > 0) {
         implied.push(("image_input", "references"));
     }
@@ -450,6 +459,72 @@ mod tests {
     }
 
     #[test]
+    fn motion_controls_require_route_features_before_spending() {
+        let mut declared = step("fx/video.motion_transfer@1");
+        declared.route = Some("motion-a@acme".into());
+        declared.requires = vec!["image_orientation".into(), "original_sound".into()];
+        let mut f = Fixture::new(&[("animate", declared.clone())]);
+        f.routes = routes(serde_json::json!([{
+            "capability": "video.motion_transfer", "route": "motion-a@acme",
+            "price": {"usd": 0.01}, "features": ["motion_reference"],
+        }]));
+        let spec = paid("video.motion_transfer", "video.motion_transfer");
+        let mut ex = f.expander();
+        ex.bind_routes(
+            &declared,
+            "animate",
+            &spec,
+            &IndexMap::from([
+                ("orientation".into(), Val::Str("image".into())),
+                ("keep_original_sound".into(), Val::Bool(true)),
+            ]),
+        );
+        assert_eq!(
+            ex.problems
+                .iter()
+                .map(|p| p.to_string())
+                .collect::<Vec<_>>(),
+            vec![
+                "animate.with.orientation: motion-a@acme does not support image_orientation",
+                "animate.with.keep_original_sound: motion-a@acme does not support original_sound",
+            ]
+        );
+        declared.requires.clear();
+        let mut f = Fixture::new(&[("animate", declared.clone())]);
+        f.routes = routes(serde_json::json!([{
+            "capability": "video.motion_transfer", "route": "motion-a@acme",
+            "price": {"usd": 0.01}, "features": ["motion_reference"],
+        }]));
+        let mut ex = f.expander();
+        for with in [
+            IndexMap::new(),
+            IndexMap::from([
+                ("orientation".into(), Val::Str("video".into())),
+                ("keep_original_sound".into(), Val::Bool(false)),
+            ]),
+        ] {
+            ex.bind_routes(&declared, "animate", &spec, &with);
+        }
+        assert!(ex.problems.is_empty(), "{:?}", ex.problems);
+        f.routes = routes(serde_json::json!([{
+            "capability": "video.motion_transfer", "route": "motion-a@acme",
+            "price": {"usd": 0.01},
+            "features": ["motion_reference", "image_orientation", "original_sound"],
+        }]));
+        let mut ex = f.expander();
+        ex.bind_routes(
+            &declared,
+            "animate",
+            &spec,
+            &IndexMap::from([
+                ("orientation".into(), Val::Str("image".into())),
+                ("keep_original_sound".into(), Val::Bool(true)),
+            ]),
+        );
+        assert!(ex.problems.is_empty(), "{:?}", ex.problems);
+    }
+
+    #[test]
     fn a_step_s_own_request_implies_features_and_counts_its_pictures() {
         let mut declared = step("fx/image.generate@1");
         declared.route = Some("img-a@acme".into());
@@ -651,7 +726,7 @@ mod tests {
     #[test]
     fn the_vocabulary_is_spec_capabilities_md() {
         let spec = spec_features();
-        assert_eq!(spec.len(), 11, "{spec:?}");
+        assert_eq!(spec.len(), 12, "{spec:?}");
         assert_eq!(vocabulary().capabilities, spec);
         assert_eq!(capability_features("vision.review"), None);
         assert_eq!(capability_features("music.generate"), Some(&[][..]));

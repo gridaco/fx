@@ -46,11 +46,12 @@ pub trait Transport: Send + Sync {
     ) -> BoxFuture<'a, Result<HttpResponse, TransportError>>;
 }
 
-/// The method of a request. Adapters use only these two.
+/// The method of one provider, storage upload or download exchange.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Method {
     Get,
     Post,
+    Put,
 }
 
 impl Method {
@@ -58,6 +59,7 @@ impl Method {
         match self {
             Method::Get => "GET",
             Method::Post => "POST",
+            Method::Put => "PUT",
         }
     }
 }

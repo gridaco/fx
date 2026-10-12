@@ -254,6 +254,24 @@ fn expected_routes() -> Vec<Expected> {
             json!({"adapter": "fal-queue", "adapter_behavior": 1}),
             ("0.03", "0.375"),
         ),
+        expected(
+            "video.motion_transfer",
+            "fal-ai/kling-video/v2.6/pro/motion-control@fal",
+            json!({"adapter": "fal-motion-control", "adapter_behavior": 1}),
+            ("0.112", "0.14"),
+        ),
+        expected(
+            "video.motion_transfer",
+            "fal-ai/kling-video/v3/pro/motion-control@fal",
+            json!({"adapter": "fal-motion-control", "adapter_behavior": 1}),
+            ("0.168", "0.21"),
+        ),
+        expected(
+            "video.motion_transfer",
+            "fal-ai/wan-motion@fal",
+            json!({"adapter":"fal-wan-motion","adapter_behavior":1}),
+            ("0.06", "0.075"),
+        ),
     ]
 }
 
@@ -314,6 +332,13 @@ const CONTRACTS: &[(&str, &str, &str, Option<&str>)] = &[
     ("image.edit", "codex", "fx-codex-image-v1", Some("\"2\"")),
     ("image.edit", "fal", "fx-fal-image-v1", None),
     ("video.generate", "fal", "fal-queue", None),
+    (
+        "video.motion_transfer",
+        "fal",
+        "fal-motion-control",
+        Some("1"),
+    ),
+    ("video.motion_transfer", "fal", "fal-wan-motion", Some("1")),
     ("background.remove", "fal", "fal-run-birefnet", None),
     ("mesh.generate", "tripo", "tripo-multiview", None),
     ("mesh.rig", "tripo", "tripo-rig", None),
@@ -348,13 +373,13 @@ fn read_spec(name: &str) -> String {
 }
 
 #[test]
-fn the_table_holds_27_routes_over_10_capabilities() {
+fn the_table_holds_30_routes_over_11_capabilities() {
     let table = table();
-    assert_eq!(table.entries.len(), 27);
+    assert_eq!(table.entries.len(), 30);
     let capabilities: BTreeSet<&str> = table.entries.keys().map(|(c, _)| c.as_str()).collect();
-    assert_eq!(capabilities.len(), 10);
+    assert_eq!(capabilities.len(), 11);
     assert!(
-        read_spec("providers.md").contains("It holds 27 routes over 10 capabilities."),
+        read_spec("providers.md").contains("It holds 30 routes over 11 capabilities."),
         "spec/providers.md §10 states the table's size"
     );
 }
@@ -424,8 +449,12 @@ fn every_contract_names_the_adapter_that_serves_its_route() {
     let providers_md = read_spec("providers.md");
     for route in table().entries.values() {
         let id = route.id();
-        let (adapter, behavior) = contract_for(&route.capability, &route.provider)
-            .unwrap_or_else(|| panic!("no adapter serves {} on {id}", route.capability));
+        let (adapter, behavior) = if id == "fal-ai/wan-motion@fal" {
+            (fal::video::WAN_MOTION_CONTRACT_ADAPTER, Some("1"))
+        } else {
+            contract_for(&route.capability, &route.provider)
+                .unwrap_or_else(|| panic!("no adapter serves {} on {id}", route.capability))
+        };
         assert_eq!(
             route.contract["adapter"],
             json!(adapter),
@@ -576,6 +605,22 @@ fn features_say_what_the_adapters_honour() {
         assert!(has("image.generate", id, "text_to_image"), "{id}");
         assert!(!has("image.edit", id, "text_to_image"), "{id}");
     }
+    for id in [
+        "fal-ai/kling-video/v2.6/pro/motion-control@fal",
+        "fal-ai/kling-video/v3/pro/motion-control@fal",
+    ] {
+        for feature in ["motion_reference", "image_orientation", "original_sound"] {
+            assert!(has("video.motion_transfer", id, feature), "{id} {feature}");
+        }
+    }
+    let wan = "fal-ai/wan-motion@fal";
+    assert!(has("video.motion_transfer", wan, "motion_reference"));
+    for feature in ["image_orientation", "original_sound"] {
+        assert!(
+            !has("video.motion_transfer", wan, feature),
+            "{wan} {feature}"
+        );
+    }
     // No route keeps a name spec/capabilities.md does not list (the predecessor's aliases).
     for alias in [
         "masked_edit",
@@ -651,7 +696,9 @@ fn pacing_is_declared_where_spec_providers_10_says() {
             route.capability
         );
         let concurrency = match (route.capability.as_str(), id.as_str()) {
-            ("mesh.generate" | "mesh.rig" | "video.generate", _) => Some(1),
+            ("mesh.generate" | "mesh.rig" | "video.generate" | "video.motion_transfer", _) => {
+                Some(1)
+            }
             // One Codex draws several images at once (spec/providers.md §10).
             ("image.generate" | "image.edit", "imagegen@codex") => Some(3),
             // GG keeps one unsettled GPT Image call per organization (spec/providers.md §10).
@@ -691,6 +738,19 @@ fn prices_and_tiers_parse() {
                 ],
             };
             assert_eq!(tiers, expected, "{}", route.id());
+        } else if route.capability == "video.motion_transfer" {
+            assert_eq!(price.unit, PriceUnit::Second);
+            assert!(price.tiers.is_empty() && price.by.is_none());
+            assert_eq!(
+                price.max_units,
+                Some(grida_fx_core::money::Units::whole(
+                    if route.model == "fal-ai/wan-motion" {
+                        10
+                    } else {
+                        30
+                    }
+                ))
+            );
         } else if route.provider == "codex" {
             // Free to FX (spec/providers.md §10).
             assert_eq!((price.low, price.high), (Usd::ZERO, Usd::ZERO));
@@ -913,7 +973,7 @@ fn the_video_route_prices_by_second_and_tier() {
 
 #[test]
 fn the_adapters_name_their_contracts_as_the_table_does() {
-    let constants: [(&str, &str, &str); 22] = [
+    let constants: [(&str, &str, &str); 23] = [
         ("image.generate", "gg", gg::image::ADAPTER),
         ("image.edit", "gg", gg::image::ADAPTER),
         ("structured.generate", "gg", gg::chat::STRUCTURED_ADAPTER),
@@ -952,6 +1012,11 @@ fn the_adapters_name_their_contracts_as_the_table_does() {
         ("image.generate", "codex", codex::ADAPTER),
         ("image.edit", "codex", codex::ADAPTER),
         ("video.generate", "fal", fal::video::CONTRACT_ADAPTER),
+        (
+            "video.motion_transfer",
+            "fal",
+            fal::video::MOTION_CONTRACT_ADAPTER,
+        ),
         (
             "background.remove",
             "fal",

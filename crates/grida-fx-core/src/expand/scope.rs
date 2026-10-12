@@ -654,6 +654,10 @@ impl Expander<'_> {
         let Some(document) = self.exps[exp.0].document.clone() else {
             return Val::Missing;
         };
+        // Give the child the same declaration-order start as a standalone workflow before
+        // an output reaches downstream judge evidence. Otherwise that evidence can begin
+        // before its judged producer and be mistaken for a cycle when its judge reads it.
+        self.members(exp);
         let mut outputs = IndexMap::new();
         let mut aliases = std::collections::BTreeMap::new();
         let mut interfaces = Vec::new();

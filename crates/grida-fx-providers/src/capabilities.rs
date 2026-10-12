@@ -328,6 +328,20 @@ pub const CAPABILITIES: &[Capability] = &[
         features: &["first_last_frame"],
         files: &[("video", "video/mp4")],
     },
+    Capability {
+        name: "video.motion_transfer",
+        shape: Shape::LongJob,
+        members: &[
+            req("prompt", Text),
+            req("duration", Number),
+            opt("orientation", Text),
+            opt("keep_original_sound", Boolean),
+            req("character", File),
+            req("motion", File),
+        ],
+        features: &["motion_reference", "image_orientation", "original_sound"],
+        files: &[("video", "video/mp4")],
+    },
 ];
 
 /// The capability of this name.

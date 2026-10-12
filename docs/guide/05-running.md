@@ -105,6 +105,7 @@ amount held for it ([providers.md §10](../../spec/providers.md#10-the-built-in-
 | `structured.generate` | `openai/gpt-5.6-sol@gg` ($0.02 – $0.60), `openai/gpt-6-astra@gg` ($0.05 – $1.50); also `openai/gpt-5.6-sol@openrouter` ($0.02 – $0.60), `openai/gpt-6-astra@openrouter` ($0.05 – $1.50) | `GG_API_KEY`, else `OPENROUTER_API_KEY` |
 | `agent.turn` | `openai/gpt-5.6-sol@gg` ($0.003 – $0.10), `openai/gpt-6-astra@gg` ($0.01 – $1.50); also `openai/gpt-5.6-sol@openrouter` ($0.003 – $0.10), `openai/gpt-6-astra@openrouter` ($0.01 – $1.50) | `GG_API_KEY`, else `OPENROUTER_API_KEY` |
 | `video.generate` | `alibaba/wan-3.0@gg` (per second, by `resolution`, at most 30 s: $0.05 – $0.20; a first frame, no last frame); also `google/gemini-omni-flash/v1.1/image-to-video@fal` (at most 10 s: $0.03 – $0.375) | `GG_API_KEY`, else `FAL_KEY` |
+| `video.motion_transfer` | `fal-ai/kling-video/v3/pro/motion-control@fal` ($0.168 – $0.21/source second), or `fal-ai/kling-video/v2.6/pro/motion-control@fal` ($0.112 – $0.14/source second); at most 30 s following video orientation, 10 s following image orientation; `fal-ai/wan-motion@fal` ($0.06 – $0.075/second) requires 24 fps, 3–10 s, video orientation and sound disabled | `FAL_KEY` |
 | `mesh.generate`, `mesh.rig` | `tripo/p2@gg` ($1.20 – $2.50), `tripo/rig-v1.0@gg` ($0.25 – $0.50); also `P2-20260801@tripo` ($1.20 – $2.50), `v1.0-20240301@tripo` ($0.25 – $0.50) | `GG_API_KEY`, else `TRIPO_API_KEY` |
 | `music.generate` | `google/lyria-3-pro-preview@openrouter` ($0.05 – $0.50) | `OPENROUTER_API_KEY` |
 | `sound.generate`, `speech.generate` | `eleven_text_to_sound_v2@elevenlabs` ($0.001 – $0.10), `eleven_v3@elevenlabs` ($0.001 – $0.05) | `ELEVENLABS_API_KEY` |
@@ -484,7 +485,7 @@ capability gives that name: `image` is `image/png`, `audio` is `audio/mpeg`, `vi
   `arguments` (and an `id`, made up when it has none);
 - `Answer.submit(**arguments)`: an agent turn that submits its answer.
 
-`video.generate` and `mesh.generate` answer `data=None`: FX reads the clip's size, frame rate and
+`video.generate`, `video.motion_transfer` and `mesh.generate` answer `data=None`: FX reads the clip's size, frame rate and
 duration, or the model's kind, from the file itself.
 
 **Faults stop the run.** The function is part of your test, so it never fails quietly. Any other

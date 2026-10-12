@@ -138,6 +138,12 @@ status 1 covers refusals, unsuccessful/incomplete runs and missing deliveries;
 when a run exists. Do not depend on an English error sentence as a stable error
 code; machine-readable errors are not uniform across commands today.
 
+## Reference-driven character performance
+
+**Current in source:** `fx/video.motion_transfer@1` accepts an image (`character`), an MP4 performance (`motion`), supporting `prompt`, and the source `duration` for planning. `orientation` selects video or image facing; source audio is omitted by default. `grida fx nodes video.motion_transfer` discovers the same built-in used by Python and JavaScript workflow builders, and their existing plan/run/result APIs execute it without another SDK operation. Built-in fal Kling V3 Pro, 2.6 Pro and Wan Motion routes use an image plus video conditioning request, with engine-owned reservations, jobs, retries, cache and settlement. The validated driving MP4 uses fal's bounded storage initiation and one credential-free PUT before the paid submission, with one-hour expiry and transient URLs excluded from portable records. Safe 422 diagnostics retain validation locations, types and scrubbed messages. Wan Motion uses its own route-contract profile with pose retargeting enabled and identity preprocessing disabled; its frame-based pricing requires an explicitly prepared 24 fps source, 3–10 seconds, video orientation and sound disabled. Known image orientation and source-sound controls are refused while planning when a route lacks their features; the Wan source limits are checked before upload.
+
+`duration` is verified against source bytes before submission. Unsupported resolution, aspect-ratio and first/last-frame controls are absent. Structural checks establish a readable result and matching duration; character identity, anatomy and motion fidelity remain a separate semantic verdict. Provider-free evidence: `crates/grida-fx-providers/tests/fal_motion.rs`, capability/catalog agreement, route-table checks, a real-engine plan and stand-in run in `python/tests/test_stand_in_engine.py`, and public planning in `js/fx/test/api.test.ts`. Live quality evidence belongs to the consuming example, not this capability claim.
+
 ## Composing operations from user intent
 
 ### "Make this, and let me inspect it"
@@ -345,6 +351,15 @@ promise through documentation alone.
 | AR-17 | "Tidy up the layout; place X below Y." | Ratified design: [spec/layout.md](spec/layout.md). Ship A (automatic grid, decks, the layout report with automatic cells) in source, unreleased; Ship B (the adjacent `fx-layout-v1` file the scenario edits) not implemented; visual editing deferred. | Agent discovers exact scope/references, edits and validates layout, verifies the renderer loaded the intended revision, and reports the actual URL or actionable diagnostics. No builder execution, provider calls, execution-history changes or identity/resume changes; repeats, nested scopes and stale references have provider-free evidence. |
 | AR-18 | "Clean up last week's exploratory runs, but keep my named ones." | Implemented in source: `runs list` and `runs remove` (CLI, Python, JavaScript), and `cache prune` (CLI). | Agent lists, previews and then removes exactly the previewed runs; named, `--run` and external runs survive filters; an active run, the last pick holder and a non-run selection are refused with a code and nothing else changes; catalog and run index forget removed folders; pruning keeps every remaining run resumable and refuses a shared, busy or unreadable cache, removing nothing; provider-free CLI, conformance and SDK evidence. |
 | AR-19 | "Share this result so somebody else can inspect it without my local service." | Implemented in source: terminal, inactive run export through CLI, Python and JavaScript; shared static browser reader and canvas. | Select the exact run, choose disclosure, export to a new directory, and review the receipt, omissions and concrete content. Verified selected bytes, non-overwriting placement, source stability and explicit reader failures preserve the evidence; publication remains a separate authorized consumer operation. |
+
+For AR-02 and AR-03, `used_workflow_outputs_preserve_downstream_judge_evidence`
+in the core expansion tests verifies that a parent can read a child's processed
+output when an independent downstream judge reviews its producer. The character
+example's `check_reel.py` additionally executes two reusable child workflows with
+four provider stand-ins at $0 and checks free composition, exact source/report
+lineage, review refusal, complete frame fitting, and decoding with synthetic media.
+These are structural gates;
+synthetic review reports do not approve artwork.
 
 For AR-19, [the export contract](spec/exports.md),
 [CLI conformance](conformance/portable-export/), exporter regression tests,

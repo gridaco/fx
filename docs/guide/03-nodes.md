@@ -16,6 +16,7 @@ Every built-in type is declared, so a workflow using it plans and prices. A type
 | `image.edit@1` | `image`, `mask` (a PNG the size of `image`: fully transparent pixels mark where it may change; a strong hint, not a guarantee), `references`, `prompt`, `size`, `background` → `image` |
 | `structured.generate@1` | `prompt`, `system`, `context` (text, json and images; images are reduced and flattened onto `matte:`, white by default), `schema`, `max_tokens` → `json` |
 | `video.generate@1` | `prompt`, `first_frame`, `last_frame`, `duration`, `resolution`, `aspect_ratio` → `video` |
+| `video.motion_transfer@1` | `character` image, `motion` MP4, supporting `prompt`, source `duration`, `orientation`, `keep_original_sound` → `video`. Appearance comes from the image and movements from the clip; `duration` is verified for pricing. |
 | `speech.generate@1` | `text` (delivery as audio tags, `[whispering] ...`), `voice`, `stability`, `language_code`, `max_chars` → `audio` |
 | `sound.generate@1` | `prompt`, `duration`, `prompt_influence`, `loop` → `audio` |
 | `music.generate@1` | `prompt`, `duration` → `audio` |

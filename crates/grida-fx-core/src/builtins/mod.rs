@@ -1,4 +1,4 @@
-//! The built-in node types (`fx/<name>@<major>`), embedded as data: `catalog.json`, the 37
+//! The built-in node types (`fx/<name>@<major>`), embedded as data: `catalog.json`, the 38
 //! standard types ported from FX's predecessor's standard library.
 //!
 //! `catalog.json` is `{"kind": "fx-std-catalog-v1", "types": [...]}`; each type has `uses`,
@@ -152,7 +152,7 @@ mod tests {
 
     #[test]
     fn the_catalog_parses() {
-        assert_eq!(builtins().len(), 37);
+        assert_eq!(builtins().len(), 38);
         let generate = builtin("image.generate", 1).unwrap();
         assert_eq!(generate.uses, "fx/image.generate@1");
         assert_eq!(generate.identity(), "fx/image.generate@1.1");

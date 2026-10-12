@@ -869,6 +869,23 @@ fn accepted_live(
                 Answer::new(data, None).with_file("video", "video/mp4", clip),
             )
         }
+        "video.motion_transfer" => {
+            let mut builder = CallBuilder::new(capability, &route);
+            let character = builder.file("image/png", &png(None));
+            let clip = media::mp4(720, 1280, 24, 72);
+            let motion = builder.file("video/mp4", &clip);
+            let call = builder
+                .request(json!({"prompt":"p", "duration":3,
+                "character":character,"motion":motion}))
+                .build();
+            let data = json!({"facts":{"width":720,"height":1280,"duration_seconds":3,"fps":24}});
+            (
+                call,
+                one("video", &clip),
+                Value::Null,
+                Answer::new(data, None).with_file("video", "video/mp4", clip),
+            )
+        }
         "mesh.generate" => {
             let mut builder = CallBuilder::new(capability, &route);
             let front = builder.file("image/png", &media::png(2, 2, Some(255)));

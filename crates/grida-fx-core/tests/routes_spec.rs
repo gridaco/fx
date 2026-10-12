@@ -378,10 +378,10 @@ fn catalogs_combine_in_order() {
 #[test]
 fn the_built_in_catalog() {
     let all = builtins();
-    assert_eq!(all.len(), 37);
+    assert_eq!(all.len(), 38);
     let count = |word: &str| all.iter().filter(|b| b.spec.kind_word() == word).count();
-    assert_eq!((count("paid"), count("judge"), count("free")), (11, 5, 21));
-    assert_eq!(all.iter().filter(|b| b.spec.paid()).count(), 13);
+    assert_eq!((count("paid"), count("judge"), count("free")), (12, 5, 21));
+    assert_eq!(all.iter().filter(|b| b.spec.paid()).count(), 14);
     for b in all {
         assert_eq!(b.uses, format!("fx/{}@{}", b.name, b.major));
         assert_eq!(b.identity(), format!("fx/{}@1.1", b.name));

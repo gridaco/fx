@@ -345,3 +345,52 @@ def test_a_stand_in_that_raises_stops_the_run_and_run_raises_it(project: Path) -
     assert not stopped.ok and stopped.stand_in
     assert stopped.stopped == "the stand-in failed: RuntimeError: the harness broke"
     assert stopped.failures["gull#1"].code == "internal"
+
+
+def test_motion_transfer_builtin_plans_and_runs_through_public_sdk(tmp_path: Path) -> None:
+    root = tmp_path / "motion"
+    (root / "workflows").mkdir(parents=True)
+    (root / "fx.yaml").write_text(
+        "fx: project/v1\nroutes:\n"
+        "  video.motion_transfer: fal-ai/kling-video/v3/pro/motion-control@fal\n",
+        "utf-8",
+    )
+    clip = (
+        Path(__file__).resolve().parents[2] / "spec/vectors/facts/mp4/h264_24fps.mp4"
+    ).read_bytes()
+    (root / "character.png").write_bytes(png(64, 48, (40, 90, 160)))
+    (root / "motion.mp4").write_bytes(clip)
+    workflow = fx.Workflow("motion", title="Reference performance")
+    transfer = workflow.step(
+        "transfer",
+        uses="fx/video.motion_transfer@1",
+        requires=["motion_reference"],
+        with_={
+            "character": "./character.png",
+            "motion": "./motion.mp4",
+            "prompt": "Follow the recorded performance.",
+            "duration": 2,
+        },
+    )
+    workflow.outputs(video=transfer.outputs.video)
+    (root / "workflows/motion.yaml").write_text(json.dumps(workflow.document()), "utf-8")
+    planned = fx.plan("motion", cwd=root)
+    assert planned.ok, planned.problems
+    assert planned.estimate() == (0.336, 0.42)
+    calls: list[StandInCall] = []
+
+    def answer(call: StandInCall) -> Answer:
+        calls.append(call)
+        assert call.capability == "video.motion_transfer"
+        assert call.request["orientation"] == "video"
+        assert call.request["keep_original_sound"] is False
+        assert isinstance(call.request["character"], InputFile)
+        assert call.request["motion"].read_bytes() == clip
+        return Answer(files={"video": clip})
+
+    result = fx.run(planned, run_dir="runs/motion", stand_in=answer)
+    assert result.ok, result.failures
+    assert result.stand_in and result.cost == 0
+    assert len(calls) == 1
+    assert result.outputs["video"].read_bytes() == clip
+    assert result.outputs["video"].kind == "video/mp4"

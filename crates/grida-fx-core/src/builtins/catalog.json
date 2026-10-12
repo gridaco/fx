@@ -167,6 +167,49 @@
    "body": "capability"
   },
   {
+   "uses": "fx/video.motion_transfer@1",
+   "name": "video.motion_transfer",
+   "major": 1,
+   "version": 1,
+   "description": "Animate a character image from a recorded performance.",
+   "inputs": {
+    "character": "image",
+    "motion": "video"
+   },
+   "params": {
+    "prompt": {
+     "type": "string",
+     "x-fx-template": true
+    },
+    "duration": {
+     "type": "number",
+     "exclusiveMinimum": 0,
+     "maximum": 30
+    },
+    "orientation": {
+     "enum": [
+      "video",
+      "image"
+     ],
+     "default": "video"
+    },
+    "keep_original_sound": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "outputs": {
+    "video": "video/mp4"
+   },
+   "judge": false,
+   "capability": "video.motion_transfer",
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "capability"
+  },
+  {
    "uses": "fx/speech.generate@1",
    "name": "speech.generate",
    "major": 1,

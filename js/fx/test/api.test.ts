@@ -210,6 +210,41 @@ describe.skipIf(engine === null)("the SDK, driving the engine", () => {
   );
 
   test(
+    "the reference-performance builtin plans through the public SDK",
+    async () => {
+      const motion = temporaryFolder("motion");
+      try {
+        mkdirSync(join(motion.path, "workflows"));
+        writeFileSync(join(motion.path, "fx.yaml"), toYaml({
+          fx: "project/v1",
+          routes: { "video.motion_transfer": "fal-ai/kling-video/v3/pro/motion-control@fal" },
+        }));
+        cpSync(join(repoRoot, "conformance/facts/in/art.png"), join(motion.path, "character.png"));
+        cpSync(join(repoRoot, "spec/vectors/facts/mp4/h264_24fps.mp4"), join(motion.path, "motion.mp4"));
+        const document = workflow({
+          id: "motion", title: "Reference performance",
+          steps: { transfer: {
+            uses: "fx/video.motion_transfer@1", requires: ["motion_reference"],
+            with: { character: "./character.png", motion: "./motion.mp4",
+              prompt: "Follow the recorded performance.", duration: 2 },
+          } },
+          outputs: { video: expr("steps.transfer.outputs.video") },
+        });
+        writeFileSync(join(motion.path, "workflows/motion.yaml"), toYaml(document));
+        const planned = await plan("motion", { cwd: motion.path, env });
+        expect(planned.ok).toBe(true);
+        expect(planned.estimate).toEqual({ lowUsd: 0.336, highUsd: 0.42, ceilingUsd: null });
+        const graph = await expand("motion", { cwd: motion.path, env });
+        expect(graph.instances[0]?.with.orientation).toBe("video");
+        expect(graph.instances[0]?.with.keep_original_sound).toBe(false);
+      } finally {
+        motion.cleanup();
+      }
+    },
+    SLOW,
+  );
+
+  test(
     "a run answered from the call cache, with its files",
     async () => {
       const replay = temporaryFolder("replay");

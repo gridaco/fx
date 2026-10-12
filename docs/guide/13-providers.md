@@ -78,6 +78,7 @@ point a provider at another address, such as a proxy. How FX reads keys and the 
 | `structured.generate`, `agent.turn` | ✓ | | OpenRouter |
 | `image.generate`, `image.edit` | ✓ | ✓ | OpenAI, OpenRouter, fal |
 | `video.generate` | ✓ | | fal |
+| `video.motion_transfer` | | | fal (Kling V3 Pro, 2.6 Pro and Wan Motion) |
 | `mesh.generate`, `mesh.rig` | ✓ | | Tripo |
 | `music.generate` | | | OpenRouter |
 | `sound.generate`, `speech.generate` | | | ElevenLabs |

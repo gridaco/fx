@@ -39,7 +39,7 @@ In the tables below, a member's type is one of:
   - `structured.generate` data that is not an object holding only `json`: `structured.generate returns its data as {"json": <value>}`;
   - `mesh.rig` data that is not `{"facts": {"riggable", "checked_rig_type", "advisory_override"}}` with the types §8 gives: `mesh.rig returns its data as {"facts": {"riggable", "checked_rig_type", "advisory_override"}}`.
 
-  A file without a kind takes the kind named for it here; `mesh.generate`'s `model` takes the kind its bytes show (binary glTF or binary FBX by their signatures, else `model is neither binary glTF nor binary FBX`). The data of `video.generate` (§6) and `mesh.generate` (§7) is taken from the answer's file, so a stand-in answers `null` (`<capability>'s data is taken from its file: answer null`) and the engine writes it, `video.generate`'s from the clip's facts (`the answer's video is not a clip FX can read: <reason>` when they are refused). `agent.turn` data is left to the engine's check ([protocol.md](protocol.md) §6.2).
+  A file without a kind takes the kind named for it here; `mesh.generate`'s `model` takes the kind its bytes show (binary glTF or binary FBX by their signatures, else `model is neither binary glTF nor binary FBX`). The data of `video.generate` (§6), `video.motion_transfer` (§15) and `mesh.generate` (§7) is taken from the answer's file, so a stand-in answers `null` (`<capability>'s data is taken from its file: answer null`) and the engine writes it, `video.generate`'s from the clip's facts (`the answer's video is not a clip FX can read: <reason>` when they are refused). `agent.turn` data is left to the engine's check ([protocol.md](protocol.md) §6.2).
 - A paid built-in maps an answer onto its outputs this way:
   - each output port takes the file of its name, else the first file whose kind's family matches the port's;
   - a declared `json` output takes `data.json`;
@@ -52,6 +52,8 @@ In the tables below, a member's type is one of:
   - `mask` for a `mask`;
   - `exact_size` for a `size` of `<W>x<H>`;
   - `alpha` for `background: transparent`, and `opaque_background` for `background: opaque`.
+
+  For `video.motion_transfer`, `orientation: image` implies `image_orientation`, and `keep_original_sound: true` implies `original_sound`.
 
   A value the plan does not know yet (a step's output that is only a list as a whole, say) implies nothing. A feature the route lacks is refused as `<route> does not support <feature>` at `<w>.with.<member>`, once per feature, and not again for `requires:`. So a request the route's adapter would refuse is refused while planning, at $0. A call a node's body makes at run time is still checked by its adapter alone ([providers.md](providers.md) §5).
 - **Input-picture limits.** A route may declare `max_input_pictures`, the most input pictures it takes in one call (`image` and `references`; a mask does not count). A step whose request would carry more is refused while planning, at `<w>.with.references`: `<route> takes at most <n> input pictures, not <count>`. The count is known while the list's length is, even when its pictures are not made yet.
@@ -209,6 +211,8 @@ A clip from a prompt and frames. A long job.
 
 **Pricing:** per second, in tiers by `resolution` ([identity.md](identity.md) §12).
 
+The separate `video.motion_transfer` capability (§15) uses a recorded performance as its motion source.
+
 ## 7. `mesh.generate`
 
 A 3D model from views of one subject. A long job.
@@ -335,3 +339,30 @@ The paid built-ins (`fx/<capability>@1`) send the requests above:
 A member is required exactly when the built-in requires it: an input port without `?`, or a param with no `default` that is not `x-fx-optional`. Each output port of a built-in names a file of its capability's answer, or is the `json` output that takes `data.json`.
 
 The engine's tests hold the built-in catalog, and the engine's own table of capabilities, to this document.
+
+## 15. `video.motion_transfer`
+
+A character picture animated by a recorded performance. A long job. Appearance and setting come from `character`; the action sequence comes from `motion`. Fidelity is a semantic review, not a structural guarantee.
+
+| Member | Type | | |
+|---|---|---|---|
+| `prompt` | text | required | supporting visual direction; does not replace the recorded performance |
+| `duration` | number | required | source duration in seconds, used for the spending reservation and verified against the source; never sent as a provider duration control |
+| `orientation` | text | optional | `video` (default) follows the performance orientation; `image` preserves the picture orientation |
+| `keep_original_sound` | boolean | optional | whether to retain source audio; false by default |
+| `character` | file | required | a clear character picture |
+| `motion` | file | required | an MP4 with a visible, unoccluded full-body or upper-body performer |
+
+**Answer:** the file `video` (`video/mp4`). `data` is `{"facts": {"width", "height", "duration_seconds", "fps"}}`, read from the result's bytes.
+
+**A route's check:** the source and output have video tracks with positive dimensions and duration. The planned duration matches the source within 0.15 s, and the output matches the source within the same tolerance. No output resolution or aspect ratio is promised ([providers.md](providers.md) §9.3).
+
+**Features:**
+
+| Feature | Meaning |
+|---|---|
+| `motion_reference` | the recorded performance drives the character's movements |
+| `image_orientation` | picture orientation can be preserved instead of following the performance |
+| `original_sound` | source audio can be retained |
+
+**Pricing:** per source second. The required `duration` bounds planning; an understated value is refused before submission. Model-specific orientation limits are checked before spending. The bounded Wan route requires an explicitly prepared 24 fps, 3–10 second source and rejects image orientation and original-sound preservation; its frame tariff equals source seconds only under those validated limits.

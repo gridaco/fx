@@ -63,7 +63,12 @@
    "audio_tags",
    "stability"
   ],
-  "background.remove": []
+  "background.remove": [],
+  "video.motion_transfer": [
+   "motion_reference",
+   "image_orientation",
+   "original_sound"
+  ]
  },
  "renamed": {
   "transparent_background": "alpha",

@@ -4,7 +4,7 @@
 //! override its entries.
 //!
 //! What `tests/routes.rs` holds the table to:
-//! - 26 routes over 10 capabilities, each fingerprint input (capability, model, provider,
+//! - 30 routes over 11 capabilities, each fingerprint input (capability, model, provider,
 //!   contract) as written there, so an accidental edit of an identity is caught;
 //! - every capability is one of [`crate::capabilities::CAPABILITIES`], and every feature is in
 //!   that capability's [`features`](crate::capabilities::Capability::features);
@@ -37,10 +37,10 @@ mod tests {
     #[test]
     fn the_default_table_parses() {
         let table = default_table().unwrap();
-        assert_eq!(table.entries.len(), 27);
+        assert_eq!(table.entries.len(), 30);
         let capabilities: std::collections::BTreeSet<&str> =
             table.entries.keys().map(|(c, _)| c.as_str()).collect();
-        assert_eq!(capabilities.len(), 10);
+        assert_eq!(capabilities.len(), 11);
     }
 
     #[test]

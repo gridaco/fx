@@ -5,7 +5,9 @@
 //! `request_id` that is a safe id (`^[A-Za-z0-9_.:-]{1,96}$`), and `status_url` and
 //! `response_url` both under the queue base, becomes the handle `{"request_id", "status_path",
 //! "response_path"}` (the URLs minus `{queue}/`, a plain query kept; never a host name). Contract
-//! `adapter` must be `fal-queue` when present.
+//! `adapter` must be `fal-queue` when present. Motion transfer uses `fal-motion-control`,
+//! an inline character and one transient hosted driving MP4 (see [`super::storage`]); queue
+//! lifecycle and settlement remain shared.
 //!
 //! `collect`: polls `GET {queue}/<status_path>` every [`POLL`] until `COMPLETED` (or a truthy
 //! `error`), then `GET {queue}/<response_path>`, then downloads `video.url` **once** (https, no
@@ -53,14 +55,28 @@ use crate::transport::{
     TransportErrorKind,
 };
 use grida_fx_core::money::Usd;
+use regex::Regex;
 use serde_json::{Map, Value, json};
 use std::sync::Arc;
+use std::sync::LazyLock;
 use std::time::Duration;
 
 pub use crate::checks::ClipFacts;
 
 /// The contract `adapter` this adapter serves.
 pub const CONTRACT_ADAPTER: &str = "fal-queue";
+
+/// The separate conditioning contract for reference-performance transfer.
+pub const MOTION_CONTRACT_ADAPTER: &str = "fal-motion-control";
+
+/// The bounded 24 fps pose-retargeting profile.
+pub const WAN_MOTION_CONTRACT_ADAPTER: &str = "fal-wan-motion";
+
+/// The largest driving performance, below fal's multipart-upload threshold.
+pub const MAX_MOTION_BYTES: u64 = 64 * 1024 * 1024;
+
+/// Source metadata and output duration tolerance, in seconds.
+pub const MOTION_DURATION_TOLERANCE: f64 = 0.15;
 
 /// The submit's deadline.
 pub const SUBMIT_DEADLINE: Duration = Duration::from_secs(300);
@@ -116,12 +132,190 @@ const ASPECTS: [&str; 2] = ["9:16", "16:9"];
 pub struct FalVideo {
     clients: FalClients,
     clock: Arc<dyn Clock>,
+    kind: VideoKind,
+}
+
+#[derive(Clone, Copy)]
+enum VideoKind {
+    Generate,
+    MotionTransfer,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum MotionProfile {
+    Kling,
+    Wan,
 }
 
 impl FalVideo {
     pub fn new(clients: FalClients, clock: Arc<dyn Clock>) -> FalVideo {
-        FalVideo { clients, clock }
+        FalVideo {
+            clients,
+            clock,
+            kind: VideoKind::Generate,
+        }
     }
+
+    /// Reference motion uses the same queue lifecycle, with its own input and answer checks.
+    pub fn motion_transfer(clients: FalClients, clock: Arc<dyn Clock>) -> FalVideo {
+        FalVideo {
+            clients,
+            clock,
+            kind: VideoKind::MotionTransfer,
+        }
+    }
+
+    fn motion_profile(&self, call: &CallRequest) -> MotionProfile {
+        if call.route.contract.get("adapter").and_then(Value::as_str)
+            == Some(WAN_MOTION_CONTRACT_ADAPTER)
+        {
+            MotionProfile::Wan
+        } else {
+            MotionProfile::Kling
+        }
+    }
+
+    fn contract(&self, call: &CallRequest) -> (&'static str, &'static str) {
+        match self.kind {
+            VideoKind::Generate => (CONTRACT_ADAPTER, "video.generate"),
+            VideoKind::MotionTransfer => (
+                match self.motion_profile(call) {
+                    MotionProfile::Kling => MOTION_CONTRACT_ADAPTER,
+                    MotionProfile::Wan => WAN_MOTION_CONTRACT_ADAPTER,
+                },
+                "video.motion_transfer",
+            ),
+        }
+    }
+}
+
+struct Motion<'a> {
+    prompt: &'a str,
+    duration: f64,
+    orientation: &'a str,
+    keep_original_sound: bool,
+    character: &'a Value,
+    motion: &'a Value,
+}
+
+fn motion(request: &Value) -> Result<Motion<'_>, String> {
+    let prompt = request.get("prompt").and_then(Value::as_str).unwrap_or("");
+    if prompt.trim().is_empty() {
+        return Err("a clip needs its prompt as text".into());
+    }
+    if prompt.chars().count() > MAX_PROMPT_CHARS {
+        return Err(format!(
+            "the prompt is longer than {MAX_PROMPT_CHARS} characters"
+        ));
+    }
+    let orientation = match request.get("orientation") {
+        None | Some(Value::Null) => "video",
+        Some(Value::String(value)) if value == "video" || value == "image" => value,
+        _ => return Err("orientation is video or image".into()),
+    };
+    let limit = if orientation == "video" { 30.0 } else { 10.0 };
+    let duration = request
+        .get("duration")
+        .and_then(Value::as_f64)
+        .unwrap_or(0.0);
+    if !duration.is_finite() || duration <= 0.0 || duration > limit {
+        return Err(format!(
+            "motion duration must be positive and at most {limit} seconds for {orientation} orientation"
+        ));
+    }
+    Ok(Motion {
+        prompt,
+        duration,
+        orientation,
+        keep_original_sound: request
+            .get("keep_original_sound")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        character: &request["character"],
+        motion: &request["motion"],
+    })
+}
+
+fn positive_facts(facts: &ClipFacts) -> Result<(), String> {
+    if facts.width == 0
+        || facts.height == 0
+        || !facts.duration_seconds.is_finite()
+        || facts.duration_seconds <= 0.0
+        || !facts.fps.is_finite()
+        || facts.fps <= 0.0
+    {
+        return Err("motion video needs positive dimensions, duration and frame rate".into());
+    }
+    Ok(())
+}
+
+/// Source bytes are carried by digest, never by a caller-supplied URL.
+fn motion_source(
+    call: &CallRequest,
+    values: &Motion<'_>,
+    profile: MotionProfile,
+) -> Result<(Vec<u8>, ClipFacts), String> {
+    if profile == MotionProfile::Wan {
+        if values.orientation != "video" {
+            return Err("this motion profile supports only video orientation".into());
+        }
+        if values.keep_original_sound {
+            return Err("this motion profile does not preserve original sound".into());
+        }
+        if !(3.0..=10.0).contains(&values.duration) {
+            return Err("this motion profile takes 3 to 10 seconds at 24 fps".into());
+        }
+    }
+    let file = crate::wire::request_file(call, values.motion, "motion")?;
+    if file.kind != "video/mp4" {
+        return Err(format!("motion is {}, not video/mp4", file.kind));
+    }
+    if file.size > MAX_MOTION_BYTES {
+        return Err(format!("motion exceeds {MAX_MOTION_BYTES} bytes"));
+    }
+    let bytes = crate::wire::read_file(file, "motion")?;
+    if bytes.len() as u64 > MAX_MOTION_BYTES {
+        return Err(format!("motion exceeds {MAX_MOTION_BYTES} bytes"));
+    }
+    if !crate::wire::matches_signature("video/mp4", &bytes) {
+        return Err("motion is not an MP4 file".into());
+    }
+    let facts = ClipFacts::of_mp4(&bytes)?;
+    positive_facts(&facts)?;
+    if profile == MotionProfile::Wan {
+        let video = grida_fx_core::facts::video_facts(&bytes, "video/mp4")
+            .map_err(|_| "motion frame count cannot be read".to_string())?
+            .ok_or_else(|| "motion frame count cannot be read".to_string())?;
+        let frames = video
+            .frames
+            .filter(|frames| (72..=240).contains(frames))
+            .ok_or_else(|| "this motion profile takes 72 to 240 frames at 24 fps".to_string())?;
+        let frame_seconds = frames as f64 / 24.0;
+        if (facts.fps - 24.0).abs() > 0.000001
+            || (frame_seconds - facts.duration_seconds).abs() > 0.000001
+            || (frame_seconds - values.duration).abs() > 1.0 / 24.0 + 0.000001
+        {
+            return Err("this motion profile requires 24 fps and a duration matching its frame count; prepare the reference explicitly".into());
+        }
+    }
+    let limit = if values.orientation == "video" {
+        30.0
+    } else {
+        10.0
+    };
+    if facts.duration_seconds > limit {
+        return Err(format!(
+            "motion exceeds {limit} seconds for {} orientation",
+            values.orientation
+        ));
+    }
+    if (facts.duration_seconds - values.duration).abs() > MOTION_DURATION_TOLERANCE {
+        return Err(format!(
+            "motion runs {:.3} s, not the declared {:.3} s",
+            facts.duration_seconds, values.duration
+        ));
+    }
+    Ok((bytes, facts))
 }
 
 /// What a request asks of the route, once its values pass (step 4 of spec/providers.md §5).
@@ -394,42 +588,74 @@ enum Read {
 
 impl FalVideo {
     /// Steps 1 to 5 of spec/providers.md §5, then the submit request (module doc).
-    fn prepare(&self, call: &CallRequest) -> Result<HttpRequest, String> {
+    fn prepare(&self, call: &CallRequest) -> Result<(HttpRequest, Option<Vec<u8>>), String> {
         let client = &self.clients.queue;
-        if let Some(refusal) = super::contract_refusal(call, CONTRACT_ADAPTER, &["video.generate"])
-        {
+        let (adapter, capability) = self.contract(call);
+        if let Some(refusal) = super::contract_refusal(call, adapter, &[capability]) {
             return Err(refusal);
         }
         crate::capabilities::check_request(&call.route.capability, &call.request)?;
         let credential = client.credential(super::CREDENTIAL_HEADER, super::CREDENTIAL_PREFIX)?;
-        let clip = clip(&call.request)?;
-        let first = super::picture(call, clip.first_frame, "first_frame")?;
-        let last = match clip.last_frame {
-            Some(frame) => Some(super::picture(call, frame, "last_frame")?),
-            None => None,
-        };
-
         let mut body = Map::new();
-        body.insert("prompt".into(), Value::String(clip.prompt.to_string()));
-        body.insert("image_url".into(), Value::String(first));
-        if let Some(last) = last {
-            body.insert("end_image_url".into(), Value::String(last));
+        let mut driving_bytes = None;
+        match self.kind {
+            VideoKind::Generate => {
+                let clip = clip(&call.request)?;
+                let first = super::picture(call, clip.first_frame, "first_frame")?;
+                let last = match clip.last_frame {
+                    Some(frame) => Some(super::picture(call, frame, "last_frame")?),
+                    None => None,
+                };
+                body.insert("prompt".into(), Value::String(clip.prompt.to_string()));
+                body.insert("image_url".into(), Value::String(first));
+                if let Some(last) = last {
+                    body.insert("end_image_url".into(), Value::String(last));
+                }
+                body.insert("aspect_ratio".into(), json!(clip.aspect_ratio));
+                body.insert("resolution".into(), json!(clip.resolution));
+                body.insert("duration".into(), json!(clip.seconds));
+            }
+            VideoKind::MotionTransfer => {
+                let values = motion(&call.request)?;
+                let character = super::picture(call, values.character, "character")?;
+                let profile = self.motion_profile(call);
+                let (source, _) = motion_source(call, &values, profile)?;
+                body.insert("prompt".into(), json!(values.prompt));
+                body.insert("image_url".into(), json!(character));
+                driving_bytes = Some(source);
+                body.insert("video_url".into(), Value::Null);
+                match profile {
+                    MotionProfile::Kling => {
+                        body.insert("character_orientation".into(), json!(values.orientation));
+                        body.insert(
+                            "keep_original_sound".into(),
+                            json!(values.keep_original_sound),
+                        );
+                    }
+                    MotionProfile::Wan => {
+                        body.insert("adapt_motion".into(), json!(true));
+                        body.insert("enhance_identity".into(), json!(false));
+                        body.insert("acceleration".into(), json!("regular"));
+                        body.insert("enable_safety_checker".into(), json!(true));
+                    }
+                }
+            }
         }
-        body.insert("aspect_ratio".into(), json!(clip.aspect_ratio));
-        body.insert("resolution".into(), json!(clip.resolution));
-        body.insert("duration".into(), json!(clip.seconds));
 
         let url = client.url(super::endpoint(&call.route.model));
-        Ok(HttpRequest::new(Method::Post, url, Lane::Provider)
-            .credential(credential)
-            .body(Body::Json(Value::Object(body)))
-            .timeout(SUBMIT_DEADLINE)
-            .max_response_bytes(JSON_RESPONSE_BYTES))
+        Ok((
+            HttpRequest::new(Method::Post, url, Lane::Provider)
+                .credential(credential)
+                .body(Body::Json(Value::Object(body)))
+                .timeout(SUBMIT_DEADLINE)
+                .max_response_bytes(JSON_RESPONSE_BYTES),
+            driving_bytes,
+        ))
     }
 
     async fn submit_once(&self, call: &CallRequest) -> Submitted {
         let client = &self.clients.queue;
-        let request = match self.prepare(call) {
+        let (mut request, driving_bytes) = match self.prepare(call) {
             Ok(request) => request,
             Err(reason) => {
                 return Submitted::Refused {
@@ -437,6 +663,15 @@ impl FalVideo {
                 };
             }
         };
+        if let Some(bytes) = driving_bytes {
+            let url = match super::storage::motion(client, bytes).await {
+                Ok(url) => url,
+                Err(outcome) => return outcome,
+            };
+            if let Body::Json(body) = &mut request.body {
+                body["video_url"] = json!(url);
+            }
+        }
         match client.send(request).await {
             Ok(response) => self.submitted(&response),
             Err(error) => submit_transport(client, &error),
@@ -483,8 +718,8 @@ impl FalVideo {
         let unreachable = |text: &str| Collected::Unreachable {
             reason: client.reason(text),
         };
-        if let Some(refusal) = super::contract_refusal(call, CONTRACT_ADAPTER, &["video.generate"])
-        {
+        let (adapter, capability) = self.contract(call);
+        if let Some(refusal) = super::contract_refusal(call, adapter, &[capability]) {
             return unreachable(&refusal);
         }
         let Some(job) = Job::from_handle(handle) else {
@@ -496,10 +731,26 @@ impl FalVideo {
             Err(reason) => return unreachable(&reason),
         };
         let deadline = self.clock.now() + COLLECT_DEADLINE;
+        // Validation envelopes may quote request values. Keep those out of portable reasons.
+        let mut diagnostics = client.redactor.clone();
+        if let Some(prompt) = call.request.get("prompt").and_then(Value::as_str) {
+            diagnostics = diagnostics.with(prompt);
+        }
+        for file in call.files.values() {
+            if let Some(path) = file.path.to_str() {
+                diagnostics = diagnostics.with(path);
+            }
+        }
 
         loop {
             match self
-                .read(&credential, &job.status_path, deadline, STATUS_LABEL)
+                .read(
+                    &credential,
+                    &job.status_path,
+                    deadline,
+                    STATUS_LABEL,
+                    &diagnostics,
+                )
                 .await
             {
                 Read::Json(status) => {
@@ -510,7 +761,7 @@ impl FalVideo {
                     }
                     if status.get("error").is_some_and(super::truthy) {
                         return Collected::Ended {
-                            reason: client.reason(&job_error(&status, &client.redactor)),
+                            reason: diagnostics.reason(&job_error(&status, &diagnostics)),
                             cost: None,
                         };
                     }
@@ -528,7 +779,13 @@ impl FalVideo {
 
         let result = loop {
             match self
-                .read(&credential, &job.response_path, deadline, RESULT_LABEL)
+                .read(
+                    &credential,
+                    &job.response_path,
+                    deadline,
+                    RESULT_LABEL,
+                    &diagnostics,
+                )
                 .await
             {
                 Read::Json(result) => break result,
@@ -562,6 +819,7 @@ impl FalVideo {
         path: &str,
         deadline: Duration,
         label: &str,
+        diagnostics: &crate::redact::Redactor,
     ) -> Read {
         let client = &self.clients.queue;
         let remaining = deadline.saturating_sub(self.clock.now());
@@ -589,10 +847,19 @@ impl FalVideo {
             },
             408 | 429 | 500..=599 => Read::Nothing,
             300..=399 | 401 | 403 => Read::Stop(Collected::Unreachable { reason: text() }),
-            400..=499 => Read::Stop(Collected::Ended {
-                reason: text(),
-                cost: None,
-            }),
+            400..=499 => {
+                let mut reason = super::status_text(label, &response);
+                if response.status == 422
+                    && let Some(detail) = validation_detail(&response.body, diagnostics)
+                {
+                    reason.push_str(": ");
+                    reason.push_str(&detail);
+                }
+                Read::Stop(Collected::Ended {
+                    reason: diagnostics.reason(&reason),
+                    cost: None,
+                })
+            }
             _ => Read::Nothing,
         }
     }
@@ -697,6 +964,59 @@ fn result_video(root: &Map<String, Value>) -> Result<&str, String> {
     Ok(url)
 }
 
+/// Bounded fields from fal's validation envelope, never `input`, `ctx` or a raw body.
+/// Locations and types are plain identifiers. Messages lose request values, URLs, data URLs,
+/// paths and quoted values before they are bounded; the final reason is redacted again.
+fn validation_detail(body: &[u8], redactor: &crate::redact::Redactor) -> Option<String> {
+    static FIELD: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"^[A-Za-z0-9_.:-]{1,96}$").unwrap());
+    let payload: Value = serde_json::from_slice(body).ok()?;
+    let details = payload.get("detail")?.as_array()?;
+    let mut kept = Vec::new();
+    for detail in details.iter().take(3) {
+        let mut fields = Vec::new();
+        if let Some(loc) = detail.get("loc").and_then(Value::as_array) {
+            let path: Vec<String> = loc
+                .iter()
+                .take(8)
+                .filter_map(|part| match part {
+                    Value::String(s) if FIELD.is_match(&redactor.redact(s)) => Some(s.clone()),
+                    Value::Number(n) if n.is_u64() => Some(n.to_string()),
+                    _ => None,
+                })
+                .collect();
+            if !path.is_empty() {
+                fields.push(format!("loc={}", path.join(".")));
+            }
+        }
+        if let Some(kind) = detail.get("type").and_then(Value::as_str)
+            && FIELD.is_match(&redactor.redact(kind))
+        {
+            fields.push(format!("type={kind}"));
+        }
+        if let Some(message) = detail.get("msg").and_then(Value::as_str) {
+            let message = safe_diagnostic_text(message, redactor, 160);
+            if !message.is_empty() {
+                fields.push(format!("msg={message}"));
+            }
+        }
+        if !fields.is_empty() {
+            kept.push(fields.join("; "));
+        }
+    }
+    (!kept.is_empty()).then(|| crate::redact::bounded(&kept.join(" | "), 360))
+}
+
+/// Diagnostics discard URLs, paths and quoted values, as well as known secrets and
+/// request values, before applying a size bound.
+fn safe_diagnostic_text(text: &str, redactor: &crate::redact::Redactor, max: usize) -> String {
+    static PRIVATE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r#"(?i)data:[^\s"'<>]+|https?://[^\s"'<>]+|(?:[A-Za-z]:\\|/)[^\s"'<>]+|"[^"]*"|'[^']*'"#).unwrap()
+    });
+    let redacted = redactor.redact(text);
+    crate::redact::bounded(&PRIVATE.replace_all(&redacted, "[redacted]"), max)
+}
+
 /// The job id a 2xx submit answer names, for an `Uncertain` reason: the body's `request_id` when
 /// it is a safe id, else the response's request-id header ([`crate::wire::request_id`]).
 fn returned_id(response: &HttpResponse) -> Option<String> {
@@ -713,7 +1033,7 @@ fn returned_id(response: &HttpResponse) -> Option<String> {
 /// collapsed and cut (the error to 500 characters, `error_type` to 100), so a key that straddles
 /// a cut is still removed whole (spec/providers.md §8).
 fn job_error(status: &Map<String, Value>, redactor: &crate::redact::Redactor) -> String {
-    let cut = |text: &str, max: usize| crate::redact::bounded(&redactor.redact(text), max);
+    let cut = |text: &str, max: usize| safe_diagnostic_text(text, redactor, max);
     let error = match status.get("error") {
         Some(Value::String(text)) => text.clone(),
         Some(other) => other.to_string(),
@@ -762,17 +1082,35 @@ impl LongJob for FalVideo {
     }
 
     fn check(&self, call: &CallRequest, answer: &Answer) -> Result<(), String> {
-        let clip = clip(&call.request)?;
         let Some(file) = answer.files.get("video") else {
             return Err("the answer carries no video".into());
         };
         let facts = ClipFacts::of_mp4(&file.bytes)?;
-        check_clip(
-            &facts,
-            clip.resolution,
-            clip.aspect_ratio,
-            clip.seconds as f64,
-        )
+        match self.kind {
+            VideoKind::Generate => {
+                let clip = clip(&call.request)?;
+                check_clip(
+                    &facts,
+                    clip.resolution,
+                    clip.aspect_ratio,
+                    clip.seconds as f64,
+                )
+            }
+            VideoKind::MotionTransfer => {
+                let values = motion(&call.request)?;
+                let (_, source) = motion_source(call, &values, self.motion_profile(call))?;
+                positive_facts(&facts)?;
+                if (facts.duration_seconds - source.duration_seconds).abs()
+                    > MOTION_DURATION_TOLERANCE
+                {
+                    return Err(format!(
+                        "the clip runs {:.3} s, not the source's {:.3} s",
+                        facts.duration_seconds, source.duration_seconds
+                    ));
+                }
+                Ok(())
+            }
+        }
     }
 }
 
@@ -991,7 +1329,7 @@ mod tests {
         let untyped = json!({"error": {"detail": "x"}, "error_type": 7});
         assert_eq!(
             job_error(untyped.as_object().unwrap(), &redactor),
-            r#"fal video job failed: {"detail":"x"}"#
+            "fal video job failed: {[redacted]:[redacted]}"
         );
     }
 

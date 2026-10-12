@@ -1080,7 +1080,7 @@ fn the_key_travels_only_as_the_post_credential() {
 }
 
 #[test]
-fn register_serves_the_four_fal_capabilities() {
+fn register_serves_the_five_fal_capabilities() {
     let mut adapters = Adapters::new();
     register(&mut adapters, &setup(Arc::new(NoNetwork), test_keys()));
     let served: Vec<(String, String)> = adapters.served();
@@ -1091,6 +1091,7 @@ fn register_serves_the_four_fal_capabilities() {
             "image.generate",
             "image.edit",
             "video.generate",
+            "video.motion_transfer",
             "background.remove"
         ]
     );

@@ -151,6 +151,7 @@ async fn exchange(clients: &Clients, request: HttpRequest) -> Result<HttpRespons
     let method = match request.method {
         Method::Get => reqwest::Method::GET,
         Method::Post => reqwest::Method::POST,
+        Method::Put => reqwest::Method::PUT,
     };
     let client = clients.of(request.lane, &url);
     let mut builder = client
