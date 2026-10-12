@@ -1,10 +1,14 @@
+import { ReferencePreviewController } from "./reference-preview-controller";
+
 /** Keyboard navigation and clipboard state, independent of React. */
 export class ExampleTabsController {
   private disposed = false;
   private generation = 0;
   private timer: ReturnType<typeof setTimeout> | undefined;
+  private readonly referencePreviews: ReferencePreviewController;
 
   constructor(private readonly root: HTMLElement) {
+    this.referencePreviews = new ReferencePreviewController(root);
     root.addEventListener("click", this.click);
     root.addEventListener("keydown", this.keydown);
   }
@@ -13,6 +17,7 @@ export class ExampleTabsController {
     this.disposed = true;
     this.generation++;
     clearTimeout(this.timer);
+    this.referencePreviews.dispose();
     this.root.removeEventListener("click", this.click);
     this.root.removeEventListener("keydown", this.keydown);
   }

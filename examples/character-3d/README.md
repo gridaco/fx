@@ -118,7 +118,10 @@ estimate  $0.00   ceiling $0.00
 The replay verifies the exact corrected model against the retained independent sampled
 low-bar review, renders the original diagnostic amplitudes, and captures its actual cheer
 clip at two-thirds playback speed. One fixed three-quarter camera frames all sampled poses;
-there is no camera orbit or decorative scaling. Outputs include the corrected `character`,
+there is no camera orbit or decorative scaling. The cover uses flat, unlit base-color textures
+with their imported color factors and alpha, without added lights or surface shading. This
+changes only the rendered preview, not the GLB's materials, geometry or animation.
+Outputs include the corrected `character`,
 qualified `record`, `result`, references, intermediate rigs, correction audit, selection,
 `atlas`, and optional `cover_video`/`cover`/`capture`. Set `render_cover: false` in a later
 inputs file to skip capture and FFmpeg. The separate `showcases/nami-cover.yaml` accepts a

@@ -1,7 +1,7 @@
 fx: workflow/v1
 id: nami-rig-cover
 title: Nami rig clip cover
-description: A browser-free capture of the actual corrected rig with fixed framing and native materials.
+description: A browser-free capture of the actual corrected rig with fixed framing and flat base-color textures.
 inputs:
   model: {type: file, kind: model/gltf-binary}
 budget: {max_usd: 0}

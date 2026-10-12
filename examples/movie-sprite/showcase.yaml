@@ -1,24 +1,39 @@
 character: .showcase-inputs/nami.png
-direction: >-
-  Preserve the supplied original full-body Nami illustration, including its expressive
-  standing pose, raised hands holding the hood near her cheeks, head tilt, open smile,
-  crossed-leg stance, long pink-tipped blonde hair, charcoal rabbit hood and all original
-  clothing and accessories. This is a restrained local body idle, with the original
-  composition and facial expression held still throughout.
+direction: 'Animate the original adult Nami rabbit-hood illustration with a clearly readable playful standing idle,
+  not an almost-still image. Preserve her character identity, open smile, magenta gaze, long blonde-to-pink hair,
+  charcoal rabbit hood, outfit and crossed-leg stance. Explicitly override the template defaults for the head, neck,
+  shoulders, upper torso, raised forearms, loose hair ends and rabbit ears: these parts may move together coherently
+  as described below. The camera and boots stay fixed. The wide landscape green canvas is intentional headroom:
+  keep the whole character centered at the same full-body scale throughout, leaving the generous empty green margins
+  intact.'
 requested_motion:
-  - One tiny slow breathing cycle confined to the jacket below the fixed shoulders.
-  - Barely perceptible settling of the lower jacket folds and skirt hem around their existing resting shape.
+- 'Perform one complete, visible six-second idle cycle: ease her upper body and shoulders to one side, lean gently
+  through center toward the other side, then smoothly return to the original pose. At this framing, the shoulders
+  should travel about 25 to 40 pixels across the cycle; the motion should be obvious at a small preview size.'
+- Let her head and neck follow the upper-body lean with a small natural tilt while preserving the original face
+  design, open smile and gaze. This is articulated pose movement, not translating or scaling the whole picture.
+- Keep both hands touching the same hood edges near her cheeks. Let her forearms and elbows gently open and relax
+  with the sway, briefly lifting and releasing the hood edges as one small playful hood adjustment. Preserve hand
+  anatomy and the original number of fingers.
+- Allow the long pink hair tips, rabbit-ear tips, bow ends and skirt hem to swing with a soft delayed follow-through
+  from the body motion, then settle. No wind effect.
+- Keep the movement continuous and readable, with a natural deceleration into the original resting pose at the final
+  frame; avoid a long motionless hold at either end.
 constraints:
-  - Keep the face, eyes, eyelids, eyebrows, mouth, head, neck and shoulders completely still.
-  - Preserve the exact open smile and gaze; no blinking, speaking or expression change.
-  - Keep both raised arms, hands, fingers and hood contact points fixed in the supplied pose.
-  - Keep the hood, rabbit ears, flower, hair roots, long hair silhouette and bow completely still.
-  - Preserve the original crossed-leg stance and boot positions; no steps, balance shifts or gestures.
-  - No torso sway, whole-body bob, shoulder breathing, stretching or proportion change.
-  - Keep the original outfit, accessories, materials, colors and coverage unchanged.
-  - Keep the camera, framing, scale and lighting fixed; do not straighten or reinterpret the pose.
-  - Retain a perfectly flat green background with no added scene, shadow, particles, text or sound.
-seconds: 8
-resolution: 720p
-aspect_ratio: "9:16"
-finish: finish.initial.json
+- 'Keep her boots planted at their original screen positions and preserve the crossed-leg stance: no step, walk,
+  jump, new gesture or pose replacement.'
+- 'Keep the facial expression and feature design consistent: no speaking, mouth shape change, eye resizing or face
+  redraw. The face may travel naturally with the head tilt.'
+- Keep the original silhouette, body proportions, outfit coverage, flower, accessories, materials and colors. Do
+  not morph the body, add extra limbs or detach the hands from the hood.
+- Do not simulate the action with a camera pan, whole-image slide, zoom, uniform scale pulse or lighting change.
+  Animate the character body and secondary parts.
+- 'Keep the entire subject in frame and preserve a perfectly flat green background: no shadow, scene, particles,
+  text or sound.'
+- Preserve generous green margins around both rabbit-ear tips throughout the entire sway. Keep her complete silhouette
+  inside the image at every frame, including the biggest tilt; do not crop the hair, hood or ears.
+seconds: 6
+resolution: 1080p
+aspect_ratio: '16:9'
+finish: finish.motion.json
+plate_padding: 64

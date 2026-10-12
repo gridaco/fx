@@ -1,5 +1,6 @@
 import { parseCharacter, parseWorld } from "../../lib/showcases/contracts";
 import { loadShowcaseJson } from "../../lib/showcases/load";
+import { FlatModelPreview } from "./flat-model-preview";
 
 type WorldEntity = {
   entity: {
@@ -20,6 +21,7 @@ type CharacterManifest = { models: ModelAsset[]; images: ImageAsset[]; result?: 
 type ModelElement = HTMLElement & {
   src: string; availableAnimations: string[]; animationName: string; paused: boolean;
   cameraOrbit: string; cameraTarget: string; fieldOfView: string; autoRotate: boolean;
+  timeScale: number;
   play(): void; pause(): void; jumpCameraToGoal(): void;
 };
 
@@ -168,6 +170,9 @@ const label = (value: string): string => value.replaceAll("_", " ").replace(/^./
 /** Model loading, stage selection and animation stay independent of React. */
 export class CharacterModelController extends ExhibitController {
   private readonly model: ModelElement;
+  private readonly preview = new FlatModelPreview();
+  private currentModelUrl = "";
+  private expectedPreviewUrl = "";
   private data?: CharacterManifest;
   private ready = false;
   private currentClip = "cheer";
@@ -184,7 +189,12 @@ export class CharacterModelController extends ExhibitController {
     }, { signal });
     this.query<HTMLSelectElement>("[data-model-evidence]").addEventListener("change", this.showEvidence, { signal });
     this.model.addEventListener("load", this.loaded, { signal });
-    this.model.addEventListener("error", () => this.text("[data-model-loading]", "The model could not load. Try another stage."), { signal });
+    this.model.addEventListener("error", () => {
+      if (!this.expectedPreviewUrl || this.model.src !== this.expectedPreviewUrl) return;
+      this.ready = false; this.currentModelUrl = ""; this.expectedPreviewUrl = "";
+      this.text("[data-model-loading]", "The model could not load. Select a stage to retry.");
+      this.syncClips();
+    }, { signal });
     void this.load().catch((error: unknown) => {
       this.failed(error);
       if (!signal.aborted) this.text("[data-model-loading]", "The 3D viewer could not load.");
@@ -193,6 +203,8 @@ export class CharacterModelController extends ExhibitController {
 
   override dispose(): void {
     this.model.pause?.();
+    this.model.src = "";
+    this.preview.dispose();
     super.dispose();
   }
 
@@ -253,16 +265,32 @@ export class CharacterModelController extends ExhibitController {
       const asset = this.models.get(stage);
       if (!asset) return;
       const src = this.asset(asset.url);
-      if (this.model.src !== src) {
-        this.ready = false; this.model.src = src;
+      if (this.currentModelUrl !== src) {
+        this.ready = false; this.currentModelUrl = src; this.expectedPreviewUrl = "";
+        this.model.src = ""; this.model.style.visibility = "hidden";
         this.text("[data-model-loading]", "Loading model…");
+        void this.loadModel(asset, src).catch((error: unknown) => {
+          if (this.abort.signal.aborted || this.currentModelUrl !== src) return;
+          this.currentModelUrl = "";
+          this.failed(error); this.text("[data-model-loading]", "The model could not load. Select a stage to retry.");
+        });
       } else if (this.ready) this.play(this.currentClip);
       this.text("[data-model-caption]", `${label(stage)} · ${(asset.bytes / 1048576).toFixed(1)} MB GLB · ${stage === "rig" ? "Six clips demonstrate the rig; locomotion and facial animation are not included." : "An intermediate model from the same recorded workflow."}`);
     }
     this.syncClips();
   }
 
-  private loaded = (): void => {
+  private async loadModel(asset: ModelAsset, src: string): Promise<void> {
+    const url = await this.preview.select(src, asset.bytes);
+    if (!url || this.abort.signal.aborted || this.currentModelUrl !== src) return;
+    this.expectedPreviewUrl = url;
+    this.model.src = url;
+  }
+
+  private loaded = (event: Event): void => {
+    const url = (event as CustomEvent<{ url?: string }>).detail?.url;
+    if (!this.expectedPreviewUrl || url !== this.expectedPreviewUrl || this.model.src !== this.expectedPreviewUrl) return;
+    this.model.style.visibility = "visible";
     this.ready = true;
     this.text("[data-model-loading]", "Drag to orbit · Scroll to zoom");
     this.play(this.currentClip);
@@ -282,6 +310,8 @@ export class CharacterModelController extends ExhibitController {
   private play(clip: string): void {
     if (this.currentStage === "reference") return;
     if (this.model.availableAnimations.includes(clip)) {
+      // Match the rendered cover's six-second playback of the four-second cheer.
+      this.model.timeScale = clip === "cheer" ? 2 / 3 : 1;
       this.currentClip = clip; this.model.animationName = clip; this.model.play();
     }
     this.syncClips();

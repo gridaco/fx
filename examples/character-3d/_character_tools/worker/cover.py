@@ -1,4 +1,4 @@
-"""Headless cover capture of an existing GLB, with fixed framing and native materials."""
+"""Headless cover capture with fixed framing and unlit base-color textures."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pathlib import Path
 
 import bpy
 import numpy as np
-from mathutils import Matrix, Vector
+from mathutils import Matrix
 
 from _character_tools.worker.blender_io import (
     TO_BLENDER,
@@ -19,6 +19,60 @@ from _character_tools.worker.blender_io import (
     select_pose,
 )
 from _character_tools.worker.rendering import camera_matrix, projected_geometry
+
+
+def flat_materials(objects: list) -> list[dict]:
+    """Preserve imported color/alpha chains while bypassing surface lighting."""
+
+    materials = {}
+    for obj in objects:
+        if obj.type == "MESH":
+            for slot in obj.material_slots:
+                if slot.material is not None:
+                    materials[slot.material.name] = slot.material
+    audit = []
+    for material in materials.values():
+        tree = material.node_tree
+        if tree is None:
+            raise ValueError("Cover materials require imported color nodes")
+        shader = next((node for node in tree.nodes if node.type == "BSDF_PRINCIPLED"), None)
+        if shader is None:
+            raise ValueError("Cover materials require an imported Principled color source")
+        emission = tree.nodes.new("ShaderNodeEmission")
+        emission.inputs["Strength"].default_value = 1
+        color = shader.inputs["Base Color"]
+        emission.inputs["Color"].default_value = color.default_value
+        if color.is_linked:
+            tree.links.new(color.links[0].from_socket, emission.inputs["Color"])
+        surface = emission.outputs["Emission"]
+        alpha = shader.inputs["Alpha"]
+        if alpha.is_linked or alpha.default_value < 1:
+            transparent = tree.nodes.new("ShaderNodeBsdfTransparent")
+            mix = tree.nodes.new("ShaderNodeMixShader")
+            mix.inputs[0].default_value = alpha.default_value
+            if alpha.is_linked:
+                tree.links.new(alpha.links[0].from_socket, mix.inputs[0])
+            tree.links.new(transparent.outputs[0], mix.inputs[1])
+            tree.links.new(surface, mix.inputs[2])
+            surface = mix.outputs[0]
+        output = next(
+            node for node in tree.nodes if node.type == "OUTPUT_MATERIAL" and node.is_active_output
+        )
+        for link in list(output.inputs["Surface"].links):
+            tree.links.remove(link)
+        tree.links.new(surface, output.inputs["Surface"])
+        audit.append(
+            {
+                "name": material.name,
+                "base_color_chain_preserved": True,
+                "alpha_chain_preserved": True,
+                "surface": "base_color_emission",
+                "strength": 1,
+            }
+        )
+    if not audit:
+        raise ValueError("Cover capture requires authored mesh materials")
+    return audit
 
 
 def main() -> None:
@@ -58,23 +112,15 @@ def main() -> None:
     scene.view_settings.look = "None"
     scene.view_settings.exposure = 0
     scene.view_settings.gamma = 1
-    # The floor and background match the site's neutral backing. Native mesh,
-    # texture and matte materials are never rewritten or replaced by emission.
+    # Only the in-memory preview surface changes. Imported texture factors and
+    # alpha are retained; the source GLB, geometry and animation remain intact.
+    material_audit = flat_materials(objects)
     world = bpy.data.worlds.new("Cover neutral world")
     world.use_nodes = True
     tree = world.node_tree
-    illumination = tree.nodes["Background"]
-    illumination.inputs[0].default_value = (0.72, 0.74, 0.76, 1)
-    illumination.inputs[1].default_value = 0.65
-    backdrop = tree.nodes.new("ShaderNodeBackground")
+    backdrop = tree.nodes["Background"]
     backdrop.inputs[0].default_value = (0.9131, 0.9131, 0.9131, 1)
     backdrop.inputs[1].default_value = 1
-    light_path = tree.nodes.new("ShaderNodeLightPath")
-    mix = tree.nodes.new("ShaderNodeMixShader")
-    tree.links.new(light_path.outputs["Is Camera Ray"], mix.inputs[0])
-    tree.links.new(illumination.outputs[0], mix.inputs[1])
-    tree.links.new(backdrop.outputs[0], mix.inputs[2])
-    tree.links.new(mix.outputs[0], tree.nodes["World Output"].inputs[0])
     scene.world = world
     clip_duration = 4.0
     count = args.fps * args.duration
@@ -106,19 +152,9 @@ def main() -> None:
     camera_data.clip_start, camera_data.clip_end = radius * 0.001, radius * 10
     camera.matrix_world = TO_BLENDER @ Matrix(matrix.tolist())
     scene.camera = camera
-    for name, offset, energy in (
-        ("Key", [2, 3, 3], 150),
-        ("Fill", [-3, 2, -1], 90),
-        ("Rim", [1, 2, -3], 120),
-    ):
-        light = bpy.data.lights.new(name, "AREA")
-        light.energy, light.shape, light.size = energy, "DISK", radius * 2
-        obj = bpy.data.objects.new(name, light)
-        scene.collection.objects.link(obj)
-        obj.location = TO_BLENDER @ Vector(center + np.asarray(offset))
-        obj.rotation_euler = (
-            (TO_BLENDER @ Vector(center) - obj.location).to_track_quat("-Z", "Y").to_euler()
-        )
+    for obj in list(scene.objects):
+        if obj.type == "LIGHT":
+            bpy.data.objects.remove(obj, do_unlink=True)
     frame = np.asarray([list(corner) for corner in camera_data.view_frame(scene=scene)])
     framing = projected_geometry(all_points, matrix, frame, [args.width, args.height])
     if not framing["fully_in_frame"]:
@@ -138,7 +174,10 @@ def main() -> None:
                 "schema": "character_rig_cover_v1",
                 "model_sha256": digest,
                 "renderer": "Blender Cycles CPU",
-                "material_policy": "native_exported_matte",
+                "material_policy": "base_color_texture_emission_only",
+                "material_audit": material_audit,
+                "scene_light_count": 0,
+                "diffuse_specular_normal_bump_shading": False,
                 "background_rgb": [245, 245, 245],
                 "width": args.width,
                 "height": args.height,

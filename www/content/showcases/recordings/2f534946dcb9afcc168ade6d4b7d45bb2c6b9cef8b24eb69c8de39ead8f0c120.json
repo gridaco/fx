@@ -1,0 +1,855 @@
+{
+ "artifacts": [
+  {
+   "digest": "230c870a6e0b10faf904ee28489bc133b6ae2dbef47fc5452d0fcb438b3553d4",
+   "media_type": "video/x-matroska",
+   "name": "loop",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 42630680
+  },
+  {
+   "digest": "34b779452fa55caee632f3f1428033682180032ea40826933d988a368c44d3ae",
+   "media_type": "video/mp4",
+   "name": "video",
+   "omitted_reason": null,
+   "path": "artifacts/34b779452fa55caee632f3f1428033682180032ea40826933d988a368c44d3ae.mp4",
+   "size": 3780311
+  },
+  {
+   "digest": "55d433f1e91ae36f96af63c06c334670e36ee07b218f1b20f73f866f552c8ff8",
+   "media_type": "image/png",
+   "name": "contact_sheet",
+   "omitted_reason": null,
+   "path": "artifacts/55d433f1e91ae36f96af63c06c334670e36ee07b218f1b20f73f866f552c8ff8.png",
+   "size": 77530
+  },
+  {
+   "digest": "5e010145341293792cfb9bd12ba0c1d67f7220ddb9cf4b6095085b89a37238b6",
+   "media_type": "json",
+   "name": "report",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 68343
+  },
+  {
+   "digest": "60454dd60ef03755ec5daf4be6392753f54e03463747f21cab2c8f15b131f35f",
+   "media_type": "text/plain",
+   "name": "prompt",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 4932
+  },
+  {
+   "digest": "75652c825981e5563ab6101f8ce5b38419ab0d818b16abf57b154a5d29e2e4ed",
+   "media_type": "video/mp4",
+   "name": "preview",
+   "omitted_reason": null,
+   "path": "artifacts/75652c825981e5563ab6101f8ce5b38419ab0d818b16abf57b154a5d29e2e4ed.mp4",
+   "size": 680128
+  },
+  {
+   "digest": "807b87122160273582f70ca5a2060e8562e5ca7220a0846c6f4947d47b436752",
+   "media_type": "json",
+   "name": "manifest",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 2046
+  },
+  {
+   "digest": "9082b2f693fccdcb1eb6b87563517e4a2e60c11da39853366abf176304605621",
+   "media_type": "json",
+   "name": "report",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 312
+  },
+  {
+   "digest": "90b9cacfc7c3703007dc1f9885dc705fd00643ddc5240358ef87a822f1960a03",
+   "media_type": "image/png",
+   "name": "nami.png",
+   "omitted_reason": "unplaced_input",
+   "path": null,
+   "size": 5542543
+  },
+  {
+   "digest": "bd14563815bd76bd102f2e298a4509a485f73c8d6a6622df11436e330752766c",
+   "media_type": "image/png",
+   "name": "canonical",
+   "omitted_reason": null,
+   "path": "artifacts/bd14563815bd76bd102f2e298a4509a485f73c8d6a6622df11436e330752766c.png",
+   "size": 394158
+  },
+  {
+   "digest": "df2607383781b31f35cdd0ec7d24d79e8c339cff6941ccd3b2f70d94fa5c14d2",
+   "media_type": "image/png",
+   "name": "image",
+   "omitted_reason": null,
+   "path": "artifacts/df2607383781b31f35cdd0ec7d24d79e8c339cff6941ccd3b2f70d94fa5c14d2.png",
+   "size": 187635
+  },
+  {
+   "digest": "fb46edaaf90728321c3ed43e99bb3b2f8e3f57fac463c9fc3094d8ec0315f012",
+   "media_type": "json",
+   "name": "finish.motion.json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 505
+  },
+  {
+   "digest": "fc8bbf7ce3f4208e08310d571f60720c82ad5b4c3e1f13ea59f6be2eadb299cf",
+   "media_type": "file/zip",
+   "name": "frames",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 73748491
+  }
+ ],
+ "disclosure": {
+  "artifacts": "media",
+  "diagnostics": false,
+  "values": true
+ },
+ "kind": "fx-run-export-v1",
+ "layout": {
+  "cells": {
+   "brief": {
+    "column": 0,
+    "row": 1,
+    "source": "automatic"
+   },
+   "finish": {
+    "column": 2,
+    "row": 0,
+    "source": "automatic"
+   },
+   "plate": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   },
+   "take": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "trim": {
+    "column": 3,
+    "row": 0,
+    "source": "automatic"
+   }
+  },
+  "cursor": null,
+  "diagnostics": [],
+  "file": null,
+  "kind": "fx-layout-report-v1",
+  "order": [
+   "plate#1",
+   "brief#1",
+   "take#1",
+   "finish#1"
+  ],
+  "revision": null,
+  "state": "none"
+ },
+ "producer": {
+  "version": "0.1.0"
+ },
+ "source": {
+  "event_count": 15,
+  "events_sha256": "bfbab7f32cb6ba51af9474bd9c36e37f4700e3c455d1daf8dcd273d6525ee299",
+  "plan_sha256": "0d06e35afdb38319f655cee843698a5417fc6ab197ff7456f3c9a5a808089d87"
+ },
+ "view": {
+  "artifacts": [
+   {
+    "available": false,
+    "digest": "230c870a6e0b10faf904ee28489bc133b6ae2dbef47fc5452d0fcb438b3553d4",
+    "kind": "video/x-matroska",
+    "name": "loop",
+    "size": 42630680,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "34b779452fa55caee632f3f1428033682180032ea40826933d988a368c44d3ae",
+    "kind": "video/mp4",
+    "name": "video",
+    "size": 3780311,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "55d433f1e91ae36f96af63c06c334670e36ee07b218f1b20f73f866f552c8ff8",
+    "kind": "image/png",
+    "name": "contact_sheet",
+    "size": 77530,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "5e010145341293792cfb9bd12ba0c1d67f7220ddb9cf4b6095085b89a37238b6",
+    "kind": "json",
+    "name": "report",
+    "size": 68343,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "60454dd60ef03755ec5daf4be6392753f54e03463747f21cab2c8f15b131f35f",
+    "kind": "text/plain",
+    "name": "prompt",
+    "size": 4932,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "75652c825981e5563ab6101f8ce5b38419ab0d818b16abf57b154a5d29e2e4ed",
+    "kind": "video/mp4",
+    "name": "preview",
+    "size": 680128,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "807b87122160273582f70ca5a2060e8562e5ca7220a0846c6f4947d47b436752",
+    "kind": "json",
+    "name": "manifest",
+    "size": 2046,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "9082b2f693fccdcb1eb6b87563517e4a2e60c11da39853366abf176304605621",
+    "kind": "json",
+    "name": "report",
+    "size": 312,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "90b9cacfc7c3703007dc1f9885dc705fd00643ddc5240358ef87a822f1960a03",
+    "kind": "image/png",
+    "name": "nami.png",
+    "size": 5542543,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "bd14563815bd76bd102f2e298a4509a485f73c8d6a6622df11436e330752766c",
+    "kind": "image/png",
+    "name": "canonical",
+    "size": 394158,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "df2607383781b31f35cdd0ec7d24d79e8c339cff6941ccd3b2f70d94fa5c14d2",
+    "kind": "image/png",
+    "name": "image",
+    "size": 187635,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "fb46edaaf90728321c3ed43e99bb3b2f8e3f57fac463c9fc3094d8ec0315f012",
+    "kind": "json",
+    "name": "finish.motion.json",
+    "size": 505,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "fc8bbf7ce3f4208e08310d571f60720c82ad5b4c3e1f13ea59f6be2eadb299cf",
+    "kind": "file/zip",
+    "name": "frames",
+    "size": 73748491,
+    "url": null
+   }
+  ],
+  "charged_usd": 1.125,
+  "estimate": {
+   "ceiling_usd": 3,
+   "high_usd": 1.125,
+   "low_usd": 0.9
+  },
+  "inputs": {
+   "aspect_ratio": {
+    "value": "16:9"
+   },
+   "character": {
+    "value": {
+     "file": "90b9cacfc7c3703007dc1f9885dc705fd00643ddc5240358ef87a822f1960a03"
+    }
+   },
+   "constraints": {
+    "value": [
+     "Keep her boots planted at their original screen positions and preserve the crossed-leg stance: no step, walk, jump, new gesture or pose replacement.",
+     "Keep the facial expression and feature design consistent: no speaking, mouth shape change, eye resizing or face redraw. The face may travel naturally with the head tilt.",
+     "Keep the original silhouette, body proportions, outfit coverage, flower, accessories, materials and colors. Do not morph the body, add extra limbs or detach the hands from the hood.",
+     "Do not simulate the action with a camera pan, whole-image slide, zoom, uniform scale pulse or lighting change. Animate the character body and secondary parts.",
+     "Keep the entire subject in frame and preserve a perfectly flat green background: no shadow, scene, particles, text or sound.",
+     "Preserve generous green margins around both rabbit-ear tips throughout the entire sway. Keep her complete silhouette inside the image at every frame, including the biggest tilt; do not crop the hair, hood or ears."
+    ]
+   },
+   "direction": {
+    "value": "Animate the original adult Nami rabbit-hood illustration with a clearly readable playful standing idle, not an almost-still image. Preserve her character identity, open smile, magenta gaze, long blonde-to-pink hair, charcoal rabbit hood, outfit and crossed-leg stance. Explicitly override the template defaults for the head, neck, shoulders, upper torso, raised forearms, loose hair ends and rabbit ears: these parts may move together coherently as described below. The camera and boots stay fixed. The wide landscape green canvas is intentional headroom: keep the whole character centered at the same full-body scale throughout, leaving the generous empty green margins intact."
+   },
+   "finish": {
+    "value": {
+     "file": "fb46edaaf90728321c3ed43e99bb3b2f8e3f57fac463c9fc3094d8ec0315f012"
+    }
+   },
+   "requested_motion": {
+    "value": [
+     "Perform one complete, visible six-second idle cycle: ease her upper body and shoulders to one side, lean gently through center toward the other side, then smoothly return to the original pose. At this framing, the shoulders should travel about 25 to 40 pixels across the cycle; the motion should be obvious at a small preview size.",
+     "Let her head and neck follow the upper-body lean with a small natural tilt while preserving the original face design, open smile and gaze. This is articulated pose movement, not translating or scaling the whole picture.",
+     "Keep both hands touching the same hood edges near her cheeks. Let her forearms and elbows gently open and relax with the sway, briefly lifting and releasing the hood edges as one small playful hood adjustment. Preserve hand anatomy and the original number of fingers.",
+     "Allow the long pink hair tips, rabbit-ear tips, bow ends and skirt hem to swing with a soft delayed follow-through from the body motion, then settle. No wind effect.",
+     "Keep the movement continuous and readable, with a natural deceleration into the original resting pose at the final frame; avoid a long motionless hold at either end."
+    ]
+   },
+   "resolution": {
+    "value": "1080p"
+   },
+   "seconds": {
+    "value": 6
+   }
+  },
+  "kind": "fx-viewer-run-v1",
+  "nodes": [
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 600,
+    "error": null,
+    "id": "plate#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "image": {
+      "file": {
+       "digest": "df2607383781b31f35cdd0ec7d24d79e8c339cff6941ccd3b2f70d94fa5c14d2",
+       "kind": "image/png",
+       "name": "image",
+       "size": 187635
+      }
+     },
+     "report": {
+      "file": {
+       "digest": "9082b2f693fccdcb1eb6b87563517e4a2e60c11da39853366abf176304605621",
+       "kind": "json",
+       "name": "report",
+       "size": 312
+      }
+     }
+    },
+    "path": "plate",
+    "ports": {
+     "inputs": {
+      "image": "image"
+     },
+     "outputs": {
+      "image": "image/png",
+      "report": "json"
+     },
+     "params": {
+      "alpha_floor": {
+       "default": 24,
+       "maximum": 64,
+       "minimum": 0,
+       "type": "integer"
+      },
+      "aspect_ratio": {
+       "enum": [
+        "9:16",
+        "16:9"
+       ]
+      },
+      "padding": {
+       "default": 32,
+       "maximum": 100,
+       "minimum": 1,
+       "type": "integer"
+      }
+     }
+    },
+    "reads": [],
+    "started_at": "2026-10-11T22:12:14.767Z",
+    "state": "succeeded",
+    "step": "plate",
+    "take": [
+     1
+    ],
+    "title": "Fit onto a green plate",
+    "uses": "./nodes/take.py#green_plate",
+    "with": {
+     "alpha_floor": {
+      "value": 24
+     },
+     "aspect_ratio": {
+      "value": "16:9"
+     },
+     "image": {
+      "file": {
+       "digest": "90b9cacfc7c3703007dc1f9885dc705fd00643ddc5240358ef87a822f1960a03",
+       "kind": "image/png",
+       "name": "nami.png",
+       "size": 5542543
+      }
+     },
+     "padding": {
+      "value": 64
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 93,
+    "error": null,
+    "id": "brief#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "prompt": {
+      "file": {
+       "digest": "60454dd60ef03755ec5daf4be6392753f54e03463747f21cab2c8f15b131f35f",
+       "kind": "text/plain",
+       "name": "prompt",
+       "size": 4932
+      }
+     }
+    },
+    "path": "brief",
+    "ports": {
+     "inputs": {},
+     "outputs": {
+      "prompt": "text/plain"
+     },
+     "params": {
+      "constraints": {
+       "default": [],
+       "items": {
+        "type": "string"
+       },
+       "type": "array"
+      },
+      "direction": {
+       "default": "",
+       "type": "string"
+      },
+      "requested_motion": {
+       "default": [],
+       "items": {
+        "type": "string"
+       },
+       "type": "array"
+      },
+      "seconds": {
+       "type": "integer"
+      }
+     }
+    },
+    "reads": [],
+    "started_at": "2026-10-11T22:12:14.767Z",
+    "state": "succeeded",
+    "step": "brief",
+    "take": [
+     1
+    ],
+    "title": "Write the motion brief",
+    "uses": "./nodes/take.py#idle_brief",
+    "with": {
+     "constraints": {
+      "list": [
+       {
+        "value": "Keep her boots planted at their original screen positions and preserve the crossed-leg stance: no step, walk, jump, new gesture or pose replacement."
+       },
+       {
+        "value": "Keep the facial expression and feature design consistent: no speaking, mouth shape change, eye resizing or face redraw. The face may travel naturally with the head tilt."
+       },
+       {
+        "value": "Keep the original silhouette, body proportions, outfit coverage, flower, accessories, materials and colors. Do not morph the body, add extra limbs or detach the hands from the hood."
+       },
+       {
+        "value": "Do not simulate the action with a camera pan, whole-image slide, zoom, uniform scale pulse or lighting change. Animate the character body and secondary parts."
+       },
+       {
+        "value": "Keep the entire subject in frame and preserve a perfectly flat green background: no shadow, scene, particles, text or sound."
+       },
+       {
+        "value": "Preserve generous green margins around both rabbit-ear tips throughout the entire sway. Keep her complete silhouette inside the image at every frame, including the biggest tilt; do not crop the hair, hood or ears."
+       }
+      ]
+     },
+     "direction": {
+      "value": "Animate the original adult Nami rabbit-hood illustration with a clearly readable playful standing idle, not an almost-still image. Preserve her character identity, open smile, magenta gaze, long blonde-to-pink hair, charcoal rabbit hood, outfit and crossed-leg stance. Explicitly override the template defaults for the head, neck, shoulders, upper torso, raised forearms, loose hair ends and rabbit ears: these parts may move together coherently as described below. The camera and boots stay fixed. The wide landscape green canvas is intentional headroom: keep the whole character centered at the same full-body scale throughout, leaving the generous empty green margins intact."
+     },
+     "requested_motion": {
+      "list": [
+       {
+        "value": "Perform one complete, visible six-second idle cycle: ease her upper body and shoulders to one side, lean gently through center toward the other side, then smoothly return to the original pose. At this framing, the shoulders should travel about 25 to 40 pixels across the cycle; the motion should be obvious at a small preview size."
+       },
+       {
+        "value": "Let her head and neck follow the upper-body lean with a small natural tilt while preserving the original face design, open smile and gaze. This is articulated pose movement, not translating or scaling the whole picture."
+       },
+       {
+        "value": "Keep both hands touching the same hood edges near her cheeks. Let her forearms and elbows gently open and relax with the sway, briefly lifting and releasing the hood edges as one small playful hood adjustment. Preserve hand anatomy and the original number of fingers."
+       },
+       {
+        "value": "Allow the long pink hair tips, rabbit-ear tips, bow ends and skirt hem to swing with a soft delayed follow-through from the body motion, then settle. No wind effect."
+       },
+       {
+        "value": "Keep the movement continuous and readable, with a natural deceleration into the original resting pose at the final frame; avoid a long motionless hold at either end."
+       }
+      ]
+     },
+     "seconds": {
+      "value": 6
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "brief#1",
+      "source_kind": "output",
+      "source_port": "prompt",
+      "target_port": "prompt"
+     },
+     {
+      "source": "plate#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "first_frame"
+     },
+     {
+      "source": "plate#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "last_frame"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 66713,
+    "error": null,
+    "id": "take#1",
+    "interface_bindings": [
+     {
+      "source": "brief#1",
+      "source_kind": "output",
+      "source_port": "prompt",
+      "target_port": "prompt"
+     },
+     {
+      "source": "plate#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "first_frame"
+     },
+     {
+      "source": "plate#1",
+      "source_kind": "output",
+      "source_port": "image",
+      "target_port": "last_frame"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "video": {
+      "file": {
+       "digest": "34b779452fa55caee632f3f1428033682180032ea40826933d988a368c44d3ae",
+       "kind": "video/mp4",
+       "name": "video",
+       "size": 3780311
+      }
+     }
+    },
+    "path": "take",
+    "ports": {
+     "inputs": {
+      "first_frame": "image?",
+      "last_frame": "image?"
+     },
+     "outputs": {
+      "video": "video/mp4"
+     },
+     "params": {
+      "aspect_ratio": {
+       "type": "string",
+       "x-fx-optional": true
+      },
+      "duration": {
+       "type": "number",
+       "x-fx-optional": true
+      },
+      "prompt": {
+       "type": "string",
+       "x-fx-template": true
+      },
+      "resolution": {
+       "type": "string",
+       "x-fx-optional": true
+      }
+     }
+    },
+    "reads": [
+     "brief#1",
+     "plate#1"
+    ],
+    "started_at": "2026-10-11T22:12:15.371Z",
+    "state": "succeeded",
+    "step": "take",
+    "take": [
+     1
+    ],
+    "title": "Generate a take",
+    "uses": "fx/video.generate@1",
+    "with": {
+     "aspect_ratio": {
+      "value": "16:9"
+     },
+     "duration": {
+      "value": 6
+     },
+     "first_frame": {
+      "file": {
+       "digest": "df2607383781b31f35cdd0ec7d24d79e8c339cff6941ccd3b2f70d94fa5c14d2",
+       "kind": "image/png",
+       "name": "image",
+       "size": 187635
+      }
+     },
+     "last_frame": {
+      "file": {
+       "digest": "df2607383781b31f35cdd0ec7d24d79e8c339cff6941ccd3b2f70d94fa5c14d2",
+       "kind": "image/png",
+       "name": "image",
+       "size": 187635
+      }
+     },
+     "prompt": {
+      "file": {
+       "digest": "60454dd60ef03755ec5daf4be6392753f54e03463747f21cab2c8f15b131f35f",
+       "kind": "text/plain",
+       "name": "prompt",
+       "size": 4932
+      }
+     },
+     "resolution": {
+      "value": "1080p"
+     }
+    }
+   },
+   {
+    "bindings": [
+     {
+      "source": "take#1",
+      "source_kind": "output",
+      "source_port": "video",
+      "target_port": "video"
+     }
+    ],
+    "cache": "miss",
+    "duration_ms": 64863,
+    "error": null,
+    "id": "finish#1",
+    "interface_bindings": [
+     {
+      "source": "take#1",
+      "source_kind": "output",
+      "source_port": "video",
+      "target_port": "video"
+     }
+    ],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "canonical": {
+      "file": {
+       "digest": "bd14563815bd76bd102f2e298a4509a485f73c8d6a6622df11436e330752766c",
+       "kind": "image/png",
+       "name": "canonical",
+       "size": 394158
+      }
+     },
+     "contact_sheet": {
+      "file": {
+       "digest": "55d433f1e91ae36f96af63c06c334670e36ee07b218f1b20f73f866f552c8ff8",
+       "kind": "image/png",
+       "name": "contact_sheet",
+       "size": 77530
+      }
+     },
+     "frames": {
+      "file": {
+       "digest": "fc8bbf7ce3f4208e08310d571f60720c82ad5b4c3e1f13ea59f6be2eadb299cf",
+       "kind": "file/zip",
+       "name": "frames",
+       "size": 73748491
+      }
+     },
+     "loop": {
+      "file": {
+       "digest": "230c870a6e0b10faf904ee28489bc133b6ae2dbef47fc5452d0fcb438b3553d4",
+       "kind": "video/x-matroska",
+       "name": "loop",
+       "size": 42630680
+      }
+     },
+     "manifest": {
+      "file": {
+       "digest": "807b87122160273582f70ca5a2060e8562e5ca7220a0846c6f4947d47b436752",
+       "kind": "json",
+       "name": "manifest",
+       "size": 2046
+      }
+     },
+     "preview": {
+      "file": {
+       "digest": "75652c825981e5563ab6101f8ce5b38419ab0d818b16abf57b154a5d29e2e4ed",
+       "kind": "video/mp4",
+       "name": "preview",
+       "size": 680128
+      }
+     },
+     "report": {
+      "file": {
+       "digest": "5e010145341293792cfb9bd12ba0c1d67f7220ddb9cf4b6095085b89a37238b6",
+       "kind": "json",
+       "name": "report",
+       "size": 68343
+      }
+     }
+    },
+    "path": "finish",
+    "ports": {
+     "inputs": {
+      "settings": "json?",
+      "video": "video"
+     },
+     "outputs": {
+      "canonical": "image/png",
+      "contact_sheet": "image/png",
+      "frames": "file/zip?",
+      "loop": "video/x-matroska",
+      "manifest": "json",
+      "preview": "video/mp4",
+      "report": "json"
+     },
+     "params": {}
+    },
+    "reads": [
+     "take#1"
+    ],
+    "started_at": "2026-10-11T22:13:22.088Z",
+    "state": "succeeded",
+    "step": "finish",
+    "take": [
+     1
+    ],
+    "title": "Key, loop and verify",
+    "uses": "./nodes/finish.py#finish",
+    "with": {
+     "settings": {
+      "file": {
+       "digest": "fb46edaaf90728321c3ed43e99bb3b2f8e3f57fac463c9fc3094d8ec0315f012",
+       "kind": "json",
+       "name": "finish.motion.json",
+       "size": 505
+      }
+     },
+     "video": {
+      "file": {
+       "digest": "34b779452fa55caee632f3f1428033682180032ea40826933d988a368c44d3ae",
+       "kind": "video/mp4",
+       "name": "video",
+       "size": 3780311
+      }
+     }
+    }
+   }
+  ],
+  "outputs": {
+   "canonical": {
+    "file": {
+     "digest": "bd14563815bd76bd102f2e298a4509a485f73c8d6a6622df11436e330752766c",
+     "kind": "image/png",
+     "name": "canonical",
+     "size": 394158
+    }
+   },
+   "contact_sheet": {
+    "file": {
+     "digest": "55d433f1e91ae36f96af63c06c334670e36ee07b218f1b20f73f866f552c8ff8",
+     "kind": "image/png",
+     "name": "contact_sheet",
+     "size": 77530
+    }
+   },
+   "frames": {
+    "file": {
+     "digest": "fc8bbf7ce3f4208e08310d571f60720c82ad5b4c3e1f13ea59f6be2eadb299cf",
+     "kind": "file/zip",
+     "name": "frames",
+     "size": 73748491
+    }
+   },
+   "loop": {
+    "file": {
+     "digest": "230c870a6e0b10faf904ee28489bc133b6ae2dbef47fc5452d0fcb438b3553d4",
+     "kind": "video/x-matroska",
+     "name": "loop",
+     "size": 42630680
+    }
+   },
+   "manifest": {
+    "file": {
+     "digest": "807b87122160273582f70ca5a2060e8562e5ca7220a0846c6f4947d47b436752",
+     "kind": "json",
+     "name": "manifest",
+     "size": 2046
+    }
+   },
+   "preview": {
+    "file": {
+     "digest": "75652c825981e5563ab6101f8ce5b38419ab0d818b16abf57b154a5d29e2e4ed",
+     "kind": "video/mp4",
+     "name": "preview",
+     "size": 680128
+    }
+   },
+   "report": {
+    "file": {
+     "digest": "5e010145341293792cfb9bd12ba0c1d67f7220ddb9cf4b6095085b89a37238b6",
+     "kind": "json",
+     "name": "report",
+     "size": 68343
+    }
+   }
+  },
+  "pending": [],
+  "run_name": "take-run-03",
+  "scopes": [],
+  "stand_in": false,
+  "state": "succeeded",
+  "warnings": [],
+  "workflow": {
+   "description": "One character picture in; a transparent idle loop out. The picture is fitted onto a green plate and drawn once by a video model, with the same picture at both ends of the take. The take is finished locally: keyed to transparency, the face held still so blinks and mouth shapes can be added separately, the loop closed, and every frame checked. A clip made elsewhere can be finished instead of drawing a take.",
+   "id": "movie-sprite",
+   "title": "Movie sprite"
+  }
+ }
+}

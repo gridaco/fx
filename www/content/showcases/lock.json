@@ -1,9 +1,9 @@
 {
   "kind": "fx-showcase-lock-v1",
   "release": {
-    "sha256": "c054fe7c605cb3052de956de77e64b588171d842e7dc9ae4c751ac2b44d5d8c7",
-    "path": "showcases/c054fe7c605cb3052de956de77e64b588171d842e7dc9ae4c751ac2b44d5d8c7/manifest.json",
-    "fixture": "manifests/c054fe7c605cb3052de956de77e64b588171d842e7dc9ae4c751ac2b44d5d8c7.json"
+    "sha256": "f14d5307043afcd04a0f290ce636442e584b9d6b8e1c11b2aa845ecb450b08de",
+    "path": "showcases/f14d5307043afcd04a0f290ce636442e584b9d6b8e1c11b2aa845ecb450b08de/manifest.json",
+    "fixture": "manifests/f14d5307043afcd04a0f290ce636442e584b9d6b8e1c11b2aa845ecb450b08de.json"
   },
   "workflows": {
     "character-3d": {
@@ -92,6 +92,14 @@
           "path": "runs/66e774f7e345639ad30c78ecfcc09d647539fe8f8ed48957eca6aeb06dd13fb0/manifest.json",
           "sha256": "66e774f7e345639ad30c78ecfcc09d647539fe8f8ed48957eca6aeb06dd13fb0",
           "fixture": "recordings/66e774f7e345639ad30c78ecfcc09d647539fe8f8ed48957eca6aeb06dd13fb0.json"
+        },
+        {
+          "id": "nami-rig-cover-02",
+          "label": "Nami rig · flat texture-only cheer",
+          "kind": "fx-run-export-v1",
+          "path": "runs/ebf0befefd7d408fe27c07c942850e9d4c036158a6472a9a26f93824531b6aab/manifest.json",
+          "sha256": "ebf0befefd7d408fe27c07c942850e9d4c036158a6472a9a26f93824531b6aab",
+          "fixture": "recordings/ebf0befefd7d408fe27c07c942850e9d4c036158a6472a9a26f93824531b6aab.json"
         }
       ]
     },
@@ -100,80 +108,64 @@
         "contract": "movie-sprite-demo-v1",
         "manifest": {
           "path": "movie-sprite/manifest.json",
-          "sha256": "ec2eb92658d98677f32e8bf6940524fd671c7463e8dad089c784e91407778227",
-          "bytes": 12811,
+          "sha256": "389eecc1159b8c5a1d3b2ab0611a3aab4533d6d92970417d3489b36f1c0c1ea5",
+          "bytes": 10311,
           "media_type": "application/json"
         },
         "metadata": [
           {
-            "path": "movie-sprite/review-evidence/comparison03-independent.json",
-            "sha256": "50c7274c6086700af260163df0cfd32add33c70553d6b7ce5a7e3da7db407d2b",
-            "bytes": 1414,
+            "path": "movie-sprite/review-evidence/clean-closure-diagnosis.json",
+            "sha256": "907bbd768c4bc59ec17b2a5d2a40d432f1f52b22ffcac9335deaa2bd72f69caa",
+            "bytes": 2346,
             "media_type": "application/json"
           },
           {
             "path": "movie-sprite/review-evidence/finish-manifest.json",
-            "sha256": "8efaf130be942c9a28c06f91fbf5b2ec3bd24c75a22849f4133af2bbee9f4147",
-            "bytes": 2369,
+            "sha256": "d935f4eb0dc9b4781695b1df7ae84794184cc9ef19018944306b202f582899b9",
+            "bytes": 1506,
             "media_type": "application/json"
           },
           {
             "path": "movie-sprite/review-evidence/finish-report.json",
-            "sha256": "03993a21f4af293cdac9491a7e0bfe0517e02ada27873157e26575c4b4f11bc9",
-            "bytes": 81743,
+            "sha256": "b7923ba8bd4fc2037e929c25c0f43d4c2aa499f3b7b044c773807fdd198b8cbd",
+            "bytes": 46250,
             "media_type": "application/json"
           },
           {
             "path": "movie-sprite/review-evidence/finish-settings.json",
-            "sha256": "230d837289bb8b989d916833a0c84e5e450a143fb7422e93c17bbb665c5dc736",
-            "bytes": 880,
+            "sha256": "91b10234e63de87e4ac2d9cba88a1f0532ed712ac0d34b80507d840201eb7d68",
+            "bytes": 505,
             "media_type": "application/json"
           },
           {
-            "path": "movie-sprite/review-evidence/finish02-vs-deterministic03.json",
-            "sha256": "4ef6ab3d271960535db53b15062f23a8ff11ae48b62b8d09cecff69ef03ff1ba",
-            "bytes": 2026,
+            "path": "movie-sprite/review-evidence/independent-review.json",
+            "sha256": "36fc62fb91fdef4beb69c9c966987d40c018c8a34cc3b9eda139d865efc2292e",
+            "bytes": 8943,
             "media_type": "application/json"
           },
           {
-            "path": "movie-sprite/review-evidence/public-replay-review.json",
-            "sha256": "21f3b8b2206cfb9f9b4fa610a0a87fb507c9898d1c36ae19ce16768d58b67228",
-            "bytes": 806,
-            "media_type": "application/json"
-          },
-          {
-            "path": "movie-sprite/review-evidence/sprite-final-review-03.json",
-            "sha256": "6e64620f864fe0486627b0e52127f5b87fe7baa4857ea60cd18cf12405082620",
-            "bytes": 9447,
+            "path": "movie-sprite/review-evidence/source-alpha-silhouette.json",
+            "sha256": "13e8a01791e7c1df686eef3981e3ba60c4377318e52379f398e069f6000fa08b",
+            "bytes": 30133,
             "media_type": "application/json"
           },
           {
             "path": "movie-sprite/review-evidence/trim-report.json",
-            "sha256": "f16b5ca10f40a59572c356c249c2aac3b629832c317cb1e07a3bb2cdf15bf78a",
-            "bytes": 572,
-            "media_type": "application/json"
-          },
-          {
-            "path": "movie-sprite/review-evidence/trim-reproducibility-review.json",
-            "sha256": "74c8b462b4c3ee493d93e65b917cc927f7f93098514cfd27c07b8befffe27f54",
-            "bytes": 839,
-            "media_type": "application/json"
-          },
-          {
-            "path": "movie-sprite/review-evidence/trim01-vs-deterministic03.json",
-            "sha256": "3e5868417867f5f7fcbe933c2a38651699a13b38b0045e8c4d9783d05a6e8d98",
-            "bytes": 513,
-            "media_type": "application/json"
-          },
-          {
-            "path": "movie-sprite/review-evidence/webm02-vs03.json",
-            "sha256": "f4f1932063fb0ef4d08dd741dc857cafd4f7f537c700f99ef66f360b99afe65c",
-            "bytes": 362,
+            "sha256": "2f5dcbef8876ba8166f9c40c1683e5eeb7f8b855edf2b0ab349fdb4efec3c68e",
+            "bytes": 571,
             "media_type": "application/json"
           }
         ]
       },
       "recordings": [
+        {
+          "id": "nami-sprite-03",
+          "label": "Nami body motion · four-second local loop",
+          "kind": "fx-run-export-v1",
+          "path": "runs/c1ac112e0ea3c2800db925dafe671dda01538f45bc981235b203a0b73bb251c0/manifest.json",
+          "sha256": "c1ac112e0ea3c2800db925dafe671dda01538f45bc981235b203a0b73bb251c0",
+          "fixture": "recordings/c1ac112e0ea3c2800db925dafe671dda01538f45bc981235b203a0b73bb251c0.json"
+        },
         {
           "id": "nami-sprite-02",
           "label": "Nami transparent idle · deterministic local finishing",
@@ -213,6 +205,14 @@
           "path": "runs/da3f0a64c58e032118d3a56b8b1d1e120fa1a539b84b041273c7efd85821170f/manifest.json",
           "sha256": "da3f0a64c58e032118d3a56b8b1d1e120fa1a539b84b041273c7efd85821170f",
           "fixture": "recordings/da3f0a64c58e032118d3a56b8b1d1e120fa1a539b84b041273c7efd85821170f.json"
+        },
+        {
+          "id": "nami-motion-take-03",
+          "label": "Nami body motion · wide 1080p generation",
+          "kind": "fx-run-export-v1",
+          "path": "runs/2f534946dcb9afcc168ade6d4b7d45bb2c6b9cef8b24eb69c8de39ead8f0c120/manifest.json",
+          "sha256": "2f534946dcb9afcc168ade6d4b7d45bb2c6b9cef8b24eb69c8de39ead8f0c120",
+          "fixture": "recordings/2f534946dcb9afcc168ade6d4b7d45bb2c6b9cef8b24eb69c8de39ead8f0c120.json"
         }
       ]
     },

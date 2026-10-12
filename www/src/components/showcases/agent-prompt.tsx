@@ -21,6 +21,11 @@ export function AgentPrompt({ parts }: { parts: readonly AgentPromptPart[] }) {
           {part.image ? <img src={part.image} alt="" loading="lazy" className="size-8 shrink-0 rounded-md bg-white/10 object-cover object-top" /> : <FileText size={18} className="ml-1 shrink-0" aria-hidden="true" />}
           <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-background text-[10px] font-semibold leading-none text-foreground">{++number}</span>
           <span>{part.label}</span>
+          {part.image ? <span data-reference-preview hidden aria-hidden="true" className="fixed z-50 w-72 max-w-[calc(100vw-1.5rem)] whitespace-normal p-2">
+            <span className="block rounded-xl border bg-muted p-2 shadow-xl">
+              <img src={part.image} alt="" loading="lazy" className="block max-h-[min(24rem,60vh)] w-full rounded-md object-contain" />
+            </span>
+          </span> : null}
         </a>)}
       </div>
       <code data-example-code hidden>{agentPromptText(parts)}</code>

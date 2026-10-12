@@ -1,4 +1,4 @@
-"""Render a centered cover from Nami's actual corrected rig, without a browser."""
+"""Render Nami's corrected rig with flat textures and fixed framing, without a browser."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from grida.fx import Ctx, node
     outputs={"video": "video/mp4", "poster": "image/webp", "capture": "json"},
     tools=["blender", "ffmpeg", "ffprobe"],
     resources=["_character_tools/worker/cover.py"],
-    version=2,
+    version=3,
 )
 def render_cover(ctx: Ctx) -> dict:
     bench = Bench(ctx)
@@ -99,6 +99,11 @@ def render_cover(ctx: Ctx) -> dict:
         raise ctx.fail("Encoded rig cover differs from its declared capture")
     if capture["model_sha256"] != adopted["sha256"]:
         raise ctx.fail("Rendered cover names a different model")
+    if (
+        capture["material_policy"] != "base_color_texture_emission_only"
+        or capture["scene_light_count"] != 0
+    ):
+        raise ctx.fail("Rendered rig cover differs from its flat texture policy")
     ctx.fact("provider_calls", 0)
     return {
         "video": ctx.out.file(video, "video/mp4"),

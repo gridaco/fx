@@ -1,0 +1,28 @@
+{
+  "source_mode": "chroma",
+  "playback_seconds": 4,
+  "loop_closure": "flow",
+  "seam_frames": 12,
+  "flow_proxy_width": 720,
+  "max_flow_pixels": 36,
+  "fixed_regions": [],
+  "moving_guards": [],
+  "local_repairs": [],
+  "outside_feather_pixels": 12,
+  "preview_max_size": [
+    1280,
+    720
+  ],
+  "export_frames": true,
+  "chroma": {
+    "key_rgb": [
+      0,
+      255,
+      0
+    ],
+    "key_excess": 128,
+    "foreground_excess": 8,
+    "minimum_alpha": 24,
+    "despill_radius_pixels": 3
+  }
+}

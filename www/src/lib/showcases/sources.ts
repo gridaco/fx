@@ -33,7 +33,7 @@ export const workflowSources = {
     inputs: "showcase.yaml",
     max_usd: 3,
     setup: "uv sync\nsource .venv/bin/activate\npython ../fetch_showcase_inputs.py .",
-    note: "Install FFmpeg and ffprobe on PATH. showcase.yaml generates a new take. Use finish-showcase.yaml without --live to replay the recorded trim and local finishing at $0; its held regions are bound to that exact footage.",
+    note: "Install FFmpeg and ffprobe on PATH. showcase.yaml generates a wide-frame motion take. finish-showcase.yaml replays the recorded four-second local finish at $0 without a face hold. The input download includes the exact recorded take; earlier quiet presets remain available.",
   },
   "portrait-motion": {
     folder: "portrait-motion",

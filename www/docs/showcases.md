@@ -199,16 +199,35 @@ for a different image are not interchangeable because the character name matches
 Retain the source illustration, finished canonical frame and derived rig as
 distinct artifacts rather than replacing their provenance with a common label.
 
-All three current demos, source attachments, downloads, primary Workflow
-recordings and covers use independently reviewed Nami material. The sprite uses
-the original adult rabbit-hood illustration and its recorded video take; its
-local finish trims raw frames [12, 228), plays the resulting 7.2 seconds over an
-8-second loop, and holds source-bound face, adjacent head and finger regions.
+All three demos use independently reviewed Nami material. The sprite
+uses a six-second 1080p landscape take of the original adult rabbit-hood
+illustration. Its source-bound trim keeps frames [12, 132), producing four seconds
+at the native 30 fps without a face hold. Generated blinks, small facial changes
+and foot adjustments remain visible. Independent scoped review passed, and the
+owner approved its publication. The quiet sprite and its earlier recordings
+remain available: `nami-sprite-02` selects [12, 228),
+plays that 7.2-second interval over eight seconds, and holds source-bound face,
+adjacent head and finger regions.
 The facial patches use a separate high-resolution registered Nami portrait.
 The 3D example uses a hood-free, short-haired SD adaptation, followed by measured
 surface-preserving finishing and an explicit lower-body weight correction.
 Its runtime qualification remains pending. Earlier character recordings remain
 available as historical evidence, without becoming the current demos.
+
+The interactive 3D exhibit displays a flat, texture-only preview. The browser
+fetches each original GLB directly from the configured asset base, then adds
+`KHR_materials_unlit` to a temporary in-memory copy. All binary chunks remain
+byte-identical, including geometry, skinning, animation and embedded images.
+The bundled viewer skips lighting and tone mapping for these unlit materials;
+painted highlights already in a texture remain. Temporary blob URLs are cached
+per stage and revoked on disposal. The cheer plays at two-thirds speed, matching
+the rendered cover's timing; other diagnostic clips keep their native speed.
+Recorded GLBs, downloads, source textures and their hashes remain unchanged.
+The animated cover uses the same flat texture-only style, rendered headlessly from
+the unchanged corrected rig. Its six-second, 24 fps cheer keeps the original fixed
+camera and framing. `nami-rig-cover-02` selects the new video and still fallback;
+the earlier lit cover remains a historical recording. This free cover-only run
+does not replace the primary rig recording or require paid generation.
 
 The covers use actual sprite idle, facial patch animation and a headlessly
 rendered rig cheer clip, reviewed together for identity, framing and motion.
@@ -277,3 +296,15 @@ publisher locks are outside this tooling's scope.
 Keep old releases while links refer to them. Rollback deploys the previously
 checked website output and content lock together; no mutable `latest` object is
 needed. CI and website builds never regenerate workflows or publish content.
+
+### Local preview and content promotion
+
+Local preview media may be copied from the verified delivery closure into ignored
+`public/showcases/` and `public/runs/`, then built with
+`FX_SHOWCASE_ASSET_BASE=/fx`. Do not deploy this local output. Promoting new
+material requires publishing the reviewed immutable closure, merging its verified
+input pin, moving local preview media out of `public/`, and rebuilding
+with the CDN base as described above. The current Nami motion take is pinned in
+`examples/movie-sprite/showcase-inputs.json` for free finishing replay. Earlier
+immutable recordings remain available. Local preparation never replaces an
+existing CDN object.

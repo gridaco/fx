@@ -4,9 +4,9 @@ title: Movie sprite
 description: >-
   One character picture in; a transparent idle loop out. The picture is fitted onto a green
   plate and drawn once by a video model, with the same picture at both ends of the take.
-  The take is finished locally: keyed to transparency, the face held still so blinks and
-  mouth shapes can be added separately, the loop closed, and every frame checked. A clip
-  made elsewhere can be finished instead of drawing a take.
+  The take is finished locally: keyed to transparency, configured regions optionally held
+  still, the loop closed, and every frame checked. A clip made elsewhere can be finished
+  instead of drawing a take.
 
 inputs:
   character:
@@ -50,6 +50,12 @@ inputs:
     type: string
     enum: ["9:16", "16:9"]
     default: "9:16"
+  plate_padding:
+    type: integer
+    minimum: 1
+    maximum: 100
+    default: 32
+    description: Margin in the source green plate's pixels, before provider resizing
   finish:
     type: file
     kind: json
@@ -78,6 +84,7 @@ steps:
     with:
       image: ${{ inputs.character }}
       aspect_ratio: ${{ inputs.aspect_ratio }}
+      padding: ${{ inputs.plate_padding }}
     view: true
 
   brief:
@@ -126,9 +133,9 @@ steps:
   finish:
     title: Key, loop and verify
     description: >-
-      Free and local: green is removed, the face is held to the first frame, the loop is
-      closed by optical flow, and every frame is decoded again and checked. Changing only
-      the finishing settings reruns only this step.
+      Free and local: green is removed, configured regions can be held to the first frame,
+      the loop is closed by optical flow, and every frame is decoded again and checked.
+      Changing only the finishing settings reruns only this step.
     uses: ./nodes/finish.py#finish
     with:
       video: ${{ steps.trim.outputs.video || steps.take.outputs.video || inputs.footage }}

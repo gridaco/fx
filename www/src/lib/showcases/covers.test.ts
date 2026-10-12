@@ -83,6 +83,21 @@ test("the terrain cover uses its free derivative while preserving the original p
   expect(cover.poster).toEndWith(`/runs/${pin.sha256}/artifacts/e103b0be751bf77a8a7e0c25925c341773f965aee4092f0f42760fb1d0023b42.webp`);
 });
 
+test("the rig cover selects the flat animation and its matching still without replacing the primary rig", () => {
+  const cover = workflowCover("character-3d");
+  const pins = showcaseLock.workflows["character-3d"].recordings;
+  const pin = pins.find(item => item.id === "nami-rig-cover-02")!;
+  expect(pins[0]!.id).toBe("nami-rig-01");
+  expect(pins.some(item => item.id === "nami-rig-cover-01")).toBe(true);
+  expect(pin.sha256).toBe("ebf0befefd7d408fe27c07c942850e9d4c036158a6472a9a26f93824531b6aab");
+  expect(cover.kind).toBe("video");
+  if (cover.kind !== "video") throw new Error("Expected the recorded flat rig animation.");
+  expect(cover.src).toEndWith(`/runs/${pin.sha256}/artifacts/6e6a07386447430242dc0af11787f8db3ed4cc59135d2c1f0d2c38153e91c506.mp4`);
+  expect(cover.poster).toEndWith(`/runs/${pin.sha256}/artifacts/7ca6a21a2eb3b0be310afcd1b52cce86de1f029d7feebd9e9da0c5e415243938.webp`);
+  expect(cover.fit).toBe("cover");
+  expect(cover.position).toBe("center");
+});
+
 test("the portrait cover selects the recorded native animation with its static fallback and centered cover framing", () => {
   const cover = workflowCover("portrait-motion");
   const pin = showcaseLock.workflows["portrait-motion"].recordings.find(item => item.id === "nami-face-01")!;

@@ -1,0 +1,252 @@
+{
+  "kind": "independent-movie-sprite-review-v1",
+  "reviewer": "nami_motion_review",
+  "producer_is_reviewer": false,
+  "browser_qa": false,
+  "provider_calls": 0,
+  "verdict": "pass_scoped",
+  "user_artistic_approval": "pending",
+  "source": {
+    "raw": "take-run-03/files/take/video.mp4",
+    "raw_sha256": "34b779452fa55caee632f3f1428033682180032ea40826933d988a368c44d3ae",
+    "raw_frames": 180,
+    "raw_fps": 30,
+    "raw_dimensions": [
+      1920,
+      1080
+    ],
+    "all_raw_frames_border_clear": true,
+    "raw_min_main_silhouette_margins_ltrb": [
+      696,
+      46,
+      706,
+      95
+    ],
+    "retained_source_frame_interval": [
+      12,
+      132
+    ],
+    "trimmed_sha256": "d73aab13d160928242aeaf795e7d8e201ff1ee2e1fa28afd64ea06a3aee4e067"
+  },
+  "sprite": {
+    "path": "finish-run-04/files/finish",
+    "semantic_verdict": "pass_scoped",
+    "facts": {
+      "frames": 120,
+      "dimensions": [
+        1920,
+        1080
+      ],
+      "playback_fps": 30.0,
+      "playback_seconds": 4.0,
+      "first_last_rgba_exact": true,
+      "canonical_first_rgba_exact": true,
+      "border_issue_frames": [],
+      "min_margins_ltrb": [
+        696,
+        46,
+        704,
+        94
+      ],
+      "alpha_islands_ge16": [
+        [
+          109,
+          1,
+          25
+        ]
+      ],
+      "max_isolated_alpha_pixels": 25,
+      "sample_ids": [
+        0,
+        10,
+        21,
+        32,
+        43,
+        54,
+        64,
+        75,
+        86,
+        97,
+        108,
+        119
+      ],
+      "fixed_regions": [],
+      "loop_closure": "flow",
+      "maximum_proxy_displacement_pixels": 6.1450886726379395,
+      "max_flow_pixels": 36.0,
+      "canonical_sha256": "0ac5898978d8d514329e8af9a60949a1e124785a7c7f9f265f264f9dfe834b16",
+      "frames_sha256": "fc8c4c662d98ea7f78ff3ec5bd19ff76d1f247c916bd08b3ee3fd801772c35fa",
+      "loop_sha256": "18b4681dcfd7026e5fd6ed1b2b85ea845830ea1fd45829491285c9168f708d09",
+      "report_sha256": "b7923ba8bd4fc2037e929c25c0f43d4c2aa499f3b7b044c773807fdd198b8cbd",
+      "decoded_ffv1_frames": 120,
+      "ffv1_vs_native_png_mismatch_frames": [],
+      "ffprobe": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "ffv1",
+            "width": 1920,
+            "height": 1080,
+            "pix_fmt": "bgra",
+            "r_frame_rate": "30/1"
+          }
+        ],
+        "format": {
+          "duration": "4.000000"
+        }
+      }
+    },
+    "observations": [
+      "All 120 native RGBA PNGs were scanned. The silhouette remains complete with no edge contact, and all 120 FFV1-decoded frames exactly match their corresponding PNGs.",
+      "Canonical, first and last native RGBA frames are identical. No fixed regions, moving guards or local repairs freeze the face or body. The unchanged 36-pixel proxy flow gate admits a maximum correction of 6.1451 pixels.",
+      "Reviewed twelve chronological native full-body samples on dark and pale backgrounds plus ten enlarged endpoint head and hand crops. Nami remains recognizable, with coherent rabbit hood, hair, hands, jacket, skirt and crossed-leg design.",
+      "The upper body rises and leans with articulated torso, head, forearm and secondary hair/ear motion, then returns. This is visibly stronger than the previously published nearly static take and is not a uniform whole-image slide or zoom.",
+      "Trimming removes the grainy provider opening and the long final resting interval. Enlarged clean endpoint crops show no obvious held-region seam or coarse first-frame texture transition."
+    ],
+    "limits": [
+      "The generator adds blinks and mildly redraws facial features while moving; the expression is consistent in character but not pixel-frozen.",
+      "Boots and legs make small generated adjustments. The action should not be described as perfectly pixel-anchored feet.",
+      "A faint 25-pixel alpha island appears only at native frame 109 in an 8 by 6 pixel box at x1168,y428, immediately beside a fine hair tip during closure. It is a minor hair-edge fragment, not a remote background speck. No other alpha island is at least sixteen pixels.",
+      "Review is based on chronological sampled images and complete numerical scans, not realtime browser playback or final user artistic approval."
+    ]
+  },
+  "motion_measurement": {
+    "method": "Approximate sparse Lucas-Kanade landmark tracking from raw first frame to sampled interior frames, with a robust partial-affine comparison. This supports visible articulated motion, not exact skeletal kinematics.",
+    "peak_sample": {
+      "frame": 63,
+      "total_disp_median": 58.506832122802734,
+      "affine_residual_p90": 112.94574332610075,
+      "regions": {
+        "head": {
+          "tracked": 406,
+          "disp_median": 53.82196807861328,
+          "affine_residual_median": 2.402588304404625,
+          "displacement_xy_median": [
+            -11.08367919921875,
+            -52.385040283203125
+          ]
+        },
+        "torso": {
+          "tracked": 578,
+          "disp_median": 63.93292236328125,
+          "affine_residual_median": 33.535836024503794,
+          "displacement_xy_median": [
+            -3.27667236328125,
+            -55.53718566894531
+          ]
+        },
+        "legs": {
+          "tracked": 134,
+          "disp_median": 22.110496520996094,
+          "affine_residual_median": 102.06519284887554,
+          "displacement_xy_median": [
+            17.714569091796875,
+            -8.408416748046875
+          ]
+        },
+        "feet": {
+          "tracked": 123,
+          "disp_median": 10.469468116760254,
+          "affine_residual_median": 97.59629603769935,
+          "displacement_xy_median": [
+            7.1607666015625,
+            -1.0435791015625
+          ]
+        }
+      }
+    }
+  },
+  "cover": {
+    "path": "prepared-24/cover-animated.webp",
+    "semantic_verdict": "pass_scoped",
+    "facts": {
+      "sha256": "4bc4339405b9f3c118be65283f10a3dfe30da928b64d8024d487eb0d89ffca2a",
+      "dimensions": [
+        960,
+        600
+      ],
+      "frame_count": 95,
+      "duration_ms": 4000,
+      "sample_ids": [
+        0,
+        12,
+        24,
+        36,
+        48,
+        60,
+        72,
+        84,
+        94
+      ],
+      "first_last_rgb_mean_abs_delta": 0.3016015589237213
+    },
+    "observations": [
+      "Reviewed nine actual decoded chronological cover frames. The full character stays centered with hood ears, hair and boots inside the 960 by 600 frame.",
+      "The four-second cycle visibly moves at cover scale. The pale matte and soft ground shadow belong only to this presentation derivative; the delivered sprite retains transparency.",
+      "Ninety-six source samples were selected without interpolation at 24 frames per second. The WebP encoder merged one identical adjacent pair, yielding 95 decoded frames while preserving exactly 4000 milliseconds of duration."
+    ],
+    "limits": [
+      "Lossy cover endpoints differ by a mean of 0.3016 RGBA levels out of 255; only the native transparent endpoints are pixel-exact.",
+      "No browser playback review."
+    ]
+  },
+  "reduced_motion_poster": {
+    "sha256": "3cb0543d981db9c66e857410940d3d0636758d64e246d55fe422614c20b893e0",
+    "frame_count": 1,
+    "dimensions": [
+      960,
+      600
+    ]
+  },
+  "browser_sprite_webp": {
+    "sha256": "347300be7bd772dd10f77545fed177e38e1a382503203e5e5b57704ff810cc93",
+    "dimensions": [
+      1280,
+      720
+    ],
+    "frame_count": 96,
+    "duration_ms": 4000,
+    "alpha_min": 0,
+    "alpha_max": 255,
+    "minimum_zero_alpha_fraction": 0.9066493055555556
+  },
+  "browser_sprite_webm": {
+    "sha256": "013280b70ecd9128ab0dafe6c9f84ea26c710925588535a05dbf596f4b405dcd",
+    "ffprobe": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "vp9",
+          "width": 1280,
+          "height": 720,
+          "pix_fmt": "yuv420p",
+          "r_frame_rate": "30/1",
+          "tags": {
+            "alpha_mode": "1"
+          }
+        }
+      ],
+      "format": {
+        "duration": "4.000000"
+      }
+    },
+    "decoded_frames": 120,
+    "decoded_alpha_min": 0,
+    "decoded_alpha_max": 255,
+    "minimum_zero_alpha_fraction": 0.9036187065972222,
+    "first_last_rgba_mean_abs_delta": 5.235460048425011e-05
+  },
+  "rejected_predecessors": [
+    {
+      "take": "take-run-01",
+      "reason": "Visible improved motion but the right rabbit-ear tip is clipped in raw frames 48 through 76. Rejected for a complete transparent silhouette."
+    },
+    {
+      "take": "take-run-02",
+      "reason": "The larger generated sway clips the left ear in raw frames 50 through 54 and the right ear in raw frames 83 through 108 despite the padded starting composition."
+    }
+  ],
+  "publication": "Local candidate only. This verdict does not publish or replace the existing showcase, and user artistic review remains pending."
+}

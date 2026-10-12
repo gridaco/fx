@@ -46,13 +46,13 @@ export function MotionDemo({ slug, assetBase, parallaxGuides = NO_GUIDES }: { sl
             <video data-movie src={asset("assets/loop.webm")} poster={asset("assets/canonical.png")} muted loop playsInline preload="metadata" aria-label="Finished transparent idle loop" />
             <img data-fallback src={asset("assets/loop.webp")} loading="lazy" alt="Transparent animated idle loop" hidden />
           </div>
-          <figcaption>Finished loop <span>Face pinned · Transparent</span></figcaption>
+          <figcaption>Finished loop <span>Transparent · Looped</span></figcaption>
         </figure>
         <figure data-original-stage hidden>
           <div className={styles.figureStage}>
-            <video data-original src={asset("assets/original-unpinned-preview.mp4")} muted loop playsInline preload="metadata" aria-label="Original generated take before facial finishing" />
+            <video data-original src={asset("assets/original-unpinned-preview.mp4")} muted loop playsInline preload="metadata" aria-label="Original generated take before local finishing" />
           </div>
-          <figcaption>Original take <span>Before face pinning</span></figcaption>
+          <figcaption>Original take <span>Before local finishing</span></figcaption>
         </figure>
       </div>
       <div className={styles.toolbar}>

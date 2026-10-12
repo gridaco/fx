@@ -52,11 +52,11 @@ export const workflowDetails: Record<Workflow["slug"], Details> = {
     related: "character-3d",
   },
   "movie-sprite": {
-    introduction: "A character idle needs more than a generated video. The background has to come away cleanly, the loop has to close, and the face has to stay usable for later expressions. Here, generation and local finishing are separate steps, so the same paid take can be finished again without drawing it again.",
+    introduction: "Animate an illustration, remove its background, and close the loop. Generation and local finishing stay separate, so timing and keying can change without paying for another take.",
     stages: [
       { title: "Prepare", description: "Fit the original character onto a flat green plate and write one motion brief." },
-      { title: "Generate", description: "Make one eight-second video take, keeping the camera and pose steady." },
-      { title: "Finish", description: "Trim the noisy endpoints, remove green, hold the face locally, and close the loop." },
+      { title: "Generate", description: "Generate a six-second take with visible upper-body motion and room for the moving ears." },
+      { title: "Finish", description: "Keep the clean four-second motion cycle, remove green, and close the loop locally." },
       { title: "Reuse", description: "Deliver the transparent loop and its exact first frame for later compositing." },
     ],
     outputs: [
@@ -65,9 +65,9 @@ export const workflowDetails: Record<Workflow["slug"], Details> = {
       { path: "assets/canonical.png", description: "The exact first frame of the finished loop." },
       { path: "assets/contact-sheet.png", description: "Sampled frames for reviewing motion and edges." },
     ],
-    inputs: "character: .showcase-inputs/nami.png\n# Full motion direction and constraints are in showcase.yaml.\nseconds: 8\nresolution: 720p\naspect_ratio: \"9:16\"\n# Settings for a new take; the recorded face pin is separate.\nfinish: finish.initial.json",
-    agent: ["Build an FX workflow that turns ", {"label": "this character", "path": "assets/source.png"}, " into an eight-second body idle. Keep the face still for separate expressions. Plan offline, then ask me for a spending ceiling before generating a take. Show me the take before finishing it. Make keying, loop closure, and any face pin local steps so I can revise them without paying for another video. Deliver the transparent loop and its exact first frame."],
-    works: ["Gentle breathing, hair settling, and small idle motion", "A fixed camera and a character that stays in its pose", "Characters without green clothing or props"],
+    inputs: "character: .showcase-inputs/nami.png\n# Full motion direction and constraints are in showcase.yaml.\nseconds: 6\nresolution: 1080p\naspect_ratio: \"16:9\"\nplate_padding: 64\nfinish: finish.motion.json",
+    agent: ["Build an FX workflow that turns ", {"label": "this character", "path": "assets/source.png"}, " into a repeating body idle with visible, coherent motion. Keep the camera fixed and leave room for the full silhouette. Plan offline, then ask me for a spending ceiling before generating a take. Show me the take before finishing it. Make keying, timing, and loop closure local steps so I can revise them without paying for another video. Deliver the transparent loop and its exact first frame."],
+    works: ["Standing body motion with hair and clothing follow-through", "A fixed camera and a consistent full-body character", "Characters without green clothing or props"],
     related: "portrait-motion",
   },
   "portrait-motion": {

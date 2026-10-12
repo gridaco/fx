@@ -8,83 +8,75 @@
   ],
   "character": {
     "id": "nami",
-    "representation": "Original adult rabbit-hood illustration; same character as facial patches and SD3D adaptation.",
+    "representation": "Original adult rabbit-hood illustration; same character as facial patches and SD 3D adaptation.",
     "source_sha256": "90b9cacfc7c3703007dc1f9885dc705fd00643ddc5240358ef87a822f1960a03",
     "rights_basis": "Original repository-owned Nami artwork; no third-party character reference."
   },
   "generation": {
     "route": "fal-ai/wan/v2.7/image-to-video@fal",
-    "run": "wan-run-02",
-    "source_video_sha256": "1029ded25f09744c28e6b2fbd11eb1905e0a3bcc2103de4c0b8f331a63437a24",
+    "run": "take-run-03",
+    "booked_usd": 1.125,
     "paid_calls": 1,
-    "booked_usd": 1,
-    "requested_seconds": 8,
-    "resolution": "720p",
-    "aspect_ratio": "9:16",
-    "limitations": [
-      "The take changes facial pixels and contains transient green encoding haze. Default finishing refused its residual-background flow. Original paid take and failed finish remain recorded."
-    ]
+    "source_video_sha256": "34b779452fa55caee632f3f1428033682180032ea40826933d988a368c44d3ae",
+    "requested_seconds": 6,
+    "resolution": "1080p",
+    "aspect_ratio": "16:9"
   },
   "comparison_preview": {
-    "source": "trim-run-03",
-    "source_video_sha256": "45c0188eeb842ee23ff578deb22e57f465f722da3b695af41d2d9e393fdcc3af",
-    "source_frame_interval": [
-      12,
-      228
-    ],
-    "frame_count": 216,
-    "playback_fps": 27,
-    "playback_seconds": 8,
+    "source_video_sha256": "d73aab13d160928242aeaf795e7d8e201ff1ee2e1fa28afd64ea06a3aee4e067",
+    "frame_count": 120,
+    "playback_fps": 30.0,
+    "playback_seconds": 4.0,
     "keyed": false,
     "held_region_applied": false,
     "loop_flow_applied": false,
     "audio": false,
-    "operation": "Encode the same retained original frame interval at the finished playback rate for synchronized comparison; no face pin, chroma key or optical-flow closure."
+    "operation": "Encode the same source interval at the finished playback rate for synchronized comparison; no fixed regions, chroma key or optical-flow closure."
   },
   "frame_selection": {
     "audio": false,
     "codec": "ffv1",
     "container_bitexact": true,
-    "end_frame_exclusive": 228,
-    "height": 1280,
+    "end_frame_exclusive": 132,
+    "height": 1080,
     "interpolation": false,
     "kind": "movie_sprite_frame_interval_v1",
-    "output_sha256": "45c0188eeb842ee23ff578deb22e57f465f722da3b695af41d2d9e393fdcc3af",
+    "output_sha256": "d73aab13d160928242aeaf795e7d8e201ff1ee2e1fa28afd64ea06a3aee4e067",
     "reason": "Explicit author-selected interval; semantic review remains separate.",
-    "retained_frames": 216,
-    "retained_seconds": 7.2,
+    "retained_frames": 120,
+    "retained_seconds": 4,
     "source_frame_rate": "30",
-    "source_frames": 240,
-    "source_sha256": "1029ded25f09744c28e6b2fbd11eb1905e0a3bcc2103de4c0b8f331a63437a24",
+    "source_frames": 180,
+    "source_sha256": "34b779452fa55caee632f3f1428033682180032ea40826933d988a368c44d3ae",
     "start_frame": 12,
-    "width": 720
+    "width": 1920
   },
   "finishing": {
-    "run": "free-finish-run-03",
+    "run": "finish-run-04",
     "paid_calls": 0,
     "booked_usd": 0,
-    "source_video_sha256": "45c0188eeb842ee23ff578deb22e57f465f722da3b695af41d2d9e393fdcc3af",
-    "settings_sha256": "230d837289bb8b989d916833a0c84e5e450a143fb7422e93c17bbb665c5dc736",
-    "fixed_region_pixels": 62336,
-    "face_pinned": true,
-    "held_region": "Source-bound face and adjacent head/finger pixels within authored quadrilateral, with12px exterior feather.",
+    "source_video_sha256": "d73aab13d160928242aeaf795e7d8e201ff1ee2e1fa28afd64ea06a3aee4e067",
+    "settings_sha256": "91b10234e63de87e4ac2d9cba88a1f0532ed712ac0d34b80507d840201eb7d68",
+    "fixed_region_pixels": 0,
+    "face_pinned": false,
+    "held_region": "None; head, neck, face, shoulders and hands retain their generated movement.",
     "chroma_key_excess": 128.0,
     "max_flow_pixels": 36.0,
     "native": {
       "schema_version": 1,
       "kind": "movie_sprite_body",
-      "width": 720,
-      "height": 1280,
-      "frame_count": 216,
-      "playback_fps": 27.0,
-      "playback_rate": "27",
-      "playback_seconds": 8.0,
+      "width": 1920,
+      "height": 1080,
+      "frame_count": 120,
+      "playback_fps": 30.0,
+      "playback_rate": "30",
+      "playback_seconds": 4.0,
       "alpha_mode": "straight",
       "loop": true,
       "audio": false,
       "canonical_frame_index": 0,
-      "canonical_sha256": "7f4ff94fe49ce2deddc21cd655ae8b8120ea7ba25d10533dc3baad291da813cb",
-      "source_sha256": "45c0188eeb842ee23ff578deb22e57f465f722da3b695af41d2d9e393fdcc3af",
+      "canonical_sha256": "0ac5898978d8d514329e8af9a60949a1e124785a7c7f9f265f264f9dfe834b16",
+      "source_sha256": "d73aab13d160928242aeaf795e7d8e201ff1ee2e1fa28afd64ea06a3aee4e067",
       "source_frame_indices": [
         0,
         1,
@@ -205,113 +197,17 @@
         116,
         117,
         118,
-        119,
-        120,
-        121,
-        122,
-        123,
-        124,
-        125,
-        126,
-        127,
-        128,
-        129,
-        130,
-        131,
-        132,
-        133,
-        134,
-        135,
-        136,
-        137,
-        138,
-        139,
-        140,
-        141,
-        142,
-        143,
-        144,
-        145,
-        146,
-        147,
-        148,
-        149,
-        150,
-        151,
-        152,
-        153,
-        154,
-        155,
-        156,
-        157,
-        158,
-        159,
-        160,
-        161,
-        162,
-        163,
-        164,
-        165,
-        166,
-        167,
-        168,
-        169,
-        170,
-        171,
-        172,
-        173,
-        174,
-        175,
-        176,
-        177,
-        178,
-        179,
-        180,
-        181,
-        182,
-        183,
-        184,
-        185,
-        186,
-        187,
-        188,
-        189,
-        190,
-        191,
-        192,
-        193,
-        194,
-        195,
-        196,
-        197,
-        198,
-        199,
-        200,
-        201,
-        202,
-        203,
-        204,
-        205,
-        206,
-        207,
-        208,
-        209,
-        210,
-        211,
-        212,
-        213,
-        214,
-        215
+        119
       ],
       "frames_pattern": "frame-{index:06d}.png"
     },
     "notes": [
-      "Raw frames[12,228) retain7.2seconds, played over8seconds at27fps. Contaminated leading/trailing frames are omitted in an explicit source-bound step.",
-      "Source-specific green key cleans the retained take; the admitted36px motion-flow bound is unchanged.",
-      "Exact fixed-region pixels are held; body/clothing motion outside authored fields remains from the paid take.",
-      "The first generated frame is the canonical; no separate facial replacement or source-image repaint is applied."
-    ],
-    "encoder_portability": "Bitexact source interval bytes verified on FFmpeg 9.0.1. Cross-version/build compressed-byte identity is not promised; source-bound settings refuse changed encoding."
+      "Raw source frames [12,132) retain exactly four seconds at the native 30fps; no playback retiming is applied.",
+      "The first 0.4 seconds with grainy source texture and final 1.6 seconds of dwell are omitted explicitly.",
+      "The generated movement is untouched outside twelve-frame endpoint closure windows.",
+      "The native canonical is the keyed first generated frame, with exact native loop endpoints.",
+      "No character-region freeze, local repair, pose replacement or facial patch is applied."
+    ]
   },
   "cover": {
     "size": [
@@ -319,163 +215,180 @@
       600
     ],
     "subject_bounds_xyxy": [
-      50,
-      33,
-      670,
-      1248
+      680,
+      30,
+      1232,
+      1002
     ],
     "resized_subject": [
-      282,
+      313,
       552
     ],
     "offset_xy": [
-      339,
+      323,
       24
     ],
-    "crop": "Full figure union across96samples; no camera pan or subject crop.",
-    "background": "Pale pink studio gradient with stationary soft ground shadow.",
-    "poster": "Static lossless first decoded frame of the recorded 96-frame animated 8:5 cover.",
-    "animated_root_output_sha256": "48606389e317edaf39ffc4767d53990a2d4f3553f41cb54394c179067731aea6"
+    "crop": "All retained source main-silhouette bounds plus 16px closure safety; fixed crop, no camera pan or subject cut.",
+    "poster": "Static lossless first decoded frame of the recorded animated cover.",
+    "animated_root_output_sha256": "4bc4339405b9f3c118be65283f10a3dfe30da928b64d8024d487eb0d89ffca2a",
+    "sampling": {
+      "actual_native_samples": 96,
+      "sample_fps": 24,
+      "decoded_webp_frames": 95,
+      "duration_ms": 4000,
+      "identical_adjacent_samples_merged_by_encoder": 1,
+      "interpolation": false
+    }
   },
   "checks": {
     "webm_alpha_range": [
       0,
       255
     ],
-    "webm_first_frame_transparent_fraction": 0.6432758246527778,
+    "webm_first_frame_transparent_fraction": 0.9119856770833333,
+    "browser_video_size": [
+      1280,
+      720
+    ],
+    "browser_video_fps": 30.0,
+    "browser_image_sample_fps": 24,
+    "native_size": [
+      1920,
+      1080
+    ],
     "webp": {
       "size": [
-        432,
-        768
+        1280,
+        720
       ],
       "frames": 96,
-      "duration_ms": 8000,
+      "duration_ms": 4000,
       "loop": 0
     },
-    "cover": {
+    "animated_cover": {
+      "size": [
+        960,
+        600
+      ],
+      "frames": 95,
+      "duration_ms": 4000,
+      "loop": 0
+    },
+    "poster": {
       "size": [
         960,
         600
       ],
       "frames": 1,
-      "animated": false,
-      "source_first_frame_pixels_exact": true
+      "animated": false
     },
     "native_all_frames_lossless_verified": true,
     "native_loop_endpoints_exact": true,
     "native_canonical_first_frame_exact": true
   },
-  "review_status": "accepted_scoped",
-  "publication_authorized": true,
+  "review_status": "independent_scoped_pass_user_artistic_review_pending",
+  "publication_authorized": false,
   "files": {
     "assets/canonical.png": {
-      "sha256": "7f4ff94fe49ce2deddc21cd655ae8b8120ea7ba25d10533dc3baad291da813cb",
-      "bytes": 645876
+      "sha256": "0ac5898978d8d514329e8af9a60949a1e124785a7c7f9f265f264f9dfe834b16",
+      "bytes": 417079
     },
     "assets/contact-sheet.png": {
-      "sha256": "4f56d9a224dd682d8fb60e69841b7f9c0e3d81a7e420806b623168b64c7ff334",
-      "bytes": 559402
+      "sha256": "d96e6d6f6c0e22d8626fe93aad658bc5292df424a2707e17b14c8017e83d647e",
+      "bytes": 78590
     },
     "assets/loop.webm": {
-      "sha256": "26dce5695d37de3dd3294738142fccea5c7cc524a4889ee412a6b6ea7cc80fd7",
-      "bytes": 1754064
+      "sha256": "013280b70ecd9128ab0dafe6c9f84ea26c710925588535a05dbf596f4b405dcd",
+      "bytes": 1189989
     },
     "assets/loop.webp": {
-      "sha256": "57b28e28074ed0a6bff119706c3dc4b9fbfe8d4753a40afd269ea1bce5130c0e",
-      "bytes": 5753672
+      "sha256": "347300be7bd772dd10f77545fed177e38e1a382503203e5e5b57704ff810cc93",
+      "bytes": 4142678
     },
     "assets/original-unpinned-preview.mp4": {
-      "sha256": "71e9b33095a5a53fa6f155c10e85b1a021f4e39ccfca57fa78f50cc0aed1c094",
-      "bytes": 2431138
+      "sha256": "0c5872e89e6117272a170d6f04a272819be43d1ecdce6dff94ef221eb1ca54e7",
+      "bytes": 2089451
     },
     "assets/preview.mp4": {
-      "sha256": "47fea1b7367819976f949796afb0c5f9bed66a60e465d25677ab46489e3a3383",
-      "bytes": 3076351
+      "sha256": "ad64f2a0f8ef2e336541e5be0fc335a35e0e7217c98fa493a3c7fb0102b5cb4a",
+      "bytes": 1399084
     },
     "assets/source.png": {
       "sha256": "90b9cacfc7c3703007dc1f9885dc705fd00643ddc5240358ef87a822f1960a03",
       "bytes": 5542543
     },
     "cover.webp": {
-      "sha256": "4477b148e8c0d5959e3cf4a673e15734360b167b97f55a7eb506db5b22f4ad90",
-      "bytes": 107500
+      "sha256": "3cb0543d981db9c66e857410940d3d0636758d64e246d55fe422614c20b893e0",
+      "bytes": 95890
     },
-    "review-evidence/comparison03-independent.json": {
-      "sha256": "50c7274c6086700af260163df0cfd32add33c70553d6b7ce5a7e3da7db407d2b",
-      "bytes": 1414
+    "review-evidence/clean-closure-diagnosis.json": {
+      "sha256": "907bbd768c4bc59ec17b2a5d2a40d432f1f52b22ffcac9335deaa2bd72f69caa",
+      "bytes": 2346
     },
-    "review-evidence/comparison03-source-samples.png": {
-      "sha256": "f2a868addf0ac34df5968def5f4f920cf388ec9dddad197e2f8372e851f103cd",
-      "bytes": 1067522
+    "review-evidence/clean-endpoint-crops.png": {
+      "sha256": "d52d85328c3f16dd81ed96a7d37afcd0c9b1a20426d44326cae4af21c10fddb9",
+      "bytes": 1862901
+    },
+    "review-evidence/cover-samples.png": {
+      "sha256": "5c92f16f57e524fe570295d4e9c9860b3c15939bcb7f3190138a3ad867d3c7bb",
+      "bytes": 403621
     },
     "review-evidence/finish-manifest.json": {
-      "sha256": "8efaf130be942c9a28c06f91fbf5b2ec3bd24c75a22849f4133af2bbee9f4147",
-      "bytes": 2369
+      "sha256": "d935f4eb0dc9b4781695b1df7ae84794184cc9ef19018944306b202f582899b9",
+      "bytes": 1506
     },
     "review-evidence/finish-report.json": {
-      "sha256": "03993a21f4af293cdac9491a7e0bfe0517e02ada27873157e26575c4b4f11bc9",
-      "bytes": 81743
+      "sha256": "b7923ba8bd4fc2037e929c25c0f43d4c2aa499f3b7b044c773807fdd198b8cbd",
+      "bytes": 46250
     },
     "review-evidence/finish-settings.json": {
-      "sha256": "230d837289bb8b989d916833a0c84e5e450a143fb7422e93c17bbb665c5dc736",
-      "bytes": 880
+      "sha256": "91b10234e63de87e4ac2d9cba88a1f0532ed712ac0d34b80507d840201eb7d68",
+      "bytes": 505
     },
-    "review-evidence/finish02-vs-deterministic03.json": {
-      "sha256": "4ef6ab3d271960535db53b15062f23a8ff11ae48b62b8d09cecff69ef03ff1ba",
-      "bytes": 2026
+    "review-evidence/independent-review.json": {
+      "sha256": "36fc62fb91fdef4beb69c9c966987d40c018c8a34cc3b9eda139d865efc2292e",
+      "bytes": 8943
     },
-    "review-evidence/public-replay-review.json": {
-      "sha256": "21f3b8b2206cfb9f9b4fa610a0a87fb507c9898d1c36ae19ce16768d58b67228",
-      "bytes": 806
+    "review-evidence/minor-hair-edge-fragment.png": {
+      "sha256": "907055eb1eb48ba23f396a29dd38947318eec6b9586f6fcaa323c952b66aca67",
+      "bytes": 64606
     },
-    "review-evidence/sprite-cover-actual-samples.png": {
-      "sha256": "17f162951439de239551e90f333e3c3e254b3185948413b16aeae0374206f78d",
-      "bytes": 218578
+    "review-evidence/native-contrasting.png": {
+      "sha256": "54b56f8c7cce005c48fd4c194bb08c1424002e2af3396f72327982188c7cdb82",
+      "bytes": 2066246
     },
-    "review-evidence/sprite-final-review-03.json": {
-      "sha256": "6e64620f864fe0486627b0e52127f5b87fe7baa4857ea60cd18cf12405082620",
-      "bytes": 9447
-    },
-    "review-evidence/sprite-finish02-contrasting-samples.png": {
-      "sha256": "7831cfa57c40bdec9a3fa93738de7adafce284586319f61b4f5eb30cf509eb36",
-      "bytes": 813512
-    },
-    "review-evidence/sprite-finish02-native-held-boundary.png": {
-      "sha256": "4ddd01328c949630f891bf98ffbda7f65febce1821e7fc70f6cd109522cfe035",
-      "bytes": 1469314
+    "review-evidence/source-alpha-silhouette.json": {
+      "sha256": "13e8a01791e7c1df686eef3981e3ba60c4377318e52379f398e069f6000fa08b",
+      "bytes": 30133
     },
     "review-evidence/trim-report.json": {
-      "sha256": "f16b5ca10f40a59572c356c249c2aac3b629832c317cb1e07a3bb2cdf15bf78a",
-      "bytes": 572
-    },
-    "review-evidence/trim-reproducibility-review.json": {
-      "sha256": "74c8b462b4c3ee493d93e65b917cc927f7f93098514cfd27c07b8befffe27f54",
-      "bytes": 839
-    },
-    "review-evidence/trim01-vs-deterministic03.json": {
-      "sha256": "3e5868417867f5f7fcbe933c2a38651699a13b38b0045e8c4d9783d05a6e8d98",
-      "bytes": 513
-    },
-    "review-evidence/webm02-vs03.json": {
-      "sha256": "f4f1932063fb0ef4d08dd741dc857cafd4f7f537c700f99ef66f360b99afe65c",
-      "bytes": 362
+      "sha256": "2f5dcbef8876ba8166f9c40c1683e5eeb7f8b855edf2b0ab349fdb4efec3c68e",
+      "bytes": 571
     }
   },
-  "publication_recording": {
-    "id": "nami-sprite-02",
-    "manifest_sha256": "9fc0a16498f4f88d904de8b1584f3df3967e99a67793274c19e4c4144958ab3f",
-    "operation": "Recorded native trim and finishing plus checksum-bound import of website-owned browser projections."
-  },
-  "review": {
-    "reviewer": "nami_video_route",
-    "verdict": "pass_scoped",
-    "producer_is_reviewer": false,
-    "evidence": "review-evidence/sprite-final-review-03.json",
-    "reproducibility_evidence": [
-      "review-evidence/trim-reproducibility-review.json",
-      "review-evidence/public-replay-review.json"
+  "browser_projection": {
+    "native_size": [
+      1920,
+      1080
     ],
-    "scope": "Native transparent loop and source-bound held region; all native media remain byte-identical to accepted finish02. Actual animated cover samples, static poster, regenerated WebM decoded identity and synchronized unpinned comparison verified without browser QA."
+    "webm_size": [
+      1280,
+      720
+    ],
+    "webm_fps": 30,
+    "webp_size": [
+      1280,
+      720
+    ],
+    "webp_sample_fps": 24,
+    "spatial_resampling": "Lanczos for WebP, FFmpeg aspect-preserving scale for WebM.",
+    "native_canonical_preserved": true
   },
-  "publication_authorization": "User explicitly authorized regenerating Nami showcase replacements and publishing the resulting website and CDN changes; final promotion remains with the supervising agent."
+  "independent_review": {
+    "path": "review-evidence/independent-review.json",
+    "verdict": "pass_scoped",
+    "user_artistic_approval": "pending",
+    "browser_qa": false,
+    "production_publication_authorized": false
+  }
 }

@@ -1,0 +1,24 @@
+character: .showcase-inputs/nami.png
+direction: >-
+  Preserve the supplied original full-body Nami illustration, including its expressive
+  standing pose, raised hands holding the hood near her cheeks, head tilt, open smile,
+  crossed-leg stance, long pink-tipped blonde hair, charcoal rabbit hood and all original
+  clothing and accessories. This is a restrained local body idle, with the original
+  composition and facial expression held still throughout.
+requested_motion:
+  - One tiny slow breathing cycle confined to the jacket below the fixed shoulders.
+  - Barely perceptible settling of the lower jacket folds and skirt hem around their existing resting shape.
+constraints:
+  - Keep the face, eyes, eyelids, eyebrows, mouth, head, neck and shoulders completely still.
+  - Preserve the exact open smile and gaze; no blinking, speaking or expression change.
+  - Keep both raised arms, hands, fingers and hood contact points fixed in the supplied pose.
+  - Keep the hood, rabbit ears, flower, hair roots, long hair silhouette and bow completely still.
+  - Preserve the original crossed-leg stance and boot positions; no steps, balance shifts or gestures.
+  - No torso sway, whole-body bob, shoulder breathing, stretching or proportion change.
+  - Keep the original outfit, accessories, materials, colors and coverage unchanged.
+  - Keep the camera, framing, scale and lighting fixed; do not straighten or reinterpret the pose.
+  - Retain a perfectly flat green background with no added scene, shadow, particles, text or sound.
+seconds: 8
+resolution: 720p
+aspect_ratio: "9:16"
+finish: finish.initial.json

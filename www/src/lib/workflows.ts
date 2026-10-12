@@ -23,7 +23,7 @@ export const workflows = [
     description: "Animate a character illustration, remove the background, and finish a transparent idle loop.",
     input: "Character illustration",
     output: "Transparent idle loop",
-    note: "A recorded trim and local held face stabilize the generated take; finishing makes no further provider calls.",
+    note: "A four-second body-motion loop with generated blinks. Trimming, keying and loop closure are local; no face hold is applied.",
   },
   {
     slug: "portrait-motion",
