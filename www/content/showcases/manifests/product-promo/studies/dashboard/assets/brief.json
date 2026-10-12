@@ -1,0 +1,57 @@
+{
+  "product": "forma",
+  "eyebrow": "YOUR NEXT DESIGN STARTS HERE",
+  "opening": [
+    "Start with data.",
+    "Shape a story."
+  ],
+  "closing": [
+    "Make it clear.",
+    "Keep it yours."
+  ],
+  "support": "A small starting point. A useful next step.",
+  "accent": "#a58bc5",
+  "background": "#f3f0f7",
+  "ink": "#282231",
+  "intent": "Show a different dense software operation: supplied weekly figures become a dashboard, then chat focuses it on returning customers. The original scripted browser capture is 44 seconds with deliberate generation waits. Select chronological source intervals to omit those waits while preserving the completed request, dashboard reveal, readable refinement request and final focused result. Aim for the first dashboard around 5-6 seconds into an 18-20 second promo. Hold the final focused dashboard for at least 3 seconds. Never invent UI, data or product claims.",
+  "regions": {
+    "chat": [
+      0.026,
+      0.146,
+      0.271,
+      0.951
+    ],
+    "canvas": [
+      0.28,
+      0.151,
+      0.975,
+      0.91
+    ]
+  },
+  "focus_hints": [
+    {
+      "source_second": 6.1,
+      "x": 0.15,
+      "y": 0.38,
+      "region": "chat"
+    },
+    {
+      "source_second": 23.5,
+      "x": 0.64,
+      "y": 0.5,
+      "region": "canvas"
+    },
+    {
+      "source_second": 29.1,
+      "x": 0.15,
+      "y": 0.63,
+      "region": "chat"
+    },
+    {
+      "source_second": 38.5,
+      "x": 0.64,
+      "y": 0.5,
+      "region": "canvas"
+    }
+  ]
+}

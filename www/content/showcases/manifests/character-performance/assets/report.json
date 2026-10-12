@@ -1,10 +1,11 @@
 {
  "audio": "silent",
  "automatic_subject_detection": false,
+ "composition_mode": "shared_timeline",
  "finished": {
-  "duration_seconds": 8,
+  "duration_seconds": 4,
   "fps": 30,
-  "frames": 240,
+  "frames": 120,
   "height": 1920,
   "width": 1080
  },
@@ -18,19 +19,26 @@
  "framing": "caller-selected static source regions, rounded outwards and aspect fit",
  "full_decode": "pass",
  "kind": "character_cast_reel_v1",
+ "poster": {
+  "at_seconds": 3.2,
+  "frame_index": 96,
+  "requested_seconds": 3.2,
+  "selection": "caller-selected timestamp, rounded down to the output frame grid",
+  "sha256": "aa138c79e788fb0e5af66450a2b9da9713ba6aaa49215d11ac1657f15a5454f0"
+ },
  "region_selection": "caller authored; complete-character visibility requires content review",
  "review_scope": "Source sampled reviews are inherited as admission evidence; this local composition makes no artistic or continuous-anatomy claim.",
  "review_status": "requires_separate_content_review",
  "segments": [
   {
    "complete_source_frame": false,
-   "duration_seconds": 4,
+   "duration_seconds": 2,
    "fit_size": [
     936,
-    1226
+    1188
    ],
    "frame_rate_conversion": true,
-   "frames": 120,
+   "frames": 60,
    "name": "Riko",
    "report_sha256": "86e03cd4d35cf03da4a9212da40827d05bebab9f997c7a4d8778ea9ee79be68b",
    "review_sha256": "411424d99c477a25b8980d4460ea8d826e2f177250ad2dba368b777d8f837c27",
@@ -44,17 +52,23 @@
    "source_crop_xywh": [
     28,
     354,
-    671,
+    692,
     879
    ],
    "source_framing_scan": {
     "frames_scanned": 96,
     "status": "clear"
    },
+   "source_interval_on_output_grid": {
+    "end_frame_exclusive": 60,
+    "end_seconds": 2,
+    "start_frame": 0,
+    "start_seconds": 0
+   },
    "source_region_xywh": [
     0.03888888888888889,
     0.2765625,
-    0.9319444444444445,
+    0.9611111111111111,
     0.68671875
    ],
    "source_review_status": "sampled_review_pass",
@@ -62,13 +76,13 @@
   },
   {
    "complete_source_frame": false,
-   "duration_seconds": 4,
+   "duration_seconds": 2,
    "fit_size": [
     936,
-    1100
+    1188
    ],
    "frame_rate_conversion": true,
-   "frames": 120,
+   "frames": 60,
    "name": "Nami",
    "report_sha256": "a7e2ce29472565a19311d3c92aed26514605e9d7275ead582f1fe79a0ec31a5e",
    "review_sha256": "f0d78183c52616694ad3863050fce967bafbfbabc7b08ee2bdae1b069de91157",
@@ -81,25 +95,38 @@
    },
    "source_crop_xywh": [
     28,
-    413,
+    354,
     692,
-    814
+    879
    ],
    "source_framing_scan": {
     "frames_scanned": 96,
     "status": "clear"
    },
+   "source_interval_on_output_grid": {
+    "end_frame_exclusive": 120,
+    "end_seconds": 4,
+    "start_frame": 60,
+    "start_seconds": 2
+   },
    "source_region_xywh": [
     0.03888888888888889,
-    0.32265625,
+    0.2765625,
     0.9611111111111111,
-    0.6359375
+    0.68671875
    ],
    "source_review_status": "sampled_review_pass",
    "video_sha256": "73daa46dfbed1b23c82fcfd5ba589f2d4c9950bfc5e32ed42eec259ed8160ace"
   }
  ],
+ "shared_timeline": {
+  "motion_sha256": "8cad44ece6ada802cac38f45c58e3db271ea7596cdee49d4fd09168e34574762",
+  "requested_switch_seconds": 2,
+  "scope": "Editorial identity cut on a shared driving timeline; pose continuity requires content review.",
+  "switch_frame": 60,
+  "switch_seconds": 2
+ },
  "spatial_resizing": "uniform aspect fit of each selected region, rounded to even pixels",
  "temporal_interpolation": false,
- "video_sha256": "0342fbbc09e75859c694f5513522f991ffc9e39be750788b8b5e9a7fd2d56f8c"
+ "video_sha256": "37cd09e498e6ed4c63f75be3dc182acf6c9e6874444ba0652bb5828ed4da1967"
 }

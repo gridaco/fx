@@ -1,47 +1,47 @@
 {
- "evidence_limit": "Reviewed 12 timestamped storyboard samples from 0.00s to 18.42s, the full-size poster, exact-copy brief, and structural report—not continuous video or audio. Smooth motion, frame continuity, and listening were not verified. Silence is intentional. The structural decode pass does not establish artistic quality, and this assessment concerns the fictional demo presentation, not shipping-product capability.",
+ "evidence_limit": "This review uses timestamped storyboard samples, the full-size poster, the brief, and the structural report—not continuous video or audio. Smooth motion, frame continuity, and listening were not verified. Silence is intentional; the report lists no audio track. The authored fixture is not evidence of shipping-product capabilities.",
  "marks": [
   {
    "criterion": 1,
    "pass": true,
-   "reason": "“Say it. Shape it.” at 1.67s establishes the premise; the request at 5.02s, canvas at 8.37s, and warmer result at 13.40s provide a coherent demonstration and payoff."
+   "reason": "The premise at 1.58s leads to a design request at 4.75s, a generated page at 6.33s, a warmer revision at 12.67s, and the closing promise at 15.84s. The sampled sequence is coherent."
   },
   {
    "criterion": 2,
    "pass": true,
-   "reason": "Chat drives the example: “Design a landing page for an urban garden.” is readable at 5.02s, followed by “Make it warmer.” at 11.72s and a visibly warmer canvas at 13.40s."
+   "reason": "Chat drives the demonstration: “Design a landing page for an urban garden.” is readable at 4.75s; “Make it warmer.” appears at 9.50s, followed by the peach-and-cream result at 11.09s."
   },
   {
    "criterion": 3,
    "pass": true,
-   "reason": "The opening at 1.67s exactly matches “Say it.” / “Shape it.” The closing at 16.75s and 18.42s exactly matches “Your idea.” / “Already taking shape.” Capitalization, punctuation, and spelling agree with the brief."
+   "reason": "At 1.58s, “Say it.” / “Shape it.” matches the brief exactly. At 15.84s and 17.42s, “Your idea.” / “Already taking shape.” also matches, including punctuation. No spelling errors are evident."
   },
   {
    "criterion": 4,
    "pass": true,
-   "reason": "The samples show deliberate sans-serif hierarchy, aligned margins, restrained lime accents, and strong dark/light contrast. The closing reverses the palette coherently. However, the isolated refinement card at 11.72s leaves excessive unused space."
+   "reason": "Consistent corner branding, generous margins, restrained typography, and lime underlines establish a deliberate hierarchy. The dark closing card at 15.84s provides strong contrast; the full-size poster preserves clear chat/canvas separation."
   },
   {
    "criterion": 5,
    "pass": true,
-   "reason": "The key request and refinement text are readable in their sampled closeups. Canvas samples at 8.37s and 13.40s retain the headline, illustration, CTA, and bottom content without accidental focal cropping. Secondary canvas labels are comparatively small."
+   "reason": "The request and refinement are legible in the 4.75s and 9.50s closeups. The canvas headline, illustration, CTA, and lower content remain inside the frame at 12.67s. The full-size poster also shows readable UI without focal clipping."
   },
   {
    "criterion": 6,
    "pass": true,
-   "reason": "The initial green/yellow canvas at 8.37s and 10.05s becomes cream, peach, and terracotta at 13.40s and 15.07s after the warmth request. These related states demonstrate an outcome, not unrelated slides."
+   "reason": "The same garden page changes from green accents at 6.33s to warmer peach and terracotta at 11.09s and 12.67s. At 14.25s, the interface reunites the conversation and revised canvas, establishing an outcome rather than unrelated slides."
   },
   {
    "criterion": 7,
    "pass": true,
-   "reason": "No external branding, watermark, identifiable borrowed footage, or private context is visible in the supplied samples or poster. Forma and HARVEST function as the fictional product and example-page identities."
+   "reason": "The sampled frames and poster show Forma and the HARVEST demo-page identity, with no recognizable external branding, watermark, personal information, or visibly borrowed footage."
   },
   {
    "criterion": 8,
    "pass": true,
-   "reason": "The sampled premise–request–refinement–result structure is useful as a silent software-launch insert or reusable framing example. Its communication succeeds, although the detached UI crops make it less convincing as a unified workspace demonstration."
+   "reason": "The reported 17.5-second format and sampled premise–request–refinement–result structure make this useful as a launch insert or recording-to-promo example. The outcome and closing message are understandable without narration."
   }
  ],
- "strengths": "Clear cause and effect, exact headline copy, readable central chat interactions, and a visibly meaningful palette refinement. The full-size poster communicates the relationship between conversation and canvas particularly well.",
- "weaknesses": "The chat crops at 3.35–6.70s and especially 11.72s float in broad empty space, weakening workspace context. Retain a contextual interface view or enlarge and reposition the refinement crop. Hold the combined chat-and-canvas view shown in the poster before closing; the report describes a return to the complete interface, but the timestamped samples do not show it. Increase secondary canvas text if it is intended to be read. The artwork and palette-only revision communicate the concept but provide limited evidence of design-tool depth; a future fixture could demonstrate one additional concrete layout edit."
+ "strengths": "Clear conversational cause and effect, exact headline copy, and a cohesive cream/ink/lime visual system. The warmer revision is visibly distinguishable, and the final interface overview reconnects the chat with its result.",
+ "weaknesses": "The main artistic weakness is reduced workspace context: isolated chat crops at 4.75s and 9.50s float in extensive empty space, while canvas-only views hide the application. Retain a slim interface header or context inset to strengthen the software-demo feel. The refinement payoff is also modest—primarily a palette change. A clearer before/after comparison would make that benefit more emphatic without implying additional functionality."
 }

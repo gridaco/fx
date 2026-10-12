@@ -1,0 +1,61 @@
+{
+  "kind": "character_cast_poster_selection_review_v1",
+  "reviewer": "independent non-producing review agent",
+  "independence": "The reviewer nominated a timestamp and inspected the rendered poster but did not author or execute the reel renderer.",
+  "recorded_at": "2026-10-12T22:18:50.101582+00:00",
+  "status": "accepted",
+  "verdict": "accepted_for_static_poster_with_declared_limits",
+  "scope": [
+    "Full-resolution 1080x1920 rendered WebP at final-reel timestamp 3.2 seconds.",
+    "Comparison with full-resolution final reel frames at 3.0, 3.1 and 3.2 seconds.",
+    "Digest verification that the final video is byte-identical to the previously accepted composition; no new motion or anatomy acceptance is inferred."
+  ],
+  "selection": {
+    "at_seconds": 3.2,
+    "frame_index": 96,
+    "requested_seconds": 3.2,
+    "selection": "caller-selected timestamp, rounded down to the output frame grid",
+    "sha256": "1f3a6c98c2861dd8bdbee9fd0822e344ea0e41278cafd3a5f348e5fe245ec668"
+  },
+  "criteria": {
+    "recognizable_riko_identity": "pass",
+    "visible_face_and_expression": "pass",
+    "complete_visible_hands_and_shoes_in_selected_frame": "pass",
+    "upright_balanced_silhouette": "pass",
+    "clear_typography_and_name": "pass",
+    "improved_use_of_reserved_headroom": "pass",
+    "unchanged_video_digest": "pass",
+    "report_and_poster_digest_binding": "pass"
+  },
+  "observations": [
+    "The upright overhead reach fills substantially more of the stage than the prior lean/crouch poster without changing the admitted motion crop.",
+    "The face remains visible between the raised arms; the sweater, shorts, hair ribbons and footwear remain identifiable.",
+    "The hands and both shoes are contained within the stage, and title/name/supporting typography remain unobstructed.",
+    "The poster is an actual selected moment from the sequential Riko/Nami reel; it does not invent a simultaneous two-character scene.",
+    "The small raised-hand details inherit the native video resolution; this is a static composition verdict, not a claim of perfect finger anatomy."
+  ],
+  "artifact_sha256": {
+    "video": "0342fbbc09e75859c694f5513522f991ffc9e39be750788b8b5e9a7fd2d56f8c",
+    "poster": "1f3a6c98c2861dd8bdbee9fd0822e344ea0e41278cafd3a5f348e5fe245ec668",
+    "report": "f62c31c4c754e1a15dbd0c2174e9ccfb72b18d7cd48caebb51eb097a14dd8297"
+  },
+  "inherited_evidence": {
+    "original_composition_review_sha256": "7a19ece0aa5290dc821c1bf6a958a82bc26ac3ffd5740891d353f37af439cd9b",
+    "original_poster_sha256": "9ec1e50cc51949045b68e7b609b3c459f0a3a768320b097543e485cd0eaa4aef",
+    "original_report_sha256": "e1cbb5fe4df95097e30711f752b50c8b575c2d07a4217147b06f552eff2d1339",
+    "scope": "The unchanged video inherits the original independently reviewed sampled composition scope. The original poster and report are retained as checkpoint snapshots in the new bundle."
+  },
+  "limitations": [
+    "One static poster was newly reviewed; continuous motion, every-frame anatomy, fine fingers, temporal flicker and listening were not newly assessed.",
+    "The original character and composition sampled-review limits still apply.",
+    "The poster timestamp is appropriate for this exact accepted video; fresh takes require a new selection and review."
+  ],
+  "bundle_bindings": {
+    "video": "assets/final.mp4",
+    "poster": "assets/poster.webp",
+    "report": "assets/report.json",
+    "original_composition_review": "assets/content-review.json",
+    "original_poster_snapshot": "assets/checkpoint-poster.webp",
+    "original_report_snapshot": "assets/checkpoint-report.json"
+  }
+}

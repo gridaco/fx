@@ -1,0 +1,47 @@
+{
+ "evidence_limit": "This review uses timestamped storyboard samples, one full-size poster, the exact-copy brief and the structural report—not continuous video or audio. Smooth motion, frame continuity and listening were not verified. Silence is intentional and is not a defect; structural decode success does not establish artistic quality.",
+ "marks": [
+  {
+   "criterion": 1,
+   "pass": true,
+   "reason": "A coherent request–result–refinement arc: opening premise at 1.72s, dashboard request at 3.44s, first dashboard at 5.16s, refinement at 8.60s, and focused result from 10.32s. The reported 19-second runtime fits the brief."
+  },
+  {
+   "criterion": 2,
+   "pass": true,
+   "reason": "Chat drives the demonstration. The initial dashboard request is visible at 3.44s; “Focus on returning customers.” appears at 8.60s. The full-size poster clearly shows both requests and their corresponding responses."
+  },
+  {
+   "criterion": 3,
+   "pass": true,
+   "reason": "At 1.72s, “Start with data.” and “Shape a story.” match exactly. At 17.20s and 18.92s, “Make it clear.” and “Keep it yours.” also match, including punctuation. The poster’s product name, eyebrow and support copy agree with the brief."
+  },
+  {
+   "criterion": 4,
+   "pass": true,
+   "reason": "Consistent lavender accents, dark typography, generous margins and aligned framing establish a deliberate hierarchy. The dark closing card provides contrast. The narrow centered chat views are less compositionally effective than the dashboard and poster."
+  },
+  {
+   "criterion": 5,
+   "pass": true,
+   "reason": "The sampled closeups preserve the complete requests, dashboard headings, KPI values and charts without evident focal clipping. The filename is retained in the canvas views. The full-size poster confirms readable UI typography, although secondary gray labels are comparatively faint."
+  },
+  {
+   "criterion": 6,
+   "pass": true,
+   "reason": "The states are causally related, not unrelated slides: “Weekly overview” at 5.16s becomes “Returning customers” at 10.32s, with revenue changing from $84,200 to $35,364 and orders from 889 to 375. The focused result remains represented through 15.48s."
+  },
+  {
+   "criterion": 7,
+   "pass": true,
+   "reason": "The supplied samples and poster show only fictional forma branding, generic workspace text and fixture data. No external branding, watermark, borrowed-reference imagery or private context is visible."
+  },
+  {
+   "criterion": 8,
+   "pass": true,
+   "reason": "The concise runtime, exact title cards and understandable before/after interaction make this useful as a fictional software-launch insert or recording-to-promo example. Its restrained presentation is functional, though not especially distinctive."
+  }
+ ],
+ "strengths": "Clear causal storytelling, accurate copy and a visible change in dashboard scope. The first dashboard appears within the requested 5–6-second window. Samples at 10.32s, 12.04s, 13.76s and 15.48s support a sustained final-result presentation, consistent with the reported edit.",
+ "weaknesses": "The isolated chat strips at 3.44s and 8.60s leave substantial unused space and weaken the spatial connection between conversation and canvas. Reframe around the relevant messages using source pixels, and consider a brief full-workspace recap before closing. The two dashboard states retain similar chart silhouettes and the same 42% ring, so the refinement is less visually emphatic than the changed title and KPIs. Emphasize those existing changes through framing, and consider shifting some of the reported final-result time toward reading the refinement while retaining at least three seconds on the outcome."
+}

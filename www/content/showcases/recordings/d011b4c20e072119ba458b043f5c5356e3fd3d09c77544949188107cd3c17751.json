@@ -1,0 +1,497 @@
+{
+ "artifacts": [
+  {
+   "digest": "20f7dfce6cd3e54760843d3ba3d7d8d2bbae3022fda1b70078bb9987453f0971",
+   "media_type": "video/mp4",
+   "name": "forma.mp4",
+   "omitted_reason": "unplaced_input",
+   "path": null,
+   "size": 449527
+  },
+  {
+   "digest": "2e056569d983a45dd44406f9cdd8da34c8ad394bcbf8d4c900ae77e774f653bf",
+   "media_type": "video/mp4",
+   "name": "video",
+   "omitted_reason": null,
+   "path": "artifacts/2e056569d983a45dd44406f9cdd8da34c8ad394bcbf8d4c900ae77e774f653bf.mp4",
+   "size": 719363
+  },
+  {
+   "digest": "33d02c49cba7ae8c9d2cf138a9c5b24ba74a2259dd3f6976def03c014563430f",
+   "media_type": "json",
+   "name": "source",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 351
+  },
+  {
+   "digest": "38285d7de010e57b0a40981deeb0f92ffab50c25cfb38b40718e8fb221eb9974",
+   "media_type": "json",
+   "name": "forma-segments-edit.json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 1694
+  },
+  {
+   "digest": "3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6",
+   "media_type": "file",
+   "name": "Manrope.ttf",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 164700
+  },
+  {
+   "digest": "3bd7b25d5207af7fbc6fbcfcfc3735cc0400fe5a5d3c32a1587e16983334d523",
+   "media_type": "image/png",
+   "name": "storyboard",
+   "omitted_reason": null,
+   "path": "artifacts/3bd7b25d5207af7fbc6fbcfcfc3735cc0400fe5a5d3c32a1587e16983334d523.png",
+   "size": 187587
+  },
+  {
+   "digest": "7fb779b23904863f199b8bd987f0a14e2221f885c656bb917144a67e9929294a",
+   "media_type": "image/webp",
+   "name": "poster",
+   "omitted_reason": null,
+   "path": "artifacts/7fb779b23904863f199b8bd987f0a14e2221f885c656bb917144a67e9929294a.webp",
+   "size": 71072
+  },
+  {
+   "digest": "8ac59e063f455e368b340cb131e25c0dbcb66c7389992b8fb57752160641be90",
+   "media_type": "json",
+   "name": "edit",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 1405
+  },
+  {
+   "digest": "c22107ecca5153a4c1f5d24e2e580e3b6e0b065f35c8e6df53fbaa72bb20d1b0",
+   "media_type": "json",
+   "name": "forma.json",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 1472
+  },
+  {
+   "digest": "c595afb58838f80ed76c2481bb2834cf867c66a49ebcc0b1b1608c85a86b2858",
+   "media_type": "image/png",
+   "name": "storyboard",
+   "omitted_reason": null,
+   "path": "artifacts/c595afb58838f80ed76c2481bb2834cf867c66a49ebcc0b1b1608c85a86b2858.png",
+   "size": 189723
+  },
+  {
+   "digest": "dfc81d82b3957c6f78303a365bde7fde49aa99c85553894e5307f4142a8a3b4e",
+   "media_type": "json",
+   "name": "report",
+   "omitted_reason": "policy_excluded",
+   "path": null,
+   "size": 3472
+  }
+ ],
+ "disclosure": {
+  "artifacts": "media",
+  "diagnostics": false,
+  "values": true
+ },
+ "kind": "fx-run-export-v1",
+ "layout": {
+  "cells": {
+   "inspect": {
+    "column": 0,
+    "row": 0,
+    "source": "automatic"
+   },
+   "propose": {
+    "column": 1,
+    "row": 0,
+    "source": "automatic"
+   },
+   "render": {
+    "column": 2,
+    "row": 0,
+    "source": "automatic"
+   }
+  },
+  "cursor": null,
+  "diagnostics": [],
+  "file": null,
+  "kind": "fx-layout-report-v1",
+  "order": [
+   "inspect#1",
+   "render#1"
+  ],
+  "revision": null,
+  "state": "none"
+ },
+ "producer": {
+  "version": "0.5.1"
+ },
+ "source": {
+  "event_count": 8,
+  "events_sha256": "8efbaa35ee7b0147f036ca15a3a0d2cae39075a156072bda781aad40e2806c06",
+  "plan_sha256": "8d996aa0f3024b4b9a00fede85f8d465223bfc2ee53a65b30ae44233f1b93b40"
+ },
+ "view": {
+  "artifacts": [
+   {
+    "available": false,
+    "digest": "20f7dfce6cd3e54760843d3ba3d7d8d2bbae3022fda1b70078bb9987453f0971",
+    "kind": "video/mp4",
+    "name": "forma.mp4",
+    "size": 449527,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "2e056569d983a45dd44406f9cdd8da34c8ad394bcbf8d4c900ae77e774f653bf",
+    "kind": "video/mp4",
+    "name": "video",
+    "size": 719363,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "33d02c49cba7ae8c9d2cf138a9c5b24ba74a2259dd3f6976def03c014563430f",
+    "kind": "json",
+    "name": "source",
+    "size": 351,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "38285d7de010e57b0a40981deeb0f92ffab50c25cfb38b40718e8fb221eb9974",
+    "kind": "json",
+    "name": "forma-segments-edit.json",
+    "size": 1694,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6",
+    "kind": "file",
+    "name": "Manrope.ttf",
+    "size": 164700,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "3bd7b25d5207af7fbc6fbcfcfc3735cc0400fe5a5d3c32a1587e16983334d523",
+    "kind": "image/png",
+    "name": "storyboard",
+    "size": 187587,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "7fb779b23904863f199b8bd987f0a14e2221f885c656bb917144a67e9929294a",
+    "kind": "image/webp",
+    "name": "poster",
+    "size": 71072,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "8ac59e063f455e368b340cb131e25c0dbcb66c7389992b8fb57752160641be90",
+    "kind": "json",
+    "name": "edit",
+    "size": 1405,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "c22107ecca5153a4c1f5d24e2e580e3b6e0b065f35c8e6df53fbaa72bb20d1b0",
+    "kind": "json",
+    "name": "forma.json",
+    "size": 1472,
+    "url": null
+   },
+   {
+    "available": true,
+    "digest": "c595afb58838f80ed76c2481bb2834cf867c66a49ebcc0b1b1608c85a86b2858",
+    "kind": "image/png",
+    "name": "storyboard",
+    "size": 189723,
+    "url": null
+   },
+   {
+    "available": false,
+    "digest": "dfc81d82b3957c6f78303a365bde7fde49aa99c85553894e5307f4142a8a3b4e",
+    "kind": "json",
+    "name": "report",
+    "size": 3472,
+    "url": null
+   }
+  ],
+  "charged_usd": 0,
+  "estimate": {
+   "ceiling_usd": 0,
+   "high_usd": 0,
+   "low_usd": 0
+  },
+  "inputs": {
+   "brief": {
+    "value": {
+     "file": "c22107ecca5153a4c1f5d24e2e580e3b6e0b065f35c8e6df53fbaa72bb20d1b0"
+    }
+   },
+   "edit": {
+    "value": {
+     "file": "38285d7de010e57b0a40981deeb0f92ffab50c25cfb38b40718e8fb221eb9974"
+    }
+   },
+   "footage": {
+    "value": {
+     "file": "20f7dfce6cd3e54760843d3ba3d7d8d2bbae3022fda1b70078bb9987453f0971"
+    }
+   }
+  },
+  "kind": "fx-viewer-run-v1",
+  "nodes": [
+   {
+    "bindings": [],
+    "cache": "hit",
+    "duration_ms": 0,
+    "error": null,
+    "id": "inspect#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "source": {
+      "file": {
+       "digest": "33d02c49cba7ae8c9d2cf138a9c5b24ba74a2259dd3f6976def03c014563430f",
+       "kind": "json",
+       "name": "source",
+       "size": 351
+      }
+     },
+     "storyboard": {
+      "file": {
+       "digest": "3bd7b25d5207af7fbc6fbcfcfc3735cc0400fe5a5d3c32a1587e16983334d523",
+       "kind": "image/png",
+       "name": "storyboard",
+       "size": 187587
+      }
+     }
+    },
+    "path": "inspect",
+    "ports": {
+     "inputs": {
+      "brief": "json",
+      "footage": "video"
+     },
+     "outputs": {
+      "source": "json",
+      "storyboard": "image/png"
+     },
+     "params": {}
+    },
+    "reads": [],
+    "started_at": "2026-10-12T22:41:23.770Z",
+    "state": "succeeded",
+    "step": "inspect",
+    "take": [
+     1
+    ],
+    "title": "Inspect source timing",
+    "uses": "./nodes/promo.py#inspect",
+    "with": {
+     "brief": {
+      "file": {
+       "digest": "c22107ecca5153a4c1f5d24e2e580e3b6e0b065f35c8e6df53fbaa72bb20d1b0",
+       "kind": "json",
+       "name": "forma.json",
+       "size": 1472
+      }
+     },
+     "footage": {
+      "file": {
+       "digest": "20f7dfce6cd3e54760843d3ba3d7d8d2bbae3022fda1b70078bb9987453f0971",
+       "kind": "video/mp4",
+       "name": "forma.mp4",
+       "size": 449527
+      }
+     }
+    }
+   },
+   {
+    "bindings": [],
+    "cache": "miss",
+    "duration_ms": 5983,
+    "error": null,
+    "id": "render#1",
+    "interface_bindings": [],
+    "interrupted": false,
+    "judges": null,
+    "key": null,
+    "needs": [],
+    "outputs": {
+     "edit": {
+      "file": {
+       "digest": "8ac59e063f455e368b340cb131e25c0dbcb66c7389992b8fb57752160641be90",
+       "kind": "json",
+       "name": "edit",
+       "size": 1405
+      }
+     },
+     "poster": {
+      "file": {
+       "digest": "7fb779b23904863f199b8bd987f0a14e2221f885c656bb917144a67e9929294a",
+       "kind": "image/webp",
+       "name": "poster",
+       "size": 71072
+      }
+     },
+     "report": {
+      "file": {
+       "digest": "dfc81d82b3957c6f78303a365bde7fde49aa99c85553894e5307f4142a8a3b4e",
+       "kind": "json",
+       "name": "report",
+       "size": 3472
+      }
+     },
+     "storyboard": {
+      "file": {
+       "digest": "c595afb58838f80ed76c2481bb2834cf867c66a49ebcc0b1b1608c85a86b2858",
+       "kind": "image/png",
+       "name": "storyboard",
+       "size": 189723
+      }
+     },
+     "video": {
+      "file": {
+       "digest": "2e056569d983a45dd44406f9cdd8da34c8ad394bcbf8d4c900ae77e774f653bf",
+       "kind": "video/mp4",
+       "name": "video",
+       "size": 719363
+      }
+     }
+    },
+    "path": "render",
+    "ports": {
+     "inputs": {
+      "brief": "json",
+      "edit": "json",
+      "font": "file",
+      "footage": "video"
+     },
+     "outputs": {
+      "edit": "json",
+      "poster": "image/webp",
+      "report": "json",
+      "storyboard": "image/png",
+      "video": "video/mp4"
+     },
+     "params": {}
+    },
+    "reads": [],
+    "started_at": "2026-10-12T22:41:23.771Z",
+    "state": "succeeded",
+    "step": "render",
+    "take": [
+     1
+    ],
+    "title": "Animate the supplied pixels",
+    "uses": "./nodes/promo.py#render",
+    "with": {
+     "brief": {
+      "file": {
+       "digest": "c22107ecca5153a4c1f5d24e2e580e3b6e0b065f35c8e6df53fbaa72bb20d1b0",
+       "kind": "json",
+       "name": "forma.json",
+       "size": 1472
+      }
+     },
+     "edit": {
+      "file": {
+       "digest": "38285d7de010e57b0a40981deeb0f92ffab50c25cfb38b40718e8fb221eb9974",
+       "kind": "json",
+       "name": "forma-segments-edit.json",
+       "size": 1694
+      }
+     },
+     "font": {
+      "file": {
+       "digest": "3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6",
+       "kind": "file",
+       "name": "Manrope.ttf",
+       "size": 164700
+      }
+     },
+     "footage": {
+      "file": {
+       "digest": "20f7dfce6cd3e54760843d3ba3d7d8d2bbae3022fda1b70078bb9987453f0971",
+       "kind": "video/mp4",
+       "name": "forma.mp4",
+       "size": 449527
+      }
+     }
+    }
+   }
+  ],
+  "outputs": {
+   "edit": {
+    "file": {
+     "digest": "8ac59e063f455e368b340cb131e25c0dbcb66c7389992b8fb57752160641be90",
+     "kind": "json",
+     "name": "edit",
+     "size": 1405
+    }
+   },
+   "poster": {
+    "file": {
+     "digest": "7fb779b23904863f199b8bd987f0a14e2221f885c656bb917144a67e9929294a",
+     "kind": "image/webp",
+     "name": "poster",
+     "size": 71072
+    }
+   },
+   "report": {
+    "file": {
+     "digest": "dfc81d82b3957c6f78303a365bde7fde49aa99c85553894e5307f4142a8a3b4e",
+     "kind": "json",
+     "name": "report",
+     "size": 3472
+    }
+   },
+   "source": {
+    "file": {
+     "digest": "33d02c49cba7ae8c9d2cf138a9c5b24ba74a2259dd3f6976def03c014563430f",
+     "kind": "json",
+     "name": "source",
+     "size": 351
+    }
+   },
+   "storyboard": {
+    "file": {
+     "digest": "c595afb58838f80ed76c2481bb2834cf867c66a49ebcc0b1b1608c85a86b2858",
+     "kind": "image/png",
+     "name": "storyboard",
+     "size": 189723
+    }
+   },
+   "video": {
+    "file": {
+     "digest": "2e056569d983a45dd44406f9cdd8da34c8ad394bcbf8d4c900ae77e774f653bf",
+     "kind": "video/mp4",
+     "name": "video",
+     "size": 719363
+    }
+   }
+  },
+  "pending": [],
+  "run_name": "extension-garden-release",
+  "scopes": [],
+  "stand_in": false,
+  "state": "succeeded",
+  "warnings": [],
+  "workflow": {
+   "description": "A supplied software recording and exact-copy brief become a short launch clip. Inspect the recording, propose an editable camera-and-timing plan, then render exact source pixels with animated typography locally. A supplied plan skips the paid proposal, so copy and timing revisions need no generation call.",
+   "id": "product-promo",
+   "title": "Product promo"
+  }
+ }
+}

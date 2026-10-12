@@ -4,7 +4,7 @@
  "contract": "product-promo/v1",
  "edit": {
   "closing_seconds": 2.5,
-  "editorial_note": "The camera follows the initial design request, the first full canvas reveal, the refinement request, and the refined canvas outcome, then returns to the complete interface.",
+  "editorial_note": "Caller-authored editorial revision of the accepted camera plan: omit processing waits, align crop changes with source cuts, keep typed requests readable, and hold the refined canvas before returning to the complete interface.",
   "focus": [
    {
     "at": 0,
@@ -19,7 +19,7 @@
     "zoom": 1
    },
    {
-    "at": 1.98,
+    "at": 1.25,
     "crop": [
      0.014,
      0.154,
@@ -31,7 +31,7 @@
     "zoom": 1
    },
    {
-    "at": 6.42,
+    "at": 3.75,
     "crop": [
      0.287,
      0.156,
@@ -43,7 +43,7 @@
     "zoom": 1
    },
    {
-    "at": 9.45,
+    "at": 6.25,
     "crop": [
      0.014,
      0.66,
@@ -55,7 +55,7 @@
     "zoom": 1
    },
    {
-    "at": 12,
+    "at": 8.75,
     "crop": [
      0.287,
      0.156,
@@ -67,7 +67,7 @@
     "zoom": 1
    },
    {
-    "at": 14,
+    "at": 13,
     "crop": [
      0,
      0,
@@ -79,22 +79,104 @@
     "zoom": 1
    }
   ],
-  "footage_seconds": 14,
-  "opening_seconds": 2
+  "footage_seconds": 13,
+  "opening_seconds": 2,
+  "source_segments": [
+   {
+    "duration_seconds": 3,
+    "source_end": 3.1,
+    "source_start": 0.7
+   },
+   {
+    "duration_seconds": 2.5,
+    "source_end": 6.5,
+    "source_start": 4.05
+   },
+   {
+    "duration_seconds": 2.5,
+    "source_end": 8.3,
+    "source_start": 6.75
+   },
+   {
+    "duration_seconds": 5,
+    "source_end": 12,
+    "source_start": 8.4
+   }
+  ]
  },
+ "focus_hint_mapping": [
+  {
+   "body_second": 1.2499999999999998,
+   "source_second": 1.7,
+   "video_second": 3.25
+  },
+  {
+   "body_second": 4.479591836734694,
+   "source_second": 5.5,
+   "video_second": 6.479591836734694
+  },
+  {
+   "body_second": 7.677419354838708,
+   "source_second": 8.1,
+   "video_second": 9.677419354838708
+  },
+  {
+   "body_second": 10.916666666666666,
+   "source_second": 10.5,
+   "video_second": 12.916666666666666
+  }
+ ],
  "font_sha256": "3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6",
- "frames": 555,
+ "frames": 525,
  "full_decode": "pass",
  "semantic_review": "required separately; structural validation is not artistic acceptance",
- "source_playback_rate": 0.857143,
+ "source_selection": "explicit chronological intervals; omitted ranges are editorial cuts",
  "source_sha256": "20f7dfce6cd3e54760843d3ba3d7d8d2bbae3022fda1b70078bb9987453f0971",
+ "source_timeline": [
+  {
+   "duration_seconds": 3,
+   "frames": 90,
+   "output_end": 3,
+   "output_start": 0,
+   "playback_rate": 0.8000000000000002,
+   "source_end": 3.1,
+   "source_start": 0.7
+  },
+  {
+   "duration_seconds": 2.5,
+   "frames": 75,
+   "output_end": 5.5,
+   "output_start": 3,
+   "playback_rate": 0.9800000000000001,
+   "source_end": 6.5,
+   "source_start": 4.05
+  },
+  {
+   "duration_seconds": 2.5,
+   "frames": 75,
+   "output_end": 8,
+   "output_start": 5.5,
+   "playback_rate": 0.6200000000000003,
+   "source_end": 8.3,
+   "source_start": 6.75
+  },
+  {
+   "duration_seconds": 5,
+   "frames": 150,
+   "output_end": 13,
+   "output_start": 8,
+   "playback_rate": 0.72,
+   "source_end": 12,
+   "source_start": 8.4
+  }
+ ],
  "ui_treatment": "supplied recording pixels, uniformly scaled and framed; no generative redraw",
  "video": {
   "codec": "h264",
   "frame_rate": "30/1",
   "has_audio": false,
   "height": 1080,
-  "seconds": 18.5,
+  "seconds": 17.5,
   "width": 1920
  }
 }

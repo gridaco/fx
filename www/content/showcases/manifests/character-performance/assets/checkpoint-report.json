@@ -1,0 +1,105 @@
+{
+ "audio": "silent",
+ "automatic_subject_detection": false,
+ "finished": {
+  "duration_seconds": 8,
+  "fps": 30,
+  "frames": 240,
+  "height": 1920,
+  "width": 1080
+ },
+ "fit_window_xywh": [
+  72,
+  230,
+  936,
+  1400
+ ],
+ "font_sha256": "3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6",
+ "framing": "caller-selected static source regions, rounded outwards and aspect fit",
+ "full_decode": "pass",
+ "kind": "character_cast_reel_v1",
+ "region_selection": "caller authored; complete-character visibility requires content review",
+ "review_scope": "Source sampled reviews are inherited as admission evidence; this local composition makes no artistic or continuous-anatomy claim.",
+ "review_status": "requires_separate_content_review",
+ "segments": [
+  {
+   "complete_source_frame": false,
+   "duration_seconds": 4,
+   "fit_size": [
+    936,
+    1226
+   ],
+   "frame_rate_conversion": true,
+   "frames": 120,
+   "name": "Riko",
+   "report_sha256": "86e03cd4d35cf03da4a9212da40827d05bebab9f997c7a4d8778ea9ee79be68b",
+   "review_sha256": "411424d99c477a25b8980d4460ea8d826e2f177250ad2dba368b777d8f837c27",
+   "source": {
+    "duration_seconds": 4,
+    "fps": 24,
+    "frames": 96,
+    "height": 1280,
+    "width": 720
+   },
+   "source_crop_xywh": [
+    28,
+    354,
+    671,
+    879
+   ],
+   "source_framing_scan": {
+    "frames_scanned": 96,
+    "status": "clear"
+   },
+   "source_region_xywh": [
+    0.03888888888888889,
+    0.2765625,
+    0.9319444444444445,
+    0.68671875
+   ],
+   "source_review_status": "sampled_review_pass",
+   "video_sha256": "01ae510292dbba1f37188bf42d61d98bd6f80d72cab740cc3a303e28e8b498ca"
+  },
+  {
+   "complete_source_frame": false,
+   "duration_seconds": 4,
+   "fit_size": [
+    936,
+    1100
+   ],
+   "frame_rate_conversion": true,
+   "frames": 120,
+   "name": "Nami",
+   "report_sha256": "a7e2ce29472565a19311d3c92aed26514605e9d7275ead582f1fe79a0ec31a5e",
+   "review_sha256": "f0d78183c52616694ad3863050fce967bafbfbabc7b08ee2bdae1b069de91157",
+   "source": {
+    "duration_seconds": 4,
+    "fps": 24,
+    "frames": 96,
+    "height": 1280,
+    "width": 720
+   },
+   "source_crop_xywh": [
+    28,
+    413,
+    692,
+    814
+   ],
+   "source_framing_scan": {
+    "frames_scanned": 96,
+    "status": "clear"
+   },
+   "source_region_xywh": [
+    0.03888888888888889,
+    0.32265625,
+    0.9611111111111111,
+    0.6359375
+   ],
+   "source_review_status": "sampled_review_pass",
+   "video_sha256": "73daa46dfbed1b23c82fcfd5ba589f2d4c9950bfc5e32ed42eec259ed8160ace"
+  }
+ ],
+ "spatial_resizing": "uniform aspect fit of each selected region, rounded to even pixels",
+ "temporal_interpolation": false,
+ "video_sha256": "0342fbbc09e75859c694f5513522f991ffc9e39be750788b8b5e9a7fd2d56f8c"
+}

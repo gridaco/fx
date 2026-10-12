@@ -1,0 +1,16 @@
+{
+ "codec": "h264",
+ "frame_rate": "12/1",
+ "has_audio": false,
+ "height": 1000,
+ "output": {
+  "audio": false,
+  "fps": 30,
+  "height": 1080,
+  "width": 1920
+ },
+ "sampling": "12 equally spaced chronological frames; audio is not sampled",
+ "seconds": 44,
+ "sha256": "d2ea71fd39be0f087bd0a60395c33d2805d82a41ad2903df1b5b8f498d4b6b34",
+ "width": 1600
+}

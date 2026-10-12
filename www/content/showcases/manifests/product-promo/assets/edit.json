@@ -1,6 +1,6 @@
 {
  "closing_seconds": 2.5,
- "editorial_note": "The camera follows the initial design request, the first full canvas reveal, the refinement request, and the refined canvas outcome, then returns to the complete interface.",
+ "editorial_note": "Caller-authored editorial revision of the accepted camera plan: omit processing waits, align crop changes with source cuts, keep typed requests readable, and hold the refined canvas before returning to the complete interface.",
  "focus": [
   {
    "at": 0,
@@ -15,7 +15,7 @@
    "zoom": 1
   },
   {
-   "at": 1.98,
+   "at": 1.25,
    "crop": [
     0.014,
     0.154,
@@ -27,7 +27,7 @@
    "zoom": 1
   },
   {
-   "at": 6.42,
+   "at": 3.75,
    "crop": [
     0.287,
     0.156,
@@ -39,7 +39,7 @@
    "zoom": 1
   },
   {
-   "at": 9.45,
+   "at": 6.25,
    "crop": [
     0.014,
     0.66,
@@ -51,7 +51,7 @@
    "zoom": 1
   },
   {
-   "at": 12,
+   "at": 8.75,
    "crop": [
     0.287,
     0.156,
@@ -63,7 +63,7 @@
    "zoom": 1
   },
   {
-   "at": 14,
+   "at": 13,
    "crop": [
     0,
     0,
@@ -75,6 +75,28 @@
    "zoom": 1
   }
  ],
- "footage_seconds": 14,
- "opening_seconds": 2
+ "footage_seconds": 13,
+ "opening_seconds": 2,
+ "source_segments": [
+  {
+   "duration_seconds": 3,
+   "source_end": 3.1,
+   "source_start": 0.7
+  },
+  {
+   "duration_seconds": 2.5,
+   "source_end": 6.5,
+   "source_start": 4.05
+  },
+  {
+   "duration_seconds": 2.5,
+   "source_end": 8.3,
+   "source_start": 6.75
+  },
+  {
+   "duration_seconds": 5,
+   "source_end": 12,
+   "source_start": 8.4
+  }
+ ]
 }

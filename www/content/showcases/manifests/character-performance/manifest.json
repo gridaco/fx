@@ -1,14 +1,14 @@
 {
   "kind": "video-demo-v1",
   "title": "One performance. Two characters.",
-  "summary": "Riko and Nami follow the same recorded dance. Independently reviewed character clips become a vertical cast reel through free local composition.",
+  "summary": "Riko and Nami share one recorded performance. Independently reviewed character clips become a four-second vertical identity cut through free local composition.",
   "result": {
     "file": "assets/final.mp4",
     "poster": "assets/poster.webp",
     "media_type": "video/mp4",
     "width": 1080,
     "height": 1920,
-    "duration_seconds": 8
+    "duration_seconds": 4
   },
   "inputs": [
     {
@@ -132,28 +132,174 @@
     },
     {
       "id": "compose",
-      "label": "Compose the accepted cast locally",
-      "description": "The full cast graph reuses the selected paid results. Explicit fixed framing regions remove empty background, with all native-frame bounds checked before selection. Local composition fits each complete chosen region, adds original typography, converts to 30fps and decodes all 240 frames.",
+      "label": "Cut between identities on one shared timeline",
+      "description": "The cast graph reuses the accepted paid results. A caller-selected common region contains all recorded native-frame foreground bounds and keeps the fitted stage fixed. Riko supplies seconds 0\u20132 and Nami seconds 2\u20134 from the same driving timeline. Local composition adds typography, converts to 30fps without interpolation and decodes all 120 frames. The 3.2-second poster and identity-cut boundary received separate full-resolution review.",
       "outputs": [
         {
           "file": "assets/report.json",
-          "label": "Composition lineage and structural report",
+          "label": "Shared-timeline intervals, lineage and poster timestamp",
           "media_type": "application/json"
         },
         {
           "file": "assets/storyboard.png",
-          "label": "Sixteen timestamped reel samples",
+          "label": "Thirty-two chronological composition samples",
+          "media_type": "image/png"
+        },
+        {
+          "file": "assets/boundary-grid.png",
+          "label": "Dense samples across the two-second identity cut",
           "media_type": "image/png"
         },
         {
           "file": "assets/content-review.json",
-          "label": "Independent composition review and limits",
+          "label": "Independent shared-timeline content review and exact digests",
           "media_type": "application/json"
         },
         {
           "file": "assets/framing-selection.json",
-          "label": "All-frame framing selection evidence",
+          "label": "Common framing region and inherited all-native-frame bounds",
           "media_type": "application/json"
+        },
+        {
+          "file": "assets/boundary-before.png",
+          "label": "Full-resolution frame immediately before the identity cut",
+          "media_type": "image/png"
+        },
+        {
+          "file": "assets/boundary-after.png",
+          "label": "Full-resolution frame immediately after the identity cut",
+          "media_type": "image/png"
+        },
+        {
+          "file": "assets/native-riko-boundary.png",
+          "label": "Native Riko boundary sample",
+          "media_type": "image/png"
+        },
+        {
+          "file": "assets/native-nami-boundary.png",
+          "label": "Native Nami boundary sample",
+          "media_type": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "sequence",
+      "label": "Compare both complete performances",
+      "description": "The alternate eight-second sequence shows the full four-second Riko take followed by the full four-second Nami take. Its video is unchanged from the earlier accepted composition; the upright Riko poster is selected at 3.2 seconds. Historical review names are rebound to the exact retained assets, with original review bytes preserved as snapshots.",
+      "outputs": [
+        {
+          "file": "assets/sequence-final.mp4",
+          "label": "Eight-second sequential cast alternate",
+          "media_type": "video/mp4",
+          "poster": "assets/sequence-poster.webp"
+        },
+        {
+          "file": "assets/sequence-report.json",
+          "label": "Sequential composition and selected-poster report",
+          "media_type": "application/json"
+        },
+        {
+          "file": "assets/sequence-storyboard.png",
+          "label": "Sixteen sequential reel samples",
+          "media_type": "image/png"
+        },
+        {
+          "file": "assets/sequence-content-review.json",
+          "label": "Original sequence verdict with retained asset bindings",
+          "media_type": "application/json"
+        },
+        {
+          "file": "assets/sequence-poster-selection-review.json",
+          "label": "Independent upright Riko poster review",
+          "media_type": "application/json"
+        },
+        {
+          "file": "assets/sequence-framing-selection.json",
+          "label": "Original per-character framing evidence",
+          "media_type": "application/json"
+        },
+        {
+          "file": "assets/checkpoint-poster.webp",
+          "label": "Original poster snapshot",
+          "media_type": "image/webp"
+        },
+        {
+          "file": "assets/checkpoint-report.json",
+          "label": "Original report snapshot",
+          "media_type": "application/json"
+        },
+        {
+          "file": "assets/checkpoint-content-review.json",
+          "label": "Unmodified original sequence review snapshot",
+          "media_type": "application/json"
+        },
+        {
+          "file": "assets/checkpoint-poster-selection-review.json",
+          "label": "Unmodified selected-poster review snapshot",
+          "media_type": "application/json"
+        }
+      ]
+    },
+    {
+      "id": "dance-study",
+      "label": "Try a different lower-body performance",
+      "description": "An additional six-second Riko take follows a different reference with one-leg balance and leg extension. Independent review covers 24 paired poses, five native-resolution comparisons and the poster. Relaxed source hands become splayed or V-like fingers, and the plain studio background does not establish exact floor contact or physical balance. Source provenance and acquisition instructions accompany the paired evidence; raw and transcoded stock footage are excluded.",
+      "outputs": [
+        {
+          "file": "studies/dance/assets/video.mp4",
+          "label": "Additional Riko balance and extension study",
+          "media_type": "video/mp4",
+          "poster": "studies/dance/assets/poster.webp"
+        },
+        {
+          "file": "studies/dance/assets/identity.png",
+          "label": "Identity comparison for the additional study",
+          "media_type": "image/png"
+        },
+        {
+          "file": "studies/dance/assets/pose-evidence.png",
+          "label": "Eight synchronized driving and result pairs",
+          "media_type": "image/png"
+        },
+        {
+          "file": "studies/dance/assets/dense-poses-01.png",
+          "label": "Dense paired poses, first half",
+          "media_type": "image/png"
+        },
+        {
+          "file": "studies/dance/assets/dense-poses-02.png",
+          "label": "Dense paired poses, second half",
+          "media_type": "image/png"
+        },
+        {
+          "file": "studies/dance/assets/report.json",
+          "label": "Technical admission and all-native-frame border report",
+          "media_type": "application/json"
+        },
+        {
+          "file": "studies/dance/content-review.json",
+          "label": "Independent bounded study acceptance",
+          "media_type": "application/json"
+        },
+        {
+          "file": "studies/dance/motion-reference.json",
+          "label": "Driving source, rights interpretation and acquisition metadata",
+          "media_type": "application/json"
+        },
+        {
+          "file": "studies/dance/REPRODUCE.md",
+          "label": "Additional-study reproduction instructions",
+          "media_type": "text/markdown"
+        },
+        {
+          "file": "studies/dance/manifest.json",
+          "label": "Complete study inventory and selected workflow contract",
+          "media_type": "application/json"
+        },
+        {
+          "file": "studies/dance/inputs/dance.txt",
+          "label": "Additional-study input recipe; save as dance.yaml",
+          "media_type": "text/plain"
         }
       ]
     }
@@ -161,8 +307,10 @@
   "limitations": [
     "The character utility is a bounded performance-transfer stage. The reel is an example composition; larger stories, copy, music, voiceover and platform delivery belong to the caller.",
     "The studio-border proxy checks all native frames for edge contact; it does not establish semantic quality. Independent character review covers the identity and eight synchronized pose samples. It cannot certify every transition, fine fingers, continuous foot contact or reliability on unseen inputs.",
+    "The primary is an editorial cut between two identities on one driving timeline, not a seamless morph or loop. Nami appears shorter and lower in the stage than Riko; the exact cut and common framing were reviewed for these accepted clips and must be checked again on fresh takes.",
     "Native character clips are 720x1280 at 24fps. Caller-selected fixed regions remove empty background before local composition into 1080x1920 at 30fps by frame duplication; no intermediate motion is generated. Output is silent.",
     "The selected driving footage is used as an adaptation under the recorded licensing interpretation, not as a training dataset. Raw and trimmed stock footage is acquired from its publisher and is not hosted by FX.",
-    "Riko and Nami are the public cast. A third local development character is excluded because upstream reference rights remain unresolved."
+    "Riko and Nami are the public cast. A third local development character is excluded because upstream reference rights remain unresolved.",
+    "The additional lower-body study broadens the inspected inputs without establishing a success rate. Its relaxed source hand poses become splayed or V-like fingers; exact floor contact, physical balance and every transition are outside its bounded review."
   ]
 }

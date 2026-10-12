@@ -7,7 +7,7 @@ export const workflows = [
     description: "Turn a screen recording and a short brief into a polished, reusable product reveal.",
     input: "Screen recording and direction",
     output: "Finished promo clip",
-    note: "The product pixels come from the supplied recording. The model proposes a camera and timing plan; typography and video rendering run locally. The sample recording is a fictional chat-driven design tool.",
+    note: "The product pixels come from the supplied recording. A model proposes an editable plan; optional explicit source intervals omit waits and hold readable results. The selected clip includes a disclosed caller revision and replays locally at $0. The sample recording is a fictional chat-driven design tool.",
   },
   {
     slug: "character-performance",
@@ -15,7 +15,7 @@ export const workflows = [
     description: "Guide character performances with separate identity and motion references, then assemble a short cast reel.",
     input: "Character artwork and reference footage",
     output: "Two-character reel",
-    note: "Riko and Nami each follow the same four-second driving reference at 24 fps. The local reel fits authored fixed regions into an eight-second, 30 fps presentation. Review combines paired frame samples and a conservative border check across every native frame; continuous anatomy is not certified.",
+    note: "Riko and Nami each follow the same four-second driving reference at 24 fps. The primary reel cuts between identities at two seconds on that shared timeline, with a common fixed region and a 30 fps presentation. The complete sequential performances remain available as an alternate. Review combines paired frame samples and a conservative border check across every native frame; continuous anatomy is not certified.",
   },
   {
     slug: "parallax",

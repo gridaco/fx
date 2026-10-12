@@ -93,6 +93,15 @@ visual inputs, recorded stage outputs and scoped limitations. It does not contai
 workflow execution logic. The Workflow tab uses the same frozen FX run export as
 the other examples.
 
+The product page's selected command runs `workflow.yaml` with
+`replay-segments.yaml` at a zero-dollar ceiling. It reuses the original source and
+brief with a saved edit containing explicit chronological source intervals and
+caller-revised camera beat times. The intervals omit processing waits and retime
+the retained footage independently; the report binds source and output intervals.
+`showcase.yaml` remains the fresh model-planning path, and `replay.yaml` retains the
+earlier uniformly retimed result. Keep model proposals and caller revisions clear
+in the stage descriptions.
+
 Each complete reviewed bundle contains `manifest.json`, `cover.webp`,
 `assets/final.mp4`, `assets/poster.webp`, `assets/report.json` and every resource
 named by its inputs and stages. The product page's prompt attachment is
@@ -102,7 +111,7 @@ files identical to their selected source artifacts. A motion comparison may use
 an independently reviewed still or comparison sheet when the original footage
 is acquired separately. Its label and description must explain what it shows.
 
-The character page uses `cast.yaml` with `inputs/cast.yaml`: two instances of the
+The character page uses `cast.yaml` with `inputs/shared-cast.yaml`: two instances of the
 single-character `workflow.yaml`, followed by the free `reel.yaml` composition.
 Riko and Nami each use a separately prepared identity image and the same four-second
 silent driving interval at 24 fps. Preparation and reel composition make no provider
@@ -115,16 +124,23 @@ transition.
 
 The optional `first_region` and `second_region` inputs are normalized
 `[x, y, width, height]` rectangles. Their default preserves the whole frame. The
-canonical reel uses author-selected fixed regions to remove empty upper background
-and balance the characters, with foreground bounds measured across all 96 native
-frames per take and a 48-pixel margin. These regions belong to the exact accepted
+canonical reel uses one author-selected common region to remove empty upper background
+and hold the fitted stage fixed across its identity cut. Its foreground bounds were
+measured across all 96 native frames per take, with a requested 48-pixel margin
+constrained by the native image boundary. This region belongs to the exact accepted
 clips; measure every frame again when selecting framing for fresh takes. This is
 an explicit framing decision rather than automatic content
 cropping. Local composition aspect-fits each complete chosen region into a silent,
-eight-second 1080 × 1920 presentation at 30 fps; the supplied performance clips
-remain native 24 fps. Its report records the chosen regions and retains the child
-review scope. Composing accepted clips does not replace visual review of the
-assembled reel.
+four-second 1080 × 1920 presentation at 30 fps; the supplied performance clips
+remain native 24 fps. With `mode: shared_timeline` and `switch_at: 2`, it uses
+Riko's first two seconds and Nami's final two seconds. This mode requires matching
+driving-motion digests and equal source timeline lengths. `poster_at: 3.2` selects
+an actual output frame. Its report records the chosen regions, exact output-frame
+intervals and inherited child review scope. The cut and poster have a separate
+bounded visual review; they are an editorial identity change, not a seamless morph
+or loop. Fresh takes require a new cut and poster review. The default sequence mode
+and `inputs/cast.yaml` retain the eight-second comparison of both complete takes,
+included as an alternate stage output.
 
 The source commands download FX's character artwork, acquire the selected stock
 clip from its original source, then prepare both identity plates and the shared

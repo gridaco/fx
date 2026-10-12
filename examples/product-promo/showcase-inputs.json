@@ -8,6 +8,12 @@
       "path": "showcases/b45587a7593e02d5dc7ca560539b0ab549ea9292078927df837464e9510cc784/product-promo/assets/source.mp4",
       "sha256": "20f7dfce6cd3e54760843d3ba3d7d8d2bbae3022fda1b70078bb9987453f0971",
       "bytes": 449527
+    },
+    {
+      "filename": "dashboard.mp4",
+      "path": "showcases/5c28fa8da809dc08979a5e643bdb85ca7323f7b4637c6cf6551fc944c5bb2916/product-promo/studies/dashboard/assets/source.mp4",
+      "sha256": "d2ea71fd39be0f087bd0a60395c33d2805d82a41ad2903df1b5b8f498d4b6b34",
+      "bytes": 345037
     }
   ]
 }

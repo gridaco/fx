@@ -1,0 +1,98 @@
+{
+  "kind": "video-demo-v1",
+  "title": "Start with data. Shape a story.",
+  "summary": "A distinct original browser recording becomes a focused dashboard promo by omitting waits and preserving readable requests and results.",
+  "result": {
+    "file": "assets/final.mp4",
+    "poster": "assets/poster.webp",
+    "media_type": "video/mp4",
+    "width": 1920,
+    "height": 1080,
+    "duration_seconds": 19
+  },
+  "inputs": [
+    {
+      "id": "footage",
+      "role": "source",
+      "label": "Original dashboard browser recording",
+      "file": "assets/source.mp4",
+      "poster": "assets/source.webp",
+      "media_type": "video/mp4",
+      "description": "A 44-second original scripted browser fixture: weekly demonstration figures become a dashboard, then chat focuses returning customers. Deliberate waits test interval selection. This is not a shipping service or live model session."
+    },
+    {
+      "id": "brief",
+      "role": "direction",
+      "label": "Exact copy and focus hints",
+      "file": "assets/brief.json",
+      "media_type": "application/json",
+      "description": "Supplied product name, exact titles, colors, timestamp hints, and named source regions. The workflow preserves this wording and the actual recording pixels."
+    }
+  ],
+  "stages": [
+    {
+      "id": "inspect",
+      "label": "Inspect the recording",
+      "description": "Validate the source and sample its chronology before any paid call.",
+      "outputs": [
+        {
+          "file": "assets/source-storyboard.png",
+          "media_type": "image/png",
+          "label": "Source timing samples"
+        },
+        {
+          "file": "assets/source.json",
+          "media_type": "application/json",
+          "label": "Source inspection"
+        }
+      ]
+    },
+    {
+      "id": "propose",
+      "label": "Refine a saved editable plan",
+      "description": "The structured model selected four chronological source intervals and camera times. The caller expanded the canvas crop left edge to retain the complete filename; timing and intervals are unchanged. The original source fixture row count and chart-label alignment were corrected before final review.",
+      "outputs": [
+        {
+          "file": "assets/edit.json",
+          "media_type": "application/json",
+          "label": "Selected camera and timing plan"
+        }
+      ]
+    },
+    {
+      "id": "render",
+      "label": "Render exact source pixels",
+      "description": "Local typography and camera framing render the saved plan at $0. Explicit cuts retain the completed requests and outcomes. Strict full-file decoding validates the delivered MP4.",
+      "outputs": [
+        {
+          "file": "assets/storyboard.png",
+          "media_type": "image/png",
+          "label": "Final timestamped samples"
+        },
+        {
+          "file": "assets/report.json",
+          "media_type": "application/json",
+          "label": "Structural delivery report"
+        }
+      ]
+    },
+    {
+      "id": "review",
+      "label": "Independent sampled review",
+      "description": "A different model accepted all eight criteria on timestamped frames, the full-size poster, exact-copy brief, and report.",
+      "outputs": [
+        {
+          "file": "assets/review.json",
+          "media_type": "application/json",
+          "label": "Independent review and limits"
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "The source is original DOM/CSS rendered by Chromium at authored timeline positions. Browser fixture creation is optional and separate from the recording-to-promo utility.",
+    "One silent 1920 \u00d7 1080 composition with explicit chronological source intervals. Caller-approved cuts omit waits and independently retime retained footage; narration, sound design, device mockups and larger edits remain outside this utility.",
+    "Independent review covers sampled visual evidence and a static poster, not continuous motion or listening. Source and final MP4 decoding are structural checks.",
+    "This is a distinct-input transfer study alongside the selected Garden example; a few inputs do not establish a general success rate."
+  ]
+}

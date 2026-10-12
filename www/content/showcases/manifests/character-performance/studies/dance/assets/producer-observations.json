@@ -1,0 +1,36 @@
+{
+  "kind": "producer_visual_observations_v1",
+  "independent": false,
+  "role": "Producer-side inspection; separate from the independent sampled reviewer and publication acceptance.",
+  "video_sha256": "3a0fdbe605db89f6a4338231355e944a36462c3b44baa520866a6cda2436f28d",
+  "viewed": [
+    "authoritative plate/opening identity comparison",
+    "eight synchronized pose pairs",
+    "24 quarter-second synchronized pose pairs",
+    "native source/output pair at4.21 seconds"
+  ],
+  "observations": [
+    "Recognizable blonde-and-pink Riko hair, ribbons, face, choker, pink cropped top, denim shorts and sneakers persist across sampled poses.",
+    "The opening overhead arm and bent lifted leg follow the source balance; the arm lowers toward the head/shoulder while the free leg gradually extends and the torso inclines.",
+    "Both legs and shoes remain present and visually readable at sampled balance/extension phases.",
+    "Relaxed or curled source hands are replaced by splayed or V-like fingers; this is approximate hand gesture transfer.",
+    "The background supplies no explicit floor plane; exact physical support/contact cannot be established."
+  ],
+  "framing_authoring_aid": {
+    "native_frames_analyzed": 145,
+    "foreground_union_xyxy": [
+      13,
+      449,
+      536,
+      1225
+    ],
+    "definition": "per-frame max RGB channel distance >20 from median of four8x8 corner patches; corners agree within8",
+    "limitation": "Pixel threshold union is a conservative authoring aid. It neither segments anatomy semantically nor certifies motion."
+  },
+  "scope_limits": [
+    "This is sampled semantic inspection, not a verdict on every transition.",
+    "Clear all-frame borders do not certify anatomy, synchronization, contact or unseen-input reliability.",
+    "A fresh generation needs independent review."
+  ],
+  "recommendation": "Additional bounded lower-body transfer study, pending separate independent publication acceptance; retain the original canonical unchanged."
+}

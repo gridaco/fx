@@ -1,0 +1,66 @@
+{
+ "audio": "removed",
+ "character": "Riko",
+ "character_plate_sha256": "6e673a9d0ff73539804d903fd8dfce205b3823d6bd964a420a94dbf230dac470",
+ "finished": {
+  "duration_seconds": 6.041667,
+  "fps": 24,
+  "frames": 145,
+  "height": 1280,
+  "width": 720
+ },
+ "framing_scan": {
+  "corner_patch_pixels": 8,
+  "corner_uniformity_max_channel_threshold": 8,
+  "edge_contacts": [],
+  "foreground_edge_max_channel_threshold": 20,
+  "frame_index_base": 0,
+  "frames_scanned": 145,
+  "kind": "studio_border_scan_v1",
+  "limitation": "Uniform corners and clear borders cannot establish anatomy or every-transition quality.",
+  "scope": "all native frames; conservative plain-studio pixel proxy, not semantic certification",
+  "status": "clear",
+  "timing": "native best_effort_timestamp_time",
+  "unknown_frames": []
+ },
+ "full_decode": "pass",
+ "kind": "character_performance_finish_v1",
+ "motion_sha256": "08e07e12cff6efdd2941b525e8754169cec7ba6a3ed65818a1ce0f3548ff7bed",
+ "native": {
+  "duration_seconds": 6.041667,
+  "fps": 24,
+  "frames": 145,
+  "height": 1280,
+  "width": 720
+ },
+ "publication_status": "requires_separate_content_review",
+ "rejection_reasons": [],
+ "review_scope": "sampled_frames_and_pose_correspondence",
+ "review_sha256": "26fefb4c81f41c6898a8803df7b5ab2ee2c6c16bdbabe89673d0c0e55c438b4a",
+ "review_status": "sampled_review_pass",
+ "sample_mean_rgb_change": [
+  1.6371256510416667,
+  3.325439453125,
+  4.168294270833333,
+  5.598225911458333,
+  5.861002604166667,
+  6.453369140625,
+  7.223063151041667
+ ],
+ "sample_times_seconds": [
+  0,
+  0.842857,
+  1.685714,
+  2.528571,
+  3.371429,
+  4.214286,
+  5.057143,
+  5.9
+ ],
+ "sampled_review_status": "pass",
+ "sampling_limit": "Eight frame pairs cannot certify every transition.",
+ "spatial_resizing_of_output": false,
+ "take_sha256": "16d59193b389fa0908e0303cfb8f23c528d94877b3d38b9636c753de4de52e4a",
+ "temporal_interpolation": false,
+ "video_sha256": "3a0fdbe605db89f6a4338231355e944a36462c3b44baa520866a6cda2436f28d"
+}

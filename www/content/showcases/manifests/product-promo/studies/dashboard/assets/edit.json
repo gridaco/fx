@@ -1,0 +1,102 @@
+{
+ "closing_seconds": 2.6,
+ "editorial_note": "Follow the completed chat request, cut to the first dashboard reveal, return to the readable refinement request, then hold on the focused returning-customers dashboard before ending wide. Caller expanded the canvas crop left edge to preserve the complete source filename; model timing and source intervals are unchanged.",
+ "focus": [
+  {
+   "at": 0,
+   "crop": [
+    0,
+    0,
+    1,
+    1
+   ],
+   "x": 0.5,
+   "y": 0.5,
+   "zoom": 1
+  },
+  {
+   "at": 1.3,
+   "crop": [
+    0.026,
+    0.146,
+    0.271,
+    0.951
+   ],
+   "x": 0.15,
+   "y": 0.38,
+   "zoom": 1
+  },
+  {
+   "at": 3.33,
+   "crop": [
+    0.28,
+    0.151,
+    0.975,
+    0.91
+   ],
+   "x": 0.64,
+   "y": 0.5,
+   "zoom": 1
+  },
+  {
+   "at": 5.92,
+   "crop": [
+    0.026,
+    0.146,
+    0.271,
+    0.951
+   ],
+   "x": 0.15,
+   "y": 0.63,
+   "zoom": 1
+  },
+  {
+   "at": 8.5,
+   "crop": [
+    0.28,
+    0.151,
+    0.975,
+    0.91
+   ],
+   "x": 0.64,
+   "y": 0.5,
+   "zoom": 1
+  },
+  {
+   "at": 14,
+   "crop": [
+    0,
+    0,
+    1,
+    1
+   ],
+   "x": 0.5,
+   "y": 0.5,
+   "zoom": 1
+  }
+ ],
+ "footage_seconds": 14,
+ "opening_seconds": 2.4,
+ "source_segments": [
+  {
+   "duration_seconds": 2.5,
+   "source_end": 7.3,
+   "source_start": 4.8
+  },
+  {
+   "duration_seconds": 2.5,
+   "source_end": 25.5,
+   "source_start": 22.5
+  },
+  {
+   "duration_seconds": 2.5,
+   "source_end": 31,
+   "source_start": 28
+  },
+  {
+   "duration_seconds": 6.5,
+   "source_end": 44,
+   "source_start": 37.5
+  }
+ ]
+}

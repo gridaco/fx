@@ -1,0 +1,131 @@
+{
+  "kind": "character_performance_study_package_v1",
+  "title": "One-leg balance and extension",
+  "character": "Riko",
+  "source_reference": "motion-reference.json",
+  "recipe": "inputs/dance.txt",
+  "workflow": "examples/character-performance/workflow.yaml",
+  "publication_status": "accepted_for_additional_bounded_study",
+  "sampled_admission": "pass",
+  "scope": "Additional 6-second performance case; existing canonical deliveries remain unchanged.",
+  "generation_routes": {
+    "video.motion_transfer": "fal-ai/wan-motion@fal",
+    "structured.generate": "openai/gpt-6-astra@openrouter"
+  },
+  "node_versions": {
+    "finish": 2,
+    "admit": 2
+  },
+  "limitations": [
+    "Eight-pair sampled provider review plus 24-pose producer inspection are not every-transition semantic certification.",
+    "The all 145-frame clear border scan is a conservative studio-background pixel proxy.",
+    "Source relaxed hand poses are approximated with splayed or V-like fingers.",
+    "A plain studio background does not establish exact floor contact or physical balance.",
+    "New generations are nondeterministic and need fresh review."
+  ],
+  "files": [
+    {
+      "path": "REPRODUCE.md",
+      "bytes": 3318,
+      "sha256": "f52f1163c96cdb670291a6adcbe3faaf3b7f2780042919dfd38b2cec379ee1b5"
+    },
+    {
+      "path": "assets/character.png",
+      "bytes": 157555,
+      "sha256": "6e673a9d0ff73539804d903fd8dfce205b3823d6bd964a420a94dbf230dac470"
+    },
+    {
+      "path": "assets/dense-evidence.json",
+      "bytes": 2110,
+      "sha256": "2983b375c4051b2d314f99b66298c2cde4ca45c303f4caa6949f44fdc8266dc1"
+    },
+    {
+      "path": "assets/dense-poses-01.png",
+      "bytes": 1253180,
+      "sha256": "7e3ebd3ef3f679f4d7a891caa5850a7001d115a6ce29ab85a991ffa93bda0af1"
+    },
+    {
+      "path": "assets/dense-poses-02.png",
+      "bytes": 1217975,
+      "sha256": "55ab5ed6ce88b7ddf73925638691fe45fe0bc078ad061485af7a9ff20c7e273c"
+    },
+    {
+      "path": "assets/identity.png",
+      "bytes": 140998,
+      "sha256": "2a094b2c2705eb558483004bf0b7b6f757e7fd268b75d5686071ba6799c41ecd"
+    },
+    {
+      "path": "assets/pose-evidence.png",
+      "bytes": 1174722,
+      "sha256": "ca73dc6763d6874965fd2c512d9918c9a5f0f465a5a2c020bfb696e39fea2539"
+    },
+    {
+      "path": "assets/poster.webp",
+      "bytes": 28946,
+      "sha256": "9435ee37e664a21ecdb6032ba8bc420b39a4309759ea0ce27505308e75c51e3f"
+    },
+    {
+      "path": "assets/producer-observations.json",
+      "bytes": 1998,
+      "sha256": "afad0191c943b5f55c81a0d91ff142017be4c51375ddc8f5a90cde03a4b59190"
+    },
+    {
+      "path": "assets/report.json",
+      "bytes": 1980,
+      "sha256": "b16c8f1c81196fbf4b3a6215ee94f03496329554093c1f0c3e426edb246c1d0d"
+    },
+    {
+      "path": "assets/review-details/native-pair-0.84s.png",
+      "bytes": 748566,
+      "sha256": "e5b870e14d61f4e2517f4e133d4babc6aaacb5e4c0ca08d21765d56dfa5137cd"
+    },
+    {
+      "path": "assets/review-details/native-pair-2.53s.png",
+      "bytes": 740539,
+      "sha256": "cea5d900ed34769f1ed29156d960729205566ec7104232cfe3fe36efa885ddcc"
+    },
+    {
+      "path": "assets/review-details/native-pair-3.37s.png",
+      "bytes": 749028,
+      "sha256": "a7995afd19cc97759d1d0c38c5edf2e84f36ab791f51eef95c7f44cfa118b298"
+    },
+    {
+      "path": "assets/review-details/native-pair-4.21s.png",
+      "bytes": 746575,
+      "sha256": "b88cc9c500602cc393d80236a5074037c6ced0ae07180a974d47e035dd207ef2"
+    },
+    {
+      "path": "assets/review-details/native-pair-5.06s.png",
+      "bytes": 739391,
+      "sha256": "c2242bef99d4af776190938fb19529e8a5806e98b9ac630a57f09950342361f4"
+    },
+    {
+      "path": "assets/sampled-review.json",
+      "bytes": 1785,
+      "sha256": "26fefb4c81f41c6898a8803df7b5ab2ee2c6c16bdbabe89673d0c0e55c438b4a"
+    },
+    {
+      "path": "assets/video.mp4",
+      "bytes": 928213,
+      "sha256": "3a0fdbe605db89f6a4338231355e944a36462c3b44baa520866a6cda2436f28d"
+    },
+    {
+      "path": "content-review.json",
+      "bytes": 3541,
+      "sha256": "35348eba6c8c62ff8ec72918ed987c5925e4409eeef798b21c44bc1df40f6f32"
+    },
+    {
+      "path": "inputs/dance.txt",
+      "bytes": 162,
+      "sha256": "4af218715722bde07444b5f9cd093a8d6c13065f66cbb6686f4f59e4995653ad"
+    },
+    {
+      "path": "motion-reference.json",
+      "bytes": 1432,
+      "sha256": "75f0dd0039acb29fa785c022c4a32ad8380321e1864dcf17a204a026adb11d42"
+    }
+  ],
+  "reproduction": "REPRODUCE.md",
+  "independent_content_review": "content-review.json",
+  "recipe_delivery": "Plain-text download containing the exact YAML recipe; save as inputs/dance.yaml."
+}

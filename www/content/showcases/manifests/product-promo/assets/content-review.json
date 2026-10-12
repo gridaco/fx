@@ -1,0 +1,55 @@
+{
+  "kind": "independent_product_promo_revision_review_v1",
+  "reviewer": "independent_non_producing_visual_review_agent",
+  "recorded_at": "2026-10-12T22:36:24.793149+00:00",
+  "status": "accepted_with_declared_sampled_scope",
+  "recommendation": "Prefer the 17.5-second Garden source-segments revision over the 18.5-second checkpoint as primary; retain the distinct dashboard operation as an additional replay study after its crop repair.",
+  "bindings": {
+    "assets/final.mp4": "2e056569d983a45dd44406f9cdd8da34c8ad394bcbf8d4c900ae77e774f653bf",
+    "assets/poster.webp": "7fb779b23904863f199b8bd987f0a14e2221f885c656bb917144a67e9929294a",
+    "assets/report.json": "dfc81d82b3957c6f78303a365bde7fde49aa99c85553894e5307f4142a8a3b4e",
+    "assets/edit.json": "8ac59e063f455e368b340cb131e25c0dbcb66c7389992b8fb57752160641be90"
+  },
+  "scope": {
+    "chronological_samples": 35,
+    "chronological_rate_fps": 2,
+    "dense_cut_samples": 20,
+    "full_resolution_seconds": [
+      4.5,
+      7.5,
+      11.5,
+      14.5
+    ],
+    "full_resolution_dimensions": [
+      1920,
+      1080
+    ],
+    "continuous_playback": false,
+    "audio": "silent; no listening assessment"
+  },
+  "criteria": {
+    "readable_initial_request": "pass",
+    "readable_refinement_request": "pass",
+    "recognizable_initial_and_refined_outcome": "pass",
+    "critical_content_containment_in_reviewed_frames": "pass",
+    "chat_and_outcome_context_reconnected": "pass",
+    "earlier_visible_result": "pass",
+    "cut_timing_in_dense_samples": "pass"
+  },
+  "observations": [
+    "The first visible canvas arrives around 5.1 seconds instead of around 8 seconds in the checkpoint; the waiting sequence is shortened without forcing the entire recording to play faster.",
+    "The initial request and Make it warmer refinement remain readable in the inspected 1920x1080 frames. The initial page and warmer peach/terracotta revision are visibly distinct.",
+    "Dense samples across 5.0, 7.5, 10.0 seconds show explicit editorial cuts aligned with the intended request/result progression. The first reveal briefly retains the supplied source fade-in; this is short and coherent.",
+    "The final full-interface view reconnects the two chat requests with the revised canvas before the closing card. The headline, CTA and selected result stay contained in the inspected frames.",
+    "The intervals and camera-beat revision are caller-authored; they should be disclosed as an editorial refinement of the saved model plan."
+  ],
+  "limitations": [
+    "This frame-based review does not certify all 525 frames, continuous smoothness or every intermediate transition.",
+    "Isolated chat cards float in extensive empty space and temporarily remove app chrome; the opening and final interface views carry the software context.",
+    "The refinement changes palette rather than demonstrating a more complex operation; this remains a bounded recording-to-promo insert, not proof of a shipping product capability.",
+    "The source is an original scripted fictional product recording; the visual outcome is not evidence of a real hosted product."
+  ],
+  "paid_calls_by_reviewer": 0,
+  "source_review_sha256": "0a8de20f3a39d36dffd35ee42fc44400726c90eeff82a1ab4f4b26add6117939",
+  "packaging_note": "The reviewed candidate filenames were rebound to identical bundle-owned bytes; visual scope and verdict are unchanged. Local inspection-frame paths are omitted from the public copy."
+}

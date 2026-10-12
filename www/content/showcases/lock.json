@@ -1,9 +1,9 @@
 {
   "kind": "fx-showcase-lock-v1",
   "release": {
-    "sha256": "b45587a7593e02d5dc7ca560539b0ab549ea9292078927df837464e9510cc784",
-    "path": "showcases/b45587a7593e02d5dc7ca560539b0ab549ea9292078927df837464e9510cc784/manifest.json",
-    "fixture": "manifests/b45587a7593e02d5dc7ca560539b0ab549ea9292078927df837464e9510cc784.json"
+    "sha256": "5c28fa8da809dc08979a5e643bdb85ca7323f7b4637c6cf6551fc944c5bb2916",
+    "path": "showcases/5c28fa8da809dc08979a5e643bdb85ca7323f7b4637c6cf6551fc944c5bb2916/manifest.json",
+    "fixture": "manifests/5c28fa8da809dc08979a5e643bdb85ca7323f7b4637c6cf6551fc944c5bb2916.json"
   },
   "workflows": {
     "character-3d": {
@@ -498,8 +498,8 @@
         "contract": "video-demo-v1",
         "manifest": {
           "path": "product-promo/manifest.json",
-          "sha256": "dc191a41d128dcbc105ce1a19a57c636a91b5cf1911c8d8d29319e4040ee8ff3",
-          "bytes": 3878,
+          "sha256": "d4445a7554535ee7a1f2d18f20d78d2042304ded4ea0a742ea6f6f61dd8d942c",
+          "bytes": 6690,
           "media_type": "application/json"
         },
         "metadata": [
@@ -510,21 +510,27 @@
             "media_type": "application/json"
           },
           {
+            "path": "product-promo/assets/content-review.json",
+            "sha256": "5d3113f0311392db8c9be21b1532d84abe444e8f93aeb8c3b61afc0a004f2704",
+            "bytes": 3450,
+            "media_type": "application/json"
+          },
+          {
             "path": "product-promo/assets/edit.json",
-            "sha256": "a842b02566ecff071bbab36a02e6c482416bfaad6094cda25f9b43c87ad9a957",
-            "bytes": 1000,
+            "sha256": "8ac59e063f455e368b340cb131e25c0dbcb66c7389992b8fb57752160641be90",
+            "bytes": 1405,
             "media_type": "application/json"
           },
           {
             "path": "product-promo/assets/report.json",
-            "sha256": "e3c246527d87604ca461e1d71f2523de8c37e8f73032aaed17baeaa0f91a08a4",
-            "bytes": 1799,
+            "sha256": "dfc81d82b3957c6f78303a365bde7fde49aa99c85553894e5307f4142a8a3b4e",
+            "bytes": 3472,
             "media_type": "application/json"
           },
           {
             "path": "product-promo/assets/review.json",
-            "sha256": "71967ab5d0bd75e95139c2f61df19caaf396f800dccc8aba8f86bb5bbfe24d11",
-            "bytes": 3555,
+            "sha256": "01e7a1abd6055ca0a61c01e47378b62ae960b9a1aecc9e9208583e18bc4df010",
+            "bytes": 3255,
             "media_type": "application/json"
           },
           {
@@ -532,10 +538,60 @@
             "sha256": "33d02c49cba7ae8c9d2cf138a9c5b24ba74a2259dd3f6976def03c014563430f",
             "bytes": 351,
             "media_type": "application/json"
+          },
+          {
+            "path": "product-promo/studies/dashboard/assets/brief.json",
+            "sha256": "c806ccbfd9fda2436852c3fd1272110ad3bc766cbd4a7ff451ddd6ae1344efe7",
+            "bytes": 1487,
+            "media_type": "application/json"
+          },
+          {
+            "path": "product-promo/studies/dashboard/assets/content-review.json",
+            "sha256": "c354b0602223f602419da59d5a87f44320a619addc914494d3074bb75635cdaa",
+            "bytes": 3072,
+            "media_type": "application/json"
+          },
+          {
+            "path": "product-promo/studies/dashboard/assets/edit.json",
+            "sha256": "5baf96c23ba2067d43688897f39befd6aa3d73a73ca550bb470dca0be4189146",
+            "bytes": 1500,
+            "media_type": "application/json"
+          },
+          {
+            "path": "product-promo/studies/dashboard/assets/report.json",
+            "sha256": "8d85fd37092322436d84588289934e29772bdff9405bf63ce83596142060d56b",
+            "bytes": 3510,
+            "media_type": "application/json"
+          },
+          {
+            "path": "product-promo/studies/dashboard/assets/review.json",
+            "sha256": "44555ae3268fda761361c43a018672dee421cc7b45350a64c84c6df5e9a89362",
+            "bytes": 3711,
+            "media_type": "application/json"
+          },
+          {
+            "path": "product-promo/studies/dashboard/assets/source.json",
+            "sha256": "3b1797fd7ede5fd2fae8f726b792629313501f84c168050321b9d98dcdfc3e7d",
+            "bytes": 351,
+            "media_type": "application/json"
+          },
+          {
+            "path": "product-promo/studies/dashboard/manifest.json",
+            "sha256": "1d335c5843da3c8a4a984f6ef02cc4c21d803d43ca4f53529c00e19ef6bddf17",
+            "bytes": 4139,
+            "media_type": "application/json"
           }
         ]
       },
       "recordings": [
+        {
+          "id": "forma-promo-segments",
+          "label": "Forma promo with explicit source intervals",
+          "kind": "fx-run-export-v1",
+          "path": "runs/d011b4c20e072119ba458b043f5c5356e3fd3d09c77544949188107cd3c17751/manifest.json",
+          "sha256": "d011b4c20e072119ba458b043f5c5356e3fd3d09c77544949188107cd3c17751",
+          "fixture": "recordings/d011b4c20e072119ba458b043f5c5356e3fd3d09c77544949188107cd3c17751.json"
+        },
         {
           "id": "forma-promo",
           "label": "Forma product reveal",
@@ -551,21 +607,39 @@
         "contract": "video-demo-v1",
         "manifest": {
           "path": "character-performance/manifest.json",
-          "sha256": "8b724eb1a15003f693c85a440ef0809130ad2b6eefac29365e15f4a4beea255f",
-          "bytes": 6890,
+          "sha256": "b410e27a2171799607363efb717a4355de006e985ef2c106bf1e4406bcac0052",
+          "bytes": 13567,
           "media_type": "application/json"
         },
         "metadata": [
           {
-            "path": "character-performance/assets/content-review.json",
+            "path": "character-performance/assets/checkpoint-content-review.json",
             "sha256": "7a19ece0aa5290dc821c1bf6a958a82bc26ac3ffd5740891d353f37af439cd9b",
             "bytes": 6201,
             "media_type": "application/json"
           },
           {
+            "path": "character-performance/assets/checkpoint-poster-selection-review.json",
+            "sha256": "de75be01b5863478778bf500cf0a182d6d0ea62db58b6387aba403cb4089397d",
+            "bytes": 3610,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/assets/checkpoint-report.json",
+            "sha256": "e1cbb5fe4df95097e30711f752b50c8b575c2d07a4217147b06f552eff2d1339",
+            "bytes": 2720,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/assets/content-review.json",
+            "sha256": "9bd91233416dc6845b0fcc4394f4d8ae0c89259b1c3bc1504e2ab6fdbac192d2",
+            "bytes": 4245,
+            "media_type": "application/json"
+          },
+          {
             "path": "character-performance/assets/framing-selection.json",
-            "sha256": "c8a8c10ac8792cfe3f9cd5ec9b0124280ddb977e205e997593ca4f028d16d643",
-            "bytes": 14584,
+            "sha256": "7a9b69d8fef3fe25420fbd5f9934202ae7dcdab48c8f0cffa0255eb7532ec219",
+            "bytes": 19209,
             "media_type": "application/json"
           },
           {
@@ -594,8 +668,8 @@
           },
           {
             "path": "character-performance/assets/report.json",
-            "sha256": "e1cbb5fe4df95097e30711f752b50c8b575c2d07a4217147b06f552eff2d1339",
-            "bytes": 2720,
+            "sha256": "798ac11e6131c904472472879823b8d23db3e4dc043a632627d596685be8424e",
+            "bytes": 3593,
             "media_type": "application/json"
           },
           {
@@ -615,10 +689,84 @@
             "sha256": "411424d99c477a25b8980d4460ea8d826e2f177250ad2dba368b777d8f837c27",
             "bytes": 2147,
             "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/assets/sequence-content-review.json",
+            "sha256": "bd1f6f88a7a532671e3ef82b701d7eadb60660fc956db293ced551809214422f",
+            "bytes": 6546,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/assets/sequence-framing-selection.json",
+            "sha256": "c8a8c10ac8792cfe3f9cd5ec9b0124280ddb977e205e997593ca4f028d16d643",
+            "bytes": 14584,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/assets/sequence-poster-selection-review.json",
+            "sha256": "d26732071fb9a39e90242143df5dd94140add0aa599b5c540fd536a8cf63df49",
+            "bytes": 3906,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/assets/sequence-report.json",
+            "sha256": "f62c31c4c754e1a15dbd0c2174e9ccfb72b18d7cd48caebb51eb097a14dd8297",
+            "bytes": 2969,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/studies/dance/assets/dense-evidence.json",
+            "sha256": "2983b375c4051b2d314f99b66298c2cde4ca45c303f4caa6949f44fdc8266dc1",
+            "bytes": 2110,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/studies/dance/assets/producer-observations.json",
+            "sha256": "afad0191c943b5f55c81a0d91ff142017be4c51375ddc8f5a90cde03a4b59190",
+            "bytes": 1998,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/studies/dance/assets/report.json",
+            "sha256": "b16c8f1c81196fbf4b3a6215ee94f03496329554093c1f0c3e426edb246c1d0d",
+            "bytes": 1980,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/studies/dance/assets/sampled-review.json",
+            "sha256": "26fefb4c81f41c6898a8803df7b5ab2ee2c6c16bdbabe89673d0c0e55c438b4a",
+            "bytes": 1785,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/studies/dance/content-review.json",
+            "sha256": "35348eba6c8c62ff8ec72918ed987c5925e4409eeef798b21c44bc1df40f6f32",
+            "bytes": 3541,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/studies/dance/manifest.json",
+            "sha256": "7482ad668e8ed840519981de57f7ad8185a7c08804bd0e1007b74d9800da90f2",
+            "bytes": 4610,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/studies/dance/motion-reference.json",
+            "sha256": "75f0dd0039acb29fa785c022c4a32ad8380321e1864dcf17a204a026adb11d42",
+            "bytes": 1432,
+            "media_type": "application/json"
           }
         ]
       },
       "recordings": [
+        {
+          "id": "riko-nami-shared-timeline",
+          "label": "Riko and Nami on a shared performance timeline",
+          "kind": "fx-run-export-v1",
+          "path": "runs/aab1ef5fb71ad00b46d16b32d98e3819fa7f61aadbda41a7db0b63ae16d516d0/manifest.json",
+          "sha256": "aab1ef5fb71ad00b46d16b32d98e3819fa7f61aadbda41a7db0b63ae16d516d0",
+          "fixture": "recordings/aab1ef5fb71ad00b46d16b32d98e3819fa7f61aadbda41a7db0b63ae16d516d0.json"
+        },
         {
           "id": "riko-nami-cast",
           "label": "Riko and Nami shared performance",

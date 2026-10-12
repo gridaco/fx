@@ -1,0 +1,22 @@
+{
+ "anatomy_and_framing": "pass",
+ "identity": "pass",
+ "limitations": [
+  "This review covers only the opening comparison and eight synchronized samples; intervening transitions and continuous timing were not inspected.",
+  "The montage scale limits assessment of fine finger anatomy and precise foot contact.",
+  "No audio was reviewed, and reliability on unseen inputs has not been established."
+ ],
+ "motion_correspondence": "pass",
+ "observations": [
+  "The generated character remains recognizable against the plate: blonde hair with pink accents and ribbons, similar face, black choker, pink cropped sweatshirt, dark denim shorts, and white/pink sneakers are retained.",
+  "The opening pose matches the reference's one-leg balance, bent lifted leg, overhead arm, and opposite arm held outward.",
+  "Across 0.00–2.53 seconds, the raised arm progressively lowers toward the head and shoulder in correspondence with the reference.",
+  "Across 3.37–5.90 seconds, the hands move forward and downward, the torso leans, and the lifted leg extends farther behind/sideways. These changes occur at the corresponding sampled times; the output is not static.",
+  "Finger poses are more splayed or V-shaped than the reference's relaxed, curled hands, and some knee angles differ slightly. These are localized approximations rather than an unrelated gesture sequence.",
+  "Both arms, hands, legs, and shoes remain present and readable, with no apparent severe hand fusion or extra limbs. The generated character stays fully framed, with no extra people or added scene text.",
+  "The softly shaded illustrated style remains consistent with the authoritative plate throughout the samples."
+ ],
+ "review_scope": "sampled_frames_and_pose_correspondence",
+ "status": "pass",
+ "style": "pass"
+}

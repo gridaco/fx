@@ -1,0 +1,83 @@
+{
+  "kind": "independent_character_performance_content_review_v1",
+  "status": "accepted_for_additional_bounded_study",
+  "reviewer": "independent_editorial_reviewer",
+  "producer_independent": true,
+  "method": {
+    "paired_chronological_samples": 24,
+    "sample_interval_seconds": 0.25,
+    "native_full_frame_pair_times_seconds": [
+      0.84,
+      2.53,
+      3.37,
+      4.21,
+      5.06
+    ],
+    "poster": "Native 720 x 1280 poster inspected separately: recognizable character, complete limbs and shoes; approximated splayed fingers remain visible.",
+    "scope": "Sampled visual inspection of the generated performance against its motion reference and character concept. No continuous playback or audio verdict."
+  },
+  "findings": [
+    "Riko remains recognizable through the pink cropped sweater, hair ribbons, shorts, and sneakers.",
+    "The one-leg balance, free-leg extension, torso angle, and lowering arms follow the coarse reference pose sequence at inspected times.",
+    "No major body malformation or character clipping was visible in the inspected samples.",
+    "Fine hand poses differ: relaxed reference hands become splayed or V-like fingers.",
+    "The plain studio background provides no floor-contact plane; exact physical contact and balance are not established.",
+    "The generated leg is somewhat more bent during the extension, and source edge excursions are not reproduced exactly."
+  ],
+  "publication_scope": "An additional reference-driven performance study, with the listed limitations visible alongside it.",
+  "limits": [
+    "Sampled inspection cannot certify every transition.",
+    "Fine finger correspondence, exact floor contact, and seamless motion identity are not claimed.",
+    "A new stochastic generation needs fresh review."
+  ],
+  "assets": [
+    {
+      "path": "assets/video.mp4",
+      "sha256": "3a0fdbe605db89f6a4338231355e944a36462c3b44baa520866a6cda2436f28d"
+    },
+    {
+      "path": "assets/poster.webp",
+      "sha256": "9435ee37e664a21ecdb6032ba8bc420b39a4309759ea0ce27505308e75c51e3f"
+    },
+    {
+      "path": "assets/report.json",
+      "sha256": "b16c8f1c81196fbf4b3a6215ee94f03496329554093c1f0c3e426edb246c1d0d"
+    },
+    {
+      "path": "assets/sampled-review.json",
+      "sha256": "26fefb4c81f41c6898a8803df7b5ab2ee2c6c16bdbabe89673d0c0e55c438b4a"
+    },
+    {
+      "path": "assets/dense-evidence.json",
+      "sha256": "2983b375c4051b2d314f99b66298c2cde4ca45c303f4caa6949f44fdc8266dc1"
+    },
+    {
+      "path": "assets/dense-poses-01.png",
+      "sha256": "7e3ebd3ef3f679f4d7a891caa5850a7001d115a6ce29ab85a991ffa93bda0af1"
+    },
+    {
+      "path": "assets/dense-poses-02.png",
+      "sha256": "55ab5ed6ce88b7ddf73925638691fe45fe0bc078ad061485af7a9ff20c7e273c"
+    },
+    {
+      "path": "assets/review-details/native-pair-0.84s.png",
+      "sha256": "e5b870e14d61f4e2517f4e133d4babc6aaacb5e4c0ca08d21765d56dfa5137cd"
+    },
+    {
+      "path": "assets/review-details/native-pair-2.53s.png",
+      "sha256": "cea5d900ed34769f1ed29156d960729205566ec7104232cfe3fe36efa885ddcc"
+    },
+    {
+      "path": "assets/review-details/native-pair-3.37s.png",
+      "sha256": "a7995afd19cc97759d1d0c38c5edf2e84f36ab791f51eef95c7f44cfa118b298"
+    },
+    {
+      "path": "assets/review-details/native-pair-4.21s.png",
+      "sha256": "b88cc9c500602cc393d80236a5074037c6ced0ae07180a974d47e035dd207ef2"
+    },
+    {
+      "path": "assets/review-details/native-pair-5.06s.png",
+      "sha256": "c2242bef99d4af776190938fb19529e8a5806e98b9ac630a57f09950342361f4"
+    }
+  ]
+}

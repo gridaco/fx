@@ -1,14 +1,14 @@
 {
   "kind": "video-demo-v1",
   "title": "Say it. Shape it.",
-  "summary": "An original chat-driven design recording becomes a focused software promo with exact typography, readable UI crops, and an editable camera plan.",
+  "summary": "An original chat-driven design recording becomes a focused software promo with exact typography, readable UI crops, and explicit editable source cuts.",
   "result": {
     "file": "assets/final.mp4",
     "poster": "assets/poster.webp",
     "media_type": "video/mp4",
     "width": 1920,
     "height": 1080,
-    "duration_seconds": 18.5
+    "duration_seconds": 17.5
   },
   "inputs": [
     {
@@ -49,8 +49,8 @@
     },
     {
       "id": "propose",
-      "label": "Save an editable camera plan",
-      "description": "An image-aware structured model proposes the timing and crop sequence. This selected proposal was used without manual changes; authored focus hints and regions guide it.",
+      "label": "Refine a saved editable plan",
+      "description": "An image-aware structured model proposed the original camera plan. The caller authored four chronological source intervals and revised camera beat times to remove waits and hold the visible results; exact source pixels and brief remain unchanged.",
       "outputs": [
         {
           "file": "assets/edit.json",
@@ -62,7 +62,7 @@
     {
       "id": "render",
       "label": "Render exact source pixels",
-      "description": "Local typography and clean cuts frame the supplied recording. Strict full-file decoding validates delivery; the frozen production run reused the exact cached model proposal at $0.",
+      "description": "Local typography and camera framing render the saved plan at $0. Explicit cuts retain the completed requests and outcomes. Strict full-file decoding validates the delivered MP4.",
       "outputs": [
         {
           "file": "assets/storyboard.png",
@@ -85,14 +85,78 @@
           "file": "assets/review.json",
           "media_type": "application/json",
           "label": "Independent review and limits"
+        },
+        {
+          "file": "assets/content-review.json",
+          "label": "Independent editorial review of exact selected bytes",
+          "media_type": "application/json"
+        }
+      ]
+    },
+    {
+      "id": "dashboard-study",
+      "label": "Apply the utility to a denser browser recording",
+      "description": "A different original 44-second browser recording supplies a table, a dashboard request and a returning-customers refinement. Model-selected chronological intervals omit long waits; the caller repaired the filename crop and source chart alignment before exact-output review. The 19-second saved-plan replay remains local and free.",
+      "outputs": [
+        {
+          "file": "studies/dashboard/assets/final.mp4",
+          "label": "Additional dashboard promo study",
+          "media_type": "video/mp4",
+          "poster": "studies/dashboard/assets/poster.webp"
+        },
+        {
+          "file": "studies/dashboard/assets/source.mp4",
+          "label": "Original 44-second scripted browser recording",
+          "media_type": "video/mp4",
+          "poster": "studies/dashboard/assets/source.webp"
+        },
+        {
+          "file": "studies/dashboard/assets/source-storyboard.png",
+          "label": "Chronological source inspection samples",
+          "media_type": "image/png"
+        },
+        {
+          "file": "studies/dashboard/assets/brief.json",
+          "label": "Dashboard exact-copy brief and focus hints",
+          "media_type": "application/json"
+        },
+        {
+          "file": "studies/dashboard/assets/edit.json",
+          "label": "Selected intervals and disclosed crop repair",
+          "media_type": "application/json"
+        },
+        {
+          "file": "studies/dashboard/assets/report.json",
+          "label": "Dashboard source intervals and structural report",
+          "media_type": "application/json"
+        },
+        {
+          "file": "studies/dashboard/assets/storyboard.png",
+          "label": "Timestamped dashboard output samples",
+          "media_type": "image/png"
+        },
+        {
+          "file": "studies/dashboard/assets/review.json",
+          "label": "Independent sampled-model review",
+          "media_type": "application/json"
+        },
+        {
+          "file": "studies/dashboard/assets/content-review.json",
+          "label": "Independent editorial review of repaired exact bytes",
+          "media_type": "application/json"
+        },
+        {
+          "file": "studies/dashboard/manifest.json",
+          "label": "Complete additional-study inputs and stage manifest",
+          "media_type": "application/json"
         }
       ]
     }
   ],
   "limitations": [
     "This original fictional recording is a separate fixture generator; callers supply prepared, rights-cleared footage of their own product.",
-    "One silent 1920\u00d71080 composition, with even source retiming. Narration, sound design, pause removal, device mockups, and larger multishot edits belong to the caller.",
+    "One silent 1920 \u00d7 1080 composition with explicit chronological source intervals. Caller-approved cuts omit waits and independently retime retained footage; narration, sound design, device mockups and larger edits remain outside this utility.",
     "Independent review covers sampled visual evidence and a static poster, not continuous motion or listening. Source and final MP4 decoding are structural checks.",
-    "The same workflow also produced a separately reviewed 19-second original poster-design variant. Two inputs are a small compatibility sample, not a general success rate."
+    "The same workflow also produced independently reviewed original poster-design and dense dashboard recordings. A few inputs are transfer evidence, not a general success rate."
   ]
 }

@@ -1,0 +1,66 @@
+{
+  "kind": "private_dense_performance_evidence_v1",
+  "video_sha256": "3a0fdbe605db89f6a4338231355e944a36462c3b44baa520866a6cda2436f28d",
+  "motion_sha256": "08e07e12cff6efdd2941b525e8754169cec7ba6a3ed65818a1ce0f3548ff7bed",
+  "native_frames": 145,
+  "foreground_union_xyxy": [
+    13,
+    449,
+    536,
+    1225
+  ],
+  "union_padding_pixels": 48,
+  "dense_result_region_xyxy": [
+    0,
+    401,
+    584,
+    1273
+  ],
+  "dense_sample_times_seconds": [
+    0.0,
+    0.25,
+    0.5,
+    0.75,
+    1.0,
+    1.25,
+    1.5,
+    1.75,
+    2.0,
+    2.25,
+    2.5,
+    2.75,
+    3.0,
+    3.25,
+    3.5,
+    3.75,
+    4.0,
+    4.25,
+    4.5,
+    4.75,
+    5.0,
+    5.25,
+    5.5,
+    5.75
+  ],
+  "capture_timing": "requested timestamps; FFmpeg selects the decoded frame at/after each request, within one native-frame interval",
+  "native_full_frame_pair_times_seconds": [
+    0.84,
+    2.53,
+    3.37,
+    4.21,
+    5.06
+  ],
+  "foreground_definition": "per-frame max RGB channel distance >20 from median of four8x8 corner patches; corners agree within8",
+  "union_scope": "all native frames; conservative studio-background authoring aid, not anatomy or motion certification",
+  "dense_layout": "source above; generated result below with fixed padded all-frame union crop for legible detail. Native-pair files retain complete original pixels.",
+  "semantic_scope": "sampled visual evidence; no claim that every transition was reviewed",
+  "files": {
+    "native-pair-0.84s.png": "e5b870e14d61f4e2517f4e133d4babc6aaacb5e4c0ca08d21765d56dfa5137cd",
+    "native-pair-2.53s.png": "cea5d900ed34769f1ed29156d960729205566ec7104232cfe3fe36efa885ddcc",
+    "native-pair-3.37s.png": "a7995afd19cc97759d1d0c38c5edf2e84f36ab791f51eef95c7f44cfa118b298",
+    "native-pair-4.21s.png": "b88cc9c500602cc393d80236a5074037c6ced0ae07180a974d47e035dd207ef2",
+    "native-pair-5.06s.png": "c2242bef99d4af776190938fb19529e8a5806e98b9ac630a57f09950342361f4",
+    "paired-01.png": "7e3ebd3ef3f679f4d7a891caa5850a7001d115a6ce29ab85a991ffa93bda0af1",
+    "paired-02.png": "55ab5ed6ce88b7ddf73925638691fe45fe0bc078ad061485af7a9ff20c7e273c"
+  }
+}

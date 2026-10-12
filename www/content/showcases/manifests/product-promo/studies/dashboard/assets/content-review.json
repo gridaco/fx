@@ -1,0 +1,52 @@
+{
+  "kind": "independent_product_promo_transfer_study_review_v1",
+  "reviewer": "independent_non_producing_visual_review_agent",
+  "recorded_at": "2026-10-12T22:40:40.393623+00:00",
+  "status": "accepted_for_additional_bounded_input_study",
+  "bindings": {
+    "assets/final.mp4": "e656583e386ccd3f48ce4560d80f9f482f515408207000d313b8a6030894dc24",
+    "assets/poster.webp": "d10df2de59ac673cebfdba85c880edd065bfd1ac274be422eadbe030e3d51d06",
+    "assets/report.json": "8d85fd37092322436d84588289934e29772bdff9405bf63ce83596142060d56b",
+    "assets/edit.json": "5baf96c23ba2067d43688897f39befd6aa3d73a73ca550bb470dca0be4189146"
+  },
+  "scope": {
+    "chronological_samples": 38,
+    "chronological_rate_fps": 2,
+    "targeted_cut_and_request_samples": 9,
+    "full_resolution_seconds": [
+      4.3,
+      8.9,
+      11,
+      15.5
+    ],
+    "full_resolution_dimensions": [
+      1920,
+      1080
+    ],
+    "continuous_playback": false
+  },
+  "criteria": {
+    "initial_request_readability": "pass",
+    "refinement_request_readability": "pass",
+    "dashboard_outcome_readability": "pass",
+    "complete_source_filename_after_crop_repair": "pass",
+    "seven_row_label_and_chart_weekday_alignment": "pass",
+    "coherent_source_cut_and_camera_progression": "pass",
+    "final_full_interface_context": "pass"
+  },
+  "observations": [
+    "The exact initial dashboard request and returning-customers refinement are readable in the full-resolution samples. The weekly overview and focused returning-customers outcome are clear and visually distinct.",
+    "At11seconds the complete Weekly figures.csv header and 7 rows label are retained; the seven bars align with their weekday centers. This resolves the two identified fixture/crop defects.",
+    "The source cuts omit idle time while retaining ready/refinement response context. The final result is held long enough to read its headline, primary statistics and chart structure before returning to a complete interface view.",
+    "The crop left-edge repair is explicitly disclosed in the saved edit note; model-selected source intervals and timing remain inspectable."
+  ],
+  "limitations": [
+    "This is a second original scripted fictional input, not proof of a production analytics feature or a general success rate.",
+    "Review covers the listed samples and exact bytes, not every 570 frames or continuous transition quality. No audio listening assessment was made; the output is silent.",
+    "Isolated chat panels leave extensive empty space and temporarily hide app chrome. They are readable at the delivered size but require consideration when adapting to smaller placements."
+  ],
+  "recommendation": "Include as additional transfer/replay evidence under the Garden primary.",
+  "paid_calls_by_reviewer": 0,
+  "source_review_sha256": "5962760440e0e52db389e766b394805c221139d584b546f55f25de2534c2a481",
+  "packaging_note": "The reviewed candidate filenames were rebound to identical bundle-owned bytes; visual scope and verdict are unchanged. Local inspection-frame paths are omitted from the public copy."
+}
