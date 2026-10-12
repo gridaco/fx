@@ -609,10 +609,8 @@ fn integrated_a_python_before_3_11_is_refused_before_it_starts() {
     assert_eq!(status(&output), 0, "{}", stderr(&output));
     assert_eq!(
         stdout(&output).lines().nth(1),
-        Some(&*format!(
-            "python    {} too old (3.9.6; FX needs 3.11+)",
-            python.display()
-        ))
+        // Inside the project, the interpreter is named relative to it, on every platform.
+        Some("python    old-python too old (3.9.6; FX needs 3.11+)")
     );
     assert!(stderr(&output).is_empty(), "{}", stderr(&output));
     let output = command(root, &["plan", "case.yaml"])
@@ -622,11 +620,8 @@ fn integrated_a_python_before_3_11_is_refused_before_it_starts() {
     assert_eq!(status(&output), 2, "{}", stdout(&output));
     assert_eq!(
         stderr(&output),
-        format!(
-            "grida-fx: {} is Python 3.9.6; FX's node host needs Python 3.11 or later with grida: \
-             run uv sync or pip install grida in the project, or set GRIDA_FX_PYTHON\n",
-            python.display()
-        )
+        "grida-fx: old-python is Python 3.9.6; FX's node host needs Python 3.11 or later with \
+         grida: run uv sync or pip install grida in the project, or set GRIDA_FX_PYTHON\n"
     );
     assert!(!root.join("started.txt").exists(), "the host was started");
 }
@@ -641,7 +636,7 @@ fn integrated_doctor_says_when_the_interpreter_has_no_grida() {
     assert_eq!(status(&output), 0, "{}", stderr(&output));
     assert_eq!(
         stdout(&output).lines().nth(1),
-        Some(&*format!("python    {} no grida", python.display()))
+        Some("python    old-python no grida")
     );
     assert!(!project.path().join("started.txt").exists());
     // A program that does not exist is still NOT FOUND.
@@ -652,7 +647,7 @@ fn integrated_doctor_says_when_the_interpreter_has_no_grida() {
         .unwrap();
     assert_eq!(
         stdout(&output).lines().nth(1),
-        Some(&*format!("python    {} NOT FOUND", missing.display()))
+        Some("python    no-such-python NOT FOUND")
     );
 }
 

@@ -397,14 +397,29 @@ fn program(python: &Path) -> PathBuf {
 /// A path as messages name it: POSIX and relative to `root` inside it, else as given (the
 /// interpreter's `HostSpec::label`).
 pub fn label(path: &Path, root: &Path) -> String {
-    match path.strip_prefix(root) {
-        Ok(inside) if !inside.as_os_str().is_empty() => inside
-            .components()
-            .map(|c| c.as_os_str().to_string_lossy())
-            .collect::<Vec<_>>()
-            .join("/"),
-        _ => path.display().to_string(),
-    }
+    let inside = |path: &Path, root: &Path| match path.strip_prefix(root) {
+        Ok(inside) if !inside.as_os_str().is_empty() => Some(
+            inside
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy())
+                .collect::<Vec<_>>()
+                .join("/"),
+        ),
+        _ => None,
+    };
+    // A root reached through a symbolic link (macOS's /var is /private/var) is the same root:
+    // compare again with the folders resolved, but not the file, which may itself be a link
+    // (a virtual environment's python).
+    let resolved = || {
+        let folder = std::fs::canonicalize(path.parent()?).ok()?;
+        inside(
+            &folder.join(path.file_name()?),
+            &std::fs::canonicalize(root).ok()?,
+        )
+    };
+    inside(path, root)
+        .or_else(resolved)
+        .unwrap_or_else(|| path.display().to_string())
 }
 
 /// [`label`], except that a path under `planning` (the planning project, when the home is a

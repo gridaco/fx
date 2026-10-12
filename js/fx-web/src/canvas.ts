@@ -372,7 +372,8 @@ export class CanvasController {
     heading.textContent = `${deck.title} · ${deck.members.length}`;
     const hint = document.createElement("span");
     hint.className = "fx-deck-bar-hint";
-    hint.textContent = "Esc or click outside to close";
+    // Kept short: a click outside the deck (the veil) closes it too, as does ×.
+    hint.textContent = "Esc to close";
     const close = document.createElement("button");
     close.type = "button";
     close.append(createElement(X, { width: 14, height: 14, "stroke-width": 2, "aria-hidden": "true" }));

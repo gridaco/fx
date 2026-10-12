@@ -69,8 +69,8 @@ use grida_fx_protocol::DescribeParams;
 use grida_fx_providers::keys::{ALLOWED, Environment, KeySource};
 use grida_fx_providers::live::{self, Servable};
 use grida_fx_providers::{Endpoints, KeyName, Keys};
-use grida_fx_runtime::host::PythonHost;
 use grida_fx_runtime::host::locate::{MINIMUM_PYTHON, Probe, python_interpreter};
+use grida_fx_runtime::host::{PythonHost, label};
 use grida_fx_runtime::tools::{resolve_tool, tool_name};
 use indexmap::IndexMap;
 use std::collections::{BTreeMap, HashSet};
@@ -366,16 +366,13 @@ fn python_line(
     env: &dyn Fn(&str) -> Option<String>,
 ) -> String {
     let interpreter = python_interpreter(&project.root, planning_root, env);
+    // Named as the host's messages name it ([`label`]), relative to the planning project when
+    // it lies there and outside the home.
     let shown = match interpreter.strip_prefix(&project.root) {
-        Ok(inside) => inside
-            .components()
-            .map(|c| c.as_os_str().to_string_lossy())
-            .collect::<Vec<_>>()
-            .join("/"),
         Err(_) if planning_root.is_some_and(|root| interpreter.starts_with(root)) => {
             crate::print::shown_path(&interpreter, &project.root)
         }
-        Err(_) => interpreter.display().to_string(),
+        _ => label(&interpreter, &project.root),
     };
     let opened = host.open_project(&project.root, &project.document.sources);
     if opened.is_ok()
