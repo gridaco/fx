@@ -1,0 +1,3 @@
+footage: .fixture/dashboard.mp4
+brief: inputs/dashboard.json
+edit: inputs/dashboard-edit.json

@@ -75,6 +75,37 @@
     "editorial_note": {
       "type": "string",
       "maxLength": 1200
+    },
+    "source_segments": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source_start",
+          "source_end",
+          "duration_seconds"
+        ],
+        "properties": {
+          "source_start": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 120
+          },
+          "source_end": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 120
+          },
+          "duration_seconds": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 16
+          }
+        }
+      }
     }
   }
 }

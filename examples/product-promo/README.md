@@ -57,15 +57,17 @@ own rights-cleared screen capture for a real product demonstration.
 | `brief` | Exact product name, opening/closing lines, support copy, colors, intent, and optional timestamped focus hints; see [inputs/forma.json](inputs/forma.json) |
 | `edit` | Optional saved camera/timing JSON; skips the paid proposal, see [inputs/forma-edit.json](inputs/forma-edit.json) |
 
-The caller owns source capture, pause removal, narration, audio rights, factual product
-claims, and final placement in a larger edit. The utility evenly retimes the complete
-source into the chosen body duration; it does not infer cuts or invent product states.
-Keep the source concise when timing and readability matter. Audio is intentionally omitted,
+The caller owns source capture, approval of editorial cuts, narration, audio rights, factual
+product claims, and final placement in a larger edit. By default the utility evenly retimes
+the complete source into the chosen body duration. An explicit `source_segments` plan can
+omit waits and retime retained intervals independently, preserving the supplied pixels.
+The proposal may select these intervals when the brief requests wait removal; review the
+saved plan against the full recording before publication. Audio is intentionally omitted,
 so music, voiceover, and sound design can be assembled independently.
 
 Three stages are individually replaceable:
 
-1. **Inspect:** validate source dimensions/duration and brief, then produce 12 timestamped
+1. **Inspect:** validate and fully decode the source recording and brief, then produce 12 timestamped
    chronological samples plus portable metadata and digests.
 2. **Propose:** one image-aware `structured.generate` call produces a typed camera/timing
    plan. Focus hints bind important interactions to source seconds and image fractions.
@@ -77,7 +79,7 @@ Three stages are individually replaceable:
 
 Outputs are `video`, `poster`, `edit`, `report`, `storyboard`, and `source`. The poster is a
 clean, complete final body composition without title-transition blending. `report` records
-source/brief/font digests, edit decisions, playback rate, dimensions, frame count, and the
+source/brief/font digests, edit decisions, playback rate or interval timeline, dimensions, frame count, and the
 full-decode verdict. It does not claim artistic acceptance.
 
 ## Revise locally
@@ -104,19 +106,77 @@ complete content. The canonical example provides request, canvas, and refinement
 complete opening/closing framing, and total duration. Invalid plans fail before encoding.
 No paid call occurs when an `edit` input is supplied.
 
+For a longer recording with idle generation time, a plan may additionally contain:
+
+```json
+"source_segments": [
+  {"source_start": 4.8, "source_end": 7.3, "duration_seconds": 2.5},
+  {"source_start": 22.5, "source_end": 25.5, "duration_seconds": 2.5},
+  {"source_start": 28, "source_end": 31, "duration_seconds": 2.5},
+  {"source_start": 37.5, "source_end": 44, "duration_seconds": 6.5}
+]
+```
+
+These are source seconds, followed by each interval's output duration. Intervals must be
+chronological, non-overlapping, finite, and confined to the actual recording. Use 1–8
+intervals, each at least 0.1 source seconds and 0.5 output seconds. Output durations must
+contain whole 30 fps frames and sum exactly to `footage_seconds`. Omitted ranges become
+clean cuts. Intervals include their start and exclude their end; every supplied source-time
+focus hint must lie inside a retained interval. Focus beat `at` values remain output body
+seconds. The report records each interval's playback rate and the mapped body/video time
+of every hint. An omitted `source_segments` field retains the continuous playback path.
+
+The optional [dashboard fixture](fixtures/dashboard.html) tests this boundary with a
+different operation: a table becomes a dashboard, then chat focuses returning customers.
+Its original 44-second browser capture includes deliberate waits. The saved
+[dashboard plan](inputs/dashboard-edit.json) selects four intervals for a 19-second promo,
+revealing the first dashboard at 4.9 seconds and holding the final result. Capture it with
+Playwright and an installed Chromium browser, then replay locally:
+
+```bash
+# Optional fixture authoring dependency; the workflow itself does not use a browser.
+uv run --with playwright playwright install chromium
+uv run --with playwright python make_dashboard.py
+# Alternatively pass --browser /path/to/chromium to use an installed browser.
+grida fx run workflow.yaml --inputs dashboard-replay.yaml \
+  --deliver video=dist/dashboard.mp4 --deliver poster=dist/dashboard.webp
+```
+
+This captures original DOM/CSS at authored timeline positions, rather than recording a
+shipping service or live generation. No outside product capture or generated UI is used.
+For your own recording, use its actual source timings and review every retained cut.
+The dashboard's model-selected intervals and timing are unchanged. The caller expanded
+one canvas crop to preserve the complete filename and corrected the authored source's
+row count and chart-label alignment before final review. The exact result passed all eight
+independent sampled criteria plus a separate chronological and targeted-cut frame review.
+To replay those frozen source pixels without a browser, fetch the pinned inputs and use
+[dashboard-showcase-replay.yaml](dashboard-showcase-replay.yaml):
+
+```bash
+python fetch_inputs.py
+grida fx run workflow.yaml --inputs dashboard-showcase-replay.yaml
+```
+
 The framework is deliberately a single composition, not a general video editor. Device
-mockups, arbitrary multishot editing, audio mixing, and portrait exports are further
+mockups, independent asset tracks, audio mixing, and portrait exports are further
 composition work; the supplied recording and exact-copy contracts remain useful boundaries.
 
 ## Frozen showcase and review
 
-The canonical recording is an 18.5-second Forma clip. The same workflow also rendered a
-second 19-second original poster-design recording with a different brief and palette.
-Both passed all eight independent sampled-review criteria. Two inputs are a small
-compatibility sample, not a general success rate. The selected model plan was used
-unchanged; the source fixture, exact copy, regions, focus hints, and composition were
-authored and refined during development. The frozen production run reused the exact
-cached proposal and rendered locally at $0.
+The selected canonical is a 17.5-second Forma clip. Its first canvas appears around
+5.1 seconds, followed by a readable refinement and a sustained warmer result. The caller
+authored four source intervals and revised camera beat times in the original model's
+accepted plan; [replay-segments.yaml](replay-segments.yaml) supplies that saved edit and
+renders locally at $0. The source recording, exact copy, and crop regions are unchanged.
+The original 18.5-second checkpoint and its unchanged model proposal remain available
+through [replay.yaml](replay.yaml).
+
+The same workflow also rendered a 19-second original poster-design recording with a
+different brief and palette. Both Garden edits and the poster variation passed all eight
+independent sampled-review criteria. The timing revision additionally received independent
+chronological and dense-cut frame review. A few inputs are compatibility evidence, not a
+general success rate. Source fixtures, exact copy, regions, focus hints, and the local
+composition were authored and refined during development.
 
 The first independent review identified an outcome crop and an insufficient result hold.
 The composition was revised to hold framing between shorter moves, keep the final hero
@@ -140,9 +200,12 @@ then use [showcase.yaml](showcase.yaml):
 
 ```bash
 python fetch_inputs.py
-grida fx run workflow.yaml --inputs showcase.yaml --live --max-usd 2
-# Its saved accepted edit replays locally without a provider call.
+# The selected caller-refined edit replays locally without a provider call.
+grida fx run workflow.yaml --inputs replay-segments.yaml
+# The original checkpoint remains available.
 grida fx run workflow.yaml --inputs replay.yaml
+# Fresh optional planning may choose a different edit.
+grida fx run workflow.yaml --inputs showcase.yaml --live --max-usd 2
 ```
 The source generator above is the fully offline alternative. A maintained example and a frozen recording have separate lifetimes;
 fresh planning may choose different timing.
@@ -155,8 +218,11 @@ uv run python check.py
 
 The check strips provider credentials, disables dotenv/network, creates deterministic
 fixtures, plans the real graph, proves paid-call refusal, renders with a saved plan, fully
-decodes the result, and proves exact cache replay. Damaged footage fails at $0. It also rejects invalid crop bounds, camera ordering,
-non-finite coordinates, excessive zoom, and malformed copy. These are structural checks,
+decodes the result, and proves exact cache replay. A 12 fps synthetic source verifies actual
+decoded output colors and the precise cut frame after interval retiming. It also checks
+source-hint mapping, omitted hints, overlap, source bounds, duration sums, and whole-frame
+output durations. Damaged footage fails at $0. Invalid crop bounds, camera ordering,
+non-finite coordinates, excessive zoom, and malformed copy are refused. These are structural checks,
 not a substitute for a visual review of your own footage.
 
 The bundled [Manrope font](fonts/Manrope.ttf) is licensed under the

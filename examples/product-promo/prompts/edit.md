@@ -1,6 +1,6 @@
 Plan one focused software-launch clip from the supplied source storyboard, source metadata,
 and exact-copy brief. The storyboard is a sequential sampling of a supplied recording,
-not a set of separate assets. Source pixels will be played continuously at an even speed.
+not a set of separate assets. By default source pixels play continuously at an even speed.
 
 The renderer has three consecutive parts: animated opening typography, the supplied
 recording with smooth camera framing, and animated closing typography. Copy comes verbatim
@@ -28,3 +28,19 @@ normalized [left, top, right, bottom] source crop bounds on the corresponding fo
 Use zoom 1 for region crops: they already frame complete content. Use [0,0,1,1] at the
 first and last beats. Cropping isolates active content; never infer or repaint missing UI.
 Without named regions, use [0,0,1,1] and the point/zoom controls described above.
+
+When the brief explicitly requests cutting waits from a longer capture, include optional
+source_segments. Otherwise omit this property to retain continuous legacy playback.
+Each segment has source_start, source_end (seconds in the recording), and duration_seconds
+(seconds in the output body). Use 1-8 finite chronological, non-overlapping source intervals;
+keep every interval within the actual source duration. Each interval needs at least 0.1
+source seconds and at least 0.5 output seconds. Output durations must sum exactly to
+footage_seconds; use tenths of seconds so they contain whole 30fps frames. Omitted source
+ranges become explicit clean cuts, not generated transitions. Retained frames are evenly
+retimed within each interval. Keep every focus_hint's source_second inside a retained
+interval. Map a retained hint to body time as the sum of preceding output durations plus
+(source_second-source_start)*duration_seconds/(source_end-source_start). Focus beat `at`
+values remain body seconds after that mapping. Compress idle processing; preserve readable
+completed requests, first result, refinement and a sustained final result. Aim for the
+first outcome around 5-6 seconds in the overall promo, including the opening. Exact
+source states remain authoritative: do not turn an omitted wait into a false intermediate UI.

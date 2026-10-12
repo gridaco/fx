@@ -195,7 +195,76 @@ def validate_edit(edit: dict) -> dict:
     note = edit.get("editorial_note")
     if not isinstance(note, str) or not note or len(note) > 1200:
         raise ValueError("edit.editorial_note must contain 1-1200 characters")
+    if "source_segments" in edit:
+        segments = edit["source_segments"]
+        if not isinstance(segments, list) or not 1 <= len(segments) <= 8:
+            raise ValueError("source_segments needs 1-8 chronological intervals")
+        previous_end, duration = 0.0, 0.0
+        for segment in segments:
+            if not isinstance(segment, dict) or set(segment) != {
+                "source_start",
+                "source_end",
+                "duration_seconds",
+            }:
+                raise ValueError(
+                    "each source segment needs source_start, source_end and duration_seconds"
+                )
+            if any(
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+                for value in segment.values()
+            ):
+                raise ValueError("source segment values must be finite numbers")
+            start, end, seconds = (
+                segment[key] for key in ("source_start", "source_end", "duration_seconds")
+            )
+            if start < previous_end or not 0 <= start < end <= 120 or end - start < 0.1 - 1e-9:
+                raise ValueError(
+                    "source segments must be chronological, non-overlapping and nonempty"
+                )
+            if not 0.5 <= seconds <= 16 or abs(seconds * FPS - round(seconds * FPS)) > 0.000001:
+                raise ValueError(
+                    "segment durations need at least half a second and whole output frames"
+                )
+            previous_end, duration = end, duration + seconds
+        if not math.isclose(duration, edit["footage_seconds"], abs_tol=0.000001):
+            raise ValueError("source segment durations must sum to footage_seconds")
     return edit
+
+
+def source_timeline(edit: dict, source_seconds: float) -> list[dict] | None:
+    """Explicit chronological source intervals; omitted field keeps legacy retiming."""
+    if "source_segments" not in edit:
+        return None
+    validate_edit(edit)
+    timeline, output_start = [], 0.0
+    for segment in edit["source_segments"]:
+        if segment["source_end"] > source_seconds + 0.000001:
+            raise ValueError("a source segment falls after the recording ends")
+        frames = round(segment["duration_seconds"] * FPS)
+        output_end = output_start + frames / FPS
+        timeline.append(
+            {
+                **segment,
+                "output_start": output_start,
+                "output_end": output_end,
+                "frames": frames,
+                "playback_rate": (segment["source_end"] - segment["source_start"]) / (frames / FPS),
+            }
+        )
+        output_start = output_end
+    return timeline
+
+
+def map_source_hint(timeline: list[dict], source_second: float) -> float:
+    """Map a retained source moment into the body, including exact cut boundaries."""
+    for segment in timeline:
+        if segment["source_start"] <= source_second < segment["source_end"]:
+            return segment["output_start"] + (
+                (source_second - segment["source_start"]) / segment["playback_rate"]
+            )
+    raise ValueError("a requested focus hint falls in an omitted source interval")
 
 
 def camera(points: list[dict], seconds: float) -> tuple[float, ...]:

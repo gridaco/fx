@@ -1,0 +1,102 @@
+{
+  "closing_seconds": 2.5,
+  "editorial_note": "Caller-authored editorial revision of the accepted camera plan: omit processing waits, align crop changes with source cuts, keep typed requests readable, and hold the refined canvas before returning to the complete interface.",
+  "focus": [
+    {
+      "at": 0,
+      "crop": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "x": 0.5,
+      "y": 0.5,
+      "zoom": 1
+    },
+    {
+      "at": 1.25,
+      "crop": [
+        0.014,
+        0.154,
+        0.248,
+        0.664
+      ],
+      "x": 0.16,
+      "y": 0.35,
+      "zoom": 1
+    },
+    {
+      "at": 3.75,
+      "crop": [
+        0.287,
+        0.156,
+        0.974,
+        0.916
+      ],
+      "x": 0.65,
+      "y": 0.5,
+      "zoom": 1
+    },
+    {
+      "at": 6.25,
+      "crop": [
+        0.014,
+        0.66,
+        0.248,
+        0.844
+      ],
+      "x": 0.16,
+      "y": 0.62,
+      "zoom": 1
+    },
+    {
+      "at": 8.75,
+      "crop": [
+        0.287,
+        0.156,
+        0.974,
+        0.916
+      ],
+      "x": 0.65,
+      "y": 0.5,
+      "zoom": 1
+    },
+    {
+      "at": 13,
+      "crop": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "x": 0.5,
+      "y": 0.5,
+      "zoom": 1
+    }
+  ],
+  "footage_seconds": 13,
+  "opening_seconds": 2,
+  "source_segments": [
+    {
+      "source_start": 0.7,
+      "source_end": 3.1,
+      "duration_seconds": 3
+    },
+    {
+      "source_start": 4.05,
+      "source_end": 6.5,
+      "duration_seconds": 2.5
+    },
+    {
+      "source_start": 6.75,
+      "source_end": 8.3,
+      "duration_seconds": 2.5
+    },
+    {
+      "source_start": 8.4,
+      "source_end": 12,
+      "duration_seconds": 5
+    }
+  ]
+}

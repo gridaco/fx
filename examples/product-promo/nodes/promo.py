@@ -5,13 +5,23 @@ from __future__ import annotations
 import hashlib
 import io
 import subprocess
+from fractions import Fraction
 from pathlib import Path
 
 from PIL import Image, ImageDraw
 
 from grida.fx import Ctx, node
 
-from nodes.composition import FPS, SIZE, Composition, probe, validate_brief, validate_edit
+from nodes.composition import (
+    FPS,
+    SIZE,
+    Composition,
+    map_source_hint,
+    probe,
+    source_timeline,
+    validate_brief,
+    validate_edit,
+)
 
 
 def digest(path: Path) -> str:
@@ -22,13 +32,23 @@ def digest(path: Path) -> str:
     return result.hexdigest()
 
 
+def sample_times(duration: float, count: int = 12, frame_rate: str = "30/1") -> list[float]:
+    try:
+        rate = Fraction(frame_rate)
+    except (ValueError, ZeroDivisionError):
+        raise ValueError("source frame rate must be a positive rational number") from None
+    if rate <= 0:
+        raise ValueError("source frame rate must be a positive rational number")
+    tail = max(0.08, float(1 / rate) + 0.001)
+    return [index * max(0, duration - tail) / (count - 1) for index in range(count)]
+
+
 def sample_frames(
-    ffmpeg: Path, source: Path, duration: float, count: int = 12
+    ffmpeg: Path, source: Path, duration: float, count: int = 12, frame_rate: str = "30/1"
 ) -> list[Image.Image]:
     """Timestamped samples, including the final visible moment; no claims about audio."""
     frames = []
-    for index in range(count):
-        at = index * max(0, duration - 0.08) / (count - 1)
+    for at in sample_times(duration, count, frame_rate):
         try:
             result = subprocess.run(
                 [
@@ -58,7 +78,7 @@ def sample_frames(
     return frames
 
 
-def sheet(frames: list[Image.Image], seconds: float) -> Image.Image:
+def sheet(frames: list[Image.Image], seconds: float, frame_rate: str = "30/1") -> Image.Image:
     canvas = Image.new("RGB", (1600, 780), "#f3f4ee")
     draw = ImageDraw.Draw(canvas)
     for index, image in enumerate(frames):
@@ -68,7 +88,7 @@ def sheet(frames: list[Image.Image], seconds: float) -> Image.Image:
         canvas.paste(thumb, (x + (390 - thumb.width) // 2, y))
         draw.text(
             (x + 8, y + 226),
-            f"{index + 1:02d}  {index * max(0, seconds - 0.08) / 11:.2f}s",
+            f"{index + 1:02d}  {sample_times(seconds, len(frames), frame_rate)[index]:.2f}s",
             fill="#14201b",
         )
     return canvas
@@ -80,19 +100,48 @@ def sheet(frames: list[Image.Image], seconds: float) -> Image.Image:
     outputs={"source": "json", "storyboard": "image/png"},
     tools=["ffmpeg", "ffprobe"],
     resources=["nodes/composition.py"],
+    version=2,
 )
 def inspect(ctx: Ctx) -> dict:
     brief = validate_brief(ctx.read.json("brief"))
     source = ctx.inputs["footage"].path
     metadata = probe(ctx.tool("ffprobe").executable, source)
+    try:
+        subprocess.run(
+            [
+                str(ctx.tool("ffmpeg").executable),
+                "-v",
+                "error",
+                "-nostdin",
+                "-xerror",
+                "-err_detect",
+                "explode",
+                "-i",
+                str(source),
+                "-f",
+                "null",
+                "-",
+            ],
+            capture_output=True,
+            timeout=120,
+            check=True,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        raise ctx.fail("FFmpeg refused the complete source recording decode") from None
     if any(hint["source_second"] > metadata["seconds"] for hint in brief.get("focus_hints", [])):
         raise ctx.fail("a focus hint falls after the source recording ends")
     metadata["sha256"] = digest(source)
     metadata["sampling"] = "12 equally spaced chronological frames; audio is not sampled"
     metadata["output"] = {"width": SIZE[0], "height": SIZE[1], "fps": FPS, "audio": False}
     storyboard = sheet(
-        sample_frames(ctx.tool("ffmpeg").executable, source, metadata["seconds"]),
+        sample_frames(
+            ctx.tool("ffmpeg").executable,
+            source,
+            metadata["seconds"],
+            frame_rate=metadata["frame_rate"],
+        ),
         metadata["seconds"],
+        metadata["frame_rate"],
     )
     ctx.fact("source_seconds", metadata["seconds"])
     ctx.fact("source_pixels_preserved", True)
@@ -111,6 +160,7 @@ def inspect(ctx: Ctx) -> dict:
     },
     tools=["ffmpeg", "ffprobe"],
     resources=["nodes/composition.py"],
+    version=4,
 )
 def render(ctx: Ctx) -> dict:
     brief = validate_brief(ctx.read.json("brief"))
@@ -120,9 +170,45 @@ def render(ctx: Ctx) -> dict:
     source = ctx.inputs["footage"].path
     metadata = probe(ffprobe, source)
     body_frames = round(edit["footage_seconds"] * FPS)
-    # Even retiming is explicit; this utility does not guess where to remove pauses.
+    timeline = source_timeline(edit, metadata["seconds"])
+    hint_mapping = []
+    if timeline is not None:
+        hint_mapping = [
+            {
+                "source_second": hint["source_second"],
+                "body_second": map_source_hint(timeline, hint["source_second"]),
+                "video_second": edit["opening_seconds"]
+                + map_source_hint(timeline, hint["source_second"]),
+            }
+            for hint in brief.get("focus_hints", [])
+        ]
     source_width = min(metadata["width"], 1920)
     source_height = round(metadata["height"] * source_width / metadata["width"])
+    if timeline is None:
+        # Preserve the legacy command and its exact pixels when no intervals are supplied.
+        filtering = [
+            "-vf",
+            f"setpts={edit['footage_seconds'] / metadata['seconds']}*PTS,"
+            f"fps={FPS},scale={source_width}:{source_height}",
+        ]
+    else:
+        graph = (
+            f"[0:v]split={len(timeline)}"
+            + "".join(f"[raw{index}]" for index in range(len(timeline)))
+            + ";"
+        )
+        for index, segment in enumerate(timeline):
+            graph += (
+                f"[raw{index}]trim=start={segment['source_start']}:end={segment['source_end']},"
+                f"setpts=(PTS-STARTPTS)/{segment['playback_rate']},fps={FPS},"
+                f"tpad=stop_mode=clone:stop_duration={segment['duration_seconds']},"
+                f"trim=end_frame={segment['frames']},"
+                f"setpts=PTS-STARTPTS[cut{index}];"
+            )
+        graph += "".join(f"[cut{index}]" for index in range(len(timeline))) + (
+            f"concat=n={len(timeline)}:v=1:a=0,scale={source_width}:{source_height}[out]"
+        )
+        filtering = ["-filter_complex", graph, "-map", "[out]"]
     decode = subprocess.Popen(
         [
             str(ffmpeg),
@@ -135,9 +221,7 @@ def render(ctx: Ctx) -> dict:
             "-i",
             str(source),
             "-an",
-            "-vf",
-            f"setpts={edit['footage_seconds'] / metadata['seconds']}*PTS,"
-            f"fps={FPS},scale={source_width}:{source_height}",
+            *filtering,
             "-frames:v",
             str(body_frames),
             "-f",
@@ -270,6 +354,13 @@ def render(ctx: Ctx) -> dict:
         ),
         "semantic_review": "required separately; structural validation is not artistic acceptance",
     }
+    if timeline is not None:
+        report.pop("source_playback_rate")
+        report["source_timeline"] = timeline
+        report["focus_hint_mapping"] = hint_mapping
+        report["source_selection"] = (
+            "explicit chronological intervals; omitted ranges are editorial cuts"
+        )
     ctx.fact("seconds", result["seconds"])
     ctx.fact("frames", composer.frames)
     ctx.fact("full_decode", "pass")
