@@ -190,6 +190,11 @@ consumers bind (§5.4, rule 4).
 - A deck draws its front card and at most **3** back silhouettes, without content, each offset
   28 canvas units right and 28 down from the card in front of it. Every member draws at the slot
   size: the largest declared member footprint.
+- The four cards are consecutive members around the front one: the two before it and the one after,
+  taking more from the other side at either end, in member order from the top left. The farther
+  a card is from the front, the deeper it lies; the other members rest hidden under the nearer
+  end. A card's wires end where it rests. Hovering a card raises it where it lies; pointing at a bookmark mark (below) brings its
+  member's neighbours in with it. This is the viewer's choice of what to show, not a layout input.
 - Footprint: width w + 28 × min(n − 1, 3) and height h + 28 × min(n − 1, 3), plus a reserved
   badge band. It stops growing at n = 4; the badge carries n. Tracks are sized from footprints
   (§4, rule 11), so a deck never reaches a neighbouring slot.
@@ -197,11 +202,18 @@ consumers bind (§5.4, rule 4).
   differ), then `· 1 failed` in the failed colour, `· 1 waiting` for members waiting for their
   route's slot (store.md §8) and `· 1 not run` for takes that never started.
   Counts come from recorded state and recorded take arrays, never from id strings.
-- The badge sits inside the footprint, scales with the canvas and uses theme tokens. Too small to
-  read, it shows `×5`; smaller still, it hides and a failed count stays as a colour dot. The one that
-  comes fades in briefly; the one that goes is gone at once, so two never overlap.
+- The badge sits inside the footprint, scales with the canvas and uses theme tokens. It shows
+  while its text is at least 9 px on screen and is gone below 8 px, fading with the zoom between,
+  with no shorter form.
+- A bookmark stands against the deck's left edge, beside its front card's title: one mark per
+  member in order, right-aligned, at most 16, more members sharing them in even slices. A mark
+  shows its members' worst state (failed, then running or waiting, then succeeded); the front
+  member's is long and dark. It lives with the badge, so a nested deck's shows only while its card
+  shows. An expanded deck's stands fixed at the canvas's left edge instead, its marks left-aligned, over the veil, so it
+  stays under the pointer while the camera moves through the grid. Each member has a row of it to point at, named as its card is titled (by its key where
+  the titles are one), with its take where the deck holds several.
 - Accessibility: the deck is one group named `<step title>, 5 items, 1 failed, collapsed`; the
-  badge is `aria-hidden`. Each card adds its key or take and position: `item 'ada', 1 of 5`,
+  badge and the bookmark are `aria-hidden`. Each card adds its key or take and position: `item 'ada', 1 of 5`,
   `take 2 of 3, skipped`.
 
 ### 5.4 Resting front card
@@ -243,6 +255,8 @@ including those that leave the deck.
 | Input | Closed deck | Expanded deck |
 |---|---|---|
 | Hover, only where `(hover: hover)` | raise the card under the pointer, and its linked partner; leaving restores the resting card | nothing; everything under the veil is inert |
+| Hover a bookmark row | raise that member, as hovering its card does | the camera glides to that member's card, which is outlined; leaving keeps the camera there |
+| Click a bookmark row | select that member (a frame member: its first step), which then rests in front | select it, and the camera glides to its card |
 | Still click on a card, a back card's visible rim or the badge | expand | select that member |
 | Click a labelled control on the front card (`Open workflow`) | does what it says | does what it says |
 | Double-click | counts as one expand click | on a workflow card: open it |

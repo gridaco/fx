@@ -32,7 +32,6 @@ export function deckBadge(members: DeckMember[]) {
   const waiting = members.filter((member) => member.state === "waiting").length;
   return {
     text: parts.join(" · "),
-    short: `×${members.length}`,
     failed: failures,
     detail: [...(failures ? [`${failures} failed`] : []), ...(waiting ? [`${waiting} waiting`] : []), ...(notRun ? [`${notRun} not run`] : [])],
   };
@@ -69,4 +68,69 @@ export function restingFront(members: DeckMember[], selected: string | null): nu
 export function expandedColumns(count: number, card: { width: number; height: number }, viewport: { width: number; height: number }) {
   const aspect = viewport.width > 0 && viewport.height > 0 ? viewport.width / viewport.height : 16 / 10;
   return Math.max(1, Math.min(count, Math.round(Math.sqrt(count * aspect * card.height / card.width))));
+}
+
+/** One mark of a deck's bookmark (§5.3): a member, or an even slice of them. */
+export interface DeckTick {
+  /** The members it stands for, by position: `first` to `last`, inclusive. */
+  first: number;
+  last: number;
+  /** The worst state among them: a failure shows over work in progress over success. */
+  tone: "failed" | "active" | "done" | "idle";
+}
+
+/** At most this many marks; more members share them in even slices. */
+const DECK_TICKS = 16;
+
+/** The bookmark's marks, top to bottom in member order. */
+export function deckTicks(members: DeckMember[]): DeckTick[] {
+  const count = Math.min(members.length, DECK_TICKS);
+  return Array.from({ length: count }, (_, at) => {
+    const first = Math.floor(at * members.length / count), last = Math.floor((at + 1) * members.length / count) - 1;
+    const states = members.slice(first, last + 1).map((member) => member.state);
+    const tone = states.some((state) => failed.has(state)) ? "failed"
+      : states.some((state) => state === "running" || state === "waiting") ? "active"
+        : states.some((state) => succeeded.has(state)) ? "done" : "idle";
+    return { first, last, tone };
+  });
+}
+
+/** Whether a mark stands for the member at `at`. */
+export function tickHolds(tick: { first: number; last: number }, at: number) {
+  return tick.first <= at && at <= tick.last;
+}
+
+/**
+ * A bookmark at `step` per mark (§5.3): each mark's centre, and each member's row from the top.
+ * The rows tile the marks; the first and last reach `reach` further out.
+ */
+export function bookmarkLayout(members: number, marks: number, step: number, reach: number) {
+  const row = marks * step / members;
+  return {
+    height: marks * step,
+    marks: Array.from({ length: marks }, (_, at) => at * step + step / 2),
+    rows: Array.from({ length: members }, (_, at) => {
+      const above = at === 0 ? reach : 0, below = at === members - 1 ? reach : 0;
+      return { top: at * row - above, height: row + above + below };
+    }),
+  };
+}
+
+/** Back cards a closed deck shows behind its front one (§5.3). */
+export const DECK_BACK = 3;
+
+/**
+ * How a closed deck rests (§5.3): four consecutive members around the front, two before it and
+ * one after where they exist, the others hidden under the ends. `start` keeps a window that still
+ * holds the front, so hovering a card raises it without moving the stack under the pointer.
+ */
+export function deckStack(count: number, front: number, kept?: number) {
+  const span = Math.min(count, DECK_BACK + 1);
+  const start = kept !== undefined && kept <= front && front < kept + span ? kept : Math.max(0, Math.min(front - 2, count - span));
+  /** Each member's place in the stack, 0 the top-left; the hidden ones share an end's. */
+  const slots = Array.from({ length: count }, (_, at) => Math.max(0, Math.min(at - start, span - 1)));
+  const shown = slots.map((_, at) => at >= start && at < start + span);
+  /** Back to front: the farther from the front, the deeper. */
+  const order = [...slots.keys()].sort((a, b) => Math.abs(b - front) - Math.abs(a - front));
+  return { start, slots, shown, order };
 }
