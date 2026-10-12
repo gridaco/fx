@@ -32,6 +32,14 @@ inputs:
     minimum: 0
     default: 1
     description: "Poster timestamp in finished-reel seconds; must fall inside the two-clip composition"
+  mode:
+    type: string
+    enum: [sequence, shared_timeline]
+    default: sequence
+  switch_at:
+    type: number
+    minimum: 0.5
+    default: 2
   fps: { type: integer, enum: [24, 30], default: 24 }
   direction:
     type: string
@@ -78,6 +86,8 @@ steps:
       second_name: ${{ inputs.second_name }}
       second_region: ${{ inputs.second_region }}
       poster_at: ${{ inputs.poster_at }}
+      mode: ${{ inputs.mode }}
+      switch_at: ${{ inputs.switch_at }}
 outputs:
   video: ${{ steps.reel.outputs.video }}
   poster: ${{ steps.reel.outputs.poster }}

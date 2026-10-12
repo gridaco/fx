@@ -225,9 +225,28 @@ Optional `poster_at` selects a moment in finished-reel seconds. It defaults to
 1 second and must fall inside the composition; the selected frame rounds down
 to the 30 fps output grid. Changing this input changes only the poster and its
 recorded selection, not the video pixels. The report binds the exact frame index,
-timestamp and poster digest. The canonical recipe selects Riko's upright reach
-at 3.2 seconds rather than the earlier crouched pose. Reel node version 4 records
+timestamp and poster digest. The sequential recipe selects Riko's upright reach
+at 3.2 seconds rather than the earlier crouched pose. Reel node version 5 records
 this explicit selection.
+
+Use `mode: shared_timeline` to switch identity once while continuing the same
+recorded performance. The two accepted reports must bind the same `motion_sha256`,
+and both source durations must match on the 30 fps output grid. `switch_at`
+defaults to 2 seconds, rounds down to an output frame and must leave at least
+half a second for each character. The first clip supplies the beginning; the
+second supplies the remaining interval from that same time, rather than
+restarting its dance. Two four-second sources produce a four-second result.
+This is an editorial identity cut; matching pose continuity still needs review.
+The report records both selected source intervals and the actual switch frame.
+
+The [shared reel recipe](inputs/shared-reel.yaml) uses the exact canonical clips
+with one common fixed region, keeping the fitted stage dimensions consistent:
+
+```sh
+grida fx run reel.yaml --inputs inputs/shared-reel.yaml
+# The same composition controls also work with the full paid cast graph.
+grida fx run cast.yaml --inputs inputs/shared-cast.yaml --live --max-usd 20
+```
 
 Optional `first_region` and `second_region` inputs in the reel or cast are static,
 caller-authored framing rectangles: `[x, y, width, height]`, normalized to each

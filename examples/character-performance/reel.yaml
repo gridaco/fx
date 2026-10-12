@@ -31,6 +31,16 @@ inputs:
     minimum: 0
     default: 1
     description: "Poster timestamp in finished-reel seconds, rounded down to the 30 fps frame grid"
+  mode:
+    type: string
+    enum: [sequence, shared_timeline]
+    default: sequence
+    description: "Sequence complete takes, or switch identity on one shared driving timeline"
+  switch_at:
+    type: number
+    minimum: 0.5
+    default: 2
+    description: "Shared-timeline identity cut in seconds; leave at least half a second per character"
 steps:
   compose:
     title: Compose the reviewed performances
@@ -45,6 +55,8 @@ steps:
       second_name: ${{ inputs.second_name }}
       second_region: ${{ inputs.second_region }}
       poster_at: ${{ inputs.poster_at }}
+      mode: ${{ inputs.mode }}
+      switch_at: ${{ inputs.switch_at }}
       font: ./fonts/Manrope.ttf
     view: true
 outputs:

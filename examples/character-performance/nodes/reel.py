@@ -136,6 +136,17 @@ def _poster_frame(value: float, frames: int) -> int:
     return min(math.floor(value * FPS), frames - 1)
 
 
+def _switch_frame(value: float, frames: int) -> int:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or not 0.5 <= value <= frames / FPS - 0.5
+    ):
+        raise ValueError("switch_at must leave at least half a second for each character")
+    return math.floor(value * FPS)
+
+
 def _font(path: Path, size: int, weight: int = 650) -> ImageFont.FreeTypeFont:
     font = ImageFont.truetype(str(path), size)
     if font.get_variation_axes():
@@ -181,10 +192,12 @@ def _card(font: Path, name: str, index: int) -> Image.Image:
         "first_region": REGION,
         "second_region": REGION,
         "poster_at": {"type": "number", "minimum": 0, "default": 1},
+        "mode": {"type": "string", "enum": ["sequence", "shared_timeline"], "default": "sequence"},
+        "switch_at": {"type": "number", "minimum": 0.5, "default": 2},
     },
     outputs={"video": "video/mp4", "poster": "image/webp", "report": "json"},
     tools=["ffmpeg", "ffprobe"],
-    version=4,
+    version=5,
 )
 def reel(ctx: Ctx) -> dict:
     """Review admission is inherited; composition still needs separate visual acceptance."""
@@ -231,6 +244,32 @@ def reel(ctx: Ctx) -> dict:
         _decode(ctx, path)
         item["source"] = facts
         item["frames"] = round(facts["duration_seconds"] * FPS)
+        item["start_frame"] = 0
+        item["end_frame"] = item["frames"]
+    mode = ctx.params["mode"]
+    if mode == "shared_timeline":
+        motion = sources[0]["review"].get("motion_sha256")
+        if (
+            not isinstance(motion, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", motion)
+            or sources[1]["review"].get("motion_sha256") != motion
+        ):
+            raise ctx.fail("shared_timeline requires two reports bound to the same driving video")
+        if (
+            sources[0]["frames"] != sources[1]["frames"]
+            or abs(
+                sources[0]["source"]["duration_seconds"] - sources[1]["source"]["duration_seconds"]
+            )
+            > 1 / FPS
+        ):
+            raise ctx.fail(
+                "shared_timeline requires matching source durations on the output frame grid"
+            )
+        switch_frame = _switch_frame(ctx.params["switch_at"], sources[0]["frames"])
+        sources[0]["end_frame"] = switch_frame
+        sources[1]["start_frame"] = switch_frame
+        for item in sources:
+            item["frames"] = item["end_frame"] - item["start_frame"]
     frames = sum(item["frames"] for item in sources)
     poster_frame = _poster_frame(ctx.params["poster_at"], frames)
     segments = []
@@ -248,6 +287,11 @@ def reel(ctx: Ctx) -> dict:
             ""
             if item["region"] == FULL_REGION
             else (f"crop={crop[2]}:{crop[3]}:{crop[0]}:{crop[1]}:exact=1,")
+        )
+        selection = (
+            f"trim=start_frame={item['start_frame']}:end_frame={item['end_frame']},setpts=PTS-STARTPTS,"
+            if mode == "shared_timeline"
+            else ""
         )
         card = ctx.work_path(f"reel/card-{index}.png")
         _card(font, item["name"], index).save(card, "PNG")
@@ -274,7 +318,7 @@ def reel(ctx: Ctx) -> dict:
                 "-filter_complex_threads",
                 "1",
                 "-filter_complex",
-                f"[0:v]{cropping}fps=30,scale={fitted[0]}:{fitted[1]},setsar=1[v];"
+                f"[0:v]{cropping}fps=30,{selection}scale={fitted[0]}:{fitted[1]},setsar=1[v];"
                 "[1:v][v]overlay=x=(W-w)/2:y=230+(1400-h)/2:shortest=1[out]",
                 "-map",
                 "[out]",
@@ -398,6 +442,7 @@ def reel(ctx: Ctx) -> dict:
             "sha256": hashlib.sha256(poster.getvalue()).hexdigest(),
             "selection": "caller-selected timestamp, rounded down to the output frame grid",
         },
+        "composition_mode": mode,
         "segments": [
             {
                 "name": item["name"],
@@ -412,6 +457,12 @@ def reel(ctx: Ctx) -> dict:
                 },
                 "frames": item["frames"],
                 "duration_seconds": item["duration_seconds"],
+                "source_interval_on_output_grid": {
+                    "start_frame": item["start_frame"],
+                    "end_frame_exclusive": item["end_frame"],
+                    "start_seconds": item["start_frame"] / FPS,
+                    "end_seconds": item["end_frame"] / FPS,
+                },
                 "fit_size": item["fit_size"],
                 "source_region_xywh": item["region"],
                 "source_crop_xywh": item["crop"],
@@ -441,6 +492,17 @@ def reel(ctx: Ctx) -> dict:
             "makes no artistic or continuous-anatomy claim."
         ),
     }
+    if mode == "shared_timeline":
+        report["shared_timeline"] = {
+            "motion_sha256": motion,
+            "requested_switch_seconds": ctx.params["switch_at"],
+            "switch_frame": switch_frame,
+            "switch_seconds": switch_frame / FPS,
+            "scope": (
+                "Editorial identity cut on a shared driving timeline; "
+                "pose continuity requires content review."
+            ),
+        }
     ctx.fact("seconds", finished["duration_seconds"])
     ctx.fact("full_decode", "pass")
     return {

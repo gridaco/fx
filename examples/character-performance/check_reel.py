@@ -15,7 +15,7 @@ from PIL import Image, ImageDraw
 
 from grida.fx import Answer, FxError, StandInCall, plan, run
 
-from nodes.reel import _crop, _poster_frame, _region
+from nodes.reel import _crop, _poster_frame, _region, _switch_frame
 
 REGIONS = {"first": [0.2, 0.125, 0.6, 0.75], "second": [0.1, 0.2, 0.8, 0.6]}
 
@@ -73,7 +73,9 @@ def main() -> None:
                     f"testsrc2=size={size}:rate=30:duration={seconds}",
                     "-vf",
                     f"drawbox=x=0:y=0:w=iw:h=ih:color=0x{color}:t=6,"
-                    f"drawbox=x={x}:y={y}:w={w}:h={h}:color=0x{inner_color}:t=6",
+                    f"drawbox=x={x}:y={y}:w={w}:h={h}:color=0x{inner_color}:t=6,"
+                    "drawbox=x=iw/3:y=ih/3:w=iw/3:h=ih/3:color=black:t=fill,"
+                    "drawbox=x=iw/3:y=ih/3:w=iw/3:h=ih/3:color=white:t=fill:enable='gte(t,2)'",
                     "-an",
                     "-c:v",
                     "libx264",
@@ -95,6 +97,7 @@ def main() -> None:
                         "full_decode": "pass",
                         "audio": "removed",
                         "review_sha256": "1" * 64,
+                        "motion_sha256": "2" * 64,
                         "review_scope": "synthetic structural fixture, no artistic approval",
                         "framing_scan": {
                             "status": "clear",
@@ -209,6 +212,77 @@ def main() -> None:
         (fixtures / "invalid-poster.json").write_text(json.dumps({**inputs, "poster_at": 8}))
         refused = run("reel.yaml", cwd=home, input_files=[".fixtures/invalid-poster.json"])
         assert not refused.ok and refused.cost == 0, "end-of-reel poster timestamp accepted"
+        # A shared timeline switches identity without restarting the second performance.
+        command(
+            [
+                "-i",
+                str(fixtures / "second.mp4"),
+                "-t",
+                "3",
+                "-an",
+                "-c:v",
+                "libx264",
+                "-threads",
+                "2",
+                str(fixtures / "second-short.mp4"),
+            ]
+        )
+        short_report = json.loads((fixtures / "second-report.json").read_text())
+        short_report["video_sha256"] = hashlib.sha256(
+            (fixtures / "second-short.mp4").read_bytes()
+        ).hexdigest()
+        short_report["framing_scan"]["frames_scanned"] = 90
+        (fixtures / "second-short-report.json").write_text(json.dumps(short_report))
+        shared_inputs = {
+            **inputs,
+            "second": "second-short.mp4",
+            "second_report": "second-short-report.json",
+            "mode": "shared_timeline",
+            "switch_at": 1.5,
+            "poster_at": 2.5,
+        }
+        (fixtures / "shared.json").write_text(json.dumps(shared_inputs))
+        shared = run("reel.yaml", cwd=home, input_files=[".fixtures/shared.json"])
+        assert shared.ok and shared.cost == 0, shared.failures
+        shared_report = json.loads(shared.outputs["report"].read_bytes())
+        assert shared_report["finished"]["frames"] == 90
+        assert shared_report["finished"]["duration_seconds"] == 3
+        assert shared_report["shared_timeline"]["switch_frame"] == 45
+        assert shared_report["shared_timeline"]["motion_sha256"] == "2" * 64
+        assert shared_report["segments"][1]["source_interval_on_output_grid"] == {
+            "start_frame": 45,
+            "end_frame_exclusive": 90,
+            "start_seconds": 1.5,
+            "end_seconds": 3,
+        }
+        width, height = shared_report["segments"][1]["fit_size"]
+        with Image.open(shared.outputs["poster"].path) as poster:
+            x, y = (1080 - width) // 2, 230 + (1400 - height) // 2
+            assert min(poster.getpixel((x + width // 2, y + height // 2))) > 220, (
+                "second clip must retain its late white timing marker, not restart at black"
+            )
+        for label, values in (
+            ("unequal", {**inputs, "mode": "shared_timeline"}),
+            ("switch", {**shared_inputs, "switch_at": 2.9}),
+        ):
+            (fixtures / f"bad-{label}.json").write_text(json.dumps(values))
+            refused = run("reel.yaml", cwd=home, input_files=[f".fixtures/bad-{label}.json"])
+            assert not refused.ok and refused.cost == 0, label
+        short_report["motion_sha256"] = "3" * 64
+        (fixtures / "different-motion-report.json").write_text(json.dumps(short_report))
+        (fixtures / "different-motion.json").write_text(
+            json.dumps({**shared_inputs, "second_report": "different-motion-report.json"})
+        )
+        refused = run("reel.yaml", cwd=home, input_files=[".fixtures/different-motion.json"])
+        assert not refused.ok and refused.cost == 0, "unrelated driving timelines accepted"
+        assert _switch_frame(1.519, 90) == 45
+        for value in (0, 0.49, 2.51, True, float("nan"), float("inf")):
+            try:
+                _switch_frame(value, 90)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("invalid switch timestamp accepted")
         replay = run("reel.yaml", **options)
         assert replay.ok and replay.cost == 0
         assert replay.outputs["video"].digest == result.outputs["video"].digest
@@ -415,9 +489,24 @@ def main() -> None:
             assert child_report["review_status"] == "sampled_review_pass"
             assert child_report["framing_scan"]["status"] == "clear"
             assert child_report["framing_scan"]["frames_scanned"] == 96
+        continued = run(
+            "cast.yaml",
+            cwd=home,
+            input_files=[".fixtures/cast.json"],
+            inputs={"mode": "shared_timeline", "switch_at": 2, "poster_at": 3.2},
+            stand_in=answer,
+        )
+        assert continued.ok and continued.cost == 0, continued.failures
+        continued_report = json.loads(continued.outputs["report"].read_bytes())
+        assert continued_report["composition_mode"] == "shared_timeline"
+        assert continued_report["finished"]["frames"] == 120
+        assert continued_report["shared_timeline"]["switch_frame"] == 60
+        assert continued_report["poster"]["frame_index"] == 96
+        assert calls.count("video.motion_transfer") == calls.count("structured.generate") == 2
         print(
             "cast reel: $0 render, strict decode, 1080x1920/30fps, complete source corners; "
             "caller-region corners and invalid bounds; lineage/review refusal, exact cache replay; "
+            "explicit poster frame and shared-timeline cut/phase checks; "
             "composed cast refuses paid calls "
             "and completes with four provider stand-ins at $0"
         )

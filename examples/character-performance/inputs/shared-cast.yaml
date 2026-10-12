@@ -1,0 +1,13 @@
+# Two prepared plates, one shared reference, one editorial identity switch.
+first_character: ../.showcase-inputs/riko-plate.png
+second_character: ../.showcase-inputs/nami-plate.png
+motion: ../.showcase-inputs/motion-prepared.mp4
+first_name: Riko
+second_name: Nami
+seconds: 4
+fps: 24
+first_region: [0.03888888888888889, 0.2765625, 0.9611111111111111, 0.68671875]
+second_region: [0.03888888888888889, 0.2765625, 0.9611111111111111, 0.68671875]
+mode: shared_timeline
+switch_at: 2
+poster_at: 3.2
