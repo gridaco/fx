@@ -1,6 +1,7 @@
 //! Helpers for adapter tests (feature `testing`): a [`Setup`] over a test transport, a call
-//! builder that puts request files in a temporary store, synthetic media, and `block_on`.
-//! Everything here is synthetic: made-up keys, media built in code.
+//! builder that puts request files in a temporary store, synthetic media, `block_on`, and
+//! [`write_program`] for any test that starts a program it wrote. Everything here is synthetic:
+//! made-up keys, media built in code.
 
 use crate::adapter::{CallRequest, RequestFile, RouteRef};
 use crate::clock::{Clock, FakeClock};
@@ -47,6 +48,32 @@ pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
         .build()
         .expect("a current-thread runtime")
         .block_on(future)
+}
+
+/// Writes an executable program at `path` whose content is `body`, for a test that starts it.
+///
+/// A program this process opened for writing can fail to start on Linux with "Text file busy"
+/// (ETXTBSY): tests run in parallel, and a process another test starts while the file is open
+/// gets a copy of the handle and holds it until it execs. So on Unix the program is copied into
+/// place by `cp` from a draft beside it, and this process never opens it for writing.
+pub fn write_program(path: &std::path::Path, body: &str) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let draft = path.with_extension("draft");
+        std::fs::write(&draft, body).unwrap();
+        let copied = std::process::Command::new("cp")
+            .arg(&draft)
+            .arg(path)
+            .stdin(std::process::Stdio::null())
+            .status()
+            .unwrap();
+        assert!(copied.success(), "cp did not write {}", path.display());
+        std::fs::remove_file(&draft).unwrap();
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    #[cfg(not(unix))]
+    std::fs::write(path, body).unwrap();
 }
 
 /// A call under test, with the temporary folder its files live in.

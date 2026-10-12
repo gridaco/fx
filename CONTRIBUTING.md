@@ -99,6 +99,12 @@ Run the checks for the boundaries you changed; [AGENTS.md](AGENTS.md#verificatio
 has the full command list. All tests and CI remain provider-free. Use injected
 transports or stand-ins for paid calls rather than making real requests.
 
+Rust tests run in parallel. A test that starts a program it wrote writes it with
+`grida_fx_providers::testing::write_program`: on Linux, a program written directly
+can fail to start with "Text file busy" while another test starts a process. Time
+limits in tests should time the behavior under test, not how long a busy machine
+takes to start a process.
+
 Common checks from the repository root:
 
 ```sh

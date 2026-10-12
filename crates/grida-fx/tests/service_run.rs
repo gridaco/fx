@@ -2,10 +2,10 @@
 //! Gates prove lifetimes without timing assumptions, and a fake opener never launches a browser.
 #![cfg(unix)]
 
+use grida_fx_providers::testing::write_program;
 use serde_json::Value;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{Ipv4Addr, TcpListener, TcpStream};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
 use std::sync::mpsc::{self, Receiver};
@@ -79,9 +79,9 @@ def wait(ctx: Ctx) -> dict:
         } else {
             "xdg-open"
         });
-        std::fs::write(
+        write_program(
             &opener,
-            format!(
+            &format!(
                 r#"#!{}
 import json
 from pathlib import Path
@@ -99,9 +99,7 @@ temporary.replace(root / "opened.json")
 "#,
                 project.python.display()
             ),
-        )
-        .unwrap();
-        std::fs::set_permissions(opener, std::fs::Permissions::from_mode(0o755)).unwrap();
+        );
         Some(project)
     }
     fn root(&self) -> &Path {

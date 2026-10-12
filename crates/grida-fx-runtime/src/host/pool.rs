@@ -676,16 +676,13 @@ time.sleep(60)
 
     #[cfg(unix)]
     fn fake_host(source: &str) -> (tempfile::TempDir, HostSpec) {
-        use std::os::unix::fs::PermissionsExt;
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("host.py"), source).unwrap();
         let python = dir.path().join("python-stub");
-        std::fs::write(
+        grida_fx_providers::testing::write_program(
             &python,
             "#!/bin/sh\nexec python3 \"$(dirname \"$0\")/host.py\"\n",
-        )
-        .unwrap();
-        std::fs::set_permissions(&python, std::fs::Permissions::from_mode(0o755)).unwrap();
+        );
         let spec = HostSpec {
             python,
             label: "python-stub".into(),
@@ -821,13 +818,10 @@ time.sleep(60)
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("deaf.py"), DEAF).unwrap();
         let python = dir.path().join("python-deaf");
-        std::fs::write(
+        grida_fx_providers::testing::write_program(
             &python,
             "#!/bin/sh\nexec python3 \"$(dirname \"$0\")/deaf.py\"\n",
-        )
-        .unwrap();
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&python, std::fs::Permissions::from_mode(0o755)).unwrap();
+        );
         let spec = HostSpec {
             python,
             label: "python-deaf".into(),
