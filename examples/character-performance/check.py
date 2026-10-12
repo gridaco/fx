@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
+import runpy
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 from PIL import Image, ImageDraw
 
@@ -26,6 +29,86 @@ KEYS = (
     "TRIPO_API_KEY",
     "ELEVENLABS_API_KEY",
 )
+
+
+def check_motion_acquisition(home: Path) -> None:
+    """Keep the default pin compatible and reject writes outside the input boundary."""
+    local = home / ".fetch-check"
+    local.mkdir()
+    shutil.copy2(home / "fetch_motion.py", local / "fetch_motion.py")
+    acquire = runpy.run_path(str(local / "fetch_motion.py"))["acquire"]
+    original, alternate = b"synthetic selected motion", b"synthetic second motion"
+
+    def metadata(data: bytes) -> dict:
+        return {
+            "bytes": len(data),
+            "sha256": hashlib.sha256(data).hexdigest(),
+            "download_url": "https://example.invalid/selected.mp4",
+        }
+
+    (local / "motion-reference.json").write_text(json.dumps(metadata(original)))
+    (local / "motion-reference-dance.json").write_text(json.dumps(metadata(alternate)))
+    source = local / "manual.mp4"
+    source.write_bytes(original)
+    alternate_source = local / "manual-dance.mp4"
+    alternate_source.write_bytes(alternate)
+
+    def refused(*, manual_source=source, **options) -> None:
+        try:
+            acquire(source=manual_source, **options)
+        except ValueError:
+            return
+        raise AssertionError("unsafe motion acquisition was accepted")
+
+    with patch("urllib.request.urlopen", side_effect=AssertionError("network is forbidden")):
+        acquire(source=source)
+        acquire()  # The default cached pin must avoid the network.
+        default = local / ".showcase-inputs/motion.mp4"
+        assert default.read_bytes() == original
+        acquire(
+            reference=Path("motion-reference-dance.json"),
+            output=Path(".showcase-inputs/dance-motion.mp4"),
+            source=alternate_source,
+        )
+        assert (local / ".showcase-inputs/dance-motion.mp4").read_bytes() == alternate
+        assert default.read_bytes() == original
+        refused(
+            manual_source=alternate_source,
+            output=Path(".showcase-inputs/wrong-digest.mp4"),
+        )
+        assert not (local / ".showcase-inputs/wrong-digest.mp4").exists()
+        assert default.read_bytes() == original
+        for output in (
+            Path("../escape.mp4"),
+            local.parent / "absolute.mp4",
+            Path("workflow.mp4"),
+            Path(".showcase-inputs/../escape.mp4"),
+            Path(".showcase-inputs/invalid.json"),
+        ):
+            refused(output=output)
+        for reference in (Path("../reference.json"), local / "motion-reference.json"):
+            refused(reference=reference)
+        protected = local / ".showcase-inputs/protected.mp4"
+        protected.write_bytes(b"keep existing input")
+        refused(output=Path(".showcase-inputs/protected.mp4"))
+        assert protected.read_bytes() == b"keep existing input"
+        outside = local / "outside"
+        outside.mkdir()
+        sentinel = outside / "sentinel.mp4"
+        sentinel.write_bytes(b"keep symlink target")
+        (local / ".showcase-inputs/link").symlink_to(outside, target_is_directory=True)
+        (local / ".showcase-inputs/linked.mp4").symlink_to(sentinel)
+        (local / "linked-reference.json").symlink_to(local / "motion-reference.json")
+        refused(output=Path(".showcase-inputs/link/new.mp4"))
+        refused(output=Path(".showcase-inputs/linked.mp4"))
+        refused(reference=Path("linked-reference.json"))
+        assert sentinel.read_bytes() == b"keep symlink target"
+        assert not (outside / "new.mp4").exists()
+        for expected in (0, -1, True, 250_000_001):
+            invalid = metadata(original)
+            invalid["bytes"] = expected
+            (local / "invalid-reference.json").write_text(json.dumps(invalid))
+            refused(reference=Path("invalid-reference.json"))
 
 
 def check_studio_border() -> None:
@@ -60,6 +143,7 @@ def check(home: Path) -> None:
     )
     for key in KEYS:
         os.environ.pop(key, None)
+    check_motion_acquisition(home)
     fixtures = home / ".fixtures"
     fixtures.mkdir(exist_ok=True)
     image = Image.new("RGBA", (240, 420))
@@ -363,6 +447,7 @@ def check(home: Path) -> None:
     try:
         worker.write_text(changed)
         shutil.rmtree(home / "nodes/__pycache__", ignore_errors=True)
+        Path(importlib.util.cache_from_source(str(worker))).unlink(missing_ok=True)
         unchanged_version = run("finish.yaml", **version_options)
         assert unchanged_version.ok and unchanged_version.cost == 0
         unchanged_report = json.loads(unchanged_version.outputs["report"].read_bytes())
@@ -372,6 +457,7 @@ def check(home: Path) -> None:
         assert "version=3,\n)\ndef finish(" in changed
         worker.write_text(changed)
         shutil.rmtree(home / "nodes/__pycache__", ignore_errors=True)
+        Path(importlib.util.cache_from_source(str(worker))).unlink(missing_ok=True)
         new_version = run("finish.yaml", **version_options)
         assert new_version.ok and new_version.cost == 0, new_version.failures
         changed_report = json.loads(new_version.outputs["report"].read_bytes())
@@ -381,6 +467,7 @@ def check(home: Path) -> None:
     finally:
         worker.write_text(original)
         shutil.rmtree(home / "nodes/__pycache__", ignore_errors=True)
+        Path(importlib.util.cache_from_source(str(worker))).unlink(missing_ok=True)
     print(
         "Motion graph checked at $0, including border rejection, explicit node versions, "
         "corruption refusal and stock export exclusion."

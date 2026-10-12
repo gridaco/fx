@@ -122,6 +122,29 @@ shows why each character needs its own framing check; Riko also demonstrated why
 eight samples alone cannot establish continuous framing. Rejected takes remain
 rejected, and changed margins are a separate recorded creative attempt.
 
+## A second performance reference
+
+The [six-second balance study](inputs/dance.yaml) uses the same Riko preparation
+and Wan route with a different [selected recording](motion-reference-dance.json).
+Acquire the original from its publisher; the source footage is not hosted by FX:
+
+```sh
+python fetch_inputs.py
+python fetch_motion.py --reference motion-reference-dance.json \
+  --output .showcase-inputs/dance-motion.mp4
+grida fx run workflow.yaml --inputs inputs/dance.yaml --live --max-usd 10
+```
+
+The frozen result follows the one-leg balance and free-leg extension in the
+inspected poses. Independent review covered 24 chronological pose pairs, five
+full-size pairs and the poster, in addition to the workflow's eight-pair review
+and clear 145-frame border scan. Fine hand poses differ: relaxed source hands
+become splayed or V-like fingers. The plain background establishes no floor
+contact plane, and the generated extension keeps a more bent leg. This is an
+additional bounded transfer case, not a claim of exact contact, finger fidelity
+or reliability on unseen choreography. Fresh generation is nondeterministic
+and needs its own review.
+
 ## Inspect or reuse one stage
 
 | Stage | Input | Result |

@@ -1,0 +1,20 @@
+{
+  "kind": "selected_motion_reference_v1",
+  "creator": "Pavel Danilyuk",
+  "source_page": "https://www.pexels.com/video/a-woman-dancing-gracefully-6939968/",
+  "download_url": "https://videos.pexels.com/video-files/6939968/6939968-hd_1080_1920_30fps.mp4",
+  "sha256": "a8bbb587b0c59e409045a5646646c8bf0a77f3a5414ee638e7da0a8d174a267a",
+  "bytes": 7689449,
+  "license": "https://www.pexels.com/license/",
+  "terms": "https://www.pexels.com/terms-of-service/",
+  "checked_date": "2026-10-13",
+  "use": "Selected full-body contemporary performance for an original illustrated character animation; no training dataset is collected.",
+  "publication_boundary": "Acquire stock footage from its source platform. Raw and transcoded source footage is excluded from public distribution. The character clip and composed review evidence are distinct works. No performer endorsement is implied.",
+  "inference_basis": "The license grants modification and adaptation. Selected one-shot inference is an interpretation of that grant; the terms do not expressly endorse AI motion transfer. Users must assess their own source and intended use.",
+  "selected_interval": {
+    "start_seconds": 0,
+    "duration_seconds": 6,
+    "prepared_fps": 24
+  },
+  "selection_reason": "Fixed portrait camera, visible body and feet, and a sustained one-leg balance followed by leg extension test lower-body pose retargeting beyond an upper-body gesture clip."
+}
