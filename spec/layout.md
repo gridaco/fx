@@ -198,8 +198,8 @@ consumers bind (§5.4, rule 4).
   route's slot (store.md §8) and `· 1 not run` for takes that never started.
   Counts come from recorded state and recorded take arrays, never from id strings.
 - The badge sits inside the footprint, scales with the canvas and uses theme tokens. Too small to
-  read, it shows `×5`; smaller still, it hides and a failed count stays as a colour dot. Each
-  gives way to the next by fading with the zoom, not over time.
+  read, it shows `×5`; smaller still, it hides and a failed count stays as a colour dot. The one that
+  comes fades in briefly; the one that goes is gone at once, so two never overlap.
 - Accessibility: the deck is one group named `<step title>, 5 items, 1 failed, collapsed`; the
   badge is `aria-hidden`. Each card adds its key or take and position: `item 'ada', 1 of 5`,
   `take 2 of 3, skipped`.
