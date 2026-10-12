@@ -82,7 +82,10 @@ reference for these five rules; `grida`'s launcher carries the same lines.
 FX is versioned and released on its own ([RELEASING.md](../RELEASING.md)). A Grida release that
 moves FX forward happens in this order:
 
-1. FX tags `v<version>` and publishes `@grida/fx` and its engine packages.
+1. FX tags `v<version>` and publishes `@grida/fx` and its engine packages. The tag's source
+   archive also serves `init --template` ([service.md](service.md) §2.1): an engine of that
+   version reads its templates from it, so the tag must hold every folder its
+   `examples/templates.json` names.
 2. `grida` pins `@grida/fx` to exactly that version, bumps its own version, and publishes.
 
 `grida` owns telling its users that a newer `grida` is available; that covers `grida fx`,

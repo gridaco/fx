@@ -25,15 +25,38 @@
       "type": "array",
       "uniqueItems": true,
       "items": {
-        "enum": [
-          "fx.yaml",
-          "README.md",
-          "AGENTS.md",
-          ".gitignore",
-          ".env.example",
-          "workflows/icon.yaml"
-        ]
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[^/\\\\]+(/[^/\\\\]+)*$"
       }
+    },
+    "template": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "name",
+            "source"
+          ],
+          "properties": {
+            "name": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]+$"
+            },
+            "source": {
+              "enum": [
+                "built_in",
+                "release",
+                "local"
+              ]
+            }
+          }
+        }
+      ]
     }
   }
 }

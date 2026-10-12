@@ -14,7 +14,8 @@ discussion is shorthand, not a newly installed executable alias.
 
 | Command | Responsibility |
 |---|---|
-| `init [DIRECTORY] [--json]` | Start a new project from the starter files, or validate an existing `fx.yaml`. |
+| `init [DIRECTORY] [--template NAME] [--json]` | Start a new project from the built-in starter or a named template, or validate an existing `fx.yaml`. |
+| `init --list-templates [--json]` | List the templates `init` can start from. |
 | `start [--project DIRECTORY] [--port N] [--background] [--open] [--json]` | Start the local FX service; foreground by default. |
 | `status [--project DIRECTORY] [--json]` | Inspect the selected project's service using an identity/compatibility handshake. |
 | `stop [--project DIRECTORY] [--json]` | Stop only the selected service; preserve runs, plans, cache and configuration. |
@@ -38,18 +39,68 @@ file. The planning project owns the run catalog, not an imported workflow's home
 `init` is recommended onboarding, not a prerequisite for execution or serving.
 Service commands can select their discovery directory with `--project`.
 
-`init` is non-interactive. In a directory that is missing, or empty but for
-`.git` and `.DS_Store`, it writes the starter project embedded in the engine, in
-this order: `fx.yaml`, `README.md`, `AGENTS.md`, `.gitignore`, `.env.example` and
-`workflows/icon.yaml`. The starter sets no route: its one paid step plans as
-refused until the user picks a provider, and its README says how to install the
-CLI and connect one. A directory that already holds `fx.yaml` is validated and
-left as it is: nothing is written, whatever starter files it lacks. Any other
-non-empty directory is refused (exit 2) and left untouched; a user adds FX to an
-existing folder by writing `fx.yaml` themselves. `init` never overwrites a file,
-installs dependencies, loads credentials, starts a server or executes a
-workflow. Repeating it on an existing valid project configuration is safe.
-Invalid existing configuration is reported rather than repaired or overwritten.
+In a directory that is missing, or empty but for `.git` and `.DS_Store`, `init`
+starts a project. Without `--template` it writes the **starter** embedded in the
+engine, in this order: `fx.yaml`, `README.md`, `AGENTS.md`, `.gitignore`,
+`.env.example` and `workflows/icon.yaml`. The starter sets no route: its one paid
+step plans as refused until the user picks a provider, and its README says how
+to install the CLI and connect one. A directory that already holds `fx.yaml` is
+validated and left as it is: nothing is written, whatever starter files it lacks,
+and `--template` is refused there (exit 2). Any other non-empty directory is
+refused (exit 2) and left untouched; a user adds FX to an existing folder by
+writing `fx.yaml` themselves. `init` never overwrites a file, installs
+dependencies, loads credentials, starts a server or executes a workflow.
+Repeating it on an existing valid project configuration is safe. Invalid
+existing configuration is reported rather than repaired or overwritten.
+
+`init` asks nothing unless it would start a project, neither `--template` nor
+`--json` is given, standard input and output are both terminals, and `CI` is
+unset. Then it lists the templates and reads a choice; an empty answer is the
+starter. Agents and scripts never see the question.
+
+### 2.1 Templates
+
+A **template** is an example of the FX repository offered as a starting point.
+The engine embeds the index `examples/templates.json` of the commit it was built
+from: each entry has a `name` (`[a-z0-9-]+`, unique, not `starter`), a one-line
+`description`, the `provider` its AI steps use (`none`, `codex`, `gg`, or `any`
+when the user picks) and its `path`, a folder under `examples/`.
+`init --list-templates` lists `starter` first, then the index in order; with
+`--json` it prints [an `fx-project-templates-v1` document](schemas/fx-project-templates-v1.schema.json).
+Listing reads nothing but the engine. An unknown `--template` is refused before
+anything is read or sent, naming the templates.
+
+`--template starter` is the built-in starter. Any other template's files come
+from the FX release the engine belongs to:
+`https://codeload.github.com/gridaco/fx/tar.gz/v<ENGINE_VERSION>`, the tag's
+gzip-compressed tar archive, whose entries lie under one top-level folder. The
+download is the engine's only network exchange outside a live run's provider
+calls. It goes through the providers' default transport on its download lane
+([providers.md](providers.md) §2): no credential, no cookie, the environment's
+proxies, no redirect followed and no retry. Anything but HTTP 200 is refused,
+naming the status, as is a body over 64 MiB. With `GRIDA_FX_NETWORK=off` it is
+refused before anything is sent.
+
+For development and tests, the hidden option `--template-source SOURCE` replaces
+the release archive: a directory (a checkout of the repository, whose
+`<path>` is read directly), a `.tar.gz` file, or an `http(s)` URL of one (plain
+`http` only to a loopback host). A directory source skips `.git`, `.fx`, `runs`,
+`.venv`, `node_modules`, `__pycache__`, `.showcase-inputs` and `.env` wherever
+they occur, so that it yields what the archive would.
+
+Only entries under `<top>/<path>/` are read; the rest of the archive is skipped
+unread. Within the template, `init` refuses, leaving the target untouched:
+
+- a path that is absolute or holds `..`, or an entry that is a symbolic or hard
+  link, a device or a FIFO;
+- more than 1000 files, or more than 32 MiB unpacked;
+- a template folder that is missing from the archive, or holds no `fx.yaml`.
+
+The template is unpacked into a temporary folder beside the target and moved in
+only when complete. Then the starter's `AGENTS.md` and `.env.example` are added
+where the template has none, and its `README.md` likewise. A template's own
+`.gitignore` keeps its lines, and gains each line of the starter's it lacks;
+without one, it gets the starter's. Nothing from a template is executed.
 
 With an explicit project, ordinary `run` registers the initialized record and
 uses a compatible running service if present. It does not implicitly start a
@@ -220,7 +271,8 @@ does not authorize execution, credential access or arbitrary filesystem reads.
 
 The wire and CLI result schemas are [catalog](schemas/fx-service-index-v1.schema.json),
 [status](schemas/fx-service-status-v1.schema.json),
-[initialization](schemas/fx-project-init-v1.schema.json), and
+[initialization](schemas/fx-project-init-v1.schema.json),
+[templates](schemas/fx-project-templates-v1.schema.json), and
 [shutdown acknowledgment](schemas/fx-service-stop-v1.schema.json).
 `status --json` always returns a status document for an accessible project:
 `running` exits 0; `stopped`, `unavailable`, and `incompatible` exit 1. Invalid
@@ -229,7 +281,10 @@ A stopped status has null `instance_id`, `pid`, and `url`. Failed handshakes als
 leave those fields null instead of presenting unverified service data.
 Only a failed `start --background --json` adds `cause`, a one-line sentence (§3);
 readers ignore members they do not know.
-`init --json` includes the local absolute `project_root`; this is command output,
+`init --json` lists every file it wrote in `files_created`, relative and `/`-separated, and
+names the template it started from (`template`: its `name` and `source`, `built_in`,
+`release` or `local`), or `null` when it started nothing. It includes the local absolute
+`project_root`; this is command output,
 not a portable workflow record. `stop --json` returns the final status document,
 whereas its private HTTP endpoint acknowledges `stopping` before shutdown completes.
 
