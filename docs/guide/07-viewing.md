@@ -58,8 +58,12 @@ to it. A press anywhere outside the list closes it.
 
 Select a card to see its details over the canvas: its outputs, inputs and settings
 as values and previews, whether it was cached, how long it took, and any error.
-Select the workflow's name in the bar for the workflow's own inputs, outputs and
-notices. Esc, the background or × closes them; a second Esc closes the step list.
+Structured values read as name/value rows, and deeper JSON stays folded until you
+open it. Under the title is the step's id (`state['waving'].draw#1`), the same one
+`inspect --json` and the run's events use; its copy button puts it on the clipboard,
+to ask an agent about that exact step. Select the workflow's name in the bar for the
+workflow's own inputs, outputs and notices, and the run's name. Esc, the background
+or × closes them; a second Esc closes the step list.
 Identities, digests and raw records stay on the command line
 (`grida fx inspect runs/example --json`).
 

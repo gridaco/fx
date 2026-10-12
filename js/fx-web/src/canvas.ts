@@ -1,3 +1,4 @@
+import { createElement, X } from "lucide";
 import type { CanvasGraph, LayoutReport } from "./graph";
 import { CanvasViewport, type CanvasInset } from "./controller";
 import { displayPortName } from "./ports";
@@ -367,13 +368,17 @@ export class CanvasController {
     this.open = { deck, veil, camera };
     this.deckBar.replaceChildren();
     const heading = document.createElement("span");
-    heading.textContent = `${deck.title} · ${deck.members.length} · Esc or click outside to close`;
+    heading.className = "fx-deck-bar-title";
+    heading.textContent = `${deck.title} · ${deck.members.length}`;
+    const hint = document.createElement("span");
+    hint.className = "fx-deck-bar-hint";
+    hint.textContent = "Esc or click outside to close";
     const close = document.createElement("button");
     close.type = "button";
-    close.textContent = "×";
+    close.append(createElement(X, { width: 14, height: 14, "stroke-width": 2, "aria-hidden": "true" }));
     close.setAttribute("aria-label", "Close");
     close.addEventListener("click", () => this.collapse(), { signal: this.graphAbort.signal });
-    this.deckBar.append(heading, close);
+    this.deckBar.append(heading, hint, close);
     this.deckBar.hidden = false;
     if (instant) return;
     const rows = Math.ceil(sizes.length / columns);
