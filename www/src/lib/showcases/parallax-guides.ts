@@ -1,13 +1,13 @@
 import { parseRunExport } from "@grida/fx-web";
 import recordingDocument from "../../../content/showcases/recordings/8610653e0b02cfb004a05163e512e86bca6b8d0368484a2bf413bfb285b461c3.json";
-import releaseDocument from "../../../content/showcases/manifests/30b1f4410d574120418e881f7b8c81e2d23f1fc8e4795135f33653fb28093266.json";
+import releaseDocument from "../../../content/showcases/manifests/5b99449a540d0a5156fd36b087925431b4255690b7aba1d2f479da1a98e0d38b.json";
 import manifestDocument from "../../../content/showcases/manifests/parallax/manifest.json";
 import type { ParallaxGuideLayer } from "../../components/showcases/parallax-guides";
 import { showcaseLock } from "./catalog";
 import { object, parseParallax, parseRelease, text } from "./contracts";
 
 // Refreshed after video example revisions: all five parallax files and its recording are unchanged.
-const releaseSha = "30b1f4410d574120418e881f7b8c81e2d23f1fc8e4795135f33653fb28093266";
+const releaseSha = "5b99449a540d0a5156fd36b087925431b4255690b7aba1d2f479da1a98e0d38b";
 const recordingSha = "8610653e0b02cfb004a05163e512e86bca6b8d0368484a2bf413bfb285b461c3";
 
 // Editorial geometry for this reviewed run, not a workflow/export capability.

@@ -1,9 +1,9 @@
 {
   "kind": "fx-showcase-lock-v1",
   "release": {
-    "sha256": "30b1f4410d574120418e881f7b8c81e2d23f1fc8e4795135f33653fb28093266",
-    "path": "showcases/30b1f4410d574120418e881f7b8c81e2d23f1fc8e4795135f33653fb28093266/manifest.json",
-    "fixture": "manifests/30b1f4410d574120418e881f7b8c81e2d23f1fc8e4795135f33653fb28093266.json"
+    "sha256": "5b99449a540d0a5156fd36b087925431b4255690b7aba1d2f479da1a98e0d38b",
+    "path": "showcases/5b99449a540d0a5156fd36b087925431b4255690b7aba1d2f479da1a98e0d38b/manifest.json",
+    "fixture": "manifests/5b99449a540d0a5156fd36b087925431b4255690b7aba1d2f479da1a98e0d38b.json"
   },
   "workflows": {
     "character-3d": {
@@ -746,7 +746,7 @@
           },
           {
             "path": "character-performance/studies/active-dance/manifest.json",
-            "sha256": "1a2624545e2996b03db62b89a0af00bdb58c091bf36d0d7bd95478360994cd0d",
+            "sha256": "9923027080429361fbe8a0c198bc1f18c0c335a71cbd50abddb2678f6c0a6eae",
             "bytes": 4794,
             "media_type": "application/json"
           },
@@ -788,7 +788,7 @@
           },
           {
             "path": "character-performance/studies/dance/manifest.json",
-            "sha256": "8cabdb2e263251e34dbf11b0e64670973d41b99ff593ccd3d1d31026aa032b0f",
+            "sha256": "c155f34159b38369e6d80025a3f0f793373224b10a39b515ff3b7a2f270bd341",
             "bytes": 4693,
             "media_type": "application/json"
           },

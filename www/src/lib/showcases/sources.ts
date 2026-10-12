@@ -2,6 +2,7 @@ import type { Workflow } from "../workflows";
 
 type Source = {
   folder: string;
+  ref?: string;
   target: string;
   inputs?: string;
   /** Absent when the project's routes are free, as on the user's own Codex. */
@@ -11,10 +12,13 @@ type Source = {
   note: string;
 };
 
+const videoSourceRef = "7e9657df53c93ceba47f82e729d6c3573efeedfb";
+
 /** Maintained authoring projects; frozen recordings remain separate evidence. */
 export const workflowSources = {
   "product-promo": {
     folder: "product-promo",
+    ref: videoSourceRef,
     target: "workflow.yaml",
     inputs: "replay-segments.yaml",
     max_usd: 0,
@@ -23,11 +27,12 @@ export const workflowSources = {
   },
   "character-performance": {
     folder: "character-performance",
+    ref: videoSourceRef,
     target: "cast.yaml",
     inputs: "inputs/shared-cast.yaml",
     max_usd: 10,
     prerequisite: "Install Grida and build FX from source; select the source build after uv sync below.",
-    setup: "uv sync\nsource .venv/bin/activate\n# Before continuing, select the built engine and checkout SDK in this environment:\n# https://github.com/gridaco/fx/blob/main/CONTRIBUTING.md#use-a-source-build-with-grida-fx\n# Do not sync dependencies again after selecting the checkout SDK.\npython fetch_inputs.py\npython fetch_motion.py\ngrida fx run prepare.yaml --inputs inputs/riko.yaml --max-usd 0 --deliver character=.showcase-inputs/riko-plate.png --deliver motion=.showcase-inputs/motion-prepared.mp4\ngrida fx run prepare.yaml --inputs inputs/nami.yaml --max-usd 0 --deliver character=.showcase-inputs/nami-plate.png",
+    setup: "uv sync\nsource .venv/bin/activate\n# Before continuing, select the built engine and checkout SDK in this environment:\n# https://github.com/gridaco/fx/blob/4323dd28a67b3d6906444bb1691d78dafa8fcca4/CONTRIBUTING.md#use-a-source-build-with-grida-fx\n# Do not sync dependencies again after selecting the checkout SDK.\npython fetch_inputs.py\npython fetch_motion.py\ngrida fx run prepare.yaml --inputs inputs/riko.yaml --max-usd 0 --deliver character=.showcase-inputs/riko-plate.png --deliver motion=.showcase-inputs/motion-prepared.mp4\ngrida fx run prepare.yaml --inputs inputs/nami.yaml --max-usd 0 --deliver character=.showcase-inputs/nami-plate.png",
     note: "Install FFmpeg and ffprobe on PATH. Use the FX source build containing video.motion_transfer and the Wan Motion route until these are released. Sync this example first, then follow CONTRIBUTING's source-build selection recipe before running the helpers or FX commands; another dependency sync would replace that SDK selection. FX delivers the identity artwork. Acquire the selected stock footage from its source and prepare the four-second, 24 fps interval locally; raw stock footage is excluded from public FX delivery. The cast template runs the single-character utility twice under one spending ceiling. Generation and independent sampled-frame review are paid; decoding, the conservative check of every native frame's studio borders, and composition are local and free. The primary four-second, 1080 × 1920 reel cuts from Riko to Nami at two seconds on their shared driving timeline, at 30 fps. It fits the complete caller-selected common region; the default region is the whole source frame. inputs/cast.yaml retains the eight-second sequential alternate.",
   },
   parallax: {
@@ -99,7 +104,7 @@ export function workflowSource(slug: Workflow["slug"]) {
   const prerequisite = source.prerequisite ?? "Install the CLI first: npm install -g grida";
   return {
     ...source,
-    url: `https://github.com/gridaco/fx/tree/main/examples/${source.folder}`,
+    url: `https://github.com/gridaco/fx/tree/${source.ref ?? "main"}/examples/${source.folder}`,
     command: source.max_usd === 0
       ? `# From examples/${source.folder} in the FX repository.\n# ${prerequisite}\n${source.setup}\n\ngrida fx plan ${target} --max-usd 0\n\n# Start the local service for the browser viewer.\ngrida fx start --background\n\n# Replay the selected plan locally, without a provider call.\ngrida fx run ${target} --max-usd 0 --open`
       : source.max_usd === undefined

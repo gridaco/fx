@@ -18,5 +18,9 @@ test("every showcase points to its complete tracked authoring project", () => {
     expect(source.command).toContain(`grida fx run ${source.target}`);
     expect(source.command).toContain("grida fx start --background");
     expect(source.url).toEndWith(`/examples/${source.folder}`);
+    const ref = workflow.slug === "product-promo" || workflow.slug === "character-performance"
+      ? "7e9657df53c93ceba47f82e729d6c3573efeedfb"
+      : "main";
+    expect(source.url).toBe(`https://github.com/gridaco/fx/tree/${ref}/examples/${source.folder}`);
   }
 });

@@ -464,7 +464,7 @@
         },
         {
           "path": "character-performance/studies/active-dance/manifest.json",
-          "sha256": "1a2624545e2996b03db62b89a0af00bdb58c091bf36d0d7bd95478360994cd0d",
+          "sha256": "9923027080429361fbe8a0c198bc1f18c0c335a71cbd50abddb2678f6c0a6eae",
           "bytes": 4794,
           "media_type": "application/json"
         },
@@ -506,7 +506,7 @@
         },
         {
           "path": "character-performance/studies/dance/manifest.json",
-          "sha256": "8cabdb2e263251e34dbf11b0e64670973d41b99ff593ccd3d1d31026aa032b0f",
+          "sha256": "c155f34159b38369e6d80025a3f0f793373224b10a39b515ff3b7a2f270bd341",
           "bytes": 4693,
           "media_type": "application/json"
         },
@@ -1158,7 +1158,7 @@
     },
     {
       "path": "character-performance/studies/active-dance/manifest.json",
-      "sha256": "1a2624545e2996b03db62b89a0af00bdb58c091bf36d0d7bd95478360994cd0d",
+      "sha256": "9923027080429361fbe8a0c198bc1f18c0c335a71cbd50abddb2678f6c0a6eae",
       "bytes": 4794,
       "media_type": "application/json"
     },
@@ -1170,8 +1170,8 @@
     },
     {
       "path": "character-performance/studies/active-dance/REPRODUCE.md",
-      "sha256": "f210a197d94ec735b4ae164f547326afe8c38ff10ff497aca4bfa43f4c32c980",
-      "bytes": 3628,
+      "sha256": "607a96e0755c96ca3a7ce781c5eb130aab8b454b70e529258c95aa46f30cfb02",
+      "bytes": 3664,
       "media_type": "text/markdown"
     },
     {
@@ -1284,7 +1284,7 @@
     },
     {
       "path": "character-performance/studies/dance/manifest.json",
-      "sha256": "8cabdb2e263251e34dbf11b0e64670973d41b99ff593ccd3d1d31026aa032b0f",
+      "sha256": "c155f34159b38369e6d80025a3f0f793373224b10a39b515ff3b7a2f270bd341",
       "bytes": 4693,
       "media_type": "application/json"
     },
@@ -1296,8 +1296,8 @@
     },
     {
       "path": "character-performance/studies/dance/REPRODUCE.md",
-      "sha256": "e16e4a219947f89b0d89397ad4e9a4709b9ad8fd96ee7aa82c569e4dd49e638d",
-      "bytes": 3747,
+      "sha256": "618382b83b9715f031de70088e75c2421c90f92e48a2bb11a26bf883036c822e",
+      "bytes": 3783,
       "media_type": "text/markdown"
     },
     {
