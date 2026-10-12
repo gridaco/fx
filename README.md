@@ -66,7 +66,9 @@ grida fx run icon --live --max-usd 1 --open
 ```
 
 `init` writes a starter project into an empty folder: a README that walks through installing
-and connecting a provider, an `AGENTS.md` for coding agents, and a first workflow. FX keeps a
+and connecting a provider, an `AGENTS.md` and the FX skills for coding agents, and a first
+workflow. Or start from an example: `npx grida fx init my-assets --template pet`
+(`--list-templates` lists them). FX keeps a
 project dashboard and records every run.
 
 A run without `--live` executes local steps and reuses cached results. New provider calls need

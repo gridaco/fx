@@ -75,10 +75,14 @@ grida fx status --json
 ```
 
 `init` writes a starter project into a new or empty folder: `fx.yaml`, a `README.md` that says how
-to install the CLI and connect an AI provider, an `AGENTS.md` for coding agents, a `.gitignore`
-that keeps runs, the cache and `.env` out of git, an `.env.example` listing the key names, and
-`workflows/icon.yaml`, a one-step workflow that draws an icon once you pick a route. It installs
-nothing and starts nothing. In a folder that already has an `fx.yaml`, it checks that file and
+to install the CLI and connect an AI provider, an `AGENTS.md` and the FX skills
+(`.agents/skills/`) for coding agents, a `.gitignore` that keeps runs, the cache and `.env` out of
+git, an `.env.example` listing the key names, and `workflows/icon.yaml`, a one-step workflow that
+draws an icon once you pick a route. It installs nothing and starts nothing. On a terminal it asks
+which template to start from; `--template NAME` names one without asking, and
+`grida fx init --list-templates` lists them. A template is one of the
+[examples](https://github.com/gridaco/fx/tree/main/examples), downloaded from the FX release you
+have, with the same agent files added. In a folder that already has an `fx.yaml`, it checks that file and
 writes nothing. It refuses any other folder that has files in it: to make an existing folder (a
 game repository, say) a project, write its `fx.yaml` yourself, holding `fx: project/v1`.
 

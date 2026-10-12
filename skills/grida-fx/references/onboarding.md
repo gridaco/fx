@@ -16,7 +16,12 @@ npx grida fx init my-assets
 
 In an empty or new folder, recent releases write a starter project: `fx.yaml`
 (routes and budget commented out), `README.md`, `AGENTS.md`, `.gitignore`,
-`.env.example` and `workflows/icon.yaml`. `--json` lists them in `files_created`.
+`.env.example`, `workflows/icon.yaml` and the FX skills under `.agents/skills/`.
+`--json` lists them in `files_created`. To start from an example instead, see
+`grida fx init --list-templates --json` and pass `--template NAME`; it downloads
+the template from the FX release, so ask the user first if the network is a
+concern. Agents always pass `--template` or get the starter: `init` asks no
+question without a terminal.
 `init` installs nothing: the user, or you with their agreement, installs the CLI
 as the main skill describes (`npm install -g grida`), or keeps using `npx grida fx`.
 

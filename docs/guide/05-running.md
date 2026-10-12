@@ -10,7 +10,7 @@ standalone `grida-fx` command and the source setup are in
 
 | Command | |
 |---|---|
-| `grida fx init [directory] [--json]` | start a new project from the starter files in an empty folder, or check an existing `fx.yaml`; never overwrites |
+| `grida fx init [directory] [--template NAME] [--json]` | start a new project in an empty folder from the starter or a template (`--list-templates` lists them), or check an existing `fx.yaml`; never overwrites |
 | `grida fx start [--project directory] [--port N] [--background] [--open] [--json]` | serve the project's dashboard and recorded runs; foreground by default |
 | `grida fx status [--project directory] [--json]` / `stop [--project directory] [--json]` | inspect or stop that project's service |
 | `grida fx logs [--project directory] [--lines N]` | read a bounded tail of service logs |

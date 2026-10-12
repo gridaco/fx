@@ -227,6 +227,11 @@ grida fx run workflows/example.yaml --inputs inputs/example.yaml --run runs/exam
 grida fx inspect runs/example --open
 ```
 
+When the service is running, give the user the viewer URL for what you are
+working on (the plan while designing, the run while it runs) rather than
+presenting renders yourself: the viewer is live, so the user sees each step as it
+happens.
+
 Treat this as a sequence of tools to select from, not permission to execute a
 workflow. `init` never overwrites a file; in an existing project it only checks
 `fx.yaml`. `start --background` returns after readiness and reuses a compatible service
