@@ -32,7 +32,7 @@
 //! - [`stand_in`]: the checks a stand-in's answer gets in a stand-in run (spec/protocol.md §5.7):
 //!   its shape, then its route's check, from adapters built keyless over a refusing transport;
 //! - [`fake`] and [`testing`] (feature `testing`): the scripted `FakeAdapter`, test setups,
-//!   calls and synthetic media.
+//!   calls, synthetic media and test programs.
 //!
 //! [`Adapters`] maps a capability and a provider to an adapter. Without `--live` the `grida-fx`
 //! binary registers none, so every uncached paid call is refused with `no_route` ("no adapter

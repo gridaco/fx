@@ -2,9 +2,9 @@
 
 #![cfg(unix)]
 
+use grida_fx_providers::testing::write_program;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{self, Receiver};
@@ -92,8 +92,7 @@ sys.exit({})
         endpoint,
         u8::from(fail_opener)
     );
-    std::fs::write(&opener, source).unwrap();
-    std::fs::set_permissions(opener, std::fs::Permissions::from_mode(0o755)).unwrap();
+    write_program(&opener, &source);
 }
 
 struct Running {

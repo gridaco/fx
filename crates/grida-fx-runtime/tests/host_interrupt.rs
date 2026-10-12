@@ -5,6 +5,7 @@
 //! test needs `python3` on `PATH` and skips without it.
 #![cfg(unix)]
 
+use grida_fx_providers::testing::write_program;
 use grida_fx_runtime::host::connection::NoIncoming;
 use grida_fx_runtime::host::end_every_host;
 use grida_fx_runtime::host::process::{HostProcess, HostSpec};
@@ -63,13 +64,10 @@ async fn ending_every_host_kills_their_groups_and_starts_no_more() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("host.py"), HOST).unwrap();
     let python: PathBuf = dir.path().join("python-host");
-    std::fs::write(
+    write_program(
         &python,
         "#!/bin/sh\nexec python3 \"$(dirname \"$0\")/host.py\"\n",
-    )
-    .unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&python, std::fs::Permissions::from_mode(0o755)).unwrap();
+    );
     let spec = HostSpec {
         python,
         label: "python-host".into(),

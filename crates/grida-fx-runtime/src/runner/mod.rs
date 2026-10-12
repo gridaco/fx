@@ -1325,7 +1325,6 @@ mod tests {
             ClosureEntry, DescribedType, ModuleDescription, RetryMode, TypeSpec,
         };
         use grida_fx_providers::Adapters;
-        use std::os::unix::fs::PermissionsExt;
         use std::sync::atomic::{AtomicBool, Ordering};
         use std::time::{Duration, Instant};
 
@@ -1429,12 +1428,10 @@ while (message := read()) is not None:
                 std::fs::write(root.join("cancel-mode"), "cancel").unwrap();
             }
             let python = root.join("python-stub");
-            std::fs::write(
+            grida_fx_providers::testing::write_program(
                 &python,
                 "#!/bin/sh\nexec python3 \"$(dirname \"$0\")/host.py\"\n",
-            )
-            .unwrap();
-            std::fs::set_permissions(&python, std::fs::Permissions::from_mode(0o755)).unwrap();
+            );
             let runtime = tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()

@@ -8,10 +8,9 @@
 use base64::Engine;
 use grida_fx_providers::adapter::{Answer, Billing, RequestAdapter, Runtime, Sent};
 use grida_fx_providers::codex::{self, CodexImages, CodexRuntime};
-use grida_fx_providers::testing::{CallBuilder, TestCall, media};
+use grida_fx_providers::testing::{self, CallBuilder, TestCall, media};
 use serde_json::{Value, json};
 use std::future::Future;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -77,6 +76,17 @@ fn completed_a() -> String {
     completed("thread-a", "turn-a")
 }
 
+/// Everything up to a second call: the first call's turn draws `png` and completes. The second
+/// call's requests have ids 5 and 6 ([`call_script`]).
+fn first_image(png: &[u8]) -> String {
+    format!(
+        "{}{}{}",
+        opening(),
+        image_item("thread-a", "turn-a", png),
+        completed_a()
+    )
+}
+
 struct Fake {
     dir: tempfile::TempDir,
     program: PathBuf,
@@ -101,8 +111,7 @@ impl Fake {
 fn fake(body: &str) -> Fake {
     let dir = tempfile::tempdir().unwrap();
     let program = dir.path().join("codex");
-    std::fs::write(&program, body).unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    testing::write_program(&program, body);
     Fake { dir, program }
 }
 
@@ -168,6 +177,31 @@ fn on_one_runtime<T, F: Future<Output = T>>(
         .unwrap();
     tokio.block_on(async {
         let (runtime, adapter) = images(program, start, whole);
+        let out = test(adapter).await;
+        let verified = runtime.shutdown().await;
+        (out, verified)
+    })
+}
+
+/// As [`on_one_runtime`], on a Codex already started: a first call, with deadlines no busy
+/// machine misses, draws the image of [`first_image`]; then `test` gets an adapter on the same
+/// runtime whose deadlines are `start` and `whole`. They time the call under test only, never how
+/// long the machine took to start the fake.
+fn on_a_started_codex<T, F: Future<Output = T>>(
+    fake: &Fake,
+    start: u64,
+    whole: u64,
+    test: impl FnOnce(CodexImages) -> F,
+) -> (T, bool) {
+    let tokio = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    tokio.block_on(async {
+        let (runtime, first) = images(Ok(fake.program.clone()), 20, 30);
+        answered(first.send(&kite().call).await);
+        let adapter = CodexImages::new(Arc::clone(&runtime))
+            .with_deadlines(Duration::from_secs(start), Duration::from_secs(whole));
         let out = test(adapter).await;
         let verified = runtime.shutdown().await;
         (out, verified)
@@ -310,18 +344,20 @@ read -r line
 #[test]
 fn a_dropped_call_interrupts_its_turn() {
     let wait = r#"read -r line
-case "$line" in *'"method":"turn/interrupt"'*'"turnId":"turn-a"'*) touch "$(dirname "$0")/interrupted" ;; esac
+case "$line" in *'"method":"turn/interrupt"'*'"turnId":"turn-b"'*) touch "$(dirname "$0")/interrupted" ;; esac
 read -r line
 "#;
-    let fake = fake(&format!("{}{wait}", opening()));
+    let png = media::png(2, 2, None);
+    let script = first_image(&png) + &call_script(5, "thread-b", "turn-b") + wait;
+    let fake = fake(&script);
     let marker = fake.marker("interrupted");
-    let (_, verified) = on_one_runtime(Ok(fake.program.clone()), 20, 30, |adapter| async move {
+    let (_, verified) = on_a_started_codex(&fake, 20, 30, |adapter| async move {
         // The run is cancelled while the turn is drawing: the call's future is dropped.
         let dropped =
             tokio::time::timeout(Duration::from_secs(2), adapter.send(&kite().call)).await;
         assert!(dropped.is_err());
         let started = Instant::now();
-        while !marker.exists() && started.elapsed() < Duration::from_secs(3) {
+        while !marker.exists() && started.elapsed() < Duration::from_secs(10) {
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
     });
@@ -576,40 +612,43 @@ fn nothing_is_ever_resent() {
 
 #[test]
 fn deadlines_stop_a_call_before_and_after_its_turn_is_asked_for() {
-    let quick = |fake: &Fake, start: u64, whole: u64| {
-        let began = Instant::now();
-        let (sent, _) = on_one_runtime(
-            Ok(fake.program.clone()),
-            start,
-            whole,
-            |adapter| async move { adapter.send(&kite().call).await },
-        );
-        assert!(
-            began.elapsed() < Duration::from_secs(whole + 10),
-            "{:?}",
-            began.elapsed()
-        );
-        sent
+    // The call ends at its deadline, not long after.
+    let timed = |whole: u64| {
+        move |adapter: CodexImages| async move {
+            let began = Instant::now();
+            let sent = adapter.send(&kite().call).await;
+            assert!(
+                began.elapsed() < Duration::from_secs(whole + 10),
+                "{:?}",
+                began.elapsed()
+            );
+            sent
+        }
     };
     let before = fake(&format!("{LISTING}exec sleep 30\n"));
     assert_eq!(
-        quick(&before, 1, 10),
+        on_one_runtime(Ok(before.program.clone()), 1, 10, timed(10)).0,
         failed("Codex image generation was not started: Codex did not start the turn within 1 s")
     );
-    // turn/start was written and never answered: the turn may be running.
+    // The second call's turn/start was written and never answered: the turn may be running.
+    let png = media::png(2, 2, None);
     let accepted =
-        "echo '{\"id\":4,\"result\":{\"turn\":{\"id\":\"turn-a\",\"status\":\"inProgress\"}}}'\n";
-    let unanswered = fake(&(opening().replace(accepted, "") + "exec sleep 30\n"));
-    // Long enough for a busy machine to start the fake; the first call starts Codex too.
+        "echo '{\"id\":6,\"result\":{\"turn\":{\"id\":\"turn-b\",\"status\":\"inProgress\"}}}'\n";
+    let second = call_script(5, "thread-b", "turn-b");
+    assert!(second.contains(accepted));
+    let unanswered = fake(&format!(
+        "{}{}exec sleep 30\n",
+        first_image(&png),
+        second.replace(accepted, "")
+    ));
     assert_eq!(
-        quick(&unanswered, 5, 15),
-        failed("Codex image generation failed: Codex did not start the turn within 5 s")
+        on_a_started_codex(&unanswered, 3, 15, timed(15)).0,
+        failed("Codex image generation failed: Codex did not start the turn within 3 s")
     );
-    // Long enough for a busy machine to start the fake and accept the turn.
-    let running = fake(&format!("{}exec sleep 30\n", opening()));
+    let running = fake(&format!("{}{second}exec sleep 30\n", first_image(&png)));
     assert_eq!(
-        quick(&running, 5, 3),
-        failed("Codex image generation failed: Codex did not finish within 3 s")
+        on_a_started_codex(&running, 3, 2, timed(2)).0,
+        failed("Codex image generation failed: Codex did not finish within 2 s")
     );
 }
 
@@ -630,12 +669,18 @@ echo $! > "$(dirname "$0")/helper.pid"
         gone(&finished.marker("helper.pid")),
         "a helper in Codex's group outlived it"
     );
-    // The same when a deadline ended the call and Codex kept running until the shutdown.
-    let stalled = fake(&format!("{}{helper}exec sleep 30\n", opening()));
-    let (sent, verified) =
-        on_one_runtime(Ok(stalled.program.clone()), 5, 3, |adapter| async move {
-            adapter.send(&kite().call).await
-        });
+    // The same when a deadline ended a call and Codex kept running until the shutdown. The helper
+    // starts in the first call, so it is there whatever the deadline.
+    let stalled = fake(&format!(
+        "{}{helper}{}{}{}exec sleep 30\n",
+        opening(),
+        generated(&png),
+        completed_a(),
+        call_script(5, "thread-b", "turn-b")
+    ));
+    let (sent, verified) = on_a_started_codex(&stalled, 3, 2, |adapter| async move {
+        adapter.send(&kite().call).await
+    });
     assert!(matches!(sent, Sent::Failed { .. }));
     assert!(verified);
     assert!(gone(&stalled.marker("helper.pid")));

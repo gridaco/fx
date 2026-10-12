@@ -9,6 +9,7 @@
 
 use grida_fx_protocol::{ErrorCode, RpcError, RunBody, RunInstance, RunParams};
 use grida_fx_providers::BoxFuture;
+use grida_fx_providers::testing::write_program;
 use grida_fx_runtime::engine::Cancel;
 use grida_fx_runtime::host::connection::Connection;
 use grida_fx_runtime::host::pool::{HostPool, RunReply, RunRequests};
@@ -205,13 +206,10 @@ impl Fixture {
         let host = dir.path().join("fake_host.py");
         std::fs::write(&host, FAKE_HOST).unwrap();
         let python = dir.path().join("python-fake");
-        std::fs::write(
+        write_program(
             &python,
-            format!("#!/bin/sh\nexec python3 '{}' \"$@\"\n", host.display()),
-        )
-        .unwrap();
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&python, std::fs::Permissions::from_mode(0o755)).unwrap();
+            &format!("#!/bin/sh\nexec python3 '{}' \"$@\"\n", host.display()),
+        );
         let spec = HostSpec {
             python,
             label: "python-fake".into(),

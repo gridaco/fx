@@ -21,7 +21,7 @@ use grida_fx_protocol::{
     TypeSpec,
 };
 use grida_fx_providers::Adapters;
-use grida_fx_providers::testing::media;
+use grida_fx_providers::testing::{media, write_program};
 use grida_fx_runtime::calls::pacing::Pacing;
 use grida_fx_runtime::engine::{Cancel, Engine, Services};
 use grida_fx_runtime::executor::{CacheUse, InstanceJob, JobBody, execute};
@@ -670,16 +670,10 @@ fn fake_python(dir: &Path) -> PathBuf {
     let program = dir.join("fake_host.py");
     std::fs::write(&program, FAKE_HOST).unwrap();
     let script = dir.join("python");
-    std::fs::write(
+    write_program(
         &script,
-        format!("#!/bin/sh\nexec python3 {}\n", program.display()),
-    )
-    .unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
-    }
+        &format!("#!/bin/sh\nexec python3 {}\n", program.display()),
+    );
     script
 }
 

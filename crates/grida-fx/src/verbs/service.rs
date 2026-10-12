@@ -650,7 +650,6 @@ fn registered_url(catalog: &Catalog, path: &str, _open: bool) -> Result<Option<S
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
-    use std::os::unix::fs::PermissionsExt;
 
     /// The competing winner becomes ready while this caller's own child has not entered FX
     /// yet. Returning another winner's URL must also retire that outstanding child, otherwise
@@ -667,12 +666,10 @@ mod tests {
         let port = listener.local_addr().unwrap().port();
         drop(listener);
         let launcher = root.path().join("gated-launcher");
-        std::fs::write(
+        grida_fx_providers::testing::write_program(
             &launcher,
             "#!/bin/sh\nprintf '%s\\n' \"$$\" > \"$3/launcher.pid\"\ni=0\nwhile [ ! -f \"$3/release-launcher\" ]; do\n i=$((i + 1))\n [ \"$i\" -lt 1000 ] || exit 2\n /bin/sleep 0.01\ndone\n: > \"$3/late-start\"\n",
-        )
-        .unwrap();
-        std::fs::set_permissions(&launcher, std::fs::Permissions::from_mode(0o755)).unwrap();
+        );
         let selected = catalog.clone();
         let parent = std::thread::spawn(move || {
             background_with_executable(

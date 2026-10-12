@@ -624,17 +624,14 @@ mod tests {
     #[tokio::test]
     async fn path_shadowed_kill_cannot_fake_verified_group_cleanup() {
         use rustix::process::{Pid, Signal, kill_process, test_kill_process};
-        use std::os::unix::fs::PermissionsExt;
 
         if std::env::var("GRIDA_FX_GROUP_KILL_CHILD").as_deref() != Ok("1") {
             let dir = tempfile::tempdir().unwrap();
             let stub = dir.path().join("kill");
-            std::fs::write(
+            grida_fx_providers::testing::write_program(
                 &stub,
                 "#!/bin/sh\nprintf '%s' \"$*\" >> \"$GRIDA_FX_GROUP_KILL_LOG\"\nexit 1\n",
-            )
-            .unwrap();
-            std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+            );
             let path = std::env::join_paths(std::iter::once(dir.path().to_path_buf()).chain(
                 std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()),
             ))
@@ -768,13 +765,10 @@ time.sleep(60)
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join(format!("{name}.py")), script).unwrap();
         let python = dir.path().join(format!("python-{name}"));
-        std::fs::write(
+        grida_fx_providers::testing::write_program(
             &python,
-            format!("#!/bin/sh\nexec python3 \"$(dirname \"$0\")/{name}.py\"\n"),
-        )
-        .unwrap();
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&python, std::fs::Permissions::from_mode(0o755)).unwrap();
+            &format!("#!/bin/sh\nexec python3 \"$(dirname \"$0\")/{name}.py\"\n"),
+        );
         let spec = HostSpec {
             python,
             label: format!("python-{name}"),

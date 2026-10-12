@@ -12,6 +12,7 @@ use grida_fx_core::host::{HostFailure, NodeHost};
 use grida_fx_protocol::{
     BuildParams, DescribeParams, DescribeTarget, ErrorCode, ModuleDescription, RetryMode,
 };
+use grida_fx_providers::testing::write_program;
 use grida_fx_runtime::host::{PythonHost, SAFE_PATH_MARK};
 use indexmap::IndexMap;
 use serde_json::{Value, json};
@@ -225,16 +226,13 @@ impl Fixture {
         let host = dir.path().join("fake_host.py");
         std::fs::write(&host, FAKE_HOST).unwrap();
         let python = dir.path().join(format!("python-{mode}"));
-        std::fs::write(
+        write_program(
             &python,
-            format!(
+            &format!(
                 "#!/bin/sh\nexec python3 '{}' {mode} \"$@\"\n",
                 host.display()
             ),
-        )
-        .unwrap();
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&python, std::fs::Permissions::from_mode(0o755)).unwrap();
+        );
         Fixture {
             _dir: dir,
             root,
@@ -602,7 +600,8 @@ fn a_host_whose_fork_keeps_its_pipes_is_seen_to_exit() {
         unavailable(failure),
         "the node host exited with status 4 while answering describe"
     );
-    assert!(took < Duration::from_secs(5), "{took:?}");
+    // Waiting for the pipes to close would take the fork's 30 s; the margin is for a busy machine.
+    assert!(took < Duration::from_secs(20), "{took:?}");
     let forked = std::fs::read_to_string(fixture.root.join("forked.txt")).unwrap();
     let mut gone = false;
     for _ in 0..300 {

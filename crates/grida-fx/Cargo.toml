@@ -26,6 +26,8 @@ chrono.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+# `testing::write_program` for tests that start a program they wrote.
+grida-fx-providers = { workspace = true, features = ["testing"] }
 jsonschema.workspace = true
 
 [lints]
