@@ -26,6 +26,13 @@ pub struct RunDocument {
     pub state: String,
     pub stand_in: bool,
     pub charged_usd: Option<f64>,
+    /// How long its invocations ran, each through its last record, summed. Omitted before any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub elapsed_ms: Option<u64>,
+    /// When its last record was written, dated as a node's `started_at` is; an unfinished run's
+    /// time is `elapsed_ms` plus the time since. Omitted when the record cannot date it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recorded_at: Option<String>,
     pub estimate: Value,
     pub inputs: Value,
     pub outputs: Value,
@@ -542,6 +549,9 @@ fn project_inventory(
     let mut candidates = BTreeMap::new();
     // Each invocation's recorded start, which dates its events' offset_ms.
     let mut invocation_starts = BTreeMap::new();
+    // Each invocation's latest offset_ms, and the last record, which time the run.
+    let mut spans: BTreeMap<&str, u64> = BTreeMap::new();
+    let mut last_record = None;
     for current in &nodes {
         collect_object(&current.parameters, None, &mut candidates);
     }
@@ -555,6 +565,14 @@ fn project_inventory(
         {
             warnings.push("An event for another plan was ignored.".into());
             continue;
+        }
+        // The record's invocation and offset, which time the run and the waits.
+        let stamp =
+            text(event, "invocation_id").zip(event.get("offset_ms").and_then(Value::as_u64));
+        if let Some((invocation, offset)) = stamp {
+            let span = spans.entry(invocation).or_default();
+            *span = (*span).max(offset);
+            last_record = Some(event);
         }
         match text(event, "event") {
             Some("scopes_updated") => {
@@ -737,18 +755,16 @@ fn project_inventory(
                 else {
                     continue;
                 };
-                let at = text(event, "invocation_id")
-                    .zip(event.get("offset_ms").and_then(Value::as_u64));
                 let call = text(event, "call").map(str::to_string);
                 if name == "call_waiting" {
                     current.waits.entry(call).or_insert_with(|| Wait {
                         route: text(event, "route").map(str::to_string),
                         since: dated(&invocation_starts, event),
-                        at: at.map(|(invocation, offset)| (invocation.into(), offset)),
+                        at: stamp.map(|(invocation, offset)| (invocation.into(), offset)),
                     });
                 } else if let Some(wait) = current.waits.shift_remove(&call) {
                     // An admission of no open wait closes nothing.
-                    current.admit(wait, at);
+                    current.admit(wait, stamp);
                 }
                 current.show_waits();
             }
@@ -852,6 +868,8 @@ fn project_inventory(
         state,
         stand_in,
         charged_usd: charged,
+        elapsed_ms: last_record.map(|_| spans.values().sum()),
+        recorded_at: last_record.and_then(|event| dated(&invocation_starts, event)),
         estimate: plan.get("estimate").cloned().unwrap_or(Value::Null),
         inputs: object(plan.get("inputs")),
         outputs,

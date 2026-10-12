@@ -373,6 +373,28 @@ fn a_start_is_dated_from_its_invocation_start() {
 }
 
 #[test]
+fn a_run_is_timed_by_its_invocations_and_dated_by_its_last_record() {
+    let fixture = Fixture::new("image/png");
+    let read =
+        || serde_json::to_value(read::read_inventory(&fixture.root()).unwrap().document).unwrap();
+    // The fixture's own invocation records no start: it is timed, but its last record is undated.
+    let before = read();
+    let earlier = before["elapsed_ms"].as_u64().unwrap();
+    assert!(before.get("recorded_at").is_none());
+    let mut events = FileForEvents::new(&fixture.root());
+    for event in [
+        json!({"event":"run_started","invocation_id":"resumed","started_at":"2026-10-11T09:00:00.000Z","offset_ms":0}),
+        json!({"event":"node_started","id":"draw#1","path":"draw","invocation_id":"resumed","offset_ms":61500}),
+    ] {
+        events.append(event);
+    }
+    drop(events);
+    let after = read();
+    assert_eq!(after["elapsed_ms"], earlier + 61500);
+    assert_eq!(after["recorded_at"], "2026-10-11T09:01:01.500Z");
+}
+
+#[test]
 fn a_step_waiting_for_its_route_is_waiting_and_its_waits_are_timed() {
     let fixture = Fixture::new("image/png");
     let mut log = FileForEvents::new(&fixture.root());

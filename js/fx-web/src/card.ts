@@ -11,9 +11,11 @@ export function element<K extends keyof SVGElementTagNameMap>(tag: K, attributes
   if (text !== undefined) node.textContent = text;
   return node;
 }
-/** How long a running card has run, beside its spinner: "8s", "1m 04s", "2h 05m". */
-export function runningLabel(started: number, now: number) {
-  const seconds = Math.max(0, Math.floor((now - started) / 1000));
+/** How long a running card has run, beside its spinner. */
+export function runningLabel(started: number, now: number) { return elapsedLabel(now - started); }
+/** A time that counts in whole seconds: "8s", "1m 04s", "2h 05m". */
+export function elapsedLabel(ms: number) {
+  const seconds = Math.max(0, Math.floor(ms / 1000));
   const [hours, minutes, rest] = [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60];
   const two = (value: number) => String(value).padStart(2, "0");
   return hours ? `${hours}h ${two(minutes)}m` : minutes ? `${minutes}m ${two(rest)}s` : `${rest}s`;

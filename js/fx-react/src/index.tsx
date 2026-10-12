@@ -17,6 +17,14 @@ export function StateIcon({ state, size = 12 }: { state: string; size?: number }
   </svg>;
 }
 
+/** A state's icon and word, untinted. */
+export function StateLabel({ state }: { state: string }) {
+  return <span className="inline-flex items-center gap-1 font-medium text-zinc-700">
+    <StateIcon state={state} size={12} />
+    {state.replaceAll("_", " ")}
+  </span>;
+}
+
 export function Status({ state }: { state: string }) {
   const colors: Record<string, string> = {
     succeeded: "bg-emerald-50 text-emerald-800 ring-emerald-200",

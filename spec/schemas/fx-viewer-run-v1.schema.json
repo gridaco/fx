@@ -66,6 +66,17 @@
       ],
       "minimum": 0
     },
+    "elapsed_ms": {
+      "description": "How long the run's invocations ran, each from its start through its latest record's offset, summed. Absent before any record.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "recorded_at": {
+      "description": "When the run's last record was written: its invocation's recorded start plus its offset, UTC RFC3339 milliseconds. An unfinished run has run `elapsed_ms` plus the time since. Absent when the record cannot date it.",
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+    },
     "estimate": {
       "type": [
         "object",

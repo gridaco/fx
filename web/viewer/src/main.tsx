@@ -1,8 +1,8 @@
 import { StrictMode, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { ArrowLeft, ArrowUpRight, Check, ChevronRight, Copy, FileText, List, RefreshCw, Square, Workflow, X } from "lucide-react";
-import { ServiceIndexProjection, ViewerController, ViewerEntryController, type Artifact, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun } from "@grida/fx-web";
-import { StateIcon, Status, Values, WorkflowCanvas, money, type WorkflowCanvasHandle } from "@grida/fx-react";
+import { ServiceIndexProjection, ViewerController, elapsedLabel, ViewerEntryController, type Artifact, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun } from "@grida/fx-web";
+import { StateIcon, StateLabel, Status, Values, WorkflowCanvas, money, type WorkflowCanvasHandle } from "@grida/fx-react";
 import "./style.css";
 
 const entryController = new ViewerEntryController(window.location.pathname);
@@ -41,6 +41,23 @@ function Heading({ title, state, meta, id, kind = "id" }: { title: string; state
     {id && <p className="fx-detail-id"><code title={id}>{id}</code><CopyButton text={id} label={`Copy ${kind}`} /></p>}
     {line && <p className="fx-detail-meta">{line}</p>}
   </div>;
+}
+
+function Dot() { return <span className="fx-bar-dot" aria-hidden="true">·</span>; }
+
+/** How long the run took, after a dot; an unfinished one counts up from its last record. */
+function RunTime({ run }: { run: ViewerRun }) {
+  const recorded = run.recorded_at ? Date.parse(run.recorded_at) : NaN;
+  const live = run.state === "unfinished" && !Number.isNaN(recorded);
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    if (!live) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [live]);
+  if (run.elapsed_ms === undefined) return null;
+  const elapsed = run.elapsed_ms + (live ? Math.max(0, now - recorded) : 0);
+  return <><Dot /><span className="fx-bar-cost" title={live ? "Running for" : "Took"}>{elapsedLabel(elapsed)}</span></>;
 }
 
 function duration(ms: number) {
@@ -179,7 +196,7 @@ function WorkflowView() {
           <ol className="fx-crumbs">{breadcrumbs.map((crumb, index) => <li key={crumb.id ?? "root"}>{index < breadcrumbs.length - 1
             ? <button onClick={() => controller.goToScope(crumb.id)} title={crumb.id ?? crumb.title}>{crumb.title}</button>
             : <button onClick={() => { controller.select(null); setAbout(!about); }} aria-current="page" aria-expanded={about}>{crumb.title}</button>}</li>)}</ol>
-          {run ? <><Status state={cancelling ? "cancelling" : run.state} />{run.charged_usd !== null && <span className="fx-bar-cost">{money(run.charged_usd)}</span>}</>
+          {run ? <><StateLabel state={cancelling ? "cancelling" : run.state} /><RunTime run={run} />{run.charged_usd !== null && <><Dot /><span className="fx-bar-cost">{money(run.charged_usd)}</span></>}</>
             : view.estimate && <span className="fx-bar-cost">{estimate(view.estimate, "est. $0.00")}</span>}
           {(run?.stand_in || plan?.stand_in) && <span className="fx-badge">Stand-in</span>}
           {notices.length > 0 && <button onClick={() => { controller.select(null); setAbout(true); }} className="fx-bar-notice" title={notices.join("\n")}>{notices.length} {plan ? (notices.length === 1 ? "problem" : "problems") : (notices.length === 1 ? "notice" : "notices")}</button>}

@@ -27,6 +27,7 @@ button { touch-action: manipulation; }
 .fx-bar:not(:has(.fx-bar-project)) { padding-left: 10px; }
 .fx-bar-project { display: flex; width: 28px; height: 28px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 6px; color: #71717a; }
 .fx-bar-project:hover { background: #f4f4f5; color: #27272a; }
+.fx-bar-dot { margin: 0 -4px; color: #a1a1aa; }
 .fx-bar-cost { flex-shrink: 0; color: #71717a; font-family: var(--font-mono); font-size: 11px; }
 .fx-crumbs { display: flex; min-width: 0; align-items: center; overflow: hidden; white-space: nowrap; }
 .fx-crumbs li { display: flex; min-width: 0; align-items: center; }

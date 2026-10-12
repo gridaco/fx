@@ -51,6 +51,10 @@ export interface ViewerRun {
   state: string;
   stand_in: boolean;
   charged_usd: number | null;
+  /** How long its invocations ran, each through its last record, summed. */
+  elapsed_ms?: number;
+  /** When its last record was written; an unfinished run has run `elapsed_ms` plus the time since. */
+  recorded_at?: string;
   estimate: { low_usd: number; high_usd: number } | null;
   inputs: Record<string, unknown>;
   outputs: Record<string, unknown>;
@@ -137,6 +141,8 @@ export function parseViewerRun(value: unknown, apiBase = "/api"): ViewerRun {
     && typeof value.state === "string"
     && typeof value.stand_in === "boolean"
     && nullableNumber(value.charged_usd)
+    && (value.elapsed_ms === undefined || (typeof value.elapsed_ms === "number" && value.elapsed_ms >= 0))
+    && (value.recorded_at === undefined || utcTimestamp(value.recorded_at))
     && (value.estimate === null || (record(value.estimate)
       && typeof value.estimate.low_usd === "number"
       && typeof value.estimate.high_usd === "number"))
@@ -180,6 +186,7 @@ export * from "./state-icon";
 export * from "./navigation";
 export * from "./scopes";
 export * from "./observation";
+export { elapsedLabel } from "./card";
 export * from "./route";
 export * from "./service";
 export * from "./export";

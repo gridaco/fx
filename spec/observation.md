@@ -93,6 +93,12 @@ admitted; the work it did is the time since `started_at` less that. A run that e
 `interrupted` as for `running`. A record without these events projects exactly as
 before. `waiting` is an instance state only; the run-state enum is unchanged.
 
+The projection also times the run: `elapsed_ms`, each invocation from its start through its
+latest record's `offset_ms`, summed, and `recorded_at`, its last record dated as `started_at`
+is. Both are absent before any record, `recorded_at` also when its invocation records no start.
+An unfinished run has run `elapsed_ms` plus the time since `recorded_at`; a client may count it
+up, as it does a running instance, which is no evidence the owner is still alive.
+
 A CLI run plans and validates, initializes its record and flushes `run_started`,
 then announces an available viewing URL before run-phase execution. Planning may
 execute declared local `at: plan` nodes before that URL exists. In project mode,
