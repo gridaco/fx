@@ -104,6 +104,8 @@ Once the call is answered, its call record is published, the run's log names the
 - **No secrets:** no keys, authorization headers, cookies, tokens or signed URLs. Requests never carry them, because credentials travel in the transport ([identity.md](identity.md) §9). A job's `handle` holds only what collecting needs, such as the provider's job id. A file a provider returns at a URL is downloaded and stored, and its URL is not kept in `data`.
 - **No paths:** no absolute paths, temporary paths or host names. Files are named by digest only.
 
+A record does hold what was asked: a call record keeps its request exactly, prompts included, and a job record its provider's job id. The store and run folders are therefore private working data, shared through an export ([exports.md](exports.md)).
+
 ## 8. Run folders
 
 A run keeps its record in a run folder, and links its results there from the store. The folder is for people and for the commands that read a run (`inspect`, `project`, `reroll`, `pick`). The store stays the cache: deleting a run folder loses nothing the store holds, and a copied run folder can be read on another machine. `grida-fx runs list` and `grida-fx runs remove` list and remove a project's run folders (§9).

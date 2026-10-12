@@ -38,6 +38,11 @@ private information too. FX excludes known local transport fields and projects
 file references; it cannot certify arbitrary authored text or media public-safe.
 The exact media allowlist and projection are in [the export contract](../../spec/exports.md).
 
+Withholding hides content, not shape: a withheld file keeps its digest, size,
+original filename and key. Media keep every byte, so metadata embedded in a file
+travels with it: EXIF in your own pictures, a location among it, and the content
+credentials and generation labels providers add.
+
 ## Use the SDK
 
 ```python

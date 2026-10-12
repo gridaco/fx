@@ -105,6 +105,16 @@ were originally absent remain absent. `error` stays null and `warnings` stays
 empty unless `--include-diagnostics` is selected. Explicitly included diagnostic
 strings are author-controlled disclosure, not automatic redaction.
 
+Withholding hides content, not shape. A withheld file value keeps its `digest`,
+`size`, basename `name` and `key`: the name of a recorded input is its original
+local filename, and the digest is an unsalted SHA-256 of the bytes, so it can
+confirm a guessed text or JSON file. `source.plan_sha256` likewise lets someone
+who can rebuild the exact `plan.json` confirm guessed inputs. Diagnostics may
+name provider request ids, routes and, for a job of unknown outcome, its call key,
+itself an unsalted digest of the request ([identity.md](identity.md) §9). An
+allocated `run_name` is the run folder's name, which holds the local date
+([store.md](store.md) §8); an explicit `--run` folder name is kept as given.
+
 The layout keeps `kind`, `state`, `cells`, `order`; `cursor`, `file`, and `revision`
 are always null. Diagnostics are empty unless explicitly included. Cell sources
 and order preserve engine layout semantics. No service path or observation
@@ -150,6 +160,12 @@ The v1 allowlist and deterministic suffixes are:
 | audio/ogg | ogg |
 | audio/flac | flac |
 | model/gltf-binary | glb |
+
+Selected bytes are copied exactly as recorded, which is how they are verified.
+Metadata embedded in a file travels with it: EXIF (including a photo's
+location), PNG text chunks, content credentials (C2PA) and provider labels that
+name a generation, container tags and creation times. FX neither reads nor
+strips it; a node that re-encodes a file before it is recorded makes new bytes.
 
 Paths contain no scheme, host, absolute path, backslash, traversal, query or
 fragment. Consumers use a chosen trusted base URL and never auto-discover

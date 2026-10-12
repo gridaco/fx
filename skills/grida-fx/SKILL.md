@@ -203,7 +203,10 @@ grida fx export ./runs/example --out ./review --json
 Use the exact saved folder. The engine requires a terminal, inactive invocation
 and a new destination. Values and diagnostics are withheld by default; include
 them only when the user intends that disclosure. Inspect the export receipt and
-omissions, and review its actual labels/media before sharing. A refusal is not
+omissions, and review its actual labels/media before sharing. Withheld values
+still show their shape (a file's digest, size and original filename), and media
+keep their embedded metadata (EXIF, a photo's location among it, and provider
+content credentials); tell the user before they publish. A refusal is not
 permission to resume, regenerate, replace a directory or publish.
 
 Python `RunRecord.export` / `export_async` and JavaScript `RunRecord.export`

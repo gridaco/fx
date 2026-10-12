@@ -270,6 +270,10 @@ route or publish the production Grida website.
 
 ## Publish to an object host
 
+Showcase recordings are FX exports: no credentials, call records or local paths. Their
+media keep what providers embedded, such as content credentials and generation
+labels, so content review covers that too.
+
 The prepared delivery tree is CDN-agnostic. Copy it to a public HTTPS host,
 preserving paths and bytes. Validate public SHA-256 bytes, MIME, CORS, HEAD and
 video ranges; a successful PUT or an S3 ETag alone is insufficient.

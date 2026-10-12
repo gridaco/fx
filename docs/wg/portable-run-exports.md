@@ -75,6 +75,10 @@ resource confinement and static controller behavior. A consumer must also check
 actual rendered behavior against its selected content; parser acceptance alone
 does not prove a page displays that evidence correctly.
 
+By design, an export discloses embedded media metadata and the shape of withheld
+values (digests, sizes, original filenames); [the export contract](../../spec/exports.md)
+lists them.
+
 Older records lacking imported-scope membership retain unused planned instances
 at root. The export client does not infer missing nesting from display paths.
 Unfinished/crashed captures, arbitrary attachment packaging, automatic
