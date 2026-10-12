@@ -31,6 +31,12 @@ export interface RunNode {
   duration_ms: number | null;
   /** When this instance last started, UTC; absent when the record cannot date it. */
   started_at?: string;
+  /** A `waiting` instance's route, whose slot its paid call waits for. */
+  waiting_for?: string;
+  /** When a `waiting` instance's earliest open wait began, UTC; absent when the record cannot date it. */
+  waiting_since?: string;
+  /** How long its latest start waited in admitted waits, overlaps counted once; its work is the time since `started_at` less this. */
+  waited_ms?: number;
   ports?: NodePorts;
   bindings?: PortBinding[];
   needs?: string[];
@@ -45,6 +51,10 @@ export interface ViewerRun {
   state: string;
   stand_in: boolean;
   charged_usd: number | null;
+  /** How long its invocations ran, each through its last record, summed. */
+  elapsed_ms?: number;
+  /** When its last record was written; an unfinished run has run `elapsed_ms` plus the time since. */
+  recorded_at?: string;
   estimate: { low_usd: number; high_usd: number } | null;
   inputs: Record<string, unknown>;
   outputs: Record<string, unknown>;
@@ -96,6 +106,9 @@ function node(value: unknown): value is RunNode {
     && nullableString(value.error)
     && nullableNumber(value.duration_ms)
     && (value.started_at === undefined || utcTimestamp(value.started_at))
+    && (value.waiting_for === undefined || typeof value.waiting_for === "string")
+    && (value.waiting_since === undefined || utcTimestamp(value.waiting_since))
+    && (value.waited_ms === undefined || (typeof value.waited_ms === "number" && Number.isSafeInteger(value.waited_ms) && value.waited_ms >= 0))
     && (value.ports === undefined || isNodePorts(value.ports))
     && (value.bindings === undefined || isPortBindings(value.bindings))
     && (value.needs === undefined || strings(value.needs))
@@ -128,6 +141,8 @@ export function parseViewerRun(value: unknown, apiBase = "/api"): ViewerRun {
     && typeof value.state === "string"
     && typeof value.stand_in === "boolean"
     && nullableNumber(value.charged_usd)
+    && (value.elapsed_ms === undefined || (typeof value.elapsed_ms === "number" && value.elapsed_ms >= 0))
+    && (value.recorded_at === undefined || utcTimestamp(value.recorded_at))
     && (value.estimate === null || (record(value.estimate)
       && typeof value.estimate.low_usd === "number"
       && typeof value.estimate.high_usd === "number"))
@@ -171,7 +186,9 @@ export * from "./state-icon";
 export * from "./navigation";
 export * from "./scopes";
 export * from "./observation";
+export { elapsedLabel } from "./card";
 export * from "./route";
 export * from "./service";
 export * from "./export";
 export * from "./export-controller";
+export * from "./values";

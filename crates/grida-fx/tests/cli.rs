@@ -332,7 +332,7 @@ fn integrated_doctor_without_a_target() {
     let text = stdout(&output);
     let lines: Vec<&str> = text.lines().collect();
     // engine, python, a key per provider, a route per built-in route.
-    assert_eq!(lines.len(), 2 + 6 + 26, "{text}");
+    assert_eq!(lines.len(), 2 + 6 + 27, "{text}");
     assert_eq!(
         lines[0],
         format!("engine    grida-fx {}", env!("CARGO_PKG_VERSION"))
@@ -351,14 +351,19 @@ fn integrated_doctor_without_a_target() {
     );
     let routes = &lines[8..];
     assert!(routes.iter().all(|l| l.starts_with("route     ")), "{text}");
-    let codex = "route     image.generate imagegen@codex not installed (codex)";
+    let codex = [
+        "route     image.edit imagegen@codex not installed (codex)",
+        "route     image.generate imagegen@codex not installed (codex)",
+    ];
     assert!(
         routes
             .iter()
-            .all(|l| l.contains(" no key (") || *l == codex),
+            .all(|l| l.contains(" no key (") || codex.contains(l)),
         "{text}"
     );
-    assert!(routes.contains(&codex), "{text}");
+    for line in codex {
+        assert!(routes.contains(&line), "{text}");
+    }
     let mut sorted = routes.to_vec();
     sorted.sort();
     assert_eq!(sorted, routes, "sorted by capability, then id");
@@ -421,8 +426,19 @@ fn integrated_doctor_lists_the_projects_routes() {
     );
     for argv in [&["doctor"][..], &["doctor", "case"][..]] {
         let output = grida_fx(project.path(), argv);
-        assert_eq!(status(&output), 0, "{argv:?}: {}", stderr(&output));
         let text = stdout(&output);
+        if argv.len() == 1 {
+            assert_eq!(status(&output), 0, "{argv:?}: {}", stderr(&output));
+            assert!(!text.contains("\nuses "), "{text}");
+        } else {
+            // The target's one route leads, and no adapter serves it: a live run could not.
+            assert_eq!(status(&output), 1, "{argv:?}: {}", stderr(&output));
+            assert_eq!(
+                text.lines().nth(2),
+                Some("uses      image.generate img-a@acme no adapter (1 step)"),
+                "{text}"
+            );
+        }
         let images: Vec<&str> = text
             .lines()
             .filter(|l| l.starts_with("route     image.generate "))
@@ -441,7 +457,7 @@ fn integrated_doctor_lists_the_projects_routes() {
             ],
             "{argv:?}"
         );
-        assert_eq!(text.lines().filter(|l| l.starts_with("route ")).count(), 27);
+        assert_eq!(text.lines().filter(|l| l.starts_with("route ")).count(), 28);
     }
 }
 
@@ -463,11 +479,21 @@ fn integrated_doctor_names_the_planning_projects_interpreter_after_the_homes() {
     )
     .unwrap();
     let output = grida_fx(root, &["doctor", "case"]);
-    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    // `img-a@acme` is in no catalog here: a live run could not serve it.
+    assert_eq!(status(&output), 1, "{}", stderr(&output));
     let text = stdout(&output);
     assert_eq!(
         text.lines().nth(1),
-        Some("python    ../../.venv/bin/python NOT FOUND"),
+        Some(
+            "python    ../../.venv/bin/python cannot start: the Python node host \
+             (../../.venv/bin/python) exited with status 3 before it answered initialize; set \
+             GRIDA_FX_PYTHON to a Python that has the grida package"
+        ),
+        "{text}"
+    );
+    assert_eq!(
+        text.lines().nth(2),
+        Some("uses      image.generate img-a@acme not in the catalog (1 step)"),
         "{text}"
     );
     // The home's own interpreter comes first.
@@ -475,10 +501,153 @@ fn integrated_doctor_names_the_planning_projects_interpreter_after_the_homes() {
     std::fs::create_dir_all(&bin).unwrap();
     std::fs::copy(root.join(".venv/bin/python"), bin.join("python")).unwrap();
     let text = stdout(&grida_fx(root, &["doctor", "case"]));
-    assert_eq!(
-        text.lines().nth(1),
-        Some("python    .venv/bin/python NOT FOUND"),
+    assert!(
+        text.lines()
+            .nth(1)
+            .is_some_and(|line| line.starts_with("python    .venv/bin/python cannot start: ")),
         "{text}"
+    );
+}
+
+#[test]
+fn integrated_doctor_puts_the_targets_routes_first() {
+    let project = tempfile::tempdir().unwrap();
+    let root = project.path();
+    std::fs::write(
+        root.join("fx.yaml"),
+        "fx: project/v1\nroutes:\n  image.generate: imagegen@codex\n",
+    )
+    .unwrap();
+    std::fs::create_dir(root.join("workflows")).unwrap();
+    std::fs::write(
+        root.join("workflows/case.yaml"),
+        "fx: workflow/v1\nid: case\ntitle: Case\nsteps:\n  draw:\n    uses: \
+         fx/image.generate@1\n    with: { prompt: a kite }\n  more:\n    steps:\n      again:\n        \
+         uses: fx/image.generate@1\n        with: { prompt: a boat }\n  keyed:\n    uses: \
+         fx/image.generate@1\n    route: openai/gpt-image-2.5-sunburst@gg\n    with: { prompt: a \
+         cat }\n  inner:\n    uses: ./workflows/inner.yaml\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("workflows/inner.yaml"),
+        "fx: workflow/v1\nid: inner\ntitle: Inner\nsteps:\n  paint:\n    uses: \
+         fx/image.generate@1\n    with: { prompt: a fish }\n",
+    )
+    .unwrap();
+    let doctor = |codex: &Path| {
+        command(root, &["doctor", "case"])
+            .env("GG_API_KEY", MADE_UP_KEY)
+            .env("GRIDA_FX_TOOL_CODEX", codex)
+            .output()
+            .unwrap()
+    };
+    // No Codex: three steps, one in a group and one in a used workflow, cannot be served.
+    let output = doctor(&root.join("no-codex"));
+    assert_eq!(status(&output), 1, "{}", stderr(&output));
+    assert_no_key(&output);
+    let text = stdout(&output);
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(
+        lines[2..4],
+        [
+            "uses      image.generate imagegen@codex not installed (codex) (3 steps)",
+            "uses      image.generate openai/gpt-image-2.5-sunburst@gg servable (1 step)",
+        ],
+        "{text}"
+    );
+    assert!(lines[4].starts_with("key       "), "{text}");
+    // The full catalog still follows.
+    assert!(
+        text.contains("\nroute     image.generate imagegen@codex not installed (codex)\n"),
+        "{text}"
+    );
+    // With Codex installed (doctor only looks for it), every route the target uses is servable.
+    let codex = root.join("codex");
+    grida_fx_providers::testing::write_program(&codex, "#!/bin/sh\nexit 0\n");
+    let output = doctor(&codex);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    assert_eq!(
+        stdout(&output).lines().nth(2),
+        Some("uses      image.generate imagegen@codex servable (3 steps)")
+    );
+}
+
+/// A project whose workflow uses a Python node, and an interpreter at `python` that answers the
+/// version check with `answer` and otherwise, as Python before 3.11 does with `-P`, prints usage
+/// text and exits 2, leaving `started.txt` behind.
+fn interpreter_project(answer: &str) -> (tempfile::TempDir, PathBuf) {
+    let project = tempfile::tempdir().unwrap();
+    let root = project.path();
+    std::fs::write(root.join("fx.yaml"), "fx: project/v1\n").unwrap();
+    std::fs::create_dir(root.join("nodes")).unwrap();
+    std::fs::write(root.join("nodes/shout.py"), "").unwrap();
+    std::fs::write(
+        root.join("case.yaml"),
+        "fx: workflow/v1\nid: case\ntitle: Case\nsteps:\n  shout:\n    uses: \
+         ./nodes/shout.py#shout\n",
+    )
+    .unwrap();
+    let python = root.join("old-python");
+    grida_fx_providers::testing::write_program(
+        &python,
+        &format!(
+            "#!/bin/sh\nif [ \"$1\" = -c ]; then echo '{answer}'; exit 0; fi\necho 'Unknown option: \
+             -P' >&2\necho usage: python3 >&2\ntouch \"$(dirname \"$0\")/started.txt\"\nexit 2\n"
+        ),
+    );
+    (project, python)
+}
+
+#[test]
+fn integrated_a_python_before_3_11_is_refused_before_it_starts() {
+    let (project, python) = interpreter_project("fx-python 3.9.6 1");
+    let root = project.path();
+    let output = command(root, &["doctor"])
+        .env("GRIDA_FX_PYTHON", &python)
+        .output()
+        .unwrap();
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    assert_eq!(
+        stdout(&output).lines().nth(1),
+        // Inside the project, the interpreter is named relative to it, on every platform.
+        Some("python    old-python too old (3.9.6; FX needs 3.11+)")
+    );
+    assert!(stderr(&output).is_empty(), "{}", stderr(&output));
+    let output = command(root, &["plan", "case.yaml"])
+        .env("GRIDA_FX_PYTHON", &python)
+        .output()
+        .unwrap();
+    assert_eq!(status(&output), 2, "{}", stdout(&output));
+    assert_eq!(
+        stderr(&output),
+        "grida-fx: old-python is Python 3.9.6; FX's node host needs Python 3.11 or later with \
+         grida: run uv sync or pip install grida in the project, or set GRIDA_FX_PYTHON\n"
+    );
+    assert!(!root.join("started.txt").exists(), "the host was started");
+}
+
+#[test]
+fn integrated_doctor_says_when_the_interpreter_has_no_grida() {
+    let (project, python) = interpreter_project("fx-python 3.12.4 0");
+    let output = command(project.path(), &["doctor"])
+        .env("GRIDA_FX_PYTHON", &python)
+        .output()
+        .unwrap();
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    assert_eq!(
+        stdout(&output).lines().nth(1),
+        Some("python    old-python no grida")
+    );
+    assert!(!project.path().join("started.txt").exists());
+    // A program that does not exist is still NOT FOUND.
+    let missing = project.path().join("no-such-python");
+    let output = command(project.path(), &["doctor"])
+        .env("GRIDA_FX_PYTHON", &missing)
+        .output()
+        .unwrap();
+    assert_eq!(
+        stdout(&output).lines().nth(1),
+        Some("python    no-such-python NOT FOUND")
     );
 }
 
@@ -1311,6 +1480,58 @@ fn hand_made_run(project: &Path, relative: &str) -> (PathBuf, String) {
     (folder, digest)
 }
 
+/// Appends a live invocation's `run_started` that records `repeat` to a hand-made run's log.
+fn add_repeat(folder: &Path) {
+    let log = folder.join("events.jsonl");
+    let mut text = std::fs::read_to_string(&log).unwrap();
+    text.push_str(&event_line(
+        "run_started",
+        json!({"workflow": "case", "resumed": true, "ceiling_usd": 2, "charged_usd": 0.04,
+               "estimate": {"low_usd": 0, "high_usd": 0},
+               "repeat": {"file": "workflows/case.yaml", "inputs": ["inputs/x y.yaml"],
+                          "max_usd": 2, "live": true}}),
+    ));
+    std::fs::write(&log, text).unwrap();
+}
+
+/// Records a hand-made run's folder in its project's run index, as `run` does (spec/store.md §9).
+fn index_run(project: &Path, relative: &str) {
+    let index = project.join(".fx/runs");
+    std::fs::create_dir_all(&index).unwrap();
+    std::fs::write(
+        index.join(format!("{}.json", digest_of(relative.as_bytes()))),
+        format!("{}\n", json!({"folder": relative})),
+    )
+    .unwrap();
+}
+
+/// A run of another project's workflow, rerolled from this one: the takes file and the command
+/// are the planning project's, the one whose run index records the run folder.
+#[test]
+fn integrated_reroll_of_another_projects_run() {
+    let here = drawing_project(ROUTED);
+    let there = drawing_project(ROUTED);
+    hand_made_run(there.path(), "runs/one");
+    add_repeat(&there.path().join("runs/one"));
+    index_run(there.path(), "runs/one");
+    let there_name = there.path().canonicalize().unwrap();
+    let there_name = there_name.file_name().unwrap().to_str().unwrap();
+    let here_root = here.path().canonicalize().unwrap();
+    let run = format!("../{there_name}/runs/one");
+    let output = grida_fx(&here_root, &["reroll", &run, "draw"]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    assert_eq!(
+        stdout(&output),
+        format!(
+            "case.takes.yaml: draw uses take 2 from now on\n\
+             next      grida-fx run ../{there_name}/workflows/case.yaml --inputs \
+             '../{there_name}/inputs/x y.yaml' --max-usd 2 --live\n"
+        )
+    );
+    assert!(there.path().join("workflows/case.takes.yaml").is_file());
+    assert!(!here.path().join("workflows/case.takes.yaml").exists());
+}
+
 /// The SHA-256 of some bytes, as the engine names files (the CLI crate has no hasher of its
 /// own, so the test asks the system's `shasum` or `sha256sum`).
 fn digest_of(bytes: &[u8]) -> String {
@@ -1418,20 +1639,40 @@ fn integrated_reroll_and_pick_over_a_hand_made_run() {
     let project = drawing_project(ROUTED);
     let (_, digest) = hand_made_run(project.path(), "runs/one");
     let takes = project.path().join("workflows/case.takes.yaml");
+    // Its record holds no `repeat`: advice, whatever `--live` (kept, and ignored) says.
     let output = grida_fx(project.path(), &["reroll", "runs/one", "draw", "--live"]);
     assert_eq!(status(&output), 0, "{}", stderr(&output));
     assert_eq!(
         stdout(&output),
-        "case.takes.yaml: draw uses take 2 from now on\nnext      grida-fx run case --live\n"
+        "case.takes.yaml: draw uses take 2 from now on\n\
+         next      run case again with the same inputs and options\n"
     );
     let output = grida_fx(project.path(), &["takes", "list", "case"]);
     assert_eq!(stdout(&output), "draw  take 2\n");
     let output = grida_fx(project.path(), &["reroll", "runs/one", "zzz"]);
     assert_eq!(status(&output), 2);
     assert_eq!(stderr(&output), "grida-fx: runs/one never ran a step zzz\n");
+    // A later, live invocation that records `repeat`: the command, its paths relative to the
+    // working directory, once the project's run index records the folder.
+    add_repeat(&project.path().join("runs/one"));
     let output = grida_fx(project.path(), &["pick", "runs/one", "draw", "1"]);
     assert_eq!(status(&output), 0, "{}", stderr(&output));
-    assert_eq!(stdout(&output), "case.takes.yaml: draw uses take 1\n");
+    assert!(
+        stdout(&output).ends_with("next      run case again with the same inputs and options\n"),
+        "{}",
+        stdout(&output)
+    );
+    index_run(project.path(), "runs/one");
+    let output = grida_fx(
+        &project.path().join("workflows"),
+        &["pick", "../runs/one", "draw", "1"],
+    );
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    assert_eq!(
+        stdout(&output),
+        "case.takes.yaml: draw uses take 1\n\
+         next      grida-fx run case.yaml --inputs '../inputs/x y.yaml' --max-usd 2 --live\n"
+    );
     let output = grida_fx(project.path(), &["takes", "list", "case"]);
     assert_eq!(stdout(&output), format!("draw  take 1  {digest}\n"));
     // A take that never finished here is picked without a result.
@@ -1447,6 +1688,55 @@ fn integrated_reroll_and_pick_over_a_hand_made_run() {
         stdout(&output),
         format!("draw  take 1  {digest}\nother  take 7\n")
     );
+}
+
+#[test]
+fn integrated_run_started_records_how_to_repeat_the_run() {
+    let project = empty_project();
+    let root = project.path();
+    std::fs::write(
+        root.join("case.yaml"),
+        "fx: workflow/v1\nid: case\ntitle: Case\nsteps:\n  pack:\n    uses: fx/package@1\n    \
+         with: { files: {}, manifest: { n: 1 } }\n",
+    )
+    .unwrap();
+    let repeat = |folder: &str, args: &[&str], sdk: bool| {
+        let mut argv = vec!["run"];
+        argv.extend_from_slice(args);
+        argv.extend_from_slice(&["--run", folder, "--no-view"]);
+        let mut command = command(root, &argv);
+        if sdk {
+            command.env("GRIDA_FX_CANCEL_SOURCE", "sdk");
+        }
+        // Whether the step's host starts does not matter: the record starts before it.
+        let output = command.output().unwrap();
+        assert!(
+            status(&output) <= 1,
+            "{}{}",
+            stdout(&output),
+            stderr(&output)
+        );
+        events(&root.join(folder))
+            .into_iter()
+            .find(|event| event["event"] == "run_started")
+            .expect("a run_started")
+            .get("repeat")
+            .cloned()
+    };
+    assert_eq!(
+        repeat("runs/id", &["case"], false),
+        Some(json!({"workflow": "case", "live": false}))
+    );
+    assert_eq!(
+        repeat(
+            "runs/live",
+            &["./case.yaml", "--live", "--max-usd", "1"],
+            false
+        ),
+        Some(json!({"file": "case.yaml", "max_usd": 1, "live": true}))
+    );
+    // An SDK's inputs file is temporary: nothing to repeat from.
+    assert_eq!(repeat("runs/sdk", &["case"], true), None);
 }
 
 /// A job record as the store writes it (fx-job-record-v1).

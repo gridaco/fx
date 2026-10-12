@@ -46,6 +46,13 @@
    },
    "event": "run_started",
    "plan": "8a1fa9996c72f5d12c02fdd27ebe85045225e60b719f49f0026b1643c5cdcfbb",
+   "repeat": {
+    "live": false,
+    "routes": [
+     "routes.yaml"
+    ],
+    "workflow": "case"
+   },
    "resumed": false,
    "workflow": "case"
   }

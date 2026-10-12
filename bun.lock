@@ -7,7 +7,7 @@
     },
     "js/fx-react": {
       "name": "@grida/fx-react",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "dependencies": {
         "@grida/fx-web": "workspace:*",
       },
@@ -20,7 +20,10 @@
     },
     "js/fx-web": {
       "name": "@grida/fx-web",
-      "version": "0.4.0",
+      "version": "0.5.0",
+      "dependencies": {
+        "lucide": "1.52.0",
+      },
     },
     "web/viewer": {
       "name": "@grida/fx-viewer",
@@ -337,6 +340,8 @@
     "lightningcss-win32-arm64-msvc": ["lightningcss-win32-arm64-msvc@1.33.0", "", { "os": "win32", "cpu": "arm64" }, "sha512-1K+MPfLSFVpphzpdbfkhlWk6wBrTObBzS2T6db10PNOZgR9GoVsAWzwNyuhUYYbTp23j+4RrncfujZ4uAzXvwA=="],
 
     "lightningcss-win32-x64-msvc": ["lightningcss-win32-x64-msvc@1.33.0", "", { "os": "win32", "cpu": "x64" }, "sha512-OlEICDx/Xl0FqSp4bry8zFnCvGpig3Gl4gCquvYwHuqJKEC1+n9NgDniFvqHGmMv1ZkqDJrDqKKSykTDX+ehuA=="],
+
+    "lucide": ["lucide@1.52.0", "", {}, "sha512-XlP0U+m3seobjTPfT0Ybg9YqJeTwSxx1I6R2Ty7vwpA/4HtibMbV28p9tW7AnIwb77YkTboK9x/OPBEqGAzCFg=="],
 
     "lucide-react": ["lucide-react@1.52.0", "", { "peerDependencies": { "@types/react": "*", "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0" }, "optionalPeers": ["@types/react"] }, "sha512-TUgPtl5ZI9WgxOcbu4ckaC5B3l1qxPQrCMgb6OfUB9owx/OvSJfcf93SMgUWAxRw5/1XDfh9uI5F5iNGXCcGDQ=="],
 

@@ -1,0 +1,27 @@
+fx: workflow/v1
+id: case
+title: What a request asks of its route
+steps:
+  base:
+    uses: fx/image.generate@1
+    with: { prompt: a kite }
+  copy:
+    uses: fx/image.generate@1
+    with:
+      prompt: the kite again
+      size: 1024x1024
+      background: transparent
+      references: ["${{ steps.base.outputs.image }}"]
+  fine:
+    uses: fx/image.generate@1
+    route: img-r@acme
+    with:
+      prompt: three kites
+      background: transparent
+      references: ["${{ steps.base.outputs.image }}", "${{ steps.base.outputs.image }}"]
+  fix:
+    uses: fx/image.edit@1
+    with:
+      prompt: a red kite
+      image: ${{ steps.base.outputs.image }}
+      references: ["${{ steps.base.outputs.image }}", "${{ steps.base.outputs.image }}"]

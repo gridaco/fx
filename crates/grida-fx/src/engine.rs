@@ -200,6 +200,7 @@ fn host_spec(planner: &Planner, env: &dyn Fn(&str) -> Option<String>) -> HostSpe
         python,
         project_root: home.root.clone(),
         sources: home.document.sources.clone(),
+        check_version: true,
     }
 }
 

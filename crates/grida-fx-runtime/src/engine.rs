@@ -480,6 +480,7 @@ mod tests {
                 label: "python3".into(),
                 project_root: root.clone(),
                 sources: Vec::new(),
+                check_version: false,
             },
             &root.join(".fx/cache"),
             1,

@@ -1,0 +1,5 @@
+fx: routes/v1
+routes:
+  - { capability: image.generate, route: img-a@acme, price: { usd: 0.01 }, features: [text_to_image, auto_background] }
+  - { capability: image.generate, route: img-r@acme, price: { usd: 0.02 }, features: [image_input, alpha], max_input_pictures: 3 }
+  - { capability: image.edit, route: img-e@acme, price: { usd: 0.03 }, features: [image_input], max_input_pictures: 2 }

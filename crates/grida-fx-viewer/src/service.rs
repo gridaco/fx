@@ -741,6 +741,19 @@ struct ServiceState {
     stop: Arc<Mutex<Option<oneshot::Sender<()>>>>,
 }
 
+/// The loopback listener could not be bound. [`bind`] wraps that error, keeping its kind, so the
+/// owner can tell a refused port from unavailable local state and name the port.
+#[derive(Debug)]
+pub struct ListenFailed(pub io::Error);
+
+impl std::fmt::Display for ListenFailed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl std::error::Error for ListenFailed {}
+
 /// Binds a persistent project service. The receiver resolves after an authenticated stop request;
 /// the owner combines it with process signals and passes that future to Server::serve_until.
 pub async fn bind(
@@ -755,8 +768,9 @@ pub async fn bind(
         ));
     }
     catalog.check_state()?;
-    let listener =
-        tokio::net::TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, port))).await?;
+    let listener = tokio::net::TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, port)))
+        .await
+        .map_err(|error| io::Error::new(error.kind(), ListenFailed(error)))?;
     let authority = listener.local_addr()?.to_string();
     let url = format!("http://{authority}/");
     let (sender, receiver) = oneshot::channel();

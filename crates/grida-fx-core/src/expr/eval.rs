@@ -2,9 +2,10 @@
 //!
 //! Strictly left to right, depth first; call arguments are all evaluated before the arity check.
 //! Short-circuited operands are never evaluated (they record no reads and raise nothing). `??`
-//! replaces only null and missing; `&&`/`||` return an operand. `==`/`!=` compare plain forms
-//! with FX's equality ([`plain_eq`]); numeric operators take numbers only and refuse a result
-//! that is not finite.
+//! replaces only null and missing, and a field an object lacks is missing when its access is
+//! `??`'s whole left operand (spec/expressions.md §2); `&&`/`||` return an operand. `==`/`!=`
+//! compare plain forms with FX's equality ([`plain_eq`]); numeric operators take numbers only and
+//! refuse a result that is not finite.
 //!
 //! Pending values propagate through unary operators, members, `.*`, indexes (target or index; a
 //! repeat indexed by a pending key waits on the key and on every instance of the repeat),
@@ -92,29 +93,70 @@ pub trait Scope {
 pub fn evaluate<S: Scope + ?Sized>(expr: &Expr, scope: &mut S) -> Result<Val, ExprError> {
     match expr {
         Expr::Name(name) => scope.root(name),
-        Expr::Field(..) | Expr::Index(..) | Expr::Every(..) => access(scope, expr),
+        Expr::Field(..) | Expr::Index(..) | Expr::Every(..) => access(scope, expr, false),
         other => evaluate_other(scope, other),
+    }
+}
+
+/// `??`'s left operand: an access whose last field an object lacks is missing (spec/expressions.md
+/// §2), unless it names an input, a table or a step's output, which the workflow and its types
+/// declare; any other expression evaluates as anywhere.
+fn fallback_operand<S: Scope + ?Sized>(scope: &mut S, expr: &Expr) -> Result<Val, ExprError> {
+    match expr {
+        Expr::Field(target, _) | Expr::Index(target, _) if !declared(target) => {
+            access(scope, expr, true)
+        }
+        other => evaluate(other, scope),
+    }
+}
+
+/// `inputs`, `tables` and `steps.<…>.outputs`: values whose every name the workflow or a step's
+/// type declares, so a missing one is a misspelling even under `??`.
+fn declared(target: &Expr) -> bool {
+    match target {
+        Expr::Name(name) => name == "inputs" || name == "tables",
+        Expr::Field(step, name) if name == "outputs" => {
+            let mut root = step.as_ref();
+            while let Expr::Field(inner, _) | Expr::Index(inner, _) | Expr::Every(inner) = root {
+                root = inner;
+            }
+            matches!(root, Expr::Name(name) if name == "steps")
+        }
+        _ => false,
     }
 }
 
 /// A chain of `.name`, `[index]` and `.*` in one frame: the innermost target first, then each
 /// access in order (an index is evaluated right after the target it indexes), so
-/// `steps.x.outputs.text` does not nest a frame per access.
+/// `steps.x.outputs.text` does not nest a frame per access. With `absent_missing`, a last field
+/// the object lacks is missing instead of an error.
 #[inline(never)]
-fn access<S: Scope + ?Sized>(scope: &mut S, expr: &Expr) -> Result<Val, ExprError> {
+fn access<S: Scope + ?Sized>(
+    scope: &mut S,
+    expr: &Expr,
+    absent_missing: bool,
+) -> Result<Val, ExprError> {
     scope.begin_access();
-    let result = access_chain(scope, expr);
+    let result = access_chain(scope, expr, absent_missing);
     scope.end_access(result.is_ok());
     result
 }
 
 #[inline(never)]
-fn access_chain<S: Scope + ?Sized>(scope: &mut S, expr: &Expr) -> Result<Val, ExprError> {
+fn access_chain<S: Scope + ?Sized>(
+    scope: &mut S,
+    expr: &Expr,
+    absent_missing: bool,
+) -> Result<Val, ExprError> {
     let mut at = links(expr);
     let mut value = evaluate(link(expr, at), scope)?;
     while at > 0 {
         at -= 1;
-        value = apply(scope, link(expr, at), value)?;
+        value = if at == 0 && absent_missing {
+            apply_or_missing(scope, link(expr, at), value)?
+        } else {
+            apply(scope, link(expr, at), value)?
+        };
     }
     Ok(value)
 }
@@ -158,10 +200,54 @@ fn apply<S: Scope + ?Sized>(scope: &mut S, link: &Expr, value: Val) -> Result<Va
     }
 }
 
+/// The last access of `??`'s left operand: `.name` or `['name']` of an object without `name` is
+/// missing, and its read is no source of the result; any other access applies as [`apply`] does.
+#[inline(never)]
+fn apply_or_missing<S: Scope + ?Sized>(
+    scope: &mut S,
+    link: &Expr,
+    value: Val,
+) -> Result<Val, ExprError> {
+    match link {
+        Expr::Field(_, name) if lacks(&value, name) => {
+            scope.access_unknown_member();
+            Ok(Val::Missing)
+        }
+        Expr::Index(_, index) => {
+            let index = evaluate(index, scope)?;
+            if let Val::Str(name) = &index
+                && lacks(&value, name)
+            {
+                scope.access_unknown_member();
+                return Ok(Val::Missing);
+            }
+            item_of(scope, value, index)
+        }
+        _ => apply(scope, link, value),
+    }
+}
+
+/// Whether `value` is an object, or a file whose JSON content is one, without `name`.
+fn lacks(value: &Val, name: &str) -> bool {
+    match value {
+        Val::Object(map) => !map.contains_key(name),
+        Val::File(file) => match &file.content {
+            Some(FileContent::Json(Value::Object(map))) => !map.contains_key(name),
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
 /// `value[index]`: the index evaluated, then the item.
 #[inline(never)]
 fn indexed<S: Scope + ?Sized>(scope: &mut S, value: Val, index: &Expr) -> Result<Val, ExprError> {
     let index = evaluate(index, scope)?;
+    item_of(scope, value, index)
+}
+
+/// `value[index]` of an evaluated index.
+fn item_of<S: Scope + ?Sized>(scope: &mut S, value: Val, index: Val) -> Result<Val, ExprError> {
     if let Val::Str(name) = &index {
         scope.access_member(name);
     } else {
@@ -180,7 +266,7 @@ fn evaluate_other<S: Scope + ?Sized>(scope: &mut S, expr: &Expr) -> Result<Val, 
         Expr::Literal(literal) => Ok(literal_value(literal)),
         // Handled by `evaluate`.
         Expr::Name(name) => scope.root(name),
-        _ => access(scope, expr),
+        _ => access(scope, expr, false),
     }
 }
 
@@ -230,7 +316,11 @@ fn binary<S: Scope + ?Sized>(
     left: &Expr,
     right: &Expr,
 ) -> Result<Val, ExprError> {
-    let left = evaluate(left, scope)?;
+    let left = if op == BinaryOp::Coalesce {
+        fallback_operand(scope, left)?
+    } else {
+        evaluate(left, scope)?
+    };
     let left = match short_circuit(op, left) {
         Ok(decided) => return Ok(decided),
         Err(left) => left,

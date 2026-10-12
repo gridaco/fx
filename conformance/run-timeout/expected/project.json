@@ -28,6 +28,13 @@
    },
    "event": "run_started",
    "plan": "cbf2fe924b8df922563ec6cb73c8e0cdd4cd0347ecabc1e63b3d8c5edf91f92b",
+   "repeat": {
+    "live": false,
+    "routes": [
+     "routes.yaml"
+    ],
+    "workflow": "case"
+   },
    "resumed": false,
    "workflow": "case"
   }

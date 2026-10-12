@@ -112,7 +112,7 @@ use grida_fx_core::value::is_digest;
 use grida_fx_protocol::{ErrorCode, RpcError, StandInAnswerParams, StandInInstance, StandInRoute};
 use grida_fx_providers::{Adapter, Answer, CallRequest, RequestFile, RouteRef};
 use indexmap::IndexMap;
-use retry::{AnswerCheck, Attempts, Backoff, HoldBook, Outcome};
+use retry::{AnswerCheck, Attempts, Backoff, HoldBook, Outcome, Waits};
 use serde_json::{Map, Value};
 use std::sync::{Arc, Mutex};
 
@@ -818,6 +818,13 @@ impl Lead<'_> {
             unrecorded: Mutex::new(None),
         };
         let hold_name = || services.next_hold(&site.instance_id);
+        let waits = RouteWaits {
+            services,
+            id: &site.instance_id,
+            capability,
+            route: &route_id,
+            call: &key,
+        };
         let attempts = Attempts {
             control: Some(&services.control),
             call: CallRequest {
@@ -842,6 +849,7 @@ impl Lead<'_> {
             book: &tally,
             jobs: &**store,
             pacing: &*services.pacing,
+            waits: Some(&waits),
             cancel: &services.cancel,
             backoff: Backoff::default(),
             job: matches!(adapter, Adapter::Job(_)).then_some(job_template),
@@ -1137,6 +1145,45 @@ impl Lead<'_> {
             files: answered,
             data,
         }))
+    }
+}
+
+/// Records a call's waits for its route's slot as `call_waiting` and `call_admitted`
+/// (spec/store.md §8, "Waiting for a route"); nothing while planning. The event log keeps its own
+/// failure, which stops the run.
+struct RouteWaits<'a> {
+    services: &'a Services,
+    id: &'a str,
+    capability: &'a str,
+    route: &'a str,
+    call: &'a str,
+}
+
+impl RouteWaits<'_> {
+    fn emit(&self, event: Event) {
+        if let Some(events) = &self.services.events {
+            let _ = events.emit(&event);
+        }
+    }
+}
+
+impl Waits for RouteWaits<'_> {
+    fn waiting(&self) {
+        self.emit(Event::CallWaiting {
+            id: self.id.to_string(),
+            capability: self.capability.to_string(),
+            route: self.route.to_string(),
+            call: self.call.to_string(),
+        });
+    }
+
+    fn admitted(&self) {
+        self.emit(Event::CallAdmitted {
+            id: self.id.to_string(),
+            capability: self.capability.to_string(),
+            route: self.route.to_string(),
+            call: self.call.to_string(),
+        });
     }
 }
 

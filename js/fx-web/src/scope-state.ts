@@ -13,6 +13,8 @@ export function scopeState(states: readonly string[], plan: boolean): string {
     return "unknown";
   }
   if (has("running")) return "running";
+  // Work started and none of it runs: every active child waits for a route's slot.
+  if (has("waiting")) return "waiting";
   if (has("failed")) return "failed";
   if (has("blocked")) return "blocked";
   if (has("cancelled")) return "cancelled";

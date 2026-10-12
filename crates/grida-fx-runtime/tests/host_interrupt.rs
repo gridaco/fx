@@ -73,6 +73,7 @@ async fn ending_every_host_kills_their_groups_and_starts_no_more() {
         label: "python-host".into(),
         project_root: dir.path().to_path_buf(),
         sources: Vec::new(),
+        check_version: false,
     };
     let mut hosts = Vec::new();
     for _ in 0..2 {

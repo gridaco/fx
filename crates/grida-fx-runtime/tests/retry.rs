@@ -199,6 +199,7 @@ impl Admission for Gate {
         limit: Option<u32>,
         rpm: Option<u32>,
         cancel: &'a Cancel,
+        _waiting: &'a (dyn Fn() + Sync),
     ) -> BoxFuture<'a, Option<Slot>> {
         Box::pin(async move {
             let n = {
@@ -317,6 +318,7 @@ impl Rig {
             book: &self.book,
             jobs: &self.jobs,
             pacing: &self.gate,
+            waits: None,
             cancel: &self.cancel,
             backoff: Backoff::default(),
             job,
@@ -432,6 +434,7 @@ impl Admission for CancelAtSlot {
         _limit: Option<u32>,
         _rpm: Option<u32>,
         _cancel: &'a Cancel,
+        _waiting: &'a (dyn Fn() + Sync),
     ) -> BoxFuture<'a, Option<Slot>> {
         Box::pin(async move {
             if self.admitted.fetch_add(1, Ordering::SeqCst) + 1 == self.at {

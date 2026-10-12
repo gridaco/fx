@@ -215,6 +215,7 @@ impl Fixture {
             label: "python-fake".into(),
             project_root: root.clone(),
             sources: Vec::new(),
+            check_version: false,
         };
         Fixture {
             _dir: dir,
@@ -903,6 +904,7 @@ async fn a_pool_that_cannot_start_hosts_says_why() {
             label: "no-such-python-for-fx".into(),
             project_root: dir.path().to_path_buf(),
             sources: Vec::new(),
+            check_version: false,
         },
         2,
     ));

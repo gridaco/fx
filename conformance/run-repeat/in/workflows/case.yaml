@@ -1,0 +1,11 @@
+fx: workflow/v1
+id: case
+title: A run repeated after a reroll
+inputs:
+  text: { type: string }
+steps:
+  a:
+    uses: ./nodes/takes.py#make
+    with: { text: "${{ inputs.text }}" }
+outputs:
+  out: ${{ steps.a.outputs.text }}

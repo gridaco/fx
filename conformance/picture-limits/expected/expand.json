@@ -1,0 +1,356 @@
+{
+ "estimate": {
+  "ceiling_usd": null,
+  "high_usd": 0.07,
+  "low_usd": 0.07
+ },
+ "instances": [
+  {
+   "bindings": [],
+   "id": "base#1",
+   "identity": "bbb4a14e9e0ec26d0f9904231b52a0d30a391fa09acaa4bd5c3508be0991fc14",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "base",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.01,
+    "low_usd": 0.01
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+     "route": "img-a@acme"
+    }
+   },
+   "state": "planned",
+   "step": "base",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "a kite",
+    "vars": {}
+   }
+  },
+  {
+   "bindings": [
+    {
+     "source": "base#1",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "references"
+    }
+   ],
+   "id": "copy#1",
+   "identity": null,
+   "interface_bindings": [
+    {
+     "source": "base#1",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "references"
+    }
+   ],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "copy",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.01,
+    "low_usd": 0.01
+   },
+   "reads": [
+    "base#1"
+   ],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+     "route": "img-a@acme"
+    }
+   },
+   "state": "planned",
+   "step": "copy",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [
+    "base#1"
+   ],
+   "with": {
+    "background": "transparent",
+    "prompt": "the kite again",
+    "references": [
+     {
+      "pending": [
+       "base#1"
+      ]
+     }
+    ],
+    "size": "1024x1024",
+    "vars": {}
+   }
+  },
+  {
+   "bindings": [
+    {
+     "source": "base#1",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "references"
+    }
+   ],
+   "id": "fine#1",
+   "identity": null,
+   "interface_bindings": [
+    {
+     "source": "base#1",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "references"
+    }
+   ],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "fine",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.02,
+    "low_usd": 0.02
+   },
+   "reads": [
+    "base#1"
+   ],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "ebf000bec17bdca710b37cfb72fa2001437c0176c7cb393869fdbc02735b4ed2",
+     "route": "img-r@acme"
+    }
+   },
+   "state": "planned",
+   "step": "fine",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [
+    "base#1"
+   ],
+   "with": {
+    "background": "transparent",
+    "prompt": "three kites",
+    "references": [
+     {
+      "pending": [
+       "base#1"
+      ]
+     },
+     {
+      "pending": [
+       "base#1"
+      ]
+     }
+    ],
+    "vars": {}
+   }
+  },
+  {
+   "bindings": [
+    {
+     "source": "base#1",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "image"
+    },
+    {
+     "source": "base#1",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "references"
+    }
+   ],
+   "id": "fix#1",
+   "identity": null,
+   "interface_bindings": [
+    {
+     "source": "base#1",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "image"
+    },
+    {
+     "source": "base#1",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "references"
+    }
+   ],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "fix",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.03,
+    "low_usd": 0.03
+   },
+   "reads": [
+    "base#1"
+   ],
+   "routes": {
+    "image.edit": {
+     "fingerprint": "76b3f67f46fa8b900a846603d289c2b847d36e0bd98a17b599063cf0482f0bed",
+     "route": "img-e@acme"
+    }
+   },
+   "state": "planned",
+   "step": "fix",
+   "take": [
+    1
+   ],
+   "type": "fx/image.edit@1.1",
+   "uses": "fx/image.edit@1",
+   "view": false,
+   "waiting_on": [
+    "base#1"
+   ],
+   "with": {
+    "background": "auto",
+    "image": {
+     "pending": [
+      "base#1"
+     ]
+    },
+    "prompt": "a red kite",
+    "references": [
+     {
+      "pending": [
+       "base#1"
+      ]
+     },
+     {
+      "pending": [
+       "base#1"
+      ]
+     }
+    ],
+    "vars": {}
+   }
+  }
+ ],
+ "kind": "fx-graph-v1",
+ "pending": [],
+ "problems": [
+  {
+   "message": "img-a@acme does not support image_input",
+   "where": "copy.with.references"
+  },
+  {
+   "message": "img-a@acme does not support exact_size",
+   "where": "copy.with.size"
+  },
+  {
+   "message": "img-a@acme does not support alpha",
+   "where": "copy.with.background"
+  },
+  {
+   "message": "img-e@acme takes at most 2 input pictures, not 3",
+   "where": "fix.with.references"
+  }
+ ],
+ "scopes": [],
+ "types": {
+  "fx/image.edit@1": {
+   "identity": "fx/image.edit@1.1",
+   "ports": {
+    "inputs": {
+     "image": "image",
+     "mask": "image?",
+     "references": "image[]?"
+    },
+    "outputs": {
+     "image": "image/png"
+    },
+    "params": {
+     "background": {
+      "default": "auto",
+      "enum": [
+       "opaque",
+       "transparent",
+       "auto"
+      ]
+     },
+     "prompt": {
+      "type": "string",
+      "x-fx-template": true
+     },
+     "size": {
+      "type": "string",
+      "x-fx-optional": true
+     },
+     "vars": {
+      "default": {},
+      "type": "object"
+     }
+    }
+   }
+  },
+  "fx/image.generate@1": {
+   "identity": "fx/image.generate@1.1",
+   "ports": {
+    "inputs": {
+     "references": "image[]?"
+    },
+    "outputs": {
+     "image": "image/png"
+    },
+    "params": {
+     "background": {
+      "default": "auto",
+      "enum": [
+       "opaque",
+       "transparent",
+       "auto"
+      ]
+     },
+     "prompt": {
+      "type": "string",
+      "x-fx-template": true
+     },
+     "size": {
+      "type": "string",
+      "x-fx-optional": true
+     },
+     "vars": {
+      "default": {},
+      "type": "object"
+     }
+    }
+   }
+  }
+ },
+ "workflow": {
+  "file": "workflows/case.yaml",
+  "id": "case",
+  "title": "What a request asks of its route"
+ }
+}

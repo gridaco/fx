@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
-import { ArtifactController, canPreviewText, stateIcon, stateIconParts, type Artifact } from "@grida/fx-web";
+import { ArtifactController, canPreviewText, jsonShape, jsonSize, parseJson, plainJson, stateIcon, stateIconParts, type Artifact } from "@grida/fx-web";
 export { WorkflowCanvas, type WorkflowCanvasHandle } from "./canvas";
 
 export function money(value: number | null): string {
@@ -15,6 +15,14 @@ export function StateIcon({ state, size = 12 }: { state: string; size?: number }
   return <svg className="fx-state-icon" data-icon={icon} width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
     <g className="fx-state-glyph">{stateIconParts(icon).map(({ tag: Tag, attributes: { class: className, ...rest } }, index) => <Tag key={index} className={String(className)} {...rest} />)}</g>
   </svg>;
+}
+
+/** A state's icon and word, untinted. */
+export function StateLabel({ state }: { state: string }) {
+  return <span className="inline-flex items-center gap-1 font-medium text-zinc-700">
+    <StateIcon state={state} size={12} />
+    {state.replaceAll("_", " ")}
+  </span>;
 }
 
 export function Status({ state }: { state: string }) {
@@ -36,6 +44,7 @@ export function Status({ state }: { state: string }) {
 }
 
 const imageKinds = ["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"];
+const jsonKinds = ["json", "application/json", "annotations"];
 
 /** The file itself: a picture, a player or its text. Clicking a picture opens the file. */
 export function ArtifactPreview({ artifact }: { artifact: Artifact }) {
@@ -52,7 +61,11 @@ export function ArtifactPreview({ artifact }: { artifact: Artifact }) {
   </a>;
   if (artifact.kind.startsWith("audio/")) return <audio className="w-full" controls preload="metadata" src={url} onError={controller.fail} />;
   if (artifact.kind.startsWith("video/")) return <video className="max-h-64 w-full rounded" controls preload="metadata" src={url} onError={controller.fail} />;
-  if (canPreviewText(artifact)) return <pre className="fx-value-text">{state.text ?? "…"}</pre>;
+  if (canPreviewText(artifact)) {
+    // A JSON file reads as its value does: rows, one line, or folded.
+    const json = jsonKinds.includes(artifact.kind) && state.text !== null ? parseJson(state.text) : undefined;
+    return json !== undefined ? <Json value={json} /> : <pre className="fx-value-text">{state.text ?? "…"}</pre>;
+  }
   return open;
 }
 
@@ -65,14 +78,17 @@ function image(value: unknown, artifacts: Map<string, Artifact>) {
 
 /** A recorded value in its plain form: text, a file, or a list or collection of them. */
 export function Value({ value, artifacts }: { value: unknown; artifacts: Map<string, Artifact> }) {
-  if (!record(value)) return <Plain value={value} />;
-  if ("value" in value && Object.keys(value).length === 1) return <Plain value={value.value} />;
+  if (!record(value)) return <Json value={plainJson(value) ?? value} />;
+  if ("value" in value && Object.keys(value).length === 1) return <Json value={value.value} />;
   if (record(value.file) && typeof value.file.digest === "string") {
     const artifact = artifacts.get(value.file.digest);
     return artifact ? <ArtifactPreview artifact={artifact} /> : <p className="fx-value-note">File not in this run folder</p>;
   }
   if (typeof value.file === "string" && /^[a-f0-9]{64}$/.test(value.file)) return <p className="fx-value-note" title={value.file}>file {value.file.slice(0, 12)}</p>;
-  if (Array.isArray(value.list)) return <div className="fx-value-list">{value.list.map((item, index) => <Value key={index} value={item} artifacts={artifacts} />)}</div>;
+  const json = plainJson(value);
+  if (json !== undefined) return <Json value={json} />;
+  // Pictures read best as a grid; anything else, one under another.
+  if (Array.isArray(value.list)) return <div className={value.list.every((item) => image(item, artifacts)) ? "fx-value-list" : "fx-value-stack"}>{value.list.map((item, index) => <Value key={index} value={item} artifacts={artifacts} />)}</div>;
   if (Array.isArray(value.collection)) {
     const entries = value.collection.filter((item): item is [string, unknown] => Array.isArray(item) && item.length === 2);
     // A collection of pictures reads best as a captioned grid; anything else as rows.
@@ -84,12 +100,25 @@ export function Value({ value, artifacts }: { value: unknown; artifacts: Map<str
   if (value.missing === true) return <p className="fx-value-note">missing</p>;
   if ("pending" in value) return <p className="fx-value-note">waiting for an upstream result</p>;
   if (typeof value.failed === "string") return <p className="fx-value-note">upstream {value.failed} failed</p>;
-  return <Plain value={value} />;
+  // An object that holds files: its members as named rows, each shown as what it is.
+  return <Values values={value} artifacts={artifacts} />;
 }
 
 /** An ordinary JSON value: text as written, anything else on one line. */
 function Plain({ value }: { value: unknown }) {
   return typeof value === "string" ? <p className="fx-value-text">{value}</p> : <p className="fx-value-text font-mono">{JSON.stringify(value)}</p>;
+}
+
+const text = (item: unknown) => typeof item === "string" ? item : JSON.stringify(item);
+
+/** Ordinary JSON by its shape ([`jsonShape`]): folded JSON is formatted, under its size. */
+export function Json({ value }: { value: unknown }) {
+  switch (jsonShape(value)) {
+    case "scalar": return <Plain value={value} />;
+    case "line": return <p className="fx-value-text font-mono">{(value as unknown[]).map(text).join(", ") || "[]"}</p>;
+    case "fields": return <dl className="fx-value-fields">{Object.entries(value as Record<string, unknown>).map(([name, item]) => <div key={name} className="contents"><dt>{name}</dt><dd>{text(item)}</dd></div>)}</dl>;
+    default: return <details className="fx-value-json"><summary>{jsonSize(value)} · JSON</summary><pre><code>{JSON.stringify(value, null, 2)}</code></pre></details>;
+  }
 }
 
 /** Named values as label/value rows. */

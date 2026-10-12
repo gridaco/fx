@@ -1,22 +1,45 @@
 //! `doctor [TARGET]`: without a target, `engine    grida-fx <version>` and the Python host line
-//! (`python    <interpreter> (grida <sdk_version>)` or `python    <interpreter> NOT FOUND`);
-//! with a target, the workflow is loaded (no inputs needed, FX), every project node type it uses
-//! (depth-first, groups after their members' group, not descending into used workflows) is
-//! resolved (`missing   <uses>: <problem>`), and each declared tool printed
-//! `format!("tool      {name:12} {path or NOT FOUND}")`. Exit 1 when anything is missing.
+//! (`python    <interpreter> (grida <sdk_version>)`, or why it cannot host nodes: see below);
+//! with a target, the workflow is loaded (no inputs needed, FX), the routes its paid steps use are
+//! listed (`uses` lines, below), every project node type it uses (depth-first, groups after their
+//! members' group, not descending into used workflows) is resolved (`missing   <uses>:
+//! <problem>`), and each declared tool printed `format!("tool      {name:12} {path or NOT
+//! FOUND}")`. Exit 1 when anything is missing or a route the target uses cannot be served.
 //!
 //! The engine and Python lines come first, with or without a target. The Python line names the
 //! interpreter the home project's node host would use (the home's `.venv`, then the planning
-//! project's; relative to the home when it is one of those, else as configured) and the `grida` version it reports once started; `NOT FOUND`
-//! when it cannot be started. That line is information: a workflow that needs the host and cannot
-//! start it shows `missing` lines for its node types, which set the exit status. Steps are visited
-//! in declaration order, each group before its members; built-ins and repeated `uses` are
-//! skipped.
+//! project's; relative to the home when it is one of those, else as configured), asks it for its
+//! version once (`host::locate::probe`), and says:
+//! - `python    <interpreter> (grida <version>)`: the host started and reported its `grida`;
+//! - `… too old (<version>; FX needs 3.11+)`: the interpreter is older than Python 3.11, which the
+//!   host needs (spec/protocol.md §1); it is not started;
+//! - `… no grida`: the interpreter runs but cannot import `grida`; it is not started;
+//! - `… NOT FOUND`: no program by that name or path;
+//! - `… cannot start: <sentence>`: the host was started and failed (a protocol mismatch, …).
 //!
-//! **Providers** (spec/providers.md §3, §10), after the engine and Python lines and before the
-//! `tool` and `missing` lines, for the **planning** project (the one found from where the command
-//! runs; with a target, the project planning would use). Nothing that could reach the network is
-//! constructed:
+//! That line is information and does not set the exit status: a workflow whose node types need
+//! the host stops doctor with the host's sentence (exit 2) when they are resolved, and a module
+//! the host could not load is a `missing` line. Steps are visited in declaration order, each group
+//! before its members; built-ins and repeated `uses` are skipped.
+//!
+//! **The target's routes** (with a target, after the Python line): one line per route its paid
+//! steps use, sorted by capability, then id, each with the number of steps using it (a repeated
+//! step counts once): `uses      <capability> <model@provider> <state> (<n> steps)`, `<state>`
+//! as on `route` lines below. Every step is visited, members of groups and the steps of used
+//! workflows included (each use of a workflow counts its steps again; a workflow already being
+//! visited is not entered again); `at: plan` steps, which never pay, are skipped. A step's route
+//! is chosen as planning chooses it (spec/identity.md §7): its `route:` when its type calls one
+//! capability, else the capability's `routes:` default in fx.yaml (the home's, then the planning
+//! project's). Neither: `uses      <capability> no route (<n> steps)`; a route the catalog does
+//! not hold for the capability: `… <id> not in the catalog (<n> steps)`. A node type that does
+//! not resolve adds no line. Any state but `servable` makes doctor exit 1, as a live run could
+//! not make that step's calls. Routes need no inputs: they are written in the workflow and
+//! fx.yaml.
+//!
+//! **Providers** (spec/providers.md §3, §10), after the engine and Python lines (and the target's
+//! routes) and before the `tool` and `missing` lines, for the **planning** project (the one found
+//! from where the command runs; with a target, the project planning would use). Nothing that could
+//! reach the network is constructed:
 //! - the allowlisted variables are read as a live run reads them (the process environment, then
 //!   the planning project's `.env` unless `GRIDA_FX_DISABLE_DOTENV=1`). A `.env` that is refused
 //!   prints `keys      <sentence>` (the sentence names the file, the variable and the line, never a
@@ -25,7 +48,8 @@
 //!   Either makes doctor exit 1, as either stops a live run;
 //! - one line per provider in `live::PROVIDERS` order: `key       <VARIABLE> present
 //!   (environment)`, `… present (.env)` or `… missing`. A missing key alone does not change the
-//!   exit status. A key's value is never printed;
+//!   exit status, unless a route the target uses needs it (its `uses` line is then not
+//!   servable). A key's value is never printed;
 //! - one line per route of the planning project's catalog (the built-in table, then `fx.yaml`
 //!   `route_tables`), sorted by capability, then id: `route     <capability> <model@provider>
 //!   servable`, `… no key (<VARIABLE>)`, `… not installed (codex)` or `… no adapter`, as
@@ -37,7 +61,7 @@ use grida_fx_core::Error;
 use grida_fx_core::docs::lock::read_lock;
 use grida_fx_core::docs::project::Project;
 use grida_fx_core::docs::workflow::{Step, Steps};
-use grida_fx_core::host::NodeHost;
+use grida_fx_core::host::{HostFailure, NodeHost};
 use grida_fx_core::project::load_target;
 use grida_fx_core::registry::{Registry, RegistryError, Resolved};
 use grida_fx_core::routes::{Route, RouteTable, load_catalog};
@@ -45,11 +69,11 @@ use grida_fx_protocol::DescribeParams;
 use grida_fx_providers::keys::{ALLOWED, Environment, KeySource};
 use grida_fx_providers::live::{self, Servable};
 use grida_fx_providers::{Endpoints, KeyName, Keys};
-use grida_fx_runtime::host::PythonHost;
-use grida_fx_runtime::host::locate::python_interpreter;
+use grida_fx_runtime::host::locate::{MINIMUM_PYTHON, Probe, python_interpreter};
+use grida_fx_runtime::host::{PythonHost, label};
 use grida_fx_runtime::tools::{resolve_tool, tool_name};
 use indexmap::IndexMap;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 use std::rc::Rc;
 
@@ -74,7 +98,6 @@ pub fn run(args: &DoctorArgs) -> Result<u8, Error> {
     let home = super::schema::home_of(target, project.clone(), &workflow)?;
     print_line(&python_line(&mut host, &home, Some(&project.root), &env));
     let providers = Providers::of(&project, &env)?;
-    providers.print();
     let mut route_defaults = home.route_defaults();
     route_defaults.extend(project.route_defaults());
     let mut registry = Registry::new(
@@ -84,7 +107,23 @@ pub fn run(args: &DoctorArgs) -> Result<u8, Error> {
         route_defaults,
     );
     host.open_project(&home.root, &home.document.sources)?;
+    // The target's routes and the keys first: they need no node host, so they print even when
+    // the project's own node types cannot be resolved (no Python with grida yet).
+    let mut used = UsedRoutes::new();
+    used_routes(
+        &workflow.workflow.steps,
+        &mut registry,
+        &mut host,
+        &mut Vec::new(),
+        &mut used,
+    );
+    let (uses, unservable) = uses_lines(&used, &providers.catalog, &providers.keys);
+    for line in &uses {
+        print_line(line);
+    }
+    providers.print();
     let mut missing = usize::from(providers.refused);
+    let mut lines = Vec::new();
     let mut seen = HashSet::new();
     for step in all_steps(&workflow.workflow.steps) {
         let Some(uses) = &step.uses else { continue };
@@ -99,27 +138,129 @@ pub fn run(args: &DoctorArgs) -> Result<u8, Error> {
                     let shown = found
                         .as_ref()
                         .map_or_else(|| "NOT FOUND".to_string(), |p| p.display().to_string());
-                    print_line(&format!("tool      {name:12} {shown}"));
+                    lines.push(format!("tool      {name:12} {shown}"));
                     missing += usize::from(found.is_none());
                 }
             }
             Ok(Resolved::Workflow(_)) => {}
             Err(RegistryError::Problem(problem)) => {
-                print_line(&format!("missing   {uses}: {problem}"));
+                lines.push(format!("missing   {uses}: {problem}"));
                 missing += 1;
             }
             Err(RegistryError::Fatal(error)) => return Err(error),
         }
     }
-    Ok(u8::from(missing > 0))
+    for line in &lines {
+        print_line(line);
+    }
+    Ok(u8::from(missing > 0 || unservable))
+}
+
+/// The capability a paid step calls and the route id chosen for it (`None`: no route), with the
+/// number of steps (module doc, "The target's routes").
+type UsedRoutes = BTreeMap<(String, Option<String>), usize>;
+
+/// Counts into `used` the routes the paid steps of `steps` use, entering used workflows
+/// (`within` holds the ones being visited). A node type that does not resolve, for whatever
+/// reason, is skipped: the node-type lines after the keys report it.
+fn used_routes(
+    steps: &Steps,
+    registry: &mut Registry,
+    host: &mut PythonHost,
+    within: &mut Vec<String>,
+    used: &mut UsedRoutes,
+) {
+    for step in all_steps(steps) {
+        let Some(uses) = &step.uses else { continue };
+        if step.at_plan {
+            continue;
+        }
+        match registry.node_type(uses, host) {
+            Ok(Resolved::Node(resolved)) => {
+                let calls = resolved.spec.capability_calls(&IndexMap::new());
+                for capability in calls.keys() {
+                    count_route(used, &step, registry, capability, calls.len());
+                }
+            }
+            Ok(Resolved::Workflow(loaded)) => {
+                if within.contains(uses) {
+                    continue;
+                }
+                within.push(uses.clone());
+                used_routes(&loaded.workflow.steps, registry, host, within, used);
+                within.pop();
+            }
+            Err(RegistryError::Problem(_) | RegistryError::Fatal(_)) => {}
+        }
+    }
+}
+
+/// Counts the route `step` uses for `capability`, chosen as planning chooses it: the step's
+/// `route:` when its type calls one capability (of `calls`), else fx.yaml's default.
+fn count_route(
+    used: &mut UsedRoutes,
+    step: &Step,
+    registry: &Registry,
+    capability: &str,
+    calls: usize,
+) {
+    let declared = if calls == 1 {
+        step.route.clone().filter(|route| !route.is_empty())
+    } else {
+        None
+    };
+    let chosen = declared.or_else(|| registry.route_default(capability).map(str::to_string));
+    *used.entry((capability.to_string(), chosen)).or_default() += 1;
+}
+
+/// One `uses` line per route in `used` (module doc, "The target's routes"), and whether any of
+/// them cannot be served.
+fn uses_lines(used: &UsedRoutes, catalog: &RouteTable, keys: &Keys) -> (Vec<String>, bool) {
+    let adapters = live::adapters(&live::offline_setup(keys.clone()));
+    let mut unservable = false;
+    let lines = used
+        .iter()
+        .map(|((capability, chosen), &count)| {
+            let (what, servable) = match chosen {
+                None => ("no route".to_string(), false),
+                Some(id) => match catalog.resolve(capability, id) {
+                    Ok(route) => {
+                        let servable = live::servable(&adapters, keys, capability, &route.provider);
+                        (
+                            format!("{id} {}", servable_text(servable)),
+                            servable == Servable::Yes,
+                        )
+                    }
+                    Err(_) => (format!("{id} not in the catalog"), false),
+                },
+            };
+            unservable |= !servable;
+            let steps = if count == 1 { "step" } else { "steps" };
+            labelled("uses", &format!("{capability} {what} ({count} {steps})"))
+        })
+        .collect();
+    (lines, unservable)
+}
+
+/// How a `route` or `uses` line says whether a live run could serve a route.
+fn servable_text(servable: Servable) -> String {
+    match servable {
+        Servable::Yes => "servable".to_string(),
+        Servable::NoKey(key) => format!("no key ({})", key.variable()),
+        Servable::NoAdapter => "no adapter".to_string(),
+        Servable::NoProgram(program) => format!("not installed ({program})"),
+    }
 }
 
 /// The provider lines of the planning project (module doc, "Providers").
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 struct Providers {
     lines: Vec<String>,
     /// The `.env` or a base URL was refused: a live run would not start.
     refused: bool,
+    /// The keys a live run would have, and the planning project's catalog.
+    keys: Keys,
+    catalog: RouteTable,
 }
 
 impl Providers {
@@ -143,7 +284,12 @@ impl Providers {
         lines.extend(key_lines(&keys));
         let catalog = load_catalog(project, &crate::engine::builtin_routes()?, &[])?;
         lines.extend(route_lines(&catalog, &keys));
-        Ok(Providers { lines, refused })
+        Ok(Providers {
+            lines,
+            refused,
+            keys,
+            catalog,
+        })
     }
 
     fn print(&self) {
@@ -206,18 +352,13 @@ fn route_lines(catalog: &RouteTable, keys: &Keys) -> Vec<String> {
     routes
         .into_iter()
         .map(|(capability, id, route)| {
-            let state = match live::servable(&adapters, keys, capability, &route.provider) {
-                Servable::Yes => "servable".to_string(),
-                Servable::NoKey(key) => format!("no key ({})", key.variable()),
-                Servable::NoAdapter => "no adapter".to_string(),
-                Servable::NoProgram(program) => format!("not installed ({program})"),
-            };
+            let state = servable_text(live::servable(&adapters, keys, capability, &route.provider));
             labelled("route", &format!("{capability} {id} {state}"))
         })
         .collect()
 }
 
-/// `python    <interpreter> (grida <version>)`, or `… NOT FOUND` when the host cannot start.
+/// The Python host line (module doc).
 fn python_line(
     host: &mut PythonHost,
     project: &Project,
@@ -225,28 +366,47 @@ fn python_line(
     env: &dyn Fn(&str) -> Option<String>,
 ) -> String {
     let interpreter = python_interpreter(&project.root, planning_root, env);
+    // Named as the host's messages name it ([`label`]), relative to the planning project when
+    // it lies there and outside the home.
     let shown = match interpreter.strip_prefix(&project.root) {
-        Ok(inside) => inside
-            .components()
-            .map(|c| c.as_os_str().to_string_lossy())
-            .collect::<Vec<_>>()
-            .join("/"),
         Err(_) if planning_root.is_some_and(|root| interpreter.starts_with(root)) => {
             crate::print::shown_path(&interpreter, &project.root)
         }
-        Err(_) => interpreter.display().to_string(),
+        _ => label(&interpreter, &project.root),
     };
-    let started = host
-        .open_project(&project.root, &project.document.sources)
-        .and_then(|()| {
-            host.describe(&DescribeParams {
-                targets: Vec::new(),
-                builtins: false,
-            })
-        });
-    match (started, &host.info) {
-        (Ok(_), Some(info)) => format!("python    {shown} (grida {})", info.host.sdk_version),
-        _ => format!("python    {shown} NOT FOUND"),
+    let opened = host.open_project(&project.root, &project.document.sources);
+    if opened.is_ok()
+        && let Some(state) = host.probe().as_ref().and_then(unhostable)
+    {
+        return labelled("python", &format!("{shown} {state}"));
+    }
+    let started = opened.and_then(|()| {
+        host.describe(&DescribeParams {
+            targets: Vec::new(),
+            builtins: false,
+        })
+    });
+    let state = match (started, &host.info) {
+        (Ok(_), Some(info)) => format!("(grida {})", info.host.sdk_version),
+        (Err(HostFailure::Unavailable(sentence)), _) => format!("cannot start: {sentence}"),
+        (Err(HostFailure::Rpc(error)), _) => format!("cannot start: {}", error.message),
+        (Ok(_), None) => "NOT FOUND".to_string(),
+    };
+    labelled("python", &format!("{shown} {state}"))
+}
+
+/// Why an interpreter that answered `probe` cannot host nodes, so it is not started: `NOT
+/// FOUND`, `too old (<version>; FX needs 3.11+)` or `no grida`; `None` when it may.
+fn unhostable(probe: &Probe) -> Option<String> {
+    let (major, minor) = MINIMUM_PYTHON;
+    match probe {
+        Probe::Missing => Some("NOT FOUND".to_string()),
+        Probe::Answered { .. } if probe.is_too_old() => Some(format!(
+            "too old ({}; FX needs {major}.{minor}+)",
+            probe.version_text().unwrap_or_default()
+        )),
+        Probe::Answered { grida: false, .. } => Some("no grida".to_string()),
+        Probe::Answered { .. } | Probe::Unknown => None,
     }
 }
 
@@ -420,20 +580,21 @@ mod tests {
         let catalog = crate::engine::builtin_routes().unwrap();
         let lines = route_lines(&catalog, &Keys::none());
         assert_eq!(lines.len(), catalog.entries.len());
-        // The Codex route needs no key; whether it is servable depends on this machine.
+        // The Codex routes need no key; whether they are servable depends on this machine.
         let (codex, keyed): (Vec<&String>, Vec<&String>) =
             lines.iter().partition(|line| line.contains("@codex "));
         assert!(
             keyed.iter().all(|line| line.contains(" no key (")),
             "{lines:#?}"
         );
-        assert_eq!(codex.len(), 1);
-        assert!(
-            codex[0].ends_with("imagegen@codex servable")
-                || codex[0].ends_with("imagegen@codex not installed (codex)"),
-            "{}",
-            codex[0]
-        );
+        assert_eq!(codex.len(), 2, "image.edit and image.generate");
+        for line in codex {
+            assert!(
+                line.ends_with("imagegen@codex servable")
+                    || line.ends_with("imagegen@codex not installed (codex)"),
+                "{line}"
+            );
+        }
         let mut sorted = lines.clone();
         sorted.sort();
         assert_eq!(sorted, lines, "sorted by capability, then id");
@@ -443,6 +604,76 @@ mod tests {
                     .to_string()
             )
         );
+    }
+
+    #[test]
+    fn uses_lines_count_steps_and_say_whether_a_live_run_could_serve_each_route() {
+        let catalog = table(&[
+            ("background.remove", "bg@fal"),
+            ("image.generate", "gpt-image-2.5-sunburst@openai"),
+        ]);
+        let keys = Keys::from_pairs(&[(KeyName::Fal, "fx-made-up-fal-value-41d7")]);
+        let used = |routes: &[(&str, Option<&str>, usize)]| -> UsedRoutes {
+            routes
+                .iter()
+                .map(|(capability, route, count)| {
+                    ((capability.to_string(), route.map(str::to_string)), *count)
+                })
+                .collect()
+        };
+        let (lines, unservable) = uses_lines(
+            &used(&[
+                ("background.remove", Some("bg@fal"), 2),
+                ("image.generate", Some("gpt-image-2.5-sunburst@openai"), 1),
+                ("image.generate", None, 3),
+                ("image.generate", Some("nope@acme"), 1),
+            ]),
+            &catalog,
+            &keys,
+        );
+        assert_eq!(
+            lines,
+            [
+                "uses      background.remove bg@fal servable (2 steps)",
+                "uses      image.generate no route (3 steps)",
+                "uses      image.generate gpt-image-2.5-sunburst@openai no key (OPENAI_API_KEY) \
+                 (1 step)",
+                "uses      image.generate nope@acme not in the catalog (1 step)",
+            ]
+        );
+        assert!(unservable);
+        let (lines, unservable) = uses_lines(
+            &used(&[("background.remove", Some("bg@fal"), 1)]),
+            &catalog,
+            &keys,
+        );
+        assert_eq!(
+            lines,
+            ["uses      background.remove bg@fal servable (1 step)"]
+        );
+        assert!(!unservable);
+        assert_eq!(uses_lines(&used(&[]), &catalog, &keys), (Vec::new(), false));
+    }
+
+    #[test]
+    fn an_interpreter_that_cannot_host_says_why() {
+        let answered = |version, grida| Probe::Answered { version, grida };
+        assert_eq!(
+            unhostable(&answered((3, 9, 6), true)).as_deref(),
+            Some("too old (3.9.6; FX needs 3.11+)")
+        );
+        // Too old wins over no grida: installing grida would not help.
+        assert_eq!(
+            unhostable(&answered((3, 9, 6), false)).as_deref(),
+            Some("too old (3.9.6; FX needs 3.11+)")
+        );
+        assert_eq!(
+            unhostable(&answered((3, 12, 4), false)).as_deref(),
+            Some("no grida")
+        );
+        assert_eq!(unhostable(&Probe::Missing).as_deref(), Some("NOT FOUND"));
+        assert_eq!(unhostable(&answered((3, 11, 0), true)), None);
+        assert_eq!(unhostable(&Probe::Unknown), None);
     }
 
     #[test]

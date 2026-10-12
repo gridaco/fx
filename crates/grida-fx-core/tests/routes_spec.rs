@@ -38,6 +38,7 @@ fn route(capability: &str, model: &str, provider: &str, contract: Value) -> Rout
         features: BTreeSet::new(),
         concurrency: None,
         requests_per_minute: None,
+        max_input_pictures: None,
         contract,
     }
 }

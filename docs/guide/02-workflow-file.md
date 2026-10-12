@@ -129,7 +129,7 @@ Every step field:
 | `budget:` | a ceiling for this step, group or each instance, inside the run's ceiling; a step inside several is held to the innermost one only |
 | `concurrency:` | at most this many instances of a repeated node step at once; on a repeated group or workflow step it does nothing yet |
 | `route:` | which model serves this step |
-| `requires:` | what the route must support (`image_input`, `mask`, `alpha` ...). The plan refuses others, offline. |
+| `requires:` | what the route must support (`image_input`, `mask`, `alpha` ...). The plan refuses others, offline. An image step's own settings already ask for what they need: `references` need `image_input`, a `WxH` size `exact_size`, a transparent background `alpha`, and no more pictures than the route takes. |
 | `independent_of:` | refuse a plan where this step and those share an underlying model, whatever the provider |
 | `timeout:` | wall-clock limit for this step, in seconds: past it the step fails (`ran past <n> seconds`) and is not run again |
 
@@ -146,7 +146,7 @@ node.
 | a list element or a field | `inputs.face.eyes[0]`, `steps.propose.outputs.json.entities` |
 | text | `"A ${{ item.kind }} named ${{ item.name }}"` |
 | arithmetic and comparison | `facts(item.file).width * 2`, `item.parallax < 0.5`, `&&`, `\|\|`, `!` |
-| a fallback for nothing | `steps.repaint.outputs.image ?? item.file` |
+| a fallback for nothing | `steps.repaint.outputs.image ?? item.file`, `item.note ?? 'none'` |
 | file facts | `facts(inputs.poster).width`, `.height`, `.has_alpha`, `.opaque`, `.bytes`, `.kind`; a WAV's `.duration`; an MP4, WebM or Matroska video's `.width`, `.height`, `.fps`, `.duration`, `.frames`, `.has_alpha` ([facts.md](../../spec/facts.md)) |
 | functions | `lookup(map, key)`, `min`, `max`, `len`, `contains`, `concat(a, b)`, `join(list, ", ")`, `stem(file)`, `digest(value)`, `accepted(collection)` |
 
@@ -154,6 +154,30 @@ node.
 - **Typing:** a value that is exactly one expression keeps its type (a list stays a list). An
   expression inside other text makes a string.
 - **No more than that:** there are no loops, user functions or string methods.
+- **`??` and a missing field.** `a ?? b` gives `b` when `a` is null or missing (a skipped step's
+  result). When `a` is a field read, `a.name` or `a['name']`, it also gives `b` when the object
+  has no field `name`, so the same body works over table rows, which keep only the fields you
+  wrote, and over input rows, whose optional fields are null:
+
+  ```yaml
+  tables:
+    rows:
+      - { id: a, note: first }
+      - { id: b }
+  steps:
+    draw:
+      for_each: ${{ tables.rows }}
+      key: ${{ item.id }}
+      with: { prompt: "${{ item.note ?? item.id }}" }   # `first`, then `b`
+  ```
+
+  Only the last field directly left of `??` may be missing: `item.extra.note ?? 'x'` still fails
+  on a row without `extra`, and `item.note == null` still fails on a row without `note`, so a
+  misspelt name is caught everywhere else. Names the workflow declares are always checked, even
+  under `??`: an input (`inputs.sise ?? 'auto'` fails; an input left out is null, so
+  `inputs.size ?? 'auto'` works), a table, a step and its outputs, and a `let:` name. A step's
+  `facts` are what its body reported, so `steps.review.facts.verdict ?? 'accept'` falls back.
+  [expressions.md](../../spec/expressions.md) has the exact rule.
 - **`facts()` on a step's output** works too. It is then a run-time value (see *Conditions*).
 - **Two kinds of fact.** `facts(file)` gives *file facts*, which FX computes from the file's bytes
   ([identity.md §4](../../spec/identity.md#4-file-kinds-and-file-facts)). `steps.<name>.facts`

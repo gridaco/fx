@@ -1080,6 +1080,59 @@ fn conditions_and_select() {
 }
 
 #[test]
+fn a_missing_table_field_falls_back_under_coalescing() {
+    // Table rows are not normalized: `??` defaults a field a row lacks (spec/expressions.md §2),
+    // and the same field read anywhere else is still refused.
+    let project = Project::new();
+    let expansion = project.expand(
+        "\
+fx: workflow/v1
+id: case
+title: Rows
+tables:
+  rows:
+    - { id: a, note: first }
+    - { id: b }
+steps:
+  bare:
+    for_each: ${{ tables.rows }}
+    key: ${{ item.id }}
+    if: ${{ (item.note ?? null) == null }}
+    uses: ./nodes/cases.py#shout
+    with: { text: \"${{ item.id }}\" }
+  noted:
+    for_each: ${{ tables.rows }}
+    key: ${{ item.id }}
+    uses: ./nodes/cases.py#shout
+    with: { text: \"${{ item.note ?? item.id }}\" }
+  strict:
+    for_each: ${{ tables.rows }}
+    key: ${{ item.id }}
+    if: ${{ item.note == null }}
+    uses: ./nodes/cases.py#shout
+    with: { text: \"${{ item.id }}\" }
+",
+    );
+    assert_eq!(
+        problems(&expansion),
+        vec!["strict.if: no field 'note'".to_string()]
+    );
+    let ids = ids(&expansion);
+    assert!(
+        !ids.contains(&"bare['a']#1") && ids.contains(&"bare['b']#1"),
+        "{ids:?}"
+    );
+    assert_eq!(
+        get(&expansion, "noted['a']#1").with["text"],
+        Val::Str("first".into())
+    );
+    assert_eq!(
+        get(&expansion, "noted['b']#1").with["text"],
+        Val::Str("b".into())
+    );
+}
+
+#[test]
 fn reading_a_select_result_reads_its_value() {
     let mut project = Project::new();
     project.inputs.insert("mode".into(), Val::Str("a".into()));

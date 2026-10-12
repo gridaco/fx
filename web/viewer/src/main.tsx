@@ -1,8 +1,8 @@
 import { StrictMode, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import { ArrowLeft, ArrowUpRight, ChevronRight, FileText, List, RefreshCw, Square, Workflow, X } from "lucide-react";
-import { ServiceIndexProjection, ViewerController, ViewerEntryController, type Artifact, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun } from "@grida/fx-web";
-import { StateIcon, Status, Values, WorkflowCanvas, money, type WorkflowCanvasHandle } from "@grida/fx-react";
+import { ArrowLeft, ArrowUpRight, Check, ChevronRight, Copy, FileText, List, RefreshCw, Square, Workflow, X } from "lucide-react";
+import { ServiceIndexProjection, ViewerController, elapsedLabel, ViewerEntryController, type Artifact, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun } from "@grida/fx-web";
+import { StateIcon, StateLabel, Status, Values, WorkflowCanvas, money, type WorkflowCanvasHandle } from "@grida/fx-react";
 import "./style.css";
 
 const entryController = new ViewerEntryController(window.location.pathname);
@@ -15,12 +15,49 @@ function Section({ title, values, artifacts }: { title: string; values: Record<s
   return Object.keys(values).length > 0 && <section className="fx-detail-section"><h3>{title}</h3><Values values={values} artifacts={artifacts} /></section>;
 }
 
-function Heading({ title, state, meta }: { title: string; state?: string; meta?: (string | false | null | undefined)[] }) {
+/** Copies `text`, and says so for a moment. */
+function CopyButton({ text, label }: { text: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const reset = window.setTimeout(() => setCopied(false), 1500);
+    return () => window.clearTimeout(reset);
+  }, [copied]);
+  const copy = () => void navigator.clipboard?.writeText(text).then(() => setCopied(true), () => setCopied(false));
+  return <button type="button" onClick={copy} className="fx-copy" aria-label={copied ? "Copied" : label} title={copied ? "Copied" : label}>
+    {copied ? <Check {...iconProps} /> : <Copy {...iconProps} />}
+  </button>;
+}
+
+/**
+ * A detail's title, state and facts, and the identifier FX itself gives it: a step's instance id,
+ * a pending repeat's or a scope's path, a run's name, a workflow's id. The same text names it in
+ * the run's events and `inspect --json`, so it can be copied into a question about it.
+ */
+function Heading({ title, state, meta, id, kind = "id" }: { title: string; state?: string; meta?: (string | false | null | undefined)[]; id?: string; kind?: string }) {
   const line = meta?.filter(Boolean).join(" · ");
   return <div className="fx-detail-heading">
     <div className="fx-detail-heading-row"><h2>{title}</h2>{state && <Status state={state} />}</div>
+    {id && <p className="fx-detail-id"><code title={id}>{id}</code><CopyButton text={id} label={`Copy ${kind}`} /></p>}
     {line && <p className="fx-detail-meta">{line}</p>}
   </div>;
+}
+
+function Dot() { return <span className="fx-bar-dot" aria-hidden="true">·</span>; }
+
+/** How long the run took, after a dot; an unfinished one counts up from its last record. */
+function RunTime({ run }: { run: ViewerRun }) {
+  const recorded = run.recorded_at ? Date.parse(run.recorded_at) : NaN;
+  const live = run.state === "unfinished" && !Number.isNaN(recorded);
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    if (!live) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [live]);
+  if (run.elapsed_ms === undefined) return null;
+  const elapsed = run.elapsed_ms + (live ? Math.max(0, now - recorded) : 0);
+  return <><Dot /><span className="fx-bar-cost" title={live ? "Running for" : "Took"}>{elapsedLabel(elapsed)}</span></>;
 }
 
 function duration(ms: number) {
@@ -48,16 +85,16 @@ function Problem({ children }: { children: ReactNode }) {
 
 function PlanDetails({ plan, instance, pending, canvasNode }: { plan: GraphDocument; instance?: GraphInstance; pending?: PendingRepeat; canvasNode?: CanvasStep }) {
   const none = new Map<string, Artifact>();
-  if (pending) return <Heading title={pending.path} state="unexpanded" meta={[`up to ${pending.max} items`, pending.high_usd > 0 && `at most ${money(pending.high_usd)}`]} />;
+  if (pending) return <Heading title={pending.path} id={pending.path} kind="step path" state="unexpanded" meta={[`up to ${pending.max} items`, pending.high_usd > 0 && `at most ${money(pending.high_usd)}`]} />;
   if (!instance) return <>
-    <Heading title={plan.workflow.title} meta={[plan.estimate.ceiling_usd !== null && `ceiling ${money(plan.estimate.ceiling_usd)}`]} />
+    <Heading title={plan.workflow.title} id={plan.workflow.id} kind="workflow id" meta={[plan.estimate.ceiling_usd !== null && `ceiling ${money(plan.estimate.ceiling_usd)}`]} />
     {plan.workflow.description && <p className="fx-detail-copy">{plan.workflow.description}</p>}
     <Section title="Inputs" values={plan.inputs ?? {}} artifacts={none} />
   </>;
   const meta = plan.steps?.[instance.step];
   const [inputs, settings] = split(instance.with, canvasNode);
   return <>
-    <Heading title={meta?.title || instance.path} state={instance.state} meta={[estimate(instance.price)]} />
+    <Heading title={meta?.title || instance.path} id={instance.id} kind="step id" state={instance.state} meta={[estimate(instance.price)]} />
     {meta?.description && <p className="fx-detail-copy">{meta.description}</p>}
     {instance.reason && <Problem>{instance.reason}</Problem>}
     <Section title="Routes" values={Object.fromEntries(Object.entries(instance.routes).map(([capability, route]) => [capability, route.route]))} artifacts={none} />
@@ -69,14 +106,15 @@ function PlanDetails({ plan, instance, pending, canvasNode }: { plan: GraphDocum
 function RunDetails({ run, node, canvasNode }: { run: ViewerRun; node?: ViewerRun["nodes"][number]; canvasNode?: CanvasStep }) {
   const artifacts = new Map(run.artifacts.map((artifact) => [artifact.digest, artifact]));
   if (!node) return <>
-    <Heading title={run.workflow.title} meta={[run.run_name]} />
+    <Heading title={run.workflow.title} id={run.run_name} kind="run name" meta={[run.workflow.id]} />
     {run.workflow.description && <p className="fx-detail-copy">{run.workflow.description}</p>}
     <Section title="Outputs" values={run.outputs} artifacts={artifacts} />
     <Section title="Inputs" values={run.inputs} artifacts={artifacts} />
   </>;
   const [inputs, settings] = split(node.with, canvasNode);
   return <>
-    <Heading title={node.title || node.path} state={node.state} meta={[node.cache === "hit" && "cached", node.duration_ms !== null && duration(node.duration_ms)]} />
+    <Heading title={node.title || node.path} id={node.id} kind="step id" state={node.state} meta={[node.cache === "hit" && "cached", node.state === "waiting" && node.waiting_for && `for ${node.waiting_for}`,
+      node.duration_ms !== null && duration(node.duration_ms), !!node.waited_ms && `waited ${duration(node.waited_ms)} for a route`]} />
     {node.error && <Problem>{node.error}</Problem>}
     <Section title="Outputs" values={node.outputs} artifacts={artifacts} />
     <Section title="Inputs" values={inputs} artifacts={artifacts} />
@@ -86,7 +124,7 @@ function RunDetails({ run, node, canvasNode }: { run: ViewerRun; node?: ViewerRu
 
 function ScopeDetails({ node }: { node: CanvasStep }) {
   return <>
-    <Heading title={node.title} state={node.kind === "boundary" ? undefined : node.state} meta={[node.kind === "workflow" && `${node.child_count ?? 0} steps`, !!node.failure_count && `${node.failure_count} failed`]} />
+    <Heading title={node.title} id={node.path ?? node.source_id} kind="path" state={node.kind === "boundary" ? undefined : node.state} meta={[node.kind === "workflow" && `${node.child_count ?? 0} steps`, !!node.failure_count && `${node.failure_count} failed`]} />
     {node.errors?.map((error) => <Problem key={error.id}><span className="block font-medium">{error.title}</span>{error.message}</Problem>)}
   </>;
 }
@@ -158,7 +196,7 @@ function WorkflowView() {
           <ol className="fx-crumbs">{breadcrumbs.map((crumb, index) => <li key={crumb.id ?? "root"}>{index < breadcrumbs.length - 1
             ? <button onClick={() => controller.goToScope(crumb.id)} title={crumb.id ?? crumb.title}>{crumb.title}</button>
             : <button onClick={() => { controller.select(null); setAbout(!about); }} aria-current="page" aria-expanded={about}>{crumb.title}</button>}</li>)}</ol>
-          {run ? <><Status state={cancelling ? "cancelling" : run.state} />{run.charged_usd !== null && <span className="fx-bar-cost">{money(run.charged_usd)}</span>}</>
+          {run ? <><StateLabel state={cancelling ? "cancelling" : run.state} /><RunTime run={run} />{run.charged_usd !== null && <><Dot /><span className="fx-bar-cost">{money(run.charged_usd)}</span></>}</>
             : view.estimate && <span className="fx-bar-cost">{estimate(view.estimate, "est. $0.00")}</span>}
           {(run?.stand_in || plan?.stand_in) && <span className="fx-badge">Stand-in</span>}
           {notices.length > 0 && <button onClick={() => { controller.select(null); setAbout(true); }} className="fx-bar-notice" title={notices.join("\n")}>{notices.length} {plan ? (notices.length === 1 ? "problem" : "problems") : (notices.length === 1 ? "notice" : "notices")}</button>}
@@ -174,7 +212,7 @@ function WorkflowView() {
           <button onClick={() => select(null)} className="fx-details-close" aria-label="Close details" title="Close"><X {...iconProps} /></button>
           {selectedNode?.kind ? <ScopeDetails node={selectedNode} />
             : selectedNode ? plan ? <PlanDetails plan={plan} instance={instance} pending={pending} canvasNode={selectedNode} />
-              : selectedNode.pending ? <Heading title={selectedNode.title} state={selectedNode.state} meta={[selectedNode.subtitle]} />
+              : selectedNode.pending ? <Heading title={selectedNode.title} id={selectedNode.source_id} kind="step path" state={selectedNode.state} meta={[selectedNode.subtitle]} />
               : <RunDetails run={run!} node={runNode} canvasNode={selectedNode} />
             : scopeNode ? <ScopeDetails node={scopeNode} />
             : plan ? <PlanDetails plan={plan} /> : <RunDetails run={run!} />}

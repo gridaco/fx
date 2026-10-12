@@ -54,11 +54,13 @@ The engine itself runs the paid built-in types (`image.generate`, `structured.ge
   `image.mirror_repeat`, `image.check_alpha`, `image.check_size`, `json.merge`, `files.copy` and
   `package`.
 
-A project that uses any of them needs a Python with `grida` and Pillow installed
+A project that uses any of them needs Python 3.11 or later with `grida` and Pillow installed
 (`pip install grida`, which brings Pillow). FX uses `GRIDA_FX_PYTHON` when it is set, else
 the `.venv` of the workflow's project, else the `.venv` of the project you run from, else the Python
 that runs the SDK when you run through it ([Running](05-running.md#from-python)), else `python3`
-on `PATH`. Only a project whose steps are all paid built-ins and `select` needs just the command.
+on `PATH`. An older Python is refused before FX starts it (macOS's own `/usr/bin/python3` is
+3.9): run `uv sync` or `pip install grida` in the project, or set `GRIDA_FX_PYTHON`. Only a project
+whose steps are all paid built-ins and `select` needs just the command.
 The first workflow below uses `image.check_alpha`, so it needs Python.
 
 ## A project

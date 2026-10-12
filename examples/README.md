@@ -8,6 +8,7 @@ source stays in Git, while generated artwork and saved runs stay outside it.
 |---|---|---|
 | [hello](hello/) | custom nodes, local steps, a judge, keyed repeats, result collections and cache | entirely offline at $0 |
 | [image-recolor](image-recolor/) | image inputs, algorithmic recoloring, delays and live run viewing | entirely offline at $0 |
+| [pet](pet/) | an animated sprite from a description or a picture: one picture first, a strip per state drawn from it, a judge that counts poses, cells cut at one scale, a Codex app pet | drawing on your own Codex at $0, with no key, from reference pictures; a stand-in runs it all offline |
 | [looping-parallax](looping-parallax/) | reusable repeating layers and the website's complete concept-to-parallax graph | mirrored layers offline; separation and seam repainting paid; optional video uses FFmpeg |
 | [world](world/) | synopsis, poster and direction into reviewed illustrated entities | free preparation offline; structured proposals and illustrations paid |
 | [movie-sprite](movie-sprite/) | an image into a video take, then transparent loop finishing | generation paid; downloaded or supplied footage finishes locally at $0 with FFmpeg |
@@ -23,7 +24,8 @@ Every example plans offline. A run without `--live` executes free steps and refu
 calls at $0. Live execution uses your keys, within the ceiling supplied with
 `--max-usd` ([Running](../docs/guide/05-running.md#keys-and-live-runs)): the routes on Grida
 Gateway (`@gg`) all take one key, `GG_API_KEY`, and the others their provider's. A
-ceiling limits spending; it does not guarantee completion or artistic quality.
+ceiling limits spending; it does not guarantee completion or artistic quality. The pet draws on
+[your own Codex](../docs/guide/12-codex.md) instead: no key, and no `--max-usd`.
 
 ## Use an example
 

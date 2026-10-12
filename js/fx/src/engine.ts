@@ -56,6 +56,7 @@ export async function call(args: readonly string[], options: CallOptions = {}): 
   // A value inherited from a launcher (a node body run under `grida fx`) would change the prefix.
   env.GRIDA_FX_INVOKER = "grida-fx";
   if (args[0] === "run") {
+    // Also tells the engine the inputs file is temporary: the run records no `repeat`.
     env.GRIDA_FX_CANCEL_SOURCE = "sdk";
   }
   const engine = findEngine(machineLookup(env, cwd));

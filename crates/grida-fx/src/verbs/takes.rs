@@ -1,8 +1,12 @@
 //! `reroll`, `pick` and `takes list|mv` (docs/guide/04-cost-and-cache.md "Takes";
 //! spec/schemas/fx-takes-v1.schema.json).
 //!
-//! The takes file of a run is the one its `plan.json` names (`takes_file`, relative to the project
-//! found from the working directory, `Project::find`; `plan.json` holds no absolute path). A
+//! The takes file of a run is the one its `plan.json` names (`takes_file`, relative to the
+//! planning project; `plan.json` holds no absolute path). The planning project is the one whose
+//! run index records the run folder (`run_index::recording_project`: the nearest folder at or
+//! above it, else the project found from the working directory, `Project::find`); with none
+//! (a copied folder), the takes file is the one under the project found from the working
+//! directory, and the `next` line is the sentence. A
 //! folder with no readable fx-graph-v1 `plan.json` is `<folder> is not a run folder`; one whose
 //! `plan.json` names no takes file inside the project is `<folder> was not started by grida-fx
 //! run` (both exit 2). The run's log is read as `project` reads it (up to its first unreadable
@@ -13,7 +17,8 @@
 //!   ran a step <step>` (exit 2); a step already at take 1000 cannot draw another (`<step> has
 //!   used take 1000, the most takes a step may have`, exit 2). Writes `<step>: {take: latest + 1}`
 //!   (an earlier `result` is dropped), prints `<takes file name>: <step> uses take <n> from now
-//!   on` and `next      grida-fx run <workflow id>[ --live]`. Nothing runs and nothing is spent.
+//!   on` and the `next` line (below). Nothing runs and nothing is spent. `--live` is accepted
+//!   and ignored: the `next` line says `--live` when the run was live.
 //! - `pick <run> <step> <take>`: `take` a whole number from 1 to 1000 (`a take is 1 or more` / `a
 //!   take is at most 1000` / `a take is a whole number, not <text>`, exit 2, checked before the
 //!   folder is read); `<step>` must be a step path the run's plan or log names (`<run> has no
@@ -22,7 +27,10 @@
 //!   `node_finished` whose id is `<step>#<take>`, or `<step>#<a.….take>` for a nested take whose
 //!   last number is the take; the last such event wins, and none leaves the entry without a
 //!   `result`. Writes `{take, result?}` (a bare digest) and prints `<takes file name>: <step> uses
-//!   take <n>`.
+//!   take <n>` and the `next` line.
+//! - The `next` line of both repeats the run from the latest `run_started`'s `repeat`, or advises
+//!   running the workflow again when the record cannot (`repeat::next_line`; spec/store.md §8
+//!   "Repeating a run").
 //! - `reroll` and `pick` refuse a stand-in run, whose `plan.json` says `"stand_in": true`
 //!   (spec/store.md §8 "Stand-in runs"): `refused: <run> holds a stand-in run, and stand-in runs
 //!   never change the workflow's takes file`, exit 1, before the log is read.
@@ -39,7 +47,7 @@
 //! members of a hand-edited file are not kept) and replaces it atomically (`store::atomic_write`).
 
 use crate::cli::{PickArgs, RerollArgs, TakesArgs, TakesVerb};
-use crate::print::{labelled, print_line};
+use crate::print::print_line;
 use crate::verbs::{event_name, read_log, read_plan, text, workflow_id};
 use grida_fx_core::docs::project::Project;
 use grida_fx_core::docs::takes::{MAX_TAKE, TakeChoice, Takes, read_takes, render_takes};
@@ -75,11 +83,7 @@ pub fn reroll(args: &RerollArgs) -> Result<u8, Error> {
         "{}: {} uses take {take} from now on",
         run.file.name, args.step
     ));
-    let live = if args.live { " --live" } else { "" };
-    print_line(&labelled(
-        "next",
-        &format!("{} run {}{live}", crate::invoker::command(), run.workflow),
-    ));
+    print_line(&run.next(&events, &cwd));
     Ok(0)
 }
 
@@ -106,6 +110,7 @@ pub fn pick(args: &PickArgs) -> Result<u8, Error> {
         "{}: {} uses take {take}",
         run.file.name, args.step
     ));
+    print_line(&run.next(&events, &cwd));
     Ok(0)
 }
 
@@ -189,6 +194,8 @@ struct RunTakes {
     folder: PathBuf,
     plan: Value,
     workflow: String,
+    /// The root of the planning project whose run index records the folder, if any.
+    root: Option<PathBuf>,
     file: TakesFile,
 }
 
@@ -207,6 +214,11 @@ impl RunTakes {
         Some(1)
     }
 
+    /// The `next` line: the command that repeats the run, or advice (`repeat::next_line`).
+    fn next(&self, events: &[Value], cwd: &Path) -> String {
+        super::repeat::next_line(events, &self.workflow, self.root.as_deref(), cwd)
+    }
+
     fn open(given: &str, cwd: &Path) -> Result<RunTakes, Error> {
         let folder = cwd.join(given);
         let plan = read_plan(&folder, given)?;
@@ -220,14 +232,19 @@ impl RunTakes {
                     crate::invoker::command()
                 ))
             })?;
-        let project = Project::find(cwd)?;
+        let here = Project::find(cwd)?.root;
+        let root = folder.canonicalize().ok().and_then(|canonical| {
+            let elsewhere = here.canonicalize().unwrap_or_else(|_| here.clone());
+            grida_fx_runtime::run_index::recording_project(&canonical, &elsewhere)
+        });
         let path = relative
             .split('/')
-            .fold(project.root.clone(), |path, part| path.join(part));
+            .fold(root.clone().unwrap_or(here), |path, part| path.join(part));
         Ok(RunTakes {
             workflow: workflow_id(&plan).to_string(),
             folder,
             plan,
+            root,
             file: TakesFile::at(path),
         })
     }

@@ -20,6 +20,12 @@
 //! against, so its routes alone decide. The vocabulary is data, `features.json`: each
 //! capability's features and the renamed ones; `tools/check_spec.py` and this module's tests hold
 //! it to spec/capabilities.md and spec/providers.md §11.
+//!
+//! A capability step's own request (spec/capabilities.md §1): for `image.generate` and
+//! `image.edit`, the with-values imply features ([`implied_features`]), each one the route lacks
+//! refused at `<w>.with.<member>` as `{route} does not support {feature}` and left out of the
+//! `requires:` check; and a route's `max_input_pictures` refuses a known count of pictures above
+//! it at `<w>.with.references`: `{route} takes at most {n} input pictures, not {count}`.
 
 use super::frame::FrameId;
 use super::{CallPrice, Expander};
@@ -63,6 +69,71 @@ pub fn capability_features(capability: &str) -> Option<&'static [String]> {
 /// FX's name for a feature its predecessor named otherwise (spec/providers.md §11).
 pub fn renamed_feature(name: &str) -> Option<&'static str> {
     vocabulary().renamed.get(name).map(String::as_str)
+}
+
+/// The features a capability step's own request implies (spec/capabilities.md §1), each with the
+/// with-member it comes from, in that section's order. A value the plan does not know yet implies
+/// nothing.
+fn implied_features(
+    spec: &NodeSpec,
+    with: &IndexMap<String, Val>,
+) -> Vec<(&'static str, &'static str)> {
+    if !matches!(
+        spec.capability.as_deref(),
+        Some("image.generate" | "image.edit")
+    ) {
+        return Vec::new();
+    }
+    let mut implied = Vec::new();
+    if known_count(with.get("references")).is_some_and(|n| n > 0) {
+        implied.push(("image_input", "references"));
+    }
+    if with
+        .get("mask")
+        .is_some_and(|mask| !matches!(mask, Val::Null | Val::Missing))
+    {
+        implied.push(("mask", "mask"));
+    }
+    if let Some(Val::Str(size)) = with.get("size")
+        && exact_size(size)
+    {
+        implied.push(("exact_size", "size"));
+    }
+    match with.get("background") {
+        Some(Val::Str(b)) if b == "transparent" => implied.push(("alpha", "background")),
+        Some(Val::Str(b)) if b == "opaque" => implied.push(("opaque_background", "background")),
+        _ => {}
+    }
+    implied
+}
+
+/// How many input pictures a capability step's own request carries (`image`, then
+/// `references`; a mask does not count), when the plan knows it.
+fn input_pictures(spec: &NodeSpec, with: &IndexMap<String, Val>) -> Option<usize> {
+    let first = match spec.capability.as_deref() {
+        Some("image.edit") => 1,
+        Some("image.generate") => 0,
+        _ => return None,
+    };
+    known_count(with.get("references")).map(|n| first + n)
+}
+
+/// The length of a list the plan knows: absent and `null` are empty; a pending value is unknown.
+fn known_count(value: Option<&Val>) -> Option<usize> {
+    match value {
+        None | Some(Val::Null | Val::Missing) => Some(0),
+        Some(Val::List(items)) => Some(items.len()),
+        Some(Val::Collection(collection)) => Some(collection.items.len()),
+        Some(_) => None,
+    }
+}
+
+/// `<W>x<H>`: positive whole numbers without leading zeros.
+fn exact_size(size: &str) -> bool {
+    let number =
+        |n: &str| !n.is_empty() && !n.starts_with('0') && n.bytes().all(|b| b.is_ascii_digit());
+    size.split_once('x')
+        .is_some_and(|(w, h)| number(w) && number(h))
 }
 
 /// `an image.generate`, `a video.generate or mesh.generate`: the capabilities a feature name was
@@ -110,6 +181,8 @@ impl Expander<'_> {
         let requires: BTreeSet<&str> = declared.requires.iter().map(String::as_str).collect();
         let capabilities: Vec<&str> = calls.keys().map(String::as_str).collect();
         let unknown = self.unknown_features(where_, &capabilities, &requires);
+        let implied = implied_features(spec, with);
+        let pictures = input_pictures(spec, with);
         for (capability, &count) in &calls {
             // `route:` names the route of a type that calls one capability; a type that calls
             // several takes each from fx.yaml (gnode ignores `route:` there, silently).
@@ -141,10 +214,35 @@ impl Expander<'_> {
                     continue;
                 }
             };
+            let own = spec.capability.as_deref() == Some(capability.as_str());
+            let mut reported = BTreeSet::new();
+            for (feature, member) in implied.iter().filter(|_| own) {
+                if !route.features.contains(*feature) && reported.insert(*feature) {
+                    self.problem(
+                        &format!("{where_}.with.{member}"),
+                        format!("{} does not support {feature}", route.id()),
+                    );
+                }
+            }
+            if let (true, Some(count), Some(most)) = (own, pictures, route.max_input_pictures)
+                && count > most as usize
+            {
+                self.problem(
+                    &format!("{where_}.with.references"),
+                    format!(
+                        "{} takes at most {most} input pictures, not {count}",
+                        route.id()
+                    ),
+                );
+            }
             let missing: Vec<&str> = requires
                 .iter()
                 .copied()
-                .filter(|feature| !unknown.contains(feature) && !route.features.contains(*feature))
+                .filter(|feature| {
+                    !unknown.contains(feature)
+                        && !reported.contains(feature)
+                        && !route.features.contains(*feature)
+                })
                 .collect();
             if !missing.is_empty() {
                 self.problem(
@@ -349,6 +447,84 @@ mod tests {
         // The route is still bound and priced.
         assert_eq!(bound["image.generate"].id(), "img-a@acme");
         assert_eq!(prices.len(), 1);
+    }
+
+    #[test]
+    fn a_step_s_own_request_implies_features_and_counts_its_pictures() {
+        let mut declared = step("fx/image.generate@1");
+        declared.route = Some("img-a@acme".into());
+        declared.requires = vec!["alpha".into(), "auto_background".into()];
+        let mut f = Fixture::new(&[("draw", declared.clone())]);
+        f.routes = routes(serde_json::json!([{
+            "capability": "image.generate", "route": "img-a@acme", "price": {"usd": 0.01},
+            "features": ["opaque_background"], "max_input_pictures": 2,
+        }]));
+        let picture = || Val::Pending(Box::new(crate::val::Pending::of("steps.base", None)));
+        let with = |references: Val, size: &str, background: &str| {
+            IndexMap::from([
+                ("references".to_string(), references),
+                ("size".to_string(), Val::Str(size.into())),
+                ("background".to_string(), Val::Str(background.into())),
+            ])
+        };
+        let mut problems = |with: IndexMap<String, Val>| {
+            let mut ex = f.expander();
+            let generate = paid("image.generate", "image.generate");
+            let (bound, _) = ex.bind_routes(&declared, "draw", &generate, &with);
+            assert_eq!(bound["image.generate"].id(), "img-a@acme");
+            ex.problems
+                .iter()
+                .map(|p| p.to_string())
+                .collect::<Vec<_>>()
+        };
+        // Pictures not made yet still count; `alpha` is reported once, at its member.
+        assert_eq!(
+            problems(with(
+                Val::List(vec![picture(), picture(), picture()]),
+                "1024x1024",
+                "transparent"
+            )),
+            vec![
+                "draw.with.references: img-a@acme does not support image_input",
+                "draw.with.size: img-a@acme does not support exact_size",
+                "draw.with.background: img-a@acme does not support alpha",
+                "draw.with.references: img-a@acme takes at most 2 input pictures, not 3",
+                "draw.requires: img-a@acme does not support auto_background",
+            ]
+        );
+        // Nothing is implied by an empty list, `auto`, `opaque` the route honours, or a value the
+        // plan does not know yet.
+        declared.requires.clear();
+        let mut f2 = Fixture::new(&[("draw", declared.clone())]);
+        f2.routes = f.routes.clone();
+        let mut ex = f2.expander();
+        let generate = paid("image.generate", "image.generate");
+        for with in [
+            with(Val::List(vec![]), "auto", "opaque"),
+            with(picture(), "08x10", "auto"),
+        ] {
+            ex.bind_routes(&declared, "draw", &generate, &with);
+        }
+        assert!(ex.problems.is_empty(), "{:?}", ex.problems);
+        // An edit counts its image.
+        let mut edit_step = step("fx/image.edit@1");
+        edit_step.route = Some("img-e@acme".into());
+        let mut f3 = Fixture::new(&[("fix", edit_step.clone())]);
+        f3.routes = routes(serde_json::json!([{
+            "capability": "image.edit", "route": "img-e@acme", "price": {"usd": 0.01},
+            "features": ["image_input"], "max_input_pictures": 2,
+        }]));
+        let mut ex = f3.expander();
+        let refs = IndexMap::from([(
+            "references".to_string(),
+            Val::List(vec![picture(), picture()]),
+        )]);
+        ex.bind_routes(&edit_step, "fix", &paid("image.edit", "image.edit"), &refs);
+        let problems: Vec<String> = ex.problems.iter().map(|p| p.to_string()).collect();
+        assert_eq!(
+            problems,
+            vec!["fix.with.references: img-e@acme takes at most 2 input pictures, not 3"]
+        );
     }
 
     #[test]

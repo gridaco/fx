@@ -2,6 +2,8 @@
 
 **Go with the flow.**
 
+![A finished run open in the FX viewer: its steps on a canvas, with each step's pictures](.github/assets/cover.webp)
+
 Reusable workflows for images, audio, and more. Connect your code and AI models with one
 Grida Gateway key (or your own provider keys), and turn a one-off script into something you can
 run again.

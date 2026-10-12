@@ -1,0 +1,164 @@
+{
+ "estimate": {
+  "ceiling_usd": null,
+  "high_usd": 0.08,
+  "low_usd": 0.02
+ },
+ "instances": [
+  {
+   "bindings": [],
+   "id": "bare['b']#1",
+   "identity": "0b6ae7e35793b4b90dcb4f9499ff7666f3759ca3b3170a3d4b08d7ee1887ef80",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": "b",
+   "needs": [],
+   "path": "bare['b']",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.04,
+    "low_usd": 0.01
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+     "route": "img-a@acme"
+    }
+   },
+   "state": "planned",
+   "step": "bare",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "b",
+    "vars": {}
+   }
+  },
+  {
+   "bindings": [],
+   "id": "noted['a']#1",
+   "identity": "28180341d48df6c3c69f8e632e5ac1e25a96d2f6e7618a3cdf6d7f52642708f7",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": "a",
+   "needs": [],
+   "path": "noted['a']",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.04,
+    "low_usd": 0.01
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+     "route": "img-a@acme"
+    }
+   },
+   "state": "planned",
+   "step": "noted",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "first",
+    "vars": {}
+   }
+  },
+  {
+   "bindings": [],
+   "id": "noted['b']#1",
+   "identity": "0b6ae7e35793b4b90dcb4f9499ff7666f3759ca3b3170a3d4b08d7ee1887ef80",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": "b",
+   "needs": [],
+   "path": "noted['b']",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.04,
+    "low_usd": 0.01
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+     "route": "img-a@acme"
+    }
+   },
+   "state": "planned",
+   "step": "noted",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "b",
+    "vars": {}
+   }
+  }
+ ],
+ "kind": "fx-graph-v1",
+ "pending": [],
+ "problems": [],
+ "scopes": [],
+ "types": {
+  "fx/image.generate@1": {
+   "identity": "fx/image.generate@1.1",
+   "ports": {
+    "inputs": {
+     "references": "image[]?"
+    },
+    "outputs": {
+     "image": "image/png"
+    },
+    "params": {
+     "background": {
+      "default": "auto",
+      "enum": [
+       "opaque",
+       "transparent",
+       "auto"
+      ]
+     },
+     "prompt": {
+      "type": "string",
+      "x-fx-template": true
+     },
+     "size": {
+      "type": "string",
+      "x-fx-optional": true
+     },
+     "vars": {
+      "default": {},
+      "type": "object"
+     }
+    }
+   }
+  }
+ },
+ "workflow": {
+  "file": "workflows/case.yaml",
+  "id": "case",
+  "title": "Coalesce a field"
+ }
+}

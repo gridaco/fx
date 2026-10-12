@@ -1,0 +1,5 @@
+fx: project/v1
+# Every picture is drawn by your own Codex, signed in with ChatGPT: no API key, and $0 to FX.
+routes:
+  image.generate: imagegen@codex
+  image.edit: imagegen@codex

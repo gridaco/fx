@@ -1,4 +1,5 @@
 import type { CanvasConnection, CanvasFrame, CanvasGraph, CanvasStep, LayoutReport } from "./graph";
+import { DECK_BACK } from "./deck";
 
 export interface PositionedNode extends CanvasStep { x: number; y: number; width: number; height: number }
 export interface PositionedEdge extends CanvasConnection { points: { x: number; y: number }[] }
@@ -8,7 +9,7 @@ export interface PlacedDeck { id: string; address: string; frame: string | null;
 export interface CanvasLayout { nodes: PositionedNode[]; edges: PositionedEdge[]; frames: PositionedFrame[]; decks: PlacedDeck[]; width: number; height: number }
 
 export const DECK_OFFSET = 28, BADGE_BAND = 30;
-const COLUMN_GAP = 100, ROW_GAP = 42, DECK_BACK = 3, FRAME_PAD = 20, FRAME_TOP = 36, MARGIN = 20;
+const COLUMN_GAP = 100, ROW_GAP = 42, FRAME_PAD = 20, FRAME_TOP = 36, MARGIN = 20;
 /** Socket rows: the card draws them and edges attach to them. */
 export const PORT_TOP = 93, PORT_ROW = 34;
 

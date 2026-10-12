@@ -248,6 +248,7 @@ fn plan_and_run(
         index: Some(RunIndex {
             project_root: planner.project.root.clone(),
         }),
+        repeat: super::repeat::recorded(args, planner, cwd),
     };
     let mut viewer = None;
     let project = planner.project.clone();
@@ -475,6 +476,7 @@ fn start_stand_in(
                 python,
                 project_root: project.root.clone(),
                 sources: project.document.sources.clone(),
+                check_version: true,
             };
             let path = std::path::absolute(&path).unwrap_or(path);
             runtime

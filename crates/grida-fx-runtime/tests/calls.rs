@@ -61,6 +61,7 @@ fn route(capability: &str, model: &str, provider: &str, high_micros: i64) -> Rou
         features: Default::default(),
         concurrency: None,
         requests_per_minute: None,
+        max_input_pictures: None,
         contract: json!({}),
     }
 }
@@ -95,6 +96,7 @@ fn engine(root: &Path, adapters: Adapters, live: bool) -> Arc<Engine> {
             label: "python3".into(),
             project_root: root.to_path_buf(),
             sources: Vec::new(),
+            check_version: false,
         },
         &root.join(".fx/cache"),
         1,
@@ -2167,6 +2169,7 @@ fn stand_in_engine(root: &Path, answerer: Arc<dyn Answerer>) -> Arc<Engine> {
                 label: "python3".into(),
                 project_root: root.to_path_buf(),
                 sources: Vec::new(),
+                check_version: false,
             },
             &root.join(".fx/cache/stand-in"),
             1,

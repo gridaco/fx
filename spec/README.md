@@ -7,6 +7,7 @@ These documents define FX independently of any implementation. The Rust engine, 
 | [identity.md](identity.md) | Values, canonical JSON, and every digest: files, node types, routes, steps, calls, plans |
 | [facts.md](facts.md) | File facts: what `facts(f)` gives for every file, image, WAV, MP4 and Matroska/WebM file |
 | [yaml.md](yaml.md) | The strict YAML subset FX reads |
+| [expressions.md](expressions.md) | Expressions: what counts as nothing, and the fallback `??`, including a missing field |
 | [store.md](store.md) | The cache layout and its records |
 | [observation.md](observation.md) | Run-observation v1: consistent snapshots, bounded events, cursors and errors |
 | [exports.md](exports.md) | Portable terminal run inspection: disclosure, verified media, immutable manifests and offline export |

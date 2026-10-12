@@ -23,13 +23,16 @@
 //! `the project's grida <sdk_version> speaks <host protocol> and grida-fx <version> speaks
 //! fx-node-protocol-v1: upgrade grida` or `…: upgrade grida-fx`), then sends one request at a
 //! time. A host that cannot start is `HostFailure::Unavailable` with a sentence naming the
-//! interpreter and `GRIDA_FX_PYTHON`. Dropping the host sends `shutdown` then the `exit`
-//! notification and waits up to 5 seconds before killing it.
+//! interpreter and `GRIDA_FX_PYTHON`. An interpreter the host located is checked before it is
+//! first started ([`locate::probe`]): one before Python 3.11 is refused with
+//! [`locate::too_old`]'s sentence and never started. Dropping the host sends `shutdown` then the
+//! `exit` notification and waits up to 5 seconds before killing it.
 //!
 //! The interpreter is the one given to [`PythonHost::with_python`], else
 //! [`locate::python_interpreter`] over the process environment, with the planning project given
 //! to [`PythonHost::with_planning_root`] as its fallback. It is named in messages as the
-//! user would write it ([`label`]): a path inside the project relative to the project root. A
+//! user would write it ([`label_from`]): a path inside the project relative to the project root,
+//! one inside the planning project with `..` segments. A
 //! host that failed to start, or broke the protocol, stays failed for its project: later calls
 //! give the same sentence without starting it again, until `open_project` names another
 //! project. A host request during `describe` or `build` is answered `-32601`.
@@ -162,6 +165,15 @@ impl PythonHost {
         })
     }
 
+    /// What the interpreter of the open project says about itself ([`locate::probe`], asked once
+    /// per process), for `doctor`'s Python host line. `None` when neither an interpreter nor a
+    /// project is set.
+    pub fn probe(&mut self) -> Option<locate::Probe> {
+        let python = self.interpreter()?;
+        self.block_on(async move { locate::probe(&python).await })
+            .ok()
+    }
+
     /// Starts the host when it is not running and returns what `initialize` answered (for
     /// `doctor`'s Python host line).
     pub fn host_info(&mut self) -> Result<InitializeResult, HostFailure> {
@@ -188,10 +200,13 @@ impl PythonHost {
             .interpreter()
             .unwrap_or_else(|| PathBuf::from("python3"));
         let spec = HostSpec {
-            label: label(&python, &root),
+            label: label_from(&python, &root, self.planning_root.as_deref()),
             python,
             project_root: root,
             sources: self.sources.clone(),
+            // An interpreter the caller named is its own (a test's fake host); one FX located
+            // is checked.
+            check_version: self.python.is_none(),
         };
         let started = self.block_on(HostProcess::start(&spec, Arc::new(NoIncoming)));
         match started {
@@ -382,14 +397,29 @@ fn program(python: &Path) -> PathBuf {
 /// A path as messages name it: POSIX and relative to `root` inside it, else as given (the
 /// interpreter's `HostSpec::label`).
 pub fn label(path: &Path, root: &Path) -> String {
-    match path.strip_prefix(root) {
-        Ok(inside) if !inside.as_os_str().is_empty() => inside
-            .components()
-            .map(|c| c.as_os_str().to_string_lossy())
-            .collect::<Vec<_>>()
-            .join("/"),
-        _ => path.display().to_string(),
-    }
+    let inside = |path: &Path, root: &Path| match path.strip_prefix(root) {
+        Ok(inside) if !inside.as_os_str().is_empty() => Some(
+            inside
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy())
+                .collect::<Vec<_>>()
+                .join("/"),
+        ),
+        _ => None,
+    };
+    // A root reached through a symbolic link (macOS's /var is /private/var) is the same root:
+    // compare again with the folders resolved, but not the file, which may itself be a link
+    // (a virtual environment's python).
+    let resolved = || {
+        let folder = std::fs::canonicalize(path.parent()?).ok()?;
+        inside(
+            &folder.join(path.file_name()?),
+            &std::fs::canonicalize(root).ok()?,
+        )
+    };
+    inside(path, root)
+        .or_else(resolved)
+        .unwrap_or_else(|| path.display().to_string())
 }
 
 /// [`label`], except that a path under `planning` (the planning project, when the home is a

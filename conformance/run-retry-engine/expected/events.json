@@ -80,6 +80,13 @@
   "event": "run_started",
   "kind": "fx-run-events-v1",
   "plan": "caa43d0c93e82d42f8e875d76eb2cb6616ac28344b539744d0ba7d59e890afca",
+  "repeat": {
+   "live": false,
+   "routes": [
+    "routes.yaml"
+   ],
+   "workflow": "case"
+  },
   "resumed": false,
   "workflow": "case"
  },

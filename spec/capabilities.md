@@ -47,6 +47,14 @@ In the tables below, a member's type is one of:
 
 **Features.**
 - A route declares the features it supports, in its table entry ([identity.md](identity.md) §7). A step's `requires:` names features of the capabilities its type calls. A name that is a feature of none of them is refused while planning: `<name> is not a(n) <capability>[ or <capability>] feature (spec/capabilities.md)`, followed by `; FX calls it <feature>` for a name FX's predecessor used ([providers.md](providers.md) §11). A capability without a section here (§13, or a project's own) is not checked this way. A known feature the step's route lacks is refused as `<route> does not support <features>`.
+- **A step's own request implies features.** A step whose type is a capability (a built-in such as `fx/image.generate@1`) sends its with-values as the request, so the plan reads from them what its route must honour, besides what `requires:` names. For `image.generate` and `image.edit`:
+  - `image_input` for a `references` list with an item;
+  - `mask` for a `mask`;
+  - `exact_size` for a `size` of `<W>x<H>`;
+  - `alpha` for `background: transparent`, and `opaque_background` for `background: opaque`.
+
+  A value the plan does not know yet (a step's output that is only a list as a whole, say) implies nothing. A feature the route lacks is refused as `<route> does not support <feature>` at `<w>.with.<member>`, once per feature, and not again for `requires:`. So a request the route's adapter would refuse is refused while planning, at $0. A call a node's body makes at run time is still checked by its adapter alone ([providers.md](providers.md) §5).
+- **Input-picture limits.** A route may declare `max_input_pictures`, the most input pictures it takes in one call (`image` and `references`; a mask does not count). A step whose request would carry more is refused while planning, at `<w>.with.references`: `<route> takes at most <n> input pictures, not <count>`. The count is known while the list's length is, even when its pictures are not made yet.
 - Each capability's section lists its features. Only those names have a meaning for it. A route in the built-in table ([providers.md](providers.md) §10) MUST declare only names from its capability's list, and only what its adapter honours.
 - A few image features describe the provider's model and change nothing FX sends, whatever `jpeg_output`, `webp_output` or `hosted_url_reference_input` say. Every route FX ships sends pictures inline. A route whose provider takes an output format (OpenAI, fal) asks for PNG; OpenRouter's image endpoint takes none, so its routes ask for nothing. Every route's check refuses an answer that is not a PNG (§2).
 
@@ -67,7 +75,7 @@ A picture from a prompt.
 1. the file is a PNG, by its kind and signature: `the answer is <kind>, not image/png`;
 2. it decodes: `the image data is not decodable`;
 3. an exact `size` matches: `the image is <w>x<h>, not <W>x<H>`;
-4. `transparent`: the image has an alpha channel (the `has_alpha` fact): `the picture asked for as transparent has no alpha channel`;
+4. `transparent`: the image has an alpha channel (the `has_alpha` fact): `the picture asked for as transparent has no alpha channel`; and a pixel that is not opaque (the `opaque` fact is false): `the picture asked for as transparent has no transparent pixels`. A background painted to look transparent, such as a checkerboard, is opaque;
 5. `opaque`: every pixel is opaque (the `opaque` fact): `the picture asked for as opaque has transparent pixels`.
 
 **Features:**
@@ -89,7 +97,7 @@ A picture from a prompt.
 | `maximum_quality` | the route asks for the model's highest quality |
 | `authored_prompt_passthrough` | the prompt is sent verbatim, never rewritten |
 
-**Limits a route may have:** an exact-size envelope or a fixed list of sizes, no transparency, and no references. They are enforced as refusals ([providers.md](providers.md) §9). No route FX ships takes references for `image.generate`, so none declares `image_input` for it.
+**Limits a route may have:** an exact-size envelope or a fixed list of sizes, no transparency, no references, and a limit on the number of input pictures (§1). They are enforced as refusals ([providers.md](providers.md) §9), and while planning where §1 says. Of the routes FX ships, only Codex's takes references for `image.generate` (at most 5), so only it declares `image_input` for it.
 
 **Pricing:** per call, in tiers by `size` ([identity.md](identity.md) §12; the built-in tiers are in [providers.md](providers.md) §10).
 
@@ -127,7 +135,7 @@ A picture made from input pictures, optionally within a mask.
 | `authored_prompt_passthrough` | as for `image.generate` |
 | `mask` | the route takes a `mask` |
 
-**Limits a route may have:** an exact-size envelope or a fixed list of sizes, no transparency, no mask, and a limit on the number of input pictures. They are enforced as refusals ([providers.md](providers.md) §9). Every route FX ships takes at most 16 input pictures (`image` and `references`; the mask does not count).
+**Limits a route may have:** an exact-size envelope or a fixed list of sizes, no transparency, no mask, and a limit on the number of input pictures. They are enforced as refusals ([providers.md](providers.md) §9), and while planning where §1 says. The routes FX ships take at most 16 input pictures (`image` and `references`; the mask does not count), and Codex's at most 5; GG's are limited by each model ([providers.md](providers.md) §10).
 
 **Pricing:** as for `image.generate`, with a larger allowance for the input pictures ([providers.md](providers.md) §10).
 

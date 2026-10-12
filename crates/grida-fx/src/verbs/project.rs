@@ -7,7 +7,13 @@
 //!   "running", path}`; `node_finished` → `{state: "succeeded", path, cache, facts}` (`facts`
 //!   `{}` when the event has none); `node_failed` / `node_skipped` → `{state: "failed" |
 //!   "skipped", path, error}` (`error` when it is set and not empty, else `reason`, else `null`).
-//!   Other events (`node_retry`, `call`, `budget_*`, `phase_planned`, `problem`) are left out;
+//!   A step waiting for its route's slot (spec/store.md §8): a `call_waiting` for an entry that
+//!   is `running` or `waiting` opens a wait, keyed by its `call`, and the `call_admitted` of the
+//!   same `call` closes it; the step's next `node_*` or `node_retry` event, or any
+//!   `run_started`, closes all its waits. An entry with an open wait is `{state: "waiting",
+//!   path, waiting_for}` (the `route` of its earliest open wait, else `null`), and a `waiting`
+//!   entry whose last wait closes is `{state: "running", path}`. Other events (`call`,
+//!   `budget_*`, `phase_planned`, `problem`) are left out;
 //! - `run`: the last `run_started`, `run_finished` and `run_cancelled` event, each whole but for
 //!   its `kind`.
 //!
@@ -17,7 +23,9 @@ use crate::cli::ProjectArgs;
 use crate::print::print_json;
 use crate::verbs::{event_name, read_log};
 use grida_fx_core::Error;
+use indexmap::IndexMap;
 use serde_json::{Map, Value, json};
+use std::collections::HashMap;
 
 /// Runs `grida-fx project`.
 pub fn run(args: &ProjectArgs) -> Result<u8, Error> {
@@ -31,6 +39,8 @@ pub fn run(args: &ProjectArgs) -> Result<u8, Error> {
 pub(crate) fn projection(events: &[Value]) -> Value {
     let mut instances = Map::new();
     let mut run = Map::new();
+    // Each started step's open waits, in the order they began: call key → route.
+    let mut waits: HashMap<String, IndexMap<Option<String>, Value>> = HashMap::new();
     for event in events {
         let Some(object) = event.as_object() else {
             continue;
@@ -38,6 +48,14 @@ pub(crate) fn projection(events: &[Value]) -> Value {
         let name = event_name(event);
         let id = object.get("id").and_then(Value::as_str);
         let path = || object.get("path").cloned().unwrap_or(Value::Null);
+        if let (
+            Some("node_started" | "node_finished" | "node_failed" | "node_skipped" | "node_retry"),
+            Some(id),
+        ) = (name, id)
+        {
+            // A start, an end or a new attempt leaves the step's waits behind.
+            waits.remove(id);
+        }
         match (name, id) {
             (Some("node_started"), Some(id)) => {
                 instances.insert(id.to_string(), json!({"state": "running", "path": path()}));
@@ -68,7 +86,37 @@ pub(crate) fn projection(events: &[Value]) -> Value {
                     json!({"state": state, "path": path(), "error": error}),
                 );
             }
+            (Some("node_retry"), Some(id)) => settle(&mut instances, id, None),
+            (Some(call @ ("call_waiting" | "call_admitted")), Some(id)) => {
+                if !matches!(
+                    instances
+                        .get(id)
+                        .and_then(|entry| entry.get("state"))
+                        .and_then(Value::as_str),
+                    Some("running" | "waiting")
+                ) {
+                    continue;
+                }
+                let open = waits.entry(id.to_string()).or_default();
+                let key = object
+                    .get("call")
+                    .and_then(Value::as_str)
+                    .map(str::to_string);
+                if call == "call_waiting" {
+                    let route = object.get("route").cloned().unwrap_or(Value::Null);
+                    open.entry(key).or_insert(route);
+                } else {
+                    open.shift_remove(&key);
+                }
+                settle(&mut instances, id, open.values().next());
+            }
             (Some(summary @ ("run_started" | "run_finished" | "run_cancelled")), _) => {
+                if summary == "run_started" {
+                    // A new invocation leaves every earlier wait behind.
+                    for id in std::mem::take(&mut waits).into_keys() {
+                        settle(&mut instances, &id, None);
+                    }
+                }
                 let mut kept = object.clone();
                 kept.remove("kind");
                 run.insert(summary.to_string(), Value::Object(kept));
@@ -77,6 +125,25 @@ pub(crate) fn projection(events: &[Value]) -> Value {
         }
     }
     json!({"instances": instances, "run": run})
+}
+
+/// Shows a started step `waiting` for `route`, the route of its earliest open wait, or `running`
+/// once it has none; any other entry stays as it is.
+fn settle(instances: &mut Map<String, Value>, id: &str, route: Option<&Value>) {
+    let Some(entry) = instances.get_mut(id) else {
+        return;
+    };
+    if !matches!(
+        entry.get("state").and_then(Value::as_str),
+        Some("running" | "waiting")
+    ) {
+        return;
+    }
+    let path = entry.get("path").cloned().unwrap_or(Value::Null);
+    *entry = match route {
+        Some(route) => json!({"state": "waiting", "path": path, "waiting_for": route}),
+        None => json!({"state": "running", "path": path}),
+    };
 }
 
 /// Whether a value counts as given: not null, `false`, `0`, an empty string, list or object.
@@ -215,6 +282,72 @@ mod tests {
         assert_eq!(run["run_started"]["resumed"], true);
         assert_eq!(run["run_cancelled"]["reason"], "interrupted");
         assert_eq!(run["run_finished"]["ok"], true);
+    }
+
+    #[test]
+    fn a_call_waiting_for_its_route_makes_its_step_waiting_until_admitted() {
+        let call = |name: &str, id: &str, key: char, route: &str| {
+            envelope(
+                name,
+                json!({"id": id, "capability": "image.generate", "route": route,
+                       "call": key.to_string().repeat(64)}),
+            )
+        };
+        let events = vec![
+            envelope("node_started", json!({"id": "a#1", "path": "a"})),
+            envelope("node_started", json!({"id": "b#1", "path": "b"})),
+            envelope("node_started", json!({"id": "e#1", "path": "e"})),
+            // Two calls of one body wait at once: one admitted, the step still waits.
+            call("call_waiting", "a#1", '1', "img-a@acme"),
+            call("call_waiting", "a#1", '2', "img-b@acme"),
+            call("call_admitted", "a#1", '1', "img-a@acme"),
+            call("call_waiting", "b#1", '3', "img-a@acme"),
+            call("call_admitted", "b#1", '3', "img-a@acme"),
+            // An admission of no open wait closes nothing; a new attempt closes them all.
+            call("call_waiting", "e#1", '4', "img-a@acme"),
+            call("call_admitted", "e#1", '5', "img-a@acme"),
+            envelope(
+                "node_retry",
+                json!({"id": "e#1", "attempt": 2, "error": "e"}),
+            ),
+            call("call_admitted", "e#1", '4', "img-a@acme"),
+            // Neither an unstarted nor an ended step waits.
+            call("call_waiting", "c#1", '6', "img-a@acme"),
+            envelope(
+                "node_finished",
+                json!({"id": "d#1", "path": "d", "cache": "miss", "outputs": {}}),
+            ),
+            call("call_waiting", "d#1", '7', "img-a@acme"),
+            call("call_admitted", "d#1", '7', "img-a@acme"),
+        ];
+        let instances = projection(&events)["instances"].clone();
+        assert_eq!(
+            instances,
+            json!({
+                "a#1": {"state": "waiting", "path": "a", "waiting_for": "img-b@acme"},
+                "b#1": {"state": "running", "path": "b"},
+                "e#1": {"state": "running", "path": "e"},
+                "d#1": {"state": "succeeded", "path": "d", "cache": "miss", "facts": {}},
+            })
+        );
+        // The stray admission left e#1's wait open until its new attempt.
+        let stray = projection(&events[..10])["instances"]["e#1"].clone();
+        assert_eq!(stray["state"], "waiting");
+        // The other call's admission ends the step's wait.
+        let mut admitted = events.clone();
+        admitted.push(call("call_admitted", "a#1", '2', "img-b@acme"));
+        assert_eq!(
+            projection(&admitted)["instances"]["a#1"],
+            json!({"state": "running", "path": "a"})
+        );
+        // A new invocation leaves the waits of the last one behind, for good.
+        let mut resumed = events.clone();
+        resumed.push(envelope("run_started", json!({"resumed": true})));
+        resumed.push(call("call_admitted", "a#1", '2', "img-b@acme"));
+        assert_eq!(
+            projection(&resumed)["instances"]["a#1"],
+            json!({"state": "running", "path": "a"})
+        );
     }
 
     #[test]

@@ -128,8 +128,8 @@ file (`workflows/case.yaml`).
 | `project <folder>` | the run's record projected to its state, as JSON on stdout |
 | `inspect <folder> --verify`, `inspect <folder> --json` | the run's summary (state, counts, spend, failures) and the check of every file it placed, on stdout; or the same as JSON |
 | `jobs` | the project store's long jobs, one line each; nothing when it holds none |
-| `reroll <folder> <step>` | the next take of a step path, written to the workflow's takes file; one line saying so and the next command, on stdout |
-| `pick <folder> <step> <take>` | a take chosen for a step path, with its result's digest, written to the takes file; one line on stdout |
+| `reroll <folder> <step>` | the next take of a step path, written to the workflow's takes file; one line saying so and a `next` line, on stdout: the command that repeats the folder's run, or advice when its record cannot repeat it |
+| `pick <folder> <step> <take>` | a take chosen for a step path, with its result's digest, written to the takes file; one line saying so and a `next` line as `reroll` prints it, on stdout |
 | `takes list <target>` | the takes file's entries, one line each (`<step>  take <n>[  <digest>]`), on stdout |
 | `lock [--check] [--same <type>]` | `fx.lock`, written or checked |
 | `cache prune [--forget-user <id>] [--yes] [--json]` | what pruning the store would remove, or removed with `--yes`, per store (`removed   <n> results, <n> calls (paid $<x>), <n> files: <bytes>; keeps …`), or the same as JSON (fx-cache-prune-v1); a refusal (`refused: <code>: …`) exits 1 and removes nothing |
@@ -238,6 +238,7 @@ alone.
 | `cache-prune` | `cache prune` over a hand-written store: refused until the store's earlier users (`legacy`) are forgotten; a preview removes nothing; what the run names stays (a result, and a paid answer only its reservation names) with their files, the rest goes and its cost is reported; a second prune removes nothing |
 | `cache-replay` | a paid call answered offline from a seeded call record, without `--live`; a second run answered from the result cache |
 | `cache-replay-miss` | the same project without a store: a paid call without `--live` is refused (exit 1), naming the capability, the route and `--live` |
+| `coalesce-field` | `a.b ?? c` falls back when an object has no field `b` (table rows without an optional field, in `if:` and in `with:`), while a missing field elsewhere is still refused |
 | `conditions-select` | `if:` on an input and on a judge's fact, `on_reject: continue`, and `fx/select@1` with `first_of` |
 | `export-identity` | two unversioned exports of one module given the same value: one source digest, two type and step identities; a second run answers both from the cache, and each keeps its own output |
 | `facts` | `facts()` of input files (an image's size, alpha and opacity; a text file's size and kind) in `if:` and in a prompt; a fact of a file not made yet leaves an identity null |
@@ -251,6 +252,7 @@ alone.
 | `lock-write` | `lock --check` without a lock fails; `lock` writes `fx.lock` for the versioned types only |
 | `matrix` | a 2x2 `matrix` with dotted keys, collected into a `text{}` port |
 | `numbers` | `1` and `1.0` give one identity; numbers render in text in their JCS form; a run's output at `outputs/<name><suffix>`; an integer literal that reading would round is refused (exit 2) |
+| `picture-limits` | what a step's own request asks of its route, refused while planning (exit 1): references on a route without `image_input`, an exact size and a transparent background it lacks, and more input pictures than an edit route's `max_input_pictures`, counted before they are made |
 | `phase` | a `for_each` over a step's output with `max:` makes a pending second phase, priced at its maximum |
 | `refusals` | six planning problems in one plan (an assertion, a feature under its old name, a missing feature, `independent_of`, an unknown route, an unbounded repeat), exit 1 |
 | `repeat-keyed` | a keyed `for_each` over an input list, collected into one step |
@@ -261,6 +263,7 @@ alone.
 | `run-local` | a local run of every output shape: text with node facts, JSON written by the engine, a list port, a keyed port, marks written as an `annotations` output, a judge's verdict; outputs and step files at their run-folder names, verified by `inspect --verify` |
 | `run-project` | a local run, then `project` of its record: cache misses, output digests, nothing charged |
 | `run-resume` | a second run into the same folder resumes it (`resumed: true`, nothing runs again); other inputs into that folder are refused (exit 1) |
+| `run-repeat` | the `next` line of `reroll` repeats a run of a workflow file with its inputs file, route table and ceiling, each path relative to the project; `pick` on a run given a workflow input flag advises running it again instead of printing a command |
 | `run-retry-engine` | `retry="engine"`: a body that raises twice runs a third time and succeeds, and no more; a `node_retry` event for each failed attempt |
 | `run-takes` | `reroll`, `pick` and `takes list` between runs: the takes file a run's plan names, the take each run draws, a picked result's digest checked by the next run |
 | `run-timeout` | a step past its `timeout:` fails with `ran past 1 seconds` and is not run again, even under `retry="engine"` (exit 1) |

@@ -1,27 +1,33 @@
-//! Codex: `image.generate` through the user's own Codex, signed in with ChatGPT
+//! Codex: `image.generate` and `image.edit` through the user's own Codex, signed in with ChatGPT
 //! (spec/providers.md §9.6).
 //!
 //! No key and no HTTP: the adapter draws through a [`CodexRuntime`], one `codex app-server` an
 //! invocation starts on its first Codex call, keeps for the others and shuts down with the run.
 //! Codex owns sign-in, the model and the usage; FX never reads its credential files, and its calls
 //! bill the user's plan ([`Billing::Plan`]), never dollars. One send, in order:
-//! 1. the route: capability `image.generate` on provider `codex`, and a contract whose `adapter`
-//!    (when present) is [`ADAPTER`] and whose `adapter_behavior` (when present) is
-//!    [`ADAPTER_BEHAVIOR`];
+//! 1. the route: capability `image.generate` or `image.edit` on provider `codex`, and a contract
+//!    whose `adapter` (when present) is [`ADAPTER`] and whose `adapter_behavior` (when present)
+//!    is [`ADAPTER_BEHAVIOR`];
 //! 2. [`crate::capabilities::check_request`];
 //! 3. values: a blank prompt, a `size` other than `auto` (Codex picks its own sizes: asked for
-//!    1024x1024 it drew 1254x1254), an unknown `background`, references;
+//!    1024x1024 it drew 1254x1254), an unknown `background`, a mask, more than [`MAX_PICTURES`]
+//!    pictures (`image`, then `references`), and each picture's file: carried, not empty, and
+//!    PNG, JPEG or WebP;
 //! 4. the runtime's Codex, started if need be ([`runtime`]): no program ([`NOT_INSTALLED`],
 //!    [`NETWORK_OFF`]), MCP servers that cannot be listed, or a sign-in other than ChatGPT is
 //!    `Sent::Refused`, for this call and the invocation's others;
-//! 5. a thread of the call's own (an empty scratch folder, read-only sandbox, no approvals, not
-//!    persisted; a model provider other than OpenAI is refused), then `turn/start` with
-//!    [`instructions`], then the thread's notifications until its first good `imageGeneration`
-//!    item. The rest of the turn is then interrupted, and its token usage read.
+//! 5. a scratch folder of the call's own holding copies of its pictures (`picture-01.png`, ...),
+//!    and a thread in it (read-only sandbox, no approvals, not persisted; a model provider other
+//!    than OpenAI is refused), then `turn/start` with [`instructions`], which name the pictures
+//!    by path as the image tool's `referenced_image_paths`, then the thread's notifications until
+//!    its first good `imageGeneration` item. The rest of the turn is then interrupted, and its
+//!    token usage read.
 //!
-//! Outcomes: every failure is `Failed { cost: None, retryable: false }`, and nothing is resent:
-//! before `turn/start` is written a failure is most likely to happen again; after, an image may
-//! already have been made. A call that is dropped (its run was cancelled) interrupts its turn.
+//! Outcomes: a request Codex rejects as overloaded was not received (`Sent::NotReceived`); every
+//! other failure is `Failed { cost: None, retryable: false }`, and nothing is resent: before
+//! `turn/start` is written a failure is most likely to happen again; after, an image may already
+//! have been made. A call that is dropped (its run was cancelled) interrupts its turn, through the
+//! runtime's reader when Codex had not yet named it.
 //! Codex reports no cost: an answer's cost is `None`, and its [`Usage`] says what Codex counted.
 
 mod process;
@@ -56,7 +62,11 @@ pub const ADAPTER: &str = "fx-codex-image-v1";
 
 /// The route contract's `adapter_behavior` this adapter serves. It names [`instructions`] and
 /// the settings of a Codex conversation: a change to either is a new behaviour.
-pub const ADAPTER_BEHAVIOR: &str = "1";
+pub const ADAPTER_BEHAVIOR: &str = "2";
+
+/// The most input pictures of one call (`image` and `references`): Codex's image tool draws
+/// nothing for more.
+pub const MAX_PICTURES: usize = 5;
 
 /// The deadline of one send, from asking for Codex to the image.
 pub const DEADLINE: Duration = Duration::from_secs(600);
@@ -94,14 +104,35 @@ const ALSO_WITHHELD: [&str; 5] = [
     "OPENAI_PROJECT_ID",
 ];
 
+/// The kinds of picture Codex reads, and the extension its copy takes.
+const PICTURE_KINDS: [(&str, &str); 3] = [
+    ("image/png", "png"),
+    ("image/jpeg", "jpg"),
+    ("image/webp", "webp"),
+];
+
 /// Settings for every Codex this adapter starts: nothing of the user's runs on a turn's end,
-/// remembers it, hooks into it or offers it apps, plugins or (with [`mcp_servers`]) MCP tools.
-const SETTINGS: [&str; 5] = [
+/// remembers it, hooks into it or offers it apps, plugins or (with [`mcp_servers`]) MCP tools;
+/// and none of Codex's own tools but its image tool is offered (Codex ignores a feature it does
+/// not know).
+const SETTINGS: [&str; 17] = [
     "notify=[]",
     "features.memories=false",
     "features.hooks=false",
     "features.apps=false",
     "features.plugins=false",
+    "features.shell_tool=false",
+    "features.unified_exec=false",
+    "features.multi_agent=false",
+    "features.browser_use=false",
+    "features.computer_use=false",
+    "features.in_app_browser=false",
+    "features.view_image=false",
+    "features.goals=false",
+    "features.sleep_tool=false",
+    "features.tool_suggest=false",
+    "features.skill_search=false",
+    "web_search=\"disabled\"",
 ];
 
 /// The deadline of listing the user's MCP servers.
@@ -115,13 +146,15 @@ const SETTLE: Duration = Duration::from_secs(3);
 enum Stop {
     /// Codex cannot draw on the user's plan: `Sent::Refused`.
     Refused(String),
+    /// Codex rejected a request on arrival: `Sent::NotReceived`.
+    NotReceived(String),
     Failed(String),
 }
 
 impl Stop {
     fn into_reason(self) -> String {
         match self {
-            Stop::Refused(reason) | Stop::Failed(reason) => reason,
+            Stop::Refused(reason) | Stop::NotReceived(reason) | Stop::Failed(reason) => reason,
         }
     }
 
@@ -165,23 +198,28 @@ impl CodexImages {
         self
     }
 
-    /// Steps 1 to 3 of the module doc: the turn's text, or the refusal.
-    fn prepare(&self, call: &CallRequest) -> Result<String, String> {
+    /// Steps 1 to 3 of the module doc: what to draw, or the refusal.
+    fn prepare<'a>(&self, call: &'a CallRequest) -> Result<Drawing<'a>, String> {
         served(&call.route)?;
         capabilities::check_request(&call.route.capability, &call.request)?;
         let values = Values::read(&call.request)?;
-        Ok(instructions(&values))
+        let pictures = values
+            .pictures
+            .iter()
+            .map(|(member, value)| picture(call, value, member))
+            .collect::<Result<_, _>>()?;
+        Ok(Drawing { values, pictures })
     }
 }
 
 impl RequestAdapter for CodexImages {
     fn send<'a>(&'a self, call: &'a CallRequest) -> BoxFuture<'a, Sent> {
         Box::pin(async move {
-            let text = match self.prepare(call) {
-                Ok(text) => text,
+            let drawing = match self.prepare(call) {
+                Ok(drawing) => drawing,
                 Err(reason) => return Sent::Refused { reason },
             };
-            draw(&self.runtime, &text, self.start_deadline, self.deadline).await
+            draw(&self.runtime, &drawing, self.start_deadline, self.deadline).await
         })
     }
 
@@ -197,16 +235,15 @@ impl RequestAdapter for CodexImages {
     }
 }
 
-/// Registers the adapter for `image.generate` on `codex`, over a runtime of the setup's program,
-/// which the registry keeps to shut it down with the invocation. Codex brings its own sign-in and
-/// network: no key, no transport.
+/// Registers the adapter for `image.generate` and `image.edit` on `codex`, over one runtime of
+/// the setup's program, which the registry keeps to shut it down with the invocation. Codex brings
+/// its own sign-in and network: no key, no transport.
 pub fn register(adapters: &mut Adapters, setup: &Setup) {
     let runtime = Arc::new(CodexRuntime::new(setup.codex.clone()));
-    adapters.register(
-        "image.generate",
-        "codex",
-        Adapter::Request(Arc::new(CodexImages::new(Arc::clone(&runtime)))),
-    );
+    let images = Arc::new(CodexImages::new(Arc::clone(&runtime)));
+    for capability in ["image.generate", "image.edit"] {
+        adapters.register(capability, "codex", Adapter::Request(images.clone()));
+    }
     adapters.keep_runtime(runtime);
 }
 
@@ -259,17 +296,24 @@ pub fn withheld() -> impl Iterator<Item = &'static str> {
         .chain(ALSO_WITHHELD.iter().copied())
 }
 
-/// The turn's text: fixed instructions, a sentence for a transparent or opaque background, then
-/// the authored prompt verbatim (behaviour [`ADAPTER_BEHAVIOR`]).
-pub fn instructions(values: &Values<'_>) -> String {
-    let mut text = String::from(
-        "Use $imagegen to generate exactly one image from the prompt between the <prompt> tags. \
-         Give it the prompt as written.",
+/// The turn's text (behaviour [`ADAPTER_BEHAVIOR`]): the image tool's arguments, the pictures'
+/// paths in order, fixed instructions, then the authored prompt verbatim. Codex draws an opaque
+/// image unless `transparent_background` is true, so `auto` is opaque.
+pub fn instructions(values: &Values<'_>, pictures: &[PathBuf]) -> String {
+    let transparent = values.background == "transparent";
+    let mut text = format!(
+        "Call the image_gen.imagegen tool exactly once. Pass the text between the <prompt> tags \
+         as its prompt, exactly as written. Set transparent_background to {transparent}."
     );
-    match values.background {
-        "transparent" => text.push_str(" Give it a transparent background (an alpha channel)."),
-        "opaque" => text.push_str(" Give it an opaque background, with no transparent pixels."),
-        _ => {}
+    if !pictures.is_empty() {
+        let paths: Vec<String> = pictures
+            .iter()
+            .map(|path| format!("`{}`", path.display()))
+            .collect();
+        text.push_str(&format!(
+            " Set referenced_image_paths to these input images, in this order: {}.",
+            paths.join(", ")
+        ));
     }
     text.push_str(
         " Do not run commands, read or edit files, use any other tool or ask questions. When the \
@@ -287,7 +331,8 @@ fn served(route: &RouteRef) -> Result<(), String> {
             route.capability
         )
     };
-    if route.capability != "image.generate" || route.provider != "codex" {
+    let capability = route.capability.as_str();
+    if !matches!(capability, "image.generate" | "image.edit") || route.provider != "codex" {
         return Err(refused());
     }
     let contract = match &route.contract {
@@ -314,6 +359,9 @@ pub struct Values<'a> {
     pub prompt: &'a str,
     /// `auto`, `opaque` or `transparent`; `auto` when absent.
     pub background: &'a str,
+    /// The input pictures in order, each with its member (`image`, `references[<i>]`); at most
+    /// [`MAX_PICTURES`].
+    pub pictures: Vec<(String, &'a Value)>,
 }
 
 impl<'a> Values<'a> {
@@ -335,12 +383,77 @@ impl<'a> Values<'a> {
             }
             Some(_) => return Err("background must be auto, opaque or transparent".into()),
         };
-        let references = request.get("references").and_then(Value::as_array);
-        if references.is_some_and(|list| !list.is_empty()) {
-            return Err("Codex image generation takes no references".into());
+        if request.get("mask").is_some_and(|mask| !mask.is_null()) {
+            return Err("Codex image edits take no mask".into());
         }
-        Ok(Values { prompt, background })
+        let mut pictures: Vec<(String, &Value)> = request
+            .get("image")
+            .filter(|image| !image.is_null())
+            .map(|image| ("image".to_string(), image))
+            .into_iter()
+            .collect();
+        let references = request.get("references").and_then(Value::as_array);
+        pictures.extend(
+            references
+                .into_iter()
+                .flatten()
+                .enumerate()
+                .map(|(i, value)| (format!("references[{i}]"), value)),
+        );
+        if pictures.len() > MAX_PICTURES {
+            return Err(format!("Codex takes at most {MAX_PICTURES} input pictures"));
+        }
+        Ok(Values {
+            prompt,
+            background,
+            pictures,
+        })
     }
+}
+
+/// What one call draws: its values and its pictures' files.
+struct Drawing<'a> {
+    values: Values<'a>,
+    pictures: Vec<Picture<'a>>,
+}
+
+/// An input picture: its store copy, and the extension its copy for Codex takes.
+struct Picture<'a> {
+    source: &'a Path,
+    extension: &'static str,
+}
+
+/// Step 3 for one picture: a file the call carries, not empty, of a kind Codex reads.
+fn picture<'a>(call: &'a CallRequest, value: &Value, member: &str) -> Result<Picture<'a>, String> {
+    let file = wire::request_file(call, value, member)?;
+    let readable = std::fs::metadata(&file.path).is_ok_and(|m| m.is_file() && m.len() > 0);
+    if !readable {
+        return Err(format!("{member} has no bytes to send"));
+    }
+    let Some((_, extension)) = PICTURE_KINDS.iter().find(|(kind, _)| *kind == file.kind) else {
+        return Err(format!(
+            "{member} is {}; Codex takes PNG, JPEG or WebP",
+            file.kind
+        ));
+    };
+    Ok(Picture {
+        source: &file.path,
+        extension,
+    })
+}
+
+/// Step 5: copies of the pictures in `folder`, in order, as `picture-<nn>.<extension>`.
+fn place(pictures: &[Picture<'_>], folder: &Path) -> Result<Vec<PathBuf>, Stop> {
+    pictures
+        .iter()
+        .enumerate()
+        .map(|(i, picture)| {
+            let copy = folder.join(format!("picture-{:02}.{}", i + 1, picture.extension));
+            std::fs::copy(picture.source, &copy)
+                .map(|_| copy)
+                .map_err(|error| Stop::Failed(grida_fx_core::error::io_reason(&error)))
+        })
+        .collect()
 }
 
 /// A command that starts `program` with `args` in `folder`: Codex's own environment, less
@@ -361,7 +474,7 @@ pub(super) fn command(program: &Path, args: &[String], folder: &Path) -> Command
     command
 }
 
-/// `-c` settings, `features.apps` and `features.plugins` off first.
+/// `-c` settings: [`SETTINGS`] first.
 pub(super) fn settings(extra: impl IntoIterator<Item = String>) -> Vec<String> {
     SETTINGS
         .iter()
@@ -417,11 +530,14 @@ fn toml_key(name: &str) -> String {
 /// Steps 4 and 5 (module doc) under their deadlines.
 async fn draw(
     runtime: &CodexRuntime,
-    text: &str,
+    wanted: &Drawing<'_>,
     start_deadline: Duration,
     deadline: Duration,
 ) -> Sent {
     let began = Instant::now();
+    if let Some(reason) = runtime.limited(unix_now()) {
+        return Sent::Refused { reason };
+    }
     let mut turn: Option<Turn> = None;
     let label = |turn: &Option<Turn>, reason: String| {
         if turn.as_ref().is_some_and(|turn| turn.requested) {
@@ -430,9 +546,15 @@ async fn draw(
             format!("{LABEL} was not started: {reason}")
         }
     };
-    match tokio::time::timeout(start_deadline, begin(runtime, text, &mut turn)).await {
+    match tokio::time::timeout(start_deadline, begin(runtime, wanted, &mut turn)).await {
         Ok(Ok(())) => {}
         Ok(Err(Stop::Refused(reason))) => return Sent::Refused { reason },
+        Ok(Err(Stop::NotReceived(reason))) => {
+            return Sent::NotReceived {
+                reason: format!("{LABEL} was not started: {reason}"),
+                retry_after: None,
+            };
+        }
         Ok(Err(Stop::Failed(reason))) => return failed(label(&turn, reason)),
         Err(_) => {
             let reason = format!(
@@ -456,7 +578,12 @@ async fn draw(
                     .with_usage(drawing.usage()),
             )
         }
-        Ok(Err(stop)) => failed(label(&Some(drawing), stop.into_reason())),
+        Ok(Err(stop)) => {
+            if let Some(resets_at) = drawing.limit {
+                runtime.reached(resets_at);
+            }
+            failed(label(&Some(drawing), stop.into_reason()))
+        }
         Err(_) => {
             let reason = format!("Codex did not finish within {} s", deadline.as_secs());
             failed(label(&Some(drawing), reason))
@@ -466,12 +593,18 @@ async fn draw(
 
 /// The runtime's Codex, a thread, and the turn: on its way into `slot`, so a stop at any point
 /// still knows whether `turn/start` was written.
-async fn begin(runtime: &CodexRuntime, text: &str, slot: &mut Option<Turn>) -> Result<(), Stop> {
+async fn begin(
+    runtime: &CodexRuntime,
+    wanted: &Drawing<'_>,
+    slot: &mut Option<Turn>,
+) -> Result<(), Stop> {
     let connection = runtime.connection().await?;
     let folder = tempfile::Builder::new()
         .prefix("grida-fx-codex-")
         .tempdir()
         .map_err(|error| Stop::Failed(grida_fx_core::error::io_reason(&error)))?;
+    let pictures = place(&wanted.pictures, folder.path())?;
+    let text = instructions(&wanted.values, &pictures);
     let (started, notes) = connection
         .start_thread(json!({
             "cwd": folder.path().to_string_lossy(),
@@ -487,6 +620,7 @@ async fn begin(runtime: &CodexRuntime, text: &str, slot: &mut Option<Turn>) -> R
         turn: None,
         requested: false,
         finished: false,
+        limit: None,
         notes,
         usage: Usage {
             runtime: connection.version.as_ref().map(|v| format!("codex {v}")),
@@ -513,8 +647,8 @@ async fn begin(runtime: &CodexRuntime, text: &str, slot: &mut Option<Turn>) -> R
     };
     turn.requested = true;
     let accepted = connection
-        .request(
-            "turn/start",
+        .start_turn(
+            &thread,
             json!({
                 "threadId": thread,
                 "input": [{"type": "text", "text": text}],
@@ -538,6 +672,8 @@ struct Turn {
     requested: bool,
     /// The turn ended (`turn/completed`).
     finished: bool,
+    /// The turn said the usage limit is reached ([`protocol::usage_limit`]).
+    limit: Option<Option<i64>>,
     notes: mpsc::UnboundedReceiver<Note>,
     usage: Usage,
     /// The thread's working folder, removed after it.
@@ -562,6 +698,7 @@ impl Turn {
                     match protocol::image_of(item) {
                         Ok(bytes) => return Ok(bytes),
                         Err(reason) => {
+                            self.limit = self.limit.or(protocol::usage_limit(Some(item), None));
                             failure.get_or_insert(reason);
                         }
                     }
@@ -570,6 +707,7 @@ impl Turn {
                 "turn/completed" if self.our_turn(&params["turn"]) => {
                     self.finished = true;
                     let turn = &params["turn"];
+                    self.limit = self.limit.or(protocol::usage_limit(None, Some(turn)));
                     return Err(Stop::Failed(
                         failure.unwrap_or_else(|| protocol::turn_failure(turn)),
                     ));
@@ -619,12 +757,11 @@ impl Turn {
         }
     }
 
-    /// Asks Codex to stop the turn, without waiting.
+    /// Asks Codex to stop the turn, without waiting. Before Codex named the turn, the runtime's
+    /// reader does it when the name arrives ([`Connection::start_turn`]).
     fn interrupt(&self) {
         if let (Some(thread), Some(turn)) = (&self.thread, &self.turn) {
-            self.connection
-                .notify(json!({"jsonrpc": "2.0", "id": format!("interrupt-{turn}"),
-                "method": "turn/interrupt", "params": {"threadId": thread, "turnId": turn}}));
+            self.connection.notify(protocol::interrupt(thread, turn));
         }
     }
 }
@@ -638,6 +775,13 @@ impl Drop for Turn {
             self.connection.forget(thread);
         }
     }
+}
+
+/// Seconds since the Unix epoch, as Codex's `resetsAt` counts them.
+fn unix_now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| since.as_secs() as i64)
 }
 
 /// A failure: never retried, and charged the route's hold ($0) since Codex reports no cost.
@@ -668,14 +812,21 @@ mod tests {
         assert_eq!(
             served(&route(
                 "codex",
-                json!({"adapter": ADAPTER, "adapter_behavior": "1"})
+                json!({"adapter": ADAPTER, "adapter_behavior": "2"})
             )),
             Ok(())
         );
         assert_eq!(served(&route("codex", Value::Null)), Ok(()));
+        let mut edit = route("codex", json!({}));
+        edit.capability = "image.edit".into();
+        assert_eq!(served(&edit), Ok(()));
+        edit.capability = "image.upscale".into();
+        assert!(served(&edit).is_err());
         for contract in [
             json!({"adapter": "fx-openai-image-v1"}),
             json!({"adapter_behavior": 1}),
+            // The skill-mention behaviour that took no pictures.
+            json!({"adapter_behavior": "1"}),
             json!([]),
         ] {
             assert!(served(&route("codex", contract)).is_err());
@@ -691,6 +842,8 @@ mod tests {
         let read = |request: Value| {
             Values::read(&request).map(|v| (v.prompt.to_string(), v.background.to_string()))
         };
+        let file = |name: &str| json!({"file": name});
+        let five = vec![file("r"); MAX_PICTURES - 1];
         assert_eq!(
             read(json!({"prompt": " a kite "})),
             Ok((" a kite ".into(), "auto".into()))
@@ -714,42 +867,63 @@ mod tests {
                 "background must be auto, opaque or transparent",
             ),
             (
-                json!({"prompt": "p", "references": [{"file": "a"}]}),
-                "Codex image generation takes no references",
+                json!({"prompt": "p", "image": file("a"), "mask": file("m")}),
+                "Codex image edits take no mask",
+            ),
+            (
+                json!({"prompt": "p", "image": file("a"), "references": vec![file("r"); 5]}),
+                "Codex takes at most 5 input pictures",
             ),
         ] {
             assert_eq!(read(request.clone()), Err(reason.to_string()), "{request}");
         }
+        // An edit's image comes first, then the references, in order.
+        let request = json!({"prompt": "p", "image": file("a"), "references": five, "mask": null});
+        let members: Vec<String> = Values::read(&request)
+            .unwrap()
+            .pictures
+            .into_iter()
+            .map(|(member, value)| format!("{member}={}", value["file"].as_str().unwrap()))
+            .collect();
+        assert_eq!(
+            members,
+            [
+                "image=a",
+                "references[0]=r",
+                "references[1]=r",
+                "references[2]=r",
+                "references[3]=r"
+            ]
+        );
     }
 
     #[test]
-    fn the_instructions_name_the_background_then_the_prompt_verbatim() {
-        let plain = Values {
+    fn the_instructions_name_the_tool_s_arguments_then_the_prompt_verbatim() {
+        let values = |background| Values {
             prompt: "a red\n kite ",
-            background: "auto",
+            background,
+            pictures: Vec::new(),
         };
         assert_eq!(
-            instructions(&plain),
-            "Use $imagegen to generate exactly one image from the prompt between the <prompt> \
-             tags. Give it the prompt as written. Do not run commands, read or edit files, use \
-             any other tool or ask questions. When the image is made, reply with one short \
-             sentence.\n\n<prompt>\na red\n kite \n</prompt>"
+            instructions(&values("auto"), &[]),
+            "Call the image_gen.imagegen tool exactly once. Pass the text between the <prompt> \
+             tags as its prompt, exactly as written. Set transparent_background to false. Do not \
+             run commands, read or edit files, use any other tool or ask questions. When the image \
+             is made, reply with one short sentence.\n\n<prompt>\na red\n kite \n</prompt>"
         );
-        let icon = Values {
-            prompt: "p",
-            background: "transparent",
-        };
-        assert!(instructions(&icon).contains(
-            "as written. Give it a transparent background (an alpha channel). Do not run"
+        assert_eq!(
+            instructions(&values("opaque"), &[]),
+            instructions(&values("auto"), &[])
+        );
+        let pictures = [
+            PathBuf::from("/tmp/x/picture-01.png"),
+            PathBuf::from("/tmp/x/picture-02.webp"),
+        ];
+        assert!(instructions(&values("transparent"), &pictures).contains(
+            "exactly as written. Set transparent_background to true. Set \
+                 referenced_image_paths to these input images, in this order: \
+                 `/tmp/x/picture-01.png`, `/tmp/x/picture-02.webp`. Do not run"
         ));
-        let opaque = Values {
-            prompt: "p",
-            background: "opaque",
-        };
-        assert!(
-            instructions(&opaque)
-                .contains(" Give it an opaque background, with no transparent pixels. ")
-        );
     }
 
     #[test]
@@ -834,6 +1008,30 @@ mod tests {
                 "features.apps=false",
                 "-c",
                 "features.plugins=false",
+                "-c",
+                "features.shell_tool=false",
+                "-c",
+                "features.unified_exec=false",
+                "-c",
+                "features.multi_agent=false",
+                "-c",
+                "features.browser_use=false",
+                "-c",
+                "features.computer_use=false",
+                "-c",
+                "features.in_app_browser=false",
+                "-c",
+                "features.view_image=false",
+                "-c",
+                "features.goals=false",
+                "-c",
+                "features.sleep_tool=false",
+                "-c",
+                "features.tool_suggest=false",
+                "-c",
+                "features.skill_search=false",
+                "-c",
+                "web_search=\"disabled\"",
                 "-c",
                 "mcp_servers.acme.enabled=false",
             ]

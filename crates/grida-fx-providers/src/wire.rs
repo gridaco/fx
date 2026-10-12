@@ -480,8 +480,10 @@ pub fn check_size_envelope(width: u32, height: u32, label: &str) -> Result<(), S
 ///    `the answer is <kind>, not image/png`;
 /// 2. the bytes decode, every row of them ([`png_decodes`]): `the image data is not decodable`;
 /// 3. an exact `size`: `the image is <w>x<h>, not <W>x<H>`;
-/// 4. `background: transparent`: an alpha channel (the `has_alpha` fact):
-///    `the picture asked for as transparent has no alpha channel`;
+/// 4. `background: transparent`: an alpha channel (the `has_alpha` fact), else `the picture
+///    asked for as transparent has no alpha channel`, and a pixel that is not opaque (the
+///    `opaque` fact false), else `the picture asked for as transparent has no transparent
+///    pixels`;
 /// 5. `background: opaque`: every pixel opaque (the `opaque` fact):
 ///    `the picture asked for as opaque has transparent pixels`.
 pub fn check_image(
@@ -506,6 +508,9 @@ pub fn check_image(
     match background {
         "transparent" if !facts.has_alpha => {
             Err("the picture asked for as transparent has no alpha channel".into())
+        }
+        "transparent" if facts.opaque => {
+            Err("the picture asked for as transparent has no transparent pixels".into())
         }
         "opaque" if !facts.opaque => {
             Err("the picture asked for as opaque has transparent pixels".into())

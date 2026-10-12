@@ -1,0 +1,12 @@
+# What a step's own request asks of its route, refused while planning (exit 1): references on a
+# route without image_input, an exact size and a transparent background it does not honour, and
+# more input pictures than an edit route takes, counted before any of them is made.
+steps:
+- argv:
+  - expand
+  - case
+  - --routes
+  - routes.yaml
+  save: expand.json
+  json: true
+  status: 1

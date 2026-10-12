@@ -158,6 +158,12 @@ export function projectScopes(view: GraphDocument | ViewerRun, flat: CanvasGraph
     const failed = children.filter((node) => node.state === "failed");
     // A workflow has run since its first step started.
     const started_at = children.flatMap((node) => node.started_at ?? []).sort()[0];
+    const state = scopeState(children.map((node) => node.state), plan);
+    // A waiting workflow has waited since its first waiting step did, for their route when they share one.
+    const waiting = state === "waiting" ? children.filter((node) => node.state === "waiting") : [];
+    const routes = new Set(waiting.map((node) => node.waiting_for));
+    const waiting_for = routes.size === 1 ? [...routes][0] : undefined;
+    const waiting_since = waiting.flatMap((node) => node.waiting_since ?? []).sort()[0];
     const errors = children.filter((node) => node.state === "failed" || node.state === "blocked").flatMap((node) => {
       const source = sourceNodes.get(node.source_id);
       const message = source && ("error" in source ? source.error : source.reason);
@@ -165,7 +171,8 @@ export function projectScopes(view: GraphDocument | ViewerRun, flat: CanvasGraph
     });
     nodes.push({ id: scope.id, source_id: scope.id, kind: "workflow", scope_id: scope.id, path: scope.path, address: scope.step, take: scope.take, key: scope.path,
       title: scope.title || scope.path, subtitle: scope.source ?? scope.path,
-      state: scopeState(children.map((node) => node.state), plan), pending: false, ...(started_at ? { started_at } : {}),
+      state, pending: false, ...(started_at ? { started_at } : {}),
+      ...(waiting_for ? { waiting_for } : {}), ...(waiting_since ? { waiting_since } : {}),
       child_count: children.length, failure_count: failed.length, ...(errors.length ? { errors } : {}), ports: scopePorts(scope) });
   }
   const inputId = active === null ? null : `boundary:input:${active}`;

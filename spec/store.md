@@ -161,6 +161,41 @@ the plan digest, step or call identities, prices, or cache keys. A changed defin
 or input creates a different plan within the same logical workflow (recorded ID
 and source); FX introduces no workflow revision or version registry.
 
+**Repeating a run.** A `run_started` that `grida-fx run` writes may record `repeat`: the
+arguments that run the same workflow again with the same inputs, from which `reroll` and `pick`
+print their `next` command. It holds the target, as `workflow` (a workflow id, as given) or
+`file` (the workflow file, or a builder's module with its `function`), the `--inputs` and
+`--routes` files in the order given (`inputs`, `routes`, left out when none), `max_usd` (the
+`--max-usd` amount, when given) and `live` (whether the invocation admitted paid calls). Every
+path is POSIX and relative to the planning project's root, each part exactly as the file system
+names it once symbolic links are resolved. It holds nothing else: `--run`,
+`--name` and `--resume` choose the folder, and a run of another take is another plan, so it
+needs a new one; `--yes-up-to`, `--deliver` and the viewer options belong to the invocation.
+A `run_started` records no `repeat` when its record could not repeat the invocation: workflow
+input flags or `--arg` were given, a stand-in answered its paid calls, the target, an inputs
+file or a route table lies outside the planning project or has a path that is not UTF-8, the
+target is a builder and the working directory is not the planning project's root (a builder is
+called with the working directory), or an SDK started it (its inputs file is temporary;
+[sdk.md](sdk.md)).
+
+`reroll` and `pick` resolve the recorded paths, `repeat`'s and `plan.json`'s `takes_file`,
+against the planning project, the project whose run index (§9) records the run folder: the
+nearest folder at or above the run folder whose index records it, else the project found from
+the working directory when its index records the folder. A folder no index records (a copied
+one) takes its takes file from the project found from the working directory and repeats with
+the sentence below. They read the latest `run_started`: with a `repeat`, they print `<command>
+run <target> [--inputs <file>]… [--routes <file>]… [--max-usd <amount>] [--live]`, each path
+relative to the working directory and written `./<path>` when it would start with `-`, each
+word outside `[A-Za-z0-9_./:@%+,-]` (or starting with `=`) in single quotes. `--live` is that
+`run_started`'s `live`: a run whose latest invocation was not live, such as one resumed without
+`--live`, repeats without it. They print the sentence `run <workflow id> again with the same
+inputs and options` instead, never a command that would run something else, when there is no
+`repeat` or one they cannot read, when no planning project is known, when the target is a
+workflow id, a workflow file other than YAML or a builder and the working directory is in
+another project (planning would find the target there), when the target is a builder and the
+working directory is not the planning project's root, or when a path is not UTF-8. Like the presentation metadata, `repeat` is not
+part of `plan.json`, the plan digest, step or call identities, prices or cache keys.
+
 **Resuming.** Running in a folder that already holds a run continues it. Finished steps come back from the record and the store, and answered calls replay without being billed. A folder whose `plan.json` records a different plan digest ([identity.md](identity.md) §10), or whose `events.jsonl` holds an event with another `plan`, is refused before anything runs, with the advice to choose a new folder; so is a folder of the other mode, a stand-in run resumed without a stand-in or the reverse (*Stand-in runs* below). The engine reads both only once it holds `run.lock`, so no other invocation writes the folder between the check and the run.
 
 **Layout.**
@@ -174,8 +209,9 @@ and source); FX introduces no workflow revision or version registry.
   outputs/<name><suffix>                             the workflow's declared outputs
 ```
 
-- **`plan.json`** is the fx-graph-v1 document that `grida-fx expand` prints, `types` included, with `plan` (the plan digest), `steps` (each declared step by its declaration path, with its declaration `order`), `inputs` and `view_origins` added, and `takes_file`: the POSIX path of the workflow's takes file relative to the planning project's root, which `reroll` and `pick` write to. A stand-in run's also has `"stand_in": true`; no other run's has the member. The first invocation writes it before any step runs, under a temporary name and then renamed (§6). Later invocations compare its `plan` and never rewrite it.
+- **`plan.json`** is the fx-graph-v1 document that `grida-fx expand` prints, `types` included, with `plan` (the plan digest), `steps` (each declared step by its declaration path, with its declaration `order`), `inputs` and `view_origins` added, and `takes_file`: the POSIX path of the workflow's takes file relative to the planning project's root, which `reroll` and `pick` write to (found as *Repeating a run* says). A stand-in run's also has `"stand_in": true`; no other run's has the member. The first invocation writes it before any step runs, under a temporary name and then renamed (§6). Later invocations compare its `plan` and never rewrite it.
 - **`events.jsonl`** is the record, and the source of truth for every command that reads the run. Each line is one fx-run-events-v1 event, written as `canon(event)` and then one line feed (U+000A), oldest first. Each line is written whole and flushed before the run goes on, in one write. A line that cannot be written whole (a full disk can take part of one) MUST NOT stay: the engine cuts the file back to its length before the line, writes nothing more if it cannot, and stops the run, so no line ever follows part of a line. A last line without its line feed is a line an invocation began and never finished (it was killed): readers leave it out, and the next invocation cuts it off, says so, and appends after it. A resumed run appends lines under a new `invocation_id`. Lines are never rewritten or removed otherwise. Every line reads back as JSON ([identity.md](identity.md) §2, nested at most 512 deep): a node fact or mark nested deeper than 509 fails its node ([protocol.md](protocol.md) §5.3), and an encoded list (fx-run-events-v1 `encoded`) nested so deep that its `{"list": …}` levels would pass that is written once as `{"value": <its plain JSON>}`, which reads back as the same list.
+- **Waiting for a route.** A paid call takes its route's slot before each send: the route's `concurrency` and `requests_per_minute` ([providers.md](providers.md) §10). A call that cannot take one at once writes `call_waiting` (`id`, `capability`, `route`, and `call`, its key) before it waits, and `call_admitted` with the same members once it has the slot; a call admitted at once writes neither, so a run on unpaced routes records nothing more. A wait that the run's cancellation ends writes no `call_admitted`. A wait is open from its `call_waiting` until the `call_admitted` of the same call, or until the step starts again, makes a new attempt (`node_retry`) or its run a new invocation (`run_started`): a wait those leave behind is no longer the step's. Readers show a started step that has not ended and has an open wait as `waiting` rather than `running` (`inspect`, `project`, the viewer), and time the work a step did from its start less the time it waited. A step whose body makes several calls at once is shown `waiting` while any of them waits, though another may be drawing: the record names only calls that waited.
 - **`run.lock`** holds an exclusive operating-system file lock (`flock` on POSIX), taken without waiting, for as long as an invocation runs the folder. A second invocation that cannot take the lock is refused at once ("another invocation is running <folder>"). The lock ends with the process, so a crashed run leaves no stale lock. The file's content means nothing. It stays in place while the folder holds a run; a removal (§9) unlinks it last. An invocation that took the lock then checks that the file it locked is still the folder's `run.lock` (the same device and inode), and is refused otherwise ("<folder> was removed while this invocation started"), since that lock was taken on a folder that is gone.
 - **`files/`** gets an instance's output files when it succeeds, whether it ran or came from the cache, before its `node_finished` event is written. Each take of a step has a folder of its own (`<step>` below), so `files/` holds every take's files and `inspect --verify` checks each against its record.
 - **`outputs/`** gets the workflow's declared outputs at the end of each invocation, before `run_finished`. An incomplete run places the outputs that exist. An output that holds no file, such as a plain value, has no entry here; its value is in the `run_finished` event.

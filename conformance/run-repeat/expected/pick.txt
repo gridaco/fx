@@ -1,0 +1,2 @@
+case.takes.yaml: a uses take 1
+next      run case again with the same inputs and options

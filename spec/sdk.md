@@ -19,6 +19,12 @@ existing named run. An explicit folder retains its existing create/resume behavi
 Resuming repeats current target/input/route/builder options; old options are not
 restored. A name does not force generation or alter any cache identity.
 
+SDKs start `run` with `GRIDA_FX_CANCEL_SOURCE=sdk` in the engine's environment. Besides naming
+the source of a signal's cancellation, it tells the engine that the invocation's inputs file is
+temporary: its `run_started` records no `repeat` ([store.md](store.md) §8, "Repeating a run"),
+so `reroll` and `pick` on its folder advise running it again rather than print a command. An
+SDK caller repeats a run by calling `run` again with the same request.
+
 Run calls retain execution ownership until completion, including cancellation
 cleanup under [control.md](control.md). They return execution results. They do not
 start a viewer, return an early URL, or offer a readiness handle.

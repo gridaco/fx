@@ -112,6 +112,35 @@ pub fn entries(project_root: &Path) -> io::Result<Vec<PathBuf>> {
     Ok(folders)
 }
 
+/// The root of the planning project whose index records `folder` (canonical): the nearest folder
+/// at or above it whose index records it, else `elsewhere` (canonical) when its index records
+/// it (a folder outside its planning project is recorded there by its absolute path). `None`
+/// when neither does: a copied folder, or one whose entry is gone. Reads only.
+pub fn recording_project(folder: &Path, elsewhere: &Path) -> Option<PathBuf> {
+    folder
+        .ancestors()
+        .chain([elsewhere])
+        .find(|root| records(root, folder))
+        .map(Path::to_path_buf)
+}
+
+/// Whether `project_root`'s index holds the entry of `folder` (both canonical).
+fn records(project_root: &Path, folder: &Path) -> bool {
+    let Ok(recorded) = recorded_form(project_root, folder) else {
+        return false;
+    };
+    let path = project_root.join(INDEX).join(entry_name(&recorded));
+    let Ok(metadata) = fs::symlink_metadata(&path) else {
+        return false;
+    };
+    metadata.is_file()
+        && metadata.len() <= MAX_ENTRY_BYTES
+        && fs::read(&path)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+            .is_some_and(|value| value.get("folder").and_then(Value::as_str) == Some(&recorded))
+}
+
 /// Removes the entry of `folder` (canonical, or as [`entries`] gave it): whether there was one.
 pub fn forget(project_root: &Path, folder: &Path) -> io::Result<bool> {
     let Ok(recorded) = recorded_form(project_root, folder) else {
@@ -301,6 +330,35 @@ mod tests {
         assert!(!forget(&moved, &moved.join("runs/one")).unwrap());
         assert!(forget(&moved, &outside).unwrap());
         assert!(entries(&moved).unwrap().is_empty());
+    }
+
+    #[test]
+    fn the_recording_project_is_the_one_whose_index_holds_the_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let (a, b) = (root.join("a"), root.join("b"));
+        let inside = b.join("runs/x/one");
+        let outside = root.join("elsewhere/two");
+        fs::create_dir_all(&a).unwrap();
+        fs::create_dir_all(&inside).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        let index = RunIndex {
+            project_root: b.clone(),
+        };
+        index.record(&inside).unwrap();
+        index.record(&outside).unwrap();
+        // Inside its project, from any other project.
+        assert_eq!(recording_project(&inside, &a), Some(b.clone()));
+        // Outside it, only from the project that records it.
+        assert_eq!(recording_project(&outside, &b), Some(b.clone()));
+        assert_eq!(recording_project(&outside, &a), None);
+        // An entry that names another folder does not count.
+        fs::write(
+            b.join(INDEX).join(entry_name("runs/x/one")),
+            "{\"folder\":\"runs/x/other\"}\n",
+        )
+        .unwrap();
+        assert_eq!(recording_project(&inside, &a), None);
     }
 
     #[cfg(unix)]

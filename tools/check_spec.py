@@ -393,7 +393,9 @@ def check_names(gate: Gate) -> None:
     roots = [p for p in NAME_ROOTS if p.is_dir()]
     for root in roots:
         for path in sorted(root.rglob("*")):
-            if not path.is_file() or "__pycache__" in path.parts:
+            # What running an example writes, and its own environment, are not authored.
+            generated = {"__pycache__", ".fx", "runs", ".venv"} & set(path.relative_to(root).parts)
+            if not path.is_file() or generated:
                 continue
             data = path.read_bytes()
             if not any(name in data for name in FORBIDDEN_NAMES):
