@@ -4,7 +4,6 @@
   "character": "Riko",
   "source_reference": "motion-reference.json",
   "recipe": "inputs/dance.txt",
-  "workflow": "examples/character-performance/workflow.yaml",
   "publication_status": "accepted_for_additional_bounded_study",
   "sampled_admission": "pass",
   "scope": "Additional 6-second performance case; existing canonical deliveries remain unchanged.",
@@ -26,8 +25,8 @@
   "files": [
     {
       "path": "REPRODUCE.md",
-      "bytes": 3318,
-      "sha256": "f52f1163c96cdb670291a6adcbe3faaf3b7f2780042919dfd38b2cec379ee1b5"
+      "bytes": 3747,
+      "sha256": "e16e4a219947f89b0d89397ad4e9a4709b9ad8fd96ee7aa82c569e4dd49e638d"
     },
     {
       "path": "assets/character.png",
@@ -36,8 +35,8 @@
     },
     {
       "path": "assets/dense-evidence.json",
-      "bytes": 2110,
-      "sha256": "2983b375c4051b2d314f99b66298c2cde4ca45c303f4caa6949f44fdc8266dc1"
+      "bytes": 2422,
+      "sha256": "8836459acbd1b05d1e2779aa847337bcc2dc4c53efcc1a15b9dcc2c0286b9fa1"
     },
     {
       "path": "assets/dense-poses-01.png",
@@ -111,8 +110,8 @@
     },
     {
       "path": "content-review.json",
-      "bytes": 3541,
-      "sha256": "35348eba6c8c62ff8ec72918ed987c5925e4409eeef798b21c44bc1df40f6f32"
+      "bytes": 4100,
+      "sha256": "46ee0e3a3dce787dd80439e6573fa69c1f7db4238b85d80ba23d58b219f03e9d"
     },
     {
       "path": "inputs/dance.txt",
@@ -127,5 +126,6 @@
   ],
   "reproduction": "REPRODUCE.md",
   "independent_content_review": "content-review.json",
-  "recipe_delivery": "Plain-text download containing the exact YAML recipe; save as inputs/dance.yaml."
+  "recipe_delivery": "Plain-text download containing the exact YAML recipe; save as inputs/dance.yaml.",
+  "workflow_source": "https://github.com/gridaco/fx/blob/3335e60e3fcbe6346f4d6a15fcccb236c6d75b3c/examples/character-performance/workflow.yaml"
 }

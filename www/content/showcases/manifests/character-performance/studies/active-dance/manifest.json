@@ -1,0 +1,132 @@
+{
+  "kind": "character_performance_study_package_v1",
+  "title": "Full-body cross-step and head-wrap",
+  "character": "Riko",
+  "source_reference": "motion-reference.json",
+  "recipe": "inputs/hiphop.txt",
+  "recipe_save_as": "inputs/hiphop.yaml",
+  "workflow_source": "https://github.com/gridaco/fx/blob/3335e60e3fcbe6346f4d6a15fcccb236c6d75b3c/examples/character-performance/workflow.yaml",
+  "publication_status": "accepted_for_additional_bounded_study",
+  "sampled_admission": "pass",
+  "scope": "Additional six-second active choreography case; existing canonical deliveries remain unchanged.",
+  "generation_routes": {
+    "video.motion_transfer": "fal-ai/kling-video/v3/pro/motion-control@fal",
+    "structured.generate": "openai/gpt-6-astra@openrouter"
+  },
+  "node_versions": {
+    "finish": 2,
+    "admit": 2
+  },
+  "limitations": [
+    "Independent inspection covered 24 chronological paired poses, five native pairs, the poster and identity comparison; it does not certify every transition.",
+    "The all 180-frame clear border scan is a conservative studio-background pixel proxy.",
+    "Fine finger contours are simplified or merged in some gestures.",
+    "Gesture heights, leg bends and exact foot contact are approximated.",
+    "Native output retains substantial empty upper space; downstream framing is an explicit editorial operation.",
+    "New generations are nondeterministic and need fresh review."
+  ],
+  "files": [
+    {
+      "path": "REPRODUCE.md",
+      "bytes": 3628,
+      "sha256": "f210a197d94ec735b4ae164f547326afe8c38ff10ff497aca4bfa43f4c32c980"
+    },
+    {
+      "path": "assets/character.png",
+      "bytes": 129047,
+      "sha256": "35d56bb82d18469032fd83e43b2975aaa6dc24ae1e465ac10bde2a38db20756b"
+    },
+    {
+      "path": "assets/dense-evidence.json",
+      "bytes": 2286,
+      "sha256": "1f611674e75d52b6d1ade3cbb094c5be802235b1b11ea61921ae66498764a176"
+    },
+    {
+      "path": "assets/dense-poses-01.png",
+      "bytes": 1116585,
+      "sha256": "99e9ccd6426559f9fd333275d4f122e320fadabea7fd9ab30a85eb72f280efd2"
+    },
+    {
+      "path": "assets/dense-poses-02.png",
+      "bytes": 1122323,
+      "sha256": "9461d92fcfba7d4e881d8d661b6ae650564c824695ab770026729c3f9fc51a26"
+    },
+    {
+      "path": "assets/identity.png",
+      "bytes": 157885,
+      "sha256": "73405f7402b5b154c62168f8e7af456e5c21c784ee13ddc857be3e8478657947"
+    },
+    {
+      "path": "assets/pose-evidence.png",
+      "bytes": 989227,
+      "sha256": "6fb37163ab6a8f610885a312385c18c56313c6eb5ac3ab4f58c2764285d23fd9"
+    },
+    {
+      "path": "assets/poster.webp",
+      "bytes": 39472,
+      "sha256": "57083a9a38ce413f3701084ff9adae71380c2eb6b4136aa68bf604eff54934eb"
+    },
+    {
+      "path": "assets/producer-observations.json",
+      "bytes": 1830,
+      "sha256": "254d7ba83a0f1f467d3a994c4f33a7a4d24525dab6eefcae921c59b36a9a8a85"
+    },
+    {
+      "path": "assets/report.json",
+      "bytes": 1960,
+      "sha256": "f93e97b6b3ad3fe5d4968c42d0a18e8685e8fef88bd0e6f662e0ba728043ca37"
+    },
+    {
+      "path": "assets/review-details/native-pair-0.84s.png",
+      "bytes": 638887,
+      "sha256": "d1223dced7832b48f14303f9f3e0e1622076f5a079f23855e495a9eceb7f3133"
+    },
+    {
+      "path": "assets/review-details/native-pair-2.53s.png",
+      "bytes": 703325,
+      "sha256": "83d3db61beed41752d55ebbb9ca480ebadbace2adfe2a113ffb428b36db41944"
+    },
+    {
+      "path": "assets/review-details/native-pair-3.37s.png",
+      "bytes": 701775,
+      "sha256": "cc61b2c20870200a4e9ddd265dd17430f2fa8c605dced2b00b1953f3b1129f61"
+    },
+    {
+      "path": "assets/review-details/native-pair-4.21s.png",
+      "bytes": 657077,
+      "sha256": "42719cf7582b4f685d45754e0f777ca8c16b9dbc5d9666d1ac5d4835e3928fc7"
+    },
+    {
+      "path": "assets/review-details/native-pair-5.06s.png",
+      "bytes": 655443,
+      "sha256": "3d2e48e2b4b36fedee723a6b806c599eda8bb1c5f4e3f2049b174df0baf96439"
+    },
+    {
+      "path": "assets/sampled-review.json",
+      "bytes": 2142,
+      "sha256": "44bd6844f686e13cfa49a4fbaf77757365e565758d63090bd4c40cab508b8616"
+    },
+    {
+      "path": "assets/video.mp4",
+      "bytes": 7896900,
+      "sha256": "1c17bd8729f1e5321dacf3cf40984499d8932c1ac373beee06ca0e1fa8503bf8"
+    },
+    {
+      "path": "content-review.json",
+      "bytes": 3616,
+      "sha256": "21321e2ce9c651ed10f5e7016a46b98a5dedb6614a4121007b9c49e3d414c30f"
+    },
+    {
+      "path": "inputs/hiphop.txt",
+      "bytes": 163,
+      "sha256": "200ccc75f207610c551fdc8bdc69500026c35ac1c01c6c669e61d2d586f57fbe"
+    },
+    {
+      "path": "motion-reference.json",
+      "bytes": 1434,
+      "sha256": "73e804998751925d99680f0f58709b297f9cb05ccc2013e5c724b0125836304a"
+    }
+  ],
+  "reproduction": "REPRODUCE.md",
+  "independent_content_review": "content-review.json"
+}

@@ -1,9 +1,9 @@
 {
   "kind": "fx-showcase-lock-v1",
   "release": {
-    "sha256": "5c28fa8da809dc08979a5e643bdb85ca7323f7b4637c6cf6551fc944c5bb2916",
-    "path": "showcases/5c28fa8da809dc08979a5e643bdb85ca7323f7b4637c6cf6551fc944c5bb2916/manifest.json",
-    "fixture": "manifests/5c28fa8da809dc08979a5e643bdb85ca7323f7b4637c6cf6551fc944c5bb2916.json"
+    "sha256": "30b1f4410d574120418e881f7b8c81e2d23f1fc8e4795135f33653fb28093266",
+    "path": "showcases/30b1f4410d574120418e881f7b8c81e2d23f1fc8e4795135f33653fb28093266/manifest.json",
+    "fixture": "manifests/30b1f4410d574120418e881f7b8c81e2d23f1fc8e4795135f33653fb28093266.json"
   },
   "workflows": {
     "character-3d": {
@@ -607,8 +607,8 @@
         "contract": "video-demo-v1",
         "manifest": {
           "path": "character-performance/manifest.json",
-          "sha256": "b410e27a2171799607363efb717a4355de006e985ef2c106bf1e4406bcac0052",
-          "bytes": 13567,
+          "sha256": "648d6adc601fb93271e8883e738a55f64424d70afd95d9c407253b398f1ca30b",
+          "bytes": 17063,
           "media_type": "application/json"
         },
         "metadata": [
@@ -715,9 +715,51 @@
             "media_type": "application/json"
           },
           {
+            "path": "character-performance/studies/active-dance/assets/dense-evidence.json",
+            "sha256": "1f611674e75d52b6d1ade3cbb094c5be802235b1b11ea61921ae66498764a176",
+            "bytes": 2286,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/studies/active-dance/assets/producer-observations.json",
+            "sha256": "254d7ba83a0f1f467d3a994c4f33a7a4d24525dab6eefcae921c59b36a9a8a85",
+            "bytes": 1830,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/studies/active-dance/assets/report.json",
+            "sha256": "f93e97b6b3ad3fe5d4968c42d0a18e8685e8fef88bd0e6f662e0ba728043ca37",
+            "bytes": 1960,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/studies/active-dance/assets/sampled-review.json",
+            "sha256": "44bd6844f686e13cfa49a4fbaf77757365e565758d63090bd4c40cab508b8616",
+            "bytes": 2142,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/studies/active-dance/content-review.json",
+            "sha256": "21321e2ce9c651ed10f5e7016a46b98a5dedb6614a4121007b9c49e3d414c30f",
+            "bytes": 3616,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/studies/active-dance/manifest.json",
+            "sha256": "1a2624545e2996b03db62b89a0af00bdb58c091bf36d0d7bd95478360994cd0d",
+            "bytes": 4794,
+            "media_type": "application/json"
+          },
+          {
+            "path": "character-performance/studies/active-dance/motion-reference.json",
+            "sha256": "73e804998751925d99680f0f58709b297f9cb05ccc2013e5c724b0125836304a",
+            "bytes": 1434,
+            "media_type": "application/json"
+          },
+          {
             "path": "character-performance/studies/dance/assets/dense-evidence.json",
-            "sha256": "2983b375c4051b2d314f99b66298c2cde4ca45c303f4caa6949f44fdc8266dc1",
-            "bytes": 2110,
+            "sha256": "8836459acbd1b05d1e2779aa847337bcc2dc4c53efcc1a15b9dcc2c0286b9fa1",
+            "bytes": 2422,
             "media_type": "application/json"
           },
           {
@@ -740,14 +782,14 @@
           },
           {
             "path": "character-performance/studies/dance/content-review.json",
-            "sha256": "35348eba6c8c62ff8ec72918ed987c5925e4409eeef798b21c44bc1df40f6f32",
-            "bytes": 3541,
+            "sha256": "46ee0e3a3dce787dd80439e6573fa69c1f7db4238b85d80ba23d58b219f03e9d",
+            "bytes": 4100,
             "media_type": "application/json"
           },
           {
             "path": "character-performance/studies/dance/manifest.json",
-            "sha256": "7482ad668e8ed840519981de57f7ad8185a7c08804bd0e1007b74d9800da90f2",
-            "bytes": 4610,
+            "sha256": "8cabdb2e263251e34dbf11b0e64670973d41b99ff593ccd3d1d31026aa032b0f",
+            "bytes": 4693,
             "media_type": "application/json"
           },
           {

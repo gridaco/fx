@@ -1,0 +1,66 @@
+{
+ "audio": "removed",
+ "character": "Riko",
+ "character_plate_sha256": "35d56bb82d18469032fd83e43b2975aaa6dc24ae1e465ac10bde2a38db20756b",
+ "finished": {
+  "duration_seconds": 6,
+  "fps": 30,
+  "frames": 180,
+  "height": 1920,
+  "width": 1072
+ },
+ "framing_scan": {
+  "corner_patch_pixels": 8,
+  "corner_uniformity_max_channel_threshold": 8,
+  "edge_contacts": [],
+  "foreground_edge_max_channel_threshold": 20,
+  "frame_index_base": 0,
+  "frames_scanned": 180,
+  "kind": "studio_border_scan_v1",
+  "limitation": "Uniform corners and clear borders cannot establish anatomy or every-transition quality.",
+  "scope": "all native frames; conservative plain-studio pixel proxy, not semantic certification",
+  "status": "clear",
+  "timing": "native best_effort_timestamp_time",
+  "unknown_frames": []
+ },
+ "full_decode": "pass",
+ "kind": "character_performance_finish_v1",
+ "motion_sha256": "81b378a3dc1c768f4d99419525cc627a5cfb7b0740b2b5db4be335f97d02234f",
+ "native": {
+  "duration_seconds": 6,
+  "fps": 30,
+  "frames": 180,
+  "height": 1920,
+  "width": 1072
+ },
+ "publication_status": "requires_separate_content_review",
+ "rejection_reasons": [],
+ "review_scope": "sampled_frames_and_pose_correspondence",
+ "review_sha256": "44bd6844f686e13cfa49a4fbaf77757365e565758d63090bd4c40cab508b8616",
+ "review_status": "sampled_review_pass",
+ "sample_mean_rgb_change": [
+  4.268880208333333,
+  3.84912109375,
+  4.379720052083333,
+  4.116536458333333,
+  3.5899251302083335,
+  4.2138671875,
+  4.1552734375
+ ],
+ "sample_times_seconds": [
+  0,
+  0.842857,
+  1.685714,
+  2.528571,
+  3.371429,
+  4.214286,
+  5.057143,
+  5.9
+ ],
+ "sampled_review_status": "pass",
+ "sampling_limit": "Eight frame pairs cannot certify every transition.",
+ "spatial_resizing_of_output": false,
+ "take_sha256": "1b7cb1d37cd715e73f3d5a9ca8ab517e5ee3eafe91276f72113da81eeffd1166",
+ "temporal_interpolation": false,
+ "video_sha256": "1c17bd8729f1e5321dacf3cf40984499d8932c1ac373beee06ca0e1fa8503bf8"
+}

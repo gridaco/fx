@@ -145,6 +145,39 @@ additional bounded transfer case, not a claim of exact contact, finger fidelity
 or reliability on unseen choreography. Fresh generation is nondeterministic
 and needs its own review.
 
+## A more active dance reference
+
+The [active dance recipe](inputs/hiphop.yaml) uses Riko and the 16–22 second
+interval of [Antoni Shkraba's recording](motion-reference-hiphop.json). In a fresh
+example copy, set only `routes.video.motion_transfer` in `fx.yaml` to
+`fal-ai/kling-video/v3/pro/motion-control@fal`, retaining the independent review
+route. Then acquire the pinned inputs and plan before spending:
+
+```sh
+uv run --no-sync python fetch_inputs.py
+uv run --no-sync python fetch_motion.py --reference motion-reference-hiphop.json \
+  --output .showcase-inputs/hiphop-motion.mp4
+grida fx plan workflow.yaml --inputs inputs/hiphop.yaml --check
+grida fx run workflow.yaml --inputs inputs/hiphop.yaml --live --max-usd 10
+```
+
+This case compares different routes on the same performance. Wan retained the
+coarse choreography but produced conspicuously enlarged palms. Kling V3 Pro
+improved the inspected hand proportions, but its first take clipped a shoe in
+43 of 180 native frames. Changing only `body_fill` from 0.45 to 0.4 produced the
+accepted take: eight sampled review criteria and all 180 native border checks
+passed. Independent publication review inspected 24 chronological pose pairs,
+five complete native pairs, the identity comparison and poster.
+
+That take retains the provider's native 1072 × 1920, 30 fps output. Cross-steps,
+reaches, turns and the knee lift follow the inspected reference poses; fingers
+remain simplified and floor contact is unverified. The native frame contains
+substantial empty space above the character. A later crop is an editorial choice
+requiring its own review. These observations describe these exact attempts;
+they do not rank the models generally or certify every transition. A new run
+is nondeterministic and needs fresh review. Raw and transcoded stock footage
+remains excluded from FX's public package.
+
 ## Inspect or reuse one stage
 
 | Stage | Input | Result |

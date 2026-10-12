@@ -49,7 +49,7 @@
     },
     {
       "path": "assets/dense-evidence.json",
-      "sha256": "2983b375c4051b2d314f99b66298c2cde4ca45c303f4caa6949f44fdc8266dc1"
+      "sha256": "8836459acbd1b05d1e2779aa847337bcc2dc4c53efcc1a15b9dcc2c0286b9fa1"
     },
     {
       "path": "assets/dense-poses-01.png",
@@ -79,5 +79,12 @@
       "path": "assets/review-details/native-pair-5.06s.png",
       "sha256": "c2242bef99d4af776190938fb19529e8a5806e98b9ac630a57f09950342361f4"
     }
-  ]
+  ],
+  "adaptation": {
+    "original_review_sha256": "35348eba6c8c62ff8ec72918ed987c5925e4409eeef798b21c44bc1df40f6f32",
+    "scope": "Delivery metadata only: the dense evidence uses filenames relative to its delivered assets folder and a neutral evidence kind. All inspected images, video, poster, technical report and sampled review are byte-identical to the original accepted study.",
+    "semantic_verdict": "unchanged",
+    "delivered_evidence_sha256": "8836459acbd1b05d1e2779aa847337bcc2dc4c53efcc1a15b9dcc2c0286b9fa1",
+    "resolved_evidence_files": 7
+  }
 }

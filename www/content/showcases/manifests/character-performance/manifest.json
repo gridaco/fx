@@ -302,6 +302,74 @@
           "media_type": "text/plain"
         }
       ]
+    },
+    {
+      "id": "active-dance-study",
+      "label": "Transfer more active choreography",
+      "description": "A separate six-second Riko study uses another real performance with cross-steps, a turn, knee lift and head-side arm gestures. It selects the Kling motion-control route and a roomier identity plate. Independent inspection covers 24 paired poses, five native comparisons, the poster and identity comparison; a local border scan checks all 180 native frames. Fine finger contours, exact gesture heights, leg bends and floor contact remain approximate. The source, licensing interpretation and reproducible route selection accompany the evidence; raw and transcoded stock footage are excluded.",
+      "outputs": [
+        {
+          "file": "studies/active-dance/assets/video.mp4",
+          "label": "Additional active choreography study",
+          "media_type": "video/mp4",
+          "poster": "studies/active-dance/assets/poster.webp"
+        },
+        {
+          "file": "studies/active-dance/assets/identity.png",
+          "label": "Identity comparison for the active choreography study",
+          "media_type": "image/png"
+        },
+        {
+          "file": "studies/active-dance/assets/pose-evidence.png",
+          "label": "Eight synchronized driving and result pairs",
+          "media_type": "image/png"
+        },
+        {
+          "file": "studies/active-dance/assets/dense-poses-01.png",
+          "label": "Dense paired poses, first half",
+          "media_type": "image/png"
+        },
+        {
+          "file": "studies/active-dance/assets/dense-poses-02.png",
+          "label": "Dense paired poses, second half",
+          "media_type": "image/png"
+        },
+        {
+          "file": "studies/active-dance/assets/dense-evidence.json",
+          "label": "Dense sample timing and portable evidence bindings",
+          "media_type": "application/json"
+        },
+        {
+          "file": "studies/active-dance/assets/report.json",
+          "label": "Technical admission and all-native-frame border report",
+          "media_type": "application/json"
+        },
+        {
+          "file": "studies/active-dance/content-review.json",
+          "label": "Independent active choreography acceptance",
+          "media_type": "application/json"
+        },
+        {
+          "file": "studies/active-dance/motion-reference.json",
+          "label": "Driving source, rights interpretation and acquisition metadata",
+          "media_type": "application/json"
+        },
+        {
+          "file": "studies/active-dance/REPRODUCE.md",
+          "label": "Active-study reproduction and explicit route selection",
+          "media_type": "text/markdown"
+        },
+        {
+          "file": "studies/active-dance/manifest.json",
+          "label": "Complete active-study inventory and selected workflow contract",
+          "media_type": "application/json"
+        },
+        {
+          "file": "studies/active-dance/inputs/hiphop.txt",
+          "label": "Active-study input recipe; save as hiphop.yaml",
+          "media_type": "text/plain"
+        }
+      ]
     }
   ],
   "limitations": [
@@ -311,6 +379,7 @@
     "Native character clips are 720x1280 at 24fps. Caller-selected fixed regions remove empty background before local composition into 1080x1920 at 30fps by frame duplication; no intermediate motion is generated. Output is silent.",
     "The selected driving footage is used as an adaptation under the recorded licensing interpretation, not as a training dataset. Raw and trimmed stock footage is acquired from its publisher and is not hosted by FX.",
     "Riko and Nami are the public cast. A third local development character is excluded because upstream reference rights remain unresolved.",
-    "The additional lower-body study broadens the inspected inputs without establishing a success rate. Its relaxed source hand poses become splayed or V-like fingers; exact floor contact, physical balance and every transition are outside its bounded review."
+    "The additional lower-body study broadens the inspected inputs without establishing a success rate. Its relaxed source hand poses become splayed or V-like fingers; exact floor contact, physical balance and every transition are outside its bounded review.",
+    "The active choreography study uses a different motion-control route and a smaller identity plate after an edge-clipped trial was rejected. Its native 1072 x 1920, 30 fps take retains empty upper space. The bounded acceptance permits simplified fingers and approximate gesture heights, leg bends and foot contact; it does not establish route superiority or a success rate."
   ]
 }

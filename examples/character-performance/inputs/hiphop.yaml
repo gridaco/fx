@@ -1,0 +1,8 @@
+character: ../.showcase-inputs/riko.webp
+motion: ../.showcase-inputs/hiphop-motion.mp4
+name: Riko
+start: 16
+seconds: 6
+fps: 24
+body_fill: 0.4
+background: "f4eee6"

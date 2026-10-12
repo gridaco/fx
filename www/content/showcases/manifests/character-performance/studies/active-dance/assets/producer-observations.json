@@ -1,0 +1,40 @@
+{
+  "kind": "producer_performance_observations_v1",
+  "reviewer": "motion_research",
+  "independent": false,
+  "video_sha256": "1c17bd8729f1e5321dacf3cf40984499d8932c1ac373beee06ca0e1fa8503bf8",
+  "scope": "24 chronological source/result pose pairs and the native 3.37-second comparison; full 180-frame border scan is separate mechanical evidence.",
+  "observations": [
+    "Cross-steps, forward reaches, body turn, knee lift and overhead/head-wrap phases correspond in the inspected poses.",
+    "Character face, blonde/pink curled hair, pink top, denim shorts and sneakers remain recognizable.",
+    "Hands are more proportionate than the Wan output on the same driving clip, but fine finger contours are simplified and occasionally merged.",
+    "The .45 Kling plate produced actual sneaker clipping; changing only body_fill to 0.4 produced this take with a clear 180-frame border scan. This single controlled case is not a success-rate estimate."
+  ],
+  "all_frame_framing_aid": {
+    "native_size": [
+      1072,
+      1920
+    ],
+    "foreground_union_xyxy": [
+      304,
+      809,
+      842,
+      1830
+    ],
+    "padded_region_xyxy": [
+      256,
+      761,
+      890,
+      1878
+    ],
+    "padding_pixels": 48,
+    "definition": "per-frame max RGB channel distance >20 from median of four8x8 corner patches; corners agree within8",
+    "scope": "Pixel foreground union over all 180 native frames, for static crop authoring only; no anatomy or motion certification."
+  },
+  "limitations": [
+    "Source gesture heights and leg bends are approximated.",
+    "A plain studio background does not establish exact foot-floor contact.",
+    "Sampled poses do not certify every transition or unseen choreography.",
+    "This producer note is not publication approval; a separate independent content review is required."
+  ]
+}

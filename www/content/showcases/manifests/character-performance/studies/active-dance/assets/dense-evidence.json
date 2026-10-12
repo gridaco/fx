@@ -1,0 +1,67 @@
+{
+  "kind": "dense_performance_evidence_v1",
+  "video_sha256": "1c17bd8729f1e5321dacf3cf40984499d8932c1ac373beee06ca0e1fa8503bf8",
+  "motion_sha256": "81b378a3dc1c768f4d99419525cc627a5cfb7b0740b2b5db4be335f97d02234f",
+  "native_frames": 180,
+  "foreground_union_xyxy": [
+    304,
+    809,
+    842,
+    1830
+  ],
+  "union_padding_pixels": 48,
+  "dense_result_region_xyxy": [
+    256,
+    761,
+    890,
+    1878
+  ],
+  "dense_sample_times_seconds": [
+    0.0,
+    0.25,
+    0.5,
+    0.75,
+    1.0,
+    1.25,
+    1.5,
+    1.75,
+    2.0,
+    2.25,
+    2.5,
+    2.75,
+    3.0,
+    3.25,
+    3.5,
+    3.75,
+    4.0,
+    4.25,
+    4.5,
+    4.75,
+    5.0,
+    5.25,
+    5.5,
+    5.75
+  ],
+  "capture_timing": "requested timestamps; FFmpeg selects the decoded frame at/after each request, within one native-frame interval",
+  "native_full_frame_pair_times_seconds": [
+    0.84,
+    2.53,
+    3.37,
+    4.21,
+    5.06
+  ],
+  "foreground_definition": "per-frame max RGB channel distance >20 from median of four8x8 corner patches; corners agree within8",
+  "union_scope": "all native frames; conservative studio-background authoring aid, not anatomy or motion certification",
+  "dense_layout": "source above; generated result below with fixed padded all-frame union crop for legible detail. Native-pair files retain complete original pixels.",
+  "semantic_scope": "sampled visual evidence; no claim that every transition was reviewed",
+  "files": {
+    "review-details/native-pair-0.84s.png": "d1223dced7832b48f14303f9f3e0e1622076f5a079f23855e495a9eceb7f3133",
+    "review-details/native-pair-2.53s.png": "83d3db61beed41752d55ebbb9ca480ebadbace2adfe2a113ffb428b36db41944",
+    "review-details/native-pair-3.37s.png": "cc61b2c20870200a4e9ddd265dd17430f2fa8c605dced2b00b1953f3b1129f61",
+    "review-details/native-pair-4.21s.png": "42719cf7582b4f685d45754e0f777ca8c16b9dbc5d9666d1ac5d4835e3928fc7",
+    "review-details/native-pair-5.06s.png": "3d2e48e2b4b36fedee723a6b806c599eda8bb1c5f4e3f2049b174df0baf96439",
+    "dense-poses-01.png": "99e9ccd6426559f9fd333275d4f122e320fadabea7fd9ab30a85eb72f280efd2",
+    "dense-poses-02.png": "9461d92fcfba7d4e881d8d661b6ae650564c824695ab770026729c3f9fc51a26"
+  },
+  "source_evidence_sha256": "7bd118ca93ae58d396a21ff6214c133c7a8cad1dd11139fef8f3275ddf5900fa"
+}

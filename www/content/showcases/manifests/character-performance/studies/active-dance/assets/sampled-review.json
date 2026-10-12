@@ -1,0 +1,22 @@
+{
+ "anatomy_and_framing": "pass",
+ "identity": "pass",
+ "limitations": [
+  "This judgment covers the supplied opening comparison and eight synchronized samples only; transitions, continuous timing, foot sliding, and between-frame artifacts were not assessed.",
+  "The small character renderings limit inspection of individual fingers, facial details, and small accessory details.",
+  "Audio was not assessed, and reliability on unseen inputs has not been established."
+ ],
+ "motion_correspondence": "pass",
+ "observations": [
+  "The generated character remains recognizable against the plate: similar illustrated face, long blonde-and-pink curled hair, pink hair accessory, dark choker, cropped pink sweatshirt, denim shorts, and white sneakers with pink accents.",
+  "The soft shading, linework, proportions, and plain pale background remain consistent with the illustrated character rather than adopting the reference person's appearance.",
+  "At 0.00s, the raised hand near the upper chest/face, opposite lowered arm, turned torso, and staggered stance correspond to the reference. At 0.84s and 1.69s, the open-hand gestures and stepping configurations also track the paired poses.",
+  "The forward two-arm reach at 2.53s, lateral arm extension and widened stance at 3.37s, and bent-knee pose with a hand near the face at 4.21s are clearly represented.",
+  "At 5.06s, the overhead arm, opposite hand across the waist, and backward-bent leg correspond. At 5.90s, the character follows the forward body bend, hand over the head, and opposite arm reaching down.",
+  "The eight samples show distinct performance poses with corresponding body turns and foot arrangements, not a static illustration. Some gesture heights and leg bends are stylized, without an evident major pose or timing mismatch at the sampled times.",
+  "The character is fully framed, including hair, hands, and shoes. No obvious missing or duplicated limbs, severe hand merges, extra people, or scene text are visible; the text shown belongs to the evidence-sheet labels."
+ ],
+ "review_scope": "sampled_frames_and_pose_correspondence",
+ "status": "pass",
+ "style": "pass"
+}

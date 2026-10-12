@@ -1,0 +1,20 @@
+{
+  "kind": "selected_motion_reference_v1",
+  "creator": "Antoni Shkraba",
+  "source_page": "https://www.pexels.com/video/woman-dancing-in-a-studio-7571002/",
+  "download_url": "https://videos.pexels.com/video-files/7571002/7571002-uhd_2160_4096_25fps.mp4",
+  "sha256": "bba941e46b6eea351f88144cf3c1d86aba679b6fe6816df4b55b523667d16851",
+  "bytes": 59946930,
+  "license": "https://www.pexels.com/license/",
+  "terms": "https://www.pexels.com/terms-of-service/",
+  "checked_date": "2026-10-13",
+  "use": "Selected full-body dance performance for an original illustrated character animation; no training dataset is collected.",
+  "publication_boundary": "Acquire stock footage from its source platform. Raw and transcoded source footage is excluded from public distribution. The character clip and composed review evidence are distinct works. No performer endorsement is implied.",
+  "inference_basis": "The license grants modification and adaptation. Selected one-shot inference is an interpretation of that grant; the terms do not expressly endorse AI motion transfer. Users must assess their own source and intended use.",
+  "selected_interval": {
+    "start_seconds": 16,
+    "duration_seconds": 6,
+    "prepared_fps": 24
+  },
+  "selection_reason": "Fixed portrait camera and visible full-body cross-steps, weight shifts, turn, knee lift and overhead/head-side arm phrase test more varied motion than an upper-body gesture clip."
+}
