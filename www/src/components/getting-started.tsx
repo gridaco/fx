@@ -42,7 +42,7 @@ export function GettingStarted() {
       aria-labelledby={`start-tab-${audience.id}`} hidden={audience.id !== "humans"} tabIndex={0}>
       <div className="flex h-10 min-w-0 items-center gap-2 rounded-md border bg-muted/30 px-2.5">
         {audience.id === "humans" && <div className="relative shrink-0 border-r pr-2">
-          <select data-install-option aria-label="Installation option" defaultValue={installOptions[0].id}
+          <select data-install-option aria-label="Package manager" defaultValue={installOptions[0].id}
             className="cursor-pointer appearance-none bg-transparent py-1 pr-5 text-xs outline-offset-2">
             {installOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
           </select>
