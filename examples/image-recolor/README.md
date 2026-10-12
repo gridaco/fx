@@ -9,7 +9,7 @@ Each node has its own source file under `nodes/`, and
 [`workflows/image-recolor.yaml`](workflows/image-recolor.yaml) connects them.
 
 Use a Python with `grida` and Pillow installed, and an FX engine with its embedded viewer
-([From a clone](../README.md#from-a-clone)). From this folder:
+([From a clone](https://github.com/gridaco/fx/blob/main/examples/README.md#from-a-clone)). From this folder:
 
 ```bash
 python make_input.py
@@ -20,7 +20,7 @@ grida fx plan image-recolor --inputs inputs/example.yaml --open
 ```
 
 The service commands need FX 0.2 or later; older releases use the compatibility viewer
-described in the [viewing guide](../../docs/guide/07-viewing.md#standalone-inspection).
+described in the [viewing guide](https://github.com/gridaco/fx/blob/main/docs/guide/07-viewing.md#standalone-inspection).
 
 The plan prints:
 

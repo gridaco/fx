@@ -119,7 +119,16 @@ pub enum Verb {
 pub struct InitArgs {
     /// project directory (default: here)
     pub directory: Option<String>,
-    /// print the initialization result as JSON
+    /// start from this template (see --list-templates); `starter` is the built-in one
+    #[arg(long, value_name = "NAME")]
+    pub template: Option<String>,
+    /// list the templates and exit
+    #[arg(long, conflicts_with_all = ["template", "directory"])]
+    pub list_templates: bool,
+    /// read templates from a checkout, a .tar.gz or its URL instead of the release (testing)
+    #[arg(long, hide = true, value_name = "SOURCE", requires = "template")]
+    pub template_source: Option<String>,
+    /// print the result as JSON
     #[arg(long)]
     pub json: bool,
 }
@@ -638,7 +647,7 @@ fn dispatch(verb: Verb, rest: Vec<String>) -> Result<u8, Error> {
         verbs::planning::run(which, &args)
     };
     match verb {
-        Verb::Init(args) => verbs::service::init(&args),
+        Verb::Init(args) => verbs::init::init(&args),
         Verb::Start(args) => verbs::service::start(&args),
         Verb::Status(args) => verbs::service::status(&args),
         Verb::Stop(args) => verbs::service::stop(&args),

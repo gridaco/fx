@@ -3,7 +3,7 @@ members = ["crates/*"]
 resolver = "3"
 
 [workspace.package]
-version = "0.5.0"
+version = "0.5.1"
 edition = "2024"
 rust-version = "1.89"
 repository = "https://github.com/gridaco/fx"
@@ -37,6 +37,9 @@ getrandom = "0.3"
 unicode-general-category = "1.1"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 url = "2"
+# init --template: the release's source archive (spec/service.md §2.1).
+tar = { version = "0.4", default-features = false }
+flate2 = "1"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
 
 [workspace.lints.rust]

@@ -1,0 +1,6 @@
+# FX run records and cache
+runs/
+.fx/
+
+# Provider keys
+.env

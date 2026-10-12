@@ -31,7 +31,7 @@ of them, so you can tell two installations apart. Setting them up, and source de
 [CONTRIBUTING.md](../../CONTRIBUTING.md#ways-to-run-fx).
 
 **One key for everything: Grida Gateway.** Create a key at
-[console.grida.co](https://console.grida.co) and set it as `GG_API_KEY`. It serves every route on
+[console.grida.co](https://console.grida.co/_/ai-gateway) and set it as `GG_API_KEY`. It serves every route on
 Grida Gateway (`@gg`): text, agent turns, images, video, 3D models and rigs, billed to your
 organization's Grida AI credits, so there is no provider account to open for each model. Set it in
 the environment, or put it in a `.env` file in your project (`GG_API_KEY=…`, and keep the file
@@ -43,7 +43,7 @@ Already have provider accounts? FX also reads each provider's own key under its 
 (`OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `FAL_KEY`, `TRIPO_API_KEY`, `ELEVENLABS_API_KEY`) for the
 routes on that provider; sound, speech and music need one, since GG has no route for them yet. No
 key at all? With Codex signed in to your ChatGPT account, images can come from
-[your own Codex](12-codex.md).
+[your own Codex](12-codex.md). [AI providers](13-providers.md) compares the ways.
 
 ### When FX needs Python
 
@@ -65,16 +65,28 @@ The first workflow below uses `image.check_alpha`, so it needs Python.
 
 ## A project
 
-A project is a folder with an `fx.yaml` in it. The standard setup is:
+A project is a folder with an `fx.yaml` in it. Start a new one with:
 
 ```sh
-grida fx init
+npx grida fx init my-assets
+cd my-assets
 grida fx start --background
 grida fx status --json
 ```
 
-`init` creates only a minimal `fx.yaml`; it preserves existing configuration and
-does not install dependencies or start anything. `start` serves the bundled
+`init` writes a starter project into a new or empty folder: `fx.yaml`, a `README.md` that says how
+to install the CLI and connect an AI provider, an `AGENTS.md` and the FX skills
+(`.agents/skills/`) for coding agents, a `.gitignore` that keeps runs, the cache and `.env` out of
+git, an `.env.example` listing the key names, and `workflows/icon.yaml`, a one-step workflow that
+draws an icon once you pick a route. It installs nothing and starts nothing. On a terminal it asks
+which template to start from; `--template NAME` names one without asking, and
+`grida fx init --list-templates` lists them. A template is one of the
+[examples](https://github.com/gridaco/fx/tree/main/examples), downloaded from the FX release you
+have, with the same agent files added. In a folder that already has an `fx.yaml`, it checks that file and
+writes nothing. It refuses any other folder that has files in it: to make an existing folder (a
+game repository, say) a project, write its `fx.yaml` yourself, holding `fx: project/v1`.
+
+`start` serves the bundled
 dashboard at `http://127.0.0.1:8787/`. Add `--open` to open it, or omit
 `--background` to keep the service in your terminal. `grida fx stop` stops the
 service without stopping workflows or deleting their records. Background mode
@@ -95,8 +107,8 @@ my-assets/
   .fx/service/        # local service state and catalog (created by FX)
 ```
 
-The initializer leaves routes and budgets to you. For the paid example below,
-extend its configuration:
+The starter leaves routes and budgets commented out for you to choose. For the paid example
+below, set them:
 
 ```yaml
 # fx.yaml

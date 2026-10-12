@@ -1,0 +1,28 @@
+{
+  "templates": [
+    {
+      "name": "hello",
+      "description": "Badges drawn by your own Python nodes, checked and laid out on a sheet: offline, no provider",
+      "provider": "none",
+      "path": "examples/hello"
+    },
+    {
+      "name": "image-recolor",
+      "description": "Recolor a picture with code, and watch the run live: offline, no provider",
+      "provider": "none",
+      "path": "examples/image-recolor"
+    },
+    {
+      "name": "pet",
+      "description": "An animated sprite sheet of a pet, drawn on your own Codex at no cost to FX",
+      "provider": "codex",
+      "path": "examples/pet"
+    },
+    {
+      "name": "concept-gallery",
+      "description": "Propose a world, review it, and draw one reviewed image per entity on Grida Gateway",
+      "provider": "gg",
+      "path": "examples/concept-gallery"
+    }
+  ]
+}

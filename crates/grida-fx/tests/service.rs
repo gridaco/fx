@@ -71,31 +71,6 @@ impl Drop for Service {
 }
 
 #[test]
-fn init_only_creates_config_and_preserves_an_existing_authored_file() {
-    let root = tempfile::tempdir().unwrap();
-    let initialized = success(execute(root.path(), &["init", "--json"]));
-    assert_eq!(initialized["kind"], "fx-project-init-v1");
-    assert_eq!(initialized["created"], true);
-    assert_eq!(initialized["files_created"], json!(["fx.yaml"]));
-    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
-    let source = "# Authored configuration\nfx: project/v1\nruns: history\n";
-    std::fs::write(root.path().join("fx.yaml"), source).unwrap();
-    let repeated = success(execute(root.path(), &["init", "--json"]));
-    assert_eq!(repeated["created"], false);
-    assert_eq!(
-        std::fs::read_to_string(root.path().join("fx.yaml")).unwrap(),
-        source
-    );
-    std::fs::write(root.path().join("fx.yaml"), "invalid: configuration\n").unwrap();
-    assert!(!execute(root.path(), &["init", "--json"]).status.success());
-    assert_eq!(
-        std::fs::read_to_string(root.path().join("fx.yaml")).unwrap(),
-        "invalid: configuration\n"
-    );
-    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
-}
-
-#[test]
 fn background_is_ready_idempotent_and_keeps_the_port_after_stop() {
     let service = Service::new();
     let port = port().to_string();

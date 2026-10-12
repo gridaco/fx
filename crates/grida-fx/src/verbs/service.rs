@@ -2,7 +2,7 @@
 //! The advisory lock owns a process lifetime; HTTP authentication owns stop authority. No PID
 //! found in a file is ever signalled, and no service command executes workflow code.
 
-use crate::cli::{InitArgs, LogsArgs, ServiceArgs, StartArgs};
+use crate::cli::{LogsArgs, ServiceArgs, StartArgs};
 use grida_fx_core::docs::project::Project;
 use grida_fx_core::{Error, ErrorKind};
 use grida_fx_viewer::service::Catalog;
@@ -22,47 +22,6 @@ const LOG: &str = "service.log";
 /// The environment variable a background start sets on the service it launches: this attempt's
 /// tag, 16 lowercase hex characters, which the service's error line carries (spec/service.md §3).
 const ATTEMPT: &str = "GRIDA_FX_SERVICE_ATTEMPT";
-
-pub fn init(args: &InitArgs) -> Result<u8, Error> {
-    let root = Path::new(args.directory.as_deref().unwrap_or("."));
-    std::fs::create_dir_all(root).map_err(|error| Error::io("project directory", &error))?;
-    let path = root.join("fx.yaml");
-    let created = match OpenOptions::new().write(true).create_new(true).open(&path) {
-        Ok(mut file) => {
-            file.write_all(
-                b"fx: project/v1\nruns: runs\ncache: .fx/cache\nworkflows: [workflows]\n",
-            )
-            .map_err(|error| Error::io("fx.yaml", &error))?;
-            true
-        }
-        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => false,
-        Err(error) => return Err(Error::io("fx.yaml", &error)),
-    };
-    if !path.is_file() {
-        return Err(Error::usage(
-            "fx.yaml exists but is not a project file; nothing was overwritten",
-        ));
-    }
-    // Validate an existing configuration without replacing or normalizing it.
-    let project = Project::find(root)?;
-    let value = json!({
-        "kind": "fx-project-init-v1", "created": created,
-        "project_root": project.root, "files_created": if created { vec!["fx.yaml"] } else { vec![] }
-    });
-    if args.json {
-        println!("{value}");
-    } else {
-        println!(
-            "{} fx.yaml",
-            if created { "Created" } else { "Using existing" }
-        );
-        println!(
-            "Start the local service with {} start --background.",
-            crate::invoker::command()
-        );
-    }
-    Ok(0)
-}
 
 fn project(where_: Option<&str>) -> Result<Project, Error> {
     let path = Path::new(where_.unwrap_or("."));

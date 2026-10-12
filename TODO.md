@@ -114,6 +114,33 @@ Listing and removing runs and pruning the cache are implemented in source
   project, are not designed; selection stays explicit.
 - **Saved plans.** Catalog plan entries have no removal path.
 
+## Project templates for `init`
+
+`init` writes one starter project, embedded in the engine, with no route set
+([service.md §2](spec/service.md#2-projects-and-standalone-operation)). Next, `init --template
+<name>` (and a picker on a terminal) starts from an example in this repository:
+
+- **The list is compiled in.** `examples/templates.json` names each offered example (name,
+  description, path, the provider it needs); the engine embeds it, so listing works offline and
+  matches the engine's version. First candidates: `hello`, `image-recolor`, `pet`,
+  `concept-gallery`.
+- **The files come from the release tag**, `codeload.github.com/gridaco/fx/tar.gz/v<version>`
+  (about 4 MB; one top folder, `fx-<version>/`). Unpack only the template's folder; refuse
+  absolute and `..` paths, links and devices, and oversize archives; unpack beside the target and
+  move it in only when complete. No package or release asset is needed. The built-in starter
+  stays the offline default; only `--template` downloads.
+- **Examples stand alone** (done): links leaving an example are absolute URLs, checked by
+  `tools/check_examples.py self-contained`, so a copied template needs no rewriting. The starter's
+  `AGENTS.md`, `.gitignore` and `.env.example` are added where a template lacks them.
+- **Testing without the network:** unit tests over synthesized archives; a hidden
+  `--template-source <dir | .tar.gz | url>` to init every indexed template from the checkout and
+  plan it (in `check_examples.py`); `git archive --prefix=fx-<version>/` served on loopback
+  stands in for codeload, which builds the same archive and honours the same `export-ignore`;
+  the release check confirms the tag holds every indexed path. Only a manual run touches GitHub.
+- **Decisions to record first:** the engine's first download outside a live provider call
+  (spec/service.md, spec/distribution.md, the "offline by default" rule); keep `init`
+  non-interactive for agents and `--json`.
+
 ## CLI update notices (npm and PyPI)
 
 **Status: researched proposal, 2026-10-08; not implemented or ratified.**

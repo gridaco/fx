@@ -16,6 +16,17 @@ source behavior: check your installed version's help before using them.
 Custom step pages remain planned. Portable recorded-run exports are described in
 the sharing chapter; check installed help for these source capabilities.
 
+## How FX is built
+
+FX is a workflow engine for asset pipelines, implemented in Rust. YAML declares the dependency
+graph; the Python and JavaScript SDKs provide programmatic authoring and execution APIs. Python
+also hosts custom node bodies and workflow builders.
+
+The engine owns planning, scheduling, result identities, caching, spending limits, provider
+retries, and run records. SDKs and node bodies use that engine rather than implementing their own
+execution or billing layer. AI generation is one application; ordinary code can run as workflow
+steps too. The bundled viewer is a read-only canvas for plans and recorded runs.
+
 ## Chapters
 
 1. [Getting started](01-getting-started.md)
@@ -30,6 +41,7 @@ the sharing chapter; check installed help for these source capabilities.
 10. [Cleaning up runs](10-cleanup.md): listing a project's runs, removing the ones you no longer need, and pruning the cache
 11. [Share a recorded run](11-exports.md): portable inspection, disclosure and immutable content
 12. [Images from your own Codex](12-codex.md): no API key, with your ChatGPT plan, and its caveats
+13. [AI providers](13-providers.md): no provider, your own Codex, Grida Gateway or your own keys, and what each serves
 
 ## Example projects
 

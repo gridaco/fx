@@ -10,7 +10,7 @@ standalone `grida-fx` command and the source setup are in
 
 | Command | |
 |---|---|
-| `grida fx init [directory] [--json]` | establish a project without overwriting existing configuration |
+| `grida fx init [directory] [--template NAME] [--json]` | start a new project in an empty folder from the starter or a template (`--list-templates` lists them), or check an existing `fx.yaml`; never overwrites |
 | `grida fx start [--project directory] [--port N] [--background] [--open] [--json]` | serve the project's dashboard and recorded runs; foreground by default |
 | `grida fx status [--project directory] [--json]` / `stop [--project directory] [--json]` | inspect or stop that project's service |
 | `grida fx logs [--project directory] [--lines N]` | read a bounded tail of service logs |
@@ -129,9 +129,11 @@ serve a type; `grida fx doctor` says which of them a live run could serve.
 
 ## Keys and live runs
 
+Which provider serves what, and where to get each key: [AI providers](13-providers.md).
+
 **One key: Grida Gateway.** `GG_API_KEY` is the one key for every route on Grida
 Gateway (`@gg`): text, agent turns, images, video, 3D models and rigs, billed to your
-organization's Grida AI credits. Create it at [console.grida.co](https://console.grida.co), where
+organization's Grida AI credits. Create it at [console.grida.co](https://console.grida.co/_/ai-gateway), where
 you also add credits and see what each call was charged. FX books a GG call at what GG charged
 for it, read back once GG has settled it; a charge that has not settled within a short wait is
 booked at the call's whole hold ([providers.md §9.7](../../spec/providers.md#97-grida-gateway)).
@@ -204,8 +206,8 @@ Python line, the routes the workflow's paid steps use, each with whether a live 
 and how many steps use it (a repeated step counts once; groups and used workflows are included):
 
 ```
-engine    grida-fx 0.5.0
-python    .venv/bin/python (grida 0.5.0)
+engine    grida-fx 0.5.1
+python    .venv/bin/python (grida 0.5.1)
 uses      image.generate imagegen@codex servable (8 steps)
 key       GG_API_KEY missing
 …
@@ -219,7 +221,7 @@ Doctor takes no `--routes`: routes a run adds with `--routes` show as `not in th
 
 **The Python line.** FX's Python node host needs Python 3.11 or later with `grida`. The Python
 line names the interpreter FX would use and says what it found:
-- `python    .venv/bin/python (grida 0.5.0)`: ready;
+- `python    .venv/bin/python (grida 0.5.1)`: ready;
 - `python    python3 too old (3.9.6; FX needs 3.11+)`: run `uv sync` or `pip install grida` in
   the project, or set `GRIDA_FX_PYTHON` to a newer Python;
 - `python    python3 no grida`: install `grida` into that Python;

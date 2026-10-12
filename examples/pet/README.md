@@ -3,7 +3,7 @@
 **The ask:** "Make me a little animated pet that idles, runs, waves, jumps, sulks, waits, works
 and looks things over, and that I can drop into the Codex app."
 
-Every picture is drawn by [your own Codex](../../docs/guide/12-codex.md), signed in with your
+Every picture is drawn by [your own Codex](https://github.com/gridaco/fx/blob/main/docs/guide/12-codex.md), signed in with your
 ChatGPT account: no API key, and $0 to FX. Codex first draws one picture of the pet, from your
 words or from a picture you give it. Each state is then one strip of poses drawn from that
 picture, so every state is the same pet. FX counts the poses, cuts them into equal cells and lays
@@ -25,7 +25,7 @@ pet/
 ## Before you start
 
 1. Install Codex and sign in with ChatGPT, then check that FX finds it
-   ([Images from your own Codex](../../docs/guide/12-codex.md#set-up)):
+   ([Images from your own Codex](https://github.com/gridaco/fx/blob/main/docs/guide/12-codex.md#set-up)):
 
    ```bash
    grida fx doctor pet

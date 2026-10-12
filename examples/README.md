@@ -29,6 +29,9 @@ ceiling limits spending; it does not guarantee completion or artistic quality. T
 
 ## Use an example
 
+Each example folder stands on its own: copy it anywhere and it still works. Its links to the
+guide and other repository pages are absolute URLs, and everything else it uses is inside it.
+
 `npm install -g grida` installs `grida fx`. Python-node projects also need the Python
 SDK and their own processing libraries. Copy the example and follow its README:
 most showcase projects use `uv sync`, with dependencies declared in their own
