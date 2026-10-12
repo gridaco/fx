@@ -14,7 +14,7 @@ use grida_fx_providers::registry::Adapters;
 use grida_fx_providers::routes::{DEFAULT_ROUTES, default_table};
 use grida_fx_providers::testing::{CallBuilder, block_on, media, setup, test_keys};
 use grida_fx_providers::transport::replay::NoNetwork;
-use grida_fx_providers::{codex, elevenlabs, fal, openai, openrouter, tripo};
+use grida_fx_providers::{codex, elevenlabs, fal, gg, openai, openrouter, tripo};
 use indexmap::IndexMap;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
@@ -82,12 +82,30 @@ fn expected_routes() -> Vec<Expected> {
     let mut astra_structured = structured.clone();
     astra_structured["request_policy"] = astra_policy();
     astra_structured["pictures"] = json!("unchanged");
+    let gg_image = json!({"adapter": "gg-image", "adapter_behavior": "1", "quality": "max"});
+    let gg_astra_tool_loop = json!({"adapter": "gg-tool-loop", "adapter_behavior": 1,
+                                    "image_detail": "high", "reasoning_effort": "high"});
+    let gg_astra_structured = json!({"adapter": "gg-structured", "adapter_behavior": 1,
+                                     "image_detail": "high", "pictures": "unchanged",
+                                     "reasoning_effort": "high"});
     vec![
+        expected(
+            "agent.turn",
+            "openai/gpt-5.6-sol@gg",
+            json!({"adapter": "gg-tool-loop", "adapter_behavior": 1}),
+            ("0.003", "0.1"),
+        ),
         expected(
             "agent.turn",
             "openai/gpt-5.6-sol@openrouter",
             tool_loop,
             ("0.003", "0.1"),
+        ),
+        expected(
+            "agent.turn",
+            "openai/gpt-6-astra@gg",
+            gg_astra_tool_loop,
+            ("0.01", "1.5"),
         ),
         expected(
             "agent.turn",
@@ -99,6 +117,12 @@ fn expected_routes() -> Vec<Expected> {
             "image.edit",
             "gpt-image-2.5-sunburst@openai",
             image_contract("fx-openai-image-v1", "1"),
+            ("0.09", "0.85"),
+        ),
+        expected(
+            "image.edit",
+            "openai/gpt-image-2.5-sunburst@gg",
+            gg_image.clone(),
             ("0.09", "0.85"),
         ),
         expected(
@@ -127,6 +151,12 @@ fn expected_routes() -> Vec<Expected> {
         ),
         expected(
             "image.generate",
+            "openai/gpt-image-2.5-sunburst@gg",
+            gg_image,
+            ("0.09", "0.7"),
+        ),
+        expected(
+            "image.generate",
             "openai/gpt-image-2.5-sunburst@openrouter",
             image_contract("fx-openrouter-image-v1", "3"),
             ("0.13", "0.7"),
@@ -142,6 +172,21 @@ fn expected_routes() -> Vec<Expected> {
             "P2-20260801@tripo",
             json!({"adapter": "tripo-multiview", "adapter_behavior": 1}),
             ("1.2", "2.5"),
+        ),
+        expected(
+            "mesh.generate",
+            "tripo/p2@gg",
+            json!({"adapter": "gg-mesh", "adapter_behavior": 1,
+                   "endpoint": "three-d.tripo.p2.multiview"}),
+            ("1.2", "2.5"),
+        ),
+        expected(
+            "mesh.rig",
+            "tripo/rig-v1.0@gg",
+            json!({"adapter": "gg-rig", "adapter_behavior": 1,
+                   "check_endpoint": "three-d.tripo.rig-check",
+                   "endpoint": "three-d.tripo.rig-v1.0.mesh"}),
+            ("0.25", "0.5"),
         ),
         expected(
             "mesh.rig",
@@ -169,15 +214,33 @@ fn expected_routes() -> Vec<Expected> {
         ),
         expected(
             "structured.generate",
+            "openai/gpt-5.6-sol@gg",
+            json!({"adapter": "gg-structured", "adapter_behavior": 1}),
+            ("0.02", "0.6"),
+        ),
+        expected(
+            "structured.generate",
             "openai/gpt-5.6-sol@openrouter",
             structured,
             ("0.02", "0.6"),
         ),
         expected(
             "structured.generate",
+            "openai/gpt-6-astra@gg",
+            gg_astra_structured,
+            ("0.05", "1.5"),
+        ),
+        expected(
+            "structured.generate",
             "openai/gpt-6-astra@openrouter",
             astra_structured,
             ("0.05", "1.5"),
+        ),
+        expected(
+            "video.generate",
+            "alibaba/wan-3.0@gg",
+            json!({"adapter": "gg-video", "adapter_behavior": 1}),
+            ("0.05", "0.2"),
         ),
         expected(
             "video.generate",
@@ -191,6 +254,13 @@ fn expected_routes() -> Vec<Expected> {
 /// The contract each adapter serves, by capability and provider (spec/providers.md §9): its
 /// `adapter`, and its `adapter_behavior` where §9 names one.
 const CONTRACTS: &[(&str, &str, &str, Option<&str>)] = &[
+    ("image.generate", "gg", "gg-image", Some("\"1\"")),
+    ("image.edit", "gg", "gg-image", Some("\"1\"")),
+    ("structured.generate", "gg", "gg-structured", Some("1")),
+    ("agent.turn", "gg", "gg-tool-loop", Some("1")),
+    ("video.generate", "gg", "gg-video", Some("1")),
+    ("mesh.generate", "gg", "gg-mesh", Some("1")),
+    ("mesh.rig", "gg", "gg-rig", Some("1")),
     (
         "image.generate",
         "openai",
@@ -271,13 +341,13 @@ fn read_spec(name: &str) -> String {
 }
 
 #[test]
-fn the_table_holds_17_routes_over_10_capabilities() {
+fn the_table_holds_26_routes_over_10_capabilities() {
     let table = table();
-    assert_eq!(table.entries.len(), 17);
+    assert_eq!(table.entries.len(), 26);
     let capabilities: BTreeSet<&str> = table.entries.keys().map(|(c, _)| c.as_str()).collect();
     assert_eq!(capabilities.len(), 10);
     assert!(
-        read_spec("providers.md").contains("It holds 17 routes over 10 capabilities."),
+        read_spec("providers.md").contains("It holds 26 routes over 10 capabilities."),
         "spec/providers.md §10 states the table's size"
     );
 }
@@ -452,13 +522,20 @@ fn features_say_what_the_adapters_honour() {
             .features
             .contains(feature)
     };
+    let gg = "openai/gpt-image-2.5-sunburst@gg";
     let openai = "gpt-image-2.5-sunburst@openai";
     let openrouter = "openai/gpt-image-2.5-sunburst@openrouter";
     let fal = "openai/gpt-image-2.5/sunburst@fal";
-    // OpenRouter refuses a mask and a transparent background (spec/providers.md §9.2).
+    // OpenRouter refuses a mask and a transparent background (spec/providers.md §9.2); GG takes
+    // a transparent background and refuses a mask (§9.7).
     for capability in ["image.generate", "image.edit"] {
         assert!(has(capability, openai, "alpha") && has(capability, fal, "alpha"));
+        assert!(has(capability, gg, "alpha"));
         assert!(!has(capability, openrouter, "alpha"));
+        // GG answers in the model's PNG and takes pictures only as bytes.
+        for feature in ["jpeg_output", "webp_output", "hosted_url_reference_input"] {
+            assert!(!has(capability, gg, feature), "{capability} {feature}");
+        }
     }
     // Codex makes every background, but no exact size and nothing from references (§9.6).
     let codex = "imagegen@codex";
@@ -475,9 +552,9 @@ fn features_say_what_the_adapters_honour() {
         assert!(!has("image.generate", codex, feature), "{feature}");
     }
     assert!(has("image.edit", openai, "mask") && has("image.edit", fal, "mask"));
-    assert!(!has("image.edit", openrouter, "mask"));
+    assert!(!has("image.edit", openrouter, "mask") && !has("image.edit", gg, "mask"));
     // Every edit route takes input pictures; every generate route refuses references.
-    for id in [openai, openrouter, fal] {
+    for id in [gg, openai, openrouter, fal] {
         assert!(has("image.edit", id, "image_input"), "{id}");
         assert!(!has("image.generate", id, "image_input"), "{id}");
         assert!(
@@ -563,8 +640,10 @@ fn pacing_is_declared_where_spec_providers_10_says() {
         let concurrency = match (route.capability.as_str(), id.as_str()) {
             ("mesh.generate" | "mesh.rig" | "video.generate", _) => Some(1),
             ("image.generate", "imagegen@codex") => Some(1),
+            // GG keeps one unsettled GPT Image call per organization (spec/providers.md §10).
+            ("image.generate" | "image.edit", "openai/gpt-image-2.5-sunburst@gg") => Some(1),
             ("structured.generate", _) => Some(4),
-            ("agent.turn", "openai/gpt-6-astra@openrouter") => Some(1),
+            ("agent.turn", "openai/gpt-6-astra@gg" | "openai/gpt-6-astra@openrouter") => Some(1),
             _ => None,
         };
         assert_eq!(route.concurrency, concurrency, "{} {id}", route.capability);
@@ -584,15 +663,20 @@ fn prices_and_tiers_parse() {
                 .iter()
                 .map(|(name, (low, high))| (name.as_str(), *low, *high))
                 .collect();
-            assert_eq!(
-                tiers,
-                vec![
+            let expected = match route.provider.as_str() {
+                "gg" => vec![
+                    ("1080p", usd("0.2"), usd("0.2")),
+                    ("480p", usd("0.05"), usd("0.05")),
+                    ("720p", usd("0.1"), usd("0.2")),
+                ],
+                _ => vec![
                     ("1080p", usd("0.15"), usd("0.1875")),
                     ("360p", usd("0.03"), usd("0.0375")),
                     ("4k", usd("0.3"), usd("0.375")),
                     ("720p", usd("0.1"), usd("0.125")),
-                ]
-            );
+                ],
+            };
+            assert_eq!(tiers, expected, "{}", route.id());
         } else if route.provider == "codex" {
             // Free to FX (spec/providers.md §10).
             assert_eq!((price.low, price.high), (Usd::ZERO, Usd::ZERO));
@@ -693,6 +777,7 @@ fn image_tiers_name_sizes_their_routes_serve() {
         .collect();
     assert_eq!(sizes("openai/gpt-image-2.5-sunburst@openrouter"), served);
     for id in [
+        "openai/gpt-image-2.5-sunburst@gg",
         "gpt-image-2.5-sunburst@openai",
         "openai/gpt-image-2.5/sunburst@fal",
     ] {
@@ -747,7 +832,7 @@ fn the_image_routes_price_by_size() {
         }
         checked += 1;
     }
-    assert_eq!(checked, 6);
+    assert_eq!(checked, 8);
     let openai = |capability: &str, size: &str| {
         table
             .resolve(capability, "gpt-image-2.5-sunburst@openai")
@@ -814,7 +899,14 @@ fn the_video_route_prices_by_second_and_tier() {
 
 #[test]
 fn the_adapters_name_their_contracts_as_the_table_does() {
-    let constants: [(&str, &str, &str); 14] = [
+    let constants: [(&str, &str, &str); 21] = [
+        ("image.generate", "gg", gg::image::ADAPTER),
+        ("image.edit", "gg", gg::image::ADAPTER),
+        ("structured.generate", "gg", gg::chat::STRUCTURED_ADAPTER),
+        ("agent.turn", "gg", gg::chat::TURN_ADAPTER),
+        ("video.generate", "gg", gg::video::ADAPTER),
+        ("mesh.generate", "gg", gg::mesh::MESH_ADAPTER),
+        ("mesh.rig", "gg", gg::mesh::RIG_ADAPTER),
         ("image.generate", "openai", openai::ADAPTER),
         ("image.edit", "openai", openai::ADAPTER),
         (
@@ -863,6 +955,7 @@ fn the_adapters_name_their_contracts_as_the_table_does() {
         elevenlabs::speech::ADAPTER
     );
     assert_eq!(openai::ADAPTER_BEHAVIOR, "1");
+    assert_eq!(gg::image::ADAPTER_BEHAVIOR, "1");
     assert_eq!(openrouter::image::CONTRACT_BEHAVIOR, "3");
     assert_eq!(codex::ADAPTER_BEHAVIOR, "1");
 }

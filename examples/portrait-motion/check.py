@@ -19,6 +19,7 @@ def main() -> None:
     os.environ["GRIDA_FX_NETWORK"] = "off"
     os.environ["GRIDA_FX_PYTHON"] = sys.executable
     for name in (
+        "GG_API_KEY",
         "OPENAI_API_KEY",
         "OPENROUTER_API_KEY",
         "FAL_KEY",

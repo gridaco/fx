@@ -1,9 +1,9 @@
 //! Provider keys: the allowlisted loader (spec/providers.md §3).
 //!
-//! FX reads exactly five key variables, under their providers' usual names ([`KeyName`]), and
-//! four base-URL variables ([`ALLOWED`]); an [`Environment`] holds what it found. Values come
+//! FX reads exactly six key variables, under their providers' usual names ([`KeyName`]), and
+//! five base-URL variables ([`ALLOWED`]); an [`Environment`] holds what it found. Values come
 //! from the process environment first; the planning project's `.env` file is read only for those
-//! nine names and only when the process does not set them; `GRIDA_FX_DISABLE_DOTENV=1` (in the
+//! eleven names and only when the process does not set them; `GRIDA_FX_DISABLE_DOTENV=1` (in the
 //! process) turns the file off. A value is never printed,
 //! logged, written to a record, an event, an error or a fixture: [`Secret`] prints as
 //! `[redacted]`, and only a transport reads it ([`Secret::expose`]).
@@ -68,9 +68,11 @@ impl fmt::Display for Secret {
     }
 }
 
-/// The allowlisted key variables, one per provider.
+/// The allowlisted key variables, one per provider. Grida Gateway comes first: one key serves
+/// every capability it routes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum KeyName {
+    GridaGateway,
     OpenAi,
     OpenRouter,
     Fal,
@@ -79,7 +81,8 @@ pub enum KeyName {
 }
 
 impl KeyName {
-    pub const ALL: [KeyName; 5] = [
+    pub const ALL: [KeyName; 6] = [
+        KeyName::GridaGateway,
         KeyName::OpenAi,
         KeyName::OpenRouter,
         KeyName::Fal,
@@ -90,6 +93,7 @@ impl KeyName {
     /// The environment variable.
     pub fn variable(self) -> &'static str {
         match self {
+            KeyName::GridaGateway => "GG_API_KEY",
             KeyName::OpenAi => "OPENAI_API_KEY",
             KeyName::OpenRouter => "OPENROUTER_API_KEY",
             KeyName::Fal => "FAL_KEY",
@@ -101,6 +105,7 @@ impl KeyName {
     /// The provider name routes use (`model@<provider>`).
     pub fn provider(self) -> &'static str {
         match self {
+            KeyName::GridaGateway => "gg",
             KeyName::OpenAi => "openai",
             KeyName::OpenRouter => "openrouter",
             KeyName::Fal => "fal",
@@ -127,14 +132,16 @@ pub enum KeySource {
     DotEnv,
 }
 
-/// Every variable the loader reads: the five keys, then the four base-URL variables
+/// Every variable the loader reads: the six keys, then the five base-URL variables
 /// ([`crate::setup::BASE_URL_VARIABLES`]).
-pub const ALLOWED: [&str; 9] = [
+pub const ALLOWED: [&str; 11] = [
+    "GG_API_KEY",
     "OPENAI_API_KEY",
     "OPENROUTER_API_KEY",
     "FAL_KEY",
     "TRIPO_API_KEY",
     "ELEVENLABS_API_KEY",
+    "GG_BASE_URL",
     "OPENAI_BASE_URL",
     "OPENROUTER_BASE_URL",
     "FAL_BASE_URL",
@@ -238,7 +245,7 @@ impl Keys {
         }
     }
 
-    /// The five keys of an [`Environment`].
+    /// The six keys of an [`Environment`].
     pub fn from_environment(environment: &Environment) -> Keys {
         Keys {
             found: KeyName::ALL
@@ -473,8 +480,8 @@ mod tests {
     #[test]
     fn the_allowlist_is_the_keys_then_the_base_urls() {
         let keys: Vec<&str> = KeyName::ALL.iter().map(|k| k.variable()).collect();
-        assert_eq!(ALLOWED[..5], keys[..]);
-        assert_eq!(ALLOWED[5..], crate::setup::BASE_URL_VARIABLES[..]);
+        assert_eq!(ALLOWED[..6], keys[..]);
+        assert_eq!(ALLOWED[6..], crate::setup::BASE_URL_VARIABLES[..]);
     }
 
     #[test]
@@ -483,6 +490,7 @@ mod tests {
         assert_eq!(
             variables,
             [
+                "GG_API_KEY",
                 "OPENAI_API_KEY",
                 "OPENROUTER_API_KEY",
                 "FAL_KEY",
@@ -491,6 +499,7 @@ mod tests {
             ]
         );
         assert_eq!(KeyName::of_provider("tripo"), Some(KeyName::Tripo));
+        assert_eq!(KeyName::of_provider("gg"), Some(KeyName::GridaGateway));
         assert_eq!(KeyName::of_provider("acme"), None);
         assert_eq!(KeyName::Fal.missing(), "FAL_KEY is not set");
     }

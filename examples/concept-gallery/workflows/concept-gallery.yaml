@@ -27,7 +27,7 @@ steps:
 
   propose:
     uses: fx/structured.generate@1
-    route: openai/gpt-5.6-sol@openrouter
+    route: openai/gpt-5.6-sol@gg
     requires: [image_input, structured_output]
     with:
       prompt: ./prompts/propose.md          # template; sees `inputs`
@@ -43,7 +43,7 @@ steps:
 
   admit:                                    # a judge you write: nodes/reviews.py
     uses: ./nodes/reviews.py#admit
-    route: openai/gpt-6-astra@openrouter
+    route: openai/gpt-6-astra@gg
     independent_of: propose                 # the plan refuses if both resolve to the same model
     judges: propose
     needs: [well_formed]                    # judges of one step run in parallel; run the free one first
@@ -87,7 +87,7 @@ steps:
 
       review:                                        # a judge you write: nodes/reviews.py
         uses: ./nodes/reviews.py#review
-        route: openai/gpt-6-astra@openrouter
+        route: openai/gpt-6-astra@gg
         independent_of: direct
         judges: draw
         requires: [image_input]

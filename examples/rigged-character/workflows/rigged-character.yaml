@@ -40,7 +40,7 @@ steps:
         steps:
           mesh:
             uses: fx/mesh.generate@1
-            route: P2-20260801@tripo
+            route: tripo/p2@gg
             with:
               views:                                         # which side each picture shows
                 front: ${{ steps.references.draw.outputs.front }}
@@ -75,7 +75,7 @@ steps:
       rig_provider:
         if: ${{ inputs.rigging == 'provider' }}
         uses: fx/mesh.rig@1                               # a long job: submitted once, resumable
-        route: v1.0-20240301@tripo
+        route: tripo/rig-v1.0@gg
         with: { model: "${{ steps.assemble.orient.outputs.mesh }}" }
 
       rig_agent:

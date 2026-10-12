@@ -35,6 +35,7 @@ import grida.fx as fx
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / "fixtures" / "viewer"
 PROVIDER_KEYS = (
+    "GG_API_KEY",
     "OPENAI_API_KEY",
     "OPENROUTER_API_KEY",
     "FAL_KEY",

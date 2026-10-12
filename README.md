@@ -2,8 +2,9 @@
 
 **Go with the flow.**
 
-Reusable workflows for images, audio, and more. Connect your code and AI models,
-bring your own provider keys, and turn a one-off script into something you can run again.
+Reusable workflows for images, audio, and more. Connect your code and AI models with one
+Grida Gateway key (or your own provider keys), and turn a one-off script into something you can
+run again.
 
 - **See the plan first.** Inspect the steps, dependencies, and estimated cost before a paid run.
 - **Keep the work you already did.** Reuse matching results from the cache and resume interrupted runs.
@@ -32,6 +33,11 @@ pip install grida
 
 The JavaScript SDK is `@grida/fx`. To run FX without the Grida CLI (in a service you host, say),
 see [ways to run FX](CONTRIBUTING.md#ways-to-run-fx).
+
+One key serves FX's text, image, video and 3D routes: create a
+[Grida Gateway](https://console.grida.co) key and set `GG_API_KEY`, in the environment or a
+project `.env`. Your own OpenAI, OpenRouter, fal, Tripo or ElevenLabs keys work too
+([keys and live runs](docs/guide/05-running.md#keys-and-live-runs)).
 
 ## Plan. Run. Inspect.
 

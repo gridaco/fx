@@ -177,6 +177,29 @@ static MESSAGE_SUMMARIES: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new(|
     .collect()
 });
 
+/// Whether the compact JSON encoding of `body` (what the transport sends) is longer than `limit`
+/// bytes. Counts without building the encoding, and stops at the limit.
+pub fn body_exceeds(body: &Value, limit: usize) -> bool {
+    struct Counter {
+        bytes: usize,
+        limit: usize,
+    }
+    impl std::io::Write for Counter {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.bytes = self.bytes.saturating_add(buf.len());
+            if self.bytes > self.limit {
+                return Err(std::io::Error::other("over the limit"));
+            }
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut counter = Counter { bytes: 0, limit };
+    serde_json::to_writer(&mut counter, body).is_err() || counter.bytes > limit
+}
+
 // ---------------------------------------------------------------------------------------------
 // Base64 and data URLs
 
@@ -720,5 +743,17 @@ mod tests {
         assert!(refused(256, 768).contains("between"));
         assert!(check_size_envelope(1024, 1024, "OpenAI").is_ok());
         assert!(check_size_envelope(3840, 2160, "OpenAI").is_ok());
+    }
+
+    #[test]
+    fn bodies_are_measured_as_sent() {
+        let body = json!({"model": "m", "prompt": "é"});
+        let sent = serde_json::to_vec(&body).unwrap().len();
+        assert!(!body_exceeds(&body, sent));
+        assert!(body_exceeds(&body, sent - 1));
+        assert!(body_exceeds(&json!({"prompt": "x".repeat(4096)}), 1024));
+        // {"a":"xxxx"} is 12 bytes.
+        assert!(!body_exceeds(&json!({"a": "xxxx"}), 12));
+        assert!(body_exceeds(&json!({"a": "xxxx"}), 11));
     }
 }

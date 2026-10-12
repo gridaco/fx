@@ -21,7 +21,14 @@ from jsonschema import Draft202012Validator
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "fixtures/control"
 SCHEMAS = ROOT / "spec/schemas"
-KEYS = ("OPENAI_API_KEY", "OPENROUTER_API_KEY", "FAL_KEY", "TRIPO_API_KEY", "ELEVENLABS_API_KEY")
+KEYS = (
+    "GG_API_KEY",
+    "OPENAI_API_KEY",
+    "OPENROUTER_API_KEY",
+    "FAL_KEY",
+    "TRIPO_API_KEY",
+    "ELEVENLABS_API_KEY",
+)
 
 
 def expect(condition: bool, message: str) -> None:

@@ -42,6 +42,12 @@ The per-size image prices of [providers.md](spec/providers.md) §10 could only b
 1. **`moderation: low`.** FX always passes it to OpenAI through `provider.options` ([providers.md](spec/providers.md) §9.2). The earlier calls that billed the single count did not send it. It is the only request difference found, and no mechanism is known for it to double the output.
 2. **An unannounced change since late September**, at OpenRouter (counting the output twice) or at OpenAI (the model drawing twice as much at `max`).
 
+**Seen since.** On 2026-10-12, a 1024x1024 `max` generate (background `opaque`) on
+`openai/gpt-image-2.5-sunburst@gg` was charged $0.2109 by Grida Gateway, which bills a model's
+regular tariff from the upstream's measured usage: the single count (7,024 × $30 per million =
+$0.21072) plus the prompt. That is a single output from the model at `max`, through a route that
+does not send `moderation: low`; it does not say which upstream GG used.
+
 **Settles it:**
 
 - **OpenRouter's activity page** for that generation shows its token breakdown: 14,048 image tokens points at the generation side (candidate 1 or OpenAI); 7,024 at a $0.42 cost points at OpenRouter's billing.

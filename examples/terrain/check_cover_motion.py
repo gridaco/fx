@@ -168,6 +168,7 @@ def main() -> None:
         GRIDA_FX_DISABLE_DOTENV="1", GRIDA_FX_NETWORK="off", GRIDA_FX_PYTHON=sys.executable
     )
     for name in (
+        "GG_API_KEY",
         "OPENAI_API_KEY",
         "OPENROUTER_API_KEY",
         "FAL_KEY",

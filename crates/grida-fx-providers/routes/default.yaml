@@ -5,6 +5,11 @@
 # quotes: what a call costs is settled from what the provider reports, else the whole hold
 # (spec/providers.md §6).
 #
+# Grida Gateway (`@gg`) is Grida's own provider: one key, GG_API_KEY, serves its
+# text, image, video and 3D routes. It charges a model's regular tariff, so its routes take the
+# prices of the same model elsewhere. A call is booked at GG's settled charge, else at its whole
+# hold (spec/providers.md §9.7, §10).
+#
 # The Codex route (imagegen@codex) runs on the user's own signed-in Codex, which counts it against
 # their plan: it is free to FX, $0, and one runs at a time (spec/providers.md §9.6).
 #
@@ -15,8 +20,8 @@
 # whole range. A project restates a route in its own route table for tighter prices.
 #
 # The contract object of each entry is part of its route fingerprint, and so of every cache key
-# the route serves: editing one changes those keys. Its `adapter` (and, for the OpenAI and
-# OpenRouter routes, `adapter_behavior`) is the one spec/providers.md §9 names for the
+# the route serves: editing one changes those keys. Its `adapter` (and, for the Grida Gateway,
+# OpenAI and OpenRouter routes, `adapter_behavior`) is the one spec/providers.md §9 names for the
 # capability's adapter on that provider. The image routes carry `adapter_behavior` as a string,
 # every other route as the integer 1. Price, features, concurrency and requests_per_minute are
 # not identity.
@@ -25,6 +30,17 @@
 # this file to both specs and to the adapters of grida-fx-providers.
 fx: routes/v1
 routes:
+- capability: agent.turn
+  route: openai/gpt-5.6-sol@gg
+  price:
+    low_usd: 0.003
+    high_usd: 0.1
+  features:
+  - image_input
+  - tool_use
+  contract:
+    adapter: gg-tool-loop
+    adapter_behavior: 1
 - capability: agent.turn
   route: openai/gpt-5.6-sol@openrouter
   price:
@@ -36,6 +52,20 @@ routes:
   contract:
     adapter: openrouter-tool-loop
     adapter_behavior: 1
+- capability: agent.turn
+  route: openai/gpt-6-astra@gg
+  price:
+    low_usd: 0.01
+    high_usd: 1.5
+  features:
+  - image_input
+  - tool_use
+  concurrency: 1
+  contract:
+    adapter: gg-tool-loop
+    adapter_behavior: 1
+    image_detail: high
+    reasoning_effort: high
 - capability: agent.turn
   route: openai/gpt-6-astra@openrouter
   price:
@@ -121,6 +151,68 @@ routes:
   contract:
     adapter: fx-openai-image-v1
     adapter_behavior: '1'
+- capability: image.edit
+  route: openai/gpt-image-2.5-sunburst@gg
+  price:
+    low_usd: 0.09
+    high_usd: 0.85
+    by: size
+    tiers:
+      1024x1024:
+        low_usd: 0.21
+        high_usd: 0.43
+      1024x1536:
+        low_usd: 0.16
+        high_usd: 0.38
+      1152x1024:
+        low_usd: 0.19
+        high_usd: 0.41
+      1152x2496:
+        low_usd: 0.14
+        high_usd: 0.36
+      1536x1024:
+        low_usd: 0.16
+        high_usd: 0.38
+      1536x1536:
+        low_usd: 0.3
+        high_usd: 0.52
+      1712x2560:
+        low_usd: 0.28
+        high_usd: 0.5
+      2064x1008:
+        low_usd: 0.13
+        high_usd: 0.35
+      2464x3328:
+        low_usd: 0.52
+        high_usd: 0.74
+      2496x1152:
+        low_usd: 0.14
+        high_usd: 0.36
+      2560x1440:
+        low_usd: 0.22
+        high_usd: 0.44
+      2560x1712:
+        low_usd: 0.28
+        high_usd: 0.5
+      2880x960:
+        low_usd: 0.1
+        high_usd: 0.32
+  features:
+  - alpha
+  - authored_prompt_passthrough
+  - auto_background
+  - custom_exact_size
+  - exact_size
+  - flexible_size
+  - image_input
+  - maximum_quality
+  - opaque_background
+  - png_output
+  concurrency: 1
+  contract:
+    adapter: gg-image
+    adapter_behavior: '1'
+    quality: max
 - capability: image.edit
   route: openai/gpt-image-2.5-sunburst@openrouter
   price:
@@ -307,6 +399,68 @@ routes:
     adapter: fx-codex-image-v1
     adapter_behavior: '1'
 - capability: image.generate
+  route: openai/gpt-image-2.5-sunburst@gg
+  price:
+    low_usd: 0.09
+    high_usd: 0.7
+    by: size
+    tiers:
+      1024x1024:
+        low_usd: 0.21
+        high_usd: 0.29
+      1024x1536:
+        low_usd: 0.16
+        high_usd: 0.24
+      1152x1024:
+        low_usd: 0.19
+        high_usd: 0.27
+      1152x2496:
+        low_usd: 0.14
+        high_usd: 0.22
+      1536x1024:
+        low_usd: 0.16
+        high_usd: 0.24
+      1536x1536:
+        low_usd: 0.3
+        high_usd: 0.38
+      1712x2560:
+        low_usd: 0.28
+        high_usd: 0.36
+      2064x1008:
+        low_usd: 0.13
+        high_usd: 0.21
+      2464x3328:
+        low_usd: 0.52
+        high_usd: 0.6
+      2496x1152:
+        low_usd: 0.14
+        high_usd: 0.22
+      2560x1440:
+        low_usd: 0.22
+        high_usd: 0.3
+      2560x1712:
+        low_usd: 0.28
+        high_usd: 0.36
+      2880x960:
+        low_usd: 0.1
+        high_usd: 0.18
+  features:
+  - alpha
+  - authored_prompt_passthrough
+  - auto_background
+  - custom_exact_size
+  - exact_size
+  - flexible_size
+  - maximum_quality
+  - opaque_background
+  - png_output
+  - text_to_image
+  concurrency: 1
+  contract:
+    adapter: gg-image
+    adapter_behavior: '1'
+    quality: max
+- capability: image.generate
   route: openai/gpt-image-2.5-sunburst@openrouter
   price:
     low_usd: 0.13
@@ -423,6 +577,35 @@ routes:
   contract:
     adapter: tripo-multiview
     adapter_behavior: 1
+- capability: mesh.generate
+  route: tripo/p2@gg
+  price:
+    low_usd: 1.2
+    high_usd: 2.5
+  features:
+  - multiview
+  - pbr
+  - textured_mesh
+  concurrency: 1
+  contract:
+    adapter: gg-mesh
+    adapter_behavior: 1
+    endpoint: three-d.tripo.p2.multiview
+- capability: mesh.rig
+  route: tripo/rig-v1.0@gg
+  price:
+    low_usd: 0.25
+    high_usd: 0.5
+  features:
+  - biped
+  - glb_input
+  - rig_check
+  concurrency: 1
+  contract:
+    adapter: gg-rig
+    adapter_behavior: 1
+    check_endpoint: three-d.tripo.rig-check
+    endpoint: three-d.tripo.rig-v1.0.mesh
 - capability: mesh.rig
   route: v1.0-20240301@tripo
   price:
@@ -466,6 +649,18 @@ routes:
     adapter: elevenlabs-speech
     adapter_behavior: 1
 - capability: structured.generate
+  route: openai/gpt-5.6-sol@gg
+  price:
+    low_usd: 0.02
+    high_usd: 0.6
+  features:
+  - image_input
+  - structured_output
+  concurrency: 4
+  contract:
+    adapter: gg-structured
+    adapter_behavior: 1
+- capability: structured.generate
   route: openai/gpt-5.6-sol@openrouter
   price:
     low_usd: 0.02
@@ -477,6 +672,21 @@ routes:
   contract:
     adapter: openrouter-structured
     adapter_behavior: 1
+- capability: structured.generate
+  route: openai/gpt-6-astra@gg
+  price:
+    low_usd: 0.05
+    high_usd: 1.5
+  features:
+  - image_input
+  - structured_output
+  concurrency: 4
+  contract:
+    adapter: gg-structured
+    adapter_behavior: 1
+    image_detail: high
+    pictures: unchanged
+    reasoning_effort: high
 - capability: structured.generate
   route: openai/gpt-6-astra@openrouter
   price:
@@ -499,6 +709,28 @@ routes:
         effort: high
       image_detail: high
     pictures: unchanged
+- capability: video.generate
+  route: alibaba/wan-3.0@gg
+  price:
+    low_usd: 0.05
+    high_usd: 0.2
+    unit: second
+    max_units: 30
+    by: resolution
+    tiers:
+      1080p:
+        low_usd: 0.2
+        high_usd: 0.2
+      480p:
+        low_usd: 0.05
+        high_usd: 0.05
+      720p:
+        low_usd: 0.1
+        high_usd: 0.2
+  concurrency: 1
+  contract:
+    adapter: gg-video
+    adapter_behavior: 1
 - capability: video.generate
   route: google/gemini-omni-flash/v1.1/image-to-video@fal
   price:

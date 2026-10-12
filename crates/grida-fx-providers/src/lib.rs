@@ -40,6 +40,7 @@
 
 pub mod adapter;
 pub mod capabilities;
+pub mod chat;
 pub mod checks;
 pub mod clock;
 pub mod codex;
@@ -47,6 +48,7 @@ pub mod elevenlabs;
 #[cfg(any(test, feature = "testing"))]
 pub mod fake;
 pub mod fal;
+pub mod gg;
 pub mod keys;
 pub mod live;
 pub mod openai;

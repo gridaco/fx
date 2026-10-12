@@ -1,4 +1,5 @@
-//! JSON Schemas as OpenRouter's strict mode takes them (spec/providers.md §9.2, "Schemas").
+//! JSON Schemas as the strict mode of Chat Completions takes them (spec/providers.md §9.2,
+//! "Schemas"; OpenRouter and Grida Gateway alike).
 //!
 //! - [`inline_refs`]: when the root has a `$defs` object, every object whose `$ref` starts with
 //!   `#/$defs/` is replaced by a deep copy of its target with the referencing object's other
@@ -6,7 +7,7 @@
 //!   refused (`unknown local schema reference: <ref>`), and so is a cycle (`cyclic local schema
 //!   reference: <ref>`). `#/definitions/…` is left as is.
 //! - [`strict`]: at schema positions only (not inside a `properties` map's names, not inside
-//!   `enum`/`const` values), drop `default` and the assertions OpenRouter's strict mode refuses
+//!   `enum`/`const` values), drop `default` and the assertions strict mode refuses
 //!   (`contains`, `format`, `maxContains`, `maxItems`, `maxLength`, `maxProperties`, `maximum`,
 //!   `minContains`, `minItems`, `minLength`, `minProperties`, `minimum`, `multipleOf`, `pattern`,
 //!   `patternProperties`, `propertyNames`, `unevaluatedItems`, `unevaluatedProperties`,

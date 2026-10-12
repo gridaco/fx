@@ -100,17 +100,17 @@ amount held for it ([providers.md §10](../../spec/providers.md#10-the-built-in-
 
 | Capability | Built-in routes | Key |
 |---|---|---|
-| `image.generate` | `gpt-image-2.5-sunburst@openai` (a call, by `size`: $0.09 – $0.70), `openai/gpt-image-2.5-sunburst@openrouter` ($0.13 – $0.70), `openai/gpt-image-2.5/sunburst@fal` ($0.09 – $0.70); `imagegen@codex` ($0 – $0: free, on [your own Codex](12-codex.md)) | each provider's; none for Codex |
-| `image.edit` | `gpt-image-2.5-sunburst@openai` (a call, by `size`: $0.09 – $0.85), `openai/gpt-image-2.5-sunburst@openrouter` ($0.13 – $0.85), `openai/gpt-image-2.5/sunburst@fal` ($0.09 – $0.85) | each provider's |
-| `structured.generate` | `openai/gpt-5.6-sol@openrouter` ($0.02 – $0.60), `openai/gpt-6-astra@openrouter` ($0.05 – $1.50) | `OPENROUTER_API_KEY` |
-| `agent.turn` | `openai/gpt-5.6-sol@openrouter` ($0.003 – $0.10), `openai/gpt-6-astra@openrouter` ($0.01 – $1.50) | `OPENROUTER_API_KEY` |
+| `image.generate` | `openai/gpt-image-2.5-sunburst@gg` (a call, by `size`: $0.09 – $0.70); also `gpt-image-2.5-sunburst@openai` ($0.09 – $0.70), `openai/gpt-image-2.5-sunburst@openrouter` ($0.13 – $0.70), `openai/gpt-image-2.5/sunburst@fal` ($0.09 – $0.70); `imagegen@codex` ($0 – $0: free, on [your own Codex](12-codex.md)) | `GG_API_KEY`, else each provider's; none for Codex |
+| `image.edit` | `openai/gpt-image-2.5-sunburst@gg` (a call, by `size`: $0.09 – $0.85); also `gpt-image-2.5-sunburst@openai` ($0.09 – $0.85, and the only one with masks), `openai/gpt-image-2.5-sunburst@openrouter` ($0.13 – $0.85), `openai/gpt-image-2.5/sunburst@fal` ($0.09 – $0.85) | `GG_API_KEY`, else each provider's |
+| `structured.generate` | `openai/gpt-5.6-sol@gg` ($0.02 – $0.60), `openai/gpt-6-astra@gg` ($0.05 – $1.50); also `openai/gpt-5.6-sol@openrouter` ($0.02 – $0.60), `openai/gpt-6-astra@openrouter` ($0.05 – $1.50) | `GG_API_KEY`, else `OPENROUTER_API_KEY` |
+| `agent.turn` | `openai/gpt-5.6-sol@gg` ($0.003 – $0.10), `openai/gpt-6-astra@gg` ($0.01 – $1.50); also `openai/gpt-5.6-sol@openrouter` ($0.003 – $0.10), `openai/gpt-6-astra@openrouter` ($0.01 – $1.50) | `GG_API_KEY`, else `OPENROUTER_API_KEY` |
+| `video.generate` | `alibaba/wan-3.0@gg` (per second, by `resolution`, at most 30 s: $0.05 – $0.20; a first frame, no last frame); also `google/gemini-omni-flash/v1.1/image-to-video@fal` (at most 10 s: $0.03 – $0.375) | `GG_API_KEY`, else `FAL_KEY` |
+| `mesh.generate`, `mesh.rig` | `tripo/p2@gg` ($1.20 – $2.50), `tripo/rig-v1.0@gg` ($0.25 – $0.50); also `P2-20260801@tripo` ($1.20 – $2.50), `v1.0-20240301@tripo` ($0.25 – $0.50) | `GG_API_KEY`, else `TRIPO_API_KEY` |
 | `music.generate` | `google/lyria-3-pro-preview@openrouter` ($0.05 – $0.50) | `OPENROUTER_API_KEY` |
-| `video.generate` | `google/gemini-omni-flash/v1.1/image-to-video@fal` (per second, by `resolution`, at most 10 s: $0.03 – $0.375) | `FAL_KEY` |
-| `mesh.generate`, `mesh.rig` | `P2-20260801@tripo` ($1.20 – $2.50), `v1.0-20240301@tripo` ($0.25 – $0.50) | `TRIPO_API_KEY` |
 | `sound.generate`, `speech.generate` | `eleven_text_to_sound_v2@elevenlabs` ($0.001 – $0.10), `eleven_v3@elevenlabs` ($0.001 – $0.05) | `ELEVENLABS_API_KEY` |
 
 An image call is priced by its `size`. A size the route's tiers list is priced at its tier:
-`1024x1024` is $0.21 – $0.29 for a generate on `gpt-image-2.5-sunburst@openai`, and
+`1024x1024` is $0.21 – $0.29 for a generate on `openai/gpt-image-2.5-sunburst@gg`, and
 $0.21 – $0.43 for an edit. `auto`, no size, or a size no tier lists is priced at the whole
 range above ([providers.md §10](../../spec/providers.md#10-the-built-in-route-table)).
 
@@ -129,12 +129,20 @@ serve a type; `grida fx doctor` says which of them a live run could serve.
 
 ## Keys and live runs
 
-**Keys.** A live run (`--live`) reads each provider's key under its usual name:
-`OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `FAL_KEY`, `TRIPO_API_KEY` and `ELEVENLABS_API_KEY`
-(`OPENAI_BASE_URL`, `OPENROUTER_BASE_URL`, `FAL_BASE_URL` and `ELEVENLABS_BASE_URL` point a
-provider at another address, such as a proxy). A key that is missing refuses only the calls that
-need it, before anything is sent and for nothing: the step fails, refused with `OPENAI_API_KEY is
-not set`. Without `--live` no key is used.
+**One key: Grida Gateway.** `GG_API_KEY` is the one key for every route on Grida
+Gateway (`@gg`): text, agent turns, images, video, 3D models and rigs, billed to your
+organization's Grida AI credits. Create it at [console.grida.co](https://console.grida.co), where
+you also add credits and see what each call was charged. FX books a GG call at what GG charged
+for it, read back once GG has settled it; a charge that has not settled within a short wait is
+booked at the call's whole hold ([providers.md §9.7](../../spec/providers.md#97-grida-gateway)).
+
+**Your own provider keys.** Every other route takes its provider's key under its usual name:
+`OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `FAL_KEY`, `TRIPO_API_KEY` and `ELEVENLABS_API_KEY`. Sound,
+speech and music have no GG route yet. `GG_BASE_URL`, `OPENAI_BASE_URL`,
+`OPENROUTER_BASE_URL`, `FAL_BASE_URL` and `ELEVENLABS_BASE_URL` point a provider at another
+address, such as a proxy. A key that is missing refuses only the calls that need it, before
+anything is sent and for nothing: the step fails, refused with `GG_API_KEY is not set`.
+Without `--live` no key is used.
 
 **No API key: your Codex.** With Codex installed and signed in to your ChatGPT account, the route
 `imagegen@codex` draws images with no key and nothing to buy: it is priced at $0, and a run whose
@@ -148,7 +156,7 @@ name, are never proxied: they go straight there, and `HTTP_PROXY` is not used
 ([providers.md §2](../../spec/providers.md#2-the-transport)).
 
 **The `.env` file.** A variable set (and not blank) in the environment wins. Otherwise FX reads it
-from the `.env` file of the project you run from, if there is one, and only those nine names: a
+from the `.env` file of the project you run from, if there is one, and only those eleven names: a
 line naming anything else is skipped without being read. A line is `NAME=value` (an `export`
 before it is fine), with the value unquoted, in `'single quotes'` taken as written, or in `"double
 quotes"` with JSON escapes; blank lines and `#` comments are skipped. A file FX cannot use stops a
@@ -171,14 +179,17 @@ follow:
 ```
 engine    grida-fx 0.2.0
 python    .venv/bin/python (grida 0.2.0)
-key       OPENAI_API_KEY present (.env)
+key       GG_API_KEY present (.env)
+key       OPENAI_API_KEY missing
 key       OPENROUTER_API_KEY missing
 key       FAL_KEY present (environment)
 key       TRIPO_API_KEY missing
 key       ELEVENLABS_API_KEY missing
-route     image.generate gpt-image-2.5-sunburst@openai servable
+route     image.generate gpt-image-2.5-sunburst@openai no key (OPENAI_API_KEY)
 route     image.generate imagegen@codex servable
 route     image.generate img-a@acme no adapter
+route     image.generate openai/gpt-image-2.5-sunburst@gg servable
+route     mesh.rig tripo/rig-v1.0@gg servable
 route     mesh.rig v1.0-20240301@tripo no key (TRIPO_API_KEY)
 …
 ```

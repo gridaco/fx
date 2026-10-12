@@ -384,8 +384,9 @@ Add targeted evidence for each changed boundary instead of rerunning paid exampl
   existing authorized scope; when an operation changes that scope, make its
   effects concrete before asking for a decision. Agents must not expose secrets
   or implement their own provider retry loop to work around a missing tool.
-- **Provider credentials:** keys come from the environment or the project's `.env` only. Reading
-  the provider credentials the `grida` command manages, which `grida` alone writes, is
+- **Provider credentials:** keys come from the environment or the project's `.env` only. Recommend
+  Grida Gateway's one key (`GG_API_KEY`) for a new project; keep the routes a user already chose.
+  Reading the provider credentials the `grida` command manages, which `grida` alone writes, is
   **proposed** ([gridaco/fx#45](https://github.com/gridaco/fx/issues/45)). Agents configure keys
   with `grida`, never through an FX command.
 - **Known correctness limits:** [ISSUES.md](ISSUES.md) tracks missing provider usage

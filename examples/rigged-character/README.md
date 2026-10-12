@@ -23,12 +23,13 @@ rigged-character/
   inputs/wren.yaml, inputs/wren.md    # a brief, and the choices for this character
 ```
 
-Every other capability uses a route of FX's built-in table: images on
-`gpt-image-2.5-sunburst@openai`, agent turns on `openai/gpt-5.6-sol@openrouter`, and the mesh and
-the rig on Tripo. From this folder:
+Every other capability uses a route of FX's built-in table, all on Grida Gateway, so one key
+serves the run: images on `openai/gpt-image-2.5-sunburst@gg`, agent turns on
+`openai/gpt-5.6-sol@gg`, and the mesh and the rig on Tripo's models (`tripo/p2@gg`,
+`tripo/rig-v1.0@gg`). From this folder:
 
 ```bash
-grida fx doctor rigged-character   # Blender 5.2 found; OPENAI_API_KEY, OPENROUTER_API_KEY and TRIPO_API_KEY set
+grida fx doctor rigged-character   # Blender 5.2 found; GG_API_KEY set
 grida fx plan   rigged-character --brief inputs/wren.md --partition head_body
 ```
 

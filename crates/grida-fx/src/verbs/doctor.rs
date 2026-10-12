@@ -359,6 +359,7 @@ mod tests {
         assert_eq!(
             lines,
             [
+                "key       GG_API_KEY missing",
                 "key       OPENAI_API_KEY missing",
                 "key       OPENROUTER_API_KEY missing",
                 "key       FAL_KEY present (environment)",

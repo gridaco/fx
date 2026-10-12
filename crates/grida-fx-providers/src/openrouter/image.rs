@@ -24,7 +24,7 @@
 //! `revised_prompt` is ignored. Deadline 600 s; response cap 64 MiB. `check`:
 //! [`crate::wire::check_image`].
 
-use super::{BODY_TOO_LARGE, body_exceeds, classify, not_served, serves, with_request_id};
+use super::{BODY_TOO_LARGE, classify, not_served, serves, with_request_id};
 use crate::BoxFuture;
 use crate::adapter::{Answer, CallRequest, RequestAdapter, Sent};
 use crate::setup::Client;
@@ -169,7 +169,7 @@ impl OpenRouterImages {
             body.insert("input_references".into(), Value::Array(pictures));
         }
         let body = Value::Object(body);
-        if body_exceeds(&body, super::MAX_REQUEST_BYTES) {
+        if wire::body_exceeds(&body, super::MAX_REQUEST_BYTES) {
             return Err(BODY_TOO_LARGE.into());
         }
         Ok(

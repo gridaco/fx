@@ -96,10 +96,12 @@ def test_verification_environment_never_uses_checkout_engine_or_provider_keys(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "stand-in")
+    monkeypatch.setenv("GG_API_KEY", "stand-in")
     monkeypatch.setenv("GRIDA_FX_BIN", "/checkout/engine")
     monkeypatch.setenv("PYTHONPATH", "/checkout/python")
     environment = tool.clean_environment()
     assert "OPENAI_API_KEY" not in environment
+    assert "GG_API_KEY" not in environment
     assert "GRIDA_FX_BIN" not in environment
     assert "PYTHONPATH" not in environment
     assert environment["GRIDA_FX_DISABLE_DOTENV"] == "1"

@@ -57,6 +57,7 @@ CHECKS = (
 def clean_environment() -> dict[str, str]:
     environment = dict(os.environ)
     for name in (
+        "GG_API_KEY",
         "OPENAI_API_KEY",
         "OPENROUTER_API_KEY",
         "FAL_KEY",

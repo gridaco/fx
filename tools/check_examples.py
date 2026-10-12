@@ -36,6 +36,7 @@ EXAMPLES = ROOT / "examples"
 
 #: Every provider key FX reads (spec/providers.md §3), kept out of the runs.
 KEYS = (
+    "GG_API_KEY",
     "OPENAI_API_KEY",
     "OPENROUTER_API_KEY",
     "FAL_KEY",

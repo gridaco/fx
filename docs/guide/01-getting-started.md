@@ -30,14 +30,20 @@ They share project files, the cache and run records. `--version` prints the FX v
 of them, so you can tell two installations apart. Setting them up, and source development, are in
 [CONTRIBUTING.md](../../CONTRIBUTING.md#ways-to-run-fx).
 
-FX reads each provider's key under its usual name: `OPENAI_API_KEY`, `OPENROUTER_API_KEY`,
-`FAL_KEY`, `TRIPO_API_KEY`, `ELEVENLABS_API_KEY`. Set them in the environment, or put them in a
-`.env` file in your project (one `NAME=value` per line, and keep the file out of version
-control); the environment wins. Keys never go in `fx.yaml` or a workflow, and FX never prints
-them: only a `--live` run uses them, and `grida fx doctor` says which ones it found, where, and
-which routes they make usable ([Running](05-running.md#keys-and-live-runs)). No key at all? With
-Codex signed in to your ChatGPT account, images can come from
-[your own Codex](12-codex.md), with no API key.
+**One key for everything: Grida Gateway.** Create a key at
+[console.grida.co](https://console.grida.co) and set it as `GG_API_KEY`. It serves every route on
+Grida Gateway (`@gg`): text, agent turns, images, video, 3D models and rigs, billed to your
+organization's Grida AI credits, so there is no provider account to open for each model. Set it in
+the environment, or put it in a `.env` file in your project (`GG_API_KEY=…`, and keep the file
+out of version control); the environment wins. Keys never go in `fx.yaml` or a workflow, and FX
+never prints them: only a `--live` run uses them, and `grida fx doctor` says which ones it found,
+where, and which routes they make usable ([Running](05-running.md#keys-and-live-runs)).
+
+Already have provider accounts? FX also reads each provider's own key under its usual name
+(`OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `FAL_KEY`, `TRIPO_API_KEY`, `ELEVENLABS_API_KEY`) for the
+routes on that provider; sound, speech and music need one, since GG has no route for them yet. No
+key at all? With Codex signed in to your ChatGPT account, images can come from
+[your own Codex](12-codex.md).
 
 ### When FX needs Python
 
@@ -96,7 +102,7 @@ fx: project/v1
 budget:
   max_usd: 10                 # the ceiling for any one run; --max-usd overrides it
 routes:                       # which model serves each capability by default
-  image.generate: gpt-image-2.5-sunburst@openai
+  image.generate: openai/gpt-image-2.5-sunburst@gg
 # workflows: [workflows, ../tools/art/workflows]   # where a workflow id is looked for
 ```
 
@@ -169,7 +175,7 @@ estimate  $0.21 – $0.87   ceiling $10.00
 The plan counts every take regeneration may draw: three drawings and their three checks. The low
 end is the one drawing that surely runs, at the low price of its size's tier; the high end is all
 three, at the tier's high. The prices are the allowances of FX's built-in route table, in tiers by
-size (`gpt-image-2.5-sunburst@openai` at `1024x1024`: $0.21 – $0.29 a call), which a project's own
+size (`openai/gpt-image-2.5-sunburst@gg` at `1024x1024`: $0.21 – $0.29 a call), which a project's own
 tables can override.
 
 ```bash
@@ -178,7 +184,7 @@ grida fx run workflows/icon.yaml --live -- --name "copper lantern"
 
 `--live` is required whenever a run may call a paid provider. Without it nothing is spent: local
 steps still run, a paid call the cache already answered is replayed, and any other paid call
-fails its step (`image.generate on gpt-image-2.5-sunburst@openai is a paid call; run with --live`). A live
+fails its step (`image.generate on openai/gpt-image-2.5-sunburst@gg is a paid call; run with --live`). A live
 run also needs a ceiling, here the project's `budget:`. The run's folder holds its outputs;
 `grida fx inspect` summarises it.
 

@@ -31,7 +31,14 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / "fixtures" / "viewer"
-KEYS = ("OPENAI_API_KEY", "OPENROUTER_API_KEY", "FAL_KEY", "TRIPO_API_KEY", "ELEVENLABS_API_KEY")
+KEYS = (
+    "GG_API_KEY",
+    "OPENAI_API_KEY",
+    "OPENROUTER_API_KEY",
+    "FAL_KEY",
+    "TRIPO_API_KEY",
+    "ELEVENLABS_API_KEY",
+)
 ADDRESS = re.compile(r"^(?:view\s+)?(http://127\.0\.0\.1:\d+/)\s*$", re.MULTILINE)
 CLIENT = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
