@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { confinedBuildFile, contentRoot, plainWrite, sha256 } from "./io";
 import { verifyBuildBinding, verifyShowcases, writeBuildBinding } from "./verify";
-import { verifyRemoteFile } from "./publish-tigris";
+import { bucketFolder, verifyRemoteFile } from "./publish-tigris";
 
 test("the frozen catalog supports all active readers without large local media", async () => {
   const result = await verifyShowcases({ requireRecordings: true });
@@ -39,6 +39,11 @@ test("delivery verification checks bytes, MIME, CORS, HEAD and video ranges", as
     }) as typeof fetch;
     await expect(verifyRemoteFile("https://assets.example", file, "https://grida.co", badRange)).rejects.toThrow("range delivery");
   }
+});
+test("a path in the delivery base is the bucket folder objects are published under", () => {
+  expect(["https://assets.example", "https://assets.example/", "https://assets.example/showcase//", "https://assets.example/a/b"].map(bucketFolder)).toEqual(["", "", "showcase/", "a/b/"]);
+  expect(() => bucketFolder("https://assets.example/a%20b")).toThrow("portable relative paths");
+  expect(() => bucketFolder("http://assets.example/showcase")).toThrow("HTTPS");
 });
 test("Next output names are hashable without weakening public asset confinement", async () => {
   const root = await mkdtemp(join(await realpath(tmpdir()), "fx-next-output-"));

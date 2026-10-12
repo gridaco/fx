@@ -1,6 +1,6 @@
 {
   "schema": "fx_showcase_inputs_v1",
-  "delivery_base": "https://grida-fx-showcase-spike-20261011.t3.tigrisfiles.io",
+  "delivery_base": "https://fx-cdn.grida.co/showcase",
   "inputs": [
     {
       "filename": "nami.png",

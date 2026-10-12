@@ -9,6 +9,11 @@ function publicBase(value: string): string {
   if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) throw new Error("Publication requires an explicit HTTPS delivery base without credentials.");
   return url.href.replace(/\/+$/, "");
 }
+/** A path in the delivery base is the bucket folder the closure is published under. */
+export function bucketFolder(base: string): string {
+  const folder = new URL(publicBase(base)).pathname.replace(/^\/+|\/+$/g, "");
+  return folder && `${safePath(folder)}/`;
+}
 async function command(args: string[]): Promise<void> {
   // CLI auth stays in its existing credential store; never inspect it or run inside a project dotenv scope.
   const child = Bun.spawn(["tigris", ...args], { cwd: tmpdir(), stdin: "ignore", stdout: "pipe", stderr: "pipe" });
@@ -37,7 +42,7 @@ export async function verifyRemoteFile(base: string, file: FileRef, origin: stri
 export async function publishTigris(bucket: string, base: string, options: { delivery?: string; origin?: string; configureCors?: boolean } = {}) {
   if (!/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket)) throw new Error("Invalid bucket name.");
   const root = options.delivery ?? deliveryRoot, origin = options.origin ?? "https://grida.co";
-  publicBase(base);
+  const folder = bucketFolder(base);
   const verified = await verifyShowcases({ delivery: root, requireRecordings: true });
   if (options.configureCors) await command(["buckets", "set-cors", bucket, "--origins", "*", "--methods", "GET,HEAD", "--headers", "Range", "--expose-headers", "Content-Length,Content-Range,Accept-Ranges,ETag", "--override", "--json"]);
   const manifests = verified.files.filter(file => file.path.endsWith("/manifest.json"));
@@ -49,7 +54,7 @@ export async function publishTigris(bucket: string, base: string, options: { del
     const existing = await fetch(url, { method: "HEAD", redirect: "error" });
     if (existing.ok) { await verifyRemoteFile(base, file, origin); reused++; continue; }
     if (existing.status !== 404) throw new Error(`Could not establish immutable destination state: ${file.path} (HTTP ${existing.status}).`);
-    await command(["objects", "put", bucket, file.path, join(root, file.path), "--access", "public", "--content-type", file.media_type, "--cache-control", "public, max-age=31536000, immutable", "--json"]);
+    await command(["objects", "put", bucket, folder + file.path, join(root, file.path), "--access", "public", "--content-type", file.media_type, "--cache-control", "public, max-age=31536000, immutable", "--json"]);
     await verifyRemoteFile(base, file, origin); uploaded++;
     console.log(`Verified ${uploaded + reused}/${ordered.length}: ${file.path}`);
   }
