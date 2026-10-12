@@ -11,8 +11,9 @@ import sys
 import tempfile
 from pathlib import Path
 
-from grida.fx import Answer, StandInCall, plan, run
 from PIL import Image, ImageDraw
+
+from grida.fx import Answer, StandInCall, plan, run
 
 from nodes.performance import studio_border_frame
 

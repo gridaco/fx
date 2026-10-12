@@ -13,8 +13,9 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from grida.fx import Ctx, node
 from PIL import Image, ImageChops, ImageDraw, ImageOps, ImageStat
+
+from grida.fx import Ctx, node
 
 
 def _png(image: Image.Image) -> bytes:
