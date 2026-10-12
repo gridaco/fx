@@ -283,10 +283,14 @@ bun --no-env-file run --cwd www publish:tigris \
   my-public-bucket https://my-public-object-host.example --configure-cors
 ```
 
-The adapter requires an existing public bucket and an explicit HTTPS base. It
-checks the local closure, refuses conflicting remote bytes, uploads media before
-manifests and verifies public delivery. `--configure-cors` explicitly replaces the
-bucket's existing CORS rules. It neither creates buckets nor changes DNS.
+The adapter requires an existing public bucket and an explicit HTTPS base. A
+path in the base is the bucket folder it publishes under:
+`https://my-public-object-host.example/showcase` writes `showcase/showcases/…` and
+`showcase/runs/…`. Access and CORS belong to the whole bucket, so share one only
+with other public, read-only media. The adapter checks the local closure, refuses
+conflicting remote bytes, uploads media before manifests and verifies public
+delivery. `--configure-cors` explicitly replaces the bucket's existing CORS rules.
+It neither creates buckets nor changes DNS.
 Publication writes `.showcases/delivery-receipt.json` with the verified inventory.
 The adapter assumes one publisher owns the immutable namespace; distributed
 publisher locks are outside this tooling's scope.
@@ -299,8 +303,11 @@ publisher locks are outside this tooling's scope.
   the active catalog needs them, or explicitly repackage affected recordings.
   Never migrate or rewrite content on read.
 - New generated results require a deliberate run, review and content release.
-- CDN migration copies identical bytes, changes `FX_SHOWCASE_ASSET_BASE` and
-  rebuilds the website. Workflow reruns are unnecessary.
+- CDN migration copies identical bytes, changes `FX_SHOWCASE_ASSET_BASE` and the
+  examples' `delivery_base` pins, and rebuilds the website. Workflow reruns are
+  unnecessary. Only the closure the current lock and the examples' pins reference
+  needs to move: earlier website builds keep reading the old host, so retire it
+  only once rolling back to them is no longer needed.
 
 Keep old releases while links refer to them. Rollback deploys the previously
 checked website output and content lock together; no mutable `latest` object is
