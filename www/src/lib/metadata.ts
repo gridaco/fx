@@ -3,9 +3,14 @@ import { site } from "../../site.config";
 
 export const fx_description = "Grida FX connects models, local tools, and checks into reusable asset workflows. Plan, run, inspect, and reuse every step.";
 
+/** A page's canonical URL on grida.co, without a trailing slash. The sitemap lists the same URLs. */
+export function pageUrl(path = ""): string {
+  return path ? `${site.url}/${path}` : site.url;
+}
+
 /** Emit complete social metadata per page: Next replaces nested metadata objects. */
 export function pageMetadata(title: string, description: string, path = ""): Metadata {
-  const url = path ? `${site.url}/${path}` : site.url;
+  const url = pageUrl(path);
   const images = [{
     url: `${site.url}/social-preview.png`,
     width: 1200,

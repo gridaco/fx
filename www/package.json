@@ -9,7 +9,7 @@
     "dev": "NEXT_TELEMETRY_DISABLED=1 next dev --webpack --hostname 127.0.0.1 --port 3100",
     "check": "bun --no-env-file run check:images && NEXT_TELEMETRY_DISABLED=1 next typegen && tsc --noEmit",
     "check:images": "bun --no-env-file scripts/image-policy.ts",
-    "test": "bun --no-env-file test scripts/image-policy.test.ts scripts/showcases src/components/showcases src/lib/showcases",
+    "test": "bun --no-env-file test scripts/image-policy.test.ts scripts/sitemap.test.ts scripts/showcases src/components/showcases src/lib/showcases",
     "build": "bun --no-env-file scripts/showcases/build.ts",
     "build:next": "NEXT_TELEMETRY_DISABLED=1 next build --webpack",
     "preview": "bun --no-env-file scripts/preview.ts",

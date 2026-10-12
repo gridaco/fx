@@ -124,8 +124,12 @@ Open Graph and Twitter fields for each page. All pages share the build-generated
 `social-preview.png`, rendered from local artwork without remote requests. Keep
 `public/landing/landscape-v1.webp`: it remains the social-preview source.
 
-The root Grida site's robots policy or sitemap index must reference
-`https://grida.co/fx/sitemap.xml`. This nested app cannot replace root `robots.txt`.
+FX owns `https://grida.co/fx/sitemap.xml`. It lists the landing, the workflow
+index and one page per workflow from the catalog that generates them, at their
+canonical URLs and without dates. The build fails if an indexable exported page is
+missing, a listed URL is not one, or a page's canonical differs from its entry.
+Guide pages belong to the docs sitemap, not this one. The root Grida site's
+`robots.txt` must reference this sitemap; a nested app's own `robots.txt` is ignored.
 The neutral palette, logo position and serif `f(x)` motif follow Grida's website;
 source references and reuse basis are recorded in the asset notes above.
 System fonts and webpack keep builds independent of remote fonts and development
