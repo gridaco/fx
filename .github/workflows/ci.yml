@@ -97,6 +97,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-15]
     runs-on: ${{ matrix.os }}
+    # A host test that hangs fails the job in minutes, not at the six-hour limit.
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: js/fx

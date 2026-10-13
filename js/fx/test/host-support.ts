@@ -10,17 +10,15 @@ import {
   closeSync,
   constants,
   copyFileSync,
-  createReadStream,
-  createWriteStream,
   mkdirSync,
   mkdtempSync,
   openSync,
-  type ReadStream,
   readFileSync,
+  readSync,
   realpathSync,
   rmSync,
-  type WriteStream,
   writeFileSync,
+  writeSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -162,6 +160,12 @@ export type Answering = (message: Message) => { result: unknown } | { error: Rec
  * reads; `stderr: "pipe"` gives it a pipe of the test
  * runner's instead, and `stderr: "slow"` a pipe that a reader drains slowly into that file
  * ({@link SLOW_READER}; the child is then the shell that runs both).
+ *
+ * The driver's ends of the named pipes never wait in a thread of the test runner's pool, which a
+ * few blocked opens or reads would use up on a machine with few cores (every later host then
+ * hangs): both are opened before the host starts, without waiting (the input read-write, the
+ * output non-blocking), so the shell's opens of them never wait either; what the driver writes is
+ * queued and written as the pipe takes it, and the output is polled.
  */
 export class HostProcess {
   readonly child: ChildProcess;
@@ -175,8 +179,17 @@ export class HostProcess {
   readonly #folder: string;
   readonly #log: string | null;
   #piped = "";
-  readonly #input: WriteStream;
-  readonly #output: ReadStream;
+  /** The driver's end of the host's input (read-write, non-blocking), null once closed. */
+  #input: number | null;
+  /** Bytes waiting for the input pipe to take them. */
+  #queued: Buffer[] = [];
+  #closing = false;
+  /** The driver's end of the host's output (non-blocking), null once it ended. */
+  #output: number | null;
+  #outputSeen = false;
+  #childExited = false;
+  readonly #poll: NodeJS.Timeout;
+  readonly #chunk = Buffer.alloc(1 << 16);
   #reader = new FrameReader();
   #messages: (Message | Error)[] = [];
   #waiting: ((value: Message | Error) => void) | null = null;
@@ -217,6 +230,9 @@ export class HostProcess {
             SLOW_READER,
           ]
         : ['in=$1; out=$2; shift 2; exec "$@" <"$in" >"$out"', "sh", input, output];
+    // Opened before the shell opens them, so neither side waits (class comment).
+    this.#output = openSync(output, constants.O_RDONLY | constants.O_NONBLOCK);
+    this.#input = openSync(input, constants.O_RDWR | constants.O_NONBLOCK);
     this.child = spawn("/bin/sh", ["-c", ...script, ...host], {
       cwd: root,
       env: options.env ?? process.env,
@@ -230,34 +246,14 @@ export class HostProcess {
         this.#piped += chunk.toString("utf8");
       });
     }
-    this.#input = createWriteStream(input);
-    this.#input.on("error", () => {
-      // the host ended first
+    this.#poll = setInterval(() => {
+      this.#flush();
+      this.#drain();
+    }, 2);
+    this.child.once("exit", () => {
+      this.#childExited = true;
+      this.#drain();
     });
-    this.#output = createReadStream(output);
-    this.#output.on("data", (chunk: Buffer | string) => {
-      const bodies = this.#reader.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
-      if (this.#reader.broken !== null) {
-        this.#push(new Error(`the protocol stream broke: ${this.#reader.broken.message}`));
-      }
-      for (const body of bodies) {
-        let message: Message;
-        try {
-          message = parseMessage(body) as Message;
-        } catch (error) {
-          this.#push(new Error(`the host wrote what is not a message: ${(error as Error).message}`));
-          continue;
-        }
-        const errors = protocolErrors(message);
-        if (errors.length > 0) {
-          this.#push(new Error(`the host wrote a message the schema refuses: ${JSON.stringify(message)}\n${errors.join("\n")}`));
-          continue;
-        }
-        this.#push(message);
-      }
-    });
-    this.#output.on("end", () => this.#push(new Error("the host closed its protocol stream")));
-    this.#output.on("error", (error) => this.#push(error));
     this.exited = new Promise((done) => this.child.once("exit", (code, signal) => done({ code, signal })));
   }
 
@@ -273,9 +269,96 @@ export class HostProcess {
     }
   }
 
-  /** Ends the host's protocol input. */
+  /** Ends the host's protocol input, once what was written before has gone. */
   closeInput(): void {
-    this.#input.end();
+    this.#closing = true;
+    this.#flush();
+  }
+
+  /** Writes what is queued as far as the input pipe takes it; closes it when asked and empty. */
+  #flush(): void {
+    while (this.#input !== null && this.#queued.length > 0) {
+      const head = this.#queued[0] as Buffer;
+      let written = 0;
+      try {
+        written = writeSync(this.#input, head);
+      } catch (error) {
+        if ((error as { code?: unknown }).code === "EAGAIN") {
+          return;
+        }
+        // The host is gone and nothing will read it.
+        this.#queued = [];
+        break;
+      }
+      if (written < head.length) {
+        this.#queued[0] = head.subarray(written);
+        return;
+      }
+      this.#queued.shift();
+    }
+    if (this.#closing && this.#input !== null && this.#queued.length === 0) {
+      closeSync(this.#input);
+      this.#input = null;
+    }
+  }
+
+  /** Reads what the host wrote: frames become messages, and its end the closed stream. */
+  #drain(): void {
+    while (this.#output !== null) {
+      let count: number;
+      try {
+        count = readSync(this.#output, this.#chunk, 0, this.#chunk.length, null);
+      } catch (error) {
+        if ((error as { code?: unknown }).code === "EAGAIN") {
+          return;
+        }
+        this.#endOutput();
+        this.#push(error as Error);
+        return;
+      }
+      if (count === 0) {
+        // No writer: the host has not opened its end yet, or it is gone.
+        if (this.#outputSeen || this.#childExited) {
+          this.#endOutput();
+          this.#push(new Error("the host closed its protocol stream"));
+        }
+        return;
+      }
+      this.#outputSeen = true;
+      this.#received(this.#chunk.subarray(0, count));
+    }
+  }
+
+  #endOutput(): void {
+    if (this.#output !== null) {
+      closeSync(this.#output);
+      this.#output = null;
+    }
+    if (this.#input === null) {
+      clearInterval(this.#poll);
+    }
+  }
+
+  #received(chunk: Buffer): void {
+    const bodies = this.#reader.push(chunk);
+    if (this.#reader.broken !== null) {
+      this.#push(new Error(`the protocol stream broke: ${this.#reader.broken.message}`));
+    }
+    for (const body of bodies) {
+      let message: Message;
+      try {
+        message = parseMessage(body) as Message;
+      } catch (error) {
+        this.#push(new Error(`the host wrote what is not a message: ${(error as Error).message}`));
+        continue;
+      }
+      const errors = protocolErrors(message);
+      if (errors.length > 0) {
+        this.#push(new Error(`the host wrote a message the schema refuses: ${JSON.stringify(message)}\n${errors.join("\n")}`));
+        continue;
+      }
+      this.#push(message);
+    }
   }
 
   #push(item: Message | Error): void {
@@ -315,7 +398,11 @@ export class HostProcess {
   }
 
   sendRaw(data: Uint8Array | string): void {
-    this.#input.write(data);
+    if (this.#input === null || this.#closing) {
+      return;
+    }
+    this.#queued.push(Buffer.from(data));
+    this.#flush();
   }
 
   send(message: unknown): void {
@@ -430,19 +517,15 @@ export class HostProcess {
     if (this.child.exitCode === null && this.child.signalCode === null) {
       this.child.kill("SIGKILL");
     }
-    // Releases an open of either pipe still waiting for the other side.
-    for (const [name, flags] of [
-      ["in", constants.O_RDONLY | constants.O_NONBLOCK],
-      ["out", constants.O_WRONLY | constants.O_NONBLOCK],
-    ] as const) {
-      try {
-        closeSync(openSync(join(this.#folder, name), flags));
-      } catch {
-        // nobody waits
+    clearInterval(this.#poll);
+    this.#queued = [];
+    for (const fd of [this.#input, this.#output]) {
+      if (fd !== null) {
+        closeSync(fd);
       }
     }
-    this.#input.destroy();
-    this.#output.destroy();
+    this.#input = null;
+    this.#output = null;
     this.child.stderr?.destroy();
   }
 }
