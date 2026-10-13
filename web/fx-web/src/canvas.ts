@@ -170,7 +170,7 @@ export class CanvasController {
     this.svg.addEventListener("pointerup", this.onPointerUp, { signal: this.abort.signal });
     this.svg.addEventListener("pointercancel", this.onPointerUp, { signal: this.abort.signal });
     // The pointer moving onto the player stays on its card.
-    this.svg.addEventListener("pointerleave", (event) => { if (event.relatedTarget !== this.videos.player) this.hover(null); }, { signal: this.abort.signal });
+    this.svg.addEventListener("pointerleave", (event) => { if (!this.videos.player.contains(event.relatedTarget as Node | null)) this.hover(null); }, { signal: this.abort.signal });
     // A deck card is the expand target: the capture phase runs before a card's own selection.
     this.svg.addEventListener("click", this.onDeckClick, { capture: true, signal: this.abort.signal });
     // Raising a card moves focus out of the canvas, so Esc listens on the document while open.
@@ -178,7 +178,7 @@ export class CanvasController {
       if (event.key !== "Escape" || !this.open || event.defaultPrevented) return;
       const target = event.target as HTMLElement | null;
       // A field keeps its own keys; Esc on the card's player closes the player first.
-      if (target?.closest("input, textarea, select, video, [contenteditable]")) return;
+      if (target?.closest("input, textarea, select, [contenteditable], .fx-canvas-player")) return;
       event.preventDefault();
       this.collapse();
     }, { capture: true, signal: this.abort.signal });

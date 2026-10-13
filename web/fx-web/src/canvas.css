@@ -58,7 +58,29 @@
 .fx-canvas-video.is-playing .fx-canvas-play, .fx-canvas-video.is-unavailable .fx-canvas-play { display: none; }
 .fx-canvas-video.is-playing .fx-canvas-node-image { visibility: hidden; }
 .fx-canvas-video.is-unavailable .fx-canvas-image-error { visibility: visible; }
-.fx-canvas-player { position: absolute; box-sizing: border-box; border-radius: 6px; background: transparent; object-fit: contain; }
+.fx-canvas-player { position: absolute; box-sizing: border-box; overflow: hidden; border-radius: 6px; outline: none; container-type: inline-size; font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.fx-canvas-player:focus-visible { box-shadow: 0 0 0 2px #2563eb; }
+.fx-canvas-player > video { display: block; width: 100%; height: 100%; object-fit: contain; }
+.fx-canvas-player:fullscreen { border-radius: 0; background: #000; }
+.fx-canvas-player.is-idle { cursor: none; }
+/* Its controls (video-controls.ts) keep their screen size at any zoom; a small player keeps fewer. */
+.fx-video-controls { position: absolute; right: 0; bottom: 0; left: 0; display: flex; align-items: center; gap: 2px; padding: 14px 4px 3px; background: linear-gradient(#0000, #0000008c); color: #fff; transition: opacity .2s; }
+.fx-canvas-player.is-idle .fx-video-controls { opacity: 0; }
+.fx-video-controls button { display: grid; flex: none; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 5px; background: none; color: inherit; cursor: pointer; }
+.fx-video-controls button[hidden] { display: none; }
+.fx-video-controls button:hover { background: #ffffff2e; }
+.fx-video-controls button:focus-visible { outline: 2px solid #93c5fd; outline-offset: -2px; }
+.fx-video-time { flex: none; padding: 0 3px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fx-video-seek { flex: 1; min-width: 0; height: 16px; margin: 0 4px; background: none; cursor: pointer; appearance: none; }
+.fx-video-seek:disabled { cursor: default; }
+.fx-video-seek:focus-visible { outline: 2px solid #93c5fd; outline-offset: 1px; border-radius: 2px; }
+.fx-video-seek::-webkit-slider-runnable-track { height: 3px; border-radius: 2px; background: linear-gradient(to right, #fff var(--fx-played, 0%), #ffffff80 var(--fx-played, 0%) var(--fx-buffered, 0%), #ffffff40 var(--fx-buffered, 0%)); }
+.fx-video-seek::-moz-range-track { height: 3px; border-radius: 2px; background: linear-gradient(to right, #fff var(--fx-played, 0%), #ffffff80 var(--fx-played, 0%) var(--fx-buffered, 0%), #ffffff40 var(--fx-buffered, 0%)); }
+.fx-video-seek::-webkit-slider-thumb { width: 10px; height: 10px; margin-top: -3.5px; border: 0; border-radius: 50%; background: #fff; appearance: none; }
+.fx-video-seek::-moz-range-thumb { width: 10px; height: 10px; border: 0; border-radius: 50%; background: #fff; }
+@container (max-width: 220px) { .fx-video-time { display: none; } }
+@container (max-width: 150px) { .fx-video-seek, .fx-video-controls .fx-video-fullscreen { display: none; } .fx-video-controls { justify-content: space-between; } }
+@container (max-width: 64px) { .fx-video-controls { display: none; } }
 .fx-canvas-toolbar { position: absolute; bottom: 16px; left: 16px; display: flex; align-items: center; gap: 1px; padding: 3px; border: 1px solid #e4e4e7; border-radius: 9px; background: #fff; box-shadow: 0 2px 5px #00000008; }
 .fx-canvas-toolbar button { min-width: 32px; height: 30px; padding: 0 8px; border: 0; border-radius: 5px; background: #fff; color: #3f3f46; font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; cursor: pointer; }
 .fx-canvas-toolbar button:hover { background: #f4f4f5; }

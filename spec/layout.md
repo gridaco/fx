@@ -257,7 +257,7 @@ including those that leave the deck.
 | Input | Closed deck | Expanded deck |
 |---|---|---|
 | Hover, only where `(hover: hover)` | raise the card under the pointer, and its linked partner; leaving restores the resting card | nothing; everything under the veil is inert |
-| Rest on a card's video, only where `(hover: hover)` and motion is not reduced | after a moment it plays over the card, muted and looping, with its controls, until the pointer leaves; pressing it keeps it playing | the same |
+| Rest on a card's video, only where `(hover: hover)` and motion is not reduced | after a moment it plays over the card, muted and looping, with its controls, until the pointer leaves; pressing it keeps it playing, and a press on its picture turns its sound on | the same |
 | Hover a bookmark row | raise that member, as hovering its card does | the camera glides to that member's card, which is outlined; leaving keeps the camera there |
 | Click a bookmark row | select that member (a frame member: its first step), which then rests in front | select it, and the camera glides to its card |
 | Still click on a card, a back card's visible rim or the badge | expand | select that member |
@@ -278,7 +278,11 @@ A video plays over its card's preview, following the card as the camera and the 
 selects nothing. Resting on it plays it muted, without taking focus or replacing a video someone
 played or pressed. It stops when it ends, when the pointer leaves one that is only hovered, on Esc
 (focus returns to its play control) and as soon as anything covers its card: another card raised
-over it, its deck resting with another card in front, or the veil of a deck it is not in.
+over it, its deck resting with another card in front, or the veil of a deck it is not in. Its
+controls are the viewer's own and keep their size on screen at any zoom: play, seek, time, mute and
+full screen, the time going first and then seek and full screen as the player gets narrow. While it
+plays they fade once the pointer rests. With focus in the player, Space or K plays and pauses, the
+arrow keys seek 5 seconds, M mutes and F goes full screen.
 
 On collapse, focus returns to the deck's front card. Raising a card never moves the focused
 element in the document. At most one deck per view is expanded, plus its nested levels. There are

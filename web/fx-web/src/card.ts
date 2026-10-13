@@ -1,8 +1,8 @@
-import { createElement, Play } from "lucide";
 import { displayPortName } from "./ports";
 import { canvasNodeGeometry, canvasPreviewReserved, PORT_ROW, PORT_TOP, type PositionedNode } from "./layout";
 import { stateIcon, stateIconParts } from "./state-icon";
 import type { CanvasStep } from "./graph";
+import { mediaGlyph } from "./video-controls";
 
 const SVG = "http://www.w3.org/2000/svg";
 
@@ -122,7 +122,7 @@ export function nodeCard(node: PositionedNode, canvasId: string, index: number, 
       const play = element("g", { class: "fx-canvas-play", role: "button", tabindex: 0, "aria-label": `Play ${preview.label}` });
       const center = { x: node.width / 2, y: frame.y + frame.height / 2 };
       play.append(element("circle", { cx: center.x, cy: center.y, r: 18 }),
-        createElement(Play, { x: center.x - 8, y: center.y - 8, width: 16, height: 16, "stroke-width": 2, "aria-hidden": "true" }));
+        mediaGlyph("play", { x: center.x - 8, y: center.y - 8, width: 16, height: 16 }));
       video.append(backdrop, image, border, fallback, play);
       group.append(video);
     }
