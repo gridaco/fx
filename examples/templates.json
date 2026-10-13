@@ -8,7 +8,7 @@
     },
     {
       "name": "hello-ts",
-      "description": "The hello badges, drawn by your own TypeScript nodes on Node: offline, no provider, no Python",
+      "description": "Badges drawn by your own TypeScript nodes, checked and laid out on a sheet: offline, no provider",
       "provider": "none",
       "path": "examples/hello-ts"
     },

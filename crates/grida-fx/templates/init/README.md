@@ -13,9 +13,9 @@ npm install -g grida
 grida fx --version
 ```
 
-Or run any command without installing, as `npx grida fx <command>`. Workflow steps written in
-Python need the Python SDK too: `pip install grida` (Python 3.11 or later). Steps written in
-TypeScript need Node 24 or later, and `npm install @grida/fx` in the project for type checking.
+Or run any command without installing, as `npx grida fx <command>`. Steps you write yourself
+need their language's SDK too: `pip install grida` for Python (3.11 or later), or
+`npm install @grida/fx` in the project for TypeScript.
 
 ## Connect an AI provider
 
@@ -56,6 +56,7 @@ grida fx run icon --live --max-usd 1 --open
 |---|---|
 | `fx.yaml` | project settings: routes, budget, where workflows are |
 | `workflows/` | your workflow files |
+| `nodes/` | node types you write, in Python or TypeScript (optional) |
 | `AGENTS.md`, `.agents/skills/` | instructions and the FX skills for coding agents |
 | `runs/`, `.fx/` | run records and the cache, written by FX and kept out of git |
 

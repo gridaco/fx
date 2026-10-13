@@ -2,9 +2,10 @@
 
 The Python SDK for [Grida FX](https://github.com/gridaco/fx). Import it as `grida.fx`.
 
-It does three things: it authors node types and workflows (`node`, `Workflow`), it hosts node
-bodies when the engine runs them (`python -m grida.fx.host`, started by the engine), and it drives
-the `grida-fx` engine from Python. The engine is the only place with engine logic: planning,
+It does three things: it authors node types and workflows (`node`, `Workflow`), it hosts Python
+node bodies, builders and stand-ins when the engine runs them (`python -m grida.fx.host`, started
+by the engine; TypeScript ones run in `@grida/fx`'s host on Node), and it drives the `grida-fx`
+engine from Python. The engine is the only place with engine logic: planning,
 identities, the cache and budgets all happen in `grida-fx`, never in this package.
 
 ## Install
@@ -32,8 +33,11 @@ python -m grida.fx run workflows/gallery.yaml --poster inputs/poster.png --live 
 ```
 
 `python -m grida.fx <verb> …` takes the same arguments as `grida-fx` and exits with its status
-(on POSIX it becomes the `grida-fx` process), so a Python installation needs no Node. The binary
-is the first of:
+(on POSIX it becomes the `grida-fx` process), so a Python installation needs no Node unless the
+project has TypeScript nodes, builders or stand-ins: those need Node 24 or later (`GRIDA_FX_NODE`
+or `node` on `PATH`) and the project's own `@grida/fx`
+([Getting started](https://github.com/gridaco/fx/blob/main/docs/guide/01-getting-started.md#when-fx-needs-node)).
+The binary is the first of:
 
 1. `GRIDA_FX_BIN`, when set (a path; relative to the current directory);
 2. the one inside the package (`grida/fx/_bin/grida-fx`): shipped in the wheel, or built into a

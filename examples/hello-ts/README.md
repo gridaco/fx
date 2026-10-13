@@ -4,8 +4,8 @@
 scale them down, and give me one sheet with all of them."
 
 [hello](https://github.com/gridaco/fx/tree/main/examples/hello), with every node written in
-TypeScript. Nothing in it is paid: it runs offline, at $0, with no keys, and it needs no Python,
-only Node 24 or later
+TypeScript. Nothing in it is paid: it runs offline, at $0, with no keys. It needs only Node 24 or
+later for its nodes
 ([When FX needs Node](https://github.com/gridaco/fx/blob/main/docs/guide/01-getting-started.md#when-fx-needs-node)).
 
 ```
@@ -63,7 +63,3 @@ Run it again and every step comes from the cache. Change one badge's colour in
 - **The cache.** Every step's result is kept by what went into it, so a second run is free and
   instant, and a change re-runs only what it touches
   ([Cost, cache and takes](https://github.com/gridaco/fx/blob/main/docs/guide/04-cost-and-cache.md)).
-- **No Python.** The Python hello judges, scales and packs with `fx/image.check_alpha@1`,
-  `fx/image.resize@1` and `fx/package@1`, built-in steps whose bodies are Python. Here your own
-  nodes judge and scale, and there is no folder to pack: a project whose steps are all
-  TypeScript nodes, paid built-ins and `fx/select@1` needs no Python.

@@ -278,6 +278,7 @@ project you choose how that identity is set:
   means:
   - the node's module;
   - the project modules it imports;
+  - the files of a package you list under `sources:` in `fx.yaml`;
   - its declared `resources`.
 
   Edit any of them, and its results are recomputed on the next run. Paid calls inside it are still
@@ -322,62 +323,13 @@ type FX finds in the module, and other exports are left alone. The body may be `
 should and shouldn't do is what [a Python node](#writing-a-node-type-in-python) should and
 shouldn't.
 
-Everything a body prints (`console.log`, `process.stdout`, a program it starts) goes to FX's
-standard error, never into its conversation with the engine, and standard input is empty.
-`process.exit()` throws instead of ending the host. A project may use Python and TypeScript nodes
-together, even in one workflow; one language per project is the usual choice.
-
-### A TypeScript project
-
-Node runs a project's `.ts` files as they are, stripping their types: there is no build step, and
-FX never type checks. `tsc` does, when you ask it to. Set the project up once, with Node 24 or later
-([Getting started](01-getting-started.md#when-fx-needs-node)), as the
-[hello-ts](../../examples/hello-ts/) example is:
-
-```sh
-npm install @grida/fx
-npm install --save-dev typescript @types/node
-```
-
-`package.json`, beside the dependencies npm records:
-
-```json
-{
-  "type": "module",
-  "imports": { "#lib/*": "./lib/*" }
-}
-```
-
-`tsconfig.json` (`erasableSyntaxOnly` needs TypeScript 5.8 or later):
-
-```json
-{
-  "compilerOptions": {
-    "module": "nodenext",
-    "strict": true,
-    "noEmit": true,
-    "allowImportingTsExtensions": true,
-    "erasableSyntaxOnly": true,
-    "verbatimModuleSyntax": true
-  }
-}
-```
-
-Write TypeScript that Node can strip:
-- **Erasable syntax only.** Types, interfaces, generics, `as` and `satisfies` are fine; `enum`,
-  `namespace` and parameter properties are not, since Node would have to compile them.
-  `erasableSyntaxOnly` makes `tsc` say so.
-- **Imports name the `.ts` file:** `import { seamError } from "./seams.ts"`, not `./seams.js` or
-  `./seams`. Import types with `import type`, which `verbatimModuleSyntax` asks for.
-- **`#` imports instead of tsconfig `paths`.** package.json's `imports` (`"#lib/*": "./lib/*"`) is
-  Node's own way to name a folder, so Node and `tsc` agree on it: `import { layOut } from
-  "#lib/atlas.ts"`.
-- **ES modules only.** `"type": "module"`, and node modules are `.ts`, `.mts`, `.js` or `.mjs`.
-  A `.tsx`, `.cts` or `.cjs` module is refused (`no node host for .tsx modules`), and so is a
-  project module that Node would load as CommonJS.
-- **Packages ship JavaScript.** Node strips no types under `node_modules`, so a package of nodes
-  you publish ships JavaScript and `.d.ts`, as `@grida/fx` does. A workspace package linked into
-  `node_modules` runs from its own folder, `.ts` files and all.
+Node 24 or later runs the project's `.ts` files as they are, stripping their types: there is no
+build step, and FX never type checks (`tsc` does, when you ask it to). Write ES modules
+(`"type": "module"` in `package.json`) in erasable syntax only (no `enum`, `namespace` or parameter
+properties), name the `.ts` file in imports (`./seams.ts`), and use package.json `imports`
+(`#lib/atlas.ts`) rather than tsconfig `paths`. The [hello-ts](../../examples/hello-ts/) example
+is a whole project, and the [JavaScript SDK](../../js/fx/README.md#writing-node-types) has the
+`tsconfig.json` for `tsc`.
 
 ### Declaring a node in TypeScript
 
@@ -424,21 +376,12 @@ The fields are `@node`'s, with the type's name as `name`. The body's types follo
 | output `"image[]"` or `"image{}"` | a readonly array of them, or a `ReadonlyMap` of them |
 | output `"json?"` | may be left out, or `null` |
 
-- **`tsc` checks the body against its declaration:** a param used as another type than its
-  choices, a param or input you didn't declare, an output missing or undeclared, a value that is
-  not a file where an output wants one, a port that isn't one (`"imgae"`), and an optional input
-  or param used as if it were always there.
-- **FX checks the values when it runs the node.** A step's `with:` can bind a param to an
-  expression, so before the body starts, FX checks each param's value against its declaration and
-  fails the step with the first that doesn't fit:
-  `param side: "up" is not one of ["left","right"]`, or
-  `param strength: "big" is not of type "number"`. An optional param whose value isn't there
-  (bound to an input nobody gave) is left out, as if the step hadn't set it. When the body
-  returns, FX checks its outputs: one missing or undeclared, or a value that isn't a file, fails
-  the step.
-- **Keyed collections are `Map`s, both ways.** A plain object puts integer-like keys (`"10"`,
-  `"2"`) before the others; a `Map` keeps the collection's order. Return a `Map` for a keyed
-  output, and keep keyed data you write as JSON in an array, as `layOut` does above.
+- **`tsc` checks the body against its declaration:** an undeclared param, input or output, a
+  missing output, a param used as another type, or an optional one used as if always there.
+- **FX checks param values when it runs the node,** since `with:` can bind one to an expression:
+  the first that doesn't fit fails the step (`param side: "up" is not one of ["left","right"]`).
+- **Keyed collections are `Map`s, both ways:** return a `Map` for a keyed output, since a plain
+  object reorders integer-like keys.
 
 ### What `ctx` gives you in TypeScript
 
@@ -461,12 +404,8 @@ The fields are `@node`'s, with the type's name as `name`. The body's types follo
 | `throw ctx.fail(message)` | a broken result: the step fails with your message (not a take) |
 | `ctx.instance` | `.id`, `.path`, `.step`, `.key`, `.take` and `.takes` of the instance running |
 
-The JSON values you give FX (facts, marks, `ctx.out.json`, a call's request) are checked before
-they leave: `NaN`, the infinities, integers beyond 2^53, `undefined` in an array, and objects that
-aren't plain (a `Map`, a `Date`, a class instance) are refused with a sentence that says where they
-are, rather than changed the way `JSON.stringify` would change them. An object member that is
-`undefined` is left out, as `JSON.stringify` leaves it out: `{ prompt, size: ctx.params.size }`
-sends no `size` when the step left that optional param out.
+JSON values you give FX (facts, marks, `ctx.out.json`, a call's request) are checked, not coerced
+as `JSON.stringify` would ([the JavaScript SDK](../../js/fx/README.md#writing-node-types)).
 
 ### Paid calls, judges and agents in TypeScript
 
@@ -520,20 +459,11 @@ export const loopsAlready = node(
 );
 ```
 
-An [agent](#agents) gets tools declared with `tool(…)`. A tool's `parameters` is a JSON Schema
-object, and its handler's arguments are typed from it: write it in place, or `as const` when you
-keep it in a variable of its own.
+An [agent](#agents) works as in Python: `ctx.agent({ system, tools })`, then
+`await agent.run(instructions, { maxSteps, submit, check })`. A tool is declared with `tool(…)`,
+and its `parameters`, a JSON Schema written in place, types the handler's arguments:
 
 ```ts
-// nodes/orient.ts
-import { copyFile, mkdir, readdir } from "node:fs/promises";
-import { join } from "node:path";
-import { type Ctx, node, tool, ToolReply } from "@grida/fx";
-
-async function blender(ctx: Ctx, script: string, ...args: string[]): Promise<void> {
-  await ctx.tool("blender").run(["--background", "--python", script, "--", ...args]);
-}
-
 const rotate = tool(
   {
     name: "rotate",
@@ -545,100 +475,24 @@ const rotate = tool(
     },
   },
   async ({ degrees }, ctx) => {
-    await blender(ctx, "blender/rotate.py", String(ctx.state["mesh"]), String(degrees));
+    const args = [String(ctx.state["mesh"]), String(degrees)];
+    await ctx.tool("blender").run(["--background", "--python", "blender/rotate.py", "--", ...args]);
     return "rotated";
-  },
-);
-
-const renderViews = tool(
-  {
-    name: "render_views",
-    description: "Render front, side and top views.",
-    parameters: { type: "object", properties: {} },
-  },
-  async (_arguments, ctx) => {
-    const folder = ctx.workPath("views");
-    await mkdir(folder, { recursive: true });
-    await blender(ctx, "blender/render_views.py", String(ctx.state["mesh"]), folder);
-    const views = (await readdir(folder)).filter((name) => name.endsWith(".png")).sort();
-    return new ToolReply("front, side and top", views.map((name) => join(folder, name)));
-  },
-);
-
-export const orient = node(
-  {
-    name: "orient",
-    inputs: { mesh: "model" },
-    outputs: { mesh: "model" },
-    calls: { "agent.turn": 30 },
-    tools: ["blender"],
-    resources: ["prompts/orient.md", "blender/rotate.py", "blender/render_views.py"],
-  },
-  async (ctx) => {
-    const mesh = ctx.workPath("mesh.glb");
-    await copyFile(ctx.inputs.mesh.path, mesh);
-    ctx.state["mesh"] = mesh;
-    const agent = ctx.agent({
-      system: await ctx.prompt("prompts/orient.md"),
-      tools: [rotate, renderViews],
-    });
-    await agent.run("Stand the character upright, facing +Y, feet on the ground.", {
-      maxSteps: 30,
-    });
-    return { mesh: ctx.out.file(mesh) };
   },
 );
 ```
 
-- **A tool returns** text, another JSON value, or a `ToolReply` when the model should see
-  pictures too: files, `ctx.out` outputs, paths or `data:` URLs. A tool that throws tells the
-  model what went wrong, and the agent goes on; one that throws `ctx.fail(…)` fails the node.
-- **A structured answer:** `agent.run(instructions, { maxSteps, submit: schema, check })` gives the
-  agent a `submit` tool and resolves to the answer, typed from `submit`. `check` returns a string
-  to refuse an answer with that reason, and nothing to accept it.
-- **External programs** are declared and found as [in Python](#external-programs):
-  `tools: ["blender", "ffmpeg"]`. `ctx.tool(name).run(argv, { cwd, timeoutS, env, check })`
-  starts one in a session of its own, in the node's work folder unless `cwd` says otherwise. A
-  non-zero exit fails the node unless `check: false`. `timeoutS` (seconds, or `null` for none)
-  stops it with everything it started and fails the node. It is stopped the same way when FX
-  stops the node (`ctx.signal`) and when the node's run ends: no program outlives its node.
+A tool returns text, another JSON value, or a `ToolReply` when the model should see pictures too.
+[External programs](#external-programs) are declared the same way: `tools: ["blender"]`.
 
 ### Versions in TypeScript
 
 [Versions](#versions) work as in Python: `version: 3` in the declaration, and
-`grida fx lock --same nodes/pack.ts#packAtlas` to confirm a change. Without a version, the
-identity follows the source:
-- the node's module, and every project file it imports, on through their own imports: relative
-  paths, `#` imports and `.json` modules alike. A workspace package linked into `node_modules`
-  counts by its real folder, so one inside the project is project files;
-- the files of a package you list under `sources:` in `fx.yaml`, wherever it is installed;
-- its declared `resources`.
-
-An import written with a literal path counts wherever it is, whether or not it runs, as in
-Python: `import … from "./x.ts"`, `export … from`, `await import("./x.ts")` and
-`require("./x.cjs")`, inside a function or a branch that never runs too. An `import type` adds
-nothing, since Node erases it, and neither does any file under `node_modules`. An import whose
-path is computed as the code runs (`` import(`./plugins/${name}.ts`) ``) counts once Node loads
-it, for the module whose top-level code loaded it, wherever the code doing the loading lives. A
-project file that only a package loads (a config loader's `import(url)`) isn't counted, and
-neither is one loaded in a worker thread or a child process: list such files under `resources`
-so their edits count. The list doesn't depend on which modules FX happened to load first, except
-in rare cases the [protocol](../../spec/protocol.md#51-describe) lists, such as a registry that
-caches what it loaded by a computed path: write its paths as literals.
-
-Two rules keep that list true:
-- **Spell paths as they are on disk.** macOS would load `./lib/Atlas.ts` for `lib/atlas.ts`, so FX
-  refuses the module instead: `nodes/pack.ts failed to import: lib/Atlas.ts is spelled
-  lib/atlas.ts on disk`. A body that loads such a path when it runs fails its step with the
-  same advice: `the body loaded lib/Atlas.ts at run time, outside its source closure:
-  lib/Atlas.ts is spelled lib/atlas.ts on disk`.
-- **Import statically.** A body that loads a project file outside its module's closure, by a
-  path it computes (in its own `import()` or a helper's), fails its step: `the body loaded
-  lib/atlas.ts at run time, outside its source closure: import it statically`, whether or not
-  another node's module had loaded that file already. A literal path counts before it runs, so
-  `await import("../lib/atlas.ts")` in the body is as good as an import at the top. Each run is
-  checked on its own, and never fails for what another run loaded, even from work it left
-  running.
+`grida fx lock --same nodes/pack.ts#packAtlas` to confirm a change. Without a version, a module's
+imports count by their literal paths (relative, `#` and `.json` alike; `import type` adds
+nothing), whether or not they run. Import project files statically and spell paths as they are
+on disk: a body that loads a project file outside that list when it runs fails its step and says
+why. List a file that only a package, a worker or a child process loads under `resources`.
 
 ## Other languages
 

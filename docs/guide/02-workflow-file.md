@@ -98,7 +98,7 @@ steps:
 | Form | Meaning |
 |---|---|
 | `fx/<name>@<major>` | built-in node type (see [Nodes](03-nodes.md)) |
-| `./nodes/mirror.py#mirror_repeat` | a node type you wrote, in your project |
+| `./nodes/mirror.py#mirror_repeat`, `./nodes/pack.ts#packAtlas` | a node type you wrote in your project, in Python or TypeScript |
 | `./workflows/icon.yaml` | another workflow, used as one step |
 
 A path that starts with `./` or `../` is relative to the workflow's home: the folder of the nearest

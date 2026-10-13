@@ -54,7 +54,7 @@ offline; without `--live` a run does every free step and refuses each paid call 
 | Project | What it shows | What runs |
 |---|---|---|
 | [hello](../../examples/hello/) | your own nodes, built-in local steps, a judge, a keyed repeat, the cache | everything, offline, at $0 |
-| [hello-ts](../../examples/hello-ts/) | hello with every node in TypeScript: types from the declaration, a judge and the source closure | everything, offline, at $0, with Node and no Python |
+| [hello-ts](../../examples/hello-ts/) | hello with every node in TypeScript: types from the declaration, a judge and the source closure | everything, offline, at $0 |
 | [looping-parallax](../../examples/looping-parallax/) | plan-time facts, fallbacks, a paid call inside your own node | offline when every layer mirrors; a repaint is live |
 | [item-icons](../../examples/item-icons/) | a TypeScript builder reading a web game's own item table, a TypeScript stand-in, and delivery into the game | the stand-in offline; the icons live |
 | [concept-gallery](../../examples/concept-gallery/) | propose a world, review it, one reviewed image per entity: YAML plus judges you write | live |

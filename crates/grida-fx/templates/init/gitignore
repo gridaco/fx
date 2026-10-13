@@ -5,5 +5,7 @@ runs/
 # Provider keys
 .env
 
-# Packages of steps written in TypeScript
+# What Python and npm install for your own steps
+.venv/
+__pycache__/
 node_modules/

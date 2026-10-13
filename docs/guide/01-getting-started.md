@@ -23,9 +23,8 @@ one language per project is the usual choice, though a project may mix them.
 This guide writes `grida fx`. You may also meet FX as `grida-fx` or `python -m grida.fx`: these are
 the same FX, started another way, and take the same commands (`grida-fx plan` is `grida fx plan`).
 
-- `grida-fx` is FX on its own, from the `@grida/fx` package, which is also the JavaScript and
-  TypeScript SDK and the host of TypeScript nodes. Projects that depend on `@grida/fx`, and servers
-  or CI images that need only FX, use it.
+- `grida-fx` is FX on its own, from the `@grida/fx` package, which is also the JavaScript SDK.
+  Projects that depend on `@grida/fx`, and servers or CI images that need only FX, use it.
 - `python -m grida.fx` is FX from the Python package, for Python users who don't want Node
   ([Running](05-running.md#from-python)).
 
@@ -69,30 +68,15 @@ The first workflow below uses `image.check_alpha`, so it needs Python.
 
 ### When FX needs Node
 
-Nodes, builders and [stand-ins](05-running.md#stand-ins-testing-without-a-provider) you write in
+Your own nodes, builders and [stand-ins](05-running.md#stand-ins-testing-without-a-provider) in
 TypeScript (or JavaScript) run on Node, in the node host that `@grida/fx` carries. A project with
-any of them needs Node, and should install `@grida/fx`:
-- **Node 24 or later.** Node runs your `.ts` files as they are, stripping their types, and tells
-  FX which files each node imports ([Nodes](03-nodes.md#writing-a-node-type-in-typescript)). Bun
-  and Deno cannot host nodes.
-- **`@grida/fx` in the project** (`npm install @grida/fx`), whose `node` your modules import:
-  `tsc` checks your nodes against it, and it pins the host they run in. FX starts the host from
-  the `@grida/fx` the workflow's project would import (its `node_modules`, or a parent folder's),
-  else the one the project you run from would import; without either, from the `@grida/fx` that
-  started FX, such as the one `grida fx` carries, and your modules' `@grida/fx` imports get that
-  one.
-
-FX uses `GRIDA_FX_NODE` when it is set, else the Node that runs `grida fx` or the JavaScript SDK
-([Running](05-running.md#from-javascript)), else `node` on `PATH`. An older Node is refused before
-FX starts it:
-
-```
-/usr/local/bin/node is Node 22.12.0; FX's TypeScript node host needs Node 24 or later: install it, or set GRIDA_FX_NODE
-```
-
-Started as `python -m grida.fx`, FX has no Node of its own to fall back on: it uses
-`GRIDA_FX_NODE` or `node` on `PATH`, and only a project's own `@grida/fx`. `grida fx doctor`
-names the Node it would use on its `node` line ([Running](05-running.md#keys-and-live-runs)).
+any of them needs Node 24 or later (Bun and Deno cannot host nodes), and should install
+`@grida/fx` (`npm install @grida/fx`): your modules import `node` from it, and `tsc` checks them
+against it. FX hosts them with the `@grida/fx` the workflow's project would import, else the one
+the project you run from would import, else the one that started FX, such as the one `grida fx`
+carries. FX uses `GRIDA_FX_NODE` when it is set, else the Node that runs `grida fx` or the
+JavaScript SDK ([Running](05-running.md#from-javascript)), else `node` on `PATH`. An older Node is
+refused before FX starts it: install Node 24 or later, or set `GRIDA_FX_NODE`.
 
 ## A project
 
@@ -107,9 +91,10 @@ grida fx status --json
 
 `init` writes a starter project into a new or empty folder: `fx.yaml`, a `README.md` that says how
 to install the CLI and connect an AI provider, an `AGENTS.md` and the FX skills
-(`.agents/skills/`) for coding agents, a `.gitignore` that keeps runs, the cache, `.env` and
-`node_modules/` out of git, an `.env.example` listing the key names, and `workflows/icon.yaml`, a
-one-step workflow that draws an icon once you pick a route. It installs nothing and starts nothing.
+(`.agents/skills/`) for coding agents, a `.gitignore` that keeps runs, the cache, `.env` and what
+Python and npm install out of git, an `.env.example` listing the key names, and
+`workflows/icon.yaml`, a one-step workflow that draws an icon once you pick a route. It installs
+nothing and starts nothing.
 On a terminal it asks which template to start from; `--template NAME` names one without asking, and
 `grida fx init --list-templates` lists them. A template is one of the
 [examples](https://github.com/gridaco/fx/tree/main/examples), downloaded from the FX release you
@@ -133,9 +118,7 @@ my-assets/
   nodes/              # your own node types (optional)
   prompts/            # prompt templates (optional)
   inputs/             # files you feed in
-  package.json        # "type": "module", and @grida/fx   (TypeScript nodes only)
-  tsconfig.json       # for type checking                 (TypeScript nodes only)
-  node_modules/       # what npm installs                 (TypeScript nodes only)
+  package.json        # "type": "module" and @grida/fx (TypeScript nodes only)
   runs/               # every run, one folder each   (created by FX)
   .fx/cache/          # content-addressed results    (created by FX)
   .fx/service/        # local service state and catalog (created by FX)
@@ -169,10 +152,10 @@ route defaults are that project's, with your `routes:` winning. The runs, the ca
 route tables and the takes file (`<id>.takes.yaml` at your root) stay those of the project you run
 from.
 
-Keep `runs/`, `.fx/` and `node_modules/` out of source control. A project file is recommended,
-not required for execution. For a one-off workflow, call `run` directly; use
-`--standalone` inside an existing project to request an independent viewer for
-that invocation. See [Viewing](07-viewing.md#standalone-inspection).
+Keep `runs/`, `.fx/`, `.venv/` and `node_modules/` out of source control. A project file is
+recommended, not required for execution. For a one-off workflow, call `run` directly; use
+`--standalone` inside an existing project to request an independent viewer for that invocation.
+See [Viewing](07-viewing.md#standalone-inspection).
 
 ## Your first workflow
 

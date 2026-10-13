@@ -260,8 +260,9 @@ grida fx view --plan graph.json --open
 ## Run records and artifacts
 
 The selected directory supplies `plan.json`, `events.jsonl`, and placed output
-files. YAML and Python-authored runs use these same recorded contracts; the viewer
-does not need to import their workflow modules. A stand-in run is visibly marked.
+files. Runs of YAML files and of builders, in Python or TypeScript, use these same
+recorded contracts; the viewer does not need to import their workflow modules. A
+stand-in run is visibly marked.
 
 Select a step to see its recorded values and artifacts. The viewer follows the record
 automatically, polling about once a second. Reloading the page also reattaches to the

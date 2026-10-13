@@ -60,8 +60,9 @@ python -m pip install 'grida>=0.2.0'
 python -m grida.fx --version
 ```
 
-These examples target FX 0.2. The Python version floor matters: the older
-`grida 0.0.1` distribution is not FX. If a compatible release is unavailable for
+These examples target FX 0.2; TypeScript nodes, builders and stand-in files need
+FX 0.6 or later. The Python version floor matters: the older `grida 0.0.1`
+distribution is not FX. If a compatible release is unavailable for
 the user's platform, report that rather than silently accepting an older package
 or switching to a source build. Follow the project's lockfile when it pins FX.
 
@@ -78,7 +79,8 @@ built-ins such as `image.resize`, `files.copy`, and `package` need Python with t
 interpreter. TypeScript nodes, builders and stand-in files need Node 24 or later
 (not Bun or Deno); `GRIDA_FX_NODE` can select that Node. Install `@grida/fx` in
 the project for `tsc` and to pin the host; without one, `grida fx` hosts them
-with its own. Installed viewers carry their own web client.
+with its own, but `python -m grida.fx` needs the project's. Installed viewers
+carry their own web client.
 
 ## Set up a project
 

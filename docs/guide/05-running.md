@@ -127,9 +127,7 @@ serve a type; `grida fx doctor` says which of them a live run could serve.
   ([Getting started](01-getting-started.md#a-project));
 - a builder, a function that returns the workflow: `level_art.py:build` in Python, or
   `level_art.ts:build` in TypeScript (`.mts`, `.js` and `.mjs` files too). Its arguments are
-  passed with `--arg name=value`; a TypeScript builder receives them as one object of strings, and
-  returns what `workflow(…)` returns ([the JavaScript SDK](../../js/fx/README.md#builders)). Its
-  takes file goes beside the builder's file.
+  passed with `--arg name=value`.
 
 ## Keys and live runs
 
@@ -237,31 +235,21 @@ line names the interpreter FX would use and says what it found:
 - `python    python3 cannot start: <why>`: it started and failed, for example a `grida` too old
   for this FX.
 
-**The Node line.** FX's TypeScript node host needs Node 24 or later and an `@grida/fx` to start
-it from ([Getting started](01-getting-started.md#when-fx-needs-node)). The Node line names the Node
-FX would use as FX found it: `GRIDA_FX_NODE` as you set it; else, under `grida fx`, the full path
-of the Node running `grida fx` (`/usr/local/bin/node` below; yours may be elsewhere, such as under
-`~/.nvm`); else `node`, looked up on `PATH`, as under `python -m grida.fx`. Then it says what it
-found:
+**The Node line.** FX's TypeScript node host needs Node 24 or later and `@grida/fx`
+([Getting started](01-getting-started.md#when-fx-needs-node)). The Node line names the Node FX
+would use and says what it found:
 - `node      /usr/local/bin/node (@grida/fx 0.6.0)`: ready;
-- `node      /usr/local/bin/node too old (22.12.0; FX needs 24+)`: install Node 24 or later, or
-  set `GRIDA_FX_NODE` to one;
-- `node      bun not Node.js 24+`: it is Bun, Deno or another program that can't host nodes: set
-  `GRIDA_FX_NODE` to Node 24 or later;
+- `node      /usr/local/bin/node too old (22.12.0; FX needs 24+)`, or `bun not Node.js 24+`:
+  install Node 24 or later, or set `GRIDA_FX_NODE` to one;
 - `node      /usr/local/bin/node no @grida/fx`: run `npm install @grida/fx` in the project;
 - `node      node NOT FOUND`: there is no such program;
 - `node      /usr/local/bin/node cannot start: <why>`: it started and failed, for example an
   `@grida/fx` too old for this FX.
 
-For its Node line, doctor starts the TypeScript node host only in a project with a `package.json`
-(the workflow's project, or the one you run from), since the host could come from an `@grida/fx`
-in a folder above it. Without one, that line says only what that Node answered,
-`node      /usr/local/bin/node (Node 24.14.0)` (or `node      /usr/local/bin/node` when it gave
-no answer), after the same checks for `too old`, `not Node.js 24+` and `NOT FOUND`.
-
-A project with no TypeScript nodes needs none of it. The lines themselves don't change the exit
-status. With a target whose nodes need a host that can't start, doctor then stops with the message
-a plan would give (exit 2).
+A project with no TypeScript nodes needs none of it: without a `package.json`, the Node line gives
+only what that Node answered (`node      /usr/local/bin/node (Node 24.14.0)`). The lines
+themselves don't change the exit status. With a target whose nodes need a host that can't start,
+doctor then stops with the message a plan would give (exit 2).
 
 ## Inputs
 
@@ -729,74 +717,11 @@ export const answer: StandIn = (call) =>
 grida fx run icon --stand-in tests/stand-in.ts#answer -- --name "copper lantern"
 ```
 
-The test above, with `node:test` (`node --test tests/icon.test.ts`):
-
-```ts
-// tests/icon.test.ts
-import assert from "node:assert/strict";
-import { cp, mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
-import { test } from "node:test";
-import { fileURLToPath } from "node:url";
-import { CallRefused, DECLINE, run, type StandInCall } from "@grida/fx";
-
-const PROJECT = fileURLToPath(new URL("..", import.meta.url));
-const LANTERN = { name: "copper lantern" };
-const OPAQUE = new URL("./pictures/opaque.png", import.meta.url);
-const CLEAR = new URL("./pictures/clear.png", import.meta.url);
-const SKIP = new Set([".fx", ".venv", ".env", "node_modules", "runs", "tests"]);
-
-/** A scratch copy of the project, with a cache of its own and no takes. */
-async function scratchProject(): Promise<string> {
-  const root = join(await mkdtemp(join(tmpdir(), "icon-")), "project");
-  await cp(PROJECT, root, {
-    recursive: true,
-    filter: (source) => !SKIP.has(basename(source)) && !source.endsWith(".takes.yaml"),
-  });
-  return root;
-}
-
-test("a rejected icon is drawn again", async () => {
-  const cwd = await scratchProject();
-  const asked: number[] = [];
-  const answer = (call: StandInCall) => {
-    assert.match(String(call.request["prompt"]), /copper lantern/);
-    asked.push(call.take);
-    // Take 1 is opaque everywhere, which the judge rejects; take 2 has a clear background.
-    return { files: { image: call.take === 1 ? OPAQUE : CLEAR } };
-  };
-  const result = await run("icon", { inputs: LANTERN, cwd, standIn: answer });
-  assert.ok(result.ok && result.standIn && result.chargedUsd === 0);
-  assert.deepEqual(asked, [1, 2]);
-
-  const again = await run("icon", { inputs: LANTERN, cwd, standIn: answer });
-  assert.ok(again.ok);
-  assert.deepEqual(asked, [1, 2]); // answered from the stand-in store
-});
-
-test("a refused drawing fails its step", async () => {
-  const cwd = await scratchProject();
-  const refuse = () => {
-    throw new CallRefused("no lanterns today");
-  };
-  const result = await run("icon", { inputs: LANTERN, cwd, standIn: refuse });
-  assert.ok(!result.ok);
-  assert.match(result.steps["draw#1"]?.error ?? "", /no lanterns today/);
-});
-
-test("a declined drawing is not live", async () => {
-  const cwd = await scratchProject();
-  const result = await run("icon", { inputs: LANTERN, cwd, standIn: () => DECLINE });
-  assert.ok(result.failed.includes("draw#1"));
-});
-```
-
-- **Two pictures** in `tests/pictures/` stand in for the drawings: 1024x1024 PNGs, one opaque
-  everywhere and one with a clear background, made once with any image tool.
-- **The judge still needs Python.** `image.check_alpha` is a built-in whose body is Python
-  ([Getting started](01-getting-started.md#when-fx-needs-python)), and the scratch copy has no
-  `.venv`: set `GRIDA_FX_PYTHON` to a Python with `grida`, in the environment or in `run`'s `env`.
+The pytest above carries over to `node:test` call for call: `run("icon", { inputs, cwd,
+standIn: answer })` on a scratch copy of the project, then `result.standIn`, `result.chargedUsd`
+and `result.failed`. Its judge, `image.check_alpha`, is a built-in whose body is Python
+([Getting started](01-getting-started.md#when-fx-needs-python)), so the test needs a Python with
+`grida`: set `GRIDA_FX_PYTHON`, in the environment or in `run`'s `env`.
 
 ## Agents
 

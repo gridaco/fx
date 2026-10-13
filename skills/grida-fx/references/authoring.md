@@ -12,7 +12,7 @@ In an existing folder, or with an older version, create the minimal `fx.yaml`
 manually:
 
 ```sh
-python -m grida.fx init
+grida fx init
 ```
 
 ```yaml
@@ -66,7 +66,7 @@ sections needed for the user's workflow; check against the installed engine.
 
 ## Custom Python nodes
 
-Python 3.11+ with `grida>=0.1.0` is required. In `nodes/greet.py`:
+Python 3.11+ with `grida>=0.2.0` (which brings Pillow) is required. In `nodes/greet.py`:
 
 ```python
 from grida.fx import Ctx, node
@@ -119,9 +119,9 @@ write artifacts through `ctx.out`; return every required output. Helpers can use
 of unrelated side effects.
 
 For paid work, use FX capabilities such as `ctx.image_generate` or
-`ctx.capability` (`ctx.imageGenerate` in TypeScript), with declared `calls`. Do
-not implement your own provider retry, cache, billing, or provenance layer.
-Direct HTTP calls escape FX's pricing and spending controls. Read the
+`ctx.capability`, with declared `calls`. Do not implement your own provider retry,
+cache, billing, or provenance layer. Direct HTTP calls escape FX's pricing and
+spending controls. Read the
 [node guide](https://github.com/gridaco/fx/blob/main/docs/guide/03-nodes.md)
 before introducing a capability or judge.
 
@@ -137,30 +137,17 @@ folders does not avoid it.
 
 ## Custom TypeScript nodes
 
-Node 24 or later is required to host them (Bun and Deno cannot). Install
-`@grida/fx` in the project, so `tsc` checks your nodes against it and the project
-pins the host they run in (without one, `grida fx` hosts them with its own):
+Node 24 or later and `@grida/fx` in the project are required, as the main skill
+says; add the type checker:
 
 ```sh
 npm install @grida/fx
 npm install --save-dev typescript @types/node
 ```
 
-The project's `package.json` sets `"type": "module"`. For type checking, a
-`tsconfig.json`:
-
-```json
-{
-  "compilerOptions": {
-    "module": "nodenext",
-    "strict": true,
-    "noEmit": true,
-    "allowImportingTsExtensions": true,
-    "erasableSyntaxOnly": true,
-    "verbatimModuleSyntax": true
-  }
-}
-```
+The project's `package.json` sets `"type": "module"`. For `npx tsc`, a
+`tsconfig.json` sets `module: "nodenext"` and turns on `strict`, `noEmit`,
+`allowImportingTsExtensions`, `erasableSyntaxOnly` and `verbatimModuleSyntax`.
 
 In `nodes/greet.ts`:
 
@@ -185,27 +172,16 @@ Node runs these files with its type stripping, so keep to its dialect:
 - `#` subpath imports (package.json `imports`) replace tsconfig `paths`;
 - node modules are `.ts`, `.mts`, `.js` or `.mjs`; `.tsx`, `.cts` and `.cjs` are refused.
 
-Declarations type the body: one input file is an `InputFile`, `kind[]` a readonly
-array, `kind{}` a `ReadonlyMap` (keep its order; never convert it to a plain
-object), params get their declared types, and the body must return exactly the
-declared outputs. Before the body runs, FX checks each param's value against its
-declaration and fails the node with the first that does not fit
-(`param side: "up" is not one of ["left","right"]`); a `null` for an optional
-param leaves it out. `ctx.read` has `bytes`, `text` and `json`, with no image
-decoding; `ctx.out.png` takes encoded PNG bytes; `ctx.signal` aborts when FX stops
-the node, and kills the programs `ctx.tool(name).run` started, as `timeoutS` and
-the end of the run do. An object member that is `undefined` is left out of what is
-sent, as `JSON.stringify` leaves it out; `undefined` in an array is refused. Agent
-tools are `tool({ name, description, parameters }, handler)`, with `parameters` a
-JSON Schema. Import everything a body uses with literal paths (`import … from
-"../lib/x.ts"`, or `await import("../lib/x.ts")` in the body), which count toward
-the node's identity whether or not they run. Spell each as on disk, case included:
-a misspelled path fails the module, or the body that loads it. A project file a
-body loads by a path it computes, outside its module's closure, fails the node,
-since its edits would not change the node's identity. List files that a package,
-a worker thread or a child process loads under `resources`. The built-in local
-types (`image.resize`, `files.copy`, `package`, …) still need Python with
-`grida`, even in a TypeScript project.
+Declare nodes and use `ctx` as for Python, with camelCase names
+(`ctx.workPath`, `ctx.imageGenerate`). Declarations type the body: one input
+file is an `InputFile`, `kind[]` a readonly array, `kind{}` a `ReadonlyMap` (keep
+its order), and the body returns exactly the declared outputs. `ctx.read` has no
+image decoding; `ctx.out.png` takes encoded PNG bytes. Import what a body uses
+with literal paths spelled as on disk (`../lib/x.ts`): they count toward the
+node's identity, and a project file loaded by a computed path fails the node.
+List files that a package, a worker thread or a child process loads under
+`resources`. The [node guide](https://github.com/gridaco/fx/blob/main/docs/guide/03-nodes.md#writing-a-node-type-in-typescript)
+has the rest.
 
 ## Python builders and execution
 
@@ -279,8 +255,6 @@ grida fx plan assets.ts:build --arg name=Ada --check
 grida fx run assets.ts:build --arg name=Ada --run runs/greeting-built
 ```
 
-Its takes file is written beside `assets.ts`.
-
 ## JavaScript and TypeScript SDK
 
 Install `@grida/fx` in the project (`npm install @grida/fx`; the SDK itself runs
@@ -315,10 +289,9 @@ if (!result.ok) throw new Error(JSON.stringify(result.failed));
 
 SDK runtime options use JavaScript names (`maxUsd`, `runDir`, `inputFiles`, builder
 `args`, `standIn`); workflow documents retain contract names. A builder target is
-`plan("assets.ts:build", { args: { name: "Ada" } })`. `run(target, { standIn })`
-answers paid calls with a function in the caller's process, offline; a stand-in
-file for the command is `--stand-in tests/stand-in.ts#answer`. Do not infer a graph
-by executing an arbitrary script as though it were a supported builder.
+`plan("assets.ts:build", { args: { name: "Ada" } })`, and `run(target, { standIn })`
+answers paid calls with a function in the caller's process, offline. Do not infer a
+graph by executing an arbitrary script as though it were a supported builder.
 
 The [Python SDK reference](https://github.com/gridaco/fx/blob/main/python/README.md)
 and [JavaScript SDK reference](https://github.com/gridaco/fx/blob/main/js/fx/README.md)

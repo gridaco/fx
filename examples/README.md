@@ -7,7 +7,7 @@ source stays in Git, while generated artwork and saved runs stay outside it.
 | Example | What it shows | What runs |
 |---|---|---|
 | [hello](hello/) | custom nodes, local steps, a judge, keyed repeats, result collections and cache | entirely offline at $0 |
-| [hello-ts](hello-ts/) | hello with every node in TypeScript: types from the declaration, a judge and the source closure | entirely offline at $0, with Node and no Python |
+| [hello-ts](hello-ts/) | hello with every node in TypeScript: types from the declaration, a judge and the source closure | entirely offline at $0 |
 | [image-recolor](image-recolor/) | image inputs, algorithmic recoloring, delays and live run viewing | entirely offline at $0 |
 | [pet](pet/) | an animated sprite from a description or a picture: one picture first, a strip per state drawn from it, a judge that counts poses, cells cut at one scale, a Codex app pet, and a reel of it as video | drawing on your own Codex at $0, with no key, from reference pictures; a stand-in runs it all offline; the reel renders locally at $0 with FFmpeg |
 | [looping-parallax](looping-parallax/) | reusable repeating layers and the website's complete concept-to-parallax graph | mirrored layers offline; separation and seam repainting paid; optional video uses FFmpeg |
@@ -38,8 +38,8 @@ guide and other repository pages are absolute URLs, and everything else it uses 
 SDK and their own processing libraries. Copy the example and follow its README:
 most showcase projects use `uv sync`, with dependencies declared in their own
 `pyproject.toml`. These application helpers are not installed with the FX SDK.
-TypeScript projects ([hello-ts](hello-ts/), [item-icons](item-icons/)) need Node 24 or
-later and `npm install`, which installs `@grida/fx` from their own `package.json`.
+TypeScript-node projects ([hello-ts](hello-ts/), [item-icons](item-icons/)) use
+`npm install`, which installs `@grida/fx` from their own `package.json`.
 
 To use the checkout's SDK and engine, follow
 [the source build instructions](../CONTRIBUTING.md#build-from-source). Small examples
