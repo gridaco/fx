@@ -1003,7 +1003,8 @@ describe.skipIf(HOST_SKIP !== null)("literal specifiers count whether or not the
           "the body loaded lib/Format.ts at run time, outside its source closure: lib/Format.ts is spelled lib/format.ts on disk",
         );
       } else {
-        expect(failed).toContain("ERR_MODULE_NOT_FOUND");
+        // Node finds no lib/Format.ts, and the body fails with its error, the root cut from it.
+        expect(failed).toBe("Cannot find module 'lib/Format.ts' imported from nodes/meter.ts");
       }
     },
     HOST_TEST,
