@@ -163,8 +163,8 @@ protocol behavior update their specification and conformance evidence together.
 ## Viewer development
 
 `web/viewer` builds the client embedded in the engine. Shared browser contracts
-and independently testable TypeScript classes live in `js/fx-web`; React adapters
-live in `js/fx-react`. Nontrivial UI state and interaction belong in classes, with
+and independently testable TypeScript classes live in `web/fx-web`; React adapters
+live in `web/fx-react`. Nontrivial UI state and interaction belong in classes, with
 React kept as a thin presentation layer.
 
 The [canonical fixture suite](fixtures/viewer/README.md) creates real, provider-free

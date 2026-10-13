@@ -238,7 +238,7 @@ Source ownership:
 - `grida-fx observe`: machine-readable CLI adapter.
 - `grida-fx-viewer`: loopback snapshot/event adapters and prefix-consistent display
   projection; artifact serving still verifies recorded bytes.
-- `js/fx-web`: wire parsing and independently testable polling controller;
+- `web/fx-web`: wire parsing and independently testable polling controller;
   React remains presentation. Saved plan sessions never poll.
 
 The meaningful verification gate is:

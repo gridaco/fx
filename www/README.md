@@ -106,7 +106,7 @@ ordinary website traffic.
 - `src/app/`: landing, workflow index, eight detail pages and metadata.
 - `src/lib/showcases/` and `content/showcases/`: private website adapters and
   small frozen content pins; see [showcase maintenance](docs/showcases.md).
-- `../js/fx-web` and `../js/fx-react`: reusable export reader, canvas,
+- `../web/fx-web` and `../web/fx-react`: reusable export reader, canvas,
   class-owned interaction and thin React adapters. The website imports these;
   FX's engine knows nothing about this catalog or its CDN.
 - `public/brand/` and `public/landing/`: curated local artwork. Preserve the

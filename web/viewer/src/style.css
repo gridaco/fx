@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@source "../../../js/fx-react/src";
+@source "../../fx-react/src";
 
 @theme {
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;

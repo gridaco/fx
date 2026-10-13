@@ -16,7 +16,7 @@ Guardrails for working in this repository. [README.md](README.md) says what FX i
 | `conformance/` | Cases that hold any implementation to the spec through the command line only. |
 | `python/` | The `grida` distribution; FX is `grida.fx`. |
 | `js/fx/` | `@grida/fx`, the Node SDK, the TypeScript node host (`dist/host-entry.js`, on Node 24+) and command launcher (`@grida/fx/cli` for host commands); per-platform engines are packaged separately. |
-| `js/fx-web/`, `js/fx-react/` | Private browser-only contracts, TypeScript controllers/canvas, and thin React adapters. |
+| `web/fx-web/`, `web/fx-react/` | Private browser-only contracts, TypeScript controllers/canvas, and thin React adapters. |
 | `web/viewer/` | Vite/React/Tailwind client, built and embedded in the engine. |
 | `www/` | Standalone Next.js/Tailwind static website mounted at `/fx`; large showcase run packages stay outside Git. |
 | `examples/` | User projects and complete website showcase sources. CI plans their graphs and exercises free paths or paid-call refusal with synthesized inputs (rigged-character only plans). Optional processing libraries belong to each example; generated artwork stays outside Git. |
