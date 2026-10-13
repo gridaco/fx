@@ -183,9 +183,9 @@ where each key comes from and which routes a live run could serve, for the proje
 needs follow:
 
 ```
-engine    grida-fx 0.5.1
-python    .venv/bin/python (grida 0.5.1)
-node      /usr/local/bin/node (@grida/fx 0.5.1)
+engine    grida-fx 0.6.0
+python    .venv/bin/python (grida 0.6.0)
+node      /usr/local/bin/node (@grida/fx 0.6.0)
 key       GG_API_KEY present (.env)
 key       OPENAI_API_KEY missing
 key       OPENROUTER_API_KEY missing
@@ -212,9 +212,9 @@ serve it and how many steps use it (a repeated step counts once; groups and used
 included):
 
 ```
-engine    grida-fx 0.5.1
-python    .venv/bin/python (grida 0.5.1)
-node      /usr/local/bin/node (@grida/fx 0.5.1)
+engine    grida-fx 0.6.0
+python    .venv/bin/python (grida 0.6.0)
+node      /usr/local/bin/node (@grida/fx 0.6.0)
 uses      image.generate imagegen@codex servable (8 steps)
 key       GG_API_KEY missing
 …
@@ -229,7 +229,7 @@ Doctor takes no `--routes`: routes a run adds with `--routes` show as `not in th
 
 **The Python line.** FX's Python node host needs Python 3.11 or later with `grida`. The Python
 line names the interpreter FX would use and says what it found:
-- `python    .venv/bin/python (grida 0.5.1)`: ready;
+- `python    .venv/bin/python (grida 0.6.0)`: ready;
 - `python    python3 too old (3.9.6; FX needs 3.11+)`: run `uv sync` or `pip install grida` in
   the project, or set `GRIDA_FX_PYTHON` to a newer Python;
 - `python    python3 no grida`: install `grida` into that Python;
@@ -243,7 +243,7 @@ FX would use as FX found it: `GRIDA_FX_NODE` as you set it; else, under `grida f
 of the Node running `grida fx` (`/usr/local/bin/node` below; yours may be elsewhere, such as under
 `~/.nvm`); else `node`, looked up on `PATH`, as under `python -m grida.fx`. Then it says what it
 found:
-- `node      /usr/local/bin/node (@grida/fx 0.5.1)`: ready;
+- `node      /usr/local/bin/node (@grida/fx 0.6.0)`: ready;
 - `node      /usr/local/bin/node too old (22.12.0; FX needs 24+)`: install Node 24 or later, or
   set `GRIDA_FX_NODE` to one;
 - `node      bun not Node.js 24+`: it is Bun, Deno or another program that can't host nodes: set
