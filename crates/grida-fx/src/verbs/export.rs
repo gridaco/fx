@@ -41,12 +41,12 @@ pub fn run(args: &ExportArgs) -> Result<u8, Error> {
                     &serde_json::to_value(&error).expect("serializable export refusal"),
                 );
             } else {
-                eprintln!(
+                grida_fx_runtime::stderr::line(format_args!(
                     "{}: {}: {}",
                     crate::invoker::command(),
                     error.code,
                     error.message
-                );
+                ));
             }
             Ok(2)
         }

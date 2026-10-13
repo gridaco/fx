@@ -75,6 +75,15 @@ reader and can continue across resumes. This source pass keeps service/browser
 lifetimes and diagnostic/lock/take/job maintenance on the CLI; verb mirroring is
 not required. See [the SDK guide](../guide/09-sdk-runs.md).
 
+The TypeScript node host ([protocol.md](../../spec/protocol.md) §1, §5.1, §8.2) is
+implemented in source (2026-10-13): `@grida/fx` hosts node bodies, workflow builders
+and stand-ins written as `.ts`, `.mts`, `.js` and `.mjs` modules on Node 24 or later,
+with the Python host's whole protocol, and the JavaScript SDK answers a run's paid
+calls with an in-process stand-in. A project may mix both languages; the engine keeps
+one planning host and one pool of hosts per language. This is half of decision 2: a
+TypeScript project needs no Python unless it uses a built-in local type, whose bodies
+are still Python (decision 8).
+
 ## Names
 
 | Thing | Name | Status |
@@ -85,7 +94,7 @@ not required. See [the SDK guide](../guide/09-sdk-runs.md).
 | Python SDK | import `grida.fx`, fixed from day one. The distribution is `grida` (stable releases from `0.1.0`; prereleases use PEP 440, such as `0.2.0a1`). Its per-platform wheels carry the engine binary as package data, with no console command: Python users run the engine as `python -m grida.fx <verb>` or through the API, so they never need Node. | shipped |
 | Rust crates | `grida-fx`, `grida-fx-std`, `grida-fx-protocol`, … (free on crates.io) | proposal |
 | Project files | `fx.yaml`, `fx.lock`, `.fx/` | proposal |
-| Environment | `GRIDA_FX_PYTHON`, `GRIDA_FX_TOOL_<NAME>`; provider keys under their providers' usual names | proposal |
+| Environment | `GRIDA_FX_PYTHON`, `GRIDA_FX_NODE`, `GRIDA_FX_TOOL_<NAME>`; provider keys under their providers' usual names | proposal |
 | Built-in type namespace, schema ids | `fx/…`, `fx-…-v1` | proposal |
 
 ## Milestone 1: FX standalone, published as a preview
@@ -191,7 +200,6 @@ Milestone 2 has passed. The published preview `v0.1.0-alpha.2` has also passed i
 ## Later
 
 - The workflow registry.
-- The TypeScript node host for `@grida/fx`.
 - GG as a provider.
 - The `grida fx` umbrella.
 - Views: the [local workflow-plan and run viewer](../guide/07-viewing.md), read-only
@@ -201,7 +209,7 @@ Milestone 2 has passed. The published preview `v0.1.0-alpha.2` has also passed i
   implemented. [Portable recorded-run exports](../../spec/exports.md) and the
   shared static browser reader are implemented in source. [Custom views and
   optional OS supervision](../../TODO.md#workflow-and-run-viewer) remain later work.
-- Standard-library node bodies in Rust, with a planned rekey (decision 8). This also makes their outputs the same bytes on every platform. Today Pillow's Linux x86-64 build writes other PNG bytes than its macOS arm64 build for some pictures, so a cache filled on one platform misses on the other for every paid call downstream of a std picture output.
+- Standard-library node bodies in Rust, with a planned rekey (decision 8). This lets a TypeScript project that uses them run without Python, the other half of decision 2, and also makes their outputs the same bytes on every platform. Today Pillow's Linux x86-64 build writes other PNG bytes than its macOS arm64 build for some pictures, so a cache filled on one platform misses on the other for every paid call downstream of a std picture output.
 
 ## Identity v3
 

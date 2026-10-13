@@ -1,0 +1,28 @@
+# run-timeout's twin with TypeScript bodies (in/nodes/slow.ts), each under `timeout: 1`, each
+# counting its runs in a file of the project folder before it waits 30 seconds. After 1 second
+# the engine sends `$/cancel`, which aborts the body's `ctx.signal`. `nap` never looks at it: the
+# engine ends its node host 5 seconds later. `watch` waits on the signal: it writes the signal's
+# reason (`the engine cancelled run`) to aborted.txt and throws `ctx.fail`. Either way the step
+# fails with `ran past 1 seconds`, not the body's own failure, and is not run again although its
+# type declares `retry: "engine"` (naps.txt and watches.txt each say 1). The run exits 1, well
+# before a body would have woken; `project` shows both failures, and the record (events.json, the
+# run's events.jsonl sorted) shows each `node_failed` with `code: null`: a timeout carries no
+# error code. nap's naps.txt, node_failed and project entry are run-timeout's.
+steps:
+- argv: [run, case, --routes, routes.yaml, --run, runs/one]
+  status: 1
+  mentions:
+  - "nap#1: ran past 1 seconds"
+  - "watch#1: ran past 1 seconds"
+- read: naps.txt
+  save: naps.txt
+- read: watches.txt
+  save: watches.txt
+- read: aborted.txt
+  save: aborted.txt
+- argv: [project, runs/one]
+  save: project.json
+  json: true
+- read: runs/one/events.jsonl
+  save: events.json
+  jsonl: true

@@ -7,11 +7,16 @@
 //! - [`engine_for`] (the process environment) and [`engine_with_env`] (an environment given as a
 //!   function, for tests): the engine of one planner:
 //!   - **node hosts** start in the workflow's **home** project (its node modules, `fx.lock` and
-//!     `sources` live there): `<python> -P -m grida.fx.host` with the interpreter
+//!     `sources` live there), one pool per language, each of at most `HostPool::default_size()`
+//!     hosts: Python's is `<python> -P -m grida.fx.host` with the interpreter
 //!     `host::locate::python_interpreter` finds for the home (`GRIDA_FX_PYTHON`, else the home's
-//!     `.venv`, else the planning project's `.venv`, else `GRIDA_FX_SDK_PYTHON`, else `python3`),
-//!     named in messages relative to the home when it lies inside it; at most
-//!     `HostPool::default_size()` of them;
+//!     `.venv`, else the planning project's `.venv`, else `GRIDA_FX_SDK_PYTHON`, else `python3`);
+//!     TypeScript's is `<node> <host-entry.js>` with the Node `host::locate::node_runtime` finds
+//!     (`GRIDA_FX_NODE`, else `GRIDA_FX_SDK_NODE`, else `node`) and the host program of the
+//!     `@grida/fx` found from the home, else from the planning project, else the one that
+//!     started the engine (`host::locate::node_host_entry`; without one, every TypeScript body
+//!     fails with its sentence); programs are named in messages relative to the home when they
+//!     lie inside it;
 //!   - the **store** is the **planning** project's cache (`planner.project.cache_dir()`), and runs
 //!     go under the planning project's runs folder: the project found from where the command
 //!     runs owns `runs/` and the cache (spec/store.md §8), also when the workflow comes from
@@ -21,7 +26,10 @@
 //!   - `live` as asked (`--live`);
 //!   - **private roots** the engine scrubs from what it records besides the home and the store
 //!     (`Engine::with_private_roots`): the planning project, and the folders the verb names (its
-//!     working directory, a stand-in file's folder).
+//!     working directory, a stand-in file's folder); and, labelled `@grida/fx`
+//!     (`Engine::with_labelled_root`), the folder of each `@grida/fx` outside the home whose host
+//!     program a TypeScript host of the run would start (`host::locate::host_package`): the
+//!     engine's, and a stand-in host's, found from the planning project.
 //! - [`adapters_for`]: without `live`, an empty registry and nothing constructed, so every
 //!   uncached paid call is refused (a recorded call still replays from the store). With `live`
 //!   (spec/providers.md §1, §3):
@@ -49,6 +57,7 @@
 //! ([`crate::interrupt`]): from the end of planning until the engine is shut down.
 
 use grida_fx_core::error::io_reason;
+use grida_fx_core::host::Language;
 use grida_fx_core::host::{NodeHost, PlanTimeRunner};
 use grida_fx_core::plan::{Plan, make_plan};
 use grida_fx_core::project::Planner;
@@ -59,7 +68,7 @@ use grida_fx_providers::live::{self, Network};
 use grida_fx_providers::{Adapters, Endpoints, Keys};
 use grida_fx_runtime::engine::Engine;
 use grida_fx_runtime::host;
-use grida_fx_runtime::host::locate::python_interpreter;
+use grida_fx_runtime::host::locate::{self, node_host_entry, node_runtime, python_interpreter};
 use grida_fx_runtime::host::pool::HostPool;
 use grida_fx_runtime::host::process::HostSpec;
 use grida_fx_runtime::plantime::PlanTime;
@@ -119,17 +128,37 @@ pub fn engine_with_env(
     // Whatever this process writes to a store marks the planning project among its users
     // (spec/store.md §6).
     grida_fx_runtime::store::lease::set_user(&planner.project.root, &planner.project.cache_dir());
-    let engine = Engine::new(
+    let typescript = typescript_spec(planner, env);
+    // Node's messages may name the files of a @grida/fx outside the home: the engine's host
+    // program's, or a stand-in host's (found from the planning project alone).
+    let home = &planner.home.root;
+    let packages: Vec<PathBuf> = [
+        typescript
+            .as_ref()
+            .ok()
+            .and_then(|spec| spec.host_package(home)),
+        node_host_entry(&planner.project.root, None, env)
+            .ok()
+            .and_then(|entry| locate::host_package(&entry, home)),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    let mut engine = Engine::new(
         runtime.handle().clone(),
-        host_spec(planner, env),
+        python_spec(planner, env),
         &store,
         HostPool::default_size(),
         adapters,
         live,
     )
+    .with_host(Language::TypeScript, typescript)
     .with_private_roots(
         std::iter::once(planner.project.root.clone()).chain(private.iter().cloned()),
     );
+    for package in packages {
+        engine = engine.with_labelled_root(package, Language::TypeScript.sdk());
+    }
     Ok(Arc::new(match stand_in {
         Some(stand_in) => engine.with_stand_in(stand_in),
         None => engine,
@@ -190,18 +219,34 @@ pub fn builtin_routes() -> Result<RouteTable, Error> {
         .map_err(|message| Error::new(ErrorKind::Internal, message))
 }
 
-/// How node hosts start for `planner`: in the home project, with the interpreter `locate` finds
-/// there, else the planning project's. `env` reads an environment variable.
-fn host_spec(planner: &Planner, env: &dyn Fn(&str) -> Option<String>) -> HostSpec {
+/// How Python node hosts start for `planner`: in the home project, with the interpreter `locate`
+/// finds there, else the planning project's. `env` reads an environment variable.
+fn python_spec(planner: &Planner, env: &dyn Fn(&str) -> Option<String>) -> HostSpec {
     let home = &planner.home;
     let python = python_interpreter(&home.root, Some(&planner.project.root), env);
-    HostSpec {
-        label: host::label_from(&python, &home.root, Some(&planner.project.root)),
-        python,
-        project_root: home.root.clone(),
-        sources: home.document.sources.clone(),
-        check_version: true,
-    }
+    let label = host::label_from(&python, &home.root, Some(&planner.project.root));
+    HostSpec::python(python, label, &home.root, home.document.sources.clone())
+}
+
+/// How TypeScript node hosts start for `planner`: in the home project, with the Node `locate`
+/// finds and the host program of the `@grida/fx` found from the home, else from the planning
+/// project, else the one that started the engine; `Err` is why there is none. `env` reads an
+/// environment variable.
+fn typescript_spec(
+    planner: &Planner,
+    env: &dyn Fn(&str) -> Option<String>,
+) -> Result<HostSpec, String> {
+    let home = &planner.home;
+    let entry = node_host_entry(&home.root, Some(&planner.project.root), env)?;
+    let node = node_runtime(env);
+    let label = host::label_from(&node, &home.root, Some(&planner.project.root));
+    Ok(HostSpec::typescript(
+        node,
+        entry,
+        label,
+        &home.root,
+        home.document.sources.clone(),
+    ))
 }
 
 /// Makes the plan with the engine's plan-time runner and its store as the result cache.
@@ -310,7 +355,7 @@ mod tests {
             );
         }
         assert!(!engine.adapters.serves("image.generate", "acme"));
-        let spec = engine.hosts.spec();
+        let spec = engine.hosts.pool(Language::Python).unwrap().spec();
         assert_eq!(spec.project_root, root);
         assert_eq!(spec.sources, ["lib"]);
         let engine = engine_for(&runtime, &planner, false, None, &[]).unwrap();
@@ -402,19 +447,171 @@ mod tests {
         let root = folder.path().canonicalize().unwrap();
         let planner = planner_in(&root, "fx: project/v1\n");
         let chosen = |name: &str| (name == "GRIDA_FX_PYTHON").then(|| "/opt/py/python".to_string());
-        let spec = host_spec(&planner, &chosen);
-        assert_eq!(spec.python, PathBuf::from("/opt/py/python"));
+        let spec = python_spec(&planner, &chosen);
+        assert_eq!(spec.program, PathBuf::from("/opt/py/python"));
         assert_eq!(spec.label, "/opt/py/python");
         let venv = root.join(".venv/bin/python");
         std::fs::create_dir_all(venv.parent().unwrap()).unwrap();
         std::fs::write(&venv, "").unwrap();
-        let spec = host_spec(&planner, &|_| None);
+        let spec = python_spec(&planner, &|_| None);
         if cfg!(windows) {
             assert_eq!(spec.label, "python3");
         } else {
-            assert_eq!(spec.python, venv);
+            assert_eq!(spec.program, venv);
             assert_eq!(spec.label, ".venv/bin/python");
         }
+    }
+
+    #[test]
+    fn the_typescript_host_is_node_with_the_homes_sdk() {
+        let folder = tempfile::tempdir().unwrap();
+        let root = folder.path().canonicalize().unwrap();
+        let planner = planner_in(
+            &root,
+            "fx: project/v1\nsources: [acme_lib, \"@acme/shapes\"]\n",
+        );
+        let nothing = |_: &str| None;
+        // No @grida/fx: every TypeScript body would fail with the sentence.
+        assert_eq!(
+            typescript_spec(&planner, &nothing),
+            Err(
+                "no @grida/fx for the TypeScript node host: run npm install @grida/fx in the \
+                 project"
+                    .to_string()
+            )
+        );
+        let runtime = runtime().unwrap();
+        let engine = engine_with_env(&runtime, &planner, false, None, &[], &nothing).unwrap();
+        assert_eq!(
+            engine.hosts.pool(Language::TypeScript).err(),
+            Some(
+                "no @grida/fx for the TypeScript node host: run npm install @grida/fx in the \
+                 project"
+            )
+        );
+        assert!(engine.hosts.pool(Language::Python).is_ok());
+        // The SDK that started the engine.
+        let sdk = root.join("sdk/dist/host-entry.js");
+        std::fs::create_dir_all(sdk.parent().unwrap()).unwrap();
+        std::fs::write(&sdk, "").unwrap();
+        let named = sdk.to_string_lossy().into_owned();
+        let started = move |name: &str| match name {
+            "GRIDA_FX_SDK_NODE_HOST" => Some(named.clone()),
+            "GRIDA_FX_SDK_NODE" => Some("/opt/node/bin/node".to_string()),
+            _ => None,
+        };
+        let spec = typescript_spec(&planner, &started).unwrap();
+        assert_eq!(spec.language, Language::TypeScript);
+        assert_eq!(spec.program, PathBuf::from("/opt/node/bin/node"));
+        assert_eq!(spec.label, "/opt/node/bin/node");
+        assert_eq!(spec.args, [sdk.clone().into_os_string()]);
+        assert_eq!(spec.project_root, root);
+        assert!(spec.check_version);
+        // The home's own @grida/fx comes first; GRIDA_FX_NODE before the SDK's Node.
+        let package = root.join("node_modules/@grida/fx");
+        std::fs::create_dir_all(package.join("dist")).unwrap();
+        std::fs::write(package.join("package.json"), "{}").unwrap();
+        std::fs::write(package.join("dist/host-entry.js"), "").unwrap();
+        let named = sdk.to_string_lossy().into_owned();
+        let chosen = move |name: &str| match name {
+            "GRIDA_FX_SDK_NODE_HOST" => Some(named.clone()),
+            "GRIDA_FX_NODE" => Some("node24".to_string()),
+            _ => None,
+        };
+        let spec = typescript_spec(&planner, &chosen).unwrap();
+        assert_eq!(spec.program, PathBuf::from("node24"));
+        assert_eq!(
+            spec.args,
+            [package.join("dist/host-entry.js").into_os_string()]
+        );
+        let engine = engine_with_env(&runtime, &planner, false, None, &[], &chosen).unwrap();
+        let pool = engine.hosts.pool(Language::TypeScript).unwrap();
+        assert_eq!(pool.spec(), &spec);
+        assert_eq!(pool.spec().sources, ["acme_lib", "@acme/shapes"]);
+    }
+
+    #[test]
+    fn a_home_outside_the_planning_project_falls_back_to_its_sdk_and_hides_it() {
+        // `app` plans; its workflows: folder lies in `shared`, the workflow's home.
+        let folder = tempfile::tempdir().unwrap();
+        let base = folder.path().canonicalize().unwrap();
+        let app = base.join("app");
+        let shared = base.join("shared");
+        std::fs::create_dir_all(&app).unwrap();
+        std::fs::create_dir_all(&shared).unwrap();
+        planner_in(&shared, "fx: project/v1\n");
+        std::fs::write(
+            app.join("fx.yaml"),
+            "fx: project/v1\nworkflows: [../shared/workflows]\n",
+        )
+        .unwrap();
+        std::fs::copy(shared.join("routes.yaml"), app.join("routes.yaml")).unwrap();
+        let request = PlanRequest {
+            target: "case".into(),
+            cwd: app.clone(),
+            routes: vec!["routes.yaml".into()],
+            ..PlanRequest::default()
+        };
+        let planner = make_planner(&request, &mut FakeHost::new()).unwrap();
+        assert_eq!(planner.home.root, shared);
+        assert_eq!(planner.project.root, app);
+        let runtime = runtime().unwrap();
+        let shown = |engine: &Engine, package: &Path| {
+            engine.scrub(&format!(
+                "not defined by \"exports\" in {}/package.json imported from {}/dist/host.js",
+                package.display(),
+                package.display()
+            ))
+        };
+        let hidden = "not defined by \"exports\" in @grida/fx/package.json imported from @grida/fx/dist/host.js";
+        // The SDK that started the engine, outside both projects: its folder is labelled.
+        let global = base.join("global/node_modules/@grida/fx");
+        std::fs::create_dir_all(global.join("dist")).unwrap();
+        std::fs::write(global.join("dist/host-entry.js"), "").unwrap();
+        let named = global
+            .join("dist/host-entry.js")
+            .to_string_lossy()
+            .into_owned();
+        let started = move |name: &str| (name == "GRIDA_FX_SDK_NODE_HOST").then(|| named.clone());
+        let spec = typescript_spec(&planner, &started).unwrap();
+        assert_eq!(
+            spec.args,
+            [global.join("dist/host-entry.js").into_os_string()]
+        );
+        let engine = engine_with_env(&runtime, &planner, false, None, &[], &started).unwrap();
+        assert_eq!(shown(&engine, &global), hidden);
+        // The planning project's own @grida/fx comes before it.
+        let planned = app.join("node_modules/@grida/fx");
+        std::fs::create_dir_all(planned.join("dist")).unwrap();
+        std::fs::write(planned.join("package.json"), "{}").unwrap();
+        std::fs::write(planned.join("dist/host-entry.js"), "").unwrap();
+        let spec = typescript_spec(&planner, &started).unwrap();
+        assert_eq!(
+            spec.args,
+            [planned.join("dist/host-entry.js").into_os_string()]
+        );
+        assert_eq!(spec.project_root, shared);
+        let engine = engine_with_env(&runtime, &planner, false, None, &[], &started).unwrap();
+        assert_eq!(
+            engine.hosts.pool(Language::TypeScript).unwrap().spec(),
+            &spec
+        );
+        assert_eq!(shown(&engine, &planned), hidden);
+        // The home's own @grida/fx comes first; inside the home, its path is the home's.
+        let own = shared.join("node_modules/@grida/fx");
+        std::fs::create_dir_all(own.join("dist")).unwrap();
+        std::fs::write(own.join("package.json"), "{}").unwrap();
+        std::fs::write(own.join("dist/host-entry.js"), "").unwrap();
+        let spec = typescript_spec(&planner, &started).unwrap();
+        assert_eq!(spec.args, [own.join("dist/host-entry.js").into_os_string()]);
+        let engine = engine_with_env(&runtime, &planner, false, None, &[], &started).unwrap();
+        assert_eq!(
+            shown(&engine, &own),
+            "not defined by \"exports\" in node_modules/@grida/fx/package.json imported from \
+             node_modules/@grida/fx/dist/host.js"
+        );
+        // A stand-in host's, found from the planning project alone, stays labelled.
+        assert_eq!(shown(&engine, &planned), hidden);
     }
 
     #[test]

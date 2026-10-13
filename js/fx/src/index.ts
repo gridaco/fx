@@ -1,7 +1,10 @@
 /**
- * Grida FX for JavaScript. The engine is the `grida-fx` command (this package installs it, with
- * the engine package for the machine); this package drives it: plan, price and run workflows,
- * read their runs, and write workflow documents.
+ * Grida FX for JavaScript and TypeScript. The engine is the `grida-fx` command (this package
+ * installs it, with the engine package for the machine); this package drives it: plan, price and
+ * run workflows, read their runs, and write workflow documents and builders. It also writes node
+ * types in TypeScript (`node`, with agent tools made by `tool`), answers paid calls with stand-ins
+ * (`run(target, { standIn })`, `Answer`, `DECLINE`), and holds the TypeScript node host the engine
+ * starts to run those nodes (`dist/host-entry.js`, Node 24 or later).
  */
 
 export const version = "0.5.1";
@@ -53,10 +56,91 @@ export type {
   RunFinished,
   WithValue,
 } from "./documents.js";
+export type {
+  Agent,
+  AgentOptions,
+  AgentRunOptions,
+  CallResult,
+  CheckResult,
+  Ctx,
+  Instance,
+  Maker,
+  Mark,
+  Reader,
+  RequestObject,
+  RequestValue,
+  ToolHandle,
+  ToolRun,
+  ToolRunOptions,
+} from "./ctx.js";
 export type { CallOptions } from "./engine.js";
+export {
+  AgentUnfinished,
+  CallFailed,
+  CallRefused,
+  Cancelled,
+  CapabilityError,
+  CapabilityUndeclared,
+  CeilingExceeded,
+  EngineError,
+  ExpressionError,
+  JobUnsettled,
+  NodeFailure,
+  NoRoute,
+  NotLive,
+  OutsideWorkDir,
+  OverBound,
+  UndeclaredResource,
+  UnknownFile,
+} from "./engine-errors.js";
 export { FxError, type FxErrorDetails } from "./errors.js";
+export { InputFile, type Output } from "./files.js";
+export {
+  type BodyReturn,
+  type Family,
+  type FromSchema,
+  type Inputs,
+  type InputsOf,
+  type JsonSchemaObject,
+  type JsonSchemaType,
+  type Kind,
+  type NodeDecl,
+  type NodeType,
+  node,
+  type OutputFile,
+  type Outputs,
+  type OutputsOf,
+  type ParamDecl,
+  type ParamDecls,
+  type Params,
+  type ParamSchema,
+  type ParamsOf,
+  type ParamValue,
+  type Picture,
+  type Port,
+  type Ports,
+  type SchemaValue,
+  type Tool,
+  type ToolArguments,
+  type ToolDecl,
+  ToolReply,
+  type ToolReturn,
+  type TypeSpec,
+  tool,
+} from "./node.js";
 export { type Platform, platformFor, platforms } from "./platforms.js";
 export type { PlanOptions, RunOptions } from "./request.js";
+export {
+  Answer,
+  type AnswerFile,
+  DECLINE,
+  type Decline,
+  isDecline,
+  type StandIn,
+  type StandInCall,
+  type StandInValue,
+  type TurnCall,
+} from "./stand-in.js";
 export {
   type Assertion,
   type Budget,
@@ -66,6 +150,7 @@ export {
   type InputDeclaration,
   type InputField,
   type InputRef,
+  type JsonInput,
   type JsonValue,
   type KeepBest,
   type NodeStep,

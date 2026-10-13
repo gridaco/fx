@@ -70,7 +70,8 @@ Downstream:
   the image whose marked areas are fully transparent (alpha 0 marks what may change), the
   convention every shipped `image.edit` route follows;
 - `fx/image.crop@1` takes `region:` from a mark;
-- your own nodes read them with `ctx.read.annotations(name)`.
+- your own nodes read them with `ctx.read.annotations(name)` (`await ctx.read.json(name)` in
+  TypeScript).
 
 ```yaml
   face:
@@ -132,5 +133,6 @@ reason. It is the cheapest call, for a first-pass filter over many takes.
 ## Annotations you write
 
 Any node can output annotations (an output declared `annotations`), with
-`ctx.annotate(shape=..., label=..., color=..., tag=..., **fields)`. A judge you write may attach the
-marks that justify its verdict. They work downstream exactly like a built-in judge's.
+`ctx.annotate(shape=..., label=..., color=..., tag=..., **fields)` in Python, or
+`await ctx.annotate({ shape, label, color, tag, ... })` in TypeScript. A judge you write may
+attach the marks that justify its verdict. They work downstream exactly like a built-in judge's.

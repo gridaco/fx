@@ -258,7 +258,7 @@ fn every_indexed_template_starts_from_the_checkout() {
             );
         }
         let ignore = std::fs::read_to_string(project.join(".gitignore")).unwrap();
-        for line in ["runs/", ".fx/", ".env"] {
+        for line in ["runs/", ".fx/", ".env", "node_modules/"] {
             assert!(ignore.lines().any(|own| own == line), "{name}: {ignore}");
         }
         for file in [
@@ -297,7 +297,10 @@ fn a_template_s_own_gitignore_keeps_its_lines() {
     ));
     let merged = std::fs::read_to_string(root.path().join(".gitignore")).unwrap();
     assert!(merged.starts_with(&own), "{merged}");
-    assert!(merged.ends_with("runs/\n.fx/\n.env\n"), "{merged}");
+    assert!(
+        merged.ends_with("runs/\n.fx/\n.env\nnode_modules/\n"),
+        "{merged}"
+    );
 }
 
 // --- Archives -----------------------------------------------------------------------------------

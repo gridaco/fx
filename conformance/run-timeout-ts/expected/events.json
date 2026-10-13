@@ -1,0 +1,193 @@
+[
+ {
+  "bindings": [],
+  "code": null,
+  "error": "ran past 1 seconds",
+  "event": "node_failed",
+  "facts": {},
+  "id": "nap#1",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "nap",
+  "plan": "cd398960ec6a953e906ddbe74c7264d83bd45dc58a6e5dc5ad292aae3123f5fe",
+  "ports": {
+   "inputs": {},
+   "outputs": {
+    "text": "text"
+   },
+   "params": {
+    "seconds": {
+     "type": "number"
+    }
+   }
+  },
+  "reads": [],
+  "uses": "./nodes/slow.ts#slow"
+ },
+ {
+  "bindings": [],
+  "code": null,
+  "error": "ran past 1 seconds",
+  "event": "node_failed",
+  "facts": {},
+  "id": "watch#1",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "watch",
+  "plan": "cd398960ec6a953e906ddbe74c7264d83bd45dc58a6e5dc5ad292aae3123f5fe",
+  "ports": {
+   "inputs": {},
+   "outputs": {
+    "text": "text"
+   },
+   "params": {
+    "seconds": {
+     "type": "number"
+    }
+   }
+  },
+  "reads": [],
+  "uses": "./nodes/slow.ts#watchful"
+ },
+ {
+  "bindings": [],
+  "event": "node_started",
+  "id": "nap#1",
+  "identity": "54a5b97eb1bd10a5fc75a620bd19e864e3785a451946f898584010ddab2b06cf",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "nap",
+  "plan": "cd398960ec6a953e906ddbe74c7264d83bd45dc58a6e5dc5ad292aae3123f5fe",
+  "ports": {
+   "inputs": {},
+   "outputs": {
+    "text": "text"
+   },
+   "params": {
+    "seconds": {
+     "type": "number"
+    }
+   }
+  },
+  "reads": [],
+  "routes": {},
+  "step": "nap",
+  "take": [
+   1
+  ],
+  "uses": "./nodes/slow.ts#slow",
+  "with": {
+   "seconds": {
+    "value": 30
+   }
+  }
+ },
+ {
+  "bindings": [],
+  "event": "node_started",
+  "id": "watch#1",
+  "identity": "d65ed734c79ee6845468943aa4069df698ab81b30dbe9356e6a9ebde4a377ede",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "watch",
+  "plan": "cd398960ec6a953e906ddbe74c7264d83bd45dc58a6e5dc5ad292aae3123f5fe",
+  "ports": {
+   "inputs": {},
+   "outputs": {
+    "text": "text"
+   },
+   "params": {
+    "seconds": {
+     "type": "number"
+    }
+   }
+  },
+  "reads": [],
+  "routes": {},
+  "step": "watch",
+  "take": [
+   1
+  ],
+  "uses": "./nodes/slow.ts#watchful",
+  "with": {
+   "seconds": {
+    "value": 30
+   }
+  }
+ },
+ {
+  "ceiling_usd": null,
+  "charged_usd": 0,
+  "estimate": {
+   "high_usd": 0,
+   "low_usd": 0
+  },
+  "event": "run_started",
+  "kind": "fx-run-events-v1",
+  "plan": "cd398960ec6a953e906ddbe74c7264d83bd45dc58a6e5dc5ad292aae3123f5fe",
+  "repeat": {
+   "live": false,
+   "routes": [
+    "routes.yaml"
+   ],
+   "workflow": "case"
+  },
+  "resumed": false,
+  "workflow": "case"
+ },
+ {
+  "charged_usd": 0,
+  "event": "run_finished",
+  "failed": [
+   "nap#1",
+   "watch#1"
+  ],
+  "incomplete": false,
+  "kind": "fx-run-events-v1",
+  "ok": false,
+  "outputs": {},
+  "plan": "cd398960ec6a953e906ddbe74c7264d83bd45dc58a6e5dc5ad292aae3123f5fe",
+  "stopped": null
+ },
+ {
+  "event": "phase_planned",
+  "high_usd": 0,
+  "kind": "fx-run-events-v1",
+  "phase": 1,
+  "plan": "cd398960ec6a953e906ddbe74c7264d83bd45dc58a6e5dc5ad292aae3123f5fe",
+  "steps": 2
+ },
+ {
+  "event": "scopes_updated",
+  "instances": [
+   {
+    "id": "nap#1",
+    "key": null,
+    "step": "nap",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "watch#1",
+    "key": null,
+    "step": "watch",
+    "take": [
+     1
+    ]
+   }
+  ],
+  "kind": "fx-run-events-v1",
+  "node_interface_bindings": {
+   "nap#1": [],
+   "watch#1": []
+  },
+  "pending": [],
+  "plan": "cd398960ec6a953e906ddbe74c7264d83bd45dc58a6e5dc5ad292aae3123f5fe",
+  "scopes": []
+ }
+]

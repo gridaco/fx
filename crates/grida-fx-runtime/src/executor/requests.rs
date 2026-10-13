@@ -390,10 +390,8 @@ impl RunHandler {
         if params.run_id != self.run_id || self.ended() {
             return;
         }
-        eprintln!(
-            "{}",
-            progress_line(&self.job.id, &params.text, params.fraction)
-        );
+        // On the connection's reader task: a line that cannot be written now must not end it.
+        crate::stderr::line(progress_line(&self.job.id, &params.text, params.fraction));
     }
 }
 

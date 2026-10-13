@@ -488,6 +488,13 @@ mod with_yaml {
             let folder = case.join("in/workflows");
             for entry in std::fs::read_dir(&folder).unwrap() {
                 let path = entry.unwrap().path();
+                // A builder may sit beside the workflow files (`workflows/build.ts`).
+                if !path
+                    .extension()
+                    .is_some_and(|suffix| suffix == "yaml" || suffix == "yml")
+                {
+                    continue;
+                }
                 let label = format!("workflows/{}", path.file_name().unwrap().to_string_lossy());
                 let loaded = load_workflow(&path, &label, &label)
                     .unwrap_or_else(|e| panic!("{}: {e}", path.display()));

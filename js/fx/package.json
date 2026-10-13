@@ -1,7 +1,7 @@
 {
   "name": "@grida/fx",
   "version": "0.5.1",
-  "description": "Grida FX for JavaScript: the grida-fx command, and an SDK to build workflows and drive the engine.",
+  "description": "Grida FX for JavaScript and TypeScript: the grida-fx command; an SDK to write workflows, builders, node types and stand-ins and to drive the engine; and the TypeScript node host.",
   "keywords": ["grida", "fx", "workflow", "generative", "assets", "pipeline"],
   "homepage": "https://grida.co/fx",
   "license": "Apache-2.0",

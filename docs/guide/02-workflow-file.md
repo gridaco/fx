@@ -238,8 +238,8 @@ let:
 - **Order:** it is ordered like the `for_each` list (or the matrix), and every element knows its key.
 - **Skipped instances are absent.** An instance rejected with `on_reject: continue` is present and
   carries its verdict. `accepted(...)` keeps only accepted elements.
-- **In Python** a collection arrives as an ordered mapping, `{key: file}`, and each file has `.key`,
-  so nothing depends on position.
+- **In Python** a collection arrives as an ordered mapping, `{key: file}`, and in TypeScript as a
+  `ReadonlyMap` in the same order. Each file has `.key`, so nothing depends on position.
 
 ### When the list comes from a step
 

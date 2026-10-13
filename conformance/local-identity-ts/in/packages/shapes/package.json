@@ -1,0 +1,1 @@
+{ "name": "@acme/shapes", "private": true, "type": "module", "exports": "./index.ts" }

@@ -203,7 +203,7 @@ def _authored_documents() -> Iterator[Path]:
     if EXAMPLES.is_dir():
         for path in sorted(EXAMPLES.rglob("*")):
             # What running an example writes is not authored (.gitignore).
-            if not path.is_file() or {".fx", "runs", ".venv"} & set(
+            if not path.is_file() or {".fx", "runs", ".venv", "node_modules"} & set(
                 path.relative_to(EXAMPLES).parts
             ):
                 continue
@@ -393,8 +393,16 @@ def check_names(gate: Gate) -> None:
     roots = [p for p in NAME_ROOTS if p.is_dir()]
     for root in roots:
         for path in sorted(root.rglob("*")):
-            # What running an example writes, and its own environment, are not authored.
-            generated = {"__pycache__", ".fx", "runs", ".venv"} & set(path.relative_to(root).parts)
+            # What running an example writes, and its own environment, are not authored: an
+            # example's installed packages, and the @grida/fx a conformance run installs. A
+            # case's own node_modules fixtures are authored.
+            parts = path.relative_to(root).parts
+            generated = bool({"__pycache__", ".fx", "runs", ".venv"} & set(parts)) or (
+                "node_modules" in parts
+                and (
+                    root == EXAMPLES or parts[parts.index("node_modules") + 1 :][:1] == ("@grida",)
+                )
+            )
             if not path.is_file() or generated:
                 continue
             data = path.read_bytes()

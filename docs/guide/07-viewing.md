@@ -160,11 +160,11 @@ problems. Conditional and absent steps remain visible; values that depend on
 execution remain unresolved. Planning state `done` may describe an existing or
 planning-time result and does not claim a new run succeeded.
 
-Planning admits no FX paid calls or run-phase steps. It may import Python builders
-and node modules, execute declared local `at: plan` steps, and cache their results.
-Python builders use the existing `file.py:function` contract; arbitrary execution
-scripts are not loaded to infer workflows. JavaScript-authored YAML files work
-like other files; a direct JavaScript builder host remains later work.
+Planning admits no FX paid calls or run-phase steps. It may import builders and
+node modules, Python or TypeScript, execute declared local `at: plan` steps, and
+cache their results. Builders are named as `file.py:function` or `file.ts:function`;
+arbitrary execution scripts are not loaded to infer workflows. YAML files written
+from JavaScript work like other files.
 
 Plan pages are static materializations. They do not poll execution events or
 replan when source changes. Browser-serving flags cannot be mixed with `--json`.

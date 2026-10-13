@@ -3,10 +3,11 @@ the same arguments and exits with its status, so Python users never need Node
 (``docs/guide/05-running.md``).
 
 The binary gets this process's environment, with ``GRIDA_FX_SDK_PYTHON`` set to this interpreter
-(``grida.fx._api.engine_environment``): node bodies run in it when neither ``GRIDA_FX_PYTHON`` nor
-a project ``.venv`` chooses a Python, so they run where ``grida`` is installed. ``GRIDA_FX_INVOKER``
-is ``python`` (``spec/distribution.md`` §2), so the engine's usage, errors and hints say
-``python -m grida.fx``, as this module's own messages do.
+(``grida.fx._api.engine_environment``): Python node bodies and ``.py`` stand-in hosts run in it
+when neither ``GRIDA_FX_PYTHON`` nor a project ``.venv`` chooses a Python, so they run where
+``grida`` is installed (TypeScript ones run on Node). ``GRIDA_FX_INVOKER`` is ``python``
+(``spec/distribution.md`` §2), so the engine's usage, errors and hints say ``python -m grida.fx``,
+as this module's own messages do.
 
 On POSIX the process becomes the binary (``os.execve``): signals, the terminal and the exit status
 are the engine's own. Elsewhere the binary runs as a child and its exit status is returned; a

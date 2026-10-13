@@ -90,13 +90,10 @@ fn list(args: &RunsListArgs) -> Result<u8, Error> {
         print_line(&list_line(found, &cwd));
     }
     for problem in &set.problems {
-        eprintln!(
-            "{}",
-            labelled(
-                "skipped",
-                &format!("{}: {}", shown_path(&problem.path, &cwd), problem.message)
-            )
-        );
+        grida_fx_runtime::stderr::line(labelled(
+            "skipped",
+            &format!("{}: {}", shown_path(&problem.path, &cwd), problem.message),
+        ));
     }
     Ok(0)
 }
@@ -1268,6 +1265,12 @@ mod tests {
         lock.try_lock().unwrap();
         assert!(runs_inside(&folder), "a held run.lock is a run starting");
         drop(lock);
+        // A process another test forks meanwhile holds a copy of the descriptor, and the lock with
+        // it, until it execs: give the lock a moment to go.
+        let released = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while runs_inside(&folder) && std::time::Instant::now() < released {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
         assert!(!runs_inside(&folder));
         recorded_run(&inner, "2026-10-01T00:00:00.000Z");
         assert!(runs_inside(&folder));

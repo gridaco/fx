@@ -24,7 +24,7 @@
  * ```
  */
 
-/** A JSON value as FX holds it (`spec/identity.md` §1). */
+/** A JSON value as FX holds it (`spec/identity.md` §1): what the SDK hands out. */
 export type JsonValue =
   | null
   | boolean
@@ -32,6 +32,17 @@ export type JsonValue =
   | string
   | JsonValue[]
   | { [key: string]: JsonValue };
+
+/** A JSON value as the SDK takes one: arrays and objects may be readonly (`as const`, a submitted
+ * value, `ctx.instance.takes`), and an object member whose value is `undefined` is left out, as
+ * `JSON.stringify` leaves it out. */
+export type JsonInput =
+  | null
+  | boolean
+  | number
+  | string
+  | readonly JsonInput[]
+  | { readonly [key: string]: JsonInput | undefined };
 
 /** An expression or a value that holds `${{ … }}` (kept as a string in the document). */
 export type Expression = string;

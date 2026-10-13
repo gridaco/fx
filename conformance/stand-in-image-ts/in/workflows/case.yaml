@@ -1,0 +1,16 @@
+fx: workflow/v1
+id: case
+title: A paid call answered by a stand-in
+inputs:
+  mood: { type: string, default: calm }
+steps:
+  draw:
+    uses: fx/image.generate@1
+    with:
+      prompt: a lantern on a quay
+      size: "64x64"
+      background: opaque
+      # The prompt never uses `mood`: another mood is another step identity, and the same call.
+      vars: { mood: "${{ inputs.mood }}" }
+outputs:
+  image: ${{ steps.draw.outputs.image }}

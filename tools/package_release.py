@@ -199,6 +199,8 @@ def verify(wheel: Path, npm: list[Path], out: Path) -> None:
                     invoker,
                     "--command",
                     shlex.join(command),
+                    "--js-sdk",
+                    str(prefix / "node_modules" / "@grida" / "fx"),
                 ],
                 cwd=temporary,
                 env=environment,

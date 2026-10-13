@@ -1606,7 +1606,12 @@ def test_a_failure_keeps_only_facts_and_marks_the_engine_can_read(tmp_path: Path
 
 
 def _conformance_projects() -> list[Path]:
-    return sorted(path.parent for path in (REPO / "conformance").glob("*/in/nodes"))
+    # The projects with Python node modules: a TypeScript project's are another host's.
+    return sorted(
+        path.parent
+        for path in (REPO / "conformance").glob("*/in/nodes")
+        if any(path.glob("**/*.py"))
+    )
 
 
 @pytest.mark.parametrize("source", _conformance_projects(), ids=lambda path: path.parent.name)

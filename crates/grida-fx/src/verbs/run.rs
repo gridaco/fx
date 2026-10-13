@@ -1,13 +1,14 @@
 //! `grida-fx run <target> [inputs] [--routes f]… [--arg n=v]… [--live] [--max-usd N]
 //! [--yes-up-to N] [--deliver OUTPUT=PATH]… [--name NAME | --resume NAME | --run FOLDER]
-//! [--stand-in FILE.py#FUNCTION | -]`
+//! [--stand-in FILE#FUNCTION | -]`
 //! (docs/guide/05-running.md; spec/store.md §8; spec/protocol.md §5.7).
 //!
 //! 0. A stand-in, before anything else (usage errors, exit 2): `--stand-in cannot be used with
-//!    --live` (or `with --yes-up-to`); a source that is neither `<file>.py#<function>` (a Python
-//!    identifier after the last `#`) nor `-` is `--stand-in takes <file>.py#<function>, or -`; a
-//!    file that is not there is `no stand-in file <file>`; `-` with a standard input that is not
-//!    a Unix-domain socket is `--stand-in - needs the stand-in's socket on standard input`
+//!    --live` (or `with --yes-up-to`); a source that is neither `<file>#<function>` (a `.py`,
+//!    `.ts`, `.mts`, `.js` or `.mjs` file, and an identifier after the last `#`) nor `-` is
+//!    `--stand-in takes <file>#<function> for a .py, .ts, .mts, .js or .mjs file, or -`; a file
+//!    that is not there is `no stand-in file <file>`; `-` with a standard input that is not a
+//!    Unix-domain socket is `--stand-in - needs the stand-in's socket on standard input`
 //!    ([`StandInSource::parse`]).
 //! 1. Arguments, before anything is read: `--max-usd` and `--yes-up-to` through `Usd::parse` (a
 //!    negative, non-finite or over-precise amount is a usage error, `<option> <text>: <reason>`,
@@ -16,17 +17,18 @@
 //! 2. The planner; then every `--deliver` name is checked against the workflow's declared outputs
 //!    (`--deliver <pair>: name one of <sorted names, ", ">`, or `…: the workflow declares no
 //!    outputs`, exit 2) before anything is planned or run. A stand-in's answerer starts next
-//!    ([`start_stand_in`]), before planning: for a file, a stand-in host in the working
-//!    directory (`initialize` with the planning project, then `stand_in.load` with the file's
-//!    absolute path, which nothing records), failing with `the stand-in <file>#<function> could
-//!    not be loaded: <reason>`; for `-`, `initialize` over the socket, failing with `the stand-in
-//!    on standard input could not be started: <reason>` (both exit 2). Then the engine
-//!    ([`crate::engine::engine_for`]), which with `--live` builds every provider's adapters from
-//!    the keys in the process environment or the planning project's `.env` (spec/providers.md
-//!    §3): a `.env` or base-URL refusal is a usage error naming the variable or the line (exit 2),
-//!    and building prints nothing. A missing key refuses only the calls that need it, when they
-//!    are made (`<VARIABLE> is not set`, $0). A stand-in run's engine has the stand-in store
-//!    (`<cache>/stand-in`) as its store and asks the stand-in.
+//!    ([`start_stand_in`]), before planning: for a file, a stand-in host of the file's language
+//!    in the working directory (`initialize` with the planning project, then `stand_in.load`
+//!    with the file's absolute path, which nothing records), failing with `the stand-in
+//!    <file>#<function> could not be loaded: <reason>` (for TypeScript, also when no `@grida/fx`
+//!    is found from the planning project); for `-`, `initialize` over the socket, failing with
+//!    `the stand-in on standard input could not be started: <reason>` (both exit 2). Then the
+//!    engine ([`crate::engine::engine_for`]), which with `--live` builds every provider's
+//!    adapters from the keys in the process environment or the planning project's `.env`
+//!    (spec/providers.md §3): a `.env` or base-URL refusal is a usage error naming the variable
+//!    or the line (exit 2), and building prints nothing. A missing key refuses only the calls
+//!    that need it, when they are made (`<VARIABLE> is not set`, $0). A stand-in run's engine
+//!    has the stand-in store (`<cache>/stand-in`) as its store and asks the stand-in.
 //! 3. Plan through the engine ([`crate::engine::plan`]: `at: plan` steps run, `cached` is the
 //!    store's). A plan with problems prints the plan (`plan::render::render`; a stand-in run's
 //!    with `plan::render::render_stand_in`, which never warns that the ceiling stops the run)
@@ -65,16 +67,18 @@
 
 use crate::cli::RunArgs;
 use crate::print::{labelled, print_line, shown_path};
+use grida_fx_core::host::{Language, NodeHost};
 use grida_fx_core::project::{PlanRequest, Planner, make_planner};
 use grida_fx_core::val::{FileValue, Val};
 use grida_fx_core::{Error, ErrorKind};
-use grida_fx_runtime::engine::{Engine, scrub_paths};
+use grida_fx_runtime::engine::{Engine, root_labels, scrub_paths};
 use grida_fx_runtime::folder::{keyed_path, new_folder};
-use grida_fx_runtime::host::locate::python_interpreter;
+use grida_fx_runtime::host::locate::{node_host_entry, node_runtime, python_interpreter};
 use grida_fx_runtime::host::process::HostSpec;
 use grida_fx_runtime::run_index::RunIndex;
 use grida_fx_runtime::runner::{self, RunError, RunOptions, RunOutcome};
 use grida_fx_runtime::stand_in::{ConnectionAnswerer, StandIn};
+use grida_fx_runtime::stderr;
 use grida_fx_runtime::store::Store;
 use indexmap::IndexMap;
 use std::io::Write;
@@ -183,7 +187,7 @@ fn plan_and_run(
     cwd: &Path,
     engine: &Arc<Engine>,
     planner: &mut Planner,
-    host: &mut grida_fx_runtime::host::PythonHost,
+    host: &mut dyn NodeHost,
     yes_up_to: Option<grida_fx_core::money::Usd>,
     deliveries: &[Delivery],
 ) -> Result<u8, Error> {
@@ -261,15 +265,12 @@ fn plan_and_run(
         |ready| {
             crate::interrupt::runner_started();
             print_line(&format!("run       {label}"));
-            eprintln!("invocation {}", ready.invocation_id);
-            eprintln!(
-                "{}",
-                if ready.control_available {
-                    "control   available"
-                } else {
-                    "control   unavailable"
-                }
-            );
+            stderr::line(format_args!("invocation {}", ready.invocation_id));
+            stderr::line(if ready.control_available {
+                "control   available"
+            } else {
+                "control   unavailable"
+            });
             let root = &ready.folder;
             // Observation is independent: a bind failure must not fail or hold up execution.
             if !args.no_view && (args.standalone || !project.has_file) {
@@ -365,12 +366,13 @@ impl Drop for RunViewer {
 /// Where a stand-in run's stand-in is (spec/protocol.md §5.7), checked (module doc, step 0).
 #[derive(Debug)]
 enum StandInSource {
-    /// `<file>.py#<function>`: `file` as typed, relative to the working directory, and its
-    /// absolute path.
+    /// `<file>#<function>`: `file` as typed, relative to the working directory, its absolute
+    /// path, and its language.
     File {
         file: String,
         path: PathBuf,
         function: String,
+        language: Language,
     },
     /// `-`: the answerer's socket, from standard input.
     Socket(SocketOnStdin),
@@ -391,8 +393,11 @@ impl StandInSource {
                 Error::usage("--stand-in - needs the stand-in's socket on standard input")
             });
         }
-        let (file, function) = split_stand_in(text)
-            .ok_or_else(|| Error::usage("--stand-in takes <file>.py#<function>, or -"))?;
+        let (file, function, language) = split_stand_in(text).ok_or_else(|| {
+            Error::usage(
+                "--stand-in takes <file>#<function> for a .py, .ts, .mts, .js or .mjs file, or -",
+            )
+        })?;
         let path = cwd.join(file);
         if !path.is_file() {
             return Err(Error::usage(format!("no stand-in file {file}")));
@@ -401,23 +406,22 @@ impl StandInSource {
             file: file.to_string(),
             path,
             function: function.to_string(),
+            language,
         })
     }
 }
 
-/// `<file>.py#<function>` split at its last `#`: a file named `….py` and a Python identifier.
-fn split_stand_in(text: &str) -> Option<(&str, &str)> {
+/// `<file>#<function>` split at its last `#`: a file a node host takes (`….py`, `….ts`,
+/// `….mts`, `….js`, `….mjs`: `Language::of_module`) and an identifier; with the file's language.
+fn split_stand_in(text: &str) -> Option<(&str, &str, Language)> {
     let (file, function) = text.rsplit_once('#')?;
-    let named = file.len() > ".py".len()
-        && file.ends_with(".py")
-        && !file.ends_with("/.py")
-        && !file.ends_with("\\.py");
+    let language = Language::of_module(file).ok()?;
     let mut chars = function.chars();
     let identifier = chars
         .next()
         .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
         && chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
-    (named && identifier).then_some((file, function))
+    identifier.then_some((file, function, language))
 }
 
 /// The answerer's end of a socket the command was given as its standard input.
@@ -468,25 +472,25 @@ fn start_stand_in(
             file,
             path,
             function,
+            language,
         } => {
-            let env = |name: &str| std::env::var(name).ok();
-            let python = python_interpreter(&project.root, None, &env);
-            let spec = HostSpec {
-                label: grida_fx_runtime::host::label(&python, &project.root),
-                python,
-                project_root: project.root.clone(),
-                sources: project.document.sources.clone(),
-                check_version: true,
+            let refused = |reason: String| {
+                Error::new(
+                    ErrorKind::Host,
+                    format!("the stand-in {file}#{function} could not be loaded: {reason}"),
+                )
             };
+            let env = |name: &str| std::env::var(name).ok();
+            let spec = stand_in_spec(language, project, &env).map_err(refused)?;
+            // Node's messages may name the files of a @grida/fx outside the project.
+            let package: Vec<(String, String)> = spec
+                .host_package(&project.root)
+                .map(|package| root_labels(&package, Language::TypeScript.sdk()))
+                .unwrap_or_default();
             let path = std::path::absolute(&path).unwrap_or(path);
             runtime
                 .block_on(ConnectionAnswerer::start_host(&spec, cwd, &path, &function))
-                .map_err(|reason| {
-                    Error::new(
-                        ErrorKind::Host,
-                        format!("the stand-in {file}#{function} could not be loaded: {reason}"),
-                    )
-                })?
+                .map_err(|reason| refused(scrub_paths(&reason, &package)))?
         }
         StandInSource::Socket(socket) => runtime
             .block_on(answerer_on_socket(socket, project))
@@ -498,6 +502,30 @@ fn start_stand_in(
             })?,
     };
     Ok(Arc::new(StandIn::new(Arc::new(answerer))))
+}
+
+/// How a stand-in host of `language` starts for the planning project `project` (its only
+/// project: no second root for the interpreter); `Err` is why it cannot.
+fn stand_in_spec(
+    language: Language,
+    project: &grida_fx_core::docs::project::Project,
+    env: &dyn Fn(&str) -> Option<String>,
+) -> Result<HostSpec, String> {
+    let root = &project.root;
+    let sources = project.document.sources.clone();
+    Ok(match language {
+        Language::Python => {
+            let python = python_interpreter(root, None, env);
+            let label = grida_fx_runtime::host::label(&python, root);
+            HostSpec::python(python, label, root, sources)
+        }
+        Language::TypeScript => {
+            let entry = node_host_entry(root, None, env)?;
+            let node = node_runtime(env);
+            let label = grida_fx_runtime::host::label(&node, root);
+            HostSpec::typescript(node, entry, label, root, sources)
+        }
+    })
 }
 
 /// The answerer on the socket of `--stand-in -`.
@@ -831,6 +859,59 @@ mod tests {
 
     fn files(value: &Val) -> Option<OutputFiles> {
         output_files(Some(value))
+    }
+
+    #[test]
+    fn a_stand_in_is_a_module_file_and_a_function() {
+        for (text, file, function, language) in [
+            (
+                "stand_in.py#answer",
+                "stand_in.py",
+                "answer",
+                Language::Python,
+            ),
+            ("tests/a.b.py#_f1", "tests/a.b.py", "_f1", Language::Python),
+            ("a#b.py#f", "a#b.py", "f", Language::Python),
+            (
+                "stand_in.ts#answer",
+                "stand_in.ts",
+                "answer",
+                Language::TypeScript,
+            ),
+            (
+                "../tools/s.mts#answer",
+                "../tools/s.mts",
+                "answer",
+                Language::TypeScript,
+            ),
+            ("s.js#answer", "s.js", "answer", Language::TypeScript),
+            ("s.mjs#answer", "s.mjs", "answer", Language::TypeScript),
+        ] {
+            assert_eq!(
+                split_stand_in(text),
+                Some((file, function, language)),
+                "{text}"
+            );
+        }
+        for text in [
+            "stand_in.py",
+            "stand_in.py#",
+            "stand_in.py#1answer",
+            "stand_in.py#an-swer",
+            ".py#answer",
+            "dir/.py#answer",
+            "dir\\.py#answer",
+            "stand_in.txt#answer",
+            "stand_in#answer",
+            "stand_in.tsx#answer",
+            "stand_in.cts#answer",
+            "stand_in.cjs#answer",
+            "types.d.ts#answer",
+            "stand_in.PY#answer",
+            "stand_in.ts#$answer",
+        ] {
+            assert_eq!(split_stand_in(text), None, "{text}");
+        }
     }
 
     #[test]

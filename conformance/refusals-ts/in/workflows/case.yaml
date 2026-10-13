@@ -1,0 +1,12 @@
+fx: workflow/v1
+id: case
+title: Modules no node host runs
+steps:
+  card:
+    uses: ./nodes/card.tsx#card
+  common:
+    uses: ./nodes/common.cts#common
+  script:
+    uses: ./nodes/common.cjs#common
+  old:
+    uses: ./legacy/old.js#old

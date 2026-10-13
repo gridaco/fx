@@ -694,6 +694,7 @@ dependencies = [
  "grida-fx-viewer",
  "indexmap",
  "jsonschema",
+ "rustix",
  "serde_json",
  "tar",
  "tempfile",

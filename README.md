@@ -27,14 +27,15 @@ The CLI needs Node.js 24 or later and carries the FX version it was released wit
 `grida` updates FX. FX runs on macOS, and on Linux (x64 and arm64) with glibc 2.28 or later; on
 Windows, use WSL 2.
 
-Write custom nodes and builders in Python with the Python SDK:
+Write custom nodes and builders in Python or TypeScript, with that language's SDK:
 
 ```sh
-pip install grida
+pip install grida        # Python 3.11 or later
+npm install @grida/fx    # in your project; TypeScript nodes run on Node.js 24 or later
 ```
 
-The JavaScript SDK is `@grida/fx`. To run FX without the Grida CLI (in a service you host, say),
-see [ways to run FX](CONTRIBUTING.md#ways-to-run-fx).
+`@grida/fx` is also the JavaScript SDK. To run FX without the Grida CLI (in a service you host,
+say), see [ways to run FX](CONTRIBUTING.md#ways-to-run-fx).
 
 ## AI providers
 

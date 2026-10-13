@@ -1,7 +1,7 @@
 //! The Python node host client against real processes.
 //!
 //! Most tests run a fake host: a stdlib-only Python program written to a temporary folder and
-//! started through a small shell script that `PythonHost::with_python` names, so the engine
+//! started through a small shell script that `LanguageHost::with_program` names, so the engine
 //! still runs `<python> -P -m grida.fx.host` and the script passes on a mode. They need `python3`
 //! on `PATH` and skip without it. The last test runs the real `grida.fx.host` through
 //! `GRIDA_FX_PYTHON` or the repository's `python/.venv`, and skips when neither exists.
@@ -13,7 +13,7 @@ use grida_fx_protocol::{
     BuildParams, DescribeParams, DescribeTarget, ErrorCode, ModuleDescription, RetryMode,
 };
 use grida_fx_providers::testing::write_program;
-use grida_fx_runtime::host::{PythonHost, SAFE_PATH_MARK};
+use grida_fx_runtime::host::{LanguageHost, SAFE_PATH_MARK};
 use indexmap::IndexMap;
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
@@ -240,8 +240,8 @@ impl Fixture {
         }
     }
 
-    fn host(&self) -> PythonHost {
-        PythonHost::new().with_python(self.python.clone())
+    fn host(&self) -> LanguageHost {
+        LanguageHost::python().with_program(self.python.clone())
     }
 
     fn log(&self) -> Vec<String> {
@@ -818,7 +818,7 @@ fn the_real_python_host() {
     )
     .unwrap();
 
-    let mut host = PythonHost::new().with_python(python);
+    let mut host = LanguageHost::python().with_program(python);
     host.open_project(&root, &[]).unwrap();
     let described = host
         .describe(&describe_params(&[("nodes/echo.py", Some("echo"))]))
@@ -893,7 +893,7 @@ fn the_real_python_host_ignores_root_modules_until_initialize() {
     )
     .unwrap();
 
-    let mut host = PythonHost::new().with_python(python);
+    let mut host = LanguageHost::python().with_program(python);
     host.open_project(&root, &[]).unwrap();
     let described = host
         .describe(&describe_params(&[("nodes/echo.py", None)]))
@@ -945,13 +945,8 @@ fn the_real_python_host_answers_for_a_stand_in() {
          \x20   return Answer(files={\"image\": PICTURE}, data={\"take\": call.take})\n",
     )
     .unwrap();
-    let spec = HostSpec {
-        label: python.display().to_string(),
-        python,
-        project_root: root.clone(),
-        sources: Vec::new(),
-        check_version: false,
-    };
+    let spec =
+        HostSpec::python(&python, python.display().to_string(), &root, Vec::new()).unchecked();
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -1067,13 +1062,8 @@ fn a_stand_in_host_that_exits_with_its_pipes_held_is_seen_to_go() {
          \x20   os._exit(3)\n",
     )
     .unwrap();
-    let spec = HostSpec {
-        label: python.display().to_string(),
-        python,
-        project_root: cwd.clone(),
-        sources: Vec::new(),
-        check_version: false,
-    };
+    let spec =
+        HostSpec::python(&python, python.display().to_string(), &cwd, Vec::new()).unchecked();
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()

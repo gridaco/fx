@@ -113,6 +113,34 @@ failures raise `FxError`. JavaScript's signal stops the export command, not any
 workflow. This operation has no provider calls, project-service requirement or
 CDN-account handling.
 
+## Answer paid calls with a stand-in
+
+Python `run`/`run_async` (`stand_in=`) and JavaScript `run` (`standIn`) answer a run's
+paid calls with a function in the caller's own process ([protocol.md](protocol.md) §5.7,
+§8). Each invocation gives the engine one end of a connected pair of Unix-domain stream
+sockets as its standard input, with `--stand-in -`, and serves `initialize`,
+`stand_in.answer`, `$/cancel`, `shutdown` and `exit` on the other end until the engine
+exits. Python makes the pair with `socketpair()`. JavaScript, which has none, accepts a
+connection on a socket in a fresh private folder, then closes the listener and removes
+the folder before the engine starts. Both answer one call at a time, in the order the
+requests arrive, so the function's state (counters, scripted answers, the requests it
+saw) is the caller's, and each invocation may get another function.
+
+A stand-in run is never live and runs every phase. Before anything starts, the SDKs
+refuse `live` and `yes_up_to` / `yesUpTo` with a stand-in, a stand-in that is not a
+function, and a system that is not POSIX. JavaScript's refusals read:
+
+- `a stand-in run is never live: pass live: false, or no standIn`;
+- `a stand-in run runs every phase: yesUpTo does not apply`;
+- `standIn is a function of one StandInCall, not <type>`;
+- `stand-ins need a POSIX system`.
+
+A stand-in that faults makes the engine stop the run, and once the engine has ended,
+`run` raises the stand-in's first error (JavaScript: rejects with the value it threw).
+`RunResult.stand_in` / `standIn` says whether a run was a stand-in run.
+`grida-fx run --stand-in <file>#<function>` serves the same function from a stand-in
+host of the file's language.
+
 ## Intentional boundaries
 
 Plans already expose graph/problems/pricing, and execution results expose output
@@ -122,5 +150,4 @@ conveniences rather than required parity. Existing JS wrappers remain supported.
 Project initialization, service management/browser opening, diagnostics, node locks,
 take maintenance and job forgetting stay CLI operations in this pass. Add native
 SDK support when a concrete embedding job justifies its lifetime and errors.
-Python callable stand-ins remain supported; a JS callable transport needs separate
-design. Pause, active revision and cloud control remain separate contracts.
+Pause, active revision and cloud control remain separate contracts.

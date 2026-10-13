@@ -1,0 +1,47 @@
+# Paid calls a TypeScript body makes through the engine (ctx.imageGenerate, ctx.imageEdit,
+# ctx.structuredGenerate), answered by a TypeScript stand-in (`--stand-in stand_in.ts#answer`).
+# `paint` asks for a 64x64 opaque picture and returns the answer's file as its output; its
+# request is stand-in-image's, so its call key and the picture's digest are stand-in-image's.
+# `retouch` sends that picture (an InputFile it was given) and a swatch it makes with ctx.out.png
+# (stored with file.put) in an image.edit request; asked.json shows both as file values with
+# their refs' facts. `describe` sends the edit as context to structured.generate with a schema
+# written in place; the stand-in answers from the picture's facts, and report.json is the value.
+# The stand-in is asked three times (count.txt). runs/two, the same plan, is answered by the
+# stand-in store's result cache: nothing is asked, and every instance is a `hit`
+# (project-two.json); the project's own store holds no file. runs/three, without a stand-in,
+# misses and refuses the paid call without --live (exit 1).
+steps:
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, --stand-in, "stand_in.ts#answer"]
+  mentions:
+  - "stand-in  stand_in.ts#answer"
+  - "result    ok   spent $0.00"
+- read: count.txt
+  save: count.txt
+- read: asked.json
+  save: asked.json
+  json: true
+- argv: [project, runs/one]
+  save: project-one.json
+  json: true
+- read: runs/one/outputs/report.json
+  save: report.json
+- argv: [run, case, --routes, routes.yaml, --run, runs/two, --stand-in, "stand_in.ts#answer"]
+  mentions:
+  - "cached    1 of 1 known steps"
+  - "result    ok   spent $0.00"
+  absent:
+  - .fx/cache/files
+  - .fx/cache/results
+  - .fx/cache/calls
+- read: count.txt
+  save: count.txt
+- argv: [project, runs/two]
+  save: project-two.json
+  json: true
+- read: runs/two/outputs/report.json
+  save: report.json
+- argv: [run, case, --routes, routes.yaml, --run, runs/three]
+  status: 1
+  mentions:
+  - "failed    paint#1: image.generate on img-a@acme is a paid call; run with --live"
+  - "failed    retouch#1: something it reads failed"

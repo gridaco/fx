@@ -1,0 +1,35 @@
+{
+ "estimate": {
+  "ceiling_usd": null,
+  "high_usd": 0,
+  "low_usd": 0
+ },
+ "instances": [],
+ "kind": "fx-graph-v1",
+ "pending": [],
+ "problems": [
+  {
+   "message": "./nodes/card.tsx#card: no node host for .tsx modules",
+   "where": "card"
+  },
+  {
+   "message": "./nodes/common.cts#common: no node host for .cts modules",
+   "where": "common"
+  },
+  {
+   "message": "./nodes/common.cjs#common: no node host for .cjs modules",
+   "where": "script"
+  },
+  {
+   "message": "legacy/old.js failed to import: legacy/old.js is not an ES module: set \"type\": \"module\" in package.json",
+   "where": "old"
+  }
+ ],
+ "scopes": [],
+ "types": {},
+ "workflow": {
+  "file": "workflows/case.yaml",
+  "id": "case",
+  "title": "Modules no node host runs"
+ }
+}

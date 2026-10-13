@@ -19,9 +19,11 @@ python -m grida.fx init
 fx: project/v1
 ```
 
-Keep workflows in `workflows/` and custom Python nodes in `nodes/`. This gives
-local paths a consistent project home. The greeting example below is a small
-end-to-end check after installing FX and its Python runtime.
+Keep workflows in `workflows/` and custom nodes in `nodes/`, written in Python or
+TypeScript; follow the language the project already uses, and keep to one unless
+it already mixes them. This gives local paths a consistent project home. The
+greeting examples below are small end-to-end checks after installing FX and the
+runtime of the nodes' language.
 
 For browser inspection, FX 0.2 and later use `start --background` once per project,
 then `plan --open`, `run --open`, and `inspect --open`. Older releases can use `view TARGET` or `view --run DIR` with
@@ -36,7 +38,8 @@ the browser flags their help advertises; do not silently switch to a source buil
   file paths inside it are relative to that input file. Direct input flags use
   kebab-case names and paths relative to the command's working directory.
 - `uses: fx/image.resize@1` names a built-in, `uses: ./nodes/greet.py#greet` a
-  Python node export, and `uses: ./workflows/child.yaml` an imported workflow.
+  Python node export, `uses: ./nodes/greet.ts#greet` a TypeScript one, and
+  `uses: ./workflows/child.yaml` an imported workflow.
   Import paths refer to local files, not remote workflow packages.
 - Paths starting `./` or `../` in a workflow resolve from its home: the nearest
   enclosing `fx.yaml` directory, or the workflow directory when none exists.
@@ -116,9 +119,10 @@ write artifacts through `ctx.out`; return every required output. Helpers can use
 of unrelated side effects.
 
 For paid work, use FX capabilities such as `ctx.image_generate` or
-`ctx.capability`, with declared `calls`. Do not implement your own provider retry,
-cache, billing, or provenance layer. Direct HTTP calls escape FX's pricing and
-spending controls. Read the [node guide](https://github.com/gridaco/fx/blob/main/docs/guide/03-nodes.md)
+`ctx.capability` (`ctx.imageGenerate` in TypeScript), with declared `calls`. Do
+not implement your own provider retry, cache, billing, or provenance layer.
+Direct HTTP calls escape FX's pricing and spending controls. Read the
+[node guide](https://github.com/gridaco/fx/blob/main/docs/guide/03-nodes.md)
 before introducing a capability or judge.
 
 **Cache limitation of older engines, including the 0.1.0 release:** distinct
@@ -130,6 +134,77 @@ On an affected engine, put distinct unversioned node bodies in separate files, o
 declare node versions and maintain `fx.lock` (bump a version when behavior
 changes; use `lock --same` only when it does not). Changing step names or run
 folders does not avoid it.
+
+## Custom TypeScript nodes
+
+Node 24 or later is required to host them (Bun and Deno cannot), with `@grida/fx`
+installed in the project:
+
+```sh
+npm install @grida/fx
+npm install --save-dev typescript @types/node
+```
+
+The project's `package.json` sets `"type": "module"`. For type checking, a
+`tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "module": "nodenext",
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true
+  }
+}
+```
+
+In `nodes/greet.ts`:
+
+```ts
+import { node } from "@grida/fx";
+
+export const greet = node(
+  { name: "greet", params: { name: "string" }, outputs: { text: "text/plain" } },
+  (ctx) => ({ text: ctx.out.text(`Hello, ${ctx.params.name}!\n`) }),
+);
+```
+
+Use it from the greeting workflow above with `uses: ./nodes/greet.ts#greet` in
+place of the Python export. The same commands plan and run it, with `grida fx` in
+place of `python -m grida.fx`:
+`grida fx plan workflows/greeting.yaml --name Ada --check`. Check types with
+`npx tsc`; FX itself never type checks.
+
+Node runs these files with its type stripping, so keep to its dialect:
+- erasable syntax only: no `enum`, `namespace` or parameter properties;
+- imports name the `.ts` file (`./helper.ts`), and `import type` brings types;
+- `#` subpath imports (package.json `imports`) replace tsconfig `paths`;
+- node modules are `.ts`, `.mts`, `.js` or `.mjs`; `.tsx`, `.cts` and `.cjs` are refused.
+
+Declarations type the body: one input file is an `InputFile`, `kind[]` a readonly
+array, `kind{}` a `ReadonlyMap` (keep its order; never convert it to a plain
+object), params get their declared types, and the body must return exactly the
+declared outputs. Before the body runs, FX checks each param's value against its
+declaration and fails the node with the first that does not fit
+(`param side: "up" is not one of ["left","right"]`); a `null` for an optional
+param leaves it out. `ctx.read` has `bytes`, `text` and `json`, with no image
+decoding; `ctx.out.png` takes encoded PNG bytes; `ctx.signal` aborts when FX stops
+the node, and kills the programs `ctx.tool(name).run` started, as `timeoutS` and
+the end of the run do. An object member that is `undefined` is left out of what is
+sent, as `JSON.stringify` leaves it out; `undefined` in an array is refused. Agent
+tools are `tool({ name, description, parameters }, handler)`, with `parameters` a
+JSON Schema. Import everything a body uses with literal paths (`import … from
+"../lib/x.ts"`, or `await import("../lib/x.ts")` in the body), which count toward
+the node's identity whether or not they run. Spell each as on disk, case included:
+a misspelled path fails the module, or the body that loads it. A project file a
+body loads by a path it computes, outside its module's closure, fails the node,
+since its edits would not change the node's identity. List files that a package,
+a worker thread or a child process loads under `resources`. The built-in local
+types (`image.resize`, `files.copy`, `package`, …) still need Python with
+`grida`, even in a TypeScript project.
 
 ## Python builders and execution
 
@@ -178,11 +253,39 @@ result.deliver({"text": "out/greeting.txt"})
 `--arg`/`arguments`; workflow inputs use input flags/`inputs`. Preserve this
 distinction. Async callers use `plan_async` and `run_async`.
 
-## JavaScript and TypeScript
+## TypeScript builders
 
-Install `@grida/fx` in the project (`npm install @grida/fx`). Use `workflow`, `expr`, and `toYaml` to
-author a workflow, then write its YAML and give that path to the engine. This
-example reuses `nodes/greet.py` above, so it also needs the Python runtime:
+A TypeScript builder is an exported function, sync or async, that returns
+`workflow(…)`'s document; it is invoked through `file.ts:function` (`.mts`, `.js`
+and `.mjs` files too). Its `--arg` values arrive as one object of strings. For the
+same project and `nodes/greet.ts`, create `assets.ts`:
+
+```ts
+import { expr, workflow } from "@grida/fx";
+
+export function build(args: { name?: string }) {
+  return workflow({
+    id: "greeting-built",
+    title: "Greeting from a builder",
+    steps: { greet: { uses: "./nodes/greet.ts#greet", with: { name: args.name ?? "world" } } },
+    outputs: { text: expr("steps.greet.outputs.text") },
+  });
+}
+```
+
+```sh
+grida fx plan assets.ts:build --arg name=Ada --check
+grida fx run assets.ts:build --arg name=Ada --run runs/greeting-built
+```
+
+Its takes file is written beside `assets.ts`.
+
+## JavaScript and TypeScript SDK
+
+Install `@grida/fx` in the project (`npm install @grida/fx`; the SDK itself runs
+on Node 18 or later). Use `workflow`, `expr`, and `toYaml` to author a workflow,
+then write its YAML and give that path to the engine, or name a builder as the
+target. This example reuses `nodes/greet.ts` above, so it needs Node 24 or later:
 
 ```javascript
 import { writeFile } from "node:fs/promises";
@@ -194,7 +297,7 @@ const document = workflow({
   inputs: { name: { type: "string", default: "world" } },
   steps: {
     greet: {
-      uses: "./nodes/greet.py#greet",
+      uses: "./nodes/greet.ts#greet",
       with: { name: expr("inputs.name") },
     },
   },
@@ -210,8 +313,10 @@ if (!result.ok) throw new Error(JSON.stringify(result.failed));
 ```
 
 SDK runtime options use JavaScript names (`maxUsd`, `runDir`, `inputFiles`, builder
-`args`); workflow documents retain contract names. Custom TypeScript node bodies
-and direct JavaScript builder hosting are not implemented. Do not infer a graph
+`args`, `standIn`); workflow documents retain contract names. A builder target is
+`plan("assets.ts:build", { args: { name: "Ada" } })`. `run(target, { standIn })`
+answers paid calls with a function in the caller's process, offline; a stand-in
+file for the command is `--stand-in tests/stand-in.ts#answer`. Do not infer a graph
 by executing an arbitrary script as though it were a supported builder.
 
 The [Python SDK reference](https://github.com/gridaco/fx/blob/main/python/README.md)

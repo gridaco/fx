@@ -14,7 +14,7 @@ use grida_fx_providers::{Adapter, Adapters, Answer, BoxFuture, CallRequest, Requ
 use grida_fx_runtime::engine::Engine;
 use grida_fx_runtime::events::read_events_tolerant;
 use grida_fx_runtime::folder::RunFolder;
-use grida_fx_runtime::host::PythonHost;
+use grida_fx_runtime::host::LanguageHost;
 use grida_fx_runtime::host::process::HostSpec;
 use grida_fx_runtime::plantime::PlanTime;
 use grida_fx_runtime::runner::{RunError, RunOptions, RunOutcome, run};
@@ -337,7 +337,7 @@ fn run_in(
         max_usd: invocation.max_usd.map(|text| Usd::parse(text).unwrap()),
         ..PlanRequest::default()
     };
-    let mut host = PythonHost::new().with_python(python.clone());
+    let mut host = LanguageHost::python().with_program(python.clone());
     let mut planner = make_planner(&request, &mut host).unwrap();
     let mut adapters = Adapters::new();
     if let Some(adapter) = invocation.adapter {
@@ -349,13 +349,13 @@ fn run_in(
     };
     let engine = Engine::new(
         runtime.handle().clone(),
-        HostSpec {
-            python: python.clone(),
-            label: python.display().to_string(),
-            project_root: planner.home.root.clone(),
-            sources: planner.home.document.sources.clone(),
-            check_version: false,
-        },
+        HostSpec::python(
+            python.clone(),
+            python.display().to_string(),
+            planner.home.root.clone(),
+            planner.home.document.sources.clone(),
+        )
+        .unchecked(),
         &store,
         2,
         adapters,

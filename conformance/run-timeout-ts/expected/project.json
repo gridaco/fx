@@ -1,0 +1,48 @@
+{
+ "instances": {
+  "nap#1": {
+   "error": "ran past 1 seconds",
+   "path": "nap",
+   "state": "failed"
+  },
+  "watch#1": {
+   "error": "ran past 1 seconds",
+   "path": "watch",
+   "state": "failed"
+  }
+ },
+ "run": {
+  "run_finished": {
+   "charged_usd": 0,
+   "event": "run_finished",
+   "failed": [
+    "nap#1",
+    "watch#1"
+   ],
+   "incomplete": false,
+   "ok": false,
+   "outputs": {},
+   "plan": "cd398960ec6a953e906ddbe74c7264d83bd45dc58a6e5dc5ad292aae3123f5fe",
+   "stopped": null
+  },
+  "run_started": {
+   "ceiling_usd": null,
+   "charged_usd": 0,
+   "estimate": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "event": "run_started",
+   "plan": "cd398960ec6a953e906ddbe74c7264d83bd45dc58a6e5dc5ad292aae3123f5fe",
+   "repeat": {
+    "live": false,
+    "routes": [
+     "routes.yaml"
+    ],
+    "workflow": "case"
+   },
+   "resumed": false,
+   "workflow": "case"
+  }
+ }
+}

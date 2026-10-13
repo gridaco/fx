@@ -1,0 +1,123 @@
+[
+ {
+  "bindings": [],
+  "code": "node_failure",
+  "error": "the body loaded lib/late.ts at run time, outside its source closure: import it statically",
+  "event": "node_failed",
+  "facts": {},
+  "id": "lazy#1",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "lazy",
+  "plan": "0308245324d6d08e60e695bef354fc906087f1a9654fa87a9416a607beb46533",
+  "ports": {
+   "inputs": {},
+   "outputs": {
+    "text": "text"
+   },
+   "params": {
+    "name": {
+     "type": "string"
+    }
+   }
+  },
+  "reads": [],
+  "uses": "./nodes/late.ts#late"
+ },
+ {
+  "bindings": [],
+  "event": "node_started",
+  "id": "lazy#1",
+  "identity": "cff7e8aa6402b323d9a52ec587ccee5eae422c66e623dd541ebcc6992b558beb",
+  "judges": null,
+  "kind": "fx-run-events-v1",
+  "needs": [],
+  "path": "lazy",
+  "plan": "0308245324d6d08e60e695bef354fc906087f1a9654fa87a9416a607beb46533",
+  "ports": {
+   "inputs": {},
+   "outputs": {
+    "text": "text"
+   },
+   "params": {
+    "name": {
+     "type": "string"
+    }
+   }
+  },
+  "reads": [],
+  "routes": {},
+  "step": "lazy",
+  "take": [
+   1
+  ],
+  "uses": "./nodes/late.ts#late",
+  "with": {
+   "name": {
+    "value": "late"
+   }
+  }
+ },
+ {
+  "ceiling_usd": null,
+  "charged_usd": 0,
+  "estimate": {
+   "high_usd": 0,
+   "low_usd": 0
+  },
+  "event": "run_started",
+  "kind": "fx-run-events-v1",
+  "plan": "0308245324d6d08e60e695bef354fc906087f1a9654fa87a9416a607beb46533",
+  "repeat": {
+   "live": false,
+   "routes": [
+    "routes.yaml"
+   ],
+   "workflow": "late"
+  },
+  "resumed": false,
+  "workflow": "late"
+ },
+ {
+  "charged_usd": 0,
+  "event": "run_finished",
+  "failed": [
+   "lazy#1"
+  ],
+  "incomplete": false,
+  "kind": "fx-run-events-v1",
+  "ok": false,
+  "outputs": {},
+  "plan": "0308245324d6d08e60e695bef354fc906087f1a9654fa87a9416a607beb46533",
+  "stopped": null
+ },
+ {
+  "event": "phase_planned",
+  "high_usd": 0,
+  "kind": "fx-run-events-v1",
+  "phase": 1,
+  "plan": "0308245324d6d08e60e695bef354fc906087f1a9654fa87a9416a607beb46533",
+  "steps": 1
+ },
+ {
+  "event": "scopes_updated",
+  "instances": [
+   {
+    "id": "lazy#1",
+    "key": null,
+    "step": "lazy",
+    "take": [
+     1
+    ]
+   }
+  ],
+  "kind": "fx-run-events-v1",
+  "node_interface_bindings": {
+   "lazy#1": []
+  },
+  "pending": [],
+  "plan": "0308245324d6d08e60e695bef354fc906087f1a9654fa87a9416a607beb46533",
+  "scopes": []
+ }
+]

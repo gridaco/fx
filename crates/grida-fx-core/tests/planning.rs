@@ -319,6 +319,9 @@ fn type_source_serves_lock() {
 fn uses_that_resolve_to_nothing_are_problems() {
     let (fixture, mut host) = local_project();
     fixture.write("nodes/n.ts", "export {}\n");
+    fixture.write("nodes/n.cjs", "module.exports = {}\n");
+    fixture.write("nodes/n.rb", "x\n");
+    fixture.write("nodes/types.d.ts", "export {}\n");
     fixture.write("nodes/plain", "x\n");
     fixture.write("nodes/broken.py", "import not_a_module\n");
     std::fs::write(fixture.root.parent().unwrap().join("outside.py"), "x = 1\n").unwrap();
@@ -329,9 +332,22 @@ fn uses_that_resolve_to_nothing_are_problems() {
             "./nodes/missing.py#x: no file missing.py",
         ),
         ("../outside.py#x", "outside.py is outside the project"),
+        // A TypeScript module goes to the host, which (here) cannot load it.
         (
             "./nodes/n.ts#x",
-            "./nodes/n.ts#x: no node host for .ts modules yet",
+            "nodes/n.ts failed to import: ModuleNotFoundError: No module named 'nodes/n.ts'",
+        ),
+        (
+            "./nodes/n.cjs#x",
+            "./nodes/n.cjs#x: no node host for .cjs modules",
+        ),
+        (
+            "./nodes/types.d.ts#x",
+            "./nodes/types.d.ts#x: no node host for .d.ts modules",
+        ),
+        (
+            "./nodes/n.rb#x",
+            "./nodes/n.rb#x: no node host for .rb modules yet",
         ),
         (
             "./nodes/plain#x",
@@ -369,6 +385,51 @@ fn uses_that_resolve_to_nothing_are_problems() {
     for (uses, want) in cases {
         assert_eq!(problem(registry.node_type(uses, &mut host)), want, "{uses}");
     }
+}
+
+#[test]
+fn a_typescript_module_resolves_like_a_python_one() {
+    let fixture = Fixture::new();
+    fixture.write("nodes/shapes.ts", "export const echo = node({});\n");
+    fixture.write("lib/png.ts", "export {};\n");
+    let mut host = FakeHost::new().with_module(described(
+        "nodes/shapes.ts",
+        vec![("echo", type_spec("echo", None, &[]))],
+        fixture.closure(&["lib/png.ts", "nodes/shapes.ts"]),
+    ));
+    let mut registry = fixture.registry();
+    let Ok(Resolved::Node(resolved)) = registry.node_type("./nodes/shapes.ts#echo", &mut host)
+    else {
+        panic!("a node type")
+    };
+    assert_eq!(
+        resolved.origin,
+        TypeOrigin::Project {
+            path: "nodes/shapes.ts".into(),
+            attribute: "echo".into()
+        }
+    );
+    assert_eq!(resolved.body, BodyKind::Project);
+    assert!(
+        resolved
+            .identity
+            .starts_with("nodes/shapes.ts#echo@source:"),
+        "{}",
+        resolved.identity
+    );
+    // The engine's own sentence for a missing export is the TypeScript one.
+    assert_eq!(
+        problem(registry.node_type("./nodes/shapes.ts#shout", &mut host)),
+        "./nodes/shapes.ts#shout: shout is not an export declared with node()"
+    );
+    let module = registry
+        .describe_module("nodes/shapes.ts", &mut host)
+        .unwrap();
+    assert_eq!(
+        registry.type_source(&module, "shout").unwrap_err(),
+        "nodes/shapes.ts: shout is not an export declared with node()"
+    );
+    assert_eq!(host.describe_calls, 1);
 }
 
 #[cfg(unix)]
@@ -553,6 +614,27 @@ fn lock_without_node_modules_starts_no_host() {
     );
     assert_eq!(report.status, 0);
     assert_eq!(host.describe_calls, 0);
+}
+
+#[test]
+fn lock_describes_the_modules_of_both_languages_in_one_call() {
+    let (fixture, host) = local_project();
+    fixture.write("nodes/shapes.ts", "export const ring = node({});\n");
+    fixture.write("nodes/types.d.ts", "export {};\n");
+    fixture.write("nodes/node_modules/dep/index.js", "export {};\n");
+    let mut host = host.with_module(described(
+        "nodes/shapes.ts",
+        vec![("ring", type_spec("ring", Some(1), &[]))],
+        fixture.closure(&["nodes/shapes.ts"]),
+    ));
+    let written = lock(&fixture.project(), &[], false, &mut host).unwrap();
+    assert_eq!(written.lines, ["fx.lock: 2 versioned node types"]);
+    assert_eq!(host.describe_calls, 1);
+    let nodes = written.write.unwrap().nodes;
+    assert_eq!(
+        nodes.keys().map(String::as_str).collect::<Vec<_>>(),
+        ["nodes/n.py#pinned@2", "nodes/shapes.ts#ring@1"]
+    );
 }
 
 #[test]
@@ -1349,6 +1431,59 @@ fn integrated_a_builder_builds_through_the_host() {
 }
 
 #[test]
+fn integrated_a_typescript_builder_builds_through_the_host() {
+    let fixture = Fixture::new();
+    fixture.write("fx.yaml", "fx: project/v1\n");
+    fixture.write("workflows/build.ts", "export function build() {}\n");
+    let document = json!({
+        "fx": "workflow/v1",
+        "id": "levels",
+        "title": "Levels",
+        "steps": {"a": {"uses": "fx/select@1", "with": {"first_of": [1]}}},
+    });
+    let mut host = FakeHost::new();
+    host.builds.insert(
+        "workflows/build.ts:build".into(),
+        Ok(BuildResult {
+            document: document.clone(),
+            // A TypeScript builder's anchor is its own path.
+            takes_anchor: "workflows/build.ts".into(),
+        }),
+    );
+    let planner = make_planner(&request(&fixture, "workflows/build.ts:build"), &mut host).unwrap();
+    assert_eq!(host.build_calls, 1);
+    assert_eq!(planner.workflow.source, "workflows/build.ts:build");
+    assert_eq!(
+        planner.takes_path,
+        fixture.root.join("workflows/levels.takes.yaml")
+    );
+    // A builder file no node host takes is refused before any host is asked.
+    for (target, refusal) in [
+        ("workflows/build.cjs:build", "no node host for .cjs modules"),
+        ("workflows/build.tsx:build", "no node host for .tsx modules"),
+        (
+            "workflows/types.d.ts:build",
+            "no node host for .d.ts modules",
+        ),
+    ] {
+        let file = target.rsplit_once(':').unwrap().0;
+        fixture.write(file, "export {}\n");
+        let error = make_planner(&request(&fixture, target), &mut host).unwrap_err();
+        assert_eq!(
+            (error.kind, error.message),
+            (ErrorKind::Plan, format!("{target}: {refusal}"))
+        );
+    }
+    assert_eq!(host.build_calls, 1);
+    // Input flags are refused before anything, as for a Python builder.
+    let mut asked = request(&fixture, "workflows/build.ts:build");
+    asked.rest = vec!["--count".into(), "3".into()];
+    let error = make_planner(&asked, &mut host).unwrap_err();
+    assert_eq!(error.kind, ErrorKind::Usage);
+    assert_eq!(host.build_calls, 1);
+}
+
+#[test]
 fn integrated_a_workflow_found_by_id_plans_from_its_home() {
     let fixture = Fixture::new();
     fixture.write(
@@ -1913,6 +2048,24 @@ fn targets_parse() {
             file: "b.py".into(),
             function: "build".into()
         }
+    );
+    assert_eq!(
+        Target::parse("workflows/build.ts:build"),
+        Target::Builder {
+            file: "workflows/build.ts".into(),
+            function: "build".into()
+        }
+    );
+    assert_eq!(
+        Target::parse("b.mjs:build"),
+        Target::Builder {
+            file: "b.mjs".into(),
+            function: "build".into()
+        }
+    );
+    assert_eq!(
+        Target::parse("b.ts:bad-name"),
+        Target::Workflow("b.ts:bad-name".into())
     );
     assert_eq!(Target::parse("case"), Target::Workflow("case".into()));
 }

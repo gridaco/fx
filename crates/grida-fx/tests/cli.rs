@@ -2,9 +2,11 @@
 //!
 //! Tests whose name starts with `integrated_` plan, describe, lock or run a real project, so they
 //! hold the whole engine (documents, inputs, routes, expansion, planning, running) to the command
-//! line; the others pin the command line itself. No test needs Python: the projects here have no
-//! node modules, except the end-to-end runs of conformance projects, which skip without a Python
-//! that has the `grida` package (`GRIDA_FX_PYTHON`, else `python/.venv/bin/python`).
+//! line; the others pin the command line itself. No test needs the `grida` package or Node: the
+//! projects here have no node modules, or programs of their own (shell scripts, and stdlib Python
+//! fakes that skip without `python3`) answer as an interpreter or a Node, except the end-to-end
+//! runs of conformance projects, which skip without a Python that has the `grida` package
+//! (`GRIDA_FX_PYTHON`, else `python/.venv/bin/python`).
 
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
@@ -331,15 +333,22 @@ fn integrated_doctor_without_a_target() {
     assert_eq!(status(&output), 0, "{}", stderr(&output));
     let text = stdout(&output);
     let lines: Vec<&str> = text.lines().collect();
-    // engine, python, a key per provider, a route per built-in route.
-    assert_eq!(lines.len(), 2 + 6 + 27, "{text}");
+    // engine, python, node, a key per provider, a route per built-in route.
+    assert_eq!(lines.len(), 3 + 6 + 27, "{text}");
     assert_eq!(
         lines[0],
         format!("engine    grida-fx {}", env!("CARGO_PKG_VERSION"))
     );
     assert!(lines[1].starts_with("python    "), "{text}");
+    // What this machine's Node says; never a private path. A project without a package.json
+    // starts no TypeScript host.
+    assert!(lines[2].starts_with("node      "), "{text}");
+    assert!(
+        !lines[2].contains("@grida/fx") && !lines[2].contains("cannot start"),
+        "{text}"
+    );
     assert_eq!(
-        lines[2..8],
+        lines[3..9],
         [
             "key       GG_API_KEY missing",
             "key       OPENAI_API_KEY missing",
@@ -349,7 +358,7 @@ fn integrated_doctor_without_a_target() {
             "key       ELEVENLABS_API_KEY missing",
         ]
     );
-    let routes = &lines[8..];
+    let routes = &lines[9..];
     assert!(routes.iter().all(|l| l.starts_with("route     ")), "{text}");
     let codex = [
         "route     image.edit imagegen@codex not installed (codex)",
@@ -434,7 +443,7 @@ fn integrated_doctor_lists_the_projects_routes() {
             // The target's one route leads, and no adapter serves it: a live run could not.
             assert_eq!(status(&output), 1, "{argv:?}: {}", stderr(&output));
             assert_eq!(
-                text.lines().nth(2),
+                text.lines().nth(3),
                 Some("uses      image.generate img-a@acme no adapter (1 step)"),
                 "{text}"
             );
@@ -492,7 +501,7 @@ fn integrated_doctor_names_the_planning_projects_interpreter_after_the_homes() {
         "{text}"
     );
     assert_eq!(
-        text.lines().nth(2),
+        text.lines().nth(3),
         Some("uses      image.generate img-a@acme not in the catalog (1 step)"),
         "{text}"
     );
@@ -548,14 +557,14 @@ fn integrated_doctor_puts_the_targets_routes_first() {
     let text = stdout(&output);
     let lines: Vec<&str> = text.lines().collect();
     assert_eq!(
-        lines[2..4],
+        lines[3..5],
         [
             "uses      image.generate imagegen@codex not installed (codex) (3 steps)",
             "uses      image.generate openai/gpt-image-2.5-sunburst@gg servable (1 step)",
         ],
         "{text}"
     );
-    assert!(lines[4].starts_with("key       "), "{text}");
+    assert!(lines[5].starts_with("key       "), "{text}");
     // The full catalog still follows.
     assert!(
         text.contains("\nroute     image.generate imagegen@codex not installed (codex)\n"),
@@ -567,7 +576,7 @@ fn integrated_doctor_puts_the_targets_routes_first() {
     let output = doctor(&codex);
     assert_eq!(status(&output), 0, "{}", stderr(&output));
     assert_eq!(
-        stdout(&output).lines().nth(2),
+        stdout(&output).lines().nth(3),
         Some("uses      image.generate imagegen@codex servable (3 steps)")
     );
 }
@@ -649,6 +658,404 @@ fn integrated_doctor_says_when_the_interpreter_has_no_grida() {
         stdout(&output).lines().nth(1),
         Some("python    no-such-python NOT FOUND")
     );
+}
+
+/// A project whose workflow uses a TypeScript node (with a `package.json`), and a Node at `node`
+/// that answers the version check with `answer` and otherwise prints usage text and exits 2,
+/// leaving `started.txt` behind. With `sdk`, the project has `@grida/fx` with its host program.
+fn node_project(answer: &str, sdk: bool) -> (tempfile::TempDir, PathBuf) {
+    let project = tempfile::tempdir().unwrap();
+    let root = project.path();
+    std::fs::write(root.join("fx.yaml"), "fx: project/v1\n").unwrap();
+    std::fs::write(root.join("package.json"), "{\"type\": \"module\"}\n").unwrap();
+    std::fs::create_dir(root.join("nodes")).unwrap();
+    std::fs::write(root.join("nodes/shout.ts"), "").unwrap();
+    std::fs::write(
+        root.join("case.yaml"),
+        "fx: workflow/v1\nid: case\ntitle: Case\nsteps:\n  shout:\n    uses: \
+         ./nodes/shout.ts#shout\n",
+    )
+    .unwrap();
+    if sdk {
+        install_sdk(root, true);
+    }
+    let node = root.join("old-node");
+    grida_fx_providers::testing::write_program(
+        &node,
+        &format!(
+            "#!/bin/sh\nif [ \"$1\" = -e ]; then echo '{answer}'; exit 0; fi\necho 'bad option' \
+             >&2\ntouch \"$(dirname \"$0\")/started.txt\"\nexit 2\n"
+        ),
+    );
+    (project, node)
+}
+
+/// Writes `@grida/fx` into `folder/node_modules`, with its host program when `entry`.
+fn install_sdk(folder: &Path, entry: bool) {
+    let package = folder.join("node_modules/@grida/fx");
+    std::fs::create_dir_all(package.join("dist")).unwrap();
+    std::fs::write(package.join("package.json"), "{\"name\": \"@grida/fx\"}").unwrap();
+    if entry {
+        std::fs::write(package.join("dist/host-entry.js"), "").unwrap();
+    }
+}
+
+#[test]
+fn integrated_a_node_before_24_is_refused_before_it_starts() {
+    let (project, node) = node_project("fx-node 22.12.0 1", true);
+    let root = project.path();
+    let output = command(root, &["doctor"])
+        .env("GRIDA_FX_NODE", &node)
+        .output()
+        .unwrap();
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    assert_eq!(
+        stdout(&output).lines().nth(2),
+        // Inside the project, Node is named relative to it.
+        Some("node      old-node too old (22.12.0; FX needs 24+)")
+    );
+    assert!(stderr(&output).is_empty(), "{}", stderr(&output));
+    let output = command(root, &["plan", "case.yaml"])
+        .env("GRIDA_FX_NODE", &node)
+        .output()
+        .unwrap();
+    assert_eq!(status(&output), 2, "{}", stdout(&output));
+    assert_eq!(
+        stderr(&output),
+        "grida-fx: old-node is Node 22.12.0; FX's TypeScript node host needs Node 24 or later: \
+         install it, or set GRIDA_FX_NODE\n"
+    );
+    // A runtime without module.registerHooks (Bun, say) is refused too.
+    let (project, node) = node_project("fx-node 24.3.0 0", true);
+    let root = project.path();
+    let output = command(root, &["plan", "case.yaml"])
+        .env("GRIDA_FX_NODE", &node)
+        .output()
+        .unwrap();
+    assert_eq!(status(&output), 2, "{}", stdout(&output));
+    assert_eq!(
+        stderr(&output),
+        "grida-fx: old-node is not Node.js 24 or later with module.registerHooks; FX's \
+         TypeScript node host needs it: install Node 24 or later, or set GRIDA_FX_NODE\n"
+    );
+    let output = command(root, &["doctor"])
+        .env("GRIDA_FX_NODE", &node)
+        .output()
+        .unwrap();
+    assert_eq!(
+        stdout(&output).lines().nth(2),
+        Some("node      old-node not Node.js 24+")
+    );
+    assert!(!root.join("started.txt").exists(), "the host was started");
+}
+
+#[test]
+fn integrated_doctor_says_why_node_cannot_host() {
+    // No @grida/fx anywhere.
+    let (project, node) = node_project("fx-node 24.14.0 1", false);
+    let root = project.path();
+    let doctor = |node: &Path| {
+        let output = command(root, &["doctor"])
+            .env("GRIDA_FX_NODE", node)
+            .output()
+            .unwrap();
+        assert_eq!(status(&output), 0, "{}", stderr(&output));
+        stdout(&output)
+            .lines()
+            .nth(2)
+            .unwrap_or_default()
+            .to_string()
+    };
+    assert_eq!(doctor(&node), "node      old-node no @grida/fx");
+    let output = command(root, &["plan", "case.yaml"])
+        .env("GRIDA_FX_NODE", &node)
+        .output()
+        .unwrap();
+    assert_eq!(status(&output), 2, "{}", stdout(&output));
+    assert_eq!(
+        stderr(&output),
+        "grida-fx: no @grida/fx for the TypeScript node host: run npm install @grida/fx in the \
+         project\n"
+    );
+    // A program that does not exist is NOT FOUND.
+    assert_eq!(
+        doctor(&root.join("no-such-node")),
+        "node      no-such-node NOT FOUND"
+    );
+    // A @grida/fx too old to host.
+    install_sdk(root, false);
+    assert_eq!(
+        doctor(&node),
+        "node      old-node cannot start: the project's @grida/fx has no TypeScript node host: \
+         upgrade @grida/fx in the project"
+    );
+    // The host program is there, but this Node cannot run it.
+    install_sdk(root, true);
+    assert_eq!(
+        doctor(&node),
+        "node      old-node cannot start: the TypeScript node host (old-node) exited with status \
+         2 before it answered initialize; set GRIDA_FX_NODE to Node 24 or later"
+    );
+    assert!(root.join("started.txt").exists());
+}
+
+#[test]
+fn integrated_doctor_starts_no_typescript_host_without_a_package_json() {
+    // A project with no package.json, below a folder whose node_modules holds a @grida/fx: its
+    // host program is never started, and the line says what Node answered.
+    let (project, node) = node_project("fx-node 24.14.0 1", false);
+    let base = project.path();
+    install_sdk(base, true);
+    let root = base.join("acme");
+    std::fs::create_dir(&root).unwrap();
+    std::fs::write(root.join("fx.yaml"), "fx: project/v1\n").unwrap();
+    let doctor = |node: &Path, args: &[&str]| {
+        let output = command(&root, args)
+            .env("GRIDA_FX_NODE", node)
+            .output()
+            .unwrap();
+        assert_eq!(status(&output), 0, "{}", stderr(&output));
+        stdout(&output)
+            .lines()
+            .nth(2)
+            .unwrap_or_default()
+            .to_string()
+    };
+    assert_eq!(
+        doctor(&node, &["doctor"]),
+        format!("node      {} (Node 24.14.0)", node.display())
+    );
+    assert!(!base.join("started.txt").exists(), "the host was started");
+    // With a target too.
+    std::fs::write(
+        root.join("case.yaml"),
+        "fx: workflow/v1\nid: case\ntitle: Case\nsteps:\n  draw:\n    uses: fx/image.generate@1\n    \
+         with: { prompt: a kite }\n",
+    )
+    .unwrap();
+    let output = command(&root, &["doctor", "case.yaml"])
+        .env("GRIDA_FX_NODE", &node)
+        .output()
+        .unwrap();
+    assert_eq!(
+        stdout(&output).lines().nth(2),
+        Some(format!("node      {} (Node 24.14.0)", node.display()).as_str()),
+        "{}",
+        stderr(&output)
+    );
+    assert!(!base.join("started.txt").exists(), "the host was started");
+    // A Node that gives no answer is named alone; one that cannot host still says why.
+    let odd = base.join("odd-node");
+    grida_fx_providers::testing::write_program(&odd, "#!/bin/sh\necho hello\n");
+    assert_eq!(
+        doctor(&odd, &["doctor"]),
+        format!("node      {}", odd.display())
+    );
+    let (_old, old_node) = node_project("fx-node 22.12.0 1", false);
+    assert_eq!(
+        doctor(&old_node, &["doctor"]),
+        format!(
+            "node      {} too old (22.12.0; FX needs 24+)",
+            old_node.display()
+        )
+    );
+    // With a package.json, the host starts.
+    std::fs::write(root.join("package.json"), "{}\n").unwrap();
+    assert_eq!(
+        doctor(&node, &["doctor"]),
+        format!(
+            "node      {} cannot start: the TypeScript node host ({}) exited with status 2 \
+             before it answered initialize; set GRIDA_FX_NODE to Node 24 or later",
+            node.display(),
+            node.display()
+        )
+    );
+    assert!(base.join("started.txt").exists());
+}
+
+/// A fake TypeScript host: answers `initialize` as `@grida/fx` 0.6.0 and `describe` with no
+/// modules, then takes `shutdown` and `exit`.
+const FAKE_TYPESCRIPT_HOST: &str = r#"
+import json, sys
+def read():
+    length = None
+    while True:
+        line = sys.stdin.buffer.readline()
+        if not line:
+            return None
+        if line == b"\r\n":
+            break
+        name, _, value = line.decode("ascii").partition(":")
+        if name.strip().lower() == "content-length":
+            length = int(value.strip())
+    return json.loads(sys.stdin.buffer.read(length))
+def write(message):
+    body = json.dumps(message).encode()
+    sys.stdout.buffer.write(b"Content-Length: %d\r\n\r\n" % len(body) + body)
+    sys.stdout.buffer.flush()
+while True:
+    message = read()
+    if message is None or message.get("method") == "exit":
+        sys.exit(0)
+    method = message.get("method")
+    if method == "initialize":
+        result = {"protocol": message["params"]["protocol"],
+                  "host": {"language": "typescript", "version": "24.14.0", "sdk_version": "0.6.0"}}
+    elif method == "describe":
+        result = {"modules": [], "builtins": []}
+    else:
+        result = None
+    write({"jsonrpc": "2.0", "id": message["id"], "result": result})
+"#;
+
+#[test]
+fn integrated_doctor_names_the_projects_grida_fx() {
+    let found = Command::new("python3")
+        .arg("--version")
+        .output()
+        .is_ok_and(|output| output.status.success());
+    if !found {
+        eprintln!("skipped: python3 is not on PATH");
+        return;
+    }
+    let (project, _) = node_project("fx-node 24.14.0 1", true);
+    let root = project.path();
+    std::fs::write(root.join("fake_host.py"), FAKE_TYPESCRIPT_HOST).unwrap();
+    let node = root.join("bin/node");
+    std::fs::create_dir_all(root.join("bin")).unwrap();
+    grida_fx_providers::testing::write_program(
+        &node,
+        "#!/bin/sh\nif [ \"$1\" = -e ]; then echo 'fx-node 24.14.0 1'; exit 0; fi\nexec python3 \
+         \"$(dirname \"$0\")/../fake_host.py\" \"$@\"\n",
+    );
+    let output = command(root, &["doctor"])
+        .env("GRIDA_FX_NODE", &node)
+        .output()
+        .unwrap();
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    assert_eq!(
+        stdout(&output).lines().nth(2),
+        Some("node      bin/node (@grida/fx 0.6.0)")
+    );
+    // The Node of the SDK that started the engine, when GRIDA_FX_NODE is not set.
+    let output = command(root, &["doctor"])
+        .env("GRIDA_FX_SDK_NODE", &node)
+        .output()
+        .unwrap();
+    assert_eq!(
+        stdout(&output).lines().nth(2),
+        Some("node      bin/node (@grida/fx 0.6.0)")
+    );
+}
+
+#[test]
+fn integrated_a_workflow_kept_outside_the_planning_project_finds_its_grida_fx() {
+    let found = Command::new("python3")
+        .arg("--version")
+        .output()
+        .is_ok_and(|output| output.status.success());
+    if !found {
+        eprintln!("skipped: python3 is not on PATH");
+        return;
+    }
+    // `app` plans; its workflows: folder lies in `shared`, the workflow's home, which has no
+    // @grida/fx of its own (gridaco/fx#68 decision 3: the home, then the planning project).
+    let dir = tempfile::tempdir().unwrap();
+    let base = dir.path().canonicalize().unwrap();
+    let app = base.join("app");
+    let shared = base.join("shared");
+    std::fs::create_dir_all(&app).unwrap();
+    std::fs::create_dir_all(shared.join("nodes")).unwrap();
+    std::fs::create_dir_all(shared.join("workflows")).unwrap();
+    std::fs::write(
+        app.join("fx.yaml"),
+        "fx: project/v1\nworkflows: [../shared/workflows]\n",
+    )
+    .unwrap();
+    std::fs::write(app.join("package.json"), "{\"type\": \"module\"}\n").unwrap();
+    install_sdk(&app, true);
+    std::fs::write(shared.join("fx.yaml"), "fx: project/v1\n").unwrap();
+    std::fs::write(shared.join("nodes/say.ts"), "").unwrap();
+    std::fs::write(
+        shared.join("workflows/hello.yaml"),
+        "fx: workflow/v1\nid: hello\ntitle: Hello\nsteps:\n  say:\n    uses: ./nodes/say.ts#say\n",
+    )
+    .unwrap();
+    std::fs::write(base.join("fake_host.py"), FAKE_TYPESCRIPT_HOST).unwrap();
+    let node = base.join("bin/node");
+    std::fs::create_dir_all(base.join("bin")).unwrap();
+    grida_fx_providers::testing::write_program(
+        &node,
+        "#!/bin/sh\nif [ \"$1\" = -e ]; then echo 'fx-node 24.14.0 1'; exit 0; fi\necho \"$@\" >> \
+         \"$(dirname \"$0\")/../argv.txt\"\nexec python3 \"$(dirname \"$0\")/../fake_host.py\" \"$@\"\n",
+    );
+    let output = command(&app, &["doctor", "hello"])
+        .env("GRIDA_FX_NODE", &node)
+        .output()
+        .unwrap();
+    assert_eq!(
+        stdout(&output).lines().nth(2),
+        Some(format!("node      {} (@grida/fx 0.6.0)", node.display()).as_str()),
+        "{}",
+        stderr(&output)
+    );
+    let entry = app.join("node_modules/@grida/fx/dist/host-entry.js");
+    let argv = std::fs::read_to_string(base.join("argv.txt")).unwrap();
+    assert_eq!(argv.lines().last(), Some(entry.to_str().unwrap()));
+    // Planning starts the same host program.
+    std::fs::remove_file(base.join("argv.txt")).unwrap();
+    let output = command(&app, &["plan", "hello"])
+        .env("GRIDA_FX_NODE", &node)
+        .output()
+        .unwrap();
+    assert!(
+        !stderr(&output).contains("no @grida/fx"),
+        "{}",
+        stderr(&output)
+    );
+    let argv = std::fs::read_to_string(base.join("argv.txt")).unwrap();
+    assert_eq!(argv.lines().last(), Some(entry.to_str().unwrap()));
+}
+
+#[test]
+fn integrated_a_typescript_stand_in_needs_a_node_host() {
+    let project = drawing_project(ROUTED);
+    let root = project.path();
+    std::fs::write(root.join("stand_in.ts"), "export function answer() {}\n").unwrap();
+    let argv = [
+        "run",
+        "case",
+        "--routes",
+        "routes.yaml",
+        "--stand-in",
+        "stand_in.ts#answer",
+    ];
+    let output = grida_fx(root, &argv);
+    assert_eq!(status(&output), 2, "{}", stdout(&output));
+    assert_eq!(
+        stderr(&output),
+        "grida-fx: the stand-in stand_in.ts#answer could not be loaded: no @grida/fx for the \
+         TypeScript node host: run npm install @grida/fx in the project\n"
+    );
+    // With @grida/fx, the stand-in host is Node: here one too old.
+    install_sdk(root, true);
+    let node = root.join("old-node");
+    grida_fx_providers::testing::write_program(
+        &node,
+        "#!/bin/sh\nif [ \"$1\" = -e ]; then echo 'fx-node 22.12.0 1'; exit 0; fi\nexit 2\n",
+    );
+    let output = command(root, &argv)
+        .env("GRIDA_FX_NODE", &node)
+        .output()
+        .unwrap();
+    assert_eq!(status(&output), 2, "{}", stdout(&output));
+    assert_eq!(
+        stderr(&output),
+        "grida-fx: the stand-in stand_in.ts#answer could not be loaded: old-node is Node \
+         22.12.0; FX's TypeScript node host needs Node 24 or later: install it, or set \
+         GRIDA_FX_NODE\n"
+    );
+    assert!(!root.join("runs").exists());
 }
 
 #[test]
@@ -770,12 +1177,12 @@ fn integrated_doctor_refuses_a_malformed_key_file() {
     assert_no_key(&output);
     let text = stdout(&output);
     let lines: Vec<&str> = text.lines().collect();
-    assert!(lines[2].starts_with("keys      .env"), "{text}");
-    assert!(lines[2].contains("FAL_KEY"), "{text}");
-    assert!(lines[2].contains("line 2"), "{text}");
+    assert!(lines[3].starts_with("keys      .env"), "{text}");
+    assert!(lines[3].contains("FAL_KEY"), "{text}");
+    assert!(lines[3].contains("line 2"), "{text}");
     // The rest is told from the process environment alone.
-    assert_eq!(lines[3], "key       GG_API_KEY missing", "{text}");
-    assert_eq!(lines[4], "key       OPENAI_API_KEY missing", "{text}");
+    assert_eq!(lines[4], "key       GG_API_KEY missing", "{text}");
+    assert_eq!(lines[5], "key       OPENAI_API_KEY missing", "{text}");
     assert!(
         text.contains("\nkey       TRIPO_API_KEY present (environment)\n"),
         "{text}"
@@ -2304,7 +2711,9 @@ fn run_refuses_a_stand_in_it_cannot_use_before_planning() {
     )
     .unwrap();
     std::fs::write(project.path().join("stand_in.txt"), "").unwrap();
-    let cases: [(&[&str], &str); 9] = [
+    std::fs::write(project.path().join("stand_in.cjs"), "").unwrap();
+    std::fs::write(project.path().join("types.d.ts"), "").unwrap();
+    let cases: [(&[&str], &str); 12] = [
         (
             &["--live", "--stand-in", "stand_in.py#answer"],
             "--stand-in cannot be used with --live",
@@ -2315,23 +2724,35 @@ fn run_refuses_a_stand_in_it_cannot_use_before_planning() {
         ),
         (
             &["--stand-in", "stand_in.py"],
-            "--stand-in takes <file>.py#<function>, or -",
+            "--stand-in takes <file>#<function> for a .py, .ts, .mts, .js or .mjs file, or -",
         ),
         (
             &["--stand-in", "stand_in.txt#answer"],
-            "--stand-in takes <file>.py#<function>, or -",
+            "--stand-in takes <file>#<function> for a .py, .ts, .mts, .js or .mjs file, or -",
         ),
         (
             &["--stand-in", "stand_in.py#1answer"],
-            "--stand-in takes <file>.py#<function>, or -",
+            "--stand-in takes <file>#<function> for a .py, .ts, .mts, .js or .mjs file, or -",
         ),
         (
             &["--stand-in", "stand_in.py#"],
-            "--stand-in takes <file>.py#<function>, or -",
+            "--stand-in takes <file>#<function> for a .py, .ts, .mts, .js or .mjs file, or -",
+        ),
+        (
+            &["--stand-in", "stand_in.cjs#answer"],
+            "--stand-in takes <file>#<function> for a .py, .ts, .mts, .js or .mjs file, or -",
+        ),
+        (
+            &["--stand-in", "types.d.ts#answer"],
+            "--stand-in takes <file>#<function> for a .py, .ts, .mts, .js or .mjs file, or -",
         ),
         (
             &["--stand-in", "missing.py#answer"],
             "no stand-in file missing.py",
+        ),
+        (
+            &["--stand-in", "missing.ts#answer"],
+            "no stand-in file missing.ts",
         ),
         (
             &["--stand-in", "-"],

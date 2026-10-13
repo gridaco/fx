@@ -1,0 +1,35 @@
+# stand-in-agent's twin in TypeScript: the node type `survey` (in/nodes/agent.ts) runs the
+# engine's agent loop with the tool `measure`, made with `tool()`, and the stand-in is
+# in/stand_in.ts (`--stand-in stand_in.ts#answer`). `survey`'s first agent.turn is answered with a
+# call of `measure`, which the TypeScript node host serves (tool.invoke), and the second turn
+# submits a value that meets the `submit` schema; `garbled`'s turn is data that is not
+# `{"text", "tool_calls"}` (`call_failed`, which the body lets through); `estimate` is a
+# structured answer that meets its schema and `wrong` one that does not. `measure` declares the
+# description and parameters Python derives from stand-in-agent's `measure`, so every call key is
+# the same: asked.json, answer.json (the submitted value and the transcript), estimate.json and
+# count.txt are stand-in-agent's, byte for byte, since the engine computes keys and writes the
+# transcript and the JSON whichever host runs the body. events-one.json differs from
+# stand-in-agent's only where the node type is named: `uses`, the plan digest, and the step
+# identities of survey#1 and garbled#1.
+steps:
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, --stand-in, "stand_in.ts#answer"]
+  status: 1
+  mentions:
+  - "stand-in  stand_in.ts#answer"
+  - "result    failed   spent $0.00"
+  - 'failed    garbled#1: agent.turn on llm-a@acme failed: the reply is not {"text", "tool_calls"}: text is not a string'
+  - 'failed    wrong#1: structured.generate on llm-a@acme failed: height: "three" is not of type "integer"'
+- read: count.txt
+  save: count.txt
+- read: asked.json
+  save: asked.json
+  json: true
+- read: runs/one/outputs/answer.json
+  save: answer.json
+  json: true
+- read: runs/one/outputs/estimate.json
+  save: estimate.json
+  json: true
+- read: runs/one/events.jsonl
+  save: events-one.json
+  jsonl: true

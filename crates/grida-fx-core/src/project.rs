@@ -5,14 +5,16 @@
 //!    (`unknown flag <x>; a builder takes its arguments as --arg`), before any builder runs;
 //! 1. the planning project: [`Project::find`] from the workflow file for a `.yaml`/`.yml` target,
 //!    else from `cwd`;
-//! 2. the workflow: a builder (`^(?P<file>.+\.py):(?P<name>[A-Za-z_][A-Za-z0-9_]*)$`, run through
-//!    the host's `build` after [`NodeHost::open_project`] on the planning project, cwd = the
-//!    working directory; `load_failed` → `no builder file …` / `… has no function …`,
-//!    `build_failed` → its message; exit 2), else [`find_workflow`] (by id: the planning
-//!    project's root files, then the folders of its `workflows` setting, which may lie outside
-//!    it) and [`crate::docs::workflow::load_workflow`]. Builder documents are validated like
-//!    files; their plan-digest source is `<path>:<function>` and their home is the planning
-//!    project;
+//! 2. the workflow: a builder (`<file>:<function>`: a file ending `.py`, `.ts`, `.mts`, `.js`
+//!    or `.mjs`, and an identifier; a `.tsx`, `.cts`, `.cjs` or declaration file is refused
+//!    first, `<file>:<function>: no node host for .<suffix> modules`), run through the `build` of
+//!    the host of its language ([`crate::host::Language::of_module`]) after
+//!    [`NodeHost::open_project`] on the planning project, cwd = the working directory;
+//!    `load_failed` → `no builder file …` / `… has no function …`, `build_failed` → its message;
+//!    exit 2), else [`find_workflow`] (by id: the planning project's root files, then the folders
+//!    of its `workflows` setting, which may lie outside it) and
+//!    [`crate::docs::workflow::load_workflow`]. Builder documents are validated like files; their
+//!    plan-digest source is `<path>:<function>` and their home is the planning project;
 //! 3. the inputs schema ([`crate::inputs::compile_inputs`], `$ref` relative to the home);
 //! 4. input flags from `rest`, then the inputs ([`crate::inputs::bind::load_inputs`]; `--inputs`
 //!    files relative to `cwd`, named as typed);
@@ -50,9 +52,11 @@ use std::sync::LazyLock;
 /// The project file's name, never a workflow.
 const PROJECT_FILE: &str = "fx.yaml";
 
-/// `file.py:function`.
+/// `file.py:function` or `file.ts:function` (also `.mts`, `.js`, `.mjs`); `.tsx`, `.cts` and
+/// `.cjs` are builder targets too, refused when loaded (module doc, step 2).
 static BUILDER_TARGET: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^(?P<file>.+\.py):(?P<name>[A-Za-z_][A-Za-z0-9_]*)$").expect("a valid pattern")
+    Regex::new(r"^(?P<file>.+\.(?:py|ts|mts|js|mjs|tsx|cts|cjs)):(?P<name>[A-Za-z_][A-Za-z0-9_]*)$")
+        .expect("a valid pattern")
 });
 
 /// A target as written on the command line.
@@ -60,14 +64,15 @@ static BUILDER_TARGET: LazyLock<Regex> = LazyLock::new(|| {
 pub enum Target {
     /// A workflow file (`*.yaml`, `*.yml`, `*.json`) or a workflow id.
     Workflow(String),
-    /// `file.py:function`.
+    /// `file.py:function`, `file.ts:function` (module doc, step 2).
     Builder { file: String, function: String },
 }
 
 impl Target {
     /// Classifies a target: a builder only when the function part is an identifier and the file
-    /// ends in `.py`; anything else is a workflow file or id (`b.py:bad-name` is looked up as an
-    /// id).
+    /// ends in a module suffix (`.py`, `.ts`, `.mts`, `.js`, `.mjs`, or the refused `.tsx`,
+    /// `.cts`, `.cjs`); anything else is a workflow file or id (`b.py:bad-name` is looked up as
+    /// an id).
     pub fn parse(text: &str) -> Target {
         match BUILDER_TARGET.captures(text) {
             Some(captures) => Target::Builder {
@@ -346,6 +351,9 @@ fn load(
     let project = Project::find(&start)?;
     match parsed {
         Target::Builder { file, function } => {
+            if let Err(refusal) = crate::host::Language::of_module(&file) {
+                return Err(Error::plan(format!("{file}:{function}: {refusal}")));
+            }
             host.open_project(&project.root, &project.document.sources)
                 .map_err(Error::from)?;
             let path = absolute(cwd, &file);
@@ -591,6 +599,35 @@ mod tests {
                 function: "_f1".into()
             }
         );
+        for file in [
+            "workflows/build.ts",
+            "b.mts",
+            "b.js",
+            "b.mjs",
+            "a:b.ts",
+            "b.tsx",
+            "b.cts",
+            "b.cjs",
+            "types.d.ts",
+        ] {
+            assert_eq!(
+                Target::parse(&format!("{file}:build")),
+                Target::Builder {
+                    file: file.into(),
+                    function: "build".into()
+                },
+                "{file}"
+            );
+        }
+        for text in [
+            "b.ts:bad-name",
+            "b.ts",
+            "b.rb:build",
+            "b.TS:build",
+            "b.ts:$x",
+        ] {
+            assert_eq!(Target::parse(text), Target::Workflow(text.into()), "{text}");
+        }
     }
 
     #[test]

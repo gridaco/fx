@@ -4,3 +4,6 @@ runs/
 
 # Provider keys
 .env
+
+# Packages of steps written in TypeScript
+node_modules/

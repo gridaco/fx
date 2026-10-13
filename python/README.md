@@ -60,9 +60,9 @@ for key, image in result.outputs["images"].items():  # a keyed collection
 missing = result.deliver({"images": "out/{key}.png"})
 ```
 
-- **Targets.** A workflow file, a workflow id, a builder `file.py:function` (its arguments as
-  `arguments={"level": "docks"}`, the command line's `--arg`), or a `Plan`. A `Workflow` object
-  is refused with `TypeError`: name the builder that returns it.
+- **Targets.** A workflow file, a workflow id, a builder `file.py:function` or `file.ts:function`
+  (its arguments as `arguments={"level": "docks"}`, the command line's `--arg`), or a `Plan`. A
+  `Workflow` object is refused with `TypeError`: name the builder that returns it.
 - **Options.** `inputs` (a mapping, written to a temporary inputs file in `cwd`, so relative
   paths in it mean what they mean on the command line), `input_files` (`--inputs`), `routes`
   (`--routes`), `max_usd` (`--max-usd`); `run` adds `live`, `yes_up_to` and one of

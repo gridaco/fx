@@ -1,0 +1,30 @@
+# Python and TypeScript node types in one workflow (spec/protocol.md section 1): the engine picks
+# each module's host by its suffix, with one planning host and one pool per language, and data
+# crosses between them both ways. TypeScript's `order` returns a keyed output as a Map with the
+# keys `sun`, `10` and `2`; Python's `keys` reads it as a keyed input and writes the keys in the
+# order it gets them; TypeScript's `frame` frames that text (framed.txt: sun, 10, 2). TypeScript's
+# `report` writes JSON that Python's `measure` reads, reporting a node fact and returning a list
+# port (sizes-0.txt …); TypeScript's `tally` reads that list in order (tally.txt). project.json
+# shows every instance succeeded with its node facts. `lock` locks the versioned types of both
+# languages in one fx.lock: each module's types share their module's source digest.
+steps:
+- argv: [run, case, --routes, routes.yaml, --run, runs/one]
+  mentions:
+  - "result    ok   spent $0.00"
+- argv: [project, runs/one]
+  save: project.json
+  json: true
+- read: runs/one/outputs/framed.txt
+  save: framed.txt
+- read: runs/one/outputs/sizes/0.txt
+  save: sizes-0.txt
+- read: runs/one/outputs/sizes/4.txt
+  save: sizes-4.txt
+- read: runs/one/outputs/tally.txt
+  save: tally.txt
+- argv: [lock]
+  mentions: ["fx.lock: 6 versioned node types"]
+- read: fx.lock
+  save: fx.lock.json
+  yaml: true
+- argv: [lock, --check]
