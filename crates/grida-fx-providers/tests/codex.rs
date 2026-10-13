@@ -8,6 +8,7 @@
 use base64::Engine;
 use grida_fx_providers::adapter::{Answer, Billing, RequestAdapter, Runtime, Sent};
 use grida_fx_providers::codex::{self, CodexImages, CodexRuntime};
+use grida_fx_providers::installed::{Program, Version};
 use grida_fx_providers::testing::{self, CallBuilder, TestCall, media};
 use serde_json::{Value, json};
 use std::future::Future;
@@ -15,12 +16,14 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-/// Counts each start in `starts` (`mcp` or `app-server`), answers `codex mcp list --json` with one
-/// enabled and one disabled server, and refuses anything but an app-server whose settings turn
-/// off apps, plugins and the enabled server.
+/// Counts each start in `starts` (`version`, `mcp` or `app-server`), names Codex 0.160.1 to
+/// `codex --version`, answers `codex mcp list --json` with one enabled and one disabled server,
+/// and refuses anything but an app-server whose settings turn off apps, plugins and the enabled
+/// server.
 const LISTING: &str = r#"#!/bin/sh
 here="$(dirname "$0")"
 case "$*" in
+  --version) echo version >> "$here/starts"; echo 'codex-cli 0.160.1'; exit 0 ;;
   *"features.apps=false"*"features.plugins=false"*"mcp list --json"*)
     echo mcp >> "$here/starts"
     echo '[{"name":"acme-docs","enabled":true},{"name":"acme-off","enabled":false}]'; exit 0 ;;
@@ -174,12 +177,16 @@ fn kite() -> TestCall {
     call(json!({"prompt": "a red kite"}))
 }
 
-/// A runtime over `program`, and an adapter over it with these deadlines.
+/// A runtime over `program`, found on `PATH`, and an adapter over it with these deadlines.
 fn images(
     program: Result<PathBuf, String>,
     start: u64,
     whole: u64,
 ) -> (Arc<CodexRuntime>, CodexImages) {
+    let program = program.map(|path| Program {
+        path,
+        origin: "PATH",
+    });
     let runtime = Arc::new(CodexRuntime::new(program));
     let adapter = CodexImages::new(Arc::clone(&runtime))
         .with_deadlines(Duration::from_secs(start), Duration::from_secs(whole));
@@ -346,8 +353,8 @@ fn one_codex_serves_every_call_of_an_invocation() {
     assert!(verified);
     assert_eq!(
         fake.starts(),
-        ["mcp", "app-server"],
-        "listed once, started once"
+        ["version", "mcp", "app-server"],
+        "asked, listed and started once"
     );
 }
 
@@ -478,7 +485,7 @@ fn only_a_chatgpt_sign_in_may_draw_and_a_refusal_holds_for_the_invocation() {
     assert!(verified);
     assert_eq!(
         signed_out.starts(),
-        ["mcp", "app-server"],
+        ["version", "mcp", "app-server"],
         "not asked again"
     );
     assert_eq!(
@@ -528,14 +535,101 @@ fi
         failed("Codex image generation failed: Codex exited")
     );
     assert!(matches!(sent.1, Sent::Answered(_)), "{:?}", sent.1);
-    assert_eq!(fake.starts(), ["mcp", "app-server", "mcp", "app-server"]);
+    assert_eq!(
+        fake.starts(),
+        [
+            "version",
+            "mcp",
+            "app-server",
+            "version",
+            "mcp",
+            "app-server"
+        ]
+    );
 }
 
 #[test]
 fn servers_that_cannot_be_listed_are_a_refusal() {
+    let unlisted =
+        "#!/bin/sh\ncase \"$1\" in --version) echo 'codex-cli 0.160.1' ;; *) exit 1 ;; esac\n";
     assert_eq!(
-        send(&fake("#!/bin/sh\nexit 1\n")),
+        send(&fake(unlisted)),
         refused("Codex's MCP servers could not be listed, so they cannot be turned off")
+    );
+}
+
+/// A fake Codex that prints `printed` and exits with `status` when asked its version, and counts
+/// every other start.
+fn versioned(printed: &str, status: u8) -> Fake {
+    fake(&format!(
+        "#!/bin/sh\ncase \"$1\" in --version) echo '{printed}'; exit {status} ;; esac\n\
+         echo started >> \"$(dirname \"$0\")/starts\"\nexit 1\n"
+    ))
+}
+
+#[test]
+fn codex_names_its_version_as_it_prints_it() {
+    let tokio = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let folder = tempfile::tempdir().unwrap();
+    let version = |fake: &Fake| tokio.block_on(codex::version(&fake.program, folder.path()));
+    let supported = |v: &str| Ok(Version::Supported(v.into()));
+    for (printed, expected) in [
+        ("codex-cli 0.160.1", supported("0.160.1")),
+        (
+            "codex-cli 0.162.0-alpha.17.2",
+            supported("0.162.0-alpha.17.2"),
+        ),
+        ("v1.0.0", supported("1.0.0")),
+        (
+            "codex-cli 0.150.0",
+            Ok(Version::Older {
+                version: "0.150.0".into(),
+                minimum: codex::MIN_VERSION,
+            }),
+        ),
+        ("codex-cli 0.150", Ok(Version::Unnamed)),
+        ("Welcome to Codex", Ok(Version::Unnamed)),
+    ] {
+        assert_eq!(version(&versioned(printed, 0)), expected, "{printed}");
+    }
+    assert_eq!(
+        version(&versioned("codex-cli 0.160.1", 2)),
+        Ok(Version::Unnamed),
+        "a failure names none"
+    );
+    let missing = Path::new("/nonexistent/codex");
+    assert_eq!(
+        tokio.block_on(codex::version(missing, folder.path())),
+        Err(codex::NOT_INSTALLED.to_string())
+    );
+}
+
+#[test]
+fn an_older_codex_is_refused_for_the_invocation_naming_where_it_was_found() {
+    let old = versioned("codex-cli 0.150.0", 0);
+    let (sent, verified) = on_one_runtime(Ok(old.program.clone()), 20, 30, |adapter| async move {
+        let first = adapter.send(&kite().call).await;
+        assert_eq!(adapter.send(&kite().call).await, first);
+        first
+    });
+    assert!(verified);
+    assert_eq!(
+        sent,
+        refused(
+            "Codex 0.150.0 (from PATH) is older than 0.160.1: update it, or set \
+             GRIDA_FX_TOOL_CODEX to a newer one"
+        )
+    );
+    assert!(old.starts().is_empty(), "nothing else was started");
+    assert_eq!(
+        send(&versioned("Welcome to Codex", 0)),
+        refused(
+            "Codex (from PATH) did not name its version: update it to 0.160.1 or later, or set \
+             GRIDA_FX_TOOL_CODEX to a newer one"
+        )
     );
 }
 
@@ -906,7 +1000,7 @@ fn what_codex_cannot_honour_is_refused_before_it_starts() {
             refused(codex::NO_EXACT_SIZE),
             refused("references[0] has no bytes to send"),
             refused("image.generate takes no member seed"),
-            refused("Codex's MCP servers could not be listed, so they cannot be turned off"),
+            refused(codex::NOT_INSTALLED),
             refused("Codex image edits take no mask"),
             refused("Codex takes at most 5 input pictures"),
             refused("references[1] is image/gif; Codex takes PNG, JPEG or WebP"),

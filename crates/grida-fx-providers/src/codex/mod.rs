@@ -14,8 +14,9 @@
 //!    pictures (`image`, then `references`), and each picture's file: carried, not empty, and
 //!    PNG, JPEG or WebP;
 //! 4. the runtime's Codex, started if need be ([`runtime`]): no program ([`NOT_INSTALLED`],
-//!    [`NETWORK_OFF`]), MCP servers that cannot be listed, or a sign-in other than ChatGPT is
-//!    `Sent::Refused`, for this call and the invocation's others;
+//!    [`NETWORK_OFF`]), one older than [`MIN_VERSION`] or that names no version, MCP servers that
+//!    cannot be listed, or a sign-in other than ChatGPT is `Sent::Refused`, for this call and the
+//!    invocation's others;
 //! 5. a scratch folder of the call's own holding copies of its pictures (`picture-01.png`, ...),
 //!    and a thread in it (read-only sandbox, no approvals, not persisted; a model provider other
 //!    than OpenAI is refused), then `turn/start` with [`instructions`], which name the pictures
@@ -40,7 +41,7 @@ use crate::adapter::{
     Adapter, Answer, Billing, CallRequest, RequestAdapter, RouteRef, Sent, Usage,
 };
 use crate::capabilities;
-use crate::installed::{self, Picture, failed};
+use crate::installed::{self, Picture, Program, Version, failed};
 use crate::registry::Adapters;
 use crate::setup::Setup;
 use crate::wire;
@@ -80,6 +81,9 @@ pub const PROGRAM_VARIABLE: &str = "GRIDA_FX_TOOL_CODEX";
 /// Where the ChatGPT app for macOS keeps its own copy of the command.
 pub const MACOS_APP_PROGRAM: &str =
     "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex";
+
+/// The oldest Codex this behaviour was verified on.
+pub const MIN_VERSION: &str = "0.160.1";
 
 /// The refusal when no program was found.
 pub const NOT_INSTALLED: &str = "Codex is not installed: install it with npm install -g \
@@ -134,8 +138,8 @@ const SETTINGS: [&str; 17] = [
     "web_search=\"disabled\"",
 ];
 
-/// The deadline of listing the user's MCP servers.
-const LIST_DEADLINE: Duration = Duration::from_secs(30);
+/// The deadline of asking Codex its version, and of listing the user's MCP servers.
+const ASK_DEADLINE: Duration = Duration::from_secs(30);
 
 /// How long an answered turn has to end after it is interrupted, for its token usage.
 const SETTLE: Duration = Duration::from_secs(3);
@@ -251,9 +255,50 @@ pub fn register(adapters: &mut Adapters, setup: &Setup) {
 ///   nothing else when it names no executable file;
 /// - else the first `codex` in an absolute `PATH` entry (empty and relative entries are skipped,
 ///   so a project's own folder never supplies it);
-/// - else `app` when it is executable.
-pub fn find_program(env: &dyn Fn(&str) -> Option<String>, app: &Path) -> Option<PathBuf> {
-    installed::find_program(env, PROGRAM_VARIABLE, "codex", Some(app.to_path_buf()))
+/// - else `app` when it is executable (origin `the ChatGPT app`).
+pub fn find_program(env: &dyn Fn(&str) -> Option<String>, app: &Path) -> Option<Program> {
+    let fallback = (app.to_path_buf(), "the ChatGPT app");
+    installed::find_program(env, PROGRAM_VARIABLE, "codex", Some(fallback))
+}
+
+/// Step 4: Codex's version, as `codex --version` names it (`codex-cli 0.160.1`), against
+/// [`MIN_VERSION`]; the refusal when it cannot be started. Codex runs in `folder`.
+pub fn version<'a>(program: &'a Path, folder: &'a Path) -> BoxFuture<'a, Result<Version, String>> {
+    Box::pin(async move {
+        match installed::ask_version(program, folder, &ALSO_WITHHELD, ASK_DEADLINE).await {
+            Ok(named) => Ok(Version::of(named.as_deref(), MIN_VERSION)),
+            Err(error) => Err(not_started(&error)),
+        }
+    })
+}
+
+/// Step 4: the refusal of a Codex that [`version`] found older than [`MIN_VERSION`], or that
+/// names no version. It says where the program was found, never its path.
+pub(super) fn check_version(program: &Program, version: &Version) -> Result<(), String> {
+    let from = program.origin;
+    match version {
+        Version::Supported(_) => Ok(()),
+        Version::Older { version, minimum } => Err(format!(
+            "Codex {version} (from {from}) is older than {minimum}: update it, or set \
+             {PROGRAM_VARIABLE} to a newer one"
+        )),
+        Version::Unnamed => Err(format!(
+            "Codex (from {from}) did not name its version: update it to {MIN_VERSION} or later, \
+             or set {PROGRAM_VARIABLE} to a newer one"
+        )),
+    }
+}
+
+/// The refusal when Codex cannot be started.
+pub(super) fn not_started(error: &std::io::Error) -> String {
+    if error.kind() == std::io::ErrorKind::NotFound {
+        NOT_INSTALLED.into()
+    } else {
+        format!(
+            "{LABEL} cannot start codex: {}",
+            grida_fx_core::error::io_reason(error)
+        )
+    }
 }
 
 /// Every variable Codex never inherits.
@@ -372,7 +417,7 @@ pub(super) async fn mcp_servers(program: &Path, folder: &Path) -> Result<Vec<Str
     args.extend(["mcp", "list", "--json"].map(String::from));
     let mut command = command(program, &args, folder);
     command.stdin(Stdio::null());
-    let output = match tokio::time::timeout(LIST_DEADLINE, command.output()).await {
+    let output = match tokio::time::timeout(ASK_DEADLINE, command.output()).await {
         Ok(Ok(output)) if output.status.success() => output,
         _ => return Err(refused()),
     };
@@ -826,9 +871,12 @@ mod tests {
             (PROGRAM_VARIABLE, shown(&app)),
             ("PATH", path.clone()),
         ]);
+        let find_program = |env: &dyn Fn(&str) -> Option<String>, app: &Path| {
+            find_program(env, app).map(|program| (program.path, program.origin))
+        };
         assert_eq!(
             find_program(&named, Path::new("/missing")),
-            Some(app.clone())
+            Some((app.clone(), PROGRAM_VARIABLE))
         );
         let missing = env(vec![
             (PROGRAM_VARIABLE, "/nonexistent/codex".into()),
@@ -840,15 +888,18 @@ mod tests {
         // A relative name becomes absolute.
         let relative = env(vec![(PROGRAM_VARIABLE, "some/codex".into())]);
         let found = find_program(&relative, &app);
-        assert!(found.is_none_or(|p| p.is_absolute()));
+        assert!(found.is_none_or(|(p, _)| p.is_absolute()));
         // Then PATH, absolute entries only; then the app.
         let blank = env(vec![(PROGRAM_VARIABLE, " ".into()), ("PATH", path.clone())]);
-        assert_eq!(find_program(&blank, &app), Some(on_path));
+        assert_eq!(find_program(&blank, &app), Some((on_path, "PATH")));
         let relative_path = env(vec![(
             "PATH",
             format!("bin{}", if cfg!(windows) { ";" } else { ":" }),
         )]);
-        assert_eq!(find_program(&relative_path, &app), Some(app.clone()));
+        assert_eq!(
+            find_program(&relative_path, &app),
+            Some((app.clone(), "the ChatGPT app"))
+        );
         assert_eq!(find_program(&env(vec![]), &plain), None);
     }
 

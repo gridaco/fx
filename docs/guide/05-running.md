@@ -177,9 +177,9 @@ sent, and the step fails with a message that names `GRIDA_FX_NETWORK`, for nothi
 paths use it.
 
 **Checking keys and routes.** `grida fx doctor` prints, after the engine, Python and Node lines,
-where each key comes from and which routes a live run could serve, for the project you run from
-(the built-in table and its `route_tables`); with a target, the tools and node types the workflow
-needs follow:
+where each key comes from, which Codex and Grok Build it found, and which routes a live run could
+serve, for the project you run from (the built-in table and its `route_tables`); with a target, the
+tools and node types the workflow needs follow:
 
 ```
 engine    grida-fx 0.6.0
@@ -191,6 +191,8 @@ key       OPENROUTER_API_KEY missing
 key       FAL_KEY present (environment)
 key       TRIPO_API_KEY missing
 key       ELEVENLABS_API_KEY missing
+program   codex /usr/local/bin/codex (PATH, 0.160.1)
+program   grok not installed
 route     image.generate gpt-image-2.5-sunburst@openai no key (OPENAI_API_KEY)
 route     image.generate imagegen@codex servable
 route     image.generate img-a@acme no adapter
@@ -200,10 +202,16 @@ route     mesh.rig v1.0-20240301@tripo no key (TRIPO_API_KEY)
 …
 ```
 
+A `program` line names the Codex or Grok Build a live run would start, where FX found it
+(`GRIDA_FX_TOOL_CODEX`, `PATH` or `the ChatGPT app`; `GRIDA_FX_TOOL_GROK`, `PATH` or
+`~/.grok/bin`) and, for Codex, the version it names (`no version` when it names none).
+
 A route is `servable`, has `no key` (and names the variable to set), is `not installed (codex)`
-or `not installed (grok)` (no Codex or Grok Build found), or has `no adapter` (no provider of FX serves it). A missing key alone doesn't change doctor's exit status, unless the target
-uses a route that needs it (below); a `.env` or base URL that a live run would refuse does: doctor
-prints `keys      <why>` and exits 1.
+or `not installed (grok)` (no Codex or Grok Build found), `too old (codex 0.150.0; FX needs
+0.160.1+)` or `no version (codex)` (a Codex a live run would refuse), or has `no adapter` (no
+provider of FX serves it). A missing key alone doesn't change doctor's exit status, unless the
+target uses a route that needs it (below); a `.env` or base URL that a live run would refuse does:
+doctor prints `keys      <why>` and exits 1.
 
 **The target's routes come first.** With a target, `grida fx doctor <target>` lists, right after the
 Python and Node lines, the routes the workflow's paid steps use, each with whether a live run could

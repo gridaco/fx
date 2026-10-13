@@ -335,8 +335,9 @@ fn integrated_doctor_without_a_target() {
     assert_eq!(status(&output), 0, "{}", stderr(&output));
     let text = stdout(&output);
     let lines: Vec<&str> = text.lines().collect();
-    // engine, python, node, a key per provider, a route per built-in route.
-    assert_eq!(lines.len(), 3 + 6 + 29, "{text}");
+    // engine, python, node, a key per provider, a program per installed provider, a route per
+    // built-in route.
+    assert_eq!(lines.len(), 3 + 6 + 2 + 29, "{text}");
     assert_eq!(
         lines[0],
         format!("engine    grida-fx {}", env!("CARGO_PKG_VERSION"))
@@ -360,7 +361,14 @@ fn integrated_doctor_without_a_target() {
             "key       ELEVENLABS_API_KEY missing",
         ]
     );
-    let routes = &lines[9..];
+    assert_eq!(
+        lines[9..11],
+        [
+            "program   codex not installed",
+            "program   grok not installed"
+        ]
+    );
+    let routes = &lines[11..];
     assert!(routes.iter().all(|l| l.starts_with("route     ")), "{text}");
     let codex = [
         "route     image.edit imagegen@codex not installed (codex)",
@@ -575,14 +583,38 @@ fn integrated_doctor_puts_the_targets_routes_first() {
         text.contains("\nroute     image.generate imagegen@codex not installed (codex)\n"),
         "{text}"
     );
-    // With Codex installed (doctor only looks for it), every route the target uses is servable.
+    // With Codex installed (doctor only asks its version), every route the target uses is
+    // servable.
     let codex = root.join("codex");
-    grida_fx_providers::testing::write_program(&codex, "#!/bin/sh\nexit 0\n");
+    let version = |printed: &str| {
+        grida_fx_providers::testing::write_program(
+            &codex,
+            &format!("#!/bin/sh\n[ \"$1\" = --version ] && echo '{printed}'\nexit 0\n"),
+        );
+    };
+    version("codex-cli 0.160.1");
     let output = doctor(&codex);
     assert_eq!(status(&output), 0, "{}", stderr(&output));
+    let text = stdout(&output);
+    assert_eq!(
+        text.lines().nth(3),
+        Some("uses      image.generate imagegen@codex servable (3 steps)")
+    );
+    let shown = format!(
+        "\nprogram   codex {} (GRIDA_FX_TOOL_CODEX, 0.160.1)\n",
+        codex.display()
+    );
+    assert!(text.contains(&shown), "{text}");
+    // An older Codex, which a live run refuses, is not.
+    version("codex-cli 0.150.0");
+    let output = doctor(&codex);
+    assert_eq!(status(&output), 1, "{}", stderr(&output));
     assert_eq!(
         stdout(&output).lines().nth(3),
-        Some("uses      image.generate imagegen@codex servable (3 steps)")
+        Some(
+            "uses      image.generate imagegen@codex too old (codex 0.150.0; FX needs 0.160.1+) \
+             (3 steps)"
+        )
     );
 }
 

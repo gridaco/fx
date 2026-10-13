@@ -5,7 +5,7 @@
 
 use super::Stop;
 use crate::adapter::Usage;
-use crate::installed;
+use crate::installed::{self, Version};
 pub(super) use crate::installed::{name, token};
 use serde_json::Value;
 use std::path::{Component, Path, PathBuf};
@@ -39,24 +39,14 @@ pub(super) fn version_of(initialized: &Value) -> Option<String> {
     installed::version(version)
 }
 
-/// A version's leading `major.minor.patch` numbers.
-fn numbers(version: &str) -> Option<[u64; 3]> {
-    let core = version.split(['-', '+']).next()?;
-    let mut parts = core.split('.').map(|part| part.parse::<u64>().ok());
-    let numbers = [parts.next()??, parts.next()??, parts.next()??];
-    parts.next().is_none().then_some(numbers)
-}
-
 /// A Grok Build older than [`super::MIN_VERSION`], or one that names no version, is refused.
 pub(super) fn check_version(version: Option<&str>) -> Result<(), Stop> {
-    let minimum = numbers(super::MIN_VERSION).expect("a version");
-    match version.and_then(|version| numbers(version).map(|n| (version, n))) {
-        Some((_, found)) if found >= minimum => Ok(()),
-        Some((version, _)) => Err(Stop::Refused(format!(
-            "Grok Build {version} is older than {}: run grok update",
-            super::MIN_VERSION
+    match Version::of(version, super::MIN_VERSION) {
+        Version::Supported(_) => Ok(()),
+        Version::Older { version, minimum } => Err(Stop::Refused(format!(
+            "Grok Build {version} is older than {minimum}: run grok update"
         ))),
-        None => Err(Stop::Refused(format!(
+        Version::Unnamed => Err(Stop::Refused(format!(
             "Grok Build did not name its version: run grok update to {} or later",
             super::MIN_VERSION
         ))),

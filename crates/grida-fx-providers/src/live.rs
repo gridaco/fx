@@ -5,8 +5,8 @@
 //!
 //! [`adapters`] registers every provider's adapters on whatever [`Setup`] it is given, so tests
 //! build the same registry over a `ReplayTransport` or `NoNetwork`. [`servable`] is what
-//! `grida-fx doctor` reports per route, over a registry built on [`offline_setup`]: doctor never
-//! constructs anything that could reach the network.
+//! `grida-fx doctor` reports per route, over a registry built on [`offline_setup`] and the
+//! programs [`installed`] finds: doctor never constructs anything that could reach the network.
 
 use crate::BoxFuture;
 use crate::adapter::{
@@ -14,12 +14,14 @@ use crate::adapter::{
     Submitted,
 };
 use crate::clock::SystemClock;
+use crate::installed::{Program, Version};
 use crate::keys::{KeyName, Keys};
 use crate::redact::Redactor;
 use crate::registry::Adapters;
 use crate::setup::{Endpoints, Setup};
 use crate::transport::http::{HttpConfig, HttpTransport};
 use serde_json::Value;
+use std::path::Path;
 use std::sync::Arc;
 
 /// The providers this crate serves, in the order `doctor` lists them: Grida Gateway first.
@@ -63,6 +65,7 @@ pub fn live_setup(keys: Keys, endpoints: Endpoints, network: Network) -> Result<
             let env = |name: &str| std::env::var(name).ok();
             let codex = codex_program(&env).ok_or_else(|| crate::codex::NOT_INSTALLED.to_string());
             let grok = crate::grok::find_program(&env)
+                .map(|program| program.path)
                 .ok_or_else(|| crate::grok::NOT_INSTALLED.to_string());
             (
                 Arc::new(HttpTransport::new(HttpConfig::default())?),
@@ -188,7 +191,7 @@ impl LongJob for Redacting<dyn LongJob> {
 }
 
 /// Whether a route can be sent (doctor's `routes` lines).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Servable {
     Yes,
     /// No adapter of this crate serves the capability on the provider.
@@ -197,35 +200,97 @@ pub enum Servable {
     NoKey(KeyName),
     /// An adapter serves it through a program that is not installed (`codex`, `grok`).
     NoProgram(&'static str),
+    /// An adapter serves it through a program older than a live run starts.
+    TooOld {
+        program: &'static str,
+        version: String,
+        minimum: &'static str,
+    },
+    /// An adapter serves it through a program that names no version a live run reads.
+    NoVersion(&'static str),
 }
 
 /// Where the environment finds a program.
-type Finder = fn(&dyn Fn(&str) -> Option<String>) -> Option<std::path::PathBuf>;
+type Finder = fn(&dyn Fn(&str) -> Option<String>) -> Option<Program>;
 
-/// The providers that are programs the user installed, and how each is found.
-const PROGRAMS: [(&str, Finder); 2] = [
-    ("codex", codex_program),
-    ("grok", crate::grok::find_program),
+/// How a program is asked its version before a live run starts it: the program, and a folder it
+/// may run in.
+type Asker = for<'a> fn(&'a Path, &'a Path) -> BoxFuture<'a, Result<Version, String>>;
+
+/// The providers that are programs the user installed: how each is found, and how it is asked
+/// its version before it starts, when it is (Grok Build names its own once started).
+const PROGRAMS: [(&str, Finder, Option<Asker>); 2] = [
+    ("codex", codex_program, Some(crate::codex::version)),
+    ("grok", crate::grok::find_program, None),
 ];
 
 /// The user's Codex: [`crate::codex::find_program`], with the macOS app's.
-fn codex_program(env: &dyn Fn(&str) -> Option<String>) -> Option<std::path::PathBuf> {
-    let app = std::path::Path::new(crate::codex::MACOS_APP_PROGRAM);
+fn codex_program(env: &dyn Fn(&str) -> Option<String>) -> Option<Program> {
+    let app = Path::new(crate::codex::MACOS_APP_PROGRAM);
     crate::codex::find_program(env, app)
 }
 
+/// A program the user installed ([`PROGRAMS`]), as a live run would find it (doctor's `program`
+/// lines).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Installed {
+    /// `codex` or `grok`.
+    pub name: &'static str,
+    /// The program, when found.
+    pub program: Option<Program>,
+    /// Its version, for a program asked before it starts (a program that cannot be started names
+    /// none).
+    pub version: Option<Version>,
+}
+
+/// Every program the user installed ([`PROGRAMS`]), as the process environment finds it, each
+/// asked its version as a live run asks it (in the system's temporary folder).
+pub async fn installed() -> Vec<Installed> {
+    let env = |name: &str| std::env::var(name).ok();
+    let folder = std::env::temp_dir();
+    let mut found = Vec::new();
+    for (name, find, ask) in PROGRAMS {
+        let program = find(&env);
+        let version = match (&program, ask) {
+            (Some(program), Some(ask)) => Some(
+                ask(&program.path, &folder)
+                    .await
+                    .unwrap_or(Version::Unnamed),
+            ),
+            _ => None,
+        };
+        found.push(Installed {
+            name,
+            program,
+            version,
+        });
+    }
+    found
+}
+
 /// Whether `capability` on `provider` is servable with `keys` by `adapters`. The route of a
-/// program the user installed ([`PROGRAMS`]) is servable when the process environment finds the
-/// program.
-pub fn servable(adapters: &Adapters, keys: &Keys, capability: &str, provider: &str) -> Servable {
+/// program the user installed is servable when `installed` holds it found, and of a version a
+/// live run starts.
+pub fn servable(
+    adapters: &Adapters,
+    keys: &Keys,
+    installed: &[Installed],
+    capability: &str,
+    provider: &str,
+) -> Servable {
     if !adapters.serves(capability, provider) {
         return Servable::NoAdapter;
     }
-    if let Some((name, find)) = PROGRAMS.iter().find(|(name, _)| *name == provider) {
-        let env = |name: &str| std::env::var(name).ok();
-        return match find(&env) {
-            Some(_) => Servable::Yes,
-            None => Servable::NoProgram(name),
+    if let Some(program) = installed.iter().find(|program| program.name == provider) {
+        return match (&program.program, &program.version) {
+            (None, _) => Servable::NoProgram(program.name),
+            (Some(_), Some(Version::Older { version, minimum })) => Servable::TooOld {
+                program: program.name,
+                version: version.clone(),
+                minimum,
+            },
+            (Some(_), Some(Version::Unnamed)) => Servable::NoVersion(program.name),
+            (Some(_), _) => Servable::Yes,
         };
     }
     match KeyName::of_provider(provider) {
@@ -335,21 +400,59 @@ mod tests {
     fn a_route_without_its_key_is_not_servable() {
         let keys = Keys::from_pairs(&[(KeyName::Fal, "fal-test-key")]);
         let adapters = adapters(&setup(keys.clone()));
+        let servable = |capability, provider| servable(&adapters, &keys, &[], capability, provider);
+        assert_eq!(servable("video.generate", "fal"), Servable::Yes);
         assert_eq!(
-            servable(&adapters, &keys, "video.generate", "fal"),
+            servable("mesh.rig", "tripo"),
+            Servable::NoKey(KeyName::Tripo)
+        );
+        assert_eq!(servable("image.generate", "acme"), Servable::NoAdapter);
+        assert_eq!(servable("video.generate", "openai"), Servable::NoAdapter);
+    }
+
+    #[test]
+    fn a_program_is_servable_when_found_and_of_a_version_a_live_run_starts() {
+        let keys = Keys::none();
+        let adapters = adapters(&setup(keys.clone()));
+        let found = |name, version| Installed {
+            name,
+            program: Some(Program {
+                path: "/opt/acme/bin/x".into(),
+                origin: "PATH",
+            }),
+            version,
+        };
+        let servable = |installed: &[Installed], provider| {
+            servable(&adapters, &keys, installed, "image.generate", provider)
+        };
+        let older = Version::Older {
+            version: "0.150.0".into(),
+            minimum: "0.160.1",
+        };
+        let codex = |version| [found("codex", Some(version))];
+        assert_eq!(
+            servable(&codex(Version::Supported("0.160.1".into())), "codex"),
             Servable::Yes
         );
         assert_eq!(
-            servable(&adapters, &keys, "mesh.rig", "tripo"),
-            Servable::NoKey(KeyName::Tripo)
+            servable(&codex(older), "codex"),
+            Servable::TooOld {
+                program: "codex",
+                version: "0.150.0".into(),
+                minimum: "0.160.1"
+            }
         );
         assert_eq!(
-            servable(&adapters, &keys, "image.generate", "acme"),
-            Servable::NoAdapter
+            servable(&codex(Version::Unnamed), "codex"),
+            Servable::NoVersion("codex")
         );
-        assert_eq!(
-            servable(&adapters, &keys, "video.generate", "openai"),
-            Servable::NoAdapter
-        );
+        // Grok Build names its version once started: found is servable.
+        assert_eq!(servable(&[found("grok", None)], "grok"), Servable::Yes);
+        let missing = Installed {
+            name: "grok",
+            program: None,
+            version: None,
+        };
+        assert_eq!(servable(&[missing], "grok"), Servable::NoProgram("grok"));
     }
 }

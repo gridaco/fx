@@ -41,7 +41,7 @@ says which you have, and `grida fx --help` and `grida fx <verb> --help` are alwa
 npm install -g grida   # the grida command, with FX as `grida fx` (Node.js 24 or later)
 pip install grida      # the Python SDK, for nodes and builders in Python (Python 3.11+, brings Pillow)
 npm install @grida/fx  # in a project: the SDK for nodes and builders in TypeScript (Node 24+ to host them)
-grida fx doctor        # the engine, Python, Node, keys and routes FX found
+grida fx doctor        # the engine, Python, Node, keys, Codex/Grok Build and routes FX found
 ```
 
 - `npx grida fx <verb>` works without a global install. `grida-fx` (from `@grida/fx`) and
@@ -792,6 +792,7 @@ Python, `run(..., { standIn: fn })` in JavaScript, in your own process.
 | `<route> does not support exact_size` (or `alpha`, `mask`, `image_input`) | change the setting or the route; for Codex and Grok Build leave `size` out and resize after |
 | `no adapter serves <route> …` | FX cannot call that provider; pick a built-in route (`grida fx nodes <type>`) |
 | `not installed (codex)` / `not installed (grok)` in doctor | install and sign in to Codex or Grok Build, or set `GRIDA_FX_TOOL_CODEX` / `GRIDA_FX_TOOL_GROK` |
+| `Codex … is older than 0.160.1` (or `too old (codex …)` in doctor) | update the Codex that doctor's `program` line names, or set `GRIDA_FX_TOOL_CODEX` to a newer one |
 | `python … too old` / `no grida` in doctor | `uv sync` or `pip install grida` in the project, or set `GRIDA_FX_PYTHON` |
 | `node … too old` / `no @grida/fx` | Node 24+, `npm install @grida/fx`, or set `GRIDA_FX_NODE` |
 | `take <n> of <path> no longer produces the picked result …` | the request changed since the pick: `grida fx pick` or `reroll` again |

@@ -131,7 +131,9 @@ Each `key` line says `present` (with its source, `environment` or `.env`) or
 `missing`, never the value. Each `route` line says whether a live run could serve
 it; with a workflow, `doctor` exits 1 when a route the workflow uses is not
 servable. `not installed (codex)` means FX found no Codex: put `codex` on `PATH`
-or set `GRIDA_FX_TOOL_CODEX`.
+or set `GRIDA_FX_TOOL_CODEX`. `too old (codex …)` means the Codex its `program`
+line names is older than 0.160.1: the user updates it or sets
+`GRIDA_FX_TOOL_CODEX` to a newer one.
 
 ## 5. Pick routes and make the first paid run
 

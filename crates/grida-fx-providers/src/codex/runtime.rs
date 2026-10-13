@@ -2,13 +2,14 @@
 //! invocation starts on its first Codex call and keeps for the others, and shuts down with the run
 //! ([`crate::adapter::Runtime`]).
 //!
-//! Starting it, once: list the user's MCP servers to turn them off, start Codex in a process group
-//! of its own ([`crate::process_group`]), `initialize`, then `account/read`; a Codex that is not signed
-//! in with ChatGPT is refused for the rest of the invocation. Two tasks then serve the
-//! connection: a writer, which owns Codex's stdin and writes the lines it is sent, so even a
-//! dropped call can ask for its turn to be interrupted without waiting; and a reader, which hands
-//! each response to the request waiting for it and each notification to the thread it names, and
-//! declines every request Codex sends (an approval, a question). A call has a thread of its own
+//! Starting it, once: check its version ([`super::version`]), list the user's MCP servers to turn
+//! them off, start Codex in a process group of its own ([`crate::process_group`]), `initialize`,
+//! then `account/read`; a Codex that is too old or not signed in with ChatGPT is refused for the
+//! rest of the invocation. Two tasks then serve the connection: a writer, which owns Codex's
+//! stdin and writes the lines it is sent, so even a dropped call can ask for its turn to be
+//! interrupted without waiting; and a reader, which hands each response to the request waiting
+//! for it and each notification to the thread it names, and declines every request Codex sends
+//! (an approval, a question). A call has a thread of its own
 //! ([`Connection::start_thread`]); a response to `thread/start` opens the thread's notifications
 //! before the reader reads on, so none is missed. A response to `turn/start` whose call is gone
 //! (dropped before Codex named its turn) has the reader interrupt the turn it names
@@ -22,11 +23,10 @@ use super::Stop;
 use super::protocol::{self, Message};
 use crate::BoxFuture;
 use crate::adapter::Runtime;
-use crate::installed::{locked, read_line};
+use crate::installed::{Program, locked, read_line};
 use crate::process_group::Group;
 use serde_json::{Value, json};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncWriteExt, BufReader};
@@ -308,7 +308,7 @@ enum State {
 /// The runtime (module doc): no Codex runs until a call needs one.
 pub struct CodexRuntime {
     /// The program, or the refusal of every call.
-    program: Result<PathBuf, String>,
+    program: Result<Program, String>,
     state: tokio::sync::Mutex<State>,
     /// The user's usage limit, once a call found it reached: `Some(resets_at)`, the unix time it
     /// resets when Codex gave it. No call starts while it holds.
@@ -316,7 +316,7 @@ pub struct CodexRuntime {
 }
 
 impl CodexRuntime {
-    pub fn new(program: Result<PathBuf, String>) -> CodexRuntime {
+    pub fn new(program: Result<Program, String>) -> CodexRuntime {
         CodexRuntime {
             program,
             state: tokio::sync::Mutex::new(State::Idle),
@@ -392,30 +392,25 @@ impl Runtime for CodexRuntime {
     }
 }
 
-/// Starts a Codex and checks its sign-in (module doc).
-async fn open(program: &Path) -> Result<Connection, Stop> {
+/// Starts a Codex and checks its version and sign-in (module doc).
+async fn open(program: &Program) -> Result<Connection, Stop> {
     let folder = tempfile::Builder::new()
         .prefix("grida-fx-codex-")
         .tempdir()
         .map_err(|error| Stop::Failed(grida_fx_core::error::io_reason(&error)))?;
+    let version = super::version(&program.path, folder.path())
+        .await
+        .map_err(Stop::Refused)?;
+    super::check_version(program, &version).map_err(Stop::Refused)?;
+    let program = program.path.as_path();
     let servers = super::mcp_servers(program, folder.path())
         .await
         .map_err(Stop::Refused)?;
     let mut args = vec!["app-server".to_string()];
     args.extend(super::settings(servers));
-    let mut child = match super::command(program, &args, folder.path()).spawn() {
-        Ok(child) => child,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Err(Stop::Refused(super::NOT_INSTALLED.into()));
-        }
-        Err(error) => {
-            return Err(Stop::Refused(format!(
-                "{} cannot start codex: {}",
-                super::LABEL,
-                grida_fx_core::error::io_reason(&error)
-            )));
-        }
-    };
+    let mut child = super::command(program, &args, folder.path())
+        .spawn()
+        .map_err(|error| Stop::Refused(super::not_started(&error)))?;
     let Some(group) = Group::enlist(&mut child) else {
         return Err(Stop::Failed("the command is stopping".into()));
     };
