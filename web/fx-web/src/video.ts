@@ -51,9 +51,9 @@ async function firstFrame(url: string, signal: AbortSignal): Promise<Blob | null
  * Video previews on node cards. SVG has no video that every browser draws in place: Safari draws
  * an HTML video inside `foreignObject` outside the SVG's transforms and above the rest of it. So a
  * card shows its video's first frame as an ordinary SVG image, read once per file when the card
- * first comes into view, and one HTML player, laid over the card's frame, plays it: muted and
- * looping while the pointer rests on the frame, with sound and controls from its play control or
- * a click on the muted video. The canvas stops the player when anything covers its card.
+ * first comes into view, and one HTML player with the browser's own controls, laid over the
+ * card's frame, plays it: with sound from its play control, or muted and looping while the
+ * pointer rests on the frame. The canvas stops the player when anything covers its card.
  */
 export class CardVideos {
   /** First frames by digest: an object URL, or null when the file could not be read. */
@@ -75,7 +75,7 @@ export class CardVideos {
   private loading = 0;
   private readonly abort = new AbortController();
   readonly player = document.createElement("video");
-  /** The video playing, and whether hovering started it (muted, looping, until the pointer leaves). */
+  /** The video playing, and whether it plays only while hovered (muted, looping, until the pointer leaves). */
   private playing: { node: string; preview: CanvasPreview; card: SVGGElement; video: SVGGElement; hover: boolean } | null = null;
   private frame: number | null = null;
   private hoverTimer: number | null = null;
@@ -102,12 +102,11 @@ export class CardVideos {
       event.stopPropagation();
       this.stop();
     }, { signal });
-    // A click on the muted video plays it on with sound and controls; leaving it stops it.
-    this.player.addEventListener("click", (event) => {
+    // Leaving a hovered video stops it; pressing it, its controls included, keeps it playing.
+    this.player.addEventListener("pointerdown", () => {
       if (!this.playing?.hover) return;
-      event.preventDefault();
       this.playing.hover = false;
-      this.mode(false);
+      this.player.loop = false;
       this.player.focus({ preventScroll: true });
     }, { signal });
     this.player.addEventListener("pointerleave", () => { if (this.playing?.hover) this.stop(); }, { signal });
@@ -195,7 +194,8 @@ export class CardVideos {
     this.playing = { ...playing, hover };
     playing.video.classList.add("is-playing");
     this.player.setAttribute("aria-label", playing.preview.label);
-    this.mode(hover);
+    this.player.muted = hover;
+    this.player.loop = hover;
     // Its first frame shows until the video's own does; the card's backdrop shows around it.
     const still = this.ready.get(playing.preview.digest);
     if (still) this.player.poster = still;
@@ -206,13 +206,6 @@ export class CardVideos {
     // Hovering never takes focus.
     if (!hover) this.player.focus({ preventScroll: true });
     void this.player.play().catch(() => {});
-  }
-  /** Muted, looping and bare while hovered; with sound and controls once asked for. */
-  private mode(hover: boolean) {
-    this.player.muted = hover;
-    this.player.loop = hover;
-    this.player.controls = !hover;
-    this.player.classList.toggle("is-hover", hover);
   }
   private cancelHover() {
     if (this.hoverTimer !== null) window.clearTimeout(this.hoverTimer);

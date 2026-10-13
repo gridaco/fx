@@ -257,7 +257,7 @@ including those that leave the deck.
 | Input | Closed deck | Expanded deck |
 |---|---|---|
 | Hover, only where `(hover: hover)` | raise the card under the pointer, and its linked partner; leaving restores the resting card | nothing; everything under the veil is inert |
-| Rest on a card's video, only where `(hover: hover)` and motion is not reduced | after a moment it plays muted and looping over the card until the pointer leaves; a click on it plays it with sound and controls | the same |
+| Rest on a card's video, only where `(hover: hover)` and motion is not reduced | after a moment it plays over the card, muted and looping, with its controls, until the pointer leaves; pressing it keeps it playing | the same |
 | Hover a bookmark row | raise that member, as hovering its card does | the camera glides to that member's card, which is outlined; leaving keeps the camera there |
 | Click a bookmark row | select that member (a frame member: its first step), which then rests in front | select it, and the camera glides to its card |
 | Still click on a card, a back card's visible rim or the badge | expand | select that member |
@@ -275,10 +275,10 @@ including those that leave the deck.
 | A deck inside an expanded card | — | a click expands it one level deeper. Only the innermost level is interactive; the levels around it are its veil, so a click on them collapses one level and selects nothing |
 
 A video plays over its card's preview, following the card as the camera and the deck move it, and
-selects nothing. Resting on it plays it muted, without taking focus or replacing a video played with
-sound. It stops when it ends, when the pointer leaves a muted one, on Esc (focus returns to its play
-control) and as soon as anything covers its card: another card raised over it, its deck resting with
-another card in front, or the veil of a deck it is not in.
+selects nothing. Resting on it plays it muted, without taking focus or replacing a video someone
+played or pressed. It stops when it ends, when the pointer leaves one that is only hovered, on Esc
+(focus returns to its play control) and as soon as anything covers its card: another card raised
+over it, its deck resting with another card in front, or the veil of a deck it is not in.
 
 On collapse, focus returns to the deck's front card. Raising a card never moves the focused
 element in the document. At most one deck per view is expanded, plus its nested levels. There are

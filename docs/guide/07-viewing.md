@@ -271,7 +271,8 @@ audio, and video use generic previews; other file types can be opened in a new t
 
 Run canvas cards also show the first available recorded image output. A step without
 one shows the first frame of its first MP4 or WebM video. Resting the pointer on it
-plays it muted and looping; click it, or its play button, to play it with sound. The
+plays it muted and looping, with the browser's video controls; press it to keep it
+playing after the pointer leaves, or use its play button to play it with sound. The
 video plays over the card, follows it as you pan and zoom, and stops when it ends, on
 Escape, or when another card covers it. A count indicates multiple distinct available images
 (or videos); select the card to inspect all outputs. The canvas uses the verified
