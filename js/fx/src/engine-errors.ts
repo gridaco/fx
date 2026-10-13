@@ -13,7 +13,7 @@
  * and the one hosting it may be two.
  */
 
-import { INTERNAL } from "./protocol.js";
+import { brandOf, INTERNAL } from "./protocol.js";
 
 const NODE_FAILURE_BRAND = Symbol.for("grida.fx.node_failure");
 const ENGINE_ERROR_BRAND = Symbol.for("grida.fx.engine_error");
@@ -23,14 +23,7 @@ function brand(error: Error, mark: symbol): void {
 }
 
 function branded(value: unknown, mark: symbol): boolean {
-  if ((typeof value !== "object" && typeof value !== "function") || value === null) {
-    return false;
-  }
-  try {
-    return (value as Record<symbol, unknown>)[mark] === true;
-  } catch {
-    return false;
-  }
+  return brandOf(value, mark) === true;
 }
 
 /** Whether `value` is a {@link NodeFailure} of any copy of `@grida/fx`. */

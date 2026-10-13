@@ -54,6 +54,7 @@ use grida_fx_core::host::Language;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 /// The variable that chooses the interpreter.
@@ -257,15 +258,22 @@ impl Probe {
 }
 
 /// Asks `program` (spawned as the host would be: see `host::program`) about itself as a host of
-/// `language`, once per process (module doc).
+/// `language`, once per process (module doc). Different programs are asked side by side.
 pub async fn probe(language: Language, program: &Path) -> Probe {
-    static PROBES: tokio::sync::Mutex<BTreeMap<(Language, PathBuf), Probe>> =
-        tokio::sync::Mutex::const_new(BTreeMap::new());
+    type Probes = BTreeMap<(Language, PathBuf), Arc<tokio::sync::OnceCell<Probe>>>;
+    static PROBES: Mutex<Probes> = Mutex::new(BTreeMap::new());
     let program = super::program(program);
-    let mut probes = PROBES.lock().await;
-    if let Some(known) = probes.get(&(language, program.clone())) {
-        return *known;
-    }
+    let answer = PROBES
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .entry((language, program.clone()))
+        .or_default()
+        .clone();
+    *answer.get_or_init(|| ask(language, program)).await
+}
+
+/// [`probe`]'s question, asked.
+async fn ask(language: Language, program: PathBuf) -> Probe {
     let (option, script, word) = match language {
         Language::Python => ("-c", PROBE_SCRIPT, "fx-python"),
         Language::TypeScript => ("-e", NODE_PROBE_SCRIPT, "fx-node"),
@@ -277,15 +285,13 @@ pub async fn probe(language: Language, program: &Path) -> Probe {
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .kill_on_drop(true);
-    let answered = match tokio::time::timeout(PROBE_LIMIT, command.output()).await {
+    match tokio::time::timeout(PROBE_LIMIT, command.output()).await {
         Ok(Ok(output)) if output.status.success() => {
             read_probe(word, &String::from_utf8_lossy(&output.stdout))
         }
         Ok(Err(error)) if error.kind() == std::io::ErrorKind::NotFound => Probe::Missing,
         _ => Probe::Unknown,
-    };
-    probes.insert((language, program), answered);
-    answered
+    }
 }
 
 /// The answer to a probe script: its last line, `<word> <major>.<minor>.<micro> <0|1>`

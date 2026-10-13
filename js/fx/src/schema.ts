@@ -24,7 +24,7 @@
  */
 
 import { NodeFailure } from "./engine-errors.js";
-import { isPlainObject, pointerToken, setOwn } from "./protocol.js";
+import { isPlainObject, placeAt, pointerToken, setOwn } from "./protocol.js";
 
 /** A segment of a place in a value (an array index or a member name) or in a schema. */
 type Segment = string | number;
@@ -54,7 +54,7 @@ export function checkedParams(
     setOwn(checked, name, value);
   }
   const skipped = new Set(Object.keys(files));
-  const seen = withFiles(params, files);
+  const seen = projectFiles(params, files);
   for (const [name, schema] of Object.entries(declared)) {
     if (!Object.hasOwn(params, name)) {
       continue;
@@ -75,38 +75,16 @@ export function checkedParams(
 
 /** The params with each file's plain projection, `{"file": <digest>}`, at its pointer (one that
  * names no place is passed over: the context refuses it when the body reads its params). */
-function withFiles(
+function projectFiles(
   params: Readonly<Record<string, unknown>>,
   files: Readonly<Record<string, string>>,
 ): Record<string, unknown> {
-  const pointers = Object.keys(files);
-  if (pointers.length === 0) {
+  if (Object.keys(files).length === 0) {
     return { ...params };
   }
   const copy = structuredClone({ ...params }) as Record<string, unknown>;
-  for (const pointer of pointers) {
-    const tokens = pointer
-      .split("/")
-      .slice(1)
-      .map((token) => token.replaceAll("~1", "/").replaceAll("~0", "~"));
-    if (!pointer.startsWith("/") || tokens.length === 0) {
-      continue;
-    }
-    let holder: unknown = copy;
-    for (const token of tokens.slice(0, -1)) {
-      holder = Array.isArray(holder)
-        ? holder[Number(token)]
-        : isPlainObject(holder) && Object.hasOwn(holder, token)
-          ? holder[token]
-          : undefined;
-    }
-    const last = tokens[tokens.length - 1] as string;
-    const projection = { file: files[pointer] };
-    if (Array.isArray(holder) && /^(?:0|[1-9][0-9]*)$/.test(last) && Number(last) < holder.length) {
-      holder[Number(last)] = projection;
-    } else if (isPlainObject(holder) && Object.hasOwn(holder, last)) {
-      setOwn(holder, last, projection);
-    }
+  for (const [pointer, digest] of Object.entries(files)) {
+    placeAt(copy, pointer, { file: digest });
   }
   return copy;
 }

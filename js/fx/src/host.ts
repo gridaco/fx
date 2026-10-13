@@ -50,6 +50,7 @@ import {
   type Channel,
   type Ctx,
   endAllTools,
+  isFile,
   RunContext,
   type RunParams,
   realPath,
@@ -802,15 +803,7 @@ export class Host {
   }
 
   async #buildInCwd(path: string, fn: string, args: Record<string, string>): Promise<unknown> {
-    let loaded: Loaded;
-    try {
-      loaded = await this.#load(path, `no builder file ${path}`);
-    } catch (error) {
-      if (error instanceof LoadError) {
-        throw new Refusal(LOAD_FAILED, error.message);
-      }
-      throw error;
-    }
+    const loaded = await this.#loadOrRefuse(path, `no builder file ${path}`);
     const builder = exportOf(loaded.namespace, fn);
     if (typeof builder !== "function") {
       throw new Refusal(LOAD_FAILED, `${path} has no function ${fn}`);
@@ -872,15 +865,7 @@ export class Host {
     if (typeof attribute !== "string" || !attribute) {
       throw new Refusal(INVALID_PARAMS, "run's body attribute is a name");
     }
-    let loaded: Loaded;
-    try {
-      loaded = await this.#load(path, `no module file ${path}`);
-    } catch (error) {
-      if (error instanceof LoadError) {
-        throw new Refusal(LOAD_FAILED, error.message);
-      }
-      throw error;
-    }
+    const loaded = await this.#loadOrRefuse(path, `no module file ${path}`);
     const record = nodeRecordOf(exportOf(loaded.namespace, attribute));
     if (record === undefined) {
       throw new Refusal(LOAD_FAILED, `${path}: ${attribute} is not an export declared with node()`);
@@ -1094,13 +1079,7 @@ export class Host {
     if (failure !== undefined) {
       throw new LoadError(failure);
     }
-    let isFile = false;
-    try {
-      isFile = statSync(file).isFile();
-    } catch {
-      isFile = false;
-    }
-    if (!isFile) {
+    if (!isFile(file)) {
       throw new LoadError(missing);
     }
     if (!isModuleFile(file)) {
@@ -1124,6 +1103,15 @@ export class Host {
     }
     this.#failures.set(relativePath, text);
     throw new LoadError(text);
+  }
+
+  /** {@link Host.#load}, its failure a `load_failed` refusal. */
+  async #loadOrRefuse(path: string, missing: string): Promise<Loaded> {
+    try {
+      return await this.#load(path, missing);
+    } catch (error) {
+      throw error instanceof LoadError ? new Refusal(LOAD_FAILED, error.message) : error;
+    }
   }
 
   /** `<shown> failed to import: <why>` (§5.1), for the module the host named `shown`. */
@@ -1538,13 +1526,7 @@ async function importStandIn(
   shown: string,
 ): Promise<Record<string, unknown>> {
   const file = realPath(path);
-  let isFile = false;
-  try {
-    isFile = statSync(file).isFile();
-  } catch {
-    isFile = false;
-  }
-  if (!isFile) {
+  if (!isFile(file)) {
     throw new Refusal(LOAD_FAILED, `no stand-in file ${shown}`);
   }
   if (!isModuleFile(path)) {

@@ -718,6 +718,41 @@ export function pointerToken(key: string): string {
   return key.replaceAll("~", "~0").replaceAll("/", "~1");
 }
 
+/** Sets the place the JSON pointer `pointer` (RFC 6901) names inside `root` to `value`: an item
+ * an array has, or a member a plain object has. Whether it did: nothing is set for a pointer that
+ * names no such place. */
+export function placeAt(root: unknown, pointer: string, value: unknown): boolean {
+  if (!pointer.startsWith("/")) {
+    return false;
+  }
+  const tokens = pointer
+    .slice(1)
+    .split("/")
+    .map((token) => token.replaceAll("~1", "/").replaceAll("~0", "~"));
+  const last = tokens.pop() as string;
+  let holder = root;
+  for (const token of tokens) {
+    if (!holds(holder, token)) {
+      return false;
+    }
+    holder = (holder as Record<string, unknown>)[token];
+  }
+  if (!holds(holder, last)) {
+    return false;
+  }
+  setOwn(holder as object, last, value);
+  return true;
+}
+
+/** Whether `holder` is an array with an item at the index `token` (written without leading
+ * zeros), or a plain object with its own member `token`. */
+function holds(holder: unknown, token: string): boolean {
+  if (Array.isArray(holder)) {
+    return /^(?:0|[1-9][0-9]*)$/.test(token) && Number(token) < holder.length;
+  }
+  return isPlainObject(holder) && Object.hasOwn(holder, token);
+}
+
 function shortInteger(value: number): string {
   const digits = BigInt(Math.abs(value));
   if (Math.abs(value) < 1e40) {
@@ -761,20 +796,28 @@ export function typeName(value: unknown): string {
   if (isPlainObject(value)) {
     return "an object";
   }
-  const object = value as Record<PropertyKey, unknown>;
   // Files of any copy of @grida/fx, by their brands.
-  if (safely(() => object[Symbol.for("grida.fx.input_file")]) !== undefined) {
+  if (brandOf(value, Symbol.for("grida.fx.input_file")) !== undefined) {
     return "an InputFile";
   }
-  if (safely(() => object[Symbol.for("grida.fx.output")]) !== undefined) {
+  if (brandOf(value, Symbol.for("grida.fx.output")) !== undefined) {
     return "an Output";
   }
-  const constructor = safely(() => object.constructor);
+  const constructor = safely(() => (value as { constructor?: unknown }).constructor);
   const name = typeof constructor === "function" ? constructor.name : "";
   if (!name) {
     return "an object";
   }
   return `${article(name)} ${name}`;
+}
+
+/** What an object or a function holds under the brand `mark` (a `Symbol.for` key, so a value of
+ * any copy of `@grida/fx` has it); undefined for anything else, or when reading it throws. */
+export function brandOf(value: unknown, mark: symbol): unknown {
+  if ((typeof value !== "object" && typeof value !== "function") || value === null) {
+    return undefined;
+  }
+  return safely(() => (value as Record<symbol, unknown>)[mark]);
 }
 
 /** "a" or "an" before a name, by how it is said: an Item, a Uint8Array, a URL. */

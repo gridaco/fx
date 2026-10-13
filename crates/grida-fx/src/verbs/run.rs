@@ -71,9 +71,8 @@ use grida_fx_core::host::{Language, NodeHost};
 use grida_fx_core::project::{PlanRequest, Planner, make_planner};
 use grida_fx_core::val::{FileValue, Val};
 use grida_fx_core::{Error, ErrorKind};
-use grida_fx_runtime::engine::{Engine, root_labels, scrub_paths};
+use grida_fx_runtime::engine::{Engine, scrub_paths};
 use grida_fx_runtime::folder::{keyed_path, new_folder};
-use grida_fx_runtime::host::locate::{node_host_entry, node_runtime, python_interpreter};
 use grida_fx_runtime::host::process::HostSpec;
 use grida_fx_runtime::run_index::RunIndex;
 use grida_fx_runtime::runner::{self, RunError, RunOptions, RunOutcome};
@@ -480,13 +479,13 @@ fn start_stand_in(
                     format!("the stand-in {file}#{function} could not be loaded: {reason}"),
                 )
             };
+            // The planning project is its only project: no second root to look in.
             let env = |name: &str| std::env::var(name).ok();
-            let spec = stand_in_spec(language, project, &env).map_err(refused)?;
+            let sources = project.document.sources.clone();
+            let spec =
+                HostSpec::locate(language, &project.root, None, sources, &env).map_err(refused)?;
             // Node's messages may name the files of a @grida/fx outside the project.
-            let package: Vec<(String, String)> = spec
-                .host_package(&project.root)
-                .map(|package| root_labels(&package, Language::TypeScript.sdk()))
-                .unwrap_or_default();
+            let package = spec.package_labels();
             let path = std::path::absolute(&path).unwrap_or(path);
             runtime
                 .block_on(ConnectionAnswerer::start_host(&spec, cwd, &path, &function))
@@ -502,30 +501,6 @@ fn start_stand_in(
             })?,
     };
     Ok(Arc::new(StandIn::new(Arc::new(answerer))))
-}
-
-/// How a stand-in host of `language` starts for the planning project `project` (its only
-/// project: no second root for the interpreter); `Err` is why it cannot.
-fn stand_in_spec(
-    language: Language,
-    project: &grida_fx_core::docs::project::Project,
-    env: &dyn Fn(&str) -> Option<String>,
-) -> Result<HostSpec, String> {
-    let root = &project.root;
-    let sources = project.document.sources.clone();
-    Ok(match language {
-        Language::Python => {
-            let python = python_interpreter(root, None, env);
-            let label = grida_fx_runtime::host::label(&python, root);
-            HostSpec::python(python, label, root, sources)
-        }
-        Language::TypeScript => {
-            let entry = node_host_entry(root, None, env)?;
-            let node = node_runtime(env);
-            let label = grida_fx_runtime::host::label(&node, root);
-            HostSpec::typescript(node, entry, label, root, sources)
-        }
-    })
 }
 
 /// The answerer on the socket of `--stand-in -`.

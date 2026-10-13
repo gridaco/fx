@@ -15,7 +15,7 @@ grida fx --version
 
 Or run any command without installing, as `npx grida fx <command>`. Workflow steps written in
 Python need the Python SDK too: `pip install grida` (Python 3.11 or later). Steps written in
-TypeScript need `@grida/fx` in the project: `npm install @grida/fx` (Node 24 or later).
+TypeScript need Node 24 or later, and `npm install @grida/fx` in the project for type checking.
 
 ## Connect an AI provider
 

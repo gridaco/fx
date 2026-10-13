@@ -418,7 +418,9 @@ fn python_line(
     };
     let opened = host.open_project(&project.root, &project.document.sources);
     if opened.is_ok()
-        && let Some(state) = host.probe().as_ref().and_then(unhostable)
+        && let Some(state) = host
+            .probe()
+            .and_then(|probe| unhostable(Language::Python, &probe))
     {
         return labelled("python", &format!("{shown} {state}"));
     }
@@ -442,7 +444,10 @@ fn node_line(
         .program_label()
         .unwrap_or_else(|| label(&node_runtime(env), &project.root));
     let probe = if opened.is_ok() { host.probe() } else { None };
-    if let Some(state) = probe.as_ref().and_then(unhostable_node) {
+    if let Some(state) = probe
+        .as_ref()
+        .and_then(|probe| unhostable(Language::TypeScript, probe))
+    {
         return labelled("node", &format!("{shown} {state}"));
     }
     // Only a project with a package.json starts the host, whose program may lie above it.
@@ -487,31 +492,27 @@ fn started(host: &mut LanguageHost, opened: Result<(), HostFailure>, sdk: &str) 
     }
 }
 
-/// Why an interpreter that answered `probe` cannot host nodes, so it is not started: `NOT
-/// FOUND`, `too old (<version>; FX needs 3.11+)` or `no grida`; `None` when it may.
-fn unhostable(probe: &Probe) -> Option<String> {
-    let (major, minor) = MINIMUM_PYTHON;
+/// Why the program that answered `probe` cannot host `language`'s nodes, so it is not started:
+/// `NOT FOUND`; `too old (<version>; FX needs 3.11+)` or `(…; FX needs 24+)`; `no grida`
+/// (Python) or `not Node.js 24+` (Node); `None` when it may.
+fn unhostable(language: Language, probe: &Probe) -> Option<String> {
+    let (minimum, not_ready) = match language {
+        Language::Python => {
+            let (major, minor) = MINIMUM_PYTHON;
+            (format!("{major}.{minor}+"), "no grida".to_string())
+        }
+        Language::TypeScript => (
+            format!("{MINIMUM_NODE}+"),
+            format!("not Node.js {MINIMUM_NODE}+"),
+        ),
+    };
     match probe {
         Probe::Missing => Some("NOT FOUND".to_string()),
-        Probe::Answered { .. } if probe.is_too_old(Language::Python) => Some(format!(
-            "too old ({}; FX needs {major}.{minor}+)",
+        Probe::Answered { .. } if probe.is_too_old(language) => Some(format!(
+            "too old ({}; FX needs {minimum})",
             probe.version_text().unwrap_or_default()
         )),
-        Probe::Answered { ready: false, .. } => Some("no grida".to_string()),
-        Probe::Answered { .. } | Probe::Unknown => None,
-    }
-}
-
-/// Why a Node that answered `probe` cannot host nodes, so it is not started: `NOT FOUND`, `too
-/// old (<version>; FX needs 24+)` or `not Node.js 24+`; `None` when it may.
-fn unhostable_node(probe: &Probe) -> Option<String> {
-    match probe {
-        Probe::Missing => Some("NOT FOUND".to_string()),
-        Probe::Answered { .. } if probe.is_too_old(Language::TypeScript) => Some(format!(
-            "too old ({}; FX needs {MINIMUM_NODE}+)",
-            probe.version_text().unwrap_or_default()
-        )),
-        Probe::Answered { ready: false, .. } => Some(format!("not Node.js {MINIMUM_NODE}+")),
+        Probe::Answered { ready: false, .. } => Some(not_ready),
         Probe::Answered { .. } | Probe::Unknown => None,
     }
 }
@@ -765,44 +766,53 @@ mod tests {
     fn an_interpreter_that_cannot_host_says_why() {
         let answered = |version, ready| Probe::Answered { version, ready };
         assert_eq!(
-            unhostable(&answered((3, 9, 6), true)).as_deref(),
+            unhostable(Language::Python, &answered((3, 9, 6), true)).as_deref(),
             Some("too old (3.9.6; FX needs 3.11+)")
         );
         // Too old wins over no grida: installing grida would not help.
         assert_eq!(
-            unhostable(&answered((3, 9, 6), false)).as_deref(),
+            unhostable(Language::Python, &answered((3, 9, 6), false)).as_deref(),
             Some("too old (3.9.6; FX needs 3.11+)")
         );
         assert_eq!(
-            unhostable(&answered((3, 12, 4), false)).as_deref(),
+            unhostable(Language::Python, &answered((3, 12, 4), false)).as_deref(),
             Some("no grida")
         );
-        assert_eq!(unhostable(&Probe::Missing).as_deref(), Some("NOT FOUND"));
-        assert_eq!(unhostable(&answered((3, 11, 0), true)), None);
-        assert_eq!(unhostable(&Probe::Unknown), None);
+        assert_eq!(
+            unhostable(Language::Python, &Probe::Missing).as_deref(),
+            Some("NOT FOUND")
+        );
+        assert_eq!(
+            unhostable(Language::Python, &answered((3, 11, 0), true)),
+            None
+        );
+        assert_eq!(unhostable(Language::Python, &Probe::Unknown), None);
     }
 
     #[test]
     fn a_node_that_cannot_host_says_why() {
         let answered = |version, ready| Probe::Answered { version, ready };
         assert_eq!(
-            unhostable_node(&answered((22, 12, 0), true)).as_deref(),
+            unhostable(Language::TypeScript, &answered((22, 12, 0), true)).as_deref(),
             Some("too old (22.12.0; FX needs 24+)")
         );
         assert_eq!(
-            unhostable_node(&answered((20, 1, 0), false)).as_deref(),
+            unhostable(Language::TypeScript, &answered((20, 1, 0), false)).as_deref(),
             Some("too old (20.1.0; FX needs 24+)")
         );
         assert_eq!(
-            unhostable_node(&answered((24, 3, 0), false)).as_deref(),
+            unhostable(Language::TypeScript, &answered((24, 3, 0), false)).as_deref(),
             Some("not Node.js 24+")
         );
         assert_eq!(
-            unhostable_node(&Probe::Missing).as_deref(),
+            unhostable(Language::TypeScript, &Probe::Missing).as_deref(),
             Some("NOT FOUND")
         );
-        assert_eq!(unhostable_node(&answered((24, 0, 0), true)), None);
-        assert_eq!(unhostable_node(&Probe::Unknown), None);
+        assert_eq!(
+            unhostable(Language::TypeScript, &answered((24, 0, 0), true)),
+            None
+        );
+        assert_eq!(unhostable(Language::TypeScript, &Probe::Unknown), None);
     }
 
     #[test]

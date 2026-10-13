@@ -10,35 +10,16 @@
 //! process that was never ended kills it with its group.
 //!
 //! A Python host inherits the engine's stderr. A TypeScript host's stderr is a pipe of its own
-//! (Unix), which a thread copies to the engine's stderr until every holder has closed it. The
-//! host opens its stderr anew to point descriptor 1 at it, and Node makes the streams it writes
-//! to non-blocking; an inherited stderr would take both to the engine's own: Linux cannot open a
-//! socket anew, a regular file opened anew there has an offset of its own (the host's output and
-//! the engine's overwrite each other), and a stream left non-blocking makes the engine's later
-//! writes fail while its reader is slow. The copy writes whole lines under the stderr lock, which
-//! the engine's own stderr lines are written under too ([`crate::stderr`]), so the lines of hosts
-//! that print at once, and the engine's own, never splice. Each write is at most 512 bytes of
-//! whole lines (POSIX's smallest `PIPE_BUF`, which a pipe takes whole) or one longer line, so a
-//! pipe that also carries the engine's stdout gets the engine's lines between them. A line is
-//! written in parts only once 64 KiB of it is held, and an unfinished last line at the end. An
-//! engine stderr that a parent made non-blocking and that cannot take more now is waited for until
-//! it can; a failed write (the reader has gone) ends the copy's writing, though it still reads its
-//! pipe to the end.
+//! (Unix), which a thread ([`StderrCopy`]) copies to the engine's stderr as spec/protocol.md §1
+//! "Output streams" states, with why an inherited stderr would not do: whole lines under the
+//! stderr lock the engine's own lines take too ([`crate::stderr`]), at most 512 bytes of them per
+//! write, a line in parts only past [`LONGEST_LINE`].
 //!
-//! Ending a TypeScript host waits, after the host has exited and its group has been killed, for
-//! the copy to write what the host left: what its pipe holds then, measured, and what the copy
-//! holds. That is bound by bytes, not time: it is waited for however slowly the engine's stderr is
-//! read, or however late its reader starts (`2>&1 | less`, its first screen read at leisure), as a
-//! blocking stderr is. Two things end the wait before the copy does, since a process that left the
-//! host's group may hold the pipe: the copy has waited a second in all for its pipe (such a process
-//! holds it idle, or prints now and then); or, once the copy has read more than the host left
-//! (such a process is printing), 10 seconds have passed since, however fast or slowly that text
-//! is read (it may be printed faster than the engine's stderr is read, or into a stderr nobody
-//! reads). [`end_every_host`], which the command calls before it exits, waits for every copy that
-//! has not ended by the same rule, on the same limits for a copy waited for before: what a host
-//! wrote is not lost when the command exits right after. [`end_every_host_now`], which an
-//! interrupted command calls, waits by that rule too, 2 seconds at most from its call whatever the
-//! copies do: an interrupted command always ends.
+//! Ending a TypeScript host waits for its copy by that section's rule: bound by what the host
+//! left, not by time, unless the copy has waited [`DRAIN`] in all for its pipe, or
+//! [`DRAIN_IN_ALL`] has passed since it read more than the host left. [`end_every_host`], which
+//! the command calls before it exits, waits for every copy left by the same rule;
+//! [`end_every_host_now`], which an interrupted command calls, for [`EXIT_DRAIN`] at most.
 //!
 //! [`HostProcess::start`] spawns, opens a [`Connection`] and sends `initialize`
 //! ([`HostProcess::start_in`]: in another working directory, for a stand-in host) with the
@@ -161,6 +142,33 @@ impl HostSpec {
         }
     }
 
+    /// The host of `language` for the project at `root`, with what [`locate`] finds from it, else
+    /// from the `planning` project: the interpreter (Python), or Node and the host program of a
+    /// `@grida/fx` (TypeScript). The program is named relative to either project when it lies in
+    /// one ([`super::label_from`]). `Err` is why there is no host program; `env` reads an
+    /// environment variable.
+    pub fn locate(
+        language: Language,
+        root: &Path,
+        planning: Option<&Path>,
+        sources: Vec<String>,
+        env: &dyn Fn(&str) -> Option<String>,
+    ) -> Result<HostSpec, String> {
+        Ok(match language {
+            Language::Python => {
+                let python = locate::python_interpreter(root, planning, env);
+                let label = super::label_from(&python, root, planning);
+                HostSpec::python(python, label, root, sources)
+            }
+            Language::TypeScript => {
+                let entry = locate::node_host_entry(root, planning, env)?;
+                let node = locate::node_runtime(env);
+                let label = super::label_from(&node, root, planning);
+                HostSpec::typescript(node, entry, label, root, sources)
+            }
+        })
+    }
+
     /// The same host, started without checking its program first (a program of the caller's
     /// own, such as a test's fake host, that ignores its arguments).
     pub fn unchecked(mut self) -> HostSpec {
@@ -178,6 +186,15 @@ impl HostSpec {
             }
             Language::Python => None,
         }
+    }
+
+    /// [`HostSpec::host_package`] of its own project, labelled `@grida/fx` for
+    /// [`crate::engine::scrub_paths`] ([`crate::engine::root_labels`]): Node's messages may name
+    /// its files. Empty for a Python host, or a host program inside the project.
+    pub fn package_labels(&self) -> Vec<(String, String)> {
+        self.host_package(&self.project_root)
+            .map(|package| crate::engine::root_labels(&package, Language::TypeScript.sdk()))
+            .unwrap_or_default()
     }
 }
 

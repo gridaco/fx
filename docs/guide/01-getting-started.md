@@ -71,14 +71,16 @@ The first workflow below uses `image.check_alpha`, so it needs Python.
 
 Nodes, builders and [stand-ins](05-running.md#stand-ins-testing-without-a-provider) you write in
 TypeScript (or JavaScript) run on Node, in the node host that `@grida/fx` carries. A project with
-any of them needs:
+any of them needs Node, and should install `@grida/fx`:
 - **Node 24 or later.** Node runs your `.ts` files as they are, stripping their types, and tells
   FX which files each node imports ([Nodes](03-nodes.md#writing-a-node-type-in-typescript)). Bun
   and Deno cannot host nodes.
-- **`@grida/fx` in the project** (`npm install @grida/fx`), whose `node` your modules import. FX
-  starts the host from the `@grida/fx` the workflow's project would import (its `node_modules`, or
-  a parent folder's), else the one the project you run from would import; without either, from
-  the `@grida/fx` that started FX, such as the one `grida fx` carries.
+- **`@grida/fx` in the project** (`npm install @grida/fx`), whose `node` your modules import:
+  `tsc` checks your nodes against it, and it pins the host they run in. FX starts the host from
+  the `@grida/fx` the workflow's project would import (its `node_modules`, or a parent folder's),
+  else the one the project you run from would import; without either, from the `@grida/fx` that
+  started FX, such as the one `grida fx` carries, and your modules' `@grida/fx` imports get that
+  one.
 
 FX uses `GRIDA_FX_NODE` when it is set, else the Node that runs `grida fx` or the JavaScript SDK
 ([Running](05-running.md#from-javascript)), else `node` on `PATH`. An older Node is refused before

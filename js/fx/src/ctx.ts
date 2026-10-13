@@ -68,6 +68,7 @@ import {
   isPlainObject,
   NODE_ERROR,
   NODE_FAILURE,
+  placeAt,
   pyRepr,
   safeString,
   setOwn,
@@ -703,55 +704,15 @@ function staged(value: Record<string, unknown>): unknown {
   return new InputFile(value as unknown as FileRefWire);
 }
 
-/** Puts `file` at the RFC 6901 `pointer` into `params`. */
+/** Puts `file` at the RFC 6901 `pointer` into `params`, at a place they have. */
 function putAt(params: Record<string, unknown>, pointer: string, file: InputFile): void {
-  const tokens = pointer
-    .split("/")
-    .slice(1)
-    .map((token) => token.replaceAll("~1", "/").replaceAll("~0", "~"));
-  if (!pointer.startsWith("/") || tokens.length === 0) {
+  if (!pointer.startsWith("/")) {
     const shown = JSON.stringify(pointer);
     throw new TypeError(`param_files names ${shown}, which is not a pointer into params`);
   }
-  const missing = () => new TypeError(`param_files names ${pointer}, which is not in params`);
-  let target: unknown = params;
-  for (const token of tokens.slice(0, -1)) {
-    target = step(target, token, missing);
+  if (!placeAt(params, pointer, file)) {
+    throw new TypeError(`param_files names ${pointer}, which is not in params`);
   }
-  const last = tokens[tokens.length - 1] as string;
-  if (Array.isArray(target)) {
-    const index = arrayIndex(target, last);
-    if (index === null) {
-      throw missing();
-    }
-    target[index] = file;
-  } else if (isPlainObject(target)) {
-    setOwn(target, last, file);
-  } else {
-    throw missing();
-  }
-}
-
-function step(target: unknown, token: string, missing: () => Error): unknown {
-  if (Array.isArray(target)) {
-    const index = arrayIndex(target, token);
-    if (index === null) {
-      throw missing();
-    }
-    return target[index];
-  }
-  if (isPlainObject(target) && Object.hasOwn(target, token)) {
-    return target[token];
-  }
-  throw missing();
-}
-
-function arrayIndex(array: unknown[], token: string): number | null {
-  if (!/^(?:0|[1-9][0-9]*)$/.test(token)) {
-    return null;
-  }
-  const index = Number(token);
-  return index < array.length ? index : null;
 }
 
 /** Every {@link Output} inside arrays and plain objects of `value`, each once. */
@@ -1130,7 +1091,8 @@ function transcriptOf(data: unknown): JsonValue[] {
   return [];
 }
 
-function isFile(path: string): boolean {
+/** Whether `path` is a file (following symbolic links). */
+export function isFile(path: string): boolean {
   try {
     return statSync(path).isFile();
   } catch {
@@ -1259,13 +1221,7 @@ function makeMaker(ctx: RunContext): Maker {
       const workDir = ctx.realWorkDir();
       const made = kind ?? kindOf(given);
       if (within(resolved, workDir) && resolved !== workDir) {
-        let file = false;
-        try {
-          file = statSync(resolved).isFile();
-        } catch {
-          file = false;
-        }
-        if (!file) {
+        if (!isFile(resolved)) {
           throw new Error(`${given} is not a file`);
         }
         return makeOutput(made, { workPath: relative(workDir, resolved).split(sep).join("/") });

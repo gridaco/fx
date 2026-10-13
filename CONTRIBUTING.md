@@ -43,11 +43,12 @@ plans, records and exports are byte-identical under each (the invoker, `GRIDA_FX
   from the `@grida/fx` the workflow's project resolves (`node_modules/@grida/fx`, in the project
   or a folder above it), else from the one the planning project resolves, else it is
   `GRIDA_FX_SDK_NODE_HOST`. Records and messages call the folder of an `@grida/fx` outside the
-  workflow's project `@grida/fx`, never its absolute path, and `doctor` starts the host only for
-  a project with a `package.json`. `@grida/fx`'s SDK calls and launchers (`grida-fx`, and
-  `grida fx` through `@grida/fx/cli`) set `GRIDA_FX_SDK_NODE` to the Node running them (not under
-  Bun or Deno) and `GRIDA_FX_SDK_NODE_HOST` to their own `dist/host-entry.js`;
-  `python -m grida.fx` sets neither ([spec/protocol.md](spec/protocol.md) §1, §8.2).
+  workflow's project `@grida/fx`, never its absolute path, and `doctor`'s Node line starts the
+  host only for a project with a `package.json`. `@grida/fx`'s SDK calls and launchers
+  (`grida-fx`, and `grida fx` through `@grida/fx/cli`) set `GRIDA_FX_SDK_NODE` to the Node
+  running them (not under Bun or Deno) and `GRIDA_FX_SDK_NODE_HOST` to their own
+  `dist/host-entry.js`; `python -m grida.fx` sets neither ([spec/protocol.md](spec/protocol.md)
+  §1, §8.2).
 - **Versions.** Each `grida` release pins one FX version, and FX releases first
   ([RELEASING.md](RELEASING.md#then-grida)). `grida` names a newer release itself; `@grida/fx`
   and `grida-fx` never check for updates.

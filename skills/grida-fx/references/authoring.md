@@ -137,8 +137,9 @@ folders does not avoid it.
 
 ## Custom TypeScript nodes
 
-Node 24 or later is required to host them (Bun and Deno cannot), with `@grida/fx`
-installed in the project:
+Node 24 or later is required to host them (Bun and Deno cannot). Install
+`@grida/fx` in the project, so `tsc` checks your nodes against it and the project
+pins the host they run in (without one, `grida fx` hosts them with its own):
 
 ```sh
 npm install @grida/fx

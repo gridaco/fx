@@ -21,9 +21,10 @@ The platforms are `@grida/fx`'s ([RELEASING.md](../RELEASING.md)). Where FX has 
 SDK imports stay `@grida/fx` (JavaScript) and `grida.fx` (Python). `grida` re-exports no FX API.
 
 Each SDK also carries the node host of its language ([protocol.md](protocol.md) §1): `@grida/fx`
-the TypeScript one, on Node 24 or later, and PyPI `grida` the Python one. A project's own
-`@grida/fx` hosts its TypeScript nodes when it has one; otherwise the `@grida/fx` that started
-the engine does, so `grida fx` runs them with the `@grida/fx` that `grida` pins.
+the TypeScript one, on Node 24 or later, and PyPI `grida` the Python one. The `@grida/fx`
+the workflow's project resolves hosts its TypeScript nodes, else the one the planning project
+resolves; otherwise the `@grida/fx` that started the engine does, so `grida fx` runs them with
+the `@grida/fx` that `grida` pins.
 
 ## 2. The invoker
 
@@ -68,9 +69,10 @@ exports its launcher for hosts as `@grida/fx/cli`:
   own; SIGINT, SIGTERM, SIGHUP and SIGQUIT are passed on once per interruption; Ctrl-Z stops
   both. `invoker` is `grida-fx` (the default) or `grida`; any other throws a `TypeError` before
   anything runs. The environment gains `GRIDA_FX_INVOKER` (§2) and, for the TypeScript node
-  host, `GRIDA_FX_SDK_NODE`, the Node running `launch` (only on Node, not Bun or Deno), and
-  `GRIDA_FX_SDK_NODE_HOST`, the path of this `@grida/fx`'s own host program
-  ([protocol.md](protocol.md) §1, §8.2), each replacing an inherited value.
+  host, `GRIDA_FX_SDK_NODE`, the Node running `launch`, and `GRIDA_FX_SDK_NODE_HOST`, the path
+  of this `@grida/fx`'s own host program ([protocol.md](protocol.md) §1, §8.2). Each replaces an
+  inherited value. Neither is set where it does not apply (under Bun or Deno, or without a built
+  host program), so an inherited one stays.
 - `INVOKER_VARIABLE` and `COMMANDS`: the variable of §2, and each invoker's command.
 
 A host:

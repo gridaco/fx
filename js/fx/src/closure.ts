@@ -471,9 +471,17 @@ export class Closures {
   closeRun(scope: RunScope, url: string, baseline: ReadonlySet<string>): ClosureEntry[] {
     scope.open = false;
     this.settle();
-    const own = new Set(this.#walk(url, null).map((entry) => entry.path));
+    if (scope.edges.size === 0 && scope.loaded.size === 0) {
+      return []; // most runs: the closure is the module's own, and the run loaded nothing new
+    }
+    // Without edges of the run's own, the walk is the module's own closure, and nothing in it
+    // is reached only through the run's edges.
+    const own =
+      scope.edges.size === 0 ? null : new Set(this.#walk(url, null).map((entry) => entry.path));
     const outside = this.#walk(url, scope.edges).filter(
-      (entry) => !baseline.has(entry.path) && (scope.loaded.has(entry.path) || !own.has(entry.path)),
+      (entry) =>
+        !baseline.has(entry.path) &&
+        (scope.loaded.has(entry.path) || (own !== null && !own.has(entry.path))),
     );
     const neverLoaded = (entry: ClosureEntry) => (this.#loadedFiles.has(entry.path) ? 0 : 1);
     // Sorted by label already: a stable sort keeps that order within each part.

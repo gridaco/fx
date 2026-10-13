@@ -244,11 +244,8 @@ impl LanguageHost {
     /// [`crate::engine::scrub_paths`]: Node's messages may name its files, and the host cuts only
     /// the project's own paths. Empty for a Python host, or a host program inside the project.
     fn package_roots(&self) -> Vec<(String, String)> {
-        let (Some(Ok(entry)), Some(root)) = (self.host_program(), &self.project_root) else {
-            return Vec::new();
-        };
-        locate::host_package(&entry, root)
-            .map(|package| crate::engine::root_labels(&package, Language::TypeScript.sdk()))
+        self.spec()
+            .map(|spec| spec.package_labels())
             .unwrap_or_default()
     }
 
@@ -273,14 +270,10 @@ impl LanguageHost {
 
     /// How the host of the open project starts; `Err` is why it cannot.
     fn spec(&self) -> Result<HostSpec, String> {
-        let Some(root) = self.project_root.clone() else {
+        // With a project, there is always a program.
+        let (Some(root), Some(program)) = (self.project_root.clone(), self.program()) else {
             return Err("the node host has no project: open one before describe or build".into());
         };
-        let fallback = match self.language {
-            Language::Python => "python3",
-            Language::TypeScript => "node",
-        };
-        let program = self.program().unwrap_or_else(|| PathBuf::from(fallback));
         let label = label_from(&program, &root, self.planning_root.as_deref());
         let spec = match self.language {
             Language::Python => HostSpec::python(program, label, root, self.sources.clone()),

@@ -8,6 +8,7 @@
  */
 
 import { readFile } from "node:fs/promises";
+import { brandOf } from "./protocol.js";
 import type { JsonValue } from "./workflow.js";
 
 /** The brand of an {@link InputFile}: its file ref, as the engine sent it. */
@@ -124,22 +125,16 @@ export function makeOutput(kind: string, source: OutputSource): Output {
 /** The file ref of an {@link InputFile} of any copy of `@grida/fx`; undefined for anything
  * else. */
 export function fileRefOf(value: unknown): FileRefWire | undefined {
-  return brandOf(value, INPUT_FILE) as FileRefWire | undefined;
+  return objectBrand(value, INPUT_FILE) as FileRefWire | undefined;
 }
 
 /** Where an {@link Output} of any copy of `@grida/fx` is; undefined for anything else. */
 export function outputSourceOf(value: unknown): OutputSource | undefined {
-  return brandOf(value, OUTPUT) as OutputSource | undefined;
+  return objectBrand(value, OUTPUT) as OutputSource | undefined;
 }
 
-function brandOf(value: unknown, mark: symbol): unknown {
-  if (typeof value !== "object" || value === null) {
-    return undefined;
-  }
-  try {
-    const found = (value as Record<symbol, unknown>)[mark];
-    return typeof found === "object" && found !== null ? found : undefined;
-  } catch {
-    return undefined;
-  }
+/** The object an object holds under the brand `mark`; undefined for anything else. */
+function objectBrand(value: unknown, mark: symbol): object | undefined {
+  const found = typeof value === "object" ? brandOf(value, mark) : undefined;
+  return typeof found === "object" && found !== null ? found : undefined;
 }

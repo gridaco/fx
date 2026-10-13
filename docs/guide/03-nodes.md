@@ -459,7 +459,7 @@ The fields are `@node`'s, with the type's name as `name`. The body's types follo
 | `ctx.progress(text, fraction)` | shown live by `grida fx run` |
 | `ctx.signal` | an `AbortSignal`, aborted when FX stops the node (its step's `timeout:`, a stopped run): pass it on to what you await, or check `ctx.signal.aborted` in long loops |
 | `throw ctx.fail(message)` | a broken result: the step fails with your message (not a take) |
-| `ctx.instance` | `.id`, `.path`, `.step`, `.key` and `.take` of the instance running |
+| `ctx.instance` | `.id`, `.path`, `.step`, `.key`, `.take` and `.takes` of the instance running |
 
 The JSON values you give FX (facts, marks, `ctx.out.json`, a call's request) are checked before
 they leave: `NaN`, the infinities, integers beyond 2^53, `undefined` in an array, and objects that

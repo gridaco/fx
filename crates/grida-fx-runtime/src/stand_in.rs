@@ -309,10 +309,10 @@ impl ConnectionAnswerer {
 /// The language of an answerer, as it named it in `initialize` (`typescript`); Python
 /// otherwise.
 fn answering_language(language: &str) -> Language {
-    match language {
-        "typescript" => Language::TypeScript,
-        _ => Language::Python,
-    }
+    Language::ALL
+        .into_iter()
+        .find(|known| known.name() == language)
+        .unwrap_or(Language::Python)
 }
 
 /// `initialize` on a fresh connection (spec/protocol.md §2): the answer's protocol must be ours.

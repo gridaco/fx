@@ -253,9 +253,9 @@ found:
 - `node      /usr/local/bin/node cannot start: <why>`: it started and failed, for example an
   `@grida/fx` too old for this FX.
 
-Doctor starts the TypeScript node host only in a project with a `package.json` (the workflow's
-project, or the one you run from), since the host could come from an `@grida/fx` in a folder above
-it. Without one, the Node line says only what that Node answered,
+For its Node line, doctor starts the TypeScript node host only in a project with a `package.json`
+(the workflow's project, or the one you run from), since the host could come from an `@grida/fx`
+in a folder above it. Without one, that line says only what that Node answered,
 `node      /usr/local/bin/node (Node 24.14.0)` (or `node      /usr/local/bin/node` when it gave
 no answer), after the same checks for `too old`, `not Node.js 24+` and `NOT FOUND`.
 

@@ -76,8 +76,9 @@ supported. Windows users can use WSL 2. Python nodes, Python builders, and local
 built-ins such as `image.resize`, `files.copy`, and `package` need Python with the
 `grida` package even when invoked through npm. `GRIDA_FX_PYTHON` can select that
 interpreter. TypeScript nodes, builders and stand-in files need Node 24 or later
-(not Bun or Deno) and `@grida/fx` installed in the project; `GRIDA_FX_NODE` can
-select that Node. Installed viewers carry their own web client.
+(not Bun or Deno); `GRIDA_FX_NODE` can select that Node. Install `@grida/fx` in
+the project for `tsc` and to pin the host; without one, `grida fx` hosts them
+with its own. Installed viewers carry their own web client.
 
 ## Set up a project
 

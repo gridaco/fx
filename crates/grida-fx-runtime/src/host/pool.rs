@@ -314,11 +314,15 @@ impl HostPools {
     /// Shuts every pool down ([`HostPool::shutdown`]), all of them whatever one reports; whether
     /// every owned child of every pool was reaped.
     pub async fn shutdown(&self) -> bool {
-        let mut verified = true;
-        for pool in [&self.python, &self.typescript].into_iter().flatten() {
-            verified &= pool.shutdown().await;
+        async fn end(pool: &Result<Arc<HostPool>, String>) -> bool {
+            match pool {
+                Ok(pool) => pool.shutdown().await,
+                Err(_) => true,
+            }
         }
-        verified
+        // The pools end side by side, as each ends its own hosts.
+        let (python, typescript) = tokio::join!(end(&self.python), end(&self.typescript));
+        python && typescript
     }
 }
 

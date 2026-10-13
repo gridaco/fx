@@ -8,15 +8,9 @@
 //!   function, for tests): the engine of one planner:
 //!   - **node hosts** start in the workflow's **home** project (its node modules, `fx.lock` and
 //!     `sources` live there), one pool per language, each of at most `HostPool::default_size()`
-//!     hosts: Python's is `<python> -P -m grida.fx.host` with the interpreter
-//!     `host::locate::python_interpreter` finds for the home (`GRIDA_FX_PYTHON`, else the home's
-//!     `.venv`, else the planning project's `.venv`, else `GRIDA_FX_SDK_PYTHON`, else `python3`);
-//!     TypeScript's is `<node> <host-entry.js>` with the Node `host::locate::node_runtime` finds
-//!     (`GRIDA_FX_NODE`, else `GRIDA_FX_SDK_NODE`, else `node`) and the host program of the
-//!     `@grida/fx` found from the home, else from the planning project, else the one that
-//!     started the engine (`host::locate::node_host_entry`; without one, every TypeScript body
-//!     fails with its sentence); programs are named in messages relative to the home when they
-//!     lie inside it;
+//!     hosts, started as `HostSpec::locate` finds them from the home, else from the planning
+//!     project (spec/protocol.md §1, "Starting a host"); without a TypeScript host program,
+//!     every TypeScript body fails with its sentence;
 //!   - the **store** is the **planning** project's cache (`planner.project.cache_dir()`), and runs
 //!     go under the planning project's runs folder: the project found from where the command
 //!     runs owns `runs/` and the cache (spec/store.md §8), also when the workflow comes from
@@ -67,8 +61,7 @@ use grida_fx_providers::keys::Environment;
 use grida_fx_providers::live::{self, Network};
 use grida_fx_providers::{Adapters, Endpoints, Keys};
 use grida_fx_runtime::engine::Engine;
-use grida_fx_runtime::host;
-use grida_fx_runtime::host::locate::{self, node_host_entry, node_runtime, python_interpreter};
+use grida_fx_runtime::host::locate::{self, node_host_entry};
 use grida_fx_runtime::host::pool::HostPool;
 use grida_fx_runtime::host::process::HostSpec;
 use grida_fx_runtime::plantime::PlanTime;
@@ -128,25 +121,26 @@ pub fn engine_with_env(
     // Whatever this process writes to a store marks the planning project among its users
     // (spec/store.md §6).
     grida_fx_runtime::store::lease::set_user(&planner.project.root, &planner.project.cache_dir());
-    let typescript = typescript_spec(planner, env);
+    let home = &planner.home;
+    let typescript = home_spec(Language::TypeScript, planner, env);
     // Node's messages may name the files of a @grida/fx outside the home: the engine's host
     // program's, or a stand-in host's (found from the planning project alone).
-    let home = &planner.home.root;
     let packages: Vec<PathBuf> = [
         typescript
             .as_ref()
             .ok()
-            .and_then(|spec| spec.host_package(home)),
+            .and_then(|spec| spec.host_package(&home.root)),
         node_host_entry(&planner.project.root, None, env)
             .ok()
-            .and_then(|entry| locate::host_package(&entry, home)),
+            .and_then(|entry| locate::host_package(&entry, &home.root)),
     ]
     .into_iter()
     .flatten()
     .collect();
     let mut engine = Engine::new(
         runtime.handle().clone(),
-        python_spec(planner, env),
+        home_spec(Language::Python, planner, env)
+            .map_err(|message| Error::new(ErrorKind::Internal, message))?,
         &store,
         HostPool::default_size(),
         adapters,
@@ -219,34 +213,23 @@ pub fn builtin_routes() -> Result<RouteTable, Error> {
         .map_err(|message| Error::new(ErrorKind::Internal, message))
 }
 
-/// How Python node hosts start for `planner`: in the home project, with the interpreter `locate`
-/// finds there, else the planning project's. `env` reads an environment variable.
-fn python_spec(planner: &Planner, env: &dyn Fn(&str) -> Option<String>) -> HostSpec {
-    let home = &planner.home;
-    let python = python_interpreter(&home.root, Some(&planner.project.root), env);
-    let label = host::label_from(&python, &home.root, Some(&planner.project.root));
-    HostSpec::python(python, label, &home.root, home.document.sources.clone())
-}
-
-/// How TypeScript node hosts start for `planner`: in the home project, with the Node `locate`
-/// finds and the host program of the `@grida/fx` found from the home, else from the planning
-/// project, else the one that started the engine; `Err` is why there is none. `env` reads an
-/// environment variable.
-fn typescript_spec(
+/// How `language`'s node hosts start for `planner`: in the home project, as
+/// [`HostSpec::locate`] finds them from the home, else from the planning project; `Err` is why
+/// there is no TypeScript host program. `env` reads an environment variable.
+fn home_spec(
+    language: Language,
     planner: &Planner,
     env: &dyn Fn(&str) -> Option<String>,
 ) -> Result<HostSpec, String> {
     let home = &planner.home;
-    let entry = node_host_entry(&home.root, Some(&planner.project.root), env)?;
-    let node = node_runtime(env);
-    let label = host::label_from(&node, &home.root, Some(&planner.project.root));
-    Ok(HostSpec::typescript(
-        node,
-        entry,
-        label,
+    let sources = home.document.sources.clone();
+    HostSpec::locate(
+        language,
         &home.root,
-        home.document.sources.clone(),
-    ))
+        Some(&planner.project.root),
+        sources,
+        env,
+    )
 }
 
 /// Makes the plan with the engine's plan-time runner and its store as the result cache.
@@ -447,13 +430,13 @@ mod tests {
         let root = folder.path().canonicalize().unwrap();
         let planner = planner_in(&root, "fx: project/v1\n");
         let chosen = |name: &str| (name == "GRIDA_FX_PYTHON").then(|| "/opt/py/python".to_string());
-        let spec = python_spec(&planner, &chosen);
+        let spec = home_spec(Language::Python, &planner, &chosen).unwrap();
         assert_eq!(spec.program, PathBuf::from("/opt/py/python"));
         assert_eq!(spec.label, "/opt/py/python");
         let venv = root.join(".venv/bin/python");
         std::fs::create_dir_all(venv.parent().unwrap()).unwrap();
         std::fs::write(&venv, "").unwrap();
-        let spec = python_spec(&planner, &|_| None);
+        let spec = home_spec(Language::Python, &planner, &|_| None).unwrap();
         if cfg!(windows) {
             assert_eq!(spec.label, "python3");
         } else {
@@ -473,7 +456,7 @@ mod tests {
         let nothing = |_: &str| None;
         // No @grida/fx: every TypeScript body would fail with the sentence.
         assert_eq!(
-            typescript_spec(&planner, &nothing),
+            home_spec(Language::TypeScript, &planner, &nothing),
             Err(
                 "no @grida/fx for the TypeScript node host: run npm install @grida/fx in the \
                  project"
@@ -500,7 +483,7 @@ mod tests {
             "GRIDA_FX_SDK_NODE" => Some("/opt/node/bin/node".to_string()),
             _ => None,
         };
-        let spec = typescript_spec(&planner, &started).unwrap();
+        let spec = home_spec(Language::TypeScript, &planner, &started).unwrap();
         assert_eq!(spec.language, Language::TypeScript);
         assert_eq!(spec.program, PathBuf::from("/opt/node/bin/node"));
         assert_eq!(spec.label, "/opt/node/bin/node");
@@ -518,7 +501,7 @@ mod tests {
             "GRIDA_FX_NODE" => Some("node24".to_string()),
             _ => None,
         };
-        let spec = typescript_spec(&planner, &chosen).unwrap();
+        let spec = home_spec(Language::TypeScript, &planner, &chosen).unwrap();
         assert_eq!(spec.program, PathBuf::from("node24"));
         assert_eq!(
             spec.args,
@@ -573,7 +556,7 @@ mod tests {
             .to_string_lossy()
             .into_owned();
         let started = move |name: &str| (name == "GRIDA_FX_SDK_NODE_HOST").then(|| named.clone());
-        let spec = typescript_spec(&planner, &started).unwrap();
+        let spec = home_spec(Language::TypeScript, &planner, &started).unwrap();
         assert_eq!(
             spec.args,
             [global.join("dist/host-entry.js").into_os_string()]
@@ -585,7 +568,7 @@ mod tests {
         std::fs::create_dir_all(planned.join("dist")).unwrap();
         std::fs::write(planned.join("package.json"), "{}").unwrap();
         std::fs::write(planned.join("dist/host-entry.js"), "").unwrap();
-        let spec = typescript_spec(&planner, &started).unwrap();
+        let spec = home_spec(Language::TypeScript, &planner, &started).unwrap();
         assert_eq!(
             spec.args,
             [planned.join("dist/host-entry.js").into_os_string()]
@@ -602,7 +585,7 @@ mod tests {
         std::fs::create_dir_all(own.join("dist")).unwrap();
         std::fs::write(own.join("package.json"), "{}").unwrap();
         std::fs::write(own.join("dist/host-entry.js"), "").unwrap();
-        let spec = typescript_spec(&planner, &started).unwrap();
+        let spec = home_spec(Language::TypeScript, &planner, &started).unwrap();
         assert_eq!(spec.args, [own.join("dist/host-entry.js").into_os_string()]);
         let engine = engine_with_env(&runtime, &planner, false, None, &[], &started).unwrap();
         assert_eq!(

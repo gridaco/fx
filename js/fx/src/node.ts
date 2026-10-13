@@ -41,7 +41,7 @@
 
 import type { Ctx } from "./ctx.js";
 import type { InputFile, Output } from "./files.js";
-import { checkValue, isPlainObject, pyRepr, setOwn, typeName } from "./protocol.js";
+import { brandOf, checkValue, isPlainObject, pyRepr, setOwn, typeName } from "./protocol.js";
 import { isPattern } from "./schema.js";
 import type { JsonInput, JsonValue } from "./workflow.js";
 
@@ -316,15 +316,7 @@ export interface NodeType<D extends NodeDecl = NodeDecl> {
 /** The node type an export holds, by its brand (any copy of `@grida/fx`); undefined for anything
  * else. */
 export function nodeRecordOf(value: unknown): NodeRecord | undefined {
-  if ((typeof value !== "object" && typeof value !== "function") || value === null) {
-    return undefined;
-  }
-  let record: unknown;
-  try {
-    record = (value as Record<symbol, unknown>)[NODE];
-  } catch {
-    return undefined;
-  }
+  const record = brandOf(value, NODE);
   if (typeof record !== "object" || record === null) {
     return undefined;
   }
@@ -580,15 +572,7 @@ export function tool<const P extends JsonSchemaObject>(
 
 /** The tool a value is, by its brand (any copy of `@grida/fx`); undefined for anything else. */
 export function toolRecordOf(value: unknown): ToolRecord | undefined {
-  if ((typeof value !== "object" && typeof value !== "function") || value === null) {
-    return undefined;
-  }
-  let record: unknown;
-  try {
-    record = (value as Record<symbol, unknown>)[AGENT_TOOL];
-  } catch {
-    return undefined;
-  }
+  const record = brandOf(value, AGENT_TOOL);
   if (typeof record !== "object" || record === null) {
     return undefined;
   }
