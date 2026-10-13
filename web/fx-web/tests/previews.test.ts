@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { canvasGraph, type Artifact, type ViewerRun } from "../src/index";
+import { resumeAt } from "../src/video";
 import { graph } from "./graph.test";
 
 const sourceDigest = "a".repeat(64);
@@ -25,7 +26,7 @@ function run(): ViewerRun {
   };
 }
 
-describe("recorded canvas image previews", () => {
+describe("recorded canvas previews", () => {
   test("plans have no previews, including cached or planning-time results", () => {
     const plan = graph();
     plan.instances[0].state = "done";
@@ -93,5 +94,36 @@ describe("recorded canvas image previews", () => {
       plain: { file: sourceDigest },
     };
     expect(canvasGraph(recorded).nodes[0].preview).toBeUndefined();
+  });
+
+  test("a step without an image output previews its first playable video", () => {
+    const recorded = run();
+    const video = (digest: string, kind: string, name: string) => ({ file: { digest, kind, name, size: 100 } });
+    recorded.nodes[0].outputs = { raw: video(sourceDigest, "video/x-matroska", "raw.mkv"), clips: { list: [video(otherDigest, "video/webm", "a.webm"), video(outputDigest, "video/mp4", "b.mp4")] } };
+    recorded.artifacts = [
+      artifact(sourceDigest, { kind: "video/x-matroska", name: "raw.mkv" }),
+      artifact(otherDigest, { kind: "video/webm", name: "a.webm" }),
+      artifact(outputDigest, { kind: "video/mp4", name: "b.mp4" }),
+    ];
+    expect(canvasGraph(recorded).nodes[0].preview).toEqual({
+      kind: "video", digest: otherDigest, url: `/api/artifacts/${otherDigest}`,
+      label: "clips: a.webm", count: 2,
+    });
+    recorded.artifacts[1].url = "https://example.invalid/a.webm";
+    expect(canvasGraph(recorded).nodes[0].preview).toMatchObject({ digest: outputDigest, count: 1 });
+  });
+
+  test("an image output previews its card before a video output does", () => {
+    const recorded = run();
+    recorded.nodes[0].outputs = { video: { file: { digest: otherDigest, kind: "video/mp4", name: "clip.mp4", size: 100 } }, image: file(outputDigest) };
+    recorded.artifacts.push(artifact(otherDigest, { kind: "video/mp4", name: "clip.mp4" }));
+    expect(canvasGraph(recorded).nodes[0].preview).toMatchObject({ kind: "image", digest: outputDigest, count: 1 });
+  });
+
+  test("a video continues where it stopped, and starts over once it has played through", () => {
+    expect(resumeAt(3.2, 8)).toBe(3.2);
+    expect([resumeAt(0, 8), resumeAt(7.9, 8), resumeAt(8, 8), resumeAt(NaN, 8)]).toEqual([null, null, null, null]);
+    // A stream of unknown length always continues.
+    expect(resumeAt(40, Infinity)).toBe(40);
   });
 });

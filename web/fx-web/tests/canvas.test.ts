@@ -16,9 +16,11 @@ function report(cells: Record<string, [number, number]>, order: string[] = []): 
     cells: Object.fromEntries(Object.entries(cells).map(([address, [column, row]]) => [address, { column, row, source: "automatic" }])) };
 }
 
-test("metadata-only nodes retain their size; image nodes reserve space before loading", () => {
+test("metadata-only nodes retain their size; image nodes reserve a 16:9 frame before loading", () => {
   expect(canvasNodeSize(node("planned"))).toEqual({ width: 250, height: 106 });
-  expect(canvasNodeSize(node("rendered", true))).toEqual({ width: 250, height: 246 });
+  expect(canvasNodeSize(node("rendered", true))).toEqual({ width: 250, height: 229 });
+  expect(canvasNodeGeometry(node("rendered", true)).preview_height).toBe(123);
+  expect(canvasNodeGeometry({ ...node("ported", true), ports: { inputs: [], outputs: [], settings: [] } }).preview_height).toBe(185);
 });
 
 test("declared port rows and settings reserve space above an image preview", () => {
@@ -32,7 +34,7 @@ test("declared port rows and settings reserve space above an image preview", () 
   const last = canvasPortAnchor(placed, "input", "image_11")!;
   expect(last.y + 16).toBeLessThan(placed.y + geometry.settings_y);
   expect(geometry.settings_y + 10).toBeLessThan(geometry.preview_y);
-  expect(geometry.preview_y + 140).toBeLessThan(geometry.height - 22);
+  expect(geometry.preview_y + geometry.preview_height).toBeLessThan(geometry.height - 22);
 });
 
 test("mixed image and metadata nodes remain separated with edges landing at their borders", () => {
@@ -200,7 +202,7 @@ test("the resting card takes the first running member and, in a take deck, the t
   expect(deckBadge([take("a", "x", 1), take("b", "x", 2), take("c", "y", 1)]).text).toBe("2 items · up to 2 takes");
 });
 
-test("absent instances never join a deck, and an image output reserves its preview before it exists", () => {
+test("absent instances never join a deck, and an image or video output reserves its preview before it exists", () => {
   const absent = { ...node("b#1", false, "b"), state: "absent" };
   const layout = layoutGraph({ nodes: [node("a#1", false, "b"), absent], edges: [] }, report({ b: [0, 0] }));
   expect([layout.nodes.map((item) => item.id), layout.decks]).toEqual([["a#1"], []]);
@@ -209,6 +211,10 @@ test("absent instances never join a deck, and an image output reserves its previ
   const ports = { inputs: [], outputs: [{ name: "image", type: "image/png", kind: "artifact" as const }], settings: [] };
   expect(canvasPreviewReserved({ ...node("draw"), ports })).toBe(true);
   expect(canvasNodeSize({ ...node("draw"), ports })).toEqual(canvasNodeSize({ ...node("draw", true), ports }));
+  for (const type of ["video/mp4", "video", "video[]"]) {
+    expect(canvasPreviewReserved({ ...node("animate"), ports: { ...ports, outputs: [{ name: "clip", type, kind: "artifact" }] } })).toBe(true);
+  }
+  expect(canvasPreviewReserved({ ...node("describe"), ports: { ...ports, outputs: [{ name: "notes", type: "videos_notes", kind: "artifact" }] } })).toBe(false);
 });
 
 test("a waiting member rests in front after a running one, and the badge counts the waiting", () => {

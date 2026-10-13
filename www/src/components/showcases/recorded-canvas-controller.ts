@@ -1,4 +1,4 @@
-import { CanvasController, ExportViewerController, exportArtifactUrl, type CanvasGraph, type ExportViewerState, type LoadedRunExport, type PinnedRunExport } from "@grida/fx-web";
+import { CanvasController, ExportViewerController, exportArtifactUrl, ownsKeys, type CanvasGraph, type ExportViewerState, type LoadedRunExport, type PinnedRunExport } from "@grida/fx-web";
 
 export interface Recording extends PinnedRunExport { id: string; label: string }
 export interface CanvasFragment { graph: boolean; recording: string | null; scope: string | null; node: string | null }
@@ -118,7 +118,8 @@ export class RecordedCanvasController {
     }
   };
   private keydown = (event: KeyboardEvent) => {
-    if (event.key === "Escape" && this.viewer.getSnapshot().selected !== null && !event.defaultPrevented) {
+    // A text field or a card's video player keeps its own Esc.
+    if (event.key === "Escape" && this.viewer.getSnapshot().selected !== null && !event.defaultPrevented && !ownsKeys(event.target)) {
       event.preventDefault(); this.viewer.select(null); this.writeFragment();
     }
     if (!(event.target instanceof HTMLElement) || !event.target.matches("[data-mode]")) return;

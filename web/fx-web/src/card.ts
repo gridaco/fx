@@ -40,6 +40,17 @@ export function cardStatus(node: Pick<CanvasStep, "state" | "started_at" | "wait
   return { text: node.state };
 }
 
+/**
+ * Filled play and pause glyphs on a 24-unit square, in the current colour. Unlike the rest of the
+ * viewer's chrome they are not Lucide's: its outlined ones read poorly on a video.
+ */
+export function mediaGlyph(kind: "play" | "pause", attributes: Record<string, string | number> = {}) {
+  const svg = element("svg", { viewBox: "0 0 24 24", fill: "currentColor", "aria-hidden": "true", ...attributes });
+  if (kind === "play") svg.append(element("path", { d: "M7 4.5v15a1 1 0 0 0 1.53.85l12-7.5a1 1 0 0 0 0-1.7l-12-7.5A1 1 0 0 0 7 4.5z" }));
+  else for (const x of [6, 14]) svg.append(element("rect", { x, y: 5, width: 4, height: 14, rx: 1.25 }));
+  return svg;
+}
+
 /** A state's glyph as a nested SVG square of `size` at (x, y). */
 export function stateIconElement(state: string, x: number, y: number, size: number) {
   const icon = stateIcon(state);
@@ -58,10 +69,12 @@ export function short(text: string, limit: number) { return [...text].length > l
  */
 export function nodeCard(node: PositionedNode, canvasId: string, index: number, signal: AbortSignal, onOpen: (scope: string) => void) {
   const preview = node.preview;
+  const { settings_y, preview_y, preview_height } = canvasNodeGeometry(node);
   const portsLabel = node.ports ? `, inputs: ${node.ports.inputs.map((port) => `${displayPortName(port.name)} (${port.type}, ${port.kind})`).join(", ") || "none"}, outputs: ${node.ports.outputs.map((port) => `${displayPortName(port.name)} (${port.type}, ${port.kind})`).join(", ") || "none"}` : node.pending ? "" : ", port metadata not recorded";
   const scopeLabel = node.kind === "workflow" ? `, imported workflow, ${node.child_count ?? 0} steps, ${node.failure_count ?? 0} failed` : "";
   const state = node.state === "waiting" && node.waiting_for ? `waiting for ${node.waiting_for}` : node.state;
-  const label = `${node.title}, ${state}${scopeLabel}${portsLabel}${preview ? `, ${preview.label}, ${preview.count} image ${preview.count === 1 ? "output" : "outputs"}` : ""}`;
+  const count = preview ? `${preview.count} ${preview.kind} ${preview.count === 1 ? "output" : "outputs"}` : "";
+  const label = `${node.title}, ${state}${scopeLabel}${portsLabel}${preview ? `, ${preview.label}, ${count}` : ""}`;
   const group = element("g", { transform: `translate(${node.x},${node.y})`, class: `fx-canvas-node${node.kind === "workflow" ? " fx-canvas-workflow" : node.kind === "boundary" ? " fx-canvas-boundary" : ""}`, role: node.kind === "workflow" ? "group" : "button", tabindex: 0, "data-node-id": node.id, "data-state": node.state, "aria-label": label, ...(node.kind === "workflow" ? { "aria-current": "false" } : { "aria-pressed": "false" }) });
   group.append(element("rect", { width: node.width, height: node.height, rx: 11, class: node.pending ? "fx-canvas-node-box fx-canvas-pending" : "fx-canvas-node-box" }));
   group.append(element("text", { x: 16, y: 27, class: "fx-canvas-node-title" }, short(node.title, node.ports ? 42 : 28)));
@@ -87,31 +100,46 @@ export function nodeCard(node: PositionedNode, canvasId: string, index: number, 
       if (!ports.length) group.append(element("text", { x: textX, y: PORT_TOP + 3, "text-anchor": direction === "input" ? "start" : "end", class: "fx-canvas-port-type" }, "None"));
     }
     if (node.ports.settings.length) {
-      const settings = element("text", { x: 16, y: canvasNodeGeometry(node).settings_y + 10, class: "fx-canvas-settings" }, short(`Settings · ${node.ports.settings.map((setting) => setting.name).join(", ")}`, 52));
+      const settings = element("text", { x: 16, y: settings_y + 10, class: "fx-canvas-settings" }, short(`Settings · ${node.ports.settings.map((setting) => setting.name).join(", ")}`, 52));
       group.append(settings);
     }
   } else if (!node.pending && !preview) {
     group.append(element("text", { x: 16, y: 64, class: "fx-canvas-port-type" }, "Port metadata not recorded"));
   }
+  const frame = { x: 16, y: preview_y, width: node.width - 32, height: preview_height };
   if (preview) {
-    const frame = { x: 16, y: canvasNodeGeometry(node).preview_y, width: node.width - 32, height: 140 };
     const clipId = `${canvasId}-preview-${index}`;
     const clip = element("clipPath", { id: clipId });
     clip.append(element("rect", { ...frame, rx: 6 }));
-    group.append(clip, element("rect", { ...frame, rx: 6, fill: `url(#${canvasId}-checker)` }));
+    group.append(clip);
+    const backdrop = element("rect", { ...frame, rx: 6, fill: `url(#${canvasId}-checker)` });
+    const unavailable = preview.kind === "video" ? "Video unavailable" : "Image unavailable";
     const image = element("image", { ...frame, preserveAspectRatio: "xMidYMid meet", "clip-path": `url(#${clipId})`, role: "img", "aria-label": preview.label, class: "fx-canvas-node-image" });
-    const fallback = element("text", { x: node.width / 2, y: frame.y + frame.height / 2, "text-anchor": "middle", "dominant-baseline": "middle", class: "fx-canvas-image-error", visibility: "hidden" }, "Image unavailable");
+    const fallback = element("text", { x: node.width / 2, y: frame.y + frame.height / 2, "text-anchor": "middle", "dominant-baseline": "middle", class: "fx-canvas-image-error", visibility: "hidden" }, unavailable);
     image.addEventListener("error", () => {
       image.setAttribute("visibility", "hidden");
       fallback.setAttribute("visibility", "visible");
-      group.setAttribute("aria-label", `${node.title}, ${state}${portsLabel}, Image unavailable: ${preview.label}`);
+      group.setAttribute("aria-label", `${node.title}, ${state}${portsLabel}, ${unavailable}: ${preview.label}`);
     }, { signal });
-    image.setAttribute("href", preview.url);
-    group.append(image, element("rect", { ...frame, rx: 6, class: "fx-canvas-image-border" }), fallback);
-    group.append(element("text", { x: node.width - 16, y: node.height - 22, "text-anchor": "end", class: "fx-canvas-image-count" }, `${preview.count} image ${preview.count === 1 ? "output" : "outputs"}`));
+    const border = element("rect", { ...frame, rx: 6, class: "fx-canvas-image-border" });
+    if (preview.kind === "image") {
+      image.setAttribute("href", preview.url);
+      group.append(backdrop, image, border, fallback);
+    } else {
+      // A video shows its first frame, which the canvas sets once the card is in view, and a play
+      // control; the canvas plays it over the frame (video.ts). The backdrop takes the pointer, so
+      // resting anywhere on the frame plays it muted.
+      const video = element("g", { class: "fx-canvas-video", "data-digest": preview.digest });
+      const play = element("g", { class: "fx-canvas-play", role: "button", tabindex: 0, "aria-label": `Play ${preview.label}` });
+      const center = { x: node.width / 2, y: frame.y + frame.height / 2 };
+      play.append(element("circle", { cx: center.x, cy: center.y, r: 18 }),
+        mediaGlyph("play", { x: center.x - 8, y: center.y - 8, width: 16, height: 16 }));
+      video.append(backdrop, image, border, fallback, play);
+      group.append(video);
+    }
+    group.append(element("text", { x: node.width - 16, y: node.height - 22, "text-anchor": "end", class: "fx-canvas-image-count" }, count));
   } else if (canvasPreviewReserved(node)) {
-    const frame = { x: 16, y: canvasNodeGeometry(node).preview_y, width: node.width - 32, height: 140 };
-    // Only a started step shimmers: the declared image may be on its way. Waiting and settled steps keep the empty frame.
+    // Only a started step shimmers: the declared file may be on its way. Waiting and settled steps keep the empty frame.
     if (node.state === "running") {
       const clipId = `${canvasId}-shimmer-${index}`;
       const clip = element("clipPath", { id: clipId });

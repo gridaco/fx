@@ -1,7 +1,7 @@
 import { StrictMode, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { ArrowLeft, ArrowUpRight, Check, ChevronRight, Copy, FileText, List, RefreshCw, Square, Workflow, X } from "lucide-react";
-import { ServiceIndexProjection, ViewerController, elapsedLabel, ViewerEntryController, type Artifact, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun } from "@grida/fx-web";
+import { ServiceIndexProjection, ViewerController, elapsedLabel, ownsKeys, ViewerEntryController, type Artifact, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun } from "@grida/fx-web";
 import { StateIcon, StateLabel, Status, Values, WorkflowCanvas, money, type WorkflowCanvasHandle } from "@grida/fx-react";
 import "./style.css";
 
@@ -179,7 +179,7 @@ function WorkflowView() {
   useEffect(() => {
     if (!open && !steps) return;
     const close = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.defaultPrevented || (event.target as Element | null)?.closest?.("input, textarea, select, [contenteditable]")) return;
+      if (event.key !== "Escape" || event.defaultPrevented || ownsKeys(event.target)) return;
       event.preventDefault();
       if (open) { setAbout(false); controller.select(null); } else setSteps(false);
     };

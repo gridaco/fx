@@ -1,5 +1,5 @@
 import { parseViewerRun, type ViewerRun } from "./index";
-import { flatCanvasGraph, parseLayoutReport, type CanvasGraph, type LayoutReport } from "./graph";
+import { cardPreview, flatCanvasGraph, parseLayoutReport, recordedFileDigests, type CanvasGraph, type LayoutReport } from "./graph";
 import { projectScopes } from "./scopes";
 
 export interface ExportArtifact {
@@ -28,7 +28,6 @@ export interface LoadedRunExport { manifest: RunExport; manifest_url: string }
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const digest = (value: unknown): value is string => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
 const count = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
-const imageTypes = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"]);
 const mediaExtensions: Record<string, string> = {
   "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif", "image/avif": "avif",
   "video/mp4": "mp4", "video/webm": "webm", "audio/wav": "wav", "audio/mpeg": "mp3", "audio/ogg": "ogg", "audio/flac": "flac", "model/gltf-binary": "glb",
@@ -92,14 +91,6 @@ function pendingRepeat(item: unknown) {
     && (item.waiting_on === undefined || (Array.isArray(item.waiting_on) && item.waiting_on.every((id) => typeof id === "string") && new Set(item.waiting_on).size === item.waiting_on.length));
 }
 
-/** Only FX value variants contain artifact references; opaque JSON is never interpreted as wiring. */
-export function exportFileDigests(value: unknown): string[] {
-  if (!record(value)) return [];
-  if (record(value.file)) return digest(value.file.digest) ? [value.file.digest] : [];
-  if (Array.isArray(value.list)) return value.list.flatMap(exportFileDigests);
-  if (Array.isArray(value.collection)) return value.collection.flatMap((entry) => Array.isArray(entry) && entry.length === 2 ? exportFileDigests(entry[1]) : []);
-  return [];
-}
 
 function validateReferences(view: ViewerRun, layout: LayoutReport, artifacts: ExportArtifact[]) {
   const ids = new Set(view.nodes.map((node) => node.id));
@@ -135,7 +126,7 @@ function validateReferences(view: ViewerRun, layout: LayoutReport, artifacts: Ex
   }
   const inventory = new Set(artifacts.map((item) => item.digest));
   for (const values of [view.inputs, view.outputs, ...view.nodes.flatMap((node) => [node.with, node.outputs])]) {
-    for (const value of Object.values(values)) if (exportFileDigests(value).some((id) => !inventory.has(id))) refuse("an artifact reference is missing from the inventory.");
+    for (const value of Object.values(values)) if (recordedFileDigests(value).some((id) => !inventory.has(id))) refuse("an artifact reference is missing from the inventory.");
   }
   const addresses = new Set([
     ...view.nodes.map((node) => node.step ?? node.path),
@@ -223,7 +214,7 @@ export async function readRunExport(pin: PinnedRunExport, signal?: AbortSignal, 
   return { manifest: parseRunExport(value), manifest_url: url.href };
 }
 
-/** Share wiring, scope projection and geometry while resolving images through the static boundary. */
+/** Share wiring, scope projection and geometry while resolving previews through the static boundary. */
 export function exportCanvasGraph(loaded: LoadedRunExport, scope: string | null = null): CanvasGraph {
   const { view, artifacts } = loaded.manifest;
   const flat = flatCanvasGraph(view);
@@ -231,14 +222,12 @@ export function exportCanvasGraph(loaded: LoadedRunExport, scope: string | null 
   for (const node of flat.nodes) {
     const source = view.nodes.find((item) => item.id === node.source_id);
     if (!source) continue;
-    const images = new Map<string, { url: string; label: string }>();
-    for (const [port, value] of Object.entries(source.outputs)) for (const id of exportFileDigests(value)) {
+    const preview = cardPreview(source.outputs, (id) => {
       const artifact = inventory.get(id);
-      const url = exportArtifactUrl(loaded, id);
-      if (artifact && imageTypes.has(artifact.media_type) && url && !images.has(id)) images.set(id, { url, label: `${port}: ${artifact.name}` });
-    }
-    const first = images.entries().next().value;
-    if (first) node.preview = { kind: "image", digest: first[0], ...first[1], count: images.size };
+      const url = artifact ? exportArtifactUrl(loaded, id) : null;
+      return artifact && url ? { media_type: artifact.media_type, name: artifact.name, url } : null;
+    });
+    if (preview) node.preview = preview;
   }
   return projectScopes(view, flat, scope);
 }

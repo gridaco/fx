@@ -150,8 +150,11 @@ export function parseLayoutReport(value: unknown): LayoutReport {
   return value as unknown as LayoutReport;
 }
 
-export interface CanvasImagePreview {
-  kind: "image"; digest: string; url: string; label: string; count: number;
+/** A card's preview: an image draws as itself, a video as its first frame until it is played. */
+export interface CanvasPreview {
+  kind: "image" | "video"; digest: string; url: string; label: string;
+  /** The step's distinct output files of the preview's kind. */
+  count: number;
 }
 export interface CanvasStep {
   id: string; source_id: string; title: string; subtitle: string; state: string; pending: boolean;
@@ -175,7 +178,7 @@ export interface CanvasStep {
   child_count?: number;
   failure_count?: number;
   errors?: { id: string; title: string; message: string }[];
-  preview?: CanvasImagePreview;
+  preview?: CanvasPreview;
   ports?: { inputs: CanvasPort[]; outputs: CanvasPort[]; settings: { name: string; type: string }[] };
 }
 export interface CanvasPort { name: string; type: string; kind: "artifact" | "parameter" | "fact" | "value" }
@@ -187,13 +190,17 @@ export interface CanvasConnection {
 export interface CanvasFrame { id: string; title: string; nodes: string[]; parent?: string | null; address?: string; take?: number[]; key?: string; state?: string }
 export interface CanvasGraph { nodes: CanvasStep[]; edges: CanvasConnection[]; frames?: CanvasFrame[] }
 
-const imageKinds = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"]);
+/** The files a card previews: pictures and the videos every browser plays, never active documents. */
+const previewKinds: Record<string, CanvasPreview["kind"]> = {
+  "image/png": "image", "image/jpeg": "image", "image/webp": "image", "image/gif": "image", "image/avif": "image",
+  "video/mp4": "video", "video/webm": "video",
+};
 const compareText = (left: string, right: string) => left < right ? -1 : left > right ? 1 : 0;
 const compareNamed = (left: { name: string; kind?: string }, right: { name: string; kind?: string }) =>
   compareText(left.name, right.name) || compareText(left.kind ?? "", right.kind ?? "");
 
-/** Follow recorded FX value variants; ordinary JSON values remain opaque. */
-function recordedFileDigests(value: unknown): string[] {
+/** Follow recorded FX value variants; ordinary JSON values remain opaque and are never read as wiring. */
+export function recordedFileDigests(value: unknown): string[] {
   if (!isRecord(value)) return [];
   if (isRecord(value.file)) return isDigest(value.file.digest) ? [value.file.digest as string] : [];
   if (Array.isArray(value.list)) return value.list.flatMap(recordedFileDigests);
@@ -202,19 +209,28 @@ function recordedFileDigests(value: unknown): string[] {
   return [];
 }
 
-/** Select a recorded output image from the host's verified artifact inventory. */
-function imagePreview(node: ViewerRun["nodes"][number], artifacts: Map<string, ViewerRun["artifacts"][number]>, apiBase: string): CanvasImagePreview | undefined {
-  const images = new Map<string, { url: string; label: string }>();
-  for (const [port, value] of Object.entries(node.outputs)) {
-    for (const digest of recordedFileDigests(value)) {
-      const artifact = artifacts.get(digest);
-      if (artifact?.available && imageKinds.has(artifact.kind) && artifact.url === `${apiBase}/artifacts/${digest}` && !images.has(digest)) {
-        images.set(digest, { url: artifact.url, label: `${port}: ${artifact.name}` });
-      }
-    }
+/**
+ * A card's preview from a step's output files, in output order: the first image, or without one
+ * the first video. `resolve` gives a file's type, name and verified URL, or null to leave it out.
+ */
+export function cardPreview(outputs: Record<string, unknown>, resolve: (digest: string) => { media_type: string; name: string; url: string } | null): CanvasPreview | undefined {
+  const found = { image: new Map<string, { url: string; label: string }>(), video: new Map<string, { url: string; label: string }>() };
+  for (const [port, value] of Object.entries(outputs)) for (const digest of recordedFileDigests(value)) {
+    const file = resolve(digest);
+    const kind = file && previewKinds[file.media_type];
+    if (file && kind && !found[kind].has(digest)) found[kind].set(digest, { url: file.url, label: `${port}: ${file.name}` });
   }
-  const first = images.entries().next().value;
-  return first ? { kind: "image", digest: first[0], ...first[1], count: images.size } : undefined;
+  const kind = found.image.size ? "image" : found.video.size ? "video" : undefined;
+  const first = kind && found[kind].entries().next().value;
+  return kind && first ? { kind, digest: first[0], ...first[1], count: found[kind].size } : undefined;
+}
+
+/** Select a recorded output picture or video from the host's verified artifact inventory. */
+function recordedPreview(node: ViewerRun["nodes"][number], artifacts: Map<string, ViewerRun["artifacts"][number]>, apiBase: string): CanvasPreview | undefined {
+  return cardPreview(node.outputs, (digest) => {
+    const artifact = artifacts.get(digest);
+    return artifact?.available && artifact.url === `${apiBase}/artifacts/${digest}` ? { media_type: artifact.kind, name: artifact.name, url: artifact.url } : null;
+  });
 }
 
 /** Project declared wiring for display; no expressions or execution decisions are evaluated. */
@@ -224,7 +240,7 @@ export function flatCanvasGraph(view: GraphDocument | ViewerRun, apiBase = "/api
   const artifacts = new Map(plan ? [] : view.artifacts.map((item) => [item.digest, item]));
   const source = plan ? view.instances : view.nodes;
   const nodes: CanvasStep[] = source.map((item) => {
-    const preview = plan ? undefined : imagePreview(item as ViewerRun["nodes"][number], artifacts, apiBase);
+    const preview = plan ? undefined : recordedPreview(item as ViewerRun["nodes"][number], artifacts, apiBase);
     const run = plan ? undefined : item as ViewerRun["nodes"][number];
     const started_at = run?.started_at;
     const declared = plan ? view.types?.[item.uses ?? ""]?.ports : (item as ViewerRun["nodes"][number]).ports;
