@@ -47,8 +47,9 @@ fn command(cwd: &Path, args: &[&str]) -> Command {
         .env("NO_COLOR", "1")
         .env("GRIDA_FX_NETWORK", "off")
         .env("GRIDA_FX_DISABLE_DOTENV", "1")
-        // No Codex, whatever this machine has installed.
-        .env("GRIDA_FX_TOOL_CODEX", cwd.join("no-codex"));
+        // No Codex and no Grok Build, whatever this machine has installed.
+        .env("GRIDA_FX_TOOL_CODEX", cwd.join("no-codex"))
+        .env("GRIDA_FX_TOOL_GROK", cwd.join("no-grok"));
     for name in PROVIDER_VARIABLES {
         command.env_remove(name);
     }
@@ -233,7 +234,7 @@ fn integrated_nodes_shows_one_type() {
          \x20 setting background: {{\"default\": \"auto\", \"enum\": [\"opaque\", \"transparent\", \"auto\"]}}\n\
          \x20 setting vars: {{\"default\": {{}}, \"type\": \"object\"}}\n\
          \x20 output  image: image/png\n\
-         \x20 routes  gpt-image-2.5-sunburst@openai, imagegen@codex, \
+         \x20 routes  gpt-image-2.5-sunburst@openai, imagegen@codex, imagine@grok, \
          openai/gpt-image-2.5-sunburst@gg, openai/gpt-image-2.5-sunburst@openrouter, \
          openai/gpt-image-2.5/sunburst@fal\n",
         "fx/image.generate@1"
@@ -270,7 +271,8 @@ fn integrated_nodes_shows_the_projects_routes() {
     assert_eq!(status(&output), 0, "{}", stderr(&output));
     assert!(
         stdout(&output).ends_with(
-            "  routes  gpt-image-2.5-sunburst@openai, imagegen@codex, img-a@acme, img-b@acme, \
+            "  routes  gpt-image-2.5-sunburst@openai, imagegen@codex, imagine@grok, img-a@acme, \
+             img-b@acme, \
              openai/gpt-image-2.5-sunburst@gg, openai/gpt-image-2.5-sunburst@openrouter, \
              openai/gpt-image-2.5/sunburst@fal\n"
         ),
@@ -332,7 +334,7 @@ fn integrated_doctor_without_a_target() {
     let text = stdout(&output);
     let lines: Vec<&str> = text.lines().collect();
     // engine, python, a key per provider, a route per built-in route.
-    assert_eq!(lines.len(), 2 + 6 + 27, "{text}");
+    assert_eq!(lines.len(), 2 + 6 + 29, "{text}");
     assert_eq!(
         lines[0],
         format!("engine    grida-fx {}", env!("CARGO_PKG_VERSION"))
@@ -353,7 +355,9 @@ fn integrated_doctor_without_a_target() {
     assert!(routes.iter().all(|l| l.starts_with("route     ")), "{text}");
     let codex = [
         "route     image.edit imagegen@codex not installed (codex)",
+        "route     image.edit imagine@grok not installed (grok)",
         "route     image.generate imagegen@codex not installed (codex)",
+        "route     image.generate imagine@grok not installed (grok)",
     ];
     assert!(
         routes
@@ -448,6 +452,7 @@ fn integrated_doctor_lists_the_projects_routes() {
             [
                 "route     image.generate gpt-image-2.5-sunburst@openai no key (OPENAI_API_KEY)",
                 "route     image.generate imagegen@codex not installed (codex)",
+                "route     image.generate imagine@grok not installed (grok)",
                 "route     image.generate img-a@acme no adapter",
                 "route     image.generate openai/gpt-image-2.5-sunburst@gg no key \
                  (GG_API_KEY)",
@@ -457,7 +462,7 @@ fn integrated_doctor_lists_the_projects_routes() {
             ],
             "{argv:?}"
         );
-        assert_eq!(text.lines().filter(|l| l.starts_with("route ")).count(), 28);
+        assert_eq!(text.lines().filter(|l| l.starts_with("route ")).count(), 30);
     }
 }
 

@@ -41,7 +41,8 @@ steps too. The bundled viewer is a read-only canvas for plans and recorded runs.
 10. [Cleaning up runs](10-cleanup.md): listing a project's runs, removing the ones you no longer need, and pruning the cache
 11. [Share a recorded run](11-exports.md): portable inspection, disclosure and immutable content
 12. [Images from your own Codex](12-codex.md): no API key, with your ChatGPT plan, and its caveats
-13. [AI providers](13-providers.md): no provider, your own Codex, Grida Gateway or your own keys, and what each serves
+13. [AI providers](13-providers.md): no provider, your own Codex or Grok Build, Grida Gateway or your own keys, and what each serves
+14. [Images from your own Grok Build](14-grok.md): no API key, with your Grok subscription, and its caveats
 
 ## Example projects
 

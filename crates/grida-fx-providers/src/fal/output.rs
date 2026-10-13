@@ -244,7 +244,7 @@ mod tests {
     use super::*;
     use crate::clock::FakeClock;
     use crate::keys::{KeyName, Keys};
-    use crate::setup::{Endpoints, Setup};
+    use crate::setup::Setup;
     use crate::testing::{block_on, media};
     use crate::transport::HttpResponse;
     use crate::transport::replay::{Exchange, Expect, NoNetwork, ReplayTransport, Reply};
@@ -259,13 +259,11 @@ mod tests {
     };
 
     fn client(transport: Arc<dyn crate::transport::Transport>) -> Client {
-        let setup = Setup {
+        let setup = Setup::new(
             transport,
-            keys: Keys::from_pairs(&[(KeyName::Fal, "test-fal-key")]),
-            endpoints: Endpoints::default(),
-            clock: Arc::new(FakeClock::new()),
-            codex: Err(crate::codex::NOT_INSTALLED.into()),
-        };
+            Keys::from_pairs(&[(KeyName::Fal, "test-fal-key")]),
+            Arc::new(FakeClock::new()),
+        );
         super::super::FalClients::new(&setup).run
     }
 

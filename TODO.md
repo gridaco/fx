@@ -433,32 +433,37 @@ Follow-ups:
   openai/codex#19175, #28723). An orientation or aspect setting could map onto that honestly;
   `image.generate` has none today. Revisit if Codex adds a size argument.
 
-### Deferred backends: Grok Build and Cursor
+### Grok Build, and Cursor next
 
-Keep Codex as the first implementation target. Grok Build and Cursor are
-explicitly deferred candidates for the same local image-backend contract,
-not approved implementation scope. Research checked 2026-10-08:
+**Grok Build: in review, 2026-10-13** ([gridaco/fx#72](https://github.com/gridaco/fx/issues/72)),
+as the route `imagine@grok` of `image.generate` and `image.edit`
+([spec/providers.md §9.8](spec/providers.md#98-grok-build)): Grok Build's own ACP server
+(`grok agent --no-leader stdio`) through FX's ACP client ([`acp`](crates/grida-fx-providers/src/acp/mod.rs)),
+a session per call whose agent offers only Grok Build's two image tools, billed to the user's
+subscription (`Billing::Plan`). Verified with fake Grok Build programs in tests and real runs on
+Grok Build 1.0.52. Follow-ups:
+- **#72 Phase 1 is partly done.** The process groups are shared ([`process_group`](crates/grida-fx-providers/src/process_group.rs)),
+  and so are program lookup, the environment withheld, request pictures, line reading and
+  bounded reason words ([`installed`](crates/grida-fx-providers/src/installed.rs)); the ACP
+  client is provider-neutral. Still per runtime: the JSON-RPC connection (Codex's app-server
+  client and [`acp`](crates/grida-fx-providers/src/acp/mod.rs) differ only in routing keys and
+  request answers), the start-once runtime state, the version check (gridaco/fx#73 for Codex),
+  and spec/providers.md §9.6 and §9.8, which restate the same rules; share them spec first.
+- **An aspect ratio.** Grok Build's tools take one (`1:1`, `16:9`, `9:16`, …); FX leaves it unset
+  until `image.generate` has a shape setting (gridaco/fx#57).
+- **Retrying a failed image tool.** A passing network error between Grok Build and xAI fails the
+  tool (`Grok Build's image tool failed`); FX marks that one failure retryable, so the engine makes
+  a new attempt, where every Codex failure is final. Revisit if a plan-billed retry policy is
+  ratified for every runtime.
+- **Prompt history.** Sessions are deleted, but Grok Build keeps a prompt history per working
+  folder; FX runs every session of an invocation in one folder, so one stays per run.
+- **Video.** Grok Build's `video_gen` and `image_to_video` could serve `video.generate` on the same
+  runtime.
 
-- **Grok Build:** its official [CLI changelog](https://x.ai/changelog/build)
-  documents built-in image and video generation tools. The
-  [CLI overview](https://docs.x.ai/build/overview) documents browser sign-in,
-  headless execution and streaming JSON output. Verify image-tool availability
-  in headless mode, reliable artifact extraction, account eligibility and usage
-  accounting before promising a no-BYOK/included-allowance backend. Video support
-  is evidence of a capability, not additional FX implementation scope here.
-- **Cursor:** image generation is a native Agent tool, with project files as
-  outputs; no separate image extension or provider API-key setup is documented
-  in its [announcement](https://cursor.com/changelog/page/12) or
-  [Agent overview](https://cursor.com/docs/agent/overview). Its
-  [CLI changelog](https://cursor.com/docs/cli/changelog) also documents image
-  generation failures. Verify headless invocation, tool permissions, output
-  delivery and image-specific plan/billing behavior. Remaining credits alone do
-  not guarantee successful generation or establish exact billing semantics.
-
-Design the initial contract to allow explicit backend selection without
-hard-coding Codex as the only possible implementation. Add these adapters only
-after the Codex integration is proven and each candidate meets the same
-lifecycle, capability, validation and honest usage-reporting requirements.
+**Cursor** stays a candidate: `cursor-agent acp` is its own ACP server, with a native image tool
+(`cursor/generate_image`), but Cursor bills dollars against a usage pool with optional on-demand
+overflow, so its route would bill in `Dollars` and need a ceiling. Research and probes:
+gridaco/fx#72.
 
 ## Grida Gateway follow-ups
 

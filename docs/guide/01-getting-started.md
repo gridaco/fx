@@ -42,8 +42,9 @@ where, and which routes they make usable ([Running](05-running.md#keys-and-live-
 Already have provider accounts? FX also reads each provider's own key under its usual name
 (`OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `FAL_KEY`, `TRIPO_API_KEY`, `ELEVENLABS_API_KEY`) for the
 routes on that provider; sound, speech and music need one, since GG has no route for them yet. No
-key at all? With Codex signed in to your ChatGPT account, images can come from
-[your own Codex](12-codex.md). [AI providers](13-providers.md) compares the ways.
+key at all? With Codex signed in to your ChatGPT account, or Grok Build signed in to a Grok
+subscription, images can come from [your own Codex](12-codex.md) or
+[your own Grok Build](14-grok.md). [AI providers](13-providers.md) compares the ways.
 
 ### When FX needs Python
 

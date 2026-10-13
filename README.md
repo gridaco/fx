@@ -45,6 +45,7 @@ one:
 |---|---|---|
 | **No provider** | nothing | a plain workflow engine: your own code, cached and recorded |
 | **Your own Codex** | Codex, signed in to ChatGPT | images, free to FX: Codex counts them against your plan |
+| **Your own Grok Build** | Grok Build, signed in to a Grok subscription | images, free to FX: Grok Build counts them against your subscription |
 | **Your own keys** | `OPENAI_API_KEY`, `FAL_KEY`, `TRIPO_API_KEY`, `ELEVENLABS_API_KEY`, … | each provider's models, on each provider's account |
 | **Grida Gateway** | one `GG_API_KEY` | every modality, with one key and one bill |
 
@@ -72,7 +73,7 @@ workflow. Or start from an example: `npx grida fx init my-assets --template pet`
 project dashboard and records every run.
 
 A run without `--live` executes local steps and reuses cached results. New provider calls need
-`--live` and a spending ceiling, such as `--max-usd 5`, unless every one is on your own Codex.
+`--live` and a spending ceiling, such as `--max-usd 5`, unless every one is on your own Codex or Grok Build.
 
 Start with [the guide](docs/guide/01-getting-started.md), or explore the
 [examples](examples/): recolor an image with code, build a looping background,

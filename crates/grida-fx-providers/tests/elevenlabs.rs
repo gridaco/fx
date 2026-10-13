@@ -296,14 +296,11 @@ fn the_base_url_comes_from_the_endpoints() {
         .reply(mp3(MP3)),
     ]));
     let setup = Setup {
-        transport: transport.clone(),
-        keys: test_keys(),
         endpoints: Endpoints {
             elevenlabs: "http://127.0.0.1:8089/v1".into(),
             ..Endpoints::default()
         },
-        clock: Arc::new(FakeClock::new()),
-        codex: Err(grida_fx_providers::codex::NOT_INSTALLED.into()),
+        ..Setup::new(transport.clone(), test_keys(), Arc::new(FakeClock::new()))
     };
     let adapter = ElevenLabsSound::new(elevenlabs::client(&setup));
     let sent = block_on(adapter.send(&sound_call(json!({"prompt": "wooden door opens"}))));

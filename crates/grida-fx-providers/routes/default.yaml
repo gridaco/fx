@@ -15,6 +15,10 @@
 # input pictures, and share one route id, so at most three of their calls run at once on the
 # invocation's one Codex (spec/providers.md §9.6, §10).
 #
+# The Grok Build routes (imagine@grok, likewise) run on the user's own signed-in Grok Build, on
+# their Grok subscription: free to FX, $0, at most 3 input pictures, three calls at once, opaque
+# images only (spec/providers.md §9.8, §10).
+#
 # The other image routes are priced per call, in tiers by `size`. A tier's low is the output tokens at
 # quality max for that size, measured or derived from a measured bill; its high adds an allowance
 # for the prompt and the input pictures, and on OpenRouter covers twice the output
@@ -171,6 +175,23 @@ routes:
   contract:
     adapter: fx-codex-image-v1
     adapter_behavior: '2'
+- capability: image.edit
+  route: imagine@grok
+  price:
+    low_usd: 0
+    high_usd: 0
+  concurrency: 3
+  max_input_pictures: 3
+  features:
+  - auto_background
+  - flexible_size
+  - image_input
+  - jpeg_output
+  - opaque_background
+  - png_output
+  contract:
+    adapter: fx-grok-image-v1
+    adapter_behavior: '1'
 - capability: image.edit
   route: openai/gpt-image-2.5-sunburst@gg
   price:
@@ -422,6 +443,24 @@ routes:
   contract:
     adapter: fx-codex-image-v1
     adapter_behavior: '2'
+- capability: image.generate
+  route: imagine@grok
+  price:
+    low_usd: 0
+    high_usd: 0
+  concurrency: 3
+  max_input_pictures: 3
+  features:
+  - auto_background
+  - flexible_size
+  - image_input
+  - jpeg_output
+  - opaque_background
+  - png_output
+  - text_to_image
+  contract:
+    adapter: fx-grok-image-v1
+    adapter_behavior: '1'
 - capability: image.generate
   route: openai/gpt-image-2.5-sunburst@gg
   price:

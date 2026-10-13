@@ -639,18 +639,15 @@ mod tests {
     use crate::adapter::RouteRef;
     use crate::clock::SystemClock;
     use crate::keys::Keys;
-    use crate::setup::Endpoints;
     use crate::transport::replay::NoNetwork;
     use serde_json::json;
 
     fn setup() -> Setup {
-        Setup {
-            transport: Arc::new(NoNetwork),
-            keys: Keys::from_pairs(&[(KeyName::GridaGateway, "sk-gg-v1-test-secret")]),
-            endpoints: Endpoints::default(),
-            clock: Arc::new(SystemClock::new()),
-            codex: Err(crate::codex::NOT_INSTALLED.into()),
-        }
+        Setup::new(
+            Arc::new(NoNetwork),
+            Keys::from_pairs(&[(KeyName::GridaGateway, "sk-gg-v1-test-secret")]),
+            Arc::new(SystemClock::new()),
+        )
     }
 
     fn client() -> Client {

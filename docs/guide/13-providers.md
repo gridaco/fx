@@ -2,13 +2,14 @@
 
 FX runs a workflow's own code with no provider at all. A step that calls an AI model (an image, a
 clip, a 3D model, structured text) runs on a **route**, `model@provider`, and a live run needs
-that provider's key, or its program for Codex. This page lists the ways to set one up and what each
+that provider's key, or its program for Codex and Grok Build. This page lists the ways to set one up and what each
 one serves.
 
 | Path | What you set up | What it serves | Who bills |
 |---|---|---|---|
 | No provider | nothing | your own code and the built-in local steps | nobody |
 | [Your own Codex](#your-own-codex) | Codex, signed in to ChatGPT | images | your ChatGPT plan; $0 to FX |
+| [Your own Grok Build](#your-own-grok-build) | Grok Build, signed in to a Grok subscription | images | your Grok subscription; $0 to FX |
 | [Grida Gateway](#grida-gateway) | `GG_API_KEY` | text, agent turns, images, video, 3D models and rigs | your organization's Grida AI credits |
 | [Your own keys](#your-own-provider-keys) | each provider's key | that provider's routes | each provider's account |
 
@@ -32,6 +33,16 @@ your plan; FX books it at $0, and a run whose calls are all on Codex needs no `-
 
 It serves images only (`image.generate` and `image.edit`), and Codex picks the model and the
 quality. Setup and caveats, sizes above all: [Images from your own Codex](12-codex.md).
+
+## Your own Grok Build
+
+With [Grok Build](https://x.ai/cli) installed and signed in to a Grok account whose subscription
+includes image generation, the route `imagine@grok` draws and edits images with no API key. Grok
+Build counts each image against your subscription; FX books it at $0, and a run whose calls are all
+on Grok Build (or on it and Codex) needs no `--max-usd`.
+
+It serves images only (`image.generate` and `image.edit`), opaque ones, and Grok Build picks the
+model and the size. Setup and caveats: [Images from your own Grok Build](14-grok.md).
 
 ## Grida Gateway
 
@@ -73,7 +84,7 @@ point a provider at another address, such as a proxy. How FX reads keys and the 
 
 ## The built-in routes
 
-| Capability | Grida Gateway | Codex | Your own keys |
+| Capability | Grida Gateway | Codex, Grok Build | Your own keys |
 |---|---|---|---|
 | `structured.generate`, `agent.turn` | ✓ | | OpenRouter |
 | `image.generate`, `image.edit` | ✓ | ✓ | OpenAI, OpenRouter, fal |

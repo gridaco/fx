@@ -12,7 +12,7 @@ Every built-in type is declared, so a workflow using it plans and prices. A type
 
 | Type | Inputs and settings → output |
 |---|---|
-| `image.generate@1` | `prompt`, `size`, `background` → `image`. It also takes `references`, input pictures to draw from: only `imagegen@codex` accepts them (up to 5); on the other routes, use `image.edit@1`. |
+| `image.generate@1` | `prompt`, `size`, `background` → `image`. It also takes `references`, input pictures to draw from: only `imagegen@codex` (up to 5) and `imagine@grok` (up to 3) accept them; on the other routes, use `image.edit@1`. |
 | `image.edit@1` | `image`, `mask` (a PNG the size of `image`: fully transparent pixels mark where it may change; a strong hint, not a guarantee), `references`, `prompt`, `size`, `background` → `image` |
 | `structured.generate@1` | `prompt`, `system`, `context` (text, json and images; images are reduced and flattened onto `matte:`, white by default), `schema`, `max_tokens` → `json` |
 | `video.generate@1` | `prompt`, `first_frame`, `last_frame`, `duration`, `resolution`, `aspect_ratio` → `video` |

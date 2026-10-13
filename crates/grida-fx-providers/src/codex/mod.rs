@@ -30,11 +30,9 @@
 //! runtime's reader when Codex had not yet named it.
 //! Codex reports no cost: an answer's cost is `None`, and its [`Usage`] says what Codex counted.
 
-mod process;
 mod protocol;
 mod runtime;
 
-pub use process::end_every_codex;
 pub use runtime::CodexRuntime;
 
 use crate::BoxFuture;
@@ -42,6 +40,7 @@ use crate::adapter::{
     Adapter, Answer, Billing, CallRequest, RequestAdapter, RouteRef, Sent, Usage,
 };
 use crate::capabilities;
+use crate::installed::{self, Picture, failed};
 use crate::registry::Adapters;
 use crate::setup::Setup;
 use crate::wire;
@@ -254,46 +253,12 @@ pub fn register(adapters: &mut Adapters, setup: &Setup) {
 ///   so a project's own folder never supplies it);
 /// - else `app` when it is executable.
 pub fn find_program(env: &dyn Fn(&str) -> Option<String>, app: &Path) -> Option<PathBuf> {
-    if let Some(named) = env(PROGRAM_VARIABLE).filter(|v| !v.trim().is_empty()) {
-        let named = PathBuf::from(named);
-        let named = if named.is_absolute() {
-            named
-        } else {
-            std::env::current_dir().ok()?.join(named)
-        };
-        return executable(&named).then_some(named);
-    }
-    let on_path = env("PATH").and_then(|path| {
-        std::env::split_paths(&path)
-            .filter(|dir| dir.is_absolute())
-            .map(|dir| dir.join("codex"))
-            .find(|candidate| executable(candidate))
-    });
-    on_path.or_else(|| executable(app).then(|| app.to_path_buf()))
-}
-
-/// A regular file this user may run (on Unix, any execute bit).
-fn executable(path: &Path) -> bool {
-    let Ok(metadata) = std::fs::metadata(path) else {
-        return false;
-    };
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        metadata.is_file() && metadata.permissions().mode() & 0o111 != 0
-    }
-    #[cfg(not(unix))]
-    {
-        metadata.is_file()
-    }
+    installed::find_program(env, PROGRAM_VARIABLE, "codex", Some(app.to_path_buf()))
 }
 
 /// Every variable Codex never inherits.
 pub fn withheld() -> impl Iterator<Item = &'static str> {
-    crate::keys::ALLOWED
-        .iter()
-        .copied()
-        .chain(ALSO_WITHHELD.iter().copied())
+    installed::withheld(&ALSO_WITHHELD)
 }
 
 /// The turn's text (behaviour [`ADAPTER_BEHAVIOR`]): the image tool's arguments, the pictures'
@@ -324,32 +289,7 @@ pub fn instructions(values: &Values<'_>, pictures: &[PathBuf]) -> String {
 
 /// Step 1: whether the route is one this adapter serves.
 fn served(route: &RouteRef) -> Result<(), String> {
-    let refused = || {
-        format!(
-            "{} is not a {} route this adapter serves",
-            route.id(),
-            route.capability
-        )
-    };
-    let capability = route.capability.as_str();
-    if !matches!(capability, "image.generate" | "image.edit") || route.provider != "codex" {
-        return Err(refused());
-    }
-    let contract = match &route.contract {
-        Value::Null => return Ok(()),
-        Value::Object(contract) => contract,
-        _ => return Err(refused()),
-    };
-    let text_or_absent = |key: &str, want: &str| match contract.get(key) {
-        None | Some(Value::Null) => true,
-        Some(Value::String(have)) => have == want,
-        Some(_) => false,
-    };
-    if text_or_absent("adapter", ADAPTER) && text_or_absent("adapter_behavior", ADAPTER_BEHAVIOR) {
-        Ok(())
-    } else {
-        Err(refused())
-    }
+    installed::served(route, "codex", ADAPTER, ADAPTER_BEHAVIOR)
 }
 
 /// A request's values after step 3.
@@ -367,15 +307,8 @@ pub struct Values<'a> {
 impl<'a> Values<'a> {
     /// Reads a request that passed its capability's check (step 3).
     pub fn read(request: &'a Value) -> Result<Values<'a>, String> {
-        let prompt = request.get("prompt").and_then(Value::as_str).unwrap_or("");
-        if prompt.trim().is_empty() {
-            return Err("an image call needs its prompt as text".into());
-        }
-        match request.get("size") {
-            None | Some(Value::Null) => {}
-            Some(Value::String(size)) if size == "auto" => {}
-            Some(_) => return Err(NO_EXACT_SIZE.into()),
-        }
+        let prompt = installed::prompt(request)?;
+        installed::auto_size(request, NO_EXACT_SIZE)?;
         let background = match request.get("background") {
             None | Some(Value::Null) => "auto",
             Some(Value::String(b)) if matches!(b.as_str(), "auto" | "opaque" | "transparent") => {
@@ -386,23 +319,7 @@ impl<'a> Values<'a> {
         if request.get("mask").is_some_and(|mask| !mask.is_null()) {
             return Err("Codex image edits take no mask".into());
         }
-        let mut pictures: Vec<(String, &Value)> = request
-            .get("image")
-            .filter(|image| !image.is_null())
-            .map(|image| ("image".to_string(), image))
-            .into_iter()
-            .collect();
-        let references = request.get("references").and_then(Value::as_array);
-        pictures.extend(
-            references
-                .into_iter()
-                .flatten()
-                .enumerate()
-                .map(|(i, value)| (format!("references[{i}]"), value)),
-        );
-        if pictures.len() > MAX_PICTURES {
-            return Err(format!("Codex takes at most {MAX_PICTURES} input pictures"));
-        }
+        let pictures = installed::input_pictures(request, MAX_PICTURES, "Codex")?;
         Ok(Values {
             prompt,
             background,
@@ -417,61 +334,21 @@ struct Drawing<'a> {
     pictures: Vec<Picture<'a>>,
 }
 
-/// An input picture: its store copy, and the extension its copy for Codex takes.
-struct Picture<'a> {
-    source: &'a Path,
-    extension: &'static str,
-}
-
 /// Step 3 for one picture: a file the call carries, not empty, of a kind Codex reads.
 fn picture<'a>(call: &'a CallRequest, value: &Value, member: &str) -> Result<Picture<'a>, String> {
-    let file = wire::request_file(call, value, member)?;
-    let readable = std::fs::metadata(&file.path).is_ok_and(|m| m.is_file() && m.len() > 0);
-    if !readable {
-        return Err(format!("{member} has no bytes to send"));
-    }
-    let Some((_, extension)) = PICTURE_KINDS.iter().find(|(kind, _)| *kind == file.kind) else {
-        return Err(format!(
-            "{member} is {}; Codex takes PNG, JPEG or WebP",
-            file.kind
-        ));
-    };
-    Ok(Picture {
-        source: &file.path,
-        extension,
-    })
-}
-
-/// Step 5: copies of the pictures in `folder`, in order, as `picture-<nn>.<extension>`.
-fn place(pictures: &[Picture<'_>], folder: &Path) -> Result<Vec<PathBuf>, Stop> {
-    pictures
-        .iter()
-        .enumerate()
-        .map(|(i, picture)| {
-            let copy = folder.join(format!("picture-{:02}.{}", i + 1, picture.extension));
-            std::fs::copy(picture.source, &copy)
-                .map(|_| copy)
-                .map_err(|error| Stop::Failed(grida_fx_core::error::io_reason(&error)))
-        })
-        .collect()
+    installed::picture(
+        call,
+        value,
+        member,
+        &PICTURE_KINDS,
+        "Codex takes PNG, JPEG or WebP",
+    )
 }
 
 /// A command that starts `program` with `args` in `folder`: Codex's own environment, less
 /// [`withheld`]; no stderr; in a process group of its own; killed when dropped.
 pub(super) fn command(program: &Path, args: &[String], folder: &Path) -> Command {
-    let mut command = Command::new(program);
-    command.args(args).current_dir(folder);
-    for variable in withheld() {
-        command.env_remove(variable);
-    }
-    command
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .kill_on_drop(true);
-    #[cfg(unix)]
-    command.process_group(0);
-    command
+    installed::command(program, args, folder, &ALSO_WITHHELD)
 }
 
 /// `-c` settings: [`SETTINGS`] first.
@@ -603,7 +480,7 @@ async fn begin(
         .prefix("grida-fx-codex-")
         .tempdir()
         .map_err(|error| Stop::Failed(grida_fx_core::error::io_reason(&error)))?;
-    let pictures = place(&wanted.pictures, folder.path())?;
+    let pictures = installed::place(&wanted.pictures, folder.path()).map_err(Stop::Failed)?;
     let text = instructions(&wanted.values, &pictures);
     let (started, notes) = connection
         .start_thread(json!({
@@ -782,15 +659,6 @@ fn unix_now() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |since| since.as_secs() as i64)
-}
-
-/// A failure: never retried, and charged the route's hold ($0) since Codex reports no cost.
-fn failed(reason: String) -> Sent {
-    Sent::Failed {
-        reason,
-        cost: None,
-        retryable: false,
-    }
 }
 
 #[cfg(test)]
