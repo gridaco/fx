@@ -10,6 +10,12 @@ const HOVER_DELAY = 300;
 
 type Box = Pick<DOMRectReadOnly, "left" | "top" | "width" | "height">;
 
+/** Where a video stopped at `time` plays from next: there, or from the start once it has played through. */
+export function resumeAt(time: number, duration: number): number | null {
+  if (!Number.isFinite(time) || time <= 0) return null;
+  return Number.isFinite(duration) && time >= duration - 0.25 ? null : time;
+}
+
 /** Where the player goes, in the host's pixels: over the frame as it is on screen now. */
 export function playerBox(frame: Box, host: Box) {
   return { left: frame.left - host.left, top: frame.top - host.top, width: frame.width, height: frame.height };
@@ -62,6 +68,10 @@ export class CardVideos {
   private readonly ready = new Map<string, string | null>();
   /** Files the player could not play: their cards say so and offer no play control. */
   private readonly failed = new Set<string>();
+  /** Where each file stopped short of its end: hovering or playing it again continues there. */
+  private readonly positions = new Map<string, number>();
+  /** What only the current video listens for; a stop ends it. */
+  private session = new AbortController();
   private readonly waiting = new Map<Element, () => void>();
   private readonly observer = new IntersectionObserver((entries) => {
     for (const entry of entries) {
@@ -169,6 +179,10 @@ export class CardVideos {
     if (!playing) return;
     const focused = this.player.contains(document.activeElement);
     this.playing = null;
+    this.session.abort();
+    const at = resumeAt(this.media.currentTime, this.media.duration);
+    if (at === null) this.positions.delete(playing.preview.digest);
+    else this.positions.set(playing.preview.digest, at);
     if (this.frame !== null) cancelAnimationFrame(this.frame);
     this.frame = null;
     playing.video.classList.remove("is-playing");
@@ -196,11 +210,20 @@ export class CardVideos {
     this.player.setAttribute("aria-label", playing.preview.label);
     this.media.muted = hover;
     this.media.loop = hover;
-    // Its first frame shows until the video's own does; the card's backdrop shows around it.
-    const still = this.ready.get(playing.preview.digest);
+    this.session = new AbortController();
+    // A video it stopped short of its end continues there. One starting over shows its first frame
+    // until the video's own does; the card's backdrop shows around it.
+    const { digest, url } = playing.preview;
+    const at = this.positions.get(digest);
+    const still = at === undefined ? this.ready.get(digest) : undefined;
     if (still) this.media.poster = still;
     else this.media.removeAttribute("poster");
-    this.media.src = playing.preview.url;
+    this.media.src = url;
+    if (at !== undefined) {
+      this.media.currentTime = at;
+      // Set before the video has loaded, the time is where it starts; a browser that drops it seeks once it can.
+      this.media.addEventListener("loadedmetadata", () => { if (this.media.currentTime < at - 0.5) this.media.currentTime = at; }, { once: true, signal: this.session.signal });
+    }
     this.player.hidden = false;
     this.follow();
     // Hovering never takes focus.

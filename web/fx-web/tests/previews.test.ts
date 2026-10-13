@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { canvasGraph, type Artifact, type ViewerRun } from "../src/index";
-import { playerBox } from "../src/video";
+import { playerBox, resumeAt } from "../src/video";
 import { graph } from "./graph.test";
 
 const sourceDigest = "a".repeat(64);
@@ -118,6 +118,13 @@ describe("recorded canvas previews", () => {
     recorded.nodes[0].outputs = { video: { file: { digest: otherDigest, kind: "video/mp4", name: "clip.mp4", size: 100 } }, image: file(outputDigest) };
     recorded.artifacts.push(artifact(otherDigest, { kind: "video/mp4", name: "clip.mp4" }));
     expect(canvasGraph(recorded).nodes[0].preview).toMatchObject({ kind: "image", digest: outputDigest, count: 1 });
+  });
+
+  test("a video continues where it stopped, and starts over once it has played through", () => {
+    expect(resumeAt(3.2, 8)).toBe(3.2);
+    expect([resumeAt(0, 8), resumeAt(7.9, 8), resumeAt(8, 8), resumeAt(NaN, 8)]).toEqual([null, null, null, null]);
+    // A stream of unknown length always continues.
+    expect(resumeAt(40, Infinity)).toBe(40);
   });
 
   test("the player covers its card's frame as it is on screen", () => {
