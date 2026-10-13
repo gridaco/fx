@@ -200,7 +200,7 @@ test("the resting card takes the first running member and, in a take deck, the t
   expect(deckBadge([take("a", "x", 1), take("b", "x", 2), take("c", "y", 1)]).text).toBe("2 items · up to 2 takes");
 });
 
-test("absent instances never join a deck, and an image output reserves its preview before it exists", () => {
+test("absent instances never join a deck, and an image or video output reserves its preview before it exists", () => {
   const absent = { ...node("b#1", false, "b"), state: "absent" };
   const layout = layoutGraph({ nodes: [node("a#1", false, "b"), absent], edges: [] }, report({ b: [0, 0] }));
   expect([layout.nodes.map((item) => item.id), layout.decks]).toEqual([["a#1"], []]);
@@ -209,6 +209,10 @@ test("absent instances never join a deck, and an image output reserves its previ
   const ports = { inputs: [], outputs: [{ name: "image", type: "image/png", kind: "artifact" as const }], settings: [] };
   expect(canvasPreviewReserved({ ...node("draw"), ports })).toBe(true);
   expect(canvasNodeSize({ ...node("draw"), ports })).toEqual(canvasNodeSize({ ...node("draw", true), ports }));
+  for (const type of ["video/mp4", "video", "video[]"]) {
+    expect(canvasPreviewReserved({ ...node("animate"), ports: { ...ports, outputs: [{ name: "clip", type, kind: "artifact" }] } })).toBe(true);
+  }
+  expect(canvasPreviewReserved({ ...node("describe"), ports: { ...ports, outputs: [{ name: "notes", type: "videos_notes", kind: "artifact" }] } })).toBe(false);
 });
 
 test("a waiting member rests in front after a running one, and the badge counts the waiting", () => {

@@ -269,11 +269,15 @@ automatically, polling about once a second. Reloading the page also reattaches t
 latest consistent snapshot. Images, text/JSON,
 audio, and video use generic previews; other file types can be opened in a new tab.
 
-Run canvas cards also show the first available recorded image output. A count
-indicates multiple distinct available images; select the card to inspect all outputs.
-The canvas uses the verified artifact inventory and never evaluates author code to
-produce thumbnails. Plan cards have no artifact previews, including steps marked
-`done` by the planner. Updates preserve the canvas camera, selection and workflow navigation.
+Run canvas cards also show the first available recorded image output. A step without
+one shows the first frame of its first MP4 or WebM video and a play button: the video
+plays over the card, follows it as you pan and zoom, and stops when it ends, on Escape,
+or when another card covers it. A count indicates multiple distinct available images
+(or videos); select the card to inspect all outputs. The canvas uses the verified
+artifact inventory and never evaluates author code to produce thumbnails; a video's
+first frame is read in the browser once its card comes into view. Plan cards have no
+artifact previews, including steps marked `done` by the planner. Updates preserve the
+canvas camera, selection and workflow navigation.
 
 These automatic thumbnails use structured run data. The existing authoring `view`
 declarations are booleans or HTML template paths; custom templates and structured

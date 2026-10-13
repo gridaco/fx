@@ -112,8 +112,10 @@ authored cells, rule 10 removes empty tracks and rule 11 sizes them.
     left.
 
 Rules 1–10 read no size, so a preview arriving never changes a cell. Footprints come from
-declarations: ports, settings and kind. A step whose declared output ports include an image
-reserves its preview area in both views, before any artifact exists.
+declarations: ports, settings and kind. A step whose declared output ports include an image or a
+video reserves its preview area in both views, before any artifact exists. A recorded card
+previews its first image output, or without one its first MP4 or WebM output, which shows its
+first frame until it is played (§5.7).
 
 Example: `seed → propose (2 takes) → warm, cool, mono, dusk, night → sheet`, and an island
 `notes → index`.
@@ -258,10 +260,10 @@ including those that leave the deck.
 | Hover a bookmark row | raise that member, as hovering its card does | the camera glides to that member's card, which is outlined; leaving keeps the camera there |
 | Click a bookmark row | select that member (a frame member: its first step), which then rests in front | select it, and the camera glides to its card |
 | Still click on a card, a back card's visible rim or the badge | expand | select that member |
-| Click a labelled control on the front card (`Open workflow`) | does what it says | does what it says |
+| Click a labelled control on the front card (`Open workflow`, a video's play control) | does what it says | does what it says |
 | Double-click | counts as one expand click | on a workflow card: open it |
 | Click the veil | — | collapse one level; the selection is unchanged; a second deck needs a second click |
-| Esc | with focus in the canvas: go back a scope (unchanged) | collapse one level, wherever focus is except in a text field; consumed only then |
+| Esc | with focus in the canvas: go back a scope (unchanged) | collapse one level, wherever focus is except in a text field or a playing video; consumed only then |
 | × | — | collapse one level |
 | Tab | one stop per deck (the front card); back cards have `tabindex=-1` | each card, in grid order |
 | Enter or Space | expand | select |
@@ -270,6 +272,11 @@ including those that leave the deck.
 | Select from the step list | raise the target to the front and glide the camera to it, centred where the open panels leave room, zooming in only as far as 100 % when titles do not read; no expand | collapse first if the target is outside; a member of the open deck is already in view, so the camera stays |
 | Scope change | — | collapse at once; keep the pre-expand camera |
 | A deck inside an expanded card | — | a click expands it one level deeper. Only the innermost level is interactive; the levels around it are its veil, so a click on them collapses one level and selects nothing |
+
+A video plays over its card's preview, following the card as the camera and the deck move it, and
+selects nothing. It stops when it ends, on Esc (focus returns to its play control) and as soon as
+anything covers its card: another card raised over it, its deck resting with another card in front,
+or the veil of a deck it is not in.
 
 On collapse, focus returns to the deck's front card. Raising a card never moves the focused
 element in the document. At most one deck per view is expanded, plus its nested levels. There are

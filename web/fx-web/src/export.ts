@@ -1,5 +1,5 @@
 import { parseViewerRun, type ViewerRun } from "./index";
-import { flatCanvasGraph, parseLayoutReport, type CanvasGraph, type LayoutReport } from "./graph";
+import { cardPreview, flatCanvasGraph, parseLayoutReport, type CanvasGraph, type LayoutReport } from "./graph";
 import { projectScopes } from "./scopes";
 
 export interface ExportArtifact {
@@ -28,7 +28,6 @@ export interface LoadedRunExport { manifest: RunExport; manifest_url: string }
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const digest = (value: unknown): value is string => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
 const count = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
-const imageTypes = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"]);
 const mediaExtensions: Record<string, string> = {
   "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif", "image/avif": "avif",
   "video/mp4": "mp4", "video/webm": "webm", "audio/wav": "wav", "audio/mpeg": "mp3", "audio/ogg": "ogg", "audio/flac": "flac", "model/gltf-binary": "glb",
@@ -223,7 +222,7 @@ export async function readRunExport(pin: PinnedRunExport, signal?: AbortSignal, 
   return { manifest: parseRunExport(value), manifest_url: url.href };
 }
 
-/** Share wiring, scope projection and geometry while resolving images through the static boundary. */
+/** Share wiring, scope projection and geometry while resolving previews through the static boundary. */
 export function exportCanvasGraph(loaded: LoadedRunExport, scope: string | null = null): CanvasGraph {
   const { view, artifacts } = loaded.manifest;
   const flat = flatCanvasGraph(view);
@@ -231,14 +230,12 @@ export function exportCanvasGraph(loaded: LoadedRunExport, scope: string | null 
   for (const node of flat.nodes) {
     const source = view.nodes.find((item) => item.id === node.source_id);
     if (!source) continue;
-    const images = new Map<string, { url: string; label: string }>();
-    for (const [port, value] of Object.entries(source.outputs)) for (const id of exportFileDigests(value)) {
+    const preview = cardPreview(Object.entries(source.outputs).flatMap(([port, value]) => exportFileDigests(value).flatMap((id) => {
       const artifact = inventory.get(id);
-      const url = exportArtifactUrl(loaded, id);
-      if (artifact && imageTypes.has(artifact.media_type) && url && !images.has(id)) images.set(id, { url, label: `${port}: ${artifact.name}` });
-    }
-    const first = images.entries().next().value;
-    if (first) node.preview = { kind: "image", digest: first[0], ...first[1], count: images.size };
+      const url = artifact ? exportArtifactUrl(loaded, id) : null;
+      return artifact && url ? [{ digest: id, media_type: artifact.media_type, url, label: `${port}: ${artifact.name}` }] : [];
+    })));
+    if (preview) node.preview = preview;
   }
   return projectScopes(view, flat, scope);
 }

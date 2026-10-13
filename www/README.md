@@ -101,7 +101,8 @@ external images, including production optimizer URL validation. For a candidate:
 2. Inspect browser Network and image `src`/`srcset`: external media and JSON must
    request the configured CDN directly, without `/_next/image?url=...` or a
    same-origin proxy.
-3. Confirm no CORS errors and exercise video playback/seeking after host changes.
+3. Confirm no CORS errors, that canvas video cards show their first frame (read from
+   the file, so videos need CORS too), and exercise video playback/seeking after host changes.
 
 These external asset bytes bypass Vercel optimization and delivery. HTML,
 JavaScript, local branding/landing media and generated social previews remain

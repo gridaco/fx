@@ -5,8 +5,11 @@ import { displayPortName } from "./ports";
 import { BADGE_BAND, DECK_OFFSET, canvasEdgePath, layoutGraph, type CanvasLayout, type PlacedDeck, type PositionedFrame, type PositionedNode } from "./layout";
 import { DECK_BACK, bookmarkLayout, deckBadge, deckStack, deckTicks, expandedColumns, restingFront, tickHolds, type DeckMember } from "./deck";
 import { element, nodeCard, runningLabel, short } from "./card";
+import { CardVideos } from "./video";
 
 const EXPANDED_GAP = 32;
+/** A card's labelled controls do what they say (§5.7): a press on one neither pans nor opens its deck. */
+const CARD_CONTROLS = ".fx-canvas-open-workflow, .fx-canvas-play";
 /** §5.9: expanded decks fit the viewport down to card titles (13 px) about 11 px on screen. */
 const LEGIBLE_ZOOM = 11 / 13;
 
@@ -84,6 +87,7 @@ export class CanvasController {
   private readonly deckBar = document.createElement("div");
   /** An open deck's bookmark, fixed at the canvas's left edge while its grid moves. */
   private readonly scrubber = document.createElement("div");
+  private readonly videos: CardVideos;
   /** The badge's text size on screen last written to `--fx-text`, within its fade. */
   private textSize = "";
   private layout: CanvasLayout = { nodes: [], edges: [], frames: [], decks: [], width: 0, height: 0 };
@@ -158,20 +162,23 @@ export class CanvasController {
       const index = this.open ? this.decks.indexOf(this.open.deck) : -1;
       if (index >= 0) this.markFront(this.decks[index], this.frontOf(index));
     }, { signal: this.abort.signal });
-    container.replaceChildren(this.svg, this.toolbar, this.empty, this.deckBar, this.scrubber);
+    this.videos = new CardVideos(container);
+    container.replaceChildren(this.svg, this.videos.player, this.toolbar, this.empty, this.deckBar, this.scrubber);
     container.addEventListener("wheel", this.onWheel, { passive: false, signal: this.abort.signal });
     this.svg.addEventListener("pointerdown", this.onPointerDown, { signal: this.abort.signal });
     this.svg.addEventListener("pointermove", this.onPointerMove, { signal: this.abort.signal });
     this.svg.addEventListener("pointerup", this.onPointerUp, { signal: this.abort.signal });
     this.svg.addEventListener("pointercancel", this.onPointerUp, { signal: this.abort.signal });
-    this.svg.addEventListener("pointerleave", () => this.hover(null), { signal: this.abort.signal });
+    // The pointer moving onto the player stays on its card.
+    this.svg.addEventListener("pointerleave", (event) => { if (event.relatedTarget !== this.videos.player) this.hover(null); }, { signal: this.abort.signal });
     // A deck card is the expand target: the capture phase runs before a card's own selection.
     this.svg.addEventListener("click", this.onDeckClick, { capture: true, signal: this.abort.signal });
     // Raising a card moves focus out of the canvas, so Esc listens on the document while open.
     document.addEventListener("keydown", (event) => {
       if (event.key !== "Escape" || !this.open || event.defaultPrevented) return;
       const target = event.target as HTMLElement | null;
-      if (target?.closest("input, textarea, select, [contenteditable]")) return;
+      // A field keeps its own keys; Esc on the card's player closes the player first.
+      if (target?.closest("input, textarea, select, video, [contenteditable]")) return;
       event.preventDefault();
       this.collapse();
     }, { capture: true, signal: this.abort.signal });
@@ -264,6 +271,7 @@ export class CanvasController {
     }
     for (const [index, node] of this.layout.nodes.entries()) {
       const group = nodeCard(node, this.id, index, signal, (scope) => this.onOpenScope(scope));
+      if (node.preview?.kind === "video") this.videos.attach(group, node.id, node.preview, signal);
       group.addEventListener("pointerenter", () => this.highlightConnections(node.id), { signal });
       group.addEventListener("pointerleave", () => this.highlightConnections(null), { signal });
       group.addEventListener("click", () => this.onSelect(node.id), { signal });
@@ -277,6 +285,7 @@ export class CanvasController {
       layer(frameOf.get(node.id) ?? null).cards.append(group);
       this.nodes.set(node.id, group);
     }
+    this.videos.redrawn(this.nodes);
     const items = new Map<string, PositionedNode | PositionedFrame>([...this.layout.nodes, ...frames].map((item) => [item.id, item]));
     this.decks = this.layout.decks.map((placed, index) => this.deck(placed, index, layer(placed.frame).cards, items));
     this.decks.forEach((_, index) => this.restDeck(index));
@@ -469,6 +478,9 @@ export class CanvasController {
     for (const at of stack.order) if (stack.shown[at]) deck.parent.insertBefore(deck.cards[at], deck.badge);
     this.stack(deck, stack.slots);
     deck.cards.forEach((card, at) => card.classList.toggle("is-buried", !stack.shown[at]));
+    // Only the front card is uncovered.
+    const playing = this.videos.card;
+    if (playing && deck.cards.some((card, at) => at !== front && card.contains(playing))) this.videos.stop();
     this.markFront(deck, front);
     // One tab stop per closed deck: its front card.
     deck.cards.forEach((card, at) => { if (card.hasAttribute("tabindex")) card.setAttribute("tabindex", at === front ? "0" : "-1"); });
@@ -544,8 +556,7 @@ export class CanvasController {
     if (target) this.restDeck(target.deck, target.card, !target.mark);
   }
   private onDeckClick = (event: MouseEvent) => {
-    // A labelled control on a card does what it says (§5.7).
-    if ((event.target as Element).closest(".fx-canvas-open-workflow")) return;
+    if ((event.target as Element).closest(CARD_CONTROLS)) return;
     const badge = (event.target as Element).closest<SVGGElement>(".fx-deck-badge");
     const hit = badge ? { deck: Number(badge.dataset.deck), card: 0 } : this.cardAt(event.target);
     if (!hit || this.open) return;
@@ -561,6 +572,9 @@ export class CanvasController {
     const deck = this.decks[index];
     if (!deck || this.open) return;
     this.hover(null);
+    // The veil covers every card outside the deck.
+    const playing = this.videos.card;
+    if (playing && !deck.cards.some((card) => card.contains(playing))) this.videos.stop();
     const sizes = deck.boxes;
     const card = { width: Math.max(...sizes.map((size) => size.width)), height: Math.max(...sizes.map((size) => size.height)) };
     const bounds = this.container.getBoundingClientRect();
@@ -740,7 +754,7 @@ export class CanvasController {
    */
   private onPointerDown = (event: PointerEvent) => {
     const target = event.target as Element;
-    if (event.button !== 0 || target.closest(".fx-canvas-open-workflow")) return;
+    if (event.button !== 0 || target.closest(CARD_CONTROLS)) return;
     this.drag = { pointer: event.pointerId, x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, moved: false,
       background: !target.closest("[data-node-id], [data-connection-id], [data-deck], .fx-deck-bookmark"), veil: Boolean(target.closest(".fx-deck-veil")) };
   };
@@ -780,6 +794,6 @@ export class CanvasController {
   dispose() {
     if (this.viewportFrame !== null) cancelAnimationFrame(this.viewportFrame);
     this.viewportFrame = null;
-    this.cancelDrag(); this.abort.abort(); this.graphAbort.abort(); this.resize.disconnect(); this.container.replaceChildren();
+    this.cancelDrag(); this.abort.abort(); this.graphAbort.abort(); this.videos.dispose(); this.resize.disconnect(); this.container.replaceChildren();
   }
 }

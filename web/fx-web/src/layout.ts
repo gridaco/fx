@@ -13,12 +13,12 @@ const COLUMN_GAP = 100, ROW_GAP = 42, FRAME_PAD = 20, FRAME_TOP = 36, MARGIN = 2
 /** Socket rows: the card draws them and edges attach to them. */
 export const PORT_TOP = 93, PORT_ROW = 34;
 
-/** §4: a card with a declared image output reserves its preview area before any image exists. */
+/** §4: a card with a declared image or video output reserves its preview area before any file exists. */
 export function canvasPreviewReserved(node: CanvasStep) {
-  return node.preview !== undefined || (node.ports?.outputs.some((port) => port.kind === "artifact" && /^image(?:[/[{?]|$)/.test(port.type)) ?? false);
+  return node.preview !== undefined || (node.ports?.outputs.some((port) => port.kind === "artifact" && /^(?:image|video)(?:[/[{?]|$)/.test(port.type)) ?? false);
 }
 
-/** Geometry depends on declarations, never on image loading or measured DOM text. */
+/** Geometry depends on declarations, never on media loading or measured DOM text. */
 export function canvasNodeGeometry(node: CanvasStep) {
   if (!node.ports) return { width: 250, height: node.preview ? 246 : 106, preview_y: 61, settings_y: 0 };
   const rows = Math.max(node.ports.inputs.length, node.ports.outputs.length);

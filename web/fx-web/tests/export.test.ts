@@ -70,6 +70,15 @@ describe("portable inspection boundary", () => {
     expect(() => parseRunExport({ ...recording.manifest, view: local })).toThrow();
     expect(exportCanvasGraph(loaded(withImage(true))).nodes[0].preview).toBeUndefined();
   });
+  test("a recorded video previews through the same static boundary", () => {
+    const value = withImage();
+    Object.assign(value.artifacts[0], { media_type: "video/mp4", name: "clip.mp4", path: `artifacts/${imageDigest}.mp4` });
+    Object.assign(value.view.artifacts[0], { kind: "video/mp4", name: "clip.mp4" });
+    value.view.nodes[0].outputs = { clip: { file: { digest: imageDigest, kind: "video/mp4", name: "clip.mp4", size: 20 } } };
+    expect(exportCanvasGraph(loaded(value)).nodes[0].preview).toEqual({
+      kind: "video", digest: imageDigest, url: `https://assets.example.com/runs/example/artifacts/${imageDigest}.mp4`, label: "clip: clip.mp4", count: 1,
+    });
+  });
   test("refuses path escapes, invalid omissions and inventory disagreement", () => {
     for (const path of ["../image.png", "/image.png", "https://example.com/image.png", "artifacts/../image.png", "artifacts/%2e%2e/image.png", "artifacts%2fimage.png", `artifacts/${imageDigest}.png?token=x`, `artifacts/${imageDigest}.png#x`, "artifacts\\image.png", `artifacts/${imageDigest}.webp`]) {
       const value = withImage(); value.artifacts[0].path = path;
