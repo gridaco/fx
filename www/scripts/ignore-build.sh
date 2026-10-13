@@ -13,7 +13,8 @@ cd "$(git rev-parse --show-toplevel)" || exit 1
 
 base=${VERCEL_GIT_PREVIOUS_SHA:-}
 if [ -z "$base" ]; then
-  [ "${VERCEL_ENV:-}" = production ] && exit 1
+  # Production, or a deployment that does not say which it is, builds.
+  [ "${VERCEL_ENV:-production}" = production ] && exit 1
   base=$(git ls-remote origin refs/heads/main | cut -f1)
   [ -n "$base" ] || exit 1
 fi

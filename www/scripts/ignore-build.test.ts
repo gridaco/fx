@@ -55,11 +55,12 @@ test("a branch's first deployment compares the website with main's, keeping the 
   await deployments(async ({ inClone, commit, decide }) => {
     inClone("switch", "--quiet", "-c", "acme");
     await commit("crates/core.rs");
-    expect(decide()).toBe(0);
+    expect(decide({ VERCEL_ENV: "preview" })).toBe(0);
     expect(inClone("rev-list", "--count", "HEAD")).toBe("3");
     expect(decide({ VERCEL_ENV: "production" })).toBe(1);
-    await commit("web/fx-web/src/index.ts");
     expect(decide()).toBe(1);
+    await commit("web/fx-web/src/index.ts");
+    expect(decide({ VERCEL_ENV: "preview" })).toBe(1);
   });
 });
 
