@@ -1,7 +1,7 @@
-import { StrictMode, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { StrictMode, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import { ArrowLeft, ArrowUpRight, Check, ChevronRight, Copy, FileText, List, RefreshCw, Square, Workflow, X } from "lucide-react";
-import { ServiceIndexProjection, ViewerController, elapsedLabel, ownsKeys, ViewerEntryController, type Artifact, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun } from "@grida/fx-web";
+import { ArrowLeft, ArrowUpRight, Check, ChevronRight, Copy, Download, FileText, List, RefreshCw, Square, Workflow, X } from "lucide-react";
+import { OutputArchiveController, ServiceIndexProjection, ViewerController, elapsedLabel, outputFiles, ownsKeys, ViewerEntryController, type Artifact, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun } from "@grida/fx-web";
 import { StateIcon, StateLabel, Status, Values, WorkflowCanvas, money, type WorkflowCanvasHandle } from "@grida/fx-react";
 import "./style.css";
 
@@ -10,9 +10,9 @@ const apiBase = entryController.route?.api_base ?? "/api";
 const controller = new ViewerController(undefined, { apiBase });
 const iconProps = { size: 14, strokeWidth: 1.5, "aria-hidden": true } as const;
 
-/** A titled set of named values; nothing when the set is empty. */
-function Section({ title, values, artifacts }: { title: string; values: Record<string, unknown>; artifacts: Map<string, Artifact> }) {
-  return Object.keys(values).length > 0 && <section className="fx-detail-section"><h3>{title}</h3><Values values={values} artifacts={artifacts} /></section>;
+/** A titled set of named values, after `children`; nothing when the set is empty. */
+function Section({ title, values, artifacts, children }: { title: string; values: Record<string, unknown>; artifacts: Map<string, Artifact>; children?: ReactNode }) {
+  return Object.keys(values).length > 0 && <section className="fx-detail-section"><h3>{title}</h3>{children}<Values values={values} artifacts={artifacts} /></section>;
 }
 
 /** Copies `text`, and says so for a moment. */
@@ -83,6 +83,21 @@ function Problem({ children }: { children: ReactNode }) {
   return <p role="alert" className="fx-detail-problem">{children}</p>;
 }
 
+/** Download all (.zip): the run's output files the viewer can serve, named as in its `outputs/`. */
+function OutputsDownload({ run, artifacts }: { run: ViewerRun; artifacts: Map<string, Artifact> }) {
+  const files = outputFiles(run.outputs, (digest) => { const artifact = artifacts.get(digest); return artifact?.available ? artifact.url : null; });
+  const archive = useMemo(() => new OutputArchiveController(), []);
+  const { building, error } = useSyncExternalStore(archive.subscribe, archive.getSnapshot);
+  useEffect(() => () => archive.dispose(), [archive]);
+  const left = files.filter((file) => file.url === null).length;
+  if (left === files.length) return null;
+  return <div className="fx-detail-download">
+    <button onClick={() => void archive.download(files, run.run_name)} disabled={building} className="fx-action"><Download {...iconProps} />{building ? "Zipping…" : "Download all (.zip)"}</button>
+    {left > 0 && <p className="fx-value-note">{left} {left === 1 ? "file is" : "files are"} not available and left out.</p>}
+    {error && <Problem>{error}</Problem>}
+  </div>;
+}
+
 function PlanDetails({ plan, instance, pending, canvasNode }: { plan: GraphDocument; instance?: GraphInstance; pending?: PendingRepeat; canvasNode?: CanvasStep }) {
   const none = new Map<string, Artifact>();
   if (pending) return <Heading title={pending.path} id={pending.path} kind="step path" state="unexpanded" meta={[`up to ${pending.max} items`, pending.high_usd > 0 && `at most ${money(pending.high_usd)}`]} />;
@@ -108,7 +123,7 @@ function RunDetails({ run, node, canvasNode }: { run: ViewerRun; node?: ViewerRu
   if (!node) return <>
     <Heading title={run.workflow.title} id={run.run_name} kind="run name" meta={[run.workflow.id]} />
     {run.workflow.description && <p className="fx-detail-copy">{run.workflow.description}</p>}
-    <Section title="Outputs" values={run.outputs} artifacts={artifacts} />
+    <Section title="Outputs" values={run.outputs} artifacts={artifacts}><OutputsDownload run={run} artifacts={artifacts} /></Section>
     <Section title="Inputs" values={run.inputs} artifacts={artifacts} />
   </>;
   const [inputs, settings] = split(node.with, canvasNode);

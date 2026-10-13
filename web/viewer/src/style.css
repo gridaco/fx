@@ -66,6 +66,8 @@ button { touch-action: manipulation; }
 .fx-detail-problem { margin-top: 10px; padding: 8px 10px; border-radius: 4px; background: #fdf4f4; color: #a14c57; font-size: 11px; line-height: 17px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .fx-detail-section { margin-top: 18px; }
 .fx-detail-section > h3 { margin-bottom: 8px; color: #71717a; font-size: 10px; font-weight: 600; line-height: 14px; }
+.fx-detail-download { display: grid; justify-items: start; gap: 6px; margin-bottom: 12px; }
+.fx-detail-download .fx-detail-problem { margin-top: 0; }
 .fx-values { display: grid; gap: 10px; margin: 0; }
 .fx-values > div { display: grid; gap: 4px; }
 .fx-values dt { color: #8b8b94; font-family: var(--font-mono); font-size: 10px; line-height: 14px; overflow-wrap: anywhere; }

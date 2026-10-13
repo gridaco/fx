@@ -65,6 +65,12 @@ open it. Under the title is the step's id (`state['waving'].draw#1`), the same o
 to ask an agent about that exact step. Select the workflow's name in the bar for the
 workflow's own inputs, outputs and notices, and the run's name. Esc, the background
 or × closes them; a second Esc closes the step list.
+
+In a run's details, **Download all (.zip)** saves its output files in one zip named after
+the run, each under its name in the run folder's `outputs/` (`hero.png`, `looks/ada.png`).
+Files the viewer cannot serve are left out, and the details say how many. A zip too large
+for the browser tab fails and says so; each output's own link still saves it. To put
+outputs in your project, use `run --deliver`.
 Identities, digests and raw records stay on the command line
 (`grida fx inspect runs/example --json`).
 
