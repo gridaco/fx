@@ -1,0 +1,39 @@
+# What the TypeScript node host refuses about a module's source closure (spec/protocol.md
+# section 5.1, "For TypeScript"). Each message names project files relative to the project, never
+# by the project's absolute path (`{project}`).
+# - `missing`: nodes/broken.ts imports ./missing.ts, which the project does not have. Describing
+#   it fails, so the step is refused while planning (`plan --check` exits 1) with
+#   `nodes/broken.ts failed to import: ` and Node's own error, its code first.
+# - `wrongcase`: nodes/wrongcase.ts imports lib/Words.ts, spelled lib/words.ts on disk. Refused
+#   while planning on every system, but the rest of the message is the system's: where file
+#   names ignore case (macOS) Node loads the file and FX refuses it
+#   (`lib/Words.ts is spelled lib/words.ts on disk`); elsewhere Node finds no file
+#   (`ERR_MODULE_NOT_FOUND: …`). Only the common prefix is pinned.
+# - `late`: nodes/late.ts plans, but its body imports lib/late.ts by a name it computes when it
+#   runs. The module is not in the closure the type was named by, so the run fails the node with
+#   `node_failure` (project.json) and exits 1.
+steps:
+- argv: [plan, missing, --routes, routes.yaml, --check]
+  status: 1
+  mentions:
+  - "refused   s: nodes/broken.ts failed to import: ERR_MODULE_NOT_FOUND: "
+  - "'nodes/missing.ts' imported from nodes/broken.ts"
+  never_mentions: ["{project}"]
+- argv: [plan, wrongcase, --routes, routes.yaml, --check]
+  status: 1
+  mentions:
+  - "refused   s: nodes/wrongcase.ts failed to import: "
+  never_mentions: ["{project}"]
+- argv: [plan, late, --routes, routes.yaml, --check]
+- argv: [run, late, --routes, routes.yaml, --run, runs/one]
+  status: 1
+  mentions:
+  - "result    failed   spent $0.00"
+  - "failed    lazy#1: the body loaded lib/late.ts at run time, outside its source closure: import it statically"
+  never_mentions: ["{project}"]
+- argv: [project, runs/one]
+  save: project.json
+  json: true
+- read: runs/one/events.jsonl
+  save: events.json
+  jsonl: true

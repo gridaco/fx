@@ -1,5 +1,6 @@
 //! Ending every node host at once, as an interrupted command does before it exits
-//! (`host::end_every_host`). A test binary of its own: once called, no host starts in the process.
+//! (`host::end_every_host_now`). A test binary of its own: once called, no host starts in the
+//! process.
 //!
 //! The hosts are a stdlib-only fake started through a shell script named as the interpreter; the
 //! test needs `python3` on `PATH` and skips without it.
@@ -7,7 +8,7 @@
 
 use grida_fx_providers::testing::write_program;
 use grida_fx_runtime::host::connection::NoIncoming;
-use grida_fx_runtime::host::end_every_host;
+use grida_fx_runtime::host::end_every_host_now;
 use grida_fx_runtime::host::process::{HostProcess, HostSpec};
 use std::path::PathBuf;
 use std::process::Command;
@@ -68,13 +69,8 @@ async fn ending_every_host_kills_their_groups_and_starts_no_more() {
         &python,
         "#!/bin/sh\nexec python3 \"$(dirname \"$0\")/host.py\"\n",
     );
-    let spec = HostSpec {
-        python,
-        label: "python-host".into(),
-        project_root: dir.path().to_path_buf(),
-        sources: Vec::new(),
-        check_version: false,
-    };
+    let spec =
+        HostSpec::python(python, "python-host", dir.path().to_path_buf(), Vec::new()).unchecked();
     let mut hosts = Vec::new();
     for _ in 0..2 {
         hosts.push(
@@ -100,7 +96,7 @@ async fn ending_every_host_kills_their_groups_and_starts_no_more() {
     assert_eq!(grandchildren.len(), 2);
     assert!(grandchildren.iter().all(|pid| alive(pid)));
 
-    end_every_host();
+    end_every_host_now();
 
     for host in &mut hosts {
         host.connection().closed().await;

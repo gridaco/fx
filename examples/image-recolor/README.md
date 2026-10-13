@@ -9,7 +9,7 @@ Each node has its own source file under `nodes/`, and
 [`workflows/image-recolor.yaml`](workflows/image-recolor.yaml) connects them.
 
 Use a Python with `grida` and Pillow installed, and an FX engine with its embedded viewer
-([From a clone](https://github.com/gridaco/fx/blob/main/examples/README.md#from-a-clone)). From this folder:
+([Use an example](https://github.com/gridaco/fx/blob/main/examples/README.md#use-an-example)). From this folder:
 
 ```bash
 python make_input.py

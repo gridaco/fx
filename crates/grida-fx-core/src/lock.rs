@@ -1,8 +1,11 @@
 //! `grida-fx lock [--check] [--same <path>#<attr>]…` (identity.md §6), computed here and written
 //! by the CLI.
 //!
-//! Every `*.py` under the project's `nodes` folder (recursively, symbolic links to folders not
-//! followed, sorted by path) is described in one `describe` call; each versioned type
+//! Every node module under the project's `nodes` folder (`*.py`, `*.ts`, `*.mts`, `*.js`,
+//! `*.mjs`: [`crate::host::Language::of_module`]; recursively, symbolic links to folders,
+//! `node_modules` folders and TypeScript declaration files `*.d.ts`/`*.d.mts` not followed or
+//! taken, sorted by path) is described in one `describe` call, which the node host sends on to
+//! the host of each module's language; each versioned type
 //! `<rel>#<attr>@<version>` gets its source digest, in module order and then in the order the
 //! host reports the module's types. With `check`, a type with no entry prints
 //! `unlocked  <key>: run grida-fx lock` (status 1). A type whose entry differs prints
@@ -17,7 +20,7 @@
 use crate::docs::lock::LockFile;
 use crate::docs::project::Project;
 use crate::error::{Error, Result};
-use crate::host::NodeHost;
+use crate::host::{Language, NodeHost};
 use crate::registry::Registry;
 use grida_fx_protocol::{DescribeParams, DescribeTarget, ModuleDescription};
 use indexmap::IndexMap;
@@ -134,9 +137,9 @@ pub fn lock(
     })
 }
 
-/// Every `*.py` file under `root/nodes`, as POSIX paths relative to the root, sorted by path
-/// component. Symbolic links to folders are not followed; a `nodes` that is not a folder holds
-/// nothing.
+/// Every node module under `root/nodes` (module doc), as POSIX paths relative to the root,
+/// sorted by path component. Symbolic links to folders and `node_modules` folders are not
+/// followed; a `nodes` that is not a folder holds nothing.
 fn node_modules(root: &Path, nodes: &str) -> Vec<String> {
     let folder = root.join(nodes);
     if !folder.is_dir() {
@@ -162,7 +165,7 @@ fn node_modules(root: &Path, nodes: &str) -> Vec<String> {
         .collect()
 }
 
-/// Collects the `*.py` files under `folder` as path parts relative to it.
+/// Collects the node modules under `folder` as path parts relative to it.
 fn walk(folder: &Path, found: &mut Vec<Vec<String>>) {
     fn visit(folder: &Path, prefix: &[String], found: &mut Vec<Vec<String>>) {
         let Ok(entries) = std::fs::read_dir(folder) else {
@@ -174,11 +177,13 @@ fn walk(folder: &Path, found: &mut Vec<Vec<String>>) {
             let mut parts = prefix.to_vec();
             parts.push(name.clone());
             match entry.file_type() {
+                // A package folder holds dependencies, never the project's own modules.
+                Ok(kind) if kind.is_dir() && name == "node_modules" => {}
                 Ok(kind) if kind.is_dir() => visit(&path, &parts, found),
                 Ok(_) => {
-                    let python =
-                        Path::new(&name).extension().and_then(|s| s.to_str()) == Some("py");
-                    if python && path.is_file() {
+                    // `of_module` refuses declaration files, which are never node modules.
+                    let module = Language::of_module(&name).is_ok();
+                    if module && path.is_file() {
                         found.push(parts);
                     }
                 }
@@ -205,6 +210,18 @@ mod tests {
             "nodes/readme.md",
             "nodes/sub/__init__.py",
             "nodes/x.PY",
+            "nodes/t.ts",
+            "nodes/m.mts",
+            "nodes/j.js",
+            "nodes/k.mjs",
+            "nodes/types.d.ts",
+            "nodes/more.d.mts",
+            "nodes/x.tsx",
+            "nodes/c.cjs",
+            "nodes/c.cts",
+            "nodes/X.TS",
+            "nodes/node_modules/dep/index.js",
+            "nodes/sub/node_modules/dep/x.py",
         ] {
             let path = root.join(file);
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -217,7 +234,11 @@ mod tests {
                 "nodes/a-b.py",
                 "nodes/a.py",
                 "nodes/b.py",
-                "nodes/sub/__init__.py"
+                "nodes/j.js",
+                "nodes/k.mjs",
+                "nodes/m.mts",
+                "nodes/sub/__init__.py",
+                "nodes/t.ts",
             ]
         );
         assert!(node_modules(root, "missing").is_empty());

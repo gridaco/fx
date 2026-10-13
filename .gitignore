@@ -18,3 +18,7 @@
 **/.fx/
 **/runs/
 !conformance/*/in/.fx/
+# A conformance case may hold node_modules of its own (an installed dependency, a link to a
+# workspace package). The runner installs @grida/fx there, which is never committed.
+!conformance/*/in/node_modules/
+conformance/*/in/node_modules/@grida/

@@ -149,7 +149,8 @@ grida fx pick runs/voiced-scenes/2026-10-02-1 "scene['s04'].music" 3
 
 **The takes file:**
 - **Where:** your choices live next to the workflow file, in `<workflow id>.takes.yaml`. For a
-  Python builder, that is next to the module that constructs the `Workflow`.
+  Python builder, that is next to the module that constructs the `Workflow`; for a TypeScript
+  builder, next to the builder's own file.
 - **What it holds:** each entry is the step path and the take; `grida fx pick` also records the
   digest of the result you chose:
 

@@ -31,11 +31,17 @@
 //!
 //! [`HostPool::shutdown`] ends idle hosts politely and awaits unhealthy-host retirement,
 //! reporting whether every owned child was reaped. The pool can still lease hosts afterwards.
+//!
+//! An engine keeps one pool per language ([`HostPools`]): a job runs on a host of its module's
+//! language, and the built-ins with Python bodies on a Python host. Each pool holds at most its
+//! own `max` hosts. A language with no host to start (no `@grida/fx` for TypeScript) has no pool:
+//! leasing from it gives the sentence why, and the other language's pool is unaffected.
 
 use super::GRACE;
 use super::connection::{ConnectionError, Incoming};
 use super::process::{HostProcess, HostSpec};
 use crate::engine::Cancel;
+use grida_fx_core::host::Language;
 use grida_fx_protocol::{ErrorCode, RpcError, RunParams, method};
 use grida_fx_providers::BoxFuture;
 use serde_json::Value;
@@ -236,6 +242,87 @@ impl HostPool {
             }
         }
         self.cleanup_verified.load(Ordering::SeqCst)
+    }
+}
+
+/// The run pools of an engine, one per language (module doc).
+pub struct HostPools {
+    python: Result<Arc<HostPool>, String>,
+    typescript: Result<Arc<HostPool>, String>,
+}
+
+impl HostPools {
+    /// A pool of at most `max` hosts started from `spec`, for the language of `spec`; the other
+    /// language has none until [`HostPools::with`] gives it one.
+    pub fn new(spec: HostSpec, max: usize) -> HostPools {
+        let language = spec.language;
+        let none = |language: Language| {
+            Err(format!(
+                "no {} node host is set up for this command",
+                language.title()
+            ))
+        };
+        HostPools {
+            python: none(Language::Python),
+            typescript: none(Language::TypeScript),
+        }
+        .with(language, Ok(spec), max)
+    }
+
+    /// The same pools with `language`'s pool started from `spec`, or, when it is `Err`, no pool
+    /// for it: every lease gets that sentence.
+    pub fn with(
+        mut self,
+        language: Language,
+        spec: Result<HostSpec, String>,
+        max: usize,
+    ) -> HostPools {
+        self.set(language, spec, max);
+        self
+    }
+
+    /// [`HostPools::with`] in place. A pool it replaces must have no hosts (it is not shut down).
+    pub fn set(&mut self, language: Language, spec: Result<HostSpec, String>, max: usize) {
+        let pool = spec.map(|spec| Arc::new(HostPool::new(spec, max)));
+        match language {
+            Language::Python => self.python = pool,
+            Language::TypeScript => self.typescript = pool,
+        }
+    }
+
+    /// The pool of `language`, or why there is none.
+    pub fn pool(&self, language: Language) -> Result<&Arc<HostPool>, &str> {
+        match language {
+            Language::Python => self.python.as_ref(),
+            Language::TypeScript => self.typescript.as_ref(),
+        }
+        .map_err(String::as_str)
+    }
+
+    /// A host of `language` (see [`HostPool::lease_cancellable`]).
+    pub async fn lease_cancellable(
+        &self,
+        language: Language,
+        cancel: &Cancel,
+    ) -> Result<HostLease, String> {
+        match self.pool(language) {
+            Ok(pool) => pool.lease_cancellable(cancel).await,
+            Err(failure) => Err(failure.to_string()),
+        }
+    }
+
+    /// Shuts every pool down ([`HostPool::shutdown`]), all of them whatever one reports; whether
+    /// every owned child of every pool was reaped.
+    pub async fn shutdown(&self) -> bool {
+        async fn end(pool: &Result<Arc<HostPool>, String>) -> bool {
+            match pool {
+                Ok(pool) => pool.shutdown().await,
+                Err(_) => true,
+            }
+        }
+        // The pools end side by side, as each ends its own hosts.
+        let (python, typescript) = tokio::join!(end(&self.python), end(&self.typescript));
+        python && typescript
     }
 }
 
@@ -614,13 +701,7 @@ mod tests {
 
     #[test]
     fn pools_have_at_least_one_host() {
-        let spec = HostSpec {
-            python: "python3".into(),
-            label: "python3".into(),
-            project_root: "/work/acme".into(),
-            sources: Vec::new(),
-            check_version: false,
-        };
+        let spec = HostSpec::python("python3", "python3", "/work/acme", Vec::new()).unchecked();
         let pool = HostPool::new(spec.clone(), 0);
         assert_eq!(pool.leases.available_permits(), 1);
         assert_eq!(pool.spec(), &spec);
@@ -631,13 +712,7 @@ mod tests {
     #[test]
     fn lease_and_run_futures_are_sendable() {
         fn send<T: Send>(_: &T) {}
-        let spec = HostSpec {
-            python: "python3".into(),
-            label: "python3".into(),
-            project_root: "/work/acme".into(),
-            sources: Vec::new(),
-            check_version: false,
-        };
+        let spec = HostSpec::python("python3", "python3", "/work/acme", Vec::new()).unchecked();
         let pool = Arc::new(HostPool::new(spec, 1));
         send(&pool.lease());
         send(&pool.shutdown());
@@ -685,13 +760,7 @@ time.sleep(60)
             &python,
             "#!/bin/sh\nexec python3 \"$(dirname \"$0\")/host.py\"\n",
         );
-        let spec = HostSpec {
-            python,
-            label: "python-stub".into(),
-            project_root: dir.path().to_path_buf(),
-            sources: Vec::new(),
-            check_version: false,
-        };
+        let spec = HostSpec::python(python, "python-stub", dir.path(), Vec::new()).unchecked();
         (dir, spec)
     }
 
@@ -774,13 +843,7 @@ time.sleep(60)
     #[tokio::test]
     async fn a_retirement_task_failure_permanently_withholds_cleanup_verification() {
         let pool = HostPool::new(
-            HostSpec {
-                python: "python3".into(),
-                label: "python3".into(),
-                project_root: "/work/acme".into(),
-                sources: Vec::new(),
-                check_version: false,
-            },
+            HostSpec::python("python3", "python3", "/work/acme", Vec::new()).unchecked(),
             1,
         );
         pool.state().retiring.push(tokio::spawn(async {
@@ -793,13 +856,7 @@ time.sleep(60)
     #[tokio::test]
     async fn a_missing_retirement_status_never_certifies_cleanup() {
         let pool = HostPool::new(
-            HostSpec {
-                python: "python3".into(),
-                label: "python3".into(),
-                project_root: "/work/acme".into(),
-                sources: Vec::new(),
-                check_version: false,
-            },
+            HostSpec::python("python3", "python3", "/work/acme", Vec::new()).unchecked(),
             1,
         );
         pool.state().retiring.push(tokio::spawn(async { None }));
@@ -827,13 +884,7 @@ time.sleep(60)
             &python,
             "#!/bin/sh\nexec python3 \"$(dirname \"$0\")/deaf.py\"\n",
         );
-        let spec = HostSpec {
-            python,
-            label: "python-deaf".into(),
-            project_root: dir.path().to_path_buf(),
-            sources: Vec::new(),
-            check_version: false,
-        };
+        let spec = HostSpec::python(python, "python-deaf", dir.path(), Vec::new()).unchecked();
         let pool = Arc::new(HostPool::new(spec, 1).with_grace(Duration::from_millis(300)));
         let params = RunParams {
             run_id: "r1".into(),
@@ -903,5 +954,67 @@ time.sleep(60)
                 .await,
             RunReply::Cancelled
         );
+    }
+
+    #[tokio::test]
+    async fn each_language_has_a_pool_of_its_own() {
+        let python = HostSpec::python("python3", "python3", "/work/acme", Vec::new()).unchecked();
+        let pools = HostPools::new(python.clone(), 2);
+        assert_eq!(pools.pool(Language::Python).unwrap().spec(), &python);
+        assert_eq!(
+            pools.pool(Language::TypeScript).err(),
+            Some("no TypeScript node host is set up for this command")
+        );
+        assert_eq!(
+            pools
+                .lease_cancellable(Language::TypeScript, &Cancel::new())
+                .await
+                .err()
+                .as_deref(),
+            Some("no TypeScript node host is set up for this command")
+        );
+        // A language with no host to start says why; the other keeps its pool.
+        let pools = pools.with(
+            Language::TypeScript,
+            Err(
+                "no @grida/fx for the TypeScript node host: run npm install @grida/fx in the \
+                 project"
+                    .into(),
+            ),
+            2,
+        );
+        assert_eq!(
+            pools
+                .lease_cancellable(Language::TypeScript, &Cancel::new())
+                .await
+                .err()
+                .as_deref(),
+            Some(
+                "no @grida/fx for the TypeScript node host: run npm install @grida/fx in the \
+                 project"
+            )
+        );
+        assert!(pools.pool(Language::Python).is_ok());
+        let typescript = HostSpec::typescript(
+            "node",
+            "/sdk/dist/host-entry.js",
+            "node",
+            "/work/acme",
+            Vec::new(),
+        );
+        let pools = pools.with(Language::TypeScript, Ok(typescript.clone()), 3);
+        let pool = pools.pool(Language::TypeScript).unwrap();
+        assert_eq!(pool.spec(), &typescript);
+        assert_eq!(pool.leases.available_permits(), 3);
+        assert_eq!(
+            pools
+                .pool(Language::Python)
+                .unwrap()
+                .leases
+                .available_permits(),
+            2
+        );
+        // Nothing was started, so every pool shuts down verified.
+        assert!(pools.shutdown().await);
     }
 }

@@ -7,6 +7,12 @@
       "path": "examples/hello"
     },
     {
+      "name": "hello-ts",
+      "description": "Badges drawn by your own TypeScript nodes, checked and laid out on a sheet: offline, no provider",
+      "provider": "none",
+      "path": "examples/hello-ts"
+    },
+    {
       "name": "image-recolor",
       "description": "Recolor a picture with code, and watch the run live: offline, no provider",
       "provider": "none",

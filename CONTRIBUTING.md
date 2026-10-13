@@ -17,7 +17,7 @@ Grida CLI. The same engine has three launchers ([spec/distribution.md](spec/dist
 | Command | Installed with | For |
 |---|---|---|
 | `grida fx <verb>` | `npm install -g grida` (Node.js 24+), which pins `@grida/fx` exactly | Everyone; the documented way |
-| `grida-fx <verb>` | `npm install @grida/fx` (Node.js 18+), or `npx @grida/fx` | The JavaScript SDK, and FX on its own: a service you host, a CI image, an FX version pinned apart from `grida` |
+| `grida-fx <verb>` | `npm install @grida/fx` (Node.js 18+; 24+ to host TypeScript nodes), or `npx @grida/fx` | The JavaScript SDK and the TypeScript node host, and FX on its own: a service you host, a CI image, an FX version pinned apart from `grida` |
 | `python -m grida.fx <verb>` | `pip install grida` (Python 3.11+) | The Python SDK, and machines without Node |
 
 All three take the same verbs. Usage, errors and next-step hints name the command that was run;
@@ -34,8 +34,21 @@ plans, records and exports are byte-identical under each (the invoker, `GRIDA_FX
 - **Your own engine.** `GRIDA_FX_BIN` points every launcher and both SDKs at a `grida-fx` binary,
   such as a source build or one built for another platform.
 - **Python node bodies.** Python nodes, builders and the local built-ins (`image.resize`,
-  `files.copy`, `package`, …) need the Python package even when FX runs through npm;
-  `GRIDA_FX_PYTHON` selects the interpreter.
+  `files.copy`, `package`, …) need the Python package even when FX runs through npm, and in a
+  TypeScript project too; `GRIDA_FX_PYTHON` selects the interpreter.
+- **TypeScript node bodies.** TypeScript (and JavaScript) nodes, builders and stand-in files run
+  in `@grida/fx`'s node host, `<node> <@grida/fx>/dist/host-entry.js`, on Node.js 24 or later
+  (type stripping and `module.registerHooks`; Bun and Deno cannot host). `<node>` is
+  `GRIDA_FX_NODE`, else `GRIDA_FX_SDK_NODE`, else `node` on `PATH`. `dist/host-entry.js` comes
+  from the `@grida/fx` the workflow's project resolves (`node_modules/@grida/fx`, in the project
+  or a folder above it), else from the one the planning project resolves, else it is
+  `GRIDA_FX_SDK_NODE_HOST`. Records and messages call the folder of an `@grida/fx` outside the
+  workflow's project `@grida/fx`, never its absolute path, and `doctor`'s Node line starts the
+  host only for a project with a `package.json`. `@grida/fx`'s SDK calls and launchers
+  (`grida-fx`, and `grida fx` through `@grida/fx/cli`) set `GRIDA_FX_SDK_NODE` to the Node
+  running them (not under Bun or Deno) and `GRIDA_FX_SDK_NODE_HOST` to their own
+  `dist/host-entry.js`; `python -m grida.fx` sets neither ([spec/protocol.md](spec/protocol.md)
+  §1, §8.2).
 - **Versions.** Each `grida` release pins one FX version, and FX releases first
   ([RELEASING.md](RELEASING.md#then-grida)). `grida` names a newer release itself; `@grida/fx`
   and `grida-fx` never check for updates.
@@ -43,9 +56,9 @@ plans, records and exports are byte-identical under each (the invoker, `GRIDA_FX
 ## Build from source
 
 Source development needs Git, Rust/Cargo ([rustup.rs](https://rustup.rs)),
-[Bun](https://bun.sh) 1.4.0, [uv](https://docs.astral.sh/uv/), and Python 3.11+.
-Installed npm packages and Python wheels already carry the engine and viewer;
-users do not need this setup.
+[Bun](https://bun.sh) 1.4.0, [uv](https://docs.astral.sh/uv/), Python 3.11+, and
+Node.js 24+ for the TypeScript node host and its tests. Installed npm packages and
+Python wheels already carry the engine and viewer; users do not need this setup.
 
 ```sh
 git clone https://github.com/gridaco/fx
@@ -54,6 +67,7 @@ uv sync --project python
 bun --no-env-file install --frozen-lockfile
 python3 tools/build_engine.py
 uv run --project python python -m grida.fx --version
+(cd js/fx && bun --no-env-file install --frozen-lockfile && bun --no-env-file run build)
 ```
 
 `tools/build_engine.py` builds the production viewer, embeds it in a release
@@ -65,6 +79,11 @@ Bun installation after dependency changes.
 Direct Cargo builds require `bun --no-env-file run build:viewer` first; a missing
 bundle fails the engine build. Source execution through `uv run --project python
 python -m grida.fx` uses the checkout's SDK and Python environment.
+
+The last line builds `js/fx/dist` (gitignored): the JavaScript SDK, and the
+TypeScript node host the engine's tests and conformance start. Rebuild it after
+changing `js/fx/src`. `node js/fx/bin/grida-fx.js` with `GRIDA_FX_BIN` pointing at
+a source engine runs the checkout's engine with the checkout's TypeScript host.
 
 ### Use the checkout from another project
 
@@ -79,12 +98,17 @@ grida = { path = "<checkout>/python", editable = true }
 That project's `grida.fx` uses the engine built into the checkout, without a
 separate engine-path setting. Rebuild it when the checkout changes.
 
+For TypeScript nodes, build `js/fx` (above) and install it into the project with
+`npm install <checkout>/js/fx`, which links it: the engine starts the TypeScript
+host from the project's `node_modules/@grida/fx`. Set `GRIDA_FX_BIN` to the
+checkout's engine so the linked SDK and `grida-fx` use it.
+
 ## Run examples
 
 [examples/README.md](examples/README.md) lists the projects and their commands.
-Every example plans offline. `hello` and `image-recolor` run entirely at $0 with
-no provider keys. Examples that need a capability FX does not yet implement say
-so and only plan.
+Every example plans offline. `hello`, `hello-ts` and `image-recolor` run entirely
+at $0 with no provider keys. Examples that need a capability FX does not yet
+implement say so and only plan.
 
 The examples' fixture pictures are code-drawn. Recreate them from the repository
 root with `uv run --project python python examples/draw_placeholders.py`.
@@ -118,10 +142,13 @@ bun --no-env-file run check:viewer
 bun --no-env-file run test:viewer
 bun --no-env-file run build:viewer
 
+# JavaScript SDK and its TypeScript node host (the host tests need Node 24+ on PATH)
+(cd js/fx && bun --no-env-file run typecheck && bun --no-env-file test && bun --no-env-file run build)
+
 # Contracts and runnable examples
 uv run --project python python tools/check_spec.py
 cargo build --locked -p grida-fx
-uv run --project python python conformance/run.py --command target/debug/grida-fx
+uv run --project python python conformance/run.py --command target/debug/grida-fx --js-sdk js/fx
 uv run --project python python tools/check_examples.py
 # Larger showcase examples also need FFmpeg on PATH.
 uv pip install --python python/.venv/bin/python -r examples/requirements-ci.txt

@@ -11,12 +11,14 @@ FX builds generated assets the way a build system builds code:
 ```bash
 npm install -g grida   # the grida command, with FX as grida fx (Node.js 24 or later)
 pip install grida      # the Python SDK, for nodes and builders you write in Python
+npm install @grida/fx  # in a project: the SDK for nodes and builders you write in TypeScript
 grida fx doctor        # checks the keys and tools your workflows need
 ```
 
 `grida` carries the FX version it was released with; updating `grida` updates FX. No repository
 clone or Rust toolchain is needed. FX runs on macOS, and on Linux with glibc 2.28 or later, on x64
-and arm64. On Windows, use WSL 2.
+and arm64. On Windows, use WSL 2. Install the SDK of the language you write your own nodes in:
+one language per project is the usual choice, though a project may mix them.
 
 This guide writes `grida fx`. You may also meet FX as `grida-fx` or `python -m grida.fx`: these are
 the same FX, started another way, and take the same commands (`grida-fx plan` is `grida fx plan`).
@@ -48,20 +50,33 @@ key at all? With Codex signed in to your ChatGPT account, images can come from
 ### When FX needs Python
 
 The engine itself runs the paid built-in types (`image.generate`, `structured.generate`, …),
-`fx/select@1` and every file fact. Everything else runs on Python:
+`fx/select@1` and every file fact. Your own nodes and builders run in their language: TypeScript
+ones on Node ([below](#when-fx-needs-node)), Python ones on Python. Python runs:
 - your own Python nodes and builders, which import `from grida.fx import node, Ctx`;
-- the built-in local types too: `image.resize`, `image.crop`, `image.pad`,
-  `image.mirror_repeat`, `image.check_alpha`, `image.check_size`, `json.merge`, `files.copy` and
-  `package`.
+- the built-in local types, whatever language your own nodes are in: `image.resize`,
+  `image.crop`, `image.pad`, `image.mirror_repeat`, `image.check_alpha`, `image.check_size`,
+  `json.merge`, `files.copy` and `package`.
 
 A project that uses any of them needs Python 3.11 or later with `grida` and Pillow installed
 (`pip install grida`, which brings Pillow). FX uses `GRIDA_FX_PYTHON` when it is set, else
 the `.venv` of the workflow's project, else the `.venv` of the project you run from, else the Python
 that runs the SDK when you run through it ([Running](05-running.md#from-python)), else `python3`
 on `PATH`. An older Python is refused before FX starts it (macOS's own `/usr/bin/python3` is
-3.9): run `uv sync` or `pip install grida` in the project, or set `GRIDA_FX_PYTHON`. Only a project
-whose steps are all paid built-ins and `select` needs just the command.
+3.9): run `uv sync` or `pip install grida` in the project, or set `GRIDA_FX_PYTHON`. A project
+whose steps are all paid built-ins, `select` and nodes of your own in TypeScript needs no Python.
 The first workflow below uses `image.check_alpha`, so it needs Python.
+
+### When FX needs Node
+
+Your own nodes, builders and [stand-ins](05-running.md#stand-ins-testing-without-a-provider) in
+TypeScript (or JavaScript) run on Node, in the node host that `@grida/fx` carries. A project with
+any of them needs Node 24 or later (Bun and Deno cannot host nodes), and should install
+`@grida/fx` (`npm install @grida/fx`): your modules import `node` from it, and `tsc` checks them
+against it. FX hosts them with the `@grida/fx` the workflow's project would import, else the one
+the project you run from would import, else the one that started FX, such as the one `grida fx`
+carries. FX uses `GRIDA_FX_NODE` when it is set, else the Node that runs `grida fx` or the
+JavaScript SDK ([Running](05-running.md#from-javascript)), else `node` on `PATH`. An older Node is
+refused before FX starts it: install Node 24 or later, or set `GRIDA_FX_NODE`.
 
 ## A project
 
@@ -76,10 +91,11 @@ grida fx status --json
 
 `init` writes a starter project into a new or empty folder: `fx.yaml`, a `README.md` that says how
 to install the CLI and connect an AI provider, an `AGENTS.md` and the FX skills
-(`.agents/skills/`) for coding agents, a `.gitignore` that keeps runs, the cache and `.env` out of
-git, an `.env.example` listing the key names, and `workflows/icon.yaml`, a one-step workflow that
-draws an icon once you pick a route. It installs nothing and starts nothing. On a terminal it asks
-which template to start from; `--template NAME` names one without asking, and
+(`.agents/skills/`) for coding agents, a `.gitignore` that keeps runs, the cache, `.env` and what
+Python and npm install out of git, an `.env.example` listing the key names, and
+`workflows/icon.yaml`, a one-step workflow that draws an icon once you pick a route. It installs
+nothing and starts nothing.
+On a terminal it asks which template to start from; `--template NAME` names one without asking, and
 `grida fx init --list-templates` lists them. A template is one of the
 [examples](https://github.com/gridaco/fx/tree/main/examples), downloaded from the FX release you
 have, with the same agent files added. In a folder that already has an `fx.yaml`, it checks that file and
@@ -102,6 +118,7 @@ my-assets/
   nodes/              # your own node types (optional)
   prompts/            # prompt templates (optional)
   inputs/             # files you feed in
+  package.json        # "type": "module" and @grida/fx (TypeScript nodes only)
   runs/               # every run, one folder each   (created by FX)
   .fx/cache/          # content-addressed results    (created by FX)
   .fx/service/        # local service state and catalog (created by FX)
@@ -135,10 +152,10 @@ route defaults are that project's, with your `routes:` winning. The runs, the ca
 route tables and the takes file (`<id>.takes.yaml` at your root) stay those of the project you run
 from.
 
-Keep `runs/` and `.fx/` out of source control. A project file is recommended,
-not required for execution. For a one-off workflow, call `run` directly; use
-`--standalone` inside an existing project to request an independent viewer for
-that invocation. See [Viewing](07-viewing.md#standalone-inspection).
+Keep `runs/`, `.fx/`, `.venv/` and `node_modules/` out of source control. A project file is
+recommended, not required for execution. For a one-off workflow, call `run` directly; use
+`--standalone` inside an existing project to request an independent viewer for that invocation.
+See [Viewing](07-viewing.md#standalone-inspection).
 
 ## Your first workflow
 

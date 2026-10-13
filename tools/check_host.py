@@ -18,7 +18,9 @@ With `--tarballs`, the two tarballs in that folder (`@grida/fx` and one engine p
 as they are: the release workflow checks the exact tarballs it uploads, and
 `tools/package_release.py --verify` runs the same checks ([`install`] and [`check`] here).
 Providers stay off and no `.env` is read. Node bodies need a Python with `grida` installed:
-`GRIDA_FX_PYTHON`, as for conformance/run.py.
+`GRIDA_FX_PYTHON`, as for conformance/run.py; TypeScript node bodies need Node 24 or later
+(`GRIDA_FX_NODE`, else the Node running `grida`, else `node` on PATH) and get the installed
+`@grida/fx` as conformance/run.py's `--js-sdk`.
 """
 
 from __future__ import annotations
@@ -140,6 +142,9 @@ def check(grida: Path, version: str, cwd: Path, env: dict[str, str]) -> None:
             "grida",
             "--command",
             shown,
+            # TypeScript cases install the @grida/fx that `grida` carries.
+            "--js-sdk",
+            str(grida.parents[1] / "@grida" / "fx"),
         ],
         cwd=cwd,
         env=env,

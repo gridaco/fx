@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "properties": {
+    "height": { "type": "integer" },
+    "unit": { "type": "string" }
+  },
+  "required": ["height", "unit"],
+  "additionalProperties": false
+}

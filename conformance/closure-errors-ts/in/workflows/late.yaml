@@ -1,0 +1,7 @@
+fx: workflow/v1
+id: late
+title: A module imported at run time
+steps:
+  lazy:
+    uses: ./nodes/late.ts#late
+    with: { name: late }

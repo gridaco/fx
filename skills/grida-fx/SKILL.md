@@ -1,6 +1,6 @@
 ---
 name: grida-fx
-description: Author, plan, run, debug, and inspect Grida FX workflows using its installed CLI and SDKs. Use for FX workflow YAML, Python nodes and builders, JavaScript workflow authoring, routes, budgets, caching, run artifacts, and the local viewer.
+description: Author, plan, run, debug, and inspect Grida FX workflows using its installed CLI and SDKs. Use for FX workflow YAML, Python and TypeScript nodes and builders, JavaScript workflow authoring, stand-ins, routes, budgets, caching, run artifacts, and the local viewer.
 ---
 
 # Grida FX
@@ -51,7 +51,8 @@ grida fx --version
 # Or run it without a global installation.
 npx --yes grida fx --version
 
-# JavaScript/TypeScript SDK in a project (Node 18+); it also provides `grida-fx`.
+# JavaScript/TypeScript SDK in a project (Node 18+; TypeScript nodes and builders
+# need Node 24+); it also provides `grida-fx`.
 npm install @grida/fx
 
 # Python 3.11+: install into the project's virtual environment.
@@ -59,8 +60,9 @@ python -m pip install 'grida>=0.2.0'
 python -m grida.fx --version
 ```
 
-These examples target FX 0.2. The Python version floor matters: the older
-`grida 0.0.1` distribution is not FX. If a compatible release is unavailable for
+These examples target FX 0.2; TypeScript nodes, builders and stand-in files need
+FX 0.6 or later. The Python version floor matters: the older `grida 0.0.1`
+distribution is not FX. If a compatible release is unavailable for
 the user's platform, report that rather than silently accepting an older package
 or switching to a source build. Follow the project's lockfile when it pins FX.
 
@@ -74,7 +76,11 @@ available for the particular platform. Native Windows and Alpine/musl are not
 supported. Windows users can use WSL 2. Python nodes, Python builders, and local
 built-ins such as `image.resize`, `files.copy`, and `package` need Python with the
 `grida` package even when invoked through npm. `GRIDA_FX_PYTHON` can select that
-interpreter. Installed viewers carry their own web client.
+interpreter. TypeScript nodes, builders and stand-in files need Node 24 or later
+(not Bun or Deno); `GRIDA_FX_NODE` can select that Node. Install `@grida/fx` in
+the project for `tsc` and to pin the host; without one, `grida fx` hosts them
+with its own, but `python -m grida.fx` needs the project's. Installed viewers
+carry their own web client.
 
 ## Set up a project
 
@@ -85,7 +91,7 @@ user: they create the account and key, and you verify with `grida fx doctor`.
 ## Author and plan
 
 For new workflows or node bodies, read [authoring.md](references/authoring.md).
-It includes runnable local examples and the supported Python/JavaScript paths.
+It includes runnable local examples and the supported Python/TypeScript paths.
 
 1. Inspect the existing workflow and project settings. An `fx.yaml` is optional.
    For a new project, `grida fx init <folder>` when the installed help lists it;
@@ -105,11 +111,11 @@ grida fx plan workflows/example.yaml --inputs inputs/example.yaml --json
 grida fx plan workflows/example.yaml --inputs inputs/example.yaml --check
 ```
 
-Planning admits no FX paid calls, but it may import Python modules, invoke a
-builder, run declared local `at: plan` nodes, and cache results. Review unfamiliar
-author code before loading it. Planning is not a sandbox or a promise of no writes.
-Declared built-ins may be marked planned and lack an executable body or route;
-do not present every listed type as runnable.
+Planning admits no FX paid calls, but it may import Python or TypeScript modules,
+invoke a builder, run declared local `at: plan` nodes, and cache results. Review
+unfamiliar author code before loading it. Planning is not a sandbox or a promise
+of no writes. Declared built-ins may be marked planned and lack an executable body
+or route; do not present every listed type as runnable.
 
 ## Run within the user's intent
 
@@ -123,6 +129,8 @@ grida fx run workflows/example.yaml --inputs inputs/example.yaml --run runs/exam
 grida fx run workflows/example.yaml --inputs inputs/example.yaml --stand-in tests/stand_in.py#answer
 ```
 
+A stand-in file is Python (`file.py#function`) or TypeScript (`file.ts#function`);
+SDK callers pass a function instead (`stand_in=` in Python, `standIn` in JavaScript).
 Stand-ins must implement FX's answer contract; they use a separate cache and
 cannot combine with `--live` or `--yes-up-to`. See the
 [stand-in guide](https://github.com/gridaco/fx/blob/main/docs/guide/05-running.md#stand-ins-testing-without-a-provider)

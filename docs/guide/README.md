@@ -19,8 +19,8 @@ the sharing chapter; check installed help for these source capabilities.
 ## How FX is built
 
 FX is a workflow engine for asset pipelines, implemented in Rust. YAML declares the dependency
-graph; the Python and JavaScript SDKs provide programmatic authoring and execution APIs. Python
-also hosts custom node bodies and workflow builders.
+graph; the Python and JavaScript SDKs provide programmatic authoring and execution APIs, and host
+custom node bodies and workflow builders: Python's on Python, TypeScript's on Node.
 
 The engine owns planning, scheduling, result identities, caching, spending limits, provider
 retries, and run records. SDKs and node bodies use that engine rather than implementing their own
@@ -31,9 +31,9 @@ steps too. The bundled viewer is a read-only canvas for plans and recorded runs.
 
 1. [Getting started](01-getting-started.md)
 2. [The workflow file](02-workflow-file.md)
-3. [Nodes: built-in, and your own in Python](03-nodes.md)
+3. [Nodes: built-in, and your own in Python or TypeScript](03-nodes.md)
 4. [Cost, cache and takes](04-cost-and-cache.md)
-5. [Running: CLI, Python, agents](05-running.md)
+5. [Running: CLI, Python, JavaScript, agents](05-running.md)
 6. [Annotations and judges](06-annotations-and-judges.md): marks as artifacts, verdicts as decisions
 7. [Viewing workflows and runs](07-viewing.md): the bundled local node canvas
 8. [Stopping and continuing a run](08-run-control.md): exact targeting, cancellation and verified local cleanup
@@ -54,11 +54,15 @@ offline; without `--live` a run does every free step and refuses each paid call 
 | Project | What it shows | What runs |
 |---|---|---|
 | [hello](../../examples/hello/) | your own nodes, built-in local steps, a judge, a keyed repeat, the cache | everything, offline, at $0 |
+| [hello-ts](../../examples/hello-ts/) | hello with every node in TypeScript: types from the declaration, a judge and the source closure | everything, offline, at $0 |
 | [looping-parallax](../../examples/looping-parallax/) | plan-time facts, fallbacks, a paid call inside your own node | offline when every layer mirrors; a repaint is live |
+| [item-icons](../../examples/item-icons/) | a TypeScript builder reading a web game's own item table, a TypeScript stand-in, and delivery into the game | the stand-in offline; the icons live |
 | [concept-gallery](../../examples/concept-gallery/) | propose a world, review it, one reviewed image per entity: YAML plus judges you write | live |
 | [game-build](../../examples/game-build/) | a game repo that builds its art with FX from its own level files: Python builder | the sky offline; the rest live |
 | [rigged-character](../../examples/rigged-character/) | agents, Blender, parts × review rounds, a recovery loop, resume | plans and prices; its reviews use `vision.review`, which has no adapter yet, and its Blender steps use tool scripts (`ctx.tool(...).script`) and version constraints, which are planned |
 
-Every example has Python nodes or built-in local types, so each needs a Python with `grida` and
-Pillow ([Getting started](01-getting-started.md#when-fx-needs-python)). The
+Every other example has Python nodes or built-in local types, so it needs a Python with `grida`
+and Pillow ([Getting started](01-getting-started.md#when-fx-needs-python)); hello-ts and
+item-icons need Node 24 or later instead
+([Getting started](01-getting-started.md#when-fx-needs-node)). The
 [examples' README](../../examples/README.md) says how to run them from a clone of the repository.

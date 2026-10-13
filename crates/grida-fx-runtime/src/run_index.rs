@@ -167,7 +167,7 @@ pub fn removals(project_root: &Path) -> io::Result<File> {
     match file.try_lock() {
         Ok(()) => {}
         Err(TryLockError::WouldBlock) => {
-            eprintln!("waiting for another grida-fx runs remove to finish");
+            crate::stderr::line("waiting for another grida-fx runs remove to finish");
             file.lock()?;
         }
         Err(TryLockError::Error(error)) => return Err(error),

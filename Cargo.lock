@@ -682,7 +682,7 @@ dependencies = [
 
 [[package]]
 name = "grida-fx"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "chrono",
  "clap",
@@ -694,6 +694,7 @@ dependencies = [
  "grida-fx-viewer",
  "indexmap",
  "jsonschema",
+ "rustix",
  "serde_json",
  "tar",
  "tempfile",
@@ -703,7 +704,7 @@ dependencies = [
 
 [[package]]
 name = "grida-fx-core"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "gif",
  "grida-fx-protocol",
@@ -722,7 +723,7 @@ dependencies = [
 
 [[package]]
 name = "grida-fx-protocol"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "indexmap",
  "jsonschema",
@@ -733,7 +734,7 @@ dependencies = [
 
 [[package]]
 name = "grida-fx-providers"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "base64 0.22.1",
  "getrandom 0.3.4",
@@ -755,7 +756,7 @@ dependencies = [
 
 [[package]]
 name = "grida-fx-runtime"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -775,7 +776,7 @@ dependencies = [
 
 [[package]]
 name = "grida-fx-viewer"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "axum",
  "chrono",

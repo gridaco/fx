@@ -1,0 +1,130 @@
+{
+ "estimate": {
+  "ceiling_usd": null,
+  "high_usd": 0,
+  "low_usd": 0
+ },
+ "instances": [
+  {
+   "bindings": [],
+   "id": "a#1",
+   "identity": "33429d9c3687dc714b170eabac8f229451317c586537083b24f7bea6ba3c79ed",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "a",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {},
+   "state": "planned",
+   "step": "a",
+   "take": [
+    1
+   ],
+   "type": "nodes/n.ts#echo@source:c7db689b154196f15905b2da65439ba762d1d1785739ae543e2c849fd19b36a5",
+   "uses": "./nodes/n.ts#echo",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "text": "hello"
+   }
+  },
+  {
+   "bindings": [],
+   "id": "b#1",
+   "identity": "8157adbba9c21a95a6205b00bfff688986101ef10dc16a538f09cc04c27829e9",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "b",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {},
+   "state": "planned",
+   "step": "b",
+   "take": [
+    1
+   ],
+   "type": "nodes/n.ts#pinned@2",
+   "uses": "./nodes/n.ts#pinned",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "text": "hello"
+   }
+  }
+ ],
+ "kind": "fx-graph-v1",
+ "pending": [],
+ "problems": [],
+ "scopes": [],
+ "types": {
+  "./nodes/n.ts#echo": {
+   "identity": "nodes/n.ts#echo@source:c7db689b154196f15905b2da65439ba762d1d1785739ae543e2c849fd19b36a5",
+   "ports": {
+    "inputs": {},
+    "outputs": {
+     "text": "text"
+    },
+    "params": {
+     "text": {
+      "type": "string"
+     }
+    }
+   },
+   "source": {
+    "files": {
+     "@acme/shapes/index.ts": "53f76ebb027689a6c9b3bb4a2b6201a10a380cc4dd648a08e1a00d66be061a48",
+     "lib/pad.ts": "ad8f93e1b23ab526bad84a273b3ef10fc4af47f281b13229756bec9f6f7522e3",
+     "lib/words.ts": "68e8b86fd41bbe769b8cf83eed2cbf175677d8d3d01dc8fc3ba41ebac475eb09",
+     "nodes/helper.ts": "7618b9afb9bbda99dd3fb0ae544c7c2f4611ac0f7c941cad357a93c4f56932b8",
+     "nodes/n.ts": "ab53aba978cacb370fc7eb23543a7aba8aba584a1d3ef2a31e6e0a67102f735d"
+    },
+    "resources": {
+     "prompts/r.md": "addc2533aadc26534d6957983e09b6d5db177c5fe2be458e8ca899394e20f5bd"
+    }
+   }
+  },
+  "./nodes/n.ts#pinned": {
+   "identity": "nodes/n.ts#pinned@2",
+   "ports": {
+    "inputs": {},
+    "outputs": {
+     "text": "text"
+    },
+    "params": {
+     "text": {
+      "type": "string"
+     }
+    }
+   },
+   "source": {
+    "files": {
+     "@acme/shapes/index.ts": "53f76ebb027689a6c9b3bb4a2b6201a10a380cc4dd648a08e1a00d66be061a48",
+     "lib/pad.ts": "ad8f93e1b23ab526bad84a273b3ef10fc4af47f281b13229756bec9f6f7522e3",
+     "lib/words.ts": "68e8b86fd41bbe769b8cf83eed2cbf175677d8d3d01dc8fc3ba41ebac475eb09",
+     "nodes/helper.ts": "7618b9afb9bbda99dd3fb0ae544c7c2f4611ac0f7c941cad357a93c4f56932b8",
+     "nodes/n.ts": "ab53aba978cacb370fc7eb23543a7aba8aba584a1d3ef2a31e6e0a67102f735d"
+    },
+    "resources": {}
+   }
+  }
+ },
+ "workflow": {
+  "file": "workflows/case.yaml",
+  "id": "case",
+  "title": "Local node identity"
+ }
+}

@@ -122,7 +122,7 @@ source = {
 ```
 
 - The **source closure** is the module that defines the type plus every project module it imports, transitively. Which files that is depends on the language, so the node host reports it (see the node protocol's `describe`). The engine reads and hashes the files itself.
-- A **label** is the file's path, POSIX, relative to the base it was found under: the project root, or the folder that contains a declared source package (so a package's files are labelled `<package>/…`). When both bases hold the file, the nearer one counts.
+- A **label** is the file's path, POSIX, relative to the base it was found under: the project root, or a declared source package, whose files are labelled with the package's name followed by their path inside the package (`<package>/…`). When both bases hold the file, the nearer one counts.
 - A **resource** is a project file the node reads at run time (a prompt, a schema). It is keyed by its declared path. A declared resource that does not exist inside the project is a refusal while planning.
 - The **export**, `<path>#<attr>`, is part of the identity because a source does not name one type. Every type a module declares shares its source closure, types that declare the same resources share the whole source, and modules that import each other share one closure. Without the export, two unversioned types that receive the same values (§8) would have one step identity, and the second would be answered with the first's result.
 

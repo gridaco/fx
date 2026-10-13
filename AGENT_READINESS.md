@@ -10,11 +10,12 @@ This is a living product and engineering harness. It records current behavior,
 gaps and scenarios against which we design FX. It is not a claim that every
 scenario below works today, nor approval to implement every proposed capability.
 
-**Last source review: 2026-10-09.** Current entries were checked against the CLI,
+**Last source review: 2026-10-13.** Current entries were checked against the CLI,
 SDKs and specifications. The cancellation delivery includes provider-free execution evidence from
 `tools/check_control.py`; run listing and removal rest on the `runs` CLI tests, the
-`runs-remove` and `cache-prune` conformance cases and the SDK tests; other capability status rests on the evidence
-listed below. No live providers were used.
+`runs-remove` and `cache-prune` conformance cases and the SDK tests; the TypeScript node host
+rests on the `@grida/fx` host tests, the engine's host tests and the TypeScript conformance
+cases; other capability status rests on the evidence listed below. No live providers were used.
 Recheck the installed version before applying them to a user's installation.
 
 ## Ownership and status
@@ -76,8 +77,9 @@ standalone `grida-fx` (npm `@grida/fx`) and `python -m grida.fx` take the same v
 same engine. Usage, errors and next-step hints name the command FX was started as; documents and
 records are identical under all three. Users install the packages rather
 than cloning the repository. Confirm `--version` and the relevant `--help` first.
-`<target>` means a workflow file, workflow id, or supported Python builder target;
-individual commands can have narrower target rules.
+`<target>` means a workflow file, workflow id, or builder target (`file.py:function`, or
+`file.ts:function` for a `.ts`, `.mts`, `.js` or `.mjs` file); individual commands can have
+narrower target rules.
 
 | Intent / tool | What an agent receives | Conditions and effects |
 |---|---|---|
@@ -89,8 +91,9 @@ individual commands can have narrower target rules.
 | Discover workflow inputs: `schema <target>` | JSON Schema for authored inputs | May load author code to resolve a target. |
 | Validate: `plan <target> ... --check --json` | Expanded graph including problems; nonzero validation status | No FX paid calls; may import code, invoke builders, execute local `at: plan` nodes and write cache results. `--json` alone does not make plan problems a failing exit status. An image step's own request is checked against its route while planning (references need `image_input`, a `WxH` size `exact_size`, a transparent background `alpha`, and pictures within the route's `max_input_pictures`), so an agent learns at $0 that a route cannot take it. |
 | Inspect planned work: `expand`, `identity`, `price <target> ...` | JSON graph, instance identities, or phased estimates | Planning conditions apply. Unresolved work and estimates are not proof of final work or actual billing. |
-| Diagnose: `doctor [target]` | Text prerequisite, tool, route and key-presence diagnostics. The Python line says whether the node host's interpreter is ready, `too old` (FX needs Python 3.11+), has `no grida`, is `NOT FOUND`, or `cannot start`. With a target, `uses` lines come first: each route its paid steps use (groups and used workflows included), whether it is servable, and how many steps use it | Let FX inspect credential configuration; agents must not read secret values. Missing keys alone do not make its exit status fail; a route the target uses that cannot be served does (exit 1), so `doctor <target>` answers "can this run live?" without matching routes by hand. Needs no inputs, and takes no `--routes`: a project that plans with extra route files lists their routes as `not in the catalog`. It does not make provider calls and is not a provider health check. CLI-only: an SDK caller sees a Python older than 3.11 as the engine's refusal sentence. |
+| Diagnose: `doctor [target]` | Text prerequisite, tool, route and key-presence diagnostics. The Python line says whether the node host's interpreter is ready, `too old` (FX needs Python 3.11+), has `no grida`, is `NOT FOUND`, or `cannot start`. The Node line after it says the same of the TypeScript node host's Node: ready (with its `@grida/fx` version), `too old` (FX needs Node 24+), `not Node.js 24+` (Bun, Deno), `no @grida/fx`, `NOT FOUND`, or `cannot start`. For that line, doctor starts the host only for a project with a `package.json` (the workflow's or the planning project), since its program may come from an `@grida/fx` above the project; without one, the line gives what Node answered, `(Node <version>)`, or the Node alone. With a target, `uses` lines come first: each route its paid steps use (groups and used workflows included), whether it is servable, and how many steps use it | Let FX inspect credential configuration; agents must not read secret values. Missing keys alone do not make its exit status fail; a route the target uses that cannot be served does (exit 1), so `doctor <target>` answers "can this run live?" without matching routes by hand. Needs no inputs, and takes no `--routes`: a project that plans with extra route files lists their routes as `not in the catalog`. It does not make provider calls and is not a provider health check. CLI-only: an SDK caller sees a Python older than 3.11, or a Node older than 24, as the engine's refusal sentence. Neither line changes the exit status. |
 | Execute: `run <target> ... [--name NAME \| --run <folder>]` | Foreground execution, an early run URL when inspection is available, and final summary | Local code needs no `--live`; paid calls need admission and a ceiling, except cached answers and runs whose every call is on the user's own Codex (`imagegen@codex`, which needs no ceiling but spends the user's plan, so still needs their go). Choose a name or explicit folder when supervising asynchronously. `--name` refuses collisions; neither naming nor a fresh record forces fresh generation. Project run pages survive completion through the separately started service. `--open` requests browser launch; `--standalone` owns a temporary viewer instead; `--no-view` skips integration and conflicts with `--open`. |
+| Answer paid calls offline: `run <target> --stand-in FILE#FUNCTION`; SDK `run(…, stand_in=…)` / `run(…, { standIn })` | A run whose paid calls the cache cannot answer are answered by a test's function, at $0 | Never live and runs every phase: `--live` and `--yes-up-to` are usage errors. The file is `.py`, `.ts`, `.mts`, `.js` or `.mjs`, hosted by its language's stand-in host; the SDKs serve the function in the caller's process. Answers pass a provider's checks; what the run stores is kept apart from the project's store, and it resumes only as a stand-in run. It shows what a workflow does with an answer, not how a provider behaves. |
 | Observe: `observe <run> --snapshot`, `observe <run> --after <cursor>`, `project <run>`, `inspect <run> --json` | Consistent snapshot, bounded event batches, state projection or summary | Read recorded data without executing workflow code. A step queued for its route's slot is `waiting` (with `waiting_for`), not `running`. Use a precise folder or `inspect <workflow-id>/<name>`; `inspect <workflow-id>` chooses the newest-created run, including failures, and refuses ambiguous recorded sources. Keep the emitted folder for observation commands. |
 | Control: `inspect RUN --control --json`, `cancel RUN [--invocation ID] [--wait] [--timeout 30s] --json` | Selected invocation, verified availability, acceptance or local completion | Exact folder or WORKFLOW_ID/NAME only. No author code, service or provider access. Wait never forces; external completion stays unverified. Python inspect_control/cancel and JavaScript inspectControl/cancel preserve the same structured result. |
 | Verify: `inspect <run> --verify --json` | Recorded summary with placed-file verification | Checks the recorded bytes, not artistic quality, external side effects, or the accuracy of a provider bill. |
@@ -105,13 +108,16 @@ individual commands can have narrower target rules.
 | Deliver: `run ... --deliver output=path` or SDK result delivery | Copies of available declared outputs | CLI delivery happens after execution and reports missing outputs. Preserve immutable store/placed files; copy out before editing bytes. |
 
 Python and JavaScript SDKs expose planning, named execution/resume, result files
-and delivery. `load_run` / `loadRun` return a saved `RunRecord` with a pinned
-folder and engine inspection; its snapshot/events/follow methods observe through
-the public reader. Python provides sync/async reads and an async iterator;
-JavaScript provides promises and an async iterator. JavaScript's existing `project`
-and `inspect` exports remain. Check `RunResult.ok`, incomplete/stopped state and
-failures: a failed step can return a result rather than throw. See
-[the SDK guide](docs/guide/09-sdk-runs.md) and [contract](spec/sdk.md).
+and delivery. Each also hosts node bodies, builders and stand-ins in its language:
+`grida` the Python ones, and `@grida/fx` the TypeScript ones, on Node 24 or later
+([protocol.md](spec/protocol.md) §8). `load_run` / `loadRun` return a saved
+`RunRecord` with a pinned folder and engine inspection; its snapshot/events/follow
+methods observe through the public reader. Python provides sync/async reads and an
+async iterator; JavaScript provides promises and an async iterator. JavaScript's
+existing `project` and `inspect` exports remain. Check `RunResult.ok`,
+incomplete/stopped state and failures: a failed step can return a result rather
+than throw. See [the SDK guide](docs/guide/09-sdk-runs.md) and
+[contract](spec/sdk.md).
 
 Portable sharing uses `export RUN --out DIR --json`, or the saved record's
 `export` method (Python also has `export_async`). The engine owns verification,
@@ -127,9 +133,10 @@ results expose files/delivery. Project setup/service management/browser opening,
 diagnostics, node locks and take/job maintenance intentionally remain CLI-only
 (run listing and removal are SDK operations: `list_runs` / `listRuns` and
 `remove_runs` / `removeRuns`, with explicit runs; pruning the cache stays CLI-only)
-until a concrete programmatic use needs a native lifetime/error design. JS callable
-stand-ins remain deferred; Python already supports them. Pause/active revision
-stay separate contracts. Async completion alone supplies no readiness handle.
+until a concrete programmatic use needs a native lifetime/error design. Both SDKs
+answer a run's paid calls with an in-process stand-in (`stand_in=` / `standIn`;
+[contract](spec/sdk.md)). Pause/active revision stay separate contracts. Async
+completion alone supplies no readiness handle.
 
 For CLI orchestration, status 0 describes the command's success, not every
 possible user goal. `run` requires an ok run and successful requested delivery;
@@ -196,7 +203,7 @@ viewer projection's `waited_ms` lets a running step's work time leave out its wa
 such steps as `running`. The SDKs return these documents as they are (the JavaScript
 types list `waiting`); there is no SDK-side state derivation.
 
-Python and JavaScript SDK runs suppress hosting and return after execution.
+Python and JavaScript SDK runs suppress viewer hosting and return after execution.
 Their `RunRecord` supports independent live observation of an initialized folder:
 load once, apply its snapshot, then follow after that exact cursor. Iteration
 continues across terminal events and resumes until its consumer stops; cancelling
@@ -328,7 +335,7 @@ promise through documentation alone.
 |---|---|---|---|
 | AR-01 | "Tell me what you can do here." | Partial: version/help, built-in catalog, input schema and planning; no uniform capability discovery. | An installed agent distinguishes supported, planned and unknown operations/types without guessing flags or interpreting empty output as support. |
 | AR-02 | "Check this before running." | Current: plan/check, graph and price JSON; `doctor <target>` for whether its routes are servable. | Agent uses `--check` or reads `problems` rather than treating `plan --json` exit 0 as validation; unresolved work and planning side effects stay explicit. |
-| AR-03 | "Run it locally without AI." | Current: ordinary nodes and offline stand-ins. | A normal code-only workflow completes and its artifacts verify at $0; stand-in data stays separate from paid data. |
+| AR-03 | "Run it locally without AI." | Current: ordinary Python or TypeScript nodes, and offline stand-ins from a `.py` or `.ts` file or in-process from either SDK. | A normal code-only workflow completes and its artifacts verify at $0; stand-in data stays separate from paid data. |
 | AR-04 | "Show me while it runs." | Current in source: project service, early run URL, polling viewer and shared observation reader; standalone mode also remains. SDK runs return after completion. | Agent reports a verified URL; human and independent observer see the same record; project inspection survives run completion, while standalone lifetime stays explicit. |
 | AR-05 | "Stop this run now." | Implemented in source: exact-target CLI/Python/JavaScript cancellation, invocation guard, optional verified wait and shared signal semantics. | Target and wait stay bound across resume; acceptance and finalization serialize; duplicate/lost requests are safe; waiter timeouts never force; verified local cleanup and unknown external outcomes remain separate. |
 | AR-06 | "Continue that exact run." | Current in source: require-existing named resume and explicit-folder same-plan resume. | Finished valid work is reused; plan/mode mismatch and an existing writer are refused; history distinguishes invocations. |
@@ -338,7 +345,7 @@ promise through documentation alone.
 | AR-10 | "Ask before the next expensive part." | Current later-phase `--yes-up-to`, within a separate ceiling. | Incomplete run can continue with an approved threshold; no claim of a general human-approval/pause system. |
 | AR-11 | "You disconnected; catch up." | Current in source: opaque cursors, bounded replay and snapshot reattachment; process liveness remains unknown. | Retained events can be read from a valid cursor; duplicates, unknown liveness and later invocations are handled without launching another run. |
 | AR-12 | "Put the result in my project." | Current output delivery and file verification. | Exact output destinations and missing/partial results are reported; immutable stored files remain intact. |
-| AR-13 | "Do it from Python or JavaScript." | Current: planning, named execution/resume, result files, saved RunRecord inspection, snapshot/batch/async following, exact-target control and portable evidence export; authoring/hosting capabilities differ. | Each claimed job preserves engine semantics with native ergonomics. Recorded folders stay pinned; cursor attachment, bounded catch-up, errors, later resumes and observer cancellation have provider-free tests. Execution readiness/browser lifetime and CLI maintenance are intentionally excluded. |
+| AR-13 | "Do it from Python or JavaScript." | Current: planning, named execution/resume, result files, saved RunRecord inspection, snapshot/batch/async following, exact-target control, portable evidence export and in-process stand-ins; node bodies, builders and stand-in files in Python or TypeScript, the TypeScript ones hosted by `@grida/fx` on Node 24+ with the Python host's whole protocol, and both in one project when needed. Built-in local types still need Python; Bun cannot host nodes. Only the TypeScript host checks param values against their schemas before a body runs and ends a body's programs when the node is cancelled or its run ends; the Python host does neither yet. | Each claimed job preserves engine semantics with native ergonomics. Recorded folders stay pinned; cursor attachment, bounded catch-up, errors, later resumes and observer cancellation have provider-free tests. A TypeScript project does every job a Python one does (describe, run, cache, build, judge, time out and cancel, run agents with tools, answer with a stand-in), with the guarantees [protocol.md](spec/protocol.md) §1 and §5 state, and its declarations refuse mistyped bodies at compile time; the evidence below names the tests. Execution readiness/browser lifetime and CLI maintenance are intentionally excluded. |
 | AR-14 | "Run exactly what I reviewed." | Partial: planning and execution are separate; SDK `run(plan)` retains options but the engine replans. No immutable approved-plan execution interface. | Changes between review and execution are detected or require renewed review; the agent does not mistake a saved plan or SDK object for a frozen execution snapshot. |
 | AR-15 | "Keep my project available while I work." | Current in source: init, foreground/background service, status/logs/stop, persistent catalog and run URLs; OS supervision remains future work. | Repeat/parallel starts, readiness, port conflicts (with the failing attempt's own cause), project identity, independent execution, restart persistence, and standalone use all have provider-free lifecycle evidence. |
 | AR-16 | "Name this deliverable; show my workflow history." | Current in source: create-only names, explicit same-plan resume, workflow-grouped index. | Concurrent name claims have one winner; collisions/missing names/plan mismatches/ambiguous sources refuse; latest includes failures, old active records remain visible, resume retains creation time/spend, and metadata changes no cache identity. |
@@ -371,10 +378,31 @@ Use [the viewer fixtures](fixtures/viewer/README.md),
 public interface through an independent consumer, not only internal methods.
 SDK record tests in [Python](python/tests/test_record.py) and
 [JavaScript](js/fx/test/record.test.ts), plus their run tests, cover AR-13 naming,
-resume and record observation through the real engine. A `RunRecord` pins its
-folder, not one invocation: a later snapshot can include a resume. Existing
-`RunResult` construction reads the folder after execution ends and is not atomic
-with a concurrent external resume; do not promise an immutable invocation capture.
+resume and record observation through the real engine. For AR-13's TypeScript hosting,
+the `@grida/fx` host tests drive the built host under Node over the protocol (output
+isolation and output kept whole at a slow stderr, a host that ends itself while its
+input stays open, closures in any describe order, CommonJS and cached requires,
+`createRequire` from a folder, literal specifiers in code that never runs and loaders
+that memoize, per-run load checks scoped to each run that name a file it loaded,
+param checks, I-JSON refusals, relative paths, cancellation and program ends,
+stand-ins), its unit tests hold the literal-specifier scanner to its cases and to
+linear time, and its type tests the declaration types to their compile-fail cases, an
+SDK test answers a real engine's paid call with an in-process stand-in, the engine's
+host tests cover Node lookup (home, planning project, SDK), the version check,
+per-language planning hosts and pools, the doctor line with fake hosts, the stderr
+copy's limits and real-Node runs whose output reaches a socket, pipe or file stderr
+whole, a slow reader, a reader that starts late and a non-blocking stderr while a body
+reports progress too, in whole lines from hosts printing at once, and interrupted
+commands that end though nobody reads their stderr and whose forced exit's message
+reaches a slow reader, and the TypeScript and mixed-language conformance cases run
+whole projects through the command line. The TypeScript examples
+([hello-ts](examples/hello-ts/README.md), [item-icons](examples/item-icons/README.md))
+are type checked and run offline by `tools/check_examples.py`: TypeScript nodes and a
+judge without Python, a builder that imports its application's own table, and a
+stand-in file whose icons are delivered. A `RunRecord` pins its folder, not one
+invocation: a later snapshot can include a resume. Existing `RunResult` construction
+reads the folder after execution ends and is not atomic with a concurrent external
+resume; do not promise an immutable invocation capture.
 Add targeted evidence for each changed boundary instead of rerunning paid examples.
 
 ## Gaps that should guide design

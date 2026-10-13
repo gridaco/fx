@@ -4,3 +4,8 @@ runs/
 
 # Provider keys
 .env
+
+# What Python and npm install for your own steps
+.venv/
+__pycache__/
+node_modules/

@@ -14,7 +14,7 @@ pub fn run(args: &ViewArgs) -> Result<u8, Error> {
             "workflow input flags require a workflow target; --run and --plan only read recorded data",
         ));
     }
-    // Finish planning, including the planning runtime and Python host lifetime, before
+    // Finish planning, including the planning runtime and node host lifetimes, before
     // entering the viewer's runtime. No refresh can import or replan the source target.
     let graph = if let Some(target) = &args.target {
         Some(super::planning::graph(&PlanArgs {

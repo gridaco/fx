@@ -98,7 +98,7 @@ steps:
 | Form | Meaning |
 |---|---|
 | `fx/<name>@<major>` | built-in node type (see [Nodes](03-nodes.md)) |
-| `./nodes/mirror.py#mirror_repeat` | a node type you wrote, in your project |
+| `./nodes/mirror.py#mirror_repeat`, `./nodes/pack.ts#packAtlas` | a node type you wrote in your project, in Python or TypeScript |
 | `./workflows/icon.yaml` | another workflow, used as one step |
 
 A path that starts with `./` or `../` is relative to the workflow's home: the folder of the nearest
@@ -238,8 +238,8 @@ let:
 - **Order:** it is ordered like the `for_each` list (or the matrix), and every element knows its key.
 - **Skipped instances are absent.** An instance rejected with `on_reject: continue` is present and
   carries its verdict. `accepted(...)` keeps only accepted elements.
-- **In Python** a collection arrives as an ordered mapping, `{key: file}`, and each file has `.key`,
-  so nothing depends on position.
+- **In Python** a collection arrives as an ordered mapping, `{key: file}`, and in TypeScript as a
+  `ReadonlyMap` in the same order. Each file has `.key`, so nothing depends on position.
 
 ### When the list comes from a step
 

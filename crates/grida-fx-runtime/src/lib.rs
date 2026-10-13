@@ -17,6 +17,7 @@
 //! | [`plantime`] | `at: plan` steps while planning |
 //! | [`host`] | node host processes, their connections and pool; the planning host |
 //! | [`tools`] | external programs (`GRIDA_FX_TOOL_<NAME>`, then `PATH`) |
+//! | [`stderr`] | the engine's own stderr lines, which never panic, and a forced exit's last word |
 //!
 //! The data flow, the threads and the attempt/billing state machine are in the step-3
 //! ARCHITECTURE notes; each module's doc names the spec sections it follows.
@@ -36,5 +37,6 @@ pub mod run_control;
 pub mod run_index;
 pub mod runner;
 pub mod stand_in;
+pub mod stderr;
 pub mod store;
 pub mod tools;

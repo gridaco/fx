@@ -71,7 +71,7 @@ grida fx run rigged-character --brief inputs/wren.md --partition head_body --liv
 
 ## What this example tests
 
-- **Agents as ordinary nodes.** Tools are plain Python on the user's machine. Each model turn is a
+- **Agents as ordinary nodes.** Tools are plain code on the user's machine. Each model turn is a
   priced, budgeted, recorded and replayable call.
 - **External tools** (Blender) declared on node types, checked by `doctor` and by every plan.
 - **Nested regeneration:** part takes and assembly takes inside body rebuilds, priced worst case
@@ -79,7 +79,7 @@ grida fx run rigged-character --brief inputs/wren.md --partition head_body --liv
 - **A long provider job** (`mesh.rig`) that resumes without paying twice.
 - **The recovery loop:** "if the rig audit fails, rebuild the body" is one `regenerate` on a group,
   not graph splicing in class inheritance.
-- **No Python builder needed.** The partition table and the rigging switch are `lookup` and `if:`.
+- **No builder needed.** The partition table and the rigging switch are `lookup` and `if:`.
 
 ## What the user did not write, compared with a hand-built pipeline
 

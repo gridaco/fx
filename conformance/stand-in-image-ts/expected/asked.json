@@ -1,0 +1,24 @@
+[
+ {
+  "capability": "image.generate",
+  "files": {},
+  "instance": {
+   "id": "draw#1",
+   "path": "draw",
+   "step": "draw"
+  },
+  "key": "6990331e32bd6a3400700873f71cde57c5f78b814ddb9492ccbcb5fad91d8aa8",
+  "request": {
+   "background": "opaque",
+   "prompt": "a lantern on a quay",
+   "size": "64x64"
+  },
+  "route": {
+   "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+   "id": "img-a@acme"
+  },
+  "take": [
+   1
+  ]
+ }
+]

@@ -1,0 +1,10 @@
+fx: workflow/v1
+id: values
+title: Values JSON cannot hold
+steps:
+  nan:
+    uses: ./nodes/values.ts#nan
+  keyed:
+    uses: ./nodes/values.ts#keyed
+  plain:
+    uses: ./nodes/values.ts#plain

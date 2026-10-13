@@ -1,0 +1,5 @@
+fx: project/v1
+routes:
+  image.generate: img-a@acme
+  structured.generate: llm-a@acme
+  vision.review: vlm-c@other

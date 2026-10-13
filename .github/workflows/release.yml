@@ -138,6 +138,14 @@ jobs:
         with:
           enable-cache: false
       - uses: oven-sh/setup-bun@v2
+      # TypeScript node bodies need Node 24 (grida's runtime): the conformance steps host them
+      # with it through GRIDA_FX_NODE, while the packages are built and checked on Node 18.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Keep Node 24 for the TypeScript node host
+        run: echo "GRIDA_FX_NODE=$(command -v node)" >> "$GITHUB_ENV"
       - uses: actions/setup-node@v7
         with:
           # The npm packages promise Node 18 or later: they are built and checked on the oldest.
@@ -197,7 +205,8 @@ jobs:
         run: |
           "$WHEEL_PYTHON" -m grida.fx --version
           GRIDA_FX_PYTHON="$WHEEL_PYTHON" uv run --locked --project python \
-            python conformance/run.py --strict --invoker python --command "$WHEEL_PYTHON -m grida.fx"
+            python conformance/run.py --strict --invoker python --command "$WHEEL_PYTHON -m grida.fx" \
+            --js-sdk "$DIST/npm/packages/fx"
       - name: The installed wheel serves its embedded viewer outside the checkout
         run: >-
           "$WHEEL_PYTHON" tools/check_viewer.py
@@ -213,7 +222,8 @@ jobs:
         run: |
           "$NPM_BIN" --version
           GRIDA_FX_PYTHON="$WHEEL_PYTHON" uv run --locked --project python \
-            python conformance/run.py --strict --command "$NPM_BIN"
+            python conformance/run.py --strict --command "$NPM_BIN" \
+            --js-sdk "$RUNNER_TEMP/npm-check/node_modules/@grida/fx"
       - name: The installed npm package serves its embedded viewer outside the checkout
         run: python3 tools/check_viewer.py --command "$NPM_BIN"
       # The same tarballs as the npm grida command installs them (spec/distribution.md): beside

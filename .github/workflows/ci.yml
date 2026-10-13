@@ -36,6 +36,15 @@ jobs:
       - run: bun --no-env-file run check:viewer
       - run: bun --no-env-file run test:viewer
       - run: bun --no-env-file run build:viewer
+      # The engine's tests start the TypeScript node host from js/fx/dist on Node 24 when both
+      # are there, and skip those tests otherwise.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: bun --no-env-file install --frozen-lockfile
+        working-directory: js/fx
+      - run: bun --no-env-file run build
+        working-directory: js/fx
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test --workspace
@@ -79,8 +88,17 @@ jobs:
       - run: uv run ruff format --check --config pyproject.toml . ../tools ../conformance/run.py ../examples ../fixtures
       - run: uv run pytest
 
+  # The SDK and its TypeScript node host, on Linux and macOS: the host's tests start it on Node
+  # 24 (grida's runtime) and hold it to keeping user output off the protocol on both, and the
+  # SDK's engine-driven tests run against a fresh grida-fx.
   js:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15]
+    runs-on: ${{ matrix.os }}
+    # A host test that hangs fails the job in minutes, not at the six-hour limit.
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: js/fx
@@ -88,7 +106,21 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
       - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.0"
+      # The engine, so the SDK's tests that drive it (stand-in runs among them) run here too.
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: bun --no-env-file install --frozen-lockfile
+        working-directory: .
+      - run: bun --no-env-file run build:viewer
+        working-directory: .
+      - run: cargo build --locked --bin grida-fx
+        working-directory: .
       - run: bun --no-env-file install --frozen-lockfile
       - run: bun --no-env-file run typecheck
       - run: bun --no-env-file test
@@ -108,7 +140,8 @@ jobs:
       - run: uv run --locked --project python python tools/check_spec.py
 
   # Every conformance case, through the command line of a fresh grida-fx, with the repository's
-  # Python SDK hosting the node bodies. --strict: a case without reviewed output fails.
+  # Python SDK and its built @grida/fx hosting the node bodies. --strict: a case without reviewed
+  # output fails.
   conformance:
     runs-on: ubuntu-latest
     steps:
@@ -121,8 +154,15 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.4.0"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
       - run: bun --no-env-file install --frozen-lockfile
       - run: bun --no-env-file run build:viewer
+      - run: bun --no-env-file install --frozen-lockfile
+        working-directory: js/fx
+      - run: bun --no-env-file run build
+        working-directory: js/fx
       - run: cargo build --locked --bin grida-fx
       - run: python3 tools/check_viewer.py --command "$PWD/target/debug/grida-fx"
       - run: uv sync --locked --project python
@@ -135,11 +175,12 @@ jobs:
           GRIDA_FX_PYTHON: python/.venv/bin/python
         run: >-
           uv run --locked --project python python conformance/run.py --strict
-          --command target/debug/grida-fx
+          --command target/debug/grida-fx --js-sdk js/fx
 
   # The examples as a clone runs them (examples/README.md): the engine built into the SDK by
   # tools/build_engine.py, then every example planned, and every runnable one run offline through
   # the SDK. Paid calls are refused at $0; tools/check_examples.py holds the examples to that.
+  # TypeScript examples get the built js/fx and run their nodes on Node 24.
   examples:
     runs-on: ubuntu-latest
     steps:
@@ -149,10 +190,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: astral-sh/setup-uv@v10.2.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.4.0"
       - run: bun --no-env-file install --frozen-lockfile
+      - run: bun --no-env-file install --frozen-lockfile
+        working-directory: js/fx
+      - run: bun --no-env-file run build
+        working-directory: js/fx
       - run: uv sync --locked --project python
       - run: python3 tools/build_engine.py
       - run: uv run --locked --project python python tools/check_examples.py

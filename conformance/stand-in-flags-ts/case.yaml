@@ -1,0 +1,38 @@
+# stand-in-flags' twin for what only a TypeScript stand-in file can get wrong, loaded by the
+# TypeScript node host. Each is a usage error (exit 2) that asks nothing and makes no run folder:
+# a function the file does not export, a file that fails to import (`broken.ts failed to import:
+# Error: broken on purpose`), and a .js file Node would load as CommonJS (legacy/package.json
+# says `"type": "commonjs"`), refused before its code runs, which would have written ran.txt. Then
+# a stand-in that throws an Error (given as `--stand-in=<file>#<function>`) is a fault of the
+# stand-in, not a failed call: the run stops (`stopped   the stand-in failed: Error: …`, exit 1)
+# after the stand-in was asked once. Its record (events.json) is stand-in-flags' but for the
+# error's name, `Error` where Python's is `RuntimeError`.
+steps:
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, --stand-in, "stand_in.ts#nope"]
+  status: 2
+  mentions:
+  - "the stand-in stand_in.ts#nope could not be loaded: stand_in.ts has no function nope"
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, --stand-in, "broken.ts#answer"]
+  status: 2
+  mentions:
+  - "the stand-in broken.ts#answer could not be loaded: broken.ts failed to import: Error: broken on purpose"
+  never_mentions: ["{project}"]
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, --stand-in, "legacy/stand_in.js#answer"]
+  status: 2
+  mentions:
+  - "the stand-in legacy/stand_in.js#answer could not be loaded: legacy/stand_in.js failed to import: legacy/stand_in.js is not an ES module: set \"type\": \"module\" in package.json"
+  absent:
+  - runs
+  - count.txt
+  - ran.txt
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, "--stand-in=stand_in.ts#answer"]
+  status: 1
+  mentions:
+  - "stand-in  stand_in.ts#answer"
+  - "stopped   the stand-in failed: Error: the test harness broke on image.generate"
+  never_mentions: ["{project}"]
+- read: count.txt
+  save: count.txt
+- read: runs/one/events.jsonl
+  save: events.json
+  jsonl: true

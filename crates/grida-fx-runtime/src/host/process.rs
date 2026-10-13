@@ -1,20 +1,36 @@
-//! A node host process (spec/protocol.md §1, §2): when its spec asks for it
-//! (`HostSpec::check_version`), the interpreter is first probed ([`locate::probe`]) and one
-//! before Python 3.11 is refused with [`locate::too_old`]'s sentence, before anything is spawned
-//! that could print Python's usage text. Then `<python> -P -m grida.fx.host` is started with
-//! `tokio::process`, its working directory at the project root, stdin/stdout piped for the
-//! protocol, stderr inherited, `PYTHONSAFEPATH` set to `host::SAFE_PATH_MARK` when the
-//! environment leaves it unset or empty, and its own process group (Unix), so ending it ends what
-//! it started. Dropping a process that was never ended kills it with its group.
+//! A node host process (spec/protocol.md §1, §2), of either language ([`HostSpec::language`]).
+//! When its spec asks for it (`HostSpec::check_version`), the program is first probed
+//! ([`locate::probe`]) and one that cannot host nodes is refused with [`locate::refusal`]'s
+//! sentence (a Python before 3.11, a Node before 24 or without `module.registerHooks`), before
+//! anything is spawned that could print a usage text. Then the host is started with
+//! `tokio::process`: `<python> -P -m grida.fx.host` with `PYTHONSAFEPATH` set to
+//! `host::SAFE_PATH_MARK` when the environment leaves it unset or empty, or `<node>
+//! <host-entry.js>`; its working directory at the project root, stdin/stdout piped for the
+//! protocol, and its own process group (Unix), so ending it ends what it started. Dropping a
+//! process that was never ended kills it with its group.
+//!
+//! A Python host inherits the engine's stderr. A TypeScript host's stderr is a pipe of its own
+//! (Unix), which a thread ([`StderrCopy`]) copies to the engine's stderr as spec/protocol.md §1
+//! "Output streams" states, with why an inherited stderr would not do: whole lines under the
+//! stderr lock the engine's own lines take too ([`crate::stderr`]), at most 512 bytes of them per
+//! write, a line in parts only past [`LONGEST_LINE`].
+//!
+//! Ending a TypeScript host waits for its copy by that section's rule: bound by what the host
+//! left, not by time, unless the copy has waited [`DRAIN`] in all for its pipe, or
+//! [`DRAIN_IN_ALL`] has passed since it read more than the host left. [`end_every_host`], which
+//! the command calls before it exits, waits for every copy left by the same rule;
+//! [`end_every_host_now`], which an interrupted command calls, for [`EXIT_DRAIN`] at most.
 //!
 //! [`HostProcess::start`] spawns, opens a [`Connection`] and sends `initialize`
-//! ([`HostProcess::start_in`]: in another working directory, for a stand-in host); the answer's
-//! protocol must be `fx-node-protocol-v1` (a mismatch, or a `protocol_mismatch` error, is the
-//! sentence `PythonHost` reports: `the project's grida <sdk> speaks <p> and grida-fx <v>
-//! speaks fx-node-protocol-v1: upgrade …`). Failures are sentences naming the interpreter as the
-//! user would (`label`), never a private absolute path the user did not give. A host that fails
-//! to initialize is ended without `shutdown`: its input is closed, it gets 5 seconds to exit, and
-//! it is killed after that.
+//! ([`HostProcess::start_in`]: in another working directory, for a stand-in host) with the
+//! declared source packages the host's language can name ([`Language::accepts_source`]); the
+//! answer's protocol must be `fx-node-protocol-v1` (a mismatch, or a `protocol_mismatch` error,
+//! is the sentence the planning host reports: `the project's grida <sdk> speaks <p> and grida-fx
+//! <v> speaks fx-node-protocol-v1: upgrade …`, `@grida/fx` for TypeScript). Failures are
+//! sentences naming the host of their language (`the Python node host`, `the TypeScript node
+//! host`) and its program as the user would (`label`), never a private absolute path the user
+//! did not give. A host that fails to initialize is ended without `shutdown`: its input is
+//! closed, it gets 5 seconds to exit, and it is killed after that.
 //!
 //! Ending:
 //! - [`HostProcess::shutdown`]: `shutdown` → `null`, then the `exit` notification, then its input
@@ -40,41 +56,146 @@
 //! host wrote before it exited, and ends the connection when nothing more arrives within the
 //! grace period (a process that left the group still holds the pipes).
 //!
-//! Every host this process started and has not ended is listed process-wide, so an interrupted
-//! command can kill them all with [`end_every_host`] before it exits; after that call no host
-//! starts.
+//! Every host this process started and has not ended is listed process-wide, so a command can
+//! kill them all before it exits ([`end_every_host`]; [`end_every_host_now`] when interrupted);
+//! after either call no host starts.
 
 use super::connection::{Connection, ConnectionError, Incoming};
-use super::{
-    GRACE, HOST_ARGS, PYTHON_ADVICE, SAFE_PATH_MARK, exit_text, locate, mismatch, program,
-};
+use super::{GRACE, HOST_ARGS, SAFE_PATH_MARK, advice, exit_text, locate, mismatch, program};
+use grida_fx_core::host::Language;
 use grida_fx_core::{ENGINE_NAME, ENGINE_VERSION};
 use grida_fx_protocol::{
     EngineInfo, ErrorCode, ErrorData, InitializeParams, InitializeResult, PROTOCOL, method,
 };
 use serde_json::Value;
+use std::ffi::OsString;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::process::{ExitStatus, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::Duration;
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
+use std::time::{Duration, Instant};
 use tokio::process::{Child, Command};
 
 /// How to start a host.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HostSpec {
-    pub python: PathBuf,
-    /// How messages name the interpreter (project-relative when inside the project).
+    /// The language of the modules the host runs.
+    pub language: Language,
+    /// The interpreter (Python) or Node (TypeScript).
+    pub program: PathBuf,
+    /// The program's arguments: `-P -m grida.fx.host` (Python), the absolute path of the host
+    /// program `dist/host-entry.js` (TypeScript).
+    pub args: Vec<OsString>,
+    /// How messages name the program (project-relative when inside the project).
     pub label: String,
     /// Absolute: the working directory and `initialize`'s `project_root`.
     pub project_root: PathBuf,
+    /// The project's declared source packages; `initialize` carries those the language can name
+    /// ([`Language::accepts_source`]).
     pub sources: Vec<String>,
-    /// Check the interpreter's version before the first start and refuse one before Python 3.11
-    /// ([`locate::probe`], spec/protocol.md §1). Set for an interpreter FX located; a caller that
-    /// names a program of its own that ignores its arguments (a test's fake host) leaves it unset.
+    /// Check the program before the first start and refuse one that cannot host nodes
+    /// ([`locate::probe`], [`locate::refusal`], spec/protocol.md §1). Set for a program FX
+    /// located; a caller that names a program of its own that ignores its arguments (a test's
+    /// fake host) leaves it unset ([`HostSpec::unchecked`]).
     pub check_version: bool,
+}
+
+impl HostSpec {
+    /// The Python host of `project_root`: `<python> -P -m grida.fx.host`, checked before it
+    /// starts.
+    pub fn python(
+        python: impl Into<PathBuf>,
+        label: impl Into<String>,
+        project_root: impl Into<PathBuf>,
+        sources: Vec<String>,
+    ) -> HostSpec {
+        HostSpec {
+            language: Language::Python,
+            program: python.into(),
+            args: HOST_ARGS.iter().map(OsString::from).collect(),
+            label: label.into(),
+            project_root: project_root.into(),
+            sources,
+            check_version: true,
+        }
+    }
+
+    /// The TypeScript host of `project_root`: `<node> <entry>`, `entry` the absolute path of a
+    /// `@grida/fx`'s `dist/host-entry.js` ([`locate::node_host_entry`]), checked before it starts.
+    pub fn typescript(
+        node: impl Into<PathBuf>,
+        entry: impl Into<PathBuf>,
+        label: impl Into<String>,
+        project_root: impl Into<PathBuf>,
+        sources: Vec<String>,
+    ) -> HostSpec {
+        HostSpec {
+            language: Language::TypeScript,
+            program: node.into(),
+            args: vec![entry.into().into_os_string()],
+            label: label.into(),
+            project_root: project_root.into(),
+            sources,
+            check_version: true,
+        }
+    }
+
+    /// The host of `language` for the project at `root`, with what [`locate`] finds from it, else
+    /// from the `planning` project: the interpreter (Python), or Node and the host program of a
+    /// `@grida/fx` (TypeScript). The program is named relative to either project when it lies in
+    /// one ([`super::label_from`]). `Err` is why there is no host program; `env` reads an
+    /// environment variable.
+    pub fn locate(
+        language: Language,
+        root: &Path,
+        planning: Option<&Path>,
+        sources: Vec<String>,
+        env: &dyn Fn(&str) -> Option<String>,
+    ) -> Result<HostSpec, String> {
+        Ok(match language {
+            Language::Python => {
+                let python = locate::python_interpreter(root, planning, env);
+                let label = super::label_from(&python, root, planning);
+                HostSpec::python(python, label, root, sources)
+            }
+            Language::TypeScript => {
+                let entry = locate::node_host_entry(root, planning, env)?;
+                let node = locate::node_runtime(env);
+                let label = super::label_from(&node, root, planning);
+                HostSpec::typescript(node, entry, label, root, sources)
+            }
+        })
+    }
+
+    /// The same host, started without checking its program first (a program of the caller's
+    /// own, such as a test's fake host, that ignores its arguments).
+    pub fn unchecked(mut self) -> HostSpec {
+        self.check_version = false;
+        self
+    }
+
+    /// The folder of the `@grida/fx` whose host program a TypeScript host runs (its argument,
+    /// [`HostSpec::typescript`]), when it lies outside `project_root` ([`locate::host_package`]);
+    /// `None` for a Python host.
+    pub fn host_package(&self, project_root: &Path) -> Option<PathBuf> {
+        match self.language {
+            Language::TypeScript => {
+                locate::host_package(Path::new(self.args.first()?), project_root)
+            }
+            Language::Python => None,
+        }
+    }
+
+    /// [`HostSpec::host_package`] of its own project, labelled `@grida/fx` for
+    /// [`crate::engine::scrub_paths`] ([`crate::engine::root_labels`]): Node's messages may name
+    /// its files. Empty for a Python host, or a host program inside the project.
+    pub fn package_labels(&self) -> Vec<(String, String)> {
+        self.host_package(&self.project_root)
+            .map(|package| crate::engine::root_labels(&package, Language::TypeScript.sdk()))
+            .unwrap_or_default()
+    }
 }
 
 /// A started, initialized host.
@@ -143,6 +264,8 @@ impl HostProcess {
         cleanup_verified: Option<Arc<AtomicBool>>,
     ) -> Result<HostProcess, String> {
         let shown = &spec.label;
+        let title = spec.language.title();
+        let sdk = spec.language.sdk();
         let Some(project_root) = spec.project_root.to_str() else {
             return Err(
                 "the project folder's path is not UTF-8, which the node protocol needs".into(),
@@ -155,7 +278,12 @@ impl HostProcess {
                 version: ENGINE_VERSION.into(),
             },
             project_root: project_root.into(),
-            sources: spec.sources.clone(),
+            sources: spec
+                .sources
+                .iter()
+                .filter(|name| spec.language.accepts_source(name))
+                .cloned()
+                .collect(),
         })
         .map_err(|e| {
             format!(
@@ -170,32 +298,42 @@ impl HostProcess {
                     () = cancel.cancelled() => {
                         return Err("the run was stopped while its node host initialized".into());
                     }
-                    probed = locate::probe(&spec.python) => probed,
+                    probed = locate::probe(spec.language, &spec.program) => probed,
                 },
-                None => locate::probe(&spec.python).await,
+                None => locate::probe(spec.language, &spec.program).await,
             };
-            if let Some(refusal) = locate::too_old(&probed, shown) {
+            if let Some(refusal) = locate::refusal(spec.language, &probed, shown) {
                 return Err(refusal);
             }
         }
-        let mut command = Command::new(program(&spec.python));
-        command.args(HOST_ARGS).current_dir(cwd);
-        if std::env::var_os("PYTHONSAFEPATH").is_none_or(|value| value.is_empty()) {
+        let mut command = Command::new(program(&spec.program));
+        command.args(&spec.args).current_dir(cwd);
+        if spec.language == Language::Python
+            && std::env::var_os("PYTHONSAFEPATH").is_none_or(|value| value.is_empty())
+        {
             command.env("PYTHONSAFEPATH", SAFE_PATH_MARK);
         }
+        // A TypeScript host gets a stderr pipe of its own, copied to the engine's (module doc).
+        let forward_stderr = cfg!(unix) && spec.language == Language::TypeScript;
         command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
+            .stderr(if forward_stderr {
+                Stdio::piped()
+            } else {
+                Stdio::inherit()
+            })
             .kill_on_drop(true);
         #[cfg(unix)]
         command.process_group(0);
         let mut child = command.spawn().map_err(|e| {
             format!(
-                "cannot start the Python node host with {shown}: {}; {PYTHON_ADVICE}",
-                grida_fx_core::error::io_reason(&e)
+                "cannot start the {title} node host with {shown}: {}; {}",
+                grida_fx_core::error::io_reason(&e),
+                advice(spec.language)
             )
         })?;
+        let forwarded = child.stderr.take().and_then(forward);
         // `process_group(0)`: the host leads a group whose id is its pid.
         let group = if cfg!(unix) { child.id() } else { None };
         let enlisted = group.is_none_or(enlist);
@@ -216,7 +354,9 @@ impl HostProcess {
                 verified.store(false, Ordering::SeqCst);
             }
             return Err(if enlisted {
-                format!("cannot start the Python node host with {shown}: its streams are not piped")
+                format!(
+                    "cannot start the {title} node host with {shown}: its streams are not piped"
+                )
             } else {
                 "the command is stopping, so no node host starts".to_string()
             });
@@ -229,6 +369,7 @@ impl HostProcess {
             status: None,
             cleanup_verified,
             group_delivery_verified: true,
+            forwarded,
         };
         let asking = connection.clone();
         let request = asking.request(method::INITIALIZE, Some(params));
@@ -256,9 +397,9 @@ impl HostProcess {
                         running,
                     });
                 }
-                Ok(info) => mismatch(Some(&info.host.sdk_version), &info.protocol),
+                Ok(info) => mismatch(spec.language, Some(&info.host.sdk_version), &info.protocol),
                 Err(e) => format!(
-                    "the Python node host ({shown}) answered initialize with something FX cannot read: {}",
+                    "the {title} node host ({shown}) answered initialize with something FX cannot read: {}",
                     super::read_reason(&e)
                 ),
             },
@@ -271,26 +412,27 @@ impl HostProcess {
                     .and_then(|data| serde_json::from_value::<ErrorData>(data).ok())
                     .and_then(|data| data.host_protocol);
                 match host_protocol {
-                    Some(host_protocol) => mismatch(None, &host_protocol),
+                    Some(host_protocol) => mismatch(spec.language, None, &host_protocol),
                     None => format!(
-                        "the project's grida does not speak {PROTOCOL}, which grida-fx {ENGINE_VERSION} speaks: {}; upgrade grida",
+                        "the project's {sdk} does not speak {PROTOCOL}, which grida-fx {ENGINE_VERSION} speaks: {}; upgrade {sdk}",
                         error.message
                     ),
                 }
             }
             Err(ConnectionError::Rpc(error)) => format!(
-                "the Python node host ({shown}) refused initialize: {}",
+                "the {title} node host ({shown}) refused initialize: {}",
                 error.message
             ),
             Err(ConnectionError::Closed) => {
                 let status = running.end(false, grace).await;
                 return Err(format!(
-                    "the Python node host ({shown}) {} before it answered initialize; {PYTHON_ADVICE}",
-                    exit_text(status)
+                    "the {title} node host ({shown}) {} before it answered initialize; {}",
+                    exit_text(status),
+                    advice(spec.language)
                 ));
             }
             Err(ConnectionError::Protocol(message)) => {
-                format!("the Python node host ({shown}) broke the protocol: {message}")
+                format!("the {title} node host ({shown}) broke the protocol: {message}")
             }
         };
         // spec/protocol.md §2: on a mismatch the engine reports both versions, then ends the host.
@@ -381,9 +523,19 @@ struct Running {
     /// Pool receipt eligibility: a dropped or failed reap leaves cleanup unverified.
     cleanup_verified: Option<Arc<AtomicBool>>,
     group_delivery_verified: bool,
+    /// The copy of a TypeScript host's stderr (module doc), until it has been waited for.
+    forwarded: Option<Arc<StderrCopy>>,
 }
 
 impl Running {
+    /// Waits for the copy of the host's stderr to end ([`StderrCopy::wait`]), once.
+    async fn drained(&mut self) {
+        if let Some(copy) = self.forwarded.take() {
+            copy.limit();
+            let _ = tokio::task::spawn_blocking(move || copy.wait()).await;
+        }
+    }
+
     /// Records the status of a reaped host and kills what is left of its group (module doc).
     fn reaped(&mut self, status: ExitStatus) {
         self.status = Some(status);
@@ -459,8 +611,15 @@ impl Running {
         }
     }
 
-    /// See [`HostProcess::end`].
+    /// See [`HostProcess::end`]; then what the host wrote to its stderr is copied (module doc).
     async fn end(&mut self, polite: bool, grace: Duration) -> Option<ExitStatus> {
+        let status = self.stop(polite, grace).await;
+        self.drained().await;
+        status
+    }
+
+    /// Ends the process: politely when asked, else by closing its input; killed after `grace`.
+    async fn stop(&mut self, polite: bool, grace: Duration) -> Option<ExitStatus> {
         let mut asked = true;
         if polite && self.status.is_none() && self.connection.is_open() {
             let connection = self.connection.clone();
@@ -483,7 +642,7 @@ impl Running {
     }
 
     /// Kills the group and the process, waits for it, then closes its input (a write blocked on
-    /// the host ends with it).
+    /// the host ends with it); then what the host wrote to its stderr is copied (module doc).
     async fn kill(&mut self) -> Option<ExitStatus> {
         if self.try_status().is_none() {
             // Before reaping: the group's id is the unreaped host's own.
@@ -494,6 +653,7 @@ impl Running {
             }
         }
         let _ = tokio::time::timeout(Duration::from_secs(1), self.connection.close_input()).await;
+        self.drained().await;
         self.status
     }
 }
@@ -529,7 +689,8 @@ fn groups() -> MutexGuard<'static, Groups> {
     GROUPS.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// Lists a new host's group; `false` once [`end_every_host`] was called.
+/// Lists a new host's group; `false` once [`end_every_host`] or [`end_every_host_now`] was
+/// called.
 fn enlist(group: u32) -> bool {
     let mut groups = groups();
     if groups.closed {
@@ -545,8 +706,24 @@ fn forget(group: u32) {
 }
 
 /// Kills the process group of every host this process started and has not ended, and lets no
-/// host start after it: for a command that is about to exit because it was interrupted.
+/// host start after it; then waits for the copies of TypeScript hosts' stderr that have not ended,
+/// by the rule a host's ending waits by (module doc). For a command that is about to exit, its
+/// work done.
 pub fn end_every_host() {
+    kill_every_host();
+    COPIES.wait_for_all(false);
+}
+
+/// [`end_every_host`] for a command that must end now (an interruption): the copies left are
+/// waited for [`EXIT_DRAIN`] at most from the call, whatever they do (module doc).
+pub fn end_every_host_now() {
+    kill_every_host();
+    COPIES.wait_for_all(true);
+}
+
+/// Kills the process group of every host this process started and has not ended, and of every
+/// Codex conversation, and lets no host start after it.
+fn kill_every_host() {
     let live = {
         let mut groups = groups();
         groups.closed = true;
@@ -593,11 +770,733 @@ fn kill_groups_now(_groups: &[u32]) -> bool {
     true
 }
 
+/// How long the copy of a TypeScript host's stderr may wait for its pipe, in all, while it is
+/// waited for ([`StderrCopy::wait`]): a process that left the host's group may hold the pipe
+/// open for good.
+const DRAIN: Duration = Duration::from_secs(1);
+
+/// How long the copy of a TypeScript host's stderr is waited for at most, whatever it does, once
+/// it has read more than its host left ([`StderrCopy::limit`]): a process that left the host's
+/// group is printing, perhaps faster than the engine's stderr is read (so the copy never waits for
+/// its pipe), or into a stderr nobody reads.
+const DRAIN_IN_ALL: Duration = Duration::from_secs(10);
+
+/// How long [`end_every_host_now`] waits for the copies left, at most, from its call, whatever
+/// they do: the command is interrupted.
+const EXIT_DRAIN: Duration = Duration::from_secs(2);
+
+/// The most the copy reads from its pipe at once.
+const READ_SIZE: usize = 16 * 1024;
+
+/// What the copy's pipe is taken to hold when that cannot be measured: Linux's largest pipe a
+/// process may set without privilege (`/proc/sys/fs/pipe-max-size`).
+const PIPE_MOST: u64 = 1024 * 1024;
+
+/// How much of a line the copy holds back before it writes the part it has (module doc).
+#[cfg(unix)]
+const LONGEST_LINE: usize = 64 * 1024;
+
+/// The limits a copy is waited for by: [`DRAIN`], [`DRAIN_IN_ALL`] and [`EXIT_DRAIN`] (tests use
+/// shorter ones).
+#[derive(Debug, Clone, Copy)]
+struct Limits {
+    /// [`DRAIN`].
+    idle: Duration,
+    /// [`DRAIN_IN_ALL`].
+    flood: Duration,
+    /// [`EXIT_DRAIN`].
+    exit: Duration,
+}
+
+impl Limits {
+    const OF_COMMAND: Limits = Limits {
+        idle: DRAIN,
+        flood: DRAIN_IN_ALL,
+        exit: EXIT_DRAIN,
+    };
+}
+
+impl Default for Limits {
+    fn default() -> Limits {
+        Limits::OF_COMMAND
+    }
+}
+
+/// The copy of a TypeScript host's stderr (module doc), as its thread reports it to whoever waits
+/// for it to end.
+#[derive(Default)]
+struct StderrCopy {
+    state: Mutex<Copying>,
+    changed: Condvar,
+    limits: Limits,
+    /// The reading end of the copy's pipe, to measure what it holds ([`StderrCopy::limit`]).
+    #[cfg(unix)]
+    pipe: Option<std::os::fd::OwnedFd>,
+}
+
+#[derive(Default)]
+struct Copying {
+    ended: bool,
+    /// Since when the copy has been waiting for its pipe, while it waits.
+    waiting_since: Option<Instant>,
+    /// How long the copy waited for its pipe before that.
+    waited: Duration,
+    /// How many bytes the copy has read from its pipe.
+    read: u64,
+    /// Once the copy is waited for: when waiting for it gives up ([`StderrCopy::limit`]).
+    limit: Option<Limit>,
+}
+
+/// When waiting for a copy gives up, whichever comes first.
+#[derive(Debug, Clone, Copy)]
+struct Limit {
+    /// The copy has waited this long for its pipe, in all.
+    waited: Duration,
+    /// What the copy has read, in all, once it has read what its host left: more is text written
+    /// after the host ended.
+    left: u64,
+    /// Once the copy has read more than `left`: this instant has come, whatever the copy does.
+    by: Option<Instant>,
+}
+
+impl Copying {
+    /// How long the copy has waited for its pipe by `now`.
+    fn waited(&self, now: Instant) -> Duration {
+        self.waited
+            + self
+                .waiting_since
+                .map_or(Duration::ZERO, |since| now.saturating_duration_since(since))
+    }
+
+    /// The copy has read `read` bytes more; once that is more than its host left, waiting for it
+    /// gives up `flood` from now at the latest.
+    #[cfg(unix)]
+    fn took(&mut self, read: usize, flood: Duration) {
+        self.read += read as u64;
+        let total = self.read;
+        if let Some(limit) = &mut self.limit
+            && limit.by.is_none()
+            && total > limit.left
+        {
+            limit.by = Some(Instant::now() + flood);
+        }
+    }
+}
+
+impl StderrCopy {
+    fn state(&self) -> MutexGuard<'_, Copying> {
+        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Changes the state and wakes whoever waits.
+    #[cfg(unix)]
+    fn update(&self, change: impl FnOnce(&mut Copying)) {
+        change(&mut self.state());
+        self.changed.notify_all();
+    }
+
+    /// How many bytes the copy's pipe holds now ([`PIPE_MOST`] when that cannot be measured).
+    fn pending(&self) -> u64 {
+        #[cfg(unix)]
+        if let Some(pipe) = &self.pipe
+            && let Ok(held) = rustix::io::ioctl_fionread(pipe)
+        {
+            return held;
+        }
+        PIPE_MOST
+    }
+
+    /// Starts the copy's limits, once, the host having ended and its group been killed: waiting
+    /// for it gives up when the copy has waited one more [`DRAIN`] for its pipe than it has by
+    /// now; and, once it has read more than what its host left (what its pipe holds now and one
+    /// read the copy may be taking from it), [`DRAIN_IN_ALL`] after that. Every later wait keeps
+    /// the same limits.
+    fn limit(&self) -> Limit {
+        let mut copying = self.state();
+        if let Some(limit) = copying.limit {
+            return limit;
+        }
+        let waited = copying.waited(Instant::now()) + self.limits.idle;
+        let left = copying.read + self.pending() + READ_SIZE as u64;
+        *copying.limit.insert(Limit {
+            waited,
+            left,
+            by: None,
+        })
+    }
+
+    /// Waits for the copy to end: for as long as it has text to write, however slow the reader,
+    /// until it has waited for its pipe up to its [`StderrCopy::limit`], and, once it has read
+    /// more than its host left, until that limit's instant has come. Whether the copy ended.
+    fn wait(&self) -> bool {
+        self.wait_until(None)
+    }
+
+    /// [`StderrCopy::wait`], giving up at `deadline` too when there is one.
+    fn wait_until(&self, deadline: Option<Instant>) -> bool {
+        let limit = self.limit();
+        let mut copying = self.state();
+        loop {
+            if copying.ended {
+                return true;
+            }
+            let now = Instant::now();
+            let idle = limit.waited.saturating_sub(copying.waited(now));
+            let by = copying
+                .limit
+                .and_then(|limit| limit.by)
+                .into_iter()
+                .chain(deadline)
+                .min();
+            let left = by.map(|by| by.saturating_duration_since(now));
+            if idle.is_zero() || left.is_some_and(|left| left.is_zero()) {
+                return false;
+            }
+            // Waiting for its pipe, the time it may wait runs out unless text arrives; writing,
+            // only an instant counts, however slow the reader.
+            let timeout = match (copying.waiting_since, left) {
+                (Some(_), Some(left)) => Some(idle.min(left)),
+                (Some(_), None) => Some(idle),
+                (None, left) => left,
+            };
+            copying = match timeout {
+                Some(timeout) => {
+                    self.changed
+                        .wait_timeout(copying, timeout)
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .0
+                }
+                None => self
+                    .changed
+                    .wait(copying)
+                    .unwrap_or_else(PoisonError::into_inner),
+            };
+        }
+    }
+}
+
+/// Copies of hosts' stderr that have not ended, and the limits they are waited for by.
+struct StderrCopies {
+    listed: Mutex<Vec<Arc<StderrCopy>>>,
+    limits: Limits,
+}
+
+/// The copies of this process's hosts' stderr that have not ended.
+static COPIES: StderrCopies = StderrCopies::with(Limits::OF_COMMAND);
+
+impl StderrCopies {
+    const fn with(limits: Limits) -> StderrCopies {
+        StderrCopies {
+            listed: Mutex::new(Vec::new()),
+            limits,
+        }
+    }
+
+    fn listed(&self) -> MutexGuard<'_, Vec<Arc<StderrCopy>>> {
+        self.listed.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Waits for every copy listed ([`StderrCopy::wait`]); `now`: [`EXIT_DRAIN`] at most from the
+    /// call, whatever they do. Their limits start together, so the copies waiting for their pipes
+    /// cost at most [`DRAIN`] together, and nothing for a copy that already waited its [`DRAIN`]
+    /// out.
+    fn wait_for_all(&self, now: bool) {
+        let deadline = now.then(|| Instant::now() + self.limits.exit);
+        let copies: Vec<Arc<StderrCopy>> = self.listed().iter().map(Arc::clone).collect();
+        for copy in &copies {
+            copy.limit();
+        }
+        for copy in copies {
+            copy.wait_until(deadline);
+        }
+    }
+}
+
+/// Starts the copy of a host's stderr to this process's ([`copy_lines`], [`to_stderr`]). The pipe
+/// is read blocking (tokio gives it back so), whatever the host does to its end.
+#[cfg(unix)]
+fn forward(stderr: tokio::process::ChildStderr) -> Option<Arc<StderrCopy>> {
+    let pipe = std::fs::File::from(stderr.into_owned_fd().ok()?);
+    spawn_copy(pipe, to_stderr, &COPIES)
+}
+
+#[cfg(not(unix))]
+fn forward(_stderr: tokio::process::ChildStderr) -> Option<Arc<StderrCopy>> {
+    None
+}
+
+/// Copies `pipe` with `write` ([`copy_lines`]) on a thread of its own, the copy listed in
+/// `copies`, and waited for by their limits, until it ends; `None` when no thread starts.
+#[cfg(unix)]
+fn spawn_copy(
+    pipe: impl std::io::Read + std::os::fd::AsFd + Send + 'static,
+    write: impl FnMut(&[u8]) -> bool + Send + 'static,
+    copies: &'static StderrCopies,
+) -> Option<Arc<StderrCopy>> {
+    let copy = Arc::new(StderrCopy {
+        limits: copies.limits,
+        pipe: pipe.as_fd().try_clone_to_owned().ok(),
+        ..StderrCopy::default()
+    });
+    copies.listed().push(Arc::clone(&copy));
+    let ending = Ending(Arc::clone(&copy), copies);
+    // A thread that does not start drops `ending`, which ends the copy.
+    std::thread::Builder::new()
+        .name("grida-fx host stderr".into())
+        .spawn(move || copy_lines(pipe, &ending.0, write))
+        .ok()
+        .map(|_| copy)
+}
+
+/// Ends its copy when dropped, however the copy's thread stops: marks it ended and takes it off
+/// its list.
+#[cfg(unix)]
+struct Ending(Arc<StderrCopy>, &'static StderrCopies);
+
+#[cfg(unix)]
+impl Drop for Ending {
+    fn drop(&mut self) {
+        self.1
+            .listed()
+            .retain(|listed| !Arc::ptr_eq(listed, &self.0));
+        self.0.update(|copying| {
+            copying.ended = true;
+            copying.waiting_since = None;
+        });
+    }
+}
+
+/// Copies `pipe` to `write` until every holder has closed it, in whole lines (module doc), and
+/// tells `copy` while it waits for the pipe and what it read. Once `write` fails nothing more is
+/// written, but the pipe is still read, so whatever writes to it never blocks.
+#[cfg(unix)]
+fn copy_lines(
+    mut pipe: impl std::io::Read,
+    copy: &StderrCopy,
+    mut write: impl FnMut(&[u8]) -> bool,
+) {
+    let mut buffer = vec![0u8; READ_SIZE];
+    let mut held = Vec::new();
+    let mut writing = true;
+    loop {
+        copy.update(|copying| copying.waiting_since = Some(Instant::now()));
+        let read = pipe.read(&mut buffer);
+        copy.update(|copying| {
+            if let Some(since) = copying.waiting_since.take() {
+                copying.waited += since.elapsed();
+            }
+            if let Ok(read) = &read {
+                copying.took(*read, copy.limits.flood);
+            }
+        });
+        match read {
+            Ok(0) => break,
+            Ok(read) => held.extend_from_slice(&buffer[..read]),
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(_) => break,
+        }
+        let whole = match held.iter().rposition(|&byte| byte == b'\n') {
+            Some(end) => end + 1,
+            None if held.len() >= LONGEST_LINE => held.len(),
+            None => continue,
+        };
+        writing = writing && write(&held[..whole]);
+        held.drain(..whole);
+    }
+    if writing && !held.is_empty() {
+        write(&held);
+    }
+}
+
+/// Writes `text` to this process's stderr under its lock ([`crate::stderr`]); whether it all was
+/// written.
+#[cfg(unix)]
+fn to_stderr(text: &[u8]) -> bool {
+    crate::stderr::write_whole(&mut std::io::stderr().lock(), text)
+}
+
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
     use crate::host::connection::NoIncoming;
-    use std::time::Instant;
+    use std::io::Write;
+
+    /// A pipe that reads `parts` one read at a time (each cut to the reader's buffer), then ends.
+    struct Parts(std::collections::VecDeque<Vec<u8>>);
+
+    impl Parts {
+        fn of(parts: &[&[u8]]) -> Parts {
+            Parts(parts.iter().map(|part| part.to_vec()).collect())
+        }
+    }
+
+    impl std::io::Read for Parts {
+        fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+            let Some(mut part) = self.0.pop_front() else {
+                return Ok(0);
+            };
+            let read = part.len().min(buffer.len());
+            buffer[..read].copy_from_slice(&part[..read]);
+            if read < part.len() {
+                self.0.push_front(part.split_off(read));
+            }
+            Ok(read)
+        }
+    }
+
+    /// What `pipe` comes to, write by write.
+    fn copied(pipe: Parts) -> Vec<Vec<u8>> {
+        let mut writes = Vec::new();
+        copy_lines(pipe, &StderrCopy::default(), |text| {
+            writes.push(text.to_vec());
+            true
+        });
+        writes
+    }
+
+    #[test]
+    fn a_copy_writes_whole_lines() {
+        let writes = copied(Parts::of(&[
+            b"alpha\nbe",
+            b"ta\ngam",
+            b"ma",
+            b"\n",
+            b"delta\nunfinished",
+        ]));
+        let writes: Vec<&[u8]> = writes.iter().map(Vec::as_slice).collect();
+        assert_eq!(
+            writes,
+            [
+                &b"alpha\n"[..],
+                b"beta\n",
+                b"gamma\n",
+                b"delta\n",
+                b"unfinished"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_copy_writes_a_line_longer_than_it_holds_in_parts() {
+        let mut text = vec![b'x'; LONGEST_LINE + 6 * 1024];
+        text.extend_from_slice(b"\nend\n");
+        let writes = copied(Parts::of(&[&text]));
+        assert_eq!(writes.len(), 2);
+        assert_eq!(writes[0].len(), LONGEST_LINE);
+        assert_eq!(writes.concat(), text);
+    }
+
+    #[test]
+    fn a_copy_that_cannot_write_still_reads_its_pipe_to_the_end() {
+        let mut pipe = Parts::of(&[b"one\n", b"two\n", b"three\n"]);
+        let mut calls = 0;
+        copy_lines(&mut pipe, &StderrCopy::default(), |_| {
+            calls += 1;
+            false
+        });
+        assert_eq!(calls, 1);
+        assert!(pipe.0.is_empty());
+    }
+
+    /// Limits short enough for tests, with wide margins between them: [`DRAIN`] half a second,
+    /// [`DRAIN_IN_ALL`] two seconds, [`EXIT_DRAIN`] a second and a half.
+    const QUICK: Limits = Limits {
+        idle: Duration::from_millis(500),
+        flood: Duration::from_secs(2),
+        exit: Duration::from_millis(1500),
+    };
+
+    /// The pipe's writing end, and its copy with `write` on a thread listed in `copies`.
+    fn piped(
+        write: impl FnMut(&[u8]) -> bool + Send + 'static,
+        copies: &'static StderrCopies,
+    ) -> (std::io::PipeWriter, Arc<StderrCopy>) {
+        let (reader, writer) = std::io::pipe().unwrap();
+        (writer, spawn_copy(reader, write, copies).unwrap())
+    }
+
+    /// What a reader took.
+    type Taken = Arc<Mutex<Vec<u8>>>;
+
+    /// A reader that takes nothing for `first`, then everything; and what it took.
+    fn reader_starting_after(first: Duration) -> (impl FnMut(&[u8]) -> bool + Send, Taken) {
+        let taken = Arc::new(Mutex::new(Vec::new()));
+        let into = Arc::clone(&taken);
+        let mut starting = true;
+        let write = move |text: &[u8]| {
+            if std::mem::take(&mut starting) {
+                std::thread::sleep(first);
+            }
+            into.lock().unwrap().extend_from_slice(text);
+            true
+        };
+        (write, taken)
+    }
+
+    /// A reader that takes nothing for three of [`QUICK`]'s idle limits, then everything.
+    fn slow_reader() -> (impl FnMut(&[u8]) -> bool + Send, Taken) {
+        reader_starting_after(QUICK.idle * 3)
+    }
+
+    /// `count` numbered lines.
+    fn numbered(count: usize) -> Vec<u8> {
+        (0..count)
+            .flat_map(|number| format!("line {number:04}\n").into_bytes())
+            .collect()
+    }
+
+    /// Waits up to 3 seconds for `copy` to end.
+    fn ends(copy: &StderrCopy) -> bool {
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while Instant::now() < deadline {
+            if copy.state().ended {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        false
+    }
+
+    #[test]
+    fn a_copy_is_waited_for_while_it_writes_to_a_slow_reader() {
+        static LISTED: StderrCopies = StderrCopies::with(QUICK);
+        let (write, taken) = slow_reader();
+        let (mut writer, copy) = piped(write, &LISTED);
+        let text = numbered(200);
+        writer.write_all(&text).unwrap();
+        // The host has ended, its text still in the pipe.
+        drop(writer);
+        let start = Instant::now();
+        assert!(copy.wait());
+        let took = start.elapsed();
+        assert!(took > QUICK.idle, "{took:?}");
+        assert_eq!(*taken.lock().unwrap(), text);
+        assert!(LISTED.listed().is_empty());
+    }
+
+    /// A reader that starts reading only long after the host ended (`2>&1 | less`, its first
+    /// screen read at leisure) still gets everything the host left: waiting for its copy is bound
+    /// by what the host left, not by the time it takes.
+    #[test]
+    fn a_copy_is_waited_for_however_late_its_reader_starts() {
+        static LISTED: StderrCopies = StderrCopies::with(QUICK);
+        let (write, taken) = reader_starting_after(QUICK.flood + QUICK.idle * 2);
+        let (mut writer, copy) = piped(write, &LISTED);
+        // Less than one read takes, so the pipe is written whole before the host ends.
+        let text = numbered(1200);
+        writer.write_all(&text).unwrap();
+        drop(writer);
+        let start = Instant::now();
+        assert!(copy.wait());
+        let took = start.elapsed();
+        assert!(took > QUICK.flood, "{took:?}");
+        assert_eq!(*taken.lock().unwrap(), text);
+        // And so does the command's own wait before it exits.
+        static AT_EXIT: StderrCopies = StderrCopies::with(QUICK);
+        let (write, taken) = reader_starting_after(QUICK.flood + QUICK.idle * 2);
+        let (mut writer, copy) = piped(write, &AT_EXIT);
+        writer.write_all(&text).unwrap();
+        drop(writer);
+        AT_EXIT.wait_for_all(false);
+        assert!(copy.state().ended);
+        assert_eq!(*taken.lock().unwrap(), text);
+    }
+
+    #[test]
+    fn a_copy_whose_pipe_is_held_idle_is_given_up_after_its_second() {
+        static LISTED: StderrCopies = StderrCopies::with(QUICK);
+        let taken = Arc::new(Mutex::new(Vec::new()));
+        let into = Arc::clone(&taken);
+        let (mut writer, copy) = piped(
+            move |text| {
+                into.lock().unwrap().extend_from_slice(text);
+                true
+            },
+            &LISTED,
+        );
+        writer.write_all(b"before\n").unwrap();
+        // `writer` stays open: a process that left the host's group holds the pipe.
+        let start = Instant::now();
+        assert!(!copy.wait());
+        let took = start.elapsed();
+        assert!(
+            took >= QUICK.idle * 9 / 10 && took < QUICK.idle * 4,
+            "{took:?}"
+        );
+        assert_eq!(*taken.lock().unwrap(), b"before\n");
+        // Waiting again, as the command does before it exits, keeps the time already spent.
+        let start = Instant::now();
+        LISTED.wait_for_all(false);
+        let took = start.elapsed();
+        assert!(took < QUICK.idle / 2, "{took:?}");
+        // Once the holder closes the pipe, the copy ends and leaves the list.
+        drop(writer);
+        assert!(ends(&copy));
+        assert!(LISTED.listed().is_empty());
+    }
+
+    #[test]
+    fn a_copy_whose_pipe_is_held_by_a_process_printing_now_and_then_is_given_up_too() {
+        static LISTED: StderrCopies = StderrCopies::with(QUICK);
+        let (mut writer, copy) = piped(|_| true, &LISTED);
+        let stop = Arc::new(AtomicBool::new(false));
+        let stopped = Arc::clone(&stop);
+        let printing = std::thread::spawn(move || {
+            while !stopped.load(Ordering::SeqCst) {
+                let _ = writer.write_all(b"tick\n");
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        });
+        let start = Instant::now();
+        assert!(!copy.wait());
+        let took = start.elapsed();
+        stop.store(true, Ordering::SeqCst);
+        printing.join().unwrap();
+        assert!(
+            took >= QUICK.idle * 9 / 10 && took < QUICK.idle * 4,
+            "{took:?}"
+        );
+        assert!(ends(&copy));
+    }
+
+    #[test]
+    fn the_copies_left_are_waited_for_together() {
+        static LISTED: StderrCopies = StderrCopies::with(QUICK);
+        // A host that was never waited for, its text still on the way to a slow reader...
+        let (write, taken) = slow_reader();
+        let (mut writer, slow) = piped(write, &LISTED);
+        let text = numbered(100);
+        writer.write_all(&text).unwrap();
+        drop(writer);
+        // ...and one whose pipe a process that left its group holds.
+        let (held, idle) = piped(|_| true, &LISTED);
+        let start = Instant::now();
+        LISTED.wait_for_all(false);
+        let took = start.elapsed();
+        assert!(
+            took > QUICK.idle && took < QUICK.idle * 3 + Duration::from_secs(2),
+            "{took:?}"
+        );
+        assert!(slow.state().ended);
+        assert_eq!(*taken.lock().unwrap(), text);
+        assert!(!idle.state().ended);
+        drop(held);
+        assert!(ends(&idle));
+        assert!(LISTED.listed().is_empty());
+    }
+
+    /// `wait` run on a thread of its own: how it went and how long it took, once it has returned.
+    fn waiting<T: Send + 'static>(
+        wait: impl FnOnce() -> T + Send + 'static,
+    ) -> std::sync::mpsc::Receiver<(T, Duration)> {
+        let (done, finished) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let start = Instant::now();
+            let went = wait();
+            let _ = done.send((went, start.elapsed()));
+        });
+        finished
+    }
+
+    /// A command interrupted while a copy is blocked on a reader that does not read still ends:
+    /// waiting for the copies left gives up [`EXIT_DRAIN`] after it starts, whatever they do.
+    #[test]
+    fn the_copies_left_are_given_up_at_the_exit_whatever_they_do() {
+        static LISTED: StderrCopies = StderrCopies::with(QUICK);
+        // A reader that takes nothing until it is let go.
+        let (release, released) = std::sync::mpsc::channel::<()>();
+        let (mut writer, blocked) = piped(
+            move |_| {
+                let _ = released.recv();
+                true
+            },
+            &LISTED,
+        );
+        writer.write_all(b"stuck\n").unwrap();
+        drop(writer);
+        let finished = waiting(|| LISTED.wait_for_all(true));
+        let waited = finished.recv_timeout(QUICK.exit * 4);
+        let ended = blocked.state().ended;
+        drop(release);
+        let ((), took) = waited.expect("waiting for the copies never gave up");
+        assert!(
+            took >= QUICK.exit * 9 / 10 && took < QUICK.exit * 3,
+            "{took:?}"
+        );
+        assert!(!ended);
+        // Let go, the copy writes what it holds and ends.
+        assert!(ends(&blocked));
+        assert!(LISTED.listed().is_empty());
+    }
+
+    /// A process that left the host's group and prints faster than the reader takes never lets
+    /// the copy wait for its pipe: once the copy has read more than the host left, waiting for it
+    /// gives up [`DRAIN_IN_ALL`] later.
+    #[test]
+    fn a_copy_that_always_has_text_to_write_is_given_up_in_the_end() {
+        static LISTED: StderrCopies = StderrCopies::with(QUICK);
+        let (mut writer, copy) = piped(
+            |_| {
+                std::thread::sleep(Duration::from_millis(20));
+                true
+            },
+            &LISTED,
+        );
+        let stop = Arc::new(AtomicBool::new(false));
+        let stopped = Arc::clone(&stop);
+        // About a megabyte a second, more than the reader takes (16 KiB every 20 ms at most).
+        let printing = std::thread::spawn(move || {
+            let line = format!("{}\n", "f".repeat(1023));
+            while !stopped.load(Ordering::SeqCst) {
+                let _ = writer.write_all(line.as_bytes());
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        });
+        let waited = Arc::clone(&copy);
+        let finished = waiting(move || waited.wait());
+        let waited = finished.recv_timeout(QUICK.flood * 4);
+        stop.store(true, Ordering::SeqCst);
+        printing.join().unwrap();
+        let (ended, took) = waited.expect("waiting for the copy never gave up");
+        assert!(!ended);
+        assert!(
+            took >= QUICK.flood * 9 / 10 && took < QUICK.flood * 2,
+            "{took:?}"
+        );
+        assert!(ends(&copy));
+    }
+
+    /// What the host left, measured when the copy's limits start: what its pipe holds then.
+    #[test]
+    fn what_the_host_left_is_measured_when_waiting_starts() {
+        static LISTED: StderrCopies = StderrCopies::with(QUICK);
+        let (release, released) = std::sync::mpsc::channel::<()>();
+        let (mut writer, copy) = piped(
+            move |_| {
+                let _ = released.recv();
+                true
+            },
+            &LISTED,
+        );
+        // The copy takes one read, then is held by its reader; the rest stays in the pipe.
+        writer.write_all(b"first\n").unwrap();
+        while copy.state().read == 0 {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        let rest = numbered(500);
+        writer.write_all(&rest).unwrap();
+        drop(writer);
+        let limit = copy.limit();
+        assert_eq!(
+            limit.left,
+            (b"first\n".len() + rest.len() + READ_SIZE) as u64
+        );
+        assert!(limit.by.is_none());
+        drop(release);
+        assert!(ends(&copy));
+        // All it read was what the host left: no clock was started.
+        assert!(copy.state().limit.is_some_and(|limit| limit.by.is_none()));
+    }
 
     #[test]
     fn group_cleanup_accepts_only_delivery_or_kernel_confirmed_absence() {
@@ -793,13 +1692,8 @@ time.sleep(60)
             &python,
             &format!("#!/bin/sh\nexec python3 \"$(dirname \"$0\")/{name}.py\"\n"),
         );
-        let spec = HostSpec {
-            python,
-            label: format!("python-{name}"),
-            project_root: dir.path().to_path_buf(),
-            sources: Vec::new(),
-            check_version: false,
-        };
+        let spec =
+            HostSpec::python(python, format!("python-{name}"), dir.path(), Vec::new()).unchecked();
         (dir, spec)
     }
 
@@ -989,13 +1883,13 @@ while True:
     #[tokio::test]
     async fn a_missing_interpreter_is_a_sentence() {
         let dir = tempfile::tempdir().unwrap();
-        let spec = HostSpec {
-            python: PathBuf::from("no-such-python-for-fx"),
-            label: "no-such-python-for-fx".into(),
-            project_root: dir.path().to_path_buf(),
-            sources: Vec::new(),
-            check_version: false,
-        };
+        let spec = HostSpec::python(
+            "no-such-python-for-fx",
+            "no-such-python-for-fx",
+            dir.path(),
+            Vec::new(),
+        )
+        .unchecked();
         let failure = HostProcess::start(&spec, Arc::new(NoIncoming))
             .await
             .err()
@@ -1016,13 +1910,7 @@ while True:
             "#!/bin/sh\nif [ \"$1\" = -c ]; then echo 'fx-python 3.9.6 1'; exit 0; fi\ntouch \
              \"$(dirname \"$0\")/started.txt\"\nexit 2\n",
         );
-        let spec = HostSpec {
-            python,
-            label: "python-old".into(),
-            project_root: dir.path().to_path_buf(),
-            sources: Vec::new(),
-            check_version: true,
-        };
+        let spec = HostSpec::python(python, "python-old", dir.path(), Vec::new());
         let failure = HostProcess::start(&spec, Arc::new(NoIncoming))
             .await
             .err()
@@ -1033,6 +1921,238 @@ while True:
              run uv sync or pip install grida in the project, or set GRIDA_FX_PYTHON"
         );
         assert!(!dir.path().join("started.txt").exists());
+    }
+
+    #[tokio::test]
+    async fn a_missing_node_is_a_sentence() {
+        let dir = tempfile::tempdir().unwrap();
+        let spec = HostSpec::typescript(
+            "no-such-node-for-fx",
+            dir.path().join("host-entry.js"),
+            "no-such-node-for-fx",
+            dir.path(),
+            Vec::new(),
+        )
+        .unchecked();
+        let failure = HostProcess::start(&spec, Arc::new(NoIncoming))
+            .await
+            .err()
+            .unwrap();
+        assert_eq!(
+            failure,
+            "cannot start the TypeScript node host with no-such-node-for-fx: no such file; set \
+             GRIDA_FX_NODE to Node 24 or later"
+        );
+    }
+
+    /// A Node at `<dir>/node-<name>` that answers `-e` with `answer` and otherwise leaves
+    /// `started.txt` behind.
+    fn node_answering(dir: &Path, name: &str, answer: &str) -> HostSpec {
+        let node = dir.join(format!("node-{name}"));
+        grida_fx_providers::testing::write_program(
+            &node,
+            &format!(
+                "#!/bin/sh\nif [ \"$1\" = -e ]; then echo '{answer}'; exit 0; fi\ntouch \
+                 \"$(dirname \"$0\")/started.txt\"\nexit 2\n"
+            ),
+        );
+        HostSpec::typescript(
+            node,
+            dir.join("host-entry.js"),
+            format!("node-{name}"),
+            dir,
+            Vec::new(),
+        )
+    }
+
+    #[tokio::test]
+    async fn a_node_that_cannot_host_is_refused_before_it_starts() {
+        let dir = tempfile::tempdir().unwrap();
+        for (name, answer, refusal) in [
+            (
+                "old",
+                "fx-node 22.12.0 1",
+                "node-old is Node 22.12.0; FX's TypeScript node host needs Node 24 or later: \
+                 install it, or set GRIDA_FX_NODE",
+            ),
+            (
+                "bun",
+                "fx-node 24.3.0 0",
+                "node-bun is not Node.js 24 or later with module.registerHooks; FX's TypeScript \
+                 node host needs it: install Node 24 or later, or set GRIDA_FX_NODE",
+            ),
+        ] {
+            let spec = node_answering(dir.path(), name, answer);
+            let failure = HostProcess::start(&spec, Arc::new(NoIncoming))
+                .await
+                .err()
+                .unwrap();
+            assert_eq!(failure, refusal);
+            assert!(
+                !dir.path().join("started.txt").exists(),
+                "{name} was started"
+            );
+        }
+        // A Node that answers 24 with its hooks is started (and here fails as a host would).
+        let spec = node_answering(dir.path(), "new", "fx-node 24.14.0 1");
+        let failure = HostProcess::start(&spec, Arc::new(NoIncoming))
+            .await
+            .err()
+            .unwrap();
+        assert_eq!(
+            failure,
+            "the TypeScript node host (node-new) exited with status 2 before it answered \
+             initialize; set GRIDA_FX_NODE to Node 24 or later"
+        );
+        assert!(dir.path().join("started.txt").exists());
+    }
+
+    /// A host that writes its argv, its working directory, whether `PYTHONSAFEPATH` is set, and
+    /// the `initialize` params to `seen.json`, then answers as a TypeScript host of `@grida/fx`
+    /// `sdk` speaking `protocol`, and takes `shutdown` and `exit`.
+    const RECORDING: &str = r#"
+import sys
+protocol, sdk = sys.argv[1], sys.argv[2]
+message = read()
+with open(os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "seen.json"), "w") as f:
+    json.dump({"argv": sys.argv[3:], "cwd": os.getcwd(),
+               "safe_path": os.environ.get("PYTHONSAFEPATH"), "params": message["params"]}, f)
+write({"jsonrpc": "2.0", "id": message["id"], "result": {
+    "protocol": message["params"]["protocol"] if protocol == "same" else protocol,
+    "host": {"language": "typescript", "version": "24.14.0", "sdk_version": sdk}}})
+"#;
+
+    /// A TypeScript host spec whose Node is a shell running [`RECORDING`] with `protocol` and
+    /// `sdk`, passing on the arguments the engine gives it.
+    fn recording(dir: &Path, protocol: &str, sdk: &str) -> HostSpec {
+        std::fs::write(
+            dir.join("recording.py"),
+            format!("{FRAMES}{RECORDING}{POLITE_LOOP}"),
+        )
+        .unwrap();
+        let node = dir.join("node-recording");
+        grida_fx_providers::testing::write_program(
+            &node,
+            &format!(
+                "#!/bin/sh\nexec python3 \"$(dirname \"$0\")/recording.py\" {protocol} {sdk} \"$@\"\n"
+            ),
+        );
+        let project = dir.join("acme");
+        std::fs::create_dir_all(&project).unwrap();
+        HostSpec::typescript(
+            node,
+            dir.join("sdk/dist/host-entry.js"),
+            "node-recording",
+            project,
+            vec![
+                "acme_lib".into(),
+                "@acme/shapes".into(),
+                "AcmePy".into(),
+                "acme-ts".into(),
+            ],
+        )
+        .unchecked()
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_typescript_host_is_node_running_its_host_program() {
+        if !have_python3() {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let spec = recording(dir.path(), "same", "0.6.0");
+        let host = HostProcess::start(&spec, Arc::new(NoIncoming))
+            .await
+            .unwrap();
+        assert_eq!(host.info().host.language, "typescript");
+        assert_eq!(host.info().host.sdk_version, "0.6.0");
+        assert_eq!(host.shutdown().await.and_then(|s| s.code()), Some(0));
+        let seen: Value =
+            serde_json::from_slice(&std::fs::read(dir.path().join("seen.json")).unwrap()).unwrap();
+        // `<node> <host-entry.js>`: no Python options, no PYTHONSAFEPATH.
+        assert_eq!(
+            seen["argv"],
+            serde_json::json!([dir.path().join("sdk/dist/host-entry.js")])
+        );
+        if std::env::var_os("PYTHONSAFEPATH").is_none() {
+            assert_eq!(seen["safe_path"], Value::Null);
+        }
+        assert_eq!(
+            std::fs::canonicalize(seen["cwd"].as_str().unwrap()).unwrap(),
+            std::fs::canonicalize(&spec.project_root).unwrap()
+        );
+        // Only the source packages an npm name can name.
+        assert_eq!(
+            seen["params"]["sources"],
+            serde_json::json!(["acme_lib", "@acme/shapes", "acme-ts"])
+        );
+        assert_eq!(
+            seen["params"]["project_root"],
+            spec.project_root.to_str().unwrap()
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_typescript_host_of_another_protocol_names_its_sdk() {
+        if !have_python3() {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let spec = recording(dir.path(), "fx-node-protocol-v2", "0.9.0");
+        let failure = HostProcess::start(&spec, Arc::new(NoIncoming))
+            .await
+            .err()
+            .unwrap();
+        assert_eq!(
+            failure,
+            format!(
+                "the project's @grida/fx 0.9.0 speaks fx-node-protocol-v2 and grida-fx \
+                 {ENGINE_VERSION} speaks fx-node-protocol-v1: upgrade grida-fx"
+            )
+        );
+        let spec = recording(dir.path(), "fx-node-protocol-v0", "0.5.0");
+        let failure = HostProcess::start(&spec, Arc::new(NoIncoming))
+            .await
+            .err()
+            .unwrap();
+        assert!(
+            failure.starts_with("the project's @grida/fx 0.5.0 speaks fx-node-protocol-v0 and")
+                && failure.ends_with(": upgrade @grida/fx"),
+            "{failure}"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_python_host_gets_the_python_source_packages_and_its_safe_path() {
+        if !have_python3() {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let typescript = recording(dir.path(), "same", "0");
+        let spec = HostSpec::python(
+            typescript.program.clone(),
+            "python-recording",
+            typescript.project_root.clone(),
+            typescript.sources.clone(),
+        )
+        .unchecked();
+        let host = HostProcess::start(&spec, Arc::new(NoIncoming))
+            .await
+            .unwrap();
+        host.shutdown().await;
+        let seen: Value =
+            serde_json::from_slice(&std::fs::read(dir.path().join("seen.json")).unwrap()).unwrap();
+        assert_eq!(
+            seen["argv"],
+            serde_json::json!(["-P", "-m", "grida.fx.host"])
+        );
+        assert_eq!(
+            seen["params"]["sources"],
+            serde_json::json!(["acme_lib", "AcmePy"])
+        );
+        if std::env::var_os("PYTHONSAFEPATH").is_none() {
+            assert_eq!(seen["safe_path"], SAFE_PATH_MARK);
+        }
     }
 
     /// Every process the engine starts gets a standard input of its own, so none inherits the

@@ -1,0 +1,77 @@
+{
+ "instances": {
+  "line_1#1": {
+   "cache": "hit",
+   "facts": {
+    "cost_usd": null
+   },
+   "path": "line_1",
+   "state": "succeeded"
+  },
+  "line_2#1": {
+   "cache": "hit",
+   "facts": {
+    "cost_usd": null
+   },
+   "path": "line_2",
+   "state": "succeeded"
+  },
+  "line_3#1": {
+   "cache": "hit",
+   "facts": {
+    "cost_usd": null
+   },
+   "path": "line_3",
+   "state": "succeeded"
+  }
+ },
+ "run": {
+  "run_finished": {
+   "charged_usd": 0,
+   "event": "run_finished",
+   "failed": [],
+   "incomplete": false,
+   "ok": true,
+   "outputs": {
+    "line_1": {
+     "file": {
+      "digest": "eae347437decfbbb52b80fa9552b7f0fdde2e2d236341a5e3dfec5d069fd2d68",
+      "kind": "text/plain",
+      "name": "line_1/text",
+      "size": 20
+     }
+    },
+    "line_2": {
+     "file": {
+      "digest": "bc1425a6ff4c4cee6cd98dfcb7787e571b52941e93ffc08c925174d92858dc0b",
+      "kind": "text/plain",
+      "name": "line_2/text",
+      "size": 20
+     }
+    },
+    "line_3": {
+     "file": {
+      "digest": "31a981cb67032ed697d29cf0cc8960b5e09522a0a940bf841646b81d819993f0",
+      "kind": "text/plain",
+      "name": "line_3/text",
+      "size": 20
+     }
+    }
+   },
+   "plan": "47b30e2ef395a7c5989d55bc09d9db8178cecaaaae5c747adaf444aadf64b13c",
+   "stopped": null
+  },
+  "run_started": {
+   "ceiling_usd": null,
+   "charged_usd": 0,
+   "estimate": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "event": "run_started",
+   "plan": "47b30e2ef395a7c5989d55bc09d9db8178cecaaaae5c747adaf444aadf64b13c",
+   "resumed": false,
+   "workflow": "built"
+  }
+ }
+}

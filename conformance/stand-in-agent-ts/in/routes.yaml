@@ -1,0 +1,4 @@
+fx: routes/v1
+routes:
+  - { capability: agent.turn, route: llm-a@acme, price: { low_usd: 0.001, high_usd: 0.002 }, features: [tool_use] }
+  - { capability: structured.generate, route: llm-a@acme, price: { low_usd: 0.001, high_usd: 0.002 } }

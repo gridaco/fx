@@ -1,0 +1,54 @@
+{
+ "instances": {
+  "keyed#1": {
+   "error": "TypeError: ctx.out.json takes a JSON value: at /sizes: a Map is not a JSON value",
+   "path": "keyed",
+   "state": "failed"
+  },
+  "nan#1": {
+   "error": "TypeError: fact score: NaN is not a JSON number",
+   "path": "nan",
+   "state": "failed"
+  },
+  "plain#1": {
+   "error": "output entries is an object; a keyed output is a Map",
+   "path": "plain",
+   "state": "failed"
+  }
+ },
+ "run": {
+  "run_finished": {
+   "charged_usd": 0,
+   "event": "run_finished",
+   "failed": [
+    "nan#1",
+    "keyed#1",
+    "plain#1"
+   ],
+   "incomplete": false,
+   "ok": false,
+   "outputs": {},
+   "plan": "6b76a8bfcb1c9088047b3e9541dedbe3e0348b1f7db668faee1caa8662fc9dce",
+   "stopped": null
+  },
+  "run_started": {
+   "ceiling_usd": null,
+   "charged_usd": 0,
+   "estimate": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "event": "run_started",
+   "plan": "6b76a8bfcb1c9088047b3e9541dedbe3e0348b1f7db668faee1caa8662fc9dce",
+   "repeat": {
+    "live": false,
+    "routes": [
+     "routes.yaml"
+    ],
+    "workflow": "values"
+   },
+   "resumed": false,
+   "workflow": "values"
+  }
+ }
+}

@@ -6,16 +6,16 @@
   by ``tools/build_engine.py``), else ``grida-fx`` on ``PATH``; none: ``RuntimeError`` naming
   ``GRIDA_FX_BIN``. The binary runs with this process's environment, plus
   ``GRIDA_FX_SDK_PYTHON`` set to this interpreter (``sys.executable``) when it is known
-  (:func:`engine_environment`): the engine uses it for node bodies and stand-in hosts only when
-  neither ``GRIDA_FX_PYTHON`` nor a project ``.venv`` chooses one, so a project without a
-  ``.venv`` gets a Python that has ``grida`` instead of a bare ``python3``. The binary's working
-  directory is
-  ``cwd`` (default: the process's), and every relative path given here (``input_files``,
-  ``routes``, ``run_dir``, the paths inside ``inputs``) is relative to it, as on the command line.
-- A target is a workflow file, a workflow id, a builder ``file.py:function`` (``arguments`` as
-  ``--arg``), or a :class:`Plan` (run as it was planned: its own target and options; giving
-  planning options with it is a ``TypeError``). A :class:`~grida.fx.Workflow` object is refused
-  with ``TypeError`` (name its builder target).
+  (:func:`engine_environment`): the engine uses it for Python node bodies and ``.py`` stand-in
+  hosts only when neither ``GRIDA_FX_PYTHON`` nor a project ``.venv`` chooses one, so a project
+  without a ``.venv`` gets a Python that has ``grida`` instead of a bare ``python3``. The
+  binary's working directory is ``cwd`` (default: the process's), and every relative path given
+  here (``input_files``, ``routes``, ``run_dir``, the paths inside ``inputs``) is relative to it,
+  as on the command line.
+- A target is a workflow file, a workflow id, a builder ``file.py:function`` or
+  ``file.ts:function`` (``arguments`` as ``--arg``), or a :class:`Plan` (run as it was planned:
+  its own target and options; giving planning options with it is a ``TypeError``). A
+  :class:`~grida.fx.Workflow` object is refused with ``TypeError`` (name its builder target).
 - Inputs: ``inputs`` (a mapping) is written to a temporary inputs YAML file (strict subset: JSON is
   YAML) placed in ``cwd`` so its relative paths keep their meaning, passed with ``--inputs``
   after ``input_files``; ``routes`` paths go as ``--routes``; ``max_usd`` as ``--max-usd``.
@@ -519,8 +519,8 @@ def binary() -> Path:
 
 
 #: The environment variable naming this SDK's interpreter for the engine: its last choice for
-#: node bodies and stand-in hosts, after ``GRIDA_FX_PYTHON`` and every project ``.venv``
-#: (``spec/protocol.md`` §1, §8).
+#: Python node bodies and ``.py`` stand-in hosts, after ``GRIDA_FX_PYTHON`` and every project
+#: ``.venv`` (``spec/protocol.md`` §1, §8.1).
 SDK_PYTHON_VARIABLE = "GRIDA_FX_SDK_PYTHON"
 #: Which command started the engine (``spec/distribution.md`` §2). The SDK always runs it as
 #: ``grida-fx``, whose errors carry the prefix :data:`_ERROR` reads; ``python -m grida.fx`` says
@@ -622,7 +622,7 @@ def _target_text(target: Any) -> str:
     if isinstance(target, str):
         return target
     raise TypeError(
-        "a target is a workflow file, a workflow id, a builder file.py:function or a Plan, "
+        "a target is a workflow file, a workflow id, a builder file:function or a Plan, "
         f"not {type(target).__name__}"
     )
 

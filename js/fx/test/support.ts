@@ -13,7 +13,7 @@ export const repoRoot = resolve(packageRoot, "..", "..");
 /**
  * The engine the integration tests drive: `GRIDA_FX_BIN`, else the repository's own build
  * (`target/debug`, then `target/release`), else none, and those tests are skipped (the js job of
- * CI builds no engine).
+ * CI builds the engine first, so they run there).
  */
 export function testEngine(): string | null {
   const configured = process.env.GRIDA_FX_BIN;

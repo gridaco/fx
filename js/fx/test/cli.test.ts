@@ -9,6 +9,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  realpathSync,
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
@@ -22,6 +23,7 @@ log="$FAKE_LOG"
 case "$1" in
   args) shift; for a in "$@"; do printf '%s\\n' "$a"; done; exit 0 ;;
   invoker) printf '%s\\n' "\${GRIDA_FX_INVOKER-unset}"; exit 0 ;;
+  host) printf '%s\\n' "\${GRIDA_FX_SDK_NODE-unset}" "\${GRIDA_FX_SDK_NODE_HOST-unset}"; exit 0 ;;
   exit) exit "$2" ;;
   kill) kill -"$2" $$; sleep 5; exit 99 ;;
   ids) echo "$$ $(ps -o pgid= -p $$ | tr -d ' ')"; exit 0 ;;
@@ -107,6 +109,21 @@ describe.skipIf(!node)("the grida-fx command", () => {
       const done = runShim(["args", "a b", "--x=y", "", "é 😀", "-"]);
       expect(done.status).toBe(0);
       expect(done.stdout).toBe("a b\n--x=y\n\né 😀\n-\n");
+    },
+    SLOW,
+  );
+
+  test(
+    "the engine learns the Node running the command and the command's own TypeScript node host",
+    () => {
+      const node = spawnSync("node", ["-p", "process.execPath"], { encoding: "utf8" }).stdout.trim();
+      const entry = realpathSync(join(folder.path, "dist", "host-entry.js"));
+      expect(runShim(["host"]).stdout).toBe(`${node}\n${entry}\n`);
+      // They replace inherited values.
+      expect(runShim(["host"], { GRIDA_FX_SDK_NODE: "/elsewhere/node", GRIDA_FX_SDK_NODE_HOST: "/elsewhere/host-entry.js" }).stdout).toBe(
+        `${node}\n${entry}\n`,
+      );
+      expect(runHost(["fx", "host"]).stdout).toBe(`${node}\n${entry}\n`);
     },
     SLOW,
   );

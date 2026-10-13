@@ -676,8 +676,8 @@
         "project_root": {"type": "string", "minLength": 1},
         "sources": {
           "type": "array",
-          "items": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
-          "description": "The project's declared source packages."
+          "items": {"type": "string", "pattern": "^(?:[A-Za-z_][A-Za-z0-9_]*|(?:@[a-z0-9][a-z0-9._~-]*/)?[a-z0-9][a-z0-9._~-]*)$"},
+          "description": "The project's declared source packages: to a node host, those its language can name (Python package names for the Python host, npm package names for the TypeScript host); to a stand-in on a socket, all of them."
         }
       },
       "required": ["protocol", "engine", "project_root", "sources"],

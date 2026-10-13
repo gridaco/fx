@@ -33,7 +33,9 @@ describe("arguments", () => {
   });
 
   test("targets and options of the wrong shape are refused before the engine runs", () => {
-    expect(() => makeRequest("", {})).toThrow(TypeError);
+    expect(() => makeRequest("", {})).toThrow(
+      new TypeError("a target is a workflow file, a workflow id or a builder file:function, as a string"),
+    );
     expect(() => makeRequest("-x.yaml", {})).toThrow('cannot start with "-"');
     expect(() => makeRequest("icon", { inputs: [] as unknown as Record<string, unknown> })).toThrow(
       "inputs is an object",
@@ -70,6 +72,21 @@ describe("arguments", () => {
     ]);
     expect(() => runArgs({ runDir: "" })).toThrow("runDir");
     expect(() => runArgs({ deliver: { icon: "" } })).toThrow("deliver.icon");
+  });
+
+  test("a stand-in answers on standard input, never live, every phase", () => {
+    const answer = () => ({});
+    expect(runArgs({ standIn: answer, runDir: "runs/x" })).toEqual(["--run=runs/x", "--stand-in=-"]);
+    expect(runArgs({ standIn: answer, live: false })).toEqual(["--stand-in=-"]);
+    expect(() => runArgs({ standIn: answer, live: true })).toThrow(
+      new TypeError("a stand-in run is never live: pass live: false, or no standIn"),
+    );
+    expect(() => runArgs({ standIn: answer, yesUpTo: 2 })).toThrow(
+      new TypeError("a stand-in run runs every phase: yesUpTo does not apply"),
+    );
+    expect(() => runArgs({ standIn: {} as never })).toThrow(
+      new TypeError("standIn is a function of one StandInCall, not an object"),
+    );
   });
 
   test("named creation and named resume are explicit, exclusive selections", () => {

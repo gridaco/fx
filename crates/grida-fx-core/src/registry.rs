@@ -7,11 +7,14 @@
 //!   `fx/<name>@<major>.<version>` with the major as a number (`@01` is `@1`: FX normalizes).
 //! - project type `^(?P<file>\.{1,2}/[^#]+)#(?P<attr>[A-Za-z_][A-Za-z0-9_]*)$`: the module is
 //!   `home root / file`, which must exist (`{uses}: no file {basename}`) and lie inside the
-//!   project once symbolic links are resolved (`{basename} is outside the project`); a `.py`
-//!   module goes to the Python host (another suffix: `{uses}: no node host for <suffix> modules
-//!   yet`). `describe` is called once per module (all attributes), its result cached; a failed
-//!   module's error text is the problem; a missing attribute is `{uses}: {attr} is not declared
-//!   with @node`. The spec is validated with [`crate::spec::NodeSpec::from_type_spec`]
+//!   project once symbolic links are resolved (`{basename} is outside the project`); the module
+//!   goes to the host of its language ([`Language::of_module`]: `.py` to Python; `.ts`, `.mts`,
+//!   `.js`, `.mjs` to TypeScript; `.tsx`, `.cts`, `.cjs` and declaration files are
+//!   `{uses}: no node host for .<suffix> modules`, any other suffix `{uses}: no node host for
+//!   .<suffix> modules yet`). `describe` is called once per module (all attributes), its result
+//!   cached; a failed module's error text is the problem; a missing attribute is `{uses}: {attr}
+//!   is not declared with @node` (TypeScript: `{uses}: {attr} is not an export declared with
+//!   node()`). The spec is validated with [`crate::spec::NodeSpec::from_type_spec`]
 //!   (`{uses}: {message}`).
 //! - workflow `^(?P<file>\.{1,2}/.+\.ya?ml)$` → the file under the home root
 //!   (`{uses}: no workflow file {file}`; FX: one outside the project is refused,
@@ -40,7 +43,7 @@ use crate::builtins::BuiltinType;
 use crate::docs::lock::LockFile;
 use crate::docs::workflow::LoadedWorkflow;
 use crate::error::{Error, Result, io_reason};
-use crate::host::{HostFailure, NodeHost};
+use crate::host::{HostFailure, Language, NodeHost};
 use crate::spec::{BodyKind, NodeSpec};
 use crate::val::FileValue;
 use grida_fx_protocol::{
@@ -279,19 +282,8 @@ impl Registry {
         }
         let relative = relative_inside(&self.root, &path)
             .ok_or_else(|| RegistryError::Problem(format!("{basename} is outside the project")))?;
-        match Path::new(&relative).extension().and_then(|s| s.to_str()) {
-            Some("py") => {}
-            Some(suffix) => {
-                return Err(RegistryError::Problem(format!(
-                    "{uses}: no node host for .{suffix} modules yet"
-                )));
-            }
-            None => {
-                return Err(RegistryError::Problem(format!(
-                    "{uses}: no node host for modules without a suffix yet"
-                )));
-            }
-        }
+        let language = Language::of_module(&relative)
+            .map_err(|refusal| RegistryError::Problem(format!("{uses}: {refusal}")))?;
         let module = self
             .describe_module(&relative, host)
             .map_err(|failure| RegistryError::Fatal(Error::from(failure)))?;
@@ -302,7 +294,7 @@ impl Registry {
             ModuleDescription::Described { types, closure, .. } => (types, closure),
         };
         let described = find_type(types, attribute).ok_or_else(|| {
-            RegistryError::Problem(format!("{uses}: {attribute} is not declared with @node"))
+            RegistryError::Problem(format!("{uses}: {}", language.not_a_node(attribute)))
         })?;
         let spec = NodeSpec::from_type_spec(&described.spec, None)
             .map_err(|message| RegistryError::Problem(format!("{uses}: {message}")))?;
@@ -549,8 +541,10 @@ impl Registry {
                 types,
                 closure,
             } => {
-                let described = find_type(types, attribute)
-                    .ok_or_else(|| format!("{path}: {attribute} is not declared with @node"))?;
+                let described = find_type(types, attribute).ok_or_else(|| {
+                    let language = Language::of_module(path).unwrap_or(Language::Python);
+                    format!("{path}: {}", language.not_a_node(attribute))
+                })?;
                 self.source_digests(closure, &described.spec.resources)
             }
         }

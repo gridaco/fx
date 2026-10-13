@@ -91,13 +91,13 @@ fn site(routes: Vec<Route>, calls: &[(&str, u32)]) -> CallSite {
 fn engine(root: &Path, adapters: Adapters, live: bool) -> Arc<Engine> {
     Arc::new(Engine::new(
         tokio::runtime::Handle::current(),
-        HostSpec {
-            python: PathBuf::from("python3"),
-            label: "python3".into(),
-            project_root: root.to_path_buf(),
-            sources: Vec::new(),
-            check_version: false,
-        },
+        HostSpec::python(
+            PathBuf::from("python3"),
+            "python3",
+            root.to_path_buf(),
+            Vec::new(),
+        )
+        .unchecked(),
         &root.join(".fx/cache"),
         1,
         adapters,
@@ -2164,13 +2164,13 @@ fn stand_in_engine(root: &Path, answerer: Arc<dyn Answerer>) -> Arc<Engine> {
     Arc::new(
         Engine::new(
             tokio::runtime::Handle::current(),
-            HostSpec {
-                python: PathBuf::from("python3"),
-                label: "python3".into(),
-                project_root: root.to_path_buf(),
-                sources: Vec::new(),
-                check_version: false,
-            },
+            HostSpec::python(
+                PathBuf::from("python3"),
+                "python3",
+                root.to_path_buf(),
+                Vec::new(),
+            )
+            .unchecked(),
             &root.join(".fx/cache/stand-in"),
             1,
             Adapters::new(),

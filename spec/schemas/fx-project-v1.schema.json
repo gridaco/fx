@@ -72,11 +72,11 @@
       "default": []
     },
     "sources": {
-      "description": "Python packages, beyond the project folder, whose modules count as the project's source: in the identity of node types without a version, and in what fx.lock guards.",
+      "description": "Packages, beyond the project folder, whose modules count as the project's source: in the identity of node types without a version, and in what fx.lock guards. Each is a Python package name (acme_lib) or an npm package name (@acme/shapes, acme-shapes); each node host is given the names its language can name.",
       "type": "array",
       "items": {
         "type": "string",
-        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+        "pattern": "^(?:[A-Za-z_][A-Za-z0-9_]*|(?:@[a-z0-9][a-z0-9._~-]*/)?[a-z0-9][a-z0-9._~-]*)$"
       },
       "default": []
     },

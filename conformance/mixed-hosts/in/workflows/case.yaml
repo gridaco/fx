@@ -1,0 +1,25 @@
+fx: workflow/v1
+id: case
+title: Python and TypeScript nodes in one workflow
+steps:
+  order:
+    uses: ./nodes/words.ts#order
+  keys:
+    uses: ./nodes/words.py#keys
+    with: { entries: "${{ steps.order.outputs.entries }}" }
+  framed:
+    uses: ./nodes/words.ts#frame
+    with: { text: "${{ steps.keys.outputs.text }}" }
+  report:
+    uses: ./nodes/words.ts#report
+    with: { phrase: a kite in the wind }
+  measure:
+    uses: ./nodes/words.py#measure
+    with: { report: "${{ steps.report.outputs.report }}" }
+  tally:
+    uses: ./nodes/words.ts#tally
+    with: { sizes: "${{ steps.measure.outputs.sizes }}" }
+outputs:
+  framed: ${{ steps.framed.outputs.text }}
+  sizes: ${{ steps.measure.outputs.sizes }}
+  tally: ${{ steps.tally.outputs.text }}

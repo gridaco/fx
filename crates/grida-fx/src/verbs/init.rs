@@ -532,7 +532,7 @@ fn overlay(unpacked: &Path) -> Result<(), Error> {
     if !merged.is_empty() && !merged.ends_with('\n') {
         merged.push('\n');
     }
-    merged.push_str("\n# FX run records, cache and provider keys\n");
+    merged.push_str("\n# FX run records, cache, provider keys and packages\n");
     for line in lacking {
         merged.push_str(line);
         merged.push('\n');

@@ -90,6 +90,25 @@ describe.skipIf(!tools || linux === undefined)("tools/build_npm.mjs", () => {
       expect(sdk.optionalDependencies[platform.package]).toBe(version);
       expect(statSync(join(out, "packages", "fx", "bin", "grida-fx.js")).mode & 0o777).toBe(0o755);
       expect(statSync(join(out, "packages", "fx", "dist", "index.d.ts")).isFile()).toBe(true);
+      // The TypeScript node host ships compiled: the engine starts dist/host-entry.js.
+      for (const module of [
+        "host-entry",
+        "host",
+        "protocol",
+        "closure",
+        "specifiers",
+        "ctx",
+        "node",
+        "schema",
+        "files",
+        "kinds",
+        "engine-errors",
+        "stand-in",
+        "socket",
+      ]) {
+        expect(statSync(join(out, "packages", "fx", "dist", `${module}.js`)).isFile()).toBe(true);
+        expect(statSync(join(out, "packages", "fx", "dist", `${module}.d.ts`)).isFile()).toBe(true);
+      }
 
       const engineFolder = join(out, "packages", name);
       const package_ = JSON.parse(readFileSync(join(engineFolder, "package.json"), "utf8"));

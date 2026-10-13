@@ -1,0 +1,80 @@
+{
+ "instances": {
+  "describe#1": {
+   "cache": "hit",
+   "facts": {
+    "cost_usd": 0,
+    "subject": "lantern"
+   },
+   "path": "describe",
+   "state": "succeeded"
+  },
+  "paint#1": {
+   "cache": "hit",
+   "facts": {
+    "cached": false,
+    "cost_usd": 0
+   },
+   "path": "paint",
+   "state": "succeeded"
+  },
+  "retouch#1": {
+   "cache": "hit",
+   "facts": {
+    "cost_usd": 0
+   },
+   "path": "retouch",
+   "state": "succeeded"
+  }
+ },
+ "run": {
+  "run_finished": {
+   "charged_usd": 0,
+   "event": "run_finished",
+   "failed": [],
+   "incomplete": false,
+   "ok": true,
+   "outputs": {
+    "painted": {
+     "file": {
+      "digest": "61551ab637dc15d883ebc2aae4ab25077f5c02697409d08f5941b6d485caa76f",
+      "kind": "image/png",
+      "name": "paint/image",
+      "size": 12420
+     }
+    },
+    "report": {
+     "file": {
+      "digest": "831f2a7208298586902a3dca8fa74f8c01c6d472180b4562f1a946c828a94cc2",
+      "kind": "json",
+      "name": "describe/report",
+      "size": 54
+     }
+    },
+    "retouched": {
+     "file": {
+      "digest": "df12aecdf3d4dab8be9f19559627442e4d4bc25f1cd0705cbd227ba8f39adcc4",
+      "kind": "image/png",
+      "name": "retouch/image",
+      "size": 12420
+     }
+    }
+   },
+   "plan": "745a277de81f59cf345390b689680ce1316c3d1a5a88bce175f9e742146eae3f",
+   "stopped": null
+  },
+  "run_started": {
+   "ceiling_usd": null,
+   "charged_usd": 0,
+   "estimate": {
+    "high_usd": 0.052,
+    "low_usd": 0.021
+   },
+   "event": "run_started",
+   "plan": "745a277de81f59cf345390b689680ce1316c3d1a5a88bce175f9e742146eae3f",
+   "resumed": false,
+   "stand_in": true,
+   "workflow": "case"
+  }
+ }
+}

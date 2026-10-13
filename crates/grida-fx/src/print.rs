@@ -39,20 +39,21 @@ pub fn print_text(text: &str) {
 /// Prints `<command>: <message>` to stderr, the command as its launcher's user types it
 /// ([`crate::invoker::command`]).
 pub fn print_error(error: &Error) {
-    let mut err = std::io::stderr().lock();
-    let _ = writeln!(err, "{}: {error}", crate::invoker::command());
+    grida_fx_runtime::stderr::line(format_args!("{}: {error}", crate::invoker::command()));
 }
 
-/// The node host: the runtime's Python host, started lazily for the project planning opens.
-pub fn host() -> grida_fx_runtime::host::PythonHost {
-    grida_fx_runtime::host::PythonHost::new()
+/// The node hosts: the runtime's Python and TypeScript hosts, each started lazily for the
+/// project planning opens when a module of its language is described or built.
+pub fn host() -> grida_fx_runtime::host::NodeHosts {
+    grida_fx_runtime::host::NodeHosts::new()
 }
 
-/// The node host of a planning verb or `run` for `target`, run from `cwd`: [`host`], falling back
-/// to the planning project's `.venv` (spec/protocol.md §1). The planning project is found as
+/// The node hosts of a planning verb or `run` for `target`, run from `cwd`: [`host`], falling
+/// back to the planning project's `.venv` (Python) and its `@grida/fx` (TypeScript), and naming
+/// programs inside it from the home (spec/protocol.md §1). The planning project is found as
 /// planning finds it (spec/store.md): from a workflow file's folder when the target is one, else
 /// from `cwd`.
-pub fn planning_host(target: &str, cwd: &Path) -> grida_fx_runtime::host::PythonHost {
+pub fn planning_host(target: &str, cwd: &Path) -> grida_fx_runtime::host::NodeHosts {
     let named_file = matches!(
         Path::new(target)
             .extension()

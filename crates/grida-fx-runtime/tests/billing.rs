@@ -77,13 +77,13 @@ struct Rig {
 fn rig_in(root: &Path, adapters: Adapters, live: bool, ceiling: Option<Usd>) -> Rig {
     let engine = Arc::new(Engine::new(
         tokio::runtime::Handle::current(),
-        HostSpec {
-            python: PathBuf::from("python3"),
-            label: "python3".into(),
-            project_root: root.to_path_buf(),
-            sources: Vec::new(),
-            check_version: false,
-        },
+        HostSpec::python(
+            PathBuf::from("python3"),
+            "python3",
+            root.to_path_buf(),
+            Vec::new(),
+        )
+        .unchecked(),
         &root.join(".fx/cache"),
         1,
         adapters,
@@ -607,13 +607,13 @@ impl Pipe {
 fn rig_with_log(root: &Path, adapters: Adapters, log: Arc<EventLog>) -> Rig {
     let engine = Arc::new(Engine::new(
         tokio::runtime::Handle::current(),
-        HostSpec {
-            python: PathBuf::from("python3"),
-            label: "python3".into(),
-            project_root: root.to_path_buf(),
-            sources: Vec::new(),
-            check_version: false,
-        },
+        HostSpec::python(
+            PathBuf::from("python3"),
+            "python3",
+            root.to_path_buf(),
+            Vec::new(),
+        )
+        .unchecked(),
         &root.join(".fx/cache"),
         1,
         adapters,

@@ -1,0 +1,104 @@
+# stand-in-image's twin with a TypeScript stand-in: `--stand-in stand_in.ts#answer` loads
+# `answer` from in/stand_in.ts in the TypeScript node host, which answers the one paid call,
+# image.generate on img-a@acme at 64x64 and opaque, with the same PNG bytes stand_in.py makes,
+# counts its calls in count.txt and keeps what it was asked in asked.json. Everything else is the
+# engine's, so every file under expected/ is stand-in-image's, byte for byte: the records hold
+# the stand-in's answer and the call key, never which file or language answered.
+# - runs/one: exit 0, the summary names the stand-in as typed and spends $0.00 although
+#   `--max-usd 0.01` is below the route's $0.04 hold; `stand_in: true` on run_started, on the
+#   call (`cached: false`, `cost_usd: 0`) and in plan.json (plan-one.json).
+# - The same command again resumes runs/one and asks nothing (count.txt stays 1).
+# - runs/two, the same plan in a new folder, is answered by the stand-in store's result cache;
+#   `--deliver` copies the image out of it.
+# - runs/other (`--mood stormy`) is another step identity with the same call: a call-cache hit of
+#   the stand-in store. The project's own store holds no file, and no `jobs/` exists in either.
+# - runs/plain, without a stand-in, misses and exits 1 as a paid call without --live; its plan.json
+#   has plan-one.json's `plan` digest and no `stand_in`.
+# - Each folder refuses the other mode (exit 1), asking nothing; `inspect` marks a stand-in run;
+#   `pick` and `reroll` refuse a stand-in run and write no takes file.
+steps:
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, --max-usd, "0.01", --stand-in, "stand_in.ts#answer"]
+  mentions:
+  - "estimate  $0.01 – $0.04   ceiling $0.01\n"
+  - "run       runs/one"
+  - "stand-in  stand_in.ts#answer"
+  - "result    ok   spent $0.00"
+- read: count.txt
+  save: count.txt
+- read: asked.json
+  save: asked.json
+  json: true
+- read: runs/one/events.jsonl
+  save: events-one.json
+  jsonl: true
+- argv: [project, runs/one]
+  save: project-one.json
+  json: true
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, --stand-in, "stand_in.ts#answer"]
+  mentions:
+  - "stand-in  stand_in.ts#answer"
+  - "result    ok   spent $0.00"
+  read: runs/one/plan.json
+  save: plan-one.json
+  json: true
+- read: count.txt
+  save: count.txt
+- read: runs/one/events.jsonl
+  save: events-resumed.json
+  jsonl: true
+- argv: [run, case, --routes, routes.yaml, --run, runs/two, --deliver, image=delivered.png, --stand-in, "stand_in.ts#answer"]
+  mentions:
+  - "result    ok   spent $0.00"
+  - "delivered delivered.png"
+- read: count.txt
+  save: count.txt
+- read: runs/two/events.jsonl
+  save: events-two.json
+  jsonl: true
+- argv: [run, case, --routes, routes.yaml, --run, runs/other, --mood, stormy, --stand-in, "stand_in.ts#answer"]
+  mentions:
+  - "result    ok   spent $0.00"
+  absent:
+  - .fx/cache/files
+  - .fx/cache/results
+  - .fx/cache/calls
+  - .fx/cache/jobs
+  - .fx/cache/stand-in/jobs
+- read: count.txt
+  save: count.txt
+- read: runs/other/events.jsonl
+  save: events-other.json
+  jsonl: true
+- argv: [run, case, --routes, routes.yaml, --run, runs/plain, --max-usd, "0.01"]
+  status: 1
+  mentions:
+  - "estimate  $0.01 – $0.04   ceiling $0.01   ⚠ the worst case exceeds the ceiling"
+  - "failed    draw#1: image.generate on img-a@acme is a paid call; run with --live"
+  read: runs/plain/plan.json
+  save: plan-plain.json
+  json: true
+- argv: [run, case, --routes, routes.yaml, --run, runs/one]
+  status: 1
+  mentions:
+  - "refused: runs/one holds a stand-in run; resume it with --stand-in, or choose a new folder"
+- argv: [run, case, --routes, routes.yaml, --run, runs/plain, --stand-in, "stand_in.ts#answer"]
+  status: 1
+  mentions:
+  - "refused: runs/plain holds a run without a stand-in; resume it without --stand-in, or choose a new folder"
+- read: count.txt
+  save: count.txt
+- argv: [inspect, runs/one, --verify]
+  save: inspect.txt
+- argv: [inspect, runs/one, --json]
+  save: inspect.json
+  json: true
+- argv: [pick, runs/one, draw, "1"]
+  status: 1
+  mentions:
+  - "runs/one holds a stand-in run, and stand-in runs never change the workflow's takes file"
+- argv: [reroll, runs/one, draw]
+  status: 1
+  mentions:
+  - "runs/one holds a stand-in run, and stand-in runs never change the workflow's takes file"
+  absent:
+  - workflows/case.takes.yaml

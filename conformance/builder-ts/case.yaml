@@ -1,0 +1,60 @@
+# A workflow builder written in TypeScript (in/workflows/build.ts), run by the TypeScript node
+# host: `workflows/build.ts:build` with `--arg count=3` gets `{count: "3"}` and returns the
+# workflow document `workflow()` makes, `built`, with three steps of the TypeScript node type
+# `make`, whose text names its take. It plans (plan.txt) and runs into runs/one (line-1.txt …);
+# the same target and argument run into runs/two is answered by the result cache (`cached    3
+# of 3 known steps`, every instance a `hit` in project-two.json). `reroll runs/one line_2`
+# writes the takes file beside the builder, workflows/built.takes.yaml, since a TypeScript
+# builder's takes anchor is its own file (spec/protocol.md section 5.2), never at the project's
+# root; its `next` line advises running again, because a builder's run records no command that
+# repeats it. runs/three draws take 2 of line_2 and answers the other two steps from the cache.
+# A function that returns something other than a workflow, one the file does not have, and a
+# .tsx file are refused before anything runs (exit 2).
+steps:
+- argv: [plan, "workflows/build.ts:build", --routes, routes.yaml, --arg, count=3]
+  save: plan.txt
+- argv: [run, "workflows/build.ts:build", --routes, routes.yaml, --arg, count=3, --run, runs/one]
+  mentions:
+  - "cached    0 of 3 known steps"
+  - "result    ok   spent $0.00"
+- read: runs/one/outputs/line_1.txt
+  save: line-1.txt
+- read: runs/one/outputs/line_2.txt
+  save: line-2.txt
+- read: runs/one/outputs/line_3.txt
+  save: line-3.txt
+- argv: [run, "workflows/build.ts:build", --routes, routes.yaml, --arg, count=3, --run, runs/two]
+  mentions:
+  - "cached    3 of 3 known steps"
+  - "result    ok   spent $0.00"
+- argv: [project, runs/two]
+  save: project-two.json
+  json: true
+- read: runs/two/outputs/line_2.txt
+  save: line-2.txt
+- argv: [reroll, runs/one, line_2]
+  save: reroll.txt
+  absent:
+  - built.takes.yaml
+- read: workflows/built.takes.yaml
+  save: built.takes.yaml
+- argv: [run, "workflows/build.ts:build", --routes, routes.yaml, --arg, count=3, --run, runs/three]
+  mentions:
+  - "cached    2 of 3 known steps"
+  - "result    ok   spent $0.00"
+- read: runs/three/outputs/line_1.txt
+  save: line-1.txt
+- read: runs/three/outputs/line_2.txt
+  save: line-2-three.txt
+- argv: [plan, "workflows/build.ts:steps", --routes, routes.yaml]
+  status: 2
+  mentions:
+  - "steps returned an array, not a workflow document"
+- argv: [plan, "workflows/build.ts:nope", --routes, routes.yaml]
+  status: 2
+  mentions:
+  - "workflows/build.ts has no function nope"
+- argv: [plan, "workflows/build.tsx:build", --routes, routes.yaml]
+  status: 2
+  mentions:
+  - "workflows/build.tsx:build: no node host for .tsx modules"

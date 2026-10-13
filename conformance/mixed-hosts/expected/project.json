@@ -1,0 +1,146 @@
+{
+ "instances": {
+  "framed#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": null
+   },
+   "path": "framed",
+   "state": "succeeded"
+  },
+  "keys#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": null
+   },
+   "path": "keys",
+   "state": "succeeded"
+  },
+  "measure#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": null,
+    "letters": 14
+   },
+   "path": "measure",
+   "state": "succeeded"
+  },
+  "order#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": null
+   },
+   "path": "order",
+   "state": "succeeded"
+  },
+  "report#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": null
+   },
+   "path": "report",
+   "state": "succeeded"
+  },
+  "tally#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": null,
+    "lines": 5
+   },
+   "path": "tally",
+   "state": "succeeded"
+  }
+ },
+ "run": {
+  "run_finished": {
+   "charged_usd": 0,
+   "event": "run_finished",
+   "failed": [],
+   "incomplete": false,
+   "ok": true,
+   "outputs": {
+    "framed": {
+     "file": {
+      "digest": "5fc52bfd42c5fae17522e562b18415ff6ddaa1274cc4323ff48fae02fc483187",
+      "kind": "text/plain",
+      "name": "framed/text",
+      "size": 19
+     }
+    },
+    "sizes": {
+     "list": [
+      {
+       "file": {
+        "digest": "37b128c59f1f5097f73f82691cb519f1f568667faab5ced1b4ab979d36837eae",
+        "kind": "text/plain",
+        "name": "measure/sizes[0]",
+        "size": 5
+       }
+      },
+      {
+       "file": {
+        "digest": "88b891e932f400e3446e84207cf0e1996a23e0f66052b8f6145bafb5386422c9",
+        "kind": "text/plain",
+        "name": "measure/sizes[1]",
+        "size": 8
+       }
+      },
+      {
+       "file": {
+        "digest": "7bf6a81a623ec8fda319dec729d90a5f356b73dc9837547c4fd60b7d1455b247",
+        "kind": "text/plain",
+        "name": "measure/sizes[2]",
+        "size": 6
+       }
+      },
+      {
+       "file": {
+        "digest": "c9733c648631ea67dacb0bbe6adf804c76ed83c71e0dd76a2380e0d435ed3854",
+        "kind": "text/plain",
+        "name": "measure/sizes[3]",
+        "size": 7
+       }
+      },
+      {
+       "file": {
+        "digest": "47b2b4d9da6b7df5cc6404892a479101c8061c02bc1ff24b49cf8ac84839a688",
+        "kind": "text/plain",
+        "name": "measure/sizes[4]",
+        "size": 8
+       }
+      }
+     ]
+    },
+    "tally": {
+     "file": {
+      "digest": "83e09ab8ae528ea118725b37c986165a5ef5ccc25d232763922e77a7b6bbca99",
+      "kind": "text/plain",
+      "name": "tally/text",
+      "size": 34
+     }
+    }
+   },
+   "plan": "debbe106d03c93a1198407d14f6bc08a2419cc9f0fa6e75fdd72b19fc8d23ce2",
+   "stopped": null
+  },
+  "run_started": {
+   "ceiling_usd": null,
+   "charged_usd": 0,
+   "estimate": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "event": "run_started",
+   "plan": "debbe106d03c93a1198407d14f6bc08a2419cc9f0fa6e75fdd72b19fc8d23ce2",
+   "repeat": {
+    "live": false,
+    "routes": [
+     "routes.yaml"
+    ],
+    "workflow": "case"
+   },
+   "resumed": false,
+   "workflow": "case"
+  }
+ }
+}

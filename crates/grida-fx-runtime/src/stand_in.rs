@@ -5,9 +5,10 @@
 //! supplies, instead of a provider. The engine reaches the function through an [`Answerer`]: a
 //! peer that speaks the node protocol's transport and only answers. [`ConnectionAnswerer`] is the
 //! one answerer FX has, over a [`Connection`], for both sources:
-//! - `--stand-in <file>.py#<function>`: a **stand-in host** ([`ConnectionAnswerer::start_host`]),
-//!   the node host program started in the engine's working directory, outside the pool, with the
-//!   planning project as its project; `initialize`, then `stand_in.load {path, function}`;
+//! - `--stand-in <file>#<function>` (a `.py`, `.ts`, `.mts`, `.js` or `.mjs` file): a
+//!   **stand-in host** ([`ConnectionAnswerer::start_host`]), the node host program of the file's
+//!   language started in the engine's working directory, outside the pool, with the planning
+//!   project as its project; `initialize`, then `stand_in.load {path, function}`;
 //! - `--stand-in -`: a socket the answerer already holds the other end of
 //!   ([`ConnectionAnswerer::start_socket`]); `initialize` only.
 //!
@@ -44,6 +45,7 @@ use crate::engine::Cancel;
 use crate::host::connection::{Connection, ConnectionError, NoIncoming};
 use crate::host::process::{HostProcess, HostSpec};
 use base64::Engine as _;
+use grida_fx_core::host::Language;
 use grida_fx_core::{ENGINE_NAME, ENGINE_VERSION};
 use grida_fx_protocol::{
     EngineInfo, ErrorCode, ErrorData, InitializeParams, InitializeResult, PROTOCOL,
@@ -249,8 +251,8 @@ impl ConnectionAnswerer {
         }
     }
 
-    /// A stand-in host (`--stand-in <file>.py#<function>`): the node host program of `spec`
-    /// (the planning project's interpreter, root and sources) started in `cwd`, then
+    /// A stand-in host (`--stand-in <file>#<function>`): the node host program of `spec` (the
+    /// file's language's, for the planning project's root and sources) started in `cwd`, then
     /// `stand_in.load {path, function}` with the file's absolute `path`. The error is the reason,
     /// for `the stand-in <file>#<function> could not be loaded: <reason>`.
     pub async fn start_host(
@@ -304,6 +306,15 @@ impl ConnectionAnswerer {
     }
 }
 
+/// The language of an answerer, as it named it in `initialize` (`typescript`); Python
+/// otherwise.
+fn answering_language(language: &str) -> Language {
+    Language::ALL
+        .into_iter()
+        .find(|known| known.name() == language)
+        .unwrap_or(Language::Python)
+}
+
 /// `initialize` on a fresh connection (spec/protocol.md §2): the answer's protocol must be ours.
 async fn initialize(
     connection: &Connection,
@@ -326,7 +337,9 @@ async fn initialize(
     match connection.request(method::INITIALIZE, Some(params)).await {
         Ok(value) => match serde_json::from_value::<InitializeResult>(value) {
             Ok(info) if info.protocol == PROTOCOL => Ok(()),
+            // The answerer says which SDK it is (its `host.language`).
             Ok(info) => Err(crate::host::mismatch(
+                answering_language(&info.host.language),
                 Some(&info.host.sdk_version),
                 &info.protocol,
             )),
@@ -342,7 +355,9 @@ async fn initialize(
                 .and_then(|data| serde_json::from_value::<ErrorData>(data).ok())
                 .and_then(|data| data.host_protocol);
             Err(match host_protocol {
-                Some(host_protocol) => crate::host::mismatch(None, &host_protocol),
+                Some(host_protocol) => {
+                    crate::host::mismatch(Language::Python, None, &host_protocol)
+                }
                 None => error.message,
             })
         }
