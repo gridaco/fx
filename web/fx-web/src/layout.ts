@@ -18,13 +18,21 @@ export function canvasPreviewReserved(node: CanvasStep) {
   return node.preview !== undefined || (node.ports?.outputs.some((port) => port.kind === "artifact" && /^(?:image|video)(?:[/[{?]|$)/.test(port.type)) ?? false);
 }
 
-/** Geometry depends on declarations, never on media loading or measured DOM text. */
+/** A preview frame's height for its width: 16:9, the commonest shape of what steps make. */
+export const PREVIEW_ASPECT = 9 / 16;
+
+/**
+ * Geometry depends on declarations, never on media loading or measured DOM text. The preview
+ * frame spans the card less 16 on each side.
+ */
 export function canvasNodeGeometry(node: CanvasStep) {
-  if (!node.ports) return { width: 250, height: node.preview ? 246 : 106, preview_y: 61, settings_y: 0 };
+  const width = node.ports ? 360 : 250;
+  const preview_height = Math.round((width - 32) * PREVIEW_ASPECT);
+  if (!node.ports) return { width, height: node.preview ? 61 + preview_height + 45 : 106, preview_y: 61, preview_height, settings_y: 0 };
   const rows = Math.max(node.ports.inputs.length, node.ports.outputs.length);
   const settings_y = 83 + Math.max(1, rows) * PORT_ROW;
   const preview_y = settings_y + (node.ports.settings.length ? 29 : 5);
-  return { width: 360, height: preview_y + (canvasPreviewReserved(node) ? 140 + 16 : 0) + (node.kind === "workflow" ? 70 : 42), preview_y, settings_y };
+  return { width, height: preview_y + (canvasPreviewReserved(node) ? preview_height + 16 : 0) + (node.kind === "workflow" ? 70 : 42), preview_y, preview_height, settings_y };
 }
 export function canvasNodeSize(node: CanvasStep) {
   const { width, height } = canvasNodeGeometry(node);

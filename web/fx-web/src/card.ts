@@ -95,8 +95,9 @@ export function nodeCard(node: PositionedNode, canvasId: string, index: number, 
   } else if (!node.pending && !preview) {
     group.append(element("text", { x: 16, y: 64, class: "fx-canvas-port-type" }, "Port metadata not recorded"));
   }
+  const { preview_y, preview_height } = canvasNodeGeometry(node);
+  const frame = { x: 16, y: preview_y, width: node.width - 32, height: preview_height };
   if (preview) {
-    const frame = { x: 16, y: canvasNodeGeometry(node).preview_y, width: node.width - 32, height: 140 };
     const clipId = `${canvasId}-preview-${index}`;
     const clip = element("clipPath", { id: clipId });
     clip.append(element("rect", { ...frame, rx: 6 }));
@@ -128,7 +129,6 @@ export function nodeCard(node: PositionedNode, canvasId: string, index: number, 
     }
     group.append(element("text", { x: node.width - 16, y: node.height - 22, "text-anchor": "end", class: "fx-canvas-image-count" }, count));
   } else if (canvasPreviewReserved(node)) {
-    const frame = { x: 16, y: canvasNodeGeometry(node).preview_y, width: node.width - 32, height: 140 };
     // Only a started step shimmers: the declared file may be on its way. Waiting and settled steps keep the empty frame.
     if (node.state === "running") {
       const clipId = `${canvasId}-shimmer-${index}`;

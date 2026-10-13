@@ -16,9 +16,11 @@ function report(cells: Record<string, [number, number]>, order: string[] = []): 
     cells: Object.fromEntries(Object.entries(cells).map(([address, [column, row]]) => [address, { column, row, source: "automatic" }])) };
 }
 
-test("metadata-only nodes retain their size; image nodes reserve space before loading", () => {
+test("metadata-only nodes retain their size; image nodes reserve a 16:9 frame before loading", () => {
   expect(canvasNodeSize(node("planned"))).toEqual({ width: 250, height: 106 });
-  expect(canvasNodeSize(node("rendered", true))).toEqual({ width: 250, height: 246 });
+  expect(canvasNodeSize(node("rendered", true))).toEqual({ width: 250, height: 229 });
+  expect(canvasNodeGeometry(node("rendered", true)).preview_height).toBe(123);
+  expect(canvasNodeGeometry({ ...node("ported", true), ports: { inputs: [], outputs: [], settings: [] } }).preview_height).toBe(185);
 });
 
 test("declared port rows and settings reserve space above an image preview", () => {
@@ -32,7 +34,7 @@ test("declared port rows and settings reserve space above an image preview", () 
   const last = canvasPortAnchor(placed, "input", "image_11")!;
   expect(last.y + 16).toBeLessThan(placed.y + geometry.settings_y);
   expect(geometry.settings_y + 10).toBeLessThan(geometry.preview_y);
-  expect(geometry.preview_y + 140).toBeLessThan(geometry.height - 22);
+  expect(geometry.preview_y + geometry.preview_height).toBeLessThan(geometry.height - 22);
 });
 
 test("mixed image and metadata nodes remain separated with edges landing at their borders", () => {

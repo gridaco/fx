@@ -113,7 +113,8 @@ authored cells, rule 10 removes empty tracks and rule 11 sizes them.
 
 Rules 1–10 read no size, so a preview arriving never changes a cell. Footprints come from
 declarations: ports, settings and kind. A step whose declared output ports include an image or a
-video reserves its preview area in both views, before any artifact exists. A recorded card
+video reserves its preview area in both views, before any artifact exists: a 16:9 frame as wide as
+the card less its padding, in which the file is fitted whole. A recorded card
 previews its first image output, or without one its first MP4 or WebM output, which shows its
 first frame until it is played (§5.7).
 
