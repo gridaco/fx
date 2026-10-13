@@ -38,7 +38,13 @@ the preview port. Choose the asset base **before building**, as described below.
 mount the contents of `out/` under `/fx/`, including `/fx/_next/`. Hosting, domain
 routing and replacing the existing Grida route are separate deployment work.
 The app lives at root `www/`; update any hosting Root Directory setting to `www`
-when moving an existing configuration.
+when moving an existing configuration. On Vercel, `vercel.json` skips a
+deployment's build unless something the site is built from changed since its
+branch's last successful deployment (or, on a branch's first one, differs from
+`main`): `www/`, the workspace packages it imports, the root `package.json` or
+`bun.lock`. `scripts/ignore-build.sh` decides and builds whenever it cannot tell;
+its test fails when the site imports a workspace package the script leaves out.
+It replaces the project's Ignored Build Step setting.
 See [Next static exports](https://nextjs.org/docs/app/guides/static-exports) and
 [basePath](https://nextjs.org/docs/app/api-reference/config/next-config-js/basePath).
 
