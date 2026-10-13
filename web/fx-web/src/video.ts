@@ -4,6 +4,8 @@ import type { CanvasPreview } from "./graph";
 const STILL_WIDTH = 640;
 /** How many videos load at once for their first frames. */
 const LOADS = 2;
+/** How long the pointer rests on a video's frame before it plays there, muted, in milliseconds. */
+const HOVER_DELAY = 300;
 
 type Box = Pick<DOMRectReadOnly, "left" | "top" | "width" | "height">;
 
@@ -49,8 +51,9 @@ async function firstFrame(url: string, signal: AbortSignal): Promise<Blob | null
  * Video previews on node cards. SVG has no video that every browser draws in place: Safari draws
  * an HTML video inside `foreignObject` outside the SVG's transforms and above the rest of it. So a
  * card shows its video's first frame as an ordinary SVG image, read once per file when the card
- * first comes into view, and one HTML player, laid over the card's frame, plays it on request.
- * The canvas stops the player when anything covers its card.
+ * first comes into view, and one HTML player, laid over the card's frame, plays it: muted and
+ * looping while the pointer rests on the frame, with sound and controls from its play control or
+ * a click on the muted video. The canvas stops the player when anything covers its card.
  */
 export class CardVideos {
   /** First frames by digest: an object URL, or null when the file could not be read. */
@@ -72,8 +75,13 @@ export class CardVideos {
   private loading = 0;
   private readonly abort = new AbortController();
   readonly player = document.createElement("video");
-  private playing: { node: string; preview: CanvasPreview; card: SVGGElement; video: SVGGElement } | null = null;
+  /** The video playing, and whether hovering started it (muted, looping, until the pointer leaves). */
+  private playing: { node: string; preview: CanvasPreview; card: SVGGElement; video: SVGGElement; hover: boolean } | null = null;
   private frame: number | null = null;
+  private hoverTimer: number | null = null;
+  // Playing on hover needs a pointer that hovers, and is motion a viewer may have asked to avoid.
+  private readonly canHover = window.matchMedia("(hover: hover)");
+  private readonly reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
   constructor(private readonly host: HTMLElement) {
     const signal = this.abort.signal;
@@ -94,6 +102,15 @@ export class CardVideos {
       event.stopPropagation();
       this.stop();
     }, { signal });
+    // A click on the muted video plays it on with sound and controls; leaving it stops it.
+    this.player.addEventListener("click", (event) => {
+      if (!this.playing?.hover) return;
+      event.preventDefault();
+      this.playing.hover = false;
+      this.mode(false);
+      this.player.focus({ preventScroll: true });
+    }, { signal });
+    this.player.addEventListener("pointerleave", () => { if (this.playing?.hover) this.stop(); }, { signal });
   }
 
   /** The card whose video plays. */
@@ -121,6 +138,21 @@ export class CardVideos {
     };
     play.addEventListener("click", start, { signal });
     play.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") start(event); }, { signal });
+    // Resting on the frame plays it muted, unless a video played with sound is on.
+    video.addEventListener("pointerenter", () => {
+      this.cancelHover();
+      if (!this.canHover.matches || this.reducedMotion.matches || this.failed.has(preview.digest) || (this.playing && !this.playing.hover)) return;
+      this.hoverTimer = window.setTimeout(() => {
+        this.hoverTimer = null;
+        if (video.isConnected) this.play({ node, preview, card, video }, true);
+      }, HOVER_DELAY);
+    }, { signal });
+    // The player appears under the pointer: moving onto it stays on the frame.
+    video.addEventListener("pointerleave", (event) => {
+      if (event.relatedTarget === this.player) return;
+      this.cancelHover();
+      if (this.playing?.hover && this.playing.video === video) this.stop();
+    }, { signal });
   }
 
   /** After a redraw the player stays with its step while the step's card shows the same file. */
@@ -134,6 +166,7 @@ export class CardVideos {
   }
 
   stop() {
+    this.cancelHover();
     const playing = this.playing;
     if (!playing) return;
     const focused = document.activeElement === this.player;
@@ -157,16 +190,33 @@ export class CardVideos {
     this.ready.clear();
   }
 
-  private play(playing: NonNullable<CardVideos["playing"]>) {
+  private play(playing: Omit<NonNullable<CardVideos["playing"]>, "hover">, hover = false) {
     this.stop();
-    this.playing = playing;
+    this.playing = { ...playing, hover };
     playing.video.classList.add("is-playing");
     this.player.setAttribute("aria-label", playing.preview.label);
+    this.mode(hover);
+    // Its first frame shows until the video's own does; the card's backdrop shows around it.
+    const still = this.ready.get(playing.preview.digest);
+    if (still) this.player.poster = still;
+    else this.player.removeAttribute("poster");
     this.player.src = playing.preview.url;
     this.player.hidden = false;
     this.follow();
-    this.player.focus({ preventScroll: true });
+    // Hovering never takes focus.
+    if (!hover) this.player.focus({ preventScroll: true });
     void this.player.play().catch(() => {});
+  }
+  /** Muted, looping and bare while hovered; with sound and controls once asked for. */
+  private mode(hover: boolean) {
+    this.player.muted = hover;
+    this.player.loop = hover;
+    this.player.controls = !hover;
+    this.player.classList.toggle("is-hover", hover);
+  }
+  private cancelHover() {
+    if (this.hoverTimer !== null) window.clearTimeout(this.hoverTimer);
+    this.hoverTimer = null;
   }
 
   /** Keeps the player over its card's frame every frame, as the camera and the decks move it. */

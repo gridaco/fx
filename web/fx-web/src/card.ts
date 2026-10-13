@@ -100,7 +100,8 @@ export function nodeCard(node: PositionedNode, canvasId: string, index: number, 
     const clipId = `${canvasId}-preview-${index}`;
     const clip = element("clipPath", { id: clipId });
     clip.append(element("rect", { ...frame, rx: 6 }));
-    group.append(clip, element("rect", { ...frame, rx: 6, fill: `url(#${canvasId}-checker)` }));
+    group.append(clip);
+    const backdrop = element("rect", { ...frame, rx: 6, fill: `url(#${canvasId}-checker)` });
     const unavailable = preview.kind === "video" ? "Video unavailable" : "Image unavailable";
     const image = element("image", { ...frame, preserveAspectRatio: "xMidYMid meet", "clip-path": `url(#${clipId})`, role: "img", "aria-label": preview.label, class: "fx-canvas-node-image" });
     const fallback = element("text", { x: node.width / 2, y: frame.y + frame.height / 2, "text-anchor": "middle", "dominant-baseline": "middle", class: "fx-canvas-image-error", visibility: "hidden" }, unavailable);
@@ -112,16 +113,17 @@ export function nodeCard(node: PositionedNode, canvasId: string, index: number, 
     const border = element("rect", { ...frame, rx: 6, class: "fx-canvas-image-border" });
     if (preview.kind === "image") {
       image.setAttribute("href", preview.url);
-      group.append(image, border, fallback);
+      group.append(backdrop, image, border, fallback);
     } else {
       // A video shows its first frame, which the canvas sets once the card is in view, and a play
-      // control; the canvas plays it over the frame (video.ts).
+      // control; the canvas plays it over the frame (video.ts). The backdrop takes the pointer, so
+      // resting anywhere on the frame plays it muted.
       const video = element("g", { class: "fx-canvas-video", "data-digest": preview.digest });
       const play = element("g", { class: "fx-canvas-play", role: "button", tabindex: 0, "aria-label": `Play ${preview.label}` });
       const center = { x: node.width / 2, y: frame.y + frame.height / 2 };
       play.append(element("circle", { cx: center.x, cy: center.y, r: 18 }),
         createElement(Play, { x: center.x - 8, y: center.y - 8, width: 16, height: 16, "stroke-width": 2, "aria-hidden": "true" }));
-      video.append(image, border, fallback, play);
+      video.append(backdrop, image, border, fallback, play);
       group.append(video);
     }
     group.append(element("text", { x: node.width - 16, y: node.height - 22, "text-anchor": "end", class: "fx-canvas-image-count" }, count));
