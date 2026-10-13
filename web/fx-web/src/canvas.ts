@@ -167,8 +167,9 @@ export class CanvasController {
     container.addEventListener("wheel", this.onWheel, { passive: false, signal: this.abort.signal });
     this.svg.addEventListener("pointerdown", this.onPointerDown, { signal: this.abort.signal });
     this.svg.addEventListener("pointermove", this.onPointerMove, { signal: this.abort.signal });
-    this.svg.addEventListener("pointerup", this.onPointerUp, { signal: this.abort.signal });
-    this.svg.addEventListener("pointercancel", this.onPointerUp, { signal: this.abort.signal });
+    // A press may end off the SVG: on a video's player that appeared under it, or on the toolbar.
+    container.addEventListener("pointerup", this.onPointerUp, { signal: this.abort.signal });
+    container.addEventListener("pointercancel", this.onPointerUp, { signal: this.abort.signal });
     // The pointer moving onto the player stays on its card.
     this.svg.addEventListener("pointerleave", (event) => { if (!this.videos.player.contains(event.relatedTarget as Node | null)) this.hover(null); }, { signal: this.abort.signal });
     // A deck card is the expand target: the capture phase runs before a card's own selection.
@@ -759,6 +760,9 @@ export class CanvasController {
       background: !target.closest("[data-node-id], [data-connection-id], [data-deck], .fx-deck-bookmark"), veil: Boolean(target.closest(".fx-deck-veil")) };
   };
   private onPointerMove = (event: PointerEvent) => {
+    // A drag lasts only while its button is held: a release the canvas never saw (outside the
+    // window) ends it here rather than leaving every later move to pan.
+    if (this.drag && event.pointerId === this.drag.pointer && (event.buttons & 1) === 0) this.cancelDrag();
     if (!this.drag) { this.hover(this.hoverAt(event.target)); return; }
     if (event.pointerId !== this.drag.pointer) return;
     if (!this.drag.moved) {
