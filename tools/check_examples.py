@@ -6,11 +6,17 @@
 Each check works on a copy of its example in a temporary folder, so the checkout stays clean and
 every run starts with an empty cache. The engine is the one ``tools/build_engine.py`` put beside
 the SDK (or ``GRIDA_FX_BIN``); node bodies run in this interpreter (``GRIDA_FX_PYTHON``, unless
-set). Nothing runs live: the provider keys are removed from the environment, the network is off,
-and a paid call is refused at $0 with ``<capability> on <route> is a paid call; run with
---live``. A check named ``<example>:refused`` runs a workflow that has paid steps, to hold it to
-that refusal; the others run only free steps. ``self-contained`` checks, without running anything,
-that no example links outside its own folder except by absolute URL.
+set). An example with a ``package.json`` is a TypeScript project: its copy gets the checkout's
+built ``js/fx`` as ``node_modules/@grida/fx``, as ``npm install`` would put it, and is type checked
+with ``js/fx``'s own ``tsc`` and ``@types/node`` before it runs; its bodies run on Node 24 or later
+(``GRIDA_FX_NODE``, else ``node`` on ``PATH``).
+
+Nothing runs live: the provider keys are removed from the environment, the network is off, and a
+paid call is refused at $0 with ``<capability> on <route> is a paid call; run with --live``. A
+check named ``<example>:refused`` runs a workflow that has paid steps, to hold it to that refusal;
+the others run only free steps, or have the example's stand-in answer the paid ones.
+``self-contained`` checks, without running anything, that no example links outside its own folder
+except by absolute URL.
 
 An example ``examples/templates.json`` offers as an ``init`` template is not copied: the engine
 starts it with ``init --template``, from an archive shaped like the release's (one top-level
@@ -47,6 +53,8 @@ from grida.fx import RunResult, _api
 
 ROOT = Path(__file__).resolve().parent.parent
 EXAMPLES = ROOT / "examples"
+#: The checkout's JavaScript SDK: its ``dist`` is built by ``bun run build`` there.
+JS_SDK = ROOT / "js" / "fx"
 
 #: Every provider key FX reads (spec/providers.md §3), kept out of the runs.
 KEYS = (
@@ -147,6 +155,73 @@ def image_recolor(home: Path) -> str:
         second.outputs["after"].digest == first.outputs["after"].digest, "cache changed the image"
     )
     return "three code-only steps at $0, exact recolor and five-second delay; then all cached"
+
+
+def hello_ts(home: Path) -> str:
+    inputs = ["inputs/badges.yaml"]
+    plan = planned("hello", home, input_files=inputs)
+    expect(plan.estimate() == (0.0, 0.0), f"hello-ts is estimated at {plan.estimate()}")
+    first = finished(fx.run("hello", input_files=inputs, cwd=home), "the first run")
+    misses = [path for path, step in first.steps.items() if step.cache != "miss"]
+    expect(not misses, f"the first run took these from a cache it cannot have: {misses}")
+    expect(len(first.steps) == 10, f"the first run ran {len(first.steps)} steps, not 10")
+    expect(list(first.outputs["badges"]) == ["sun", "leaf", "stone"], "the badges are not keyed")
+    for key, file in first.outputs["badges"].items():
+        with Image.open(file.path) as badge:
+            expect(badge.size == (64, 64), f"badge {key} is {badge.size}")
+            expect(badge.getchannel("A").getextrema()[0] == 0, f"badge {key} has no clear pixel")
+    with Image.open(first.outputs["sheet"].path) as sheet:
+        expect(sheet.size == (3 * 64 + 4 * 8, 64 + 2 * 8), f"the sheet is {sheet.size}")
+    second = finished(fx.run("hello", input_files=inputs, cwd=home), "the second run")
+    ran = [path for path, step in second.steps.items() if step.cache != "hit"]
+    expect(not ran, f"the second run ran these again instead of reading the cache: {ran}")
+    return f"{len(first.steps)} TypeScript steps ran at $0, then all from the cache"
+
+
+ITEM_ICONS = "workflows/icons.ts:build"
+ITEMS = ["copper_key", "storm_lantern", "moon_compass"]
+
+
+def stand_in_run(home: Path, folder: str, *options: str) -> RunResult:
+    """A run of item-icons answered by its TypeScript stand-in, through the engine's command line
+    (the SDK's ``stand_in`` takes a Python function)."""
+    command = [str(_api.binary()), "run", ITEM_ICONS, "--stand-in", "stand_in.ts#answer"]
+    done = subprocess.run(
+        [*command, "--run", folder, *options, "--no-view"],
+        cwd=home,
+        env=_api.engine_environment(),
+        capture_output=True,
+        text=True,
+    )
+    expect(done.returncode == 0, f"the stand-in run exited {done.returncode}: {done.stderr}")
+    result = RunResult(home / folder, _api._read_events(home / folder))
+    result._store = _api._project_store(home)
+    return finished(result, f"the stand-in run {folder}")
+
+
+def item_icons(home: Path) -> str:
+    plan = planned(ITEM_ICONS, home)
+    low, high = plan.estimate()
+    expect(0 < low <= high, f"item-icons is estimated at {(low, high)}")
+    paths = sorted(instance["path"] for instance in plan.document["instances"])
+    expect(paths == sorted(f"icon['{item}']" for item in ITEMS), f"the plan has {paths}")
+    shutil.rmtree(home / "public" / "icons", ignore_errors=True)
+    first = stand_in_run(home, "runs/first", "--deliver", "icons=public/icons/{key}.png")
+    expect(first.stand_in, "the run does not say it was answered by a stand-in")
+    expect(list(first.outputs["icons"]) == ITEMS, "the icons are not keyed by the items")
+    for item in ITEMS:
+        with Image.open(home / "public" / "icons" / f"{item}.png") as icon:
+            expect(icon.size == (1024, 1024), f"the icon of {item} is {icon.size}")
+            expect(icon.getchannel("A").getextrema()[0] == 0, f"the icon of {item} is opaque")
+    second = stand_in_run(home, "runs/second")
+    ran = [path for path, step in second.steps.items() if step.cache != "hit"]
+    expect(not ran, f"the second stand-in run asked again for {ran}")
+    return f"planned at ${low:.2f} – ${high:.2f}; the stand-in drew and delivered 3 icons at $0"
+
+
+def item_icons_refused(home: Path) -> str:
+    refused(fx.run(ITEM_ICONS, cwd=home), "the icons run")
+    return "each icon is refused at $0 without a stand-in"
 
 
 def looping_parallax(home: Path) -> str:
@@ -336,11 +411,14 @@ def rigged_character(home: Path) -> str:
 
 CHECKS: dict[str, tuple[str, Callable[[Path], str]]] = {
     "hello": ("hello", hello),
+    "hello-ts": ("hello-ts", hello_ts),
     "image-recolor": ("image-recolor", image_recolor),
     "looping-parallax": ("looping-parallax", looping_parallax),
     "looping-parallax:refused": ("looping-parallax", looping_parallax_refused),
     "looping-parallax:meadow": ("looping-parallax", meadow_parallax),
     "looping-parallax:meadow-refused": ("looping-parallax", meadow_parallax_refused),
+    "item-icons": ("item-icons", item_icons),
+    "item-icons:refused": ("item-icons", item_icons_refused),
     "concept-gallery": ("concept-gallery", concept_gallery),
     "concept-gallery:refused": ("concept-gallery", concept_gallery_refused),
     "game-build": ("game-build", game_build),
@@ -357,6 +435,29 @@ def offline() -> None:
     os.environ["GRIDA_FX_NETWORK"] = "off"
     os.environ["GRIDA_FX_DISABLE_DOTENV"] = "1"
     os.environ.setdefault("GRIDA_FX_PYTHON", sys.executable)
+
+
+def typescript(home: Path, check_types: bool) -> None:
+    """Installs the checkout's ``@grida/fx`` into a TypeScript example's copy, as ``npm install``
+    would (copied, not linked), with ``js/fx``'s ``typescript`` and ``@types/node``, then, with
+    ``check_types``, checks the example's types with them."""
+    expect((JS_SDK / "dist" / "host-entry.js").is_file(), "js/fx is not built: bun run build there")
+    modules = home / "node_modules"
+    (modules / "@grida" / "fx").mkdir(parents=True)
+    shutil.copy2(JS_SDK / "package.json", modules / "@grida" / "fx" / "package.json")
+    shutil.copytree(JS_SDK / "dist", modules / "@grida" / "fx" / "dist")
+    (modules / "@types").mkdir()
+    (modules / "@types" / "node").symlink_to(JS_SDK / "node_modules" / "@types" / "node")
+    (modules / "typescript").symlink_to(JS_SDK / "node_modules" / "typescript")
+    if not check_types:
+        return
+    node = os.environ.get("GRIDA_FX_NODE", "node")
+    checked = subprocess.run(
+        [node, str(modules / "typescript" / "bin" / "tsc"), "-p", str(home)],
+        capture_output=True,
+        text=True,
+    )
+    expect(checked.returncode == 0, f"tsc found errors:\n{checked.stdout}{checked.stderr}")
 
 
 #: A markdown link's target, as written: ``[text](target)``.
@@ -485,6 +586,7 @@ def main(names: list[str]) -> int:
         else:
             print(f"ok   templates: {', '.join(offered.values())} each have a check and ship")
     url, server = serve(release_archive(sorted(offered)))
+    typed: set[str] = set()  # the TypeScript examples whose types are checked: once each
     if not names or "self-contained" in names:
         leaving = self_contained()
         if leaving:
@@ -506,8 +608,13 @@ def main(names: list[str]) -> int:
                     shutil.copytree(
                         EXAMPLES / example,
                         home,
-                        ignore=shutil.ignore_patterns(".fx", "runs", ".venv", ".showcase-inputs"),
+                        ignore=shutil.ignore_patterns(
+                            ".fx", "runs", ".venv", ".showcase-inputs", "node_modules"
+                        ),
                     )
+                if (home / "package.json").is_file():
+                    typescript(home, check_types=example not in typed)
+                    typed.add(example)
                 print(f"ok   {name}: {check(home)}")
             except Failed as failure:
                 failures += 1

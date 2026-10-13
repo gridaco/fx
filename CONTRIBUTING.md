@@ -105,9 +105,9 @@ checkout's engine so the linked SDK and `grida-fx` use it.
 ## Run examples
 
 [examples/README.md](examples/README.md) lists the projects and their commands.
-Every example plans offline. `hello` and `image-recolor` run entirely at $0 with
-no provider keys. Examples that need a capability FX does not yet implement say
-so and only plan.
+Every example plans offline. `hello`, `hello-ts` and `image-recolor` run entirely
+at $0 with no provider keys. Examples that need a capability FX does not yet
+implement say so and only plan.
 
 The examples' fixture pictures are code-drawn. Recreate them from the repository
 root with `uv run --project python python examples/draw_placeholders.py`.

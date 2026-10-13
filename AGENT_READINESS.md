@@ -395,7 +395,11 @@ whole, a slow reader, a reader that starts late and a non-blocking stderr while 
 reports progress too, in whole lines from hosts printing at once, and interrupted
 commands that end though nobody reads their stderr and whose forced exit's message
 reaches a slow reader, and the TypeScript and mixed-language conformance cases run
-whole projects through the command line. A `RunRecord` pins its folder, not one
+whole projects through the command line. The TypeScript examples
+([hello-ts](examples/hello-ts/README.md), [item-icons](examples/item-icons/README.md))
+are type checked and run offline by `tools/check_examples.py`: TypeScript nodes and a
+judge without Python, a builder that imports its application's own table, and a
+stand-in file whose icons are delivered. A `RunRecord` pins its folder, not one
 invocation: a later snapshot can include a resume. Existing `RunResult` construction
 reads the folder after execution ends and is not atomic with a concurrent external
 resume; do not promise an immutable invocation capture.

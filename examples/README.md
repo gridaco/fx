@@ -7,6 +7,7 @@ source stays in Git, while generated artwork and saved runs stay outside it.
 | Example | What it shows | What runs |
 |---|---|---|
 | [hello](hello/) | custom nodes, local steps, a judge, keyed repeats, result collections and cache | entirely offline at $0 |
+| [hello-ts](hello-ts/) | hello with every node in TypeScript: types from the declaration, a judge and the source closure | entirely offline at $0, with Node and no Python |
 | [image-recolor](image-recolor/) | image inputs, algorithmic recoloring, delays and live run viewing | entirely offline at $0 |
 | [pet](pet/) | an animated sprite from a description or a picture: one picture first, a strip per state drawn from it, a judge that counts poses, cells cut at one scale, a Codex app pet, and a reel of it as video | drawing on your own Codex at $0, with no key, from reference pictures; a stand-in runs it all offline; the reel renders locally at $0 with FFmpeg |
 | [looping-parallax](looping-parallax/) | reusable repeating layers and the website's complete concept-to-parallax graph | mirrored layers offline; separation and seam repainting paid; optional video uses FFmpeg |
@@ -16,6 +17,7 @@ source stays in Git, while generated artwork and saved runs stay outside it.
 | [character-3d](character-3d/) | reviewed reference views, mesh generation, Blender assembly, rigging and admission | current runnable graph; local steps need Blender, generation and review paid |
 | [terrain](terrain/) | Python builder, fixed 47-mask atlas, validation and deterministic map preview | preparation and preview local; atlas generation and review paid |
 | [ui-kit](ui-kit/) | Python builder, nine-slice panels, button states, icons and measured geometry | preparation and validation local; artwork and review paid |
+| [item-icons](item-icons/) | a TypeScript builder reading a web game's own item table, a TypeScript stand-in, and delivery into the game | icon generation paid; the stand-in runs it all offline at $0 |
 | [concept-gallery](concept-gallery/) | structured answers, independent judges, phases and takes | paid generation and review |
 | [game-build](game-build/) | a Python builder reading its application's level files | sky mirrors offline; ground, icons and repaints paid |
 | [rigged-character](rigged-character/) | an illustrative graph with APIs FX has not implemented | plans only; use character-3d for the runnable pipeline |
@@ -36,6 +38,8 @@ guide and other repository pages are absolute URLs, and everything else it uses 
 SDK and their own processing libraries. Copy the example and follow its README:
 most showcase projects use `uv sync`, with dependencies declared in their own
 `pyproject.toml`. These application helpers are not installed with the FX SDK.
+TypeScript projects ([hello-ts](hello-ts/), [item-icons](item-icons/)) need Node 24 or
+later and `npm install`, which installs `@grida/fx` from their own `package.json`.
 
 To use the checkout's SDK and engine, follow
 [the source build instructions](../CONTRIBUTING.md#build-from-source). Small examples
@@ -47,7 +51,14 @@ cd examples/hello && grida-fx run hello --inputs inputs/badges.yaml
 ```
 
 The alias uses the checkout's Python environment. Larger projects need the additional
-libraries listed in their READMEs. Rebuild the engine after changing its source.
+libraries listed in their READMEs. Rebuild the engine after changing its source. A
+TypeScript example also needs the checkout's `js/fx`, built as the same instructions say and
+linked into it, without changing its `package.json`:
+
+```bash
+cd examples/hello-ts && npm install --no-save ../../js/fx
+grida-fx run hello --inputs inputs/badges.yaml
+```
 
 ## Images and recorded inputs
 

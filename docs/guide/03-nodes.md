@@ -331,7 +331,8 @@ together, even in one workflow; one language per project is the usual choice.
 
 Node runs a project's `.ts` files as they are, stripping their types: there is no build step, and
 FX never type checks. `tsc` does, when you ask it to. Set the project up once, with Node 24 or later
-([Getting started](01-getting-started.md#when-fx-needs-node)):
+([Getting started](01-getting-started.md#when-fx-needs-node)), as the
+[hello-ts](../../examples/hello-ts/) example is:
 
 ```sh
 npm install @grida/fx

@@ -180,6 +180,7 @@ jobs:
   # The examples as a clone runs them (examples/README.md): the engine built into the SDK by
   # tools/build_engine.py, then every example planned, and every runnable one run offline through
   # the SDK. Paid calls are refused at $0; tools/check_examples.py holds the examples to that.
+  # TypeScript examples get the built js/fx and run their nodes on Node 24.
   examples:
     runs-on: ubuntu-latest
     steps:
@@ -189,10 +190,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: astral-sh/setup-uv@v10.2.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.4.0"
       - run: bun --no-env-file install --frozen-lockfile
+      - run: bun --no-env-file install --frozen-lockfile
+        working-directory: js/fx
+      - run: bun --no-env-file run build
+        working-directory: js/fx
       - run: uv sync --locked --project python
       - run: python3 tools/build_engine.py
       - run: uv run --locked --project python python tools/check_examples.py

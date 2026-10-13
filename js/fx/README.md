@@ -143,7 +143,8 @@ that would read back as something else (`on`, `017`, `2026-10-05`, a digest) is 
 
 A node type is an export declared with `node`. Node 24 or later runs the project's `.ts` files as
 they are, stripping their types: there is no build step, and the engine runs each node in this
-package's node host.
+package's node host. [hello-ts](https://github.com/gridaco/fx/tree/main/examples/hello-ts) is a
+whole project of them, with no Python.
 
 ```ts
 // nodes/greet.ts
@@ -248,6 +249,8 @@ npx grida-fx plan workflows/badges.ts:build --arg count=3
 
 From the SDK, `plan("workflows/badges.ts:build", { args: { count: 3 } })`. Its takes file,
 `badges.takes.yaml`, goes beside the builder's file.
+[item-icons](https://github.com/gridaco/fx/tree/main/examples/item-icons) builds its workflow
+from a web game's own item table, and answers its paid calls offline with a stand-in.
 
 ## Stand-ins
 
