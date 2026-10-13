@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Refuses to start unless asked for `agent --no-leader stdio` with API-key sign-in off, no xAI
 /// key, nothing imported and FX's overlay; counts each start.
@@ -206,6 +206,18 @@ fn on_one_runtime<T, F: Future<Output = T>>(
         let verified = runtime.shutdown().await;
         (out, verified)
     })
+}
+
+/// Waits up to 10 s for `path` to exist.
+async fn appears(path: &Path) -> bool {
+    let started = Instant::now();
+    while !path.exists() {
+        if started.elapsed() > Duration::from_secs(10) {
+            return false;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    true
 }
 
 fn send(fake: &Fake, call: &TestCall) -> Sent {
@@ -612,11 +624,14 @@ fn a_dropped_call_s_session_is_cancelled_then_deleted_before_grok_is_shut_down()
             deleted("s-a", 6)
         )
     });
+    let prompted = fake.marker("prompt-s-a");
     let ((), verified) = on_one_runtime(Ok(fake.program.clone()), |adapter| async move {
         let call = kite();
-        // The run is cancelled while Grok Build draws: the send is dropped.
-        let dropped = tokio::time::timeout(Duration::from_secs(1), adapter.send(&call.call)).await;
-        assert!(dropped.is_err());
+        // The run is cancelled while Grok Build draws: the send is dropped once it has the prompt.
+        tokio::select! {
+            sent = adapter.send(&call.call) => panic!("the call ended: {sent:?}"),
+            seen = appears(&prompted) => assert!(seen, "Grok Build was never sent the prompt"),
+        }
     });
     assert!(verified);
     assert_eq!(fake.lines("events"), ["cancelled", "deleted"]);
