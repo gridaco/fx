@@ -23,7 +23,7 @@ use serde_json::Value;
 use std::sync::Arc;
 
 /// The providers this crate serves, in the order `doctor` lists them: Grida Gateway first.
-pub const PROVIDERS: [&str; 7] = [
+pub const PROVIDERS: [&str; 8] = [
     "gg",
     "openai",
     "openrouter",
@@ -31,6 +31,7 @@ pub const PROVIDERS: [&str; 7] = [
     "tripo",
     "elevenlabs",
     "codex",
+    "grok",
 ];
 
 /// Whether a live run may reach the network ([`crate::transport::NETWORK_VARIABLE`]).
@@ -52,29 +53,34 @@ impl Network {
 }
 
 /// The setup of a live run: the default transport (or [`crate::transport::Offline`] when the
-/// network is off), the system clock, and the user's Codex as the process environment finds it
-/// ([`crate::codex::find_program`]; none when the network is off). This is the only place a Codex
-/// is looked for, so no other setup can start one.
+/// network is off), the system clock, and the user's Codex and Grok Build as the process
+/// environment finds them ([`crate::codex::find_program`], [`crate::grok::find_program`]; none when
+/// the network is off). This is the only place either is looked for, so no other setup can start
+/// one.
 pub fn live_setup(keys: Keys, endpoints: Endpoints, network: Network) -> Result<Setup, String> {
-    let (transport, codex): (Arc<dyn crate::transport::Transport>, _) = match network {
+    let (transport, codex, grok): (Arc<dyn crate::transport::Transport>, _, _) = match network {
         Network::On => {
             let env = |name: &str| std::env::var(name).ok();
-            let app = std::path::Path::new(crate::codex::MACOS_APP_PROGRAM);
-            let codex = crate::codex::find_program(&env, app)
-                .ok_or_else(|| crate::codex::NOT_INSTALLED.to_string());
-            (Arc::new(HttpTransport::new(HttpConfig::default())?), codex)
+            let codex = codex_program(&env).ok_or_else(|| crate::codex::NOT_INSTALLED.to_string());
+            let grok = crate::grok::find_program(&env)
+                .ok_or_else(|| crate::grok::NOT_INSTALLED.to_string());
+            (
+                Arc::new(HttpTransport::new(HttpConfig::default())?),
+                codex,
+                grok,
+            )
         }
         Network::Off => (
             Arc::new(crate::transport::Offline),
             Err(crate::codex::NETWORK_OFF.to_string()),
+            Err(crate::grok::NETWORK_OFF.to_string()),
         ),
     };
     Ok(Setup {
-        transport,
-        keys,
         endpoints,
-        clock: Arc::new(SystemClock::new()),
         codex,
+        grok,
+        ..Setup::new(transport, keys, Arc::new(SystemClock::new()))
     })
 }
 
@@ -82,13 +88,11 @@ pub fn live_setup(keys: Keys, endpoints: Endpoints, network: Network) -> Result<
 /// refused before it leaves), the default endpoints and the system clock. `grida-fx doctor`
 /// builds its registry on it to say which routes a live run could serve.
 pub fn offline_setup(keys: Keys) -> Setup {
-    Setup {
-        transport: Arc::new(crate::transport::Offline),
+    Setup::new(
+        Arc::new(crate::transport::Offline),
         keys,
-        endpoints: Endpoints::default(),
-        clock: Arc::new(SystemClock::new()),
-        codex: Err(crate::codex::NOT_INSTALLED.into()),
-    }
+        Arc::new(SystemClock::new()),
+    )
 }
 
 /// Every provider's adapters over `setup`, in registration order, each answering
@@ -105,6 +109,7 @@ pub fn adapters(setup: &Setup) -> Adapters {
     crate::tripo::register(&mut registered, setup);
     crate::elevenlabs::register(&mut registered, setup);
     crate::codex::register(&mut registered, setup);
+    crate::grok::register(&mut registered, setup);
     let redactor = setup.redactor();
     let mut adapters = Adapters::new();
     for (capability, provider) in registered.served() {
@@ -190,22 +195,37 @@ pub enum Servable {
     NoAdapter,
     /// An adapter serves it, but the provider's key is missing.
     NoKey(KeyName),
-    /// An adapter serves it through a program that is not installed (`codex`).
+    /// An adapter serves it through a program that is not installed (`codex`, `grok`).
     NoProgram(&'static str),
 }
 
-/// Whether `capability` on `provider` is servable with `keys` by `adapters`. A Codex route is
-/// servable when [`crate::codex::find_program`] finds Codex in the process environment.
+/// Where the environment finds a program.
+type Finder = fn(&dyn Fn(&str) -> Option<String>) -> Option<std::path::PathBuf>;
+
+/// The providers that are programs the user installed, and how each is found.
+const PROGRAMS: [(&str, Finder); 2] = [
+    ("codex", codex_program),
+    ("grok", crate::grok::find_program),
+];
+
+/// The user's Codex: [`crate::codex::find_program`], with the macOS app's.
+fn codex_program(env: &dyn Fn(&str) -> Option<String>) -> Option<std::path::PathBuf> {
+    let app = std::path::Path::new(crate::codex::MACOS_APP_PROGRAM);
+    crate::codex::find_program(env, app)
+}
+
+/// Whether `capability` on `provider` is servable with `keys` by `adapters`. The route of a
+/// program the user installed ([`PROGRAMS`]) is servable when the process environment finds the
+/// program.
 pub fn servable(adapters: &Adapters, keys: &Keys, capability: &str, provider: &str) -> Servable {
     if !adapters.serves(capability, provider) {
         return Servable::NoAdapter;
     }
-    if provider == "codex" {
+    if let Some((name, find)) = PROGRAMS.iter().find(|(name, _)| *name == provider) {
         let env = |name: &str| std::env::var(name).ok();
-        let app = std::path::Path::new(crate::codex::MACOS_APP_PROGRAM);
-        return match crate::codex::find_program(&env, app) {
+        return match find(&env) {
             Some(_) => Servable::Yes,
-            None => Servable::NoProgram("codex"),
+            None => Servable::NoProgram(name),
         };
     }
     match KeyName::of_provider(provider) {
@@ -221,13 +241,7 @@ mod tests {
     use crate::transport::replay::NoNetwork;
 
     fn setup(keys: Keys) -> Setup {
-        Setup {
-            transport: Arc::new(NoNetwork),
-            keys,
-            endpoints: Endpoints::default(),
-            clock: Arc::new(FakeClock::new()),
-            codex: Err(crate::codex::NOT_INSTALLED.into()),
-        }
+        Setup::new(Arc::new(NoNetwork), keys, Arc::new(FakeClock::new()))
     }
 
     #[test]

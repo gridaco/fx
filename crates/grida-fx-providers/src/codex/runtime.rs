@@ -3,7 +3,7 @@
 //! ([`crate::adapter::Runtime`]).
 //!
 //! Starting it, once: list the user's MCP servers to turn them off, start Codex in a process group
-//! of its own ([`super::process`]), `initialize`, then `account/read`; a Codex that is not signed
+//! of its own ([`crate::process_group`]), `initialize`, then `account/read`; a Codex that is not signed
 //! in with ChatGPT is refused for the rest of the invocation. Two tasks then serve the
 //! connection: a writer, which owns Codex's stdin and writes the lines it is sent, so even a
 //! dropped call can ask for its turn to be interrupted without waiting; and a reader, which hands
@@ -16,19 +16,20 @@
 //! ([`super::Stop::NotReceived`]).
 //!
 //! A connection whose Codex exited is replaced by the next call. Shutting down closes stdin and
-//! ends the process group ([`super::process::Group::finish`]).
+//! ends the process group ([`Group::finish`]).
 
 use super::Stop;
-use super::process::Group;
-use super::protocol::{self, MAX_LINE_BYTES, Message};
+use super::protocol::{self, Message};
 use crate::BoxFuture;
 use crate::adapter::Runtime;
+use crate::installed::{locked, read_line};
+use crate::process_group::Group;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdout};
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -62,12 +63,6 @@ struct Routes {
     threads: Mutex<HashMap<String, mpsc::UnboundedSender<Note>>>,
     /// Why the connection ended, once it has.
     ended: Mutex<Option<String>>,
-}
-
-fn locked<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-    mutex
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 /// One running Codex.
@@ -237,7 +232,7 @@ async fn read_all(
 ) {
     let mut stdout = BufReader::new(stdout);
     let reason = loop {
-        let line = match read_line(&mut stdout).await {
+        let line = match read_line(&mut stdout, "Codex").await {
             Ok(Some(line)) => line,
             Ok(None) => break "Codex exited".to_string(),
             Err(reason) => break reason,
@@ -299,38 +294,6 @@ fn route(routes: &Routes, writer: &mpsc::WeakUnboundedSender<Value>, message: Me
             if let Some(writer) = writer.upgrade() {
                 let _ = writer.send(json!({"jsonrpc": "2.0", "id": id, "error": error}));
             }
-        }
-    }
-}
-
-/// One line, without its newline, refused as soon as it passes [`MAX_LINE_BYTES`]; `None` at the
-/// end of the output.
-async fn read_line(stdout: &mut BufReader<ChildStdout>) -> Result<Option<Vec<u8>>, String> {
-    let mut line = Vec::new();
-    loop {
-        let available = stdout
-            .fill_buf()
-            .await
-            .map_err(|_| "Codex's output is unreadable".to_string())?;
-        if available.is_empty() {
-            return Ok((!line.is_empty()).then_some(line));
-        }
-        let (taken, ended) = match available.iter().position(|&byte| byte == b'\n') {
-            Some(at) => {
-                line.extend_from_slice(&available[..at]);
-                (at + 1, true)
-            }
-            None => {
-                line.extend_from_slice(available);
-                (available.len(), false)
-            }
-        };
-        stdout.consume(taken);
-        if line.len() > MAX_LINE_BYTES {
-            return Err("Codex sent a message over 64 MiB".into());
-        }
-        if ended {
-            return Ok(Some(line));
         }
     }
 }

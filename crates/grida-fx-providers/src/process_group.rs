@@ -1,26 +1,28 @@
-//! Starting Codex, and ending everything it started (spec/providers.md §9.6).
+//! Ending everything a runtime the user installed started: Codex and Grok Build
+//! (spec/providers.md §9.6, §9.8).
 //!
-//! Each Codex runs in a process group of its own, registered here until it is ended. Its MCP
+//! Each runtime runs in a process group of its own, registered here until it is ended. Its MCP
 //! servers and helpers join that group, so ending the group ends them too:
-//! - a runtime that shuts down asks Codex to stop first (stdin closed, then `SIGTERM` to the
+//! - a runtime that shuts down asks its program to stop first (stdin closed, then `SIGTERM` to the
 //!   group), and then kills the group ([`Group::finish`]);
 //! - a runtime that is dropped without shutting down kills the group ([`Group`]'s `Drop`);
 //! - a command that exits on an interrupt kills every group and lets none start after
-//!   ([`end_every_codex`]).
+//!   ([`end_every_runtime`]).
 //!
-//! Process groups are a Unix notion: elsewhere `kill_on_drop` ends Codex itself, and nothing else.
+//! Process groups are a Unix notion: elsewhere `kill_on_drop` ends the program itself, and nothing
+//! else.
 
 use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 use tokio::process::Child;
 
-/// How long a Codex that was asked to stop has before its group is killed.
+/// How long a program that was asked to stop has before its group is killed.
 const GRACE: Duration = Duration::from_secs(2);
 
 #[derive(Default)]
 struct Groups {
     live: Vec<u32>,
-    /// The command is ending: no Codex may start.
+    /// The command is ending: no runtime may start.
     closed: bool,
 }
 
@@ -35,13 +37,13 @@ fn groups() -> MutexGuard<'static, Groups> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-/// A started Codex's process group, killed when dropped.
-pub(super) struct Group(Option<u32>);
+/// A started runtime's process group, killed when dropped.
+pub(crate) struct Group(Option<u32>);
 
 impl Group {
     /// Registers the group `child` leads (`process_group(0)`: its id is the child's pid). `None`
     /// when the command is ending, and the child is then killed.
-    pub(super) fn enlist(child: &mut Child) -> Option<Group> {
+    pub(crate) fn enlist(child: &mut Child) -> Option<Group> {
         let id = if cfg!(unix) { child.id() } else { None };
         let mut groups = groups();
         if groups.closed {
@@ -53,10 +55,10 @@ impl Group {
         Some(Group(id))
     }
 
-    /// Ends a Codex whose stdin is closed: it gets [`GRACE`] to exit, then the group gets
-    /// `SIGTERM` and [`GRACE`] more, then the group is killed (also when Codex exited by itself, for
-    /// whatever it left in the group). Whether the group verifiably ended.
-    pub(super) async fn finish(mut self, child: &mut Child) -> bool {
+    /// Ends a program whose stdin is closed: it gets [`GRACE`] to exit, then the group gets
+    /// `SIGTERM` and [`GRACE`] more, then the group is killed (also when the program exited by
+    /// itself, for whatever it left in the group). Whether the group verifiably ended.
+    pub(crate) async fn finish(mut self, child: &mut Child) -> bool {
         if tokio::time::timeout(GRACE, child.wait()).await.is_err() {
             if let Some(id) = self.0 {
                 signal(id, Signal::Term);
@@ -86,10 +88,10 @@ impl Drop for Group {
     }
 }
 
-/// Kills every Codex group this process started and has not ended, and lets none start after it:
-/// for a command that is about to exit because it was interrupted. Whether every group was
+/// Kills every runtime group this process started and has not ended, and lets none start after
+/// it: for a command that is about to exit because it was interrupted. Whether every group was
 /// verifiably ended.
-pub fn end_every_codex() -> bool {
+pub fn end_every_runtime() -> bool {
     let live = {
         let mut groups = groups();
         groups.closed = true;

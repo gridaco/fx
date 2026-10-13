@@ -304,13 +304,11 @@ mod tests {
     use serde_json::json;
 
     fn client() -> Client {
-        let setup = Setup {
-            transport: Arc::new(NoNetwork),
-            keys: Keys::from_pairs(&[(KeyName::Fal, "fal-secret")]),
-            endpoints: crate::setup::Endpoints::default(),
-            clock: Arc::new(FakeClock::new()),
-            codex: Err(crate::codex::NOT_INSTALLED.into()),
-        };
+        let setup = Setup::new(
+            Arc::new(NoNetwork),
+            Keys::from_pairs(&[(KeyName::Fal, "fal-secret")]),
+            Arc::new(FakeClock::new()),
+        );
         FalClients::new(&setup).run
     }
 

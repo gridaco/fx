@@ -70,7 +70,7 @@
 //!   servable). A key's value is never printed;
 //! - one line per route of the planning project's catalog (the built-in table, then `fx.yaml`
 //!   `route_tables`), sorted by capability, then id: `route     <capability> <model@provider>
-//!   servable`, `… no key (<VARIABLE>)`, `… not installed (codex)` or `… no adapter`, as
+//!   servable`, `… no key (<VARIABLE>)`, `… not installed (codex)` (or `(grok)`) or `… no adapter`, as
 //!   `live::servable` answers over every provider's adapters built on `live::offline_setup`.
 
 use crate::cli::DoctorArgs;
@@ -687,9 +687,21 @@ mod tests {
         let catalog = crate::engine::builtin_routes().unwrap();
         let lines = route_lines(&catalog, &Keys::none());
         assert_eq!(lines.len(), catalog.entries.len());
-        // The Codex routes need no key; whether they are servable depends on this machine.
-        let (codex, keyed): (Vec<&String>, Vec<&String>) =
-            lines.iter().partition(|line| line.contains("@codex "));
+        // The Codex and Grok Build routes need no key; whether they are servable depends on this
+        // machine.
+        let (grok, lines_but_grok): (Vec<&String>, Vec<&String>) =
+            lines.iter().partition(|line| line.contains("@grok "));
+        let (codex, keyed): (Vec<&String>, Vec<&String>) = lines_but_grok
+            .into_iter()
+            .partition(|line| line.contains("@codex "));
+        assert_eq!(grok.len(), 2, "image.edit and image.generate");
+        for line in grok {
+            assert!(
+                line.ends_with("imagine@grok servable")
+                    || line.ends_with("imagine@grok not installed (grok)"),
+                "{line}"
+            );
+        }
         assert!(
             keyed.iter().all(|line| line.contains(" no key (")),
             "{lines:#?}"

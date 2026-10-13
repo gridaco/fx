@@ -6,7 +6,7 @@
 use crate::adapter::{CallRequest, RequestFile, RouteRef};
 use crate::clock::{Clock, FakeClock};
 use crate::keys::{KeyName, Keys};
-use crate::setup::{Endpoints, Setup};
+use crate::setup::Setup;
 use crate::transport::Transport;
 use grida_fx_core::routes::parse_route_id;
 use indexmap::IndexMap;
@@ -33,13 +33,7 @@ pub fn setup(transport: Arc<dyn Transport>, keys: Keys) -> Setup {
 
 /// As [`setup`], with the given clock.
 pub fn setup_with_clock(transport: Arc<dyn Transport>, keys: Keys, clock: Arc<dyn Clock>) -> Setup {
-    Setup {
-        transport,
-        keys,
-        endpoints: Endpoints::default(),
-        clock,
-        codex: Err(crate::codex::NOT_INSTALLED.into()),
-    }
+    Setup::new(transport, keys, clock)
 }
 
 /// Runs a future to completion on a current-thread runtime with time enabled.
@@ -186,6 +180,16 @@ pub mod media {
                 .collect();
             writer.write_image_data(&data).expect("PNG data");
         }
+        bytes
+    }
+
+    /// A decodable baseline RGB JPEG of `width` × `height`.
+    pub fn jpeg(width: u32, height: u32) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        let data = vec![120u8; (width * height * 3) as usize];
+        image::codecs::jpeg::JpegEncoder::new(&mut bytes)
+            .encode(&data, width, height, image::ExtendedColorType::Rgb8)
+            .expect("a JPEG");
         bytes
     }
 

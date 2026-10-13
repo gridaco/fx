@@ -2,7 +2,7 @@
 //! spec/capabilities.md §2–§3). Nothing here reaches a network: every send goes to a
 //! `ReplayTransport` that asserts the exact request, to `NoNetwork` (which panics on any send) or
 //! to `Offline`. The key is the made-up `test-openai-key`; every picture is built in code (the
-//! `testing::media` PNGs, and the JPEG and WebP encoders below).
+//! `testing::media` PNGs and JPEGs, and the WebP encoder below).
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
@@ -143,16 +143,6 @@ fn text_parts(prompt: &str, size: Option<&str>, background: &str) -> Vec<Part> {
     parts
 }
 
-/// A decodable baseline JPEG, built in code.
-fn jpeg(width: u32, height: u32) -> Vec<u8> {
-    let mut bytes = Vec::new();
-    let data = vec![120u8; (width * height * 3) as usize];
-    image::codecs::jpeg::JpegEncoder::new(&mut bytes)
-        .encode(&data, width, height, image::ExtendedColorType::Rgb8)
-        .expect("a JPEG");
-    bytes
-}
-
 /// A decodable lossless WebP with alpha, built in code.
 fn webp(width: u32, height: u32) -> Vec<u8> {
     let mut bytes = Vec::new();
@@ -282,7 +272,7 @@ fn generate_sends_auto_background_and_size_only_when_given() {
 fn edit_sends_text_fields_then_each_input_image_in_order() {
     let first = media::png(2, 2, Some(255));
     let second = media::png(3, 3, None);
-    let photo = jpeg(4, 4);
+    let photo = media::jpeg(4, 4);
     let sticker = webp(4, 4);
     let mut builder = edit_builder();
     let image = builder.file("image/png", &first);
@@ -673,7 +663,7 @@ fn files_are_refused_by_digest_kind_and_bytes() {
     );
 
     for (kind, bytes, member) in [
-        ("image/png", jpeg(4, 4), "image"),
+        ("image/png", media::jpeg(4, 4), "image"),
         ("image/png", b"\x89PNG\r\n\x1a\ntruncated".to_vec(), "image"),
         ("image/jpeg", media::JPEG_HEAD.to_vec(), "image"),
         ("image/webp", png.clone(), "image"),
@@ -815,7 +805,7 @@ fn a_structural_failure_names_the_request_id() {
 #[test]
 fn an_answer_carries_only_the_image() {
     // A JPEG answer is answered as what it is; the check refuses it (below).
-    let photo = jpeg(4, 4);
+    let photo = media::jpeg(4, 4);
     let answer = answered(outcome(ok(&photo)));
     assert_eq!(answer.files["image"].kind, "image/jpeg");
     assert_eq!(answer.data, Value::Null);
@@ -1228,7 +1218,7 @@ fn the_check_holds_the_answer_to_the_request() {
         );
     }
     assert_eq!(
-        check(json!({"prompt": "p"}), "image/jpeg", jpeg(4, 4)),
+        check(json!({"prompt": "p"}), "image/jpeg", media::jpeg(4, 4)),
         Err("the answer is image/jpeg, not image/png".into())
     );
     assert_eq!(

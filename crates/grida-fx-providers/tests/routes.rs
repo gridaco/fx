@@ -14,7 +14,7 @@ use grida_fx_providers::registry::Adapters;
 use grida_fx_providers::routes::{DEFAULT_ROUTES, default_table};
 use grida_fx_providers::testing::{CallBuilder, block_on, media, setup, test_keys};
 use grida_fx_providers::transport::replay::NoNetwork;
-use grida_fx_providers::{codex, elevenlabs, fal, gg, openai, openrouter, tripo};
+use grida_fx_providers::{codex, elevenlabs, fal, gg, grok, openai, openrouter, tripo};
 use indexmap::IndexMap;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
@@ -127,6 +127,12 @@ fn expected_routes() -> Vec<Expected> {
         ),
         expected(
             "image.edit",
+            "imagine@grok",
+            image_contract("fx-grok-image-v1", "1"),
+            ("0", "0"),
+        ),
+        expected(
+            "image.edit",
             "openai/gpt-image-2.5-sunburst@gg",
             gg_image.clone(),
             ("0.09", "0.85"),
@@ -153,6 +159,12 @@ fn expected_routes() -> Vec<Expected> {
             "image.generate",
             "imagegen@codex",
             image_contract("fx-codex-image-v1", "2"),
+            ("0", "0"),
+        ),
+        expected(
+            "image.generate",
+            "imagine@grok",
+            image_contract("fx-grok-image-v1", "1"),
             ("0", "0"),
         ),
         expected(
@@ -312,6 +324,8 @@ const CONTRACTS: &[(&str, &str, &str, Option<&str>)] = &[
         Some("\"2\""),
     ),
     ("image.edit", "codex", "fx-codex-image-v1", Some("\"2\"")),
+    ("image.generate", "grok", "fx-grok-image-v1", Some("\"1\"")),
+    ("image.edit", "grok", "fx-grok-image-v1", Some("\"1\"")),
     ("image.edit", "fal", "fx-fal-image-v1", None),
     ("video.generate", "fal", "fal-queue", None),
     ("background.remove", "fal", "fal-run-birefnet", None),
@@ -348,13 +362,13 @@ fn read_spec(name: &str) -> String {
 }
 
 #[test]
-fn the_table_holds_27_routes_over_10_capabilities() {
+fn the_table_holds_29_routes_over_10_capabilities() {
     let table = table();
-    assert_eq!(table.entries.len(), 27);
+    assert_eq!(table.entries.len(), 29);
     let capabilities: BTreeSet<&str> = table.entries.keys().map(|(c, _)| c.as_str()).collect();
     assert_eq!(capabilities.len(), 10);
     assert!(
-        read_spec("providers.md").contains("It holds 27 routes over 10 capabilities."),
+        read_spec("providers.md").contains("It holds 29 routes over 10 capabilities."),
         "spec/providers.md §10 states the table's size"
     );
 }
@@ -563,6 +577,26 @@ fn features_say_what_the_adapters_honour() {
     }
     assert!(has("image.generate", codex, "text_to_image"));
     assert!(!has("image.edit", codex, "text_to_image"));
+    // Grok Build draws opaque JPEGs from pictures, sent as PNGs, and takes no exact size, no
+    // transparency and no mask (§9.8).
+    let grok = "imagine@grok";
+    for capability in ["image.generate", "image.edit"] {
+        for feature in [
+            "flexible_size",
+            "auto_background",
+            "opaque_background",
+            "image_input",
+            "jpeg_output",
+            "png_output",
+        ] {
+            assert!(has(capability, grok, feature), "{capability} {feature}");
+        }
+        for feature in ["exact_size", "custom_exact_size", "mask", "alpha"] {
+            assert!(!has(capability, grok, feature), "{capability} {feature}");
+        }
+    }
+    assert!(has("image.generate", grok, "text_to_image"));
+    assert!(!has("image.edit", grok, "text_to_image"));
     assert!(has("image.edit", openai, "mask") && has("image.edit", fal, "mask"));
     assert!(!has("image.edit", openrouter, "mask") && !has("image.edit", gg, "mask"));
     // Every edit route takes input pictures; every other generate route refuses references.
@@ -624,9 +658,11 @@ fn every_example_table_declares_only_what_fx_honours() {
             if !registry.serves(&route.capability, &route.provider) {
                 continue;
             }
-            // Every image.generate adapter of FX but Codex's refuses references (spec/providers.md
-            // §9).
-            if route.capability == "image.generate" && route.provider != "codex" {
+            // Every image.generate adapter of FX but Codex's and Grok Build's refuses references
+            // (spec/providers.md §9).
+            if route.capability == "image.generate"
+                && !matches!(route.provider.as_str(), "codex" | "grok")
+            {
                 assert!(!route.features.contains("image_input"), "{label}: {id}");
             }
             // OpenRouter's image adapter refuses a mask and a transparent background (§9.2).
@@ -654,6 +690,8 @@ fn pacing_is_declared_where_spec_providers_10_says() {
             ("mesh.generate" | "mesh.rig" | "video.generate", _) => Some(1),
             // One Codex draws several images at once (spec/providers.md §10).
             ("image.generate" | "image.edit", "imagegen@codex") => Some(3),
+            // So does one Grok Build (spec/providers.md §10).
+            ("image.generate" | "image.edit", "imagine@grok") => Some(3),
             // GG keeps one unsettled GPT Image call per organization (spec/providers.md §10).
             ("image.generate" | "image.edit", "openai/gpt-image-2.5-sunburst@gg") => Some(1),
             ("structured.generate", _) => Some(4),
@@ -666,6 +704,7 @@ fn pacing_is_declared_where_spec_providers_10_says() {
 
 #[test]
 fn prices_and_tiers_parse() {
+    let plan = registry().plan_providers();
     for route in table().entries.values() {
         let price = &route.price;
         assert!(price.low <= price.high, "{}", route.id());
@@ -691,7 +730,7 @@ fn prices_and_tiers_parse() {
                 ],
             };
             assert_eq!(tiers, expected, "{}", route.id());
-        } else if route.provider == "codex" {
+        } else if plan.contains(&route.provider) {
             // Free to FX (spec/providers.md §10).
             assert_eq!((price.low, price.high), (Usd::ZERO, Usd::ZERO));
             assert_eq!(price.unit, PriceUnit::Call);
@@ -810,6 +849,7 @@ fn image_tiers_name_sizes_their_routes_serve() {
 #[test]
 fn the_image_routes_price_by_size() {
     let table = table();
+    let plan = registry().plan_providers();
     let with = |size: Option<&str>| -> IndexMap<String, Val> {
         let mut with = IndexMap::new();
         with.insert("prompt".to_string(), Val::Str("a kite".to_string()));
@@ -820,7 +860,7 @@ fn the_image_routes_price_by_size() {
     };
     let mut checked = 0;
     for route in table.entries.values() {
-        if !route.capability.starts_with("image.") || route.provider == "codex" {
+        if !route.capability.starts_with("image.") || plan.contains(&route.provider) {
             continue;
         }
         let id = route.id();
@@ -913,7 +953,7 @@ fn the_video_route_prices_by_second_and_tier() {
 
 #[test]
 fn the_adapters_name_their_contracts_as_the_table_does() {
-    let constants: [(&str, &str, &str); 22] = [
+    let constants: [(&str, &str, &str); 24] = [
         ("image.generate", "gg", gg::image::ADAPTER),
         ("image.edit", "gg", gg::image::ADAPTER),
         ("structured.generate", "gg", gg::chat::STRUCTURED_ADAPTER),
@@ -951,6 +991,8 @@ fn the_adapters_name_their_contracts_as_the_table_does() {
         ("image.generate", "fal", fal::image::CONTRACT_ADAPTER),
         ("image.generate", "codex", codex::ADAPTER),
         ("image.edit", "codex", codex::ADAPTER),
+        ("image.generate", "grok", grok::ADAPTER),
+        ("image.edit", "grok", grok::ADAPTER),
         ("video.generate", "fal", fal::video::CONTRACT_ADAPTER),
         (
             "background.remove",
@@ -973,6 +1015,7 @@ fn the_adapters_name_their_contracts_as_the_table_does() {
     assert_eq!(gg::image::ADAPTER_BEHAVIOR, "1");
     assert_eq!(openrouter::image::CONTRACT_BEHAVIOR, "3");
     assert_eq!(codex::ADAPTER_BEHAVIOR, "2");
+    assert_eq!(grok::ADAPTER_BEHAVIOR, "1");
 }
 
 /// spec/providers.md §10: a route that takes input pictures declares the most its adapter takes,
@@ -983,6 +1026,7 @@ fn input_picture_limits_are_the_adapters_own() {
         let id = route.id();
         let limit = match (route.capability.as_str(), route.provider.as_str()) {
             ("image.generate" | "image.edit", "codex") => Some(codex::MAX_PICTURES),
+            ("image.generate" | "image.edit", "grok") => Some(grok::MAX_PICTURES),
             ("image.edit", "openai") => Some(openai::MAX_INPUT_IMAGES),
             ("image.edit", "openrouter") => Some(openrouter::image::MAX_PICTURES),
             ("image.edit", "fal") => Some(fal::image::MAX_PICTURES),
@@ -1017,8 +1061,8 @@ fn sample(builder: &mut CallBuilder, ty: MemberType) -> Value {
 
 /// Every built-in route gets past its adapter's contract check and the capability check
 /// (spec/providers.md §5 steps 1–2): with no keys, each call is refused for its key (step 3), or
-/// the Codex route for its program, which no test setup has, so no table entry points a model at
-/// a wire its adapter refuses.
+/// the Codex and Grok Build routes for their programs, which no test setup has, so no table entry
+/// points a model at a wire its adapter refuses.
 #[test]
 fn every_route_passes_its_adapter_s_contract_and_capability_checks() {
     let registry = adapters(&setup(Arc::new(NoNetwork), Keys::none()));
@@ -1047,6 +1091,10 @@ fn every_route_passes_its_adapter_s_contract_and_capability_checks() {
         };
         if route.provider == "codex" {
             assert_eq!(reason, codex::NOT_INSTALLED, "{id}");
+            continue;
+        }
+        if route.provider == "grok" {
+            assert_eq!(reason, grok::NOT_INSTALLED, "{id}");
             continue;
         }
         let key = KeyName::of_provider(&route.provider)

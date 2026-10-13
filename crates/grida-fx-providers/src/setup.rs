@@ -101,9 +101,25 @@ pub struct Setup {
     /// The user's Codex program, or why there is none (the refusal of every Codex call). Only
     /// [`crate::live::live_setup`] looks for one.
     pub codex: Result<std::path::PathBuf, String>,
+    /// The user's Grok Build program, or why there is none (the refusal of every Grok call). Only
+    /// [`crate::live::live_setup`] looks for one.
+    pub grok: Result<std::path::PathBuf, String>,
 }
 
 impl Setup {
+    /// A setup over `transport` with `keys`, the default endpoints and `clock`, and no program the
+    /// user installed: only [`crate::live::live_setup`] looks for those.
+    pub fn new(transport: Arc<dyn Transport>, keys: Keys, clock: Arc<dyn Clock>) -> Setup {
+        Setup {
+            transport,
+            keys,
+            endpoints: Endpoints::default(),
+            clock,
+            codex: Err(crate::codex::NOT_INSTALLED.into()),
+            grok: Err(crate::grok::NOT_INSTALLED.into()),
+        }
+    }
+
     /// A redactor over every key of the invocation.
     pub fn redactor(&self) -> Redactor {
         Redactor::new(self.keys.secrets())
@@ -127,6 +143,7 @@ impl std::fmt::Debug for Setup {
             .field("keys", &self.keys)
             .field("endpoints", &self.endpoints)
             .field("codex", &self.codex)
+            .field("grok", &self.grok)
             .finish_non_exhaustive()
     }
 }
@@ -192,13 +209,7 @@ mod tests {
     use crate::transport::replay::NoNetwork;
 
     fn setup(keys: Keys) -> Setup {
-        Setup {
-            transport: Arc::new(NoNetwork),
-            keys,
-            endpoints: Endpoints::default(),
-            clock: Arc::new(SystemClock::new()),
-            codex: Err(crate::codex::NOT_INSTALLED.into()),
-        }
+        Setup::new(Arc::new(NoNetwork), keys, Arc::new(SystemClock::new()))
     }
 
     #[test]

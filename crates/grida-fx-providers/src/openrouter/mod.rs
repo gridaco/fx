@@ -239,19 +239,16 @@ mod tests {
     use super::*;
     use crate::clock::SystemClock;
     use crate::keys::Keys;
-    use crate::setup::Endpoints;
     use crate::transport::TransportErrorKind;
     use crate::transport::replay::NoNetwork;
     use serde_json::json;
 
     fn client() -> Client {
-        let setup = Setup {
-            transport: Arc::new(NoNetwork),
-            keys: Keys::from_pairs(&[(KeyName::OpenRouter, "or-secret")]),
-            endpoints: Endpoints::default(),
-            clock: Arc::new(SystemClock::new()),
-            codex: Err(crate::codex::NOT_INSTALLED.into()),
-        };
+        let setup = Setup::new(
+            Arc::new(NoNetwork),
+            Keys::from_pairs(&[(KeyName::OpenRouter, "or-secret")]),
+            Arc::new(SystemClock::new()),
+        );
         super::client(&setup)
     }
 

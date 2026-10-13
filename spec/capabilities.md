@@ -97,7 +97,7 @@ A picture from a prompt.
 | `maximum_quality` | the route asks for the model's highest quality |
 | `authored_prompt_passthrough` | the prompt is sent verbatim, never rewritten |
 
-**Limits a route may have:** an exact-size envelope or a fixed list of sizes, no transparency, no references, and a limit on the number of input pictures (§1). They are enforced as refusals ([providers.md](providers.md) §9), and while planning where §1 says. Of the routes FX ships, only Codex's takes references for `image.generate` (at most 5), so only it declares `image_input` for it.
+**Limits a route may have:** an exact-size envelope or a fixed list of sizes, no transparency, no references, and a limit on the number of input pictures (§1). They are enforced as refusals ([providers.md](providers.md) §9), and while planning where §1 says. Of the routes FX ships, only Codex's and Grok Build's take references for `image.generate` (at most 5 and 3), so only they declare `image_input` for it.
 
 **Pricing:** per call, in tiers by `size` ([identity.md](identity.md) §12; the built-in tiers are in [providers.md](providers.md) §10).
 
@@ -135,7 +135,7 @@ A picture made from input pictures, optionally within a mask.
 | `authored_prompt_passthrough` | as for `image.generate` |
 | `mask` | the route takes a `mask` |
 
-**Limits a route may have:** an exact-size envelope or a fixed list of sizes, no transparency, no mask, and a limit on the number of input pictures. They are enforced as refusals ([providers.md](providers.md) §9), and while planning where §1 says. The routes FX ships take at most 16 input pictures (`image` and `references`; the mask does not count), and Codex's at most 5; GG's are limited by each model ([providers.md](providers.md) §10).
+**Limits a route may have:** an exact-size envelope or a fixed list of sizes, no transparency, no mask, and a limit on the number of input pictures. They are enforced as refusals ([providers.md](providers.md) §9), and while planning where §1 says. The routes FX ships take at most 16 input pictures (`image` and `references`; the mask does not count), Codex's at most 5 and Grok Build's at most 3; GG's are limited by each model ([providers.md](providers.md) §10).
 
 **Pricing:** as for `image.generate`, with a larger allowance for the input pictures ([providers.md](providers.md) §10).
 

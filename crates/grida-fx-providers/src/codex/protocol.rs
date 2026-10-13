@@ -5,11 +5,10 @@
 
 use super::Stop;
 use crate::adapter::Usage;
+use crate::installed;
+pub(super) use crate::installed::{name, token};
 use crate::wire;
 use serde_json::Value;
-
-/// The longest line Codex may send (an image arrives base64 on one line).
-pub(super) const MAX_LINE_BYTES: usize = 64 * 1024 * 1024;
 
 /// The reasoning effort and service tier of every turn: the user's own settings (a high effort,
 /// a priority tier) would spend their plan faster for nothing an image needs.
@@ -173,44 +172,15 @@ pub(super) fn turn_failure(turn: &Value) -> String {
     }
 }
 
-/// A word from one of Codex's closed vocabularies, safe to show: letters, digits and `_`, at most
-/// 40 of them; anything else is `unknown`.
-pub(super) fn token(text: &str) -> String {
-    let safe = !text.is_empty()
-        && text.len() <= 40
-        && text.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_');
-    if safe {
-        text.to_string()
-    } else {
-        "unknown".to_string()
-    }
-}
-
 fn token_of(value: Option<&Value>) -> String {
     token(value.and_then(Value::as_str).unwrap_or(""))
-}
-
-/// A name Codex gives (a model's), safe to keep: letters, digits, `.`, `-` and `_`, at most 60 of
-/// them.
-pub(super) fn name(text: &str) -> Option<String> {
-    let safe = !text.is_empty()
-        && text.len() <= 60
-        && text
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'));
-    safe.then(|| text.to_string())
 }
 
 /// Codex's version from `initialize`'s `userAgent` (`<client>/<version> (…`), when it is one.
 pub(super) fn version_of(initialized: &Value) -> Option<String> {
     let agent = initialized.get("userAgent").and_then(Value::as_str)?;
     let version = agent.split_whitespace().next()?.split_once('/')?.1;
-    let safe = !version.is_empty()
-        && version.len() <= 40
-        && version
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'+'));
-    safe.then(|| version.to_string())
+    installed::version(version)
 }
 
 /// A thread's total token usage from `thread/tokenUsage/updated`, onto `usage`.
