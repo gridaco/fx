@@ -7,6 +7,8 @@ const STILL_WIDTH = 640;
 const LOADS = 2;
 /** How long the pointer rests on a video's frame before it plays there, muted, in milliseconds. */
 const HOVER_DELAY = 300;
+/** How long a stopped video stays loaded, so playing it again continues at once, in milliseconds. */
+const KEEP_LOADED = 30_000;
 
 type Box = Pick<DOMRectReadOnly, "left" | "top" | "width" | "height">;
 
@@ -91,6 +93,10 @@ export class CardVideos {
   private readonly media: HTMLVideoElement;
   /** The video playing, and whether it plays only while hovered (muted, looping, until the pointer leaves). */
   private playing: { node: string; preview: CanvasPreview; card: SVGGElement; video: SVGGElement; hover: boolean } | null = null;
+  /** The file the player holds, playing or kept after a stop, and whether it shows its frame yet. */
+  private loaded: string | null = null;
+  private shown = false;
+  private unloadTimer: number | null = null;
   private frame: number | null = null;
   private hoverTimer: number | null = null;
   // Playing on hover needs a pointer that hovers, and is motion a viewer may have asked to avoid.
@@ -117,6 +123,7 @@ export class CardVideos {
       this.failed.add(this.playing.preview.digest);
       this.playing.video.classList.add("is-unavailable");
       this.stop();
+      this.unload();
     }, { signal });
     this.player.addEventListener("pointerleave", () => { if (this.playing?.hover) this.stop(); }, { signal });
   }
@@ -169,7 +176,7 @@ export class CardVideos {
     const card = cards.get(this.playing.node);
     const video = card?.querySelector<SVGGElement>(`.fx-canvas-video[data-digest="${this.playing.preview.digest}"]`);
     if (!card || !video) { this.stop(); return; }
-    video.classList.add("is-playing");
+    video.classList.toggle("is-shown", this.shown);
     Object.assign(this.playing, { card, video });
   }
 
@@ -185,17 +192,18 @@ export class CardVideos {
     else this.positions.set(playing.preview.digest, at);
     if (this.frame !== null) cancelAnimationFrame(this.frame);
     this.frame = null;
-    playing.video.classList.remove("is-playing");
+    this.show(playing.video, false);
     this.controls.reset();
+    // Paused, not unloaded: playing it again shows this frame at once and goes on from it.
     this.media.pause();
     this.player.hidden = true;
-    this.media.removeAttribute("src");
-    this.media.load();
+    this.unloadTimer = window.setTimeout(() => this.unload(), KEEP_LOADED);
     if (focused) playing.video.querySelector<SVGGElement>(".fx-canvas-play")?.focus({ preventScroll: true });
   }
 
   dispose() {
     this.stop();
+    this.unload();
     this.abort.abort();
     this.observer.disconnect();
     this.waiting.clear();
@@ -205,25 +213,30 @@ export class CardVideos {
 
   private play(playing: Omit<NonNullable<CardVideos["playing"]>, "hover">, hover = false) {
     this.stop();
+    this.cancelUnload();
     this.playing = { ...playing, hover };
-    playing.video.classList.add("is-playing");
     this.player.setAttribute("aria-label", playing.preview.label);
     this.media.muted = hover;
     this.media.loop = hover;
     this.session = new AbortController();
-    // A video it stopped short of its end continues there. One starting over shows its first frame
-    // until the video's own does; the card's backdrop shows around it.
+    // A video stopped short of its end continues there: at once while the player still holds it,
+    // else from a seek once it loads.
     const { digest, url } = playing.preview;
-    const at = this.positions.get(digest);
-    const still = at === undefined ? this.ready.get(digest) : undefined;
-    if (still) this.media.poster = still;
-    else this.media.removeAttribute("poster");
-    this.media.src = url;
-    if (at !== undefined) {
-      this.media.currentTime = at;
-      // Set before the video has loaded, the time is where it starts; a browser that drops it seeks once it can.
-      this.media.addEventListener("loadedmetadata", () => { if (this.media.currentTime < at - 0.5) this.media.currentTime = at; }, { once: true, signal: this.session.signal });
-    }
+    const at = this.positions.get(digest) ?? 0;
+    if (this.loaded !== digest) {
+      this.loaded = digest;
+      this.media.src = url;
+      if (at) {
+        // Set before the video has loaded, the time is where it starts; a browser that drops it seeks once it can.
+        this.media.currentTime = at;
+        this.media.addEventListener("loadedmetadata", () => { if (this.media.currentTime < at - 0.5) this.media.currentTime = at; }, { once: true, signal: this.session.signal });
+      }
+    } else if (Math.abs(this.media.currentTime - at) > 0.05) this.media.currentTime = at;
+    // The card keeps its first frame, and the player stays clear, until the video shows its own
+    // frame there: nothing blanks while it loads, and its controls never show a time it leaves.
+    const settle = () => { if (this.playing && this.media.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && !this.media.seeking) this.show(this.playing.video, true); };
+    for (const type of ["loadeddata", "seeked", "playing"] as const) this.media.addEventListener(type, settle, { signal: this.session.signal });
+    settle();
     this.player.hidden = false;
     this.follow();
     // Hovering never takes focus.
@@ -233,6 +246,24 @@ export class CardVideos {
   private cancelHover() {
     if (this.hoverTimer !== null) window.clearTimeout(this.hoverTimer);
     this.hoverTimer = null;
+  }
+  /** Whether the video shows its frame over the card, which then hides its first frame and play control. */
+  private show(video: SVGGElement, shown: boolean) {
+    this.shown = shown;
+    video.classList.toggle("is-shown", shown);
+    this.player.classList.toggle("is-shown", shown);
+  }
+  /** Lets go of a stopped video's file and decoder. */
+  private unload() {
+    this.cancelUnload();
+    if (this.playing || this.loaded === null) return;
+    this.loaded = null;
+    this.media.removeAttribute("src");
+    this.media.load();
+  }
+  private cancelUnload() {
+    if (this.unloadTimer !== null) window.clearTimeout(this.unloadTimer);
+    this.unloadTimer = null;
   }
 
   /**
