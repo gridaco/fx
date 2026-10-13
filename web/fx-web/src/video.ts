@@ -7,6 +7,8 @@ const STILL_WIDTH = 640;
 const LOADS = 2;
 /** How long the pointer rests on a video's frame before it plays there, muted, in milliseconds. */
 const HOVER_DELAY = 300;
+/** How long the player fades in and out over the card's first frame, in milliseconds (canvas.css). */
+const FADE = 150;
 /** How long a stopped video stays loaded, so playing it again continues at once, in milliseconds. */
 const KEEP_LOADED = 30_000;
 
@@ -97,6 +99,7 @@ export class CardVideos {
   private loaded: string | null = null;
   private shown = false;
   private unloadTimer: number | null = null;
+  private hideTimer: number | null = null;
   private frame: number | null = null;
   private hoverTimer: number | null = null;
   // Playing on hover needs a pointer that hovers, and is motion a viewer may have asked to avoid.
@@ -196,13 +199,15 @@ export class CardVideos {
     this.controls.reset();
     // Paused, not unloaded: playing it again shows this frame at once and goes on from it.
     this.media.pause();
-    this.player.hidden = true;
+    // It fades out over the card's first frame, which shows again at once.
+    this.hideTimer = window.setTimeout(() => { this.hideTimer = null; this.player.hidden = true; }, FADE);
     this.unloadTimer = window.setTimeout(() => this.unload(), KEEP_LOADED);
     if (focused) playing.video.querySelector<SVGGElement>(".fx-canvas-play")?.focus({ preventScroll: true });
   }
 
   dispose() {
     this.stop();
+    if (this.hideTimer !== null) window.clearTimeout(this.hideTimer);
     this.unload();
     this.abort.abort();
     this.observer.disconnect();
@@ -214,6 +219,8 @@ export class CardVideos {
   private play(playing: Omit<NonNullable<CardVideos["playing"]>, "hover">, hover = false) {
     this.stop();
     this.cancelUnload();
+    if (this.hideTimer !== null) window.clearTimeout(this.hideTimer);
+    this.hideTimer = null;
     this.playing = { ...playing, hover };
     this.player.setAttribute("aria-label", playing.preview.label);
     this.media.muted = hover;

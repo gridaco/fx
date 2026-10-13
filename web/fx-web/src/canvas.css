@@ -55,13 +55,21 @@
 .fx-canvas-play:hover circle, .fx-canvas-play:focus-visible circle { fill: #18181b; }
 .fx-canvas-play:focus-visible circle { stroke: #2563eb; stroke-width: 2px; }
 .fx-canvas-play svg { color: #fff; pointer-events: none; }
-.fx-canvas-video.is-shown .fx-canvas-play, .fx-canvas-video.is-unavailable .fx-canvas-play { display: none; }
-.fx-canvas-video.is-shown .fx-canvas-node-image { visibility: hidden; }
+.fx-canvas-video.is-unavailable .fx-canvas-play { display: none; }
+/* The video fades in over the first frame and play control, which hide once it has; they show again at once as it fades out. */
+.fx-canvas-video .fx-canvas-node-image, .fx-canvas-video .fx-canvas-play { transition: visibility 0s; }
+.fx-canvas-video.is-shown .fx-canvas-node-image, .fx-canvas-video.is-shown .fx-canvas-play { visibility: hidden; transition-delay: .15s; }
 .fx-canvas-video.is-unavailable .fx-canvas-image-error { visibility: visible; }
 .fx-canvas-player { position: absolute; box-sizing: border-box; overflow: hidden; border-radius: 6px; outline: none; container-type: inline-size; font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 .fx-canvas-player:focus-visible { box-shadow: 0 0 0 2px #2563eb; }
 /* Until the video shows its frame the card's first frame shows through, and takes the pointer. */
 .fx-canvas-player:not(.is-shown) { opacity: 0; pointer-events: none; }
+.fx-canvas-player { transition: opacity .15s ease; }
+@starting-style { .fx-canvas-player.is-shown { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .fx-canvas-player { transition: none; }
+  .fx-canvas-video.is-shown .fx-canvas-node-image, .fx-canvas-video.is-shown .fx-canvas-play { transition-delay: 0s; }
+}
 .fx-canvas-player > video { display: block; width: 100%; height: 100%; object-fit: contain; }
 .fx-canvas-player:fullscreen { border-radius: 0; background: #000; }
 .fx-canvas-player.is-idle { cursor: none; }
