@@ -16,6 +16,10 @@
 //!   machine, not this one. Every other request is `https` to a remote host: through a proxy it
 //!   is tunnelled (`CONNECT`), so the proxy sees the host and port, and the request stays
 //!   encrypted end to end;
+//! - **trust**: a server's certificate is accepted when it chains to the bundled Mozilla roots or
+//!   to a root the platform's certificate store trusts (the macOS keychain, the Windows store, the
+//!   system bundle elsewhere; `SSL_CERT_FILE` / `SSL_CERT_DIR`, when set, name it instead), read
+//!   when the clients are built;
 //! - `redirect::Policy::none()`, no retries (reqwest's own retry of protocol NACKs is turned
 //!   off), `accept-encoding: identity` on every request (the adapter reads the entity as sent), a
 //!   connect timeout ([`HttpConfig::connect_timeout`], 30 s by default) inside the request's

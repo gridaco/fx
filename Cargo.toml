@@ -35,7 +35,11 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 base64 = "0.22"
 getrandom = "0.3"
 unicode-general-category = "1.1"
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+# rustls trusting the bundled roots and the platform's certificate store (spec/providers.md §2).
+reqwest = { version = "0.12", default-features = false, features = [
+    "rustls-tls-webpki-roots",
+    "rustls-tls-native-roots",
+] }
 url = "2"
 # init --template: the release's source archive (spec/service.md §2.1).
 tar = { version = "0.4", default-features = false }
