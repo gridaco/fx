@@ -1,109 +1,81 @@
-# Grida FX
+# FX
 
 **Go with the flow.**
 
 ![A finished run open in the FX viewer: its steps on a canvas, with each step's pictures](.github/assets/cover.webp)
 
-Reusable workflows for images, audio, and more. Connect your code and AI models with one
-Grida Gateway key (or your own provider keys), and turn a one-off script into something you can
-run again.
+A workflow engine for images, audio, video, 3D and the code around them.
 
-- **See the plan first.** Inspect the steps, dependencies, and estimated cost before a paid run.
-- **Keep the work you already did.** Reuse matching results from the cache and resume interrupted runs.
-- **Look inside a run.** Open the node canvas to explore steps, connections, and recorded artifacts.
-- **Test without a bill.** Run ordinary code offline, or use [stand-ins](docs/guide/05-running.md#stand-ins-testing-without-a-provider)
-  to answer paid calls in tests.
+## Why FX
+
+A build system for generated assets.
+
+- **Priced before it spends.** The whole run is priced up front, and a live run never crosses
+  its ceiling.
+- **Never pays twice.** Results and paid calls are cached by content, and an interrupted run picks
+  up where it stopped.
+- **Judged, not just generated.** Steps can judge each other's output, draw again when rejected,
+  and let you pick the take you want.
+- **Any model, or your own subscription.** Switch providers per step, or draw on your Codex or
+  Grok plan.
+- **One native engine.** No Docker, no server: YAML in git, from your laptop to CI.
 
 ## Install
 
-FX comes with the Grida CLI:
-
 ```sh
-npm install -g grida
-grida fx --version
+npm install -g grida     # FX as `grida fx` (Node.js 24+; macOS, Linux, Windows through WSL 2)
+pip install grida        # the Python SDK, for nodes in Python
+npm install @grida/fx    # the TypeScript SDK, for nodes in TypeScript
 ```
 
-The CLI needs Node.js 24 or later and carries the FX version it was released with, so updating
-`grida` updates FX. FX runs on macOS, and on Linux (x64 and arm64) with glibc 2.28 or later; on
-Windows, use WSL 2.
-
-Write custom nodes and builders in Python or TypeScript, with that language's SDK:
-
-```sh
-pip install grida        # Python 3.11 or later
-npm install @grida/fx    # in your project; TypeScript nodes run on Node.js 24 or later
-```
-
-`@grida/fx` is also the JavaScript SDK. To run FX without the Grida CLI (in a service you host,
-say), see [ways to run FX](CONTRIBUTING.md#ways-to-run-fx).
+To run FX without the Grida CLI, see [ways to run FX](CONTRIBUTING.md#ways-to-run-fx).
 
 ## AI providers
 
-FX runs your own code with no provider at all. When a step calls an AI model, pick how it reaches
-one:
+FX runs your own code with no provider at all. For AI steps, pick a route per capability or per
+step, and mix them freely:
 
-| | What you set up | What you get |
+| | Set up | You get |
 |---|---|---|
-| **No provider** | nothing | a plain workflow engine: your own code, cached and recorded |
-| **Your own Codex** | Codex, signed in to ChatGPT | images, free to FX: Codex counts them against your plan |
-| **Your own Grok Build** | Grok Build, signed in to a Grok subscription | images, free to FX: Grok Build counts them against your subscription |
-| **Your own keys** | `OPENAI_API_KEY`, `FAL_KEY`, `TRIPO_API_KEY`, `ELEVENLABS_API_KEY`, … | each provider's models, on each provider's account |
-| **Grida Gateway** | one `GG_API_KEY` | every modality, with one key and one bill |
+| **No provider** | nothing | your own code, cached and recorded |
+| **BYOA** (bring your own agent) | Codex or Grok Build, signed in | images on your ChatGPT or Grok subscription, $0 to FX |
+| **Provider keys** | `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `FAL_KEY`, `TRIPO_API_KEY`, `ELEVENLABS_API_KEY` | each provider's models, on its own account |
+| **Grida Gateway** | `GG_API_KEY` | text, images, video and 3D with one key and one bill |
 
-[Grida Gateway](https://console.grida.co/_/ai-gateway) is the shortest way in: create a key,
-set `GG_API_KEY` in the environment or a project `.env`, and FX's text, image, video and 3D steps
-run on it. Mix paths as you like; [AI providers](docs/guide/13-providers.md) lists what each one
-serves and where to get each key.
+[AI providers](docs/guide/13-providers.md) says what each one serves and where to get each key.
 
 ## Plan. Run. Inspect.
 
 Start a project, then pick a route for its first workflow in `fx.yaml`:
 
 ```sh
-npx grida fx init my-assets
+npx grida fx init my-assets                  # a starter project, with files for coding agents
 cd my-assets
-grida fx start --background
-grida fx plan icon --open
+grida fx start --background                  # the local viewer
+grida fx plan icon --open                    # the steps and their price; spends nothing
 grida fx run icon --live --max-usd 1 --open
 ```
 
-`init` writes a starter project into an empty folder: a README that walks through installing
-and connecting a provider, an `AGENTS.md` and the FX skills for coding agents, and a first
-workflow. Or start from an example: `npx grida fx init my-assets --template pet`
-(`--list-templates` lists them). FX keeps a
-project dashboard and records every run.
-
-A run without `--live` executes local steps and reuses cached results. New provider calls need
-`--live` and a spending ceiling, such as `--max-usd 5`, unless every one is on your own Codex or Grok Build.
-
-Start with [the guide](docs/guide/01-getting-started.md), or explore the
-[examples](examples/): recolor an image with code, build a looping background,
-or compose a concept gallery.
+Without `--live`, nothing is spent: local steps run and cached results are reused. Start with
+[the guide](docs/guide/01-getting-started.md), or the [examples](examples/).
 
 ### For agents
-
-Install the skill for workflow authoring, execution, and inspection:
 
 ```sh
 npx skills add gridaco/fx
 ```
 
-[`llms.txt`](llms.txt) (served at [grida.co/fx/llms.txt](https://grida.co/fx/llms.txt)) is the
-reference for agents: the rules, the workflow file, every node type, route and command, complete
-recipes, and what to do about each error. CI checks it against the engine, so it is the
-document to trust when two disagree.
+[`llms.txt`](llms.txt) is the reference for agents: the whole of FX on one page, checked against
+the engine.
 
 ## Learn more
 
 - [The guide](docs/guide/README.md): workflows, nodes, cost and cache, running, viewing, sharing
 - [Python SDK](python/README.md) and [JavaScript SDK](js/fx/README.md)
-- [llms.txt](llms.txt): the whole of FX on one page, checked against the engine
 - [Specifications](spec/): the language-neutral contracts
 
 ## Contribute
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for source builds, examples, checks, and
-viewer or website development. [The overview](docs/wg/overview.md) records the
-project's history and direction; [ISSUES.md](ISSUES.md) tracks known gaps.
-
-Grida FX is open source under [Apache-2.0](LICENSE).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for source builds and checks, and
+[the overview](docs/wg/overview.md) for the project's direction. FX is open source under
+[Apache-2.0](LICENSE).
