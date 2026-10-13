@@ -16,7 +16,7 @@ This page says how to set it up, what it does well, and where it differs from th
    ```
 
    The ChatGPT app for macOS carries its own copy of Codex, and FX finds it there too when
-   `codex` is not on your `PATH`.
+   `codex` is not on your `PATH`. FX needs Codex 0.160.1 or later.
 
 2. Check that FX can see it:
 
@@ -25,12 +25,17 @@ This page says how to set it up, what it does well, and where it differs from th
    ```
 
    ```text
+   program   codex /usr/local/bin/codex (PATH, 0.160.1)
+   …
    route     image.edit imagegen@codex servable
    route     image.generate imagegen@codex servable
    ```
 
-   `not installed (codex)` means FX found no Codex. Put `codex` on your `PATH`, or name the
-   program with `GRIDA_FX_TOOL_CODEX=/path/to/codex`.
+   The `program` line says which Codex FX found, where (`PATH`, `GRIDA_FX_TOOL_CODEX` or
+   `the ChatGPT app`) and its version. `not installed (codex)` means FX found no Codex. Put
+   `codex` on your `PATH`, or name the program with `GRIDA_FX_TOOL_CODEX=/path/to/codex`.
+   `too old (codex …)` means the Codex FX found is older than 0.160.1, often an old copy earlier
+   on your `PATH`: update it, or name a newer one with `GRIDA_FX_TOOL_CODEX`.
 
 3. Pick the route for your project's images in `fx.yaml`:
 
@@ -247,14 +252,16 @@ Codex at all: `Codex was not started: GRIDA_FX_NETWORK is off`.
 - Your prompts and images go to OpenAI under your ChatGPT account's terms, as when you use Codex
   yourself.
 - FX talks to Codex through `codex app-server`, which Codex marks experimental. It was tested with
-  Codex 0.160.1; a Codex update can change it. A step that no longer understands Codex fails, and
-  may fail after Codex has drawn (an image FX cannot recognise is lost to it).
+  Codex 0.160.1, the oldest FX starts; a Codex update can change it. A step that no longer
+  understands Codex fails, and may fail after Codex has drawn (an image FX cannot recognise is
+  lost to it).
 
 ## When it fails
 
 | The step says | What to do |
 |---|---|
 | `Codex is not installed: …` | Install Codex and run `codex login`, or set `GRIDA_FX_TOOL_CODEX`. |
+| `Codex 0.150.0 (from PATH) is older than 0.160.1: …`, or `Codex (from PATH) did not name its version: …` | Update that Codex (`grida fx doctor` shows which one FX found), or set `GRIDA_FX_TOOL_CODEX` to a newer one. |
 | `imagegen@codex does not support exact_size` | Leave `size` out, and size the picture after it (above). |
 | `imagegen@codex takes at most 5 input pictures, …` | Give the step fewer pictures, or use an API route for it. |
 | `… is image/gif; Codex takes PNG, JPEG or WebP` | Convert the picture first. |

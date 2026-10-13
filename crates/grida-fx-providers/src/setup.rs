@@ -100,7 +100,7 @@ pub struct Setup {
     pub clock: Arc<dyn Clock>,
     /// The user's Codex program, or why there is none (the refusal of every Codex call). Only
     /// [`crate::live::live_setup`] looks for one.
-    pub codex: Result<std::path::PathBuf, String>,
+    pub codex: Result<crate::installed::Program, String>,
     /// The user's Grok Build program, or why there is none (the refusal of every Grok call). Only
     /// [`crate::live::live_setup`] looks for one.
     pub grok: Result<std::path::PathBuf, String>,

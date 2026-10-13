@@ -68,9 +68,16 @@
 //!   (environment)`, `… present (.env)` or `… missing`. A missing key alone does not change the
 //!   exit status, unless a route the target uses needs it (its `uses` line is then not
 //!   servable). A key's value is never printed;
+//! - one line per program the user installed (Codex, then Grok Build), found and asked its
+//!   version once (`live::installed`), as a live run would: `program   <name> <path> (<origin>,
+//!   <version>)`, `<origin>` being where it was found (`GRIDA_FX_TOOL_CODEX`, `PATH`, `the
+//!   ChatGPT app`; `GRIDA_FX_TOOL_GROK`, `PATH`, `~/.grok/bin`), and `<version>` what Codex names
+//!   (`no version` when it names none; Grok Build names its own once started, so its line has
+//!   none); else `program   <name> not installed`. These lines do not set the exit status;
 //! - one line per route of the planning project's catalog (the built-in table, then `fx.yaml`
 //!   `route_tables`), sorted by capability, then id: `route     <capability> <model@provider>
-//!   servable`, `… no key (<VARIABLE>)`, `… not installed (codex)` (or `(grok)`) or `… no adapter`, as
+//!   servable`, `… no key (<VARIABLE>)`, `… not installed (codex)` (or `(grok)`), `… too old
+//!   (codex <version>; FX needs 0.160.1+)`, `… no version (codex)` or `… no adapter`, as
 //!   `live::servable` answers over every provider's adapters built on `live::offline_setup`.
 
 use crate::cli::DoctorArgs;
@@ -84,8 +91,9 @@ use grida_fx_core::project::load_target;
 use grida_fx_core::registry::{Registry, RegistryError, Resolved};
 use grida_fx_core::routes::{Route, RouteTable, load_catalog};
 use grida_fx_protocol::DescribeParams;
+use grida_fx_providers::installed::Version;
 use grida_fx_providers::keys::{ALLOWED, Environment, KeySource};
-use grida_fx_providers::live::{self, Servable};
+use grida_fx_providers::live::{self, Installed, Servable};
 use grida_fx_providers::{Endpoints, KeyName, Keys};
 use grida_fx_runtime::host::locate::{
     MINIMUM_NODE, MINIMUM_PYTHON, NO_SDK, Probe, node_runtime, python_interpreter,
@@ -159,7 +167,12 @@ pub fn run(args: &DoctorArgs) -> Result<u8, Error> {
         &mut Vec::new(),
         &mut used,
     );
-    let (uses, unservable) = uses_lines(&used, &providers.catalog, &providers.keys);
+    let (uses, unservable) = uses_lines(
+        &used,
+        &providers.catalog,
+        &providers.keys,
+        &providers.installed,
+    );
     for line in &uses {
         print_line(line);
     }
@@ -257,7 +270,12 @@ fn count_route(
 
 /// One `uses` line per route in `used` (module doc, "The target's routes"), and whether any of
 /// them cannot be served.
-fn uses_lines(used: &UsedRoutes, catalog: &RouteTable, keys: &Keys) -> (Vec<String>, bool) {
+fn uses_lines(
+    used: &UsedRoutes,
+    catalog: &RouteTable,
+    keys: &Keys,
+    installed: &[Installed],
+) -> (Vec<String>, bool) {
     let adapters = live::adapters(&live::offline_setup(keys.clone()));
     let mut unservable = false;
     let lines = used
@@ -267,11 +285,10 @@ fn uses_lines(used: &UsedRoutes, catalog: &RouteTable, keys: &Keys) -> (Vec<Stri
                 None => ("no route".to_string(), false),
                 Some(id) => match catalog.resolve(capability, id) {
                     Ok(route) => {
-                        let servable = live::servable(&adapters, keys, capability, &route.provider);
-                        (
-                            format!("{id} {}", servable_text(servable)),
-                            servable == Servable::Yes,
-                        )
+                        let servable =
+                            live::servable(&adapters, keys, installed, capability, &route.provider);
+                        let served = servable == Servable::Yes;
+                        (format!("{id} {}", servable_text(servable)), served)
                     }
                     Err(_) => (format!("{id} not in the catalog"), false),
                 },
@@ -291,6 +308,12 @@ fn servable_text(servable: Servable) -> String {
         Servable::NoKey(key) => format!("no key ({})", key.variable()),
         Servable::NoAdapter => "no adapter".to_string(),
         Servable::NoProgram(program) => format!("not installed ({program})"),
+        Servable::TooOld {
+            program,
+            version,
+            minimum,
+        } => format!("too old ({program} {version}; FX needs {minimum}+)"),
+        Servable::NoVersion(program) => format!("no version ({program})"),
     }
 }
 
@@ -300,8 +323,10 @@ struct Providers {
     lines: Vec<String>,
     /// The `.env` or a base URL was refused: a live run would not start.
     refused: bool,
-    /// The keys a live run would have, and the planning project's catalog.
+    /// The keys a live run would have, the programs it would find, and the planning project's
+    /// catalog.
     keys: Keys,
+    installed: Vec<Installed>,
     catalog: RouteTable,
 }
 
@@ -324,12 +349,19 @@ impl Providers {
         }
         let refused = !lines.is_empty();
         lines.extend(key_lines(&keys));
+        let installed = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|error| Error::io("the programs' versions", &error))?
+            .block_on(live::installed());
+        lines.extend(program_lines(&installed));
         let catalog = load_catalog(project, &crate::engine::builtin_routes()?, &[])?;
-        lines.extend(route_lines(&catalog, &keys));
+        lines.extend(route_lines(&catalog, &keys, &installed));
         Ok(Providers {
             lines,
             refused,
             keys,
+            installed,
             catalog,
         })
     }
@@ -382,8 +414,32 @@ fn key_lines(keys: &Keys) -> Vec<String> {
         .collect()
 }
 
+/// One `program` line per program the user installed (module doc, "Providers").
+fn program_lines(installed: &[Installed]) -> Vec<String> {
+    installed
+        .iter()
+        .map(|found| {
+            let Some(program) = &found.program else {
+                return labelled("program", &format!("{} not installed", found.name));
+            };
+            let version = match &found.version {
+                None => String::new(),
+                Some(Version::Supported(version) | Version::Older { version, .. }) => {
+                    format!(", {version}")
+                }
+                Some(Version::Unnamed) => ", no version".to_string(),
+            };
+            let (name, path) = (found.name, program.path.display());
+            labelled(
+                "program",
+                &format!("{name} {path} ({}{version})", program.origin),
+            )
+        })
+        .collect()
+}
+
 /// One `route` line per route of `catalog`, sorted by capability, then id.
-fn route_lines(catalog: &RouteTable, keys: &Keys) -> Vec<String> {
+fn route_lines(catalog: &RouteTable, keys: &Keys, installed: &[Installed]) -> Vec<String> {
     let adapters = live::adapters(&live::offline_setup(keys.clone()));
     let mut routes: Vec<(&str, String, &Route)> = catalog
         .entries
@@ -394,7 +450,8 @@ fn route_lines(catalog: &RouteTable, keys: &Keys) -> Vec<String> {
     routes
         .into_iter()
         .map(|(capability, id, route)| {
-            let state = servable_text(live::servable(&adapters, keys, capability, &route.provider));
+            let servable = live::servable(&adapters, keys, installed, capability, &route.provider);
+            let state = servable_text(servable);
             labelled("route", &format!("{capability} {id} {state}"))
         })
         .collect()
@@ -667,7 +724,7 @@ mod tests {
         ]);
         let value = "fx-made-up-fal-value-41d7";
         let keys = Keys::from_pairs(&[(KeyName::Fal, value)]);
-        let lines = route_lines(&catalog, &keys);
+        let lines = route_lines(&catalog, &keys, &[]);
         assert_eq!(
             lines,
             [
@@ -682,13 +739,60 @@ mod tests {
         assert!(lines.iter().all(|line| !line.contains(value)));
     }
 
+    /// Codex found on `PATH` naming `version`, and no Grok Build.
+    fn installed(version: Version) -> Vec<Installed> {
+        let program = grida_fx_providers::installed::Program {
+            path: "/opt/acme/bin/codex".into(),
+            origin: "PATH",
+        };
+        vec![
+            Installed {
+                name: "codex",
+                program: Some(program),
+                version: Some(version),
+            },
+            Installed {
+                name: "grok",
+                program: None,
+                version: None,
+            },
+        ]
+    }
+
+    #[test]
+    fn program_lines_say_where_each_program_was_found_and_its_version() {
+        let older = Version::Older {
+            version: "0.150.0".into(),
+            minimum: "0.160.1",
+        };
+        assert_eq!(
+            program_lines(&installed(older)),
+            [
+                "program   codex /opt/acme/bin/codex (PATH, 0.150.0)",
+                "program   grok not installed",
+            ]
+        );
+        let mut found = installed(Version::Unnamed);
+        assert_eq!(
+            program_lines(&found)[0],
+            "program   codex /opt/acme/bin/codex (PATH, no version)"
+        );
+        // A program asked nothing before it starts shows none.
+        found[0].version = None;
+        assert_eq!(
+            program_lines(&found)[0],
+            "program   codex /opt/acme/bin/codex (PATH)"
+        );
+    }
+
     #[test]
     fn every_built_in_route_has_a_line() {
         let catalog = crate::engine::builtin_routes().unwrap();
-        let lines = route_lines(&catalog, &Keys::none());
+        let supported = installed(Version::Supported("0.160.1".into()));
+        let lines = route_lines(&catalog, &Keys::none(), &supported);
         assert_eq!(lines.len(), catalog.entries.len());
-        // The Codex and Grok Build routes need no key; whether they are servable depends on this
-        // machine.
+        // The Codex and Grok Build routes need no key: they need the program, and Codex one
+        // that is recent enough.
         let (grok, lines_but_grok): (Vec<&String>, Vec<&String>) =
             lines.iter().partition(|line| line.contains("@grok "));
         let (codex, keyed): (Vec<&String>, Vec<&String>) = lines_but_grok
@@ -697,8 +801,7 @@ mod tests {
         assert_eq!(grok.len(), 2, "image.edit and image.generate");
         for line in grok {
             assert!(
-                line.ends_with("imagine@grok servable")
-                    || line.ends_with("imagine@grok not installed (grok)"),
+                line.ends_with("imagine@grok not installed (grok)"),
                 "{line}"
             );
         }
@@ -708,10 +811,20 @@ mod tests {
         );
         assert_eq!(codex.len(), 2, "image.edit and image.generate");
         for line in codex {
+            assert!(line.ends_with("imagegen@codex servable"), "{line}");
+        }
+        let older = Version::Older {
+            version: "0.150.0".into(),
+            minimum: "0.160.1",
+        };
+        for (version, state) in [
+            (older, "too old (codex 0.150.0; FX needs 0.160.1+)"),
+            (Version::Unnamed, "no version (codex)"),
+        ] {
+            let lines = route_lines(&catalog, &Keys::none(), &installed(version));
             assert!(
-                line.ends_with("imagegen@codex servable")
-                    || line.ends_with("imagegen@codex not installed (codex)"),
-                "{line}"
+                lines.contains(&format!("route     image.edit imagegen@codex {state}")),
+                "{lines:#?}"
             );
         }
         let mut sorted = lines.clone();
@@ -749,6 +862,7 @@ mod tests {
             ]),
             &catalog,
             &keys,
+            &[],
         );
         assert_eq!(
             lines,
@@ -765,13 +879,17 @@ mod tests {
             &used(&[("background.remove", Some("bg@fal"), 1)]),
             &catalog,
             &keys,
+            &[],
         );
         assert_eq!(
             lines,
             ["uses      background.remove bg@fal servable (1 step)"]
         );
         assert!(!unservable);
-        assert_eq!(uses_lines(&used(&[]), &catalog, &keys), (Vec::new(), false));
+        assert_eq!(
+            uses_lines(&used(&[]), &catalog, &keys, &[]),
+            (Vec::new(), false)
+        );
     }
 
     #[test]

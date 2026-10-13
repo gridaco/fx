@@ -41,7 +41,7 @@ use crate::adapter::{
     Adapter, Answer, Billing, CallRequest, RequestAdapter, RouteRef, Sent, Usage,
 };
 use crate::capabilities;
-use crate::installed::{self, Picture, failed};
+use crate::installed::{self, Picture, Program, failed};
 use crate::registry::Adapters;
 use crate::setup::Setup;
 use crate::wire;
@@ -250,9 +250,10 @@ fn installed_program(env: &dyn Fn(&str) -> Option<String>) -> Option<PathBuf> {
 ///   else when it names no executable file;
 /// - else the first `grok` in an absolute `PATH` entry (empty and relative entries are skipped, so
 ///   a project's own folder never supplies it). Never `agent`, which other programs also install;
-/// - else [`installed_program`] when it is executable.
-pub fn find_program(env: &dyn Fn(&str) -> Option<String>) -> Option<PathBuf> {
-    installed::find_program(env, PROGRAM_VARIABLE, "grok", installed_program(env))
+/// - else [`installed_program`] when it is executable (origin `~/.grok/bin`).
+pub fn find_program(env: &dyn Fn(&str) -> Option<String>) -> Option<Program> {
+    let fallback = installed_program(env).map(|path| (path, "~/.grok/bin"));
+    installed::find_program(env, PROGRAM_VARIABLE, "grok", fallback)
 }
 
 /// Every variable Grok Build never inherits.
@@ -787,12 +788,15 @@ mod tests {
                     .map(|(_, v)| v.clone())
             }
         };
+        let find_program = |env: &dyn Fn(&str) -> Option<String>| {
+            find_program(env).map(|program| (program.path, program.origin))
+        };
         assert_eq!(
             find_program(&env(vec![
                 (PROGRAM_VARIABLE, shown(&named)),
                 ("PATH", shown(&bin))
             ])),
-            Some(named.clone())
+            Some((named.clone(), PROGRAM_VARIABLE))
         );
         assert_eq!(
             find_program(&env(vec![(PROGRAM_VARIABLE, "/nonexistent/grok".into())])),
@@ -800,7 +804,7 @@ mod tests {
         );
         assert_eq!(
             find_program(&env(vec![("PATH", shown(&bin)), ("HOME", shown(&home))])),
-            Some(on_path)
+            Some((on_path, "PATH"))
         );
         // `agent` alone is never taken for Grok Build.
         let only_agent = dir.path().join("only-agent");
@@ -810,7 +814,7 @@ mod tests {
                 ("PATH", shown(&only_agent)),
                 ("HOME", shown(&home))
             ])),
-            Some(installed)
+            Some((installed, "~/.grok/bin"))
         );
         assert_eq!(find_program(&env(vec![("PATH", shown(&only_agent))])), None);
         assert_eq!(find_program(&env(vec![("HOME", "relative".into())])), None);
