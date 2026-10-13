@@ -12,6 +12,7 @@ Guardrails for working in this repository. [README.md](README.md) says what FX i
 | `crates/grida-fx-providers` | Provider adapters behind an injected transport. |
 | `crates/grida-fx` | The `grida-fx` command. |
 | `crates/grida-fx-viewer` | Read-only run projection, standalone hosting and the project service for the embedded viewer. |
+| `llms.txt` | The reference for people and agents using FX, kept by hand: rules, the workflow file, node types, routes, commands, recipes, errors. Served at grida.co/fx/llms.txt; `tools/check_llms.py` holds it to the engine. |
 | `spec/` | The language-neutral contracts: schemas, identity, protocol, test vectors. Code follows `spec/`; a change to identity is a change to `spec/` first. |
 | `conformance/` | Cases that hold any implementation to the spec through the command line only. |
 | `python/` | The `grida` distribution; FX is `grida.fx`. |
@@ -44,6 +45,12 @@ Guardrails for working in this repository. [README.md](README.md) says what FX i
   `docs/wg/` are a docs source of gridaco/grida (CONTRIBUTING.md, "Docs"): their pages and
   assets live only here. Images go beside the page and use markdown syntax, at most 500 KiB,
   never video; relative links must resolve. CI's `docs` job enforces it.
+- **`llms.txt` is the user-facing source of truth.** Only `spec/` and the engine rank above it;
+  where the guide, the README, the skills or an `AGENTS.md` disagree with it, it wins and they are
+  fixed. It is written by hand, never generated. A change to anything users see (a verb, a flag, a
+  setting, a node type, a route, a message its error table quotes) updates it in the same change,
+  and a release brings it up to the version it names (RELEASING.md). Its recipes are complete
+  projects that `tools/check_llms.py` plans, so keep each one self-contained.
 - **Identifiers, comments, logs and messages are in English.**
 - **Nontrivial browser UI uses vanilla TypeScript classes.** Own canvas, viewport,
   interaction and viewer state in independently testable classes. React is a thin
@@ -69,6 +76,7 @@ cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test --w
 uv run --project python python tools/check_spec.py
 uv run --project python python conformance/run.py --command target/debug/grida-fx --js-sdk js/fx
 python3 tools/build_engine.py && uv run --project python python tools/check_examples.py
+uv run --project python python tools/check_llms.py
 # Showcase examples: install FFmpeg on PATH; these libraries are not SDK dependencies.
 uv pip install --python python/.venv/bin/python -r examples/requirements-ci.txt
 python/.venv/bin/python tools/check_showcase_examples.py

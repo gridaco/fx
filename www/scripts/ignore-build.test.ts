@@ -64,11 +64,11 @@ test("a branch's first deployment compares the website with main's, keeping the 
   });
 });
 
-test("the build watches www, every workspace package it imports and the workspace install", async () => {
+test("the build watches www, every workspace package it imports, the workspace install and llms.txt", async () => {
   const manifest = async (folder: string) => JSON.parse(await readFile(join(root, folder, "package.json"), "utf8")) as { name: string; workspaces?: string[]; dependencies?: Record<string, string> };
   const folders = new Map<string, string>();
   for (const folder of (await manifest(".")).workspaces ?? []) folders.set((await manifest(folder)).name, folder);
-  const watched = new Set(["www", "package.json", "bun.lock"]);
+  const watched = new Set(["www", "package.json", "bun.lock", "llms.txt"]);
   for (const queue = ["www"]; queue.length;) {
     for (const [name, version] of Object.entries((await manifest(queue.pop()!)).dependencies ?? {})) {
       const folder = folders.get(name);

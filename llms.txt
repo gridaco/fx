@@ -1,0 +1,825 @@
+# Grida FX
+
+> Grida FX is a workflow engine for generated assets (images, video, audio, 3D models, structured
+> text) and ordinary local code. You describe steps in a YAML workflow; FX plans the run offline
+> with its price, runs only what changed, caches every result by content, never spends past a
+> ceiling, and records how each result was made. The command is `grida fx`.
+
+Version: 0.6.0
+
+This file is the reference for people and coding agents using FX: what exists, how to write it,
+and how to run it, as complete recipes. It is kept by hand and checked in CI against the engine
+of the release it names: every recipe below is planned, every `grida fx` command is checked
+against the command's own help, and every link resolves. When it and the guide, the README or a
+skill disagree, trust this file. Only the contracts in `spec/` (normative) and the engine itself
+rank above it. An installed FX may be older or newer than the version above: `grida fx --version`
+says which you have, and `grida fx --help` and `grida fx <verb> --help` are always right for it.
+
+## Rules for agents
+
+- **Plan first; it is free.** `grida fx plan <workflow>` never calls a provider. Show the user its
+  steps and estimate before any run that may spend.
+- **Spending is the user's call.** `--live` admits paid calls. Run it only with the user's go and an
+  agreed ceiling (`--max-usd`). A run on the user's own Codex or Grok Build needs no ceiling but
+  spends their subscription: ask for that too.
+- **Keys are the user's.** Never read, print, write or commit `.env` or a key. Ask the user to set
+  keys; check what FX found with `grida fx doctor`. FX never writes provider credentials.
+- **Discover, don't guess.** `grida fx nodes`, `grida fx nodes <type>`, `grida fx schema <target>`
+  and `grida fx --help` list what this installation has.
+- **Ask before changing a route.** The route is part of a step's identity: a new route draws anew
+  and earlier results don't carry over.
+- **`runs/` and `.fx/` belong to FX.** Read runs with `grida fx inspect` or the SDKs; never edit
+  them by hand.
+- **Show the live viewer.** When the project service is running (`grida fx status --json`), give
+  the user the URL `plan --open` or `run` prints instead of describing renders yourself.
+- **Don't retry paid calls yourself.** The engine is the only retry owner (at most 6 attempts per
+  call). A failed run is resumed or run again; cached work is not redone.
+
+## Install and check
+
+```sh
+npm install -g grida   # the grida command, with FX as `grida fx` (Node.js 24 or later)
+pip install grida      # the Python SDK, for nodes and builders in Python (Python 3.11+, brings Pillow)
+npm install @grida/fx  # in a project: the SDK for nodes and builders in TypeScript (Node 24+ to host them)
+grida fx doctor        # the engine, Python, Node, keys and routes FX found
+```
+
+- `npx grida fx <verb>` works without a global install. `grida-fx` (from `@grida/fx`) and
+  `python -m grida.fx` (from the Python package) are the same FX with the same verbs, project
+  files, cache and records; `--version` tells installations apart.
+- Platforms: macOS, Linux (glibc 2.28+), x64 and arm64; Windows through WSL 2.
+- **Python is needed** for your own Python nodes and builders, and for the built-in local types
+  (`image.resize`, `image.crop`, `image.pad`, `image.mirror_repeat`, `image.check_alpha`,
+  `image.check_size`, `json.merge`, `files.copy`, `package`). FX picks `GRIDA_FX_PYTHON`, else the
+  workflow project's `.venv`, else the `.venv` of the project you run from, else the SDK's own
+  Python, else `python3` on `PATH`; older than 3.11 is refused.
+- **Node 24+ is needed** for TypeScript nodes, builders and stand-ins (Bun and Deno cannot host
+  nodes). FX picks `GRIDA_FX_NODE`, else the Node running `grida fx` or the SDK, else `node`.
+- Paid built-in types (`image.generate`, `structured.generate`, …) and `fx/select@1` run in the
+  engine and need neither.
+
+## A project
+
+```sh
+npx grida fx init my-assets       # a starter project in a new or empty folder; installs and starts nothing
+cd my-assets
+grida fx start --background       # the local viewer at http://127.0.0.1:8787/ (optional)
+grida fx plan icon -- --name "copper lantern"
+```
+
+`init` writes `fx.yaml`, `README.md`, `AGENTS.md`, the FX agent skills in `.agents/skills/`,
+`.gitignore`, `.env.example` and `workflows/icon.yaml`. `grida fx init --list-templates` lists
+templates; `--template NAME` picks one. In a folder that already has an `fx.yaml` it only checks it;
+any other non-empty folder is refused (write `fx.yaml` yourself to adopt an existing repository).
+
+```
+my-assets/
+  fx.yaml          # project settings: the folder that holds it is the project root
+  workflows/       # workflow files (searched recursively for `grida fx run <id>`)
+  nodes/           # your own node types (optional)
+  prompts/         # prompt templates (optional)
+  runs/            # one folder per run          (FX writes it; keep out of git)
+  .fx/cache/       # content-addressed results   (FX writes it; keep out of git)
+  .fx/service/     # local service state         (FX writes it; keep out of git)
+```
+
+```yaml
+# fx.yaml
+fx: project/v1
+budget:
+  max_usd: 10                       # ceiling for any one run; --max-usd overrides it
+routes:                             # the model for each capability, where a step names none
+  image.generate: openai/gpt-image-2.5-sunburst@gg
+  structured.generate: { route: openai/gpt-5.6-sol@gg, concurrency: 4 }   # at most 4 calls at once
+# route_tables: [routes/prices.yaml]   # your own route tables (fx: routes/v1), read after the built-in one
+# workflows: [workflows, ../tools/art] # where a workflow id is looked for (replaces the default)
+# cache: ../shared-cache               # share a cache across projects
+# sources: [acme_lib]                  # packages whose source counts toward your nodes' identity
+```
+
+A path that starts with `./` or `../` in a workflow (`uses:`, `prompt:`, `schema:`, a file in
+`with:`) is relative to the project root, the folder of the nearest `fx.yaml` above the workflow,
+whichever file it is written in. Absolute paths are refused.
+
+## The workflow file
+
+```yaml
+fx: workflow/v1          # required
+id: gallery              # required: stable; names runs/<id>/ and `grida fx run gallery`
+title: Gallery           # required
+description: …           # optional
+inputs:  { … }           # what a caller supplies
+tables:  { … }           # constant lookup tables
+let:     { … }           # named expressions
+budget:  { max_usd: 12 } # this workflow's default ceiling
+assert:  [ … ]           # plan-time checks
+steps:   { … }           # required: the work
+outputs: { … }           # what the workflow promises
+```
+
+Three ideas govern everything:
+- **A step is a pure function of what it declares.** It sees only what is wired to it.
+- **Results are kept by content.** A step runs again only when its node type, `with:` values,
+  input bytes, upstream results, route or take changed. Renaming or reordering steps reruns
+  nothing. Paid calls are also cached by their exact request.
+- **Order comes from wiring.** Steps run as soon as their inputs exist, in parallel.
+
+### Strict YAML
+
+FX reads a strict YAML subset with one meaning everywhere. Refused with "quote it": `yes`, `no`,
+`on`, `off` (any case), `True`/`FALSE`/`Null`, leading-zero numbers (`017`), `0x1F`, `1_000`,
+`16:9`, `.inf`, dates (`2026-10-05`). Write `"16:9"`, `"on"`. Duplicate keys, anchors, aliases and
+tags are refused. `1024x1024`, `y` and `n` are plain strings.
+
+### Inputs
+
+```yaml
+inputs:
+  name:     { type: string, description: "What the item is" }
+  count:    { type: integer, default: 4, minimum: 1, maximum: 48 }
+  ratio:    { type: number }
+  draft:    { type: boolean, default: false }
+  poster:   { type: file, kind: image }            # kind: image, audio, video, text/markdown, …
+  sprites:  { type: files, kind: image, glob: true }   # many files, keyed by file stem
+  tags:     { type: list, items: { type: string }, unique_items: true }
+  layers:                                          # a list of objects: `items` is a field map
+    type: list
+    max_items: 32
+    items:
+      id:   { type: string, pattern: "^[a-z0-9_]+$" }
+      file: { type: file, kind: image }
+  canvas:                                          # a nested object: nest fields
+    width:  { type: integer }
+    height: { type: integer }
+  voices:   { type: map, values: { voice_id: { type: string } } }
+```
+
+Keywords are snake_case (`max_items`, `min_length`, `unique_items`). An optional input with no
+default is `null`. `grida fx schema <target>` prints the JSON Schema they compile to. Give inputs
+as kebab-case flags after `--` (`-- --max-entities 24 --poster art/p.png`), or in YAML files with
+`--inputs file.yaml` (repeatable, later wins; paths inside are relative to that file). Lists and
+maps need a file; a `files` input also takes a quoted glob.
+
+### Steps
+
+```yaml
+steps:
+  draw:
+    uses: fx/image.generate@1          # a built-in type, ./nodes/x.py#name, ./nodes/x.ts#name,
+                                       # or ./workflows/other.yaml (a workflow as one step)
+    with: { prompt: "A ${{ inputs.name }} icon", size: 1024x1024, background: transparent }
+```
+
+| Field | Meaning |
+|---|---|
+| `with:` | the node type's inputs and settings |
+| `if:` | run only when true (plan-time values decide in the plan; run-time values make it *maybe*) |
+| `needs:` | order after steps without reading them (rare) |
+| `for_each:` `as:` `key:` `max:` | repeat per item; `max:` is required when the list comes from a step |
+| `matrix:` | repeat over every combination: `{ eye: [...], mouth: [...] }`, read as `matrix.eye` |
+| `steps:` | a group: nested steps that repeat or regenerate together |
+| `judges:` `on_reject:` | this step judges another (below) |
+| `regenerate:` | on a group: redo it until accepted, `{ max: 3, until: "${{ … }}" }` |
+| `takes:` `pick:` | draw several takes now; `pick: manual` (default), `first_accepted`, `best: { by: <fact>, order: lowest\|highest }` |
+| `assert:` | `[{ check: "${{ … }}", message: "…", on_fail: fail\|skip }]` |
+| `at: plan` | run this free, local, deterministic step while planning: its outputs become plan-time values |
+| `budget:` | `{ max_usd: N }` for this step, group or each repeat instance (the innermost counts) |
+| `concurrency:` | at most N instances of a repeated node step at once (no effect on groups yet) |
+| `route:` | which model serves this step (`model@provider`) |
+| `requires:` | features the route must support: `image_input`, `mask`, `alpha`, `exact_size` |
+| `independent_of:` | refuse a route that shares a model with these steps |
+| `timeout:` | seconds; past it the step fails and is not run again |
+
+### Expressions
+
+`${{ … }}` works in any value. A value that is exactly one expression keeps its type (a list stays
+a list); inside other text it makes a string. There are no loops, user functions or string methods:
+write a node when you need more.
+
+| Write | Example |
+|---|---|
+| references | `inputs.poster`, `steps.draw.outputs.image`, `steps.review.facts.verdict`, `item.id`, `let.ready`, `tables.rows`, `matrix.eye` |
+| one instance | `steps.entity['harbor_keeper'].draw`, `steps.cell[item.eye]` |
+| a collection | `steps.entity.*.draw.outputs.image` (ordered like the list, keyed) |
+| fields, elements | `steps.propose.outputs.json.entities`, `inputs.layers[0]` |
+| operators | `+ - * /`, `== != < <= > >=`, `&&`, `\|\|`, `!` |
+| fallback | `a ?? b`: `b` when `a` is null, a skipped step's result, or the last field read is missing |
+| file facts | `facts(inputs.poster).width`, `.height`, `.has_alpha`, `.opaque`, `.bytes`, `.kind`; audio `.duration`; video `.width`, `.height`, `.fps`, `.duration`, `.frames` |
+| functions | `lookup(map, key)`, `min`, `max`, `len`, `contains`, `concat(a, b)`, `join(list, ", ")`, `stem(file)`, `digest(value)`, `accepted(collection)` |
+
+Names the workflow declares are checked even under `??` (a misspelt input fails). Node facts are
+what a step reported (`ctx.fact`), read as `steps.<name>.facts.<fact>`.
+
+### Judges, rejection and regeneration
+
+A judge is a step with `judges: <step>` that reports a `verdict` fact (`accept` or `reject`).
+Everything reading the judged step waits for its judges.
+
+| `on_reject:` | |
+|---|---|
+| `fail` (default) | the judged step fails; its dependents are skipped |
+| `continue` | keep the verdict; downstream runs (filter with `accepted(...)`) |
+| `skip` | skip downstream of the judged step; the run still succeeds |
+| `regenerate: { max: N, then: fail\|continue\|skip\|keep_best: { by: <fact>, order: lowest\|highest }, feedback: true }` | draw again until accepted; `max` counts all takes, the first included |
+
+Three failures stay apart: a failed paid call is retried by the engine (at most 6 attempts, each
+reserved and recorded); a broken node result (`ctx.fail`, wrong outputs) fails the step; a valid
+result judged wrong becomes a new take only when you asked for regeneration.
+
+### Phases
+
+A `for_each` over a list a step makes cannot be sized while planning: it starts a new phase,
+priced at `max:` in the plan and exactly once the list exists. `--yes-up-to N` stops before a
+later phase whose worst case would take the run past N; run again with a higher N to continue. To
+avoid a phase, compute the list in an `at: plan` step.
+
+## Built-in node types
+
+`grida fx nodes` lists every type; `grida fx nodes <type>` shows its settings, outputs and routes.
+Types marked *planned* plan and price but cannot run yet.
+
+| Type | Settings → outputs | Notes |
+|---|---|---|
+| `fx/image.generate@1` | `prompt`, `size` (`WxH` or `auto`), `background` (`auto`, `opaque`, `transparent`), `references`, `vars` → `image` | paid; `references` only on `imagegen@codex` (≤5) and `imagine@grok` (≤3) |
+| `fx/image.edit@1` | `image`, `mask`, `references`, `prompt`, `size`, `background` → `image` | paid; masks only on `gpt-image-2.5-sunburst@openai` |
+| `fx/structured.generate@1` | `prompt`, `system`, `context` (text, json, images), `schema`, `max_tokens`, `vars` → `json` | paid |
+| `fx/video.generate@1` | `prompt`, `first_frame`, `last_frame`, `duration`, `resolution`, `aspect_ratio` → `video` | paid, long job |
+| `fx/speech.generate@1` | `text`, `voice`, `stability`, `language_code`, `max_chars` → `audio` | paid |
+| `fx/sound.generate@1` | `prompt`, `duration`, `prompt_influence`, `loop` → `audio` | paid |
+| `fx/music.generate@1` | `prompt`, `duration` → `audio` | paid |
+| `fx/mesh.generate@1` | `views` (`front` plus `back`, `left` or `right`), `face_limit`, `quad`, `texture`, `pbr` → `model` | paid, long job |
+| `fx/mesh.rig@1` | `model`, `rig_type`, `skeleton` → `model` (binary glTF) | paid, long job |
+| `fx/image.check_alpha@1` | `image`, `expect` (`transparent`, `opaque`) → verdict | free judge (Python) |
+| `fx/image.check_size@1` | `image`, `width`, `height` → verdict | free judge (Python) |
+| `fx/image.resize@1` | `image`, `longest_side` or `width`/`height` → `image` | free (Python) |
+| `fx/image.crop@1` | `image`, `box`, `padding`, or `region` (annotations) → `image` | free (Python) |
+| `fx/image.pad@1` | `image`, `width`, `height` → `image` | free (Python) |
+| `fx/image.mirror_repeat@1` | `image`, `axis` (`x`, `y`, `xy`) → `image` | free (Python) |
+| `fx/select@1` | `first_of: [...]` → the first that exists and was not rejected, under its own port name | free (engine) |
+| `fx/json.merge@1` | `documents` → `json` | free (Python) |
+| `fx/package@1` | `files` (`"dest/{key}.png": <collection>`), `manifest` → `files`, `manifest` | free (Python) |
+| `fx/files.copy@1` | `file` → `file` | free (Python) |
+| `fx/background.remove@1` | `image` → `image` | *planned*: no built-in route |
+| `fx/vision.annotate@1`, `fx/vision.review@1`, `fx/structured.review@1`, `fx/audio.check_duration@1` | | *planned* |
+| `fx/image.compose@1`, `key`, `sheet`, `contact_sheet`; `fx/video.probe@1`, `frames`, `encode`; `fx/audio.normalize@1`, `trim`, `concat`, `mix`; `fx/annotations.mask@1`, `filter` | | *planned* |
+
+A prompt may be a template file (`prompt: ./prompts/draw.md`), rendered with the step's `vars:`
+and the workflow's `inputs`. Until `vision.review` runs, a model's judgement is a
+`structured.generate` answer read by a judge you write (recipe below).
+
+## Routes and providers
+
+A route is `model@provider`. Pick one per capability in `fx.yaml` `routes:`, or per step with
+`route:`. `grida fx nodes <type>` lists routes; `grida fx doctor` says which a live run can serve.
+
+| Capability | Built-in routes | Key |
+|---|---|---|
+| `image.generate`, `image.edit` | `openai/gpt-image-2.5-sunburst@gg`; `gpt-image-2.5-sunburst@openai`; `openai/gpt-image-2.5-sunburst@openrouter`; `openai/gpt-image-2.5/sunburst@fal`; `imagegen@codex`; `imagine@grok` | `GG_API_KEY`, else the provider's; none for Codex and Grok Build |
+| `structured.generate`, `agent.turn` | `openai/gpt-5.6-sol@gg`, `openai/gpt-6-astra@gg`; the same models `@openrouter` | `GG_API_KEY`, else `OPENROUTER_API_KEY` |
+| `video.generate` | `alibaba/wan-3.0@gg`; `google/gemini-omni-flash/v1.1/image-to-video@fal` | `GG_API_KEY`, else `FAL_KEY` |
+| `mesh.generate`, `mesh.rig` | `tripo/p2@gg`, `tripo/rig-v1.0@gg`; `P2-20260801@tripo`, `v1.0-20240301@tripo` | `GG_API_KEY`, else `TRIPO_API_KEY` |
+| `music.generate` | `google/lyria-3-pro-preview@openrouter` | `OPENROUTER_API_KEY` |
+| `sound.generate`, `speech.generate` | `eleven_text_to_sound_v2@elevenlabs`, `eleven_v3@elevenlabs` | `ELEVENLABS_API_KEY` |
+
+- **Grida Gateway (`@gg`)**: one key, `GG_API_KEY` (from console.grida.co), for text, agent turns,
+  images, video and 3D, billed to Grida AI credits; it needs the `text` and `media` scopes.
+- **Your own Codex (`imagegen@codex`)** and **your own Grok Build (`imagine@grok`)**: images with no
+  API key, counted against the user's own subscription and booked by FX at $0. Neither takes an
+  exact `size` (leave it out and resize after) or a `mask`; Grok Build has no transparency. A run
+  whose paid calls are all on them needs no ceiling (it runs under $0 and refuses other routes).
+- **Keys** come from the environment, else the project's `.env` (only the eleven FX key and base
+  URL names are read). Keys never go in `fx.yaml` or a workflow. Without `--live` no key is used.
+  `*_BASE_URL` variables point a provider at a proxy; `HTTPS_PROXY`/`ALL_PROXY` are honoured.
+- Built-in prices are planning allowances; a call is booked at what the provider reports, else at
+  its whole reservation. A route on a provider with no adapter still plans; live it is refused.
+
+## Your own nodes
+
+A node type in your project is a function with a declaration. Do the work and return the declared
+outputs; never write undeclared files, read undeclared files, call providers directly, retry, or
+cache: FX does all of that. Without `version`, a node's identity follows its source (the module,
+the project modules it imports, declared `resources`), so editing it reruns it; paid calls inside
+are still cached by request. With `version=N`, only a bump reruns it; `grida fx lock` pins its
+source in `fx.lock`, and `grida fx lock --same <file>#<name>` confirms a change that keeps behaviour.
+
+Declaration fields (Python keyword arguments, TypeScript object members): `inputs` (`"image"`,
+`"image[]"` a list, `"image{}"` a keyed collection, trailing `?` optional), `params` (types, a tuple
+or list of allowed values, or a JSON Schema), `outputs` (`"image/png"`, `"json"`, `"annotations?"`),
+`calls` (`{"image.edit": 1}`: the most paid calls per run, which the plan prices; an undeclared call
+fails), `resources` (project files it reads), `tools` (external programs, checked by `doctor`;
+`GRIDA_FX_TOOL_<NAME>` picks a build), `judge` (must report a `verdict` fact), `version`, `retry`
+(`"engine"`: rerun after an exception, for providers you call your own way).
+
+What `ctx` gives (Python name; TypeScript in camelCase where it differs):
+
+| | |
+|---|---|
+| `ctx.read.image/json/text/bytes(name)` | a declared input (`image` is PIL; TypeScript has `bytes/text/json`, no image decoding) |
+| `ctx.inputs[name]` | the file: `.path`, `.kind`, `.digest`, `.key`, `.facts` |
+| `ctx.params` | settings, typed |
+| `ctx.out.png/json/text/bytes(...)` | an output value to return; `ctx.out.path(name)` + `ctx.out.file(path)` for files a tool writes |
+| `ctx.fact(name, value)` | report a node fact (`await` in TypeScript) |
+| `ctx.annotate(shape=…, label=…, …)` | add a mark to an `annotations` output |
+| `ctx.image_generate/image_edit/structured_generate(...)`, `ctx.capability(...)` | a paid call through FX: routed, priced, budgeted, cached |
+| `ctx.agent(system=…, tools=[…])` | a tool-using model loop; declare `calls={"agent.turn": N}` |
+| `ctx.tool("ffmpeg").run([...])` | a declared external program |
+| `ctx.prompt(path, **vars)` | render a declared resource with `${{ }}` |
+| `ctx.work_path(name)`, `ctx.state` | scratch space and state for this run of the node |
+| `ctx.progress(text, fraction)` | live progress |
+| `raise ctx.fail(msg)` / `throw ctx.fail(msg)` | a broken result: the step fails with your message |
+
+TypeScript nodes run on Node 24+ with types stripped: ES modules (`"type": "module"`), erasable
+syntax only (no `enum`, `namespace`, parameter properties), `.ts` in import paths, package.json
+`imports` (`#lib/x.ts`) rather than tsconfig `paths`. `tsc` checks bodies against declarations;
+FX never type checks. Return a `Map` for a keyed output. Any other language can implement the node
+protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
+
+## Running
+
+| Command | |
+|---|---|
+| `grida fx plan <target> [--inputs f]… [--max-usd N] [--check] [--json] [--expect-cached] [--open]` | expand, check and price; never spends. `--check` exits 1 on problems (use it in CI) |
+| `grida fx run <target> [--live] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--name N \| --resume N \| --run DIR] [--stand-in F#fn] [--open \| --no-view]` | run; free steps always run, paid calls only with `--live` |
+| `grida fx inspect <run> [--verify] [--json] [--open]` | a run's summary; a workflow id reads its newest run |
+| `grida fx reroll <run> <step-path>` / `grida fx pick <run> <step-path> <take>` | the next take of a step / use a take from now on |
+| `grida fx takes list <target>` / `grida fx takes mv <target> <old> <new>` | read or repair `<id>.takes.yaml` |
+| `grida fx cancel <run> [--invocation ID] [--wait] [--timeout 30s] [--json]` | cancel one invocation; `inspect <run> --control --json` first |
+| `grida fx runs list [--workflow ID] [--json]` / `grida fx runs remove <run>… [--yes]` | list runs / remove runs (preview without `--yes`) |
+| `grida fx cache prune [--yes]` | remove what no remaining run names |
+| `grida fx export <run> --out DIR [--include-values] [--include-diagnostics] [--json]` | a portable copy of a finished run |
+| `grida fx jobs [--forget KEY]` | long provider jobs in the cache |
+| `grida fx nodes [type]`, `grida fx schema <target>`, `grida fx doctor [target]` | discovery and readiness |
+| `grida fx expand`, `identity`, `price <target>`; `grida fx project <run>`; `grida fx observe <run> [--snapshot]` | JSON for tools |
+| `grida fx start [--background] [--port N] [--open]`, `status [--json]`, `stop`, `logs [--lines N]` | the project's local viewer service |
+| `grida fx init [dir] [--template NAME] [--list-templates]`, `grida fx lock [--same NODE]… [--check]` | project setup, node version locks |
+
+`<target>` is a workflow file, a workflow id, or a builder (`file.py:build`, `file.ts:build`, with
+`--arg name=value`). `<run>` is a run folder, a workflow id, or `WORKFLOW_ID/NAME`.
+
+- **Ceiling.** A live run needs one: `--max-usd`, else the workflow's `budget:`, else `fx.yaml`'s.
+  Before every paid call and attempt FX reserves its worst case; a call that would cross the
+  ceiling is not made, its step fails, dependents are skipped, and the rest of the run goes on.
+- **Runs.** Each run is a folder, `runs/<id>/<date>-<n>/`, with `events.jsonl` (the record),
+  `plan.json`, `outputs/` and `files/`. A run ends `ok`, `failed` (naming each failure) or
+  `incomplete`. `--name NAME` creates a named run once; `--resume NAME` (same target, inputs and
+  options) continues it; `--run DIR` creates or continues a folder. Finished steps come from the
+  cache and answered calls replay from the record.
+- **Takes.** The first result of a request is take 1. `reroll` and `pick` write
+  `<id>.takes.yaml` beside the workflow (commit it); every run reads it.
+- **Deliver.** `--deliver icons=out/{key}.png` copies declared outputs after the run, `{key}` per
+  element; a missing one makes the command exit non-zero.
+- **Exit status.** `0` done; `1` refused or not ok (plan problems, a run not ok, a missing
+  delivery); `2` unreadable input or a usage mistake; `130` interrupted or cancelled.
+- **Offline checks.** `GRIDA_FX_NETWORK=off` refuses every provider request before sending;
+  `GRIDA_FX_DISABLE_DOTENV=1` ignores `.env`.
+
+### From Python and JavaScript
+
+```python
+from grida.fx import plan, run
+
+planned = plan("icon", inputs={"name": "copper lantern"})
+print(planned.estimate(), planned.problems)
+result = run(planned, live=True)               # target, inputs and ceiling from the plan
+print(result.ok, result.cost, result.failures) # a failed step does not raise
+result.deliver({"icon": "out/icon.png"})
+```
+
+```ts
+import { plan, run } from "@grida/fx";
+
+const planned = await plan("icon", { inputs: { name: "copper lantern" } });
+const result = await run(planned, { live: true });
+console.log(result.ok, result.chargedUsd, result.failed);
+```
+
+Both raise `PlanRefused` for a refused plan and `FxError` for a run refused before it starts. Also:
+`run_async`, `load_run(...)`/`loadRun(...)` (saved records, `snapshot`, `events`, `follow`,
+`export`), `cancel`/`inspect_control`, `list_runs`/`remove_runs` (`listRuns`/`removeRuns`).
+
+## Recipes
+
+Each recipe is a complete project: every file is shown with its path in a comment on its first
+line (the comment is not part of the file), and CI runs the recipe's `grida fx plan` lines, and
+its `grida fx run` lines without `--live`, against those files.
+
+### One transparent icon, drawn again until its background is clear
+
+```yaml
+# fx.yaml
+fx: project/v1
+budget: { max_usd: 5 }
+routes:
+  image.generate: openai/gpt-image-2.5-sunburst@gg
+```
+
+```yaml
+# workflows/icon.yaml
+fx: workflow/v1
+id: icon
+title: One item icon
+inputs:
+  name: { type: string, description: "What the item is" }
+steps:
+  draw:
+    uses: fx/image.generate@1
+    with:
+      prompt: "A single ${{ inputs.name }} game icon, centered, no text."
+      background: transparent
+      size: 1024x1024
+  clean:
+    uses: fx/image.check_alpha@1
+    judges: draw
+    with: { image: "${{ steps.draw.outputs.image }}", expect: transparent }
+    on_reject:
+      regenerate: { max: 3 }
+outputs:
+  icon: ${{ steps.draw.outputs.image }}
+```
+
+```sh
+grida fx plan icon -- --name "copper lantern"
+grida fx run icon --live -- --name "copper lantern"
+grida fx inspect icon
+```
+
+The plan prices every take regeneration may draw. Running it again changes nothing and costs
+nothing; another `--name` draws again.
+
+### Many items from a table, sized locally, packed into a folder
+
+```yaml
+# workflows/icons.yaml
+fx: workflow/v1
+id: icons
+title: Item icons
+tables:
+  items:
+    - { id: lantern, look: "a copper lantern" }
+    - { id: rope, look: "a coil of hemp rope" }
+    - { id: map, look: "a folded sea chart" }
+steps:
+  icon:
+    for_each: ${{ tables.items }}
+    key: ${{ item.id }}
+    concurrency: 2
+    steps:
+      draw:
+        uses: fx/image.generate@1
+        route: imagegen@codex
+        with: { prompt: "A game inventory icon of ${{ item.look }}, flat style, no text.", background: transparent }
+      small:
+        uses: fx/image.resize@1
+        with: { image: "${{ steps.draw.outputs.image }}", longest_side: 256 }
+      square:
+        uses: fx/image.pad@1
+        with: { image: "${{ steps.small.outputs.image }}", width: 256, height: 256 }
+  pack:
+    uses: fx/package@1
+    with:
+      files:
+        "icons/{key}.png": ${{ steps.icon.*.square.outputs.image }}
+      manifest:
+        items: ${{ tables.items }}
+outputs:
+  icons: ${{ steps.icon.*.square.outputs.image }}
+  files: ${{ steps.pack.outputs.files }}
+```
+
+```sh
+grida fx plan icons
+grida fx run icons --live --deliver icons=out/{key}.png
+```
+
+`key:` names instances (`icon['rope']`), so takes and delivered files follow the item when the
+table changes. On `imagegen@codex` the size is the route's own: resize and pad locally for an exact
+canvas. The run needs no ceiling while every paid call is on Codex.
+
+### A model proposes a list; one image per entry (a second phase)
+
+```json
+// schemas/cast.json
+{
+  "type": "object",
+  "properties": {
+    "characters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": { "id": { "type": "string" }, "look": { "type": "string" } },
+        "required": ["id", "look"]
+      }
+    }
+  },
+  "required": ["characters"]
+}
+```
+
+```yaml
+# workflows/cast.yaml
+fx: workflow/v1
+id: cast
+title: Cast portraits
+inputs:
+  premise: { type: string }
+  max_characters: { type: integer, default: 6, minimum: 1, maximum: 12 }
+budget: { max_usd: 8 }
+steps:
+  propose:
+    uses: fx/structured.generate@1
+    route: openai/gpt-5.6-sol@gg
+    with:
+      prompt: "Invent the cast of this story, at most ${{ inputs.max_characters }}: ${{ inputs.premise }}"
+      schema: ./schemas/cast.json
+  portrait:
+    for_each: ${{ steps.propose.outputs.json.characters }}
+    key: ${{ item.id }}
+    max: ${{ inputs.max_characters }}
+    uses: fx/image.generate@1
+    route: openai/gpt-image-2.5-sunburst@gg
+    with: { prompt: "A portrait of ${{ item.look }}, painted, plain background.", size: 1024x1024 }
+outputs:
+  cast: ${{ steps.propose.outputs.json }}
+  portraits: ${{ steps.portrait.*.outputs.image }}
+```
+
+```sh
+grida fx plan cast -- --premise "a lighthouse keeper's last winter"
+grida fx run cast --live --yes-up-to 5 -- --premise "a lighthouse keeper's last winter"
+```
+
+Phase 2 is priced at `max:` in the plan, then exactly once `propose` answers. `--yes-up-to 5`
+stops before a phase that would take the run past $5.
+
+### Your own Python node and judge
+
+```python
+# nodes/tiles.py
+from PIL import Image, ImageOps
+
+from grida.fx import Ctx, node
+
+
+@node("mirror_tile", inputs={"image": "image"}, outputs={"image": "image/png"})
+def mirror_tile(ctx: Ctx) -> dict:
+    src = ctx.read.image("image")
+    out = Image.new(src.mode, (src.width * 2, src.height))
+    out.paste(src, (0, 0))
+    out.paste(ImageOps.mirror(src), (src.width, 0))
+    return {"image": ctx.out.png(out)}
+
+
+@node("wide_enough", inputs={"image": "image"}, params={"min_width": int}, judge=True)
+def wide_enough(ctx: Ctx) -> dict:
+    width = ctx.inputs["image"].facts["width"]
+    ctx.fact("width", width)
+    ctx.fact("verdict", "accept" if width >= ctx.params["min_width"] else "reject")
+    return {}
+```
+
+```yaml
+# workflows/strip.yaml
+fx: workflow/v1
+id: strip
+title: Seamless strip
+inputs:
+  scene: { type: string }
+steps:
+  draw:
+    uses: fx/image.generate@1
+    route: openai/gpt-image-2.5-sunburst@gg
+    with: { prompt: "${{ inputs.scene }}, side view, flat colours", size: 1536x1024 }
+  tile:
+    uses: ./nodes/tiles.py#mirror_tile
+    with: { image: "${{ steps.draw.outputs.image }}" }
+  wide:
+    uses: ./nodes/tiles.py#wide_enough
+    judges: tile
+    with: { image: "${{ steps.tile.outputs.image }}", min_width: 2048 }
+    on_reject: continue
+outputs:
+  strip: ${{ steps.tile.outputs.image }}
+```
+
+```sh
+grida fx plan strip --max-usd 2 -- --scene "a harbour at dusk"
+```
+
+Python nodes need Python 3.11+ with `grida` (Pillow comes with it). A param declared as a type
+(`int`) is checked when the step runs.
+
+### Your own TypeScript node, run offline
+
+```json
+// package.json
+{ "type": "module", "private": true, "dependencies": { "@grida/fx": "0.6.0" } }
+```
+
+```ts
+// nodes/palette.ts
+import { node } from "@grida/fx";
+
+export const palette = node(
+  {
+    name: "palette",
+    params: { base: "string", steps: { type: "integer", default: 4, minimum: 2 }, mood: ["warm", "cool"] },
+    outputs: { swatches: "json" },
+  },
+  async (ctx) => {
+    const swatches = Array.from({ length: ctx.params.steps }, (_, i) => `${ctx.params.base}/${ctx.params.mood}/${i}`);
+    await ctx.fact("count", swatches.length);
+    return { swatches: ctx.out.json(swatches) };
+  },
+);
+```
+
+```yaml
+# workflows/palette.yaml
+fx: workflow/v1
+id: palette
+title: A palette
+inputs:
+  base: { type: string, default: teal }
+steps:
+  colours:
+    uses: ./nodes/palette.ts#palette
+    with: { base: "${{ inputs.base }}", steps: 5, mood: cool }
+outputs:
+  swatches: ${{ steps.colours.outputs.swatches }}
+```
+
+```sh
+grida fx plan palette
+grida fx run palette -- --base coral
+```
+
+`uses:` names the export (`#palette`). Node 24+ runs the `.ts` file as it is; `npm install
+@grida/fx` puts the SDK in `node_modules`. Nothing here is paid, so the run needs no `--live`.
+
+### A builder: a workflow from your own data, in Python
+
+```python
+# build_icons.py
+from grida.fx import Workflow
+
+ITEMS = {"lantern": "a copper lantern", "rope": "a coil of hemp rope"}
+
+
+def build(theme: str = "flat") -> Workflow:
+    wf = Workflow("built-icons", title=f"Icons, {theme}")
+    icons = wf.step(
+        "icon",
+        for_each=[{"id": key, "look": look} for key, look in ITEMS.items()],
+        key="${{ item.id }}",
+        uses="fx/image.generate@1",
+        route="imagegen@codex",
+        with_={"prompt": f"A {theme} game icon of ${{{{ item.look }}}}, no text."},
+    )
+    wf.outputs(icons=icons.all.outputs.image)
+    return wf
+```
+
+```sh
+grida fx plan build_icons.py:build --arg theme=pixel
+```
+
+A builder runs while planning and returns the workflow; FX never runs arbitrary scripts to find
+one. In TypeScript: `export function build() { return workflow({ id, title, steps, outputs }) }`
+with `expr("item.id")` for expressions, planned as `grida fx plan workflows/icons.ts:build`.
+
+### Fall back to another route when a judge rejects
+
+```yaml
+# workflows/fallback.yaml
+fx: workflow/v1
+id: fallback
+title: A cut-out, from a second route if needed
+inputs:
+  subject: { type: string }
+steps:
+  first:
+    uses: fx/image.generate@1
+    route: openai/gpt-image-2.5-sunburst@gg
+    with: { prompt: "${{ inputs.subject }}, isolated", background: transparent, size: 1024x1024 }
+  clear:
+    uses: fx/image.check_alpha@1
+    judges: first
+    with: { image: "${{ steps.first.outputs.image }}", expect: transparent }
+    on_reject: continue
+  second:
+    if: ${{ steps.clear.facts.verdict == 'reject' }}
+    uses: fx/image.generate@1
+    route: imagegen@codex
+    with: { prompt: "${{ inputs.subject }}, isolated", background: transparent }
+  chosen:
+    uses: fx/select@1
+    with: { first_of: ["${{ steps.first.outputs.image }}", "${{ steps.second.outputs.image }}"] }
+outputs:
+  picture: ${{ steps.chosen.outputs.image }}
+```
+
+```sh
+grida fx plan fallback --max-usd 1 -- --subject "a brass key"
+```
+
+`second` depends on a run-time verdict, so the plan prices it as *maybe*. `select` skips
+candidates whose step was skipped or rejected; `a ?? b` does the same for a skipped step's result.
+
+### Test a workflow offline with a stand-in
+
+```python
+# tests/stand_in.py
+import io
+
+from PIL import Image
+
+from grida.fx import DECLINE, Answer
+
+
+def answer(call):
+    if call.capability != "image.generate":
+        return DECLINE
+    width, height = map(int, call.request["size"].split("x"))
+    picture = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    picture.paste((200, 120, 40, 255), (width // 4, height // 4, width * 3 // 4, height * 3 // 4))
+    out = io.BytesIO()
+    picture.save(out, "PNG")
+    return Answer(files={"image": out.getvalue()})
+```
+
+```yaml
+# workflows/icon.yaml
+fx: workflow/v1
+id: icon
+title: One item icon
+inputs:
+  name: { type: string }
+steps:
+  draw:
+    uses: fx/image.generate@1
+    route: openai/gpt-image-2.5-sunburst@gg
+    with: { prompt: "A ${{ inputs.name }} icon, no text.", background: transparent, size: 1024x1024 }
+  clean:
+    uses: fx/image.check_alpha@1
+    judges: draw
+    with: { image: "${{ steps.draw.outputs.image }}", expect: transparent }
+outputs:
+  icon: ${{ steps.draw.outputs.image }}
+```
+
+```sh
+grida fx plan icon -- --name lantern
+grida fx run icon --stand-in tests/stand_in.py#answer -- --name lantern
+```
+
+A stand-in answers paid calls with your function: offline, for nothing, checked as a provider's
+answer would be (a picture of the wrong size fails the call). It keeps its own cache
+(`.fx/cache/stand-in/`), never mixes with paid answers, and cannot be combined with `--live` or
+`--yes-up-to`. Return `Answer(...)`, `DECLINE` (the call fails as not live), or raise
+`CallRefused`/`CallFailed`; anything else stops the run. From the SDKs: `run(..., stand_in=fn)` in
+Python, `run(..., { standIn: fn })` in JavaScript, in your own process.
+
+## When something fails
+
+| You see | Do |
+|---|---|
+| `"title" is a required property` | a workflow needs `fx`, `id`, `title` and `steps` |
+| `plain scalar 'on' is ambiguous …; quote it` | quote the value (`"on"`, `"16:9"`, `"2026-10-05"`) |
+| `inputs: 'name' is a required property` | give the input: `-- --name …` or `--inputs file.yaml` |
+| `… is a paid call; run with --live` | the step needs a provider: ask the user, then `--live` with a ceiling |
+| `refused: a live run needs a ceiling: …` | add `--max-usd N` (agreed with the user) or a `budget:` |
+| `… was refused: GG_API_KEY is not set` | the user sets the key (environment or `.env`); check with `grida fx doctor` |
+| `<route> does not support exact_size` (or `alpha`, `mask`, `image_input`) | change the setting or the route; for Codex and Grok Build leave `size` out and resize after |
+| `no adapter serves <route> …` | FX cannot call that provider; pick a built-in route (`grida fx nodes <type>`) |
+| `not installed (codex)` / `not installed (grok)` in doctor | install and sign in to Codex or Grok Build, or set `GRIDA_FX_TOOL_CODEX` / `GRIDA_FX_TOOL_GROK` |
+| `python … too old` / `no grida` in doctor | `uv sync` or `pip install grida` in the project, or set `GRIDA_FX_PYTHON` |
+| `node … too old` / `no @grida/fx` | Node 24+, `npm install @grida/fx`, or set `GRIDA_FX_NODE` |
+| `take <n> of <path> no longer produces the picked result …` | the request changed since the pick: `grida fx pick` or `reroll` again |
+| `stopped   phase 2 may cost up to $…` | the next phase needs approval: run again with a higher `--yes-up-to` |
+| a versioned node's source changed | bump `version`, or `grida fx lock --same <file>#<name>` |
+| `port 8787 is in use` | `grida fx start --background --port <N>` |
+| a `submitting` job in `grida fx jobs` | check the provider's dashboard, then `grida fx jobs --forget <key>` |
+
+## Docs
+
+- [The guide](https://github.com/gridaco/fx/blob/main/docs/guide/README.md): every chapter, for people
+- [Getting started](https://github.com/gridaco/fx/blob/main/docs/guide/01-getting-started.md)
+- [The workflow file](https://github.com/gridaco/fx/blob/main/docs/guide/02-workflow-file.md)
+- [Nodes](https://github.com/gridaco/fx/blob/main/docs/guide/03-nodes.md): built-in, Python, TypeScript
+- [Cost, cache and takes](https://github.com/gridaco/fx/blob/main/docs/guide/04-cost-and-cache.md)
+- [Running](https://github.com/gridaco/fx/blob/main/docs/guide/05-running.md): CLI, SDKs, keys, stand-ins
+- [AI providers](https://github.com/gridaco/fx/blob/main/docs/guide/13-providers.md)
+- [Images from your own Codex](https://github.com/gridaco/fx/blob/main/docs/guide/12-codex.md) and [Grok Build](https://github.com/gridaco/fx/blob/main/docs/guide/14-grok.md)
+- [Examples](https://github.com/gridaco/fx/tree/main/examples): complete projects
+
+## Spec
+
+- [spec/](https://github.com/gridaco/fx/blob/main/spec/README.md): the normative contracts
+- [Expressions](https://github.com/gridaco/fx/blob/main/spec/expressions.md), [YAML](https://github.com/gridaco/fx/blob/main/spec/yaml.md), [identity](https://github.com/gridaco/fx/blob/main/spec/identity.md), [providers and routes](https://github.com/gridaco/fx/blob/main/spec/providers.md), [capabilities](https://github.com/gridaco/fx/blob/main/spec/capabilities.md)
+- [The workflow schema](https://github.com/gridaco/fx/blob/main/spec/schemas/fx-workflow-v1.schema.json) and [the project schema](https://github.com/gridaco/fx/blob/main/spec/schemas/fx-project-v1.schema.json)
+
+## Optional
+
+- [Viewing runs](https://github.com/gridaco/fx/blob/main/docs/guide/07-viewing.md), [run control](https://github.com/gridaco/fx/blob/main/docs/guide/08-run-control.md), [SDK runs](https://github.com/gridaco/fx/blob/main/docs/guide/09-sdk-runs.md), [cleanup](https://github.com/gridaco/fx/blob/main/docs/guide/10-cleanup.md), [exports](https://github.com/gridaco/fx/blob/main/docs/guide/11-exports.md)
+- [The Python SDK](https://github.com/gridaco/fx/blob/main/python/README.md) and [the JavaScript SDK](https://github.com/gridaco/fx/blob/main/js/fx/README.md)
+- [The FX agent skill](https://github.com/gridaco/fx/blob/main/skills/grida-fx/SKILL.md): `npx skills add gridaco/fx`

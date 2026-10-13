@@ -204,6 +204,9 @@ jobs:
       - run: uv sync --locked --project python
       - run: python3 tools/build_engine.py
       - run: uv run --locked --project python python tools/check_examples.py
+      # llms.txt: its commands against the engine's help, its recipes planned (and run offline
+      # where they say so), its links (tools/check_llms.py).
+      - run: uv run --locked --project python python tools/check_llms.py
       # Showcase processing libraries belong to examples, not to the distributed SDK.
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: uv pip install --python python/.venv/bin/python -r examples/requirements-ci.txt

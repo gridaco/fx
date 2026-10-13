@@ -88,10 +88,16 @@ Install the skill for workflow authoring, execution, and inspection:
 npx skills add gridaco/fx
 ```
 
+[`llms.txt`](llms.txt) (served at [grida.co/fx/llms.txt](https://grida.co/fx/llms.txt)) is the
+reference for agents: the rules, the workflow file, every node type, route and command, complete
+recipes, and what to do about each error. CI checks it against the engine, so it is the
+document to trust when two disagree.
+
 ## Learn more
 
 - [The guide](docs/guide/README.md): workflows, nodes, cost and cache, running, viewing, sharing
 - [Python SDK](python/README.md) and [JavaScript SDK](js/fx/README.md)
+- [llms.txt](llms.txt): the whole of FX on one page, checked against the engine
 - [Specifications](spec/): the language-neutral contracts
 
 ## Contribute

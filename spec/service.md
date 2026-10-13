@@ -46,8 +46,8 @@ engine, in this order: `fx.yaml`, `README.md`, `AGENTS.md`, `.gitignore`,
 repository's `skills/` (each folder there holding a `SKILL.md`) under
 `.agents/skills/<skill>/`, as `npx skills add gridaco/fx` installs them. The
 engine embeds the skills of the commit it was built from. `AGENTS.md` points
-agents at the skills and asks them to give the user the live viewer's URL while
-the service runs. The starter sets no route: its one paid
+agents at the skills and the published `llms.txt`, and asks them to give the
+user the live viewer's URL while the service runs. The starter sets no route: its one paid
 step plans as refused until the user picks a provider, and its README says how
 to install the CLI and connect one. A directory that already holds `fx.yaml` is
 validated and left as it is: nothing is written, whatever starter files it lacks,

@@ -2,12 +2,13 @@
 # Vercel's Ignored Build Step for the website, named by www/vercel.json: exit 0 skips the
 # build, and any other exit builds it.
 #
-# The website is built from www/, the workspace packages it imports and the workspace install.
+# The website is built from www/, the workspace packages it imports, the workspace install and
+# the repository's llms.txt (served at /fx/llms.txt).
 # A deployment builds when one of them changed since its branch's last successful deployment,
 # or, on a branch's first deployment, when they differ from main's; and whenever that cannot
 # be told.
 
-website="www web/fx-web web/fx-react package.json bun.lock"
+website="www web/fx-web web/fx-react package.json bun.lock llms.txt"
 
 cd "$(git rev-parse --show-toplevel)" || exit 1
 

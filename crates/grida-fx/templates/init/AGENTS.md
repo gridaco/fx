@@ -4,7 +4,9 @@ This is a [Grida FX](https://github.com/gridaco/fx) project. Work through the `g
 (or `npx grida fx` when it is not installed); FX plans, prices, caches and records every step.
 
 The FX agent skills are in `.agents/skills/`: read `grida-fx/SKILL.md` before authoring, running
-or inspecting workflows. Update them with `npx skills add gridaco/fx`.
+or inspecting workflows. Update them with `npx skills add gridaco/fx`. The full FX reference, with
+complete recipes, is <https://grida.co/fx/llms.txt>; it names the FX version it describes, so
+compare it with `grida fx --version`.
 
 ## Rules
 

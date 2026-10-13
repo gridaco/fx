@@ -44,7 +44,9 @@ truth. Every other manifest repeats it in its own form:
 - `js/fx/package.json` uses it unchanged and pins each engine package to it exactly, and
   `js/fx/src/index.ts` exports it as `version`;
 - `fixtures/host/grida/package.json`, the stand-in for the npm `grida` command, pins
-  `@grida/fx` to it exactly, as `grida` does ([spec/distribution.md](spec/distribution.md)).
+  `@grida/fx` to it exactly, as `grida` does ([spec/distribution.md](spec/distribution.md));
+- [`llms.txt`](llms.txt) names it on its `Version:` line and pins `@grida/fx` to it in its
+  recipes. A release also brings the rest of `llms.txt` up to date with what it ships.
 
 To change it, edit `Cargo.toml` and each of those files. Then run `cargo update --workspace`
 and `(cd python && uv lock)`, and check the result:

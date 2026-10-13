@@ -14,7 +14,8 @@ Every other place that states a version repeats it, in its own ecosystem's form:
 - every other package.json under js/ for an ``@grida/fx-*`` package (the per-platform engine
   packages), and web/fx-*'s (the private browser packages), states it;
 - fixtures/host/grida/package.json, the stand-in for the npm ``grida`` command, pins
-  ``@grida/fx`` to exactly it, as ``grida`` does (spec/distribution.md).
+  ``@grida/fx`` to exactly it, as ``grida`` does (spec/distribution.md);
+- llms.txt names it on its ``Version:`` line, and every ``@grida/fx`` it pins is exactly it.
 
     uv run --project python python tools/check_versions.py                       # the tree
     uv run --project python python tools/check_versions.py --tag v0.1.0-alpha.1  # and a tag
@@ -48,6 +49,9 @@ PEP440_PHASE = {"alpha": "a", "beta": "b", "rc": "rc"}
 EXPORTED_VERSION = re.compile(r"""export\s+const\s+(?:version|VERSION)\s*=\s*["']([^"']*)["']""")
 # An engine package named in js/fx/src/platforms.ts, the one list of them.
 PLATFORM_PACKAGE = re.compile(r"""\bpackage:\s*["'](@grida/fx-[^"']+)["']""")
+# llms.txt: the release it describes, and the SDK its recipes pin.
+LLMS_VERSION = re.compile(r"^Version: (\S*)$", re.MULTILINE)
+LLMS_PIN = re.compile(r'"@grida/fx":\s*"([^"]*)"')
 
 
 class VersionError(ValueError):
@@ -208,6 +212,13 @@ def statements(root: Path, version: str) -> Iterator[tuple[str, str | None, str]
     host = root / "fixtures" / "host" / "grida" / "package.json"
     pinned = _json(host).get("dependencies", {}).get("@grida/fx")
     yield _where(root, host, "dependencies @grida/fx"), pinned, version
+
+    llms = root / "llms.txt"
+    text = llms.read_text(encoding="utf-8") if llms.is_file() else ""
+    stated = LLMS_VERSION.search(text)
+    yield "llms.txt Version", stated.group(1) if stated else None, version
+    for pin in LLMS_PIN.finditer(text):
+        yield 'llms.txt "@grida/fx"', pin.group(1), version
 
 
 def platform_manifests(root: Path) -> list[Path]:

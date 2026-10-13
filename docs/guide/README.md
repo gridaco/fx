@@ -5,8 +5,10 @@ workflow file, FX plans the run offline with its price, runs only what changed, 
 result with a record of how it was made.
 
 This guide describes FX for the people who use it. The contracts are in [`spec/`](../../spec/),
-which is normative: where this guide and `spec/` disagree, `spec/` wins. Where the guide describes
-something designed but not built yet, it says **planned**. Stable FX releases start at `0.1.0`;
+which is normative: where this guide and `spec/` disagree, `spec/` wins. The repository's
+[`llms.txt`](../../llms.txt) puts FX on one page for agents, checked against the engine; where it
+and this guide disagree, it wins. Where the guide describes something designed but not built yet,
+it says **planned**. Stable FX releases start at `0.1.0`;
 [the overview](../wg/overview.md) records shipped milestones and future work.
 
 The local FX service gives a project a stable address, a run/plan index, and a
