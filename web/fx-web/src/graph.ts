@@ -199,8 +199,8 @@ const compareText = (left: string, right: string) => left < right ? -1 : left > 
 const compareNamed = (left: { name: string; kind?: string }, right: { name: string; kind?: string }) =>
   compareText(left.name, right.name) || compareText(left.kind ?? "", right.kind ?? "");
 
-/** Follow recorded FX value variants; ordinary JSON values remain opaque. */
-function recordedFileDigests(value: unknown): string[] {
+/** Follow recorded FX value variants; ordinary JSON values remain opaque and are never read as wiring. */
+export function recordedFileDigests(value: unknown): string[] {
   if (!isRecord(value)) return [];
   if (isRecord(value.file)) return isDigest(value.file.digest) ? [value.file.digest as string] : [];
   if (Array.isArray(value.list)) return value.list.flatMap(recordedFileDigests);
@@ -210,14 +210,15 @@ function recordedFileDigests(value: unknown): string[] {
 }
 
 /**
- * A card's preview from its output files in output order: the first image, or without one the
- * first video. Callers pass only files they resolved to a verified URL.
+ * A card's preview from a step's output files, in output order: the first image, or without one
+ * the first video. `resolve` gives a file's type, name and verified URL, or null to leave it out.
  */
-export function cardPreview(files: Iterable<{ digest: string; media_type: string; url: string; label: string }>): CanvasPreview | undefined {
+export function cardPreview(outputs: Record<string, unknown>, resolve: (digest: string) => { media_type: string; name: string; url: string } | null): CanvasPreview | undefined {
   const found = { image: new Map<string, { url: string; label: string }>(), video: new Map<string, { url: string; label: string }>() };
-  for (const { digest, media_type, url, label } of files) {
-    const kind = previewKinds[media_type];
-    if (kind && !found[kind].has(digest)) found[kind].set(digest, { url, label });
+  for (const [port, value] of Object.entries(outputs)) for (const digest of recordedFileDigests(value)) {
+    const file = resolve(digest);
+    const kind = file && previewKinds[file.media_type];
+    if (file && kind && !found[kind].has(digest)) found[kind].set(digest, { url: file.url, label: `${port}: ${file.name}` });
   }
   const kind = found.image.size ? "image" : found.video.size ? "video" : undefined;
   const first = kind && found[kind].entries().next().value;
@@ -226,11 +227,10 @@ export function cardPreview(files: Iterable<{ digest: string; media_type: string
 
 /** Select a recorded output picture or video from the host's verified artifact inventory. */
 function recordedPreview(node: ViewerRun["nodes"][number], artifacts: Map<string, ViewerRun["artifacts"][number]>, apiBase: string): CanvasPreview | undefined {
-  return cardPreview(Object.entries(node.outputs).flatMap(([port, value]) => recordedFileDigests(value).flatMap((digest) => {
+  return cardPreview(node.outputs, (digest) => {
     const artifact = artifacts.get(digest);
-    return artifact?.available && artifact.url === `${apiBase}/artifacts/${digest}`
-      ? [{ digest, media_type: artifact.kind, url: artifact.url, label: `${port}: ${artifact.name}` }] : [];
-  })));
+    return artifact?.available && artifact.url === `${apiBase}/artifacts/${digest}` ? { media_type: artifact.kind, name: artifact.name, url: artifact.url } : null;
+  });
 }
 
 /** Project declared wiring for display; no expressions or execution decisions are evaluated. */

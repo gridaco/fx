@@ -2,7 +2,6 @@ import { displayPortName } from "./ports";
 import { canvasNodeGeometry, canvasPreviewReserved, PORT_ROW, PORT_TOP, type PositionedNode } from "./layout";
 import { stateIcon, stateIconParts } from "./state-icon";
 import type { CanvasStep } from "./graph";
-import { mediaGlyph } from "./video-controls";
 
 const SVG = "http://www.w3.org/2000/svg";
 
@@ -41,6 +40,17 @@ export function cardStatus(node: Pick<CanvasStep, "state" | "started_at" | "wait
   return { text: node.state };
 }
 
+/**
+ * Filled play and pause glyphs on a 24-unit square, in the current colour. Unlike the rest of the
+ * viewer's chrome they are not Lucide's: its outlined ones read poorly on a video.
+ */
+export function mediaGlyph(kind: "play" | "pause", attributes: Record<string, string | number> = {}) {
+  const svg = element("svg", { viewBox: "0 0 24 24", fill: "currentColor", "aria-hidden": "true", ...attributes });
+  if (kind === "play") svg.append(element("path", { d: "M7 4.5v15a1 1 0 0 0 1.53.85l12-7.5a1 1 0 0 0 0-1.7l-12-7.5A1 1 0 0 0 7 4.5z" }));
+  else for (const x of [6, 14]) svg.append(element("rect", { x, y: 5, width: 4, height: 14, rx: 1.25 }));
+  return svg;
+}
+
 /** A state's glyph as a nested SVG square of `size` at (x, y). */
 export function stateIconElement(state: string, x: number, y: number, size: number) {
   const icon = stateIcon(state);
@@ -59,6 +69,7 @@ export function short(text: string, limit: number) { return [...text].length > l
  */
 export function nodeCard(node: PositionedNode, canvasId: string, index: number, signal: AbortSignal, onOpen: (scope: string) => void) {
   const preview = node.preview;
+  const { settings_y, preview_y, preview_height } = canvasNodeGeometry(node);
   const portsLabel = node.ports ? `, inputs: ${node.ports.inputs.map((port) => `${displayPortName(port.name)} (${port.type}, ${port.kind})`).join(", ") || "none"}, outputs: ${node.ports.outputs.map((port) => `${displayPortName(port.name)} (${port.type}, ${port.kind})`).join(", ") || "none"}` : node.pending ? "" : ", port metadata not recorded";
   const scopeLabel = node.kind === "workflow" ? `, imported workflow, ${node.child_count ?? 0} steps, ${node.failure_count ?? 0} failed` : "";
   const state = node.state === "waiting" && node.waiting_for ? `waiting for ${node.waiting_for}` : node.state;
@@ -89,13 +100,12 @@ export function nodeCard(node: PositionedNode, canvasId: string, index: number, 
       if (!ports.length) group.append(element("text", { x: textX, y: PORT_TOP + 3, "text-anchor": direction === "input" ? "start" : "end", class: "fx-canvas-port-type" }, "None"));
     }
     if (node.ports.settings.length) {
-      const settings = element("text", { x: 16, y: canvasNodeGeometry(node).settings_y + 10, class: "fx-canvas-settings" }, short(`Settings · ${node.ports.settings.map((setting) => setting.name).join(", ")}`, 52));
+      const settings = element("text", { x: 16, y: settings_y + 10, class: "fx-canvas-settings" }, short(`Settings · ${node.ports.settings.map((setting) => setting.name).join(", ")}`, 52));
       group.append(settings);
     }
   } else if (!node.pending && !preview) {
     group.append(element("text", { x: 16, y: 64, class: "fx-canvas-port-type" }, "Port metadata not recorded"));
   }
-  const { preview_y, preview_height } = canvasNodeGeometry(node);
   const frame = { x: 16, y: preview_y, width: node.width - 32, height: preview_height };
   if (preview) {
     const clipId = `${canvasId}-preview-${index}`;

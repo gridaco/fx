@@ -19,7 +19,7 @@ export function canvasPreviewReserved(node: CanvasStep) {
 }
 
 /** A preview frame's height for its width: 16:9, the commonest shape of what steps make. */
-export const PREVIEW_ASPECT = 9 / 16;
+const PREVIEW_ASPECT = 9 / 16;
 
 /**
  * Geometry depends on declarations, never on media loading or measured DOM text. The preview

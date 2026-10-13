@@ -60,11 +60,10 @@
 .fx-canvas-video .fx-canvas-node-image, .fx-canvas-video .fx-canvas-play { transition: visibility 0s; }
 .fx-canvas-video.is-shown .fx-canvas-node-image, .fx-canvas-video.is-shown .fx-canvas-play { visibility: hidden; transition-delay: .15s; }
 .fx-canvas-video.is-unavailable .fx-canvas-image-error { visibility: visible; }
-.fx-canvas-player { position: absolute; box-sizing: border-box; overflow: hidden; border-radius: 6px; outline: none; container-type: inline-size; font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.fx-canvas-player { position: absolute; box-sizing: border-box; overflow: hidden; border-radius: 6px; outline: none; container-type: inline-size; font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; transition: opacity .15s ease; }
 .fx-canvas-player:focus-visible { box-shadow: 0 0 0 2px #2563eb; }
 /* Until the video shows its frame the card's first frame shows through, and takes the pointer. */
 .fx-canvas-player:not(.is-shown) { opacity: 0; pointer-events: none; }
-.fx-canvas-player { transition: opacity .15s ease; }
 @starting-style { .fx-canvas-player.is-shown { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
   .fx-canvas-player { transition: none; }

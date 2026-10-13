@@ -1,5 +1,5 @@
 import { parseViewerRun, type ViewerRun } from "./index";
-import { cardPreview, flatCanvasGraph, parseLayoutReport, type CanvasGraph, type LayoutReport } from "./graph";
+import { cardPreview, flatCanvasGraph, parseLayoutReport, recordedFileDigests, type CanvasGraph, type LayoutReport } from "./graph";
 import { projectScopes } from "./scopes";
 
 export interface ExportArtifact {
@@ -91,14 +91,6 @@ function pendingRepeat(item: unknown) {
     && (item.waiting_on === undefined || (Array.isArray(item.waiting_on) && item.waiting_on.every((id) => typeof id === "string") && new Set(item.waiting_on).size === item.waiting_on.length));
 }
 
-/** Only FX value variants contain artifact references; opaque JSON is never interpreted as wiring. */
-export function exportFileDigests(value: unknown): string[] {
-  if (!record(value)) return [];
-  if (record(value.file)) return digest(value.file.digest) ? [value.file.digest] : [];
-  if (Array.isArray(value.list)) return value.list.flatMap(exportFileDigests);
-  if (Array.isArray(value.collection)) return value.collection.flatMap((entry) => Array.isArray(entry) && entry.length === 2 ? exportFileDigests(entry[1]) : []);
-  return [];
-}
 
 function validateReferences(view: ViewerRun, layout: LayoutReport, artifacts: ExportArtifact[]) {
   const ids = new Set(view.nodes.map((node) => node.id));
@@ -134,7 +126,7 @@ function validateReferences(view: ViewerRun, layout: LayoutReport, artifacts: Ex
   }
   const inventory = new Set(artifacts.map((item) => item.digest));
   for (const values of [view.inputs, view.outputs, ...view.nodes.flatMap((node) => [node.with, node.outputs])]) {
-    for (const value of Object.values(values)) if (exportFileDigests(value).some((id) => !inventory.has(id))) refuse("an artifact reference is missing from the inventory.");
+    for (const value of Object.values(values)) if (recordedFileDigests(value).some((id) => !inventory.has(id))) refuse("an artifact reference is missing from the inventory.");
   }
   const addresses = new Set([
     ...view.nodes.map((node) => node.step ?? node.path),
@@ -230,11 +222,11 @@ export function exportCanvasGraph(loaded: LoadedRunExport, scope: string | null 
   for (const node of flat.nodes) {
     const source = view.nodes.find((item) => item.id === node.source_id);
     if (!source) continue;
-    const preview = cardPreview(Object.entries(source.outputs).flatMap(([port, value]) => exportFileDigests(value).flatMap((id) => {
+    const preview = cardPreview(source.outputs, (id) => {
       const artifact = inventory.get(id);
       const url = artifact ? exportArtifactUrl(loaded, id) : null;
-      return artifact && url ? [{ digest: id, media_type: artifact.media_type, url, label: `${port}: ${artifact.name}` }] : [];
-    })));
+      return artifact && url ? { media_type: artifact.media_type, name: artifact.name, url } : null;
+    });
     if (preview) node.preview = preview;
   }
   return projectScopes(view, flat, scope);

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { canvasGraph, type Artifact, type ViewerRun } from "../src/index";
-import { playerBox, resumeAt } from "../src/video";
+import { resumeAt } from "../src/video";
 import { graph } from "./graph.test";
 
 const sourceDigest = "a".repeat(64);
@@ -125,10 +125,5 @@ describe("recorded canvas previews", () => {
     expect([resumeAt(0, 8), resumeAt(7.9, 8), resumeAt(8, 8), resumeAt(NaN, 8)]).toEqual([null, null, null, null]);
     // A stream of unknown length always continues.
     expect(resumeAt(40, Infinity)).toBe(40);
-  });
-
-  test("the player covers its card's frame as it is on screen", () => {
-    expect(playerBox({ left: 130, top: 260, width: 164, height: 70 }, { left: 100, top: 200, width: 800, height: 600 }))
-      .toEqual({ left: 30, top: 60, width: 164, height: 70 });
   });
 });

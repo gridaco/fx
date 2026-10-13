@@ -1,28 +1,10 @@
 import { createElement, Maximize, Minimize, Volume2, VolumeX, type IconNode } from "lucide";
+import { mediaGlyph } from "./card";
 
 /** How long the pointer rests before a playing video's controls fade, in milliseconds. */
 const IDLE_DELAY = 2000;
 /** How far the arrow keys seek, in seconds. */
 const SEEK_STEP = 5;
-
-/**
- * Filled play and pause glyphs, on a 24-unit square, drawn in the current colour. Unlike the rest
- * of the viewer's chrome they are not Lucide's: its outlined ones read poorly on a video.
- */
-export function mediaGlyph(kind: "play" | "pause", attributes: Record<string, string | number> = {}) {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  for (const [name, value] of Object.entries({ viewBox: "0 0 24 24", fill: "currentColor", "aria-hidden": "true", ...attributes })) svg.setAttribute(name, String(value));
-  if (kind === "play") {
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute("d", "M7 4.5v15a1 1 0 0 0 1.53.85l12-7.5a1 1 0 0 0 0-1.7l-12-7.5A1 1 0 0 0 7 4.5z");
-    svg.append(path);
-  } else for (const x of [6, 14]) {
-    const bar = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    for (const [name, value] of Object.entries({ x, y: 5, width: 4, height: 14, rx: 1.25 })) bar.setAttribute(name, String(value));
-    svg.append(bar);
-  }
-  return svg;
-}
 
 /** A video time as players show it: "0:07", "12:30", "1:02:03". */
 export function videoTime(seconds: number) {
@@ -107,7 +89,7 @@ export class VideoControls {
     element.addEventListener("pointerdown", (event) => { taken = press(event.target === video); this.wake(); }, { signal });
     video.addEventListener("click", () => { if (taken) taken = false; else this.toggle(); }, { signal });
     element.addEventListener("pointermove", () => this.wake(), { signal });
-    element.addEventListener("pointerleave", () => { if (!video.paused) this.rest(); }, { signal });
+    element.addEventListener("pointerleave", () => this.rest(), { signal });
     element.addEventListener("focusin", () => this.wake(), { signal });
     element.addEventListener("keydown", (event) => {
       const target = event.target === seek ? "slider" : (event.target as Element).closest("button") ? "button" : "other";
@@ -177,8 +159,9 @@ export class VideoControls {
     const buffered = video.buffered.length ? video.buffered.end(video.buffered.length - 1) : 0;
     seek.style.setProperty("--fx-played", share(video.currentTime));
     seek.style.setProperty("--fx-buffered", share(buffered));
-    const text = `${videoTime(video.currentTime)} / ${videoTime(duration)}`;
-    seek.setAttribute("aria-valuetext", `${videoTime(video.currentTime)} of ${videoTime(duration)}`);
+    const [at, length] = [videoTime(video.currentTime), videoTime(duration)];
+    const text = `${at} / ${length}`;
+    seek.setAttribute("aria-valuetext", `${at} of ${length}`);
     if (this.time.textContent !== text) this.time.textContent = text;
   }
 

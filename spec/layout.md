@@ -279,7 +279,8 @@ A video plays over its card's preview, following the card as the camera and the 
 selects nothing. Resting on it plays it muted, without taking focus or replacing a video someone
 played or pressed. It stops when it ends, when the pointer leaves one that is only hovered, on Esc
 (focus returns to its play control) and as soon as anything covers its card: another card raised
-over it, its deck resting with another card in front, or the veil of a deck it is not in. Until the
+over it, its deck resting with another card in front, or the veil of a deck it is not in; a covered
+card's video does not start. Until the
 video shows its own frame, the card keeps its first frame; the video fades in over it, and out
 again when it stops. Resting on it or playing it again
 continues where it stopped, unless it played to its end. Its
