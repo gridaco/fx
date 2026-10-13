@@ -22,7 +22,7 @@ wheels = [
 
 [[package]]
 name = "grida"
-version = "0.6.0"
+version = "0.6.1"
 source = { editable = "." }
 dependencies = [
     { name = "pillow" },

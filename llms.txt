@@ -5,7 +5,7 @@
 > with its price, runs only what changed, caches every result by content, never spends past a
 > ceiling, and records how each result was made. The command is `grida fx`.
 
-Version: 0.6.0
+Version: 0.6.1
 
 This file is the reference for people and coding agents using FX: what exists, how to write it,
 and how to run it, as complete recipes. It is kept by hand and checked in CI against the engine
@@ -290,6 +290,8 @@ A route is `model@provider`. Pick one per capability in `fx.yaml` `routes:`, or 
 - **Keys** come from the environment, else the project's `.env` (only the eleven FX key and base
   URL names are read). Keys never go in `fx.yaml` or a workflow. Without `--live` no key is used.
   `*_BASE_URL` variables point a provider at a proxy; `HTTPS_PROXY`/`ALL_PROXY` are honoured.
+  HTTPS trusts the public roots and the platform's certificate store (`SSL_CERT_FILE`/`SSL_CERT_DIR`
+  in its place when set), so a proxy whose root the machine trusts works.
 - Built-in prices are planning allowances; a call is booked at what the provider reports, else at
   its whole reservation. A route on a provider with no adapter still plans; live it is refused.
 
@@ -367,7 +369,8 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
 - **Takes.** The first result of a request is take 1. `reroll` and `pick` write
   `<id>.takes.yaml` beside the workflow (commit it); every run reads it.
 - **Deliver.** `--deliver icons=out/{key}.png` copies declared outputs after the run, `{key}` per
-  element; a missing one makes the command exit non-zero.
+  element; a missing one makes the command exit non-zero. The viewer's **Download all (.zip)** is
+  the same files for a person; agents use `--deliver` or `export`.
 - **Exit status.** `0` done; `1` refused or not ok (plan problems, a run not ok, a missing
   delivery); `2` unreadable input or a usage mistake; `130` interrupted or cancelled.
 - **Offline checks.** `GRIDA_FX_NETWORK=off` refuses every provider request before sending;
@@ -612,7 +615,7 @@ Python nodes need Python 3.11+ with `grida` (Pillow comes with it). A param decl
 
 ```json
 // package.json
-{ "type": "module", "private": true, "dependencies": { "@grida/fx": "0.6.0" } }
+{ "type": "module", "private": true, "dependencies": { "@grida/fx": "0.6.1" } }
 ```
 
 ```ts
