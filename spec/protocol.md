@@ -2,7 +2,7 @@
 
 `fx-node-protocol-v1` · schema: [schemas/fx-node-protocol-v1.schema.json](schemas/fx-node-protocol-v1.schema.json)
 
-The engine runs node bodies and workflow builders written in other languages through a **node host**: a separate process that loads the user's modules and runs their code. The Python host ships with `grida.fx`, and the TypeScript host with `@grida/fx`. This document is the contract between the engine and any host. (The [overview](../docs/wg/overview.md) calls it "protocol v2": its design name relative to the Python engine FX grew out of, which ran bodies in its own process.)
+The engine runs node bodies and workflow builders written in other languages through a **node host**: a separate process that loads the user's modules and runs their code. The Python host ships with `grida.fx`, and the TypeScript host with `@grida/fx`. This document is the contract between the engine and any host.
 
 The split is fixed. **The host runs user code and nothing else.** The engine owns the store, the call cache, routes, prices, budgets, retries, prompt rendering, the agent loop, file facts and every identity. A host never computes a digest or a file fact, never talks to a provider and never writes the store. The values a body reports about its own result with `fact` are *node facts* (§6.3), not file facts ([identity.md](identity.md) §4).
 
@@ -522,7 +522,7 @@ Each SDK hosts node bodies, builders and stand-ins in its own language, over the
 
 ### 8.1 Python
 
-`grida.fx` keeps the `Ctx` authoring surface of FX's Python predecessor and rehosts it over the protocol:
+`grida.fx` offers the `Ctx` authoring surface over the protocol:
 
 | `Ctx` | Protocol |
 |---|---|
@@ -848,29 +848,3 @@ The whole exchange is below, with the messages indented for reading. Both sides 
 ```
 
 The call key is `digest({"kind": "fx-call-v1", "capability": "structured.generate", "route": <fingerprint>, "request": <the request above>, "take": [1]})` ([identity.md](identity.md) §9). The engine then stores `out/caption.txt`, merges the node fact `words: 7` with the `cost_usd: 0.0012` it writes itself, and writes the result record under the step's identity.
-
-## 10. Changes from the Python predecessor
-
-The Python engine FX grew out of ran bodies in its own process and handed them live Python objects. Its protocol schema was never serialized.
-
-| Predecessor | FX |
-|---|---|
-| A body's `Ctx` holds the engine's own objects | Everything crosses the protocol as data |
-| Callbacks have no ids and no results | JSON-RPC requests in both directions, interleaved |
-| The capability layer retries inside the provider adapter | The engine is the only retry owner, and it settles every attempt |
-| Python runs the agent loop and its tools in one process | The engine runs the loop; tools and the check come back as `tool.invoke` and `agent.check` |
-| Prompts are rendered in the host's Python | `prompt.render`: the engine owns the language and the resource check |
-| `InputFile.facts` is computed lazily by a Python plugin | Every file ref carries the file facts the engine computed |
-| `ctx.out.json` writes Python's `json.dumps(v, sort_keys=True, indent=1, ensure_ascii=False)` | `file.put` with `json`: the engine writes the format of [identity.md](identity.md) §5, the same bytes in every language, and the predecessor's bytes for most values |
-| Tool results enter the transcript as Python `json.dumps` text | `text(v)` ([identity.md](identity.md) §5) |
-| `ctx.progress` and `ctx.cancelled` do nothing | `progress` and `$/cancel` |
-| A timeout cannot stop a body running in a thread | A host that ignores `$/cancel` is ended |
-| A param holding a file that is neither text nor JSON arrives as a live object | `param_files` |
-| `NodeFailure`, `CapabilityError` and other exceptions | Error codes, each saying whether the node may run again |
-| A builder's takes file is `<builder module>.takes.yaml`, next to the builder file | `<workflow id>.takes.yaml` in the folder of the module that constructed the `Workflow` (§5.2), since one builder module may build several workflows. A project moving to FX renames such takes files. |
-| A schema refusal of a submitted value is the jsonschema validator's message | FX's own text per failed keyword (§6.2) |
-| A transcript's tool call holds `arguments` as an object | Its canonical JSON text, as provider APIs carry it (§6.2) |
-| `Agent.transcript` carries over from one run to the next | A new transcript per `agent.run`, and the transcript so far in the data of an error that ends a loop (§6.2) |
-| A malformed `agent.turn` reply is cached and fails every replay | A billed failed attempt that is never recorded (§6.1 step 7) |
-| A `retry: engine` rerun sends a call that already failed again: up to 36 sends of one request | A key that ended in an engine error is never sent again in the invocation (§6.1 step 3) |
-| A call still in flight when its step timed out is left behind, its hold open | A step timeout leaves paid work with the engine to finish and settle. Whole-invocation cancellation instead ends local waiting with conservative settlement; remote completion can remain unknown (§5.3). |

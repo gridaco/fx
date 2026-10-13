@@ -106,10 +106,10 @@ fn assert_refused(call: &TestCall, keys: Keys, reason: &str) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// A1: the reference transcript on the astra route
+// The reference transcript on the astra route
 
 #[test]
-fn a1_the_transcript_maps_to_the_wire() {
+fn the_transcript_maps_to_the_wire() {
     let picture = media::png(1, 1, Some(255));
     let mut builder = CallBuilder::new("agent.turn", ASTRA_ROUTE).contract(astra_contract());
     let file = builder.file("image/png", &picture);
@@ -229,10 +229,10 @@ fn arguments_text_passes_byte_for_byte_and_objects_go_compact() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// A2: the text-model route
+// The text-model route
 
 #[test]
-fn a2_the_text_model_route_sends_the_provider_defaults() {
+fn the_text_model_route_sends_the_provider_defaults() {
     let picture = media::png(2, 2, Some(255));
     let mut builder = CallBuilder::new("agent.turn", TEXT_ROUTE).contract(text_contract());
     let image = builder.file("image/png", &picture);
@@ -279,10 +279,10 @@ fn a2_the_text_model_route_sends_the_provider_defaults() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// A3: replies
+// Replies
 
 #[test]
-fn a3_replies_parse_and_malformed_calls_fail() {
+fn replies_parse_and_malformed_calls_fail() {
     let good = reply(
         json!({
             "content": [{"type": "text", "text": "Looking."}],
@@ -359,10 +359,10 @@ fn a3_replies_parse_and_malformed_calls_fail() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// A4: empty assistant messages, ids, tool names
+// Empty assistant messages, ids, tool names
 
 #[test]
-fn a4_an_empty_assistant_message_sends_null_content_and_no_calls() {
+fn an_empty_assistant_message_sends_null_content_and_no_calls() {
     let call = turn(
         TEXT_ROUTE,
         text_contract(),
@@ -391,7 +391,7 @@ fn a4_an_empty_assistant_message_sends_null_content_and_no_calls() {
 }
 
 #[test]
-fn a4_turns_that_cannot_be_sent_are_refused() {
+fn turns_that_cannot_be_sent_are_refused() {
     let with = |messages: Value| {
         turn(
             TEXT_ROUTE,

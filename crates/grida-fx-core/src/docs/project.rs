@@ -7,7 +7,7 @@
 //!
 //! The start is made absolute and its symbolic links are resolved (as far as it exists), as
 //! Python's `Path.resolve()` does. Messages name the file `fx.yaml`. A `nodes:` folder with a
-//! `..` segment reads `nodes is a folder inside the project`, gnode's sentence. A `workflows:`
+//! `..` segment reads `nodes is a folder inside the project`. A `workflows:`
 //! folder that is the project root or a folder above it, lexically or once its symbolic links
 //! are resolved, is refused when the file is found (spec/store.md, *Finding a workflow by id*):
 //! searching it would read the project's own runs and store.

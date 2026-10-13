@@ -266,7 +266,7 @@ def test_param_schema_renames_the_predecessors_keys() -> None:
         "x-fx-optional": True,
         "x-fx-template": False,
     }
-    # Only boolean values are the predecessor's flags; anything else is the schema's own.
+    # Only boolean values are the shorthand's flags; anything else is the schema's own.
     assert param_schema({"optional": "maybe"}) == {"optional": "maybe"}
     assert param_schema({"optional": True, "x-fx-optional": True}) == {"x-fx-optional": True}
     with pytest.raises(SpecError, match="sets both optional and x-fx-optional"):

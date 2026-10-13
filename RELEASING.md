@@ -1,15 +1,15 @@
 # Releasing
 
-Milestone 2 and the installed-preview checks have passed. Python uses stable releases
-starting at `0.1.0`, so users can install with `pip install grida`. npm uses `latest` for stable versions and `next` for pre-releases. [`.github/workflows/release.yml`](.github/workflows/release.yml) builds,
-checks and publishes both package formats from the same version. The owner pushes the tag
+Stable releases start at `0.1.0`: Python users install with `pip install grida`, and npm uses
+`latest` for stable versions and `next` for pre-releases.
+[`.github/workflows/release.yml`](.github/workflows/release.yml) builds, checks and publishes
+both package formats from the same version. The owner pushes the tag
 and approves the publish. CI uses OIDC for both registries and holds no publishing token.
 Local uploads have no CI build provenance.
 
-The first CI preview is published: `0.1.0-alpha.2` on npm and `0.1.0a2` on PyPI.
-The stable release `0.1.0` is published on npm and PyPI.
-All five npm trusted publishers and the PyPI publisher have completed a tokenless
-upload. Future releases start with a version bump; the initial bootstrap is complete.
+The one-time setup below is done: all five npm packages and the PyPI project publish through
+trusted publishing, and each has completed a tokenless upload. A release starts with a version
+bump.
 
 ## What a release publishes
 
@@ -115,9 +115,11 @@ The run builds all four targets and checks everything, but publishes nothing. It
 you can download and inspect them. Do this before the first tag. (A run started on a `v*` tag
 with dry_run unchecked publishes, just as pushing the tag does.)
 
-After the Apple Silicon preview, bootstrap the other three npm packages from a **successful**
-dry run of the same source and version. Download its `npm-x86_64-apple-darwin`,
-`npm-x86_64-unknown-linux-gnu` and `npm-aarch64-unknown-linux-gnu` artifacts into separate folders
+A new engine package needs a manual first upload, since npm configures a trusted publisher only
+on a package that exists. Take its tarball from a **successful** dry run of the same source and
+version. The first bootstrap, after the Apple Silicon local preview, uploaded the other three:
+download the `npm-x86_64-apple-darwin`, `npm-x86_64-unknown-linux-gnu` and
+`npm-aarch64-unknown-linux-gnu` artifacts into separate folders
 (Actions → run → Artifacts, or `gh run download <run-id> --repo gridaco/fx --dir target/bootstrap`).
 Each contains exactly one tested engine tarball. Inspect them and publish from your
 npm-authenticated machine:
@@ -128,10 +130,8 @@ npm publish target/bootstrap/npm-x86_64-unknown-linux-gnu/*.tgz --tag next --acc
 npm publish target/bootstrap/npm-aarch64-unknown-linux-gnu/*.tgz --tag next --access public --ignore-scripts --registry https://registry.npmjs.org
 ```
 
-All five npm package pages now exist. Register their trusted publishers, configure PyPI,
-bump to the next preview and push its tag. That next release publishes all four platforms
-through OIDC, including the three remaining Python wheels. The initial local preview
-supports Apple Silicon only until the remaining artifacts are uploaded.
+Then register the package's trusted publisher (One-time setup, step 3); the next tag publishes
+it through OIDC with the rest.
 
 ## Local packaging and setup preview
 

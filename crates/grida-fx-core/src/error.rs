@@ -28,7 +28,7 @@ pub enum ErrorKind {
     Io,
     /// A node host that could not start or broke the protocol.
     Host,
-    /// A command or feature that arrives with a later step ("not available until the runner lands").
+    /// A command or feature the engine cannot provide in the setting it was asked in.
     Unavailable,
     /// A fault in the engine itself.
     Internal,
@@ -80,7 +80,7 @@ impl Error {
         Self::new(ErrorKind::Internal, message)
     }
 
-    /// A command of a later step: `"<verb> is not available until the runner lands"`.
+    /// A command or feature the engine cannot provide here, named in `message`.
     pub fn unavailable(message: impl Into<String>) -> Self {
         Self::new(ErrorKind::Unavailable, message)
     }

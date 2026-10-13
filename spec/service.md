@@ -1,6 +1,6 @@
 # Local FX service
 
-**Status: ratified and implemented in source, 2026-10-08; verified offline.**
+**Status: ratified and implemented, 2026-10-08; released in 0.2.0; verified offline.**
 
 The local FX service gives one project a stable loopback address, an index of
 recorded runs and saved plans, and the embedded browser client. Workflow execution
@@ -257,12 +257,12 @@ entry. A wrong project or entry ID returns an error, never the current project's
 unrelated run. Browser readers use explicit scoped API bases and reject URLs
 outside that scope. The standalone root API remains supported.
 
-**Implemented in source (2026-10-10), unreleased:** a scoped `GET /api/layout` returns
+A scoped `GET /api/layout` returns
 the selected run's or plan's canvas layout report ([layout.md](layout.md) §6.11) with
 `Cache-Control: no-store` and no `ETag`, since the report changes as a run records more
 while the layout file stays the same. The standalone root serves the same report at
 `/api/layout`, and a run's `/api/snapshot` carries the report of its prefix as `layout`.
-Ship A serves automatic cells only. With the layout file (Ship B, not
+The report carries automatic cells only. With the layout file ([layout.md](layout.md) §6, not
 implemented), the service derives the file's location from the recorded `takes_file` alone; a request never names a path. A `takes_file` that is not a plain
 relative path inside the project, or a location reached through a symbolic link that
 leaves it, is not read: the report says so with a diagnostic and carries automatic
@@ -309,4 +309,3 @@ or real browser opener is required in automated tests.
 
 An actual browser check must additionally demonstrate multiple run navigation,
 live step changes and completed-run inspection after the producing command exits.
-Published packages receive these source behaviors only in a later release.

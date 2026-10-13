@@ -1,9 +1,9 @@
-"""The nine standard bodies, ported byte for byte from FX's predecessor (``grida.fx.std``).
+"""The nine standard bodies (``grida.fx.std``).
 
 Each takes a :class:`~grida.fx.Ctx` and returns its outputs. Every picture output is
 ``_png(picture)``: ``picture.save(BytesIO(), format="PNG")`` with nothing else, so Pillow's own
 encoder settles every byte; the RGBA conversion and rounding are Pillow's and Python's
-(``round`` ties to even). Messages are the predecessor's, verbatim.
+(``round`` ties to even).
 
 - ``mirror_repeat``: ``axis`` containing ``x`` doubles the width with a left-right mirror, then
   ``y`` doubles the height with a top-bottom flip; past 16384 px: ``mirroring <n> px on <axis>
@@ -198,8 +198,8 @@ _TEXT_KINDS = {".md": "text/markdown", ".txt": "text/plain"}
 
 def _stored_bytes(file: _ctx.InputFile) -> bytes | None:
     """A file's bytes, or ``None`` when the engine handed it without a place to read them (a
-    file ref always has a ``path``, ``spec/protocol.md`` section 3.1; this keeps the
-    predecessor's sentence for one that does not)."""
+    file ref always has a ``path``, ``spec/protocol.md`` section 3.1; one that does not
+    gets its own sentence)."""
 
     try:
         path = file.path

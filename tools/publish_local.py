@@ -298,7 +298,7 @@ def load_manifest(path: Path) -> Release:
         fail("Python and npm versions disagree")
     target = value.get("target")
     if not isinstance(target, str) or target not in TARGETS:
-        fail("manifest target is not a supported preview target")
+        fail("manifest target is not a supported release target")
     binary_sha256 = value.get("binary_sha256")
     if not isinstance(binary_sha256, str) or SHA256.fullmatch(binary_sha256) is None:
         fail("manifest binary_sha256 must be a lowercase SHA-256 digest")

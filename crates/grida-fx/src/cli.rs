@@ -17,7 +17,7 @@
 //! `run --live` reads the provider keys from the environment or the planning project's `.env`
 //! (spec/providers.md §3; [`crate::engine::adapters_for`]); `doctor` says which are present.
 //!
-//! As with the predecessor's argparse, a repeated option takes its last value (`--max-usd 1
+//! As with Python's argparse, a repeated option takes its last value (`--max-usd 1
 //! --max-usd 2` is a ceiling of $2; `--check --check` is `--check`); repeatable options
 //! (`--inputs`, `--routes`, `--arg`, `--same`, `--deliver`) still collect every value.
 //! `--max-usd`, `--yes-up-to` and `pick`'s take accept a negative number as their value, so FX's

@@ -20,7 +20,7 @@
 //! - tools match `^[a-z0-9][a-z0-9_-]*` plus an optional version bound starting with one of
 //!   `<>=!~` (`blender>=4.2`).
 //!
-//! Quoted names are Python `repr`s, as the messages of FX's predecessor wrote them.
+//! Quoted names are Python `repr`s.
 
 use crate::text::py_repr_str;
 use crate::val::Val;
@@ -135,13 +135,13 @@ pub use grida_fx_protocol::RetryMode as Retry;
 /// Who runs a type's body.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BodyKind {
-    /// A paid built-in: the engine makes its one capability call (step 4).
+    /// A paid built-in: the engine makes its one capability call.
     Capability,
-    /// A built-in whose body is in `grida.fx.std`, run by the Python host (step 3).
+    /// A built-in whose body is in `grida.fx.std`, run by the Python host.
     Python,
     /// `fx/select@1`: the engine itself.
     Engine,
-    /// A built-in that plans, identifies and prices but has no body yet.
+    /// A built-in that plans, identifies and prices but has no body.
     None,
     /// A project type, run by its language's host.
     Project,

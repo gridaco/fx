@@ -251,8 +251,8 @@ impl Expander<'_> {
         }
     }
 
-    /// `{member: facts}` of each direct node member's latest result in group take `take`
-    /// (gnode `_group_feedback`); `{}` when nothing has run.
+    /// `{member: facts}` of each direct node member's latest result in group take `take`; `{}`
+    /// when nothing has run.
     pub(crate) fn group_feedback(&self, declared: &Step, child: FrameId, take: u32) -> Val {
         let frame = &self.frames[child.0];
         let mut takes = frame.takes.clone();

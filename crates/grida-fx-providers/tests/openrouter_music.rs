@@ -122,7 +122,7 @@ fn refused(call: &TestCall, keys: Keys) -> String {
     }
 }
 
-// M1 -------------------------------------------------------------------------------------------
+// Streamed answers -----------------------------------------------------------------------------
 
 #[test]
 fn a_stream_is_assembled_from_its_chunks_and_costed_from_its_last_usage() {
@@ -198,7 +198,7 @@ fn a_stream_is_recognised_by_its_data_lines_alone() {
     assert_eq!(answer.cost, Some(Usd(0)));
 }
 
-// M2 -------------------------------------------------------------------------------------------
+// Buffered answers -----------------------------------------------------------------------------
 
 #[test]
 fn buffered_shapes_are_collected() {
@@ -243,7 +243,7 @@ fn steps_other_than_model_output_are_read_past() {
     assert_eq!((cost, retryable), (None, true));
 }
 
-// M3 -------------------------------------------------------------------------------------------
+// Bodies that cannot become an answer ----------------------------------------------------------
 
 #[test]
 fn bodies_that_cannot_become_an_answer_fail_the_attempt() {
@@ -388,7 +388,7 @@ fn a_structural_failure_names_the_request_id() {
     );
 }
 
-// M4 -------------------------------------------------------------------------------------------
+// The check, refusals, statuses and the key ----------------------------------------------------
 
 #[test]
 fn bytes_without_the_mp3_signature_fail_the_check() {

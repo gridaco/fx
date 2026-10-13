@@ -1,8 +1,9 @@
 """The host's side of a session with requests both ways (``spec/protocol.md`` sections 1, 5, 6).
 
-Step 2's host answered one request at a time on one thread. A ``run`` needs more: while it is
-pending the host sends ``capability``, ``fact`` and the rest and reads their answers, and the
-engine sends ``tool.invoke``, ``agent.check`` and ``$/cancel`` for the same run.
+Planning (``describe`` and ``build``) needs only one request at a time, on one thread. A
+``run`` needs more: while it is pending the host sends ``capability``, ``fact`` and the rest and
+reads their answers, and the engine sends ``tool.invoke``, ``agent.check`` and ``$/cancel`` for
+the same run.
 
 - **The reader** is the host's main thread: it reads every frame. A response resolves the
   :class:`concurrent.futures.Future` of the host request with its id (set directly by the
@@ -10,7 +11,7 @@ engine sends ``tool.invoke``, ``agent.check`` and ``$/cancel`` for the same run.
   on the body loop; ``tool.invoke`` and ``agent.check`` are scheduled on that loop;
   ``$/cancel`` marks the run's ``ctx.cancelled`` (and answers a pending ``tool.invoke`` or
   ``agent.check`` it names with ``cancelled``); ``describe``, ``build``, ``initialize`` and
-  ``shutdown`` are answered on the reader as in step 2.
+  ``shutdown`` are answered on the reader.
 - **The body loop** is an asyncio event loop on a thread of its own. An ``async def`` body runs
   on it; a plain ``def`` body runs in a worker thread (``asyncio.to_thread``).
 - **Writes** go through one lock, one whole frame at a time.

@@ -5,7 +5,7 @@
 //! (per-thousand-characters prices, fractional units) rounds half to even. Money is written as a
 //! JSON number (`micros / 1e6` through [`crate::value::number`]), so `0` and `0.0` are one value.
 //! Text shows `$x.xx` (`{:.2}` of the exact decimal, ties to even, as Python's `f"{x:.2f}"`
-//! does on gnode's floats for every amount with at most 6 decimals).
+//! does on a float for every amount with at most 6 decimals).
 
 use crate::value::{as_f64, format_number};
 use serde_json::Value;
@@ -84,7 +84,7 @@ impl Usd {
         crate::value::number(self.0 as f64 / 1_000_000.0).unwrap_or_else(|_| Value::from(0))
     }
 
-    /// `$x.xx`, as gnode's `f"${x:.2f}"`.
+    /// `$x.xx`, as Python's `f"${x:.2f}"`.
     pub fn dollars_2(self) -> String {
         format!("${:.2}", self.0 as f64 / 1_000_000.0)
     }

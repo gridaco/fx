@@ -9,7 +9,7 @@ which is normative: where this guide and `spec/` disagree, `spec/` wins. The rep
 [`llms.txt`](../../llms.txt) puts FX on one page for agents, checked against the engine; where it
 and this guide disagree, it wins. Where the guide describes something designed but not built yet,
 it says **planned**. Stable FX releases start at `0.1.0`;
-[the overview](../wg/overview.md) records shipped milestones and future work.
+[the overview](../wg/overview.md) records the decisions, what shipped and what comes later.
 
 The local FX service gives a project a stable address, a run/plan index, and a
 read-only node canvas. Start with `grida fx init` and `grida fx start --background`;

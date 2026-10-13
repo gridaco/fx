@@ -78,7 +78,7 @@ export function findEngine(lookup: EngineLookup): string {
   }
   if (platform.libc === "glibc" && lookup.isMusl()) {
     throw new FxError(
-      `the preview of grida-fx needs glibc 2.28 or later on Linux, and this system's C library ` +
+      `grida-fx needs glibc 2.28 or later on Linux, and this system's C library ` +
         `is musl (Alpine Linux, for one), so npm left out ${platform.package}. Use a glibc-based ` +
         `system or image (Debian, Ubuntu, …), or set ${BINARY_VARIABLE} to a grida-fx binary.`,
     );

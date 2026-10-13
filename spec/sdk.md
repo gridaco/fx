@@ -148,6 +148,6 @@ files and delivery. Independent wrappers for every planning verb are optional
 conveniences rather than required parity. Existing JS wrappers remain supported.
 
 Project initialization, service management/browser opening, diagnostics, node locks,
-take maintenance and job forgetting stay CLI operations in this pass. Add native
+take maintenance and job forgetting stay CLI operations. Add native
 SDK support when a concrete embedding job justifies its lifetime and errors.
 Pause, active revision and cloud control remain separate contracts.

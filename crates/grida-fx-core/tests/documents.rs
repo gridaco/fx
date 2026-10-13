@@ -109,7 +109,7 @@ fn a_workflow_document_is_typed() {
 
 #[test]
 fn compile_inputs_on_the_captured_shapes() {
-    // What stage-gen's `schema` verb printed for the `linear` case, with FX's tag.
+    // The `linear` case's input shapes, with FX's tag.
     let linear = compile_inputs(
         &map(json!({"brief": {"type": "file", "kind": "text/plain"}})),
         None,

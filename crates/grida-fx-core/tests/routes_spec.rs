@@ -184,7 +184,7 @@ fn length_priced_calls() {
 
 #[test]
 fn call_counts_multiply_whole_prices() {
-    // The predecessor's 7 × (0.0123456 – 0.0333333) has 7-place prices, which FX refuses when a
+    // 7 × (0.0123456 – 0.0333333) has 7-place prices, which FX refuses when a
     // table is read; the same count over 6-place prices is exact.
     let per_call = priced(RoutePrice {
         low: Usd(12_346),

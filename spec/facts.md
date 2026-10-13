@@ -34,14 +34,14 @@ Per format:
 - **WebP.** `width` and `height` are the canvas's. `has_alpha` is the alpha flag (the `VP8X` alpha flag, or the alpha hint of a lossless `VP8L` image). With alpha, the first frame is decoded and `opaque` is true when every alpha is 255.
 - **JPEG.** `width` and `height` come from the first start-of-frame marker (`SOF0` to `SOF15`, except `DHT`, `JPG` and `DAC`), found by walking the marker segments from the start-of-image marker. A JPEG never has alpha: `has_alpha` is false and `opaque` true. An EXIF orientation is not applied: the size is the stored one. A frame header with a width or height of 0 is refused.
 
-FX judges images by this rule as written. stage-gen's engine read them with Pillow, which differs on these files, so `opaque` can change for them:
+FX judges images by this rule as written. Pillow reads these files differently, so a reading through it can disagree on `opaque`:
 
-| File | stage-gen's engine | FX |
+| File | Pillow | FX |
 |---|---|---|
 | 16-bit alpha, every alpha `0xFF00` | `opaque` true: alpha judged on its high byte | `opaque` false: judged at full depth, only 65535 is opaque |
 | 16-bit greyscale or 16-bit RGB with a `tRNS` colour every pixel has | `opaque` true: the `tRNS` chunk was ignored | `opaque` false: `tRNS` always applies |
 | GIF whose first frame does not cover the screen, with a transparent index the frame does not use | `opaque` false: the uncovered area counts as transparent | `opaque` true: only the frame's own pixels count |
-| bytes that do not decode (a truncated PNG, a text file named `.png`) | facts without `opaque`, or an error that stopped planning | refused |
+| bytes that do not decode (a truncated PNG, a text file named `.png`) | facts without `opaque`, or an error | refused |
 
 ## 3. WAV
 
@@ -54,7 +54,7 @@ FX judges images by this rule as written. stage-gen's engine read them with Pill
 5. A frame rate of 0 gives no duration. Otherwise `duration` is the frame count divided by the frame rate (both exact in binary64, so the quotient is correctly rounded), rounded to 6 places.
 6. A walk that ends without a `data` chunk gives no duration.
 
-These are the rules of the `wave` module of CPython 3.12, which stage-gen's engine used. Where that module raised an error the engine did not catch, FX gives no duration (§7).
+These are the rules of the `wave` module of CPython 3.12. Where that module raises an error, FX gives no duration (§7).
 
 ## 4. MP4
 
@@ -256,21 +256,17 @@ Every MP4 above with a video track is 64×48 unless stated, and `has_alpha` fals
 
 The fixtures cut from or written over another one (`truncated.*`, `mvhd_*`, `stsz_no_table.mp4`, `stsd_count_zero.mp4`, `png_private20.mkv`, `block_track_zero.mkv`) are made by `make_fixtures.py` from the bytes of the fixture named; but for `truncated.*`, every other size and offset stays where it was.
 
-Generating the fixtures also reads each one the way stage-gen's engine did (`wave`, or `ffprobe` as §7 describes) and fails on any difference that §7 does not make deliberate. The deliberate ones among the fixtures: `empty.wav`, `rate_zero.wav`, `truncated_fmt.wav` and `odd_chunk_unpadded.wav` (it raised an error), `truncated.mp4`, `garbage.mp4`, `stsd_count_zero.mp4`, `mvhd_no_timescale.mp4`, `truncated.mkv`, `garbage.webm` and `block_track_zero.mkv` (it gave `bytes` and `kind`, or ffprobe read what was there), `stsz_no_table.mp4` (ffprobe read one packet), `vp9_5994.webm` (it gave 59.940063) and `png_rgba64.mkv` (it gave `has_alpha` false). Every other fixture reads the same in both, the rounded rates of `h264_ts1000_24fps.mp4`, `h264_ts1000_2997.mp4`, `h264_ts1000000_30fps.mp4`, `h264_ts90000_5994.mp4`, `ismv.mp4`, `fragmented_av.mp4` and `remux_ms.mp4` among them.
+Generating the fixtures also reads each one with the reference readers (`wave`, or `ffprobe` as §7 describes) and fails on any difference that §7 does not make deliberate. The deliberate ones among the fixtures: `empty.wav`, `rate_zero.wav`, `truncated_fmt.wav` and `odd_chunk_unpadded.wav` (`wave` raised an error), `truncated.mp4`, `garbage.mp4`, `stsd_count_zero.mp4`, `mvhd_no_timescale.mp4`, `truncated.mkv`, `garbage.webm` and `block_track_zero.mkv` (ffprobe failed, or read what was there), `stsz_no_table.mp4` (ffprobe read one packet), `vp9_5994.webm` (ffprobe gave 59.940063) and `png_rgba64.mkv` (the pixel-format list gave `has_alpha` false). Every other fixture reads the same in both, the rounded rates of `h264_ts1000_24fps.mp4`, `h264_ts1000_2997.mp4`, `h264_ts1000000_30fps.mp4`, `h264_ts90000_5994.mp4`, `ismv.mp4`, `fragmented_av.mp4` and `remux_ms.mp4` among them.
 
-## 7. Changes from stage-gen's engine
+## 7. The reference readers
 
-stage-gen's engine computed facts in Python: images with Pillow, WAV with the `wave` module, and video with `ffprobe` when one was on `PATH`. Its video facts were the first video stream's `width`, `height`, `r_frame_rate` as `fps`, the stream's `duration` (else the container's), the demuxed packet count as `frames`, and `has_alpha` true when the decoder's pixel format was one of `rgba`, `bgra`, `argb`, `abgr`, `yuva420p`, `yuva422p`, `yuva444p`, `gbrap` and `ya8`. FX computes every fact itself, by the rules above.
+§6's cross-check reads every fixture with CPython's `wave` module for WAV and with `ffprobe` for video. From `ffprobe` it takes the first video stream's `width`, `height`, `r_frame_rate` as `fps`, the stream's `duration` (else the container's), the demuxed packet count as `frames`, and `has_alpha` true when the decoder's pixel format is one of `rgba`, `bgra`, `argb`, `abgr`, `yuva420p`, `yuva422p`, `yuva444p`, `gbrap` and `ya8`. FX computes every fact itself, by the rules above, and differs from those readings on purpose here:
 
-| stage-gen's engine | FX |
+| Reference reader | FX |
 |---|---|
-| Video facts existed only where `ffprobe` was installed; without it, or when it failed or timed out, a video had `bytes` and `kind` only. | The engine parses MP4 and Matroska itself: the same facts everywhere ([identity.md](identity.md) §13). |
-| An MP4 or Matroska file that does not parse had `bytes` and `kind` only (ffprobe failed), or what ffprobe could read from it. | Refused (§4.1, §5.1). |
-| Images: 16-bit alpha judged on its high byte, `tRNS` ignored on 16-bit greyscale and RGB, a GIF's uncovered screen area counted, broken bytes crashed or dropped `opaque`. | §2's rule as written; broken bytes refused (§2's table). |
-| WAV files that made `wave` raise anything but its own error stopped planning: an empty file (`EOFError`), a `fmt ` chunk cut short (`EOFError`), a chunk running past the RIFF size (`RuntimeError`), a frame rate of 0 (`ZeroDivisionError`). | No duration, never an error (§3). |
-| Kinds came from the suffix, except that a workflow input with an unknown suffix took its declared kind: a `.mov` declared `video` had video facts, a `.bmp` declared `image` had image facts, and `audio/x-wav` and `audio` were read as WAV. | Kinds come from the suffix alone ([identity.md](identity.md) §4): a `.mov` or a `.bmp` is kind `file`, with `bytes` and `kind` only. |
-| Facts were cached by digest alone, so the same bytes first read under one kind kept that kind's facts under another. | Facts depend on the bytes and the kind (§1). |
-| `has_alpha` was membership of the decoder's pixel format in a list of nine 8-bit formats: 16-bit RGBA PNG frames (`rgba64be`) and ProRes 4444 had false, GIF frames in Matroska true. | By codec (§4.4, §5.3): PNG frames by their PNG header, so 16-bit RGBA is true; codecs the tables do not name have no `has_alpha`. |
-| A Matroska frame rate was ffmpeg's reduction of 10⁹/`DefaultDuration` with numerator and denominator at most 30000 (19001/317, 59.940063, for 60000/1001), and an estimate when there was no `DefaultDuration`. | The closest fraction with a denominator at most 1001 (60000/1001, 59.94006); no `fps` without `DefaultDuration` (§5.2). |
-| An MP4's frame rate and duration were ffmpeg's: its stream's `r_frame_rate`, an estimate for irregular timestamps, and its stream duration. | §4.3's rules, which give ffmpeg's values on every fixture, constant rates whose timestamps were rounded to a timescale of 1000, 16000, 90000, 10^6 or 10^7 units among them. ffmpeg may differ elsewhere: on a few frames at a coarse timescale, which allow both a whole rate and its 1000/1001 neighbour (ffmpeg then also reads the codec's own rate), on irregular timestamps, and on an `mdhd` duration that disagrees with the samples. |
-| Numbers were Python floats, written `24.0`. | FX numbers: `24` (§1). |
+| An MP4 or Matroska file that does not parse makes ffprobe fail, or gives what ffprobe could read from it. | Refused (§4.1, §5.1). |
+| `wave` raises on an empty file (`EOFError`), a `fmt ` chunk cut short (`EOFError`), a chunk running past the RIFF size (`RuntimeError`) and a frame rate of 0 (`ZeroDivisionError`). | No duration, never an error (§3). |
+| The pixel-format list gives 16-bit RGBA PNG frames (`rgba64be`) and ProRes 4444 no alpha, and GIF frames in Matroska alpha. | By codec (§4.4, §5.3): PNG frames by their PNG header, so 16-bit RGBA is true; codecs the tables do not name have no `has_alpha`. |
+| A Matroska frame rate is ffmpeg's reduction of 10⁹/`DefaultDuration` with numerator and denominator at most 30000 (19001/317, 59.940063, for 60000/1001), and an estimate when there is no `DefaultDuration`. | The closest fraction with a denominator at most 1001 (60000/1001, 59.94006); no `fps` without `DefaultDuration` (§5.2). |
+| An MP4's frame rate and duration are ffmpeg's: its stream's `r_frame_rate`, an estimate for irregular timestamps, and its stream duration. | §4.3's rules, which give ffmpeg's values on every fixture, constant rates whose timestamps were rounded to a timescale of 1000, 16000, 90000, 10^6 or 10^7 units among them. ffmpeg may differ elsewhere: on a few frames at a coarse timescale, which allow both a whole rate and its 1000/1001 neighbour (ffmpeg then also reads the codec's own rate), on irregular timestamps, and on an `mdhd` duration that disagrees with the samples. |
+| Numbers are Python floats, written `24.0`. | FX numbers: `24` (§1). |

@@ -1,5 +1,5 @@
 //! The built-in node types (`fx/<name>@<major>`), embedded as data: `catalog.json`, the 37
-//! standard types ported from FX's predecessor's standard library.
+//! standard types.
 //!
 //! `catalog.json` is `{"kind": "fx-std-catalog-v1", "types": [...]}`; each type has `uses`,
 //! `name`, `major`, `version`, `description` (optional), `inputs`, `params`, `outputs`, `judge`,

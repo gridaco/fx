@@ -12,7 +12,7 @@
 //! they were written).
 //!
 //! FX decisions: `files` with `glob: true` expands relative patterns only (an absolute pattern is
-//! refused); declared kinds are not enforced (as stage-gen's engine did): the declared kind
+//! refused); declared kinds are not enforced: the declared kind
 //! names a file only when its suffix is unknown.
 //!
 //! How files are named in messages: a path given as a flag is named as typed; a path written in
@@ -171,7 +171,7 @@ pub type GivenFileReader<'a> = dyn FnMut(&str, &str) -> std::result::Result<File
 /// already files, pending or failed are kept; a path is read through `read`), then validation
 /// unless anything is open (files validated as their name). Returns the bound values and the
 /// troubles (each a problem text at `<where>.with`). On a binding failure the given values come
-/// back unbound, as gnode does.
+/// back unbound.
 pub fn bind_given(
     schema: &Value,
     given: IndexMap<String, Val>,
@@ -271,7 +271,7 @@ pub(crate) fn resolve(path: &Path) -> PathBuf {
     out
 }
 
-/// The text of a value used as a path (Python's `str()` for the values gnode accepted).
+/// The text of a value used as a path, as Python's `str()` writes it.
 fn path_text(value: &Value) -> String {
     match value {
         Value::String(s) => s.clone(),
@@ -575,7 +575,7 @@ fn is_open(value: &Val) -> bool {
     }
 }
 
-/// gnode's `_bind_open`: file inputs read through `read`, open values and files kept.
+/// Open inputs: file inputs read through `read`, open values and files kept.
 fn bind_open(
     schema: &Value,
     value: Val,

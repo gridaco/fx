@@ -6,8 +6,8 @@
 //! reading `<file>: <loc>: <message>` with several joined by `"; "` (`<loc>` the instance path
 //! joined by `.`, or `(document)` at the top). A document of the wrong kind reads
 //! `<file>: a workflow file starts with fx: workflow/v1` (likewise `project`, `routes`, `lock`).
-//! For workflow steps, the step-shape sentences of stage-gen's engine (listed in [`workflow`])
-//! are produced first, in its order, so authors see the same sentences.
+//! For workflow steps, the step-shape sentences (listed in [`workflow`]) are produced first, in
+//! their fixed order.
 //!
 //! The reserved-marker rule (identity.md §3) applies to values read from a workflow (`with`,
 //! `tables`, `let`, `outputs`, `for_each`, `matrix`, defaults) and from inputs files.
@@ -224,7 +224,7 @@ pub fn read_document(path: &Path, label: &str, schema: Schema) -> Result<Value> 
     Ok(value)
 }
 
-/// Python's truthiness of a JSON value, as gnode's checks read optional fields: `null`, `false`,
+/// Python's truthiness of a JSON value, as the checks read optional fields: `null`, `false`,
 /// `0`, `""`, `[]` and `{}` are false.
 pub(crate) fn truthy(value: &Value) -> bool {
     match value {

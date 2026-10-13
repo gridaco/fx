@@ -19,8 +19,7 @@
 //! | [`tools`] | external programs (`GRIDA_FX_TOOL_<NAME>`, then `PATH`) |
 //! | [`stderr`] | the engine's own stderr lines, which never panic, and a forced exit's last word |
 //!
-//! The data flow, the threads and the attempt/billing state machine are in the step-3
-//! ARCHITECTURE notes; each module's doc names the spec sections it follows.
+//! Each module's doc names the spec sections it follows.
 
 pub mod agent;
 pub mod calls;

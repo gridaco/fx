@@ -7,9 +7,9 @@
 //! `then: fail`, `view: false`, `feedback: false`.
 //!
 //! Reading a workflow runs three passes, and the first that refuses wins:
-//! 1. the step-shape checks over the raw steps, recursively, with gnode's sentences in gnode's
-//!    order (one per step: the first rule a step breaks; a group whose members break a rule is
-//!    not checked itself), each as `<file>: steps.<name>[.steps.<name>]: <message>`;
+//! 1. the step-shape checks over the raw steps, recursively, each with its own sentence, in a
+//!    fixed order (one per step: the first rule a step breaks; a group whose members break a rule
+//!    is not checked itself), each as `<file>: steps.<name>[.steps.<name>]: <message>`;
 //! 2. the `fx-workflow-v1` schema;
 //! 3. the typed conversion, with the reserved-marker rule (identity.md §3) over `with`, `tables`,
 //!    `let`, `outputs`, `for_each`, `matrix` values and input defaults, and money read as
@@ -211,12 +211,12 @@ pub fn load_workflow(path: &Path, label: &str, source: &str) -> Result<LoadedWor
 
 // ------------------------------------------------------------------------------ step shape
 
-/// Present and not `null`, as a field gnode defaults to `None`.
+/// Present and not `null`.
 fn set(step: &Map<String, Value>, key: &str) -> bool {
     step.get(key).is_some_and(|v| !v.is_null())
 }
 
-/// gnode's step-shape checks over every step of `steps` (`where_` = `steps` or
+/// The step-shape checks over every step of `steps` (`where_` = `steps` or
 /// `<group>.steps`), in declaration order. A group's members are checked first; when one of them
 /// is refused, the group itself is not checked (its own rules run only on valid members).
 fn shape_of_steps(steps: &Map<String, Value>, where_: &str, out: &mut Vec<String>) {

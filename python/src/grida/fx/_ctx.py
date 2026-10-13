@@ -2,7 +2,7 @@
 section 8).
 
 A ``Ctx`` is built by the host for one ``run`` (section 5.3) from its params and a
-:class:`~grida.fx._session.Channel` to the engine. Members (every one stage-gen's bodies use):
+:class:`~grida.fx._session.Channel` to the engine. Members:
 
 - ``ctx.instance``: ``id``, ``path``, ``step``, ``key``, ``takes`` (the ``take`` list) and
   ``take`` (its last number).
@@ -25,7 +25,7 @@ A ``Ctx`` is built by the host for one ``run`` (section 5.3) from its params and
 - ``ctx.fact(name, value)``, ``ctx.annotate(shape=None, label=None, color=None, tag=None,
   **fields)``, ``ctx.progress(text, fraction=None)``: the ``fact``, ``annotate`` and ``progress``
   requests; ``ctx.facts`` and ``ctx.marks`` mirror what was reported (bodies read them).
-  ``annotate`` keeps the predecessor's local refusals (``a mark's shape is one of point, points,
+  ``annotate`` makes its own local refusals (``a mark's shape is one of point, points,
   box``; ``a <shape> mark needs <geometry>=``).
 - ``ctx.prompt(path, **variables)``: ``prompt.render`` (path must be a declared resource:
   ``NodeFailure("<path> is not one of this node's declared resources")`` locally first).
@@ -44,10 +44,9 @@ A ``Ctx`` is built by the host for one ``run`` (section 5.3) from its params and
 - ``ctx.cancelled``: set when the engine sends ``$/cancel`` for this run.
 - ``ctx.fail(message)``: returns a :class:`NodeFailure` to raise.
 
-Two things differ from the predecessor by design: an output made by ``ctx.out.file`` of a file
-under the work folder is read by the engine when the run is answered (the predecessor read it at
-once), and ``ctx.out.json`` keeps a copy of the value, which the engine writes in the format of
-``spec/identity.md`` section 5.
+An output made by ``ctx.out.file`` of a file under the work folder is read by the engine when the
+run is answered, and ``ctx.out.json`` keeps a copy of the value, which the engine writes in the
+format of ``spec/identity.md`` section 5.
 """
 
 from __future__ import annotations

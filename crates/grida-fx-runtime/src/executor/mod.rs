@@ -112,7 +112,7 @@ pub enum JobBody {
     Capability { capability: String },
     /// `fx/select@1`.
     Select,
-    /// A built-in with no body yet.
+    /// A built-in with no body.
     None,
 }
 

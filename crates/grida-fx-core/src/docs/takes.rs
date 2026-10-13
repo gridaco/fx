@@ -6,7 +6,7 @@
 //! published workflow) keeps it in the planning project's root. Read in the strict subset and
 //! validated: keys are step paths, `take` an integer from 1 to [`MAX_TAKE`] (a larger one is
 //! refused with `<step>.take: <n> is above 1000, …`), `result` a bare digest. An absent file
-//! is empty. The writer (reroll/pick, step 3) writes
+//! is empty. The writer (reroll/pick) writes
 //! `# <name>: written by \`grida-fx reroll\` and \`grida-fx pick\`; commit it\n` + sorted YAML.
 
 use super::{Schema, validate};

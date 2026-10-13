@@ -8,7 +8,7 @@ shorthand:
 - a param given as ``bool``/``int``/``float``/``str``/``list``/``dict`` becomes
   ``{"type": "boolean"|"integer"|"number"|"string"|"array"|"object"}``; a tuple of choices
   ``{"enum": [...]}``; a mapping is a JSON Schema used as is, except that a boolean ``optional``
-  key is written ``x-fx-optional`` and ``template`` ``x-fx-template`` (the predecessor's spelling);
+  key is written ``x-fx-optional`` and ``template`` ``x-fx-template`` (the shorthand spelling);
 - :func:`param` builds one: ``param(str, optional=True)``, ``param(str, template=True)``,
   ``param(int, default=3, minimum=1, maximum=8)``.
 
@@ -115,7 +115,7 @@ def param_schema(declared: Any) -> dict[str, Any]:
                     raise SpecError(f"param schema sets both {key} and {renamed}")
                 built[renamed] = value
             elif key in built and key in _RENAMED_KEYS.values():
-                continue  # already written from the predecessor's spelling, with the same value
+                continue  # already written from the shorthand spelling, with the same value
             else:
                 built[key] = value
         return built

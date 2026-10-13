@@ -114,7 +114,7 @@ impl Expander<'_> {
                 continue;
             }
             // A judge left out by its own `if:` still counts; the problem key is the judge's bare
-            // name (gnode's key, kept).
+            // name.
             if let OnReject::Regenerate(regeneration) = &other.on_reject {
                 let limit = self.takes_max(frame, regeneration, &format!("{judge}.on_reject"));
                 longest = longest.max(limit);
@@ -169,7 +169,7 @@ impl Expander<'_> {
         }
         match self.step(scope, name) {
             // A group, repeat, used workflow or absent step is judged by nobody, silently: the
-            // judge runs once and links to nothing (gnode's rule, kept).
+            // judge runs once and links to nothing.
             Ok(expansion) => (self.exp(expansion).kind == ExpKind::Node).then_some(expansion),
             // The subject is under way: it reads this judge, a cycle. The judge runs once and
             // links to nothing; the cycle refuses the plan.
@@ -521,8 +521,7 @@ impl Expander<'_> {
             }
             Chosen::Value(Val::Failed(id)) => {
                 self.trace_result(&id, what);
-                // A take whose body failed has a result, and reading it is a read (gnode listed
-                // such a take as done and read its result).
+                // A take whose body failed has a result, and reading it is a read.
                 if self
                     .env
                     .results
@@ -1656,7 +1655,7 @@ pub(crate) mod tests {
             None,
         );
         assert_eq!(run(&mut f, 3), Chosen::Instance("draw#3".into()));
-        // Unjudged first_accepted waits forever (gnode's rule).
+        // Unjudged first_accepted waits forever.
         let mut draw = step("fx/image.generate@1");
         draw.takes = Some(2);
         draw.pick = Some(Pick::FirstAccepted);

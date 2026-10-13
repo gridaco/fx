@@ -1,10 +1,10 @@
 # Canvas layout
 
-**Status: ratified design, 2026-10-09; Ship A implemented in source, 2026-10-10, unreleased,
-with the gaps §12 lists; Ship B not implemented.** In source: the recorded fields of §2, the cell
+**Status: ratified design, 2026-10-09; Ship A implemented, 2026-10-10, and released in 0.2.0,
+with the gaps §12 lists; Ship B not implemented.** Released: the recorded fields of §2, the cell
 rule and member order in the engine, the layout route and its report with automatic cells, and
-the canvas placing its cards in them with decks. Nothing here is in an installed release, and no
-layout file is read. [§12](#12-implementation-order) records evidence and what is left.
+the canvas placing its cards in them with decks. No layout file is read.
+[§12](#12-implementation-order) records evidence and what is left.
 
 This document defines where the bundled viewer places a workflow's steps on its canvas: an
 automatic left-to-right grid, decks for repeated instances, and an optional file beside the
@@ -38,8 +38,8 @@ identity, caches or resume, and it changes no existing field of any record (§2,
 The ratified split kept Ship A to the viewer and additive contract fields. Computing cells in the
 engine (§8) widens that: a plan's `/api/view` stays the verbatim fx-graph-v1 document, so Ship A
 also brings the scoped layout route and the report kind, and it records the step, key, order and
-pending facts that the cell rule, the badges and the run view read and that no record holds
-today.
+pending facts that the cell rule, the badges and the run view read and that earlier records
+lack.
 
 [Agent readiness](../AGENT_READINESS.md) scenario AR-17 becomes current only with Ship B.
 

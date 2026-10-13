@@ -1,5 +1,5 @@
 //! Workflow inputs: the shorthand compiled to JSON Schema, defaults, validation, files
-//! (fx-workflow-v1 `$defs/input*`). The rules are those of stage-gen's engine, with FX's names.
+//! (fx-workflow-v1 `$defs/input*`).
 //!
 //! - [`compile_inputs`] / [`compile_input`]: snake_case keywords become their JSON Schema
 //!   spelling and are copied verbatim, in declared order; `file` → `{"type": "string",
@@ -15,7 +15,7 @@
 //! - [`with_defaults`]: defaults at every depth; a nested group left out is filled in when none
 //!   of its members is required; list items are filled, map values are not.
 //! - [`validate`]: the compiled schema's keywords, with the message texts of Python's
-//!   `jsonschema` 4.26, which stage-gen's engine printed (values in [`crate::text::py_repr`];
+//!   `jsonschema` 4.26 (values in [`crate::text::py_repr`];
 //!   FX: booleans are not numbers, `2.0` is an integer). Errors sorted by location; the first 8
 //!   joined by `"; "`, each `"<location>: <message>"` with location `inputs`, `.name` per key,
 //!   `[i]` per index. The subset the compiler emits is implemented by hand (type, enum,
@@ -492,7 +492,7 @@ pub fn validate(schema: &Value, value: &Value) -> std::result::Result<(), String
     validate_val(schema, &bind::json_to_val(value))
 }
 
-/// [`validate`] over runtime values (a missing value prints as `MISSING`, as gnode's did).
+/// [`validate`] over runtime values (a missing value prints as `MISSING`).
 pub(crate) fn validate_val(schema: &Value, value: &Val) -> std::result::Result<(), String> {
     let mut errors = Vec::new();
     let mut path = Vec::new();

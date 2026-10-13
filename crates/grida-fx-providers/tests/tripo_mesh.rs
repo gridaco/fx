@@ -351,7 +351,7 @@ fn the_face_limit_bounds_are_inclusive() {
 
 #[test]
 fn bad_requests_are_refused_before_anything_is_sent() {
-    // spec/providers.md §5, §9.4 (mirrors the stage-gen plugin test of a view Tripo does not take).
+    // spec/providers.md §5, §9.4, with a view Tripo does not take.
     let refused = |call: TestCall, keys: Keys| -> String {
         match block_on(offline_mesh(keys).submit(&call)) {
             Submitted::Refused { reason } => {
@@ -694,8 +694,7 @@ fn a_failed_upload_posts_no_task() {
 
 #[test]
 fn the_paid_post_is_sent_once_whatever_happens() {
-    // spec/providers.md §9.4 "Paid POST" (mirrors stage-gen's "a post whose outcome is unknown is
-    // never repeated").
+    // spec/providers.md §9.4 "Paid POST": a post whose outcome is unknown is never repeated.
     let uncertain = |detail: &str| Submitted::Uncertain {
         reason: format!("Tripo may have taken the task; it is not posted again ({detail})"),
     };
@@ -823,8 +822,7 @@ fn the_paid_post_is_sent_once_whatever_happens() {
 
 #[test]
 fn a_finished_mesh_is_downloaded_with_its_cost() {
-    // spec/providers.md §7, §9.4 (mirrors stage-gen's "a mesh task is posted once and collected
-    // with its cost").
+    // spec/providers.md §7, §9.4: a mesh task is posted once and collected with its cost.
     let h = harness(vec![
         read("task1", "queued"),
         read("task1", "running"),
@@ -854,8 +852,7 @@ fn a_finished_mesh_is_downloaded_with_its_cost() {
 
 #[test]
 fn an_fbx_is_preferred_and_every_model_is_downloaded() {
-    // spec/providers.md §9.4 "Tasks" (mirrors stage-gen's "a mesh is posted once and its fbx
-    // kept").
+    // spec/providers.md §9.4 "Tasks": a mesh is posted once and its FBX kept.
     let glb_url = "https://api.tripo3d.ai/out/model.glb";
     let cases: Vec<(Value, Vec<Exchange>, &str, Vec<u8>)> = vec![
         (
@@ -958,7 +955,7 @@ fn a_task_tripo_ended_is_over() {
 
 #[test]
 fn a_task_still_running_at_the_deadline_stays_tripos() {
-    // spec/providers.md §7 (mirrors stage-gen's "one still running stays Tripo's"): clock 0, 0, 100
+    // spec/providers.md §7: one still running stays Tripo's. Clock 0, 0, 100
     // and a deadline of 10 s make exactly two reads.
     let clock = FakeClock::scripted(&[Duration::ZERO, Duration::ZERO, Duration::from_secs(100)]);
     let h = harness_with(
@@ -1122,7 +1119,7 @@ fn an_answer_about_another_task_or_an_unknown_status_is_unreachable() {
 
 #[test]
 fn the_output_scan_decides_what_is_downloaded() {
-    // spec/providers.md §9.4 "Tasks" (mirrors stage-gen's "a model from another host is refused").
+    // spec/providers.md §9.4 "Tasks": a model from another host is refused.
     // The task succeeded, so an unusable output costs what its success read reports (125 credits).
     let ended = |reason: &str| Collected::Ended {
         reason: reason.into(),

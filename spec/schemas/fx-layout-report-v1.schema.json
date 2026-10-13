@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:grida-fx:schema:fx-layout-report-v1",
   "title": "FX canvas layout report (fx-layout-report-v1)",
-  "description": "Where the viewer places a run's or a saved plan's steps (layout.md §6.11): every slot's cell and every member's order, served at the scoped `api/layout` route. The browser places its own cards in these cells and never computes one. Ship A serves automatic cells only; `file`, `revision` and `diagnostics` stay empty until the layout file ships.",
+  "description": "Where the viewer places a run's or a saved plan's steps (layout.md §6.11): every slot's cell and every member's order, served at the scoped `api/layout` route. The browser places its own cards in these cells and never computes one. While the viewer reads no layout file (layout.md §6), a report carries automatic cells only, with `file` and `revision` null and no diagnostics.",
   "type": "object",
   "required": [
     "kind",

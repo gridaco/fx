@@ -95,9 +95,7 @@ quality; visual review and publication approval remain separate.
 ## Source and media
 
 The project contains source, prompts, schemas, specifications and synthesized
-fixture code. `nodes/_portrait_motion/LICENSE` retains the original helper
-source's BSD 3-Clause notice; `NOTICE.md` describes its adaptation. That source
-license makes no claim about downloaded artwork.
+fixture code.
 
 The source illustration is prepared separately by `source-workflow.yaml`, using
 `source-showcase.yaml` and the prompt in `prompts/source-closeup.md`. This optional
@@ -116,7 +114,7 @@ Use `--portrait portrait.png` with the main workflow to override the recorded
 showcase input. Keep its own live ceiling separate from source preparation.
 
 Its reference is a native crop at integer bounds `(580, 80, 1476, 976)` from
-Stage Gen's public, repository-owned Nami `reaching_pose.webp` (2048×1536,
+the public Nami `reaching_pose.webp` (2048×1536,
 SHA-256 `468768f45ec08b5a69be1a4cb496a8068cf0d6f65c3f2bf8dd231cabfee7a315`).
 No private reference or unpublished character variant is used. The unmodified
 reference only admitted one eye: swept hair obstructed the other eye, and its

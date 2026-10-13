@@ -27,7 +27,7 @@ impl UnaryOp {
     }
 }
 
-/// Binary operators with gnode's binding powers; a higher power binds tighter.
+/// Binary operators with their binding powers; a higher power binds tighter.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryOp {
     /// `??`, power 10, right-associative.

@@ -181,7 +181,7 @@ def test_schemas_from_annotations() -> None:
     )
     assert tool_schema(namespace["strings"]) == {
         "name": "strings",
-        "description": "Strings.\n\nMore.  ",  # inspect.getdoc, as the predecessor
+        "description": "Strings.\n\nMore.  ",  # inspect.getdoc
         "parameters": {
             "type": "object",
             "properties": {

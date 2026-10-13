@@ -418,7 +418,7 @@ fn unreadable_files_are_named() {
 fn the_first_refusal_wins() {
     // Contract before shape, shape before key, key before values, values before files.
     let foreign = CallBuilder::new("image.generate", ROUTE)
-        .contract(json!({"adapter": "gnode-fal-image-v1"}))
+        .contract(json!({"adapter": "acme-fal-image-v1"}))
         .request(json!({"prompt": "", "quality": "low"}))
         .build();
     assert_eq!(

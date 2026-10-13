@@ -404,7 +404,7 @@ fn an_edit_takes_sixteen_input_images() {
 #[test]
 fn the_route_must_be_one_this_adapter_serves() {
     for contract in [
-        json!({"adapter": "gnode-openai-image-v1", "adapter_behavior": "1"}),
+        json!({"adapter": "acme-openai-image-v1", "adapter_behavior": "1"}),
         json!({"adapter": "fx-openrouter-image-v1"}),
         json!({"adapter": ADAPTER, "adapter_behavior": "2"}),
         // routes-caps F3: the behaviour is the text "1" (spec/providers.md §9.1, §10); the number

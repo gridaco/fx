@@ -16,8 +16,8 @@ It prints one line per check and exits non-zero when any check fails:
       non-empty <n>.txt) and agree with digest.py's reader of the subset;
   (e) tools/digest.py --check-examples passes: the identity examples, the reserved-marker
       vectors and the JSON output vectors;
-  (f) nothing under spec/schemas/, spec/vectors/, conformance/, docs/guide/ or examples/ names
-      the engine FX came from (the spec's prose may, where it records the history);
+  (f) no FORBIDDEN_NAMES appear under spec/, docs/, conformance/, examples/ or the default
+      routes' folder;
   (g) the worked examples in spec/identity.md agree with spec/vectors/identity/examples.json;
   (h) every expected fx-graph-v1 output of a conformance case passes digest.py --check-graph,
       with the case's in/ as the project and the route tables its step passed (the built-in
@@ -72,10 +72,17 @@ DISCRIMINATORS = {
     "lock/v1": "fx-lock-v1",
 }
 TAKES_SCHEMA = "fx-takes-v1"
-FORBIDDEN_NAMES = (b"gnode", b"Gnode", b"GNODE")
-# Where the origin engine's name may not appear: the contracts and the cases, not the spec's
-# prose (identity.md and protocol.md record where FX differs from it).
-NAME_ROOTS = (SCHEMAS, VECTORS, CONFORMANCE, GUIDE, EXAMPLES, DEFAULT_ROUTES.parent)
+FORBIDDEN_NAMES = (
+    b"gnode",
+    b"Gnode",
+    b"GNODE",
+    b"stage-gen",
+    b"stage_gen",
+    b"Stage Gen",
+    b"STAGE_GEN",
+)
+# Where they may not appear: the contracts and their prose, the docs, the cases, the examples.
+NAME_ROOTS = (SPEC, REPO / "docs", CONFORMANCE, EXAMPLES, DEFAULT_ROUTES.parent)
 # Contract fields are lower_snake_case. External vocabulary ($ref, ...) and the x-fx-*
 # extension keywords keep their own spelling.
 SNAKE_CASE = re.compile(r"[a-z][a-z0-9_]*\Z|\$[A-Za-z]+\Z|x-fx-[a-z0-9-]+\Z")
@@ -414,7 +421,7 @@ def check_names(gate: Gate) -> None:
                 if any(name in line for name in FORBIDDEN_NAMES)
             ]
             hits.append(f"{rel(path)}: line {', '.join(lines)}")
-    subject = "no origin-engine names in " + ", ".join(rel(r) + "/" for r in roots)
+    subject = "no forbidden names in " + ", ".join(rel(r) + "/" for r in roots)
     gate.result("f", subject, hits)
 
 
@@ -708,7 +715,7 @@ def check_default_routes(gate: Gate, schemas: dict[str, Any]) -> None:
 
 
 def _providers_changes(text: str) -> str:
-    """spec/providers.md section 11, the changes from the engine FX came from."""
+    """spec/providers.md section 11, the renamed features."""
     start = text.find("\n## 11. ")
     if start < 0:
         return ""

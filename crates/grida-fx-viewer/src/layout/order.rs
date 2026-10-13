@@ -34,10 +34,10 @@ impl SlotKey {
 }
 
 /// A member's place in its slot: its position in the newest recorded expansion order; missing
-/// from it, its key in code-point order, then its take number by number, then its id (D2). A
-/// frame or workflow card takes the smallest key among its descendants. A card without member
-/// descendants falls back to its absent descendants' plan positions, then its pending entries'
-/// positions, then its own path, take and id.
+/// from it, its key in code-point order, then its take number by number (§4, rule 4), then its
+/// id, the engine's last tie-break. A frame or workflow card takes the smallest key among its
+/// descendants. A card without member descendants falls back to its absent descendants' plan
+/// positions, then its pending entries' positions, then its own path, take and id.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct MemberKey<'a> {
     tier: u8,

@@ -64,7 +64,6 @@ estimate  $0.08 – $62.40   ceiling $25.00   ⚠ the worst case exceeds the cei
 - `world_example/` owns the private models, medium rules, deterministic judges and nodes.
 - `views/gallery.html` is the workflow's custom artifact gallery.
 
-Only the public `grida.fx` SDK and Pydantic are required. There is no dependency on a
-separate game or asset application, frozen engine, local cache, or historical run.
-Source attribution is in [ATTRIBUTION.md](ATTRIBUTION.md). Published imagery and run
-packages stay on the CDN; moving this authoring source does not regenerate them.
+Only the public `grida.fx` SDK and Pydantic are required. There is no dependency on another
+application, a local cache or an earlier run. Published imagery and run packages stay on the
+CDN.

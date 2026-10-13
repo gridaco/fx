@@ -2,9 +2,9 @@
 //!
 //! `make_plan` expands, runs every ready `at: plan` instance (planned, nothing pending in its
 //! with-values, a free type, no result yet) through the [`PlanTimeRunner`] in listing order, and
-//! expands again until none is ready. Without a runner (step 2), each ready at-plan instance
-//! gives the problem `<step>: running an at: plan step is not available until the runner lands`
-//! and the loop stops. Problems, in order: the expansion's; those "not available" ones;
+//! expands again until none is ready. Without a runner, each ready at-plan instance gives the
+//! problem `<step>: running an at: plan step needs a plan-time runner, and planning has none`
+//! and the loop stops. Problems, in order: the expansion's; those "needs a plan-time runner" ones;
 //! `<step>: failed while planning: <error>` per failed at-plan result; `<step>: an at: plan step
 //! reads something only a run produces` per at-plan instance still planned without a result (only
 //! with a runner); then deduplicated by `(where, message)`, the first kept
@@ -37,7 +37,7 @@ use std::collections::{BTreeSet, HashSet};
 
 /// The problem of an at-plan instance while no plan-time runner exists.
 pub const AT_PLAN_UNAVAILABLE: &str =
-    "running an at: plan step is not available until the runner lands";
+    "running an at: plan step needs a plan-time runner, and planning has none";
 
 /// The plan's price range.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

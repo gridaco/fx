@@ -5,10 +5,6 @@ The runner never imports an engine: it runs a command, checks how it exits, and 
 prints or writes with what a person has reviewed. Any implementation (the Rust `grida-fx`, a
 future one) can be held to the same cases.
 
-The suite began in stage-gen, where FX comes from. Its first fourteen cases moved here with their
-inputs renamed to FX's names. Their recorded outputs did not move, because every digest changes
-under [identity.md](../spec/identity.md); see [Recording expected output](#recording-expected-output).
-
 ## Running
 
 ```sh

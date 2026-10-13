@@ -45,8 +45,8 @@ uv run python -m grida.fx plan workflow.yaml --inputs inputs/nami/inputs.yaml
 
 Install Blender 5.2 or later and make `blender` discoverable on PATH. If needed, set
 `GRIDA_FX_TOOL_BLENDER` to its executable. `jsonschema`, `numpy` and `Pillow` are this example's
-Python dependencies; Blender uses its own bundled Python and NumPy. No Stage Gen package,
-external source checkout or container is required.
+Python dependencies; Blender uses its own bundled Python and NumPy. No external source checkout
+or container is required.
 
 The fresh plan with the supplied showcase settings prints:
 
@@ -178,6 +178,4 @@ paid workflow. It does not validate artistic quality or the entire paid pipeline
 candidate GLB. It exercises the same rig reviewer without generating a character. Labels
 and reference subjects are not bundled with this example.
 
-Source attribution and the preserved BSD terms are in [NOTICE.md](NOTICE.md) and
-[LICENSE.stage-gen](LICENSE.stage-gen). Generated artwork, run records, caches and old
-runtime binaries are not included.
+Generated artwork, run records and caches are not included.

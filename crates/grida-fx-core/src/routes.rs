@@ -14,7 +14,7 @@
 //!
 //! Prices are read in micro-dollars ([`Usd`]); an amount with more than 6 decimal places is
 //! refused (identity.md §12), judged on the number's JCS text (`1e-7 has more than 6 decimal
-//! places`). A price's other refusals keep the predecessor's sentences: `a price is a
+//! places`). A price's other refusals read: `a price is a
 //! non-negative range, low to high`; `a length-priced route declares the most units one call
 //! carries`; `a tiered price names the setting it is priced by, and its tiers`; `price tier
 //! {name} lies outside the route's range`. Every refusal reads `<file>: <where>: <sentence>`,

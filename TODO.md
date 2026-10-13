@@ -17,12 +17,6 @@ Pending work and open design questions only. Supported behavior belongs in the
   its recorded membership omits them. Keep that evidence intact until the engine
   supplies ownership; do not guess from display paths in the export client.
 
-**Prior implementation reference only:**
-[Stage Gen's viewer](https://github.com/softmarshmallow/stage-gen/tree/main/web/viewer)
-and its run-view projection (`src/stage_gen/runview/`) demonstrate graph and artifact
-inspection. Use them to inform the UX; FX's viewer must work independently, with no
-dependency on that application's packages, catalog, branding or view-contract namespace.
-
 ### Observation and SDK readiness
 
 - Consider SSE if polling becomes insufficient, building on
@@ -42,7 +36,7 @@ dependency on that application's packages, catalog, branding or view-contract na
 
 ### Agent-authored canvas layout
 
-**Status: ratified design, 2026-10-09; Ship A in source, 2026-10-10, unreleased.**
+**Status: ratified design, 2026-10-09; Ship A implemented, 2026-10-10, and released in 0.2.0.**
 [Canvas layout](spec/layout.md) owns the design; [AR-17](AGENT_READINESS.md#tidy-up-the-layout)
 tracks the agent scenario. Remaining work, in order:
 

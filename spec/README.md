@@ -12,7 +12,7 @@ These documents define FX independently of any implementation. The Rust engine, 
 | [observation.md](observation.md) | Run-observation v1: consistent snapshots, bounded events, cursors and errors |
 | [exports.md](exports.md) | Portable terminal run inspection: disclosure, verified media, immutable manifests and offline export |
 | [service.md](service.md) | Project initialization, local service lifecycle, stable run/plan URLs and standalone inspection |
-| [layout.md](layout.md) | Canvas layout: the automatic grid and decks (Ship A, in source, unreleased) and the optional `<workflow id>.layout.json` file (Ship B, not implemented) |
+| [layout.md](layout.md) | Canvas layout: the automatic grid and decks, and the optional `<workflow id>.layout.json` file (not implemented) |
 | [control.md](control.md) | Local run control: exact invocation targeting, cancellation acceptance, verified local completion and force boundaries |
 | [sdk.md](sdk.md) | SDK user jobs: named execution/resume, pinned saved records, independent observation and in-process stand-ins |
 | [distribution.md](distribution.md) | The ways to run FX (`grida fx`, `grida-fx`, `python -m grida.fx`), the invoker, the host contract and the release order |

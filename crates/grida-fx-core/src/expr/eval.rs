@@ -17,7 +17,7 @@
 //!
 //! Views are handled by the scope; every other value by the rules here. A view that must become
 //! a plain value (next to a pending value, inside text, as `digest`'s argument) is finished
-//! first: a `.*` result is its collection, any other view is refused (gnode crashed there).
+//! first: a `.*` result is its collection, any other view is refused.
 
 use super::ast::{BinaryOp, Func, Literal, UnaryOp};
 use super::functions;
@@ -405,8 +405,8 @@ fn combine<S: Scope + ?Sized>(
     }
 }
 
-/// An operand of `==`/`!=`: a `.*` result compares as its collection (gnode compared its plain
-/// form); any other view stays a view and compares by identity.
+/// An operand of `==`/`!=`: a `.*` result compares as its collection, not its plain
+/// form; any other view stays a view and compares by identity.
 fn comparable<S: Scope + ?Sized>(scope: &mut S, value: Val) -> Result<Val, ExprError> {
     match value {
         Val::View(view) => match scope.finish_view(view) {
@@ -453,7 +453,7 @@ fn pending(result: Result<Pending, ExprError>) -> Result<Val, ExprError> {
 }
 
 /// `derive_all(op, values)` after finishing any view among the values (a `.*` result is its
-/// collection; any other view is refused, where gnode crashed).
+/// collection; any other view is refused).
 pub(crate) fn derive_all<S: Scope + ?Sized>(
     scope: &mut S,
     op: &str,
@@ -466,7 +466,7 @@ pub(crate) fn derive_all<S: Scope + ?Sized>(
     pending(Pending::derive_all(op, &finished))
 }
 
-/// Python's `repr` of a value as gnode's messages print it: strings quoted, `None`, `True`,
+/// Python's `repr` of a value as FX's messages print it: strings quoted, `None`, `True`,
 /// numbers in their JCS form, lists and objects in Python's notation.
 pub(crate) fn repr(value: &Val) -> String {
     match value {

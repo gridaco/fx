@@ -371,7 +371,7 @@ mod tests {
         assert_eq!(own(json!({"adapter": null})), None);
         assert_eq!(own(json!({"adapter": "fx-fal-image-v1", "x": 1})), None);
         assert_eq!(
-            own(json!({"adapter": "gnode-openai-image-v1"})),
+            own(json!({"adapter": "acme-openai-image-v1"})),
             Some("img-a@fal is not a image.generate route this adapter serves".into())
         );
         assert!(own(json!({"adapter": 1})).is_some());

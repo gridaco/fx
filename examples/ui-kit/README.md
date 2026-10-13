@@ -61,6 +61,5 @@ estimate  $0.78 – $12.24   ceiling $15.00
 
 `ui_example/` owns the private sheet geometry, alpha normalization, evidence renderers,
 models and review shapes. Dependencies are the public FX SDK, its Pillow dependency,
-and Pydantic. No game package or frozen runtime is required. The original algorithms
-retain their [source attribution](ATTRIBUTION.md). Generated artwork and historical
-run packages stay on the CDN, outside Git.
+and Pydantic. Nothing else is required. Generated artwork and run packages stay on the CDN,
+outside Git.

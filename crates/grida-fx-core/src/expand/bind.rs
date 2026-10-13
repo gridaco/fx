@@ -14,7 +14,7 @@
 //! none of the capabilities the type calls is refused once, before any route is bound, at
 //! `<w>.requires`: `{name} is not an image.generate feature (spec/capabilities.md)` (several
 //! capabilities: `an image.generate or structured.generate feature`), followed by `; FX calls it
-//! {feature}` when the name is the predecessor's for one of their features (spec/providers.md
+//! {feature}` when the name is a renamed one of their features (spec/providers.md
 //! §11). It is then left out of every route's missing features. A type that calls a capability
 //! FX does not define (spec/capabilities.md §13, or a project's own) has no vocabulary to check
 //! against, so its routes alone decide. The vocabulary is data, `features.json`: each
@@ -66,7 +66,7 @@ pub fn capability_features(capability: &str) -> Option<&'static [String]> {
     vocabulary().capabilities.get(capability).map(Vec::as_slice)
 }
 
-/// FX's name for a feature its predecessor named otherwise (spec/providers.md §11).
+/// FX's name for a renamed feature (spec/providers.md §11).
 pub fn renamed_feature(name: &str) -> Option<&'static str> {
     vocabulary().renamed.get(name).map(String::as_str)
 }
@@ -185,7 +185,7 @@ impl Expander<'_> {
         let pictures = input_pictures(spec, with);
         for (capability, &count) in &calls {
             // `route:` names the route of a type that calls one capability; a type that calls
-            // several takes each from fx.yaml (gnode ignores `route:` there, silently).
+            // several takes each from fx.yaml, and `route:` is ignored there.
             let chosen = if calls.len() == 1 {
                 declared.route.clone().filter(|route| !route.is_empty())
             } else {
@@ -316,7 +316,7 @@ impl Expander<'_> {
                 }
             };
             // Only a node step has direct instances: a group, repeat or used workflow never
-            // conflicts (gnode's rule, kept).
+            // conflicts.
             let theirs = self.models(&self.exp(other).instances.clone());
             let shared: Vec<String> = ours.intersection(&theirs).cloned().collect();
             if !shared.is_empty() {
@@ -404,7 +404,7 @@ mod tests {
     }
 
     #[test]
-    fn a_predecessor_feature_name_is_refused_as_unknown_naming_fx_s() {
+    fn a_renamed_feature_name_is_refused_as_unknown_naming_fx_s() {
         let mut declared = step("fx/image.generate@1");
         declared.route = Some("img-a@acme".into());
         declared.requires = vec![

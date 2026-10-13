@@ -99,7 +99,7 @@ A template that is exactly one `${{ … }}` and nothing else keeps the value's t
 - empty objects and arrays as `{}` and `[]`;
 - no trailing newline.
 
-When every number is an integer written without `.0` (a Python `int`, not a whole `float`) or a decimal without an exponent, and every key lies in the Basic Multilingual Plane, this is byte for byte what Python's `json.dumps(v, sort_keys=True, indent=1, ensure_ascii=False)` writes, which is what stage-gen's engine wrote.
+When every number is an integer written without `.0` (a Python `int`, not a whole `float`) or a decimal without an exponent, and every key lies in the Basic Multilingual Plane, this is byte for byte what Python's `json.dumps(v, sort_keys=True, indent=1, ensure_ascii=False)` writes.
 
 **Prompt files** (a template param given as a project path, or `prompt.render`) are decoded as above. Then every HTML comment `<!-- … -->` is removed together with one newline directly after it, and the template is rendered. The rendered text, not the file's digest, is what enters the identity.
 
@@ -246,26 +246,13 @@ A repeated step's path carries its key in brackets, quoted: `entity['ada'].draw#
 - Money is written as JSON numbers. `0` and `0.0` are the same value (§1).
 - A tiered price ([fx-routes-v1](schemas/fx-routes-v1.schema.json) `by` and `tiers`) prices a call at the tier its `by` setting names, when that setting is text. A setting that is absent, is not text, is not known to the plan yet, or names no tier prices the call at the route's whole range. A tier outside that range is refused when the route table is read.
 
-## 13. Changes from gnode
+## 13. Content addressing, not a chain
 
-stage-gen's gnode computed identities differently. Every gnode digest changes, and no gnode record is migrated: stage-gen moved to FX with an empty cache ([store.md](store.md) §10). The differences:
-
-| gnode | FX |
-|---|---|
-| Canonical JSON follows Python: `1` ≠ `1.0`, `1e+16` and `1e-05` notation, `NaN` emitted as a bare token, keys sorted by code point. | RFC 8785 with I-JSON values (§1, §2). |
-| Hashed objects carry no `kind`. | Every hashed object names its formula (§2). |
-| A built-in's identity is `gnode/<name>@<major>.<version>`. | `fx/<name>@<major>.<version>` (§6). |
-| An unversioned type's source map mixes module labels and resource paths in one object. | Separate `files` and `resources` (§6). |
-| A call key's `take` is an integer at one level and a list deeper down. | Always a list (§9). |
-| Call records keep no request. | Records keep the canonical request (§9). |
-| The plan digest hashes a pydantic dump of the workflow, which includes every defaulted field, and leaves out sub-workflows, node types and routes. | The authored documents, the type identities and the route fingerprints (§10). |
-| Numbers in text go through `str(float)`: `1e+16`, and integers above 2^53 lose precision. | JCS number form; such integers are refused where read (§5, §1). |
-| Text read from the cache uses universal newlines; inputs keep their line endings; a byte-order mark is kept. | One rule for every text read (§5). |
-| YAML 1.1 through PyYAML: `yes`/`on` become booleans, `017` becomes 15, dates become dates, duplicate keys silently overwrite. | The strict YAML subset in [yaml.md](yaml.md). |
-| `True == 1` in conditions. | Booleans are not numbers. |
-| Facts come from PIL, and from ffprobe when it happens to be installed. | The engine computes facts itself, the same everywhere ([facts.md](facts.md) §7). |
-
-The overview's first draft proposed a "Merkle chain" in which upstream step identities enter downstream identities. FX keeps content addressing (§8) instead. Content addressing is already a Merkle structure over content. Unlike a chain of identities, it lets an upstream rerun that writes the same bytes keep everything downstream cached. A downstream identity that cannot be known until its upstream runs is inherent: the content does not exist yet.
+Upstream step identities do not enter downstream identities. FX keeps content addressing (§8)
+instead. Content addressing is already a Merkle structure over content. Unlike a chain of
+identities, it lets an upstream rerun that writes the same bytes keep everything downstream cached.
+A downstream identity that cannot be known until its upstream runs is inherent: the content does
+not exist yet.
 
 ## 14. Worked examples
 

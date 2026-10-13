@@ -10,11 +10,11 @@ pub const KIND: &str = "fx-layout-report-v1";
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct LayoutReport {
     pub kind: &'static str,
-    /// The derived layout file (Ship B); null in Ship A.
+    /// The derived layout file (layout.md §6.11); always null, since the viewer reads none.
     pub file: Option<String>,
-    /// The digest of the layout file read (Ship B); null in Ship A.
+    /// The digest of the layout file read; always null, since none is read.
     pub revision: Option<String>,
-    /// `applied`, `none` or `refused`; always `none` in Ship A.
+    /// `applied`, `none` or `refused`; always `none`, since no layout file is read.
     pub state: &'static str,
     /// The observation cursor of the record prefix the report reflects; null for a plan.
     pub cursor: Option<String>,
@@ -25,7 +25,7 @@ pub struct LayoutReport {
     pub order: Vec<String>,
 }
 
-/// A structured layout diagnostic (§6.10). Ship A reports none.
+/// A structured layout diagnostic (§6.10). None is reported while no layout file is read.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Diagnostic {
     pub code: &'static str,
@@ -38,6 +38,6 @@ pub struct Diagnostic {
 pub struct CellEntry {
     pub column: u32,
     pub row: u32,
-    /// `automatic`, or `authored` from Ship B.
+    /// `automatic`, or `authored` for a cell a layout file places (§4, rule 9).
     pub source: &'static str,
 }

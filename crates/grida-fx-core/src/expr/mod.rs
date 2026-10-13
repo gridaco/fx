@@ -3,8 +3,8 @@
 //! Only strings are evaluated: a document's keys never are, and numbers, booleans and null pass
 //! through [`resolve`] unchanged.
 //!
-//! - [`lexer`]: tokens. FX decision: digits and whitespace are ASCII only (gnode accepted Unicode
-//!   ones); `strip()` of a template's inner text strips the same whitespace.
+//! - [`lexer`]: tokens. FX decision: digits and whitespace are ASCII only, not
+//!   Unicode's; `strip()` of a template's inner text strips the same whitespace.
 //! - [`parser`]: a Pratt parser into [`ast::Expr`].
 //! - [`template`]: splitting strings into text and expressions, and rendering them.
 //! - [`eval`]: evaluation over a [`eval::Scope`], and [`resolve`] over documents.
@@ -12,7 +12,7 @@
 //!
 //! Values follow spec/identity.md: one number type, so `-1` is an ordinary number and an integer
 //! literal that reading would round is refused (§1); `digest(v)` is the first 16 hex characters
-//! of `digest(plain(v))` (§2, §3); text renders as §5 says. Messages keep gnode's wording, with
+//! of `digest(plain(v))` (§2, §3); text renders as §5 says. Messages use
 //! Python's `repr` from [`crate::text::py_repr_str`] and kind words from
 //! [`crate::val::Val::kind_word`].
 

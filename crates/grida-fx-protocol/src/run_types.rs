@@ -1,5 +1,5 @@
-//! The `run` messages and the host-to-engine requests (protocol.md §3, §5.3–§5.6, §6). Step 3
-//! (the runner) uses them; step 2 defines them so the schema is covered in one place.
+//! The `run` messages and the host-to-engine requests (protocol.md §3, §5.3–§5.6, §6). The runner
+//! uses them; they live here so the schema is covered in one place.
 //!
 //! One serde type per `$defs` entry of fx-node-protocol-v1, field names as in the schema:
 //! `file_ref`, `file_value`, `staged_input`, `output_value`, `port_output`, `mark`,

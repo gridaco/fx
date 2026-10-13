@@ -360,7 +360,7 @@ fn mixed_templates_with_pending_or_failed_parts() {
             "v=", {"pending": a.token}, " and ", {"pending": qx.token}
         ]}))
     );
-    // A pending value inside a list part, too (gnode rendered its token into the text).
+    // A pending value inside a list part, too.
     assert_eq!(refs(&rendered("v=${{ parts }}").unwrap()), ["c#1"]);
     // FX: a failed part makes the string that failed result, so its reader is blocked.
     assert_eq!(rendered("t=${{ F }}").unwrap(), Val::Failed("a#1".into()));
@@ -995,7 +995,7 @@ fn lookup_and_contains_use_fx_equality() {
     assert_eq!(err("lookup(m, 'zz')"), "lookup(): no entry 'zz'");
     assert_eq!(err("lookup(m, 1)"), "lookup(): no entry 1");
     assert_eq!(err("lookup(m, true)"), "lookup(): no entry True");
-    // FX: an unhashable key finds nothing (gnode crashed).
+    // An unhashable key finds nothing.
     assert_eq!(err("lookup(m, x)"), "lookup(): no entry [1, 2, 3]");
     assert_eq!(
         err("lookup(m, m)"),
@@ -1332,7 +1332,7 @@ fn views_are_delegated_and_finished() {
 #[test]
 fn views_next_to_pending_values_and_in_text() {
     let names_a_step = ExprError::names_a_step();
-    // gnode crashed on these; FX refuses them.
+    // These are refused.
     assert_eq!(view_eval("P && node").unwrap_err(), names_a_step);
     assert_eq!(view_eval("digest(node)").unwrap_err(), names_a_step);
     // A pending index goes to the scope: a repeat waits on the index and every instance, and

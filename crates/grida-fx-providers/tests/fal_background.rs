@@ -297,7 +297,7 @@ fn statuses_follow_the_run_host_table() {
 #[test]
 fn refusals_send_nothing() {
     let foreign = CallBuilder::new("background.remove", ROUTE)
-        .contract(json!({"adapter": "gnode-fal-image-v1"}))
+        .contract(json!({"adapter": "acme-fal-image-v1"}))
         .request(json!({"image": {"file": "f".repeat(64)}}))
         .build();
     assert_eq!(

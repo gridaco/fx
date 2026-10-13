@@ -1331,7 +1331,7 @@ steps:
 ",
     );
     // A name no capability the type calls defines is refused as such, once, with FX's name for
-    // the predecessor's (spec/providers.md §11); a known feature a route lacks is the route's.
+    // a renamed one (spec/providers.md §11); a known feature a route lacks is the route's.
     assert_eq!(
         problems(&expansion),
         vec![
@@ -1729,8 +1729,8 @@ steps:
 // (a take whose `until` reads it) the chain is reached inside it. When a step outside reads the
 // group while its `until` waits, the next take's members expand in declaration order instead: the
 // judged step first, its judge held (the outside reader is unfinished), then the next member
-// reads the judged step, which settles the judge, which reads that member back. Both must plan
-// as stage-gen's engine plans them: no cycle, the same graph.
+// reads the judged step, which settles the judge, which reads that member back. Both plan the
+// same graph, with no cycle.
 
 /// A step joining one text, read from `SOURCE`.
 const JOIN: &str =

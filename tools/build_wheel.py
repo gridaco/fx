@@ -1,4 +1,4 @@
-"""Builds a ``grida`` wheel that carries the ``grida-fx`` engine (milestone 1, step 5).
+"""Builds a ``grida`` wheel that carries the ``grida-fx`` engine.
 
     uv run --project python python tools/build_wheel.py \\
         --binary target/release/grida-fx --target aarch64-apple-darwin --out dist/
@@ -9,8 +9,8 @@ platform, each with the engine at ``grida/fx/_bin/grida-fx``. There is no consol
 ``python/`` makes a wheel without the engine, for development only.
 
 - **Targets.** ``aarch64-apple-darwin``, ``x86_64-apple-darwin``, ``x86_64-unknown-linux-gnu`` and
-  ``aarch64-unknown-linux-gnu``. Windows is not in the preview: the runner uses Unix process
-  groups and signals.
+  ``aarch64-unknown-linux-gnu``. Windows is not supported: the runner uses Unix process groups
+  and signals.
 - **Contents.** Every file of the packages ``python/pyproject.toml`` names under
   ``[tool.hatch.build.targets.wheel]`` except ``__pycache__``, compiled files, dotfiles and
   ``grida/fx/_bin/``; the binary at ``grida/fx/_bin/grida-fx`` with mode 0o755 (every other file
@@ -149,9 +149,9 @@ def platform_tag(binary: bytes, target: str) -> str:
     """The wheel platform tag for ``binary`` built for ``target`` (module docstring)."""
     if target not in TARGETS:
         known = ", ".join(TARGETS)
-        reason = f"{target} is not a preview target ({known})"
+        reason = f"{target} is not a release target ({known})"
         if "windows" in target:
-            reason += "; Windows is not in the preview: the runner uses Unix process groups"
+            reason += "; Windows is not supported: the runner uses Unix process groups"
             reason += " and signals"
         raise BuildError(reason)
     system, arch = TARGETS[target]

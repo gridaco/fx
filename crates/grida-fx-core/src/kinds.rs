@@ -51,9 +51,7 @@ pub fn kind_of(name: &str) -> &'static str {
 /// The suffix a run writes for an output of this kind (store.md "Run folders"): the first suffix
 /// identity.md §4 lists for the kind (`image/png` → `.png`, `image/jpeg` → `.jpg`, `image/gif`
 /// → `.gif`, `text/yaml` → `.yaml`), `.json` for `annotations`, and `""` for every other kind,
-/// `file` and families such as `image` included. gnode's run folders had no suffix for
-/// `image/gif`, `audio/ogg`, `text/yaml`, `text/toml`, `text/html` and `model/gltf+json`;
-/// store.md §10 lists that change.
+/// `file` and families such as `image` included.
 pub fn suffix_of_kind(kind: &str) -> &'static str {
     if kind == "annotations" {
         return ".json";
@@ -81,8 +79,8 @@ pub fn is_json(kind: &str) -> bool {
 
 /// The kind of a workflow input file given for a declared kind: the suffix kind wins when it is
 /// known (a declared kind is never enforced); the declared kind is used only for an unknown
-/// suffix and a declaration other than `file` (`kind: image` and `brief` give `image`). As FX's
-/// predecessor did, a declaration that `file` starts with keeps `file`.
+/// suffix and a declaration other than `file` (`kind: image` and `brief` give `image`). A
+/// declaration that `file` starts with keeps `file`.
 pub fn effective_kind(name: &str, declared: &str) -> String {
     let kind = kind_of(name);
     if kind == "file" && !kind.starts_with(declared) {
@@ -184,7 +182,7 @@ mod tests {
         assert_eq!(effective_kind("a", "image"), "image");
         assert_eq!(effective_kind("a.bin", "image/png"), "image/png");
         assert_eq!(effective_kind("a.bin", "file"), "file");
-        // gnode's prefix rule: `file` starts with `fi`.
+        // The prefix rule: `file` starts with `fi`.
         assert_eq!(effective_kind("a.bin", "fi"), "file");
     }
 

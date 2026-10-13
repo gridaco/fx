@@ -1633,7 +1633,7 @@ fn integrated_an_at_plan_step_without_a_runner() {
         plan.problems,
         [Problem::new(
             "a",
-            "running an at: plan step is not available until the runner lands"
+            "running an at: plan step needs a plan-time runner, and planning has none"
         )]
     );
     assert_eq!(plan.ceiling, Some(Usd(2_000_000)));

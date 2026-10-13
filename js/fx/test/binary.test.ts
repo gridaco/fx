@@ -115,7 +115,7 @@ describe("finding the engine", () => {
     expect(error.message).toContain("musl");
   });
 
-  test("Windows and other platforms are not in the preview", () => {
+  test("Windows and other platforms are not supported", () => {
     const windows = failure(lookup({ os: "win32", cpu: "x64" }));
     expect(windows.message).toContain("does not run on Windows");
     expect(windows.message).toContain("WSL");

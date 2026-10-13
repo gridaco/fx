@@ -554,7 +554,7 @@ mod tests {
             (
                 "image.generate",
                 "openai",
-                json!({"adapter": "gnode-openai-image-v1"}),
+                json!({"adapter": "acme-openai-image-v1"}),
             ),
             (
                 "image.generate",

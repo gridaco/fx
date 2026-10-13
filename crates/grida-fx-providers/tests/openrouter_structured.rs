@@ -111,10 +111,10 @@ fn assert_refused(call: &TestCall, keys: Keys, reason: &str) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// S1: the text model, no pictures
+// The text model, no pictures
 
 #[test]
-fn s1_the_text_model_sends_a_plain_question() {
+fn the_text_model_sends_a_plain_question() {
     let schema = colour_schema();
     let exact = r#"{"model":"openai/gpt-5.6-sol","messages":[{"role":"user","content":"Name a colour."}],"response_format":{"type":"json_schema","json_schema":{"name":"colour","strict":true,"schema":{"title":"colour","description":"A colour","type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":false},"description":"A colour"}},"provider":{"require_parameters":true},"max_tokens":16000}"#.to_string();
     let transport = replay(vec![expect(ExpectBody::JsonText(exact)).reply(completion(
@@ -181,14 +181,14 @@ fn a_byok_answer_counts_the_upstream_inference() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// S2 and S3: one 2400x3000 RGBA picture, unchanged on astra, reduced on the text model
+// One 2400x3000 RGBA picture, unchanged on astra, reduced on the text model
 
 fn tall_picture() -> Vec<u8> {
     media::png(2400, 3000, Some(128))
 }
 
 #[test]
-fn s2_astra_sees_the_picture_unchanged_with_its_policy() {
+fn astra_sees_the_picture_unchanged_with_its_policy() {
     let picture = tall_picture();
     let mut builder =
         CallBuilder::new("structured.generate", ASTRA_ROUTE).contract(astra_contract());
@@ -232,7 +232,7 @@ fn s2_astra_sees_the_picture_unchanged_with_its_policy() {
 }
 
 #[test]
-fn s3_the_text_model_sees_a_reduced_flattened_picture() {
+fn the_text_model_sees_a_reduced_flattened_picture() {
     let mut builder = CallBuilder::new("structured.generate", TEXT_ROUTE).contract(text_contract());
     let file = builder.file("image/png", &tall_picture());
     let call = builder
@@ -302,7 +302,7 @@ fn a_reduced_picture_takes_the_requests_matte() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// S4: a schema file with $defs, a $ref with siblings, defaults and assertions
+// A schema file with $defs, a $ref with siblings, defaults and assertions
 
 fn report_schema() -> Value {
     json!({
@@ -324,7 +324,7 @@ fn report_schema() -> Value {
 }
 
 #[test]
-fn s4_a_schema_file_is_inlined_and_made_strict() {
+fn a_schema_file_is_inlined_and_made_strict() {
     let mut builder = CallBuilder::new("structured.generate", TEXT_ROUTE).contract(text_contract());
     let schema = builder.file(
         "application/json",
@@ -377,7 +377,7 @@ fn s4_a_schema_file_is_inlined_and_made_strict() {
 }
 
 #[test]
-fn s4_unknown_and_cyclic_references_are_refused() {
+fn unknown_and_cyclic_references_are_refused() {
     let mut unknown = report_schema();
     unknown["properties"]["detail"]["$ref"] = json!("#/$defs/missing");
     assert_refused(
@@ -406,10 +406,10 @@ fn s4_unknown_and_cyclic_references_are_refused() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// S5: text context
+// Text context
 
 #[test]
-fn s5_text_context_follows_the_prompt() {
+fn text_context_follows_the_prompt() {
     let picture = media::png(2, 2, Some(255));
     let mut builder =
         CallBuilder::new("structured.generate", ASTRA_ROUTE).contract(astra_contract());
@@ -439,10 +439,10 @@ fn s5_text_context_follows_the_prompt() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// S6: answers
+// Answers
 
 #[test]
-fn s6_answers_parse_unwrap_or_fail() {
+fn answers_parse_unwrap_or_fail() {
     let message = |m: Value| completion(m, json!({"cost": 0.25}));
     let replies = vec![
         // 1. A parsed object wins over content.
@@ -539,10 +539,10 @@ fn s6_answers_parse_unwrap_or_fail() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// S7: check
+// The check
 
 #[test]
-fn s7_the_check_refuses_with_the_smallest_location() {
+fn the_check_refuses_with_the_smallest_location() {
     let schema = json!({
         "type": "object",
         "properties": {
@@ -585,10 +585,10 @@ fn s7_the_check_refuses_with_the_smallest_location() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// S8: HTTP failures
+// HTTP failures
 
 #[test]
-fn s8_an_upstream_error_keeps_only_its_safe_detail() {
+fn an_upstream_error_keeps_only_its_safe_detail() {
     let prompt = "private-prompt-value";
     let raw = json!({"error": {
         "message": format!("Invalid schema for response_format 'x': In context=(), 'required' is required to be supplied and to be an array including every key in properties. required must include every key {KEY} {prompt}"),

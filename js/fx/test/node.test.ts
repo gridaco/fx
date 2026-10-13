@@ -188,7 +188,7 @@ describe("a declaration", () => {
     expect(nodeRecordOf(() => 1)).toBeUndefined();
   });
 
-  test("param shorthand and the predecessor's spelling", () => {
+  test("param shorthand and its plain spelling", () => {
     expect(paramSchema({ type: "string", optional: true, template: false })).toEqual({
       type: "string",
       "x-fx-optional": true,

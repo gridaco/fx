@@ -8,7 +8,7 @@
 //! abbreviation (FX decision). `--` ends CLI option parsing: everything after it is an
 //! authored input, including flags otherwise reserved by the verb.
 //!
-//! `--check`, `--json` and `--expect-cached` are options of `plan` only, as in the predecessor:
+//! `--check`, `--json` and `--expect-cached` are options of `plan` only:
 //! after `expand`, `identity` or `price` they are workflow input flags like any other. `run` takes
 //! the planning verbs' value options plus its own: `--yes-up-to`, `--deliver`, `--name`,
 //! `--resume` and `--run` with a

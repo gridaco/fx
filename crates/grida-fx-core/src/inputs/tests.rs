@@ -24,9 +24,8 @@ fn compile_error(value: Value) -> String {
 }
 
 #[test]
-fn shorthand_compiles_like_gnode() {
-    // The shapes stage-gen's `schema` verb printed (the `linear` and `tiered-price` cases,
-    // optional members), with FX's file tag.
+fn shorthand_compiles_to_these_shapes() {
+    // The `linear` and `tiered-price` cases' shapes, and optional members, with FX's file tag.
     assert_eq!(
         compiled(json!({"brief": {"type": "file", "kind": "text/plain"}})),
         json!({
@@ -365,7 +364,7 @@ mod with_text {
     use super::*;
 
     #[test]
-    fn the_example_stage_gen_printed() {
+    fn the_example_compiles() {
         let schema = compiled(json!({
             "count": {"type": "integer"},
             "style": {"tone": {"type": "string"}},

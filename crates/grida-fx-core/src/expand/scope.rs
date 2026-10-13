@@ -6,7 +6,7 @@
 //! refers back to itself), `steps` (a [`ViewData::Steps`] view), else `unknown name 'x'`.
 //! `steps.<name>` finds the step lexically ([`Expander::find`]), expands it, and returns
 //! [`Expander::view_of`]: missing (absent), its pending token, or a node / repeat / group /
-//! workflow / regenerating view, each as stage-gen's engine reads it; a node view's `outputs`,
+//! workflow / regenerating view; a node view's `outputs`,
 //! `facts` and `take` are answered by `judge.rs` ([`Expander::node_result`],
 //! [`Expander::node_take`]). `.*` results are [`ViewData::Every`]; finishing turns them
 //! into collections (files keyed, verdicts kept for present keys) and refuses any other view. A
@@ -261,8 +261,7 @@ impl Expander<'_> {
     ///
     /// `judging` is the evaluating frame's judging pin; a node view is pinned to its take only
     /// when the node is the judged step (callers check that, see `view_at`). A node whose
-    /// instances are being created right now refers back to itself (FX refuses the cycle gnode
-    /// read as missing).
+    /// instances are being created right now refers back to itself: the cycle is refused.
     pub(crate) fn view_of(
         &mut self,
         exp: ExpId,
@@ -306,7 +305,7 @@ impl Expander<'_> {
     }
 
     /// [`Expander::view_of`] seen from `frame`: a node is pinned only when it is the very step
-    /// the frame's judge judges (gnode compares expansions, not names).
+    /// the frame's judge judges (expansions are compared, not names).
     fn view_at(
         &mut self,
         frame: FrameId,
@@ -504,8 +503,8 @@ impl Expander<'_> {
     }
 
     /// `steps.rep[k]` of a repeat whose key `k` only a run gives: any instance may be the one
-    /// picked, so the value waits on `k` and on every instance of the repeat (gnode's
-    /// `_RepeatView.expression_item`; token `{"index": k's token}`). `None` for any other view.
+    /// picked, so the value waits on `k` and on every instance of the repeat (token
+    /// `{"index": k's token}`). `None` for any other view.
     pub(crate) fn repeat_item_pending(&mut self, view: ViewId, index: &Pending) -> Option<Val> {
         let ViewData::Repeat { exp, .. } = self.views[view.0] else {
             return None;

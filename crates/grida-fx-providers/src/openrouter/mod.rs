@@ -467,7 +467,7 @@ mod tests {
         }
         for contract in [
             json!({"adapter": adapter, "adapter_behavior": 3}),
-            json!({"adapter": "gnode-openrouter-image-v1", "adapter_behavior": "3"}),
+            json!({"adapter": "acme-openrouter-image-v1", "adapter_behavior": "3"}),
             json!({"adapter": 1}),
             json!([]),
             json!("fx-openrouter-image-v1"),

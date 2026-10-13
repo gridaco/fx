@@ -1,10 +1,10 @@
 /**
- * The platforms the preview ships the engine for, one optional npm package each (as esbuild
+ * The platforms FX ships the engine for, one optional npm package each (as esbuild
  * does). `@grida/fx` depends on all four as optional dependencies; npm installs the one whose
  * `os`, `cpu` (and on Linux `libc`) fields match the machine. `tools/build_npm.mjs` reads this
  * table to make those packages, so it is the one list of them.
  *
- * Windows is not in the preview: the engine's runner relies on Unix process groups and signals.
+ * Windows is not among them: the engine's runner relies on Unix process groups and signals.
  */
 
 /** One platform the engine is built for. */
@@ -59,7 +59,7 @@ export const platforms: readonly Platform[] = [
   },
 ];
 
-/** The platform for `process.platform` and `process.arch`, or `null` when the preview has none. */
+/** The platform for `process.platform` and `process.arch`, or `null` when FX ships none for it. */
 export function platformFor(os: string, cpu: string): Platform | null {
   return platforms.find((platform) => platform.os === os && platform.cpu === cpu) ?? null;
 }
@@ -69,15 +69,15 @@ export function platformForTriple(triple: string): Platform | null {
   return platforms.find((platform) => platform.triple === triple) ?? null;
 }
 
-/** Why the preview has no engine for this machine, in a sentence. */
+/** Why FX has no engine for this machine, in a sentence. */
 export function unsupportedReason(os: string, cpu: string): string {
   const supported = platforms.map((platform) => platform.label).join("; ");
   const machine = `${os} on ${cpu}`;
   if (os === "win32") {
     return (
-      `the preview of grida-fx does not run on Windows (the engine's runner uses Unix process ` +
+      `grida-fx does not run on Windows (the engine's runner uses Unix process ` +
       `groups and signals). It runs on: ${supported}. On Windows, use WSL.`
     );
   }
-  return `the preview of grida-fx has no engine for ${machine}. It runs on: ${supported}.`;
+  return `grida-fx has no engine for ${machine}. It runs on: ${supported}.`;
 }

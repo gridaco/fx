@@ -11,7 +11,7 @@ The engine runs the model loop; the body declares the tools and the check:
 - :class:`Tool` is a declared tool: ``name`` (``^[a-z][a-z0-9_]{0,63}$``, never ``submit``), a
   non-blank ``description``, a mapping ``parameters`` (a JSON Schema), and
   ``handler(arguments) -> ToolResult`` (sync or async). Construction validates and raises
-  ``ValueError`` (the predecessor's ``ToolSpec`` rules).
+  ``ValueError``.
 - :class:`ToolResult` is a declared tool's answer: non-blank ``text`` and ``images``, each an
   image data URL (``data:image/...;base64,...``) or an HTTP(S) URL; :class:`ToolInvocationError`
   is what a handler raises to tell the model it failed.

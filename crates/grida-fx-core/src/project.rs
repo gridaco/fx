@@ -299,7 +299,7 @@ pub struct Planner {
     pub takes: Takes,
     pub takes_path: PathBuf,
     pub registry: Registry,
-    /// Results known while planning (at-plan results; the runner's results in step 3).
+    /// Results known while planning (at-plan results, and the runner's results).
     pub results: IndexMap<String, NodeResult>,
     pub max_usd: Option<Usd>,
 }

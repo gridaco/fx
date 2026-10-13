@@ -22,7 +22,7 @@
 //!
 //! Details:
 //! - `<names>` is the sorted list of undeclared names as Python prints a list of strings
-//!   (`['x', 'y']`), as FX's predecessor wrote it; a name given `null` counts too.
+//!   (`['x', 'y']`); a name given `null` counts too.
 //! - The other refusals read `the fact cost_usd is the engine's: a node may not report it`,
 //!   the reserved-marker sentence of `value::check_markers` (`fact <name>: …`, `marks[<i>]: …`),
 //!   `output <label>: <work_path> is not a file inside the work dir`, `output <label>: cannot

@@ -170,6 +170,4 @@ encode or technical report does not approve artistic quality.
 ## Source and media
 
 The project contains source, prompts, settings and a synthesized fixture script.
-Generated media and run data stay outside Git. `nodes/_movie_sprite/LICENSE`
-retains the original helper source's BSD 3-Clause notice; `NOTICE.md` describes
-its adaptation. That source license makes no claim about downloaded artwork.
+Generated media and run data stay outside Git.

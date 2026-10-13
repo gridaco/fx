@@ -41,7 +41,7 @@
 //! Before the first turn, `agent.run` is refused with `-32602` when `max_steps` is 0, a body tool
 //! is named `submit`, a tool's `parameters` or the `submit` schema holds a reserved marker
 //! (spec/protocol.md §3.2), or `submit` is not a JSON Schema (draft 2020-12). The reply shape is
-//! read leniently where the predecessor was: a missing or `null` `text` is `""`, missing or
+//! read leniently: a missing or `null` `text` is `""`, missing or
 //! `null` `tool_calls` are none, and a call without `arguments` has `{}`; members other than
 //! those named are not kept. Anything else (a reply that is not an object, a call without a
 //! name, an `id` that is neither absent, `null` nor a string) fails the turn with `call_failed`.
@@ -249,7 +249,7 @@ fn compile(schema: &Value) -> Result<Validator, String> {
         .map_err(|error| format!("the submit schema is not a JSON Schema: {error}"))
 }
 
-/// One segment of an instance location, ordered as the predecessor sorted them: indexes by
+/// One segment of an instance location, in this order: indexes by
 /// number, names by text, a shorter location first.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 enum Segment {

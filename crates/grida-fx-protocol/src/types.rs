@@ -1,4 +1,4 @@
-//! The session, `describe` and `build` messages (protocol.md §2, §4, §5.1, §5.2): what step 2
+//! The session, `describe` and `build` messages (protocol.md §2, §4, §5.1, §5.2): what planning
 //! uses. `run` and the host-to-engine requests are in [`crate::run_types`].
 //!
 //! Field names are the schema's. An optional member is an `Option` left out when `None`; a

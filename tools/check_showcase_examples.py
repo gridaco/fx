@@ -54,7 +54,7 @@ def plan_and_refuse(home: Path, target: str, inputs: str | None = None) -> None:
 
 
 def audit_source(home: Path) -> None:
-    """Example bodies must not import the application checkout or private FX internals."""
+    """Example bodies must not import private FX internals."""
     for path in home.rglob("*.py"):
         for item in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             names = []
@@ -63,9 +63,6 @@ def audit_source(home: Path) -> None:
             elif isinstance(item, ast.ImportFrom) and item.module is not None:
                 names = [item.module]
             for name in names:
-                assert not name.startswith(
-                    ("stage_gen", "demo_game_tools", "demo_game_collection")
-                ), f"{path.relative_to(home)} imports another application: {name}"
                 assert not name.startswith("grida.fx."), (
                     f"{path.relative_to(home)} imports a private FX module: {name}"
                 )

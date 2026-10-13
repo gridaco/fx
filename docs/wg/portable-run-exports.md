@@ -1,6 +1,6 @@
 # Portable run exports
 
-Status: implemented in source, 2026-10-11. [spec/exports.md](../../spec/exports.md)
+Status: implemented, 2026-10-11; released in 0.2.0. [spec/exports.md](../../spec/exports.md)
 owns the normative `fx-run-export-v1` format. The CLI, Python and JavaScript
 saved-record APIs, and shared static browser reader follow it. Check installed
 help before using this capability with an older published engine.

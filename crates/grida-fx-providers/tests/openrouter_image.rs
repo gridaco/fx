@@ -142,7 +142,7 @@ fn failed(sent: Sent) -> (String, Option<Usd>, bool) {
     }
 }
 
-// I1 -------------------------------------------------------------------------------------------
+// Edits: the body, picture order, sixteen pictures ---------------------------------------------
 
 #[test]
 fn an_edit_sends_the_full_body_and_reports_its_cost() {
@@ -243,7 +243,7 @@ fn an_edit_takes_sixteen_pictures() {
     assert_eq!(body["input_references"].as_array().unwrap().len(), 16);
 }
 
-// I2 -------------------------------------------------------------------------------------------
+// Generates and sizes --------------------------------------------------------------------------
 
 #[test]
 fn a_generate_without_size_sends_auto_background_and_no_size() {
@@ -312,7 +312,7 @@ fn a_fixture_exchange_plays() {
     assert!(reason.contains("20"), "{reason}");
 }
 
-// I3 -------------------------------------------------------------------------------------------
+// Refusals before sending ----------------------------------------------------------------------
 
 #[test]
 fn foreign_contracts_are_refused_before_anything_else() {
@@ -320,7 +320,7 @@ fn foreign_contracts_are_refused_before_anything_else() {
     for contract in [
         json!({"adapter": "fx-openrouter-image-v1", "adapter_behavior": 3}),
         json!({"adapter": "fx-openrouter-image-v1", "adapter_behavior": "1"}),
-        json!({"adapter": "gnode-openrouter-image-v1", "adapter_behavior": "3"}),
+        json!({"adapter": "acme-openrouter-image-v1", "adapter_behavior": "3"}),
         json!({"adapter": "fx-openai-image-v1", "adapter_behavior": "3"}),
     ] {
         // A malformed request and a missing key too: the contract is judged first.
@@ -498,7 +498,7 @@ fn files_that_are_not_pictures_or_have_no_bytes_are_refused() {
     assert_eq!(refused(&call), "references[0] has no bytes to send");
 }
 
-// I4 -------------------------------------------------------------------------------------------
+// HTTP statuses --------------------------------------------------------------------------------
 
 #[test]
 fn statuses_classify_per_spec() {
@@ -591,7 +591,7 @@ fn a_status_reason_names_the_safe_detail_and_request_id() {
     assert_eq!((cost, retryable), (Some(Usd::ZERO), false));
 }
 
-// I5 -------------------------------------------------------------------------------------------
+// Transport phases -----------------------------------------------------------------------------
 
 #[test]
 fn transport_phases_decide_the_outcome() {
@@ -669,7 +669,7 @@ fn a_transport_that_refuses_the_request_is_a_refusal() {
     );
 }
 
-// I6 -------------------------------------------------------------------------------------------
+// Answer bodies and media types ----------------------------------------------------------------
 
 #[test]
 fn bodies_that_cannot_become_an_answer_fail_the_attempt() {
@@ -833,7 +833,7 @@ fn a_malformed_revised_prompt_is_ignored() {
     assert_eq!(answer.data, Value::Null);
 }
 
-// I7 -------------------------------------------------------------------------------------------
+// The check ------------------------------------------------------------------------------------
 
 #[test]
 fn checks_refuse_what_the_route_did_not_ask_for() {
@@ -922,7 +922,7 @@ fn a_wrong_size_from_the_provider_is_answered_then_refused_by_the_check() {
     );
 }
 
-// I8 -------------------------------------------------------------------------------------------
+// Cost and the key -----------------------------------------------------------------------------
 
 #[test]
 fn costs_come_from_usage_cost_rounded_up() {

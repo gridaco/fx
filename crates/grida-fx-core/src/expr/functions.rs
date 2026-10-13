@@ -9,9 +9,8 @@
 //!
 //! A function whose result is made from the content of a list or object (`digest`, `join`,
 //! `min`/`max` over a list, `contains` over a list) is also pending while that content holds a
-//! pending value, so a pending token never ends up inside a known value; gnode rendered such
-//! tokens into the result. `join` of a list holding a failed result is that failed result, as a
-//! mixed template is.
+//! pending value, so a pending token never ends up inside a known value. `join` of a list holding
+//! a failed result is that failed result, as a mixed template is.
 
 use super::eval::{Scope, derive_all, kind, len, operand_number, repr};
 use super::{ExprError, Func};
@@ -212,7 +211,7 @@ pub fn accepted(collection: &Collection) -> Result<Val, ExprError> {
         .iter()
         .any(|(key, _)| matches!(verdict(key), Some(None)));
     if undecided {
-        // As in gnode, the refs may be empty when every item is known but a verdict is not.
+        // The refs may be empty when every item is known but a verdict is not.
         let mut refs = BTreeSet::new();
         for (_, value) in &collection.items {
             refs.extend(value.pending_refs());

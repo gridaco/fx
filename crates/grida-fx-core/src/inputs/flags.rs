@@ -10,7 +10,7 @@
 //! anything else, a stray positional included; with a builder target any flag is
 //! `unknown flag <x>; a builder takes its arguments as --arg` (checked by the caller).
 //!
-//! As with gnode's parser, a bad value is reported even when an unknown flag came before it, a
+//! A bad value is reported even when an unknown flag came before it, a
 //! repeated value flag keeps its last value, and the result lists inputs in property order. A
 //! number is written as YAML writes a plain number (yaml.md "Values"): a decimal integer, or a
 //! decimal with a fraction or an exponent, no leading zero; an integer literal that reading would

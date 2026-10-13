@@ -566,40 +566,9 @@ FX ships a default route table, embedded in `grida-fx`. It is the first table of
 - **Pacing is not identity.** The engine applies a route's pacing per route id, so routes of one id for several capabilities share it. The OpenAI and OpenRouter image routes declare `requests_per_minute: 150`. The 3D routes and the video routes declare `concurrency: 1`, and so do the GG image routes: GG runs one GPT Image call per organization at a time until it settles, and answers a second with a 429 (§9.7). The Codex routes declare `concurrency: 3`, shared by their one id: one Codex runs several turns at once (five at once drew in about the time of one), and three keeps the user's plan from being spent faster than they would by hand; a project sets its own in `fx.yaml`. The Grok Build routes declare `concurrency: 3` likewise, on their one Grok Build. A call waiting for its slot is recorded as waiting ([store.md](store.md) §8). The structured routes declare `concurrency: 4`, and the `openai/gpt-6-astra` agent routes declare `concurrency: 1`.
 - **Shipped without a route:** `background.remove` has an adapter on fal, but no route until fal's price for it is recorded. `vision.annotate`, `vision.review` and `structured.review` have no adapter. Calls on any of these are `no_route` unless a project's table adds a route.
 
-## 11. Changes from stage-gen's engine
+## 11. Renamed features
 
-- **Every attempt is held and settled.** Before, six attempts shared one hold, so billed attempts went uncounted.
-- **Refusals before sending cost $0.** Before, some were charged the whole hold: a missing image key, a bad `background`, references on a generate, an unknown `$ref`, a bad schema file, an out-of-range sound duration, and free-phase failures of Tripo.
-- **Deterministic 4xx answers end the call.** Before, they were resent up to six times.
-- **Pacing is the engine's, per route.** Before, an image adapter paced only within one call.
-- **A rate-limited send waits as long as the provider asks**, up to 60 s (§4.3). Before, `retry-after` was never read.
-- **Tripo jobs are no longer forgotten.** Before, a Tripo job still running at the deadline, or with a malformed status, was settled, and the next run paid again. Now it is `Unreachable` and stays `submitted`.
-- **A provably unsent Tripo task post is `NotReceived`.** Before, it stopped the next run for a person.
-- **The fal handle holds paths**, with a plain query kept, and a `request_id` that is a safe id. Before, it held absolute URLs and any `request_id`. A failed status read during a fal collect no longer settles the job.
-- **Downloads are capped.** Video, background and Tripo downloads have size caps, and every download refuses redirects and carries no credential.
-- **A Tripo task that ends failed or cancelled in the run that submitted it costs what Tripo reports, else $0** (§9.4). Before, it was charged the whole hold. One that a later run finds ended keeps the whole hold the submitting run charged when it stopped waiting (§6).
-- **A long job that finished with an unusable result costs what its provider reported for it** (§7), else the whole hold. Before, it was always charged the whole hold.
-- **Image routes are priced by size** (§10). The plan prices each call, and each attempt is held, at the tier of the request's own `size`. Before, every image call on a route was priced and held at one range, whatever its size.
-- **Music cost is read.** OpenRouter music now reads `usage.cost`; before, every call was charged its whole hold.
-- **A malformed `revised_prompt` no longer fails a paid image.**
-- **Answers no longer carry `attempts`**, request ids or usage. Structured output answers `{"json": value}`.
-- **A request timed out at OpenAI or OpenRouter (408) is billed.** It arrived, and the provider may have done the work: `Failed { cost: None, retryable: true }` (§9.1, §9.2), never a free resend.
-- **OpenRouter BYOK costs count the upstream charge** (§9.2). Before, only `usage.cost` was read, OpenRouter's fee alone, so a ceiling saw $0 for paid upstream work.
-- **Proxies never carry a credential in clear text** (§2 item 9). Before, the environment's `HTTP_PROXY` also took plain `http` requests to a loopback base URL, key included.
-- **A download refuses any header named like a credential** (§2 item 5), not only the credential slot.
-- **Agent turns refuse a file that is not a picture** (§9.2). Before, it was sent as `image/png`.
-- **Structured output's schema `name`** is the schema's `title` with every character but ASCII letters and digits written `_`, at most 64 characters, else `answer`. Before, it was the title, else the schema file's stem, and non-ASCII letters were kept (`Café plan` was `Café_plan`, and is now `Caf__plan`).
-- **Structured output's text context** is appended under `--- context <i> ---`, where `<i>` counts every context file from 1, pictures included, and the text goes as read, `\r\n` included. Before, the header was `--- <file name> ---`, and CRLF became LF.
-- **Strict schemas are canonicalized at schema positions only** (§9.2). A property named `format`, `default`, `pattern` or `properties`, and the contents of `enum` and `const`, are kept. Before, they were deleted wherever they occurred, and `required` could list properties the schema no longer had.
-- **Reduced structured pictures are scaled from their full depth.** A 16-bit picture is scaled as such; before, it was clipped to white. The Lanczos filters differ by under 1/255 in mean.
-- **`null` counts as absent** ([capabilities.md](capabilities.md) §1). Tripo's `texture: null` sends `true`, the default, where the predecessor sent `false`; fal video's `aspect_ratio: null` draws at `9:16`, where the predecessor refused.
-- **fal requests carry only the headers they need.** The queue's status and result reads carry no `content-type`, and a background-removal result is downloaded with `accept: image/*`, not `*/*`.
-- **fal result hosts are held to §9.3.** A background-removal result is downloaded only from `fal.media` (before, from any host), and a video only over `https` (before, `http` too).
-- **`ELEVENLABS_BASE_URL` is honoured** (§3). Before, the ElevenLabs routes always went to the default base.
-- **fal pictures must be pictures.** A file that is not `image/*` is refused before sending, at $0, for images, video frames and background removal. Before, it was sent labelled `image/png`.
-- **fal clips are judged by their bytes**, not by `content-type`. Before, a valid MP4 served as octet-stream, or with no type, was ended and paid for again.
-- **A fal clip download is made once per collect;** a failure leaves the job `submitted`.
-- **A Tripo check `rig_type` is kept only as a short plain string**, else `null`.
-- **An Uncertain submit names the provider's job id** when it is safe, and its job record keeps the reason as its `note` ([store.md](store.md) §5), so `grida-fx jobs` and a later run's `job_unsettled` show it. Before, the job record kept nothing and a later run could not say which job to look for.
-- **Provider URLs reach the transport as given;** the default transport sends `'` in a query as `%27` (httpx sent it as is).
-- **Route contracts and features use FX's names.** The image routes' contracts name FX's adapters (`fx-openai-image-v1`, `fx-openrouter-image-v1`, `fx-fal-image-v1`), so their fingerprints differ from the predecessor's. The predecessor's `route_id` and `surface` members, which no adapter reads, are dropped. A feature has one name: the aliases `masked_edit`, `transparent_background`, `reference_images` and `data_url_reference_input` are gone, and the OpenRouter `image.generate` route no longer claims to take input pictures. A step that still requires an alias is refused while planning as no feature of its capability, naming FX's: `alpha`, `mask`, `image_input`.
+A feature has one name. These names are not features, and a step that requires one is refused
+while planning as no feature of its capability, naming FX's instead
+([capabilities.md](capabilities.md) §1): `masked_edit` is `mask`, `transparent_background` is
+`alpha`, and `reference_images` and `data_url_reference_input` are `image_input`.

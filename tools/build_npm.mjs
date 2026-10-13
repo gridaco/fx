@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Builds the npm packages of a release (milestone 1, step 5): @grida/fx, and one engine package
+// Builds the npm packages of a release: @grida/fx, and one engine package
 // per built binary. Publishing is not done here (RELEASING.md).
 //
 //     node tools/build_npm.mjs --out dist/npm --target aarch64-apple-darwin=target/release/grida-fx

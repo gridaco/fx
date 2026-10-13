@@ -127,5 +127,4 @@ network disabled. Neither the still workflow nor this check requires FFmpeg.
 and composition helpers. It requires only the public FX SDK and its Pillow dependency.
 The small, non-generated topology template is preserved because its exact pixels are
 part of the paint instruction; see [TERRAIN-ATTRIBUTION.md](TERRAIN-ATTRIBUTION.md) for
-its CC BY 3.0 provenance. Helper code retains its [source attribution](ATTRIBUTION.md).
-Generated art, runs and caches stay outside Git.
+its CC BY 3.0 provenance. Generated art, runs and caches stay outside Git.

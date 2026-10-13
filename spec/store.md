@@ -384,24 +384,3 @@ A folder at a run's place that holds files but no `plan.json` refuses nothing: w
 **What stays.** Every run's `plan.json` and `events.jsonl` name what it needs: file digests, step identities and call keys, each 64 lowercase hexadecimal characters. Every such token names what stays: the result record, call record or file of that name, in the run's store (the stand-in store for a stand-in run). So do the tokens of every record that stays and of every job record, until nothing new is named. A file the store holds that is linked from anywhere else (a link count above one, such as a run folder outside the project's knowledge) stays, with every record that names it. Every `budget_reserved` names the key of the call it holds money for (fx-run-events-v1), written before anything is sent, so a paid answer is named even when its `call` event never got written.
 
 **What goes.** Every other result record, call record and file under `results/`, `calls/` and `files/`, records before files, and the leftovers of §6. Nothing else under the store root is touched: not `jobs/`, `projects/`, `lock` or a name that is not a digest. With `--yes` the stores are locked exclusively first, and everything above is checked and counted again under the lock.
-
-## 10. Changes from stage-gen's engine
-
-FX comes from the Python engine stage-gen ran on until it moved onto FX. That engine's store and run folders differed as follows.
-
-| stage-gen | FX |
-|---|---|
-| The store sits in a folder named after the old engine, and its records carry the old engine's kinds. | `.fx/cache`, with `fx-result-record-v1`, `fx-call-record-v1` and `fx-job-record-v1`. An old record is absent to FX, and none is migrated: it keeps no request (next row), so its FX key cannot be computed from it. A project that moves to FX starts with an empty cache. |
-| A call record keeps only `kind`, `key`, `files`, `data` and `cost_usd`. | It also keeps `capability`, `route`, `request` and `take`, so its key can be recomputed (§3). |
-| A job record's `route` is an id and its `take` an integer, and it keeps no request. | `route` is `{id, fingerprint}`, `take` is a list, and the request is kept. |
-| A settled job's record is deleted. | It MAY be kept, as `settled`. |
-| Records are written with Python's JSON encoder. | `canon(record)`, RFC 8785. |
-| Event lines are Python's compact JSON with sorted keys, and carry `schema_version` and `graph_sha256`. Cancelling writes `run_canceled`. | `canon(event)`. `kind` carries the version, `plan` holds the plan digest, and the event is `run_cancelled` (§8). |
-| `plan.json` is written with Python's JSON encoder and a trailing newline. After the run it is rewritten to add the absolute paths of the workflow and the project, a builder's arguments, and the input values. | fx-graph-v1, in the identity.md §5 "Writing JSON" format. It is written once and holds no absolute path (§8). It records the takes file by its project-relative path (`takes_file`), so `reroll` and `pick` find it without a path to the workflow. |
-| A run folder's suffix table has no entry for `image/gif`, `audio/ogg`, `text/yaml`, `text/toml`, `text/html` or `model/gltf+json`, so those files are placed without a suffix. | The first suffix that identity.md §4 lists for the kind (§8). |
-| A file is placed only when its name holds nothing or a file of another size, so a different file of the same size, such as a later take, is never placed. | A name is left alone only when it already holds the same bytes (§8). |
-| Every take of a step is placed at `files/<step>/`, so the folder holds one take, and `inspect --verify` fails on a healthy run with several takes. | Each take has its own folder, `<step>#<takes>` when its take list is not `[1]` (§8). |
-| A name longer than a file system takes, or a temporary name longer than the final one, cannot be placed, and the run never completes. | Segments are cut to 255 bytes with a digest, and temporary names are 22 bytes (§8). |
-| Two invocations started at once may pick the same new folder. | A new folder is claimed by making it (§8). |
-| A failed event write can leave part of a line, followed by later lines, and the folder can no longer be resumed. | A line is written whole or not at all, and a torn last line is cut off by the next invocation (§8). |
-| What a killed run leaves (work dirs, temporary files) stays. | A later run removes it (§6, §8). |

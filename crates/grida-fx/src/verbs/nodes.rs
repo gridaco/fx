@@ -5,7 +5,7 @@
 //! `  routes  <ids serving it, sorted, ", " or "none installed">` from the project's catalog
 //! (built-in table + fx.yaml `route_tables`). An unknown TYPE prints nothing.
 //!
-//! A setting's schema is written on one line as the predecessor wrote it (Python's
+//! A setting's schema is written on one line as Python writes it (
 //! `json.dumps(schema, sort_keys=True)`): keys sorted, `", "` and `": "` between items, text
 //! outside ASCII escaped as `\uXXXX`, numbers in their JCS form (`0`, not `0.0`). The route
 //! catalog is read only when a capability type's `routes` line needs it.

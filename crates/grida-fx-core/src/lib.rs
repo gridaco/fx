@@ -2,8 +2,8 @@
 //!
 //! The core is synchronous and pure: it reads project files and nothing else. It never spawns a
 //! process or opens a connection. Node hosts reach it through the [`host::NodeHost`] trait, which
-//! `grida-fx-runtime` implements; tests use a fake. The module map, data flow and conventions are
-//! in the step-2 ARCHITECTURE notes; each module's doc names the spec sections it follows.
+//! `grida-fx-runtime` implements; tests use a fake. Each module's doc names the spec sections it
+//! follows.
 
 pub mod builtins;
 pub mod docs;

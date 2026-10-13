@@ -1,7 +1,7 @@
 //! The automatic cell rule (spec/layout.md §4, rules 5–8 and 10). Rule 9, authored cells,
-//! belongs to the layout file (Ship B): it would place authored slots between rule 8 and rule
-//! 10, on the coordinates [`cells`] computes before collapsing, which is why the collapse is a
-//! separate step here.
+//! belongs to the layout file (§6), which the viewer does not read: it would place authored
+//! slots between rule 8 and rule 10, on the coordinates [`cells`] computes before collapsing,
+//! which is why the collapse is a separate step here.
 //!
 //! The generic graph algorithms come from `petgraph`: union-find for clusters, Tarjan's strongly
 //! connected components for cycles, and a topological order for depths.
@@ -63,8 +63,9 @@ fn automatic(slots: usize, edges: &[(usize, usize)]) -> Vec<(u32, u32)> {
                 }
                 column += 1;
             } else {
-                // Rule 8: sub-columns of up to three, top to bottom in rule 7's order, from the
-                // depth's smallest preferred row (D3).
+                // Rule 8: sub-columns of up to three, top to bottom in rule 7's order. The rule
+                // leaves the first row open; the engine starts at the depth's smallest preferred
+                // row.
                 let first = ranked[0].0;
                 for (position, &(_, slot)) in ranked.iter().enumerate() {
                     placed[slot] = (

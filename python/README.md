@@ -218,8 +218,7 @@ them, and runs them in this package's node host when a workflow uses one (`fx/im
 | `fx/files.copy@1` | the same bytes and kind |
 | `fx/package@1` | lays files out by destination path (`{key}` takes a keyed collection) with a manifest |
 
-The bodies are ported byte for byte from FX's predecessor, and every picture they write comes
-from Pillow's own PNG encoder, so `pillow` is pinned to one exact version: another build may write
+Every picture the bodies write comes from Pillow's own PNG encoder, so `pillow` is pinned to one exact version: another build may write
 other bytes, which would change every identity and request downstream of them.
 `grida.fx.std.body_of("fx/<name>@1")` returns a body; `grida.fx.std.pictures` holds the Pillow
 reads and writes behind `ctx.read.image` and `ctx.out.png`.

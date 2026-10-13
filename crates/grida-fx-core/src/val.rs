@@ -7,7 +7,7 @@
 //! [`ViewId`], and `finish` turns them into values or refuses them, so no stored value ever
 //! holds one.
 //!
-//! FX rules where gnode differs: one number type (`f64`, always finite; integers are exact
+//! FX's rules: one number type (`f64`, always finite; integers are exact
 //! within ±2^53 because readers refuse anything else); booleans are not numbers;
 //! `text(missing)` is `""`; numbers render in their JCS form; `plain` follows spec/identity.md §3
 //! and a pending value has no plain form (an identity that would hold one is `null`).
@@ -136,11 +136,11 @@ impl Collection {
 
 /// A value only a run can produce.
 ///
-/// `refs` are the instance ids it waits on: they are graph edges and MUST match gnode exactly.
+/// `refs` are the instance ids it waits on: they are graph edges.
 /// A record shows the value by them alone, `{"pending": [refs, sorted]}` ([`Val::shown`]).
 /// `token` names how the value is computed; it is internal and never reaches a record or a
 /// message, but two textually identical expressions over the same references must get equal
-/// tokens. FX computes tokens with gnode's shapes under FX's `digest`: `{"ref": …}` for a
+/// tokens. FX computes tokens under its `digest`, in these shapes: `{"ref": …}` for a
 /// reference, `{"op", "of", "extra"}` for a derivation of one pending value, `{"op", "args"}` for
 /// an operation over several values, where a pending value inside is `{"pending": token}`
 /// ([`Val::token_form`]).
@@ -252,8 +252,8 @@ impl Val {
             .then_some(Val::Number(if x == 0.0 { 0.0 } else { x }))
     }
 
-    /// The word for this value in type errors (gnode's words for JSON values, FX's words for
-    /// runtime values, where gnode printed Python class names): `null`, `a boolean`, `a number`,
+    /// The word for this value in type errors, for JSON and runtime values alike: `null`,
+    /// `a boolean`, `a number`,
     /// `text`, `a list`, `an object`, `a file`, `a missing value`, `a failed result`,
     /// `a collection`, `a pending value`, `a step`.
     pub fn kind_word(&self) -> &'static str {
@@ -273,7 +273,7 @@ impl Val {
         }
     }
 
-    /// Python's type name as gnode's `an instance key is text or a number, not {name}` prints it
+    /// Python's type name as `an instance key is text or a number, not {name}` prints it
     /// (`NoneType`, `list`, `dict`, `_Missing`, `Failed`, `Collection`, `Pending`).
     pub fn type_name(&self) -> &'static str {
         match self {
@@ -435,7 +435,7 @@ impl Val {
     /// e.g. .outputs.image or .facts.verdict`. Callers handle pending and failed values first.
     ///
     /// A pending or failed value that reaches it anyway renders as its shown form
-    /// (`{"pending":["a#1"]}`, `{"failed":"a#1"}`), where gnode rendered its token.
+    /// (`{"pending":["a#1"]}`, `{"failed":"a#1"}`), never its token.
     pub fn text(&self) -> Result<String, ExprError> {
         if self.contains_view() {
             return Err(ExprError::names_a_step());
@@ -476,7 +476,7 @@ impl Val {
     }
 }
 
-/// Equality as `==` sees it (gnode's, with FX's rules): compares shown forms (pending values by
+/// Equality as `==` sees it: compares shown forms (pending values by
 /// token), so `1 == 1.0`, `true != 1`, files equal by digest, missing equals missing,
 /// `null != missing`; two views are equal only when they are the same view.
 pub fn plain_eq(a: &Val, b: &Val) -> bool {

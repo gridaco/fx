@@ -46,7 +46,7 @@ In the tables below, a member's type is one of:
   - each member of `data.facts` becomes a node fact, and a string `data.verdict` becomes the fact `verdict`.
 
 **Features.**
-- A route declares the features it supports, in its table entry ([identity.md](identity.md) §7). A step's `requires:` names features of the capabilities its type calls. A name that is a feature of none of them is refused while planning: `<name> is not a(n) <capability>[ or <capability>] feature (spec/capabilities.md)`, followed by `; FX calls it <feature>` for a name FX's predecessor used ([providers.md](providers.md) §11). A capability without a section here (§13, or a project's own) is not checked this way. A known feature the step's route lacks is refused as `<route> does not support <features>`.
+- A route declares the features it supports, in its table entry ([identity.md](identity.md) §7). A step's `requires:` names features of the capabilities its type calls. A name that is a feature of none of them is refused while planning: `<name> is not a(n) <capability>[ or <capability>] feature (spec/capabilities.md)`, followed by `; FX calls it <feature>` for a renamed feature ([providers.md](providers.md) §11). A capability without a section here (§13, or a project's own) is not checked this way. A known feature the step's route lacks is refused as `<route> does not support <features>`.
 - **A step's own request implies features.** A step whose type is a capability (a built-in such as `fx/image.generate@1`) sends its with-values as the request, so the plan reads from them what its route must honour, besides what `requires:` names. For `image.generate` and `image.edit`:
   - `image_input` for a `references` list with an item;
   - `mask` for a `mask`;

@@ -2,10 +2,10 @@
 ``docs/wg/overview.md``).
 
 The engine owns every built-in's declaration (its catalog) and runs ``fx/select@1`` and the paid
-built-ins itself. Nine built-ins have Python bodies, ported byte for byte from FX's predecessor so
-their output files (and every identity and request downstream of them) stay the same; Pillow is
-pinned for that reason. The host runs one when ``run``'s ``body`` is ``{"builtin":
-"fx/<name>@1"}``: :data:`BODIES` maps ``<name>`` to its body.
+built-ins itself. Nine built-ins have Python bodies, whose output files (and every identity and
+request downstream of them) must not change by a byte; Pillow is pinned for that reason. The host
+runs one when ``run``'s ``body`` is ``{"builtin": "fx/<name>@1"}``: :data:`BODIES` maps
+``<name>`` to its body.
 
 | name | body |
 |---|---|

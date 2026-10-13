@@ -2,12 +2,11 @@
 //!
 //! - [`decode_text`] is identity.md §5 "Decoding": strict UTF-8, one leading byte-order mark
 //!   removed, line endings kept. It is the one rule for inputs, cached outputs, prompt files and
-//!   templates (FX differs from gnode here: gnode kept the BOM and used universal newlines).
+//!   templates.
 //! - [`prompt_text`] is identity.md §5 "Prompt files": every `<!-- … -->` (non-greedy, across
 //!   lines) removed together with one directly following `\n`.
-//! - [`py_repr_str`] and [`py_repr`] reproduce Python's `repr`, which gnode's messages embed
-//!   (`no field 'x'`, `key 'a' names two items`, `'x' is not of type 'integer'`). FX keeps those
-//!   message texts.
+//! - [`py_repr_str`] and [`py_repr`] reproduce Python's `repr`, which FX's messages embed
+//!   (`no field 'x'`, `key 'a' names two items`, `'x' is not of type 'integer'`).
 
 use crate::error::{Error, Result};
 use crate::value;
@@ -142,7 +141,7 @@ fn is_printable(c: char) -> bool {
     ) && (code & 0xfffe) != 0xfffe
 }
 
-/// Python's `repr` of a JSON value as gnode's messages print it: strings per [`py_repr_str`],
+/// Python's `repr` of a JSON value as FX's messages print it: strings per [`py_repr_str`],
 /// `True`/`False`/`None`, numbers in their JCS form (FX has one number type), lists `[1, 2]`,
 /// objects `{'a': 1}` in their own key order.
 pub fn py_repr(value: &Value) -> String {

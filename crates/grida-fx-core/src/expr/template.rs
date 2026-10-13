@@ -9,7 +9,7 @@
 //!
 //! FX rules for mixed templates: a pending part makes the whole string pending
 //! (`derive_all("text", …)`); a failed part makes the whole string that failed result, so its
-//! reader is blocked (gnode rendered it as `{"failed":"…"}` text and ran the reader); missing
+//! reader is blocked rather than run on `{"failed":"…"}` text; missing
 //! renders as `""`.
 
 use super::eval::{Scope, evaluate, finish};

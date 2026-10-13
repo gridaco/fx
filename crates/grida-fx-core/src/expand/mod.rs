@@ -1,4 +1,4 @@
-//! Expansion: a workflow document into step instances, as stage-gen's engine expands it.
+//! Expansion: a workflow document into step instances.
 //!
 //! The public model ([`Instance`], [`PendingRepeat`], [`Expansion`], [`NodeResult`]) is what
 //! planning and the outputs read. The [`Expander`] is internal; its methods are spread over the
@@ -25,24 +25,22 @@
 //! FX decisions recorded here:
 //! - names: `fx/…`, `fx.yaml`, `grida-fx` in messages; key text of numbers is JCS (`2.0` → `2`);
 //! - native select is keyed on the built-in `fx/select@1` only;
-//! - top-level failed items of select's `first_of` become missing (gnode's rule kept);
+//! - top-level failed items of select's `first_of` become missing;
 //! - a failed or pending part of a mixed template makes the string failed or pending;
 //! - every cycle is refused: a node reading itself or a mutual `with:` cycle reports
 //!   `<decl path> refers back to itself` instead of reading missing; a `let` that refers to
 //!   itself reports `let.<name> refers back to itself`; a workflow used inside itself (directly
 //!   or through other workflows) reports `<uses> refers back to itself` at the step; `needs:`
-//!   cycles stay silent (gnode); a step's judges and `independent_of` targets, which it expands
+//!   cycles stay silent; a step's judges and `independent_of` targets, which it expands
 //!   for its own sake, are held while a step under way is unfinished, so they read that step as
-//!   pending where gnode read missing, and list after it; held judges that a step begun later
+//!   pending, and list after it; held judges that a step begun later
 //!   settles by reading the judged step are expanded on trial, undone when they reach that
-//!   reader, which is their own evidence and reads the judged take unjudged, as in gnode
-//!   (`node.rs`);
+//!   reader, which is their own evidence and reads the judged take unjudged (`node.rs`);
 //! - at most [`MAX_CHAIN`] step expansions are under way inside each other (a chain of steps
 //!   reading each other): the next is refused, `the chain of steps reading each other is longer
 //!   than 2000`; the frames between two links are kept small (`expr::evaluate`);
-//! - `reads` keep gnode's leak (a step first expanded while another step's `with:` is evaluated
-//!   adds what it read to that step's reads) and phases gnode's rule (only a repeat's list starts
-//!   a phase), for an exact comparison;
+//! - a step first expanded while another step's `with:` is evaluated adds what it read to that
+//!   step's `reads`, and only a repeat's list starts a phase;
 //! - template params render in declaration order; a missing declared resource is a problem on
 //!   the step; lock drift is a problem on the step;
 //! - an `at: plan` step whose type is paid is refused (`an at: plan step makes no paid call`) and
@@ -107,7 +105,7 @@ impl State {
     }
 }
 
-/// The price of one capability's calls in one instance (gnode `CallPrice`).
+/// The price of one capability's calls in one instance.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CallPrice {
     pub capability: String,
@@ -227,7 +225,7 @@ pub enum ResultStatus {
     Skipped,
 }
 
-/// What an instance produced (gnode `Result`): outputs by port (files, collections, lists, or any
+/// What an instance produced: outputs by port (files, collections, lists, or any
 /// value for select), node facts, and an error for a failure.
 #[derive(Debug, Clone, PartialEq)]
 pub struct NodeResult {
@@ -298,8 +296,7 @@ pub fn quote_key(key: &str) -> String {
     format!("'{}'", key.replace('\\', "\\\\").replace('\'', "\\'"))
 }
 
-/// One position of a declared step: the whole step, or one repeat item (gnode `_single`'s
-/// arguments).
+/// One position of a declared step: the whole step, or one repeat item.
 #[derive(Debug, Clone)]
 pub(crate) struct Position {
     /// The scope frame the step is declared in.
@@ -369,8 +366,8 @@ pub(crate) struct Expander<'a> {
     /// Shadow pricing under way (`repeat.rs`): nothing is held inside a shadow.
     pub(crate) shadowing: u32,
     /// Set by [`Expander::single`] when its `uses` did not resolve: the problem it reported.
-    /// gnode raises there, which leaves a whole repeat (or a pending repeat's pricing) absent,
-    /// not just one item; the repeat and the shadow pricing read it right after `single`.
+    /// It leaves a whole repeat (or a pending repeat's pricing) absent, not just one item; the
+    /// repeat and the shadow pricing read it right after `single`.
     escaped: Option<Problem>,
     /// Each workflow root frame: its workflow's source, and the context frame of the step that
     /// used it (`None` for the root workflow). A workflow that uses itself is refused with it.
@@ -746,7 +743,7 @@ impl<'a> Expander<'a> {
             let (value, reads) = self.evaluate_reading(frame, &assertion.check, &label);
             if value.contains_pending() {
                 // Not decidable yet: the step it belongs to waits for what it reads, so it is
-                // decided before the step is dispatched (gnode dispatched it at once).
+                // decided before the step is dispatched.
                 if let Some(instance) = owner.and_then(|id| self.instance_mut(id)) {
                     let own = instance.id.clone();
                     instance.reads.extend(
@@ -784,7 +781,7 @@ impl<'a> Expander<'a> {
     }
 
     /// Evaluates a document value in a frame's step scope and finishes it; an error becomes a
-    /// problem at `where_` and the value missing (gnode `_evaluate`).
+    /// problem at `where_` and the value missing.
     pub(crate) fn evaluate(&mut self, frame: FrameId, value: &Value, where_: &str) -> Val {
         match self.resolve_finished(frame, value) {
             Ok(value) => value,
@@ -807,7 +804,7 @@ impl<'a> Expander<'a> {
     }
 
     /// [`Expander::evaluate`] under a fresh read set; returns the ids read, and merges them into
-    /// any enclosing read set (gnode `_evaluate_reading`, its leak kept).
+    /// any enclosing read set.
     pub(crate) fn evaluate_reading(
         &mut self,
         frame: FrameId,

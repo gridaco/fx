@@ -461,10 +461,6 @@ fn every_contract_names_the_adapter_that_serves_its_route() {
             "spec/providers.md §9 names no adapter {adapter} ({capability})"
         );
     }
-    assert!(
-        !DEFAULT_ROUTES.contains("gnode") && !providers_md.contains("`gnode-"),
-        "contracts use FX's adapter names"
-    );
 }
 
 #[test]
@@ -610,7 +606,7 @@ fn features_say_what_the_adapters_honour() {
         assert!(has("image.generate", id, "text_to_image"), "{id}");
         assert!(!has("image.edit", id, "text_to_image"), "{id}");
     }
-    // No route keeps a name spec/capabilities.md does not list (the predecessor's aliases).
+    // No route keeps a renamed feature (spec/providers.md §11).
     for alias in [
         "masked_edit",
         "transparent_background",

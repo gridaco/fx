@@ -1,9 +1,9 @@
-"""The standard bodies (``grida.fx.std``) against the outputs FX's predecessor recorded.
+"""The standard bodies (``grida.fx.std``) against recorded outputs.
 
 Each body runs with a stand-in ctx: a test double holding exactly the members the bodies use
 (``params``, ``inputs``, ``read.image``, ``read.annotations``, ``out.bytes``, ``out.text``,
 ``out.json``, ``fact``), so these tests hold the bodies alone, apart from the node host. Inputs
-come from ``std_fixtures.py``; a picture output is compared by its digest with the predecessor's,
+come from ``std_fixtures.py``; a picture output is compared by its digest with the recorded one,
 and a JSON output by its value, because FX's engine writes JSON files itself.
 """
 
@@ -148,8 +148,8 @@ def run(name: str, *, inputs: dict[str, Any] | None = None, **params: Any) -> St
     return ctx
 
 
-def gnode_json(value: Any) -> bytes:
-    """A JSON value as the predecessor wrote it (``ctx.out.json``)."""
+def recorded_json(value: Any) -> bytes:
+    """A JSON value in the recorded outputs' format (``ctx.out.json``)."""
     return json.dumps(value, ensure_ascii=False, sort_keys=True, indent=1).encode("utf-8")
 
 
@@ -247,7 +247,7 @@ def test_bodies_are_the_nine_by_name() -> None:
         "fx/image.resize@1.1",
         "fx/image.resize@1\n",
         "fx/image.resize",
-        "gnode/image.resize@1",
+        "acme/image.resize@1",
         "image.resize",
         "fx/image.generate@1",
         "fx/select@1",
@@ -724,7 +724,7 @@ def test_unexpected_errors_are_python_errors(given: Inputs) -> None:
 # ------------------------------------------------------------------------------------------------
 # json.merge and files.copy
 
-MERGED_BY_GNODE = "d7288468b8e03d08fff40f91d550e9db286cbc3fe6bb2e0f1ecba7346fd4354e"
+MERGED_RECORDED = "d7288468b8e03d08fff40f91d550e9db286cbc3fe6bb2e0f1ecba7346fd4354e"
 
 
 def test_merge_is_shallow_and_a_later_key_wins(given: Inputs) -> None:
@@ -741,15 +741,15 @@ def test_merge_is_shallow_and_a_later_key_wins(given: Inputs) -> None:
         "d": True,
     }
     assert list(merged.value) == ["b", "a", "z", "n", "s", "c", "d"]
-    # The same value, to the number type: the predecessor's writer gives its recorded bytes.
-    assert sha256(gnode_json(merged.value)) == MERGED_BY_GNODE
+    # The same value, to the number type: written in that format, it has the recorded digest.
+    assert sha256(recorded_json(merged.value)) == MERGED_RECORDED
 
 
 def test_merge_of_nothing_is_an_empty_object() -> None:
     ctx = run("json.merge", inputs={"documents": []})
     assert ctx.result["json"].value == {}
     assert (
-        sha256(gnode_json(ctx.result["json"].value))
+        sha256(recorded_json(ctx.result["json"].value))
         == "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
     )
 
@@ -781,13 +781,13 @@ def test_copy_keeps_the_bytes_and_the_kind(given: Inputs, source: str, kind: str
 # ------------------------------------------------------------------------------------------------
 # package
 
-MANIFEST_BY_GNODE = "ad9d39c92861a72b796f62e5e3809c99ecdcf5cad1a25c0e93bdb87dea1f9910"
+MANIFEST_RECORDED = "ad9d39c92861a72b796f62e5e3809c99ecdcf5cad1a25c0e93bdb87dea1f9910"
 MIRROR_X = "584b0b17da6d071566de76b61062851a9538e4771fddedd4e44028e74891bea7"
 MIRROR_Y = "a19b87ca230e4b539a1a27f6089be60eb83abec5dbbc14d714b74f04c351d36f"
 
 
 def _probe_package(given: Inputs, folder: Path, content: Any) -> StandIn:
-    """The predecessor's probe step ``pkg``: ``content`` reads a JSON file as a param would."""
+    """The probe step ``pkg``: ``content`` reads a JSON file as a param would."""
     rgba = given.file("rgba_37x23.png")
     jpg = given.file("rgb_40x30.jpg")
     a = given.file("a.json")
@@ -899,9 +899,9 @@ def test_package_lays_out_the_probe_step(given: Inputs, tmp_path: Path) -> None:
     }
 
 
-def test_package_values_are_the_predecessors_to_the_byte(given: Inputs, tmp_path: Path) -> None:
-    """Given the values the predecessor gave it, every JSON file of the package is the value its
-    writer recorded: the same keys, order of files, and number types."""
+def test_package_values_are_the_recorded_ones_to_the_byte(given: Inputs, tmp_path: Path) -> None:
+    """Given the recorded inputs, every JSON file of the package is the value its writer
+    recorded: the same keys, order of files, and number types."""
     ctx = _probe_package(given, tmp_path, json.loads)
     files = ctx.result["files"]
     recorded = {
@@ -910,8 +910,8 @@ def test_package_values_are_the_predecessors_to_the_byte(given: Inputs, tmp_path
         "n.json": "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce",
     }
     for path, digest in recorded.items():
-        assert sha256(gnode_json(files[path].value)) == digest, path
-    assert sha256(gnode_json(ctx.result["manifest"].value)) == MANIFEST_BY_GNODE
+        assert sha256(recorded_json(files[path].value)) == digest, path
+    assert sha256(recorded_json(ctx.result["manifest"].value)) == MANIFEST_RECORDED
 
 
 @pytest.mark.parametrize("destination", ["../x.json", "a/../x.json", "/x.json", "a b.json"])
@@ -953,7 +953,7 @@ def test_package_of_nothing() -> None:
     assert ctx.result["files"] == {}
     assert ctx.result["manifest"].value == {"files": []}
     assert (
-        sha256(gnode_json(ctx.result["manifest"].value))
+        sha256(recorded_json(ctx.result["manifest"].value))
         == "5137627d8e4cfa47bad0b35eb03c9d22c60cf669b82339af7a56cb5377670286"
     )
 

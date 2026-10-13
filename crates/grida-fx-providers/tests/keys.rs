@@ -52,7 +52,7 @@ fn only_allowlisted_values_are_loaded_from_the_dotenv() {
          OPENROUTER_API_KEY=file-openrouter\n\
          FAL_KEY='file-fal'\n\
          ELEVENLABS_API_KEY=file-elevenlabs\n\
-         STAGE_GEN_IMAGE_MODEL=ignored/from-file\n\
+         ACME_IMAGE_MODEL=ignored/from-file\n\
          UNRELATED_SECRET=ignored-value\n\
          OPENAI_BASE_URL=https://proxy.example.test/v1\n",
     );
@@ -72,7 +72,7 @@ fn only_allowlisted_values_are_loaded_from_the_dotenv() {
         Some("https://proxy.example.test/v1")
     );
     assert_eq!(environment.get("TRIPO_API_KEY"), None);
-    assert_eq!(environment.get("STAGE_GEN_IMAGE_MODEL"), None);
+    assert_eq!(environment.get("ACME_IMAGE_MODEL"), None);
     assert_eq!(environment.get("UNRELATED_SECRET"), None);
     assert_eq!(environment.source("FAL_KEY"), Some(KeySource::DotEnv));
     let shown = format!("{environment:?}");
@@ -176,7 +176,7 @@ fn a_missing_dotenv_is_fine() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Refusals (stage-gen's test_config_rejects_unsafe_allowlisted_dotenv_entries, and more)
+// Refusals
 
 #[test]
 fn a_duplicate_key_is_refused() {
@@ -260,7 +260,7 @@ fn a_blank_value_is_refused() {
             "{text:?}"
         );
     }
-    // stage-gen's .env.example shape: blank keys are refused, not skipped.
+    // An `.env.example` shape: blank keys are refused, not skipped.
     assert_eq!(
         refusal("OPENAI_API_KEY=\nFAL_KEY=x\n", &[]),
         ".env contains an empty value for OPENAI_API_KEY"
@@ -382,7 +382,7 @@ fn the_allowed_names_are_the_callers() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Endpoints (as stage-gen's endpoint tests hold them)
+// Endpoints
 
 fn endpoints(pairs: &[(&str, &str)]) -> Result<Endpoints, String> {
     let environment = Environment::from_pairs(pairs);

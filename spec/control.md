@@ -1,6 +1,6 @@
 # Run control
 
-**Status: cancellation v1 implemented in source, 2026-10-08; unreleased.**
+**Status: cancellation v1 implemented, 2026-10-08; released in 0.2.0.**
 The commands, events and result shapes below describe this checkout. Check an
 installed version's help before assuming support. This document owns cancellation v1.
 Termination and pause have agreed vocabulary only; their full contracts and
@@ -271,7 +271,7 @@ unmanaged execution or claim completion because an await was cancelled.
 Forced parent/OS exit can still interrupt cleanup and must remain distinguishable.
 Non-run command interruption keeps its existing process-owned behavior.
 
-The cancellation delivery includes public Python and JavaScript wrappers for
+Cancellation has public Python and JavaScript wrappers for
 the same inspect-control and cancel operations, options, outcomes and errors.
 Python exposes `inspect_control`, `cancel` and their `_async` variants; JavaScript
 exposes `inspectControl` and `cancel`. Both expose `RunControlResult` and
@@ -280,11 +280,10 @@ itself. See [the user guide](../docs/guide/08-run-control.md) for options and ex
 Cancelling an SDK run task/AbortSignal retains ownership and waits for engine cleanup;
 it may therefore remain pending if cleanup is stuck. Cancelling only an SDK
 control wait ends that wait and leaves any accepted run cancellation effective.
-Test and document these distinct lifetimes. Other CLI/SDK parity gaps remain
-the separate backlog task, not prerequisites for this delivery.
+Test and document these distinct lifetimes. Other CLI/SDK parity gaps are
+recorded in [agent readiness](../AGENT_READINESS.md).
 
-This is an unreleased behavior change: CLI/Python/JavaScript parity tests cover
-the new ownership lifetime. Include it in the next release notes. SDK run
+CLI/Python/JavaScript parity tests cover this ownership lifetime. SDK run
 cancellation sends SIGTERM once with the internal SDK source marker; repeated
 task/AbortSignal cancellation never becomes second-SIGINT force authority.
 

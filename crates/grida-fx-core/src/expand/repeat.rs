@@ -109,7 +109,7 @@ impl Expander<'_> {
             };
             self.single(&position, child);
             if self.escaped.take().is_some() {
-                // gnode raises out of the whole repeat: the step is absent, its problem reported.
+                // The whole repeat fails: the step is absent, its problem reported.
                 self.exps[into.0].kind = ExpKind::Absent;
                 return;
             }
@@ -358,7 +358,7 @@ impl Expander<'_> {
         let phase = self.phase_of(&refs, at.frame);
         let (low, high) = self.shadow_price(at, phase);
         if self.escaped.take().is_some() {
-            // gnode raises out of the pricing: no pending repeat, the step absent.
+            // The pricing fails: no pending repeat, the step absent.
             self.exps[into.0].kind = ExpKind::Absent;
             return;
         }

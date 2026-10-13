@@ -10,7 +10,7 @@ compares what they read with each folder's ``expected.json``.
 Generating (it needs ``ffmpeg`` and ``ffprobe`` on PATH) rewrites spec/vectors/facts/{wav,mp4,
 matroska}/ and the conformance cases' copies of them (the two media files of
 conformance/facts-media/in/ and conformance/stand-in-job/in/clip.mp4), and cross-checks every
-fixture against what stage-gen's engine read from it (Python's ``wave`` for WAV, ``ffprobe`` for
+fixture against what the reference readers read from it (Python's ``wave`` for WAV, ``ffprobe`` for
 video; spec/facts.md section 7). A fixture whose facts differ from that reading fails the run
 unless DIFFERENCES lists it with the section of spec/facts.md that makes the difference
 deliberate.
@@ -91,7 +91,7 @@ class Refusal(Exception):
 
 # ---------------------------------------------------------------------------------------------
 # WAV (spec/facts.md section 3): the rule is what Python's `wave` reads, with every error
-# (including those stage-gen's engine did not catch) giving no duration.
+# giving no duration.
 
 
 def wav_duration(data: bytes) -> float | None:
@@ -1126,13 +1126,13 @@ def facts_of(name: str, data: bytes) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------------------------
-# What stage-gen's engine read (for the cross-check while generating)
+# What the reference readers read (for the cross-check while generating; spec/facts.md section 7)
 
 ALPHA_FORMATS = {"rgba", "bgra", "argb", "abgr", "yuva420p", "yuva422p", "yuva444p", "gbrap", "ya8"}
 
 
-def predecessor_facts(name: str, path: Path) -> dict[str, Any]:
-    """Facts as stage-gen's engine computed them, or {"crashed": ...} where it raised."""
+def reference_facts(name: str, path: Path) -> dict[str, Any]:
+    """Facts as the reference readers give them, or {"crashed": ...} where one raised."""
 
     data = path.read_bytes()
     kind = kind_of(name)
@@ -1189,7 +1189,7 @@ def _ffprobe_facts(path: Path) -> dict[str, Any]:
     return facts
 
 
-# Fixtures whose facts differ from what stage-gen's engine read, each with the reason. Every
+# Fixtures whose facts differ from what the reference readers read, each with the reason. Every
 # entry must differ, and every other fixture must agree.
 DIFFERENCES = {
     "wav/empty.wav": "it raised EOFError; FX gives no duration (facts.md 3)",
@@ -1695,12 +1695,12 @@ def cross_check(files: dict[str, bytes]) -> list[str]:
     for path in sorted(files):
         name = path.split("/")[1]
         ours = facts_of(name, files[path])
-        theirs = predecessor_facts(name, FACTS / path)
+        theirs = reference_facts(name, FACTS / path)
         if path in DIFFERENCES:
             if ours == theirs:
                 problems.append(f"{path}: listed in DIFFERENCES but reads the same: {ours}")
         elif ours != theirs:
-            problems.append(f"{path}: FX {ours} but stage-gen's engine {theirs}")
+            problems.append(f"{path}: FX {ours} but the reference readers {theirs}")
     return problems
 
 

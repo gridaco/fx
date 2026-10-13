@@ -222,7 +222,7 @@ fn plain_handle() -> Value {
 
 #[test]
 fn a_rig_is_checked_free_then_posted_once() {
-    // spec/providers.md §9.4 "Rig" (mirrors stage-gen's "a rig is checked free then posted once").
+    // spec/providers.md §9.4 "Rig": a rig is checked free, then posted once.
     let h = harness(vec![
         upload(),
         check_posted(),
@@ -263,8 +263,7 @@ fn a_rig_is_checked_free_then_posted_once() {
 
 #[test]
 fn a_doubted_model_is_rigged_only_when_allowed() {
-    // spec/providers.md §9.4 "Rig" (mirrors stage-gen's "a doubted model is rigged only when
-    // allowed").
+    // spec/providers.md §9.4 "Rig": a doubted model is rigged only when allowed.
     let h = harness(vec![
         upload(),
         check_posted(),
@@ -390,7 +389,7 @@ fn a_doubted_model_is_rigged_only_when_allowed() {
 
 #[test]
 fn only_a_glb_is_rigged_and_bad_requests_send_nothing() {
-    // spec/providers.md §5 (mirrors stage-gen's "only a glb is rigged").
+    // spec/providers.md §5: only a GLB is rigged.
     let refused = |call: TestCall, keys: Keys| match block_on(offline_rig(keys).submit(&call)) {
         Submitted::Refused { reason } => {
             assert_clean(&reason);

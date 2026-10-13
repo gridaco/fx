@@ -1,7 +1,6 @@
-//! `grida-fx plan` text, byte for byte the layout of the engine FX comes from (stage-gen's
-//! gnode): a 10-column label field, `·` U+00B7, `–` U+2013, `≤` U+2264, `⚠` U+26A0, money
-//! `$x.xx`, `$lo – $hi` unless equal, `1 steps`, `provider calls` always plural,
-//! `phase`/`phases`. No trailing newline.
+//! `grida-fx plan` text, byte for byte: a 10-column label field, `·` U+00B7, `–` U+2013, `≤`
+//! U+2264, `⚠` U+26A0, money `$x.xx`, `$lo – $hi` unless equal, `1 steps`, `provider calls`
+//! always plural, `phase`/`phases`. No trailing newline.
 //!
 //! ```text
 //! {id}  ·  {k} phase|phases
@@ -22,8 +21,8 @@
 //!   nothing there (the ceiling itself is still shown).
 //! - `note` lines are the plan's warnings, `refused` lines its problems, both in order.
 //!
-//! Amounts are shown with two decimals the way the predecessor's `f"${x:.2f}"` showed its
-//! floats: the amount as the nearest double, correctly rounded (Rust's `{:.2}` rounds the same
+//! Amounts are shown with two decimals the way Python's `f"${x:.2f}"` shows a
+//! float: the amount as the nearest double, correctly rounded (Rust's `{:.2}` rounds the same
 //! way), so `$0.005` shows `$0.01` and `$0.125` shows `$0.12`.
 
 use super::{Estimate, PhaseSummary, Plan};
@@ -163,10 +162,10 @@ fn dollars(amount: Usd) -> String {
 
 #[cfg(test)]
 mod tests {
-    //! The layout is tested on computed summaries, reproducing the plans the predecessor printed
-    //! for the conformance cases (`refusals`, `tiered-price`, `judge-regenerate`, `phase`,
-    //! `linear`). The `integrated_` tests render whole hand-built plans, so they also hold
-    //! [`Plan`]'s pricing to the same text; they need the planning module's summaries.
+    //! The layout is tested on computed summaries, reproducing the plans of the conformance cases
+    //! (`refusals`, `tiered-price`, `judge-regenerate`, `phase`, `linear`). The `integrated_` tests
+    //! render whole hand-built plans, so they also hold [`Plan`]'s pricing to the same text; they
+    //! need the planning module's summaries.
 
     use super::*;
 
@@ -393,7 +392,7 @@ mod tests {
     }
 
     #[test]
-    fn money_shows_two_decimals_as_the_predecessor_did() {
+    fn money_shows_two_decimals_as_python_does() {
         assert_eq!(dollars(Usd(0)), "$0.00");
         assert_eq!(dollars(Usd(6_862_500)), "$6.86");
         assert_eq!(dollars(Usd(5_000)), "$0.01");

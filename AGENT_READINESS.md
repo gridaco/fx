@@ -28,7 +28,7 @@ Recheck the installed version before applying them to a user's installation.
 - [The installed skill](skills/grida-fx/SKILL.md) teaches agents how to use what
   ships. It must not teach a proposed command as if it exists.
 - [The guide](docs/guide/) explains supported usage;
-  [the overview](docs/wg/overview.md) records decisions and milestones.
+  [the overview](docs/wg/overview.md) records the decisions and the plan.
 
 Use these statuses when extending this document: **current** means implemented
 in the reviewed source; **partial** means only part of the intent is supported;
@@ -279,24 +279,23 @@ provider charged nothing.
 
 ### "Tidy up the layout"
 
-**Ratified design, 2026-10-09; Ship A in source, 2026-10-10, unreleased; Ship B not
-implemented.** [Canvas layout](spec/layout.md) specifies it. Also cover requests such as "Place the comparison below the variants
+**Ratified design, 2026-10-09; the automatic grid and decks released in 0.2.0; the layout
+file not implemented.** [Canvas layout](spec/layout.md) specifies it. Also cover requests such as "Place the comparison below the variants
 so it makes more sense." User-driven canvas editing is deferred; the first consumer
 is an external agent authoring presentation data.
 
-The design has two ships. Ship A gives every view an automatic left-to-right grid
-and stacks repeated instances into decks; it adds no file. Ship B adds the optional
+The design has two parts. The automatic layout gives every view a left-to-right grid
+and stacks repeated instances into decks; it adds no file. The layout file is the optional
 adjacent `<workflow id>.layout.json` (`fx-layout-v1`) in the folder of the workflow's
 takes file: declared steps placed by column and row, and each repeat drawn as a deck
 or a grid. Cells are computed by the engine; a missing file means automatic layout.
 Builders, imports, precedence, diagnostics and the layout report are settled in the
 spec. Per-run files, per-instance keys, a layout command and typed SDK access to the
-report are deferred: the layout route (and, from Ship B, `inspect`) carries the report,
+report are deferred: the layout route (and, once the file is read, `inspect`) carries the report,
 and Python and JavaScript callers will receive it untyped inside the existing
-`inspection` summary. In source, the scoped and standalone `api/layout` routes and a
-run's `api/snapshot` serve the report with automatic cells only. Nothing is in an
-installed release, and the file and `inspect` layout output arrive with Ship B: do not
-advertise them before then.
+`inspection` summary. The scoped and standalone `api/layout` routes and a run's
+`api/snapshot` serve the report with automatic cells only. The layout file and `inspect`
+layout output are not implemented: do not advertise them.
 
 The operation sequence is **inspect, edit, validate, refresh and verify**:
 
@@ -349,7 +348,7 @@ promise through documentation alone.
 | AR-14 | "Run exactly what I reviewed." | Partial: planning and execution are separate; SDK `run(plan)` retains options but the engine replans. No immutable approved-plan execution interface. | Changes between review and execution are detected or require renewed review; the agent does not mistake a saved plan or SDK object for a frozen execution snapshot. |
 | AR-15 | "Keep my project available while I work." | Current in source: init, foreground/background service, status/logs/stop, persistent catalog and run URLs; OS supervision remains future work. | Repeat/parallel starts, readiness, port conflicts (with the failing attempt's own cause), project identity, independent execution, restart persistence, and standalone use all have provider-free lifecycle evidence. |
 | AR-16 | "Name this deliverable; show my workflow history." | Current in source: create-only names, explicit same-plan resume, workflow-grouped index. | Concurrent name claims have one winner; collisions/missing names/plan mismatches/ambiguous sources refuse; latest includes failures, old active records remain visible, resume retains creation time/spend, and metadata changes no cache identity. |
-| AR-17 | "Tidy up the layout; place X below Y." | Ratified design: [spec/layout.md](spec/layout.md). Ship A (automatic grid, decks, the layout report with automatic cells) in source, unreleased; Ship B (the adjacent `fx-layout-v1` file the scenario edits) not implemented; visual editing deferred. | Agent discovers exact scope/references, edits and validates layout, verifies the renderer loaded the intended revision, and reports the actual URL or actionable diagnostics. No builder execution, provider calls, execution-history changes or identity/resume changes; repeats, nested scopes and stale references have provider-free evidence. |
+| AR-17 | "Tidy up the layout; place X below Y." | Ratified design: [spec/layout.md](spec/layout.md). The automatic grid, decks and the layout report with automatic cells are released (0.2.0); the adjacent `fx-layout-v1` file the scenario edits is not implemented; visual editing deferred. | Agent discovers exact scope/references, edits and validates layout, verifies the renderer loaded the intended revision, and reports the actual URL or actionable diagnostics. No builder execution, provider calls, execution-history changes or identity/resume changes; repeats, nested scopes and stale references have provider-free evidence. |
 | AR-18 | "Clean up last week's exploratory runs, but keep my named ones." | Implemented in source: `runs list` and `runs remove` (CLI, Python, JavaScript), and `cache prune` (CLI). | Agent lists, previews and then removes exactly the previewed runs; named, `--run` and external runs survive filters; an active run, the last pick holder and a non-run selection are refused with a code and nothing else changes; catalog and run index forget removed folders; pruning keeps every remaining run resumable and refuses a shared, busy or unreadable cache, removing nothing; provider-free CLI, conformance and SDK evidence. |
 | AR-19 | "Share this result so somebody else can inspect it without my local service." | Implemented in source: terminal, inactive run export through CLI, Python and JavaScript; shared static browser reader and canvas. | Select the exact run, choose disclosure, export to a new directory, and review the receipt, omissions and concrete content. Verified selected bytes, non-overwriting placement, source stability and explicit reader failures preserve the evidence; publication remains a separate authorized consumer operation. |
 

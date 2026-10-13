@@ -8,7 +8,7 @@
 //! `e3`. Strings have no C escapes. `true`, `false` and `null` are literals, except after a dot.
 //!
 //! FX decision: digits are the ASCII digits `0-9` and whitespace is ASCII whitespace
-//! ([`is_space`]); gnode accepted Unicode ones.
+//! ([`is_space`]), not Unicode's.
 
 use super::ExprError;
 use crate::text::py_repr_str;

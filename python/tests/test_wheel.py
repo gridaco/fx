@@ -366,9 +366,9 @@ def test_the_tag_is_read_from_the_binary(binary: bytes, target: str, tag: str) -
         (
             macho(),
             "x86_64-pc-windows-msvc",
-            "x86_64-pc-windows-msvc is not a preview target (aarch64-apple-darwin,"
+            "x86_64-pc-windows-msvc is not a release target (aarch64-apple-darwin,"
             " x86_64-apple-darwin, x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu); Windows"
-            " is not in the preview: the runner uses Unix process groups and signals",
+            " is not supported: the runner uses Unix process groups and signals",
         ),
     ],
 )

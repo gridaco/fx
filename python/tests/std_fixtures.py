@@ -1,7 +1,7 @@
 """The inputs of ``test_std.py``, synthesized: small pictures and JSON documents.
 
 Every input is made here, from a formula, so no media is committed. The golden outputs that
-``test_std.py`` checks were recorded by FX's predecessor on inputs with exactly these bytes, made
+``test_std.py`` checks were recorded on inputs with exactly these bytes, made
 with CPython 3.12 (its ``zlib`` module 1.2.12) and Pillow 12.3.0 (its bundled zlib-ng 1.3.1,
 libjpeg-turbo and LittleCMS). :data:`INPUT_DIGESTS` holds those inputs' digests: another Pillow or
 zlib build writes other bytes, and then the goldens cannot be compared (the tests skip, saying
@@ -151,7 +151,7 @@ def array_json() -> bytes:
 def region_json() -> bytes:
     """Annotations: a note, a point, then two box marks (the first one is cropped to)."""
     return (
-        b'{"kind": "gnode-annotations-v1", "annotations": [{"label": "note"}, '
+        b'{"kind": "fx-annotations-v1", "annotations": [{"label": "note"}, '
         b'{"shape": "point", "at": [0.1, 0.1]}, '
         b'{"shape": "box", "box": [0.25, 0.25, 0.75, 0.75], "label": "face"}, '
         b'{"shape": "box", "box": [0, 0, 1, 1]}]}\n'
@@ -201,7 +201,7 @@ INPUT_DIGESTS: dict[str, str] = {
     "a.json": "eb8eb453f3baf17a73e7fe52406bbda4645ad77a79951ff21830f27f91b6cc00",
     "b.json": "2d13dfb80f7b88014b7c3a90170a52a8bd9d8c60b526796f2f1476d1a73c7c22",
     "array.json": "1fb3ffcf3df89e31f56932d4a64a23eede8a2f6707898bf14d1fc42a78286868",
-    "region.json": "95e323597f8c4e1554ed1ab72852178d934cfda2b0824d2efa8223d4ab823ae3",
+    "region.json": "95473dd795cb1f01303aeddb282dc47df3e860d2882fc4d0a5afe5a73f09f6a6",
     "noshape.json": "e66e840b36666d7ac53a8d473926e031593e425cc1dbd14c22c8aaa87b8d5690",
     "notes.md": "af28611c8dd7cdaa70b328947a47e7236543cff6aee512d92f80132b7f8db82f",
 }

@@ -25,23 +25,23 @@
 //! needs input {n}` and `{type} needs setting {n}` at `<w>.with`.
 //!
 //! FX refuses a node step read while its instances are being made (its own `with:`, or a `with:`
-//! cycle through other nodes) as referring back to itself, where gnode read missing. The driver
+//! cycle through other nodes) as referring back to itself. The driver
 //! tracks that window around `node`: it lasts while the expansion holds fewer instances than its
 //! take numbers. So `node` sets the take numbers before it makes any instance and adds each
 //! instance as soon as it exists; the step's judges, expanded after the last one, read it.
-//! `needs:` still reads such a step silently (the instances made so far), as in gnode.
+//! `needs:` still reads such a step silently (the instances made so far).
 //!
 //! The judges and `independent_of` targets a node step expands once its instances exist are not
 //! what anything around it is waiting for. While a step under way is unfinished (still
 //! `Expanding`, or a node whose instances are not all made: `unfinished`), that work is held
 //! ([`Held`]) and released, oldest first, once none is (`release_held`, after each step); so a
 //! judge or target that reads the unfinished step later reads it as pending instead of being
-//! refused. gnode expanded them at once and read missing. A read of the step's result does wait
+//! refused. A read of the step's result does wait
 //! for its judges: it expands held judges first (`settle_judges`, from `chosen`), and a judge that
 //! reads that reader back is then a real cycle and refused. A held step lists its judges and
-//! targets later than gnode did. Inside a shadow (pricing a pending repeat) nothing is held.
+//! targets after it. Inside a shadow (pricing a pending repeat) nothing is held.
 //!
-//! Holding must not turn a judge's own evidence into a cycle. In gnode's order a step's judges
+//! Holding must not turn a judge's own evidence into a cycle. Unheld, a step's judges
 //! expand right after its instances, so a step a judge reads (`review` reading `renders`, which
 //! reads `measure`, which reads the judged `mesh`) is first reached inside the judge, while the
 //! judge is not linked yet, and reads the judged take as it is. A reader that began after the
@@ -608,7 +608,7 @@ impl Expander<'_> {
         let where_ = at.where_.as_str();
         let spec = Rc::clone(&resolved.spec);
         // A result wins over everything: fx-graph-v1 calls an instance whose result failed
-        // `failed` (gnode listed it as done) and any other result `done`.
+        // `failed` and any other result `done`.
         let (state, reason) = match self.env.results.get(&id) {
             Some(result) if result.status == ResultStatus::Failed => {
                 (State::Failed, result.error.clone())
@@ -840,7 +840,7 @@ impl Expander<'_> {
                     .map(|(key, item)| (key, self.port_file(item, where_)))
                     .collect(),
             ),
-            // A list port given one path keeps the string (gnode's rule).
+            // A list port given one path keeps the string.
             other => other,
         }
     }

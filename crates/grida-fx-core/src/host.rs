@@ -7,8 +7,9 @@
 //!   runtime's hosts implement it, one per language behind one that dispatches by suffix (each
 //!   starts its process lazily, on the first call for a module of its language, so a project
 //!   without node modules needs neither Python nor Node). Tests use [`FakeHost`].
-//! - [`PlanTimeRunner`]: runs an `at: plan` instance's body while planning. The step-3 runner implements it; in step 2 none exists and a plan that needs one gets
-//!   the problem `<step>: running an at: plan step is not available until the runner lands`.
+//! - [`PlanTimeRunner`]: runs an `at: plan` instance's body while planning. The runtime's
+//!   runner implements it; without one, a plan that needs it gets the problem
+//!   `<step>: running an at: plan step needs a plan-time runner, and planning has none`.
 //! - [`ResultCache`]: whether the store holds a trusted result for an instance (plan `cached`,
 //!   store.md §4: the identity and the instance's read set). The runtime's store implements it;
 //!   [`NoCache`] holds nothing.
