@@ -16,8 +16,8 @@ It prints one line per check and exits non-zero when any check fails:
       non-empty <n>.txt) and agree with digest.py's reader of the subset;
   (e) tools/digest.py --check-examples passes: the identity examples, the reserved-marker
       vectors and the JSON output vectors;
-  (f) no FORBIDDEN_NAMES appear under spec/, docs/, conformance/, examples/ or the default
-      routes' folder;
+  (f) no FORBIDDEN_NAMES appear under spec/, docs/, conformance/, examples/, the default
+      routes' folder or the providers crate's source, which holds the adapters' references;
   (g) the worked examples in spec/identity.md agree with spec/vectors/identity/examples.json;
   (h) every expected fx-graph-v1 output of a conformance case passes digest.py --check-graph,
       with the case's in/ as the project and the route tables its step passed (the built-in
@@ -27,15 +27,20 @@ It prints one line per check and exits non-zero when any check fails:
       every reserved-marker case is refused (or read) by the YAML reader as by the JSON reader;
   (j) the built-in route table (crates/grida-fx-providers/routes/default.yaml) is in the strict
       YAML subset and validates against fx-routes-v1; its size is the one spec/providers.md
-      section 10 states; every route's capability has its section in spec/capabilities.md and is
+      section 3 states; every route's capability has its section in spec/capabilities.md and is
       a paid built-in's of the standard library (or agent.turn, the engine's own); every feature
-      is in its capability's feature table; every contract's adapter is one providers.md
-      section 9 names; and the guide's table of built-in routes (docs/guide/05-running.md) lists
-      every route under its capability with the table's prices;
+      is in its capability's feature table; every contract's adapter and adapter_behavior are
+      the ones the built-in adapters table of spec/providers.md section 2 gives its capability
+      and provider, whose every reference exists and heads with the same contracts; and the
+      guide's table of built-in routes (docs/guide/05-running.md) lists every route under its
+      capability with the table's prices;
   (k) the planner's feature vocabulary (crates/grida-fx-core/src/expand/features.json) lists, for
       every capability section of spec/capabilities.md and no other, exactly its feature table;
-      and each name it renames is one spec/providers.md section 11 drops, is a feature of no
-      capability, and becomes a feature of one.
+      and each name it renames is one spec/providers.md section 4 drops, is a feature of no
+      capability, and becomes a feature of one;
+  (l) every reference to a section of a spec file, as `<file>.md §N` (or `section N`, with the
+      file's link, path or backticks between), in the repository's text files names a numbered
+      heading that file has.
 """
 
 from __future__ import annotations
@@ -62,6 +67,7 @@ EXAMPLES = REPO / "examples"
 DEFAULT_ROUTES = REPO / "crates" / "grida-fx-providers" / "routes" / "default.yaml"
 STD_CATALOG = REPO / "crates" / "grida-fx-core" / "src" / "builtins" / "catalog.json"
 FEATURES = REPO / "crates" / "grida-fx-core" / "src" / "expand" / "features.json"
+PROVIDERS_SRC = REPO / "crates" / "grida-fx-providers" / "src"
 
 DRAFT_2020_12 = "https://json-schema.org/draft/2020-12/schema"
 SCHEMA_ID_PREFIX = "urn:grida-fx:schema:"
@@ -81,8 +87,9 @@ FORBIDDEN_NAMES = (
     b"Stage Gen",
     b"STAGE_GEN",
 )
-# Where they may not appear: the contracts and their prose, the docs, the cases, the examples.
-NAME_ROOTS = (SPEC, REPO / "docs", CONFORMANCE, EXAMPLES, DEFAULT_ROUTES.parent)
+# Where they may not appear: the contracts and their prose, the docs, the cases, the examples,
+# and the adapters' references beside their code.
+NAME_ROOTS = (SPEC, REPO / "docs", CONFORMANCE, EXAMPLES, DEFAULT_ROUTES.parent, PROVIDERS_SRC)
 # Contract fields are lower_snake_case. External vocabulary ($ref, ...) and the x-fx-*
 # extension keywords keep their own spelling.
 SNAKE_CASE = re.compile(r"[a-z][a-z0-9_]*\Z|\$[A-Za-z]+\Z|x-fx-[a-z0-9-]+\Z")
@@ -636,6 +643,77 @@ def _guide_rows(text: str) -> list[str]:
     return rows
 
 
+def _section(text: str, title: str) -> str:
+    """The `## <n>. <title>` section of a spec file, up to the next `## ` heading."""
+    match = re.search(rf"^## \d+\. {re.escape(title)}[ \t]*$", text, re.M)
+    if not match:
+        return ""
+    end = text.find("\n## ", match.end())
+    return text[match.start() : end if end >= 0 else len(text)]
+
+
+# A row of spec/providers.md's table of built-in adapters: provider, capability, adapter, the
+# behaviour as JSON in backticks, and a link to the adapter's reference.
+_ADAPTER_ROW = re.compile(
+    r"^\| `([a-z0-9-]+)` \| `([a-z]+(?:\.[a-z_]+)+)` \| `([A-Za-z0-9_.-]+)` \| (`[^`]+`) \| "
+    r"\[[^\]]+\]\(([^)\s]+)\) \|$"
+)
+# A row of an adapter reference's own table: capabilities, adapter, behaviour.
+_REFERENCE_ROW = re.compile(
+    r"^\| ((?:`[a-z]+(?:\.[a-z_]+)+`(?:, )?)+) \| `([A-Za-z0-9_.-]+)` \| (`[^`]+`) \|$"
+)
+
+
+def _builtin_adapters(text: str) -> dict[tuple[str, str], tuple[str, str, str]]:
+    """spec/providers.md section 2: (capability, provider) -> (adapter, behaviour, reference),
+    the behaviour as its cell writes it (`"1"` or `1`)."""
+    rows: dict[tuple[str, str], tuple[str, str, str]] = {}
+    for line in _section(text, "The built-in adapters").splitlines():
+        row = _ADAPTER_ROW.match(line)
+        if row:
+            provider, capability, adapter, behavior, reference = row.groups()
+            rows[(capability, provider)] = (adapter, behavior, reference)
+    return rows
+
+
+def _behavior_problem(contract: dict[str, Any], cell: str) -> str | None:
+    """Why a contract's `adapter_behavior` is not the one a table cell writes, or None."""
+    try:
+        want = digest.canon(digest.parse_ijson(cell.strip("`")))
+    except digest.RefusedInput:
+        return f"the table's behaviour {cell} is not JSON"
+    if "adapter_behavior" not in contract:
+        return f"carries no behaviour, the table {cell}"
+    have = digest.canon(contract["adapter_behavior"])
+    if have != want:
+        return f"carries behaviour {have.decode('utf-8')}, the table {cell}"
+    return None
+
+
+def _check_adapter_references(rows: dict[tuple[str, str], tuple[str, str, str]]) -> list[str]:
+    """Every reference the table links exists, and its own table lists the same contracts."""
+    problems: list[str] = []
+    expected: dict[str, set[tuple[str, str, str]]] = {}
+    for (capability, _), (adapter, behavior, reference) in rows.items():
+        expected.setdefault(reference, set()).add((capability, adapter, behavior))
+    for reference, want in sorted(expected.items()):
+        path = (SPEC / reference).resolve()
+        if not path.is_file():
+            problems.append(f"{reference}: no such file")
+            continue
+        have: set[tuple[str, str, str]] = set()
+        for line in path.read_text(encoding="utf-8").splitlines():
+            row = _REFERENCE_ROW.match(line)
+            if row:
+                cells, adapter, behavior = row.groups()
+                for capability in re.findall(r"`([^`]+)`", cells):
+                    have.add((capability, adapter, behavior))
+        if have != want:
+            extra, lacking = sorted(have - want), sorted(want - have)
+            problems.append(f"{rel(path)}: its table lists {extra} and lacks {lacking}")
+    return problems
+
+
 def _same_amount(text: str, value: Any) -> bool:
     from decimal import Decimal
 
@@ -665,8 +743,11 @@ def check_default_routes(gate: Gate, schemas: dict[str, Any]) -> None:
     problems = []
     used = sorted({r["capability"] for r in routes})
     stated = f"It holds {len(routes)} routes over {len(used)} capabilities."
-    if stated not in providers_md:
-        problems.append(f"spec/providers.md section 10 does not say {stated!r}")
+    if stated not in _section(providers_md, "The built-in route table"):
+        problems.append(f"spec/providers.md section 3 does not say {stated!r}")
+    adapters = _builtin_adapters(providers_md)
+    if not adapters:
+        problems.append("spec/providers.md section 2 has no table of built-in adapters")
     for route in routes:
         capability, name = route["capability"], route["route"]
         where = f"{capability} {name}"
@@ -678,14 +759,26 @@ def check_default_routes(gate: Gate, schemas: dict[str, Any]) -> None:
                 problems.append(f"{where}: features {unknown} are not in its feature table")
         if capability not in std:
             problems.append(f"{where}: no paid built-in of the standard library calls it")
-        adapter = (route.get("contract") or {}).get("adapter")
-        if adapter is not None and f"Contract `adapter`: `{adapter}`" not in providers_md:
-            problems.append(f"{where}: spec/providers.md section 9 names no adapter {adapter}")
+        contract = route.get("contract") or {}
+        row = adapters.get((capability, name.rsplit("@", 1)[-1]))
+        if row is None:
+            problems.append(f"{where}: spec/providers.md section 2 has no adapter for it")
+            continue
+        if contract.get("adapter") != row[0]:
+            problems.append(f"{where}: its contract's adapter is not {row[0]}")
+        behavior = _behavior_problem(contract, row[1])
+        if behavior:
+            problems.append(f"{where}: {behavior}")
     gate.result(
         "j",
         f"{subject}: {len(routes)} routes agree with spec/capabilities.md, the "
         "standard library and spec/providers.md",
         problems,
+    )
+    gate.result(
+        "j",
+        f"spec/providers.md section 2: {len(adapters)} built-in adapters and their references",
+        _check_adapter_references(adapters),
     )
     guide = GUIDE / "05-running.md"
     rows = _guide_rows(guide.read_text(encoding="utf-8")) if guide.is_file() else []
@@ -712,15 +805,6 @@ def check_default_routes(gate: Gate, schemas: dict[str, Any]) -> None:
                 f"{capability} {name}: the guide says {shown}, the table {low} – {high}"
             )
     gate.result("j", f"{rel(guide)}: the built-in routes and their prices", problems)
-
-
-def _providers_changes(text: str) -> str:
-    """spec/providers.md section 11, the renamed features."""
-    start = text.find("\n## 11. ")
-    if start < 0:
-        return ""
-    end = text.find("\n## ", start + 1)
-    return text[start : end if end >= 0 else len(text)]
 
 
 def check_feature_vocabulary(gate: Gate) -> None:
@@ -766,10 +850,10 @@ def check_feature_vocabulary(gate: Gate) -> None:
                 f"{capability}: not its feature table (extra {extra}, missing {lacking})"
             )
     every = {feature for features in sections.values() for feature in features}
-    changes = _providers_changes((SPEC / "providers.md").read_text(encoding="utf-8"))
+    changes = _section((SPEC / "providers.md").read_text(encoding="utf-8"), "Renamed features")
     for old, new in sorted(renamed.items()):
         if f"`{old}`" not in changes:
-            problems.append(f"renamed {old}: spec/providers.md section 11 does not name it")
+            problems.append(f"renamed {old}: spec/providers.md section 4 does not name it")
         if old in every:
             problems.append(f"renamed {old}: it is still a feature in spec/capabilities.md")
         if new not in every:
@@ -777,8 +861,97 @@ def check_feature_vocabulary(gate: Gate) -> None:
     gate.result(
         "k",
         f"{subject}: {len(capabilities)} capabilities and {len(renamed)} renamed features agree "
-        "with spec/capabilities.md and spec/providers.md section 11",
+        "with spec/capabilities.md and spec/providers.md section 4",
         problems,
+    )
+
+
+# ---------------------------------------------------------------------------------------------
+# (l) references to the sections of spec files
+# ---------------------------------------------------------------------------------------------
+
+# A numbered heading of a spec file: `## 3. Outcomes`, `### 3.1 The outcomes of one send`.
+_NUMBERED_HEADING = re.compile(r"^#{2,6} (\d+(?:\.\d+)*)\.?[ \t]", re.M)
+# What a reference may put between a file's name and its section: the rest of a markdown link,
+# closing backticks, and spaces, perhaps across a line break and a comment's marker.
+_SEPARATOR = r"(?:\]\([^)\s]*\)|`{1,2})?(?:[ \t]+|[ \t]*\n[ \t]*(?:(?://[/!]?|#|\*)[ \t]*)?)"
+_NUMBER = r"\d+(?:\.\d+)*"
+# The text files a reference may sit in.
+_REFERENCE_SUFFIXES = {
+    ".md",
+    ".rs",
+    ".py",
+    ".ts",
+    ".tsx",
+    ".txt",
+    ".yaml",
+    ".yml",
+    ".json",
+    ".toml",
+}
+
+
+def _reference_pattern(names: list[str]) -> re.Pattern[str]:
+    """`<name> §N[, §M | and §M | –N]` or `<name> section(s) N[, M | and M]`; the name alone or
+    under a folder named spec."""
+    name = "|".join(re.escape(n) for n in names)
+    sections = rf"§(?P<first>{_NUMBER})(?P<more>(?:(?:,| and| or)[ \t]+§{_NUMBER}|–§?{_NUMBER})*)"
+    words = rf"sections?[ \t]+(?P<word>{_NUMBER})(?P<words>(?:(?:,| and| or)[ \t]+{_NUMBER})*)"
+    return re.compile(
+        rf"(?<![\w.-])(?P<folder>(?:[\w.-]+/)*)(?P<name>{name}){_SEPARATOR}(?:{sections}|{words})"
+    )
+
+
+def _text_files() -> list[Path] | None:
+    """The repository's text files that git tracks or would add; None without git."""
+    try:
+        done = subprocess.run(
+            ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+            cwd=REPO,
+            capture_output=True,
+            check=True,
+            timeout=60,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    files = [REPO / name for name in done.stdout.decode("utf-8").split("\0") if name]
+    return [path for path in files if path.suffix in _REFERENCE_SUFFIXES and path.is_file()]
+
+
+def check_section_references(gate: Gate) -> None:
+    headings = {
+        path.name: set(_NUMBERED_HEADING.findall(path.read_text(encoding="utf-8")))
+        for path in sorted(SPEC.glob("*.md"))
+        if path.name != "README.md"
+    }
+    files = _text_files()
+    if files is None:
+        gate.report("skip", "l", "git cannot list the repository's files")
+        return
+    pattern = _reference_pattern(sorted(headings))
+    problems: list[str] = []
+    found = 0
+    for path in files:
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        for match in pattern.finditer(text):
+            folder = match.group("folder")
+            if folder and not folder.endswith("spec/"):
+                continue
+            name = match.group("name")
+            if match.group("first") is not None:
+                numbers = [match.group("first"), *re.findall(_NUMBER, match.group("more"))]
+            else:
+                numbers = [match.group("word"), *re.findall(_NUMBER, match.group("words"))]
+            found += len(numbers)
+            line = text.count("\n", 0, match.start("name")) + 1
+            for number in numbers:
+                if number not in headings[name]:
+                    problems.append(f"{rel(path)}:{line}: {name} has no section {number}")
+    gate.result(
+        "l", f"{found} references to sections of spec files name headings that exist", problems
     )
 
 
@@ -795,6 +968,7 @@ def main() -> int:
     check_identity_cross(gate)
     check_default_routes(gate, schemas)
     check_feature_vocabulary(gate)
+    check_section_references(gate)
     if gate.failures:
         print(f"{gate.failures} checks failed")
         return 1

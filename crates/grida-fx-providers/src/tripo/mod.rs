@@ -1,5 +1,5 @@
 //! Tripo: `mesh.generate` (multiview to model) and `mesh.rig`, both long jobs
-//! (spec/providers.md §9.4; spec/capabilities.md §7–§8).
+//! (src/tripo/README.md; spec/capabilities.md §7–§8).
 //!
 //! Credential `authorization: Bearer <TRIPO_API_KEY>` on every request to the API base
 //! (`https://openapi.tripo3d.ai/v3`, no override variable), never on a model download. Every API
@@ -12,7 +12,7 @@
 //! The cost is `credits_consumed` of the finished task × USD 0.01, rounded up
 //! ([`crate::wire::decimal_micros_ceil`] with 10 000 micro-dollars per credit).
 //!
-//! Outcomes (spec/providers.md §7, §9.4):
+//! Outcomes (spec/adapters.md §6; src/tripo/README.md):
 //! - free phase: 400, 401, 403, 404, 413, 415 and 422 are `Refused`, and so is a request the
 //!   transport refused itself (the network turned off); every other failure is `NotReceived`;
 //! - the paid POST: `not_sent` and 429 are `NotReceived`; 400, 401, 403, 404 and 422 are
@@ -75,15 +75,15 @@ const RUNNING: [&str; 2] = ["queued", "running"];
 /// The task statuses that end a task without a result.
 const ENDED: [&str; 4] = ["failed", "cancelled", "banned", "expired"];
 
-/// The ended statuses Tripo does not bill (spec/providers.md §9.4 "Collect"): its billing
+/// The ended statuses Tripo does not bill (src/tripo/README.md, "Collect"): its billing
 /// documentation says `Failed and cancelled tasks are not charged`, and its task lifecycle says
 /// their frozen credits are released. It says nothing of `banned` or `expired`.
 pub const UNBILLED: [&str; 2] = ["failed", "cancelled"];
 
-/// Free-phase statuses that are deterministic refusals (spec/providers.md §9.4 "Free phase").
+/// Free-phase statuses that are deterministic refusals (src/tripo/README.md, "Free phase").
 const FREE_REFUSED: [u16; 7] = [400, 401, 403, 404, 413, 415, 422];
 
-/// The ` (code <n>)` a refusal names (spec/providers.md §9.4 "The envelope"): the integer
+/// The ` (code <n>)` a refusal names (src/tripo/README.md, "The envelope"): the integer
 /// `code` of a JSON object body, which says why Tripo refused; nothing else of the body is read.
 fn error_code(body: &[u8]) -> String {
     match serde_json::from_slice::<Value>(body) {
@@ -97,7 +97,7 @@ fn error_code(body: &[u8]) -> String {
     }
 }
 
-/// Paid-POST statuses that say Tripo refused the task (spec/providers.md §9.4 "Paid POST"). They
+/// Paid-POST statuses that say Tripo refused the task (src/tripo/README.md, "Paid POST"). They
 /// cost `None`: Tripo does not document a refusal as unbilled, and $0 is never inferred.
 const PAID_REFUSED: [u16; 5] = [400, 401, 403, 404, 422];
 
@@ -129,8 +129,8 @@ pub struct TripoApi {
     pub clock: Arc<dyn Clock>,
 }
 
-/// One status read of a task (spec/providers.md §9.4 "Tasks"). Its `Debug` names the output's
-/// members but never their values, which hold signed model URLs (spec/providers.md §8).
+/// One status read of a task (src/tripo/README.md, "Tasks"). Its `Debug` names the output's
+/// members but never their values, which hold signed model URLs (spec/adapters.md §7).
 #[derive(Clone, PartialEq)]
 pub struct Task {
     pub status: String,
@@ -141,7 +141,7 @@ pub struct Task {
 impl Task {
     /// What the task cost by this read: its `credits_consumed` as [`credits_cost`] reads it,
     /// `None` when absent or unreadable. A finished task costs this whether its output answers
-    /// or is unusable (spec/providers.md §9.4 "Cost").
+    /// or is unusable (src/tripo/README.md, "Cost").
     pub fn cost(&self) -> Option<Usd> {
         credits_cost(self.credits_consumed.as_ref())
     }
@@ -209,7 +209,7 @@ impl TripoApi {
     }
 
     /// Uploads one file (`POST /files`, multipart field `file`) and returns its `file_token`.
-    /// A failure is free-phase (spec/providers.md §9.4): `Refused` when it is deterministic (400,
+    /// A failure is free-phase (src/tripo/README.md): `Refused` when it is deterministic (400,
     /// 401, 403, 404, 413, 415, 422, a missing key, the network off), else `NotReceived`.
     pub async fn upload(
         &self,
@@ -259,7 +259,7 @@ impl TripoApi {
     /// The first read always happens. A read that fails (a transport failure, a 429, a 5xx, an
     /// unreadable envelope) is a poll that saw nothing; after each read the deadline is checked,
     /// then the clock sleeps [`POLL`]. A 401, a 403, a 3xx or a transport refusal ends polling at
-    /// once, since reading again cannot help (spec/providers.md §7).
+    /// once, since reading again cannot help (spec/adapters.md §6).
     pub async fn wait(&self, task_id: &str, deadline: Duration) -> Waited {
         if !TASK_ID.is_match(task_id) {
             return Waited::Unreachable("not a Tripo task id".into());
@@ -346,8 +346,8 @@ impl TripoApi {
         }
     }
 
-    /// The model URLs of a finished task's `output`, in first-appearance order (spec/providers.md
-    /// §9.4 "Model URLs"): `(field path, url)`, 1 to 8 distinct.
+    /// The model URLs of a finished task's `output`, in first-appearance order
+    /// (src/tripo/README.md, "Model URLs"): `(field path, url)`, 1 to 8 distinct.
     ///
     /// A depth-first walk of objects only, in key order (arrays are not entered; a key that does
     /// not match `[A-Za-z0-9_]+` is skipped with its subtree). A string is a model URL when it
@@ -452,7 +452,7 @@ impl TripoApi {
         }
     }
 
-    /// Posts a paid task exactly once (spec/providers.md §9.4 "Paid POST") and returns its task
+    /// Posts a paid task exactly once (src/tripo/README.md, "Paid POST") and returns its task
     /// id, or the outcome the submit reports. An `Uncertain` after a 200 names the task id Tripo
     /// returned when it is a safe field, so a person can find the task.
     pub(crate) async fn post_task(&self, path: &str, body: Value) -> Result<String, Submitted> {
@@ -566,7 +566,7 @@ impl TripoApi {
     }
 
     /// `Submitted::NotReceived` for an answer that took nothing. Tripo documents no
-    /// `retry-after`, but a response that sends one is honoured (spec/providers.md §4.3): the
+    /// `retry-after`, but a response that sends one is honoured (spec/adapters.md §3.3): the
     /// header sets `retry_after`, and a 429's reason names it.
     pub(crate) fn took_nothing(&self, reason: String, response: &HttpResponse) -> Submitted {
         Submitted::NotReceived {
@@ -616,7 +616,7 @@ pub fn register(adapters: &mut Adapters, setup: &Setup) {
     );
 }
 
-/// The route check of spec/providers.md §5 step 1: the call is on `capability`, and the route's
+/// The route check of spec/adapters.md §4 step 1: the call is on `capability`, and the route's
 /// contract names `adapter` when it names one.
 pub(crate) fn check_route(
     call: &CallRequest,
@@ -647,7 +647,7 @@ pub(crate) fn handle_task_id(handle: &Value) -> Option<&str> {
 }
 
 /// The reported cost of a finished task: `credits_consumed`, a number or a decimal string, ×
-/// USD 0.01, rounded up (spec/providers.md §6). Booleans, `null`, objects, lists, a negative or
+/// USD 0.01, rounded up (spec/adapters.md §5). Booleans, `null`, objects, lists, a negative or
 /// non-decimal value: `None`.
 pub(crate) fn credits_cost(credits: Option<&Value>) -> Option<Usd> {
     let text = match credits? {
@@ -664,7 +664,7 @@ pub(crate) fn credits_cost(credits: Option<&Value>) -> Option<Usd> {
     crate::wire::decimal_micros_ceil(&text, MICROS_PER_CREDIT)
 }
 
-/// The cost of a task Tripo ended without a result (spec/providers.md §9.4 "Collect", "Cost").
+/// The cost of a task Tripo ended without a result (src/tripo/README.md, "Collect", "Cost").
 /// For `failed` and `cancelled` ([`UNBILLED`]): the read's own `credits_consumed` as
 /// [`credits_cost`] reads it, since a figure Tripo reports wins over its documented rule;
 /// `Some(0)` when the read reports none (absent or `null`); `None`, the whole hold, when the
@@ -681,7 +681,7 @@ pub(crate) fn ended_cost(status: &str, credits: Option<&Value>) -> Option<Usd> {
 
 /// A value from Tripo kept in a handle or an answer's `data`: a short plain string
 /// (`^[A-Za-z0-9_.:-]{1,96}$`) as is; anything else is `null`, since a handle and an answer never
-/// hold a provider URL or other free text (spec/providers.md §4.4, §7).
+/// hold a provider URL or other free text (spec/adapters.md §3.4, §6).
 pub(crate) fn plain_or_null(value: &Value) -> Value {
     match value {
         Value::String(text) if SAFE_FIELD.is_match(text) => value.clone(),
@@ -690,7 +690,7 @@ pub(crate) fn plain_or_null(value: &Value) -> Value {
 }
 
 /// A value from Tripo shown in a reason: `null`, a boolean, or a short plain string as JSON;
-/// anything else is withheld (spec/providers.md §8).
+/// anything else is withheld (spec/adapters.md §7).
 pub(crate) fn shown(value: &Value) -> String {
     match value {
         Value::Null | Value::Bool(_) => value.to_string(),
@@ -699,14 +699,14 @@ pub(crate) fn shown(value: &Value) -> String {
     }
 }
 
-/// Whether the transport refused the request itself (spec/providers.md §4.2): the network is off
+/// Whether the transport refused the request itself (spec/adapters.md §3.2): the network is off
 /// or the request broke the transport's rules. Nothing left.
 fn refused_by_transport(error: &TransportError) -> bool {
     error.phase == Phase::NotSent && error.kind == TransportErrorKind::Refused
 }
 
 /// A 429's `retry-after` header, when it is a plain number of seconds, appended to `reason`
-/// (spec/providers.md §4.3).
+/// (spec/adapters.md §3.3).
 fn with_retry_after(reason: String, response: &HttpResponse) -> String {
     match response.header("retry-after").map(str::trim) {
         Some(seconds)
@@ -754,7 +754,7 @@ fn visit_output<'a>(
     Ok(())
 }
 
-/// A model URL is on one of Tripo's own hosts (spec/providers.md §9.4 "Tasks"): `https`, no
+/// A model URL is on one of Tripo's own hosts (src/tripo/README.md, "Tasks"): `https`, no
 /// userinfo, port absent or 443, and the host `tripo3d.ai`, a subdomain of it, or Tripo's storage
 /// host.
 fn check_model_host(url: &str) -> Result<(), &'static str> {
@@ -977,7 +977,7 @@ mod tests {
 
     #[test]
     fn an_ended_task_costs_what_tripo_reports_else_its_rule() {
-        // spec/providers.md §9.4 "Collect": a failed or cancelled task costs the read's own
+        // src/tripo/README.md, "Collect": a failed or cancelled task costs the read's own
         // figure, $0 when it reports none, and the whole hold when the figure cannot be read.
         for status in UNBILLED {
             let cases = [

@@ -4,7 +4,7 @@
 //! Each provider module has `pub fn register(adapters: &mut Adapters, setup: &Setup)`, which
 //! registers its adapters for every capability it serves, **whether or not its key is present**: a
 //! call without the key is refused before sending (`Sent::Refused`, "`<VARIABLE>` is not set",
-//! spec/providers.md §5), and `grida-fx doctor` reports the route as not servable.
+//! spec/adapters.md §4), and `grida-fx doctor` reports the route as not servable.
 
 use crate::clock::Clock;
 use crate::keys::{Environment, KeyName, Keys, Secret};
@@ -12,7 +12,7 @@ use crate::redact::Redactor;
 use crate::transport::{Credential, HttpRequest, HttpResponse, Transport, TransportError};
 use std::sync::Arc;
 
-/// The base-URL variables a project may set (spec/providers.md §3). Tripo has none.
+/// The base-URL variables a project may set (spec/providers.md §1). Tripo has none.
 pub const BASE_URL_VARIABLES: [&str; 5] = [
     "GG_BASE_URL",
     "OPENAI_BASE_URL",

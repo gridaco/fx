@@ -89,18 +89,18 @@ Gate: the docs' relative links resolve; `check_spec`.
 
 ### M1. The adapter contract, split out (no behaviour change)
 
-- [ ] `spec/adapters.md`: the adapter contract, version 1, made from `providers.md`'s
+- [x] `spec/adapters.md`: the adapter contract, version 1, made from `providers.md`'s
   introduction and §1, §2 and §4 to §8, unchanged in substance.
-- [ ] `spec/providers.md`: providers, keys and endpoints; the built-in adapters as a normative
+- [x] `spec/providers.md`: providers, keys and endpoints; the built-in adapters as a normative
   table (provider, capability, contract `adapter`, `adapter_behavior` as exact JSON, reference);
   the built-in route table; renamed features. fal and Tripo get their behaviour named, and
   `background.remove` on fal gets one.
-- [ ] Each FX adapter's wire details move from §9 to
+- [x] Each FX adapter's wire details move from §9 to
   `crates/grida-fx-providers/src/<provider>/README.md`, with its contract names and behaviour.
-- [ ] Every reference follows: spec cross-references, the guide's anchors (`#96-codex`,
+- [x] Every reference follows: spec cross-references, the guide's anchors (`#96-codex`,
   `#97-grida-gateway`, `#98-grok-build`, `#10-the-built-in-route-table`), `llms.txt`, Rust
-  comments, and capabilities.md's "the route's, in providers.md §9".
-- [ ] The gates follow the text: `check_spec` (j), (k) and its forbidden-name roots;
+  comments, and capabilities.md's pointer to the route's value checks (old §9).
+- [x] The gates follow the text: `check_spec` (j), (k) and its forbidden-name roots;
   `tests/routes.rs`'s sentence and contract checks; `bind.rs`'s renamed-features anchor;
   `tests/capabilities.rs`. A new check: every "`<spec file>` §N" reference names a heading
   that exists.
@@ -110,7 +110,8 @@ Gate: `check_spec`, `cargo test`, `check_llms`.
 ### M2. The engine owns the checks (no behaviour change)
 
 - [ ] Spec: the engine checks the route's contract and the request's fit before dispatch, and
-  runs the every-route checks after the adapter's own (`adapters.md` §5, `capabilities.md` §1).
+  runs the every-route checks after the adapter's own (`adapters.md` §3.4 and §4,
+  `capabilities.md` §1).
 - [ ] Runtime: the contract check and `check_request` before dispatch, and
   `checks::every_route` on every answer, for adapters and stand-ins alike. Adapters drop their
   copies and keep their route-specific checks.

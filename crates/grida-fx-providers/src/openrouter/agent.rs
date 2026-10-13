@@ -1,5 +1,5 @@
 //! OpenRouter agent turns: one `agent.turn` (spec/protocol.md §6.2 step 3) as one
-//! `POST {base}/chat/completions` with strict function tools (spec/providers.md §9.2;
+//! `POST {base}/chat/completions` with strict function tools (src/openrouter/README.md;
 //! spec/capabilities.md §5).
 //!
 //! Contract: `adapter: openrouter-tool-loop`, `adapter_behavior: 1`, optional `request_policy`
@@ -13,7 +13,7 @@
 //! `data: {"text", "tool_calls": [{"id", "name", "arguments": <object>}]}`, `cost` from
 //! `usage` ([`super::usage_cost`]); the engine checks its shape. Deadline 600 s.
 //!
-//! `send`, in the order of spec/providers.md §5:
+//! `send`, in the order of spec/adapters.md §4:
 //! 1. the contract (`structured::read_contract`, no `pictures` member);
 //! 2. `capabilities::check_request`;
 //! 3. the key (`authorization: Bearer <OPENROUTER_API_KEY>`);
@@ -81,7 +81,7 @@ impl OpenRouterAgent {
         // 4 and 5. Values, then files.
         let policy = &contract.policy;
         let prompt = chat::agent_prompt(call, policy.image_detail.as_deref())?;
-        // The body (spec/providers.md §9.2).
+        // The body (src/openrouter/README.md).
         let mut body = Map::new();
         body.insert(
             "model".into(),
@@ -104,7 +104,7 @@ impl OpenRouterAgent {
         Ok(Prepared { credential, body })
     }
 
-    /// A 2xx's body as an answer (spec/providers.md §9.2).
+    /// A 2xx's body as an answer (src/openrouter/README.md).
     fn parse(&self, response: &HttpResponse) -> Sent {
         let body = match wire::json_object(&response.body, LABEL) {
             Ok(body) => body,

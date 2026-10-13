@@ -1,7 +1,7 @@
 //! What the adapters of programs the user installed share: Codex and Grok Build
-//! (spec/providers.md §9.6, §9.8). Finding the program, asking its version, starting it without
-//! the user's keys, reading its lines, checking a request's pictures, and the bounded words a
-//! reason may carry.
+//! (src/codex/README.md; src/grok/README.md). Finding the program, asking its version, starting it
+//! without the user's keys, reading its lines, checking a request's pictures, and the bounded words
+//! a reason may carry.
 
 use crate::adapter::{CallRequest, RouteRef, Sent};
 use crate::wire;

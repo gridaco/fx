@@ -1,4 +1,4 @@
-//! OpenRouter `agent.turn` over synthetic exchanges (spec/providers.md §9.2;
+//! OpenRouter `agent.turn` over synthetic exchanges (src/openrouter/README.md;
 //! spec/capabilities.md §5; spec/protocol.md §6.2 step 3). Nothing here reaches a network: every
 //! send goes to a `ReplayTransport` that asserts the request, and every refusal runs over a
 //! transport that saw no request.
@@ -525,7 +525,7 @@ fn refusals_come_in_order_and_send_nothing() {
     );
 }
 
-/// wire-diff WD-1 (spec/providers.md §9.2 "Agent turns"): a picture that is not an `image/*`
+/// wire-diff WD-1 (src/openrouter/README.md, "Agent turns"): a picture that is not an `image/*`
 /// file is refused before anything is sent, naming its place in the transcript, instead of
 /// going out labelled `image/png`. Kinds are judged before any file is read.
 #[test]

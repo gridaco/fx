@@ -1,6 +1,6 @@
-//! The user's Codex as a runtime (spec/providers.md §1, §9.6): one `codex app-server` an
-//! invocation starts on its first Codex call and keeps for the others, and shuts down with the run
-//! ([`crate::adapter::Runtime`]).
+//! The user's Codex as a runtime (spec/adapters.md §1; src/codex/README.md): one `codex app-server`
+//! an invocation starts on its first Codex call and keeps for the others, and shuts down with the
+//! run ([`crate::adapter::Runtime`]).
 //!
 //! Starting it, once: check its version ([`super::version`]), list the user's MCP servers to turn
 //! them off, start Codex in a process group of its own ([`crate::process_group`]), `initialize`,

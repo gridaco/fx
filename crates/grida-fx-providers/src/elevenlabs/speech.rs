@@ -1,6 +1,6 @@
 //! ElevenLabs speech: `POST {base}/text-to-speech/<voice>?output_format=mp3_44100_192` with
 //! `{"text", "model_id": <route model>, "voice_settings"?: {"stability"}, "language_code"?}`
-//! (spec/providers.md §9.5). Refused before sending: blank text or over 5000 characters, a voice
+//! (src/elevenlabs/README.md). Refused before sending: blank text or over 5000 characters, a voice
 //! that is not `^[A-Za-z0-9_-]{1,128}$`, `stability` outside 0..1, no key. `language_code` null or
 //! `""` is not sent; `max_chars` (pricing only) is never sent.
 //!
@@ -25,7 +25,7 @@ pub const LABEL: &str = "ElevenLabs speech generation";
 /// The capability this adapter serves.
 pub const CAPABILITY: &str = "speech.generate";
 
-/// The contract's `adapter` (spec/providers.md §9.5).
+/// The contract's `adapter` (src/elevenlabs/README.md).
 pub const ADAPTER: &str = "elevenlabs-speech";
 
 pub const MAX_TEXT_CHARS: usize = 5000;
@@ -50,7 +50,7 @@ impl ElevenLabsSpeech {
 impl RequestAdapter for ElevenLabsSpeech {
     fn send<'a>(&'a self, call: &'a CallRequest) -> BoxFuture<'a, Sent> {
         Box::pin(async move {
-            // spec/providers.md §5, steps 1 to 3.
+            // spec/adapters.md §4, steps 1 to 3.
             if let Err(reason) = check_route(call, CAPABILITY, ADAPTER)
                 .and_then(|()| capabilities::check_request(CAPABILITY, &call.request))
             {
@@ -76,7 +76,7 @@ impl RequestAdapter for ElevenLabsSpeech {
 }
 
 /// The voice and the wire body of a request whose shape `capabilities::check_request` accepted,
-/// or the refusal of its first out-of-range value (spec/providers.md §9.5 "Speech").
+/// or the refusal of its first out-of-range value (src/elevenlabs/README.md, "Speech").
 fn body(call: &CallRequest) -> Result<(&str, Map<String, Value>), String> {
     let request = &call.request;
     let text = request.get("text").and_then(Value::as_str).unwrap_or("");

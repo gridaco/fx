@@ -1,12 +1,12 @@
 //! The providers' checks of a stand-in's answer (spec/protocol.md §5.7, §6.1 *Stand-in answers*;
-//! spec/providers.md §1, §4.4).
+//! spec/adapters.md §1, §3.4).
 //!
 //! A stand-in run answers each paid call the call cache cannot answer with a function the caller
 //! supplies, instead of a provider. The engine holds such an answer to what a provider's answer is
 //! held to. [`StandInChecks`] makes the checks that are the providers':
 //! - [`StandInChecks::request`], sub-step 1: the request against its capability, before the
-//!   stand-in is asked (spec/capabilities.md §1; spec/providers.md §5 step 2). The route's
-//!   refusals of values (spec/providers.md §5 steps 1, 3, 4 and 5) live inside each adapter's
+//!   stand-in is asked (spec/capabilities.md §1; spec/adapters.md §4 step 2). The route's
+//!   refusals of values (spec/adapters.md §4 steps 1, 3, 4 and 5) live inside each adapter's
 //!   send, and are not made;
 //! - [`StandInChecks::answer`], sub-steps 3.1 and 3.2: the answer's shape, since no adapter made
 //!   it, and then the route's check. The round trip of `data` through canonical JSON and the

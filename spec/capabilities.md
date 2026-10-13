@@ -5,7 +5,7 @@ A capability is a kind of paid call: `image.generate`, `agent.turn`, `mesh.rig`,
 - what an answer returns: files by name, with kinds, and `data`;
 - the features and limits a route may declare.
 
-How a provider's adapter turns a request into an exchange, and how it is billed, is [providers.md](providers.md). How the call is keyed is [identity.md](identity.md) §9.
+How a provider's adapter turns a request into an exchange, and how it is billed, is [adapters.md](adapters.md). How the call is keyed is [identity.md](identity.md) §9.
 
 ## 1. Requests and answers
 
@@ -13,14 +13,14 @@ How a provider's adapter turns a request into an exchange, and how it is billed,
 - A request is a JSON object: the **canonical request** ([identity.md](identity.md) §9). Files are file values (`{"file": "<digest>"}`, [protocol.md](protocol.md) §3.2).
 - A body's `ctx` call sends whatever members it gives. A paid built-in sends its params, without `vars`, then its input ports (§14). The member tables below list the members in that order; `agent.turn`, which no built-in sends, in the order of [protocol.md](protocol.md) §6.2.
 - A paid built-in leaves out a param the step did not give and that has no default, and an input port without a value: neither is a member of the request. A param whose value is missing or `null` goes as `null` (§14; [protocol.md](protocol.md) §5.3 `params`). Absent and `null` are different requests, and so different call keys ([identity.md](identity.md) §9).
-- Every adapter MUST check a request against its capability right after its route's contract, before anything else ([providers.md](providers.md) §5), with these sentences:
+- Every adapter MUST check a request against its capability right after its route's contract, before anything else ([adapters.md](adapters.md) §4), with these sentences:
   - A request that is not an object: `a request for <capability> is a JSON object`.
   - A member the capability does not define is refused: `<capability> takes no member <name>`.
   - Then each member, in the table's order:
     - A member whose value is `null` is absent. It stays in the call key, but no adapter reads it.
     - A required member that is absent: `<capability> needs <name>`.
     - A member of the wrong type: `<name> is <type>`. The type words are `text`, `a number`, `a whole number`, `true or false`, `an object`, `a list`, `a file`, `a list of files`, `files by name`, and `a JSON file or object`.
-- Checks on a member's value beyond its type are the route's, in [providers.md](providers.md) §9: non-blank text, ranges, enumerations, sizes, counts.
+- Checks on a member's value beyond its type are the route's, in its adapter's reference ([providers.md](providers.md) §2): non-blank text, ranges, enumerations, sizes, counts.
 
 In the tables below, a member's type is one of:
 - `text`, `number`, `integer` (a number with no fractional part), `boolean`, `object` or `list`;
@@ -46,16 +46,16 @@ In the tables below, a member's type is one of:
   - each member of `data.facts` becomes a node fact, and a string `data.verdict` becomes the fact `verdict`.
 
 **Features.**
-- A route declares the features it supports, in its table entry ([identity.md](identity.md) §7). A step's `requires:` names features of the capabilities its type calls. A name that is a feature of none of them is refused while planning: `<name> is not a(n) <capability>[ or <capability>] feature (spec/capabilities.md)`, followed by `; FX calls it <feature>` for a renamed feature ([providers.md](providers.md) §11). A capability without a section here (§13, or a project's own) is not checked this way. A known feature the step's route lacks is refused as `<route> does not support <features>`.
+- A route declares the features it supports, in its table entry ([identity.md](identity.md) §7). A step's `requires:` names features of the capabilities its type calls. A name that is a feature of none of them is refused while planning: `<name> is not a(n) <capability>[ or <capability>] feature (spec/capabilities.md)`, followed by `; FX calls it <feature>` for a renamed feature ([providers.md](providers.md) §4). A capability without a section here (§13, or a project's own) is not checked this way. A known feature the step's route lacks is refused as `<route> does not support <features>`.
 - **A step's own request implies features.** A step whose type is a capability (a built-in such as `fx/image.generate@1`) sends its with-values as the request, so the plan reads from them what its route must honour, besides what `requires:` names. For `image.generate` and `image.edit`:
   - `image_input` for a `references` list with an item;
   - `mask` for a `mask`;
   - `exact_size` for a `size` of `<W>x<H>`;
   - `alpha` for `background: transparent`, and `opaque_background` for `background: opaque`.
 
-  A value the plan does not know yet (a step's output that is only a list as a whole, say) implies nothing. A feature the route lacks is refused as `<route> does not support <feature>` at `<w>.with.<member>`, once per feature, and not again for `requires:`. So a request the route's adapter would refuse is refused while planning, at $0. A call a node's body makes at run time is still checked by its adapter alone ([providers.md](providers.md) §5).
+  A value the plan does not know yet (a step's output that is only a list as a whole, say) implies nothing. A feature the route lacks is refused as `<route> does not support <feature>` at `<w>.with.<member>`, once per feature, and not again for `requires:`. So a request the route's adapter would refuse is refused while planning, at $0. A call a node's body makes at run time is still checked by its adapter alone ([adapters.md](adapters.md) §4).
 - **Input-picture limits.** A route may declare `max_input_pictures`, the most input pictures it takes in one call (`image` and `references`; a mask does not count). A step whose request would carry more is refused while planning, at `<w>.with.references`: `<route> takes at most <n> input pictures, not <count>`. The count is known while the list's length is, even when its pictures are not made yet.
-- Each capability's section lists its features. Only those names have a meaning for it. A route in the built-in table ([providers.md](providers.md) §10) MUST declare only names from its capability's list, and only what its adapter honours.
+- Each capability's section lists its features. Only those names have a meaning for it. A route in the built-in table ([providers.md](providers.md) §3) MUST declare only names from its capability's list, and only what its adapter honours.
 - A few image features describe the provider's model and change nothing FX sends, whatever `jpeg_output`, `webp_output` or `hosted_url_reference_input` say. Every route FX ships sends pictures inline. A route whose provider takes an output format (OpenAI, fal) asks for PNG; OpenRouter's image endpoint takes none, so its routes ask for nothing. Every route's check refuses an answer that is not a PNG (§2).
 
 ## 2. `image.generate`
@@ -97,9 +97,9 @@ A picture from a prompt.
 | `maximum_quality` | the route asks for the model's highest quality |
 | `authored_prompt_passthrough` | the prompt is sent verbatim, never rewritten |
 
-**Limits a route may have:** an exact-size envelope or a fixed list of sizes, no transparency, no references, and a limit on the number of input pictures (§1). They are enforced as refusals ([providers.md](providers.md) §9), and while planning where §1 says. Of the routes FX ships, only Codex's and Grok Build's take references for `image.generate` (at most 5 and 3), so only they declare `image_input` for it.
+**Limits a route may have:** an exact-size envelope or a fixed list of sizes, no transparency, no references, and a limit on the number of input pictures (§1). They are enforced as refusals (each adapter's reference, [providers.md](providers.md) §2), and while planning where §1 says. Of the routes FX ships, only Codex's and Grok Build's take references for `image.generate` (at most 5 and 3), so only they declare `image_input` for it.
 
-**Pricing:** per call, in tiers by `size` ([identity.md](identity.md) §12; the built-in tiers are in [providers.md](providers.md) §10).
+**Pricing:** per call, in tiers by `size` ([identity.md](identity.md) §12; the built-in tiers are in [providers.md](providers.md) §3).
 
 ## 3. `image.edit`
 
@@ -135,9 +135,9 @@ A picture made from input pictures, optionally within a mask.
 | `authored_prompt_passthrough` | as for `image.generate` |
 | `mask` | the route takes a `mask` |
 
-**Limits a route may have:** an exact-size envelope or a fixed list of sizes, no transparency, no mask, and a limit on the number of input pictures. They are enforced as refusals ([providers.md](providers.md) §9), and while planning where §1 says. The routes FX ships take at most 16 input pictures (`image` and `references`; the mask does not count), Codex's at most 5 and Grok Build's at most 3; GG's are limited by each model ([providers.md](providers.md) §10).
+**Limits a route may have:** an exact-size envelope or a fixed list of sizes, no transparency, no mask, and a limit on the number of input pictures. They are enforced as refusals (each adapter's reference, [providers.md](providers.md) §2), and while planning where §1 says. The routes FX ships take at most 16 input pictures (`image` and `references`; the mask does not count), Codex's at most 5 and Grok Build's at most 3; GG's are limited by each model ([providers.md](providers.md) §3).
 
-**Pricing:** as for `image.generate`, with a larger allowance for the input pictures ([providers.md](providers.md) §10).
+**Pricing:** as for `image.generate`, with a larger allowance for the input pictures ([providers.md](providers.md) §3).
 
 ## 4. `structured.generate`
 
@@ -199,7 +199,7 @@ A clip from a prompt and frames. A long job.
 
 **Answer:** the file `video` (`video/mp4`). `data` is `{"facts": {"width", "height", "duration_seconds", "fps"}}`, with numbers from the clip's file facts ([facts.md](facts.md)).
 
-**A route's check:** the clip's size and duration against the request ([providers.md](providers.md) §9.3, §9.7).
+**A route's check:** the clip's size and duration against the request ([fal](../crates/grida-fx-providers/src/fal/README.md), [GG](../crates/grida-fx-providers/src/gg/README.md)).
 
 **Features:**
 
@@ -318,7 +318,7 @@ A picture's subject on a transparent background.
 
 **Features:** none.
 
-FX ships an adapter for it on fal, but the built-in route table has no route for it yet ([providers.md](providers.md) §10).
+FX ships an adapter for it on fal, but the built-in route table has no route for it yet ([providers.md](providers.md) §3).
 
 ## 13. Capabilities without an adapter
 

@@ -1,8 +1,8 @@
-//! The OpenAI Images adapter over synthetic exchanges (spec/providers.md §4, §5 and §9.1;
-//! spec/capabilities.md §2–§3). Nothing here reaches a network: every send goes to a
-//! `ReplayTransport` that asserts the exact request, to `NoNetwork` (which panics on any send) or
-//! to `Offline`. The key is the made-up `test-openai-key`; every picture is built in code (the
-//! `testing::media` PNGs and JPEGs, and the WebP encoder below).
+//! The OpenAI Images adapter over synthetic exchanges (spec/adapters.md §3, §4;
+//! src/openai/README.md; spec/capabilities.md §2–§3). Nothing here reaches a network: every send
+//! goes to a `ReplayTransport` that asserts the exact request, to `NoNetwork` (which panics on any
+//! send) or to `Offline`. The key is the made-up `test-openai-key`; every picture is built in code
+//! (the `testing::media` PNGs and JPEGs, and the WebP encoder below).
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
@@ -407,8 +407,9 @@ fn the_route_must_be_one_this_adapter_serves() {
         json!({"adapter": "acme-openai-image-v1", "adapter_behavior": "1"}),
         json!({"adapter": "fx-openrouter-image-v1"}),
         json!({"adapter": ADAPTER, "adapter_behavior": "2"}),
-        // routes-caps F3: the behaviour is the text "1" (spec/providers.md §9.1, §10); the number
-        // 1 is another contract with another fingerprint, refused as OpenRouter refuses 3.
+        // routes-caps F3: the behaviour is the text "1" (src/openai/README.md; spec/providers.md
+        // §3); the number 1 is another contract with another fingerprint, refused as OpenRouter
+        // refuses 3.
         json!({"adapter": ADAPTER, "adapter_behavior": 1}),
     ] {
         let call = CallBuilder::new("image.generate", ROUTE)
@@ -827,7 +828,7 @@ fn an_answer_carries_only_the_image() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Statuses (spec/providers.md §4.3 with §9.1's overrides)
+// Statuses (spec/adapters.md §3.3 with the overrides of src/openai/README.md)
 
 fn envelope(status: u16, error: Value) -> HttpResponse {
     HttpResponse::json(status, &json!({ "error": error }))
@@ -991,7 +992,7 @@ fn rate_limits_are_not_received_and_quota_ends_the_call() {
 }
 
 /// classify C1: OpenAI's 408 is its own timeout, after the request arrived. The work may be done,
-/// so it is a billed, retryable failure (spec/providers.md §9.1), never a free resend.
+/// so it is a billed, retryable failure (src/openai/README.md), never a free resend.
 #[test]
 fn a_408_is_billed_and_retryable() {
     for (response, reason) in [
@@ -1059,7 +1060,7 @@ fn a_redirect_is_not_followed() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Transport failures (spec/providers.md §4.2)
+// Transport failures (spec/adapters.md §3.2)
 
 fn failing(error: TransportError) -> Sent {
     let transport = Arc::new(ReplayTransport::new(vec![

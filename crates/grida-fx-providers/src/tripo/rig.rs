@@ -1,4 +1,4 @@
-//! Tripo `mesh.rig`: a free riggability check, then the paid rig (spec/providers.md §9.4).
+//! Tripo `mesh.rig`: a free riggability check, then the paid rig (src/tripo/README.md).
 //!
 //! `submit`: refuse a model that is not `model/gltf-binary` (or no key); upload it as
 //! `unrigged.glb`; post `POST /animations/rig-check` `{"input": token}` and wait for that task up to
@@ -12,10 +12,10 @@
 //! `model`; `data: {"facts": {"riggable", "checked_rig_type", "advisory_override"}}` from the
 //! handle; cost from the rig task's credits.
 //!
-//! The whole check is the free phase (spec/providers.md §7): a check task that ends without
+//! The whole check is the free phase (spec/adapters.md §6): a check task that ends without
 //! success is `Refused`; one still running at its deadline, an answer about another task, or a
 //! `riggable` that is not a boolean is `NotReceived`, and the engine resends the whole submit.
-//! Refusals before anything is sent come in the order of spec/providers.md §5: the route, the
+//! Refusals before anything is sent come in the order of spec/adapters.md §4: the route, the
 //! request's shape (spec/capabilities.md §8), the key, then the model file (its bytes, its kind).
 
 use super::{TripoApi, Waited};
@@ -171,7 +171,7 @@ impl TripoRig {
     }
 }
 
-/// The model's bytes (spec/providers.md §5 step 5): a file the call carries, of kind
+/// The model's bytes (spec/adapters.md §4 step 5): a file the call carries, of kind
 /// `model/gltf-binary`, readable and not empty.
 fn model_bytes(call: &CallRequest) -> Result<Vec<u8>, String> {
     let missing = || "a rig call needs its model".to_string();

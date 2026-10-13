@@ -55,7 +55,7 @@ GG_API_KEY=…
 ```
 
 in the environment, or in a `.env` file in your project (keep it out of version control). FX books
-a GG call at what GG charged for it ([providers.md §9.7](../../spec/providers.md#97-grida-gateway)).
+a GG call at what GG charged for it ([GG's adapter reference](../../crates/grida-fx-providers/src/gg/README.md)).
 
 The key needs both scopes, `text` for text and agent steps and `media` for everything else.
 GG's own API reference, written for people and agents alike, is

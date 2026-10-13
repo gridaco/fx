@@ -1,5 +1,5 @@
-//! Reading one output picture out of a fal answer (spec/providers.md §8, §9.3): the object
-//! `root.images[0]` of an image call or `root.image` of a background removal.
+//! Reading one output picture out of a fal answer (spec/adapters.md §7; src/fal/README.md): the
+//! object `root.images[0]` of an image call or `root.image` of a background removal.
 //!
 //! In order:
 //! 1. `url` is a non-blank string;

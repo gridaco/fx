@@ -1,4 +1,4 @@
-//! fal video: a queue long job (spec/providers.md §9.3, §7).
+//! fal video: a queue long job (src/fal/README.md; spec/adapters.md §6).
 //!
 //! `submit`: one `POST {queue}/<model>` with `{"prompt", "image_url", "end_image_url"?,
 //! "aspect_ratio", "resolution", "duration"}` (`duration` a JSON integer); a 2xx with a
@@ -14,14 +14,14 @@
 //! min(remaining, 60 s), sleeping through the injected [`Clock`]. The answer is file `video`
 //! (`video/mp4`) and `data: {"facts": {"width", "height", "duration_seconds", "fps"}}` from the
 //! clip's file facts; `cost` from the result's top-level `usage.cost`. `check`: the clip's size and
-//! duration against the request (spec/providers.md §9.3).
+//! duration against the request (src/fal/README.md).
 //!
-//! Submit refusals, in this order (spec/providers.md §5, §9.3): another route's contract; a request
-//! that does not fit `video.generate`; no `FAL_KEY`; a blank prompt, or one over
-//! [`MAX_PROMPT_CHARS`]; no `first_frame`; a `duration` that is not a whole number from 3 to 10; a
-//! `resolution` (default `720p`) or `aspect_ratio` (default `9:16`) the route does not draw; then
-//! `first_frame` and `last_frame`, each when it is not an `image/*` file (`<member> is <kind>, not a
-//! picture`) or has no bytes.
+//! Submit refusals, in this order (spec/adapters.md §4; src/fal/README.md): another route's
+//! contract; a request that does not fit `video.generate`; no `FAL_KEY`; a blank prompt, or one
+//! over [`MAX_PROMPT_CHARS`]; no `first_frame`; a `duration` that is not a whole number from 3 to
+//! 10; a `resolution` (default `720p`) or `aspect_ratio` (default `9:16`) the route does not draw;
+//! then `first_frame` and `last_frame`, each when it is not an `image/*` file (`<member> is <kind>,
+//! not a picture`) or has no bytes.
 //!
 //! Submit statuses: 4xx other than 408 and 429 is `Failed { Some(0), false }`; 408, 429, 500, 502
 //! and 503 are `NotReceived`; any other status, a 2xx without a usable handle, or a handle outside
@@ -30,7 +30,7 @@
 //! <id>)`, the body's `request_id`, else the response's request-id header, when it is a safe id),
 //! so a person can find the job.
 //!
-//! Collect outcomes (spec/providers.md §7): a handle this adapter did not write is `Unreachable`
+//! Collect outcomes (spec/adapters.md §6): a handle this adapter did not write is `Unreachable`
 //! with nothing requested. Failed status and result reads (a transport failure, 408, 429, a 5xx, a
 //! body that is not a JSON object) are polls that saw nothing. A 401, 403 or 3xx is `Unreachable`;
 //! another 4xx is `Ended`; a status with a truthy `error` is `Ended`; the deadline is
@@ -124,7 +124,7 @@ impl FalVideo {
     }
 }
 
-/// What a request asks of the route, once its values pass (step 4 of spec/providers.md §5).
+/// What a request asks of the route, once its values pass (step 4 of spec/adapters.md §4).
 #[derive(Debug, Clone, PartialEq)]
 struct Clip<'a> {
     prompt: &'a str,
@@ -221,7 +221,7 @@ pub fn expected_size(resolution: &str, aspect_ratio: &str) -> Option<(u32, u32)>
     }
 }
 
-/// The check of a collected clip (spec/providers.md §9.3): its size is
+/// The check of a collected clip (src/fal/README.md): its size is
 /// [`expected_size`] (`the clip is <w>x<h>, not <W>x<H>`), and its duration is within
 /// `1/fps + 0.01` s of `seconds` (`the clip runs <x> s, not <n> s`).
 pub fn check_clip(
@@ -303,7 +303,7 @@ fn is_queue_ref(reference: &str) -> bool {
 /// No percent-encoding, `/`, `?`, `#` or `=` in a value, and no name that reads as a credential or
 /// a signature (one holding `auth`, `credential`, `expires`, `key`, `password`, `policy`,
 /// `secret`, `session`, `sig` or `token`, or starting `x-amz-` or `x-goog-`), since a handle never
-/// holds a signed URL (spec/providers.md §7).
+/// holds a signed URL (spec/adapters.md §6).
 fn is_plain_query(query: &str) -> bool {
     const SECRET_WORDS: [&str; 10] = [
         "auth",
@@ -350,7 +350,7 @@ fn is_queue_path(path: &str) -> bool {
 }
 
 /// The handle of a 2xx submit answer (module doc), or the `Uncertain` sentence. A `request_id`
-/// that is not a safe id is no handle: it would go into the job record (spec/providers.md §7).
+/// that is not a safe id is no handle: it would go into the job record (spec/adapters.md §6).
 fn handle_of(queue_base: &str, body: &[u8]) -> Result<Value, String> {
     let no_handle = || "fal took the video job but returned no handle to collect it by".to_string();
     let payload = crate::wire::json_object(body, SUBMIT_LABEL).map_err(|_| no_handle())?;
@@ -393,7 +393,7 @@ enum Read {
 }
 
 impl FalVideo {
-    /// Steps 1 to 5 of spec/providers.md §5, then the submit request (module doc).
+    /// Steps 1 to 5 of spec/adapters.md §4, then the submit request (module doc).
     fn prepare(&self, call: &CallRequest) -> Result<HttpRequest, String> {
         let client = &self.clients.queue;
         if let Some(refusal) = super::contract_refusal(call, CONTRACT_ADAPTER, &["video.generate"])
@@ -627,7 +627,7 @@ impl FalVideo {
         if remaining.is_zero() {
             return outstanding(client);
         }
-        // The provider's text, byte for byte (spec/providers.md §8).
+        // The provider's text, byte for byte (spec/adapters.md §7).
         let request = HttpRequest::new(Method::Get, url, Lane::Download)
             .timeout(remaining)
             .max_response_bytes(MAX_VIDEO_BYTES);
@@ -711,7 +711,7 @@ fn returned_id(response: &HttpResponse) -> Option<String> {
 
 /// `fal video job failed (<error_type>): <error>`. Each provider text is redacted **first**, then
 /// collapsed and cut (the error to 500 characters, `error_type` to 100), so a key that straddles
-/// a cut is still removed whole (spec/providers.md §8).
+/// a cut is still removed whole (spec/adapters.md §7).
 fn job_error(status: &Map<String, Value>, redactor: &crate::redact::Redactor) -> String {
     let cut = |text: &str, max: usize| crate::redact::bounded(&redactor.redact(text), max);
     let error = match status.get("error") {
@@ -732,7 +732,7 @@ fn outstanding(client: &Client) -> Collected {
     }
 }
 
-/// A failed submit exchange (spec/providers.md §4.2).
+/// A failed submit exchange (spec/adapters.md §3.2).
 fn submit_transport(client: &Client, error: &TransportError) -> Submitted {
     match (error.kind, error.phase) {
         (TransportErrorKind::Refused, _) => Submitted::Refused {

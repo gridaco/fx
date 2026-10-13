@@ -1,4 +1,4 @@
-//! ElevenLabs sound and speech (spec/providers.md §9.5): every request asserted on a replay
+//! ElevenLabs sound and speech (src/elevenlabs/README.md): every request asserted on a replay
 //! transport, every refusal over `NoNetwork` (nothing may be sent), synthetic MP3 bytes only.
 //!
 //! Mirrors the reference engine's adapter tests (the request each route sends, absent members
@@ -737,7 +737,7 @@ fn the_kind_is_the_normalized_content_type() {
     );
 }
 
-/// spec/providers.md §8: an ElevenLabs key (`sk_` and lowercase hex) is a valid media-type
+/// spec/adapters.md §7: an ElevenLabs key (`sk_` and lowercase hex) is a valid media-type
 /// subtype, so a provider that echoes it in `content-type` makes it the answer's kind. The
 /// check's sentence quotes the kind, redacted; and the adapter a live run registers answers the
 /// retry owner with a redactor over every key of the invocation.

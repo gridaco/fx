@@ -15,7 +15,7 @@
 //! them.
 //!
 //! `run --live` reads the provider keys from the environment or the planning project's `.env`
-//! (spec/providers.md §3; [`crate::engine::adapters_for`]); `doctor` says which are present.
+//! (spec/providers.md §1; [`crate::engine::adapters_for`]); `doctor` says which are present.
 //!
 //! As with Python's argparse, a repeated option takes its last value (`--max-usd 1
 //! --max-usd 2` is a ceiling of $2; `--check --check` is `--check`); repeatable options

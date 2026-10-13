@@ -1,4 +1,4 @@
-//! fal `background.remove` (spec/providers.md §9.3) over synthetic exchanges. Every test that
+//! fal `background.remove` (src/fal/README.md) over synthetic exchanges. Every test that
 //! sends asserts each request; every refusal runs over `NoNetwork`. Media are built in code.
 
 use grida_fx_core::money::Usd;

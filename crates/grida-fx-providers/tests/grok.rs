@@ -1,4 +1,4 @@
-//! The Grok Build adapter and runtime (spec/providers.md §9.8) against fake Grok Build programs:
+//! The Grok Build adapter and runtime (src/grok/README.md) against fake Grok Build programs:
 //! shell scripts that speak the agent's side of ACP. No real Grok Build is ever started.
 //!
 //! The runtime's reader and writer run on the tokio runtime that started them, so each test runs

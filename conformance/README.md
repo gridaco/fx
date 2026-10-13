@@ -231,7 +231,7 @@ Each step runs with a minimal environment, never the caller's:
 - `HOME`, a fresh empty folder for the case;
 - `NO_COLOR=1`, `LANG=C.UTF-8` and `PYTHONDONTWRITEBYTECODE=1`;
 - `GRIDA_FX_NETWORK=off` and `GRIDA_FX_DISABLE_DOTENV=1`, so no provider is reached and no `.env`
-  is read ([providers.md](../spec/providers.md) §2, §3);
+  is read ([adapters.md](../spec/adapters.md) §2; [providers.md](../spec/providers.md) §1);
 - `GRIDA_FX_PYTHON` and `GRIDA_FX_NODE`, each passed through when set (a path made absolute,
   above);
 - `RUSTUP_HOME` and `CARGO_HOME`, from the caller, else `~/.rustup` and `~/.cargo` when those

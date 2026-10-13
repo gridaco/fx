@@ -1,4 +1,4 @@
-//! Provider keys: the allowlisted loader (spec/providers.md §3).
+//! Provider keys: the allowlisted loader (spec/providers.md §1).
 //!
 //! FX reads exactly six key variables, under their providers' usual names ([`KeyName`]), and
 //! five base-URL variables ([`ALLOWED`]); an [`Environment`] holds what it found. Values come

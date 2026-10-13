@@ -1,5 +1,5 @@
 //! GG 3D: `mesh.generate` from views ([`GgMesh`]) and `mesh.rig` ([`GgRig`]), long jobs on GG's
-//! specialized endpoints (spec/providers.md §9.7, §7), run by [`super::job`].
+//! specialized endpoints (src/gg/README.md; spec/adapters.md §6), run by [`super::job`].
 //!
 //! A specialized endpoint is named by its id, not by a model: GG's endpoint ids are opaque, so
 //! the route's contract names the one it submits to (`endpoint`, such as
@@ -13,7 +13,7 @@
 //! - [`GgRig`]: `input` is `{rig_type, spec}`, `biped` and `mixamo` when the request names none
 //!   (`skeleton` is `spec`), and the model is the part `mesh`, named `unrigged.glb`. The rigged
 //!   model is `result.glb`. When the contract names a `check_endpoint`, a free riggability check
-//!   comes first: the free phase of spec/providers.md §7. Its job is submitted with the model
+//!   comes first: the free phase of spec/adapters.md §6. Its job is submitted with the model
 //!   (`input` `{}`, the attempt's `Idempotency-Key` with `-check` appended) and waited for up to
 //!   [`CHECK_DEADLINE`]; its result is `{riggable, rig_type}`. A doubted model (`riggable` not
 //!   true, or `rig_type` not the requested one) is refused unless `allow_negative_check` is true.
@@ -28,7 +28,7 @@
 //! `data: {"facts": {"riggable", "checked_rig_type", "advisory_override"}}` for a rig, from its
 //! handle: `null`, `null` and `false` when no check ran.
 //!
-//! Submit refusals, in this order (spec/providers.md §5): another route's contract, or one without
+//! Submit refusals, in this order (spec/adapters.md §4): another route's contract, or one without
 //! an endpoint; a request that does not fit its capability; no `GG_API_KEY`; the
 //! values (a mesh's view names and count); then the files (a mesh's views in
 //! the order front, left, back, right, each PNG or JPEG; a rig's model, a GLB). The model's own
@@ -137,7 +137,7 @@ struct Endpoints {
     check: Option<String>,
 }
 
-/// Reads a 3D route contract (spec/providers.md §5 step 1): `adapter`, behaviour `1`, the
+/// Reads a 3D route contract (spec/adapters.md §4 step 1): `adapter`, behaviour `1`, the
 /// `endpoint` it submits to and, among `members`, a rig's `check_endpoint`.
 fn endpoints(
     call: &CallRequest,
@@ -203,7 +203,7 @@ impl GgMesh {
         }
     }
 
-    /// Steps 1 to 5 of spec/providers.md §5, then the submit request (module doc).
+    /// Steps 1 to 5 of spec/adapters.md §4, then the submit request (module doc).
     fn prepare(&self, call: &CallRequest) -> Result<HttpRequest, String> {
         let endpoint = endpoints(call, "mesh.generate", MESH_ADAPTER, &["endpoint"])?.endpoint;
         capabilities::check_request(&call.route.capability, &call.request)?;
@@ -246,7 +246,7 @@ impl GgMesh {
     }
 }
 
-/// The views by name (spec/providers.md §5 step 4): `front` and at least one of the others, no
+/// The views by name (spec/adapters.md §4 step 4): `front` and at least one of the others, no
 /// other name.
 fn view_names(request: &Value) -> Result<&Map<String, Value>, String> {
     let views = match request.get("views") {
@@ -314,7 +314,7 @@ impl GgRig {
         }
     }
 
-    /// Steps 1 to 5 of spec/providers.md §5 (module doc).
+    /// Steps 1 to 5 of spec/adapters.md §4 (module doc).
     fn prepare(&self, call: &CallRequest) -> Result<Rig, String> {
         let endpoints = endpoints(call, "mesh.rig", RIG_ADAPTER, &RIG_MEMBERS)?;
         capabilities::check_request(&call.route.capability, &call.request)?;

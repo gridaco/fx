@@ -1,4 +1,4 @@
-//! OpenRouter `structured.generate` over synthetic exchanges (spec/providers.md §9.2;
+//! OpenRouter `structured.generate` over synthetic exchanges (src/openrouter/README.md;
 //! spec/capabilities.md §4). Nothing here reaches a network: every send goes to a
 //! `ReplayTransport` that asserts the request, and every refusal runs over a transport that saw
 //! no request. Pictures are built in code (`testing::media::png`).
@@ -141,7 +141,7 @@ fn the_text_model_sends_a_plain_question() {
     );
 }
 
-/// classify C2 (spec/providers.md §9.2 "Cost"): a request OpenRouter ran on the user's own
+/// classify C2 (src/openrouter/README.md, "Cost"): a request OpenRouter ran on the user's own
 /// provider key reports only its fee as `usage.cost`; the upstream charge counts too, and a BYOK
 /// answer without it is charged the whole hold. A structural failure bills the same way.
 #[test]
@@ -715,7 +715,7 @@ fn a_transport_that_refuses_is_a_refusal() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Refusals before sending, in the order of spec/providers.md §5
+// Refusals before sending, in the order of spec/adapters.md §4
 
 #[test]
 fn refusals_come_in_order_and_send_nothing() {

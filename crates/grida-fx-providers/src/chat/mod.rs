@@ -1,7 +1,7 @@
 //! Chat Completions as FX speaks it, whichever provider serves the route: the structured-output
 //! prompt and answer (spec/capabilities.md §4) and the agent turn's transcript, tools and reply
-//! (§5), with the pictures they carry (spec/providers.md §9.2; Grida Gateway's adapters, §9.7,
-//! send the same messages).
+//! (§5), with the pictures they carry (src/openrouter/README.md; Grida Gateway's adapters,
+//! src/gg/README.md, send the same messages).
 //!
 //! What a provider adds is its own module's: the endpoint and credential, provider members of the
 //! body (OpenRouter's routing and reasoning), how a status classifies, and what a call costs.
@@ -114,11 +114,12 @@ pub struct StructuredPrompt {
     pub max_tokens: u64,
 }
 
-/// Steps 4 and 5 of a structured call (spec/providers.md §5, §9.2), for a request that passed its
-/// capability's check: the values (a non-blank `prompt`; `matte` a colour; `max_tokens` at least
-/// 1; an inline schema whose references inline and which compiles as a draft 2020-12 JSON
-/// Schema), then the files (the schema file, then each context file, a picture or UTF-8 text).
-/// Pictures go as they are when `pictures_unchanged`, else reduced; each part carries `detail`.
+/// Steps 4 and 5 of a structured call (spec/adapters.md §4; src/openrouter/README.md), for a
+/// request that passed its capability's check: the values (a non-blank `prompt`; `matte` a colour;
+/// `max_tokens` at least 1; an inline schema whose references inline and which compiles as a draft
+/// 2020-12 JSON Schema), then the files (the schema file, then each context file, a picture or
+/// UTF-8 text). Pictures go as they are when `pictures_unchanged`, else reduced; each part carries
+/// `detail`.
 pub fn structured_prompt(
     call: &CallRequest,
     pictures_unchanged: bool,
@@ -296,7 +297,7 @@ fn over(src: [u8; 4], matte: [u8; 4]) -> [u8; 3] {
     [channel(0), channel(1), channel(2)]
 }
 
-/// A picture reduced for a structured call (spec/providers.md §9.2): decoded, flattened on
+/// A picture reduced for a structured call (src/openrouter/README.md): decoded, flattened on
 /// `matte`, fitted into [`PICTURE_EDGE`] × [`PICTURE_EDGE`] with Lanczos3 when larger, and
 /// encoded as an RGB PNG data URL. `None` when the bytes do not decode.
 ///
@@ -355,7 +356,7 @@ fn sent_schema(original: &Value) -> Result<Value, String> {
 }
 
 /// Unwraps the `completionState` envelopes a provider sometimes puts around an answer
-/// (spec/providers.md §9.2): a string holding such an object is parsed; a complete envelope
+/// (src/openrouter/README.md): a string holding such an object is parsed; a complete envelope
 /// gives its `entries` (as an object), `items` (as a list) or `value`; an incomplete or
 /// malformed one is left as it is; anything else is unwrapped member by member.
 fn unwrap_completion(value: Value) -> Value {
@@ -421,12 +422,13 @@ pub struct AgentPrompt {
     pub max_tokens: Option<u64>,
 }
 
-/// Steps 4 and 5 of an agent turn (spec/providers.md §5, §9.2), for a request that passed its
-/// capability's check: the values (each tool's name `^[a-z][a-z0-9_]{0,63}$`, non-blank
-/// description and object `parameters`; `max_tokens` at least 1; the transcript: known roles, text
-/// contents, an id on every assistant call and every tool message, pictures as file values), then
-/// the files: every picture's kind before any file is read (`messages[<i>].images[<j>] is <kind>,
-/// not a picture`), then each as a data URL of its kind. Each picture part carries `detail`.
+/// Steps 4 and 5 of an agent turn (spec/adapters.md §4; src/openrouter/README.md), for a request
+/// that passed its capability's check: the values (each tool's name `^[a-z][a-z0-9_]{0,63}$`,
+/// non-blank description and object `parameters`; `max_tokens` at least 1; the transcript: known
+/// roles, text contents, an id on every assistant call and every tool message, pictures as file
+/// values), then the files: every picture's kind before any file is read
+/// (`messages[<i>].images[<j>] is <kind>, not a picture`), then each as a data URL of its kind.
+/// Each picture part carries `detail`.
 pub fn agent_prompt(call: &CallRequest, detail: Option<&str>) -> Result<AgentPrompt, String> {
     // 4. Values.
     let request = &call.request;
@@ -677,7 +679,7 @@ fn wire_messages(
     Ok(out)
 }
 
-/// The calls of a reply (spec/providers.md §9.2), or the structural failure's sentence.
+/// The calls of a reply (src/openrouter/README.md), or the structural failure's sentence.
 fn reply_calls(value: Option<&Value>) -> Result<Vec<Value>, &'static str> {
     let entries = match value {
         None | Some(Value::Null) => return Ok(Vec::new()),

@@ -730,7 +730,8 @@ fn kill_every_host() {
         std::mem::take(&mut groups.live)
     };
     kill_groups_now(&live);
-    // Codex and Grok Build runtimes (spec/providers.md §9.6, §9.8) own process groups too.
+    // Codex and Grok Build runtimes (crates/grida-fx-providers/src/codex/README.md;
+    // crates/grida-fx-providers/src/grok/README.md) own process groups too.
     grida_fx_providers::process_group::end_every_runtime();
 }
 

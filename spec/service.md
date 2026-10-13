@@ -81,7 +81,7 @@ from the FX release the engine belongs to:
 gzip-compressed tar archive, whose entries lie under one top-level folder. The
 download is the engine's only network exchange outside a live run's provider
 calls. It goes through the providers' default transport on its download lane
-([providers.md](providers.md) §2): no credential, no cookie, the environment's
+([adapters.md](adapters.md) §2): no credential, no cookie, the environment's
 proxies, no redirect followed and no retry. Anything but HTTP 200 is refused,
 naming the status, as is a body over 64 MiB. With `GRIDA_FX_NETWORK=off` it is
 refused before anything is sent.

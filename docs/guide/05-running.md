@@ -96,7 +96,7 @@ the built-in table out ([identity.md §7](../../spec/identity.md#7-route-fingerp
 
 The built-in table ships with the command. Its prices are planning allowances in US dollars, not
 provider quotes: what a call costs is settled from what the provider reports, else from the whole
-amount held for it ([providers.md §10](../../spec/providers.md#10-the-built-in-route-table)).
+amount held for it ([providers.md §3](../../spec/providers.md#3-the-built-in-route-table)).
 
 | Capability | Built-in routes | Key |
 |---|---|---|
@@ -112,7 +112,7 @@ amount held for it ([providers.md §10](../../spec/providers.md#10-the-built-in-
 An image call is priced by its `size`. A size the route's tiers list is priced at its tier:
 `1024x1024` is $0.21 – $0.29 for a generate on `openai/gpt-image-2.5-sunburst@gg`, and
 $0.21 – $0.43 for an edit. `auto`, no size, or a size no tier lists is priced at the whole
-range above ([providers.md §10](../../spec/providers.md#10-the-built-in-route-table)).
+range above ([providers.md §3](../../spec/providers.md#3-the-built-in-route-table)).
 
 A project picks one with `routes:` in `fx.yaml` (or a step's `route:`). To change a price or add
 a route, list a table under `route_tables:`: its entry for the same capability and route replaces
@@ -138,7 +138,7 @@ Gateway (`@gg`): text, agent turns, images, video, 3D models and rigs, billed to
 organization's Grida AI credits. Create it at [console.grida.co](https://console.grida.co/_/ai-gateway), where
 you also add credits and see what each call was charged. FX books a GG call at what GG charged
 for it, read back once GG has settled it; a charge that has not settled within a short wait is
-booked at the call's whole hold ([providers.md §9.7](../../spec/providers.md#97-grida-gateway)).
+booked at the call's whole hold ([GG's adapter reference](../../crates/grida-fx-providers/src/gg/README.md)).
 
 **Your own provider keys.** Every other route takes its provider's key under its usual name:
 `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `FAL_KEY`, `TRIPO_API_KEY` and `ELEVENLABS_API_KEY`. Sound,
@@ -158,7 +158,7 @@ calls are all on it needs no `--max-usd`. It has caveats, on sizes above all:
 (`HTTPS_PROXY` or `ALL_PROXY`, minus the hosts in `NO_PROXY`), tunnelled, so the proxy never reads
 a key. Requests to `localhost` or a loopback address, the only hosts a plain `http` base URL may
 name, are never proxied: they go straight there, and `HTTP_PROXY` is not used
-([providers.md §2](../../spec/providers.md#2-the-transport)).
+([adapters.md §2](../../spec/adapters.md#2-the-transport)).
 
 **The `.env` file.** A variable set (and not blank) in the environment wins. Otherwise FX reads it
 from the `.env` file of the project you run from, if there is one, and only those eleven names: a

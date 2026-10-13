@@ -103,7 +103,7 @@ moves FX forward happens in this order:
 `grida` owns telling its users that a newer `grida` is available; that covers `grida fx`,
 because the pin moves with `grida`'s version. `@grida/fx` and `grida-fx` never check for updates.
 
-Provider keys are FX's own today ([providers.md](providers.md) §3). Reading the provider
+Provider keys are FX's own today ([providers.md](providers.md) §1). Reading the provider
 credentials `grida` manages, which `grida` alone writes, is tracked in
 [gridaco/fx#45](https://github.com/gridaco/fx/issues/45).
 

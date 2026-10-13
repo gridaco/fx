@@ -1,4 +1,4 @@
-//! Wire helpers every adapter shares (spec/providers.md §4–§6): base URLs, JSON bodies, strict
+//! Wire helpers every adapter shares (spec/adapters.md §3–§5): base URLs, JSON bodies, strict
 //! base64 and data URLs, media types and byte signatures, reported costs, safe error details,
 //! request files, image sizes and the image checks.
 //!
@@ -18,7 +18,7 @@ use std::sync::LazyLock;
 // ---------------------------------------------------------------------------------------------
 // Base URLs
 
-/// Normalizes a provider base URL (spec/providers.md §3): trimmed, trailing `/` removed; an
+/// Normalizes a provider base URL (spec/providers.md §1): trimmed, trailing `/` removed; an
 /// `http`/`https` URL with a host, no userinfo, no query, no fragment and a valid port; `http`
 /// only for a loopback host (`localhost`, or a loopback IP). `label` names the provider in the
 /// refusal (`OpenAI base_url must …`).
@@ -100,7 +100,7 @@ static SAFE_FIELD: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[A-Za-z0-9_.:-]{1,96}$").expect("a valid pattern"));
 
 /// The allowlisted detail of an error body in the `{"error": {...}}` envelope OpenAI and
-/// OpenRouter use (spec/providers.md §8):
+/// OpenRouter use (spec/adapters.md §7):
 /// 1. `error` must be an object; when `error.metadata.raw` is a string holding JSON with an
 ///    `error` object, that inner object is used instead;
 /// 2. from `message`, only fixed summaries, matched case-insensitively, de-duplicated, in this
@@ -314,7 +314,7 @@ pub fn matches_signature(kind: &str, bytes: &[u8]) -> bool {
 // ---------------------------------------------------------------------------------------------
 // Costs
 
-/// A reported cost in US dollars (spec/providers.md §6): a JSON number that is finite and not
+/// A reported cost in US dollars (spec/adapters.md §5): a JSON number that is finite and not
 /// negative (booleans, strings and `null` are not costs), converted exactly from its JCS text and
 /// **rounded up** to whole micro-dollars, so a cost is never under-counted (`1e-7` → `Usd(1)`).
 pub fn usd_ceil(value: &Value) -> Option<Usd> {
@@ -447,9 +447,9 @@ pub fn parse_size(value: Option<&Value>) -> Result<Option<(u32, u32)>, String> {
     }
 }
 
-/// The GPT Image exact-size envelope (spec/providers.md §9.1, §9.3), checked in this order: edges
-/// multiples of 16; the longer edge at most 3840; aspect ratio at most 3:1; between 655 360 and
-/// 8 294 400 pixels. `label` starts each sentence (`OpenAI image size …`).
+/// The GPT Image exact-size envelope (src/openai/README.md; src/fal/README.md), checked in this
+/// order: edges multiples of 16; the longer edge at most 3840; aspect ratio at most 3:1; between
+/// 655 360 and 8 294 400 pixels. `label` starts each sentence (`OpenAI image size …`).
 pub fn check_size_envelope(width: u32, height: u32, label: &str) -> Result<(), String> {
     let (long, short) = (width.max(height) as u64, width.min(height) as u64);
     if !width.is_multiple_of(16) || !height.is_multiple_of(16) {
@@ -474,7 +474,7 @@ pub fn check_size_envelope(width: u32, height: u32, label: &str) -> Result<(), S
     Ok(())
 }
 
-/// The image checks after an answer (spec/providers.md §4.4; each refusal fails the attempt as
+/// The image checks after an answer (spec/adapters.md §3.4; each refusal fails the attempt as
 /// billed), in this order:
 /// 1. the kind is `image/png` and the bytes carry the PNG signature:
 ///    `the answer is <kind>, not image/png`;

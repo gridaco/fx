@@ -54,7 +54,7 @@
 //! not make that step's calls. Routes need no inputs: they are written in the workflow and
 //! fx.yaml.
 //!
-//! **Providers** (spec/providers.md §3, §10), after the engine and host lines (and the target's
+//! **Providers** (spec/providers.md §1, §3), after the engine and host lines (and the target's
 //! routes) and before the `tool` and `missing` lines, for the **planning** project (the one found
 //! from where the command runs; with a target, the project planning would use). Nothing that could
 //! reach the network is constructed:

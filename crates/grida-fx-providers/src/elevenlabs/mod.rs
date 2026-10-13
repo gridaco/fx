@@ -1,5 +1,5 @@
 //! ElevenLabs: `sound.generate` and `speech.generate`, both one synchronous request answered with
-//! raw MP3 bytes (spec/providers.md §9.5; spec/capabilities.md §10–§11).
+//! raw MP3 bytes (src/elevenlabs/README.md; spec/capabilities.md §10–§11).
 //!
 //! Credential `xi-api-key: <ELEVENLABS_API_KEY>`; base `ELEVENLABS_BASE_URL`, default
 //! `https://api.elevenlabs.io/v1`; query `output_format=mp3_44100_192`; headers
@@ -10,7 +10,7 @@
 //! (`ElevenLabs sound generation returned HTTP <n>`; never `detail.message`) are shared by both
 //! adapters ([`classify`]).
 //!
-//! Both adapters refuse in the order of spec/providers.md §5: the route's contract
+//! Both adapters refuse in the order of spec/adapters.md §4: the route's contract
 //! ([`check_route`]), the request's shape (`capabilities::check_request`), the key, then their own
 //! values. Every reason, refusals included, goes through the client's redactor last.
 
@@ -45,10 +45,10 @@ pub const AUDIO_FILE: &str = "audio";
 /// The credential header (no prefix).
 pub const CREDENTIAL_HEADER: &str = "xi-api-key";
 
-/// The variable that moves the base URL, named when a response redirects (spec/providers.md §4.3).
+/// The variable that moves the base URL, named when a response redirects (spec/adapters.md §3.3).
 pub const BASE_URL_VARIABLE: &str = "ELEVENLABS_BASE_URL";
 
-/// The contract's `adapter_behavior` both adapters serve (spec/providers.md §10: an integer on
+/// The contract's `adapter_behavior` both adapters serve (spec/providers.md §3: an integer on
 /// every non-image route).
 pub const ADAPTER_BEHAVIOR: u64 = 1;
 
@@ -60,11 +60,11 @@ pub fn client(setup: &Setup) -> Client {
     setup.client(KeyName::ElevenLabs, &setup.endpoints.elevenlabs)
 }
 
-/// An exchange's outcome (spec/providers.md §9.5 table): a 2xx becomes the answer (file `audio`),
+/// An exchange's outcome (src/elevenlabs/README.md table): a 2xx becomes the answer (file `audio`),
 /// anything else a [`Sent`]. `label` is `ElevenLabs sound generation` or `ElevenLabs speech
 /// generation`.
 ///
-/// - a transport failure (spec/providers.md §4.2): refused by the transport → `Refused`;
+/// - a transport failure (spec/adapters.md §3.2): refused by the transport → `Refused`;
 ///   otherwise `not_sent` → `NotReceived`; `after_send` (a timeout, a reset, a body over the
 ///   cap) → `Failed { cost: None, retryable: true }`;
 /// - 2xx → `Answered`: the body as file `audio`, its kind the normalized `content-type`
@@ -135,7 +135,7 @@ pub fn classify(
 /// `<label> returned no audio data`, `requested mp3 but received <kind>`, `audio bytes do not
 /// match declared media type audio/mpeg`, in that order. The kind comes from the provider's
 /// `content-type`, which may echo anything, a key included: every sentence goes through the
-/// client's redactor (spec/providers.md §8).
+/// client's redactor (spec/adapters.md §7).
 pub fn check_audio(client: &Client, label: &str, answer: &Answer) -> Result<(), String> {
     crate::checks::audio(answer.files.get(AUDIO_FILE), label, &client.redactor)
         .map_err(|reason| client.reason(&reason))
@@ -156,7 +156,7 @@ pub fn register(adapters: &mut Adapters, setup: &Setup) {
     );
 }
 
-/// spec/providers.md §5 step 1: the call is on `capability`, and the route's contract, when it
+/// spec/adapters.md §4 step 1: the call is on `capability`, and the route's contract, when it
 /// names an `adapter` or an `adapter_behavior`, names `adapter` and [`ADAPTER_BEHAVIOR`]. An
 /// absent contract (`{}` or `null`) is served, and a `null` member counts as absent. Refused with `<route> is not a <capability> route
 /// this adapter serves`.
@@ -235,7 +235,7 @@ pub(crate) fn refused(client: &Client, reason: &str) -> Sent {
 
 /// `NotReceived`, with the provider's `retry-after` when it gave one in seconds.
 ///
-/// The engine waits at least `retry_after` before resending (spec/providers.md §4.3); the reason
+/// The engine waits at least `retry_after` before resending (spec/adapters.md §3.3); the reason
 /// names it too.
 fn not_received(reason: String, retry_after: Option<Duration>) -> Sent {
     Sent::NotReceived {
@@ -244,7 +244,7 @@ fn not_received(reason: String, retry_after: Option<Duration>) -> Sent {
     }
 }
 
-/// spec/providers.md §4.2.
+/// spec/adapters.md §3.2.
 fn transport_failure(client: &Client, label: &str, error: &TransportError) -> Sent {
     if error.kind == TransportErrorKind::Refused {
         return Sent::Refused {
@@ -277,7 +277,7 @@ static MEDIA_TYPE: LazyLock<Regex> = LazyLock::new(|| {
 static RETRY_AFTER: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[A-Za-z0-9 ,:+-]{1,40}$").expect("a valid pattern"));
 
-/// The answer's kind (spec/providers.md §9.5 "Answer"): `audio/mpeg` without a `content-type`;
+/// The answer's kind (src/elevenlabs/README.md, "Answer"): `audio/mpeg` without a `content-type`;
 /// the normalized audio type; else the lowercased base type when it is a media type, and
 /// `application/octet-stream` when it is not one, so that the check refuses either with a
 /// sentence that holds no header text beyond a media type.

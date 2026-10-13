@@ -1,5 +1,5 @@
 //! The providers' checks of a stand-in's answer (spec/protocol.md §6.1 "Stand-in answers";
-//! spec/capabilities.md §1 "Answers"; spec/providers.md §4.4): the request check, the shape and
+//! spec/capabilities.md §1 "Answers"; spec/adapters.md §3.4): the request check, the shape and
 //! its sentences, the kinds of files that gave none, the data FX writes, and the route's check,
 //! an adapter's or every route's. Nothing is sent: the adapters are built keyless over a
 //! transport that refuses every exchange. Media are built in code, except two clips read from
@@ -903,7 +903,7 @@ fn accepted_live(
     }
 }
 
-/// spec/providers.md §4.4: an adapter's check judges only the call and the answer, so an answer
+/// spec/adapters.md §3.4: an adapter's check judges only the call and the answer, so an answer
 /// it accepts live passes it the same as a stand-in's answer.
 #[test]
 fn every_adapters_check_takes_a_stand_ins_answer_as_it_takes_a_live_one() {

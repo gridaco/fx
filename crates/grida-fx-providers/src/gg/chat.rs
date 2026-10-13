@@ -1,5 +1,5 @@
 //! GG text: `structured.generate` and `agent.turn`, each one `POST {base}/chat/completions`
-//! answered synchronously (spec/providers.md §9.7; spec/capabilities.md §4–§5).
+//! answered synchronously (src/gg/README.md; spec/capabilities.md §4–§5).
 //!
 //! The messages, the strict JSON-schema response format, the strict function tools and the
 //! answers are [`crate::chat`]'s, the same as OpenRouter's. The body adds nothing GG would have to
@@ -18,12 +18,12 @@
 //! - [`GgAgent`]: `adapter: gg-tool-loop`, behaviour `1`, optional `image_detail` and
 //!   `reasoning_effort`. Deadline [`TURN_DEADLINE`].
 //!
-//! A send, in order (spec/providers.md §5): the contract; the capability's check; the key
+//! A send, in order (spec/adapters.md §4): the contract; the capability's check; the key
 //! (`GG_API_KEY is not set`); the values and files of [`crate::chat`]; a body over
 //! [`MAX_REQUEST_BYTES`], GG's limit, is refused (`request body exceeds 20 MiB`); then one
 //! exchange, classified by [`super::classify`] ([`super::Gateway::exchange`]). A 2xx that does
 //! not become an answer is `Failed { retryable: true }`, at GG's settled charge, else `None`
-//! (spec/providers.md §4.4).
+//! (spec/adapters.md §3.4).
 
 use super::Gateway;
 use crate::BoxFuture;
@@ -219,7 +219,7 @@ fn usage(body: &Map<String, Value>) -> Option<Usage> {
     (counted != Usage::default()).then_some(counted)
 }
 
-/// A structural failure of a 2xx (spec/providers.md §4.4): billed, retryable.
+/// A structural failure of a 2xx (spec/adapters.md §3.4): billed, retryable.
 fn structural(gateway: &Gateway, response: &HttpResponse, reason: &str) -> Sent {
     Sent::Failed {
         reason: gateway.reason(&super::with_request_id(reason.to_string(), response)),

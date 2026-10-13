@@ -1,17 +1,17 @@
 //! fal: `image.generate` and `image.edit` on the synchronous host, `video.generate` as a queue
-//! long job, and `background.remove` (spec/providers.md §9.3; spec/capabilities.md).
+//! long job, and `background.remove` (src/fal/README.md; spec/capabilities.md).
 //!
 //! Credential `authorization: Key <FAL_KEY>`, attached only to requests to the run host
 //! (`FAL_BASE_URL`, default `https://fal.run`) and the queue host (`https://queue.fal.run`), never
 //! to a result download. Pictures go inline as data URLs under their own `image/*` kind (no
 //! multipart, no uploads); a file of another kind is refused before sending. Every adapter
-//! first refuses a route whose `contract.adapter` is present and is not its own (§9.3), since the
-//! registry is keyed by provider, not model.
+//! first refuses a route whose `contract.adapter` is present and is not its own
+//! (src/fal/README.md), since the registry is keyed by provider, not model.
 //!
 //! What the adapters share lives here: the output host check ([`is_fal_media_url`]), the contract
-//! guard, the answer root and reported cost, the run host's status classes (spec/providers.md
-//! §4.2, §4.3 and §9.3) and the one place this module builds a `NotReceived`. Reading a picture
-//! out of an answer (a data URL or a hosted download) is `output`.
+//! guard, the answer root and reported cost, the run host's status classes (spec/adapters.md
+//! §3.2, §3.3 and src/fal/README.md) and the one place this module builds a `NotReceived`. Reading
+//! a picture out of an answer (a data URL or a hosted download) is `output`.
 
 pub mod background;
 pub mod image;
@@ -28,7 +28,7 @@ use serde_json::{Map, Value};
 use std::sync::Arc;
 use std::time::Duration;
 
-/// The image output host check of spec/providers.md §9.3: `https`, a host that is `fal.media` or
+/// The image output host check of src/fal/README.md: `https`, a host that is `fal.media` or
 /// ends with `.fal.media` (lowercased, trailing dots removed), no userinfo, port absent or 443, no
 /// fragment. A query is allowed.
 pub fn is_fal_media_url(url: &str) -> bool {
@@ -99,10 +99,10 @@ pub fn register(adapters: &mut Adapters, setup: &Setup) {
 pub(crate) const CREDENTIAL_HEADER: &str = "authorization";
 pub(crate) const CREDENTIAL_PREFIX: &str = "Key ";
 
-/// The base-URL variable a run-host redirect points at (spec/providers.md §4.3).
+/// The base-URL variable a run-host redirect points at (spec/adapters.md §3.3).
 pub(crate) const RUN_BASE_VARIABLE: &str = "FAL_BASE_URL";
 
-/// Step 1 of spec/providers.md §5: `None` when the route is one of `capabilities` and its
+/// Step 1 of spec/adapters.md §4: `None` when the route is one of `capabilities` and its
 /// contract's `adapter` is absent or `own`; else the refusal sentence.
 pub(crate) fn contract_refusal(
     call: &CallRequest,
@@ -129,7 +129,7 @@ pub(crate) fn endpoint(model: &str) -> &str {
     model.trim().trim_matches('/')
 }
 
-/// The answer's root (spec/providers.md §9.3): the payload's `data` when that is an object, else
+/// The answer's root (src/fal/README.md): the payload's `data` when that is an object, else
 /// the payload.
 pub(crate) fn answer_root(payload: &Map<String, Value>) -> &Map<String, Value> {
     match payload.get("data") {
@@ -138,7 +138,8 @@ pub(crate) fn answer_root(payload: &Map<String, Value>) -> &Map<String, Value> {
     }
 }
 
-/// The reported cost: `usage.cost` at the payload's top level only (spec/providers.md §6, §9.3).
+/// The reported cost: `usage.cost` at the payload's top level only (spec/adapters.md §5;
+/// src/fal/README.md).
 pub(crate) fn reported_cost(payload: &Map<String, Value>) -> Option<Usd> {
     payload
         .get("usage")
@@ -146,7 +147,7 @@ pub(crate) fn reported_cost(payload: &Map<String, Value>) -> Option<Usd> {
         .and_then(crate::wire::usd_ceil)
 }
 
-/// A request picture as a data URL, under its own kind (step 5 of spec/providers.md §5): a file the
+/// A request picture as a data URL, under its own kind (step 5 of spec/adapters.md §4): a file the
 /// call carries (`<member> has no bytes to send`), of an `image/*` kind (`<member> is <kind>, not
 /// a picture`), whose store copy reads and is not empty. A file of another kind is refused before
 /// anything leaves rather than sent under a picture's label, since fal may take a paid job it then
@@ -160,7 +161,7 @@ pub(crate) fn picture(call: &CallRequest, value: &Value, member: &str) -> Result
     Ok(crate::wire::data_url(&file.kind, &bytes))
 }
 
-/// Whether `text` is a provider id a handle or a reason may hold (spec/providers.md §7, §8):
+/// Whether `text` is a provider id a handle or a reason may hold (spec/adapters.md §6, §7):
 /// `^[A-Za-z0-9_.:-]{1,96}$`.
 pub(crate) fn is_safe_id(text: &str) -> bool {
     (1..=96).contains(&text.len())
@@ -169,11 +170,11 @@ pub(crate) fn is_safe_id(text: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || b"_.:-".contains(&b))
 }
 
-/// The wait a 408 or 429 asks for: the shared parser (spec/providers.md §4.3).
+/// The wait a 408 or 429 asks for: the shared parser (spec/adapters.md §3.3).
 pub(crate) use crate::adapter::retry_after;
 
 /// The sentence of a provider's "took nothing" answer: `retry_after`, when the provider sent one,
-/// goes into the reason (spec/providers.md §4.3).
+/// goes into the reason (spec/adapters.md §3.3).
 fn took_nothing_reason(client: &Client, text: &str, retry_after: Option<Duration>) -> String {
     match retry_after {
         Some(after) => client.reason(&format!(
@@ -205,7 +206,7 @@ pub(crate) fn submit_not_received(
 }
 
 /// `<label> returned HTTP <n>`, plus the provider's request id when it is a safe field. Never a
-/// response body (spec/providers.md §8, §9.3).
+/// response body (spec/adapters.md §7; src/fal/README.md).
 pub(crate) fn status_text(label: &str, response: &HttpResponse) -> String {
     let mut text = crate::wire::status_reason(label, response.status, None);
     if let Some(id) = crate::wire::request_id(response) {
@@ -214,11 +215,11 @@ pub(crate) fn status_text(label: &str, response: &HttpResponse) -> String {
     text
 }
 
-/// How a run-host exchange becomes a [`Sent`] unless it is a 2xx (spec/providers.md §4.2, §4.3,
-/// §9.3): a transport refusal is `Refused`; `not_sent` is `NotReceived`; `after_send` is
-/// `Failed { None, true }`; 408 and 429 are `NotReceived`; a 3xx is `Failed { None, false }`
-/// naming `FAL_BASE_URL`; another 4xx is `Failed { Some(0), false }` (fal validates before it
-/// runs, and does not bill a refusal); a 5xx (or anything else) is `Failed { None, true }`.
+/// How a run-host exchange becomes a [`Sent`] unless it is a 2xx (spec/adapters.md §3.2, §3.3;
+/// src/fal/README.md): a transport refusal is `Refused`; `not_sent` is `NotReceived`; `after_send`
+/// is `Failed { None, true }`; 408 and 429 are `NotReceived`; a 3xx is `Failed { None, false }`
+/// naming `FAL_BASE_URL`; another 4xx is `Failed { Some(0), false }` (fal validates before it runs,
+/// and does not bill a refusal); a 5xx (or anything else) is `Failed { None, true }`.
 #[allow(clippy::result_large_err)] // `Sent` is what every caller returns at once
 pub(crate) fn classify_run(
     client: &Client,
@@ -261,7 +262,7 @@ pub(crate) fn classify_run(
     })
 }
 
-/// A failed plain exchange (spec/providers.md §4.2).
+/// A failed plain exchange (spec/adapters.md §3.2).
 fn transport_sent(client: &Client, label: &str, error: &TransportError) -> Sent {
     match (error.kind, error.phase) {
         (TransportErrorKind::Refused, _) => Sent::Refused {
@@ -280,7 +281,7 @@ fn transport_sent(client: &Client, label: &str, error: &TransportError) -> Sent 
     }
 }
 
-/// Whether a status member counts as set (spec/providers.md §9.3, "a truthy `error`"): anything
+/// Whether a status member counts as set (src/fal/README.md, "a truthy `error`"): anything
 /// but `null`, `false`, `0`, `""`, `[]` and `{}`.
 pub(crate) fn truthy(value: &Value) -> bool {
     match value {

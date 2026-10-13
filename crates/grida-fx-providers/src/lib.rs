@@ -2,7 +2,8 @@
 //!
 //! The rule the adapter interface encodes is the ratified "Retry and billing" rule
 //! (docs/wg/overview.md; spec/protocol.md §6.1 step 7; spec/store.md §5), and how each provider's
-//! outcomes map onto it is spec/providers.md:
+//! outcomes map onto it is spec/adapters.md, with each adapter's reference beside its code
+//! (`src/<provider>/README.md`, listed in spec/providers.md §2):
 //!
 //! - an adapter makes **one send** per call of [`RequestAdapter::send`] (or one submit, one
 //!   collect) and reports what happened as a [`Sent`] (or [`Submitted`], [`Collected`]);

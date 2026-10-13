@@ -1,13 +1,13 @@
 //! OpenRouter images: `POST {base}/images` for both `image.generate` and `image.edit`
-//! (spec/providers.md §9.2; spec/capabilities.md §2–§3).
+//! (src/openrouter/README.md; spec/capabilities.md §2–§3).
 //!
 //! Contract: `adapter: fx-openrouter-image-v1`, `adapter_behavior: "3"` (a string), each checked
-//! when present (`super::serves`). Refusals, in the order of spec/providers.md §5: the contract; the capability's shape
-//! ([`crate::capabilities::check_request`]); the key; then the values (a blank prompt, a mask,
-//! `background: transparent`, another unknown background, a `size` other than `auto` and the
-//! seven verified sizes ([`ALLOWED_SIZES`]), references on a generate, an edit with more than
-//! [`MAX_PICTURES`] pictures); then the files (each picture must be an `image/*` file with bytes);
-//! and last a serialized body over [`super::MAX_REQUEST_BYTES`].
+//! when present (`super::serves`). Refusals, in the order of spec/adapters.md §4: the contract; the
+//! capability's shape ([`crate::capabilities::check_request`]); the key; then the values (a blank
+//! prompt, a mask, `background: transparent`, another unknown background, a `size` other than
+//! `auto` and the seven verified sizes ([`ALLOWED_SIZES`]), references on a generate, an edit with
+//! more than [`MAX_PICTURES`] pictures); then the files (each picture must be an `image/*` file
+//! with bytes); and last a serialized body over [`super::MAX_REQUEST_BYTES`].
 //!
 //! Body, members in this order: `{"model", "prompt", "n": 1, "provider": {"allow_fallbacks":
 //! false, "options": {"openai": {"moderation": "low"}}}, "size"?, "quality": "max", "background",
@@ -20,7 +20,7 @@
 //! WebP; `image/jpg`, `null` and anything else are refused), else sniffed from the bytes. The
 //! answer is file `image` with that kind, `data: null`, and `cost` from `usage`
 //! ([`super::usage_cost`]). A 2xx that cannot become an answer is `Failed { cost, retryable:
-//! true }`, with the reported cost when the body parsed (spec/providers.md §4.4).
+//! true }`, with the reported cost when the body parsed (spec/adapters.md §3.4).
 //! `revised_prompt` is ignored. Deadline 600 s; response cap 64 MiB. `check`:
 //! [`crate::wire::check_image`].
 
@@ -60,7 +60,7 @@ pub const MAX_PICTURES: usize = 16;
 /// The capabilities this adapter is registered for.
 const CAPABILITIES: [&str; 2] = ["image.generate", "image.edit"];
 
-/// The media types an answer may declare (spec/providers.md §9.2).
+/// The media types an answer may declare (src/openrouter/README.md).
 const ANSWER_KINDS: [&str; 3] = ["image/png", "image/jpeg", "image/webp"];
 
 /// OpenRouter's image adapter (module doc).
@@ -74,7 +74,7 @@ impl OpenRouterImages {
         OpenRouterImages { client }
     }
 
-    /// Every refusal of spec/providers.md §5, in order, then the request to send.
+    /// Every refusal of spec/adapters.md §4, in order, then the request to send.
     fn prepare(&self, call: &CallRequest) -> Result<HttpRequest, String> {
         let route = &call.route;
         let behavior = Value::String(CONTRACT_BEHAVIOR.to_string());
@@ -181,7 +181,7 @@ impl OpenRouterImages {
         )
     }
 
-    /// A 2xx response as an answer, or a structural failure (spec/providers.md §4.4).
+    /// A 2xx response as an answer, or a structural failure (spec/adapters.md §3.4).
     fn answer(&self, response: &HttpResponse) -> Sent {
         let failed = |reason: String, cost| Sent::Failed {
             reason: self.client.reason(&with_request_id(reason, response)),

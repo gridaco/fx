@@ -1331,7 +1331,7 @@ steps:
 ",
     );
     // A name no capability the type calls defines is refused as such, once, with FX's name for
-    // a renamed one (spec/providers.md §11); a known feature a route lacks is the route's.
+    // a renamed one (spec/providers.md §4); a known feature a route lacks is the route's.
     assert_eq!(
         problems(&expansion),
         vec![

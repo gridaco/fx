@@ -56,7 +56,7 @@ EXAMPLES = ROOT / "examples"
 #: The checkout's JavaScript SDK: its ``dist`` is built by ``bun run build`` there.
 JS_SDK = ROOT / "js" / "fx"
 
-#: Every provider key FX reads (spec/providers.md §3), kept out of the runs.
+#: Every provider key FX reads (spec/providers.md §1), kept out of the runs.
 KEYS = (
     "GG_API_KEY",
     "OPENAI_API_KEY",

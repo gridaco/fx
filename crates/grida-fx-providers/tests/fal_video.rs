@@ -1,6 +1,6 @@
-//! fal `video.generate`, a queue long job (spec/providers.md §7, §9.3), over synthetic exchanges
-//! and a `FakeClock`, so polling takes microseconds. Every test that sends asserts each request;
-//! every refusal runs over `NoNetwork`. Clips are the committed facts vectors
+//! fal `video.generate`, a queue long job (spec/adapters.md §6; src/fal/README.md), over synthetic
+//! exchanges and a `FakeClock`, so polling takes microseconds. Every test that sends asserts each
+//! request; every refusal runs over `NoNetwork`. Clips are the committed facts vectors
 //! (`spec/vectors/facts/mp4/`) and `testing::media::MP4_HEAD`.
 
 use grida_fx_core::money::Usd;
@@ -124,7 +124,7 @@ fn refused(call: &CallRequest, keys: Keys) -> String {
 }
 
 /// The reason of an `Ended` collect that reports no cost, as every one does when no read reported
-/// a cost (spec/providers.md §9.3).
+/// a cost (src/fal/README.md).
 fn ended(collected: Collected) -> String {
     match collected {
         Collected::Ended { reason, cost: None } => reason,
@@ -538,8 +538,9 @@ fn collect_polls_through_a_dropped_read_then_downloads_without_credential() {
 
 #[test]
 fn an_unusable_result_costs_what_the_result_read_reports() {
-    // spec/providers.md §7, §9.3: fal finished the job and reported its cost, so an unusable
-    // result is booked at that figure, as an answer would be; without a figure, the whole hold.
+    // spec/adapters.md §6; src/fal/README.md: fal finished the job and reported its cost, so an
+    // unusable result is booked at that figure, as an answer would be; without a figure, the whole
+    // hold.
     let not_mp4 = || {
         Expect::download(VIDEO_URL).reply(
             HttpResponse::new(200, b"not a clip".to_vec()).with_header("content-type", "video/mp4"),
@@ -897,8 +898,8 @@ fn downloads_that_end_or_stop_collecting() {
 
 #[test]
 fn the_bytes_decide_the_kind_not_the_headers() {
-    // A valid MP4 is answered whatever its content-type header or declared type says: §9.3 ends
-    // a job only when the bytes are not MP4.
+    // A valid MP4 is answered whatever its content-type header or declared type says: fal's
+    // README ends a job only when the bytes are not MP4.
     let results = [
         json!({"video": {"url": VIDEO_URL}}),
         json!({"video": {"url": VIDEO_URL, "content_type": "video/webm"}}),
@@ -936,7 +937,7 @@ fn the_bytes_decide_the_kind_not_the_headers() {
 
 #[test]
 fn a_failed_download_is_unreachable_and_made_once() {
-    // spec/providers.md §8: a result file is fetched once per collect. A failure a later collect
+    // spec/adapters.md §7: a result file is fetched once per collect. A failure a later collect
     // may not repeat leaves the job `submitted`; the next collect reads the result again.
     let cases: Vec<(Exchange, &str)> = vec![
         (

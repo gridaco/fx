@@ -1,5 +1,5 @@
 //! OpenRouter structured output: `POST {base}/chat/completions` with a strict JSON-schema
-//! `response_format` and provider routing from the route contract (spec/providers.md §9.2;
+//! `response_format` and provider routing from the route contract (src/openrouter/README.md;
 //! spec/capabilities.md §4).
 //!
 //! Contract: `adapter: openrouter-structured`, `adapter_behavior: 1`, optional `request_policy`
@@ -13,7 +13,7 @@
 //! schema (draft 2020-12; `format` not asserted), refused as `<path>: <message>`. Deadline 900 s
 //! for `openai/gpt-6-astra`, 1800 s otherwise.
 //!
-//! `send`, in the order of spec/providers.md §5:
+//! `send`, in the order of spec/adapters.md §4:
 //! 1. the contract (`read_contract`): `adapter` and `adapter_behavior`, when present, are this
 //!    adapter's; `request_policy` and `pictures` are valid; no other member;
 //! 2. `capabilities::check_request`;
@@ -26,8 +26,9 @@
 //! 6. a body over 200 MiB is refused; otherwise one exchange.
 //!
 //! Non-2xx and transport outcomes are [`super::classify`]'s (a transport's own refusal is
-//! `Refused`, spec/providers.md §4.2). A 2xx that does not become an answer is
-//! `Failed { cost: <the usage's cost when the body parsed>, retryable: true }` (§4.4).
+//! `Refused`, spec/adapters.md §3.2). A 2xx that does not become an answer is
+//! `Failed { cost: <the usage's cost when the body parsed>, retryable: true }` (spec/adapters.md
+//! §3.4).
 
 use crate::BoxFuture;
 use crate::adapter::{Answer, CallRequest, RequestAdapter, RouteRef, Sent};
@@ -54,7 +55,7 @@ pub const CONTRACT_ADAPTER: &str = "openrouter-structured";
 /// The capability this adapter serves.
 pub const CAPABILITY: &str = "structured.generate";
 
-/// The model whose structured calls get the shorter deadline (spec/providers.md §9.2, "Limits").
+/// The model whose structured calls get the shorter deadline (src/openrouter/README.md, "Limits").
 pub const FAST_DEADLINE_MODEL: &str = "openai/gpt-6-astra";
 
 /// The deadline of a structured call on [`FAST_DEADLINE_MODEL`].
@@ -221,8 +222,8 @@ fn valid_slugs(slugs: &[Value]) -> bool {
     !seen.is_empty()
 }
 
-/// What a route contract asks of an OpenRouter chat adapter (spec/providers.md §5 step 1,
-/// §9.2): its policy, and for structured output whether pictures go unchanged.
+/// What a route contract asks of an OpenRouter chat adapter (spec/adapters.md §4 step 1;
+/// src/openrouter/README.md): its policy, and for structured output whether pictures go unchanged.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct ChatContract {
     pub(super) policy: RequestPolicy,
@@ -313,7 +314,7 @@ pub(super) fn reported_cost(body: &Map<String, Value>) -> Option<Usd> {
     super::usage_cost(body.get("usage"))
 }
 
-/// A structural failure of a 2xx (spec/providers.md §4.4): billed, retryable.
+/// A structural failure of a 2xx (spec/adapters.md §3.4): billed, retryable.
 pub(super) fn structural(
     client: &Client,
     response: &HttpResponse,
@@ -363,7 +364,7 @@ impl OpenRouterStructured {
             contract.pictures_unchanged,
             contract.policy.image_detail.as_deref(),
         )?;
-        // The body (spec/providers.md §9.2).
+        // The body (src/openrouter/README.md).
         let mut body = Map::new();
         body.insert(
             "model".into(),
@@ -392,7 +393,7 @@ impl OpenRouterStructured {
         })
     }
 
-    /// A 2xx's body as an answer (spec/providers.md §9.2).
+    /// A 2xx's body as an answer (src/openrouter/README.md).
     fn parse(&self, response: &HttpResponse) -> Sent {
         let body = match wire::json_object(&response.body, LABEL) {
             Ok(body) => body,

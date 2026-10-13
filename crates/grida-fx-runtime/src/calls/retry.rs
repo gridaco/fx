@@ -10,7 +10,7 @@
 //! refused reservation gives its slot back. Between sends the owner waits [`Backoff`] (0.5 s,
 //! doubling, at most 8 s). After a `NotReceived` whose provider asked for a wait (`retry_after`,
 //! a `Retry-After` header), it waits the longer of the backoff and that wait, the wait capped at
-//! [`MAX_RETRY_AFTER`] (60 s) (spec/providers.md §4.3).
+//! [`MAX_RETRY_AFTER`] (60 s) (spec/adapters.md §3.3).
 //!
 //! **Checking an answer.** An answer is accepted only when, in this order, the adapter's `check`
 //! passes, its `data` survives being written as the call record writes it and read back (its
@@ -60,8 +60,8 @@
 //! record stays `submitted`, `Failed`; cancelled → the record stays `submitted`, `Cancelled`.
 //!
 //! **Reasons.** Every reason an outcome carries (`Refused`, `Failed`, `Unsettled`) passes through
-//! the adapter's redactor last (`RequestAdapter::redactor`, `LongJob::redactor`; spec/providers.md
-//! §8): a live invocation's adapters redact every key of the invocation. That covers the adapter's
+//! the adapter's redactor last (`RequestAdapter::redactor`, `LongJob::redactor`; spec/adapters.md
+//! §7): a live invocation's adapters redact every key of the invocation. That covers the adapter's
 //! own sentences, its check's, and the engine's checks of the answer, which may quote what the
 //! provider sent back.
 //!

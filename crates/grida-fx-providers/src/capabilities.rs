@@ -1,6 +1,6 @@
 //! The capabilities FX ships, as data (spec/capabilities.md): each one's canonical request members,
 //! the features a route of it may declare, and what its answer carries. Adapters call
-//! [`check_request`] first (spec/providers.md §5 step 2), so every route of a capability refuses
+//! [`check_request`] first (spec/adapters.md §4 step 2), so every route of a capability refuses
 //! the same malformed request with the same sentence. `tests/capabilities.rs` holds this table to
 //! spec/capabilities.md (every member table and feature list) and to the standard library's paid
 //! built-ins; `tests/routes.rs` holds the built-in route table's features to [`Capability::features`].
@@ -19,7 +19,7 @@
 //!   object`).
 //!
 //! Value checks beyond the type (non-blank text, ranges, enums) are the adapter's, with the
-//! sentences spec/providers.md §9 gives per provider.
+//! sentences of its reference (spec/providers.md §2).
 
 use serde_json::Value;
 

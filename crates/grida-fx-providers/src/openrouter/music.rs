@@ -1,9 +1,9 @@
 //! OpenRouter music (Lyria): `POST {base}/chat/completions` with `{"model", "messages": [{"role":
 //! "user", "content": <prompt>}], "modalities": ["text", "audio"], "audio": {"format": "mp3"},
-//! "stream": true}` (spec/providers.md §9.2; spec/capabilities.md §9). `duration` is never sent:
+//! "stream": true}` (src/openrouter/README.md; spec/capabilities.md §9). `duration` is never sent:
 //! it stays in the call key only.
 //!
-//! Refusals, in the order of spec/providers.md §5: the contract (`adapter: openrouter-music`,
+//! Refusals, in the order of spec/adapters.md §4: the contract (`adapter: openrouter-music`,
 //! `adapter_behavior: 1`, each checked when present); the capability's shape; the key; a blank prompt
 //! (`a music call needs its prompt as text`); a serialized body over
 //! [`super::MAX_REQUEST_BYTES`].
@@ -22,8 +22,8 @@
 //! `null`.
 //!
 //! The answer is file `audio` (`audio/mpeg`), `data: null`, and `cost` from the last `usage`
-//! seen, an error event's included (spec/providers.md §6). A 2xx that cannot become an answer is
-//! `Failed { cost, retryable: true }` with that cost when one was seen (spec/providers.md §4.4).
+//! seen, an error event's included (spec/adapters.md §5). A 2xx that cannot become an answer is
+//! `Failed { cost, retryable: true }` with that cost when one was seen (spec/adapters.md §3.4).
 //! Deadline 900 s; response cap 128 MiB. `check`: the MP3 signature.
 
 use super::{BODY_TOO_LARGE, classify, not_served, serves, with_request_id};
@@ -73,7 +73,7 @@ impl OpenRouterMusic {
         OpenRouterMusic { client }
     }
 
-    /// Every refusal of spec/providers.md §5, in order, then the request to send.
+    /// Every refusal of spec/adapters.md §4, in order, then the request to send.
     fn prepare(&self, call: &CallRequest) -> Result<HttpRequest, String> {
         let route = &call.route;
         if route.capability != "music.generate"
@@ -114,7 +114,7 @@ impl OpenRouterMusic {
         .max_response_bytes(MAX_RESPONSE_BYTES))
     }
 
-    /// A 2xx response as an answer, or a structural failure (spec/providers.md §4.4).
+    /// A 2xx response as an answer, or a structural failure (spec/adapters.md §3.4).
     fn answer(&self, response: &HttpResponse) -> Sent {
         let mut track = Track::default();
         match track

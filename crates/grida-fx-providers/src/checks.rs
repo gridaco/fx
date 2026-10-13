@@ -1,4 +1,4 @@
-//! The answer checks more than one route makes (spec/providers.md §4.4; spec/capabilities.md).
+//! The answer checks more than one route makes (spec/adapters.md §3.4; spec/capabilities.md).
 //!
 //! Adapters' `check`s call these, so two routes never disagree on what "an exact size", "an MP3"
 //! or "meets the schema" means, and each keeps its own sentences where they differ (a missing
@@ -8,7 +8,7 @@
 //! (spec/protocol.md §6.1, *Stand-in answers*; [`crate::stand_in`]).
 //!
 //! A check judges the call (its route, request, files and take) and the answer alone, never
-//! anything its adapter's send or collect kept (spec/providers.md §4.4), so a stand-in's answer can
+//! anything its adapter's send or collect kept (spec/adapters.md §3.4), so a stand-in's answer can
 //! be held to it.
 //!
 //! [`ClipFacts`] are the facts a clip's answer carries as `data` (spec/capabilities.md §6), which

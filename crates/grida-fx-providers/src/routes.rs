@@ -1,16 +1,16 @@
-//! The built-in default route table (spec/identity.md §7; spec/providers.md §10):
+//! The built-in default route table (spec/identity.md §7; spec/providers.md §3):
 //! `routes/default.yaml`, embedded in the binary. The `grida-fx` command hands it to planning as
 //! `PlanRequest::builtin_routes`; a `--routes` file leaves it out, and a project's `route_tables`
 //! override its entries.
 //!
 //! What `tests/routes.rs` holds the table to:
-//! - 26 routes over 10 capabilities, each fingerprint input (capability, model, provider,
+//! - 29 routes over 10 capabilities, each fingerprint input (capability, model, provider,
 //!   contract) as written there, so an accidental edit of an identity is caught;
 //! - every capability is one of [`crate::capabilities::CAPABILITIES`], and every feature is in
 //!   that capability's [`features`](crate::capabilities::Capability::features);
 //! - every route is served by an adapter of this crate (`live::adapters`), whose kind matches the
 //!   capability's shape, and every contract names the `adapter` (and `adapter_behavior`) that
-//!   spec/providers.md §9 gives that adapter;
+//!   spec/providers.md §2 gives that adapter;
 //! - prices parse, and the tiered routes price as spec/identity.md §12 reads them: the video
 //!   route by `resolution`, the image routes by `size`.
 

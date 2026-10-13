@@ -1,5 +1,5 @@
 //! GG images: `image.generate` (`POST {base}/images/generations`, JSON) and `image.edit`
-//! (`POST {base}/images/edits`, multipart), both answered synchronously (spec/providers.md §9.7;
+//! (`POST {base}/images/edits`, multipart), both answered synchronously (src/gg/README.md;
 //! spec/capabilities.md §2–§3).
 //!
 //! One [`RequestAdapter`], registered for both capabilities on provider `gg`; the endpoint is
@@ -19,7 +19,7 @@
 //! and its `x-gg-reserved-mills` as the cost bound. The check is every image route's
 //! ([`crate::checks::image`]).
 //!
-//! A send, in order (spec/providers.md §5):
+//! A send, in order (spec/adapters.md §4):
 //! 1. the route: `image.generate` or `image.edit`, and a contract this adapter serves;
 //! 2. [`crate::capabilities::check_request`];
 //! 3. the key: `GG_API_KEY is not set`;
@@ -136,7 +136,7 @@ impl GgImages {
         Ok(request("images/edits").body(Body::Multipart(parts)))
     }
 
-    /// A 2xx body as the answer, priced (spec/providers.md §4.4): a structural failure is billed
+    /// A 2xx body as the answer, priced (spec/adapters.md §3.4): a structural failure is billed
     /// and may be tried again.
     async fn parse(&self, response: &HttpResponse) -> Sent {
         match answer(&response.body) {
@@ -292,7 +292,7 @@ fn input_file(
     Ok((kind, extension, bytes))
 }
 
-/// A 2xx body as the answer, or the structural failure's sentence (spec/providers.md §4.4).
+/// A 2xx body as the answer, or the structural failure's sentence (spec/adapters.md §3.4).
 /// `created`, `media_type` and any usage are not read: the bytes decide the kind.
 fn answer(body: &[u8]) -> Result<Answer, String> {
     let payload = wire::json_object(body, LABEL)?;

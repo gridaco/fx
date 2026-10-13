@@ -1,7 +1,7 @@
 //! fal background removal: `POST {run}/<model>` (`fal-ai/birefnet/v2`) with `{"image_url",
 //! "model": "General Use (Light)", "operating_resolution": "1024x1024", "output_mask": false,
 //! "refine_foreground": true, "output_format": "png", "mask_only": false, "sync_mode": true}`
-//! (spec/providers.md §9.3). The answer `root.image.url` is a data URI (decoded) or a `*.fal.media`
+//! (src/fal/README.md). The answer `root.image.url` is a data URI (decoded) or a `*.fal.media`
 //! URL (downloaded as for images). File `image` (`image/png`), `data: null`, cost from `usage.cost`.
 //! `check`: a PNG with its signature. Deadline 300 s. Contract `adapter` must be
 //! `fal-run-birefnet` when present. No route in the default table serves it yet (no published
@@ -10,7 +10,7 @@
 //! Refused before sending, in this order: another route's contract; a request that does not fit
 //! `background.remove`; no `FAL_KEY`; an `image` that is not an `image/*` file (`image is <kind>,
 //! not a picture`) or has no bytes. Statuses are the run host's, as for
-//! images (spec/providers.md §9.3). The answer may declare PNG, WebP or GIF; `width`, `height` and
+//! images (src/fal/README.md). The answer may declare PNG, WebP or GIF; `width`, `height` and
 //! `mask_image` are not read.
 
 use super::FalClients;
@@ -49,7 +49,7 @@ impl FalBackground {
         FalBackground { clients }
     }
 
-    /// Steps 1 to 5 of spec/providers.md §5, then the request (module doc).
+    /// Steps 1 to 5 of spec/adapters.md §4, then the request (module doc).
     fn prepare(&self, call: &CallRequest) -> Result<HttpRequest, String> {
         let client = &self.clients.run;
         if let Some(refusal) =

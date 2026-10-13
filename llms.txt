@@ -819,7 +819,7 @@ Python, `run(..., { standIn: fn })` in JavaScript, in your own process.
 ## Spec
 
 - [spec/](https://github.com/gridaco/fx/blob/main/spec/README.md): the normative contracts
-- [Expressions](https://github.com/gridaco/fx/blob/main/spec/expressions.md), [YAML](https://github.com/gridaco/fx/blob/main/spec/yaml.md), [identity](https://github.com/gridaco/fx/blob/main/spec/identity.md), [providers and routes](https://github.com/gridaco/fx/blob/main/spec/providers.md), [capabilities](https://github.com/gridaco/fx/blob/main/spec/capabilities.md)
+- [Expressions](https://github.com/gridaco/fx/blob/main/spec/expressions.md), [YAML](https://github.com/gridaco/fx/blob/main/spec/yaml.md), [identity](https://github.com/gridaco/fx/blob/main/spec/identity.md), [providers and routes](https://github.com/gridaco/fx/blob/main/spec/providers.md), [adapters](https://github.com/gridaco/fx/blob/main/spec/adapters.md), [capabilities](https://github.com/gridaco/fx/blob/main/spec/capabilities.md)
 - [The workflow schema](https://github.com/gridaco/fx/blob/main/spec/schemas/fx-workflow-v1.schema.json) and [the project schema](https://github.com/gridaco/fx/blob/main/spec/schemas/fx-project-v1.schema.json)
 
 ## Optional

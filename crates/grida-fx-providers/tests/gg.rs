@@ -1,4 +1,4 @@
-//! Grida Gateway's adapters (spec/providers.md §9.7) over synthetic exchanges and a `FakeClock`.
+//! Grida Gateway's adapters (src/gg/README.md) over synthetic exchanges and a `FakeClock`.
 //! Nothing here reaches a network: every send goes to a `ReplayTransport` that asserts the request,
 //! and every refusal runs over a transport that saw no request. Pictures are built in code
 //! (`testing::media`); the clip is the committed facts vector (`spec/vectors/facts/mp4/`).

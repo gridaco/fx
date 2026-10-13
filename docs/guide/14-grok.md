@@ -193,4 +193,4 @@ not CI or a server. With `GRIDA_FX_NETWORK=off`, FX does not start Grok Build at
 | `Grok Build was not started: GRIDA_FX_NETWORK is off` | Unset `GRIDA_FX_NETWORK`. |
 
 How the route is specified, sentence by sentence, is
-[providers.md §9.8](../../spec/providers.md#98-grok-build).
+[the Grok Build adapter's reference](../../crates/grida-fx-providers/src/grok/README.md).

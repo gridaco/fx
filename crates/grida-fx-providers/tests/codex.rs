@@ -1,4 +1,4 @@
-//! The Codex adapter and runtime (spec/providers.md §9.6) against fake Codex programs: shell
+//! The Codex adapter and runtime (src/codex/README.md) against fake Codex programs: shell
 //! scripts that speak the app-server's side of the conversation. No real Codex is ever started.
 //!
 //! The runtime's reader and writer run on the tokio runtime that started them, so each test runs

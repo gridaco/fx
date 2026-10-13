@@ -1,5 +1,5 @@
 //! Grok Build: `image.generate` and `image.edit` through the user's own Grok Build, signed in with
-//! a Grok subscription (spec/providers.md §9.8).
+//! a Grok subscription (src/grok/README.md).
 //!
 //! No key and no HTTP: the adapter draws through a [`GrokRuntime`], one `grok agent --no-leader
 //! stdio` an invocation starts on its first Grok call, keeps for the others and shuts down with the

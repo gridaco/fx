@@ -25,7 +25,7 @@ url.workspace = true
 reqwest.workspace = true
 sha2.workspace = true
 jsonschema.workspace = true
-# Picture reduction for structured output (spec/providers.md §9.2).
+# Picture reduction for structured output (src/openrouter/README.md).
 image.workspace = true
 png = { workspace = true, optional = true }
 # The scratch folder a Codex conversation runs in.

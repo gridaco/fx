@@ -1,36 +1,35 @@
-# The built-in default route table (spec/identity.md §7; spec/providers.md §10).
+# The built-in default route table (spec/identity.md §7; spec/providers.md §3).
 #
 # Embedded in the grida-fx binary and used unless a --routes file is given; a project's
 # route_tables override any entry. Prices are planning allowances in US dollars, not provider
 # quotes: what a call costs is settled from what the provider reports, else the whole hold
-# (spec/providers.md §6).
+# (spec/adapters.md §5).
 #
 # Grida Gateway (`@gg`) is Grida's own provider: one key, GG_API_KEY, serves its
 # text, image, video and 3D routes. It charges a model's regular tariff, so its routes take the
 # prices of the same model elsewhere. A call is booked at GG's settled charge, else at its whole
-# hold (spec/providers.md §9.7, §10).
+# hold (src/gg/README.md; spec/providers.md §3).
 #
 # The Codex routes (imagegen@codex, for image.generate and image.edit) run on the user's own
 # signed-in Codex, which counts them against their plan: they are free to FX, $0, take at most 5
 # input pictures, and share one route id, so at most three of their calls run at once on the
-# invocation's one Codex (spec/providers.md §9.6, §10).
+# invocation's one Codex (src/codex/README.md; spec/providers.md §3).
 #
 # The Grok Build routes (imagine@grok, likewise) run on the user's own signed-in Grok Build, on
 # their Grok subscription: free to FX, $0, at most 3 input pictures, three calls at once, opaque
-# images only (spec/providers.md §9.8, §10).
+# images only (src/grok/README.md; spec/providers.md §3).
 #
 # The other image routes are priced per call, in tiers by `size`. A tier's low is the output tokens at
 # quality max for that size, measured or derived from a measured bill; its high adds an allowance
 # for the prompt and the input pictures, and on OpenRouter covers twice the output
-# (spec/providers.md §10). A size the tiers do not list (`auto`, none, or any other WxH) takes the
+# (spec/providers.md §3). A size the tiers do not list (`auto`, none, or any other WxH) takes the
 # whole range. A project restates a route in its own route table for tighter prices.
 #
 # The contract object of each entry is part of its route fingerprint, and so of every cache key
-# the route serves: editing one changes those keys. Its `adapter` (and, for the Grida Gateway,
-# OpenAI and OpenRouter routes, `adapter_behavior`) is the one spec/providers.md §9 names for the
-# capability's adapter on that provider. The image routes carry `adapter_behavior` as a string,
-# every other route as the integer 1. Price, features, max_input_pictures, concurrency and
-# requests_per_minute are not identity.
+# the route serves: editing one changes those keys. Its `adapter` and `adapter_behavior` are the
+# ones spec/providers.md §2 names for the capability's adapter on that provider. The image routes
+# carry `adapter_behavior` as a string, every other route as the integer 1. Price, features,
+# max_input_pictures, concurrency and requests_per_minute are not identity.
 #
 # Features are the names spec/capabilities.md lists for each capability. tests/routes.rs holds
 # this file to both specs and to the adapters of grida-fx-providers.

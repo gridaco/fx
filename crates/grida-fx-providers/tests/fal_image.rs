@@ -1,4 +1,4 @@
-//! fal `image.generate` and `image.edit` (spec/providers.md §9.3) over synthetic exchanges. Every
+//! fal `image.generate` and `image.edit` (src/fal/README.md) over synthetic exchanges. Every
 //! test that sends asserts each request; every refusal runs over `NoNetwork`. Media are built in
 //! code (`testing::media`).
 

@@ -1,4 +1,4 @@
-//! OpenRouter images (spec/providers.md §9.2; spec/capabilities.md §2–§3), offline: every
+//! OpenRouter images (src/openrouter/README.md; spec/capabilities.md §2–§3), offline: every
 //! exchange is scripted on a `ReplayTransport` that asserts each request, and every refusal runs
 //! over `NoNetwork`, which panics on any send. Media are built in code (`testing::media`).
 
@@ -330,7 +330,7 @@ fn foreign_contracts_are_refused_before_anything_else() {
             .build();
         assert_eq!(refused_with(&call, Keys::none()), not_served, "{contract}");
     }
-    // Each member is checked when present (spec/providers.md §5 step 1): without one, the next
+    // Each member is checked when present (spec/adapters.md §4 step 1): without one, the next
     // step judges the call.
     for contract in [
         json!({}),

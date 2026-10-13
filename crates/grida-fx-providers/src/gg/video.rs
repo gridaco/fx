@@ -1,4 +1,5 @@
-//! GG video: `video.generate`, a long job (spec/providers.md §9.7, §7) run by [`super::job`].
+//! GG video: `video.generate`, a long job (src/gg/README.md; spec/adapters.md §6) run by
+//! [`super::job`].
 //!
 //! `submit`: one `POST {base}/videos` with `{model, prompt, duration?, aspectRatio?, resolution?,
 //! providerOptions?}` and the attempt's `Idempotency-Key` ([`super::Gateway`]): `duration` a JSON
@@ -13,7 +14,7 @@
 //! `check`: the clip runs within [`DURATION_TOLERANCE`] of a requested `duration`, and has the
 //! exact size of a requested `WIDTHxHEIGHT`.
 //!
-//! Submit refusals, in this order (spec/providers.md §5): another route's contract; a request that
+//! Submit refusals, in this order (spec/adapters.md §4): another route's contract; a request that
 //! does not fit `video.generate`; no `GG_API_KEY`; a blank prompt; a last frame; a
 //! `resolution` that is neither a tier name nor `WIDTHxHEIGHT`; an `aspect_ratio` that is not
 //! `W:H`; a first frame whose file the call does not carry, is empty or is not PNG, JPEG or WebP.
@@ -102,7 +103,7 @@ impl GgVideo {
     }
 }
 
-/// The request's values, once they pass (step 4 of spec/providers.md §5).
+/// The request's values, once they pass (step 4 of spec/adapters.md §4).
 #[derive(Debug, Clone, PartialEq)]
 struct Clip<'a> {
     prompt: &'a str,
@@ -210,7 +211,7 @@ fn pixels(text: &str) -> Option<(u32, u32)> {
     Some((captures[1].parse().ok()?, captures[2].parse().ok()?))
 }
 
-/// Reads this adapter's route contract (spec/providers.md §5 step 1).
+/// Reads this adapter's route contract (spec/adapters.md §4 step 1).
 fn contract(call: &CallRequest) -> Result<(), String> {
     super::read_contract(call, &["video.generate"], ADAPTER, |v| v == &json!(1), &[]).map(|_| ())
 }
@@ -225,7 +226,7 @@ fn deliver(bytes: Vec<u8>) -> Result<Answer, String> {
 }
 
 impl GgVideo {
-    /// Steps 1 to 5 of spec/providers.md §5, then the submit request (module doc).
+    /// Steps 1 to 5 of spec/adapters.md §4, then the submit request (module doc).
     fn prepare(&self, call: &CallRequest) -> Result<HttpRequest, String> {
         contract(call)?;
         capabilities::check_request(&call.route.capability, &call.request)?;

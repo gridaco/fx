@@ -10,7 +10,7 @@ Grida FX is a workflow engine for generative asset pipelines. You write a workfl
 - caches every paid call by its request;
 - records the run.
 
-FX is a standalone product, made by Grida. Think of the Vercel AI SDK without its gateway: FX talks to providers (fal, OpenAI, OpenRouter, Tripo, ElevenLabs, …) with the user's own keys. Grida's gateway (GG) is one more provider, the recommended start: one key, `GG_API_KEY`, serves FX's text, image, video and 3D routes ([providers.md](../../spec/providers.md) §9.7). The Grida ecosystem will get first-class support. Neither is needed for FX to work.
+FX is a standalone product, made by Grida. Think of the Vercel AI SDK without its gateway: FX talks to providers (fal, OpenAI, OpenRouter, Tripo, ElevenLabs, …) with the user's own keys. Grida's gateway (GG) is one more provider, the recommended start: one key, `GG_API_KEY`, serves FX's text, image, video and 3D routes ([GG's adapter reference](../../crates/grida-fx-providers/src/gg/README.md)). The Grida ecosystem will get first-class support. Neither is needed for FX to work.
 
 ## Decisions
 

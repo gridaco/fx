@@ -1208,7 +1208,7 @@ def _kind(table: dict[str, Any]) -> None:
         (_renamed_but_still_a_feature, "renamed alpha: it is still a feature"),
         (
             _renamed_but_never_dropped,
-            "renamed old_alpha: spec/providers.md section 11 does not name it",
+            "renamed old_alpha: spec/providers.md section 4 does not name it",
         ),
         (_kind, "kind is 'fx-features-v2', not 'fx-features-v1'"),
     ],
@@ -1231,7 +1231,7 @@ def test_check_spec_feature_vocabulary_follows_the_spec_text(
     vocabulary: tuple[Any, Path, Path], capsys: pytest.CaptureFixture[str]
 ) -> None:
     check_spec, spec, _ = vocabulary
-    # A feature row added to the spec, and a rename that section 11 no longer names.
+    # A feature row added to the spec, and a rename that section 4 no longer names.
     capabilities = spec / "capabilities.md"
     text = capabilities.read_text("utf-8")
     row = "| `exact_duration` |"
@@ -1246,7 +1246,7 @@ def test_check_spec_feature_vocabulary_follows_the_spec_text(
     assert _check_vocabulary(check_spec) == 1
     out = capsys.readouterr().out
     assert "sound.generate: not its feature table (extra [], missing ['loop_seamless'])" in out
-    assert "renamed data_url_reference_input: spec/providers.md section 11 does not name it" in out
+    assert "renamed data_url_reference_input: spec/providers.md section 4 does not name it" in out
 
 
 @pytest.mark.parametrize(
@@ -1277,3 +1277,101 @@ def test_check_spec_feature_vocabulary_refuses_a_malformed_table(
         features.write_text(content, "utf-8")
     assert _check_vocabulary(check_spec) == 1
     assert expected in capsys.readouterr().out
+
+
+# --- tools/check_spec.py: the built-in adapters (j) ---------------------------------------------
+
+
+@pytest.fixture
+def adapters(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Any, Path]:
+    """check_spec with spec/ and the adapters' references copied into `tmp_path`."""
+    check_spec = _load_check_spec()
+    spec = tmp_path / "spec"
+    spec.mkdir()
+    for name in ("capabilities.md", "providers.md"):
+        (spec / name).write_bytes((REPO / "spec" / name).read_bytes())
+    source = REPO / "crates" / "grida-fx-providers" / "src"
+    for reference in source.glob("*/README.md"):
+        copy = tmp_path / reference.relative_to(REPO)
+        copy.parent.mkdir(parents=True)
+        copy.write_bytes(reference.read_bytes())
+    monkeypatch.setattr(check_spec, "SPEC", spec)
+    return check_spec, tmp_path
+
+
+def _check_routes(check_spec: Any) -> int:
+    gate = check_spec.Gate()
+    check_spec.check_default_routes(gate, {})
+    return gate.failures
+
+
+def test_check_spec_routes_agree_with_the_built_in_adapters(
+    adapters: tuple[Any, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    check_spec, _ = adapters
+    assert _check_routes(check_spec) == 0, capsys.readouterr().out
+    assert "26 built-in adapters and their references" in capsys.readouterr().out
+
+
+def test_check_spec_routes_catch_a_behaviour_the_table_does_not_write(
+    adapters: tuple[Any, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    check_spec, root = adapters
+    providers = root / "spec" / "providers.md"
+    row = "| `fal` | `video.generate` | `fal-queue` | `1` |"
+    text = providers.read_text("utf-8")
+    assert text.count(row) == 1
+    providers.write_text(text.replace(row, row.replace("`1`", '`"1"`')), "utf-8")
+    assert _check_routes(check_spec) == 2
+    out = capsys.readouterr().out
+    assert 'image-to-video@fal: carries behaviour 1, the table `"1"`' in out
+    assert "src/fal/README.md: its table lists [('video.generate', 'fal-queue', '`1`')]" in out
+
+
+def test_check_spec_routes_catch_a_reference_without_its_contract(
+    adapters: tuple[Any, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    check_spec, root = adapters
+    reference = root / "crates" / "grida-fx-providers" / "src" / "tripo" / "README.md"
+    row = "| `mesh.rig` | `tripo-rig` | `1` |\n"
+    text = reference.read_text("utf-8")
+    assert text.count(row) == 1
+    reference.write_text(text.replace(row, ""), "utf-8")
+    assert _check_routes(check_spec) == 1
+    assert "lacks [('mesh.rig', 'tripo-rig', '`1`')]" in capsys.readouterr().out
+
+
+# --- tools/check_spec.py: references to the sections of spec files (l) --------------------------
+
+
+def _check_references(check_spec: Any, monkeypatch: pytest.MonkeyPatch, files: list[Path]) -> int:
+    monkeypatch.setattr(check_spec, "_text_files", lambda: files)
+    gate = check_spec.Gate()
+    check_spec.check_section_references(gate)
+    return gate.failures
+
+
+def test_check_spec_section_references(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    check_spec = _load_check_spec()
+    spec = tmp_path / "spec"
+    spec.mkdir()
+    (spec / "acme.md").write_text("# Acme\n\n## 1. One\n\n### 1.2 Two\n\n## 3. Three\n", "utf-8")
+    (spec / "README.md").write_text("# Contracts\n\n## 9. Not a contract\n", "utf-8")
+    monkeypatch.setattr(check_spec, "SPEC", spec)
+    good = tmp_path / "good.rs"
+    good.write_text(
+        "//! [acme.md](acme.md) §1, §1.2 and §3; spec/acme.md section 3; (spec/acme.md\n"
+        "//! §1.2); `acme.md` §1–§3; README.md §7; docs/acme.md §9\n",
+        "utf-8",
+    )
+    assert _check_references(check_spec, monkeypatch, [good]) == 0, capsys.readouterr().out
+    assert "7 references to sections of spec files" in capsys.readouterr().out
+    bad = tmp_path / "bad.md"
+    bad.write_text("See [acme.md](../spec/acme.md) §2,\nand acme.md §1, §4.\n", "utf-8")
+    assert _check_references(check_spec, monkeypatch, [good, bad]) == 1
+    out = capsys.readouterr().out
+    assert "bad.md:1: acme.md has no section 2" in out
+    assert "bad.md:2: acme.md has no section 4" in out
+    assert "section 1\n" not in out

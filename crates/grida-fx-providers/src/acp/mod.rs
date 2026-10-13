@@ -1,5 +1,5 @@
 //! A client of the Agent Client Protocol (ACP v1) over a program's stdin and stdout
-//! (spec/providers.md §9.8): JSON-RPC 2.0, one message per line. It keeps ACP's own vocabulary at
+//! (src/grok/README.md): JSON-RPC 2.0, one message per line. It keeps ACP's own vocabulary at
 //! this boundary; what a session means is the driver's (Grok Build's, [`crate::grok`]).
 //!
 //! Two tasks serve a connection: a writer, which owns the program's stdin and writes the lines it
@@ -18,7 +18,7 @@
 //!
 //! A `session/new` response opens its session's notifications before the reader reads on, so
 //! none of a prompt's is missed. Reasons are fixed sentences: an agent's own text can name private
-//! paths (spec/providers.md §8).
+//! paths (spec/adapters.md §7).
 
 use crate::installed::{locked, read_line};
 use crate::process_group::Group;

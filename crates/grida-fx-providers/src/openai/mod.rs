@@ -1,5 +1,5 @@
 //! OpenAI: `image.generate` and `image.edit` on the Images API, with native alpha
-//! (spec/providers.md §9.1; spec/capabilities.md §2–§3).
+//! (src/openai/README.md; spec/capabilities.md §2–§3).
 //!
 //! One [`RequestAdapter`], registered for both capabilities on provider `openai`; the endpoint is
 //! chosen by `call.route.capability`:
@@ -11,11 +11,11 @@
 //! Credential `authorization: Bearer <OPENAI_API_KEY>`; base `OPENAI_BASE_URL`, default
 //! `https://api.openai.com/v1`. Deadline 600 s per send; response cap 64 MiB. Wire constants
 //! (`n: 1`, `output_format: png`, `quality: max`, `moderation: low`; never `input_fidelity`,
-//! `response_format`, `seed`) are spec/providers.md §9.1's. The answer is the one `b64_json` PNG
+//! `response_format`, `seed`) are src/openai/README.md's. The answer is the one `b64_json` PNG
 //! as file `image`, `data: null`, `cost: None` (OpenAI reports no cost). [`check`] is
-//! [`crate::wire::check_image`]. Status classes: spec/providers.md §9.1's table.
+//! [`crate::wire::check_image`]. Status classes: src/openai/README.md's table.
 //!
-//! A send, in order (spec/providers.md §5):
+//! A send, in order (spec/adapters.md §4):
 //! 1. the route: capability `image.generate` or `image.edit` on provider `openai`, and a contract
 //!    whose `adapter` (when present) is [`ADAPTER`] and whose `adapter_behavior` (when present) is
 //!    [`ADAPTER_BEHAVIOR`]; else `<model@provider> is not a <capability> route this adapter
@@ -27,8 +27,8 @@
 //! 5. files (`image`, then `references[i]`, then `mask`): a digest the call does not carry or an
 //!    empty store copy, a kind other than PNG, JPEG or WebP, bytes that do not decode as their
 //!    kind;
-//! 6. one exchange, classified by `OpenAiImages::classify` (spec/providers.md §4.2, §4.3 and
-//!    §9.1's overrides).
+//! 6. one exchange, classified by `OpenAiImages::classify` (spec/adapters.md §3.2, §3.3 and
+//!    the overrides of src/openai/README.md).
 //!
 //! Every reason goes through [`Client::reason`] (redacted, bounded) and names the provider's
 //! request id when the response carries a safe one.
@@ -62,15 +62,16 @@ pub const MAX_RESPONSE_BYTES: u64 = 64 * 1024 * 1024;
 /// The most input images of an edit (`image` plus `references`; the mask does not count).
 pub const MAX_INPUT_IMAGES: usize = 16;
 
-/// The route contract's `adapter` this adapter serves (spec/providers.md §5 step 1, §9.1).
+/// The route contract's `adapter` this adapter serves (spec/adapters.md §4 step 1;
+/// src/openai/README.md).
 pub const ADAPTER: &str = "fx-openai-image-v1";
 
 /// The route contract's `adapter_behavior` this adapter serves: the text `"1"`, as every image
-/// route carries it (spec/providers.md §10). The number `1` is another contract, with another
+/// route carries it (spec/providers.md §3). The number `1` is another contract, with another
 /// fingerprint, and is not served.
 pub const ADAPTER_BEHAVIOR: &str = "1";
 
-/// The variable a redirect points at (spec/providers.md §3, §4.3).
+/// The variable a redirect points at (spec/providers.md §1; spec/adapters.md §3.3).
 const BASE_URL_VARIABLE: &str = "OPENAI_BASE_URL";
 
 /// The refusal of a `size` that is not `auto` or `WxH`.
@@ -146,7 +147,7 @@ impl OpenAiImages {
         Ok(request("images/edits").body(Body::Multipart(parts)))
     }
 
-    /// What one exchange's response means (spec/providers.md §4.3, §4.4 and §9.1).
+    /// What one exchange's response means (spec/adapters.md §3.3, §3.4; src/openai/README.md).
     fn classify(&self, response: &HttpResponse) -> Sent {
         let status = response.status;
         let id = wire::request_id(response);
@@ -216,7 +217,7 @@ impl OpenAiImages {
         }
     }
 
-    /// A failed exchange (spec/providers.md §4.2).
+    /// A failed exchange (spec/adapters.md §3.2).
     fn transport_failure(&self, error: &TransportError) -> Sent {
         if error.kind == TransportErrorKind::Refused {
             return Sent::Refused {
@@ -316,7 +317,7 @@ fn served(route: &RouteRef) -> Result<bool, String> {
     }
 }
 
-/// The request's values after step 4 (spec/providers.md §9.1).
+/// The request's values after step 4 (src/openai/README.md).
 #[derive(Debug)]
 struct Values<'a> {
     /// Verbatim: the prompt is never trimmed or rewritten.
@@ -376,7 +377,7 @@ impl<'a> Values<'a> {
     }
 }
 
-/// The wire fields, in the order both bodies send them (spec/providers.md §9.1).
+/// The wire fields, in the order both bodies send them (src/openai/README.md).
 fn fields(model: &str, values: &Values<'_>) -> Vec<(&'static str, Value)> {
     let mut fields = vec![
         ("model", json!(model)),
@@ -427,7 +428,7 @@ fn input_file(
     Ok((kind, extension, bytes))
 }
 
-/// A 2xx body as the answer, or the structural failure's sentence (spec/providers.md §4.4).
+/// A 2xx body as the answer, or the structural failure's sentence (spec/adapters.md §3.4).
 /// `revised_prompt`, `usage`, `created` and any URL are ignored; a URL is never fetched.
 fn answer(body: &[u8]) -> Result<Answer, String> {
     let payload = wire::json_object(body, LABEL)?;
@@ -445,8 +446,8 @@ fn answer(body: &[u8]) -> Result<Answer, String> {
     Ok(Answer::new(Value::Null, None).with_file("image", kind, bytes))
 }
 
-/// The `type` and `code` of an error envelope, for the status overrides of spec/providers.md
-/// §9.1.
+/// The `type` and `code` of an error envelope, for the status overrides of
+/// src/openai/README.md.
 #[derive(Debug, Default)]
 struct ErrorFields {
     kind: Option<String>,
@@ -508,7 +509,7 @@ fn retry_after_text(response: &HttpResponse) -> Option<String> {
 }
 
 /// `NotReceived`: the provider took nothing. `retry_after` is the wait the provider asked for;
-/// the engine waits at least that long before resending (spec/providers.md §4.3).
+/// the engine waits at least that long before resending (spec/adapters.md §3.3).
 fn not_received(reason: String, retry_after: Option<Duration>) -> Sent {
     Sent::NotReceived {
         reason,

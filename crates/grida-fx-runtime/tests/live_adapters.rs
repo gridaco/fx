@@ -1,5 +1,5 @@
 //! The retry owner (`calls::retry`) driving real provider adapters over a replay transport: what
-//! the ratified rule (spec/protocol.md §6.1 step 7; spec/providers.md §4) bills when an actual
+//! the ratified rule (spec/protocol.md §6.1 step 7; spec/adapters.md §3) bills when an actual
 //! adapter classifies actual provider answers, attempt by attempt.
 //!
 //! The adapters are built exactly as a live run builds them (`<provider>::register` over a
@@ -38,7 +38,7 @@ use tokio::time::{Duration, Instant};
 const INSTANCE: &str = "sfx";
 const KEY: &str = "test-elevenlabs-key";
 
-/// The built-in sound route's high price (spec/providers.md §10): what each attempt reserves.
+/// The built-in sound route's high price (spec/providers.md §3): what each attempt reserves.
 const SOUND_HOLD: Usd = Usd(100_000);
 /// The built-in speech route's high price.
 const SPEECH_HOLD: Usd = Usd(50_000);

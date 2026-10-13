@@ -1,6 +1,6 @@
-//! The user's Grok Build as a runtime (spec/providers.md §1, §9.8): one `grok agent --no-leader
-//! stdio` an invocation starts on its first Grok call and keeps for the others, and shuts down
-//! with the run ([`crate::adapter::Runtime`]).
+//! The user's Grok Build as a runtime (spec/adapters.md §1; src/grok/README.md): one `grok agent
+//! --no-leader stdio` an invocation starts on its first Grok call and keeps for the others, and
+//! shuts down with the run ([`crate::adapter::Runtime`]).
 //!
 //! Starting it, once: Grok Build in a scratch folder and a process group of its own, with the
 //! environment of [`super::environment`]; then `initialize` (its version, at least

@@ -273,4 +273,4 @@ Codex at all: `Codex was not started: GRIDA_FX_NETWORK is off`.
 | `Codex was not started: GRIDA_FX_NETWORK is off` | Unset `GRIDA_FX_NETWORK`. |
 
 How the route is specified, sentence by sentence, is
-[providers.md §9.6](../../spec/providers.md#96-codex).
+[the Codex adapter's reference](../../crates/grida-fx-providers/src/codex/README.md).

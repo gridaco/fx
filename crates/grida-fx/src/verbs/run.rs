@@ -25,7 +25,7 @@
 //!    `the stand-in on standard input could not be started: <reason>` (both exit 2). Then the
 //!    engine ([`crate::engine::engine_for`]), which with `--live` builds every provider's
 //!    adapters from the keys in the process environment or the planning project's `.env`
-//!    (spec/providers.md §3): a `.env` or base-URL refusal is a usage error naming the variable
+//!    (spec/providers.md §1): a `.env` or base-URL refusal is a usage error naming the variable
 //!    or the line (exit 2), and building prints nothing. A missing key refuses only the calls
 //!    that need it, when they are made (`<VARIABLE> is not set`, $0). A stand-in run's engine
 //!    has the stand-in store (`<cache>/stand-in`) as its store and asks the stand-in.

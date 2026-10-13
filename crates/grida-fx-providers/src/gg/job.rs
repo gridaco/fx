@@ -1,5 +1,5 @@
-//! GG jobs: what the video, 3D and rigging adapters share (spec/providers.md §9.7, §7). Each
-//! submits one paid request that GG answers with a job, then reads `GET {base}/jobs/<job_id>`
+//! GG jobs: what the video, 3D and rigging adapters share (src/gg/README.md; spec/adapters.md §6).
+//! Each submits one paid request that GG answers with a job, then reads `GET {base}/jobs/<job_id>`
 //! until GG has the result, downloads its one file once, and waits a little for GG to settle the
 //! job's charge. A [`Kind`] names what differs: the labels, where the result's file is, its cap,
 //! and what its bytes must be.
@@ -24,7 +24,7 @@
 //! the whole hold. `billing.authorized_mills` is GG's authorization, never its charge, and is not
 //! read.
 //!
-//! Collect outcomes (spec/providers.md §7): a handle this adapter did not write is `Unreachable`
+//! Collect outcomes (spec/adapters.md §6): a handle this adapter did not write is `Unreachable`
 //! with nothing requested. A read that fails (a transport failure, 408, 429, a 5xx, a body that is
 //! not a JSON object) saw nothing, and polling goes on. A 3xx, 401, 403, 404, another 4xx, a job
 //! with another id, a status GG does not document and the deadline are `Unreachable`: the job may
@@ -313,7 +313,7 @@ impl Jobs {
         }
     }
 
-    /// A failed submit exchange (spec/providers.md §4.2).
+    /// A failed submit exchange (spec/adapters.md §3.2).
     fn submit_failure(&self, call: &CallRequest, kind: &Kind, error: &TransportError) -> Submitted {
         let label = kind.submit_label;
         match (error.kind, error.phase) {
@@ -424,7 +424,7 @@ impl Jobs {
     }
 
     /// Sends a free submit (a pre-check GG does not bill) and reads its job id: the free phase of
-    /// spec/providers.md §7. A deterministic refusal (a 4xx other than 408 and 429, or a request
+    /// spec/adapters.md §6. A deterministic refusal (a 4xx other than 408 and 429, or a request
     /// the transport refuses itself) is `Refused`; anything else that is not a job, `NotReceived`,
     /// and the engine sends the whole submit again, under the same key, which GG answers with the
     /// same job.
@@ -581,7 +581,7 @@ impl Jobs {
         if remaining.is_zero() {
             return Err(self.outstanding(kind));
         }
-        // The provider's text, byte for byte (spec/providers.md §8).
+        // The provider's text, byte for byte (spec/adapters.md §7).
         let request = HttpRequest::new(Method::Get, url, Lane::Download)
             .timeout(remaining)
             .max_response_bytes(kind.max_bytes);

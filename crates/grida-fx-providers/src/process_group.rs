@@ -1,5 +1,5 @@
 //! Ending everything a runtime the user installed started: Codex and Grok Build
-//! (spec/providers.md §9.6, §9.8).
+//! (src/codex/README.md; src/grok/README.md).
 //!
 //! Each runtime runs in a process group of its own, registered here until it is ended. Its MCP
 //! servers and helpers join that group, so ending the group ends them too:

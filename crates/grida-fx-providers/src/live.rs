@@ -1,4 +1,4 @@
-//! A live invocation's adapters (spec/providers.md §1): the only place the default transport is
+//! A live invocation's adapters (spec/adapters.md §1): the only place the default transport is
 //! built. `grida-fx run --live` (and an `at: plan` step of a live run) calls [`live_setup`] and
 //! [`adapters`]; without `--live` nothing here is constructed and the engine gets an empty
 //! [`Adapters`], so every uncached paid call is refused before anything could leave.
@@ -102,7 +102,7 @@ pub fn offline_setup(keys: Keys) -> Setup {
 /// [`RequestAdapter::redactor`] (or [`LongJob::redactor`]) with [`Setup::redactor`]: every key of
 /// the invocation. The engine's retry owner redacts each reason it reports with it, so a check's
 /// sentence, or the engine's own, never shows a key whichever adapter it came from
-/// (spec/providers.md §8).
+/// (spec/adapters.md §7).
 pub fn adapters(setup: &Setup) -> Adapters {
     let mut registered = Adapters::new();
     crate::gg::register(&mut registered, setup);

@@ -1492,7 +1492,7 @@ async fn a_hold_past_the_ceiling_is_ceiling_exceeded() {
     assert!(fake.log().is_empty());
 }
 
-/// An image route priced per call in tiers by `size` (spec/providers.md §10): one tier,
+/// An image route priced per call in tiers by `size` (spec/providers.md §3): one tier,
 /// $0.21–0.29, inside the whole range, $0.09–0.70.
 fn img_sized() -> Route {
     let mut sized = route("image.generate", "img-s", "acme", 700_000);

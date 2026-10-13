@@ -71,7 +71,7 @@ pub struct AnsweredFile {
     pub bytes: Vec<u8>,
 }
 
-/// How a provider bills its calls (spec/providers.md §6).
+/// How a provider bills its calls (spec/adapters.md §5).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Billing {
     /// In US dollars, to the account of the key FX sends: what the ceiling bounds.
@@ -178,7 +178,7 @@ pub enum Sent {
     /// nothing. The engine may send the same request again under the same attempt, at $0.
     /// `retry_after` is the wait the provider asked for before that ([`retry_after`]; `None` when
     /// it asked for none): the engine waits at least its own backoff, and at least `retry_after`
-    /// up to its cap (spec/providers.md §4.3).
+    /// up to its cap (spec/adapters.md §3.3).
     NotReceived {
         reason: String,
         retry_after: Option<Duration>,
@@ -346,9 +346,10 @@ pub enum Collected {
     Answered(Answer),
     /// The job ended without a result: the record becomes `settled`, the call fails
     /// `call_failed`, and a later run submits it anew. `cost` is what the ended job costs
-    /// (spec/providers.md §7): the provider's own figure for it, as for an answer when the job
-    /// finished with an unusable result; `Some(0)` only where spec/providers.md §9 says so; `None`
-    /// otherwise, and the run that submitted the job then charges its whole hold.
+    /// (spec/adapters.md §6): the provider's own figure for it, as for an answer when the job
+    /// finished with an unusable result; `Some(0)` only where its reference says so
+    /// (spec/providers.md §2); `None` otherwise, and the run that submitted the job then charges
+    /// its whole hold.
     Ended { reason: String, cost: Option<Usd> },
     /// Collecting failed and the job may still be running: the record stays `submitted`, the
     /// call fails `call_failed`, and a later run collects again.
@@ -371,8 +372,8 @@ pub trait RequestAdapter: Send + Sync {
         Billing::Dollars
     }
 
-    /// The redactor every reason of this adapter's calls passes through last (spec/providers.md
-    /// §8). The engine's retry owner redacts with it each reason it reports: the adapter's own,
+    /// The redactor every reason of this adapter's calls passes through last (spec/adapters.md
+    /// §7). The engine's retry owner redacts with it each reason it reports: the adapter's own,
     /// its check's, and the engine's checks of the answer. A live invocation's adapters answer
     /// with the redactor over every key of the invocation ([`crate::live::adapters`]); the
     /// default masks the known secret shapes only.
@@ -407,7 +408,7 @@ pub trait LongJob: Send + Sync {
 }
 
 /// A runtime some adapters share: a program the user installed and signed into (Codex), started
-/// on an invocation's first call that needs it and kept for the others (spec/providers.md §1). The
+/// on an invocation's first call that needs it and kept for the others (spec/adapters.md §1). The
 /// engine owns its life: it is shut down with the run ([`crate::Adapters::shutdown`]).
 pub trait Runtime: Send + Sync {
     /// Ends the runtime and everything it started. Whether everything is verifiably ended; a

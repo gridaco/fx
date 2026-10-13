@@ -1,4 +1,4 @@
-//! Tripo `mesh.rig` over synthetic exchanges (spec/providers.md §7, §9.4;
+//! Tripo `mesh.rig` over synthetic exchanges (spec/adapters.md §6; src/tripo/README.md;
 //! spec/capabilities.md §8). Nothing here reaches the network: every exchange is scripted on a
 //! `ReplayTransport` (which panics on any request it was not given) or the setup is built over
 //! `NoNetwork`; time is a `FakeClock`. The key is the made-up `test-tripo-key`.
@@ -222,7 +222,7 @@ fn plain_handle() -> Value {
 
 #[test]
 fn a_rig_is_checked_free_then_posted_once() {
-    // spec/providers.md §9.4 "Rig": a rig is checked free, then posted once.
+    // src/tripo/README.md, "Rig": a rig is checked free, then posted once.
     let h = harness(vec![
         upload(),
         check_posted(),
@@ -263,7 +263,7 @@ fn a_rig_is_checked_free_then_posted_once() {
 
 #[test]
 fn a_doubted_model_is_rigged_only_when_allowed() {
-    // spec/providers.md §9.4 "Rig": a doubted model is rigged only when allowed.
+    // src/tripo/README.md, "Rig": a doubted model is rigged only when allowed.
     let h = harness(vec![
         upload(),
         check_posted(),
@@ -389,7 +389,7 @@ fn a_doubted_model_is_rigged_only_when_allowed() {
 
 #[test]
 fn only_a_glb_is_rigged_and_bad_requests_send_nothing() {
-    // spec/providers.md §5: only a GLB is rigged.
+    // spec/adapters.md §4: only a GLB is rigged.
     let refused = |call: TestCall, keys: Keys| match block_on(offline_rig(keys).submit(&call)) {
         Submitted::Refused { reason } => {
             assert_clean(&reason);
@@ -447,7 +447,7 @@ fn only_a_glb_is_rigged_and_bad_requests_send_nothing() {
 
 #[test]
 fn every_check_failure_is_free() {
-    // spec/providers.md §9.4 "Free phase": nothing paid is posted in any of these.
+    // src/tripo/README.md, "Free phase": nothing paid is posted in any of these.
     let deadline_clock = || {
         FakeClock::scripted(&[
             Duration::ZERO,
@@ -584,7 +584,7 @@ fn every_check_failure_is_free() {
 
 #[test]
 fn the_paid_rig_follows_the_task_outcomes() {
-    // spec/providers.md §9.4 "Paid POST", as for the mesh.
+    // src/tripo/README.md, "Paid POST", as for the mesh.
     let cases: Vec<(Exchange, Submitted)> = vec![
         (
             rig_expect(RIG_BODY).fail(not_sent()),
@@ -643,7 +643,7 @@ fn the_paid_rig_follows_the_task_outcomes() {
 
 #[test]
 fn a_rig_answers_its_one_glb_with_the_checks_facts() {
-    // spec/providers.md §9.4 "Tasks"; spec/capabilities.md §8.
+    // src/tripo/README.md, "Tasks"; spec/capabilities.md §8.
     let h = harness(vec![
         read("task2", "running", json!({}), json!(0)),
         read("task2", "success", json!({"model": STORAGE}), json!(25)),
@@ -821,7 +821,7 @@ fn a_rig_collect_ends_or_stays_outstanding_like_a_mesh() {
 
 #[test]
 fn a_check_rig_type_that_is_not_a_plain_string_never_reaches_the_handle_or_the_answer() {
-    // spec/providers.md §7: a handle holds no signed URL; §4.4: an answer holds no provider URL.
+    // spec/adapters.md §6: a handle holds no signed URL; §3.4: an answer holds no provider URL.
     let signed = format!("{STORAGE}/check.json?Signature=deadbeefcafe0123&Expires=1");
     for returned in [
         json!({"preview": signed}),

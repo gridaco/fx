@@ -1,4 +1,4 @@
-//! The allowlisted key loader and the base-URL endpoints (spec/providers.md §3).
+//! The allowlisted key loader and the base-URL endpoints (spec/providers.md §1).
 //!
 //! Every `.env` here is written into a temporary directory from inline text; no test reads a real
 //! `.env` or the process environment (the process is a closure over made-up pairs), and every

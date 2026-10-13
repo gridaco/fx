@@ -1,6 +1,6 @@
 //! ElevenLabs sound effects: `POST {base}/sound-generation?output_format=mp3_44100_192` with
 //! `{"text": <prompt>, "model_id": <route model>, "loop", "duration_seconds"?,
-//! "prompt_influence"?}` (spec/providers.md §9.5). Refused before sending: a blank prompt or one
+//! "prompt_influence"?}` (src/elevenlabs/README.md). Refused before sending: a blank prompt or one
 //! over 450 characters, `duration` outside 0.5..30, `prompt_influence` outside 0..1, no key.
 //!
 //! The prompt goes out verbatim (not trimmed); `loop` is always sent (false when absent);
@@ -20,7 +20,7 @@ pub const LABEL: &str = "ElevenLabs sound generation";
 /// The capability this adapter serves.
 pub const CAPABILITY: &str = "sound.generate";
 
-/// The contract's `adapter` (spec/providers.md §9.5).
+/// The contract's `adapter` (src/elevenlabs/README.md).
 pub const ADAPTER: &str = "elevenlabs-sound-effect";
 
 pub const MAX_PROMPT_CHARS: usize = 450;
@@ -42,7 +42,7 @@ impl ElevenLabsSound {
 impl RequestAdapter for ElevenLabsSound {
     fn send<'a>(&'a self, call: &'a CallRequest) -> BoxFuture<'a, Sent> {
         Box::pin(async move {
-            // spec/providers.md §5, steps 1 to 3.
+            // spec/adapters.md §4, steps 1 to 3.
             if let Err(reason) = check_route(call, CAPABILITY, ADAPTER)
                 .and_then(|()| capabilities::check_request(CAPABILITY, &call.request))
             {
@@ -67,7 +67,7 @@ impl RequestAdapter for ElevenLabsSound {
 }
 
 /// The wire body of a request whose shape `capabilities::check_request` accepted, or the
-/// refusal of its first out-of-range value (spec/providers.md §9.5 "Sound").
+/// refusal of its first out-of-range value (src/elevenlabs/README.md, "Sound").
 fn body(call: &CallRequest) -> Result<Map<String, Value>, String> {
     let request = &call.request;
     let prompt = request.get("prompt").and_then(Value::as_str).unwrap_or("");

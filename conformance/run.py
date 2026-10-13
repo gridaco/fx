@@ -230,7 +230,7 @@ def step_environment(home: Path, passed: dict[str, str]) -> dict[str, str]:
 
     No provider key, tool override, FX cache location or locale can change what a case prints,
     and a case that runs `--live` reaches no provider: the network is off and no `.env` is read
-    (spec/providers.md sections 2 and 3).
+    (spec/adapters.md section 2; spec/providers.md section 1).
     """
 
     return {

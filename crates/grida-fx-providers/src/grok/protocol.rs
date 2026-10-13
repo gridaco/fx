@@ -1,7 +1,7 @@
-//! What Grok Build says over ACP, read (spec/providers.md §9.8): its version and sign-in, its
+//! What Grok Build says over ACP, read (src/grok/README.md): its version and sign-in, its
 //! tool calls, where it saved an image, its usage and its failures. Reasons are fixed sentences
 //! with bounded tokens, never Grok Build's own text, which can name private paths
-//! (spec/providers.md §8).
+//! (spec/adapters.md §7).
 
 use super::Stop;
 use crate::adapter::Usage;

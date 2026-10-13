@@ -26,7 +26,7 @@
 //!     engine's, and a stand-in host's, found from the planning project.
 //! - [`adapters_for`]: without `live`, an empty registry and nothing constructed, so every
 //!   uncached paid call is refused (a recorded call still replays from the store). With `live`
-//!   (spec/providers.md §1, §3):
+//!   (spec/adapters.md §1; spec/providers.md §1):
 //!   1. the allowlisted variables ([`provider_environment`]): the process environment, then the
 //!      planning project's `.env` (`<planning project>/.env`) for the names the process does not
 //!      set, unless the process sets `GRIDA_FX_DISABLE_DOTENV=1`;
@@ -187,7 +187,7 @@ pub fn adapters_for(
     Ok(live::adapters(&setup))
 }
 
-/// The keys and endpoints of the planning project at `project_root` (spec/providers.md §3): the
+/// The keys and endpoints of the planning project at `project_root` (spec/providers.md §1): the
 /// allowlisted variables from `env`, then from `<project_root>/.env` (unless `env` gives
 /// `GRIDA_FX_DISABLE_DOTENV=1`). A `.env` or base-URL refusal is a usage error; its sentence
 /// names the variable or the line, never a value.

@@ -1,5 +1,5 @@
 //! fal images: `POST {run}/<model>/text-to-image` (`image.generate`) and `POST {run}/<model>/edit`
-//! (`image.edit`), JSON bodies, then one download of a hosted output (spec/providers.md §9.3).
+//! (`image.edit`), JSON bodies, then one download of a hosted output (src/fal/README.md).
 //!
 //! Contract `adapter` must be `fx-fal-image-v1` when present. Body members in order: `prompt`,
 //! `num_images: 1`, `image_size` (only when `size` is given: `"auto"` or `{"width", "height"}`),
@@ -10,12 +10,12 @@
 //! Deadline 600 s for the POST and the download together. `cost`: `usage.cost` at the payload's
 //! top level ([`crate::wire::usd_ceil`]), else `None`. `check`: [`crate::wire::check_image`].
 //!
-//! Refused before sending (spec/providers.md §5, §9.3), in this order: another route's contract;
-//! a request that does not fit its capability; no `FAL_KEY`; a blank prompt or one over
-//! [`MAX_PROMPT_CHARS`]; a `background` other than `auto`, `opaque` or `transparent`; references
-//! on a generate; more than [`MAX_PICTURES`] pictures on an edit; a `size` that is not `auto` or
-//! `WxH` inside the GPT Image envelope; then, in the order `image`, `references[<i>]`, `mask`, a
-//! picture that is not an `image/*` file (`<member> is <kind>, not a picture`) or has no bytes.
+//! Refused before sending (spec/adapters.md §4; src/fal/README.md), in this order: another route's
+//! contract; a request that does not fit its capability; no `FAL_KEY`; a blank prompt or one over
+//! [`MAX_PROMPT_CHARS`]; a `background` other than `auto`, `opaque` or `transparent`; references on
+//! a generate; more than [`MAX_PICTURES`] pictures on an edit; a `size` that is not `auto` or `WxH`
+//! inside the GPT Image envelope; then, in the order `image`, `references[<i>]`, `mask`, a picture
+//! that is not an `image/*` file (`<member> is <kind>, not a picture`) or has no bytes.
 
 use super::FalClients;
 use super::output::{self, Rules};
@@ -49,7 +49,7 @@ pub const MAX_PICTURES: usize = 16;
 /// The POST's response cap: an output picture inline as base64 is 4/3 of its bytes, plus JSON.
 pub(crate) const MAX_RESPONSE_BYTES: u64 = MAX_OUTPUT_BYTES / 3 * 4 + 4 * 1024 * 1024;
 
-/// What an image answer may declare (spec/providers.md §9.3).
+/// What an image answer may declare (src/fal/README.md).
 const RULES: Rules = Rules {
     allowed: &["image/png", "image/jpeg", "image/webp"],
     check_dimensions: true,
@@ -70,7 +70,7 @@ impl FalImages {
         FalImages { clients }
     }
 
-    /// Steps 1 to 5 of spec/providers.md §5, then the request (module doc).
+    /// Steps 1 to 5 of spec/adapters.md §4, then the request (module doc).
     fn prepare(&self, call: &CallRequest) -> Result<HttpRequest, String> {
         let client = &self.clients.run;
         if let Some(refusal) =
@@ -206,7 +206,7 @@ fn background(request: &Value) -> Result<&str, String> {
 }
 
 /// `image_size` for `size`: nothing when absent or `null`, `"auto"`, or `{"width", "height"}`
-/// within the GPT Image envelope (spec/providers.md §9.1, with sentences starting `fal image
+/// within the GPT Image envelope (src/openai/README.md, with sentences starting `fal image
 /// size`).
 fn image_size(size: Option<&Value>) -> Result<Option<Value>, String> {
     match size {

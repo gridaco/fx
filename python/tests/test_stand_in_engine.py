@@ -31,7 +31,7 @@ pytestmark = pytest.mark.skipif(
     reason="needs the engine beside the SDK (python3 tools/build_engine.py) on a POSIX system",
 )
 
-#: Every provider key FX reads (``spec/providers.md`` section 3), kept out of the runs.
+#: Every provider key FX reads (``spec/providers.md`` section 1), kept out of the runs.
 KEYS = (
     "GG_API_KEY",
     "OPENAI_API_KEY",

@@ -1,4 +1,4 @@
-//! OpenRouter music (spec/providers.md §9.2; spec/capabilities.md §9), offline: every exchange is
+//! OpenRouter music (src/openrouter/README.md; spec/capabilities.md §9), offline: every exchange is
 //! scripted on a `ReplayTransport` that asserts each request, and every refusal runs over
 //! `NoNetwork`, which panics on any send. Audio is `testing::media::MP3` followed by
 //! `testing::media::MP3_FRAME` (an ID3 tag, then an MPEG frame sync), here and in the fixture
@@ -431,7 +431,7 @@ fn foreign_contracts_are_refused_before_anything_else() {
             "{contract}"
         );
     }
-    // Each member is checked when present (spec/providers.md §5 step 1).
+    // Each member is checked when present (spec/adapters.md §4 step 1).
     for contract in [
         json!({}),
         json!({"adapter": "openrouter-music"}),

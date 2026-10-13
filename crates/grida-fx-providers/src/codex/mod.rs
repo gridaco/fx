@@ -1,5 +1,5 @@
 //! Codex: `image.generate` and `image.edit` through the user's own Codex, signed in with ChatGPT
-//! (spec/providers.md §9.6).
+//! (src/codex/README.md).
 //!
 //! No key and no HTTP: the adapter draws through a [`CodexRuntime`], one `codex app-server` an
 //! invocation starts on its first Codex call, keeps for the others and shuts down with the run.

@@ -21,7 +21,7 @@ fn repository() -> PathBuf {
 }
 
 /// The variables no child inherits: the six provider keys and the five base URLs
-/// (spec/providers.md §3).
+/// (spec/providers.md §1).
 const PROVIDER_VARIABLES: [&str; 11] = [
     "GG_API_KEY",
     "OPENAI_API_KEY",
