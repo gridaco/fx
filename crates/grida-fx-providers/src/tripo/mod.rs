@@ -38,7 +38,7 @@
 pub mod mesh;
 pub mod rig;
 
-use crate::adapter::{Adapter, CallRequest, Collected, Submitted};
+use crate::adapter::{Adapter, CallRequest, Collected, Identity, Submitted};
 use crate::clock::Clock;
 use crate::keys::KeyName;
 use crate::registry::Adapters;
@@ -616,26 +616,30 @@ pub fn register(adapters: &mut Adapters, setup: &Setup) {
     );
 }
 
+/// The contract an adapter of Tripo's serves: `adapter`, with no behaviour checked
+/// (spec/providers.md §2).
+pub(crate) const fn identity(adapter: &'static str) -> Identity {
+    Identity {
+        adapter,
+        behavior: None,
+    }
+}
+
 /// The route check of spec/adapters.md §4 step 1: the call is on `capability`, and the route's
-/// contract names `adapter` when it names one.
+/// contract names `adapter` when it names one (the engine's check, [`crate::checks::contract`],
+/// made again for a direct caller).
 pub(crate) fn check_route(
     call: &CallRequest,
     capability: &str,
-    adapter: &str,
+    adapter: &'static str,
 ) -> Result<(), String> {
-    let named = match call.route.contract.get("adapter") {
-        None | Some(Value::Null) => true,
-        Some(Value::String(name)) => name == adapter,
-        Some(_) => false,
-    };
-    if call.route.capability == capability && named {
-        Ok(())
-    } else {
-        Err(format!(
+    if call.route.capability != capability {
+        return Err(format!(
             "{} is not a {capability} route this adapter serves",
             call.route.id()
-        ))
+        ));
     }
+    crate::checks::contract(&call.route, &identity(adapter))
 }
 
 /// The task id of a handle this adapter wrote, if it has a usable one.

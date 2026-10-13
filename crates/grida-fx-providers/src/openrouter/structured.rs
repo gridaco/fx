@@ -13,7 +13,9 @@
 //! schema (draft 2020-12; `format` not asserted), refused as `<path>: <message>`. Deadline 900 s
 //! for `openai/gpt-6-astra`, 1800 s otherwise.
 //!
-//! `send`, in the order of spec/adapters.md §4:
+//! `send`, in the order of spec/adapters.md §4 (the engine makes steps 1 and 2 before it, the
+//! contract's other members through `check_contract`; the adapter makes them again for a direct
+//! caller):
 //! 1. the contract (`read_contract`): `adapter` and `adapter_behavior`, when present, are this
 //!    adapter's; `request_policy` and `pictures` are valid; no other member;
 //! 2. `capabilities::check_request`;
@@ -31,7 +33,7 @@
 //! §3.4).
 
 use crate::BoxFuture;
-use crate::adapter::{Answer, CallRequest, RequestAdapter, RouteRef, Sent};
+use crate::adapter::{Answer, CallRequest, Identity, RequestAdapter, RouteRef, Sent};
 use crate::capabilities;
 use crate::chat;
 use crate::checks;
@@ -54,6 +56,12 @@ pub const CONTRACT_ADAPTER: &str = "openrouter-structured";
 
 /// The capability this adapter serves.
 pub const CAPABILITY: &str = "structured.generate";
+
+/// The contract this adapter serves: [`CONTRACT_ADAPTER`], behaviour the number 1.
+pub const IDENTITY: Identity = Identity {
+    adapter: CONTRACT_ADAPTER,
+    behavior: Some("1"),
+};
 
 /// The model whose structured calls get the shorter deadline (src/openrouter/README.md, "Limits").
 pub const FAST_DEADLINE_MODEL: &str = "openai/gpt-6-astra";
@@ -231,14 +239,15 @@ pub(super) struct ChatContract {
 }
 
 /// Reads the route's contract for the adapter `adapter` serving `capability`. `adapter` and
-/// `adapter_behavior` (the integer 1), when present, must be this adapter's; `request_policy` is
-/// read by [`RequestPolicy::from_contract`]; `pictures` (absent or `"unchanged"`) only when
+/// `adapter_behavior` (the integer 1, which both OpenRouter chat adapters serve), when present,
+/// must be this adapter's ([`checks::contract`], the engine's check); `request_policy` is read by
+/// [`RequestPolicy::from_contract`]; `pictures` (absent or `"unchanged"`) only when
 /// `takes_pictures`; no other member. Refused with `<route> is not a <capability> route this
 /// adapter serves`, followed by `: <why>` when a member is not one it can serve.
 pub(super) fn read_contract(
     route: &RouteRef,
     capability: &str,
-    adapter: &str,
+    adapter: &'static str,
     takes_pictures: bool,
 ) -> Result<ChatContract, String> {
     let refused = |why: Option<String>| {
@@ -255,22 +264,13 @@ pub(super) fn read_contract(
     if route.capability != capability {
         return Err(refused(None));
     }
-    let empty = Map::new();
-    let contract = match &route.contract {
-        Value::Null => &empty,
-        Value::Object(contract) => contract,
-        _ => return Err(refused(None)),
+    let identity = Identity {
+        adapter,
+        behavior: Some("1"),
     };
-    match contract.get("adapter") {
-        None | Some(Value::Null) => {}
-        Some(Value::String(name)) if name == adapter => {}
-        Some(_) => return Err(refused(None)),
-    }
-    match contract.get("adapter_behavior") {
-        None | Some(Value::Null) => {}
-        Some(Value::Number(n)) if n.as_u64() == Some(1) => {}
-        Some(_) => return Err(refused(None)),
-    }
+    checks::contract(route, &identity)?;
+    let empty = Map::new();
+    let contract = route.contract.as_object().unwrap_or(&empty);
     let mut allowed = vec!["adapter", "adapter_behavior", "request_policy"];
     if takes_pictures {
         allowed.push("pictures");
@@ -440,6 +440,14 @@ impl RequestAdapter for OpenRouterStructured {
     /// [`checks::structured`]).
     fn check(&self, call: &CallRequest, answer: &Answer) -> Result<(), String> {
         checks::structured(call, answer, &self.client.redactor)
+    }
+
+    fn identity(&self) -> Option<Identity> {
+        Some(IDENTITY)
+    }
+
+    fn check_contract(&self, call: &CallRequest) -> Result<(), String> {
+        read_contract(&call.route, CAPABILITY, CONTRACT_ADAPTER, true).map(|_| ())
     }
 }
 

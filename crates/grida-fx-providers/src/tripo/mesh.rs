@@ -17,7 +17,7 @@
 
 use super::TripoApi;
 use crate::BoxFuture;
-use crate::adapter::{Answer, CallRequest, Collected, LongJob, Submitted};
+use crate::adapter::{Answer, CallRequest, Collected, Identity, LongJob, Submitted};
 use serde_json::{Map, Value, json};
 use std::time::Duration;
 
@@ -237,5 +237,9 @@ impl LongJob for TripoMesh {
         handle: &'a Value,
     ) -> BoxFuture<'a, Collected> {
         Box::pin(self.collect_call(handle))
+    }
+
+    fn identity(&self) -> Option<Identity> {
+        Some(super::identity(ADAPTER))
     }
 }

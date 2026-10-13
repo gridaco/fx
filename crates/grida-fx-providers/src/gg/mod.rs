@@ -555,9 +555,10 @@ pub(crate) fn not_served(call: &CallRequest, why: Option<&str>) -> String {
 }
 
 /// Reads a GG route contract (spec/adapters.md §4 step 1): `null` or an object whose `adapter`,
-/// when present, is `adapter`, whose `adapter_behavior`, when present, is one `behavior` accepts,
-/// and whose other members are among `members`. `null` members count as absent. The contract's
-/// members are handed back.
+/// when present, is `adapter`, whose `adapter_behavior`, when present, is one `behavior` accepts
+/// ([`crate::checks::serves`], the engine's check, made again here for a direct caller), and whose
+/// other members are among `members`. `null` members count as absent. The contract's members are
+/// handed back.
 pub(crate) fn read_contract(
     call: &CallRequest,
     capabilities: &[&str],
@@ -565,24 +566,14 @@ pub(crate) fn read_contract(
     behavior: impl Fn(&Value) -> bool,
     members: &[&str],
 ) -> Result<serde_json::Map<String, Value>, String> {
-    if !capabilities.contains(&call.route.capability.as_str()) {
+    if !capabilities.contains(&call.route.capability.as_str())
+        || !crate::checks::serves(&call.route.contract, adapter, behavior)
+    {
         return Err(not_served(call, None));
     }
-    let contract = match &call.route.contract {
-        Value::Null => return Ok(serde_json::Map::new()),
-        Value::Object(contract) => contract,
-        _ => return Err(not_served(call, None)),
+    let Some(contract) = call.route.contract.as_object() else {
+        return Ok(serde_json::Map::new());
     };
-    match contract.get("adapter") {
-        None | Some(Value::Null) => {}
-        Some(Value::String(name)) if name == adapter => {}
-        Some(_) => return Err(not_served(call, None)),
-    }
-    match contract.get("adapter_behavior") {
-        None | Some(Value::Null) => {}
-        Some(value) if behavior(value) => {}
-        Some(_) => return Err(not_served(call, None)),
-    }
     if let Some(member) = contract.keys().find(|key| {
         !matches!(key.as_str(), "adapter" | "adapter_behavior") && !members.contains(&key.as_str())
     }) {

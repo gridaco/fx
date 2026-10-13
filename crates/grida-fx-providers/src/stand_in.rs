@@ -5,12 +5,13 @@
 //! supplies, instead of a provider. The engine holds such an answer to what a provider's answer is
 //! held to. [`StandInChecks`] makes the checks that are the providers':
 //! - [`StandInChecks::request`], sub-step 1: the request against its capability, before the
-//!   stand-in is asked (spec/capabilities.md §1; spec/adapters.md §4 step 2). The route's
-//!   refusals of values (spec/adapters.md §4 steps 1, 3, 4 and 5) live inside each adapter's
-//!   send, and are not made;
+//!   stand-in is asked (spec/capabilities.md §1; spec/adapters.md §4 step 2), as the engine checks
+//!   it before an adapter's send ([`checks::request`]). The route's refusals (spec/adapters.md §4
+//!   steps 1, 3, 4 and 5), its contract included, are not made;
 //! - [`StandInChecks::answer`], sub-steps 3.1 and 3.2: the answer's shape, since no adapter made
-//!   it, and then the route's check. The round trip of `data` through canonical JSON and the
-//!   engine's check of `agent.turn` (3.3 and 3.4) are the engine's.
+//!   it, and then the route's check: one check, where a live answer of FX's adapter meets both
+//!   the adapter's and the capability's every-route check. The round trip of `data` through
+//!   canonical JSON and the engine's check of `agent.turn` (3.3 and 3.4) are the engine's.
 //!
 //! **The shape** (spec/capabilities.md §1, *Answers*), the first refusal winning, for a capability
 //! FX ships ([`capabilities::CAPABILITIES`]):
@@ -102,13 +103,10 @@ impl StandInChecks {
     }
 
     /// The request check of spec/capabilities.md §1 ([`capabilities::check_request`]) for a
-    /// capability FX ships; `Ok(())` for any other. A refusal is `capability_refused`, and the
-    /// stand-in is not asked.
+    /// capability FX ships; `Ok(())` for any other: the engine's own before a send
+    /// ([`checks::request`]). A refusal is `capability_refused`, and the stand-in is not asked.
     pub fn request(&self, capability: &str, request: &Value) -> Result<(), String> {
-        match capabilities::capability(capability) {
-            Some(_) => capabilities::check_request(capability, request),
-            None => Ok(()),
-        }
+        checks::request(capability, request)
     }
 
     /// The answer's shape (module doc), with the kinds of files that gave none and the `data` of

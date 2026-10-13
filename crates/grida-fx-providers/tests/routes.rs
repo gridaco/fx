@@ -1052,11 +1052,45 @@ fn the_adapters_name_their_contracts_as_the_table_does() {
         contract_for("speech.generate", "elevenlabs").unwrap().0,
         elevenlabs::speech::ADAPTER
     );
-    assert_eq!(openai::ADAPTER_BEHAVIOR, "1");
-    assert_eq!(gg::image::ADAPTER_BEHAVIOR, "1");
-    assert_eq!(openrouter::image::CONTRACT_BEHAVIOR, "3");
-    assert_eq!(codex::ADAPTER_BEHAVIOR, "2");
-    assert_eq!(grok::ADAPTER_BEHAVIOR, "1");
+    // The contracts the engine checks: each behaviour is the table's, as JSON text.
+    let identities = [
+        ("image.generate", "gg", gg::image::IDENTITY),
+        ("structured.generate", "gg", gg::chat::STRUCTURED_IDENTITY),
+        ("agent.turn", "gg", gg::chat::TURN_IDENTITY),
+        ("video.generate", "gg", gg::video::IDENTITY),
+        ("mesh.generate", "gg", gg::mesh::MESH_IDENTITY),
+        ("mesh.rig", "gg", gg::mesh::RIG_IDENTITY),
+        ("image.generate", "openai", openai::IDENTITY),
+        ("image.generate", "openrouter", openrouter::image::IDENTITY),
+        (
+            "structured.generate",
+            "openrouter",
+            openrouter::structured::IDENTITY,
+        ),
+        ("agent.turn", "openrouter", openrouter::agent::IDENTITY),
+        ("music.generate", "openrouter", openrouter::music::IDENTITY),
+        ("image.generate", "codex", codex::IDENTITY),
+        ("image.generate", "grok", grok::IDENTITY),
+        (
+            "sound.generate",
+            "elevenlabs",
+            elevenlabs::identity(elevenlabs::sound::ADAPTER),
+        ),
+        (
+            "speech.generate",
+            "elevenlabs",
+            elevenlabs::identity(elevenlabs::speech::ADAPTER),
+        ),
+    ];
+    for (capability, provider, identity) in identities {
+        assert_eq!(
+            contract_for(capability, provider),
+            identity
+                .behavior
+                .map(|behavior| (identity.adapter, behavior)),
+            "{capability} on {provider}"
+        );
+    }
 }
 
 /// spec/providers.md §3: a route that takes input pictures declares the most its adapter takes,

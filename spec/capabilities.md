@@ -13,7 +13,7 @@ How a provider's adapter turns a request into an exchange, and how it is billed,
 - A request is a JSON object: the **canonical request** ([identity.md](identity.md) §9). Files are file values (`{"file": "<digest>"}`, [protocol.md](protocol.md) §3.2).
 - A body's `ctx` call sends whatever members it gives. A paid built-in sends its params, without `vars`, then its input ports (§14). The member tables below list the members in that order; `agent.turn`, which no built-in sends, in the order of [protocol.md](protocol.md) §6.2.
 - A paid built-in leaves out a param the step did not give and that has no default, and an input port without a value: neither is a member of the request. A param whose value is missing or `null` goes as `null` (§14; [protocol.md](protocol.md) §5.3 `params`). Absent and `null` are different requests, and so different call keys ([identity.md](identity.md) §9).
-- Every adapter MUST check a request against its capability right after its route's contract, before anything else ([adapters.md](adapters.md) §4), with these sentences:
+- A request MUST be checked against its capability right after its route's contract, before anything else ([adapters.md](adapters.md) §4 step 2). The engine checks it before an adapter FX ships sees the call, and before a stand-in is asked ([protocol.md](protocol.md) §6.1), with these sentences:
   - A request that is not an object: `a request for <capability> is a JSON object`.
   - A member the capability does not define is refused: `<capability> takes no member <name>`.
   - Then each member, in the table's order:
@@ -31,6 +31,7 @@ In the tables below, a member's type is one of:
 
 **Answers.**
 - An answer holds files by name, which the engine stores ([store.md](store.md) §3), and `data`: JSON, or `null`. It holds what the sections below name and nothing else.
+- A section's *Every route's check* (or *Check*) holds on every route of its capability. The engine makes it on each answer of an adapter FX ships, after the adapter's own check ([adapters.md](adapters.md) §3.4), and on a stand-in's answer on a route FX has no adapter for ([protocol.md](protocol.md) §6.1, *Stand-in answers*). *A route's check* is its adapter's alone.
 - A stand-in's answer ([protocol.md](protocol.md) §5.7), which no adapter shaped, is held to this before any other check ([protocol.md](protocol.md) §6.1, *Stand-in answers*), with these sentences, the first that applies winning:
   - a file a section below names is missing: `the answer holds no <name>`;
   - a file it does not name: `<capability> returns no file named <name>`;
@@ -53,7 +54,7 @@ In the tables below, a member's type is one of:
   - `exact_size` for a `size` of `<W>x<H>`;
   - `alpha` for `background: transparent`, and `opaque_background` for `background: opaque`.
 
-  A value the plan does not know yet (a step's output that is only a list as a whole, say) implies nothing. A feature the route lacks is refused as `<route> does not support <feature>` at `<w>.with.<member>`, once per feature, and not again for `requires:`. So a request the route's adapter would refuse is refused while planning, at $0. A call a node's body makes at run time is still checked by its adapter alone ([adapters.md](adapters.md) §4).
+  A value the plan does not know yet (a step's output that is only a list as a whole, say) implies nothing. A feature the route lacks is refused as `<route> does not support <feature>` at `<w>.with.<member>`, once per feature, and not again for `requires:`. So a request the route's adapter would refuse is refused while planning, at $0. A call a node's body makes at run time is checked only before it is sent ([adapters.md](adapters.md) §4).
 - **Input-picture limits.** A route may declare `max_input_pictures`, the most input pictures it takes in one call (`image` and `references`; a mask does not count). A step whose request would carry more is refused while planning, at `<w>.with.references`: `<route> takes at most <n> input pictures, not <count>`. The count is known while the list's length is, even when its pictures are not made yet.
 - Each capability's section lists its features. Only those names have a meaning for it. A route in the built-in table ([providers.md](providers.md) §3) MUST declare only names from its capability's list, and only what its adapter honours.
 - A few image features describe the provider's model and change nothing FX sends, whatever `jpeg_output`, `webp_output` or `hosted_url_reference_input` say. Every route FX ships sends pictures inline. A route whose provider takes an output format (OpenAI, fal) asks for PNG; OpenRouter's image endpoint takes none, so its routes ask for nothing. Every route's check refuses an answer that is not a PNG (§2).

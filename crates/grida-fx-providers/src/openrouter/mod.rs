@@ -7,7 +7,8 @@
 //! plus the upstream inference on the user's own provider key), the last SSE `usage` for music.
 //! Status classes, shared by the four adapters, are src/openrouter/README.md's table, implemented
 //! once in [`classify`]; so are the contract check
-//! (`serves`, `not_served`), the request-body cap ([`crate::wire::body_exceeds`]) and request ids
+//! (`serves`, `not_served`: the engine's, [`crate::checks`], made again for a direct caller), the
+//! request-body cap ([`crate::wire::body_exceeds`]) and request ids
 //! in reasons (`with_request_id`).
 
 pub mod agent;
@@ -170,32 +171,12 @@ static SAFE_NUMBER: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new
 
 /// `<route> is not a <capability> route this adapter serves` (spec/adapters.md §4 step 1).
 pub(crate) fn not_served(call: &CallRequest) -> String {
-    format!(
-        "{} is not a {} route this adapter serves",
-        call.route.id(),
-        call.route.capability
-    )
+    crate::checks::not_served(&call.route)
 }
 
-/// Whether a route contract is one the adapter `adapter` serves (spec/adapters.md §4 step 1):
-/// `null` or an object whose `adapter`, when present, is `adapter`, and whose `adapter_behavior`,
-/// when present, is one `behavior` accepts. `null` members count as absent.
-pub(crate) fn serves(contract: &Value, adapter: &str, behavior: impl Fn(&Value) -> bool) -> bool {
-    let contract = match contract {
-        Value::Null => return true,
-        Value::Object(contract) => contract,
-        _ => return false,
-    };
-    let named = match contract.get("adapter") {
-        None | Some(Value::Null) => true,
-        Some(name) => name.as_str() == Some(adapter),
-    };
-    let behaves = match contract.get("adapter_behavior") {
-        None | Some(Value::Null) => true,
-        Some(value) => behavior(value),
-    };
-    named && behaves
-}
+/// Whether a route contract is one the adapter `adapter` serves (spec/adapters.md §4 step 1): the
+/// engine's check, which each adapter makes again for a direct caller.
+pub(crate) use crate::checks::serves;
 
 /// The reason with ` (request <id>)` when the response carries a safe request id.
 pub(crate) fn with_request_id(reason: String, response: &HttpResponse) -> String {

@@ -356,6 +356,26 @@ pub enum Collected {
     Unreachable { reason: String },
 }
 
+/// The contract an adapter FX ships serves, as a route's contract names it (spec/providers.md §2):
+/// its `adapter`, and its `adapter_behavior` as canonical JSON (spec/identity.md §2), such as
+/// `"1"` for the string and `1` for the number; `None` where the adapter checks none (fal's and
+/// Tripo's). The engine holds each call's route to it before the adapter sees the call
+/// ([`crate::checks::contract`]; spec/adapters.md §4 step 1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Identity {
+    pub adapter: &'static str,
+    pub behavior: Option<&'static str>,
+}
+
+impl Identity {
+    /// Whether `value`, a contract's `adapter_behavior`, is the behaviour this adapter serves:
+    /// its canonical JSON is [`Identity::behavior`]. Any value is when the adapter checks none.
+    pub fn behaves(&self, value: &Value) -> bool {
+        self.behavior
+            .is_none_or(|behavior| grida_fx_core::value::canon(value) == behavior)
+    }
+}
+
 /// An adapter for calls answered within one request.
 pub trait RequestAdapter: Send + Sync {
     /// Sends the request once. Never retries.
@@ -367,6 +387,21 @@ pub trait RequestAdapter: Send + Sync {
         Ok(())
     }
 
+    /// The contract this adapter serves; `None`, the default, names none. For an adapter that names
+    /// one (every adapter FX ships), the engine refuses a call before [`RequestAdapter::send`] as
+    /// spec/adapters.md §4 steps 1 and 2 say, and holds an answer to the capability's every-route
+    /// check after [`RequestAdapter::check`] (spec/adapters.md §3.4).
+    fn identity(&self) -> Option<Identity> {
+        None
+    }
+
+    /// The adapter's judgement of its route's other contract members (spec/adapters.md §4 step
+    /// 1), which the engine makes after its own check of the contract and before its check of the
+    /// request. A refusal is a sentence. None by default.
+    fn check_contract(&self, _call: &CallRequest) -> Result<(), String> {
+        Ok(())
+    }
+
     /// How this adapter's calls are billed ([`Billing`]); dollars unless it says otherwise.
     fn billing(&self) -> Billing {
         Billing::Dollars
@@ -374,9 +409,10 @@ pub trait RequestAdapter: Send + Sync {
 
     /// The redactor every reason of this adapter's calls passes through last (spec/adapters.md
     /// §7). The engine's retry owner redacts with it each reason it reports: the adapter's own,
-    /// its check's, and the engine's checks of the answer. A live invocation's adapters answer
-    /// with the redactor over every key of the invocation ([`crate::live::adapters`]); the
-    /// default masks the known secret shapes only.
+    /// its check's, the engine's refusals before a send ([`crate::checks::before_send`]), and the
+    /// engine's checks of the answer. A live invocation's adapters answer with the redactor over
+    /// every key of the invocation ([`crate::live::adapters`]); the default masks the known secret
+    /// shapes only.
     fn redactor(&self) -> Redactor {
         Redactor::default()
     }
@@ -393,6 +429,17 @@ pub trait LongJob: Send + Sync {
 
     /// As [`RequestAdapter::check`], on a collected answer.
     fn check(&self, _call: &CallRequest, _answer: &Answer) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// As [`RequestAdapter::identity`]: the engine's refusals come before
+    /// [`LongJob::submit`], never before [`LongJob::collect`].
+    fn identity(&self) -> Option<Identity> {
+        None
+    }
+
+    /// As [`RequestAdapter::check_contract`].
+    fn check_contract(&self, _call: &CallRequest) -> Result<(), String> {
         Ok(())
     }
 
@@ -429,6 +476,23 @@ impl Adapter {
         match self {
             Adapter::Request(adapter) => adapter.billing(),
             Adapter::Job(adapter) => adapter.billing(),
+        }
+    }
+
+    /// The contract the adapter serves ([`RequestAdapter::identity`]).
+    pub fn identity(&self) -> Option<Identity> {
+        match self {
+            Adapter::Request(adapter) => adapter.identity(),
+            Adapter::Job(adapter) => adapter.identity(),
+        }
+    }
+
+    /// The adapter's judgement of its route's other contract members
+    /// ([`RequestAdapter::check_contract`]).
+    pub fn check_contract(&self, call: &CallRequest) -> Result<(), String> {
+        match self {
+            Adapter::Request(adapter) => adapter.check_contract(call),
+            Adapter::Job(adapter) => adapter.check_contract(call),
         }
     }
 }
@@ -510,6 +574,53 @@ mod tests {
                     cost: None,
                 }
             })
+        }
+    }
+
+    #[test]
+    fn an_identity_compares_its_behaviour_as_canonical_json() {
+        let text = Identity {
+            adapter: "fx-acme-image-v1",
+            behavior: Some(r#""1""#),
+        };
+        assert!(text.behaves(&json!("1")));
+        for other in [json!(1), json!(1.0), json!("2"), json!(["1"]), json!(true)] {
+            assert!(!text.behaves(&other), "{other}");
+        }
+        let number = Identity {
+            adapter: "acme-video",
+            behavior: Some("1"),
+        };
+        assert!(number.behaves(&json!(1)));
+        assert!(number.behaves(&json!(1.0)), "the same number");
+        for other in [json!("1"), json!(2), json!(1.5)] {
+            assert!(!number.behaves(&other), "{other}");
+        }
+        let unchecked = Identity {
+            adapter: "acme-queue",
+            behavior: None,
+        };
+        assert!(unchecked.behaves(&json!(9)));
+        // An adapter names none unless it says so, and judges no other member.
+        let call = CallRequest {
+            route: RouteRef {
+                capability: "image.generate".into(),
+                model: "img-a".into(),
+                provider: "acme".into(),
+                contract: json!({"adapter": "x"}),
+            },
+            request: json!({}),
+            files: IndexMap::new(),
+            take: vec![1],
+            key: "0".repeat(64),
+            attempt: 1,
+        };
+        for adapter in [
+            Adapter::Request(Arc::new(Silent)),
+            Adapter::Job(Arc::new(Silent)),
+        ] {
+            assert_eq!(adapter.identity(), None);
+            assert_eq!(adapter.check_contract(&call), Ok(()));
         }
     }
 

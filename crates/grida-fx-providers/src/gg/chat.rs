@@ -18,7 +18,9 @@
 //! - [`GgAgent`]: `adapter: gg-tool-loop`, behaviour `1`, optional `image_detail` and
 //!   `reasoning_effort`. Deadline [`TURN_DEADLINE`].
 //!
-//! A send, in order (spec/adapters.md §4): the contract; the capability's check; the key
+//! A send, in order (spec/adapters.md §4; the engine makes the first two before it, the
+//! contract's other members through `check_contract`, and the adapter again for a direct
+//! caller): the contract; the capability's check; the key
 //! (`GG_API_KEY is not set`); the values and files of [`crate::chat`]; a body over
 //! [`MAX_REQUEST_BYTES`], GG's limit, is refused (`request body exceeds 20 MiB`); then one
 //! exchange, classified by [`super::classify`] ([`super::Gateway::exchange`]). A 2xx that does
@@ -27,7 +29,7 @@
 
 use super::Gateway;
 use crate::BoxFuture;
-use crate::adapter::{Answer, CallRequest, RequestAdapter, Sent, Usage};
+use crate::adapter::{Answer, CallRequest, Identity, RequestAdapter, Sent, Usage};
 use crate::capabilities;
 use crate::chat;
 use crate::checks;
@@ -47,6 +49,18 @@ pub const STRUCTURED_ADAPTER: &str = "gg-structured";
 
 /// The contract `adapter` of [`GgAgent`].
 pub const TURN_ADAPTER: &str = "gg-tool-loop";
+
+/// The contract [`GgStructured`] serves: [`STRUCTURED_ADAPTER`], behaviour the number 1.
+pub const STRUCTURED_IDENTITY: Identity = Identity {
+    adapter: STRUCTURED_ADAPTER,
+    behavior: Some("1"),
+};
+
+/// The contract [`GgAgent`] serves: [`TURN_ADAPTER`], behaviour the number 1.
+pub const TURN_IDENTITY: Identity = Identity {
+    adapter: TURN_ADAPTER,
+    behavior: Some("1"),
+};
 
 /// The deadline of a structured call.
 pub const STRUCTURED_DEADLINE: Duration = Duration::from_secs(900);
@@ -77,11 +91,11 @@ struct Contract {
     pictures_unchanged: bool,
 }
 
-/// Reads a GG chat contract (module doc) for `adapter` serving `capability`.
+/// Reads a GG chat contract (module doc) for the adapter of `identity` serving `capability`.
 fn contract(
     call: &CallRequest,
     capability: &str,
-    adapter: &str,
+    identity: &Identity,
     takes_pictures: bool,
 ) -> Result<Contract, String> {
     let members: &[&str] = if takes_pictures {
@@ -89,7 +103,13 @@ fn contract(
     } else {
         &["image_detail", "reasoning_effort"]
     };
-    let contract = super::read_contract(call, &[capability], adapter, |v| v == &json!(1), members)?;
+    let contract = super::read_contract(
+        call,
+        &[capability],
+        identity.adapter,
+        |v| identity.behaves(v),
+        members,
+    )?;
     let detail = match contract.get("image_detail") {
         None => None,
         Some(Value::String(detail)) if IMAGE_DETAILS.contains(&detail.as_str()) => {
@@ -241,7 +261,7 @@ impl GgStructured {
 
     fn prepare(&self, call: &CallRequest) -> Result<HttpRequest, String> {
         let capability = "structured.generate";
-        let contract = contract(call, capability, STRUCTURED_ADAPTER, true)?;
+        let contract = contract(call, capability, &STRUCTURED_IDENTITY, true)?;
         capabilities::check_request(capability, &call.request)?;
         self.gateway.credential()?;
         let prompt = chat::structured_prompt(
@@ -279,6 +299,14 @@ impl RequestAdapter for GgStructured {
     fn check(&self, call: &CallRequest, answer: &Answer) -> Result<(), String> {
         checks::structured(call, answer, &self.gateway.client.redactor)
     }
+
+    fn identity(&self) -> Option<Identity> {
+        Some(STRUCTURED_IDENTITY)
+    }
+
+    fn check_contract(&self, call: &CallRequest) -> Result<(), String> {
+        contract(call, "structured.generate", &STRUCTURED_IDENTITY, true).map(|_| ())
+    }
 }
 
 /// GG's agent-turn adapter (module doc).
@@ -294,7 +322,7 @@ impl GgAgent {
 
     fn prepare(&self, call: &CallRequest) -> Result<HttpRequest, String> {
         let capability = "agent.turn";
-        let contract = contract(call, capability, TURN_ADAPTER, false)?;
+        let contract = contract(call, capability, &TURN_IDENTITY, false)?;
         capabilities::check_request(capability, &call.request)?;
         self.gateway.credential()?;
         let prompt = chat::agent_prompt(call, contract.detail.as_deref())?;
@@ -325,5 +353,13 @@ impl RequestAdapter for GgAgent {
             )
             .await
         })
+    }
+
+    fn identity(&self) -> Option<Identity> {
+        Some(TURN_IDENTITY)
+    }
+
+    fn check_contract(&self, call: &CallRequest) -> Result<(), String> {
+        contract(call, "agent.turn", &TURN_IDENTITY, false).map(|_| ())
     }
 }

@@ -26,7 +26,7 @@
 
 use super::{BODY_TOO_LARGE, classify, not_served, serves, with_request_id};
 use crate::BoxFuture;
-use crate::adapter::{Answer, CallRequest, RequestAdapter, Sent};
+use crate::adapter::{Answer, CallRequest, Identity, RequestAdapter, Sent};
 use crate::setup::Client;
 use crate::transport::{Body, HttpRequest, HttpResponse, Lane, Method};
 use crate::wire;
@@ -36,9 +36,14 @@ use std::time::Duration;
 /// The label of every reason.
 pub const LABEL: &str = "OpenRouter image generation";
 
-/// The contract this adapter serves.
+/// The contract `adapter` this adapter serves.
 pub const CONTRACT_ADAPTER: &str = "fx-openrouter-image-v1";
-pub const CONTRACT_BEHAVIOR: &str = "3";
+
+/// The contract this adapter serves: [`CONTRACT_ADAPTER`], and `adapter_behavior` the text `"3"`.
+pub const IDENTITY: Identity = Identity {
+    adapter: CONTRACT_ADAPTER,
+    behavior: Some(r#""3""#),
+};
 
 /// The exact sizes the route returns exactly.
 pub const ALLOWED_SIZES: [&str; 7] = [
@@ -77,9 +82,8 @@ impl OpenRouterImages {
     /// Every refusal of spec/adapters.md §4, in order, then the request to send.
     fn prepare(&self, call: &CallRequest) -> Result<HttpRequest, String> {
         let route = &call.route;
-        let behavior = Value::String(CONTRACT_BEHAVIOR.to_string());
         if !CAPABILITIES.contains(&route.capability.as_str())
-            || !serves(&route.contract, CONTRACT_ADAPTER, |v| v == &behavior)
+            || !serves(&route.contract, CONTRACT_ADAPTER, |v| IDENTITY.behaves(v))
         {
             return Err(not_served(call));
         }
@@ -258,6 +262,10 @@ impl RequestAdapter for OpenRouterImages {
         };
         let size = wire::parse_size(call.request.get("size"))?;
         crate::checks::image(call, image, size)
+    }
+
+    fn identity(&self) -> Option<Identity> {
+        Some(IDENTITY)
     }
 }
 

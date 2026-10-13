@@ -13,12 +13,13 @@
 //! [`MAX_RETRY_AFTER`] (60 s) (spec/adapters.md §3.3).
 //!
 //! **Checking an answer.** An answer is accepted only when, in this order, the adapter's `check`
-//! passes, its `data` survives being written as the call record writes it and read back (its
-//! canonical form, spec/identity.md §2, which is what the record replays), and the engine's own
-//! check for the capability ([`Attempts::check`]; the shape of an `agent.turn` reply) passes on
-//! that canonical form. The accepted answer carries the canonical `data`, so a live answer and
-//! its replay are the same value. Any refusal fails the attempt as billed, before anything is
-//! recorded.
+//! passes (for an adapter FX ships, followed by the capability's every-route check:
+//! [`super::checked`]), its `data` survives being written as the call record writes it and read
+//! back (its canonical form, spec/identity.md §2, which is what the record replays), and the
+//! engine's own check for the capability ([`Attempts::check`]; the shape of an `agent.turn` reply)
+//! passes on that canonical form. The accepted answer carries the canonical `data`, so a live
+//! answer and its replay are the same value. Any refusal fails the attempt as billed, before
+//! anything is recorded.
 //!
 //! **A plain call, attempt by attempt** (each attempt is its own hold, `ledger::hold_id`):
 //!
@@ -62,8 +63,8 @@
 //! **Reasons.** Every reason an outcome carries (`Refused`, `Failed`, `Unsettled`) passes through
 //! the adapter's redactor last (`RequestAdapter::redactor`, `LongJob::redactor`; spec/adapters.md
 //! §7): a live invocation's adapters redact every key of the invocation. That covers the adapter's
-//! own sentences, its check's, and the engine's checks of the answer, which may quote what the
-//! provider sent back.
+//! own sentences, its check's, the engine's refusals before a send ([`super::checked`]), and the
+//! engine's checks of the answer, which may quote what the provider sent back.
 //!
 //! Every hold emits `budget_reserved` and `budget_settled` through the ledger. The owner never
 //! writes a call record and never emits an event itself; the call path does both, after

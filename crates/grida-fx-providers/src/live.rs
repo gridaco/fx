@@ -10,8 +10,8 @@
 
 use crate::BoxFuture;
 use crate::adapter::{
-    Adapter, Answer, Billing, CallRequest, Collected, LongJob, RequestAdapter, RouteRef, Sent,
-    Submitted,
+    Adapter, Answer, Billing, CallRequest, Collected, Identity, LongJob, RequestAdapter, RouteRef,
+    Sent, Submitted,
 };
 use crate::clock::SystemClock;
 use crate::installed::{Program, Version};
@@ -144,7 +144,8 @@ pub fn adapters(setup: &Setup) -> Adapters {
 }
 
 /// An adapter as registered, answering [`RequestAdapter::redactor`] with the invocation's
-/// ([`adapters`]); everything else is the adapter's own.
+/// ([`adapters`]); everything else is the adapter's own, its identity and its contract judgement
+/// included, so the engine checks it as it checks the adapter.
 struct Redacting<A: ?Sized> {
     inner: Arc<A>,
     redactor: Redactor,
@@ -157,6 +158,14 @@ impl RequestAdapter for Redacting<dyn RequestAdapter> {
 
     fn check(&self, call: &CallRequest, answer: &Answer) -> Result<(), String> {
         self.inner.check(call, answer)
+    }
+
+    fn identity(&self) -> Option<Identity> {
+        self.inner.identity()
+    }
+
+    fn check_contract(&self, call: &CallRequest) -> Result<(), String> {
+        self.inner.check_contract(call)
     }
 
     fn billing(&self) -> Billing {
@@ -179,6 +188,14 @@ impl LongJob for Redacting<dyn LongJob> {
 
     fn check(&self, call: &CallRequest, answer: &Answer) -> Result<(), String> {
         self.inner.check(call, answer)
+    }
+
+    fn identity(&self) -> Option<Identity> {
+        self.inner.identity()
+    }
+
+    fn check_contract(&self, call: &CallRequest) -> Result<(), String> {
+        self.inner.check_contract(call)
     }
 
     fn billing(&self) -> Billing {

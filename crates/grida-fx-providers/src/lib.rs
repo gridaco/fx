@@ -10,7 +10,7 @@
 //! - [`Sent::NotReceived`] is the only outcome after which the same request may be sent again
 //!   under the same attempt: the connection or the send failed, or the provider said it took
 //!   nothing. It bills nothing;
-//! - [`Sent::Refused`] means the adapter refused before anything left (`capability_refused`,
+//! - [`Sent::Refused`] means the call was refused before anything left (`capability_refused`,
 //!   settled at $0, never retried);
 //! - [`Sent::Answered`] carries the answer and the cost the provider reported, if any. The
 //!   adapter's [`RequestAdapter::check`] then runs; a refusal fails the attempt **as billed**;
@@ -24,7 +24,8 @@
 //!   reqwest transport ([`transport::http`]), and for tests the replay transport and `NoNetwork`;
 //! - [`keys`] (the allowlisted key loader), [`redact`], [`setup`] (what adapters are built
 //!   from), [`clock`] (polling time), [`wire`] (helpers every adapter shares), [`checks`] (the
-//!   answer checks routes share, and every route's check of a capability),
+//!   engine's checks before a send, the answer checks routes share, and every route's check of a
+//!   capability),
 //!   [`capabilities`] (spec/capabilities.md as data), [`routes`] (the built-in route table);
 //! - one module per provider: [`openai`], [`openrouter`], [`fal`], [`tripo`], [`elevenlabs`],
 //!   [`codex`] (the user's own Codex, started as a process), [`grok`] (the user's own Grok Build,
@@ -36,6 +37,14 @@
 //!   its shape, then its route's check, from adapters built keyless over a refusing transport;
 //! - [`fake`] and [`testing`] (feature `testing`): the scripted `FakeAdapter`, test setups,
 //!   calls, synthetic media and test programs.
+//!
+//! **The engine's checks.** Every adapter here names the contract it serves
+//! ([`adapter::Identity`]; spec/providers.md §2). The engine then refuses a call before the adapter
+//! sees it, as spec/adapters.md §4 steps 1 and 2 say ([`checks::before_send`]: the contract, the
+//! adapter's own judgement of the contract's other members, the request), and holds its answers
+//! to the capability's every-route check after the adapter's own ([`checks::every_route_with`]). Each
+//! adapter makes steps 1 and 2 again for a caller that hands it a call directly, through the same
+//! functions, so the order its module doc gives is its whole order.
 //!
 //! [`Adapters`] maps a capability and a provider to an adapter. Without `--live` the `grida-fx`
 //! binary registers none, so every uncached paid call is refused with `no_route` ("no adapter

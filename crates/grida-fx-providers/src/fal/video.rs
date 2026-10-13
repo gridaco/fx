@@ -45,7 +45,7 @@
 
 use super::FalClients;
 use crate::BoxFuture;
-use crate::adapter::{Answer, CallRequest, Collected, LongJob, Submitted};
+use crate::adapter::{Answer, CallRequest, Collected, Identity, LongJob, Submitted};
 use crate::clock::Clock;
 use crate::setup::Client;
 use crate::transport::{
@@ -773,6 +773,10 @@ impl LongJob for FalVideo {
             clip.aspect_ratio,
             clip.seconds as f64,
         )
+    }
+
+    fn identity(&self) -> Option<Identity> {
+        Some(super::identity(CONTRACT_ADAPTER))
     }
 }
 

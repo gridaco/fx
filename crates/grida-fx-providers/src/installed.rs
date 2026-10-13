@@ -3,7 +3,7 @@
 //! without the user's keys, reading its lines, checking a request's pictures, and the bounded words
 //! a reason may carry.
 
-use crate::adapter::{CallRequest, RouteRef, Sent};
+use crate::adapter::{CallRequest, Identity, RouteRef, Sent};
 use crate::wire;
 use serde_json::Value;
 use std::ffi::OsStr;
@@ -178,40 +178,15 @@ pub(crate) fn command(
     command
 }
 
-/// Whether `route` is an `image.generate` or `image.edit` route on `provider` whose contract's
-/// `adapter` and `adapter_behavior`, when present, are `adapter` and `behavior`.
-pub(crate) fn served(
-    route: &RouteRef,
-    provider: &str,
-    adapter: &str,
-    behavior: &str,
-) -> Result<(), String> {
-    let refused = || {
-        format!(
-            "{} is not a {} route this adapter serves",
-            route.id(),
-            route.capability
-        )
-    };
+/// Whether `route` is an `image.generate` or `image.edit` route on `provider` whose contract is
+/// one the adapter of `identity` serves (the engine's check, [`crate::checks::contract`], made
+/// again for a direct caller).
+pub(crate) fn served(route: &RouteRef, provider: &str, identity: &Identity) -> Result<(), String> {
     let capability = route.capability.as_str();
     if !matches!(capability, "image.generate" | "image.edit") || route.provider != provider {
-        return Err(refused());
+        return Err(crate::checks::not_served(route));
     }
-    let contract = match &route.contract {
-        Value::Null => return Ok(()),
-        Value::Object(contract) => contract,
-        _ => return Err(refused()),
-    };
-    let text_or_absent = |key: &str, want: &str| match contract.get(key) {
-        None | Some(Value::Null) => true,
-        Some(Value::String(have)) => have == want,
-        Some(_) => false,
-    };
-    if text_or_absent("adapter", adapter) && text_or_absent("adapter_behavior", behavior) {
-        Ok(())
-    } else {
-        Err(refused())
-    }
+    crate::checks::contract(route, identity)
 }
 
 /// An image request's prompt, verbatim (never trimmed or rewritten); refused when blank.

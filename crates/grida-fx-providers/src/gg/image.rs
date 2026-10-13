@@ -19,7 +19,8 @@
 //! and its `x-gg-reserved-mills` as the cost bound. The check is every image route's
 //! ([`crate::checks::image`]).
 //!
-//! A send, in order (spec/adapters.md §4):
+//! A send, in order (spec/adapters.md §4; the engine makes steps 1 and 2 before it, the
+//! contract's `quality` through `check_contract`, and the adapter again for a direct caller):
 //! 1. the route: `image.generate` or `image.edit`, and a contract this adapter serves;
 //! 2. [`crate::capabilities::check_request`];
 //! 3. the key: `GG_API_KEY is not set`;
@@ -34,7 +35,7 @@
 
 use super::Gateway;
 use crate::BoxFuture;
-use crate::adapter::{Answer, CallRequest, RequestAdapter, Sent};
+use crate::adapter::{Answer, CallRequest, Identity, RequestAdapter, Sent};
 use crate::capabilities;
 use crate::transport::{Body, HttpRequest, HttpResponse, Lane, Method, Part};
 use crate::wire;
@@ -47,8 +48,11 @@ pub const LABEL: &str = "GG image generation";
 /// The route contract's `adapter` this adapter serves.
 pub const ADAPTER: &str = "gg-image";
 
-/// The route contract's `adapter_behavior` this adapter serves: the text `"1"`.
-pub const ADAPTER_BEHAVIOR: &str = "1";
+/// The contract this adapter serves: [`ADAPTER`], and `adapter_behavior` the text `"1"`.
+pub const IDENTITY: Identity = Identity {
+    adapter: ADAPTER,
+    behavior: Some(r#""1""#),
+};
 
 /// The whole-exchange deadline: GG answers within 600 s, then a margin for its answer to arrive.
 pub const DEADLINE: Duration = Duration::from_secs(630);
@@ -83,23 +87,12 @@ impl GgImages {
     /// Steps 1 to 5 of the module doc: the one request to send, or the refusal sentence (not yet
     /// redacted).
     fn prepare(&self, call: &CallRequest) -> Result<HttpRequest, String> {
-        let contract = super::read_contract(
-            call,
-            &["image.generate", "image.edit"],
-            ADAPTER,
-            |behavior| behavior.as_str() == Some(ADAPTER_BEHAVIOR),
-            &["quality"],
-        )?;
-        let quality = match contract.get("quality") {
-            None => None,
-            Some(Value::String(quality)) if !quality.trim().is_empty() => Some(quality.as_str()),
-            Some(_) => return Err(super::not_served(call, Some("quality is text"))),
-        };
+        let quality = contract(call)?;
         let edit = call.route.capability == "image.edit";
         capabilities::check_request(&call.route.capability, &call.request)?;
         let credential = self.gateway.credential()?;
         let values = Values::read(&call.request, edit)?;
-        let fields = fields(&call.route.model, &values, quality);
+        let fields = fields(&call.route.model, &values, quality.as_deref());
         let request = |path: &str| {
             self.gateway.paid(
                 HttpRequest::new(Method::Post, self.gateway.client.url(path), Lane::Provider)
@@ -178,6 +171,30 @@ impl RequestAdapter for GgImages {
         let size =
             wire::parse_size(call.request.get("size")).map_err(|_| SIZE_SHAPE.to_string())?;
         crate::checks::image(call, image, size)
+    }
+
+    fn identity(&self) -> Option<Identity> {
+        Some(IDENTITY)
+    }
+
+    fn check_contract(&self, call: &CallRequest) -> Result<(), String> {
+        contract(call).map(|_| ())
+    }
+}
+
+/// Step 1 (spec/adapters.md §4): the route's contract, and the `quality` it names, if any.
+fn contract(call: &CallRequest) -> Result<Option<String>, String> {
+    let contract = super::read_contract(
+        call,
+        &["image.generate", "image.edit"],
+        ADAPTER,
+        |behavior| IDENTITY.behaves(behavior),
+        &["quality"],
+    )?;
+    match contract.get("quality") {
+        None => Ok(None),
+        Some(Value::String(quality)) if !quality.trim().is_empty() => Ok(Some(quality.clone())),
+        Some(_) => Err(super::not_served(call, Some("quality is text"))),
     }
 }
 

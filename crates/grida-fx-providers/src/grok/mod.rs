@@ -7,8 +7,7 @@
 //! FX never reads its credential files, and its calls bill the user's subscription
 //! ([`Billing::Plan`]), never dollars. One send, in order:
 //! 1. the route: capability `image.generate` or `image.edit` on provider `grok`, and a contract
-//!    whose `adapter` (when present) is [`ADAPTER`] and whose `adapter_behavior` (when present)
-//!    is [`ADAPTER_BEHAVIOR`];
+//!    whose `adapter` and `adapter_behavior`, each when present, are [`IDENTITY`]'s;
 //! 2. [`crate::capabilities::check_request`];
 //! 3. values: a blank prompt, a `size` other than `auto`, a `transparent` background, a mask, more
 //!    than [`MAX_PICTURES`] pictures (`image`, then `references`), and each picture's file:
@@ -38,7 +37,7 @@ pub use runtime::GrokRuntime;
 use crate::BoxFuture;
 use crate::acp::{Failure, Notes};
 use crate::adapter::{
-    Adapter, Answer, Billing, CallRequest, RequestAdapter, RouteRef, Sent, Usage,
+    Adapter, Answer, Billing, CallRequest, Identity, RequestAdapter, RouteRef, Sent, Usage,
 };
 use crate::capabilities;
 use crate::installed::{self, Picture, Program, failed};
@@ -59,10 +58,13 @@ pub const LABEL: &str = "Grok Build image generation";
 /// The route contract's `adapter` this adapter serves.
 pub const ADAPTER: &str = "fx-grok-image-v1";
 
-/// The route contract's `adapter_behavior` this adapter serves. It names [`instructions`], the
-/// session's agent ([`profile`]) and the settings of [`environment`]: a change to any is a new
-/// behaviour.
-pub const ADAPTER_BEHAVIOR: &str = "1";
+/// The contract this adapter serves: [`ADAPTER`], and `adapter_behavior` the text `"1"`. The
+/// behaviour names [`instructions`], the session's agent ([`profile`]) and the settings of
+/// [`environment`]: a change to any is a new behaviour.
+pub const IDENTITY: Identity = Identity {
+    adapter: ADAPTER,
+    behavior: Some(r#""1""#),
+};
 
 /// The oldest Grok Build whose behaviour this adapter was verified on.
 pub const MIN_VERSION: &str = "1.0.52";
@@ -221,6 +223,10 @@ impl RequestAdapter for GrokImages {
         crate::checks::image(call, image, None)
     }
 
+    fn identity(&self) -> Option<Identity> {
+        Some(IDENTITY)
+    }
+
     fn billing(&self) -> Billing {
         Billing::Plan
     }
@@ -292,7 +298,7 @@ fn command(program: &Path, folder: &Path) -> Command {
     command
 }
 
-/// The prompt's text (behaviour [`ADAPTER_BEHAVIOR`]): which tool to call once and with what, the
+/// The prompt's text ([`IDENTITY`]'s behaviour): which tool to call once and with what, the
 /// pictures' paths in order, fixed instructions, then the authored prompt verbatim.
 pub fn instructions(prompt: &str, pictures: &[PathBuf]) -> String {
     let mut text = if pictures.is_empty() {
@@ -318,7 +324,7 @@ pub fn instructions(prompt: &str, pictures: &[PathBuf]) -> String {
 
 /// Step 1: whether the route is one this adapter serves.
 fn served(route: &RouteRef) -> Result<(), String> {
-    installed::served(route, "grok", ADAPTER, ADAPTER_BEHAVIOR)
+    installed::served(route, "grok", &IDENTITY)
 }
 
 /// A request's values after step 3.

@@ -109,13 +109,30 @@ Gate: `check_spec`, `cargo test`, `check_llms`.
 
 ### M2. The engine owns the checks (no behaviour change)
 
-- [ ] Spec: the engine checks the route's contract and the request's fit before dispatch, and
+- [x] Spec: the engine checks the route's contract and the request's fit before dispatch, and
   runs the every-route checks after the adapter's own (`adapters.md` §3.4 and §4,
-  `capabilities.md` §1).
-- [ ] Runtime: the contract check and `check_request` before dispatch, and
-  `checks::every_route` on every answer, for adapters and stand-ins alike. Adapters drop their
-  copies and keep their route-specific checks.
-- [ ] Refusal sentences and their order are unchanged; every adapter test passes as written.
+  `capabilities.md` §1, `protocol.md` §6.1 step 7). It checks inside the attempt, where an
+  adapter's refusal comes (after the slot, the hold and a long job's `submitting` record), so
+  events and records are unchanged, and never before a collect.
+- [x] Runtime: each FX adapter names its contract, an `Identity`: `adapter`, and `adapter_behavior`
+  as canonical JSON (none for fal and Tripo, which check only `adapter`). Around an adapter that
+  names one, the engine makes the contract check, then the adapter's own judgement of its other
+  contract members (`check_contract`: GG's and OpenRouter chat's), then `check_request`, before
+  each send or submit; and `checks::every_route_with`, with the adapter's redactor, after the
+  adapter's check of each answer. A test double that names none gets neither.
+  - Adapters keep their guards for direct callers, since their tests call them directly, but each
+    guard is built on the engine's functions (`checks::serves`, `checks::contract`), so there is
+    one implementation. Called directly, fal and Tripo now refuse a contract that is not an
+    object, and GG, OpenRouter chat and ElevenLabs accept a behaviour written `1.0`, as OpenRouter
+    music did: the engine hands an adapter neither.
+  - Stand-ins are unchanged: the request check only, and the adapter's check or the every-route
+    check, never both (`protocol.md` §6.1, *Stand-in answers*).
+- [x] Refusal sentences and their order are unchanged; every adapter test passes as written but
+  one. The adapters' `ADAPTER_BEHAVIOR` and `CONTRACT_BEHAVIOR` constants become their
+  `IDENTITY`, so `tests/routes.rs`'s contract test, which asserted five of them, now holds each
+  identity that names a behaviour to the table. `tests/engine_checks.rs` holds each adapter's
+  identity to `providers.md` §2, and the engine's refusals to each adapter's own, over every
+  built-in contract and the members each judges.
 
 Gate: `cargo test`, conformance.
 

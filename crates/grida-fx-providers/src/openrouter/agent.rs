@@ -13,7 +13,9 @@
 //! `data: {"text", "tool_calls": [{"id", "name", "arguments": <object>}]}`, `cost` from
 //! `usage` ([`super::usage_cost`]); the engine checks its shape. Deadline 600 s.
 //!
-//! `send`, in the order of spec/adapters.md §4:
+//! `send`, in the order of spec/adapters.md §4 (the engine makes steps 1 and 2 before it, the
+//! contract's other members through `check_contract`; the adapter makes them again for a direct
+//! caller):
 //! 1. the contract (`structured::read_contract`, no `pictures` member);
 //! 2. `capabilities::check_request`;
 //! 3. the key (`authorization: Bearer <OPENROUTER_API_KEY>`);
@@ -31,7 +33,7 @@
 
 use super::structured;
 use crate::BoxFuture;
-use crate::adapter::{Answer, CallRequest, RequestAdapter, Sent};
+use crate::adapter::{Answer, CallRequest, Identity, RequestAdapter, Sent};
 use crate::capabilities;
 use crate::chat;
 use crate::setup::Client;
@@ -52,6 +54,12 @@ pub const DEADLINE: Duration = Duration::from_secs(600);
 
 /// The capability this adapter serves.
 pub const CAPABILITY: &str = "agent.turn";
+
+/// The contract this adapter serves: [`CONTRACT_ADAPTER`], behaviour the number 1.
+pub const IDENTITY: Identity = Identity {
+    adapter: CONTRACT_ADAPTER,
+    behavior: Some("1"),
+};
 
 /// OpenRouter's agent-turn adapter (module doc).
 #[derive(Debug, Clone)]
@@ -146,5 +154,13 @@ impl RequestAdapter for OpenRouterAgent {
                 Err(sent) => sent,
             }
         })
+    }
+
+    fn identity(&self) -> Option<Identity> {
+        Some(IDENTITY)
+    }
+
+    fn check_contract(&self, call: &CallRequest) -> Result<(), String> {
+        structured::read_contract(&call.route, CAPABILITY, CONTRACT_ADAPTER, false).map(|_| ())
     }
 }

@@ -37,7 +37,7 @@
 use super::Gateway;
 use super::job::{Jobs, Kind, job_id};
 use crate::BoxFuture;
-use crate::adapter::{Answer, CallRequest, Collected, LongJob, Submitted};
+use crate::adapter::{Answer, CallRequest, Collected, Identity, LongJob, Submitted};
 use crate::capabilities;
 use crate::clock::Clock;
 use crate::transport::{Body, HttpRequest, Lane, Method, Part};
@@ -52,6 +52,18 @@ pub const MESH_ADAPTER: &str = "gg-mesh";
 
 /// The contract `adapter` of [`GgRig`].
 pub const RIG_ADAPTER: &str = "gg-rig";
+
+/// The contract [`GgMesh`] serves: [`MESH_ADAPTER`], behaviour the number 1.
+pub const MESH_IDENTITY: Identity = Identity {
+    adapter: MESH_ADAPTER,
+    behavior: Some("1"),
+};
+
+/// The contract [`GgRig`] serves: [`RIG_ADAPTER`], behaviour the number 1.
+pub const RIG_IDENTITY: Identity = Identity {
+    adapter: RIG_ADAPTER,
+    behavior: Some("1"),
+};
 
 /// The view names GG takes, in the order they are sent.
 pub const VIEWS: [&str; 4] = ["front", "left", "back", "right"];
@@ -142,10 +154,16 @@ struct Endpoints {
 fn endpoints(
     call: &CallRequest,
     capability: &str,
-    adapter: &str,
+    identity: &Identity,
     members: &[&str],
 ) -> Result<Endpoints, String> {
-    let contract = super::read_contract(call, &[capability], adapter, |v| v == &json!(1), members)?;
+    let contract = super::read_contract(
+        call,
+        &[capability],
+        identity.adapter,
+        |v| identity.behaves(v),
+        members,
+    )?;
     let id = |name: &str| match contract.get(name) {
         Some(Value::String(id)) if ENDPOINT.is_match(id) => Ok(Some(id.clone())),
         Some(_) => Err(super::not_served(
@@ -205,7 +223,7 @@ impl GgMesh {
 
     /// Steps 1 to 5 of spec/adapters.md §4, then the submit request (module doc).
     fn prepare(&self, call: &CallRequest) -> Result<HttpRequest, String> {
-        let endpoint = endpoints(call, "mesh.generate", MESH_ADAPTER, &["endpoint"])?.endpoint;
+        let endpoint = endpoints(call, "mesh.generate", &MESH_IDENTITY, &["endpoint"])?.endpoint;
         capabilities::check_request(&call.route.capability, &call.request)?;
         self.jobs.gateway.credential()?;
         let views = view_names(&call.request)?;
@@ -281,11 +299,19 @@ impl LongJob for GgMesh {
     fn collect<'a>(&'a self, call: &'a CallRequest, handle: &'a Value) -> BoxFuture<'a, Collected> {
         Box::pin(async move {
             let contract =
-                endpoints(call, "mesh.generate", MESH_ADAPTER, &["endpoint"]).map(|_| ());
+                endpoints(call, "mesh.generate", &MESH_IDENTITY, &["endpoint"]).map(|_| ());
             self.jobs
                 .collect(job_id(handle), &MESH_KIND, contract)
                 .await
         })
+    }
+
+    fn identity(&self) -> Option<Identity> {
+        Some(MESH_IDENTITY)
+    }
+
+    fn check_contract(&self, call: &CallRequest) -> Result<(), String> {
+        endpoints(call, "mesh.generate", &MESH_IDENTITY, &["endpoint"]).map(|_| ())
     }
 }
 
@@ -316,7 +342,7 @@ impl GgRig {
 
     /// Steps 1 to 5 of spec/adapters.md §4 (module doc).
     fn prepare(&self, call: &CallRequest) -> Result<Rig, String> {
-        let endpoints = endpoints(call, "mesh.rig", RIG_ADAPTER, &RIG_MEMBERS)?;
+        let endpoints = endpoints(call, "mesh.rig", &RIG_IDENTITY, &RIG_MEMBERS)?;
         capabilities::check_request(&call.route.capability, &call.request)?;
         self.jobs.gateway.credential()?;
         let text = |name: &str, default: &str| match call.request.get(name) {
@@ -451,7 +477,7 @@ impl GgRig {
     }
 
     async fn collect_call(&self, call: &CallRequest, handle: &Value) -> Collected {
-        let contract = endpoints(call, "mesh.rig", RIG_ADAPTER, &RIG_MEMBERS).map(|_| ());
+        let contract = endpoints(call, "mesh.rig", &RIG_IDENTITY, &RIG_MEMBERS).map(|_| ());
         let collected = self
             .jobs
             .collect(rig_job_id(handle), &RIG_KIND, contract)
@@ -510,6 +536,14 @@ impl LongJob for GgRig {
 
     fn collect<'a>(&'a self, call: &'a CallRequest, handle: &'a Value) -> BoxFuture<'a, Collected> {
         Box::pin(self.collect_call(call, handle))
+    }
+
+    fn identity(&self) -> Option<Identity> {
+        Some(RIG_IDENTITY)
+    }
+
+    fn check_contract(&self, call: &CallRequest) -> Result<(), String> {
+        endpoints(call, "mesh.rig", &RIG_IDENTITY, &RIG_MEMBERS).map(|_| ())
     }
 }
 

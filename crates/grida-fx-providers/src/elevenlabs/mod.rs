@@ -17,7 +17,7 @@
 pub mod sound;
 pub mod speech;
 
-use crate::adapter::{Adapter, Answer, CallRequest, Sent};
+use crate::adapter::{Adapter, Answer, CallRequest, Identity, Sent};
 use crate::keys::KeyName;
 use crate::registry::Adapters;
 use crate::setup::{Client, Setup};
@@ -48,9 +48,14 @@ pub const CREDENTIAL_HEADER: &str = "xi-api-key";
 /// The variable that moves the base URL, named when a response redirects (spec/adapters.md §3.3).
 pub const BASE_URL_VARIABLE: &str = "ELEVENLABS_BASE_URL";
 
-/// The contract's `adapter_behavior` both adapters serve (spec/providers.md §3: an integer on
-/// every non-image route).
-pub const ADAPTER_BEHAVIOR: u64 = 1;
+/// The contract the adapter named `adapter` serves: behaviour the number 1 (spec/providers.md
+/// §3: an integer on every non-image route).
+pub const fn identity(adapter: &'static str) -> Identity {
+    Identity {
+        adapter,
+        behavior: Some("1"),
+    }
+}
 
 /// The kind of an answer whose `content-type` is not a media type at all (RFC 9110 §8.3).
 const UNKNOWN_KIND: &str = "application/octet-stream";
@@ -157,35 +162,23 @@ pub fn register(adapters: &mut Adapters, setup: &Setup) {
 }
 
 /// spec/adapters.md §4 step 1: the call is on `capability`, and the route's contract, when it
-/// names an `adapter` or an `adapter_behavior`, names `adapter` and [`ADAPTER_BEHAVIOR`]. An
-/// absent contract (`{}` or `null`) is served, and a `null` member counts as absent. Refused with `<route> is not a <capability> route
-/// this adapter serves`.
-pub fn check_route(call: &CallRequest, capability: &str, adapter: &str) -> Result<(), String> {
+/// names an `adapter` or an `adapter_behavior`, names `adapter` and the number 1 ([`identity`];
+/// the engine's check, [`crate::checks::contract`], made again for a direct caller). An absent
+/// contract (`{}` or `null`) is served, and a `null` member counts as absent. Refused with
+/// `<route> is not a <capability> route this adapter serves`.
+pub fn check_route(
+    call: &CallRequest,
+    capability: &str,
+    adapter: &'static str,
+) -> Result<(), String> {
     let route = &call.route;
-    let refused = || {
-        Err(format!(
+    if route.capability != capability {
+        return Err(format!(
             "{} is not a {capability} route this adapter serves",
             route.id()
-        ))
-    };
-    if route.capability != capability {
-        return refused();
+        ));
     }
-    let contract = match &route.contract {
-        Value::Null => return Ok(()),
-        Value::Object(contract) => contract,
-        _ => return refused(),
-    };
-    let present = |name: &str| contract.get(name).filter(|value| !value.is_null());
-    if present("adapter").is_some_and(|name| name.as_str() != Some(adapter)) {
-        return refused();
-    }
-    if present("adapter_behavior")
-        .is_some_and(|behavior| behavior.as_u64() != Some(ADAPTER_BEHAVIOR))
-    {
-        return refused();
-    }
-    Ok(())
+    crate::checks::contract(route, &identity(adapter))
 }
 
 /// A request member that `capabilities::check_request` typed as a number: `None` when absent or

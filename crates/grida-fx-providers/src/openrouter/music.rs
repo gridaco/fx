@@ -28,7 +28,7 @@
 
 use super::{BODY_TOO_LARGE, classify, not_served, serves, with_request_id};
 use crate::BoxFuture;
-use crate::adapter::{Answer, CallRequest, RequestAdapter, Sent};
+use crate::adapter::{Answer, CallRequest, Identity, RequestAdapter, Sent};
 use crate::redact::Redactor;
 use crate::setup::Client;
 use crate::transport::{Body, HttpRequest, HttpResponse, Lane, Method};
@@ -47,8 +47,12 @@ pub const CONTRACT_ADAPTER: &str = "openrouter-music";
 pub const DEADLINE: Duration = Duration::from_secs(900);
 pub const MAX_RESPONSE_BYTES: u64 = 128 * 1024 * 1024;
 
-/// The contract `adapter_behavior` this adapter serves.
-const CONTRACT_BEHAVIOR: f64 = 1.0;
+/// The contract this adapter serves: [`CONTRACT_ADAPTER`], and `adapter_behavior` the number 1
+/// (written `1.0` too, the same number).
+pub const IDENTITY: Identity = Identity {
+    adapter: CONTRACT_ADAPTER,
+    behavior: Some("1"),
+};
 
 /// The only output format the route asks for, and its media type.
 const FORMAT: &str = "mp3";
@@ -77,9 +81,7 @@ impl OpenRouterMusic {
     fn prepare(&self, call: &CallRequest) -> Result<HttpRequest, String> {
         let route = &call.route;
         if route.capability != "music.generate"
-            || !serves(&route.contract, CONTRACT_ADAPTER, |v| {
-                v.is_number() && v.as_f64() == Some(CONTRACT_BEHAVIOR)
-            })
+            || !serves(&route.contract, CONTRACT_ADAPTER, |v| IDENTITY.behaves(v))
         {
             return Err(not_served(call));
         }
@@ -156,6 +158,10 @@ impl RequestAdapter for OpenRouterMusic {
             return Err("the answer has no audio".into());
         };
         crate::checks::audio_signature(audio)
+    }
+
+    fn identity(&self) -> Option<Identity> {
+        Some(IDENTITY)
     }
 }
 

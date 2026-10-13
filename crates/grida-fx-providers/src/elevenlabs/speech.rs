@@ -12,7 +12,7 @@
 
 use super::{CREDENTIAL_HEADER, check_route, float, number, post, refused, within};
 use crate::BoxFuture;
-use crate::adapter::{Answer, CallRequest, RequestAdapter, Sent};
+use crate::adapter::{Answer, CallRequest, Identity, RequestAdapter, Sent};
 use crate::capabilities;
 use crate::setup::Client;
 use regex::Regex;
@@ -72,6 +72,10 @@ impl RequestAdapter for ElevenLabsSpeech {
 
     fn check(&self, _call: &CallRequest, answer: &Answer) -> Result<(), String> {
         super::check_audio(&self.client, LABEL, answer)
+    }
+
+    fn identity(&self) -> Option<Identity> {
+        Some(super::identity(ADAPTER))
     }
 }
 

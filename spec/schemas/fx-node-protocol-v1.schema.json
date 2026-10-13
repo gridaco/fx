@@ -282,7 +282,7 @@
         {
           "const": -32015,
           "title": "capability_refused",
-          "description": "The adapter refused before sending anything; settled at $0."
+          "description": "The engine or the adapter refused the call before sending anything; settled at $0."
         },
         {
           "const": -32016,

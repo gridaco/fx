@@ -18,7 +18,7 @@ pub mod image;
 mod output;
 pub mod video;
 
-use crate::adapter::{Adapter, CallRequest, Sent, Submitted};
+use crate::adapter::{Adapter, CallRequest, Identity, Sent, Submitted};
 use crate::keys::KeyName;
 use crate::registry::Adapters;
 use crate::setup::{Client, Setup};
@@ -102,26 +102,27 @@ pub(crate) const CREDENTIAL_PREFIX: &str = "Key ";
 /// The base-URL variable a run-host redirect points at (spec/adapters.md §3.3).
 pub(crate) const RUN_BASE_VARIABLE: &str = "FAL_BASE_URL";
 
+/// The contract an adapter of fal's serves: `adapter`, with no behaviour checked
+/// (spec/providers.md §2).
+pub(crate) const fn identity(adapter: &'static str) -> Identity {
+    Identity {
+        adapter,
+        behavior: None,
+    }
+}
+
 /// Step 1 of spec/adapters.md §4: `None` when the route is one of `capabilities` and its
-/// contract's `adapter` is absent or `own`; else the refusal sentence.
+/// contract's `adapter` is absent or `own` (the engine's check, [`crate::checks::contract`], made
+/// again for a direct caller); else the refusal sentence.
 pub(crate) fn contract_refusal(
     call: &CallRequest,
-    own: &str,
+    own: &'static str,
     capabilities: &[&str],
 ) -> Option<String> {
-    let adapter = call.route.contract.get("adapter");
-    let serves_capability = capabilities.contains(&call.route.capability.as_str());
-    let own_contract =
-        crate::wire::is_absent(adapter) || adapter.and_then(Value::as_str) == Some(own);
-    if serves_capability && own_contract {
-        None
-    } else {
-        Some(format!(
-            "{} is not a {} route this adapter serves",
-            call.route.id(),
-            call.route.capability
-        ))
+    if !capabilities.contains(&call.route.capability.as_str()) {
+        return Some(crate::checks::not_served(&call.route));
     }
+    crate::checks::contract(&call.route, &identity(own)).err()
 }
 
 /// The route's model as an endpoint id: surrounding whitespace and `/` removed.

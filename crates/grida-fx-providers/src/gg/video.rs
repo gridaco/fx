@@ -24,7 +24,7 @@
 use super::Gateway;
 use super::job::{Jobs, Kind};
 use crate::BoxFuture;
-use crate::adapter::{Answer, CallRequest, Collected, LongJob, Submitted};
+use crate::adapter::{Answer, CallRequest, Collected, Identity, LongJob, Submitted};
 use crate::capabilities;
 use crate::checks::ClipFacts;
 use crate::clock::Clock;
@@ -38,6 +38,12 @@ pub use super::job::{COLLECT_DEADLINE, POLL, READ_DEADLINE, SETTLE_WAIT, SUBMIT_
 
 /// The contract `adapter` this adapter serves.
 pub const ADAPTER: &str = "gg-video";
+
+/// The contract this adapter serves: [`ADAPTER`], behaviour the number 1.
+pub const IDENTITY: Identity = Identity {
+    adapter: ADAPTER,
+    behavior: Some("1"),
+};
 
 /// The most bytes of one clip.
 pub const MAX_VIDEO_BYTES: u64 = 512 * 1024 * 1024;
@@ -213,7 +219,14 @@ fn pixels(text: &str) -> Option<(u32, u32)> {
 
 /// Reads this adapter's route contract (spec/adapters.md §4 step 1).
 fn contract(call: &CallRequest) -> Result<(), String> {
-    super::read_contract(call, &["video.generate"], ADAPTER, |v| v == &json!(1), &[]).map(|_| ())
+    super::read_contract(
+        call,
+        &["video.generate"],
+        ADAPTER,
+        |v| IDENTITY.behaves(v),
+        &[],
+    )
+    .map(|_| ())
 }
 
 /// The clip the download holds (module doc).
@@ -267,6 +280,14 @@ impl LongJob for GgVideo {
         };
         let facts = ClipFacts::of_mp4(&file.bytes)?;
         check_clip(&facts, &call.request)
+    }
+
+    fn identity(&self) -> Option<Identity> {
+        Some(IDENTITY)
+    }
+
+    fn check_contract(&self, call: &CallRequest) -> Result<(), String> {
+        contract(call)
     }
 }
 

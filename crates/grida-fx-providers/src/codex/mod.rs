@@ -6,8 +6,7 @@
 //! Codex owns sign-in, the model and the usage; FX never reads its credential files, and its calls
 //! bill the user's plan ([`Billing::Plan`]), never dollars. One send, in order:
 //! 1. the route: capability `image.generate` or `image.edit` on provider `codex`, and a contract
-//!    whose `adapter` (when present) is [`ADAPTER`] and whose `adapter_behavior` (when present)
-//!    is [`ADAPTER_BEHAVIOR`];
+//!    whose `adapter` and `adapter_behavior`, each when present, are [`IDENTITY`]'s;
 //! 2. [`crate::capabilities::check_request`];
 //! 3. values: a blank prompt, a `size` other than `auto` (Codex picks its own sizes: asked for
 //!    1024x1024 it drew 1254x1254), an unknown `background`, a mask, more than [`MAX_PICTURES`]
@@ -38,7 +37,7 @@ pub use runtime::CodexRuntime;
 
 use crate::BoxFuture;
 use crate::adapter::{
-    Adapter, Answer, Billing, CallRequest, RequestAdapter, RouteRef, Sent, Usage,
+    Adapter, Answer, Billing, CallRequest, Identity, RequestAdapter, RouteRef, Sent, Usage,
 };
 use crate::capabilities;
 use crate::installed::{self, Picture, Program, Version, failed};
@@ -60,9 +59,13 @@ pub const LABEL: &str = "Codex image generation";
 /// The route contract's `adapter` this adapter serves.
 pub const ADAPTER: &str = "fx-codex-image-v1";
 
-/// The route contract's `adapter_behavior` this adapter serves. It names [`instructions`] and
-/// the settings of a Codex conversation: a change to either is a new behaviour.
-pub const ADAPTER_BEHAVIOR: &str = "2";
+/// The contract this adapter serves: [`ADAPTER`], and `adapter_behavior` the text `"2"`. The
+/// behaviour names [`instructions`] and the settings of a Codex conversation: a change to either is
+/// a new behaviour.
+pub const IDENTITY: Identity = Identity {
+    adapter: ADAPTER,
+    behavior: Some(r#""2""#),
+};
 
 /// The most input pictures of one call (`image` and `references`): Codex's image tool draws
 /// nothing for more.
@@ -233,6 +236,10 @@ impl RequestAdapter for CodexImages {
         crate::checks::image(call, image, None)
     }
 
+    fn identity(&self) -> Option<Identity> {
+        Some(IDENTITY)
+    }
+
     fn billing(&self) -> Billing {
         Billing::Plan
     }
@@ -306,7 +313,7 @@ pub fn withheld() -> impl Iterator<Item = &'static str> {
     installed::withheld(&ALSO_WITHHELD)
 }
 
-/// The turn's text (behaviour [`ADAPTER_BEHAVIOR`]): the image tool's arguments, the pictures'
+/// The turn's text ([`IDENTITY`]'s behaviour): the image tool's arguments, the pictures'
 /// paths in order, fixed instructions, then the authored prompt verbatim. Codex draws an opaque
 /// image unless `transparent_background` is true, so `auto` is opaque.
 pub fn instructions(values: &Values<'_>, pictures: &[PathBuf]) -> String {
@@ -334,7 +341,7 @@ pub fn instructions(values: &Values<'_>, pictures: &[PathBuf]) -> String {
 
 /// Step 1: whether the route is one this adapter serves.
 fn served(route: &RouteRef) -> Result<(), String> {
-    installed::served(route, "codex", ADAPTER, ADAPTER_BEHAVIOR)
+    installed::served(route, "codex", &IDENTITY)
 }
 
 /// A request's values after step 3.

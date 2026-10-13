@@ -20,7 +20,7 @@
 use super::FalClients;
 use super::output::{self, Rules};
 use crate::BoxFuture;
-use crate::adapter::{Answer, CallRequest, RequestAdapter, Sent};
+use crate::adapter::{Answer, CallRequest, Identity, RequestAdapter, Sent};
 use crate::transport::{Body, HttpRequest, Lane, Method};
 use serde_json::{Map, Value, json};
 use std::time::{Duration, Instant};
@@ -235,6 +235,10 @@ impl RequestAdapter for FalImages {
             .ok()
             .flatten();
         crate::checks::image(call, file, size)
+    }
+
+    fn identity(&self) -> Option<Identity> {
+        Some(super::identity(CONTRACT_ADAPTER))
     }
 }
 

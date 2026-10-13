@@ -61,8 +61,9 @@ class CeilingExceeded(CapabilityError):
 
 
 class CallRefused(CapabilityError):
-    """``capability_refused``: the adapter refused before sending; settled at $0. A stand-in
-    raises it to refuse the call it was asked (``spec/protocol.md`` section 5.7)."""
+    """``capability_refused``: the engine or the adapter refused the call before sending;
+    settled at $0. A stand-in raises it to refuse the call it was asked (``spec/protocol.md``
+    section 5.7)."""
 
     code = -32015
 

@@ -16,7 +16,7 @@
 use super::FalClients;
 use super::output::{self, Rules};
 use crate::BoxFuture;
-use crate::adapter::{Answer, CallRequest, RequestAdapter, Sent};
+use crate::adapter::{Answer, CallRequest, Identity, RequestAdapter, Sent};
 use crate::transport::{Body, HttpRequest, Lane, Method};
 use serde_json::{Map, Value, json};
 use std::time::{Duration, Instant};
@@ -130,5 +130,9 @@ impl RequestAdapter for FalBackground {
             return Err("the answer carries no image".into());
         };
         crate::wire::check_png(&file.kind, &file.bytes)
+    }
+
+    fn identity(&self) -> Option<Identity> {
+        Some(super::identity(CONTRACT_ADAPTER))
     }
 }

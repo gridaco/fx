@@ -55,7 +55,7 @@ FX registers one adapter for each capability and provider below ([adapters.md](a
 | `grok` | `image.generate` | `fx-grok-image-v1` | `"1"` | [Grok Build](../crates/grida-fx-providers/src/grok/README.md) |
 | `grok` | `image.edit` | `fx-grok-image-v1` | `"1"` | [Grok Build](../crates/grida-fx-providers/src/grok/README.md) |
 
-- An adapter refuses a route whose contract names another `adapter`, or another `adapter_behavior` than its row's, when present ([adapters.md](adapters.md) §4 step 1). fal's and Tripo's adapters check only `adapter`, for every capability they serve: the behaviour in their rows is the one the built-in routes carry, and a route that names another is still served. `background.remove` on fal has no route (§3); its behaviour is the integer `1`, as for every route outside images.
+- A route whose contract names another `adapter`, or another `adapter_behavior` than its row's, when present, is refused before its adapter sees the call ([adapters.md](adapters.md) §4 step 1). For fal's and Tripo's adapters only `adapter` is checked, for every capability they serve: the behaviour in their rows is the one the built-in routes carry, and a route that names another is still served. `background.remove` on fal has no route (§3); its behaviour is the integer `1`, as for every route outside images.
 - The `codex` and `grok` adapters work through a runtime and bill the user's own plan ([adapters.md](adapters.md) §1, §5). Every other adapter bills dollars, to the account of its provider's key (§1).
 
 ## 3. The built-in route table

@@ -17,9 +17,8 @@
 //!
 //! A send, in order (spec/adapters.md §4):
 //! 1. the route: capability `image.generate` or `image.edit` on provider `openai`, and a contract
-//!    whose `adapter` (when present) is [`ADAPTER`] and whose `adapter_behavior` (when present) is
-//!    [`ADAPTER_BEHAVIOR`]; else `<model@provider> is not a <capability> route this adapter
-//!    serves`;
+//!    whose `adapter` and `adapter_behavior`, each when present, are [`IDENTITY`]'s; else
+//!    `<model@provider> is not a <capability> route this adapter serves`;
 //! 2. [`crate::capabilities::check_request`];
 //! 3. the key: `OPENAI_API_KEY is not set`;
 //! 4. values: a blank prompt, an unknown `background`, a `size` that is not `auto` or `WxH` or
@@ -36,8 +35,9 @@
 //! [`check`]: RequestAdapter::check
 
 use crate::BoxFuture;
-use crate::adapter::{Adapter, Answer, CallRequest, RequestAdapter, RouteRef, Sent};
+use crate::adapter::{Adapter, Answer, CallRequest, Identity, RequestAdapter, RouteRef, Sent};
 use crate::capabilities;
+use crate::checks;
 use crate::keys::KeyName;
 use crate::registry::Adapters;
 use crate::setup::{Client, Setup};
@@ -66,10 +66,13 @@ pub const MAX_INPUT_IMAGES: usize = 16;
 /// src/openai/README.md).
 pub const ADAPTER: &str = "fx-openai-image-v1";
 
-/// The route contract's `adapter_behavior` this adapter serves: the text `"1"`, as every image
-/// route carries it (spec/providers.md §3). The number `1` is another contract, with another
+/// The contract this adapter serves: [`ADAPTER`], and `adapter_behavior` the text `"1"`, as every
+/// image route carries it (spec/providers.md §3). The number `1` is another contract, with another
 /// fingerprint, and is not served.
-pub const ADAPTER_BEHAVIOR: &str = "1";
+pub const IDENTITY: Identity = Identity {
+    adapter: ADAPTER,
+    behavior: Some(r#""1""#),
+};
 
 /// The variable a redirect points at (spec/providers.md §1; spec/adapters.md §3.3).
 const BASE_URL_VARIABLE: &str = "OPENAI_BASE_URL";
@@ -269,6 +272,10 @@ impl RequestAdapter for OpenAiImages {
             wire::parse_size(call.request.get("size")).map_err(|_| SIZE_SHAPE.to_string())?;
         crate::checks::image(call, image, size)
     }
+
+    fn identity(&self) -> Option<Identity> {
+        Some(IDENTITY)
+    }
 }
 
 /// Registers the adapter for `image.generate` and `image.edit` on `openai`.
@@ -278,43 +285,19 @@ pub fn register(adapters: &mut Adapters, setup: &Setup) {
     adapters.register("image.edit", "openai", Adapter::Request(images));
 }
 
-/// Step 1: whether the route is one this adapter serves, and if so whether it is an edit.
+/// Step 1: whether the route is one this adapter serves, and if so whether it is an edit. The
+/// contract is the engine's check ([`checks::contract`]), made here again for a direct caller.
 fn served(route: &RouteRef) -> Result<bool, String> {
-    let refused = || {
-        format!(
-            "{} is not a {} route this adapter serves",
-            route.id(),
-            route.capability
-        )
-    };
     let edit = match route.capability.as_str() {
         "image.generate" => false,
         "image.edit" => true,
-        _ => return Err(refused()),
+        _ => return Err(checks::not_served(route)),
     };
     if route.provider != "openai" {
-        return Err(refused());
+        return Err(checks::not_served(route));
     }
-    let contract = match &route.contract {
-        Value::Null => return Ok(edit),
-        Value::Object(contract) => contract,
-        _ => return Err(refused()),
-    };
-    let adapter_ok = match contract.get("adapter") {
-        None | Some(Value::Null) => true,
-        Some(Value::String(adapter)) => adapter == ADAPTER,
-        Some(_) => false,
-    };
-    let behavior_ok = match contract.get("adapter_behavior") {
-        None | Some(Value::Null) => true,
-        Some(Value::String(behavior)) => behavior == ADAPTER_BEHAVIOR,
-        Some(_) => false,
-    };
-    if adapter_ok && behavior_ok {
-        Ok(edit)
-    } else {
-        Err(refused())
-    }
+    checks::contract(route, &IDENTITY)?;
+    Ok(edit)
 }
 
 /// The request's values after step 4 (src/openai/README.md).
