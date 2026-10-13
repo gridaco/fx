@@ -355,7 +355,7 @@ promise through documentation alone.
 
 For AR-19, [the export contract](spec/exports.md),
 [CLI conformance](conformance/portable-export/), exporter regression tests,
-SDK record tests and [browser tests](js/fx-web/tests/export.test.ts) cover the
+SDK record tests and [browser tests](web/fx-web/tests/export.test.ts) cover the
 offline boundary. Both SDKs and the CLI produced identical manifest bytes from
 the same existing recording. Consumers use the shared reader and existing canvas;
 their catalogs and delivery tooling remain separate from the public export.

@@ -5,7 +5,7 @@
     "": {
       "name": "grida-fx-web-workspace",
     },
-    "js/fx-react": {
+    "web/fx-react": {
       "name": "@grida/fx-react",
       "version": "0.5.0",
       "dependencies": {
@@ -18,7 +18,7 @@
         "react": "^19.2.0",
       },
     },
-    "js/fx-web": {
+    "web/fx-web": {
       "name": "@grida/fx-web",
       "version": "0.5.0",
       "dependencies": {
@@ -85,11 +85,11 @@
 
     "@emnapi/runtime": ["@emnapi/runtime@1.11.3", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA=="],
 
-    "@grida/fx-react": ["@grida/fx-react@workspace:js/fx-react"],
+    "@grida/fx-react": ["@grida/fx-react@workspace:web/fx-react"],
 
     "@grida/fx-viewer": ["@grida/fx-viewer@workspace:web/viewer"],
 
-    "@grida/fx-web": ["@grida/fx-web@workspace:js/fx-web"],
+    "@grida/fx-web": ["@grida/fx-web@workspace:web/fx-web"],
 
     "@grida/fx-www": ["@grida/fx-www@workspace:www"],
 
