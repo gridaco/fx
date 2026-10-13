@@ -1,0 +1,42 @@
+{
+ "instances": {
+  "lazy#1": {
+   "error": "the body loaded lib/late.ts at run time, outside its source closure: import it statically",
+   "path": "lazy",
+   "state": "failed"
+  }
+ },
+ "run": {
+  "run_finished": {
+   "charged_usd": 0,
+   "event": "run_finished",
+   "failed": [
+    "lazy#1"
+   ],
+   "incomplete": false,
+   "ok": false,
+   "outputs": {},
+   "plan": "0308245324d6d08e60e695bef354fc906087f1a9654fa87a9416a607beb46533",
+   "stopped": null
+  },
+  "run_started": {
+   "ceiling_usd": null,
+   "charged_usd": 0,
+   "estimate": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "event": "run_started",
+   "plan": "0308245324d6d08e60e695bef354fc906087f1a9654fa87a9416a607beb46533",
+   "repeat": {
+    "live": false,
+    "routes": [
+     "routes.yaml"
+    ],
+    "workflow": "late"
+   },
+   "resumed": false,
+   "workflow": "late"
+  }
+ }
+}

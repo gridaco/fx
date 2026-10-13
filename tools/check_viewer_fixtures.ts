@@ -18,7 +18,7 @@ import {
   type CanvasGraph,
   type RunNode,
   type ViewerView,
-} from "../js/fx-web/src/index";
+} from "../web/fx-web/src/index";
 
 interface EdgeExpectation { source: string; target: string; kinds?: string[]; kind?: string }
 interface PortsExpectation {

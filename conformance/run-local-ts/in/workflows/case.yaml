@@ -1,0 +1,38 @@
+fx: workflow/v1
+id: case
+title: TypeScript nodes of every output shape
+inputs:
+  word: { type: string, default: kite }
+steps:
+  said:
+    uses: ./nodes/local.ts#say
+    with: { word: "${{ inputs.word }}" }
+  report:
+    uses: ./nodes/local.ts#describe
+    with: { text: "${{ steps.said.outputs.text }}" }
+  parts:
+    uses: ./nodes/local.ts#letters
+    with: { word: "${{ inputs.word }}" }
+  entries:
+    uses: ./nodes/local.ts#index
+    with: { word: "${{ inputs.word }}" }
+  marks:
+    uses: ./nodes/local.ts#mark
+    with: { subject: "${{ steps.said.outputs.text }}" }
+  check:
+    uses: ./nodes/local.ts#check
+    judges: said
+    with: { subject: "${{ steps.said.outputs.text }}" }
+  order:
+    uses: ./nodes/local.ts#order
+  listing:
+    uses: ./nodes/local.ts#listing
+    with: { entries: "${{ steps.order.outputs.entries }}" }
+outputs:
+  said: ${{ steps.said.outputs.text }}
+  report: ${{ steps.report.outputs.report }}
+  parts: ${{ steps.parts.outputs.parts }}
+  entries: ${{ steps.entries.outputs.entries }}
+  marks: ${{ steps.marks.outputs.annotations }}
+  order: ${{ steps.order.outputs.entries }}
+  keys: ${{ steps.listing.outputs.keys }}

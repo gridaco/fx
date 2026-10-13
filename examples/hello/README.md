@@ -4,7 +4,9 @@
 scale them down, and give me one sheet with all of them and a folder I can ship."
 
 Nothing in it is paid: it runs offline, at $0, with no keys. It needs only a Python with `grida`
-and Pillow for its nodes ([From a clone](https://github.com/gridaco/fx/blob/main/examples/README.md#from-a-clone)).
+and Pillow for its nodes
+([When FX needs Python](https://github.com/gridaco/fx/blob/main/docs/guide/01-getting-started.md#when-fx-needs-python)).
+[hello-ts](https://github.com/gridaco/fx/tree/main/examples/hello-ts) writes them in TypeScript.
 
 ```
 hello/

@@ -1,0 +1,143 @@
+[
+ {
+  "capability": "image.edit",
+  "files": {
+   "61551ab637dc15d883ebc2aae4ab25077f5c02697409d08f5941b6d485caa76f": {
+    "facts": {
+     "bytes": 12420,
+     "has_alpha": false,
+     "height": 64,
+     "kind": "image/png",
+     "opaque": true,
+     "width": 64
+    },
+    "kind": "image/png",
+    "name": "paint/image",
+    "path_is_file": true,
+    "size": 12420
+   },
+   "e2f1f61f417a765b1dd7d4404f451ad1424c6af4eec79becde9781320cb4f72b": {
+    "facts": {
+     "bytes": 268,
+     "has_alpha": false,
+     "height": 8,
+     "kind": "image/png",
+     "opaque": true,
+     "width": 8
+    },
+    "kind": "image/png",
+    "name": "request/file",
+    "path_is_file": true,
+    "size": 268
+   }
+  },
+  "instance": {
+   "id": "retouch#1",
+   "path": "retouch",
+   "step": "retouch"
+  },
+  "key": "e3fe5be60cb52dc4938573a32f26de7961012ac1191d82cc2d5096fdb816478b",
+  "request": {
+   "background": "opaque",
+   "image": {
+    "file": "61551ab637dc15d883ebc2aae4ab25077f5c02697409d08f5941b6d485caa76f"
+   },
+   "prompt": "Warm it up like the swatch.",
+   "references": [
+    {
+     "file": "e2f1f61f417a765b1dd7d4404f451ad1424c6af4eec79becde9781320cb4f72b"
+    }
+   ],
+   "size": "64x64"
+  },
+  "route": {
+   "fingerprint": "ebff6248067fb1e89160d2c1b6548f68fddc3f20fddbdb2f1617237e9961260d",
+   "id": "img-a@acme"
+  },
+  "take": [
+   1
+  ]
+ },
+ {
+  "capability": "image.generate",
+  "files": {},
+  "instance": {
+   "id": "paint#1",
+   "path": "paint",
+   "step": "paint"
+  },
+  "key": "6990331e32bd6a3400700873f71cde57c5f78b814ddb9492ccbcb5fad91d8aa8",
+  "request": {
+   "background": "opaque",
+   "prompt": "a lantern on a quay",
+   "size": "64x64"
+  },
+  "route": {
+   "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+   "id": "img-a@acme"
+  },
+  "take": [
+   1
+  ]
+ },
+ {
+  "capability": "structured.generate",
+  "files": {
+   "df12aecdf3d4dab8be9f19559627442e4d4bc25f1cd0705cbd227ba8f39adcc4": {
+    "facts": {
+     "bytes": 12420,
+     "has_alpha": false,
+     "height": 64,
+     "kind": "image/png",
+     "opaque": true,
+     "width": 64
+    },
+    "kind": "image/png",
+    "name": "retouch/image",
+    "path_is_file": true,
+    "size": 12420
+   }
+  },
+  "instance": {
+   "id": "describe#1",
+   "path": "describe",
+   "step": "describe"
+  },
+  "key": "88923c27e282581cc019947f7a8fd40c7d593e3c7fdded2a20841ec2239d0d53",
+  "request": {
+   "context": [
+    {
+     "file": "df12aecdf3d4dab8be9f19559627442e4d4bc25f1cd0705cbd227ba8f39adcc4"
+    }
+   ],
+   "prompt": "Describe the picture.",
+   "schema": {
+    "additionalProperties": false,
+    "properties": {
+     "height": {
+      "type": "integer"
+     },
+     "subject": {
+      "type": "string"
+     },
+     "width": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "subject",
+     "width",
+     "height"
+    ],
+    "type": "object"
+   }
+  },
+  "route": {
+   "fingerprint": "1a974f1107934b4388bf8dbbdc9931a2353db3612d5e2624c2f6eb3e6ba6db2e",
+   "id": "llm-a@acme"
+  },
+  "take": [
+   1
+  ]
+ }
+]

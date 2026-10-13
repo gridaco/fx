@@ -1,0 +1,43 @@
+{
+ "annotations": [
+  {
+   "at": [
+    0.25,
+    0.5
+   ],
+   "label": "the dot of the i",
+   "shape": "point",
+   "tag": "spot"
+  },
+  {
+   "box": [
+    0.1,
+    0.2,
+    0.4,
+    0.6
+   ],
+   "color": "#e4572e",
+   "label": "the first letter",
+   "shape": "box"
+  },
+  {
+   "closed": false,
+   "label": "a line",
+   "points": [
+    [
+     0.1,
+     0.9
+    ],
+    [
+     0.9,
+     0.9
+    ]
+   ],
+   "shape": "points"
+  },
+  {
+   "label": "a note about the whole word"
+  }
+ ],
+ "kind": "fx-annotations-v1"
+}

@@ -1,0 +1,11 @@
+{
+ "fx": "lock/v1",
+ "nodes": {
+  "nodes/words.py#keys@1": "c1f8bb89f7d9cff0e841448fc71839ed57d34a181773a8aa9a7a43c306521086",
+  "nodes/words.py#measure@1": "c1f8bb89f7d9cff0e841448fc71839ed57d34a181773a8aa9a7a43c306521086",
+  "nodes/words.ts#frame@1": "fb15d3b7d456cdfc8854f72e55d8302602fdea37149002d284152ea1f407691a",
+  "nodes/words.ts#order@1": "fb15d3b7d456cdfc8854f72e55d8302602fdea37149002d284152ea1f407691a",
+  "nodes/words.ts#report@1": "fb15d3b7d456cdfc8854f72e55d8302602fdea37149002d284152ea1f407691a",
+  "nodes/words.ts#tally@1": "fb15d3b7d456cdfc8854f72e55d8302602fdea37149002d284152ea1f407691a"
+ }
+}

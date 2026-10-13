@@ -1,0 +1,40 @@
+{
+ "submitted": {
+  "height": 3,
+  "unit": "hands"
+ },
+ "transcript": [
+  {
+   "content": "Measure the lantern, then submit its height.",
+   "role": "user"
+  },
+  {
+   "content": "I measure it first.",
+   "role": "assistant",
+   "tool_calls": [
+    {
+     "arguments": "{\"thing\":\"lantern\"}",
+     "id": "call_measure",
+     "name": "measure"
+    }
+   ]
+  },
+  {
+   "content": "{\"height\":3,\"thing\":\"lantern\",\"unit\":\"hands\"}",
+   "name": "measure",
+   "role": "tool",
+   "tool_call_id": "call_measure"
+  },
+  {
+   "content": "",
+   "role": "assistant",
+   "tool_calls": [
+    {
+     "arguments": "{\"height\":3,\"unit\":\"hands\"}",
+     "id": "call_1",
+     "name": "submit"
+    }
+   ]
+  }
+ ]
+}

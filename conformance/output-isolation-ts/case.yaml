@@ -1,0 +1,24 @@
+# A TypeScript body's output never reaches the node protocol (spec/protocol.md section 1, "Output
+# streams"): before any other module loads, the TypeScript node host moves the protocol to a
+# descriptor of its own and makes descriptor 1 its standard error. nodes/noisy.ts writes a marker
+# with console.log while its module loads, then from the body with console.log, console.info,
+# process.stdout.write, a child spawned with spawnSync and one with spawn (each with inherited
+# stdio), and a child's child (`sh -c 'sh -c "echo …"; true'`); a child that reads its standard
+# input gets nothing. Each marker reaches the engine's standard error, through the pipe the engine
+# gives the host's and copies (`mentions`), none reaches its standard output (run.txt is the run's summary and nothing else),
+# and the protocol stays intact: the run succeeds with the body's output (said.txt).
+steps:
+- argv: [run, case, --routes, routes.yaml, --run, runs/one]
+  save: run.txt
+  mentions:
+  - "marker-module: console.log while the module loads"
+  - "marker-console: console.log"
+  - "marker-info: console.info"
+  - "marker-write: process.stdout.write"
+  - "marker-sync: spawnSync with inherited stdio"
+  - "marker-async: spawn with inherited stdio"
+  - "marker-grandchild: a child of a child"
+  - "marker-stdin: a child read 0 bytes"
+  - "result    ok   spent $0.00"
+- read: runs/one/outputs/said.txt
+  save: said.txt

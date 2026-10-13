@@ -12,7 +12,7 @@ under [identity.md](../spec/identity.md); see [Recording expected output](#recor
 ## Running
 
 ```sh
-uv run --project python python conformance/run.py --command target/debug/grida-fx
+uv run --project python python conformance/run.py --command target/debug/grida-fx --js-sdk js/fx
 uv run --project python python conformance/run.py --command target/debug/grida-fx linear numbers
 ```
 
@@ -24,7 +24,7 @@ uv run --project python python conformance/run.py --command target/debug/grida-f
 
   ```sh
   cargo build --bin grida-fx
-  uv run --project python python conformance/run.py \
+  uv run --project python python conformance/run.py --js-sdk js/fx \
     --command "cargo run -q --manifest-path '$PWD/Cargo.toml' --bin grida-fx --"
   ```
 
@@ -34,11 +34,33 @@ uv run --project python python conformance/run.py --command target/debug/grida-f
   `GRIDA_FX_PYTHON=python/.venv/bin/python` after `uv sync --project python`. A value that is a
   path is made absolute from where you run the script, without following symbolic links (a
   virtual environment's `python` is one); a bare name such as `python3` is passed on unchanged.
-  A stand-in case (one that runs `run --stand-in <file>.py#<function>`) needs it too, even
-  without a `nodes/` folder: its stand-in is served by the same Python host. Only the cases
-  whose `in/` has no `nodes/` folder and that name no stand-in run without it.
+  A stand-in case whose stand-in is Python (`run --stand-in <file>.py#<function>`) needs it
+  too, even without a `nodes/` folder: its stand-in is served by the same Python host. Only the
+  cases with no Python node module or stand-in, and that run no built-in local type (whose bodies
+  are Python's, [protocol.md](../spec/protocol.md) §1), run without it.
+- **TypeScript node bodies.** The cases named `*-ts`, and `mixed-hosts`, use node types,
+  builders and stand-ins written in TypeScript, which the engine runs in the TypeScript node
+  host of `@grida/fx` on Node 24 or later. Their `in/package.json` depends on `@grida/fx`, and
+  the runner installs a built `@grida/fx` into each such project's `node_modules/@grida/fx`
+  (its `package.json` and `dist/`, copied as `npm install` would place them), from `--js-sdk`,
+  else the environment variable `GRIDA_FX_CONFORMANCE_JS_SDK`. Build it first; a case that needs
+  it fails without it:
+
+  ```sh
+  (cd js/fx && bun --no-env-file install --frozen-lockfile && bun --no-env-file run build)
+  uv run --project python python conformance/run.py --command target/debug/grida-fx --js-sdk js/fx
+  ```
+
+  The engine finds Node as it always does: `GRIDA_FX_NODE`, which the runner passes through
+  like `GRIDA_FX_PYTHON` (a path made absolute, a bare name unchanged), else `node` on `PATH`.
+  Set it when `PATH` gives a Node older than 24, which the engine refuses. `--js-sdk` also takes
+  the package as `tools/build_npm.mjs` lays it out, or as npm installed it
+  (`<prefix>/node_modules/@grida/fx`).
 - **Options:** `--timeout SECONDS` limits each step (default 60). `--strict` fails a case that has
-  no `expected/` yet. `--write` records output (below).
+  no `expected/` yet. `--write` records output (below). `--js-sdk FOLDER` is the built
+  `@grida/fx` (above). `--invoker` names the launcher the command is (`grida-fx`, the default;
+  `grida` for `grida fx`; `python` for `python -m grida.fx`): expected terminal text is recorded
+  through `grida-fx`, and a command it names at a verb (`grida-fx run …`) is the invoker's.
 - **Results:** each case prints `PASS`, `FAIL` or `PENDING`, and the runner exits non-zero if any
   case fails.
 
@@ -49,12 +71,16 @@ A case is a folder:
 | Path | What it is |
 |---|---|
 | `case.yaml` | the steps to run, in order |
-| `in/` | an FX project: `fx.yaml`, a `routes.yaml` route table, workflow files, node modules, inputs |
+| `in/` | an FX project: `fx.yaml`, a `routes.yaml` route table, workflow files, node modules (Python or TypeScript), inputs; for TypeScript, a `package.json` |
 | `expected/` | what the steps save, as reviewed by a person |
 | `README.md` | optional: how a fixture was made, and anything a reviewer needs |
 
 The runner copies `in/` to a fresh temporary folder (prefixed `fx-conformance-<case>-`) and runs
 every step there, so a case may write anything into its project without touching the repository.
+The copy keeps symbolic links as links, so a workspace package linked into `node_modules` stays
+one (`local-identity-ts`); each link under `in/` must be relative and stay inside `in/`, or the
+case fails. When `in/package.json` depends on `@grida/fx`, the runner then installs the built
+package into the copy (Running, above).
 
 ### case.yaml
 
@@ -94,6 +120,7 @@ Each step is a mapping with these keys and no others:
 | `argv` | list of strings | the command's arguments, after the command itself, run in the project folder |
 | `status` | integer, default 0 | the exit status `argv` must end with |
 | `mentions` | list of strings | strings that must each appear in the command's stdout or stderr |
+| `never_mentions` | list of strings | strings that must appear in neither; `{project}` stands for the project's absolute path, as the runner made it and with its symbolic links resolved, which no message may name |
 | `stdin` | string | text fed to the command's standard input (default: none, and stdin is closed) |
 | `files` | mapping of path to string | files written into the project as UTF-8, before `argv` runs |
 | `read` | path | a project file to save instead of stdout: something the command wrote (`fx.lock`, a run's `outputs/…`) |
@@ -105,8 +132,9 @@ Each step is a mapping with these keys and no others:
 
 - A step needs `argv`, `read`, `files` or `absent`. In one step, `files` are written first, then
   `argv` runs, then `read` is read, then every `absent` path is checked.
-- `status`, `mentions` and `stdin` need `argv`. `read`, `json`, `jsonl` and `yaml` need
-  `save`, and `save` needs `argv` or `read`. `json`, `jsonl` and `yaml` exclude each other.
+- `status`, `mentions`, `never_mentions` and `stdin` need `argv`. `read`, `json`, `jsonl` and
+  `yaml` need `save`, and `save` needs `argv` or `read`. `json`, `jsonl` and `yaml` exclude each
+  other.
 - Paths in `files`, `read`, `absent` and `invalid_inputs` are POSIX and relative. They may not
   leave the project: no `..`, no absolute path, no backslash, no symbolic link out of it.
 - An unknown key, or a value of the wrong type, fails the case before any step runs.
@@ -117,14 +145,16 @@ says two different inputs mean the same thing (see `numbers` and `local-identity
 ### The command line the cases use
 
 Every step runs in the project folder, and `<target>` is a workflow id (`case`) or a workflow
-file (`workflows/case.yaml`).
+file (`workflows/case.yaml`), or a builder `<file>:<function>` (`workflows/build.ts:build`), whose
+document the host of its file's language makes (`builder-ts`).
 
 | Command | What a case reads from it |
 |---|---|
 | `expand <target>`, `identity <target>`, `price <target>` | the expanded graph, each instance's identity, the price by phase, as JSON on stdout |
 | `plan <target> [--json]` | whether the workflow plans (a workflow found by id, or not found); with `--json`, the expanded graph as `expand` prints it |
 | `run <target> --run <folder> [--deliver <output>=<path>]… [--max-usd <n>]` | a local run in `<folder>`, or the continuation of the run that folder holds; its exit status and summary lines (`result    ok   spent $0.00`, `failed    <id>: <error>`, `stopped   <message>`, `refused: …`); the files it writes under the folder; with `--deliver`, the output files copied to `<path>` (`{key}` once per element) after the run. No case runs `--live`: one passes it only beside `--stand-in`, a usage error |
-| `run <target> … --stand-in <file>.py#<function>` (or `--stand-in=…`) | a stand-in run: the paid calls the cache cannot answer go to `<function>` in the case's `<file>`, served by the Python host in the project folder, offline and for nothing; its summary has the line `stand-in  <source as typed>`, and it keeps its records in the stand-in store, `<cache>/stand-in/`. Its usage errors (with `--live` or `--yes-up-to`, a source of another form, a missing file, `--stand-in -` when standard input is not a socket) and a stand-in that cannot be loaded exit 2 |
+| `plan <file>:<function> --arg <name>=<value>…`, `run <file>:<function> --arg <name>=<value>… --run <folder>` | a builder target: the builder is given each `--arg` as a string and returns the workflow, which plans and runs as a workflow file would; a function that does not return a workflow, one the file does not have, or a file no node host runs exits 2 |
+| `run <target> … --stand-in <file>#<function>` (or `--stand-in=…`) for a `.py`, `.ts`, `.mts`, `.js` or `.mjs` file | a stand-in run: the paid calls the cache cannot answer go to `<function>` in the case's `<file>`, served in the project folder by the host of the file's language, offline and for nothing; its summary has the line `stand-in  <source as typed>`, and it keeps its records in the stand-in store, `<cache>/stand-in/`. Its usage errors (with `--live` or `--yes-up-to`; a source of another form, such as a `.tsx` file, `--stand-in takes <file>#<function> for a .py, .ts, .mts, .js or .mjs file, or -`; a missing file; `--stand-in -` when standard input is not a socket) and a stand-in that cannot be loaded exit 2 |
 | `project <folder>` | the run's record projected to its state, as JSON on stdout |
 | `inspect <folder> --verify`, `inspect <folder> --json` | the run's summary (state, counts, spend, failures) and the check of every file it placed, on stdout; or the same as JSON |
 | `jobs` | the project store's long jobs, one line each; nothing when it holds none |
@@ -154,11 +184,11 @@ Every case relies on these flags:
   current directory; `{key}` in the path stands for each element's key (or position), made a
   safe path. An output the workflow does not declare is refused before anything runs.
 
-A node body in a case may keep a counter in a file in the project folder, the node host's
-working directory, so that a later step can read how often the body ran (`run-retry-engine`,
-`run-timeout`). A case's stand-in does the same in its own working directory, which is the
-engine's, the project folder: `count.txt` for how often it was asked and `asked.json` for what
-(`stand-in-image/README.md`).
+A node body in a case may keep a counter in a file in the project folder, which is the working
+directory of node hosts of either language, so that a later step can read how often the body ran
+(`run-retry-engine`, `run-timeout`, `run-timeout-ts`). A case's stand-in does the same in its own
+working directory, which is the engine's, the project folder: `count.txt` for how often it was
+asked and `asked.json` for what (`stand-in-image/README.md`).
 
 ### Exit status
 
@@ -204,13 +234,17 @@ Each step runs with a minimal environment, never the caller's:
 - `PATH`, from the caller;
 - `HOME`, a fresh empty folder for the case;
 - `NO_COLOR=1`, `LANG=C.UTF-8` and `PYTHONDONTWRITEBYTECODE=1`;
-- `GRIDA_FX_PYTHON`, passed through when set (a path made absolute, above);
+- `GRIDA_FX_NETWORK=off` and `GRIDA_FX_DISABLE_DOTENV=1`, so no provider is reached and no `.env`
+  is read ([providers.md](../spec/providers.md) §2, §3);
+- `GRIDA_FX_PYTHON` and `GRIDA_FX_NODE`, each passed through when set (a path made absolute,
+  above);
 - `RUSTUP_HOME` and `CARGO_HOME`, from the caller, else `~/.rustup` and `~/.cargo` when those
   folders exist, so that a `cargo run` command still finds its toolchain once `HOME` is replaced.
 
-No provider key, `GRIDA_FX_TOOL_<NAME>` override or FX cache location can reach a case, and no
-case spends: a case that needs a paid call's answer seeds the project's store with it
-(`cache-replay`), or answers it with a stand-in (`stand-in-image`).
+No provider key, `GRIDA_FX_TOOL_<NAME>` override, FX cache location, `NODE_OPTIONS` or SDK
+variable (`GRIDA_FX_SDK_*`) can reach a case, and no case spends: a case that needs a paid call's
+answer seeds the project's store with it (`cache-replay`), or answers it with a stand-in
+(`stand-in-image`).
 
 ## Recording expected output
 
@@ -235,9 +269,11 @@ alone.
 |---|---|
 | `at-plan` | an `at: plan` step runs while planning, and a `for_each` over its output expands to keyed instances; its price |
 | `at-plan-run` | an `at: plan` step in a run: its keyed `for_each` of local steps runs, collected into one output; the `at: plan` step is not run again |
+| `builder-ts` | a TypeScript builder (`workflows/build.ts:build --arg count=3`) of TypeScript nodes: planned, run, and answered by the result cache in a second folder; `reroll` writes the takes file beside the builder; a function that returns no workflow, one the file lacks and a `.tsx` builder refused (exit 2) |
 | `cache-prune` | `cache prune` over a hand-written store: refused until the store's earlier users (`legacy`) are forgotten; a preview removes nothing; what the run names stays (a result, and a paid answer only its reservation names) with their files, the rest goes and its cost is reported; a second prune removes nothing |
 | `cache-replay` | a paid call answered offline from a seeded call record, without `--live`; a second run answered from the result cache |
 | `cache-replay-miss` | the same project without a store: a paid call without `--live` is refused (exit 1), naming the capability, the route and `--live` |
+| `closure-errors-ts` | what the TypeScript node host refuses about a source closure: an import of a missing file and an import spelled unlike the file on disk, refused while planning with project-relative paths; a body that imports a project module by a path it computes when it runs fails the node (`node_failure`) |
 | `coalesce-field` | `a.b ?? c` falls back when an object has no field `b` (table rows without an optional field, in `if:` and in `with:`), while a missing field elsewhere is still refused |
 | `conditions-select` | `if:` on an input and on a judge's fact, `on_reject: continue`, and `fx/select@1` with `first_of` |
 | `export-identity` | two unversioned exports of one module given the same value: one source digest, two type and step identities; a second run answers both from the cache, and each keeps its own output |
@@ -248,30 +284,42 @@ alone.
 | `judge-regenerate` | a judge's `on_reject: {regenerate: {max: 3, then: fail}}`, priced as up to three calls |
 | `linear` | a file input's digest in a local step's identity, a pending value that leaves an identity null, and workflow outputs |
 | `local-identity` | an unversioned project type's `<path>#<attr>@source:<digest>` identity over its module, its project imports and its declared resources; a versioned type's `<path>#<attr>@<version>` never moves |
+| `local-identity-ts` | `local-identity` for TypeScript: the closure its imports give, resolved as Node resolves them (a transitive import, a `#` subpath import, a declared source package linked into `node_modules` from the project's workspace, labelled by its name) moves the identity when edited; a type-only import and an installed dependency never do; a versioned type never moves |
 | `lock-drift` | an `fx.lock` entry that no longer matches its source refuses the plan, `lock --check` and `lock`; `lock --same` confirms it |
 | `lock-write` | `lock --check` without a lock fails; `lock` writes `fx.lock` for the versioned types only |
+| `lock-write-ts` | `lock-write` for TypeScript: `lock` locks the versioned types of `.ts` and `.mjs` modules, passing over a declaration file and `node_modules` |
 | `matrix` | a 2x2 `matrix` with dotted keys, collected into a `text{}` port |
+| `mixed-hosts` | Python and TypeScript node types in one workflow, with a keyed collection, JSON and a list passed between them both ways; one `fx.lock` for both languages (needs `GRIDA_FX_PYTHON` and the built `@grida/fx`) |
 | `numbers` | `1` and `1.0` give one identity; numbers render in text in their JCS form; a run's output at `outputs/<name><suffix>`; an integer literal that reading would round is refused (exit 2) |
-| `picture-limits` | what a step's own request asks of its route, refused while planning (exit 1): references on a route without `image_input`, an exact size and a transparent background it lacks, and more input pictures than an edit route's `max_input_pictures`, counted before they are made |
+| `output-isolation-ts` | what a TypeScript body writes to standard output (`console.log`, `process.stdout.write`, children with inherited stdio, a child's child) reaches the engine's standard error, never its standard output or the protocol, and the run succeeds |
 | `phase` | a `for_each` over a step's output with `max:` makes a pending second phase, priced at its maximum |
+| `picture-limits` | what a step's own request asks of its route, refused while planning (exit 1): references on a route without `image_input`, an exact size and a transparent background it lacks, and more input pictures than an edit route's `max_input_pictures`, counted before they are made |
 | `refusals` | six planning problems in one plan (an assertion, a feature under its old name, a missing feature, `independent_of`, an unknown route, an unbounded repeat), exit 1 |
+| `refusals-ts` | `.tsx`, `.cts` and `.cjs` modules and a `.js` module Node loads as CommonJS refused while planning (exit 1); a NaN fact, a `Map` in a JSON output and a keyed output returned as a plain object fail their nodes |
 | `repeat-keyed` | a keyed `for_each` over an input list, collected into one step |
 | `resource-missing` | a declared resource that is not in the project is a planning problem (exit 1), never a crash |
 | `run-cache-hit` | the same plan run into a second folder: every step is a result-cache hit, with the same output bytes |
 | `run-deliver` | `--deliver` of a one-file and a keyed output (keys made safe paths), left alone when unchanged; an undeclared output refused before the run (exit 2) |
 | `run-failures` | `ctx.fail` keeps its node facts (in the run's events), an exception is a `node_error`, a reader of a failed step is skipped as blocked; the run goes on, lists its failures in the expansion's order and exits 1 |
 | `run-local` | a local run of every output shape: text with node facts, JSON written by the engine, a list port, a keyed port, marks written as an `annotations` output, a judge's verdict; outputs and step files at their run-folder names, verified by `inspect --verify` |
+| `run-local-ts` | `run-local` for TypeScript: every output shape, a judge, `inspect --verify`, and a keyed output whose keys (`sun`, `10`, `2`) keep their order, as an output and as a keyed input; the outputs both cases make are byte for byte `run-local`'s; a second run is all cache hits |
 | `run-project` | a local run, then `project` of its record: cache misses, output digests, nothing charged |
-| `run-resume` | a second run into the same folder resumes it (`resumed: true`, nothing runs again); other inputs into that folder are refused (exit 1) |
 | `run-repeat` | the `next` line of `reroll` repeats a run of a workflow file with its inputs file, route table and ceiling, each path relative to the project; `pick` on a run given a workflow input flag advises running it again instead of printing a command |
+| `run-resume` | a second run into the same folder resumes it (`resumed: true`, nothing runs again); other inputs into that folder are refused (exit 1) |
 | `run-retry-engine` | `retry="engine"`: a body that raises twice runs a third time and succeeds, and no more; a `node_retry` event for each failed attempt |
 | `run-takes` | `reroll`, `pick` and `takes list` between runs: the takes file a run's plan names, the take each run draws, a picked result's digest checked by the next run |
 | `run-timeout` | a step past its `timeout:` fails with `ran past 1 seconds` and is not run again, even under `retry="engine"` (exit 1) |
+| `run-timeout-ts` | `run-timeout` for TypeScript: a body that ignores `ctx.signal` and one that waits on it both fail with `ran past 1 seconds` and are not run again; the signal's reason is `the engine cancelled run` |
 | `runs-remove` | `runs list` and `runs remove` over hand-written runs: a preview removes nothing, `--state failed` takes a failed dated run and keeps an incomplete one and the named run, a named and a placed run go when named, and the project folder is refused |
 | `stand-in-agent` | a stand-in's `agent.turn` answers drive the engine's agent loop: a tool call, then a `submit`, and the transcript in the output; a turn whose data is not `{text, tool_calls}` and a structured answer its schema refuses are `call_failed` |
+| `stand-in-agent-ts` | `stand-in-agent` with a TypeScript node type, tool and stand-in: the same call keys, transcript and answers as `stand-in-agent`, byte for byte |
+| `stand-in-calls-ts` | paid calls from TypeScript bodies (`ctx.imageGenerate`, `ctx.imageEdit` with an input file and a file the body made, `ctx.structuredGenerate`) answered by a TypeScript stand-in; the same call key as `stand-in-image` for the same request; a second run answered from the stand-in store |
 | `stand-in-errors` | what a stand-in's answer can end in: refused, failed, declined (`not_live`), a picture of the wrong size, an answer of the wrong shape (a file's kind, an extra file, no file, data), and a body's call the request check refuses before the stand-in is asked; the `code` of each `node_failed`; nothing of them recorded, so a new run asks again |
-| `stand-in-flags` | how `--stand-in` is given: with `--live` or `--yes-up-to`, a malformed source, a missing file, a missing function, a file that fails to import, and `-` without a socket are usage errors (exit 2) that ask nothing; a stand-in that raises stops the run (exit 1) |
+| `stand-in-errors-ts` | `stand-in-errors` with a TypeScript stand-in and node type: the same failures, codes and asked calls, byte for byte |
+| `stand-in-flags` | how `--stand-in` is given: with `--live` or `--yes-up-to`, a malformed source (a `.tsx` file among them), a missing file of either language, a missing function, a file that fails to import, and `-` without a socket are usage errors (exit 2) that ask nothing; a stand-in that raises stops the run (exit 1) |
+| `stand-in-flags-ts` | a TypeScript stand-in file without the function, one that fails to import and one Node loads as CommonJS are usage errors (exit 2); a stand-in that throws stops the run (exit 1) |
 | `stand-in-image` | a stand-in run: the call answered offline for $0.00 under a ceiling below its hold, marked `stand_in` in `plan.json`, `run_started` and the `call` event, kept in the stand-in store (resumed, rerun and call-cache hits ask nothing; the project's own store gets nothing and still misses); the plan digest unchanged; each folder refuses the other mode; `inspect` names it; `pick` and `reroll` refuse it |
+| `stand-in-image-ts` | `stand-in-image` with a TypeScript stand-in (`--stand-in stand_in.ts#answer`): every recorded file is `stand-in-image`'s, byte for byte |
 | `stand-in-job` | long jobs (`video.generate`, `mesh.generate`) answered at once with no job record: files sent without a kind take the capability's (the model's from its signature), and the engine writes `data` from the files, so the clip's file facts and the model's kind become node facts |
 | `takes-pick` | `takes: 3` with `pick: first_accepted`, priced as three calls |
 | `template-prompt` | a prompt file rendered with `vars` and inputs, `max:` from an input, and steps nested in a repeat |
@@ -291,3 +339,27 @@ alone.
   holds for `fx.lock` entries and a takes file's `result` alike.
 - Say what the case pins in a comment at the top of `case.yaml`, so a reviewer can judge its
   recorded output.
+- Pin what a message must say with `mentions`, and only the part FX owns: a sentence that quotes
+  Node's or Python's own error may pin its code and the paths FX made relative, never the rest,
+  which another version or system words differently (`closure-errors-ts`). Where a path could
+  leak, add `never_mentions: ["{project}"]`.
+
+### Writing a TypeScript case
+
+- Name it `<twin>-ts` when it holds a Python case to the same contract, and make its project the
+  twin's in TypeScript, so that a reviewer can compare the two `expected/` folders: wherever the
+  engine owns the bytes (outputs, call keys, records), they must be equal, and the case's
+  comment says where they differ and why.
+- `in/package.json` is `{"private": true, "type": "module", "dependencies": {"@grida/fx": "*"}}`,
+  with `imports` for `#` subpath imports and other dependencies when the case needs them. Never
+  commit `node_modules/@grida/fx`: the runner installs it, refuses a case that carries one, and
+  `.gitignore` keeps it out. Other files under `in/node_modules/` are fixtures and are committed
+  (`local-identity-ts`: an installed dependency, and a relative link to a workspace package).
+- Node modules import from `"@grida/fx"` and name the files they import with their suffix
+  (`./helper.ts`), in the syntax Node's type stripping runs: no `enum`, `namespace` or parameter
+  properties. Export each node type under an ASCII identifier (`[A-Za-z_][A-Za-z0-9_]*`), the
+  only names a type identity can hold.
+- Nothing type-checks a case, but keep its modules correct under the tsconfig a project would use
+  (`allowImportingTsExtensions`, `erasableSyntaxOnly`, `verbatimModuleSyntax`, `noEmit`,
+  `module: nodenext`, `strict`), since a reader takes them as examples; only the mistake a case
+  is about may break it (`closure-errors-ts`' missing and misspelled imports).

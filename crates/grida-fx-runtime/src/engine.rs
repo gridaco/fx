@@ -1,8 +1,9 @@
 //! What one command shares between its tasks.
 //!
 //! - [`Engine`]: built once per command (`run`, and the planning verbs when an `at: plan` step must
-//!   run): the tokio runtime handle, the home project, the store, the node-host pool, the
-//!   provider adapters, whether paid calls are admitted (`--live`), and a stand-in run's stand-in.
+//!   run): the tokio runtime handle, the home project, the store, the node-host pools (one per
+//!   language), the provider adapters, whether paid calls are admitted (`--live`), and a stand-in
+//!   run's stand-in.
 //! - [`Services`]: one run invocation's view of the engine: the ledger and the event log (both
 //!   absent while planning), per-route pacing, cancellation and the invocation id. Every task of
 //!   the invocation holds an `Arc<Services>`.
@@ -18,13 +19,15 @@
 //! becomes its path relative to the project root (`.fx/cache`, or `../shared/.fx/cache` when it
 //! lies outside). The command may name further private roots ([`Engine::with_private_roots`]:
 //! the planning project, the command's working directory, a stand-in file's folder), each
-//! labelled relative to the project root the same way (`..`, `../tools`); a filesystem root is
-//! never one. Each root is matched as given and, when it differs, with its symbolic links
-//! resolved; the longest root is replaced first; a match inside a longer name (`/…/acme2`) is
-//! left alone.
+//! labelled relative to the project root the same way (`..`, `../tools`), and labelled roots
+//! ([`Engine::with_labelled_root`]: the folder of a `@grida/fx` outside the home whose host
+//! program runs TypeScript bodies, labelled `@grida/fx`); a filesystem root is never one. Each
+//! root is matched as given and, when it differs, with its symbolic links resolved
+//! ([`root_labels`]); the longest root is replaced first; a match inside a longer name
+//! (`/…/acme2`) is left alone.
 //!
 //! Threading: the core (planner, expansion, registry, the sync
-//! `PythonHost` that describes and builds) is not `Send` and lives on the command's own thread,
+//! `NodeHosts` that describe and build) is not `Send` and lives on the command's own thread,
 //! the scheduler. Everything that waits (node hosts, paid calls, the agent loop) runs as tokio
 //! tasks on [`Engine::handle`]. The scheduler never blocks inside the runtime: it spawns tasks
 //! with `handle.spawn` and waits on channels with `blocking_recv`, or calls `handle.block_on`
@@ -32,10 +35,12 @@
 
 use crate::calls::pacing::Pacing;
 use crate::events::EventLog;
-use crate::host::pool::HostPool;
+use crate::host::pool::HostPools;
+use crate::host::process::HostSpec;
 use crate::ledger::Ledger;
 use crate::stand_in::StandIn;
 use crate::store::Store;
+use grida_fx_core::host::Language;
 use grida_fx_core::val::FileValue;
 use grida_fx_providers::Adapters;
 use indexmap::IndexMap;
@@ -51,7 +56,10 @@ pub struct Engine {
     /// The home project's declared source packages (spec/protocol.md §2 `initialize`).
     pub sources: Vec<String>,
     pub store: Arc<Store>,
-    pub hosts: Arc<HostPool>,
+    /// The pools that run bodies, one per language.
+    pub hosts: Arc<HostPools>,
+    /// The most hosts each pool starts.
+    host_limit: usize,
     pub adapters: Arc<Adapters>,
     /// `--live`: paid calls that miss the call cache may be sent.
     pub live: bool,
@@ -61,14 +69,17 @@ pub struct Engine {
     pub stand_in: Option<Arc<StandIn>>,
     /// Further private roots [`Engine::scrub`] replaces (module doc).
     private_roots: Vec<PathBuf>,
+    /// Private roots [`Engine::scrub`] replaces with a label of their own (module doc).
+    labelled_roots: Vec<(PathBuf, String)>,
 }
 
 impl Engine {
-    /// An engine over the home project `project_root` with its store at `store_root` and a pool
-    /// of at most `hosts` node hosts started from `host`.
+    /// An engine over the home project `host.project_root` with its store at `store_root` and a
+    /// pool of at most `hosts` node hosts started from `host`, for the language of `host`; the
+    /// other language has no pool until [`Engine::with_host`] gives it one.
     pub fn new(
         handle: tokio::runtime::Handle,
-        host: crate::host::process::HostSpec,
+        host: HostSpec,
         store_root: &std::path::Path,
         hosts: usize,
         adapters: Adapters,
@@ -79,12 +90,25 @@ impl Engine {
             project_root: host.project_root.clone(),
             sources: host.sources.clone(),
             store: Arc::new(Store::open(store_root)),
-            hosts: Arc::new(HostPool::new(host, hosts)),
+            hosts: Arc::new(HostPools::new(host, hosts)),
+            host_limit: hosts,
             adapters: Arc::new(adapters),
             live,
             stand_in: None,
             private_roots: Vec::new(),
+            labelled_roots: Vec::new(),
         }
+    }
+
+    /// The same engine with a pool for `language`'s hosts started from `spec` (at most as many
+    /// as [`Engine::new`] was given), or, when `spec` is `Err`, the sentence every job of that
+    /// language fails with. Give it before the engine is shared.
+    pub fn with_host(mut self, language: Language, spec: Result<HostSpec, String>) -> Engine {
+        let limit = self.host_limit;
+        let pools = Arc::get_mut(&mut self.hosts)
+            .expect("an engine's host pools are its own until the engine is shared");
+        pools.set(language, spec, limit);
+        self
     }
 
     /// The same engine scrubbing `roots` too (module doc); a filesystem root is left out.
@@ -93,6 +117,16 @@ impl Engine {
             if root.parent().is_some() && !self.private_roots.contains(&root) {
                 self.private_roots.push(root);
             }
+        }
+        self
+    }
+
+    /// The same engine scrubbing `root` too, replaced by `label` rather than a path relative to
+    /// the project (module doc); a filesystem root is left out.
+    pub fn with_labelled_root(mut self, root: PathBuf, label: impl Into<String>) -> Engine {
+        let label = label.into();
+        if root.parent().is_some() && !self.labelled_roots.iter().any(|(known, _)| *known == root) {
+            self.labelled_roots.push((root, label));
         }
         self
     }
@@ -110,7 +144,7 @@ impl Engine {
     }
 
     /// `text` with the store root, the project root and the further private roots replaced by
-    /// relative labels (module doc).
+    /// relative labels, and the labelled roots by their labels (module doc).
     pub fn scrub(&self, text: &str) -> String {
         let project = self.project_root.as_path();
         let store = self.store.root();
@@ -121,17 +155,27 @@ impl Engine {
         for root in &self.private_roots {
             labelled.push((root.as_path(), relative_label(root, project)));
         }
-        let mut roots: Vec<(String, String)> = Vec::new();
-        for (root, label) in labelled {
-            roots.push((root.to_string_lossy().into_owned(), label.clone()));
-            if let Ok(resolved) = std::fs::canonicalize(root)
-                && resolved != root
-            {
-                roots.push((resolved.to_string_lossy().into_owned(), label));
-            }
+        for (root, label) in &self.labelled_roots {
+            labelled.push((root.as_path(), label.clone()));
         }
+        let roots: Vec<(String, String)> = labelled
+            .into_iter()
+            .flat_map(|(root, label)| root_labels(root, &label))
+            .collect();
         scrub_paths(text, &roots)
     }
+}
+
+/// The `(root, label)` pairs [`scrub_paths`] takes for one root: as given and, when it differs,
+/// with its symbolic links resolved (module doc).
+pub fn root_labels(root: &std::path::Path, label: &str) -> Vec<(String, String)> {
+    let mut roots = vec![(root.to_string_lossy().into_owned(), label.to_string())];
+    if let Ok(resolved) = std::fs::canonicalize(root)
+        && resolved != root
+    {
+        roots.push((resolved.to_string_lossy().into_owned(), label.to_string()));
+    }
+    roots
 }
 
 /// `path` relative to `base`, with `/` between segments (`..` to climb); `.` for `base` itself.
@@ -475,13 +519,7 @@ mod tests {
         std::fs::create_dir_all(root.join(".fx/cache")).unwrap();
         let engine = Engine::new(
             runtime.handle().clone(),
-            crate::host::process::HostSpec {
-                python: PathBuf::from("python3"),
-                label: "python3".into(),
-                project_root: root.clone(),
-                sources: Vec::new(),
-                check_version: false,
-            },
+            HostSpec::python("python3", "python3", &root, Vec::new()).unchecked(),
             &root.join(".fx/cache"),
             1,
             Adapters::new(),
@@ -509,6 +547,29 @@ mod tests {
         assert_eq!(
             engine.scrub(&text),
             "../tools/stand_in.py failed: ../.venv/bin/python"
+        );
+        assert_eq!(engine.scrub("a/b /c"), "a/b /c");
+
+        // A labelled root keeps its label, inside a private root too (the longest root first),
+        // and through its resolved path; never `/`.
+        let package = dir.path().join("node_modules/@grida/fx");
+        std::fs::create_dir_all(&package).unwrap();
+        let engine = engine
+            .with_labelled_root(package.clone(), "@grida/fx")
+            .with_labelled_root(PathBuf::from("/"), "nothing");
+        let text = format!(
+            "Package subpath './x' is not defined by \"exports\" in {}/package.json imported \
+             from {}",
+            package.display(),
+            std::fs::canonicalize(&package)
+                .unwrap()
+                .join("dist/host.js")
+                .display()
+        );
+        assert_eq!(
+            engine.scrub(&text),
+            "Package subpath './x' is not defined by \"exports\" in @grida/fx/package.json \
+             imported from @grida/fx/dist/host.js"
         );
         assert_eq!(engine.scrub("a/b /c"), "a/b /c");
     }

@@ -1,0 +1,28 @@
+# What the TypeScript node host and the engine refuse in a TypeScript project.
+# - Planning `case` (expand, exit 1) refuses four steps: a .tsx, a .cts and a .cjs module have no
+#   node host (`<uses>: no node host for .<suffix> modules`, no "yet": FX will not host them),
+#   and legacy/old.js, which Node would load as CommonJS (legacy/package.json says
+#   `"type": "commonjs"`), fails to import with `legacy/old.js is not an ES module: set "type":
+#   "module" in package.json`, before its code runs: it would have written ran.txt.
+# - Running `values` (exit 1) fails each step on a value JSON cannot hold, which the host refuses
+#   before anything is sent: a fact that is NaN (`TypeError: fact score: NaN is not a JSON
+#   number`, a node_error), a JSON output holding a Map (`at /sizes: a Map is not a JSON value`),
+#   and a keyed output returned as a plain object, which would lose its order
+#   (`output entries is an object; a keyed output is a Map`, a node_failure). project.json shows
+#   the three failures.
+steps:
+- argv: [expand, case, --routes, routes.yaml]
+  status: 1
+  save: expand.json
+  json: true
+  absent:
+  - ran.txt
+- argv: [run, values, --routes, routes.yaml, --run, runs/one]
+  status: 1
+  mentions:
+  - "failed    nan#1: TypeError: fact score: NaN is not a JSON number"
+  - "failed    keyed#1: TypeError: ctx.out.json takes a JSON value: at /sizes: a Map is not a JSON value"
+  - "failed    plain#1: output entries is an object; a keyed output is a Map"
+- argv: [project, runs/one]
+  save: project.json
+  json: true

@@ -143,7 +143,9 @@ embedded-viewer checks, with provider keys removed and dotenv disabled.
 
 For a native macOS setup preview, use Bun **1.4.0**, Node 18 or later, Rust 1.89 or
 later, and a current uv (`uv self update` for a standalone uv installation). The
-publisher requires uv's `--no-attestations` option; uv 0.6 does not support it.
+publisher requires uv's `--no-attestations` option; uv 0.6 does not support it. The
+conformance cases with TypeScript node bodies need Node 24 or later: `node` on `PATH`, or
+`GRIDA_FX_NODE` naming one when `PATH` gives an older Node.
 Prepare the entire verified bundle with one command:
 
 ```sh
@@ -226,10 +228,12 @@ The tag starts `release.yml`, which runs four jobs:
      dishonest one, and checks that the tag is the one in the table;
    - installs that wheel into a fresh Python 3.11 environment, and runs the whole conformance
      suite (`--strict`, `--invoker python`) through `python -m grida.fx`, with that environment
-     hosting the node bodies;
+     hosting the Python node bodies, and Node 24 (`GRIDA_FX_NODE`) with the `@grida/fx` the npm
+     packager built (`--js-sdk`) hosting the TypeScript ones;
    - its npm packager, `tools/build_npm.mjs`, runs under Node 18 (the oldest Node the
      packages support). It installs the tarballs into a fresh prefix, and runs the suite
-     again through the installed `grida-fx` command;
+     again through the installed `grida-fx` command, with the installed `@grida/fx` as the
+     TypeScript cases' `--js-sdk` and their bodies still on Node 24;
    - runs `tools/check_viewer.py` through both installed commands from an isolated temporary
      directory. A synthetic graph needs no provider; loopback requests must retrieve every
      embedded frontend file byte-for-byte, without a browser or frontend runtime;
@@ -290,5 +294,10 @@ cd "$(mktemp -d)" && grida-fx init demo --template hello --json   # "source": "r
 
   ```sh
   GRIDA_FX_PYTHON=fx-check/bin/python uv run --project python python conformance/run.py \
-    --strict --invoker python --command "fx-check/bin/python -m grida.fx"
+    --strict --invoker python --command "fx-check/bin/python -m grida.fx" \
+    --js-sdk "$(npm root -g)/@grida/fx"
   ```
+
+  The TypeScript cases install the `@grida/fx` that `--js-sdk` names (here the one
+  `npm install -g` put in place) into their projects, and host their bodies on Node 24 or
+  later: `node` on `PATH`, or the Node that `GRIDA_FX_NODE` names.

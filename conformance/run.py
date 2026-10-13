@@ -15,6 +15,10 @@ absolute path (build first: a step's timeout includes any build):
 
     python conformance/run.py \
         --command "cargo run -q --manifest-path '$PWD/Cargo.toml' --bin grida-fx --"
+
+A case whose project depends on @grida/fx (TypeScript node bodies) gets a built @grida/fx
+installed into its node_modules: from --js-sdk, else GRIDA_FX_CONFORMANCE_JS_SDK (a folder
+holding the package's package.json and dist/, such as js/fx after `bun run build`).
 """
 
 from __future__ import annotations
@@ -62,6 +66,7 @@ STEP_KEYS = {
     "files",
     "stdin",
     "mentions",
+    "never_mentions",
     "absent",
 }
 # The ways a saved text may be compared by meaning; a step uses at most one.
@@ -70,8 +75,12 @@ FORMATS = ("json", "jsonl", "yaml")
 # from run events (objects with an "event" member), never from the data under DATA_KEYS.
 VOLATILE_KEYS = {"offset_ms", "invocation_id", "duration_ms", "created_at", "started_at"}
 DATA_KEYS = {"with", "inputs", "outputs", "request", "data", "facts", "params", "value", "contract"}
-# Which Python hosts node bodies: passed through from the caller when set.
+# Which Python and which Node host node bodies: passed through from the caller when set.
 PYTHON_HOST = "GRIDA_FX_PYTHON"
+NODE_HOST = "GRIDA_FX_NODE"
+# The built @grida/fx a TypeScript case's project gets as node_modules/@grida/fx.
+JS_SDK_ENV = "GRIDA_FX_CONFORMANCE_JS_SDK"
+JS_SDK_NAME = "@grida/fx"
 # Where rustup and Cargo keep their toolchains: HOME is replaced, so a `cargo run` command finds
 # them only through these. From the caller, else the default folder in the caller's home.
 TOOLCHAIN_HOMES = {"RUSTUP_HOME": ".rustup", "CARGO_HOME": ".cargo"}
@@ -132,16 +141,18 @@ def _executable(text: str, what: str) -> str:
 
 
 def passed_through() -> dict[str, str]:
-    """What the caller's environment gives every step: the Python host and the toolchain homes."""
+    """What the caller's environment gives every step: the Python and Node hosts and the
+    toolchain homes."""
 
     passed: dict[str, str] = {}
-    python = os.environ.get(PYTHON_HOST)
-    if python:
-        # A path is resolved now: every step runs in a temporary folder, where a relative path
-        # would name nothing. A bare name is left for the engine to find on PATH.
-        if _names_a_path(python):
-            python = _executable(python, f"{PYTHON_HOST}={python}")
-        passed[PYTHON_HOST] = python
+    for variable in (PYTHON_HOST, NODE_HOST):
+        program = os.environ.get(variable)
+        if program:
+            # A path is resolved now: every step runs in a temporary folder, where a relative
+            # path would name nothing. A bare name is left for the engine to find on PATH.
+            if _names_a_path(program):
+                program = _executable(program, f"{variable}={program}")
+            passed[variable] = program
     for name, folder in TOOLCHAIN_HOMES.items():
         value = os.environ.get(name)
         if value:
@@ -149,6 +160,69 @@ def passed_through() -> dict[str, str]:
         elif (default := Path.home() / folder).is_dir():
             passed[name] = str(default)
     return passed
+
+
+def resolve_js_sdk(given: str | None) -> Path | None:
+    """The built @grida/fx that TypeScript cases install, or None when none was given."""
+
+    text = given if given is not None else os.environ.get(JS_SDK_ENV)
+    if not text:
+        return None
+    folder = Path(os.path.abspath(os.path.expanduser(text)))
+    try:
+        name = json.loads((folder / "package.json").read_text(encoding="utf-8")).get("name")
+    except (OSError, ValueError, AttributeError):
+        name = None
+    if name != JS_SDK_NAME or not (folder / "dist" / "host-entry.js").is_file():
+        raise SystemExit(
+            f"conformance: {text} is not a built {JS_SDK_NAME} (package.json and "
+            "dist/host-entry.js); build it with `bun run build` in js/fx"
+        )
+    return folder
+
+
+def install_js_sdk(project: Path, js_sdk: Path | None) -> None:
+    """Gives a project whose package.json depends on @grida/fx a copy of the built package in
+    node_modules, as `npm install` would: copied, not linked, so its files lie under
+    node_modules the way an installed dependency's do."""
+
+    manifest = project / "package.json"
+    if not manifest.is_file():
+        return
+    try:
+        package = json.loads(manifest.read_text(encoding="utf-8"))
+    except ValueError as error:
+        raise CaseFailure(f"in/package.json: {error}") from None
+    wanted = any(
+        isinstance(package.get(field), dict) and JS_SDK_NAME in package[field]
+        for field in ("dependencies", "devDependencies")
+    )
+    if not wanted:
+        return
+    if js_sdk is None:
+        raise CaseFailure(
+            f"in/package.json depends on {JS_SDK_NAME}: pass --js-sdk or set {JS_SDK_ENV}"
+        )
+    target = project / "node_modules" / "@grida" / "fx"
+    if target.exists():
+        raise CaseFailure(f"in/ carries node_modules/{JS_SDK_NAME}; the runner installs it")
+    target.mkdir(parents=True)
+    shutil.copy2(js_sdk / "package.json", target / "package.json")
+    shutil.copytree(js_sdk / "dist", target / "dist")
+
+
+def check_links(folder: Path) -> None:
+    """Every symbolic link under a case's in/ is relative and stays inside it (README.md, "A
+    case"): the copy keeps links, so a workspace package linked into node_modules stays one."""
+
+    root = folder.resolve()
+    for path in sorted(folder.rglob("*")):
+        if not path.is_symlink():
+            continue
+        target = os.readlink(path)
+        where = path.relative_to(folder).as_posix()
+        if os.path.isabs(target) or not path.resolve().is_relative_to(root):
+            raise CaseFailure(f"in/{where} is a symbolic link out of in/")
 
 
 def step_environment(home: Path, passed: dict[str, str]) -> dict[str, str]:
@@ -286,8 +360,8 @@ def load_case(case: Path) -> list[dict[str, Any]]:
             raise CaseFailure(f"{where}: read needs save")
         if "read" in step and not _is_path(step["read"]):
             raise CaseFailure(f"{where}: read is a relative path inside the project")
-        if ("status" in step or "stdin" in step or "mentions" in step) and argv is None:
-            raise CaseFailure(f"{where}: status, stdin and mentions need argv")
+        if {"status", "stdin", "mentions", "never_mentions"} & set(step) and argv is None:
+            raise CaseFailure(f"{where}: status, stdin, mentions and never_mentions need argv")
         if "save" in step and argv is None and "read" not in step:
             raise CaseFailure(f"{where}: save needs argv or read")
         save = step.get("save")
@@ -312,9 +386,10 @@ def load_case(case: Path) -> list[dict[str, Any]]:
             raise CaseFailure(f"{where}: files maps relative paths to text")
         if "stdin" in step and not isinstance(step["stdin"], str):
             raise CaseFailure(f"{where}: stdin is text")
-        mentions = step.get("mentions", [])
-        if not isinstance(mentions, list) or not all(isinstance(m, str) for m in mentions):
-            raise CaseFailure(f"{where}: mentions is a list of strings")
+        for key in ("mentions", "never_mentions"):
+            texts = step.get(key, [])
+            if not isinstance(texts, list) or not all(isinstance(m, str) for m in texts):
+                raise CaseFailure(f"{where}: {key} is a list of strings")
         absent = step.get("absent", [])
         if not isinstance(absent, list) or not all(map(_is_path, absent)):
             raise CaseFailure(f"{where}: absent is a list of relative paths inside the project")
@@ -328,6 +403,7 @@ def run_case(
     passed: dict[str, str],
     timeout_s: float,
     texts: set[str] | None = None,
+    js_sdk: Path | None = None,
 ) -> dict[str, bytes]:
     """Run a case's steps; returns what they save. The names of saves that are the command's own
     terminal text (its stdout, compared as bytes) are added to `texts`."""
@@ -335,7 +411,11 @@ def run_case(
     project = work / "project"
     home = work / "home"
     home.mkdir()
-    shutil.copytree(case / "in", project, ignore=shutil.ignore_patterns("__pycache__"))
+    check_links(case / "in")
+    shutil.copytree(
+        case / "in", project, symlinks=True, ignore=shutil.ignore_patterns("__pycache__")
+    )
+    install_js_sdk(project, js_sdk)
     env = step_environment(home, passed)
     saved: dict[str, bytes] = {}
     saved_by: dict[str, int] = {}
@@ -361,6 +441,21 @@ def run_case(
             missing = [text for text in step.get("mentions", []) if text not in both]
             if missing:
                 raise CaseFailure(f"{label} never mentions {missing}\n{_shown(stdout + stderr)}")
+            # `{project}` stands for the project's absolute path, as given and as resolved: a
+            # private path no message may name.
+            leaked = [
+                text
+                for text in step.get("never_mentions", [])
+                if any(
+                    shown in both
+                    for shown in {
+                        text.replace("{project}", str(project)),
+                        text.replace("{project}", str(project.resolve())),
+                    }
+                )
+            ]
+            if leaked:
+                raise CaseFailure(f"{label} mentions {leaked}\n{_shown(stdout + stderr)}")
             output = stdout
         if "read" in step:
             path = project_path(project, step["read"], f"{label} read")
@@ -654,6 +749,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--strict", action="store_true", help="a case with no expected/ yet fails")
     parser.add_argument(
+        "--js-sdk",
+        help=f"a built {JS_SDK_NAME} for TypeScript cases (default: ${JS_SDK_ENV})",
+    )
+    parser.add_argument(
         "--invoker",
         choices=sorted(INVOKER_COMMANDS),
         default="grida-fx",
@@ -667,6 +766,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--write records through the grida-fx invoker only")
     command = resolve_command(args.command)
     passed = passed_through()
+    js_sdk = resolve_js_sdk(args.js_sdk)
     cases = sorted(path.parent for path in ROOT.glob("*/case.yaml"))
     if args.cases:
         known = {case.name for case in cases}
@@ -680,7 +780,7 @@ def main(argv: list[str] | None = None) -> int:
         with tempfile.TemporaryDirectory(prefix=f"fx-conformance-{case.name}-") as work:
             texts: set[str] = set()
             try:
-                saved = run_case(case, Path(work), command, passed, args.timeout, texts)
+                saved = run_case(case, Path(work), command, passed, args.timeout, texts, js_sdk)
             except CaseFailure as error:
                 outcome = Outcome(case.name, "FAIL", str(error))
             else:

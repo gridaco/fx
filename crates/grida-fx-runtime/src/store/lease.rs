@@ -81,7 +81,9 @@ impl Store {
             return Ok(());
         }
         let unsupported = |error: io::Error| {
-            eprintln!("note: the cache cannot be locked ({error}); going on without its lock");
+            crate::stderr::line(format_args!(
+                "note: the cache cannot be locked ({error}); going on without its lock"
+            ));
             if let Entry::Vacant(vacant) = held().entry(self.root.clone()) {
                 vacant.insert(None);
             }
@@ -99,7 +101,7 @@ impl Store {
                 Ok(()) => break,
                 Err(TryLockError::WouldBlock) if started.elapsed() < wait => {
                     if !told {
-                        eprintln!("waiting for grida-fx cache prune to finish");
+                        crate::stderr::line("waiting for grida-fx cache prune to finish");
                         told = true;
                     }
                     std::thread::sleep(Duration::from_millis(100));
@@ -170,11 +172,15 @@ impl Store {
         }
         let users = store.join("projects");
         if let Err(error) = make_users(store, &users) {
-            eprintln!("note: the cache's projects/ cannot be made: {error}");
+            crate::stderr::line(format_args!(
+                "note: the cache's projects/ cannot be made: {error}"
+            ));
             return;
         }
         if let Err(error) = touch(&users.join(user_id(project))) {
-            eprintln!("note: the cache's projects/ cannot be written: {error}");
+            crate::stderr::line(format_args!(
+                "note: the cache's projects/ cannot be written: {error}"
+            ));
         }
     }
 }

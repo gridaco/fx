@@ -55,7 +55,8 @@ and reference them relative to `SKILL.md`.
 ## Authoring conventions
 
 - Skills work in a user's project without an FX repository checkout. Use the
-  public `grida fx` command (`grida-fx` standalone) or `grida.fx` SDK, and document required dependencies.
+  public `grida fx` command (`grida-fx` standalone) or the `grida.fx` and
+  `@grida/fx` SDKs, and document required dependencies.
 - Keep each skill self-contained. Do not depend on sibling skills, repository
   tooling, contributor instructions, or local development paths.
 - Teach the existing FX contracts rather than implementing another engine.

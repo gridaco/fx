@@ -1,0 +1,9 @@
+fx: workflow/v1
+id: case
+title: Output that never reaches the protocol
+steps:
+  noisy:
+    uses: ./nodes/noisy.ts#noisy
+    with: { word: quiet }
+outputs:
+  said: ${{ steps.noisy.outputs.text }}

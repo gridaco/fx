@@ -1,0 +1,7 @@
+fx: workflow/v1
+id: wrongcase
+title: An import spelled unlike the file
+steps:
+  s:
+    uses: ./nodes/wrongcase.ts#wrongcase
+    with: { text: hello }

@@ -21,6 +21,7 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { constants } from "node:os";
 import { binary } from "./binary.js";
+import { hostVariables } from "./engine.js";
 
 /**
  * The version of the contract between `@grida/fx/cli` and a host command: {@link launch}'s
@@ -73,7 +74,7 @@ export function launch(argv: readonly string[], options: LaunchOptions = {}): vo
     );
   }
   const command = COMMANDS[invoker];
-  const env = { ...process.env, [INVOKER_VARIABLE]: invoker };
+  const env = { ...process.env, ...hostVariables(), [INVOKER_VARIABLE]: invoker };
   let engine: string;
   try {
     engine = binary({ env });

@@ -1,0 +1,7 @@
+fx: workflow/v1
+id: missing
+title: An import of a missing file
+steps:
+  s:
+    uses: ./nodes/broken.ts#broken
+    with: { text: hello }

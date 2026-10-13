@@ -1,12 +1,16 @@
 // The SDK against the engine, offline: planning verbs, a run whose paid call has no --live (it
-// fails its step, spending nothing), and a run answered from a seeded call cache
-// (conformance/cache-replay). Skipped when no engine is built (see support.ts).
+// fails its step, spending nothing), a run answered from a seeded call cache
+// (conformance/cache-replay), and a run whose paid call a stand-in in this process answers
+// (`run(…, { standIn })`, on a copy of conformance/stand-in-image). Skipped when no engine is built
+// (see support.ts).
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { cpSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { deflateSync } from "node:zlib";
 import {
   binary,
+  DECLINE,
   engineVersion,
   expand,
   expr,
@@ -19,6 +23,8 @@ import {
   project,
   RunFile,
   run,
+  type StandIn,
+  type StandInCall,
   toYaml,
   version,
   workflow,
@@ -26,6 +32,40 @@ import {
 import { repoRoot, SLOW, temporaryFolder, testEngine } from "./support.js";
 
 const engine = testEngine();
+
+/** A PNG of one opaque colour, `width` by `height`. */
+function png(width: number, height: number): Uint8Array {
+  const chunk = (tag: string, data: Buffer) => {
+    const body = Buffer.concat([Buffer.from(tag, "latin1"), data]);
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(data.length);
+    const check = Buffer.alloc(4);
+    check.writeUInt32BE(crc32(body));
+    return Buffer.concat([length, body, check]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header.set([8, 2, 0, 0, 0], 8);
+  const row = Buffer.concat([Buffer.from([0]), ...Array.from({ length: width }, () => Buffer.from([40, 90, 160]))]);
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk("IHDR", header),
+    chunk("IDAT", deflateSync(Buffer.concat(Array.from({ length: height }, () => row)))),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
+function crc32(data: Uint8Array): number {
+  let crc = 0xffffffff;
+  for (const byte of data) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = crc & 1 ? (crc >>> 1) ^ 0xedb88320 : crc >>> 1;
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
 
 describe.skipIf(engine === null)("the SDK, driving the engine", () => {
   const folder = temporaryFolder("api");
@@ -242,6 +282,48 @@ describe.skipIf(engine === null)("the SDK, driving the engine", () => {
         expect(checked.verification).toEqual({ verified: true, problems: [] });
       } finally {
         replay.cleanup();
+      }
+    },
+    SLOW,
+  );
+
+  test.skipIf(process.platform === "win32")(
+    "a stand-in in this process answers the paid call; a second run is answered from the stand-in store",
+    async () => {
+      const standing = temporaryFolder("stand-in");
+      try {
+        cpSync(join(repoRoot, "conformance", "stand-in-image", "in"), standing.path, { recursive: true });
+        const calls: StandInCall[] = [];
+        const standIn: StandIn = (call) => {
+          calls.push(call);
+          if (call.capability !== "image.generate") {
+            return DECLINE;
+          }
+          const [width = 0, height = 0] = String(call.request.size).split("x").map(Number);
+          return { files: { image: png(width, height) } };
+        };
+        const options = { cwd: standing.path, env, routes: ["routes.yaml"], standIn };
+        const first = await run("case", { ...options, runDir: "runs/one", deliver: { image: "delivered.png" } });
+        expect(first.ok).toBe(true);
+        expect(first.exitCode).toBe(0);
+        expect(first.standIn).toBe(true);
+        expect(first.chargedUsd).toBe(0);
+        expect(calls.map((call) => [call.capability, call.route.id, call.request.size, [...call.takes]])).toEqual([
+          ["image.generate", "img-a@acme", "64x64", [1]],
+        ]);
+        const image = first.outputs.image as RunFile;
+        expect(image).toBeInstanceOf(RunFile);
+        expect(image.kind).toBe("image/png");
+        expect(Buffer.from(readFileSync(join(standing.path, "delivered.png")))).toEqual(Buffer.from(png(64, 64)));
+        expect(first.steps["draw#1"]).toMatchObject({ state: "succeeded" });
+        // The same plan in a new folder: the stand-in store answers, and the stand-in is not asked.
+        const second = await run("case", { ...options, runDir: "runs/two" });
+        expect(second.ok).toBe(true);
+        expect(second.standIn).toBe(true);
+        expect(calls).toHaveLength(1);
+        expect((second.outputs.image as RunFile).digest).toBe(image.digest);
+      } finally {
+        standing.cleanup();
       }
     },
     SLOW,

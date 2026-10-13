@@ -29,10 +29,43 @@ test("the SDK's surface", () => {
     "toYaml",
     "workflow",
     "expr",
+    "node",
+    "tool",
   ]) {
     expect(typeof (fx as Record<string, unknown>)[name]).toBe("function");
   }
   expect(new fx.FxError("x")).toBeInstanceOf(Error);
+  // What node bodies use: their files and errors.
+  for (const name of [
+    "InputFile",
+    "NodeFailure",
+    "EngineError",
+    "Cancelled",
+    "CapabilityError",
+    "CapabilityUndeclared",
+    "OverBound",
+    "NoRoute",
+    "NotLive",
+    "CeilingExceeded",
+    "CallRefused",
+    "CallFailed",
+    "JobUnsettled",
+    "AgentUnfinished",
+    "UndeclaredResource",
+    "ExpressionError",
+    "OutsideWorkDir",
+    "UnknownFile",
+  ]) {
+    expect(typeof (fx as Record<string, unknown>)[name]).toBe("function");
+  }
+  expect(new fx.CallFailed("x")).toBeInstanceOf(fx.EngineError);
+  expect(new fx.NodeFailure("x")).toBeInstanceOf(Error);
+  // What agent tools and stand-ins use.
+  expect(typeof fx.ToolReply).toBe("function");
+  expect(fx.DECLINE as symbol).toBe(Symbol.for("grida.fx.decline"));
+  for (const name of ["json", "turn", "submit"] as const) {
+    expect(typeof fx.Answer[name]).toBe("function");
+  }
 });
 
 test("a workflow document, written for the engine", () => {

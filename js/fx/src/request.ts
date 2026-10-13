@@ -9,6 +9,8 @@ import { unlink, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { Environment } from "./binary.js";
 import type { CallOptions } from "./engine.js";
+import { typeName } from "./protocol.js";
+import type { StandIn } from "./stand-in.js";
 import { toYaml } from "./yaml.js";
 
 /** Options of the planning verbs (`plan`, `expand`, `identity`, `price`) and of `run`. */
@@ -20,7 +22,7 @@ export interface PlanOptions extends CallOptions {
   readonly inputFiles?: readonly string[];
   /** Route tables (`--routes`, `fx: routes/v1`); giving any leaves the built-in table out. */
   readonly routes?: readonly string[];
-  /** Arguments of a builder target `file.py:function` (`--arg NAME=VALUE`). */
+  /** Arguments of a builder target, `file.ts:function` or `file.py:function` (`--arg NAME=VALUE`). */
   readonly args?: Readonly<Record<string, string | number | boolean>>;
   /** The ceiling in US dollars (`--max-usd`); a live run needs one (here, in the workflow or in
    * fx.yaml) unless every call is on the user's own Codex or Grok Build (`imagegen@codex`,
@@ -44,6 +46,9 @@ export interface RunOptions extends PlanOptions {
   /** Copy outputs out after the run (`--deliver OUTPUT=PATH`): `{ output: path }`, with `{key}`
    * in the path for each element of a collection. */
   readonly deliver?: Readonly<Record<string, string>>;
+  /** Answer the run's paid calls with this function instead of a provider (`--stand-in -`): a
+   * stand-in run, offline and for nothing. Never with `live` or `yesUpTo`; POSIX only. */
+  readonly standIn?: StandIn;
 }
 
 /** A target with its planning options, resolved. */
@@ -63,7 +68,7 @@ export interface PlanRequest {
 export function makeRequest(target: string, options: PlanOptions): PlanRequest {
   if (typeof target !== "string" || target === "") {
     throw new TypeError(
-      "a target is a workflow file, a workflow id or a builder file.py:function, as a string",
+      "a target is a workflow file, a workflow id or a builder file:function, as a string",
     );
   }
   if (target.startsWith("-")) {
@@ -128,6 +133,20 @@ export function runArgs(options: RunOptions): string[] {
   if (options.live !== undefined && typeof options.live !== "boolean") {
     throw new TypeError(`live is true or false, not ${JSON.stringify(options.live)}`);
   }
+  if (options.standIn !== undefined) {
+    if (options.live === true) {
+      throw new TypeError("a stand-in run is never live: pass live: false, or no standIn");
+    }
+    if (options.yesUpTo !== undefined) {
+      throw new TypeError("a stand-in run runs every phase: yesUpTo does not apply");
+    }
+    if (typeof options.standIn !== "function") {
+      throw new TypeError(`standIn is a function of one StandInCall, not ${typeName(options.standIn)}`);
+    }
+    if (process.platform === "win32") {
+      throw new Error("stand-ins need a POSIX system");
+    }
+  }
   if (options.live === true) {
     args.push("--live");
   }
@@ -144,6 +163,9 @@ export function runArgs(options: RunOptions): string[] {
       throw new TypeError(`deliver.${name} is a path`);
     }
     args.push(`--deliver=${name}=${path}`);
+  }
+  if (options.standIn !== undefined) {
+    args.push("--stand-in=-");
   }
   return args;
 }

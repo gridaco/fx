@@ -1,0 +1,67 @@
+# run-local's twin with TypeScript node types (in/nodes/local.ts), run by the TypeScript node
+# host: one local run of every output shape a node returns. `said` writes text and reports the
+# node fact `letters`; `report` returns `ctx.out.json`, whose bytes the engine writes in the JSON
+# layout of spec/identity.md section 5 (`half` is 2, `ratio` 0.5); `parts` returns a list port of
+# two files and `entries` a keyed port (`first`, `last`); `marks` reports four marks with
+# `ctx.annotate` and returns nothing, so the engine writes them as its `annotations` output;
+# `check` judges `said` and reports its verdict and a fact. Beyond run-local, `order` returns a
+# keyed port as a Map with the keys `sun`, `10` and `2`, and the run keeps that order (a plain
+# object would put `2` and `10` first): in run_finished's collection, and in `listing`, which
+# reads it as a keyed input and writes the keys as it sees them (keys.txt). Every output and step
+# file the two cases share is byte for byte run-local's: the engine writes them. `inspect
+# --verify` rehashes the 11 files the steps placed. The same plan run into runs/two is answered
+# by the result cache: every instance in project-two.json is a `hit`, no body runs, and the
+# outputs are the same bytes.
+steps:
+- argv: [run, case, --routes, routes.yaml, --run, runs/one]
+  mentions:
+  - "cached    0 of 4 known steps"
+  - "result    ok   spent $0.00"
+- argv: [project, runs/one]
+  save: project.json
+  json: true
+- read: runs/one/outputs/said.txt
+  save: said.txt
+- read: runs/one/outputs/report.json
+  save: report.json
+- read: runs/one/outputs/parts/0.txt
+  save: parts-0.txt
+- read: runs/one/outputs/parts/1.txt
+  save: parts-1.txt
+- read: runs/one/outputs/entries/first.txt
+  save: entries-first.txt
+- read: runs/one/outputs/entries/last.txt
+  save: entries-last.txt
+- read: runs/one/outputs/marks.json
+  save: marks.json
+- read: runs/one/outputs/keys.txt
+  save: keys.txt
+- read: runs/one/outputs/order/sun.txt
+  save: order-sun.txt
+- read: runs/one/outputs/order/10.txt
+  save: order-10.txt
+- read: runs/one/outputs/order/2.txt
+  save: order-2.txt
+- read: runs/one/files/parts/parts/1.txt
+  save: parts-1.txt
+- read: runs/one/files/entries/entries/last.txt
+  save: entries-last.txt
+- read: runs/one/files/report/report.json
+  save: report.json
+- argv: [inspect, runs/one, --verify]
+  save: inspect.txt
+- argv: [run, case, --routes, routes.yaml, --run, runs/two]
+  mentions:
+  - "cached    4 of 4 known steps"
+  - "result    ok   spent $0.00"
+- argv: [project, runs/two]
+  save: project-two.json
+  json: true
+- read: runs/two/outputs/said.txt
+  save: said.txt
+- read: runs/two/outputs/report.json
+  save: report.json
+- read: runs/two/outputs/keys.txt
+  save: keys.txt
+- read: runs/two/outputs/marks.json
+  save: marks.json

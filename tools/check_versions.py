@@ -12,7 +12,7 @@ Every other place that states a version repeats it, in its own ecosystem's form:
   exactly it, among them every engine package js/fx/src/platforms.ts names; a ``version``
   constant exported from js/fx/src states it too;
 - every other package.json under js/ for an ``@grida/fx-*`` package (the per-platform engine
-  packages) states it;
+  packages), and web/fx-*'s (the private browser packages), states it;
 - fixtures/host/grida/package.json, the stand-in for the npm ``grida`` command, pins
   ``@grida/fx`` to exactly it, as ``grida`` does (spec/distribution.md).
 
@@ -212,10 +212,11 @@ def statements(root: Path, version: str) -> Iterator[tuple[str, str | None, str]
 
 def platform_manifests(root: Path) -> list[Path]:
     """Every package.json under js/ for an @grida/fx-* package, outside installed and built
-    folders."""
+    folders, and the private browser packages' under web/fx-*."""
 
     found = []
-    for path in sorted((root / "js").rglob("package.json")):
+    manifests = [*(root / "js").rglob("package.json"), *(root / "web").glob("fx-*/package.json")]
+    for path in sorted(manifests):
         parts = set(path.relative_to(root).parts)
         if parts & {"node_modules", "dist"}:
             continue

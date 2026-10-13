@@ -1,0 +1,7 @@
+{
+ "fx": "lock/v1",
+ "nodes": {
+  "nodes/n.ts#pinned@2": "0f96c8e4a3f78bbfb7541aedfd7cf39d7f9a2776901b10645ea20d3dfa9bf880",
+  "nodes/plain.mjs#shout@1": "baa8835bceaa5506f18dbfefc241ebceb372d7c88828df312cea11e144b50004"
+ }
+}

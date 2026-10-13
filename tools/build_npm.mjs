@@ -435,11 +435,34 @@ async function main(argv) {
   }
 }
 
+/** The compiled modules @grida/fx's tarball must hold: the SDK's, and the TypeScript node host's
+ * (`dist/host-entry.js` is what the engine starts). */
+const SDK_MODULES = [
+  "index",
+  "cli",
+  "binary",
+  "platforms",
+  "api",
+  "host-entry",
+  "host",
+  "protocol",
+  "closure",
+  "specifiers",
+  "ctx",
+  "node",
+  "schema",
+  "files",
+  "kinds",
+  "engine-errors",
+  "stand-in",
+  "socket",
+];
+
 /** What @grida/fx's tarball must hold: the manifest, the readme, the command, and each module of
  * the compiled SDK with its declarations. */
 function sdkFiles() {
   const expected = { "package.json": null, "README.md": null, "LICENSE": null, "bin/grida-fx.js": 0o755 };
-  for (const module of ["index", "cli", "binary", "platforms", "api"]) {
+  for (const module of SDK_MODULES) {
     expected[`dist/${module}.js`] = null;
     expected[`dist/${module}.d.ts`] = null;
   }

@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "type": "module",
+  "imports": { "#lib/*": "./lib/*" },
+  "dependencies": { "@grida/fx": "*" },
+  "devDependencies": { "@types/node": "*", "typescript": "^5.8.0" }
+}

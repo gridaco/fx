@@ -1,8 +1,8 @@
 //! `plan`, `expand`, `identity`, `price`.
 //!
 //! Each: build a [`grida_fx_core::project::PlanRequest`] from the arguments (cwd = the process's
-//! working directory, canonical; `--max-usd` through `Usd::parse`), make the planner with a lazy
-//! Python host for the home project, then make the plan through the engine
+//! working directory, canonical; `--max-usd` through `Usd::parse`), make the planner with lazy
+//! node hosts (one per language) for the home project, then make the plan through the engine
 //! ([`crate::engine::plan`]): `at: plan` steps run on the plan-time runner, and `cached` is what
 //! the planning project's store holds. Planning never writes a run folder and never spends (an
 //! `at: plan` step is never paid). Then print:

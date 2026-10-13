@@ -210,13 +210,7 @@ impl Fixture {
             &python,
             &format!("#!/bin/sh\nexec python3 '{}' \"$@\"\n", host.display()),
         );
-        let spec = HostSpec {
-            python,
-            label: "python-fake".into(),
-            project_root: root.clone(),
-            sources: Vec::new(),
-            check_version: false,
-        };
+        let spec = HostSpec::python(python, "python-fake", root.clone(), Vec::new()).unchecked();
         Fixture {
             _dir: dir,
             root,
@@ -899,13 +893,13 @@ async fn shutdown_ends_idle_hosts_politely() {
 async fn a_pool_that_cannot_start_hosts_says_why() {
     let dir = tempfile::tempdir().unwrap();
     let pool = Arc::new(HostPool::new(
-        HostSpec {
-            python: PathBuf::from("no-such-python-for-fx"),
-            label: "no-such-python-for-fx".into(),
-            project_root: dir.path().to_path_buf(),
-            sources: Vec::new(),
-            check_version: false,
-        },
+        HostSpec::python(
+            PathBuf::from("no-such-python-for-fx"),
+            "no-such-python-for-fx",
+            dir.path().to_path_buf(),
+            Vec::new(),
+        )
+        .unchecked(),
         2,
     ));
     let sentence = "cannot start the Python node host with no-such-python-for-fx: no such file; set GRIDA_FX_PYTHON to a Python that has the grida package";

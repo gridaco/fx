@@ -11,5 +11,5 @@
     "allowImportingTsExtensions": true,
     "types": ["vite/client"]
   },
-  "include": ["src", "../../js/fx-web/src", "../../js/fx-react/src", "vite.config.ts"]
+  "include": ["src", "../fx-web/src", "../fx-react/src", "vite.config.ts"]
 }

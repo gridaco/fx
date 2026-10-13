@@ -1,9 +1,10 @@
 # How `run --stand-in` is given, and what stops a stand-in run. Each mistake is a usage error
 # (exit 2), refused before anything is planned, run or asked: with --live, with --yes-up-to, a
-# source that is not `<file>.py#<function>` or `-` (no `#`, a file without the .py suffix), a file
-# that does not exist, a function the file does not have, a file that fails to import, and `-`
-# when standard input is not a socket (closed, which the runner makes /dev/null; or a pipe, given
-# as `--stand-in=-`). None of them makes a run folder or asks the stand-in. Then a stand-in that
+# source that is not `<file>#<function>` for a .py, .ts, .mts, .js or .mjs file, or `-` (no `#`, a
+# file with another suffix, a .tsx file, which no node host runs), a file that does not exist (of
+# either language), a function the file does not have, a file that fails to import, and `-` when
+# standard input is not a socket (closed, which the runner makes /dev/null; or a pipe, given as
+# `--stand-in=-`). None of them makes a run folder or asks the stand-in. Then a stand-in that
 # raises RuntimeError (given as `--stand-in=<file>#<function>`) is a fault of the stand-in, not a
 # failed call: the run stops (`stopped   the stand-in failed: RuntimeError: …`, exit 1) after the
 # stand-in was asked once; events.json pins the record of the stopped run.
@@ -19,15 +20,23 @@ steps:
 - argv: [run, case, --routes, routes.yaml, --run, runs/one, --stand-in, stand_in.py]
   status: 2
   mentions:
-  - "--stand-in takes <file>.py#<function>, or -"
+  - "--stand-in takes <file>#<function> for a .py, .ts, .mts, .js or .mjs file, or -"
 - argv: [run, case, --routes, routes.yaml, --run, runs/one, --stand-in, "routes.yaml#answer"]
   status: 2
   mentions:
-  - "--stand-in takes <file>.py#<function>, or -"
+  - "--stand-in takes <file>#<function> for a .py, .ts, .mts, .js or .mjs file, or -"
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, --stand-in, "stand_in.tsx#answer"]
+  status: 2
+  mentions:
+  - "--stand-in takes <file>#<function> for a .py, .ts, .mts, .js or .mjs file, or -"
 - argv: [run, case, --routes, routes.yaml, --run, runs/one, --stand-in, "missing.py#answer"]
   status: 2
   mentions:
   - "no stand-in file missing.py"
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, --stand-in, "missing.ts#answer"]
+  status: 2
+  mentions:
+  - "no stand-in file missing.ts"
 - argv: [run, case, --routes, routes.yaml, --run, runs/one, --stand-in, "stand_in.py#nope"]
   status: 2
   mentions:

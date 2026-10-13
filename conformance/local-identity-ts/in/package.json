@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "type": "module",
+  "imports": { "#lib/*": "./lib/*" },
+  "dependencies": { "@acme/shapes": "*", "@grida/fx": "*", "acme-colors": "*" }
+}

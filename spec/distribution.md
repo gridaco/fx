@@ -20,6 +20,12 @@ The platforms are `@grida/fx`'s ([RELEASING.md](../RELEASING.md)). Where FX has 
 
 SDK imports stay `@grida/fx` (JavaScript) and `grida.fx` (Python). `grida` re-exports no FX API.
 
+Each SDK also carries the node host of its language ([protocol.md](protocol.md) §1): `@grida/fx`
+the TypeScript one, on Node 24 or later, and PyPI `grida` the Python one. The `@grida/fx`
+the workflow's project resolves hosts its TypeScript nodes, else the one the planning project
+resolves; otherwise the `@grida/fx` that started the engine does, so `grida fx` runs them with
+the `@grida/fx` that `grida` pins.
+
 ## 2. The invoker
 
 A launcher tells the engine which command started it through `GRIDA_FX_INVOKER`:
@@ -58,10 +64,15 @@ exports its launcher for hosts as `@grida/fx/cli`:
 
 - `HOST_CONTRACT`: `1`, the version of this section.
 - `launch(argv, { invoker })`: runs the engine with `argv` (the arguments after `fx`), this
-  process's standard streams and working directory, and ends the process as the engine ended:
-  its exit status, or the same signal. The engine runs in a process group of its own; SIGINT,
-  SIGTERM, SIGHUP and SIGQUIT are passed on once per interruption; Ctrl-Z stops both. `invoker`
-  is `grida-fx` (the default) or `grida`; any other throws a `TypeError` before anything runs.
+  process's standard streams, working directory and environment, and ends the process as the
+  engine ended: its exit status, or the same signal. The engine runs in a process group of its
+  own; SIGINT, SIGTERM, SIGHUP and SIGQUIT are passed on once per interruption; Ctrl-Z stops
+  both. `invoker` is `grida-fx` (the default) or `grida`; any other throws a `TypeError` before
+  anything runs. The environment gains `GRIDA_FX_INVOKER` (§2) and, for the TypeScript node
+  host, `GRIDA_FX_SDK_NODE`, the Node running `launch`, and `GRIDA_FX_SDK_NODE_HOST`, the path
+  of this `@grida/fx`'s own host program ([protocol.md](protocol.md) §1, §8.2). Each replaces an
+  inherited value. Neither is set where it does not apply (under Bun or Deno, or without a built
+  host program), so an inherited one stays.
 - `INVOKER_VARIABLE` and `COMMANDS`: the variable of §2, and each invoker's command.
 
 A host:
@@ -71,8 +82,9 @@ A host:
 3. refuses a `HOST_CONTRACT` it was not written for, telling the user to reinstall it;
 4. calls `launch(rest, { invoker: "grida" })` and does nothing after it: the launcher owns the
    process from then on;
-5. never finds, spawns or replaces the engine itself (`GRIDA_FX_BIN` stays the user's), and adds
-   no FX options of its own.
+5. never finds, spawns or replaces the engine itself (`GRIDA_FX_BIN` stays the user's), nor a
+   node host's runtime (`GRIDA_FX_NODE` and `GRIDA_FX_PYTHON` stay the user's, and `launch`
+   sets the SDK's own variables), and adds no FX options of its own.
 
 The `fx` branch of the stand-in host, [fixtures/host/grida](../fixtures/host/grida/), is the
 reference for these five rules; `grida`'s launcher carries the same lines.

@@ -1,0 +1,21 @@
+# lock-write's twin with TypeScript modules. No fx.lock yet. `lock --check` names each unlocked
+# versioned type and fails; `lock` writes fx.lock with the source digests of
+# nodes/n.ts#pinned@2 and nodes/plain.mjs#shout@1, a .mjs module no workflow uses (the scan finds
+# every module of every node host's suffixes); the unversioned echo is not locked. The scan
+# passes over nodes/shapes.d.ts, a declaration file, and node_modules, where the runner installs
+# @grida/fx. Then `lock --check` passes and the workflow plans. fx.lock is compared by meaning, as
+# JSON.
+steps:
+- argv: [lock, --check]
+  status: 1
+  mentions:
+  - "unlocked  nodes/n.ts#pinned@2"
+  - "unlocked  nodes/plain.mjs#shout@1"
+- argv: [lock]
+  mentions: ["fx.lock: 2 versioned node types"]
+- read: fx.lock
+  save: fx.lock.json
+  yaml: true
+- argv: [lock, --check]
+  mentions: ["fx.lock: 2 versioned node types, all locked"]
+- argv: [expand, case, --routes, routes.yaml]

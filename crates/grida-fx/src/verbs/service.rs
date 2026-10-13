@@ -255,7 +255,10 @@ pub fn start(args: &StartArgs) -> Result<u8, Error> {
     // concurrent attempts sharing the log never report each other's cause.
     match (started, attempt_tag().filter(|_| !args.background)) {
         (Err(error), Some(tag)) => {
-            eprintln!("{}: attempt {tag}: {error}", crate::invoker::command());
+            grida_fx_runtime::stderr::line(format_args!(
+                "{}: attempt {tag}: {error}",
+                crate::invoker::command()
+            ));
             Ok(2)
         }
         (started, _) => started,

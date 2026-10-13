@@ -176,7 +176,7 @@ pub struct LogsArgs {
 /// The common options of the planning verbs, plus the verb-specific flags.
 #[derive(Debug, Args, Clone, Default)]
 pub struct PlanArgs {
-    /// a workflow file, a workflow id, or a builder file.py:function
+    /// a workflow file, a workflow id, or a builder file.py:function or file.ts:function
     pub target: String,
     /// inputs YAML; repeatable; later files win
     #[arg(long = "inputs", value_name = "FILE")]
@@ -243,7 +243,7 @@ pub struct LockArgs {
 /// `run`: the planning options, plus the run's own.
 #[derive(Debug, Args, Clone, Default)]
 pub struct RunArgs {
-    /// a workflow file, a workflow id, or a builder file.py:function
+    /// a workflow file, a workflow id, or a builder file.py:function or file.ts:function
     pub target: String,
     /// inputs YAML; repeatable; later files win
     #[arg(long = "inputs", value_name = "FILE")]
@@ -277,8 +277,8 @@ pub struct RunArgs {
     /// resume an existing named run with the same planned target and inputs
     #[arg(long, value_name = "NAME")]
     pub resume: Option<String>,
-    /// answer paid calls with a stand-in, offline and for nothing: FILE.py#FUNCTION, or - for a
-    /// socket on standard input (SDKs); never with --live or --yes-up-to
+    /// answer paid calls with a stand-in, offline and for nothing: FILE#FUNCTION (.py, .ts, .mts,
+    /// .js or .mjs), or - for a socket on standard input (SDKs); never with --live or --yes-up-to
     #[arg(long = "stand-in", value_name = "SOURCE", allow_hyphen_values = true)]
     pub stand_in: Option<String>,
     /// use an invocation-owned viewer on an available port; no project service needed
@@ -517,7 +517,7 @@ pub struct CancelArgs {
 #[derive(Debug, Args, Clone)]
 #[command(group(clap::ArgGroup::new("source").required(true).multiple(false).args(["target", "run", "plan"])))]
 pub struct ViewArgs {
-    /// a workflow file, a workflow id, or a Python builder file.py:function
+    /// a workflow file, a workflow id, or a builder file.py:function or file.ts:function
     pub target: Option<String>,
     /// an existing run folder
     #[arg(long, value_name = "DIRECTORY")]
@@ -531,7 +531,7 @@ pub struct ViewArgs {
     /// a route table for a workflow target; repeatable
     #[arg(long = "routes", value_name = "FILE", requires = "target")]
     pub routes: Vec<String>,
-    /// an argument for a Python builder target
+    /// an argument for a builder target
     #[arg(long = "arg", value_name = "NAME=VALUE", requires = "target")]
     pub arg: Vec<String>,
     /// the planning ceiling in US dollars; viewing never admits paid calls
@@ -580,15 +580,19 @@ pub fn main(argv: Vec<OsString>) -> ExitCode {
         crate::interrupt::expect_runner();
     }
     let ran = on_big_stack(move || dispatch(cli.verb, rest));
-    // A host the verb did not end (none should be left) goes with what it started.
+    // A host the verb did not end (none should be left) goes with what it started, and what the
+    // hosts wrote reaches stderr first.
     grida_fx_runtime::host::end_every_host();
-    match ran {
+    let code = match ran {
         Ok(status) => ExitCode::from(status),
         Err(error) => {
             print_error(&error);
             ExitCode::from(2)
         }
-    }
+    };
+    // A forced end under way (a second Ctrl-C) exits the process itself, with its message.
+    let _ending = crate::interrupt::ending();
+    code
 }
 
 /// Parses `argv` (the program name first) as `invoker`'s command: usage and help name the

@@ -1,0 +1,17 @@
+fx: workflow/v1
+id: case
+title: Paid calls from TypeScript bodies, answered by a stand-in
+steps:
+  paint:
+    uses: ./nodes/paint.ts#paint
+    with: { prompt: a lantern on a quay }
+  retouch:
+    uses: ./nodes/paint.ts#retouch
+    with: { image: "${{ steps.paint.outputs.image }}" }
+  describe:
+    uses: ./nodes/paint.ts#describe
+    with: { image: "${{ steps.retouch.outputs.image }}" }
+outputs:
+  painted: ${{ steps.paint.outputs.image }}
+  retouched: ${{ steps.retouch.outputs.image }}
+  report: ${{ steps.describe.outputs.report }}

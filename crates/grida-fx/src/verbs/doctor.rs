@@ -1,13 +1,15 @@
-//! `doctor [TARGET]`: without a target, `engine    grida-fx <version>` and the Python host line
-//! (`python    <interpreter> (grida <sdk_version>)`, or why it cannot host nodes: see below);
+//! `doctor [TARGET]`: without a target, `engine    grida-fx <version>`, the Python host line
+//! (`python    <interpreter> (grida <sdk_version>)`, or why it cannot host nodes: see below) and
+//! the TypeScript host line (`node      <node> (@grida/fx <sdk_version>)`, what Node answered, or
+//! why it cannot host);
 //! with a target, the workflow is loaded (no inputs needed, FX), the routes its paid steps use are
 //! listed (`uses` lines, below), every project node type it uses (depth-first, groups after their
 //! members' group, not descending into used workflows) is resolved (`missing   <uses>:
 //! <problem>`), and each declared tool printed `format!("tool      {name:12} {path or NOT
 //! FOUND}")`. Exit 1 when anything is missing or a route the target uses cannot be served.
 //!
-//! The engine and Python lines come first, with or without a target. The Python line names the
-//! interpreter the home project's node host would use (the home's `.venv`, then the planning
+//! The engine, Python and Node lines come first, with or without a target. The Python line names
+//! the interpreter the home project's node host would use (the home's `.venv`, then the planning
 //! project's; relative to the home when it is one of those, else as configured), asks it for its
 //! version once (`host::locate::probe`), and says:
 //! - `python    <interpreter> (grida <version>)`: the host started and reported its `grida`;
@@ -17,12 +19,28 @@
 //! - `… NOT FOUND`: no program by that name or path;
 //! - `… cannot start: <sentence>`: the host was started and failed (a protocol mismatch, …).
 //!
-//! That line is information and does not set the exit status: a workflow whose node types need
-//! the host stops doctor with the host's sentence (exit 2) when they are resolved, and a module
-//! the host could not load is a `missing` line. Steps are visited in declaration order, each group
+//! The Node line names the Node the home project's TypeScript host would use (`GRIDA_FX_NODE`,
+//! else `GRIDA_FX_SDK_NODE`, else `node`; as configured), asks it about itself once, and says:
+//! - `… NOT FOUND`: no program by that name or path;
+//! - `… too old (<version>; FX needs 24+)`: a Node before 24 (spec/protocol.md §1); not started;
+//! - `… not Node.js 24+`: a program without `module.registerHooks` (Bun, Deno); not started.
+//!
+//! Otherwise the TypeScript host is started only for a project with a `package.json` (in the home
+//! or the planning project): its host program may come from a `node_modules` above the project,
+//! which a project without one never asked for. Without one, the line is what Node answered:
+//! `node      <node> (Node <version>)`, or `node      <node>` when it gave no answer. With one:
+//! - `node      <node> (@grida/fx <version>)`: the host started and reported its `@grida/fx`;
+//! - `… no @grida/fx`: no `@grida/fx` is found from the home, nor from the planning project, nor
+//!   one that started the engine;
+//! - `… cannot start: <sentence>`: the host could not start (a `@grida/fx` too old to host, a
+//!   protocol mismatch, …).
+//!
+//! These lines are information and do not set the exit status: a workflow whose node types need
+//! a host stops doctor with the host's sentence (exit 2) when they are resolved, and a module the
+//! host could not load is a `missing` line. Steps are visited in declaration order, each group
 //! before its members; built-ins and repeated `uses` are skipped.
 //!
-//! **The target's routes** (with a target, after the Python line): one line per route its paid
+//! **The target's routes** (with a target, after the host lines): one line per route its paid
 //! steps use, sorted by capability, then id, each with the number of steps using it (a repeated
 //! step counts once): `uses      <capability> <model@provider> <state> (<n> steps)`, `<state>`
 //! as on `route` lines below. Every step is visited, members of groups and the steps of used
@@ -36,7 +54,7 @@
 //! not make that step's calls. Routes need no inputs: they are written in the workflow and
 //! fx.yaml.
 //!
-//! **Providers** (spec/providers.md §3, §10), after the engine and Python lines (and the target's
+//! **Providers** (spec/providers.md §3, §10), after the engine and host lines (and the target's
 //! routes) and before the `tool` and `missing` lines, for the **planning** project (the one found
 //! from where the command runs; with a target, the project planning would use). Nothing that could
 //! reach the network is constructed:
@@ -61,7 +79,7 @@ use grida_fx_core::Error;
 use grida_fx_core::docs::lock::read_lock;
 use grida_fx_core::docs::project::Project;
 use grida_fx_core::docs::workflow::{Step, Steps};
-use grida_fx_core::host::{HostFailure, NodeHost};
+use grida_fx_core::host::{HostFailure, Language, NodeHost};
 use grida_fx_core::project::load_target;
 use grida_fx_core::registry::{Registry, RegistryError, Resolved};
 use grida_fx_core::routes::{Route, RouteTable, load_catalog};
@@ -69,8 +87,10 @@ use grida_fx_protocol::DescribeParams;
 use grida_fx_providers::keys::{ALLOWED, Environment, KeySource};
 use grida_fx_providers::live::{self, Servable};
 use grida_fx_providers::{Endpoints, KeyName, Keys};
-use grida_fx_runtime::host::locate::{MINIMUM_PYTHON, Probe, python_interpreter};
-use grida_fx_runtime::host::{PythonHost, label};
+use grida_fx_runtime::host::locate::{
+    MINIMUM_NODE, MINIMUM_PYTHON, NO_SDK, Probe, node_runtime, python_interpreter,
+};
+use grida_fx_runtime::host::{LanguageHost, label};
 use grida_fx_runtime::tools::{resolve_tool, tool_name};
 use indexmap::IndexMap;
 use std::collections::{BTreeMap, HashSet};
@@ -88,7 +108,18 @@ pub fn run(args: &DoctorArgs) -> Result<u8, Error> {
     let Some(target) = &args.target else {
         let mut host = crate::print::host();
         let project = Project::find(&cwd)?;
-        print_line(&python_line(&mut host, &project, None, &env));
+        print_line(&python_line(
+            host.member(Language::Python),
+            &project,
+            None,
+            &env,
+        ));
+        print_line(&node_line(
+            host.member(Language::TypeScript),
+            &project,
+            None,
+            &env,
+        ));
         let providers = Providers::of(&project, &env)?;
         providers.print();
         return Ok(u8::from(providers.refused));
@@ -96,7 +127,18 @@ pub fn run(args: &DoctorArgs) -> Result<u8, Error> {
     let mut host = crate::print::planning_host(target, &cwd);
     let (project, workflow) = load_target(target, &cwd, &IndexMap::new(), &mut host)?;
     let home = super::schema::home_of(target, project.clone(), &workflow)?;
-    print_line(&python_line(&mut host, &home, Some(&project.root), &env));
+    print_line(&python_line(
+        host.member(Language::Python),
+        &home,
+        Some(&project.root),
+        &env,
+    ));
+    print_line(&node_line(
+        host.member(Language::TypeScript),
+        &home,
+        Some(&project.root),
+        &env,
+    ));
     let providers = Providers::of(&project, &env)?;
     let mut route_defaults = home.route_defaults();
     route_defaults.extend(project.route_defaults());
@@ -108,7 +150,7 @@ pub fn run(args: &DoctorArgs) -> Result<u8, Error> {
     );
     host.open_project(&home.root, &home.document.sources)?;
     // The target's routes and the keys first: they need no node host, so they print even when
-    // the project's own node types cannot be resolved (no Python with grida yet).
+    // the project's own node types cannot be resolved (no Python with grida, no @grida/fx yet).
     let mut used = UsedRoutes::new();
     used_routes(
         &workflow.workflow.steps,
@@ -166,7 +208,7 @@ type UsedRoutes = BTreeMap<(String, Option<String>), usize>;
 fn used_routes(
     steps: &Steps,
     registry: &mut Registry,
-    host: &mut PythonHost,
+    host: &mut dyn NodeHost,
     within: &mut Vec<String>,
     used: &mut UsedRoutes,
 ) {
@@ -360,7 +402,7 @@ fn route_lines(catalog: &RouteTable, keys: &Keys) -> Vec<String> {
 
 /// The Python host line (module doc).
 fn python_line(
-    host: &mut PythonHost,
+    host: &mut LanguageHost,
     project: &Project,
     planning_root: Option<&Path>,
     env: &dyn Fn(&str) -> Option<String>,
@@ -376,36 +418,101 @@ fn python_line(
     };
     let opened = host.open_project(&project.root, &project.document.sources);
     if opened.is_ok()
-        && let Some(state) = host.probe().as_ref().and_then(unhostable)
+        && let Some(state) = host
+            .probe()
+            .and_then(|probe| unhostable(Language::Python, &probe))
     {
         return labelled("python", &format!("{shown} {state}"));
     }
+    labelled(
+        "python",
+        &format!("{shown} {}", started(host, opened, "grida")),
+    )
+}
+
+/// The Node host line (module doc). `planning_root`: the planning project, when it may be
+/// another project than `project`, the home.
+fn node_line(
+    host: &mut LanguageHost,
+    project: &Project,
+    planning_root: Option<&Path>,
+    env: &dyn Fn(&str) -> Option<String>,
+) -> String {
+    let opened = host.open_project(&project.root, &project.document.sources);
+    // Named as the host's messages name it.
+    let shown = host
+        .program_label()
+        .unwrap_or_else(|| label(&node_runtime(env), &project.root));
+    let probe = if opened.is_ok() { host.probe() } else { None };
+    if let Some(state) = probe
+        .as_ref()
+        .and_then(|probe| unhostable(Language::TypeScript, probe))
+    {
+        return labelled("node", &format!("{shown} {state}"));
+    }
+    // Only a project with a package.json starts the host, whose program may lie above it.
+    let typescript = std::iter::once(project.root.as_path())
+        .chain(planning_root)
+        .any(|root| root.join("package.json").is_file());
+    if !typescript {
+        return labelled(
+            "node",
+            &match probe.as_ref().and_then(Probe::version_text) {
+                Some(version) => format!("{shown} (Node {version})"),
+                None => shown,
+            },
+        );
+    }
+    if opened.is_ok()
+        && let Some(Err(sentence)) = host.host_program()
+        && sentence == NO_SDK
+    {
+        return labelled("node", &format!("{shown} no @grida/fx"));
+    }
+    labelled(
+        "node",
+        &format!("{shown} {}", started(host, opened, "@grida/fx")),
+    )
+}
+
+/// Starts the host of an opened project and asks it to describe nothing: `(<sdk> <version>)`
+/// from its `initialize`, or `cannot start: <sentence>`.
+fn started(host: &mut LanguageHost, opened: Result<(), HostFailure>, sdk: &str) -> String {
     let started = opened.and_then(|()| {
         host.describe(&DescribeParams {
             targets: Vec::new(),
             builtins: false,
         })
     });
-    let state = match (started, &host.info) {
-        (Ok(_), Some(info)) => format!("(grida {})", info.host.sdk_version),
+    match (started, &host.info) {
+        (Ok(_), Some(info)) => format!("({sdk} {})", info.host.sdk_version),
         (Err(HostFailure::Unavailable(sentence)), _) => format!("cannot start: {sentence}"),
         (Err(HostFailure::Rpc(error)), _) => format!("cannot start: {}", error.message),
         (Ok(_), None) => "NOT FOUND".to_string(),
-    };
-    labelled("python", &format!("{shown} {state}"))
+    }
 }
 
-/// Why an interpreter that answered `probe` cannot host nodes, so it is not started: `NOT
-/// FOUND`, `too old (<version>; FX needs 3.11+)` or `no grida`; `None` when it may.
-fn unhostable(probe: &Probe) -> Option<String> {
-    let (major, minor) = MINIMUM_PYTHON;
+/// Why the program that answered `probe` cannot host `language`'s nodes, so it is not started:
+/// `NOT FOUND`; `too old (<version>; FX needs 3.11+)` or `(…; FX needs 24+)`; `no grida`
+/// (Python) or `not Node.js 24+` (Node); `None` when it may.
+fn unhostable(language: Language, probe: &Probe) -> Option<String> {
+    let (minimum, not_ready) = match language {
+        Language::Python => {
+            let (major, minor) = MINIMUM_PYTHON;
+            (format!("{major}.{minor}+"), "no grida".to_string())
+        }
+        Language::TypeScript => (
+            format!("{MINIMUM_NODE}+"),
+            format!("not Node.js {MINIMUM_NODE}+"),
+        ),
+    };
     match probe {
         Probe::Missing => Some("NOT FOUND".to_string()),
-        Probe::Answered { .. } if probe.is_too_old() => Some(format!(
-            "too old ({}; FX needs {major}.{minor}+)",
+        Probe::Answered { .. } if probe.is_too_old(language) => Some(format!(
+            "too old ({}; FX needs {minimum})",
             probe.version_text().unwrap_or_default()
         )),
-        Probe::Answered { grida: false, .. } => Some("no grida".to_string()),
+        Probe::Answered { ready: false, .. } => Some(not_ready),
         Probe::Answered { .. } | Probe::Unknown => None,
     }
 }
@@ -669,23 +776,55 @@ mod tests {
 
     #[test]
     fn an_interpreter_that_cannot_host_says_why() {
-        let answered = |version, grida| Probe::Answered { version, grida };
+        let answered = |version, ready| Probe::Answered { version, ready };
         assert_eq!(
-            unhostable(&answered((3, 9, 6), true)).as_deref(),
+            unhostable(Language::Python, &answered((3, 9, 6), true)).as_deref(),
             Some("too old (3.9.6; FX needs 3.11+)")
         );
         // Too old wins over no grida: installing grida would not help.
         assert_eq!(
-            unhostable(&answered((3, 9, 6), false)).as_deref(),
+            unhostable(Language::Python, &answered((3, 9, 6), false)).as_deref(),
             Some("too old (3.9.6; FX needs 3.11+)")
         );
         assert_eq!(
-            unhostable(&answered((3, 12, 4), false)).as_deref(),
+            unhostable(Language::Python, &answered((3, 12, 4), false)).as_deref(),
             Some("no grida")
         );
-        assert_eq!(unhostable(&Probe::Missing).as_deref(), Some("NOT FOUND"));
-        assert_eq!(unhostable(&answered((3, 11, 0), true)), None);
-        assert_eq!(unhostable(&Probe::Unknown), None);
+        assert_eq!(
+            unhostable(Language::Python, &Probe::Missing).as_deref(),
+            Some("NOT FOUND")
+        );
+        assert_eq!(
+            unhostable(Language::Python, &answered((3, 11, 0), true)),
+            None
+        );
+        assert_eq!(unhostable(Language::Python, &Probe::Unknown), None);
+    }
+
+    #[test]
+    fn a_node_that_cannot_host_says_why() {
+        let answered = |version, ready| Probe::Answered { version, ready };
+        assert_eq!(
+            unhostable(Language::TypeScript, &answered((22, 12, 0), true)).as_deref(),
+            Some("too old (22.12.0; FX needs 24+)")
+        );
+        assert_eq!(
+            unhostable(Language::TypeScript, &answered((20, 1, 0), false)).as_deref(),
+            Some("too old (20.1.0; FX needs 24+)")
+        );
+        assert_eq!(
+            unhostable(Language::TypeScript, &answered((24, 3, 0), false)).as_deref(),
+            Some("not Node.js 24+")
+        );
+        assert_eq!(
+            unhostable(Language::TypeScript, &Probe::Missing).as_deref(),
+            Some("NOT FOUND")
+        );
+        assert_eq!(
+            unhostable(Language::TypeScript, &answered((24, 0, 0), true)),
+            None
+        );
+        assert_eq!(unhostable(Language::TypeScript, &Probe::Unknown), None);
     }
 
     #[test]

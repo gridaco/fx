@@ -34,5 +34,9 @@ url.workspace = true
 grida-fx-providers = { workspace = true, features = ["testing"] }
 jsonschema.workspace = true
 
+[target.'cfg(unix)'.dev-dependencies]
+# `node_output`: how much an engine's stderr pipe holds, and a non-blocking one.
+rustix = "1.1"
+
 [lints]
 workspace = true

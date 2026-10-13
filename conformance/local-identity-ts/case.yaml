@@ -1,0 +1,79 @@
+# local-identity's twin with TypeScript node types: an unversioned type is named by its export
+# and its source, `nodes/n.ts#echo@source:` and the digest of the closure the TypeScript node host
+# reports from Node's own module resolution, plus its declared resources (prompts/r.md). The
+# closure (expand.json's `types`) is nodes/n.ts, what it imports (nodes/helper.ts), what that
+# imports (lib/words.ts), a `#lib/*` subpath import (lib/pad.ts), and the declared source package
+# `@acme/shapes`, a workspace package that node_modules/@acme/shapes links to packages/shapes:
+# counted by its real path and labelled by its name (`@acme/shapes/index.ts`). It never holds
+# nodes/types.ts, which n.ts imports only for a type (erased before it runs), nor
+# node_modules/acme-colors/index.js, an installed dependency. Editing either of those leaves
+# every identity as it was (identity.json, saved three times); editing the transitive import, the
+# subpath import, the source package and the resource each moves a#1, and never b#1: the
+# versioned `nodes/n.ts#pinned@2` is named by its version, so every step saving
+# identity-pinned.json prints the same bytes.
+steps:
+- argv: [expand, case, --routes, routes.yaml]
+  save: expand.json
+  json: true
+- argv: [identity, case, --routes, routes.yaml]
+  save: identity.json
+  json: true
+- argv: [identity, pinned, --routes, routes.yaml]
+  save: identity-pinned.json
+  json: true
+- files:
+    nodes/types.ts: |
+      // Only imported for its type: erased before the module runs, so never in a closure.
+
+      export type Framed = string & {};
+  argv: [identity, case, --routes, routes.yaml]
+  save: identity.json
+  json: true
+- files:
+    node_modules/acme-colors/index.js: |
+      // An installed dependency: under node_modules, so never a project file.
+
+      export function tint(text) {
+        return `${text}`;
+      }
+  argv: [identity, case, --routes, routes.yaml]
+  save: identity.json
+  json: true
+- files:
+    lib/words.ts: |
+      // Imported by nodes/helper.ts: in the closure of the node types that import the helper.
+
+      export function trimmed(text: string): string {
+        return text.trim().replace(/\s+/g, " ");
+      }
+  argv: [identity, case, --routes, routes.yaml]
+  save: identity-transitive-edited.json
+  json: true
+- files:
+    lib/pad.ts: |
+      // Imported through the package's `#lib/*` subpath import.
+
+      export function pad(text: string): string {
+        return `  ${text}  `;
+      }
+  argv: [identity, case, --routes, routes.yaml]
+  save: identity-subpath-edited.json
+  json: true
+- files:
+    packages/shapes/index.ts: |
+      // A workspace package, linked as node_modules/@acme/shapes and declared in fx.yaml's sources.
+
+      export function outline(text: string): string {
+        return `<${text}>`;
+      }
+  argv: [identity, case, --routes, routes.yaml]
+  save: identity-package-edited.json
+  json: true
+- files:
+    prompts/r.md: "Say it twice: ${{ text }}\n"
+  argv: [identity, case, --routes, routes.yaml]
+  save: identity-resource-edited.json
+  json: true
+- argv: [identity, pinned, --routes, routes.yaml]
+  save: identity-pinned.json
+  json: true

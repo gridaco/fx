@@ -1,0 +1,281 @@
+[
+ {
+  "capability": "agent.turn",
+  "files": {},
+  "instance": {
+   "id": "garbled#1",
+   "path": "garbled",
+   "step": "garbled"
+  },
+  "key": "d7b223f6d2d1d5b441b114eb8dfbcef1f456ae8457a41fc869154a86a1f759df",
+  "request": {
+   "messages": [
+    {
+     "content": "Garble the reply.",
+     "role": "user"
+    }
+   ],
+   "system": "You measure things before you answer.",
+   "tool_choice": "required",
+   "tools": [
+    {
+     "description": "Measures a thing and says how tall it is.",
+     "name": "measure",
+     "parameters": {
+      "properties": {
+       "thing": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "thing"
+      ],
+      "type": "object"
+     }
+    },
+    {
+     "description": "Finish: submit the answer this task asks for.",
+     "name": "submit",
+     "parameters": {
+      "additionalProperties": false,
+      "properties": {
+       "height": {
+        "type": "integer"
+       },
+       "unit": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "height",
+       "unit"
+      ],
+      "type": "object"
+     }
+    }
+   ]
+  },
+  "route": {
+   "fingerprint": "fdf1010fca4610e0b53483f0ddab9ebe24558a8ed7cb74b108129a9f85a930b0",
+   "id": "llm-a@acme"
+  },
+  "take": [
+   1
+  ]
+ },
+ {
+  "capability": "agent.turn",
+  "files": {},
+  "instance": {
+   "id": "survey#1",
+   "path": "survey",
+   "step": "survey"
+  },
+  "key": "2faf89701cfd6a8b3a3714cd547e1d2d221698ed0b58703861f25dbab37f517c",
+  "request": {
+   "messages": [
+    {
+     "content": "Measure the lantern, then submit its height.",
+     "role": "user"
+    }
+   ],
+   "system": "You measure things before you answer.",
+   "tool_choice": "required",
+   "tools": [
+    {
+     "description": "Measures a thing and says how tall it is.",
+     "name": "measure",
+     "parameters": {
+      "properties": {
+       "thing": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "thing"
+      ],
+      "type": "object"
+     }
+    },
+    {
+     "description": "Finish: submit the answer this task asks for.",
+     "name": "submit",
+     "parameters": {
+      "additionalProperties": false,
+      "properties": {
+       "height": {
+        "type": "integer"
+       },
+       "unit": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "height",
+       "unit"
+      ],
+      "type": "object"
+     }
+    }
+   ]
+  },
+  "route": {
+   "fingerprint": "fdf1010fca4610e0b53483f0ddab9ebe24558a8ed7cb74b108129a9f85a930b0",
+   "id": "llm-a@acme"
+  },
+  "take": [
+   1
+  ]
+ },
+ {
+  "capability": "agent.turn",
+  "files": {},
+  "instance": {
+   "id": "survey#1",
+   "path": "survey",
+   "step": "survey"
+  },
+  "key": "b6e3d9ac3b42104fa669c833e938c39e3bd834476606149094c35869e5476d2a",
+  "request": {
+   "messages": [
+    {
+     "content": "Measure the lantern, then submit its height.",
+     "role": "user"
+    },
+    {
+     "content": "I measure it first.",
+     "role": "assistant",
+     "tool_calls": [
+      {
+       "arguments": "{\"thing\":\"lantern\"}",
+       "id": "call_measure",
+       "name": "measure"
+      }
+     ]
+    },
+    {
+     "content": "{\"height\":3,\"thing\":\"lantern\",\"unit\":\"hands\"}",
+     "name": "measure",
+     "role": "tool",
+     "tool_call_id": "call_measure"
+    }
+   ],
+   "system": "You measure things before you answer.",
+   "tool_choice": "required",
+   "tools": [
+    {
+     "description": "Measures a thing and says how tall it is.",
+     "name": "measure",
+     "parameters": {
+      "properties": {
+       "thing": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "thing"
+      ],
+      "type": "object"
+     }
+    },
+    {
+     "description": "Finish: submit the answer this task asks for.",
+     "name": "submit",
+     "parameters": {
+      "additionalProperties": false,
+      "properties": {
+       "height": {
+        "type": "integer"
+       },
+       "unit": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "height",
+       "unit"
+      ],
+      "type": "object"
+     }
+    }
+   ]
+  },
+  "route": {
+   "fingerprint": "fdf1010fca4610e0b53483f0ddab9ebe24558a8ed7cb74b108129a9f85a930b0",
+   "id": "llm-a@acme"
+  },
+  "take": [
+   1
+  ]
+ },
+ {
+  "capability": "structured.generate",
+  "files": {
+   "e7eaf92d0a7a4280ade59c0a0a8c53c9ad12ab392c1ea49e2d7df1e09d9329de": {
+    "facts": {
+     "bytes": 183,
+     "kind": "json"
+    },
+    "kind": "json",
+    "name": "schemas/height.json",
+    "path_is_file": true,
+    "size": 183
+   }
+  },
+  "instance": {
+   "id": "estimate#1",
+   "path": "estimate",
+   "step": "estimate"
+  },
+  "key": "e81cf317bebac519e18bfa1130b7484ab78bd587b988a9988a82868e2f70a745",
+  "request": {
+   "matte": "#ffffff",
+   "prompt": "Estimate the height of the lantern.",
+   "schema": {
+    "file": "e7eaf92d0a7a4280ade59c0a0a8c53c9ad12ab392c1ea49e2d7df1e09d9329de"
+   }
+  },
+  "route": {
+   "fingerprint": "1a974f1107934b4388bf8dbbdc9931a2353db3612d5e2624c2f6eb3e6ba6db2e",
+   "id": "llm-a@acme"
+  },
+  "take": [
+   1
+  ]
+ },
+ {
+  "capability": "structured.generate",
+  "files": {
+   "e7eaf92d0a7a4280ade59c0a0a8c53c9ad12ab392c1ea49e2d7df1e09d9329de": {
+    "facts": {
+     "bytes": 183,
+     "kind": "json"
+    },
+    "kind": "json",
+    "name": "schemas/height.json",
+    "path_is_file": true,
+    "size": 183
+   }
+  },
+  "instance": {
+   "id": "wrong#1",
+   "path": "wrong",
+   "step": "wrong"
+  },
+  "key": "106fb4d1085a5692234a67e7a4042136ef405a6714d9ec710b6af365ce378d9c",
+  "request": {
+   "matte": "#ffffff",
+   "prompt": "Answer with the wrong type.",
+   "schema": {
+    "file": "e7eaf92d0a7a4280ade59c0a0a8c53c9ad12ab392c1ea49e2d7df1e09d9329de"
+   }
+  },
+  "route": {
+   "fingerprint": "1a974f1107934b4388bf8dbbdc9931a2353db3612d5e2624c2f6eb3e6ba6db2e",
+   "id": "llm-a@acme"
+  },
+  "take": [
+   1
+  ]
+ }
+]

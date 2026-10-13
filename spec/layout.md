@@ -30,9 +30,9 @@ identity, caches or resume, and it changes no existing field of any record (§2,
 | | Ship A: automatic grid and decks | Ship B: the layout file |
 |---|---|---|
 | Delivers | the cell rule and the member order (§4, §8), decks and their interaction (§5), stable live updates, socket edges (§9), the scoped layout route and its report with automatic cells (§6.11) | `<workflow id>.layout.json` (`fx-layout-v1`, §6), diagnostics, the report's file members, `inspect` output, grid spreads and matrix tables (§6.3) |
-| Code | `crates/grida-fx-core` and `crates/grida-fx-runtime` record the added fields; `crates/grida-fx-viewer` reads them, computes cells and the member order and serves the report; `js/fx-web` places its own projection's cards in the served cells and draws; `web/viewer` | `crates/grida-fx-viewer`: the file reader, discovery and diagnostics; `crates/grida-fx`: `inspect`; `crates/grida-fx-core` and `crates/grida-fx-runtime`: recorded matrix axis values; `js/fx-web`: grid spreads and matrix tables |
+| Code | `crates/grida-fx-core` and `crates/grida-fx-runtime` record the added fields; `crates/grida-fx-viewer` reads them, computes cells and the member order and serves the report; `web/fx-web` places its own projection's cards in the served cells and draws; `web/viewer` | `crates/grida-fx-viewer`: the file reader, discovery and diagnostics; `crates/grida-fx`: `inspect`; `crates/grida-fx-core` and `crates/grida-fx-runtime`: recorded matrix axis values; `web/fx-web`: grid spreads and matrix tables |
 | Contracts | optional members only. [`fx-graph-v1`](schemas/fx-graph-v1.schema.json): `order` on `steps` entries; `step` and `waiting_on` on `pending` entries; a materialized plan (`plan --open`, `plan --standalone`, `view` of a workflow) carries `steps` and `takes_file`, as `plan.json` does. [`fx-run-events-v1`](schemas/fx-run-events-v1.schema.json): `scopes_updated` adds `instances` (each expanded instance's `id`, `step`, `take` and `key`, in expansion order; absent instances, never members, are left out) and `pending` (the expansion's pending repeats, as in fx-graph-v1). [`fx-viewer-run-v1`](schemas/fx-viewer-run-v1.schema.json): nodes add `step`, `take`, `key` and `interrupted`; the document adds `pending`, the repeats not yet expanded. New: the scoped layout route and the `fx-layout-report-v1` kind, whose schema Ship A writes | [`fx-layout-v1`](schemas/fx-layout-v1.schema.json); the report's file members; `axes` (a matrix combination's axis values, in declared axis order) on fx-graph-v1 instances, `scopes_updated` `instances` and fx-viewer-run-v1 nodes |
-| Removes | `@dagrejs/dagre` from `js/fx-web`; no ELK dependency is added | nothing |
+| Removes | `@dagrejs/dagre` from `web/fx-web`; no ELK dependency is added | nothing |
 | Never changes | any existing field or its meaning, the workflow format, the plan digest, step, type and call identity, the store, caches, resume | the same; planning, runs, resume and the store never open the layout file |
 
 The ratified split kept Ship A to the viewer and additive contract fields. Computing cells in the
@@ -484,9 +484,9 @@ FX never writes the file. Writing every reported cell back as authored draws the
 |---|---|---|
 | connected components, topological order, cycle detection | generic | a Rust graph library, such as `petgraph`; its version and licence are checked when it is added |
 | slots, order key, clusters, depths, rows, wrap, authored cells, empty-track collapse, diagnostics | product | `crates/grida-fx-viewer` |
-| per-scope projection: canvases, frames, members, collapsed imported workflows, rerouted and merged edges with their ports | product | stays in `js/fx-web` (`scopes.ts`, `graph.ts`); its cards are keyed by the recorded `step`, the report's cell key |
-| parsing and validating documents; node card content by id (title, ports, settings, preview, state); navigation and selection state | presentation | stays in `js/fx-web` |
-| track pixels, deck footprints, edge curves, motion, camera | presentation | `js/fx-web`, from the served report |
+| per-scope projection: canvases, frames, members, collapsed imported workflows, rerouted and merged edges with their ports | product | stays in `web/fx-web` (`scopes.ts`, `graph.ts`); its cards are keyed by the recorded `step`, the report's cell key |
+| parsing and validating documents; node card content by id (title, ports, settings, preview, state); navigation and selection state | presentation | stays in `web/fx-web` |
+| track pixels, deck footprints, edge curves, motion, camera | presentation | `web/fx-web`, from the served report |
 
 - **Native.** `inspect` must report cells, and the installed command has no JavaScript runtime.
   The browser places its cards in the cells the engine serves; it never computes a cell.
@@ -587,7 +587,7 @@ Ship A, then Ship B. Each step lands with its evidence, recorded here.
    and a run's report against `fx-layout-report-v1`, `no-store` and no `ETag`; `check_viewer`
    reads `api/layout` from the installed engine in plan and run modes, and a run's report carries
    its cursor; a run's `/api/snapshot` carries the same report as `/api/layout`.
-3. Place the projection in the served cells in `js/fx-web`: tracks, deck footprints, placeholders, badges,
+3. Place the projection in the served cells in `web/fx-web`: tracks, deck footprints, placeholders, badges,
    edges, interaction, motion, camera and refresh; remove `@dagrejs/dagre`.
    *Landed in part.* Cards go in the served cells with tracks over every frame of a container,
    and a card with a declared image output reserves its preview area in both views; absent
@@ -622,7 +622,7 @@ nested levels, reduced motion and live updates that move no cell.
 2. The report's file members on the route and the `layout` member of `inspect RUN --json`.
 3. Record matrix `axes` (§2) in `crates/grida-fx-core` and `crates/grida-fx-runtime`, carry them
    onto fx-viewer-run-v1 nodes, edit the three schemas and re-record the matrix conformance case.
-4. Grid spreads and matrix tables in `js/fx-web`.
+4. Grid spreads and matrix tables in `web/fx-web`.
 5. The conformance identity case (§7); the spec gate validates committed `*.layout.json` files.
 6. The guide, the installed skill and AR-17's evidence in [agent readiness](../AGENT_READINESS.md).
 

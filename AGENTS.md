@@ -15,8 +15,8 @@ Guardrails for working in this repository. [README.md](README.md) says what FX i
 | `spec/` | The language-neutral contracts: schemas, identity, protocol, test vectors. Code follows `spec/`; a change to identity is a change to `spec/` first. |
 | `conformance/` | Cases that hold any implementation to the spec through the command line only. |
 | `python/` | The `grida` distribution; FX is `grida.fx`. |
-| `js/fx/` | `@grida/fx`, the Node SDK and command launcher (`@grida/fx/cli` for host commands); per-platform engines are packaged separately. |
-| `js/fx-web/`, `js/fx-react/` | Private browser-only contracts, TypeScript controllers/canvas, and thin React adapters. |
+| `js/fx/` | `@grida/fx`, the Node SDK, the TypeScript node host (`dist/host-entry.js`, on Node 24+) and command launcher (`@grida/fx/cli` for host commands); per-platform engines are packaged separately. |
+| `web/fx-web/`, `web/fx-react/` | Private browser-only contracts, TypeScript controllers/canvas, and thin React adapters. |
 | `web/viewer/` | Vite/React/Tailwind client, built and embedded in the engine. |
 | `www/` | Standalone Next.js/Tailwind static website mounted at `/fx`; large showcase run packages stay outside Git. |
 | `examples/` | User projects and complete website showcase sources. CI plans their graphs and exercises free paths or paid-call refusal with synthesized inputs (rigged-character only plans). Optional processing libraries belong to each example; generated artwork stays outside Git. |
@@ -61,11 +61,13 @@ Run the checks for what you touched:
 bun --no-env-file install --frozen-lockfile
 bun --no-env-file run check:viewer && bun --no-env-file run test:viewer && bun --no-env-file run build:viewer
 bun --no-env-file run check:www && bun --no-env-file run test:www && bun --no-env-file run build:www
+# js/fx/dist: the TypeScript node host that the engine's tests and conformance start on Node 24+.
+(cd js/fx && bun --no-env-file install --frozen-lockfile && bun --no-env-file run build)
 cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test --workspace
 (cd python && uv run ruff check --config pyproject.toml . ../tools ../conformance ../examples ../fixtures && uv run ruff format --check --config pyproject.toml . ../tools ../conformance/run.py ../examples ../fixtures && uv run pytest)
 (cd js/fx && bun --no-env-file run typecheck && bun --no-env-file test)
 uv run --project python python tools/check_spec.py
-uv run --project python python conformance/run.py --command target/debug/grida-fx
+uv run --project python python conformance/run.py --command target/debug/grida-fx --js-sdk js/fx
 python3 tools/build_engine.py && uv run --project python python tools/check_examples.py
 # Showcase examples: install FFmpeg on PATH; these libraries are not SDK dependencies.
 uv pip install --python python/.venv/bin/python -r examples/requirements-ci.txt
@@ -78,4 +80,6 @@ uv run --project python python tools/check_viewer_fixtures.py
 ```
 
 Source builds embed `web/viewer/dist` and refuse a missing bundle. Bun is a build-time dependency;
-installed npm and Python packages serve the bundled viewer without a frontend runtime.
+installed npm and Python packages serve the bundled viewer without a frontend runtime. The engine's
+and the SDK's tests that start the TypeScript node host need Node 24 or later on `PATH` (and, for
+the engine's, a built `js/fx/dist`), and skip, saying why, without them; conformance needs both.

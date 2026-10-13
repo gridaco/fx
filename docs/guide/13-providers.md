@@ -19,11 +19,11 @@ serve ([Running](05-running.md#keys-and-live-runs)).
 
 ## No provider
 
-FX is a workflow engine first. Your Python nodes, the built-in local steps (`image.resize`,
-`json.merge`, `package`, …) and file facts run with no key and without `--live`, and a run of them
-is cached and recorded like any other. Without `--live`, a step that would call a provider is
-refused for nothing, so you can build and test the rest of a workflow first, or answer paid calls
-with [stand-ins](05-running.md#stand-ins-testing-without-a-provider).
+FX is a workflow engine first. Your own nodes, in Python or TypeScript, the built-in local steps
+(`image.resize`, `json.merge`, `package`, …) and file facts run with no key and without `--live`,
+and a run of them is cached and recorded like any other. Without `--live`, a step that would call
+a provider is refused for nothing, so you can build and test the rest of a workflow first, or
+answer paid calls with [stand-ins](05-running.md#stand-ins-testing-without-a-provider).
 
 ## Your own Codex
 

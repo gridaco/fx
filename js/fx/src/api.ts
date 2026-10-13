@@ -3,11 +3,12 @@
  * place with engine logic, and these functions read the documents it prints.
  *
  * - A target is what the command takes: a workflow file, a workflow id, or a builder
- *   `file.py:function` (with `args`). `run` also takes a {@link Plan}: it runs it with the target
- *   and options it was planned with.
+ *   `file.ts:function` or `file.py:function` (with `args`). `run` also takes a {@link Plan}: it
+ *   runs it with the target and options it was planned with.
  * - Relative paths (`inputFiles`, `routes`, `runDir`, paths inside `inputs`) start at `cwd`, as on
  *   the command line.
- * - Planning never spends. A run spends only with `live: true`, within a ceiling.
+ * - Planning never spends. A run spends only with `live: true`, within a ceiling; with
+ *   `standIn`, a function answers its paid calls instead, offline and for nothing.
  * - The engine's errors (exit status 2), a run it refuses to start and an interrupted run reject
  *   with {@link FxError}; a plan with problems that is asked to run rejects with
  *   {@link PlanRefused}. A failed step does not reject: read `result.ok` and `result.failed`.
@@ -39,6 +40,8 @@ import {
   runArgs,
   withInputsFile,
 } from "./request.js";
+import { socketPair } from "./socket.js";
+import { Answerer, serveStandIn } from "./stand-in.js";
 import type { JsonValue } from "./workflow.js";
 
 /** The first line of a run's summary: `run` padded to 10 columns, then the folder as named. */
@@ -262,6 +265,11 @@ export class RunResult {
     return this.finished?.stopped ?? null;
   }
 
+  /** Whether the run was a stand-in run (`run(…, { standIn })`, or `--stand-in`). */
+  get standIn(): boolean {
+    return this.projection.run?.run_started?.stand_in === true;
+  }
+
   /** Each instance's state, by instance id. */
   get steps(): Record<string, ProjectedInstance> {
     return this.projection.instances ?? {};
@@ -315,12 +323,28 @@ export function decode(encoded: Encoded, placed: ReadonlyMap<string, string>): R
 }
 
 /** The options `run` still takes with a {@link Plan}. */
-const RUN_ONLY: readonly string[] = ["live", "yesUpTo", "runDir", "name", "resume", "deliver", "signal"];
+const RUN_ONLY: readonly string[] = [
+  "live",
+  "yesUpTo",
+  "runDir",
+  "name",
+  "resume",
+  "deliver",
+  "signal",
+  "standIn",
+];
 
 /**
  * Runs `target`, or a plan, after planning it: a plan with problems rejects with
  * {@link PlanRefused} before any folder exists. `live: true` admits paid calls, within a
  * ceiling. Then reads the folder back through `grida-fx project` and `inspect --json`.
+ *
+ * With `standIn`, the function answers the run's paid calls (`spec/protocol.md` §5.7): it is
+ * served in this process, over a socket that is the engine's standard input, and the run is not
+ * planned first (the engine plans it, and refuses a plan with problems). When the stand-in fails
+ * (it throws something other than `CallRefused` or `CallFailed`, or returns something that is not
+ * an answer), the engine stops the run, and `run` rejects with what the stand-in threw (a
+ * `TypeError` for what it returned) once the engine has ended.
  */
 export async function run(target: string | Plan, options: RunOptions = {}): Promise<RunResult> {
   let request: PlanRequest;
@@ -340,13 +364,22 @@ export async function run(target: string | Plan, options: RunOptions = {}): Prom
   }
   const own = runArgs(options);
   const signal = options.signal;
-  const planned = target instanceof Plan ? target : await planRequest(request, signal);
-  if (!planned.ok) {
+  const answerer = options.standIn === undefined ? null : new Answerer(options.standIn);
+  // A stand-in run plans nothing first: the run plans, and refuses problems.
+  const planned =
+    target instanceof Plan ? target : answerer === null ? await planRequest(request, signal) : null;
+  if (planned !== null && !planned.ok) {
     throw new PlanRefused(planned);
   }
-  const done = await withInputsFile(request, (inputsFile) =>
-    call(["run", ...planningArgs(request, inputsFile), ...own, "--no-view"], callOptions(request, signal)),
-  );
+  const done = await withInputsFile(request, (inputsFile) => {
+    const args = ["run", ...planningArgs(request, inputsFile), ...own, "--no-view"];
+    const given = callOptions(request, signal);
+    return answerer === null ? call(args, given) : callAnswered(args, given, answerer);
+  });
+  const fault = answerer?.fault;
+  if (fault !== null && fault !== undefined) {
+    throw fault.error;
+  }
   if (done.status === INTERRUPTED) {
     throw new FxError("the run was interrupted", {
       exitCode: done.status,
@@ -383,6 +416,25 @@ export async function run(target: string | Plan, options: RunOptions = {}): Prom
   const projection = await project(folder, readOptions);
   const inspection = await inspect(folder, readOptions);
   return new RunResult(resolve(request.cwd, folder), done, projection, inspection);
+}
+
+/** {@link call} with the stand-in served on a socket pair, the engine's end its standard input.
+ * Once the engine has exited, the serving ends: nothing waits for a stand-in still answering. */
+async function callAnswered(
+  args: readonly string[],
+  options: CallOptions,
+  answerer: Answerer,
+): Promise<Exit> {
+  const { ours, theirs } = await socketPair();
+  const served = serveStandIn(ours, answerer);
+  try {
+    return await call(args, options, theirs);
+  } finally {
+    theirs.destroy();
+    answerer.close();
+    ours.destroy();
+    await served;
+  }
 }
 
 /** `grida-fx project <run>`: a run's record projected to its state. */

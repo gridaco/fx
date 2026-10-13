@@ -69,7 +69,7 @@ exercises a real provider-free saved run and structured refusals. SDK tests
 cover options, receipts and errors; CLI, Python and JavaScript produced identical
 manifest bytes from the same saved recording.
 
-The [shared browser tests](../../js/fx-web/tests/export.test.ts) cover pinned
+The [shared browser tests](../../web/fx-web/tests/export.test.ts) cover pinned
 manifest verification, required shapes, reference and layout consistency,
 resource confinement and static controller behavior. A consumer must also check
 actual rendered behavior against its selected content; parser acceptance alone

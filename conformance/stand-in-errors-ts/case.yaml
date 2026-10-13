@@ -1,0 +1,49 @@
+# stand-in-errors' twin in TypeScript: every way a stand-in's answer can end, from
+# in/stand_in.ts (`--stand-in stand_in.ts#answer`), whose answers are stand_in.py's as the
+# TypeScript node host encodes them: a thrown CallRefused is `capability_refused` and a CallFailed
+# `call_failed`, DECLINE goes on to the live check (`not_live`), and the engine checks each
+# answer's picture and shape (32x32 for 64x64, `{bytes, kind: "text/plain"}` as `image`, an extra
+# file, no file, data). `body`'s TypeScript node makes a call with no prompt, refused before the
+# stand-in is asked, and lets the refusal through. The engine words every failure, computes every
+# key and checks every answer, so asked.json, count-one.txt and count-two.txt are
+# stand-in-errors', byte for byte; events-one.json, events-two.json and project-one.json differ
+# only where the node type is named: `uses` (`./nodes/asks.ts#asks_nothing`), the plan digest and
+# body#1's step identity. A second run into a new folder answers `good` from the stand-in store
+# and asks each of the other eight again (count 17).
+steps:
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, --stand-in, "stand_in.ts#answer"]
+  status: 1
+  mentions:
+  - "stand-in  stand_in.ts#answer"
+  - "result    failed   spent $0.00"
+  - "failed    refused#1: image.generate on img-a@acme was refused: the stand-in refuses this prompt"
+  - "failed    failed#1: image.generate on img-a@acme failed: the stand-in failed this prompt"
+  - "failed    declined#1: image.generate on img-a@acme is a paid call the stand-in declined"
+  - "failed    small#1: image.generate on img-a@acme failed: the image is 32x32, not 64x64"
+  - "failed    text#1: image.generate on img-a@acme failed: image is text/plain, not image/png"
+  - "failed    extra#1: image.generate on img-a@acme failed: image.generate returns no file named thumbnail"
+  - "failed    missing#1: image.generate on img-a@acme failed: the answer holds no image"
+  - "failed    data#1: image.generate on img-a@acme failed: image.generate returns no data"
+  - "failed    body#1: image.generate on img-a@acme was refused: image.generate needs prompt"
+- read: count.txt
+  save: count-one.txt
+- read: asked.json
+  save: asked.json
+  json: true
+- read: runs/one/events.jsonl
+  save: events-one.json
+  jsonl: true
+- argv: [project, runs/one]
+  save: project-one.json
+  json: true
+- argv: [run, case, --routes, routes.yaml, --run, runs/two, --stand-in, "stand_in.ts#answer"]
+  status: 1
+  mentions:
+  - "result    failed   spent $0.00"
+  - "failed    declined#1: image.generate on img-a@acme is a paid call the stand-in declined"
+  - "failed    body#1: image.generate on img-a@acme was refused: image.generate needs prompt"
+- read: count.txt
+  save: count-two.txt
+- read: runs/two/events.jsonl
+  save: events-two.json
+  jsonl: true

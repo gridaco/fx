@@ -377,13 +377,13 @@ fn a_pending_with_value_cannot_run() {
 // ------------------------------------------------------------ attempts
 
 fn engine(handle: tokio::runtime::Handle, project: &Path, python: &Path) -> Arc<Engine> {
-    let spec = HostSpec {
-        python: python.to_path_buf(),
-        label: "python3".into(),
-        project_root: project.to_path_buf(),
-        sources: Vec::new(),
-        check_version: false,
-    };
+    let spec = HostSpec::python(
+        python.to_path_buf(),
+        "python3",
+        project.to_path_buf(),
+        Vec::new(),
+    )
+    .unchecked();
     Arc::new(Engine::new(
         handle,
         spec,
@@ -779,13 +779,13 @@ fn stand_in_services(
     python: &Path,
     stand_in: Arc<CountingStandIn>,
 ) -> Arc<Services> {
-    let spec = HostSpec {
-        python: python.to_path_buf(),
-        label: "python3".into(),
-        project_root: project.to_path_buf(),
-        sources: Vec::new(),
-        check_version: false,
-    };
+    let spec = HostSpec::python(
+        python.to_path_buf(),
+        "python3",
+        project.to_path_buf(),
+        Vec::new(),
+    )
+    .unchecked();
     let engine = Engine::new(
         tokio::runtime::Handle::current(),
         spec,

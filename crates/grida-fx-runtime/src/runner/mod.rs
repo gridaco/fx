@@ -575,8 +575,8 @@ fn invoke(
             ) {
                 Ok(endpoint) => Some(endpoint),
                 Err(_) => {
-                    eprintln!(
-                        "note: local run control is unavailable; signal cancellation remains available"
+                    crate::stderr::line(
+                        "note: local run control is unavailable; signal cancellation remains available",
                     );
                     None
                 }
@@ -604,10 +604,14 @@ fn invoke(
         && let (Some(endpoint), Some(terminal)) = (&endpoint, terminal)
         && endpoint.complete(&terminal).is_err()
     {
-        eprintln!("note: local cleanup completed, but its control receipt could not be saved");
+        crate::stderr::line(
+            "note: local cleanup completed, but its control receipt could not be saved",
+        );
     }
     if !cleanup_verified {
-        eprintln!("note: node-host cleanup could not be verified; no completion receipt was saved");
+        crate::stderr::line(
+            "note: node-host cleanup could not be verified; no completion receipt was saved",
+        );
     }
     outcome
 }
@@ -678,10 +682,10 @@ fn prepare(
             ))
         })?;
     if torn {
-        eprintln!(
+        crate::stderr::line(format_args!(
             "note: {events_label} ended in a line an earlier invocation did not finish writing; \
              it was left out"
-        );
+        ));
     }
     let another = prior
         .iter()
@@ -1443,13 +1447,7 @@ while (message := read()) is not None:
             let engine = Arc::new(
                 Engine::new(
                     runtime.handle().clone(),
-                    HostSpec {
-                        python,
-                        label: "python-stub".into(),
-                        project_root: root.clone(),
-                        sources: Vec::new(),
-                        check_version: false,
-                    },
+                    HostSpec::python(python, "python-stub", root.clone(), Vec::new()).unchecked(),
                     &root.join("cache"),
                     1,
                     Adapters::new(),
@@ -1590,13 +1588,13 @@ while (message := read()) is not None:
             .unwrap();
         let engine = Arc::new(Engine::new(
             runtime.handle().clone(),
-            HostSpec {
-                python: root.join("unused-python"),
-                label: "unused-python".into(),
-                project_root: root.clone(),
-                sources: Vec::new(),
-                check_version: false,
-            },
+            HostSpec::python(
+                root.join("unused-python"),
+                "unused-python",
+                root.clone(),
+                Vec::new(),
+            )
+            .unchecked(),
             &root.join("cache"),
             1,
             Adapters::new(),

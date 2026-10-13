@@ -66,10 +66,10 @@ pub fn file_ref(store: &Store, file: &FileValue, files: &RunFiles) -> Result<Fil
         )
     })?;
     if let Some(reason) = &read.refused {
-        eprintln!(
+        crate::stderr::line(format_args!(
             "warning: {}: its file facts cannot be read ({reason}); the body gets its size and kind only",
             file.name
-        );
+        ));
     }
     let facts: IndexMap<String, Value> = read.facts.into_iter().collect();
     let mut handed = file.clone();

@@ -1,4 +1,4 @@
-# Running: CLI, Python, agents
+# Running: CLI, Python, JavaScript, agents
 
 ## CLI
 
@@ -17,14 +17,14 @@ standalone `grida-fx` command and the source setup are in
 | `grida fx inspect RUN --control [--json]` | observe an exact invocation's local control availability |
 | `grida fx cancel RUN [--invocation ID] [--wait] [--timeout DURATION] [--json]` | request cancellation; optionally verify local completion ([Run control](08-run-control.md)) |
 | `grida fx plan <target> [inputs] [--routes file]… [--max-usd N] [--check] [--expect-cached] [--json] [--open] [--standalone]` | expand, check, price; optionally open the plan canvas. Never spends. |
-| `grida fx run <target> [inputs] [--routes file]… [--live] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--name NAME \| --resume NAME \| --run folder] [--stand-in file.py#function] [--open \| --no-view] [--standalone]` | run; `--live` admits paid calls, needs a ceiling (unless every call is on your own Codex or Grok Build) and reads the provider keys; `--name` creates a named run, `--resume` continues it, `--run` selects a folder; `--stand-in` answers paid calls with your function instead, offline ([below](#stand-ins-testing-without-a-provider)) |
+| `grida fx run <target> [inputs] [--routes file]… [--live] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--name NAME \| --resume NAME \| --run folder] [--stand-in file.py#function \| file.ts#function] [--open \| --no-view] [--standalone]` | run; `--live` admits paid calls, needs a ceiling (unless every call is on your own Codex or Grok Build) and reads the provider keys; `--name` creates a named run, `--resume` continues it, `--run` selects a folder; `--stand-in` answers paid calls with your function instead, offline ([below](#stand-ins-testing-without-a-provider)) |
 | `grida fx reroll <run> <step-path>` / `grida fx pick <run> <step-path> <take>` | takes ([Cost](04-cost-and-cache.md#takes)) |
 | `grida fx takes list <target>` / `grida fx takes mv <target> <old> <new>` | inspect or repair a takes file |
 | `grida fx jobs [--forget <key>]` | the cache's long provider jobs, `settled` ones included ([Resuming](04-cost-and-cache.md#resuming)); `--forget` clears one once you have checked the provider |
 | `grida fx inspect <folder or workflow id or workflow id/name> [--verify] [--json] [--open] [--standalone]` | summary; a workflow ID selects its newest-created run; `--verify` re-checks every placed file; `--open` opens its canvas |
 | `grida fx nodes [type]` | built-in and project node types, with settings and routes |
 | `grida fx schema <target>` | the JSON Schema its `inputs:` compile to |
-| `grida fx doctor [target]` | the Python, keys, routes and tools a workflow needs, the target's own routes first ([below](#keys-and-live-runs)) |
+| `grida fx doctor [target]` | the Python, Node, keys, routes and tools a workflow needs, the target's own routes first ([below](#keys-and-live-runs)) |
 | `grida fx lock [where] [--same <node>]… [--check]` | node version locks; repeat `--same` to confirm several |
 | `grida fx expand`, `identity`, `price <target> [inputs]` | the expanded graph, each instance's identity, the price by phase, as JSON |
 | `grida fx project <run>` | a run's record projected to its state, as JSON |
@@ -125,7 +125,9 @@ serve a type; `grida fx doctor` says which of them a live run could serve.
 - a workflow id (`concept-gallery`), looked for among the `.yaml` files at the project root, then
   in the folders `fx.yaml` lists under `workflows:`, `workflows/` by default
   ([Getting started](01-getting-started.md#a-project));
-- a Python builder (`level_art.py:build`), whose arguments are passed with `--arg name=value`.
+- a builder, a function that returns the workflow: `level_art.py:build` in Python, or
+  `level_art.ts:build` in TypeScript (`.mts`, `.js` and `.mjs` files too). Its arguments are
+  passed with `--arg name=value`.
 
 ## Keys and live runs
 
@@ -174,14 +176,15 @@ adapters as usual, but nothing leaves the machine: every provider request is ref
 sent, and the step fails with a message that names `GRIDA_FX_NETWORK`, for nothing. Tests of live
 paths use it.
 
-**Checking keys and routes.** `grida fx doctor` prints, after the engine and Python lines, where
-each key comes from and which routes a live run could serve, for the project you run from (the
-built-in table and its `route_tables`); with a target, the tools and node types the workflow needs
-follow:
+**Checking keys and routes.** `grida fx doctor` prints, after the engine, Python and Node lines,
+where each key comes from and which routes a live run could serve, for the project you run from
+(the built-in table and its `route_tables`); with a target, the tools and node types the workflow
+needs follow:
 
 ```
-engine    grida-fx 0.2.0
-python    .venv/bin/python (grida 0.2.0)
+engine    grida-fx 0.6.0
+python    .venv/bin/python (grida 0.6.0)
+node      /usr/local/bin/node (@grida/fx 0.6.0)
 key       GG_API_KEY present (.env)
 key       OPENAI_API_KEY missing
 key       OPENROUTER_API_KEY missing
@@ -203,12 +206,14 @@ uses a route that needs it (below); a `.env` or base URL that a live run would r
 prints `keys      <why>` and exits 1.
 
 **The target's routes come first.** With a target, `grida fx doctor <target>` lists, right after the
-Python line, the routes the workflow's paid steps use, each with whether a live run could serve it
-and how many steps use it (a repeated step counts once; groups and used workflows are included):
+Python and Node lines, the routes the workflow's paid steps use, each with whether a live run could
+serve it and how many steps use it (a repeated step counts once; groups and used workflows are
+included):
 
 ```
-engine    grida-fx 0.5.1
-python    .venv/bin/python (grida 0.5.1)
+engine    grida-fx 0.6.0
+python    .venv/bin/python (grida 0.6.0)
+node      /usr/local/bin/node (@grida/fx 0.6.0)
 uses      image.generate imagegen@codex servable (8 steps)
 key       GG_API_KEY missing
 …
@@ -217,12 +222,13 @@ key       GG_API_KEY missing
 Routes are read from the workflow and `fx.yaml`, so doctor needs no inputs. A step with no route
 shows `no route`, and a route the catalog doesn't have shows `not in the catalog`. Doctor exits 1
 when any route the target uses can't be served, since that stops a live run; the full list of
-keys and routes still follows. These lines need no Python, so they print even before `uv sync`.
+keys and routes still follows. These lines need no Python or Node, so they print even before
+`uv sync` or `npm install`.
 Doctor takes no `--routes`: routes a run adds with `--routes` show as `not in the catalog`.
 
 **The Python line.** FX's Python node host needs Python 3.11 or later with `grida`. The Python
 line names the interpreter FX would use and says what it found:
-- `python    .venv/bin/python (grida 0.5.1)`: ready;
+- `python    .venv/bin/python (grida 0.6.0)`: ready;
 - `python    python3 too old (3.9.6; FX needs 3.11+)`: run `uv sync` or `pip install grida` in
   the project, or set `GRIDA_FX_PYTHON` to a newer Python;
 - `python    python3 no grida`: install `grida` into that Python;
@@ -230,8 +236,21 @@ line names the interpreter FX would use and says what it found:
 - `python    python3 cannot start: <why>`: it started and failed, for example a `grida` too old
   for this FX.
 
-The line itself doesn't change the exit status. With a target whose nodes need Python, doctor then
-stops with the message a plan would give (exit 2).
+**The Node line.** FX's TypeScript node host needs Node 24 or later and `@grida/fx`
+([Getting started](01-getting-started.md#when-fx-needs-node)). The Node line names the Node FX
+would use and says what it found:
+- `node      /usr/local/bin/node (@grida/fx 0.6.0)`: ready;
+- `node      /usr/local/bin/node too old (22.12.0; FX needs 24+)`, or `bun not Node.js 24+`:
+  install Node 24 or later, or set `GRIDA_FX_NODE` to one;
+- `node      /usr/local/bin/node no @grida/fx`: run `npm install @grida/fx` in the project;
+- `node      node NOT FOUND`: there is no such program;
+- `node      /usr/local/bin/node cannot start: <why>`: it started and failed, for example an
+  `@grida/fx` too old for this FX.
+
+A project with no TypeScript nodes needs none of it: without a `package.json`, the Node line gives
+only what that Node answered (`node      /usr/local/bin/node (Node 24.14.0)`). The lines
+themselves don't change the exit status. With a target whose nodes need a host that can't start,
+doctor then stops with the message a plan would give (exit 2).
 
 ## Inputs
 
@@ -394,8 +413,9 @@ result.deliver({"images": "out/{key}.png"})
 ```
 
 - **Targets** are what the command takes: a workflow file, an id, or a builder
-  `"file.py:function"` with its arguments as `arguments={"level": "levels/docks.toml"}`. A
-  `Workflow` object a builder returns is not accepted yet (`TypeError`): name the builder instead.
+  (`"file.py:function"`, or a TypeScript one) with its arguments as
+  `arguments={"level": "levels/docks.toml"}`. A `Workflow` object a builder returns is not accepted
+  yet (`TypeError`): name the builder instead.
 - **Planning first:** `grida.fx.plan(...)` returns the plan, with `.estimate()`, `.phases()` and
   `.problems`. `grida.fx.run(plan, live=True)` runs it with the target, inputs and ceiling it was
   planned with (`live`, `yes_up_to`, and one of `name`, `resume` or `run_dir` may still be given).
@@ -413,10 +433,42 @@ result.deliver({"images": "out/{key}.png"})
 - **Stand-ins:** `stand_in=answer` answers the run's paid calls with your function, offline and
   for nothing ([below](#stand-ins-testing-without-a-provider)); `result.stand_in` says whether a
   run had one.
-- **Your Python runs the nodes when nothing else is chosen:** the SDK (and `python -m grida.fx`)
-  tells the engine the Python it runs in, and node bodies, built-ins with Python bodies and a
-  `--stand-in` file run in it when neither `GRIDA_FX_PYTHON` nor a project `.venv` chooses one.
-  Set `GRIDA_FX_PYTHON` to choose another.
+- **Your Python runs the Python nodes when nothing else is chosen:** the SDK (and
+  `python -m grida.fx`) tells the engine the Python it runs in, and Python node bodies, built-ins
+  with Python bodies and a `.py` `--stand-in` file run in it when neither `GRIDA_FX_PYTHON` nor a
+  project `.venv` chooses one. Set `GRIDA_FX_PYTHON` to choose another.
+
+## From JavaScript
+
+The JavaScript SDK (`npm install @grida/fx`, Node 18 or later) drives the same engine from
+JavaScript or TypeScript, with JavaScript names; [its README](../../js/fx/README.md) lists the API.
+
+```ts
+import { run } from "@grida/fx";
+
+const result = await run("workflows/gallery.yaml", {
+  inputs: { synopsis: "inputs/synopsis.md", poster: "inputs/poster.png" },
+  live: true,
+  maxUsd: 10,
+});
+console.log(result.ok, result.chargedUsd, result.incomplete, result.failed);
+const images = result.outputs["images"]; // a keyed collection is a Map, in its order
+```
+
+- **Targets** are what the command takes: a workflow file, an id, a builder
+  (`"level_art.ts:build"`, or a Python one) with its arguments as
+  `args: { level: "levels/docks.toml" }`, or a plan from `plan(…)`.
+- **A refused plan rejects** with `PlanRefused`, and a run refused before it starts with `FxError`.
+  A failed step doesn't: check `result.ok`, then `result.failed` (instance ids) and
+  `result.steps`.
+- **Stand-ins:** `standIn: answer` answers the run's paid calls with your function, in your own
+  process, offline and for nothing ([below](#stand-ins-testing-without-a-provider));
+  `result.standIn` says whether a run had one.
+- **Your Node runs the TypeScript nodes when nothing else is chosen:** the SDK (and `grida fx`)
+  tells the engine the Node it runs on, and TypeScript node bodies, builders and a TypeScript
+  `--stand-in` file run on it unless `GRIDA_FX_NODE` chooses another. Hosting them needs Node 24
+  or later ([Getting started](01-getting-started.md#when-fx-needs-node)); run under Bun, the SDK
+  leaves the choice to `node` on `PATH`.
 
 ## Stand-ins (testing without a provider)
 
@@ -426,19 +478,25 @@ rest is a real run: every step runs, your nodes and judges see the answers, and 
 recorded. A call answered before is replayed from the stand-in's own cache (below); the function
 is asked only the rest.
 
-**Two ways to give one:**
+**Ways to give one:**
 - **From Python,** `grida.fx.run(..., stand_in=answer)` (or `run_async`) calls `answer` in your
   own process, so closures, counters and lists of scripted answers work, and each run may get
-  another function. The SDK hands the engine a socket on its standard input (`--stand-in -`, for
-  SDKs rather than for typing), so this needs macOS or Linux.
-- **From the command,** `--stand-in <file>.py#<function>`, with the file relative to where you are;
-  it may lie outside the project. FX loads it in a Python of its own: `GRIDA_FX_PYTHON` when it is
-  set, else the `.venv` of the project you run from, else the SDK's Python, else `python3` on
-  `PATH`. Unlike your nodes,
-  it never uses the `.venv` of a workflow's own project when that is another one
-  ([Getting started](01-getting-started.md#when-fx-needs-python)). The file's folder comes first
-  on `sys.path`, as `python <file>` would have it. A file that is missing or does not load, or a
-  function it lacks, is refused before the run starts (exit 2).
+  another function.
+- **From JavaScript,** `run(…, { standIn: answer })` does the same in your own process
+  ([below](#the-function-in-typescript)). Either SDK hands the engine a socket on its standard
+  input (`--stand-in -`, for SDKs rather than for typing), so both need macOS or Linux.
+- **From the command,** `--stand-in <file>#<function>`, with a `.py` file, or a `.ts`, `.mts`,
+  `.js` or `.mjs` one, relative to where you are; it may lie outside the project. A file that is
+  missing or does not load, or a function it lacks, is refused before the run starts (exit 2).
+  - FX loads a Python file in a Python of its own: `GRIDA_FX_PYTHON` when it is set, else the
+    `.venv` of the project you run from, else the SDK's Python, else `python3` on `PATH`. Unlike
+    your nodes, it never uses the `.venv` of a workflow's own project when that is another one
+    ([Getting started](01-getting-started.md#when-fx-needs-python)). The file's folder comes first
+    on `sys.path`, as `python <file>` would have it.
+  - FX loads a TypeScript file in a Node of its own, the one your nodes would run on
+    ([Getting started](01-getting-started.md#when-fx-needs-node)), with the `@grida/fx` of the
+    project you run from, else the one that started FX. The file's imports resolve from its own
+    folder, as `node <file>` would have them, and the function is its export of that name.
 
   ```bash
   grida fx run icon --stand-in tests/stand_in.py#answer -- --name "copper lantern"
@@ -492,9 +550,10 @@ duration, or the model's kind, from the file itself.
 exception (an `AssertionError` among them), an answer FX cannot read, or a stand-in host that
 exits stops the whole run, rather than failing one call the workflow would then route around:
 `stopped   the stand-in failed: AssertionError: …`, exit 1. The function is not called again
-after its first fault, and from Python, `run()` raises that exception once the engine has ended,
-noting the run folder. A step's `timeout:` and a stopped run abandon a call the function is still
-answering, and its late answer is discarded.
+after its first fault. Once the engine has ended, `run()` raises that exception in Python, noting
+the run folder, and rejects with the value the function threw in JavaScript. A step's `timeout:`
+and a stopped run abandon a call the function is still answering, and its late answer is
+discarded.
 
 **Answers are checked** as a provider's are, in this order:
 1. **The request,** before the function is called: a request that does not fit its capability
@@ -625,6 +684,45 @@ def test_a_declined_drawing_is_not_live(project):
 - **One call at a time:** FX calls the function for one call after another, in the order the
   engine asks, never for two at once, so plain counters and `list.pop(0)` scripts need no lock.
   Steps that run at the same time may still ask in either order.
+
+### The function in TypeScript
+
+The same contract, with `@grida/fx`'s names. A stand-in is a `StandIn`: a function of one
+`StandInCall`, `async` or not, that returns an answer or `DECLINE`.
+- **The call** has the members above. Its files are `InputFile`s (`.path`, `await .bytes()`,
+  `.facts`), `call.files` is a `ReadonlyMap` by digest, and `call.signal` is aborted when FX
+  abandons the call. FX asks one call at a time, so a function that ignores the signal holds up
+  the calls after it.
+- **An answer** is a plain object, `{ files: { name: file }, data }`, each file a `Uint8Array`,
+  `{ bytes, kind }`, an `InputFile`, or a file `URL` whose suffix gives its kind.
+  `Answer.json(value)`, `Answer.turn(text, toolCalls)` and `Answer.submit(arguments)` are the
+  shortcuts. A stand-in that asks another one first tells `DECLINE` from an answer with
+  `isDecline(answer)`, which TypeScript narrows on (`answer === DECLINE` doesn't).
+- **Refusals are thrown:** `throw new CallRefused("…")` or `throw new CallFailed("…")`. Anything
+  else thrown, and `undefined` or any other value returned, is a fault.
+
+A file for `--stand-in`:
+
+```ts
+// tests/stand-in.ts
+import { DECLINE, type StandIn } from "@grida/fx";
+
+// A 1024x1024 PNG with a clear background, in pictures/ beside this file.
+const LANTERN = new URL("./pictures/lantern.png", import.meta.url);
+
+export const answer: StandIn = (call) =>
+  call.capability === "image.generate" ? { files: { image: LANTERN } } : DECLINE;
+```
+
+```bash
+grida fx run icon --stand-in tests/stand-in.ts#answer -- --name "copper lantern"
+```
+
+The pytest above carries over to `node:test` call for call: `run("icon", { inputs, cwd,
+standIn: answer })` on a scratch copy of the project, then `result.standIn`, `result.chargedUsd`
+and `result.failed`. Its judge, `image.check_alpha`, is a built-in whose body is Python
+([Getting started](01-getting-started.md#when-fx-needs-python)), so the test needs a Python with
+`grida`: set `GRIDA_FX_PYTHON`, in the environment or in `run`'s `env`.
 
 ## Agents
 

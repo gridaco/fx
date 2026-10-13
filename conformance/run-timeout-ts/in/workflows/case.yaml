@@ -1,0 +1,12 @@
+fx: workflow/v1
+id: case
+title: Steps past their timeout
+steps:
+  nap:
+    uses: ./nodes/slow.ts#slow
+    timeout: 1
+    with: { seconds: 30 }
+  watch:
+    uses: ./nodes/slow.ts#watchful
+    timeout: 1
+    with: { seconds: 30 }

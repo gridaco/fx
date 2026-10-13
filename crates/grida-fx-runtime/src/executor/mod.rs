@@ -15,8 +15,9 @@
 //! 5. **A body** (a project type, or a built-in of `grida.fx.std`): input and param files that are
 //!    not in the store yet are adopted (`Store::adopt`); an empty work dir
 //!    `<store>/work/<run id>/` is made; `run` params are staged ([`stage::run_params`]); a host is
-//!    leased from the pool and `run` sent with a `requests::RunHandler` serving the run's requests;
-//!    the reply is accepted ([`accept::accept`]); the work dir is removed.
+//!    leased from the pool of the body's language ([`JobBody::language`]: a project module's, by
+//!    its suffix; Python for `grida.fx.std`) and `run` sent with a `requests::RunHandler` serving
+//!    the run's requests; the reply is accepted ([`accept::accept`]); the work dir is removed.
 //!    - a host `node_failure`: failed with its message, facts kept (reported with `fact`, then the
 //!      error's `data.facts`), never retried;
 //!    - a host `node_error`: failed with `<type>: <message>` (`data.exception`), or `<type>` alone
@@ -86,6 +87,7 @@ use crate::store::{ReadSet, Store};
 use accept::{NotAccepted, failure_facts};
 use grida_fx_core::error::io_reason;
 use grida_fx_core::expand::{Instance, NodeResult, ResultStatus};
+use grida_fx_core::host::Language;
 use grida_fx_core::money::Usd;
 use grida_fx_core::project::Planner;
 use grida_fx_core::registry::TypeOrigin;
@@ -112,6 +114,21 @@ pub enum JobBody {
     Select,
     /// A built-in with no body yet.
     None,
+}
+
+impl JobBody {
+    /// The language of the host that runs the body: a project body's module's
+    /// ([`Language::of_module`]; planning refused every other suffix); the `grida.fx.std`
+    /// built-ins are Python's, whatever the language of the project's own modules
+    /// (spec/protocol.md §1).
+    pub fn language(&self) -> Language {
+        match self {
+            JobBody::Project { path, .. } => Language::of_module(path).unwrap_or(Language::Python),
+            JobBody::Std { .. } | JobBody::Capability { .. } | JobBody::Select | JobBody::None => {
+                Language::Python
+            }
+        }
+    }
 }
 
 /// One instance, ready to run off the scheduler thread.
@@ -475,7 +492,11 @@ async fn run_on_host(
         Ok(params) => params,
         Err(message) => return Attempt::ran(failed(&message)),
     };
-    let lease = services.engine.hosts.lease_cancellable(cancel).await;
+    let lease = services
+        .engine
+        .hosts
+        .lease_cancellable(job.body.language(), cancel)
+        .await;
     let mut lease = match lease {
         Ok(lease) => lease,
         Err(message) => return Attempt::ran(failed(&message)),
@@ -851,6 +872,23 @@ mod tests {
     use grida_fx_core::val::Collection;
     use grida_fx_protocol::RpcError;
     use serde_json::json;
+
+    #[test]
+    fn a_body_runs_on_a_host_of_its_language() {
+        let project = |path: &str| JobBody::Project {
+            path: path.into(),
+            attribute: "shout".into(),
+        };
+        assert_eq!(project("nodes/a.py").language(), Language::Python);
+        for path in ["nodes/a.ts", "nodes/a.mts", "nodes/a.js", "nodes/a.mjs"] {
+            assert_eq!(project(path).language(), Language::TypeScript, "{path}");
+        }
+        // The grida.fx.std built-ins are Python's, in a TypeScript project too.
+        let std = JobBody::Std {
+            builtin: "fx/image.resize@1".into(),
+        };
+        assert_eq!(std.language(), Language::Python);
+    }
 
     fn job_with(with: Vec<(&str, Val)>) -> InstanceJob {
         InstanceJob {

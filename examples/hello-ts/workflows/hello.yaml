@@ -1,0 +1,42 @@
+# A list of badges in; each one drawn, checked and scaled down, then all of them on one sheet.
+# Every node is your own TypeScript, run on Node: no Python, no keys, $0.
+fx: workflow/v1
+id: hello
+title: Hello, badges
+description: Draw a badge for each entry, check its background is clear, scale it down, and lay the badges out on one sheet.
+
+inputs:
+  size: { type: integer, default: 64, minimum: 16, maximum: 256 }
+  badges:
+    type: list
+    max_items: 16
+    items:
+      id:    { type: string, pattern: "^[a-z0-9_]+$" }
+      shape: { type: string, enum: [circle, square, diamond] }
+      color: { type: string, pattern: "^#[0-9a-f]{6}$" }
+
+steps:
+  badge:
+    for_each: ${{ inputs.badges }}
+    key: ${{ item.id }}
+    steps:
+      draw:                                  # draws the shape on a clear square
+        uses: ./nodes/badges.ts#badge
+        with: { shape: "${{ item.shape }}", color: "${{ item.color }}" }
+
+      clear:                                 # a judge: is the background transparent?
+        uses: ./nodes/badges.ts#clear
+        judges: draw                         # a rejection fails the badge (`on_reject: fail`)
+        with: { image: "${{ steps.draw.outputs.image }}" }
+
+      small:                                 # scales it down; it waits for `clear`
+        uses: ./nodes/badges.ts#shrink
+        with: { image: "${{ steps.draw.outputs.image }}", side: "${{ inputs.size }}" }
+
+  sheet:                                     # every badge, in the order of the input list
+    uses: ./nodes/badges.ts#sheet
+    with: { badges: "${{ steps.badge.*.small.outputs.image }}", gap: 8 }
+
+outputs:
+  sheet:  ${{ steps.sheet.outputs.image }}
+  badges: ${{ steps.badge.*.small.outputs.image }}

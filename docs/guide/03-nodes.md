@@ -1,7 +1,8 @@
 # Nodes
 
 A node type is one kind of work. You use built-in ones by name. When none fits, write your own in
-Python, or later in TypeScript or any language that speaks the node protocol.
+[Python](#writing-a-node-type-in-python) or [TypeScript](#writing-a-node-type-in-typescript), or in
+[any language](#other-languages) that speaks the node protocol.
 
 ## Built-in node types (`fx/...`)
 
@@ -277,6 +278,7 @@ project you choose how that identity is set:
   means:
   - the node's module;
   - the project modules it imports;
+  - the files of a package you list under `sources:` in `fx.yaml`;
   - its declared `resources`.
 
   Edit any of them, and its results are recomputed on the next run. Paid calls inside it are still
@@ -291,31 +293,210 @@ project you choose how that identity is set:
 
 Built-in node types always carry versions; their major version is in `uses:`.
 
-## TypeScript and other languages (later)
-
-Node bodies in TypeScript come later: the TypeScript node host for `@grida/fx` is on the Later
-list in [the overview](../wg/overview.md). Until then, JavaScript and TypeScript users drive the
-engine with `@grida/fx` (build workflows, plan and run them). They need Python in
-two cases: for node bodies of their own, and for the built-in local types (`image.resize`,
-`image.check_alpha`, `package` and the rest), whose bodies are Python for now
-([Getting started](01-getting-started.md#when-fx-needs-python)). A project whose steps are all
-paid built-ins and `select` needs no Python. The intended shape of a TypeScript node:
+## Writing a node type in TypeScript
 
 ```ts
 // nodes/pack.ts
 import { node } from "@grida/fx";
-import sharp from "sharp";
+import { layOut } from "#lib/atlas.ts";
 
 export const packAtlas = node(
-  { id: "pack_atlas", inputs: { icons: "image{}" }, params: { columns: "integer" }, outputs: { atlas: "image/png", index: "json" } },
+  {
+    name: "pack_atlas",
+    inputs: { icons: "image{}" },
+    params: { columns: "integer", cell: { type: "integer", default: 64, minimum: 8 } },
+    outputs: { atlas: "image/png", index: "json" },
+  },
   async (ctx) => {
-    const atlas = await pack(Object.values(ctx.inputs.icons).map((f) => f.path), ctx.params.columns);
-    return { atlas: ctx.out.png(atlas.buffer), index: ctx.out.json(atlas.index) };
+    const icons = [...ctx.inputs.icons]; // [key, InputFile] pairs, in the collection's order
+    // Your own code: draws the atlas with the image library you choose, and returns its PNG
+    // bytes and where each icon went, as [{ key, x, y }, …].
+    const atlas = await layOut(icons, ctx.params.columns, ctx.params.cell);
+    return { atlas: ctx.out.png(atlas.png), index: ctx.out.json(atlas.cells) };
   },
 );
 ```
 
-`uses: ./nodes/pack.ts#packAtlas` will work exactly like the Python form. Any other language can
-implement the node protocol (JSON-RPC 2.0 over stdio, specified in [`spec/`](../../spec/): the
-engine sends the request, the node calls back to the engine, and answers with its outputs) and be
-used the same way.
+Use it from a workflow with `uses: ./nodes/pack.ts#packAtlas`, the name of the export (letters,
+digits and `_`). `node(declaration, body)` declares a node type; every export that holds one is a
+type FX finds in the module, and other exports are left alone. The body may be `async`. What it
+should and shouldn't do is what [a Python node](#writing-a-node-type-in-python) should and
+shouldn't.
+
+Node 24 or later runs the project's `.ts` files as they are, stripping their types: there is no
+build step, and FX never type checks (`tsc` does, when you ask it to). Write ES modules
+(`"type": "module"` in `package.json`) in erasable syntax only (no `enum`, `namespace` or parameter
+properties), name the `.ts` file in imports (`./seams.ts`), and use package.json `imports`
+(`#lib/atlas.ts`) rather than tsconfig `paths`. The [hello-ts](../../examples/hello-ts/) example
+is a whole project, and the [JavaScript SDK](../../js/fx/README.md#writing-node-types) has the
+`tsconfig.json` for `tsc`.
+
+### Declaring a node in TypeScript
+
+```ts
+export const layerRepaint = node(
+  {
+    name: "layer_repaint", // the type name, unique in your project
+    inputs: { image: "image", refs: "image[]", lines: "audio{}", spec: "json?" },
+    params: {
+      opaque: "boolean",
+      strength: "number",
+      side: ["left", "right"], // one of these values
+      labels: { type: "array", items: { type: "string" } }, // any JSON Schema
+      note: { type: "string", optional: true }, // a step may leave it out
+    },
+    outputs: { image: "image/png", report: "json" },
+    calls: { "image.edit": 1 }, // paid calls it makes, at most, per run
+    resources: ["prompts/seam.md"], // project files this node reads
+    tools: ["ffmpeg"], // external programs
+    version: null, // see Versions
+  },
+  async (ctx) => {
+    // ctx.inputs.refs is a readonly InputFile[], ctx.inputs.lines a ReadonlyMap<string,
+    // InputFile>, ctx.inputs.spec an InputFile or undefined; ctx.params.side "left" | "right".
+    const report = { side: ctx.params.side, lines: [...ctx.inputs.lines.keys()] };
+    return { image: ctx.inputs.image, report: ctx.out.json(report) };
+  },
+);
+```
+
+The fields are `@node`'s, with the type's name as `name`. The body's types follow from them:
+
+| Declared | In the body |
+|---|---|
+| input `"image"` | `ctx.inputs.image`, an `InputFile` |
+| input `"image[]"` | a `readonly InputFile[]` |
+| input `"audio{}"` | a `ReadonlyMap<string, InputFile>`, in the collection's order |
+| input with a trailing `?` | an optional property, `undefined` when absent |
+| param `"string"`, `"integer"`, `"number"`, `"boolean"` | `string`, `number`, `number`, `boolean` |
+| param `"array"`, `"object"` | `readonly JsonValue[]`, `{ readonly [key: string]: JsonValue }`: JSON values you can pass on to a call's request, a fact or `ctx.out.json` |
+| param `["left", "right"]` | `"left" \| "right"` |
+| param as a JSON Schema object | its type, read from `type`, `enum`, `const`, `prefixItems`, `items` and `properties`, and a `JsonValue` where they say nothing narrower; `optional: true` makes it an optional property, with a `default` or without |
+| output `"image/png"` | an `Output` made by `ctx.out`, or an `InputFile` |
+| output `"image[]"` or `"image{}"` | a readonly array of them, or a `ReadonlyMap` of them |
+| output `"json?"` | may be left out, or `null` |
+
+- **`tsc` checks the body against its declaration:** an undeclared param, input or output, a
+  missing output, a param used as another type, or an optional one used as if always there.
+- **FX checks param values when it runs the node,** since `with:` can bind one to an expression:
+  the first that doesn't fit fails the step (`param side: "up" is not one of ["left","right"]`).
+- **Keyed collections are `Map`s, both ways:** return a `Map` for a keyed output, since a plain
+  object reorders integer-like keys.
+
+### What `ctx` gives you in TypeScript
+
+| | |
+|---|---|
+| `ctx.inputs.name` | the file, an `InputFile`: `.path`, `.kind`, `.digest`, `.size`, `.name`, `.key`, `.facts` (its [file facts](#what-ctx-gives-you)), and `await .bytes()`, `.text()`, `.json()` |
+| `await ctx.read.bytes(name)`, `.text(name)`, `.json(name)` | read an input of one file that isn't optional, by its name, or any `InputFile`. `text` is strict UTF-8. There is no image decoding: read `.path` with the image library you choose |
+| `ctx.params` | your settings, typed from the declaration |
+| `ctx.out.png(bytes)`, `.json(value)`, `.text(text)`, `.bytes(data, kind)` | produce an output value to return; `png` takes encoded PNG bytes |
+| `ctx.out.path(name)` then `ctx.out.file(path)` | for tools that write a file themselves: get a path, then return it |
+| `ctx.workPath(name)`, `ctx.workDir`, `ctx.state` | scratch space and state for this node's run (tools, agents) |
+| `await ctx.fact(name, value)` | report a node fact |
+| `await ctx.annotate({ shape, label, color, tag, … })` | add a mark to this node's `annotations` output |
+| `await ctx.capability(capability, request)`, or typed: `ctx.imageGenerate(…)`, `ctx.imageEdit(…)`, `ctx.structuredGenerate(…)` | a paid call through FX. The result has `.image`, `.audio`, `.video` (its first file of that kind), `.files`, `.json`, `.data`, `.cached` and `.costUsd` |
+| `ctx.agent({ system, tools })` | a tool-using model loop (below) |
+| `await ctx.tool("ffmpeg").run([...argv])` | an external program you declared, as in Python; it resolves to `{ status, stdout, stderr }` |
+| `await ctx.prompt(path, variables)` | render one of your declared `resources` with `${{ }}` |
+| `ctx.progress(text, fraction)` | shown live by `grida fx run` |
+| `ctx.signal` | an `AbortSignal`, aborted when FX stops the node (its step's `timeout:`, a stopped run): pass it on to what you await, or check `ctx.signal.aborted` in long loops |
+| `throw ctx.fail(message)` | a broken result: the step fails with your message (not a take) |
+| `ctx.instance` | `.id`, `.path`, `.step`, `.key`, `.take` and `.takes` of the instance running |
+
+JSON values you give FX (facts, marks, `ctx.out.json`, a call's request) are checked, not coerced
+as `JSON.stringify` would ([the JavaScript SDK](../../js/fx/README.md#writing-node-types)).
+
+### Paid calls, judges and agents in TypeScript
+
+A paid call, as [in Python](#paid-calls-inside-your-node): declare it, and never retry it
+yourself. `retry: "engine"` runs the node again after it throws, as `retry="engine"` does.
+
+```ts
+export const layerRepaint = node(
+  {
+    name: "layer_repaint",
+    inputs: { image: "image" },
+    outputs: { image: "image/png" },
+    calls: { "image.edit": 1 },
+    resources: ["prompts/seam.md"],
+  },
+  async (ctx) => {
+    const seam = await seamMask(ctx.inputs.image); // PNG bytes, from your own code
+    const result = await ctx.imageEdit({
+      image: ctx.inputs.image,
+      mask: ctx.out.png(seam),
+      prompt: await ctx.prompt("prompts/seam.md"),
+    });
+    return { image: result.image };
+  },
+);
+```
+
+A [judge](#judges-you-write) declares `judge: true` and reports a `verdict` fact:
+
+```ts
+export const loopsAlready = node(
+  {
+    name: "loops_already",
+    inputs: { image: "image" },
+    outputs: { annotations: "annotations?" },
+    judge: true,
+  },
+  async (ctx) => {
+    const err = await seamError(ctx.inputs.image);
+    await ctx.fact("seam_error", err);
+    if (err >= 0.02) {
+      await ctx.annotate({
+        shape: "box",
+        box: [0.97, 0, 1, 1],
+        label: `visible step at the seam (${err.toFixed(3)})`,
+      });
+    }
+    await ctx.fact("verdict", err < 0.02 ? "accept" : "reject");
+    return {};
+  },
+);
+```
+
+An [agent](#agents) works as in Python: `ctx.agent({ system, tools })`, then
+`await agent.run(instructions, { maxSteps, submit, check })`. A tool is declared with `tool(…)`,
+and its `parameters`, a JSON Schema written in place, types the handler's arguments:
+
+```ts
+const rotate = tool(
+  {
+    name: "rotate",
+    description: "Rotate the mesh around its vertical axis.",
+    parameters: {
+      type: "object",
+      properties: { degrees: { type: "number" } },
+      required: ["degrees"],
+    },
+  },
+  async ({ degrees }, ctx) => {
+    const args = [String(ctx.state["mesh"]), String(degrees)];
+    await ctx.tool("blender").run(["--background", "--python", "blender/rotate.py", "--", ...args]);
+    return "rotated";
+  },
+);
+```
+
+A tool returns text, another JSON value, or a `ToolReply` when the model should see pictures too.
+[External programs](#external-programs) are declared the same way: `tools: ["blender"]`.
+
+### Versions in TypeScript
+
+[Versions](#versions) work as in Python: `version: 3` in the declaration, and
+`grida fx lock --same nodes/pack.ts#packAtlas` to confirm a change. Without a version, a module's
+imports count by their literal paths (relative, `#` and `.json` alike; `import type` adds
+nothing), whether or not they run. Import project files statically and spell paths as they are
+on disk: a body that loads a project file outside that list when it runs fails its step and says
+why. List a file that only a package, a worker or a child process loads under `resources`.
+
+## Other languages
+
+Any other language can implement the node protocol (JSON-RPC 2.0 over stdio, specified in
+[`spec/`](../../spec/): the engine sends the request, the node calls back to the engine, and
+answers with its outputs) and be used the same way. FX picks a module's host by its suffix: `.py`
+for Python; `.ts`, `.mts`, `.js` and `.mjs` for TypeScript.

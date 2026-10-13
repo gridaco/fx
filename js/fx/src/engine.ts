@@ -12,6 +12,9 @@
  */
 
 import { spawn } from "node:child_process";
+import { statSync } from "node:fs";
+import type { Socket } from "node:net";
+import { fileURLToPath } from "node:url";
 import { type Environment, findEngine, machineLookup, mergeEnvironment } from "./binary.js";
 import { FxError } from "./errors.js";
 
@@ -49,10 +52,40 @@ const DRAIN_MS = 500;
  * (spec/distribution.md §2), whichever command started this process. */
 const ERROR_PREFIX = "grida-fx: ";
 
-/** Runs the engine with `args` and collects what it prints. */
-export async function call(args: readonly string[], options: CallOptions = {}): Promise<Exit> {
+/**
+ * What the engine needs to host TypeScript node bodies with this package (spec/distribution.md):
+ * `GRIDA_FX_SDK_NODE`, the Node running it (not when that is Bun or Deno), and
+ * `GRIDA_FX_SDK_NODE_HOST`, this package's own host program, when it is built. They replace
+ * inherited values.
+ */
+export function hostVariables(): Record<string, string> {
+  const variables: Record<string, string> = {};
+  const versions = process.versions as Readonly<Record<string, string | undefined>>;
+  if (versions.bun === undefined && versions.deno === undefined) {
+    variables.GRIDA_FX_SDK_NODE = process.execPath;
+  }
+  const entry = fileURLToPath(new URL("./host-entry.js", import.meta.url));
+  try {
+    if (statSync(entry).isFile()) {
+      variables.GRIDA_FX_SDK_NODE_HOST = entry;
+    }
+  } catch {
+    // not built: the engine finds the project's own @grida/fx, if any
+  }
+  return variables;
+}
+
+/** Runs the engine with `args` and collects what it prints. `stdin`, a socket, becomes the
+ * engine's standard input (a stand-in run's): it is closed here once the engine holds it, so the
+ * engine alone keeps that end open. */
+export async function call(
+  args: readonly string[],
+  options: CallOptions = {},
+  stdin?: Socket,
+): Promise<Exit> {
   const cwd = options.cwd ?? process.cwd();
-  const env = mergeEnvironment(options.env);
+  // An explicit `options.env` wins over the host variables.
+  const env = mergeEnvironment({ ...hostVariables(), ...options.env });
   // A value inherited from a launcher (a node body run under `grida fx`) would change the prefix.
   env.GRIDA_FX_INVOKER = "grida-fx";
   if (args[0] === "run") {
@@ -65,8 +98,9 @@ export async function call(args: readonly string[], options: CallOptions = {}): 
     const child = spawn(engine, [...args], {
       cwd,
       env,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: [stdin ?? "ignore", "pipe", "pipe"],
     });
+    stdin?.destroy();
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
     child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));

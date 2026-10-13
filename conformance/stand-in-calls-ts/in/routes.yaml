@@ -1,0 +1,5 @@
+fx: routes/v1
+routes:
+  - { capability: image.generate, route: img-a@acme, price: { low_usd: 0.01, high_usd: 0.04 }, features: [alpha, exact_size, opaque_background] }
+  - { capability: image.edit, route: img-a@acme, price: { low_usd: 0.02, high_usd: 0.05 }, features: [alpha, exact_size, opaque_background, image_input] }
+  - { capability: structured.generate, route: llm-a@acme, price: { low_usd: 0.001, high_usd: 0.002 } }
