@@ -25,7 +25,8 @@ pub struct RouteRef {
     pub capability: String,
     pub model: String,
     pub provider: String,
-    /// The route's declared contract object; `{}` when none.
+    /// The route's contract object, as its table's reading completed it (spec/identity.md §7);
+    /// `{}` when none.
     pub contract: Value,
 }
 
@@ -358,21 +359,21 @@ pub enum Collected {
 
 /// The contract an adapter FX ships serves, as a route's contract names it (spec/providers.md §2):
 /// its `adapter`, and its `adapter_behavior` as canonical JSON (spec/identity.md §2), such as
-/// `"1"` for the string and `1` for the number; `None` where the adapter checks none (fal's and
-/// Tripo's). The engine holds each call's route to it before the adapter sees the call
-/// ([`crate::checks::contract`]; spec/adapters.md §4 step 1).
+/// `"1"` for the string and `1` for the number. The engine holds each call's route to it before
+/// the adapter sees the call ([`crate::checks::contract`]; spec/adapters.md §4 step 1), and core's
+/// [`grida_fx_core::routes::BUILT_IN_ADAPTERS`], which completes a route's contract when a table is
+/// read (spec/identity.md §7), names the same (`tests/routes.rs`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Identity {
     pub adapter: &'static str,
-    pub behavior: Option<&'static str>,
+    pub behavior: &'static str,
 }
 
 impl Identity {
     /// Whether `value`, a contract's `adapter_behavior`, is the behaviour this adapter serves:
-    /// its canonical JSON is [`Identity::behavior`]. Any value is when the adapter checks none.
+    /// its canonical JSON is [`Identity::behavior`].
     pub fn behaves(&self, value: &Value) -> bool {
-        self.behavior
-            .is_none_or(|behavior| grida_fx_core::value::canon(value) == behavior)
+        grida_fx_core::value::canon(value) == self.behavior
     }
 }
 
@@ -581,7 +582,7 @@ mod tests {
     fn an_identity_compares_its_behaviour_as_canonical_json() {
         let text = Identity {
             adapter: "fx-acme-image-v1",
-            behavior: Some(r#""1""#),
+            behavior: r#""1""#,
         };
         assert!(text.behaves(&json!("1")));
         for other in [json!(1), json!(1.0), json!("2"), json!(["1"]), json!(true)] {
@@ -589,18 +590,13 @@ mod tests {
         }
         let number = Identity {
             adapter: "acme-video",
-            behavior: Some("1"),
+            behavior: "1",
         };
         assert!(number.behaves(&json!(1)));
         assert!(number.behaves(&json!(1.0)), "the same number");
         for other in [json!("1"), json!(2), json!(1.5)] {
             assert!(!number.behaves(&other), "{other}");
         }
-        let unchecked = Identity {
-            adapter: "acme-queue",
-            behavior: None,
-        };
-        assert!(unchecked.behaves(&json!(9)));
         // An adapter names none unless it says so, and judges no other member.
         let call = CallRequest {
             route: RouteRef {

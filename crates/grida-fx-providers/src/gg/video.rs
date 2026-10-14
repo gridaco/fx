@@ -42,7 +42,7 @@ pub const ADAPTER: &str = "gg-video";
 /// The contract this adapter serves: [`ADAPTER`], behaviour the number 1.
 pub const IDENTITY: Identity = Identity {
     adapter: ADAPTER,
-    behavior: Some("1"),
+    behavior: "1",
 };
 
 /// The most bytes of one clip.

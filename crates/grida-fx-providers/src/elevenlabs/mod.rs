@@ -53,7 +53,7 @@ pub const BASE_URL_VARIABLE: &str = "ELEVENLABS_BASE_URL";
 pub const fn identity(adapter: &'static str) -> Identity {
     Identity {
         adapter,
-        behavior: Some("1"),
+        behavior: "1",
     }
 }
 

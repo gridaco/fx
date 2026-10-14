@@ -56,13 +56,13 @@ pub const RIG_ADAPTER: &str = "gg-rig";
 /// The contract [`GgMesh`] serves: [`MESH_ADAPTER`], behaviour the number 1.
 pub const MESH_IDENTITY: Identity = Identity {
     adapter: MESH_ADAPTER,
-    behavior: Some("1"),
+    behavior: "1",
 };
 
 /// The contract [`GgRig`] serves: [`RIG_ADAPTER`], behaviour the number 1.
 pub const RIG_IDENTITY: Identity = Identity {
     adapter: RIG_ADAPTER,
-    behavior: Some("1"),
+    behavior: "1",
 };
 
 /// The view names GG takes, in the order they are sent.

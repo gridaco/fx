@@ -51,7 +51,7 @@ pub const ADAPTER: &str = "gg-image";
 /// The contract this adapter serves: [`ADAPTER`], and `adapter_behavior` the text `"1"`.
 pub const IDENTITY: Identity = Identity {
     adapter: ADAPTER,
-    behavior: Some(r#""1""#),
+    behavior: r#""1""#,
 };
 
 /// The whole-exchange deadline: GG answers within 600 s, then a margin for its answer to arrive.

@@ -536,7 +536,7 @@ mod tests {
     fn a_contract_is_served_when_its_adapter_and_behaviour_are_the_adapters_or_absent() {
         let text = Identity {
             adapter: "fx-acme-image-v1",
-            behavior: Some(r#""1""#),
+            behavior: r#""1""#,
         };
         let route = |contract: Value| {
             CallBuilder::new("image.generate", "img-a@acme")
@@ -570,23 +570,13 @@ mod tests {
                 "{refused}"
             );
         }
-        // An adapter that checks no behaviour checks its name alone.
-        let unchecked = Identity {
-            adapter: "acme-queue",
-            behavior: None,
-        };
-        assert_eq!(
-            contract(&route(json!({"adapter_behavior": "9"})), &unchecked),
-            Ok(())
-        );
-        assert!(contract(&route(json!({"adapter": "acme-run"})), &unchecked).is_err());
     }
 
     #[test]
     fn before_a_send_the_contract_comes_first_then_the_adapters_own_then_the_request() {
         let identity = Identity {
             adapter: "acme-structured",
-            behavior: Some("1"),
+            behavior: "1",
         };
         let call = |contract: Value, request: Value| {
             CallBuilder::new("structured.generate", "text-a@acme")

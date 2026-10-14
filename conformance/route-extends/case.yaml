@@ -1,0 +1,43 @@
+# A route that extends another (identity.md §7): img-b@acme takes img-a@acme's price, features
+# and contract, restating one contract member; img-c@acme restates its price and features and
+# keeps the contract. extends is not hashed, so img-c's fingerprint differs from img-a's only by
+# its model. A base no table read so far holds, or one on another provider, is refused (exit 2).
+steps:
+- argv:
+  - expand
+  - case
+  - --routes
+  - routes.yaml
+  save: expand.json
+  json: true
+  status: 0
+- files:
+    missing.yaml: |
+      fx: routes/v1
+      routes:
+        - { capability: image.generate, route: img-d@acme, extends: img-z@acme }
+  argv:
+  - expand
+  - case
+  - --routes
+  - routes.yaml
+  - --routes
+  - missing.yaml
+  status: 2
+  mentions:
+  - "missing.yaml: routes.0.extends: no route img-z@acme serves image.generate"
+- files:
+    other.yaml: |
+      fx: routes/v1
+      routes:
+        - { capability: image.generate, route: img-b@acme, extends: img-a@other }
+  argv:
+  - expand
+  - case
+  - --routes
+  - routes.yaml
+  - --routes
+  - other.yaml
+  status: 2
+  mentions:
+  - "other.yaml: routes.0.extends: img-a@other is not a acme route"

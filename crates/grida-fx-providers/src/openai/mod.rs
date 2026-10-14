@@ -71,7 +71,7 @@ pub const ADAPTER: &str = "fx-openai-image-v1";
 /// fingerprint, and is not served.
 pub const IDENTITY: Identity = Identity {
     adapter: ADAPTER,
-    behavior: Some(r#""1""#),
+    behavior: r#""1""#,
 };
 
 /// The variable a redirect points at (spec/providers.md §1; spec/adapters.md §3.3).

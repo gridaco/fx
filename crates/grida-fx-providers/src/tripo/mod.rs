@@ -616,22 +616,13 @@ pub fn register(adapters: &mut Adapters, setup: &Setup) {
     );
 }
 
-/// The contract an adapter of Tripo's serves: `adapter`, with no behaviour checked
-/// (spec/providers.md §2).
-pub(crate) const fn identity(adapter: &'static str) -> Identity {
-    Identity {
-        adapter,
-        behavior: None,
-    }
-}
-
 /// The route check of spec/adapters.md §4 step 1: the call is on `capability`, and the route's
-/// contract names `adapter` when it names one (the engine's check, [`crate::checks::contract`],
-/// made again for a direct caller).
+/// contract is one `identity` serves (the engine's check, [`crate::checks::contract`], made again
+/// for a direct caller).
 pub(crate) fn check_route(
     call: &CallRequest,
     capability: &str,
-    adapter: &'static str,
+    identity: &Identity,
 ) -> Result<(), String> {
     if call.route.capability != capability {
         return Err(format!(
@@ -639,7 +630,7 @@ pub(crate) fn check_route(
             call.route.id()
         ));
     }
-    crate::checks::contract(&call.route, &identity(adapter))
+    crate::checks::contract(&call.route, identity)
 }
 
 /// The task id of a handle this adapter wrote, if it has a usable one.

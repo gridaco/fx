@@ -23,13 +23,16 @@
 # quality max for that size, measured or derived from a measured bill; its high adds an allowance
 # for the prompt and the input pictures, and on OpenRouter covers twice the output
 # (spec/providers.md §3). A size the tiers do not list (`auto`, none, or any other WxH) takes the
-# whole range. A project restates a route in its own route table for tighter prices.
+# whole range. A project restates a route in its own route table for tighter prices, or extends it
+# and states only the prices.
 #
 # The contract object of each entry is part of its route fingerprint, and so of every cache key
 # the route serves: editing one changes those keys. Its `adapter` and `adapter_behavior` are the
 # ones spec/providers.md §2 names for the capability's adapter on that provider. The image routes
-# carry `adapter_behavior` as a string, every other route as the integer 1. Price, features,
-# max_input_pictures, concurrency and requests_per_minute are not identity.
+# carry `adapter_behavior` as a string, every other route as the integer 1. Every entry states
+# both, so filling in a contract that leaves them out (spec/identity.md §7) changes none of these
+# routes. Price, features, max_input_pictures, concurrency and requests_per_minute are not
+# identity.
 #
 # Features are the names spec/capabilities.md lists for each capability. tests/routes.rs holds
 # this file to both specs and to the adapters of grida-fx-providers.
@@ -148,12 +151,10 @@ routes:
   - exact_size
   - flexible_size
   - image_input
-  - jpeg_output
   - mask
   - maximum_quality
   - opaque_background
   - png_output
-  - webp_output
   contract:
     adapter: fx-openai-image-v1
     adapter_behavior: '1'
@@ -185,7 +186,6 @@ routes:
   - auto_background
   - flexible_size
   - image_input
-  - jpeg_output
   - opaque_background
   - png_output
   contract:
@@ -288,7 +288,6 @@ routes:
   - auto_background
   - exact_size
   - flexible_size
-  - hosted_url_reference_input
   - image_input
   - maximum_quality
   - opaque_background
@@ -350,14 +349,11 @@ routes:
   - custom_exact_size
   - exact_size
   - flexible_size
-  - hosted_url_reference_input
   - image_input
-  - jpeg_output
   - mask
   - maximum_quality
   - opaque_background
   - png_output
-  - webp_output
   contract:
     adapter: fx-fal-image-v1
     adapter_behavior: '1'
@@ -415,12 +411,10 @@ routes:
   - custom_exact_size
   - exact_size
   - flexible_size
-  - jpeg_output
   - maximum_quality
   - opaque_background
   - png_output
   - text_to_image
-  - webp_output
   contract:
     adapter: fx-openai-image-v1
     adapter_behavior: '1'
@@ -453,7 +447,6 @@ routes:
   - auto_background
   - flexible_size
   - image_input
-  - jpeg_output
   - opaque_background
   - png_output
   - text_to_image
@@ -616,12 +609,10 @@ routes:
   - custom_exact_size
   - exact_size
   - flexible_size
-  - jpeg_output
   - maximum_quality
   - opaque_background
   - png_output
   - text_to_image
-  - webp_output
   contract:
     adapter: fx-fal-image-v1
     adapter_behavior: '1'

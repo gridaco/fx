@@ -34,6 +34,12 @@ pub const DOWNLOAD_LABEL: &str = output::DOWNLOAD_LABEL;
 /// The contract `adapter` this adapter serves.
 pub const CONTRACT_ADAPTER: &str = "fx-fal-image-v1";
 
+/// The contract this adapter serves: [`CONTRACT_ADAPTER`], and `adapter_behavior` the text `"1"`.
+pub const IDENTITY: Identity = Identity {
+    adapter: CONTRACT_ADAPTER,
+    behavior: r#""1""#,
+};
+
 /// The POST and the download together.
 pub const DEADLINE: Duration = Duration::from_secs(600);
 
@@ -74,7 +80,7 @@ impl FalImages {
     fn prepare(&self, call: &CallRequest) -> Result<HttpRequest, String> {
         let client = &self.clients.run;
         if let Some(refusal) =
-            super::contract_refusal(call, CONTRACT_ADAPTER, &["image.generate", "image.edit"])
+            super::contract_refusal(call, &IDENTITY, &["image.generate", "image.edit"])
         {
             return Err(refusal);
         }
@@ -238,7 +244,7 @@ impl RequestAdapter for FalImages {
     }
 
     fn identity(&self) -> Option<Identity> {
-        Some(super::identity(CONTRACT_ADAPTER))
+        Some(IDENTITY)
     }
 }
 

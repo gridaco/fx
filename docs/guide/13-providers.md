@@ -96,4 +96,14 @@ point a provider at another address, such as a proxy. How FX reads keys and the 
 The routes themselves, with their models and planning prices, are in FX's built-in route table:
 `grida fx nodes <type>` lists a capability's routes, and `grida fx doctor` says which ones a live
 run could serve. A project can add or restate routes in its own `route_tables:`
-([where prices come from](04-cost-and-cache.md#before-spending-the-plan)).
+([where prices come from](04-cost-and-cache.md#before-spending-the-plan)). An entry that
+`extends:` a built-in route states only what differs, a price say, and keeps the rest, contract
+included; restating the same route this way keeps its identity, so its cached results stay
+([route tables](05-running.md#name-a-run-or-continue-it)).
+
+A route's `contract` names the adapter that serves it, as `adapter` and `adapter_behavior`
+([providers.md §2](../../spec/providers.md#2-the-built-in-adapters)). On a provider and
+capability FX serves, FX fills in what a project route's contract leaves out: its adapter's name
+as `adapter`, and that adapter's `adapter_behavior` unless the contract names another adapter.
+So such a route always names its adapter. Every adapter checks both: up to 0.6.1, fal's and
+Tripo's checked only `adapter`, and served a route that named another `adapter_behavior`.

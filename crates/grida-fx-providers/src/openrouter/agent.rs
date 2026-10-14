@@ -58,7 +58,7 @@ pub const CAPABILITY: &str = "agent.turn";
 /// The contract this adapter serves: [`CONTRACT_ADAPTER`], behaviour the number 1.
 pub const IDENTITY: Identity = Identity {
     adapter: CONTRACT_ADAPTER,
-    behavior: Some("1"),
+    behavior: "1",
 };
 
 /// OpenRouter's agent-turn adapter (module doc).

@@ -1,0 +1,15 @@
+fx: workflow/v1
+id: case
+title: Extended routes
+steps:
+  base:
+    uses: fx/image.generate@1
+    with: { prompt: a kite, background: transparent }
+  low:
+    uses: fx/image.generate@1
+    route: img-b@acme
+    with: { prompt: a kite, background: transparent }
+  cheap:
+    uses: fx/image.generate@1
+    route: img-c@acme
+    with: { prompt: a kite }

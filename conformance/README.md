@@ -294,6 +294,7 @@ alone.
 | `refusals-ts` | `.tsx`, `.cts` and `.cjs` modules and a `.js` module Node loads as CommonJS refused while planning (exit 1); a NaN fact, a `Map` in a JSON output and a keyed output returned as a plain object fail their nodes |
 | `repeat-keyed` | a keyed `for_each` over an input list, collected into one step |
 | `resource-missing` | a declared resource that is not in the project is a planning problem (exit 1), never a crash |
+| `route-extends` | a route that `extends` another takes its price, features and contract, and restates what differs (a contract member, a price); `extends` is not hashed; a base no table read so far holds, or one on another provider, is refused (exit 2) |
 | `run-cache-hit` | the same plan run into a second folder: every step is a result-cache hit, with the same output bytes |
 | `run-deliver` | `--deliver` of a one-file and a keyed output (keys made safe paths), left alone when unchanged; an undeclared output refused before the run (exit 2) |
 | `run-failures` | `ctx.fail` keeps its node facts (in the run's events), an exception is a `node_error`, a reader of a failed step is skipped as blocked; the run goes on, lists its failures in the expansion's order and exits 1 |

@@ -25,7 +25,7 @@ use std::sync::atomic::AtomicU64;
 /// The contract the fake adapter serves: `acme-image`, behaviour the string `"1"`.
 const ACME: Identity = Identity {
     adapter: "acme-image",
-    behavior: Some(r#""1""#),
+    behavior: r#""1""#,
 };
 
 const FOREIGN: &str = "img-a@acme is not a image.generate route this adapter serves";

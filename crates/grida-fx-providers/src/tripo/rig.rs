@@ -33,6 +33,12 @@ pub const COLLECT_DEADLINE: Duration = Duration::from_secs(600);
 /// The route contract's `adapter` this adapter serves.
 pub const ADAPTER: &str = "tripo-rig";
 
+/// The contract this adapter serves: [`ADAPTER`], and `adapter_behavior` the number 1.
+pub const IDENTITY: Identity = Identity {
+    adapter: ADAPTER,
+    behavior: "1",
+};
+
 const CAPABILITY: &str = "mesh.rig";
 
 /// The rig type when the request names none.
@@ -54,7 +60,7 @@ impl TripoRig {
 
     async fn submit_call(&self, call: &CallRequest) -> Submitted {
         let api = &self.api;
-        if let Err(reason) = super::check_route(call, CAPABILITY, ADAPTER) {
+        if let Err(reason) = super::check_route(call, CAPABILITY, &IDENTITY) {
             return api.refused(&reason);
         }
         if let Err(reason) = crate::capabilities::check_request(CAPABILITY, &call.request) {
@@ -205,6 +211,6 @@ impl LongJob for TripoRig {
     }
 
     fn identity(&self) -> Option<Identity> {
-        Some(super::identity(ADAPTER))
+        Some(IDENTITY)
     }
 }

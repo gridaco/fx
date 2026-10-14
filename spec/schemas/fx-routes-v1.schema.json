@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:grida-fx:schema:fx-routes-v1",
   "title": "FX route table (fx: routes/v1)",
-  "description": "Which `model@provider` serves a capability, what it costs, the features it supports, how many input pictures it takes, its pacing, and the contract that enters its fingerprint (identity.md §7). Tables combine in the order identity.md §7 gives: a later table's entry for the same capability and route replaces an earlier one.",
+  "description": "Which `model@provider` serves a capability, what it costs, the features it supports, how many input pictures it takes, its pacing, and the contract that enters its fingerprint (identity.md §7). Tables combine in the order identity.md §7 gives: a later table's entry for the same capability and route replaces an earlier one. An entry may extend another route and state only what differs.",
   "type": "object",
   "required": [
     "fx",
@@ -19,10 +19,21 @@
         "type": "object",
         "required": [
           "capability",
-          "route",
-          "price"
+          "route"
         ],
         "additionalProperties": false,
+        "if": {
+          "not": {
+            "required": [
+              "extends"
+            ]
+          }
+        },
+        "then": {
+          "required": [
+            "price"
+          ]
+        },
         "properties": {
           "capability": {
             "type": "string",
@@ -30,6 +41,11 @@
           },
           "route": {
             "description": "`<model>@<provider>`, split at the last `@`. A table declares a route at most once per capability.",
+            "type": "string",
+            "pattern": "^.+@[a-z0-9._-]+$"
+          },
+          "extends": {
+            "description": "Another route of the same capability and provider, `<model>@<provider>`, that this entry starts from (identity.md §7): an entry already read, else the built-in table's, even when a `--routes` file leaves that table out. The entry takes the base's price, features, input-picture limit, pacing and contract; a member it states replaces the base's, except `contract`, whose members merge one level deep. With it, `price` may be left out. It is not part of the fingerprint.",
             "type": "string",
             "pattern": "^.+@[a-z0-9._-]+$"
           },
@@ -176,7 +192,7 @@
             "minimum": 1
           },
           "contract": {
-            "description": "Settings that change what the route returns. Part of its fingerprint, so of every identity it serves.",
+            "description": "Settings that change what the route returns. Part of its fingerprint, so of every identity it serves. Where one of FX's adapters serves the route's capability and provider, a left-out `adapter` or `adapter_behavior` is filled in from providers.md §2 before the fingerprint is taken (identity.md §7).",
             "type": "object"
           }
         }

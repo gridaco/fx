@@ -1,0 +1,10 @@
+fx: routes/v1
+routes:
+  - capability: image.generate
+    route: img-a@acme
+    price: { low_usd: 0.02, high_usd: 0.04 }
+    features: [text_to_image, alpha]
+    concurrency: 2
+    contract: { quality: high, sizes: [1024x1024] }
+  - { capability: image.generate, route: img-b@acme, extends: img-a@acme, contract: { quality: low } }
+  - { capability: image.generate, route: img-c@acme, extends: img-a@acme, price: { usd: 0.01 }, features: [text_to_image] }

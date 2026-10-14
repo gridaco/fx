@@ -94,6 +94,19 @@ lists under `route_tables`, then each `--routes` file in the order given. A late
 for the same capability and route replaces an earlier one, and giving any `--routes` file leaves
 the built-in table out ([identity.md §7](../../spec/identity.md#7-route-fingerprint)).
 
+An entry may `extends:` another route of the same capability and provider, from an entry read
+before it (earlier in the same table, or in a table read before) or from the built-in table (even
+when a `--routes` file leaves that table out), and state only what differs. It takes the base's
+price, features, input-picture limit, pacing and contract; a member it states replaces the
+base's whole, except `contract`, whose members merge one by one. `extends` is not part of the
+route's identity, so an entry that extends a route to reprice it keeps every cached result.
+Where one of FX's adapters serves the capability and provider, a contract that leaves out
+`adapter` gets that adapter's name, and one that leaves out `adapter_behavior` gets its
+behaviour unless the contract names another adapter. A project route on such a capability and
+provider whose contract left out `adapter`, or named FX's adapter and left out
+`adapter_behavior`, under FX 0.6.1 or earlier hashes differently once after the upgrade, so its
+steps and paid calls run again; a route on any other pair keeps its fingerprint.
+
 The built-in table ships with the command. Its prices are planning allowances in US dollars, not
 provider quotes: what a call costs is settled from what the provider reports, else from the whole
 amount held for it ([providers.md §3](../../spec/providers.md#3-the-built-in-route-table)).
@@ -116,7 +129,23 @@ range above ([providers.md §3](../../spec/providers.md#3-the-built-in-route-tab
 
 A project picks one with `routes:` in `fx.yaml` (or a step's `route:`). To change a price or add
 a route, list a table under `route_tables:`: its entry for the same capability and route replaces
-the built-in one. A route on a provider FX has no adapter for still plans and prices, but a live
+the built-in one, and `extends` keeps everything but what it states:
+
+```yaml
+# routes/prices.yaml, listed in fx.yaml as route_tables: [routes/prices.yaml]
+fx: routes/v1
+routes:
+  - capability: image.generate
+    route: openai/gpt-image-2.5-sunburst@gg
+    extends: openai/gpt-image-2.5-sunburst@gg
+    price: { low_usd: 0.09, high_usd: 0.80 }
+```
+
+This entry holds $0.80 for each call, more than the built-in entry holds for any size. A `price`
+it states replaces the base's whole, size tiers included, so a price meant for one size holds too
+little for a larger one.
+
+A route on a provider FX has no adapter for still plans and prices, but a live
 call on it is refused (`no adapter serves …`). `grida fx nodes <type>` lists the routes that
 serve a type; `grida fx doctor` says which of them a live run could serve.
 

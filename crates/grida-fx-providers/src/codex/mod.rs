@@ -64,7 +64,7 @@ pub const ADAPTER: &str = "fx-codex-image-v1";
 /// a new behaviour.
 pub const IDENTITY: Identity = Identity {
     adapter: ADAPTER,
-    behavior: Some(r#""2""#),
+    behavior: r#""2""#,
 };
 
 /// The most input pictures of one call (`image` and `references`): Codex's image tool draws

@@ -39,6 +39,7 @@ CALL = EXAMPLES["call"]["digest"]
 NODE_SOURCE = EXAMPLES["node_source"]["digest"]
 MARKERS_FILE = REPO / "spec" / "vectors" / "identity" / "markers.json"
 JSON_OUTPUT_FILE = REPO / "spec" / "vectors" / "identity" / "json_output.json"
+ROUTES_FILE = REPO / "spec" / "vectors" / "identity" / "routes.json"
 MARKER_CASES = json.loads(MARKERS_FILE.read_text("utf-8"))["cases"]
 JSON_OUTPUT_CASES = json.loads(JSON_OUTPUT_FILE.read_text("utf-8"))["cases"]
 
@@ -74,6 +75,22 @@ def test_check_examples_reports_nothing() -> None:
     assert digest.check_examples(EXAMPLES_FILE) == []
     assert digest.check_marker_vectors(MARKERS_FILE) == []
     assert digest.check_json_output_vectors(JSON_OUTPUT_FILE) == []
+    assert digest.check_route_vectors(ROUTES_FILE) == []
+
+
+def test_check_route_vectors_catches_a_wrong_contract_and_refusal(tmp_path: Path) -> None:
+    document = json.loads(ROUTES_FILE.read_text("utf-8"))
+    cases = document["cases"]
+    filled = next(c for c in cases if "expect" in c)
+    filled["expect"][0]["contract"] = {}
+    refused = next(c for c in cases if "refuse" in c)
+    refused["refuse"]["reason"] = "other_provider"
+    path = tmp_path / "routes.json"
+    path.write_text(json.dumps(document), "utf-8")
+    failures = digest.check_route_vectors(path)
+    assert len(failures) == 2, failures
+    assert f"{filled['name']}: img-a@gg has contract" in failures[0]
+    assert f"{refused['name']}: refused no_base" in failures[1]
 
 
 def test_check_examples_covers_every_formula() -> None:
@@ -123,6 +140,62 @@ def test_route_fingerprint() -> None:
     assert digest.route_fingerprint("image.generate", "img-a@acme", {}) == ROUTE
     assert digest.route_fingerprint("image.generate", "img-a@acme", {"size": 1024}) != ROUTE
     assert digest.route_fingerprint("image.edit", "img-a@acme") != ROUTE
+
+
+def test_contracts_are_completed_from_the_built_in_adapters() -> None:
+    complete = digest.complete_contract
+    gg_image = {"adapter": "gg-image", "adapter_behavior": "1"}
+    assert complete("image.generate", "gg", {}) == gg_image
+    assert complete("image.edit", "gg", {"adapter": None, "adapter_behavior": None}) == gg_image
+    assert complete("image.generate", "gg", {"adapter_behavior": 1}) == {
+        "adapter": "gg-image",
+        "adapter_behavior": 1,
+    }
+    assert complete("image.generate", "gg", {"adapter": "acme-image"}) == {"adapter": "acme-image"}
+    # The behaviour is typed as spec/providers.md section 2 writes it.
+    assert complete("speech.generate", "elevenlabs", {})["adapter_behavior"] == 1
+    assert complete("vision.review", "gg", {}) == {}
+    assert complete("image.generate", "acme", {"adapter": None}) == {"adapter": None}
+    # Every built-in route already names both, so its fingerprint does not move.
+    assert len(digest.BUILT_IN_ADAPTERS) == 26
+    filled = digest.route_fingerprint("image.generate", "img-a@gg", gg_image)
+    assert filled == "7f6238d4aa013ab3e87587914c9ee915b141d33a2432a8ff1f3a361874901b95"
+
+
+def test_route_tables_resolve_extends() -> None:
+    builtin = digest.RouteTable()
+    builtin.read(
+        [{"capability": "image.generate", "route": "img-base@gg", "contract": {"quality": "max"}}],
+        "builtin",
+    )
+    base = {"adapter": "gg-image", "adapter_behavior": "1", "quality": "max"}
+    assert builtin.lookup("image.generate", "img-base@gg") == ("builtin: routes[0]", base)
+    catalog = digest.RouteTable()
+    catalog.read(
+        [
+            {"capability": "image.generate", "route": "img-a@gg", "extends": "img-base@gg"},
+            {
+                "capability": "image.generate",
+                "route": "img-b@gg",
+                "extends": "img-a@gg",
+                "contract": {"quality": "high"},
+            },
+        ],
+        "t",
+        builtin,
+    )
+    assert catalog.lookup("image.generate", "img-a@gg") == ("t: routes[0]", base)
+    assert catalog.lookup("image.generate", "img-b@gg")[1] == {**base, "quality": "high"}
+    assert catalog.lookup("image.generate", "img-base@gg") is None
+    for extends, capability, code in [
+        ("img-z@gg", "image.generate", "no_base"),
+        ("img-base@gg", "image.edit", "no_base"),
+        ("img-base@acme", "image.generate", "other_provider"),
+    ]:
+        entry = {"capability": capability, "route": "img-c@gg", "extends": extends}
+        with pytest.raises(digest.RefusedInput) as refused:
+            digest.RouteTable().read([entry], "t", builtin)
+        assert refused.value.code == code
 
 
 def test_route_splits_at_the_last_at() -> None:
@@ -875,6 +948,27 @@ def test_check_graph_refuses_a_duplicate_within_one_table(
     assert "already declared" in capsys.readouterr().err
 
 
+def test_check_graph_extends_the_built_in_table_under_routes(project: Path) -> None:
+    builtin = project / "builtin.yaml"
+    builtin.write_text(
+        "fx: routes/v1\nroutes:\n"
+        "  - { capability: image.generate, route: img-base@acme, price: {}, contract: { v: 7 } }\n",
+        "utf-8",
+    )
+    other = project / "other.yaml"
+    other.write_text(
+        "fx: routes/v1\nroutes:\n"
+        "  - { capability: image.generate, route: img-a@acme, extends: img-base@acme }\n",
+        "utf-8",
+    )
+    extended = digest.route_fingerprint("image.generate", "img-a@acme", {"v": 7})
+    graph = _with_fingerprint(_graph(), extended)
+    routes = ["--routes", str(other), "--builtin-routes", str(builtin)]
+    assert _run_check(project, graph, *routes) == 0
+    # Without the built-in table, the base is in no table read so far.
+    assert _run_check(project, graph, "--routes", str(other)) == 1
+
+
 def test_check_graph_route_in_no_table(project: Path, capsys: pytest.CaptureFixture[str]) -> None:
     (project / "fx.yaml").write_text("fx: project/v1\n", "utf-8")
     # Without --routes the built-in table, unknown here, may hold it: a note.
@@ -1322,10 +1416,27 @@ def test_check_spec_routes_catch_a_behaviour_the_table_does_not_write(
     text = providers.read_text("utf-8")
     assert text.count(row) == 1
     providers.write_text(text.replace(row, row.replace("`1`", '`"1"`')), "utf-8")
-    assert _check_routes(check_spec) == 2
+    assert _check_routes(check_spec) == 3
     out = capsys.readouterr().out
     assert 'image-to-video@fal: carries behaviour 1, the table `"1"`' in out
     assert "src/fal/README.md: its table lists [('video.generate', 'fal-queue', '`1`')]" in out
+    assert 'video.generate on fal: digest.py carries behaviour 1, the table `"1"`' in out
+
+
+def test_check_spec_routes_catch_digest_s_own_table(
+    adapters: tuple[Any, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    check_spec, _ = adapters
+    ours = dict(check_spec.digest.BUILT_IN_ADAPTERS)
+    ours[("mesh.rig", "tripo")] = ("tripo-rig", "1")
+    del ours[("image.edit", "grok")]
+    monkeypatch.setattr(check_spec.digest, "BUILT_IN_ADAPTERS", ours)
+    assert _check_routes(check_spec) == 1
+    out = capsys.readouterr().out
+    assert "image.edit on grok: not in digest.py's table" in out
+    assert 'mesh.rig on tripo: digest.py carries behaviour "1", the table `1`' in out
 
 
 def test_check_spec_routes_catch_a_reference_without_its_contract(

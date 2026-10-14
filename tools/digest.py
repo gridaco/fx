@@ -11,12 +11,13 @@ Usage:
                            [--builtin-routes <default.yaml>]
     python tools/digest.py --canon <file.json | ->
 
---check-examples also checks markers.json and json_output.json when they sit beside the
-examples file. --check-graph builds the route catalog of identity.md section 7 from the built-in
-default table (--builtin-routes, the engine's routes/default.yaml, read as a plain route table
-and left out when a --routes file is given), fx.yaml's route_tables, and then each --routes
-file. Without --builtin-routes the built-in table is unknown here, and a route found in no
-table is a note, not a failure.
+--check-examples also checks markers.json, json_output.json and routes.json when they sit beside
+the examples file. --check-graph builds the route catalog of identity.md section 7 from the
+built-in default table (--builtin-routes, the engine's routes/default.yaml, read as a plain route
+table and left out of the catalog when a --routes file is given, though an entry may still extend
+one of its routes), fx.yaml's route_tables, and then each --routes file, completing each contract
+as section 7 says. Without --builtin-routes the built-in table is unknown here, and a route found
+in no table is a note, not a failure.
 
 Only the standard library is needed, plus PyYAML when a YAML file (a route table, fx.yaml,
 fx.lock) has to be read.
@@ -420,6 +421,55 @@ def route_object(capability: str, route_id: str, contract: Any = None) -> dict[s
 
 def route_fingerprint(capability: str, route_id: str, contract: Any = None) -> str:
     return digest(route_object(capability, route_id, contract))
+
+
+# spec/providers.md section 2: the contract each adapter FX ships serves, by capability and
+# provider: its `adapter`, and its `adapter_behavior` as the JSON value the table writes.
+# tools/check_spec.py holds this copy to that table.
+BUILT_IN_ADAPTERS: dict[tuple[str, str], tuple[str, Any]] = {
+    ("image.generate", "openai"): ("fx-openai-image-v1", "1"),
+    ("image.edit", "openai"): ("fx-openai-image-v1", "1"),
+    ("image.generate", "openrouter"): ("fx-openrouter-image-v1", "3"),
+    ("image.edit", "openrouter"): ("fx-openrouter-image-v1", "3"),
+    ("structured.generate", "openrouter"): ("openrouter-structured", 1),
+    ("agent.turn", "openrouter"): ("openrouter-tool-loop", 1),
+    ("music.generate", "openrouter"): ("openrouter-music", 1),
+    ("image.generate", "fal"): ("fx-fal-image-v1", "1"),
+    ("image.edit", "fal"): ("fx-fal-image-v1", "1"),
+    ("video.generate", "fal"): ("fal-queue", 1),
+    ("background.remove", "fal"): ("fal-run-birefnet", 1),
+    ("mesh.generate", "tripo"): ("tripo-multiview", 1),
+    ("mesh.rig", "tripo"): ("tripo-rig", 1),
+    ("sound.generate", "elevenlabs"): ("elevenlabs-sound-effect", 1),
+    ("speech.generate", "elevenlabs"): ("elevenlabs-speech", 1),
+    ("image.generate", "codex"): ("fx-codex-image-v1", "2"),
+    ("image.edit", "codex"): ("fx-codex-image-v1", "2"),
+    ("image.generate", "gg"): ("gg-image", "1"),
+    ("image.edit", "gg"): ("gg-image", "1"),
+    ("structured.generate", "gg"): ("gg-structured", 1),
+    ("agent.turn", "gg"): ("gg-tool-loop", 1),
+    ("video.generate", "gg"): ("gg-video", 1),
+    ("mesh.generate", "gg"): ("gg-mesh", 1),
+    ("mesh.rig", "gg"): ("gg-rig", 1),
+    ("image.generate", "grok"): ("fx-grok-image-v1", "1"),
+    ("image.edit", "grok"): ("fx-grok-image-v1", "1"),
+}
+
+
+def complete_contract(capability: str, provider: str, contract: dict[str, Any]) -> dict[str, Any]:
+    """Step 2 of identity.md section 7: where one of FX's adapters serves the capability and
+    provider, a left-out or null `adapter` becomes its name, then a left-out or null
+    `adapter_behavior` its behaviour when `adapter` is that name."""
+    completed = dict(contract)
+    served = BUILT_IN_ADAPTERS.get((capability, provider))
+    if served is None:
+        return completed
+    adapter, behavior = served
+    if completed.get("adapter") is None:
+        completed["adapter"] = adapter
+    if completed.get("adapter_behavior") is None and completed.get("adapter") == adapter:
+        completed["adapter_behavior"] = behavior
+    return completed
 
 
 def step_object(
@@ -877,9 +927,55 @@ def check_json_output_vectors(path: Path) -> list[str]:
     return failures
 
 
+def check_route_vectors(path: Path) -> list[str]:
+    """vectors/identity/routes.json: route tables read into a catalog, each contract completed
+    (identity.md section 7)."""
+    failures: list[str] = []
+    for case in _cases(path, "fx-route-vectors-v1"):
+        name = case.get("name", "<unnamed>")
+        refuse = case.get("refuse")
+        try:
+            builtin = RouteTable()
+            builtin.read(case.get("builtin", []), "builtin")
+            catalog = RouteTable()
+            if not case.get("routes_given"):
+                catalog.entries.update(builtin.entries)
+            for index, table in enumerate(case["tables"]):
+                catalog.read(table, f"tables[{index}]", builtin)
+        except RefusedInput as error:
+            if refuse is None:
+                failures.append(f"{name}: refused: {error}")
+                continue
+            where = f"tables[{refuse['table']}]: routes[{refuse['entry']}]"
+            if error.code != refuse["reason"] or not str(error).startswith(where):
+                failures.append(f"{name}: refused {error.code} ({error}), expected {refuse}")
+            continue
+        if refuse is not None:
+            failures.append(f"{name}: should be refused as {refuse['reason']}")
+            continue
+        for want in case.get("expect", []):
+            found = catalog.lookup(want["capability"], want["route"])
+            if found is None:
+                failures.append(f"{name}: {want['route']} for {want['capability']} is missing")
+                continue
+            contract = found[1]
+            if canon(contract) != canon(want["contract"]):
+                failures.append(
+                    f"{name}: {want['route']} has contract {canon(contract).decode('utf-8')}"
+                )
+            got = route_fingerprint(want["capability"], want["route"], contract)
+            if got != want["digest"]:
+                failures.append(f"{name}: {want['route']} fingerprint {got}, expected digest")
+        for absent in case.get("absent", []):
+            if catalog.lookup(absent["capability"], absent["route"]) is not None:
+                failures.append(f"{name}: {absent['route']} should not be in the catalog")
+    return failures
+
+
 IDENTITY_VECTORS = {
     "markers.json": check_marker_vectors,
     "json_output.json": check_json_output_vectors,
+    "routes.json": check_route_vectors,
 }
 
 
@@ -893,28 +989,36 @@ class RouteTable:
 
     Tables are loaded in catalog order. A later table's entry for a capability and route
     replaces an earlier one, contract included; two entries for one capability and route within
-    one table are refused. The built-in default table is the engine's, unknown here.
+    one table are refused. Each entry's contract is completed as it is read: its `extends` base's
+    members first, then the serving adapter's identity (BUILT_IN_ADAPTERS). Only contracts are
+    kept, since nothing else of a route is hashed.
     """
 
     def __init__(self) -> None:
         self.entries: dict[tuple[str, str], tuple[str, dict[str, Any]]] = {}
 
-    def load(self, path: Path) -> None:
+    def load(self, path: Path, builtin: RouteTable | None = None) -> None:
         document = read_yaml_file(path)
         if not isinstance(document, dict) or document.get("fx") != "routes/v1":
             raise RefusedInput(f"{path}: not a route table (fx: routes/v1)", "invalid_document")
         routes = document.get("routes")
         if not isinstance(routes, list):
             raise RefusedInput(f"{path}: routes must be a list", "invalid_document")
+        self.read(routes, str(path), builtin)
+
+    def read(self, routes: list[Any], label: str, builtin: RouteTable | None = None) -> None:
+        """Lay one table's entries over the catalog, in order. An entry's `extends` names an
+        earlier entry of the same table, else an entry of the catalog so far, else `builtin`'s."""
+        read: dict[tuple[str, str], tuple[str, dict[str, Any]]] = {}
         seen: dict[tuple[str, str], int] = {}
         for index, entry in enumerate(routes):
-            where = f"{path}: routes[{index}]"
+            where = f"{label}: routes[{index}]"
             if not isinstance(entry, dict):
                 raise RefusedInput(f"{where}: not a mapping", "invalid_document")
             capability, route_id = entry.get("capability"), entry.get("route")
             if not isinstance(capability, str) or not isinstance(route_id, str):
                 raise RefusedInput(f"{where}: needs capability and route", "invalid_document")
-            split_route(route_id)
+            _, provider = split_route(route_id)
             key = (capability, route_id)
             if key in seen:
                 raise RefusedInput(
@@ -926,7 +1030,36 @@ class RouteTable:
             contract = entry.get("contract", {})
             if not isinstance(contract, dict):
                 raise RefusedInput(f"{where}: contract must be a mapping", "invalid_document")
-            self.entries[key] = (where, contract)
+            if "extends" in entry:
+                base = self._base(entry["extends"], capability, provider, where, read, builtin)
+                contract = {**base, **contract}
+            read[key] = (where, complete_contract(capability, provider, contract))
+        self.entries.update(read)
+
+    def _base(
+        self,
+        extends: Any,
+        capability: str,
+        provider: str,
+        where: str,
+        read: dict[tuple[str, str], tuple[str, dict[str, Any]]],
+        builtin: RouteTable | None,
+    ) -> dict[str, Any]:
+        """The contract of an entry's base (identity.md section 7, step 1)."""
+        if not isinstance(extends, str):
+            raise RefusedInput(f"{where}: extends must be a route", "invalid_document")
+        if split_route(extends)[1] != provider:
+            raise RefusedInput(
+                f"{where}: extends {extends}, which is not a {provider} route", "other_provider"
+            )
+        key = (capability, extends)
+        for table in (read, self.entries, builtin.entries if builtin else {}):
+            if key in table:
+                return table[key][1]
+        raise RefusedInput(
+            f"{where}: extends {extends}, which no table read so far holds for {capability}",
+            "no_base",
+        )
 
     def lookup(self, capability: str, route_id: str) -> tuple[str, dict[str, Any]] | None:
         """(where it was declared, its contract) of the entry in force, or None."""
@@ -1003,8 +1136,11 @@ class GraphCheck:
         self.counts = {"identities": 0, "routes": 0, "sources": 0, "locks": 0, "plans": 0}
         self.routes = RouteTable()
         # identity.md section 7: the built-in default table heads the catalog unless a
-        # --routes file is given. Unless it is handed in, this checker does not know that table.
-        self.builtin = builtin if not route_files else None
+        # --routes file is given, and an entry may extend one of its routes either way. Unless it
+        # is handed in, this checker does not know that table.
+        self.builtin = RouteTable()
+        if builtin is not None:
+            self.builtin.load(builtin)
         self.builtin_table = not route_files and builtin is None
         self.lock: dict[str, str] = {}
         self._load_project(route_files)
@@ -1013,9 +1149,12 @@ class GraphCheck:
         self.failures.append(message)
 
     def _load_project(self, route_files: list[Path]) -> None:
-        # The catalog, in order: the built-in table (when known), fx.yaml's route_tables in
-        # their listed order (relative to the project root), then each --routes file.
-        tables: list[Path] = [self.builtin] if self.builtin is not None else []
+        # The catalog, in order: the built-in table (when known, and no --routes file is given),
+        # fx.yaml's route_tables in their listed order (relative to the project root), then each
+        # --routes file.
+        if not route_files:
+            self.routes.entries.update(self.builtin.entries)
+        tables: list[Path] = []
         project_file = self.project / "fx.yaml"
         if project_file.is_file():
             document = read_yaml_file(project_file)
@@ -1025,7 +1164,7 @@ class GraphCheck:
             tables.extend(self.project / str(item) for item in listed or [])
         tables.extend(route_files)
         for path in tables:
-            self.routes.load(path)
+            self.routes.load(path, self.builtin)
         lock_file = self.project / "fx.lock"
         if lock_file.is_file():
             document = read_yaml_file(lock_file)
@@ -1376,7 +1515,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--builtin-routes",
         type=Path,
-        help="the built-in default route table (left out with --routes)",
+        help="the built-in default route table (left out of the catalog with --routes, but still "
+        "extended)",
     )
     args = parser.parse_args(argv)
 

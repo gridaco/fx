@@ -60,7 +60,7 @@ pub const CAPABILITY: &str = "structured.generate";
 /// The contract this adapter serves: [`CONTRACT_ADAPTER`], behaviour the number 1.
 pub const IDENTITY: Identity = Identity {
     adapter: CONTRACT_ADAPTER,
-    behavior: Some("1"),
+    behavior: "1",
 };
 
 /// The model whose structured calls get the shorter deadline (src/openrouter/README.md, "Limits").
@@ -266,7 +266,7 @@ pub(super) fn read_contract(
     }
     let identity = Identity {
         adapter,
-        behavior: Some("1"),
+        behavior: "1",
     };
     checks::contract(route, &identity)?;
     let empty = Map::new();

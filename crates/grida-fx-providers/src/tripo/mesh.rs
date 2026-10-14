@@ -33,6 +33,12 @@ pub const FACE_LIMIT: std::ops::RangeInclusive<i64> = 48..=25_000;
 /// The route contract's `adapter` this adapter serves.
 pub const ADAPTER: &str = "tripo-multiview";
 
+/// The contract this adapter serves: [`ADAPTER`], and `adapter_behavior` the number 1.
+pub const IDENTITY: Identity = Identity {
+    adapter: ADAPTER,
+    behavior: "1",
+};
+
 const CAPABILITY: &str = "mesh.generate";
 
 /// Tripo's mesh adapter (module doc).
@@ -63,7 +69,7 @@ impl TripoMesh {
 
     async fn submit_call(&self, call: &CallRequest) -> Submitted {
         let api = &self.api;
-        if let Err(reason) = super::check_route(call, CAPABILITY, ADAPTER) {
+        if let Err(reason) = super::check_route(call, CAPABILITY, &IDENTITY) {
             return api.refused(&reason);
         }
         if let Err(reason) = crate::capabilities::check_request(CAPABILITY, &call.request) {
@@ -240,6 +246,6 @@ impl LongJob for TripoMesh {
     }
 
     fn identity(&self) -> Option<Identity> {
-        Some(super::identity(ADAPTER))
+        Some(IDENTITY)
     }
 }

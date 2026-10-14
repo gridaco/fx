@@ -7,11 +7,11 @@ The reference for FX's adapters on `tripo`, under the adapter contract, [spec/ad
 | `mesh.generate` | `tripo-multiview` | `1` |
 | `mesh.rig` | `tripo-rig` | `1` |
 
-Tripo's adapters check only `adapter` ([adapters.md](../../../../spec/adapters.md) §4 step 1): the behaviour above is the one the built-in routes carry.
+A route whose contract names another `adapter` or `adapter_behavior` than the ones above is refused ([adapters.md](../../../../spec/adapters.md) §4 step 1). Up to FX 0.6.1, these adapters checked only `adapter`.
 
 - **Capabilities:**
-  - `mesh.generate`, a long job: the free phase uploads the views, then `POST /generation/multiview-to-model`. Contract `adapter`: `tripo-multiview`.
-  - `mesh.rig`, a long job: the free phase uploads the model, posts `POST /animations/rig-check` and waits for it; then `POST /animations/rig`. Contract `adapter`: `tripo-rig`.
+  - `mesh.generate`, a long job: the free phase uploads the views, then `POST /generation/multiview-to-model`. Contract `adapter`: `tripo-multiview`, behaviour `1`.
+  - `mesh.rig`, a long job: the free phase uploads the model, posts `POST /animations/rig-check` and waits for it; then `POST /animations/rig`. Contract `adapter`: `tripo-rig`, behaviour `1`.
 - **Credential:** `authorization: Bearer <TRIPO_API_KEY>` on every API request, and never on a model download.
 - **The envelope.** Every API answer must be HTTP 200 exactly, with a JSON object `{"code": 0, "data": {...}}`. Tripo's error text is never read: a reason says `body withheld`. A refusal (below) names Tripo's error code when the body is a JSON object whose `code` is an integer, as ` (code <n>)` after the status (`Tripo refused the task with HTTP 400 (code 2002)`); nothing else of the body is kept.
 - **Limits:**

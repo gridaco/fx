@@ -63,7 +63,7 @@ pub const ADAPTER: &str = "fx-grok-image-v1";
 /// [`environment`]: a change to any is a new behaviour.
 pub const IDENTITY: Identity = Identity {
     adapter: ADAPTER,
-    behavior: Some(r#""1""#),
+    behavior: r#""1""#,
 };
 
 /// The oldest Grok Build whose behaviour this adapter was verified on.

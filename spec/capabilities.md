@@ -57,7 +57,7 @@ In the tables below, a member's type is one of:
   A value the plan does not know yet (a step's output that is only a list as a whole, say) implies nothing. A feature the route lacks is refused as `<route> does not support <feature>` at `<w>.with.<member>`, once per feature, and not again for `requires:`. So a request the route's adapter would refuse is refused while planning, at $0. A call a node's body makes at run time is checked only before it is sent ([adapters.md](adapters.md) §4).
 - **Input-picture limits.** A route may declare `max_input_pictures`, the most input pictures it takes in one call (`image` and `references`; a mask does not count). A step whose request would carry more is refused while planning, at `<w>.with.references`: `<route> takes at most <n> input pictures, not <count>`. The count is known while the list's length is, even when its pictures are not made yet.
 - Each capability's section lists its features. Only those names have a meaning for it. A route in the built-in table ([providers.md](providers.md) §3) MUST declare only names from its capability's list, and only what its adapter honours.
-- A few image features describe the provider's model and change nothing FX sends, whatever `jpeg_output`, `webp_output` or `hosted_url_reference_input` say. Every route FX ships sends pictures inline. A route whose provider takes an output format (OpenAI, fal) asks for PNG; OpenRouter's image endpoint takes none, so its routes ask for nothing. Every route's check refuses an answer that is not a PNG (§2).
+- Every route FX ships sends input pictures inline. A route whose provider takes an output format (OpenAI, fal) asks for PNG; OpenRouter's image endpoint takes none, so its routes ask for nothing. Every route's check refuses an answer that is not a PNG (§2), so no feature names another output format.
 
 ## 2. `image.generate`
 
@@ -91,10 +91,7 @@ A picture from a prompt.
 | `custom_exact_size` | any `<W>x<H>` within the route's envelope is served, not only a fixed list of sizes |
 | `flexible_size` | `size` may be absent or `auto` |
 | `image_input` | the route takes input pictures: `references` |
-| `hosted_url_reference_input` | the provider can also fetch input pictures by URL; FX always sends them inline |
 | `png_output` | the model can encode PNG: every route FX ships needs a PNG answer (check 1), and asks for one where its provider takes an output format |
-| `jpeg_output` | the model can encode JPEG |
-| `webp_output` | the model can encode WebP |
 | `maximum_quality` | the route asks for the model's highest quality |
 | `authored_prompt_passthrough` | the prompt is sent verbatim, never rewritten |
 
@@ -128,10 +125,7 @@ A picture made from input pictures, optionally within a mask.
 | `custom_exact_size` | as for `image.generate` |
 | `flexible_size` | as for `image.generate` |
 | `image_input` | the route takes input pictures: `image`, then `references` |
-| `hosted_url_reference_input` | as for `image.generate` |
 | `png_output` | as for `image.generate` |
-| `jpeg_output` | as for `image.generate` |
-| `webp_output` | as for `image.generate` |
 | `maximum_quality` | as for `image.generate` |
 | `authored_prompt_passthrough` | as for `image.generate` |
 | `mask` | the route takes a `mask` |

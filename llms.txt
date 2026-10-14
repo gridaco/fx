@@ -294,6 +294,35 @@ A route is `model@provider`. Pick one per capability in `fx.yaml` `routes:`, or 
   in its place when set), so a proxy whose root the machine trusts works.
 - Built-in prices are planning allowances; a call is booked at what the provider reports, else at
   its whole reservation. A route on a provider with no adapter still plans; live it is refused.
+- **Your own route table** (`fx: routes/v1`, listed under `route_tables:` in `fx.yaml`): its entry
+  for a capability and route replaces the built-in one. An entry may `extends:` another route of
+  the same capability and provider, a built-in one (even with `--routes`) or one read before it,
+  and state only what differs: it takes the base's price, features, limits, pacing and
+  `contract`, a member it states replaces the base's, and `contract` merges member by member.
+  `extends` is not part of a route's identity, so repricing a route this way keeps every cache.
+  On a provider and capability FX has an adapter for, a `contract` that leaves out `adapter` gets
+  FX's, and one that leaves out `adapter_behavior` gets its behaviour unless it names another
+  adapter.
+
+```yaml
+# routes/prices.yaml
+fx: routes/v1
+routes:
+  - capability: image.generate
+    route: openai/gpt-image-2.5-sunburst@gg
+    extends: openai/gpt-image-2.5-sunburst@gg   # the built-in entry, with more headroom
+    price: { low_usd: 0.09, high_usd: 0.80 }     # replaces its whole price, size tiers included
+```
+
+- **Upgrading from 0.6.1:** a route of your own on a provider and capability FX has an adapter for,
+  whose `contract` left out `adapter`, or named FX's adapter and left out `adapter_behavior`, now
+  has them filled in, so its identity changes once: its steps and paid calls run again, and
+  resuming a run folder planned before is refused (start a new run). Built-in routes keep theirs.
+  A route of your own on `fal` or `tripo` whose `contract` names an `adapter_behavior` other than
+  FX's is now refused when a call is sent, as on every other provider. A step whose `requires:`
+  names `jpeg_output`, `webp_output` or `hosted_url_reference_input` is now refused while planning
+  as no feature of its capability: drop the name, since every route answers PNG and sends input
+  pictures inline.
 
 ## Your own nodes
 
@@ -794,6 +823,8 @@ Python, `run(..., { standIn: fn })` in JavaScript, in your own process.
 | `… was refused: GG_API_KEY is not set` | the user sets the key (environment or `.env`); check with `grida fx doctor` |
 | `<route> does not support exact_size` (or `alpha`, `mask`, `image_input`) | change the setting or the route; for Codex and Grok Build leave `size` out and resize after |
 | `no adapter serves <route> …` | FX cannot call that provider; pick a built-in route (`grida fx nodes <type>`) |
+| `routes.<n>.extends: no route <base> serves <capability>` | `extends` names a route of the same capability declared earlier (in the same table or one read before) or a built-in one; check the id and the order |
+| `routes.<n>.extends: <base> is not a <provider> route` | a route extends only a route of its own provider |
 | `not installed (codex)` / `not installed (grok)` in doctor | install and sign in to Codex or Grok Build, or set `GRIDA_FX_TOOL_CODEX` / `GRIDA_FX_TOOL_GROK` |
 | `Codex … is older than 0.160.1` (or `too old (codex …)` in doctor) | update the Codex that doctor's `program` line names, or set `GRIDA_FX_TOOL_CODEX` to a newer one |
 | `python … too old` / `no grida` in doctor | `uv sync` or `pip install grida` in the project, or set `GRIDA_FX_PYTHON` |

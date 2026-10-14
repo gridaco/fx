@@ -602,6 +602,29 @@ fn a_fixture_plays_the_same_collect() {
 }
 
 #[test]
+fn a_job_is_collected_whatever_behaviour_its_route_names() {
+    // src/fal/README.md: a submit is refused, but a job already submitted (under FX 0.6.1, which
+    // read no behaviour) is collected, since the call's key fixed its contract.
+    let mut builder = CallBuilder::new("video.generate", ROUTE)
+        .contract(json!({"adapter": "fal-queue", "adapter_behavior": 2}));
+    let first = builder.file("image/png", &media::png(2, 2, Some(255)));
+    let call = builder
+        .request(json!({"prompt": "p", "first_frame": first, "duration": 3}))
+        .build();
+    assert_eq!(
+        refused(&call, test_keys()),
+        format!("{ROUTE} is not a video.generate route this adapter serves")
+    );
+    let transport = Arc::new(ReplayTransport::new(vec![
+        completed(),
+        result(),
+        Expect::download(VIDEO_URL).reply(clip_reply()),
+    ]));
+    let collected = collect(&transport, &Arc::new(FakeClock::new()), &call);
+    assert!(matches!(collected, Collected::Answered(_)), "{collected:?}");
+}
+
+#[test]
 fn a_failed_job_ends_with_its_cut_error() {
     let clock = Arc::new(FakeClock::new());
     let transport = Arc::new(ReplayTransport::new(vec![status_get().reply(ok(json!({

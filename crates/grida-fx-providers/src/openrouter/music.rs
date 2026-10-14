@@ -51,7 +51,7 @@ pub const MAX_RESPONSE_BYTES: u64 = 128 * 1024 * 1024;
 /// (written `1.0` too, the same number).
 pub const IDENTITY: Identity = Identity {
     adapter: CONTRACT_ADAPTER,
-    behavior: Some("1"),
+    behavior: "1",
 };
 
 /// The only output format the route asks for, and its media type.

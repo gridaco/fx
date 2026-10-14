@@ -23,4 +23,4 @@ These documents define FX independently of any implementation. The Rust engine, 
 | [schemas/](schemas/) | JSON Schemas for every document and record |
 | [vectors/](vectors/) | Test vectors: canonical JSON, YAML, identity examples, file facts |
 
-A change to identity changes every cache. It needs a new `kind` version in [identity.md](identity.md), new vectors, and a migration note.
+A change to identity changes every cache. It needs a new `kind` version in [identity.md](identity.md), new vectors, and a migration note. The one exception, the route contract's completion ([identity.md](identity.md) §7), kept `fx-route-v1` because it moved no built-in fingerprint; it has its vectors and its migration note.

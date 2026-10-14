@@ -115,11 +115,12 @@ Gate: `check_spec`, `cargo test`, `check_llms`.
   adapter's refusal comes (after the slot, the hold and a long job's `submitting` record), so
   events and records are unchanged, and never before a collect.
 - [x] Runtime: each FX adapter names its contract, an `Identity`: `adapter`, and `adapter_behavior`
-  as canonical JSON (none for fal and Tripo, which check only `adapter`). Around an adapter that
-  names one, the engine makes the contract check, then the adapter's own judgement of its other
-  contract members (`check_contract`: GG's and OpenRouter chat's), then `check_request`, before
-  each send or submit; and `checks::every_route_with`, with the adapter's redactor, after the
-  adapter's check of each answer. A test double that names none gets neither.
+  as canonical JSON (none for fal and Tripo, which checked only `adapter` until M3). Around an
+  adapter that names one, the engine makes the contract check, then the adapter's own judgement
+  of its other contract members (`check_contract`: GG's and OpenRouter chat's), then
+  `check_request`, before each send or submit; and `checks::every_route_with`, with the
+  adapter's redactor, after the adapter's check of each answer. A test double that names none
+  gets neither.
   - Adapters keep their guards for direct callers, since their tests call them directly, but each
     guard is built on the engine's functions (`checks::serves`, `checks::contract`), so there is
     one implementation. Called directly, fal and Tripo now refuse a contract that is not an
@@ -138,19 +139,66 @@ Gate: `cargo test`, conformance.
 
 ### M3. Route identity and `extends`
 
-- [ ] Spec (`identity.md` §7): where a route's contract leaves out `adapter` or
-  `adapter_behavior`, the engine supplies them from the built-in adapter table, for a provider
-  that has an adapter. Routes on providers without one are untouched. `extends` is resolved
-  before the fingerprint and is not part of it.
-- [ ] `fx-routes-v1`: `extends`; `price` is not required beside it.
-- [ ] Core: a static (capability, provider) → identity table, promoted from `tests/routes.rs`;
-  filling in `load_catalog`; resolving `extends`.
-- [ ] A test pins all 29 built-in fingerprints before the change and proves that none moves.
-- [ ] `tools/digest.py` fills and resolves exactly as the engine does; vectors for a filled
+- [x] Spec (`identity.md` §7): where a route's contract leaves out `adapter` or
+  `adapter_behavior`, the engine supplies them from the built-in adapter table, for a
+  capability and provider that has an adapter. Routes on pairs without one are untouched.
+  `extends` is resolved before the fingerprint and is not part of it.
+  - The fill is keyed by capability and provider, as the registry is, not by provider alone:
+    `vision.review` on `gg` is untouched. A member set to `null` counts as left out. The
+    behaviour is filled only when the contract's `adapter` is the table's, typed exactly as
+    `providers.md` §2 writes it (a string for images, such as `"1"`, `"2"` for Codex and `"3"`
+    for OpenRouter; the number `1` otherwise).
+  - `kind` stays `fx-route-v1`, the one exception to the rule that an identity change bumps it
+    (`identity.md`, `spec/README.md`): no built-in fingerprint moves. The migration note: a
+    project route on a pair FX serves whose contract left out `adapter`, or named FX's adapter
+    and left out `adapter_behavior`, recomputes once.
+  - `extends` names a route of the same capability and provider: an earlier entry of the same
+    table, else the entry in force in the catalog so far (which wins over a built-in one of the
+    same route), else the built-in table's, even under `--routes`. The entry copies the base's
+    price, features, `max_input_pictures`, `concurrency`, `requests_per_minute` and contract; a
+    member it states replaces the base's whole, except `contract`, whose members merge one level
+    deep. A missing base, a base of another capability, and one on another provider are refused
+    while the table is read (`routes.<n>.extends: no route <base> serves <capability>`;
+    `… <base> is not a <provider> route`), in `llms.txt`'s errors table.
+- [x] `fx-routes-v1`: `extends`; `price` is not required beside it. It is an `if`/`then`, so a
+  missing price is refused as before.
+- [x] Core: a static (capability, provider) → identity table, promoted from `tests/routes.rs`;
+  filling in `parse_route`; resolving `extends` over the bases `load_catalog` passes.
+  - The table is `routes::BUILT_IN_ADAPTERS`, promoted from the test's table with its behaviours
+    unchanged; fal's and Tripo's adapters, whose `Identity` named none, now name the ones
+    `providers.md` §2 gives (fal images `"1"`, `fal-queue`, `fal-run-birefnet` and Tripo's `1`).
+  - The fill is in `parse_route`, not `load_catalog`, since every reader reaches it
+    (`RouteTable::from_document` reads the built-in table and bypasses `load_catalog`);
+    `load_catalog` hands each table its bases, the catalog so far and then the built-in table
+    (`read_table`, then `parse_table`; `RouteTable::from_document_over` does the same for a
+    document already loaded). `tests/routes_spec.rs` proves both bases through `load_catalog`.
+  - Core cannot see the providers crate, so a test there holds the table to every registered
+    adapter's `Identity`, behaviour included, and to `providers.md` §2, in its order.
+  - fal's and Tripo's adapters now name their behaviour in their `Identity`, so the engine
+    refuses a route whose contract names another `adapter_behavior`, as for every other adapter.
+    This is a deliberate behaviour change, for a project route that names another behaviour on
+    fal or Tripo only; `llms.txt` and the two references say so. `Identity::behavior` is no
+    longer optional. A fal video job already submitted is still collected whatever behaviour its
+    route names: its collect checks the capability and `adapter` alone, as before, since the
+    call's key fixes the contract (`adapters.md` §4), so a job submitted under 0.6.1 is not
+    stranded.
+- [x] A test pins all 29 built-in fingerprints before the change and proves that none moves.
+- [x] `tools/digest.py` fills and resolves exactly as the engine does; vectors for a filled
   contract and an extended route.
-- [ ] Drop `jpeg_output`, `webp_output` and `hosted_url_reference_input` from the vocabulary
-  (capabilities.md, `features.json`, `capabilities.rs`) and from the routes.
-- [ ] `llms.txt`; guide pages 05 and 13.
+  - digest.py keeps its own copy of the adapter table, which `check_spec` (j) holds to
+    `providers.md` §2, and always takes the built-in table as a base: `check_spec` (h) passes
+    `--builtin-routes` with `--routes` too.
+  - The vectors are a new input form, `spec/vectors/identity/routes.json`
+    (`fx-route-vectors-v1`): tables in, completed contracts and fingerprints out, and refusals
+    by reason, with made-up models, on FX's own providers where a case needs an adapter of FX's
+    and on `acme` otherwise. A hashed object alone cannot show a fill.
+  - A conformance case, `route-extends`, plans extended routes through the command line, and
+    `check_spec` (h) checks its fingerprints with digest.py. No expected file moved.
+- [x] Drop `jpeg_output`, `webp_output` and `hosted_url_reference_input` from the vocabulary
+  (capabilities.md, `features.json`, `capabilities.rs`) and from the routes. A step that
+  requires one is refused as no feature of its capability, with no hint; `llms.txt`'s upgrade
+  note says so.
+- [x] `llms.txt`; guide pages 05 and 13.
 
 Gate: `cargo test`, conformance with no expected file moved, `check_spec`, `pytest`.
 
@@ -315,7 +363,7 @@ Gate: the whole verification list, `check_host` included.
 |---|---|
 | Where a project declares providers | `providers:` in `fx.yaml` |
 | A cap's form | `price: {cap_usd: N}`, alone in `price` |
-| What `extends` may name | a route of the same capability and provider, from the built-in table (even under `--routes`) or an entry already read. It takes a snapshot and is never hashed |
+| What `extends` may name | a route of the same capability and provider, from the built-in table (even under `--routes`) or an entry already read, which wins. It takes a snapshot and is never hashed |
 | Route-level options | `contract.provider_options`, already in the fingerprint |
 | Step-level options | an optional `provider_options` param on each paid built-in, without a version bump. If `identity.md` requires a bump, route-level options only, and a follow-up |
 | The adapter of a route without a contract | its provider's default for the capability, from the built-in table (the generic one after M6) |

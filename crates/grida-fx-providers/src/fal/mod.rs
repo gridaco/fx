@@ -102,27 +102,18 @@ pub(crate) const CREDENTIAL_PREFIX: &str = "Key ";
 /// The base-URL variable a run-host redirect points at (spec/adapters.md §3.3).
 pub(crate) const RUN_BASE_VARIABLE: &str = "FAL_BASE_URL";
 
-/// The contract an adapter of fal's serves: `adapter`, with no behaviour checked
-/// (spec/providers.md §2).
-pub(crate) const fn identity(adapter: &'static str) -> Identity {
-    Identity {
-        adapter,
-        behavior: None,
-    }
-}
-
 /// Step 1 of spec/adapters.md §4: `None` when the route is one of `capabilities` and its
-/// contract's `adapter` is absent or `own` (the engine's check, [`crate::checks::contract`], made
-/// again for a direct caller); else the refusal sentence.
+/// contract is one `own` serves (the engine's check, [`crate::checks::contract`], made again for a
+/// direct caller); else the refusal sentence.
 pub(crate) fn contract_refusal(
     call: &CallRequest,
-    own: &'static str,
+    own: &Identity,
     capabilities: &[&str],
 ) -> Option<String> {
     if !capabilities.contains(&call.route.capability.as_str()) {
         return Some(crate::checks::not_served(&call.route));
     }
-    crate::checks::contract(&call.route, &identity(own)).err()
+    crate::checks::contract(&call.route, own).err()
 }
 
 /// The route's model as an endpoint id: surrounding whitespace and `/` removed.
@@ -365,22 +356,23 @@ mod tests {
         let own = |contract| {
             contract_refusal(
                 &call("image.generate", contract),
-                "fx-fal-image-v1",
+                &image::IDENTITY,
                 &["image.generate"],
             )
         };
+        let refusal = Some("img-a@fal is not a image.generate route this adapter serves".into());
         assert_eq!(own(json!({})), None);
         assert_eq!(own(json!({"adapter": null})), None);
         assert_eq!(own(json!({"adapter": "fx-fal-image-v1", "x": 1})), None);
-        assert_eq!(
-            own(json!({"adapter": "acme-openai-image-v1"})),
-            Some("img-a@fal is not a image.generate route this adapter serves".into())
-        );
+        assert_eq!(own(json!({"adapter_behavior": "1"})), None);
+        assert_eq!(own(json!({"adapter": "acme-openai-image-v1"})), refusal);
         assert!(own(json!({"adapter": 1})).is_some());
+        // The behaviour is checked as every adapter's is: the number 1 is another contract.
+        assert_eq!(own(json!({"adapter_behavior": 1})), refusal);
         assert_eq!(
             contract_refusal(
                 &call("video.generate", json!({})),
-                "fx-fal-image-v1",
+                &image::IDENTITY,
                 &["image.generate"]
             ),
             Some("img-a@fal is not a video.generate route this adapter serves".into())

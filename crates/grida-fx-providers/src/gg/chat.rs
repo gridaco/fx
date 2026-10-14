@@ -53,13 +53,13 @@ pub const TURN_ADAPTER: &str = "gg-tool-loop";
 /// The contract [`GgStructured`] serves: [`STRUCTURED_ADAPTER`], behaviour the number 1.
 pub const STRUCTURED_IDENTITY: Identity = Identity {
     adapter: STRUCTURED_ADAPTER,
-    behavior: Some("1"),
+    behavior: "1",
 };
 
 /// The contract [`GgAgent`] serves: [`TURN_ADAPTER`], behaviour the number 1.
 pub const TURN_IDENTITY: Identity = Identity {
     adapter: TURN_ADAPTER,
-    behavior: Some("1"),
+    behavior: "1",
 };
 
 /// The deadline of a structured call.

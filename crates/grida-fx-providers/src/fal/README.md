@@ -8,12 +8,12 @@ The reference for FX's adapters on `fal`, under the adapter contract, [spec/adap
 | `video.generate` | `fal-queue` | `1` |
 | `background.remove` | `fal-run-birefnet` | `1` |
 
-fal's three adapters check only `adapter` ([adapters.md](../../../../spec/adapters.md) §4 step 1): a route whose contract names another behaviour than the one above is still served.
+A route whose contract names another `adapter` or `adapter_behavior` than the ones above is refused ([adapters.md](../../../../spec/adapters.md) §4 step 1). Up to FX 0.6.1, these adapters checked only `adapter`. A video job already submitted is collected whatever `adapter_behavior` its route names, since the call's key fixed the contract: `collect` checks the capability and `adapter` alone, so a job submitted under 0.6.1 is not stranded.
 
 - **Capabilities:**
-  - `image.generate` (`POST {run}/<model>/text-to-image`) and `image.edit` (`POST {run}/<model>/edit`). Contract `adapter`: `fx-fal-image-v1`.
-  - `video.generate`, a long job on the queue: `POST {queue}/<model>`. Contract `adapter`: `fal-queue`.
-  - `background.remove` (`POST {run}/<model>`). Contract `adapter`: `fal-run-birefnet`.
+  - `image.generate` (`POST {run}/<model>/text-to-image`) and `image.edit` (`POST {run}/<model>/edit`). Contract `adapter`: `fx-fal-image-v1`, behaviour `"1"`, the string.
+  - `video.generate`, a long job on the queue: `POST {queue}/<model>`. Contract `adapter`: `fal-queue`, behaviour `1`.
+  - `background.remove` (`POST {run}/<model>`). Contract `adapter`: `fal-run-birefnet`, behaviour `1`.
 - **Credential:** `authorization: Key <FAL_KEY>`, on the run and queue hosts only.
 - **Images.**
   - Refused before sending, in this order:

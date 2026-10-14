@@ -15,13 +15,13 @@ It prints one line per check and exits non-zero when any check fails:
   (d) the YAML vectors are complete (accept/<n>.yaml has a valid <n>.json, refuse/<n>.yaml a
       non-empty <n>.txt) and agree with digest.py's reader of the subset;
   (e) tools/digest.py --check-examples passes: the identity examples, the reserved-marker
-      vectors and the JSON output vectors;
+      vectors, the JSON output vectors and the route vectors;
   (f) no FORBIDDEN_NAMES appear under spec/, docs/, conformance/, examples/, the default
       routes' folder or the providers crate's source, which holds the adapters' references;
   (g) the worked examples in spec/identity.md agree with spec/vectors/identity/examples.json;
   (h) every expected fx-graph-v1 output of a conformance case passes digest.py --check-graph,
-      with the case's in/ as the project and the route tables its step passed (the built-in
-      table when it passed none);
+      with the case's in/ as the project, the route tables its step passed, and the built-in
+      table (in the catalog when the step passed none, and a base for `extends` either way);
   (i) the identity vectors agree with other readers and writers: every JSON output case that
       identity.md section 5 says Python's json.dumps writes the same is written the same, and
       every reserved-marker case is refused (or read) by the YAML reader as by the JSON reader;
@@ -31,9 +31,10 @@ It prints one line per check and exits non-zero when any check fails:
       a paid built-in's of the standard library (or agent.turn, the engine's own); every feature
       is in its capability's feature table; every contract's adapter and adapter_behavior are
       the ones the built-in adapters table of spec/providers.md section 2 gives its capability
-      and provider, whose every reference exists and heads with the same contracts; and the
-      guide's table of built-in routes (docs/guide/05-running.md) lists every route under its
-      capability with the table's prices;
+      and provider, whose every reference exists and heads with the same contracts, and which
+      tools/digest.py's own copy (BUILT_IN_ADAPTERS, which completes a contract) agrees with;
+      and the guide's table of built-in routes (docs/guide/05-running.md) lists every route
+      under its capability with the table's prices;
   (k) the planner's feature vocabulary (crates/grida-fx-core/src/expand/features.json) lists, for
       every capability section of spec/capabilities.md and no other, exactly its feature table;
       and each name it renames is one spec/providers.md section 4 drops, is a feature of no
@@ -571,7 +572,7 @@ def check_expected_graphs(gate: Gate) -> None:
             command += ["--project", str(project)]
             for route_file in routes:
                 command += ["--routes", str(project / route_file)]
-            if not routes and DEFAULT_ROUTES.is_file():
+            if DEFAULT_ROUTES.is_file():
                 command += ["--builtin-routes", str(DEFAULT_ROUTES)]
             done = subprocess.run(command, capture_output=True, text=True, timeout=120)
             output = (done.stdout + done.stderr).strip().splitlines()
@@ -714,6 +715,28 @@ def _check_adapter_references(rows: dict[tuple[str, str], tuple[str, str, str]])
     return problems
 
 
+def _check_digest_adapters(rows: dict[tuple[str, str], tuple[str, str, str]]) -> list[str]:
+    """digest.py's copy of the built-in adapters names each row's adapter and behaviour."""
+    problems: list[str] = []
+    ours = digest.BUILT_IN_ADAPTERS
+    for key in sorted(set(rows) | set(ours)):
+        capability, provider = key
+        if key not in ours:
+            problems.append(f"{capability} on {provider}: not in digest.py's table")
+            continue
+        if key not in rows:
+            problems.append(f"{capability} on {provider}: in digest.py's table only")
+            continue
+        adapter, behavior = ours[key]
+        contract = {"adapter": adapter, "adapter_behavior": behavior}
+        if adapter != rows[key][0]:
+            problems.append(f"{capability} on {provider}: digest.py names {adapter}")
+        problem = _behavior_problem(contract, rows[key][1])
+        if problem:
+            problems.append(f"{capability} on {provider}: digest.py {problem}")
+    return problems
+
+
 def _same_amount(text: str, value: Any) -> bool:
     from decimal import Decimal
 
@@ -779,6 +802,11 @@ def check_default_routes(gate: Gate, schemas: dict[str, Any]) -> None:
         "j",
         f"spec/providers.md section 2: {len(adapters)} built-in adapters and their references",
         _check_adapter_references(adapters),
+    )
+    gate.result(
+        "j",
+        "tools/digest.py: its table of built-in adapters is spec/providers.md section 2",
+        _check_digest_adapters(adapters),
     )
     guide = GUIDE / "05-running.md"
     rows = _guide_rows(guide.read_text(encoding="utf-8")) if guide.is_file() else []

@@ -1,6 +1,6 @@
 # Identity
 
-Every cache in FX is keyed by a content identity. This document defines each one exactly, so that any implementation (the Rust engine, the independent checker in `tools/digest.py`, a future one) computes the same bytes and the same digests. A change here is a change to every cache: it needs a new `kind` version and a migration note.
+Every cache in FX is keyed by a content identity. This document defines each one exactly, so that any implementation (the Rust engine, the independent checker in `tools/digest.py`, a future one) computes the same bytes and the same digests. A change here is a change to every cache: it needs a new `kind` version and a migration note. The one exception is the route contract's completion (§7), which kept `fx-route-v1` because it moved no built-in fingerprint.
 
 The words MUST, MUST NOT and SHOULD are used as in RFC 2119.
 
@@ -140,7 +140,7 @@ route_fingerprint = digest({
   "capability": capability,
   "model": model,
   "provider": provider,
-  "contract": contract,   // the route's declared contract object, {} when none
+  "contract": contract,   // the route's contract object, completed as below; {} when none
 })
 ```
 
@@ -152,6 +152,19 @@ Price, features, input-picture limits, concurrency and pacing are not part of it
 3. each `--routes` file, in the order given.
 
 A later table's entry for the same capability and route replaces an earlier one, contract included; this is how a project overrides a built-in price. Two entries for the same capability and route within one table are refused.
+
+**The contract.** A route's contract is the object its entry declares, `{}` when none, completed when the table is read, in this order:
+
+1. **`extends`.** An entry may name, in `extends`, another route of the same capability and provider, its base. The entry starts from the base's price, features, `max_input_pictures`, `concurrency`, `requests_per_minute` and contract. A member the entry states replaces the base's whole, except `contract`, whose members merge one level deep: a member the entry's contract states replaces the base's member of that name, and the base's other members stay. With a base, `price` may be left out.
+   - The base is an entry already read, else the built-in default table's entry, which serves as a base even when a `--routes` file leaves that table out of the catalog. An entry already read is an earlier entry of the same table, else the entry in force in the catalog built so far, so it wins over a built-in entry of the same route. An entry may name its own route, to restate the entry it replaces.
+   - The base is copied as it is when the entry is read: a later table that replaces the base changes no route that extended it.
+   - `extends` itself is never hashed: an entry that extends a route and one that states the same members are the same route.
+   - A base on another provider, or one that no table read so far holds for the entry's capability, is refused while the table is read.
+2. **The serving adapter's identity.** Where one of FX's adapters serves the route's capability and provider ([providers.md](providers.md) §2), a contract that leaves out `adapter` gets that adapter's name, and one that leaves out `adapter_behavior` and whose `adapter` is that name gets that adapter's behaviour, typed exactly as that table writes it: the string `"1"` and the number `1` are different contracts. A member whose value is `null` counts as left out. A contract that names another `adapter` gets no behaviour. A route on a capability and provider no adapter of FX's serves keeps its contract as completed by step 1, even on a provider other capabilities of which FX serves (`vision.review` on `gg`).
+
+Every route of the built-in table names both members, so step 2 changes none of their fingerprints.
+
+Up to and including the 0.6.1 release, the contract was hashed as the entry declared it, and `extends` did not exist. Records made under that rule are not rewritten. A project route whose capability and provider one of FX's adapters serves, and whose contract left out `adapter` (or set it to `null`), or named that adapter and left out `adapter_behavior` (or set it to `null`), now has another fingerprint. Its steps miss the result cache once and run again, and its paid calls miss the call cache, since a call key holds the route fingerprint (§9), and are paid again. The plan digest holds the fingerprints too (§10), so resuming a run folder planned under the old rule is refused: start a new run. The kind stays `fx-route-v1`, the one exception to the rule at the top of this document: every built-in fingerprint is unchanged, and the routes that move are exactly the ones step 2 fills in.
 
 ## 8. Step identity
 
@@ -256,7 +269,7 @@ not exist yet.
 
 ## 14. Worked examples
 
-Each example gives the object, its canonical bytes and its digest. The same examples are in `vectors/identity/examples.json`, and `tools/digest.py --check-examples` reproduces every one.
+Each example gives the object, its canonical bytes and its digest. The same examples are in `vectors/identity/examples.json`, and `tools/digest.py --check-examples` reproduces every one. How a route's contract is completed (§7) cannot be seen in a hashed object, so `vectors/identity/routes.json` pins it from the tables a reader is given: a route `img-a@gg` serving `image.generate`, declared with no contract, has the contract `{"adapter":"gg-image","adapter_behavior":"1"}` and the fingerprint `7f6238d4aa013ab3e87587914c9ee915b141d33a2432a8ff1f3a361874901b95`.
 
 **A file.** The 8 bytes `one\ntwo\n`:
 

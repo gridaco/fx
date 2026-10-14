@@ -30,18 +30,19 @@
 //! <id>)`, the body's `request_id`, else the response's request-id header, when it is a safe id),
 //! so a person can find the job.
 //!
-//! Collect outcomes (spec/adapters.md §6): a handle this adapter did not write is `Unreachable`
-//! with nothing requested. Failed status and result reads (a transport failure, 408, 429, a 5xx, a
-//! body that is not a JSON object) are polls that saw nothing. A 401, 403 or 3xx is `Unreachable`;
-//! another 4xx is `Ended`; a status with a truthy `error` is `Ended`; the deadline is
-//! `Unreachable`. A result without an https video is `Ended`. The download is made once: a
-//! transport failure, a 3xx, 401, 403, 408, 429, a 5xx or another status outside 2xx and 4xx is
-//! `Unreachable` (a later collect reads the result and downloads again); another 4xx, a body over
-//! the cap, empty or without the MP4 signature, or a clip with no video stream is `Ended`. An
-//! `Ended` after the result read comes from a job fal finished, so it costs that read's
-//! `usage.cost`, as an answer would; every other `Ended` reports no cost (`None`), so the run that
-//! submitted the job charges its whole hold. The bytes decide the kind: a `content-type` header
-//! and the result's `content_type` are not read.
+//! Collect outcomes (spec/adapters.md §6): a route of another capability or another contract
+//! `adapter`, or a handle this adapter did not write, is `Unreachable` with nothing requested; the
+//! route's `adapter_behavior` is not read, as up to FX 0.6.1. Failed status and result reads (a
+//! transport failure, 408, 429, a 5xx, a body that is not a JSON object) are polls that saw
+//! nothing. A 401, 403 or 3xx is `Unreachable`; another 4xx is `Ended`; a status with a truthy
+//! `error` is `Ended`; the deadline is `Unreachable`. A result without an https video is `Ended`.
+//! The download is made once: a transport failure, a 3xx, 401, 403, 408, 429, a 5xx or another
+//! status outside 2xx and 4xx is `Unreachable` (a later collect reads the result and downloads
+//! again); another 4xx, a body over the cap, empty or without the MP4 signature, or a clip with no
+//! video stream is `Ended`. An `Ended` after the result read comes from a job fal finished, so it
+//! costs that read's `usage.cost`, as an answer would; every other `Ended` reports no cost
+//! (`None`), so the run that submitted the job charges its whole hold. The bytes decide the kind: a
+//! `content-type` header and the result's `content_type` are not read.
 
 use super::FalClients;
 use crate::BoxFuture;
@@ -61,6 +62,12 @@ pub use crate::checks::ClipFacts;
 
 /// The contract `adapter` this adapter serves.
 pub const CONTRACT_ADAPTER: &str = "fal-queue";
+
+/// The contract this adapter serves: [`CONTRACT_ADAPTER`], and `adapter_behavior` the number 1.
+pub const IDENTITY: Identity = Identity {
+    adapter: CONTRACT_ADAPTER,
+    behavior: "1",
+};
 
 /// The submit's deadline.
 pub const SUBMIT_DEADLINE: Duration = Duration::from_secs(300);
@@ -396,8 +403,7 @@ impl FalVideo {
     /// Steps 1 to 5 of spec/adapters.md §4, then the submit request (module doc).
     fn prepare(&self, call: &CallRequest) -> Result<HttpRequest, String> {
         let client = &self.clients.queue;
-        if let Some(refusal) = super::contract_refusal(call, CONTRACT_ADAPTER, &["video.generate"])
-        {
+        if let Some(refusal) = super::contract_refusal(call, &IDENTITY, &["video.generate"]) {
             return Err(refusal);
         }
         crate::capabilities::check_request(&call.route.capability, &call.request)?;
@@ -483,9 +489,13 @@ impl FalVideo {
         let unreachable = |text: &str| Collected::Unreachable {
             reason: client.reason(text),
         };
-        if let Some(refusal) = super::contract_refusal(call, CONTRACT_ADAPTER, &["video.generate"])
+        // The capability and `adapter` alone, as up to FX 0.6.1: the call's key fixed the
+        // contract when the job was submitted (spec/adapters.md §4), so a job submitted then on a
+        // route naming another behaviour is still collected.
+        if call.route.capability != "video.generate"
+            || !crate::checks::serves(&call.route.contract, IDENTITY.adapter, |_| true)
         {
-            return unreachable(&refusal);
+            return unreachable(&crate::checks::not_served(&call.route));
         }
         let Some(job) = Job::from_handle(handle) else {
             return unreachable("a fal video job handle is not one this adapter wrote");
@@ -776,7 +786,7 @@ impl LongJob for FalVideo {
     }
 
     fn identity(&self) -> Option<Identity> {
-        Some(super::identity(CONTRACT_ADAPTER))
+        Some(IDENTITY)
     }
 }
 

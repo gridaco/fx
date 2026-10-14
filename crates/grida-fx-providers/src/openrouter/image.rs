@@ -42,7 +42,7 @@ pub const CONTRACT_ADAPTER: &str = "fx-openrouter-image-v1";
 /// The contract this adapter serves: [`CONTRACT_ADAPTER`], and `adapter_behavior` the text `"3"`.
 pub const IDENTITY: Identity = Identity {
     adapter: CONTRACT_ADAPTER,
-    behavior: Some(r#""3""#),
+    behavior: r#""3""#,
 };
 
 /// The exact sizes the route returns exactly.

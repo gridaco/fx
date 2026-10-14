@@ -376,6 +376,55 @@ fn catalogs_combine_in_order() {
 }
 
 #[test]
+fn extends_reaches_the_catalog_so_far_then_the_built_in_table() {
+    // identity.md §7: load_catalog hands each table the catalog so far, then the built-in table,
+    // which serves as a base even when a --routes file leaves it out of the catalog.
+    let folder = tempfile::tempdir().unwrap();
+    let root = folder.path().to_path_buf();
+    std::fs::write(
+        root.join("project.yaml"),
+        "fx: routes/v1\nroutes:\n  - { capability: image.generate, route: img-a@acme, price: { usd: 0.04 }, contract: { quality: high } }\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("extra.yaml"),
+        "fx: routes/v1\nroutes:\n  - { capability: image.generate, route: img-b@acme, extends: img-a@acme }\n  - { capability: mesh.rig, route: rig-b@acme, extends: rig-a@acme, contract: { endpoint: b } }\n",
+    )
+    .unwrap();
+    let project = Project {
+        root: root.clone(),
+        document: ProjectDoc {
+            route_tables: vec!["project.yaml".into()],
+            ..ProjectDoc::default()
+        },
+        has_file: true,
+    };
+    let builtin = RouteTable::from_document(
+        &json!({"fx": "routes/v1", "routes": [
+            {"capability": "image.generate", "route": "img-a@acme", "price": {"usd": 0.09}, "contract": {"quality": "low"}},
+            {"capability": "mesh.rig", "route": "rig-a@acme", "price": {"usd": 0.5}, "contract": {"endpoint": "a", "check": true}},
+        ]}),
+        "built-in",
+    )
+    .unwrap();
+    let catalog = load_catalog(
+        &project,
+        &builtin,
+        &[(root.join("extra.yaml"), "extra.yaml".into())],
+    )
+    .unwrap();
+    // The project's entry, which replaced the built-in one, is the base.
+    let image = catalog.resolve("image.generate", "img-b@acme").unwrap();
+    assert_eq!(image.price.high, Usd(40_000));
+    assert_eq!(image.contract, json!({"quality": "high"}));
+    // A route only the built-in table holds is a base under --routes, though not in the catalog.
+    assert!(catalog.resolve("mesh.rig", "rig-a@acme").is_err());
+    let rig = catalog.resolve("mesh.rig", "rig-b@acme").unwrap();
+    assert_eq!(rig.price.high, Usd(500_000));
+    assert_eq!(rig.contract, json!({"endpoint": "b", "check": true}));
+}
+
+#[test]
 fn the_built_in_catalog() {
     let all = builtins();
     assert_eq!(all.len(), 37);

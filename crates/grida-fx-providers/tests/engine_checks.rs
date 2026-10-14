@@ -79,14 +79,7 @@ fn every_adapter_names_the_contract_spec_providers_2_gives_it() {
             .identity()
             .unwrap_or_else(|| panic!("{capability} on {provider} names no contract"));
         assert_eq!(identity.adapter, adapter, "{capability} on {provider}");
-        match identity.behavior {
-            Some(served) => assert_eq!(served, behavior, "{capability} on {provider}"),
-            // spec/providers.md §2: fal's and Tripo's adapters check only `adapter`.
-            None => assert!(
-                ["fal", "tripo"].contains(&provider.as_str()),
-                "{capability} on {provider} checks no behaviour"
-            ),
-        }
+        assert_eq!(identity.behavior, behavior, "{capability} on {provider}");
     }
 }
 

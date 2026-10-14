@@ -27,6 +27,12 @@ pub const LABEL: &str = "fal background removal";
 /// The contract `adapter` this adapter serves.
 pub const CONTRACT_ADAPTER: &str = "fal-run-birefnet";
 
+/// The contract this adapter serves: [`CONTRACT_ADAPTER`], and `adapter_behavior` the number 1.
+pub const IDENTITY: Identity = Identity {
+    adapter: CONTRACT_ADAPTER,
+    behavior: "1",
+};
+
 /// The POST and any download together.
 pub const DEADLINE: Duration = Duration::from_secs(300);
 
@@ -52,9 +58,7 @@ impl FalBackground {
     /// Steps 1 to 5 of spec/adapters.md §4, then the request (module doc).
     fn prepare(&self, call: &CallRequest) -> Result<HttpRequest, String> {
         let client = &self.clients.run;
-        if let Some(refusal) =
-            super::contract_refusal(call, CONTRACT_ADAPTER, &["background.remove"])
-        {
+        if let Some(refusal) = super::contract_refusal(call, &IDENTITY, &["background.remove"]) {
             return Err(refusal);
         }
         crate::capabilities::check_request(&call.route.capability, &call.request)?;
@@ -133,6 +137,6 @@ impl RequestAdapter for FalBackground {
     }
 
     fn identity(&self) -> Option<Identity> {
-        Some(super::identity(CONTRACT_ADAPTER))
+        Some(IDENTITY)
     }
 }
