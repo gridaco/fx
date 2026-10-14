@@ -32,9 +32,10 @@ It prints one line per check and exits non-zero when any check fails:
       is in its capability's feature table; every contract's adapter is one the built-in
       adapters tables of spec/providers.md section 2 give its capability and provider (the
       first table their defaults, one per pair; the second the adapters a route must name),
-      with that row's adapter_behavior; every reference those tables link exists and heads
-      with the same contracts, and tools/digest.py's own copy (BUILT_IN_ADAPTERS, which
-      completes a contract) agrees with them, defaults included;
+      with that row's adapter_behavior; every reference those tables and the family table
+      link exists and heads with the same contracts, and tools/digest.py's own copies
+      (BUILT_IN_ADAPTERS and FAMILY_ADAPTERS, which complete a contract) agree with them,
+      defaults included;
       and the guide's table of built-in routes (docs/guide/05-running.md) lists every route
       under its capability with the table's prices;
   (k) the planner's feature vocabulary (crates/grida-fx-core/src/expand/features.json) lists, for
@@ -667,19 +668,24 @@ _REFERENCE_ROW = re.compile(
 )
 
 
-def _builtin_adapters(text: str) -> dict[tuple[str, str, str], tuple[str, str, bool]]:
+def _builtin_adapters(
+    text: str, families: bool = False
+) -> dict[tuple[str, str, str], tuple[str, str, bool]]:
     """spec/providers.md section 2: (capability, provider, adapter) -> (behaviour, reference,
     default), the behaviour as its cell writes it (`"1"` or `1`); a row of the first table is its
-    pair's default, one of the second is not."""
+    pair's default, one of the second is not. With `families`, the rows of the family table
+    instead, its family in the provider's place, each a default."""
     rows: dict[tuple[str, str, str], tuple[str, str, bool]] = {}
     tables = 0
+    family = False
     for line in _section(text, "The built-in adapters").splitlines():
         if line.startswith("| Provider | Capability |"):
             tables += 1
+        family = family or line.startswith("| Family | Capability |")
         row = _ADAPTER_ROW.match(line)
-        if row:
+        if row and family == families:
             provider, capability, adapter, behavior, reference = row.groups()
-            rows[(capability, provider, adapter)] = (behavior, reference, tables == 1)
+            rows[(capability, provider, adapter)] = (behavior, reference, family or tables == 1)
     return rows
 
 
@@ -743,6 +749,28 @@ def _check_digest_adapters(rows: dict[tuple[str, str, str], tuple[str, str, bool
             problems.append(f"{where}: digest.py {problem}")
         if default != rows[key][2]:
             problems.append(f"{where}: digest.py says default is {default}")
+    return problems
+
+
+def _check_digest_families(rows: dict[tuple[str, str, str], tuple[str, str, bool]]) -> list[str]:
+    """digest.py's copy of the family adapters names each row of the family table."""
+    problems: list[str] = []
+    ours = {
+        (capability, family, adapter): behavior
+        for (family, capability), (adapter, behavior) in digest.FAMILY_ADAPTERS.items()
+    }
+    for key in sorted(set(rows) | set(ours)):
+        capability, family, adapter = key
+        where = f"{adapter} for {capability} of the {family} family"
+        if key not in ours:
+            problems.append(f"{where}: not in digest.py's table")
+            continue
+        if key not in rows:
+            problems.append(f"{where}: in digest.py's table only")
+            continue
+        problem = _behavior_problem({"adapter_behavior": ours[key]}, rows[key][0])
+        if problem:
+            problems.append(f"{where}: digest.py {problem}")
     return problems
 
 
@@ -811,15 +839,19 @@ def check_default_routes(gate: Gate, schemas: dict[str, Any]) -> None:
         "standard library and spec/providers.md",
         problems,
     )
+    families = _builtin_adapters(providers_md, families=True)
     gate.result(
         "j",
-        f"spec/providers.md section 2: {len(adapters)} built-in adapters and their references",
-        _check_adapter_references(adapters),
+        f"spec/providers.md section 2: {len(adapters)} built-in adapters, {len(families)} family "
+        "adapters and their references",
+        _check_adapter_references({**adapters, **families})
+        + ([] if families else ["spec/providers.md section 2 has no table of family adapters"]),
     )
     gate.result(
         "j",
-        "tools/digest.py: its table of built-in adapters is spec/providers.md section 2",
-        _check_digest_adapters(adapters),
+        "tools/digest.py: its tables of built-in and family adapters are spec/providers.md "
+        "section 2",
+        _check_digest_adapters(adapters) + _check_digest_families(families),
     )
     guide = GUIDE / "05-running.md"
     rows = _guide_rows(guide.read_text(encoding="utf-8")) if guide.is_file() else []

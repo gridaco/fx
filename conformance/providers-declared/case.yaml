@@ -1,16 +1,23 @@
 # A project that declares providers (providers.md §1): `acme`, with its key's variable and
 # header, a base URL its own variable moves, download hosts and a family, and `local`, a keyless
 # server on this machine. A declaration is configuration, not identity: the workflow on an acme
-# route plans, and expands to the same graph with and without the declarations (expand.json,
-# saved twice). doctor lists each declared provider after the built-in keys, with its base URL's
-# host and where its key comes from. A declaration that takes a name FX ships, a variable a
-# built-in reads, one FX or the programs it starts read for themselves (in any letter case), or a
-# plain-http default base URL off this machine is refused while fx.yaml is read (exit 2).
+# image route plans, and expands to the same graph with and without the declarations (expand.json,
+# saved twice). Only a family reaches a fingerprint (identity.md §7): the chat workflow's
+# structured.generate route on acme, declared without a contract, is completed with the
+# openai-compatible family's adapter (expand-chat.json), and keeps its bare contract's fingerprint
+# once acme is no longer declared. doctor lists each declared provider after the built-in keys,
+# with its base URL's host and where its key comes from. A declaration that takes a name FX ships,
+# a variable a built-in reads, one FX or the programs it starts read for themselves (in any letter
+# case), or a plain-http default base URL off this machine is refused while fx.yaml is read
+# (exit 2).
 steps:
 - argv: [plan, case, --routes, routes.yaml]
   save: plan.txt
 - argv: [expand, case, --routes, routes.yaml]
   save: expand.json
+  json: true
+- argv: [expand, chat, --routes, routes.yaml]
+  save: expand-chat.json
   json: true
 - argv: [doctor]
   mentions:
@@ -24,6 +31,11 @@ steps:
   argv: [expand, case, --routes, routes.yaml]
   save: expand.json
   json: true
+- argv: [expand, chat, --routes, routes.yaml]
+  mentions:
+  - b84a7f3e9926f76c4c628e5bfb6cf513d87f0e570b13a65c954113c5c171a055
+  never_mentions:
+  - c349af10e0a600f63fef6013c88dc88926acf949c5bcade06c74bc4563217099
 - files:
     fx.yaml: |
       fx: project/v1

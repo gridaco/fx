@@ -35,8 +35,9 @@
 //!      variable in its place);
 //!   3. `grida_fx_providers::live::live_setup` over the default transport, or over the `Offline`
 //!      transport when `GRIDA_FX_NETWORK=off` (every exchange is refused before it leaves);
-//!   4. every provider's adapters on that setup (`live::adapters`), registered whether or not
-//!      their key is present: a call without its key is refused before sending.
+//!   4. every provider's adapters on that setup (`live::adapters`), a family's for each provider
+//!      the planning project declares with one included, registered whether or not their key is
+//!      present: a call without its key is refused before sending.
 //!
 //!   A `.env` or base-URL refusal is a usage error (exit 2) whose message names the variable or
 //!   the `.env` line, never a value; building the adapters prints nothing.

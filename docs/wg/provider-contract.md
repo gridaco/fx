@@ -650,17 +650,72 @@ is under `/var`, a link to `/private/var`, so the gate needs it on macOS.
 
 ### M9. OpenAI-compatible providers
 
-- [ ] Spec: the `openai-compatible` family serves `structured.generate` and `agent.turn` over
+- [x] Spec: the `openai-compatible` family serves `structured.generate` and `agent.turn` over
   `{base}/chat/completions`.
   - Errors map through the default status table, never `Some(0)`.
   - Cost is `None`, so the hold or the cap is charged.
   - Contract adapters are `openai-compatible-structured` and `openai-compatible-tool-loop`,
     behaviour `1`.
-- [ ] Registered from declarations, on the shared chat module.
-- [ ] A replay test: a made-up declared `acme` answers both capabilities.
-- [ ] An `llms.txt` recipe: a declared provider, planned offline.
+  - `providers.md` §1 (the family serves the provider's two chat capabilities; only a `family`
+    reaches a fingerprint) and §2, a third table, `| Family | Capability | …`, with the two
+    adapters, each its capability's default on every provider the planning project declares with
+    the family; `adapters.md` §1 (registration from declarations; a stand-in run's adapters are
+    built for FX's declarations only, so a declared route gets its capability's every-route
+    check, all the family checks); the `family` description in `fx-project-v1`. The reference is
+    `crates/grida-fx-providers/src/openai_compatible/README.md`.
+  - Code fact: the behaviour is the number `1`, as every route outside images carries it
+    (`tests/routes.rs`); the string `"1"` is another fingerprint.
+  - The fill extends to declared families (R7; the Default on a route without a contract):
+    `identity.md` §7 step 2 completes a declared provider's route from its family's adapters,
+    keyed on the planning project's declarations, never on a provider's name, so an undeclared
+    `acme` route, in conformance and in `identity.md`'s worked examples, does not move. Core's
+    `routes::FAMILY_ADAPTERS`; `complete_contract` and `parse_table` take the declarations
+    (`load_catalog` passes the project's, `RouteTable::from_document` FX's own,
+    `RouteTable::from_document_over` the caller's). `digest.py` keeps `FAMILY_ADAPTERS` and reads
+    `fx.yaml`'s `providers:` for `--check-graph`; route vectors take a case's `providers`, with
+    three new cases; `check_spec` (j) holds the family table, its reference and digest.py's copy.
+    No built-in fingerprint moved.
+  - The wire (the Default on a generic adapter's wire): only what OpenAI's Chat Completions
+    reference names and FX's two capabilities need: `model`, `messages`, `max_tokens` (the
+    request's, else 16,000 on a structured call), a strict `json_schema` response format or
+    strict function tools, and `tool_choice`. Contract members: `adapter`, `adapter_behavior`,
+    `provider_options`; structured pictures are always reduced (there is no `pictures:
+    unchanged`), a turn's pictures go as they are, and no picture carries a `detail`. Owned:
+    every body member, `max_completion_tokens` (it restates `max_tokens`), `stream`, `n`, and the
+    other chat capability's members that would change what it reads in the answer (`tools` and
+    `tool_choice` on structured output, `response_format` on a turn), as OpenRouter's.
+  - Labels `<name> structured generation` and `<name> tool loop`; deadlines 1800 s and 600 s; a
+    16 MiB response cap and a 200 MiB body cap (OpenRouter's chat precedent). A redirect names
+    the declaration's base-URL variable, else `providers.<name>.base_url`. Token usage is
+    recorded: GG's reader moved to `chat::usage`, a small extraction.
+- [x] Registered from declarations, on the shared chat module.
+  - Code fact: no registry site needed new plumbing. `live::adapters` reads the declarations the
+    setup's `Keys` carry (M8), so the engine (`adapters_for`) and doctor's `uses` and `route`
+    lines get the planning project's; the stand-in checks keep FX's own (above).
+    `openai_compatible::register` adds both adapters per declaration of the family, after FX's.
+    `Setup::declared_client` and `Client::optional_credential` (none for a keyless declaration).
+  - The shared chat module gained `chat::completions_request`, `chat::structural` and
+    `chat::usage` (OpenRouter's and GG's, moved, with no byte or sentence changed);
+    `wire::with_request_id` is OpenRouter's. A new `classify` follows `adapters.md` §3.3 as
+    written: no adapter had a shared default-table classifier.
+- [x] A replay test: a made-up declared `acme` answers both capabilities.
+  - `tests/openai_compatible.rs`: both answers from the registry a live run builds (exact bodies,
+    cost `None`, usage), a keyless `local` sent no credential, the base-URL variable, refusals in
+    order, provider options, every status and structural failure. The engine-check matrix
+    (`tests/engine_checks.rs`) now registers a declared `acme`, so it covers the family. Also a
+    retry-owner test (each attempt charged the whole cap, a reported cost ignored), a CLI test (a
+    live run with the network off reaches the adapter; undeclared, `no adapter serves`), doctor
+    (`no key (ACME_API_KEY)`, then `servable`), and `conformance/providers-declared`, which gains
+    a chat workflow: its filled fingerprint (`expand-chat.json`, checked by digest.py through
+    `check_spec` (h)) and the bare one once `acme` is no longer declared. No other expected file
+    moved.
+- [x] An `llms.txt` recipe: a declared provider, planned offline.
+  - "A provider FX does not ship, from a declaration alone"; M11 does not repeat it. Also
+    `llms.txt`'s routes section and errors table, guide page 13 ("An OpenAI-compatible
+    provider"), `AGENT_READINESS.md` (AR-20, still Proposed) and the conformance README.
 
-Gate: `cargo test`, `check_llms`.
+Gate: `cargo test`, `check_llms`, and, since the fill reaches identity, `check_spec`, conformance
+and `pytest`.
 
 ### M10. Project adapters in Python and TypeScript
 
@@ -692,7 +747,7 @@ Gate: the whole verification list, `check_host` included.
 
 - [ ] Guide page 13, "Use a model or provider FX does not ship"; caps in page 04; routes in
   page 05.
-- [ ] `llms.txt`: recipes for a new model and a declared provider; the errors table.
+- [ ] `llms.txt`: a recipe for a new model (M9 wrote the declared provider's); the errors table.
 - [ ] `skills/grida-fx` and its onboarding reference.
 - [ ] `AGENT_READINESS.md`: AR-20 Current, with its evidence.
 - [ ] The follow-ups written up on this page, ready to file when the owner asks.
@@ -800,7 +855,23 @@ when the owner asks.
   `accept-encoding`, which `transport/http.rs` sets itself;
 - the redirect sentences' variables: `gg::BASE_URL_VARIABLE`, `elevenlabs::BASE_URL_VARIABLE`,
   fal's `RUN_BASE_VARIABLE`, OpenAI's `BASE_URL_VARIABLE` and OpenRouter's literal restate the
-  declarations' base-URL variables.
+  declarations' base-URL variables;
+- a 408 from an OpenAI-compatible server: the family follows `adapters.md` §3.3, so a 408 is
+  `NotReceived` and resent under the same attempt, unbilled, while FX's OpenAI and OpenRouter
+  adapters treat their providers' 408 as a timeout after the request arrived (`Failed { cost:
+  None, retryable: true }`); a server whose 408 means the same is resent without a bill;
+- family contract options: the family's contract takes only `adapter`, `adapter_behavior` and
+  `provider_options`, so a route cannot ask for a picture `detail`, a reasoning effort or
+  `pictures: unchanged`, and the token limit is always `max_tokens`: the family owns
+  `max_completion_tokens`, so a server that takes only that name cannot be given a limit;
+- a declared provider's refusals and costs: every 4xx but 408 and 429 costs `None`, so a server
+  that refuses a request it never ran (a `json_schema` response format it does not take, say) is
+  charged the whole hold or cap, and a reported cost (`usage.cost`) is never read; a declaration
+  has no member to say either;
+- stand-in checks for declared providers: `StandInChecks::new` builds its registry with
+  `Keys::none()`, FX's declarations only, so a declared route's stand-in answer gets the
+  every-route check; that is what the family checks, but an adapter of M10 with a check of its
+  own would be skipped.
 
 **gridaco/models**, gaps found against `v1.20261013.6`:
 - no answer shapes for fal's endpoints (only `grida` bindings have `result_schema_url`);

@@ -16,8 +16,8 @@ the examples file. --check-graph builds the route catalog of identity.md section
 built-in default table (--builtin-routes, the engine's routes/default.yaml, read as a plain route
 table and left out of the catalog when a --routes file is given, though an entry may still extend
 one of its routes), fx.yaml's route_tables, and then each --routes file, completing each contract
-as section 7 says. Without --builtin-routes the built-in table is unknown here, and a route found
-in no table is a note, not a failure.
+as section 7 says, with the families fx.yaml's providers declare. Without --builtin-routes the
+built-in table is unknown here, and a route found in no table is a note, not a failure.
 
 Only the standard library is needed, plus PyYAML when a YAML file (a route table, fx.yaml,
 fx.lock) has to be read.
@@ -461,11 +461,27 @@ BUILT_IN_ADAPTERS: dict[tuple[str, str, str], tuple[Any, bool]] = {
     ("image.edit", "fal", "fx-fal-image-v1"): ("1", False),
 }
 
+# spec/providers.md section 2, its third table: the adapters of each family a declaration may
+# name, by family and capability, each the default of its capability on a provider declared with
+# that family: its contract `adapter` and `adapter_behavior`. tools/check_spec.py holds this copy
+# to that table.
+FAMILY_ADAPTERS: dict[tuple[str, str], tuple[str, Any]] = {
+    ("openai-compatible", "structured.generate"): ("openai-compatible-structured", 1),
+    ("openai-compatible", "agent.turn"): ("openai-compatible-tool-loop", 1),
+}
 
-def complete_contract(capability: str, provider: str, contract: dict[str, Any]) -> dict[str, Any]:
+
+def complete_contract(
+    capability: str,
+    provider: str,
+    contract: dict[str, Any],
+    families: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """Step 2 of identity.md section 7: where FX's adapters serve the capability and provider, a
     left-out or null `adapter` becomes the name of the pair's default, then a left-out or null
-    `adapter_behavior` the behaviour of the pair's adapter `adapter` names."""
+    `adapter_behavior` the behaviour of the pair's adapter `adapter` names. A provider FX does not
+    ship is completed the same way from the adapters of the family `families` (the planning
+    project's declarations: provider -> family) give it, never from its name."""
     completed = dict(contract)
     behaviors: dict[str, Any] = {}
     default = None
@@ -474,6 +490,11 @@ def complete_contract(capability: str, provider: str, contract: dict[str, Any]) 
             behaviors[adapter] = behavior
             if is_default:
                 default = adapter
+    family = (families or {}).get(provider)
+    served = FAMILY_ADAPTERS.get((family, capability)) if family is not None else None
+    if default is None and served is not None:
+        default = served[0]
+        behaviors[default] = served[1]
     if default is None:
         return completed
     if completed.get("adapter") is None:
@@ -953,7 +974,7 @@ def check_route_vectors(path: Path) -> list[str]:
         try:
             builtin = RouteTable()
             builtin.read(case.get("builtin", []), "builtin")
-            catalog = RouteTable()
+            catalog = RouteTable(declared_families(case.get("providers")))
             if not case.get("routes_given"):
                 catalog.entries.update(builtin.entries)
             for index, table in enumerate(case["tables"]):
@@ -1006,12 +1027,14 @@ class RouteTable:
     Tables are loaded in catalog order. A later table's entry for a capability and route
     replaces an earlier one, contract included; two entries for one capability and route within
     one table are refused. Each entry's contract is completed as it is read: its `extends` base's
-    members first, then the serving adapter's identity (BUILT_IN_ADAPTERS). Only contracts are
-    kept, since nothing else of a route is hashed.
+    members first, then the serving adapter's identity (BUILT_IN_ADAPTERS, else FAMILY_ADAPTERS
+    for a provider `families` gives a family). Only contracts are kept, since nothing else of a
+    route is hashed.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, families: dict[str, str] | None = None) -> None:
         self.entries: dict[tuple[str, str], tuple[str, dict[str, Any]]] = {}
+        self.families: dict[str, str] = dict(families or {})
 
     def load(self, path: Path, builtin: RouteTable | None = None) -> None:
         document = read_yaml_file(path)
@@ -1049,7 +1072,8 @@ class RouteTable:
             if "extends" in entry:
                 base = self._base(entry["extends"], capability, provider, where, read, builtin)
                 contract = {**base, **contract}
-            read[key] = (where, complete_contract(capability, provider, contract))
+            completed = complete_contract(capability, provider, contract, self.families)
+            read[key] = (where, completed)
         self.entries.update(read)
 
     def _base(
@@ -1080,6 +1104,18 @@ class RouteTable:
     def lookup(self, capability: str, route_id: str) -> tuple[str, dict[str, Any]] | None:
         """(where it was declared, its contract) of the entry in force, or None."""
         return self.entries.get((capability, route_id))
+
+
+def declared_families(providers: Any) -> dict[str, str]:
+    """provider -> family, from fx.yaml's `providers:` (spec/providers.md section 1): each
+    declaration that names a family."""
+    if not isinstance(providers, dict):
+        return {}
+    return {
+        str(name): entry["family"]
+        for name, entry in providers.items()
+        if isinstance(entry, dict) and isinstance(entry.get("family"), str)
+    }
 
 
 def _contains_pending(value: Any) -> bool:
@@ -1178,6 +1214,8 @@ class GraphCheck:
             if listed is not None and not isinstance(listed, list):
                 raise RefusedInput(f"{project_file}: route_tables must be a list", "invalid")
             tables.extend(self.project / str(item) for item in listed or [])
+            if isinstance(document, dict):
+                self.routes.families = declared_families(document.get("providers"))
         tables.extend(route_files)
         for path in tables:
             self.routes.load(path, self.builtin)

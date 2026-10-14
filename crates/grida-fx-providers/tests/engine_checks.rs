@@ -2,12 +2,14 @@
 //! ships: every adapter names the contract spec/providers.md §2 gives it, every built-in route
 //! passes the engine's check, and for every call the engine refuses, the adapter called directly
 //! refuses with the same sentence, so moving the checks to the engine changes no refusal and no
-//! order.
+//! order. A made-up `acme`, declared with the `openai-compatible` family, brings that family's
+//! adapters into the registry.
 
+use grida_fx_core::providers::{BaseUrl, Credential, Declaration, Declarations};
 use grida_fx_providers::adapter::{Adapter, Identity, RouteRef, Sent, Submitted};
 use grida_fx_providers::capabilities::{MemberType, capability};
 use grida_fx_providers::checks;
-use grida_fx_providers::keys::{KeyName, Keys};
+use grida_fx_providers::keys::{Environment, KeyName, Keys};
 use grida_fx_providers::live::adapters;
 use grida_fx_providers::registry::Adapters;
 use grida_fx_providers::routes::default_table;
@@ -17,10 +19,33 @@ use grida_fx_providers::{codex, grok};
 use serde_json::{Map, Value, json};
 use std::sync::Arc;
 
-/// FX's adapters as a live invocation registers them, with no keys, over a transport that fails
-/// any send.
+/// The provider declared with the `openai-compatible` family, and the variable of its key.
+const DECLARED: &str = "acme";
+const DECLARED_KEY: &str = "ACME_API_KEY";
+
+/// FX's adapters as a live invocation registers them, with `acme` declared with the family, with
+/// no keys, over a transport that fails any send.
 fn registry() -> Adapters {
-    adapters(&setup(Arc::new(NoNetwork), Keys::none()))
+    let acme = Declaration {
+        name: DECLARED.into(),
+        label: DECLARED.into(),
+        credential: Some(Credential {
+            variable: DECLARED_KEY.into(),
+            header: "authorization".into(),
+            scheme: "Bearer".into(),
+        }),
+        base_url: BaseUrl {
+            variable: None,
+            default: "https://api.acme.test/v1".into(),
+        },
+        download_hosts: Vec::new(),
+        family: Some("openai-compatible".into()),
+    };
+    let environment = Environment::declared(&[], &Declarations::with(&[acme]));
+    adapters(&setup(
+        Arc::new(NoNetwork),
+        Keys::from_environment(&environment),
+    ))
 }
 
 fn route(capability: &str, provider: &str, contract: Value) -> RouteRef {
@@ -53,7 +78,7 @@ fn read_spec(name: &str) -> String {
 }
 
 /// `(provider, capability, adapter, behaviour as JSON)` for each row of spec/providers.md §2's
-/// two tables, the defaults first.
+/// tables, the defaults first; a family's row on [`DECLARED`].
 fn written_adapters() -> Vec<(String, String, String, String)> {
     let text = read_spec("providers.md");
     let start = text
@@ -63,13 +88,18 @@ fn written_adapters() -> Vec<(String, String, String, String)> {
         .find("\n## 3. ")
         .map_or(text.len(), |at| start + at);
     let code = |cell: &str| cell.trim_matches('`').to_string();
+    let mut family = false;
     text[start..end]
         .lines()
-        .filter(|line| line.starts_with("| `"))
-        .map(|line| {
+        .filter_map(|line| {
+            family |= line.starts_with("| Family | Capability |");
+            line.starts_with("| `").then_some((line, family))
+        })
+        .map(|(line, family)| {
             let cells: Vec<&str> = line.trim_matches('|').split(" | ").map(str::trim).collect();
+            let provider = if family { DECLARED } else { cells[0] };
             (
-                code(cells[0]),
+                code(provider),
                 code(cells[1]),
                 code(cells[2]),
                 code(cells[3]),
@@ -272,6 +302,7 @@ fn later_refusal(provider: &str) -> String {
     match provider {
         "codex" => codex::NOT_INSTALLED.into(),
         "grok" => grok::NOT_INSTALLED.into(),
+        DECLARED => format!("{DECLARED_KEY} is not set"),
         _ => KeyName::of_provider(provider)
             .unwrap_or_else(|| panic!("no key names provider {provider}"))
             .missing(),

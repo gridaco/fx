@@ -432,8 +432,9 @@ pub enum Collected {
 /// its `adapter`, and its `adapter_behavior` as canonical JSON (spec/identity.md §2), such as
 /// `"1"` for the string and `1` for the number. The engine holds each call's route to it before
 /// the adapter sees the call ([`crate::checks::contract`]; spec/adapters.md §4 step 1), and core's
-/// [`grida_fx_core::routes::BUILT_IN_ADAPTERS`], which completes a route's contract when a table is
-/// read (spec/identity.md §7), names the same (`tests/routes.rs`).
+/// [`grida_fx_core::routes::BUILT_IN_ADAPTERS`] and [`grida_fx_core::routes::FAMILY_ADAPTERS`],
+/// which complete a route's contract when a table is read (spec/identity.md §7), name the same
+/// (`tests/routes.rs`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Identity {
     pub adapter: &'static str,

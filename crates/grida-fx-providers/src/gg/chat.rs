@@ -31,7 +31,7 @@
 
 use super::Gateway;
 use crate::BoxFuture;
-use crate::adapter::{Answer, CallRequest, Identity, RequestAdapter, Sent, Usage};
+use crate::adapter::{Answer, CallRequest, Identity, RequestAdapter, Sent};
 use crate::capabilities;
 use crate::chat;
 use crate::checks;
@@ -239,7 +239,7 @@ async fn exchange(
         let message =
             chat::first_message(&body).ok_or_else(|| format!("{label} returned no message"))?;
         let data = answer(message).map_err(|what| format!("{label} {what}"))?;
-        Ok(match usage(&body) {
+        Ok(match chat::usage(&body) {
             Some(usage) => Answer::new(data, None).with_usage(usage),
             None => Answer::new(data, None),
         })
@@ -251,24 +251,6 @@ async fn exchange(
             gateway.charged(failed, &response).await
         }
     }
-}
-
-/// The tokens a completion's `usage` counts, when it counts any: `prompt_tokens` (cache reads
-/// included), `prompt_tokens_details.cached_tokens` and `completion_tokens` (reasoning included).
-fn usage(body: &Map<String, Value>) -> Option<Usage> {
-    let usage = body.get("usage")?.as_object()?;
-    let count = |value: Option<&Value>| value.and_then(Value::as_u64);
-    let counted = Usage {
-        input_tokens: count(usage.get("prompt_tokens")),
-        cached_input_tokens: count(
-            usage
-                .get("prompt_tokens_details")
-                .and_then(|details| details.get("cached_tokens")),
-        ),
-        output_tokens: count(usage.get("completion_tokens")),
-        ..Usage::default()
-    };
-    (counted != Usage::default()).then_some(counted)
 }
 
 /// A structural failure of a 2xx (spec/adapters.md §3.4): billed, retryable.

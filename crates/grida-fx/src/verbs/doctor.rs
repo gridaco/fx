@@ -84,7 +84,8 @@
 //!   servable`, `… no key (<VARIABLE>)`, `… not installed (codex)` (or `(grok)`), `… too old
 //!   (codex <version>; FX needs 0.160.1+)`, `… no version (codex)` or `… no adapter` (no adapter
 //!   of the capability on the provider, or none under the `adapter` the route's contract names),
-//!   as `live::servable` answers over every provider's adapters built on `live::offline_setup`.
+//!   as `live::servable` answers over every provider's adapters built on `live::offline_setup`,
+//!   a family's for each provider the planning project declares with one included.
 
 use crate::cli::DoctorArgs;
 use crate::print::{labelled, print_line};

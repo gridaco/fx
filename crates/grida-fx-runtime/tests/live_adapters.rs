@@ -8,7 +8,8 @@
 //! job records and pacing are the same fakes as `tests/retry.rs`, on paused time.
 
 use grida_fx_core::money::Usd;
-use grida_fx_providers::elevenlabs;
+use grida_fx_core::providers::{BaseUrl, Credential, Declaration, Declarations};
+use grida_fx_providers::keys::Environment;
 use grida_fx_providers::testing::media::{MP3, MP3_FRAME};
 use grida_fx_providers::testing::{setup, test_keys};
 use grida_fx_providers::transport::replay::{
@@ -20,6 +21,7 @@ use grida_fx_providers::transport::{
 use grida_fx_providers::{
     Adapter, Adapters, Answer, BoxFuture, CallRequest, Keys, RequestAdapter, RouteRef,
 };
+use grida_fx_providers::{elevenlabs, live};
 use grida_fx_runtime::calls::engine_check;
 use grida_fx_runtime::calls::pacing::{Admission, Slot};
 use grida_fx_runtime::calls::retry::{
@@ -608,4 +610,94 @@ async fn a_speech_value_out_of_range_is_refused_at_no_cost() {
         rig.book.settlements(),
         vec![(hold_name(1), Some(Usd::ZERO))]
     );
+}
+
+// ---------------------------------------------------------------------------------------------
+// A declared provider of the `openai-compatible` family (spec/providers.md §1, §2)
+
+/// A made-up capped route's cap: what each attempt holds, and is charged, since the family reads
+/// no cost.
+const CAP: Usd = Usd(50_000);
+const ACME_KEY: &str = "test-acme-key";
+
+/// The adapter a live run registers from the declaration of `acme`, a provider of the family, for
+/// `call`'s route.
+fn declared_adapter_for(
+    call: &CallRequest,
+    transport: Arc<dyn Transport>,
+) -> Arc<dyn RequestAdapter> {
+    let acme = Declaration {
+        name: "acme".into(),
+        label: "acme".into(),
+        credential: Some(Credential {
+            variable: "ACME_API_KEY".into(),
+            header: "authorization".into(),
+            scheme: "Bearer".into(),
+        }),
+        base_url: BaseUrl {
+            variable: None,
+            default: "https://api.acme.test/v1".into(),
+        },
+        download_hosts: Vec::new(),
+        family: Some("openai-compatible".into()),
+    };
+    let environment =
+        Environment::declared(&[("ACME_API_KEY", ACME_KEY)], &Declarations::with(&[acme]));
+    let adapters = live::adapters(&setup(transport, Keys::from_environment(&environment)));
+    match adapters.serving(&call.route) {
+        Some(Adapter::Request(adapter)) => Arc::clone(adapter),
+        other => panic!("no request adapter serves {}: {other:?}", call.route.id()),
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_declared_provider_s_attempts_are_each_charged_the_whole_cap() {
+    let rig = Rig::new();
+    let expect = || {
+        Expect::post_json("https://api.acme.test/v1/chat/completions", Value::Null)
+            .credential("authorization", &format!("Bearer {ACME_KEY}"))
+            .body(ExpectBody::Any)
+    };
+    let transport = Arc::new(ReplayTransport::new(vec![
+        expect().reply(HttpResponse::new(500, b"internal error".to_vec())),
+        expect().reply(HttpResponse::json(
+            200,
+            &json!({"choices": [{"message": {"role": "assistant", "content": "{\"name\": \"red\"}"}}],
+                    "usage": {"prompt_tokens": 9, "completion_tokens": 3, "cost": 0.000001}}),
+        )),
+    ]));
+    let route = RouteRef {
+        capability: "structured.generate".into(),
+        model: "acme/text-a".into(),
+        provider: "acme".into(),
+        contract: json!({"adapter": "openai-compatible-structured", "adapter_behavior": 1}),
+        limits: Default::default(),
+    };
+    let call = call(
+        route,
+        json!({"prompt": "Name a colour.", "schema": {"type": "object",
+               "properties": {"name": {"type": "string"}}, "required": ["name"]}}),
+    );
+    let adapter = declared_adapter_for(&call, transport.clone());
+    let outcome = send_plain(adapter.as_ref(), &rig.attempts(call, CAP)).await;
+    transport.assert_done();
+    let Outcome::Answered {
+        answer,
+        charged,
+        attempts,
+    } = outcome
+    else {
+        panic!("an answer was expected: {outcome:?}");
+    };
+    assert_eq!(answer.data, json!({"json": {"name": "red"}}));
+    assert_eq!((answer.cost, charged, attempts), (None, CAP, 2));
+    // The 5xx and the answer are each billed the whole cap: no cost is read, a reported one
+    // included.
+    assert_eq!(
+        rig.book.settlements(),
+        vec![(hold_name(1), None), (hold_name(2), None)]
+    );
+    assert_eq!(rig.book.charged(), Usd(100_000));
+    rig.book.assert_all_settled();
+    rig.assert_no_job_record();
 }

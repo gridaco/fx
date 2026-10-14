@@ -101,6 +101,15 @@ pub fn request_id(response: &HttpResponse) -> Option<String> {
         .map(str::to_string)
 }
 
+/// The reason with ` (request <id>)` when the response carries a safe request id
+/// ([`request_id`]).
+pub fn with_request_id(reason: String, response: &HttpResponse) -> String {
+    match request_id(response) {
+        Some(id) => format!("{reason} (request {id})"),
+        None => reason,
+    }
+}
+
 static SAFE_FIELD: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[A-Za-z0-9_.:-]{1,96}$").expect("a valid pattern"));
 

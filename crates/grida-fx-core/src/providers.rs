@@ -7,7 +7,9 @@
 //! planning project's `fx.yaml` ([`parse`]); [`Declarations`] is the built-in ones, then the
 //! project's. The keys, the `.env` reader, the base URLs, `doctor` and the variables Codex, Grok
 //! Build, the background service and the browser opener never inherit all read them. A
-//! declaration is configuration, never identity.
+//! declaration is configuration and is not hashed; only its `family` reaches a route's
+//! fingerprint, through the contract it completes ([`crate::routes::complete_contract`],
+//! [`crate::routes::FAMILY_ADAPTERS`]; spec/identity.md §7).
 //!
 //! A declaration is refused while `fx.yaml` is read, `<file>: providers.<name>…: <sentence>`:
 //! - a name FX ships: `<name> is a provider FX ships`;

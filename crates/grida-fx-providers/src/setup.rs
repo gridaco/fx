@@ -168,6 +168,14 @@ impl Setup {
         self.client_for(key.declaration(), base)
     }
 
+    /// The client of a provider the planning project declares, at its base URL: its key (if it
+    /// is declared with one and the key is set), its declaration and the shared transport.
+    pub fn declared_client(&self, declaration: &Declaration) -> Client {
+        let base = self.endpoints.base(&declaration.name);
+        let base = base.unwrap_or(&declaration.base_url.default).to_string();
+        self.client_for(declaration, &base)
+    }
+
     fn client_for(&self, declaration: &Declaration, base: &str) -> Client {
         Client {
             transport: Arc::clone(&self.transport),
@@ -222,6 +230,15 @@ impl Client {
                 secret: secret.clone(),
             }),
             _ => Err(crate::keys::not_set(&declared.variable)),
+        }
+    }
+
+    /// [`Client::credential`], or none for a provider declared without one, which is sent no
+    /// key (spec/providers.md §1).
+    pub fn optional_credential(&self) -> Result<Option<Credential>, String> {
+        match &self.declared {
+            None => Ok(None),
+            Some(_) => self.credential().map(Some),
         }
     }
 

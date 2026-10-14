@@ -303,12 +303,24 @@ A route is `model@provider`. Pick one per capability in `fx.yaml` `routes:`, or 
   variables from the environment or `.env` as it reads its own, redacts its key, keeps both from
   Codex, Grok Build, the background service and the browser opener (node hosts inherit FX's
   environment, as before), and `grida fx doctor` lists it
-  (`provider  acme api.acme.test ACME_API_KEY missing`). It bills dollars. A declaration is not
-  part of any identity. No adapter serves a declared provider yet: its routes plan and price, and
-  a live call on one is refused (`no adapter serves …`). A name FX ships (`gg`, `openai`,
-  `openrouter`, `fal`, `tripo`, `elevenlabs`, `codex`, `grok`), a variable already read,
+  (`provider  acme api.acme.test ACME_API_KEY missing`). It bills dollars. A name FX ships (`gg`,
+  `openai`, `openrouter`, `fal`, `tripo`, `elevenlabs`, `codex`, `grok`), a variable already read,
   `GRIDA_FX_*`, proxy, certificate, `PATH` and `HOME` variables, and a default base URL that
   breaks the address rule are refused.
+- **`family: openai-compatible`** (a server that speaks the OpenAI Chat Completions API) is all a
+  provider needs for `structured.generate` and `agent.turn`: FX's family adapters serve its routes
+  of those two capabilities, at `{base}/chat/completions`. They send the model, the messages,
+  `max_tokens`, a strict `json_schema` response format or strict function tools, and the
+  provider's member of `provider_options`, and nothing chosen for one provider; the key as
+  declared, or none for a provider declared without a `credential`. They read no cost, so every
+  call is booked at its whole reservation: give each route a `cap_usd` (or a price you trust).
+  A 408 or a 429 is sent again, another 4xx fails, and a 5xx is billed and tried again. A
+  declaration is not part of any identity, but a route on the provider whose `contract` leaves out
+  `adapter`, or names the family's adapter and leaves out `adapter_behavior`, is filled in with
+  the family's (`openai-compatible-structured`, `openai-compatible-tool-loop`, behaviour `1`), so
+  declaring or dropping the family changes those routes' identity once. A route of another
+  capability, or on a provider declared without a family, has no adapter: it plans and prices,
+  and a live call on it is refused (`no adapter serves …`).
 
 ```yaml
 # fx.yaml
@@ -926,6 +938,66 @@ answer would be (a picture of the wrong size fails the call). It keeps its own c
 `CallRefused`/`CallFailed`; anything else stops the run. From the SDKs: `run(..., stand_in=fn)` in
 Python, `run(..., { standIn: fn })` in JavaScript, in your own process.
 
+### A provider FX does not ship, from a declaration alone
+
+```yaml
+# fx.yaml
+fx: project/v1
+route_tables: [routes/acme.yaml]
+providers:
+  acme:                                      # stands for your provider; its routes are <model>@acme
+    credential: { variable: ACME_API_KEY }   # sent as authorization: Bearer <key>
+    base_url: { variable: ACME_BASE_URL, default: "https://api.acme.test/v1" }
+    family: openai-compatible                # it speaks the OpenAI Chat Completions API
+```
+
+```yaml
+# routes/acme.yaml
+fx: routes/v1
+routes:
+  - capability: structured.generate
+    route: acme/text-a@acme        # the model id as the provider names it
+    price: { cap_usd: 0.05 }       # no cost is read: each call is booked at its cap
+  - capability: agent.turn
+    route: acme/text-a@acme
+    price: { cap_usd: 0.05 }
+```
+
+```json
+// schemas/colour.json
+{ "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"] }
+```
+
+```yaml
+# workflows/colour.yaml
+fx: workflow/v1
+id: colour
+title: A colour from a declared provider
+steps:
+  name:
+    uses: fx/structured.generate@1
+    route: acme/text-a@acme
+    with:
+      prompt: Name a colour for a copper lantern.
+      schema: ./schemas/colour.json
+outputs:
+  colour: ${{ steps.name.outputs.json }}
+```
+
+```sh
+grida fx plan colour
+grida fx doctor
+grida fx run colour --live --max-usd 1
+```
+
+The plan prices the call at $0 to $0.05 and notes its cap. `doctor` says `no key (ACME_API_KEY)`
+for the routes until the key is set (environment or `.env`), then `servable`. The routes name no
+`contract`, so each gets the family's adapter (`openai-compatible-structured`,
+`openai-compatible-tool-loop`), and a run sends the model, the messages, `max_tokens` and the
+strict schema to `https://api.acme.test/v1/chat/completions`; the model's own parameters go in
+`provider_options: { acme: { … } }`. A server on this machine (`http://127.0.0.1:8080/v1`) needs no
+`credential`.
+
 ## When something fails
 
 | You see | Do |
@@ -937,7 +1009,7 @@ Python, `run(..., { standIn: fn })` in JavaScript, in your own process.
 | `refused: a live run needs a ceiling: …` | add `--max-usd N` (agreed with the user) or a `budget:` |
 | `… was refused: GG_API_KEY is not set` | the user sets the key (environment or `.env`); check with `grida fx doctor` |
 | `<route> does not support exact_size` (or `alpha`, `mask`, `image_input`) | change the setting or the route; for Codex and Grok Build leave `size` out and resize after |
-| `no adapter serves <route> …` | FX cannot call that provider, or the route's `contract` names an `adapter` FX does not have: pick a built-in route (`grida fx nodes <type>`), or fix or drop `contract.adapter` |
+| `no adapter serves <route> …` | FX cannot call that provider for that capability (a declared provider needs `family: openai-compatible`, which serves `structured.generate` and `agent.turn`), or the route's `contract` names an `adapter` FX does not have: pick a built-in route (`grida fx nodes <type>`), declare the family, or fix or drop `contract.adapter` |
 | `… was refused: <provider>'s generic image adapter sends no exact size: give the model's own parameter in provider_options.<provider>` (or `no mask`, `no transparent background`) | leave `size` (or `mask`, or a transparent `background`) out, and pass the model's own parameter in `provider_options` |
 | `… returned no single image` | the model answered no picture, or several, and FX takes one per call: pick another model or route |
 | `routes.<n>.extends: no route <base> serves <capability>` | `extends` names a route of the same capability declared earlier (in the same table or one read before) or a built-in one; check the id and the order |

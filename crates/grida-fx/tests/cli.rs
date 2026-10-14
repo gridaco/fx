@@ -1328,9 +1328,9 @@ fn integrated_doctor_lists_declared_providers_and_their_keys() {
         ],
         "{text}"
     );
-    // No adapter serves a declared provider's routes yet.
+    // The family serves a declared provider's chat routes: without its key, not yet.
     assert!(
-        text.contains("\nroute     structured.generate chat-a@acme no adapter\n"),
+        text.contains("\nroute     structured.generate chat-a@acme no key (ACME_API_KEY)\n"),
         "{text}"
     );
     // Its key and base URL from the environment, then from the planning project's `.env`.
@@ -1346,6 +1346,11 @@ fn integrated_doctor_lists_declared_providers_and_their_keys() {
     assert!(
         stdout(&output)
             .contains("\nprovider  acme proxy.acme.test:8443 ACME_API_KEY present (environment)\n"),
+        "{}",
+        stdout(&output)
+    );
+    assert!(
+        stdout(&output).contains("\nroute     structured.generate chat-a@acme servable\n"),
         "{}",
         stdout(&output)
     );
@@ -1408,6 +1413,70 @@ fn integrated_doctor_lists_declared_providers_and_their_keys() {
         "{}",
         stdout(&output)
     );
+}
+
+/// A live run on a declared provider's chat route reaches the family's adapter, registered from
+/// the planning project's declaration: with the network off it is refused there, having sent
+/// nothing, where an undeclared provider is `no adapter serves …`.
+#[test]
+fn integrated_a_declared_family_serves_its_provider_s_chat_routes_live() {
+    let project = empty_project();
+    let root = project.path();
+    std::fs::write(
+        root.join("routes.yaml"),
+        "fx: routes/v1\nroutes:\n  - { capability: structured.generate, route: text-a@acme, \
+         price: { cap_usd: 0.05 } }\n",
+    )
+    .unwrap();
+    std::fs::create_dir(root.join("schemas")).unwrap();
+    std::fs::write(
+        root.join("schemas/colour.json"),
+        r#"{"type": "object", "properties": {"name": {"type": "string"}}}"#,
+    )
+    .unwrap();
+    std::fs::create_dir(root.join("workflows")).unwrap();
+    std::fs::write(
+        root.join("workflows/chat.yaml"),
+        "fx: workflow/v1\nid: chat\ntitle: Chat\nsteps:\n  name:\n    uses: \
+         fx/structured.generate@1\n    route: text-a@acme\n    with:\n      prompt: Name a \
+         colour.\n      schema: ./schemas/colour.json\noutputs:\n  name: ${{ \
+         steps.name.outputs.json }}\n",
+    )
+    .unwrap();
+    let live = |fx_yaml: &str| {
+        std::fs::write(root.join("fx.yaml"), fx_yaml).unwrap();
+        let output = command(
+            root,
+            &[
+                "run",
+                "chat",
+                "--routes",
+                "routes.yaml",
+                "--live",
+                "--max-usd",
+                "1",
+            ],
+        )
+        .env("ACME_API_KEY", MADE_UP_KEY)
+        .output()
+        .unwrap();
+        assert_eq!(status(&output), 1, "{}{}", stdout(&output), stderr(&output));
+        assert_no_key(&output);
+        stdout(&output)
+    };
+    let text = live(DECLARING);
+    let failed = text
+        .lines()
+        .find(|l| l.starts_with("failed    name#1: "))
+        .unwrap_or_else(|| panic!("{text}"));
+    assert_eq!(
+        failed,
+        "failed    name#1: structured.generate on text-a@acme was refused: acme structured \
+         generation was not sent: the network is off (GRIDA_FX_NETWORK=off)",
+        "{text}"
+    );
+    let text = live("fx: project/v1\n");
+    assert!(text.contains("no adapter serves"), "{text}");
 }
 
 #[test]

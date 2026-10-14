@@ -39,7 +39,7 @@ use crate::capabilities;
 use crate::chat;
 use crate::checks;
 use crate::setup::Client;
-use crate::transport::{Body, Credential, HttpRequest, HttpResponse, Lane, Method};
+use crate::transport::{Credential, HttpRequest, HttpResponse};
 use crate::wire;
 use grida_fx_core::money::Usd;
 use regex::Regex;
@@ -317,18 +317,20 @@ pub(super) fn read_contract(
 // ---------------------------------------------------------------------------------------------
 // Helpers shared with the agent adapter
 
-/// The chat completions request carrying `body`.
+/// The chat completions request carrying `body` ([`chat::completions_request`]).
 pub(super) fn chat_request(
     client: &Client,
     credential: Credential,
     body: Value,
     timeout: Duration,
 ) -> HttpRequest {
-    HttpRequest::new(Method::Post, client.url("chat/completions"), Lane::Provider)
-        .credential(credential)
-        .body(Body::Json(body))
-        .timeout(timeout)
-        .max_response_bytes(super::MAX_CHAT_RESPONSE_BYTES)
+    chat::completions_request(
+        client,
+        Some(credential),
+        body,
+        timeout,
+        super::MAX_CHAT_RESPONSE_BYTES,
+    )
 }
 
 /// The cost `usage` reports ([`super::usage_cost`]).
@@ -336,20 +338,9 @@ pub(super) fn reported_cost(body: &Map<String, Value>) -> Option<Usd> {
     super::usage_cost(body.get("usage"))
 }
 
-/// A structural failure of a 2xx (spec/adapters.md §3.4): billed, retryable.
-pub(super) fn structural(
-    client: &Client,
-    response: &HttpResponse,
-    reason: &str,
-    cost: Option<Usd>,
-) -> Sent {
-    let reason = super::with_request_id(reason.to_string(), response);
-    Sent::Failed {
-        reason: client.reason(&reason),
-        cost,
-        retryable: true,
-    }
-}
+/// A structural failure of a 2xx (spec/adapters.md §3.4): billed, retryable
+/// ([`chat::structural`]).
+pub(super) use crate::chat::structural;
 
 // ---------------------------------------------------------------------------------------------
 // The adapter

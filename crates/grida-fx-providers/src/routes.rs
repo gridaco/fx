@@ -14,7 +14,8 @@
 //!   capability's shape, and every contract names the `adapter` and `adapter_behavior` that
 //!   spec/providers.md §2 gives that adapter;
 //! - core's [`grida_fx_core::routes::BUILT_IN_ADAPTERS`], which completes a route's contract, is
-//!   spec/providers.md §2 and every registered adapter's identity;
+//!   spec/providers.md §2 and every registered adapter's identity, and its `FAMILY_ADAPTERS` the
+//!   family table there and the identities of [`crate::openai_compatible`]'s adapters;
 //! - prices parse, and the tiered routes price as spec/identity.md §12 reads them: the video
 //!   route by `resolution`, the image routes by `size`.
 //!

@@ -164,8 +164,8 @@ Each adapter's reference lists what it sends and refuses
 
 ## A provider FX does not ship
 
-A provider FX has no adapter for is declared in `fx.yaml`, under `providers:`, by the name its
-routes give it:
+A provider FX does not ship is declared in `fx.yaml`, under `providers:`, by the name its routes
+give it:
 
 ```yaml
 # fx.yaml
@@ -185,7 +185,8 @@ providers:
   and the variable that may move it, as `OPENAI_BASE_URL` moves OpenAI's.
 - **`download_hosts`** are the hosts its results may be downloaded from: a host, or `*.` and a
   domain for every host below it.
-- **`family`** is the wire it speaks: `openai-compatible`, the OpenAI chat API.
+- **`family`** is the wire it speaks: `openai-compatible`, the OpenAI Chat Completions API. That
+  is all FX needs to run the provider's `structured.generate` and `agent.turn` routes (below).
 
 FX reads a declared provider's key and address as it reads its own: from the environment, else
 the project's `.env`. It redacts the key wherever it would be shown, keeps both variables from
@@ -196,16 +197,49 @@ Codex, Grok Build, the background service and the program that opens your browse
 provider  acme api.acme.test ACME_API_KEY present (.env)
 ```
 
-A declared provider bills dollars, to its own account. Declarations are settings, not part of any
-identity: changing one moves no cache. No adapter serves a declared provider yet, so its routes
-plan and price, and a live call on one is refused (`no adapter serves …`; `no adapter` in
-doctor).
+A declared provider bills dollars, to its own account. Declarations are settings: changing a key's
+variable or the address moves no cache. Only `family` reaches a route's identity
+([below](#an-openai-compatible-provider)).
 
 A declaration may not take the name of a provider FX ships (`gg`, `openai`, `openrouter`, `fal`,
 `tripo`, `elevenlabs`, `codex`, `grok`), a variable FX or another declaration already reads, or a
 variable FX and the programs it starts read for themselves: `GRIDA_FX_*`, the proxy and certificate
 variables, `PATH` and `HOME`. Each is refused when `fx.yaml` is read, naming the declaration
 ([providers.md §1](../../spec/providers.md#1-keys-and-endpoints)).
+
+### An OpenAI-compatible provider
+
+With `family: openai-compatible`, FX's own adapters serve the provider's `structured.generate` and
+`agent.turn` routes: one `POST <base>/chat/completions` per call, with the model, the messages,
+`max_tokens`, a strict JSON schema (or strict function tools for an agent turn) and the provider's
+member of `provider_options`, and nothing chosen for one provider. Give each route a price, or a
+cap when you do not know one:
+
+```yaml
+# routes/acme.yaml, listed under route_tables: in fx.yaml
+fx: routes/v1
+routes:
+  - capability: structured.generate
+    route: acme/text-a@acme        # the model id as the provider names it
+    price: { cap_usd: 0.05 }
+```
+
+- **No cost is read.** Providers report usage differently, or not at all, so each call is booked
+  at its whole reservation: the cap, or the route's high price. The tokens a reply counts are kept
+  with the call.
+- **The family is part of a route's identity.** A route whose `contract` leaves out `adapter`,
+  or names the family's adapter without `adapter_behavior`, is filled in with the family's
+  (`openai-compatible-structured`, `openai-compatible-tool-loop`, behaviour `1`), as a route on
+  one of FX's providers is with FX's. Declaring the family, or dropping it, changes those routes'
+  identity once.
+- **Statuses** are FX's defaults: a 408 or a 429 is sent again, any other 4xx fails the call, and
+  a 5xx is billed and tried again.
+- A route of another capability, or on a provider declared without a family, has no adapter: it
+  plans and prices, and a live call on it is refused (`no adapter serves …`; `no adapter` in
+  doctor).
+
+The [OpenAI-compatible reference](../../crates/grida-fx-providers/src/openai_compatible/README.md)
+lists what the adapters send and refuse.
 
 ## Parameters FX does not expose
 

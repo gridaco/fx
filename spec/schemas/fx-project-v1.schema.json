@@ -64,7 +64,7 @@
       "default": []
     },
     "providers": {
-      "description": "Providers the project declares beside FX's own (providers.md §1), by name: the provider part of their routes (`<model>@<name>`). A declaration names the variable its key comes from and the header it is sent in, its base URL and the variable that may move it, the hosts its results may be downloaded from, and the wire it speaks. It is configuration, not identity. Refused while the file is read, beyond this schema: a name FX ships (`gg`, `openai`, `openrouter`, `fal`, `tripo`, `elevenlabs`, `codex`, `grok`); a variable a built-in declaration, an earlier declaration or the same one already reads; a `GRIDA_FX_` variable, a proxy or certificate variable, `PATH` or `HOME`, in any letter case; a default base URL that is not `https`, unless it names a loopback host, or that has userinfo, a query or a fragment.",
+      "description": "Providers the project declares beside FX's own (providers.md §1), by name: the provider part of their routes (`<model>@<name>`). A declaration names the variable its key comes from and the header it is sent in, its base URL and the variable that may move it, the hosts its results may be downloaded from, and the wire it speaks. It is configuration and is not hashed: only its family reaches a fingerprint, by completing the contract of each of the provider's routes that leaves out `adapter` or `adapter_behavior` (identity.md §7). Refused while the file is read, beyond this schema: a name FX ships (`gg`, `openai`, `openrouter`, `fal`, `tripo`, `elevenlabs`, `codex`, `grok`); a variable a built-in declaration, an earlier declaration or the same one already reads; a `GRIDA_FX_` variable, a proxy or certificate variable, `PATH` or `HOME`, in any letter case; a default base URL that is not `https`, unless it names a loopback host, or that has userinfo, a query or a fragment.",
       "type": "object",
       "propertyNames": {
         "type": "string",
@@ -175,7 +175,7 @@
           "default": []
         },
         "family": {
-          "description": "The wire the provider speaks. No adapter serves a family yet: a declared provider's routes plan and price, and a live call on one is refused (no_route).",
+          "description": "The wire the provider speaks: openai-compatible, the OpenAI Chat Completions API, whose adapters serve the provider's structured.generate and agent.turn routes and complete their contracts (identity.md section 7). Left out, no adapter serves the provider: its routes plan and price, and a live call on one is refused (no_route).",
           "enum": [
             "openai-compatible"
           ]

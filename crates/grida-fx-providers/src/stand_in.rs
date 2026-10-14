@@ -47,7 +47,9 @@
 //! from a registry built with no keys over a transport that refuses every exchange
 //! ([`live::offline_setup`]): only its `check` is ever called. A route no adapter serves gets the
 //! check spec/capabilities.md gives its capability for every route ([`checks::every_route`]), and
-//! a capability with none gets none.
+//! a capability with none gets none. The registry holds FX's own declarations only
+//! ([`Keys::none`]), so a route on a provider the planning project declares gets the every-route
+//! check, which is all a family's adapters check (spec/adapters.md §1).
 
 use crate::adapter::{Adapter, Answer, AnsweredFile, CallRequest};
 use crate::capabilities;

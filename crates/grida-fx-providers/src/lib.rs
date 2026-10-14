@@ -29,7 +29,9 @@
 //!   [`capabilities`] (spec/capabilities.md as data), [`routes`] (the built-in route table);
 //! - one module per provider: [`openai`], [`openrouter`], [`fal`], [`tripo`], [`elevenlabs`],
 //!   [`codex`] (the user's own Codex, started as a process), [`grok`] (the user's own Grok Build,
-//!   spoken to over [`acp`]), each with `register(&mut Adapters, &Setup)`;
+//!   spoken to over [`acp`]), each with `register(&mut Adapters, &Setup)`; and
+//!   [`openai_compatible`], the family that serves each provider the planning project declares
+//!   with it, registered from the setup's declarations;
 //! - [`installed`]: what the adapters of programs the user installed share (finding one, its
 //!   version); [`process_group`]: the process groups of their runtimes, and their end;
 //! - [`live`]: the adapters of a live run, the only place the default transport is built;
@@ -67,6 +69,7 @@ pub mod installed;
 pub mod keys;
 pub mod live;
 pub mod openai;
+pub mod openai_compatible;
 pub mod openrouter;
 pub mod process_group;
 pub mod redact;

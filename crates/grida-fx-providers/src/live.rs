@@ -86,7 +86,8 @@ pub fn offline_setup(keys: Keys) -> Setup {
     )
 }
 
-/// Every provider's adapters over `setup`, in registration order, each answering
+/// Every provider's adapters over `setup`, in registration order, those of a family last, for each
+/// provider `setup`'s declarations declare with it ([`crate::openai_compatible`]), each answering
 /// [`RequestAdapter::redactor`] (or [`LongJob::redactor`]) with [`Setup::redactor`]: every key of
 /// the invocation. The engine's retry owner redacts each reason it reports with it, so a check's
 /// sentence, or the engine's own, never shows a key whichever adapter it came from
@@ -101,6 +102,7 @@ pub fn adapters(setup: &Setup) -> Adapters {
     crate::elevenlabs::register(&mut registered, setup);
     crate::codex::register(&mut registered, setup);
     crate::grok::register(&mut registered, setup);
+    crate::openai_compatible::register(&mut registered, setup);
     let redactor = setup.redactor();
     registered.map(|adapter| match adapter {
         Adapter::Request(inner) => Adapter::Request(Arc::new(Redacting {
@@ -350,12 +352,26 @@ mod tests {
         let keys = Keys::from_environment(&environment);
         let plain = adapters(&setup(Keys::none()));
         let adapters = adapters(&setup(keys));
+        // FX's routes, in order, then the declared family's on acme.
+        let mut served = plain.served();
+        served.extend([
+            ("structured.generate".to_string(), "acme".to_string()),
+            ("agent.turn".to_string(), "acme".to_string()),
+        ]);
+        assert_eq!(adapters.served(), served, "the same routes, in order");
+        let registered = adapters.registered();
+        assert_eq!(registered[..plain.registered().len()], plain.registered());
+        let declared: Vec<(&str, &str, bool)> = registered[plain.registered().len()..]
+            .iter()
+            .map(|r| (r.provider, r.identity.adapter, r.default))
+            .collect();
         assert_eq!(
-            adapters.served(),
-            plain.served(),
-            "the same routes, in order"
+            declared,
+            [
+                ("acme", "openai-compatible-structured", true),
+                ("acme", "openai-compatible-tool-loop", true),
+            ]
         );
-        assert_eq!(adapters.registered(), plain.registered());
         for registered in adapters.registered() {
             let (capability, provider) = (registered.capability, registered.provider);
             let route = RouteRef {
@@ -451,8 +467,29 @@ mod tests {
             servable("image.generate", "img-a@acme", none.clone()),
             Servable::NoAdapter
         );
-        // A declared provider has no adapter yet, with or without its key.
-        let keys = Keys::from_environment(&crate::keys::Environment::declared(&[], &declared()));
+        // A provider declared with the family is served on its chat capabilities: with its key
+        // only, and on no other capability.
+        let declared_servable = |pairs: &[(&str, &str)], capability, id| {
+            let environment = crate::keys::Environment::declared(pairs, &declared());
+            let keys = Keys::from_environment(&environment);
+            let adapters = super::adapters(&setup(keys.clone()));
+            super::servable(&adapters, &keys, &[], &route(capability, id, Value::Null))
+        };
+        for capability in ["structured.generate", "agent.turn"] {
+            assert_eq!(
+                declared_servable(&[], capability, "chat-a@acme"),
+                Servable::NoKey("ACME_API_KEY".into())
+            );
+            assert_eq!(
+                declared_servable(&[("ACME_API_KEY", "k")], capability, "chat-a@acme"),
+                Servable::Yes
+            );
+        }
+        assert_eq!(
+            declared_servable(&[("ACME_API_KEY", "k")], "image.generate", "img-a@acme"),
+            Servable::NoAdapter
+        );
+        // Undeclared, the same route has none.
         let chat = route("structured.generate", "chat-a@acme", none.clone());
         assert_eq!(
             super::servable(&adapters, &keys, &[], &chat),

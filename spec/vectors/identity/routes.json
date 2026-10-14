@@ -1,6 +1,6 @@
 {
  "kind": "fx-route-vectors-v1",
- "description": "Route tables read into a catalog (identity.md section 7): each case's builtin table stands in for the built-in default table, and its tables follow in catalog order. routes_given leaves the built-in table out of the catalog, as a --routes file does; it still serves as a base. expect lists catalog entries with their completed contract and fingerprint; absent lists routes the catalog must not hold; refuse names the table and entry that is refused, and why: no_base or other_provider.",
+ "description": "Route tables read into a catalog (identity.md section 7): each case's builtin table stands in for the built-in default table, and its tables follow in catalog order. providers, when given, is the planning project's declarations as fx.yaml's providers: gives them; only a declaration's family completes a contract. routes_given leaves the built-in table out of the catalog, as a --routes file does; it still serves as a base. expect lists catalog entries with their completed contract and fingerprint; absent lists routes the catalog must not hold; refuse names the table and entry that is refused, and why: no_base or other_provider.",
  "cases": [
   {
    "name": "a contract left out on a pair an adapter of FX serves is filled in",
@@ -99,6 +99,49 @@
     {"capability": "image.edit", "route": "acme/img-b@fal", "contract": {"adapter": "fx-fal-image-v1", "adapter_behavior": "1"}, "digest": "37f13319dd742c2df5d694c4fa4da14fff235a412635bec51bb06a823601b504"},
     {"capability": "image.generate", "route": "acme/img-c@openrouter", "contract": {"adapter": "fal-image"}, "digest": "aa60a467663d4eed3d8866b3fba0c52497fd257c0ce7073bb91cb978bdcb3acb"},
     {"capability": "image.generate", "route": "acme/img-d@openrouter", "contract": {"adapter": "openrouter-image", "adapter_behavior": "3"}, "digest": "159ae06524924c6c668956866777e68a3a6b23d0b8fe2327a521003dd3352a4d"}
+   ]
+  },
+  {
+   "name": "a declared family fills its provider's chat routes",
+   "note": "identity.md section 7, step 2, a declared family: acme is declared with family openai-compatible, whose adapters (providers.md section 2) serve structured.generate and agent.turn; image.generate has none, so its contract is kept.",
+   "providers": {"acme": {"base_url": {"default": "https://api.acme.test/v1"}, "family": "openai-compatible"}},
+   "builtin": [],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "structured.generate", "route": "text-a@acme", "price": {"cap_usd": 0.05}}, {"capability": "agent.turn", "route": "text-a@acme", "price": {"cap_usd": 0.05}, "contract": {"adapter": null}}, {"capability": "image.generate", "route": "img-a@acme", "price": {"usd": 0.01}}]
+   ],
+   "expect": [
+    {"capability": "structured.generate", "route": "text-a@acme", "contract": {"adapter": "openai-compatible-structured", "adapter_behavior": 1}, "digest": "c349af10e0a600f63fef6013c88dc88926acf949c5bcade06c74bc4563217099"},
+    {"capability": "agent.turn", "route": "text-a@acme", "contract": {"adapter": "openai-compatible-tool-loop", "adapter_behavior": 1}, "digest": "3f5b552eded964844c3135b4f48c9ff96eddd7e9338e3319df757816b0a38b92"},
+    {"capability": "image.generate", "route": "img-a@acme", "contract": {}, "digest": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4"}
+   ]
+  },
+  {
+   "name": "a family completes a contract only where the planning project declares it",
+   "note": "The family is read from the declarations, never from the provider's name: acme declared without a family, and other not declared, keep their contracts.",
+   "providers": {"acme": {"base_url": {"default": "https://api.acme.test/v1"}}},
+   "builtin": [],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "structured.generate", "route": "text-a@acme", "price": {"cap_usd": 0.05}}, {"capability": "agent.turn", "route": "text-a@other", "price": {"cap_usd": 0.05}}]
+   ],
+   "expect": [
+    {"capability": "structured.generate", "route": "text-a@acme", "contract": {}, "digest": "b84a7f3e9926f76c4c628e5bfb6cf513d87f0e570b13a65c954113c5c171a055"},
+    {"capability": "agent.turn", "route": "text-a@other", "contract": {}, "digest": "7ce912645327f86aafb110b714a11f53d2697ec3d287e97b1719e6638e52ae8d"}
+   ]
+  },
+  {
+   "name": "a family's stated members are kept",
+   "note": "A stated behaviour is kept, and refused when a call is sent; a contract naming another adapter gets no behaviour.",
+   "providers": {"acme": {"base_url": {"default": "https://api.acme.test/v1"}, "family": "openai-compatible"}},
+   "builtin": [],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "structured.generate", "route": "text-b@acme", "price": {"cap_usd": 0.05}, "contract": {"adapter_behavior": 2}}, {"capability": "agent.turn", "route": "text-b@acme", "price": {"cap_usd": 0.05}, "contract": {"adapter": "acme-chat"}}]
+   ],
+   "expect": [
+    {"capability": "structured.generate", "route": "text-b@acme", "contract": {"adapter_behavior": 2, "adapter": "openai-compatible-structured"}, "digest": "fe32a95908d79b320ccb27b4b986ebb9f973955dd59186c5225b9f939ebeeae9"},
+    {"capability": "agent.turn", "route": "text-b@acme", "contract": {"adapter": "acme-chat"}, "digest": "d1bf8ca0041334db65760da00a6d581674db854c4a61aaa297909a2ed9709db2"}
    ]
   },
   {

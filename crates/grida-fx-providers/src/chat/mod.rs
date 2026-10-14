@@ -4,7 +4,9 @@
 //! src/gg/README.md, send the same messages).
 //!
 //! What a provider adds is its own module's: the endpoint and credential, provider members of the
-//! body (OpenRouter's routing and reasoning), how a status classifies, and what a call costs.
+//! body (OpenRouter's routing and reasoning), how a status classifies, and what a call costs. The
+//! request itself ([`completions_request`]), a 2xx that does not become an answer
+//! ([`structural`]) and the tokens a completion counts ([`usage`]) are shared here too.
 //!
 //! **Structured output** ([`structured_prompt`], [`structured_value`]). The schema is a `json`
 //! file or an inline object, sent after `$ref` inlining and strict canonicalization ([`schema`]),
@@ -24,13 +26,17 @@
 
 pub mod schema;
 
-use crate::adapter::CallRequest;
+use crate::adapter::{CallRequest, Sent, Usage};
 use crate::capabilities;
 use crate::checks;
+use crate::setup::Client;
+use crate::transport::{Body, Credential, HttpRequest, HttpResponse, Lane, Method};
 use crate::wire;
+use grida_fx_core::money::Usd;
 use regex::Regex;
 use serde_json::{Map, Value, json};
 use std::sync::LazyLock;
+use std::time::Duration;
 
 /// The default `max_tokens` of a structured call.
 pub const DEFAULT_MAX_TOKENS: u64 = 16_000;
@@ -81,6 +87,59 @@ pub fn message_text(content: Option<&Value>) -> String {
             .collect(),
         _ => String::new(),
     }
+}
+
+/// The one `POST {base}/chat/completions` of a call: `body` as JSON, with `credential` when the
+/// provider takes one, under `timeout` and a response cap of `max_response_bytes`.
+pub fn completions_request(
+    client: &Client,
+    credential: Option<Credential>,
+    body: Value,
+    timeout: Duration,
+    max_response_bytes: u64,
+) -> HttpRequest {
+    let request = HttpRequest::new(Method::Post, client.url("chat/completions"), Lane::Provider)
+        .body(Body::Json(body))
+        .timeout(timeout)
+        .max_response_bytes(max_response_bytes);
+    match credential {
+        Some(credential) => request.credential(credential),
+        None => request,
+    }
+}
+
+/// A structural failure of a 2xx (spec/adapters.md §3.4): billed at `cost`, retryable, the reason
+/// naming the response's request id ([`wire::with_request_id`]) and redacted.
+pub fn structural(
+    client: &Client,
+    response: &HttpResponse,
+    reason: &str,
+    cost: Option<Usd>,
+) -> Sent {
+    let reason = wire::with_request_id(reason.to_string(), response);
+    Sent::Failed {
+        reason: client.reason(&reason),
+        cost,
+        retryable: true,
+    }
+}
+
+/// The tokens a completion's `usage` counts, when it counts any: `prompt_tokens` (cache reads
+/// included), `prompt_tokens_details.cached_tokens` and `completion_tokens` (reasoning included).
+pub fn usage(body: &Map<String, Value>) -> Option<Usage> {
+    let usage = body.get("usage")?.as_object()?;
+    let count = |value: Option<&Value>| value.and_then(Value::as_u64);
+    let counted = Usage {
+        input_tokens: count(usage.get("prompt_tokens")),
+        cached_input_tokens: count(
+            usage
+                .get("prompt_tokens_details")
+                .and_then(|details| details.get("cached_tokens")),
+        ),
+        output_tokens: count(usage.get("completion_tokens")),
+        ..Usage::default()
+    };
+    (counted != Usage::default()).then_some(counted)
 }
 
 /// `max_tokens`: absent or `null` is `None`; otherwise a whole number of at least 1 (the type is

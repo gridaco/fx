@@ -23,8 +23,11 @@
 //! - [`BUILT_IN_ADAPTERS`]: on a capability and provider FX's adapters serve, a left-out or `null`
 //!   `adapter` becomes the name of that pair's default, and a left-out or `null`
 //!   `adapter_behavior` the behaviour of the pair's adapter `adapter` names ([`complete_contract`]).
-//!   The core knows FX's adapters by this table alone; the providers crate's tests hold it to
-//!   every adapter it registers.
+//!   On a provider the planning project declares with a `family`, [`FAMILY_ADAPTERS`] does the
+//!   same for the capabilities that family serves: the family is read from the declarations
+//!   ([`load_catalog`] passes the project's), never from the provider's name. The core knows FX's
+//!   adapters by these tables alone; the providers crate's tests hold them to every adapter it
+//!   registers.
 //!
 //! Prices are read in micro-dollars ([`Usd`]); an amount with more than 6 decimal places is
 //! refused (identity.md §12), judged on the number's JCS text (`1e-7 has more than 6 decimal
@@ -51,6 +54,7 @@
 use crate::docs::project::Project;
 use crate::error::{Error, Result};
 use crate::money::{Units, Usd};
+use crate::providers::Declarations;
 use crate::val::Val;
 use crate::value::as_f64;
 use indexmap::IndexMap;
@@ -230,6 +234,43 @@ pub const BUILT_IN_ADAPTERS: [BuiltInAdapter; 30] = [
     named("image.edit", "fal", "fx-fal-image-v1", r#""1""#),
 ];
 
+/// The contract one of a family's adapters serves (spec/providers.md §2): the default of its
+/// capability on every provider the planning project declares with that family.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FamilyAdapter {
+    /// The declaration's `family`.
+    pub family: &'static str,
+    pub capability: &'static str,
+    /// The contract's `adapter`.
+    pub adapter: &'static str,
+    /// The contract's `adapter_behavior` as canonical JSON.
+    pub behavior: &'static str,
+}
+
+/// The adapters of each family a declaration may name, as spec/providers.md §2's third table
+/// lists them.
+pub const FAMILY_ADAPTERS: [FamilyAdapter; 2] = [
+    FamilyAdapter {
+        family: "openai-compatible",
+        capability: "structured.generate",
+        adapter: "openai-compatible-structured",
+        behavior: "1",
+    },
+    FamilyAdapter {
+        family: "openai-compatible",
+        capability: "agent.turn",
+        adapter: "openai-compatible-tool-loop",
+        behavior: "1",
+    },
+];
+
+/// The adapter of `family` that serves `capability`, if any.
+pub fn family_adapter(family: &str, capability: &str) -> Option<&'static FamilyAdapter> {
+    FAMILY_ADAPTERS
+        .iter()
+        .find(|served| served.family == family && served.capability == capability)
+}
+
 /// The default FX ships for `capability` on `provider`, if any: the adapter of a route whose
 /// contract names none.
 pub fn built_in_adapter(capability: &str, provider: &str) -> Option<&'static BuiltInAdapter> {
@@ -250,25 +291,59 @@ pub fn built_in_adapter_named(
     })
 }
 
-/// Completes `contract` from the adapters FX ships for `capability` on `provider`, if any
-/// (identity.md §7 step 2): a left-out or `null` `adapter` becomes the default's name, then a
-/// left-out or `null` `adapter_behavior` the behaviour of the adapter `adapter` names.
-pub fn complete_contract(capability: &str, provider: &str, contract: &mut Map<String, Value>) {
-    let Some(default) = built_in_adapter(capability, provider) else {
+/// The adapters that serve `capability` on `provider`, as (contract `adapter`, behaviour as
+/// canonical JSON, whether it is the default): FX's own, else those of the family `declarations`
+/// give the provider.
+fn serving(
+    capability: &str,
+    provider: &str,
+    declarations: &Declarations,
+) -> Vec<(&'static str, &'static str, bool)> {
+    let own: Vec<_> = BUILT_IN_ADAPTERS
+        .iter()
+        .filter(|served| served.capability == capability && served.provider == provider)
+        .map(|served| (served.adapter, served.behavior, served.default))
+        .collect();
+    if !own.is_empty() {
+        return own;
+    }
+    let family = declarations
+        .get(provider)
+        .and_then(|declaration| declaration.family.as_deref());
+    family
+        .and_then(|family| family_adapter(family, capability))
+        .map(|served| (served.adapter, served.behavior, true))
+        .into_iter()
+        .collect()
+}
+
+/// Completes `contract` from the adapters that serve `capability` on `provider`, if any
+/// (identity.md §7 step 2): FX's own, else those of the family `declarations` give `provider`. A
+/// left-out or `null` `adapter` becomes the default's name, then a left-out or `null`
+/// `adapter_behavior` the behaviour of the adapter `adapter` names.
+pub fn complete_contract(
+    capability: &str,
+    provider: &str,
+    declarations: &Declarations,
+    contract: &mut Map<String, Value>,
+) {
+    let adapters = serving(capability, provider, declarations);
+    let Some(&(default, _, _)) = adapters.iter().find(|(_, _, default)| *default) else {
         return;
     };
     let left_out = |member: Option<&Value>| member.is_none_or(Value::is_null);
     if left_out(contract.get("adapter")) {
-        contract.insert("adapter".into(), Value::from(default.adapter));
+        contract.insert("adapter".into(), Value::from(default));
     }
-    let named = contract
-        .get("adapter")
-        .and_then(Value::as_str)
-        .and_then(|adapter| built_in_adapter_named(capability, provider, adapter));
-    if let Some(served) = named
+    let named = contract.get("adapter").and_then(Value::as_str);
+    let behavior = named
+        .and_then(|name| adapters.iter().find(|(adapter, _, _)| *adapter == name))
+        .map(|(_, behavior, _)| *behavior);
+    if let Some(behavior) = behavior
         && left_out(contract.get("adapter_behavior"))
     {
-        contract.insert("adapter_behavior".into(), served.behavior_value());
+        let value = serde_json::from_str(behavior).expect("a behaviour is JSON");
+        contract.insert("adapter_behavior".into(), value);
     }
 }
 
@@ -350,24 +425,28 @@ impl RouteTable {
         RouteTable::default()
     }
 
-    /// Reads one `fx: routes/v1` table (already loaded from YAML) on its own: an entry's
-    /// `extends` names an earlier entry of the same table. `file` labels errors; a refusal is an
-    /// [`crate::ErrorKind::Route`] error `"<file>: <where>: <message>"` (exit 2) (module doc),
-    /// except a document outside the schema, which [`crate::docs::validate`] refuses.
+    /// Reads one `fx: routes/v1` table (already loaded from YAML) on its own, with FX's own
+    /// declarations: an entry's `extends` names an earlier entry of the same table. `file` labels
+    /// errors; a refusal is an [`crate::ErrorKind::Route`] error `"<file>: <where>: <message>"`
+    /// (exit 2) (module doc), except a document outside the schema, which
+    /// [`crate::docs::validate`] refuses.
     pub fn from_document(document: &Value, file: &str) -> Result<RouteTable> {
-        RouteTable::from_document_over(document, file, &[])
+        RouteTable::from_document_over(document, file, &[], &Declarations::built_in())
     }
 
-    /// [`RouteTable::from_document`] for a table read after others: an entry's `extends` names an
-    /// earlier entry of the same table, else an entry of the first of `bases` that holds one
-    /// (the catalog so far, then the built-in table: identity.md §7).
+    /// [`RouteTable::from_document`] for a table read after others, for a planning project whose
+    /// declarations are `declarations`: an entry's `extends` names an earlier entry of the same
+    /// table, else an entry of the first of `bases` that holds one (the catalog so far, then the
+    /// built-in table: identity.md §7), and a declared family completes its provider's contracts.
     pub fn from_document_over(
         document: &Value,
         file: &str,
         bases: &[&RouteTable],
+        declarations: &Declarations,
     ) -> Result<RouteTable> {
         crate::docs::validate(crate::docs::Schema::Routes, document, file)?;
-        parse_table(document, bases).map_err(|message| Error::route(format!("{file}: {message}")))
+        parse_table(document, bases, declarations)
+            .map_err(|message| Error::route(format!("{file}: {message}")))
     }
 
     /// Lays a later table over this one: its entries replace equal (capability, route) entries.
@@ -413,7 +492,8 @@ impl RouteTable {
 /// `(absolute path, label as the user typed it)`. Each file is read with the strict YAML loader
 /// and validated against fx-routes-v1; a missing file is an Io error naming the label. Each
 /// table's `extends` resolves against the catalog so far, then `builtin`, even when `extra`
-/// leaves it out of the catalog.
+/// leaves it out of the catalog. The project's declarations complete the contracts of the
+/// providers it declares with a family.
 pub fn load_catalog(
     project: &Project,
     builtin: &RouteTable,
@@ -429,24 +509,36 @@ pub fn load_catalog(
         .route_tables
         .iter()
         .map(|table| (project.root.join(table), table.clone()));
+    let declarations = project.declarations();
     for (path, label) in listed.chain(extra.iter().cloned()) {
-        let table = read_table(&path, &label, &[&catalog, builtin])?;
+        let table = read_table(&path, &label, &[&catalog, builtin], &declarations)?;
         catalog.overlay(table);
     }
     Ok(catalog)
 }
 
 /// Reads, checks and parses one route table file over `bases`.
-fn read_table(path: &Path, label: &str, bases: &[&RouteTable]) -> Result<RouteTable> {
+fn read_table(
+    path: &Path,
+    label: &str,
+    bases: &[&RouteTable],
+    declarations: &Declarations,
+) -> Result<RouteTable> {
     let document = crate::docs::read_document(path, label, crate::docs::Schema::Routes)?;
-    parse_table(&document, bases).map_err(|message| Error::route(format!("{label}: {message}")))
+    parse_table(&document, bases, declarations)
+        .map_err(|message| Error::route(format!("{label}: {message}")))
 }
 
 /// The parse step after schema validation: every route of the table in order, each `extends`
 /// resolved against the entries before it, then `bases`; then the duplicate check. Each message
 /// starts with where it applies, as the instance path joined by `.` (`routes.0.price.low_usd: …`),
-/// as schema refusals do.
-fn parse_table(document: &Value, bases: &[&RouteTable]) -> std::result::Result<RouteTable, String> {
+/// as schema refusals do. `declarations` give the families that complete a declared provider's
+/// contracts.
+fn parse_table(
+    document: &Value,
+    bases: &[&RouteTable],
+    declarations: &Declarations,
+) -> std::result::Result<RouteTable, String> {
     let entries = match document.get("routes") {
         Some(Value::Array(entries)) => entries.as_slice(),
         None => &[],
@@ -463,7 +555,7 @@ fn parse_table(document: &Value, bases: &[&RouteTable]) -> std::result::Result<R
                 .or_else(|| bases.iter().find_map(|table| table.entries.get(&key)))
                 .cloned()
         };
-        let route = parse_route(entry, &format!("routes.{i}"), base)?;
+        let route = parse_route(entry, &format!("routes.{i}"), base, declarations)?;
         routes.push(route);
     }
     let mut table = RouteTable::new();
@@ -486,6 +578,7 @@ fn parse_route(
     entry: &Value,
     at: &str,
     base_of: impl Fn(&str, &str) -> Option<Route>,
+    declarations: &Declarations,
 ) -> std::result::Result<Route, String> {
     let entry = entry
         .as_object()
@@ -564,7 +657,7 @@ fn parse_route(
             }
         }
     }
-    complete_contract(&capability, &provider, &mut contract);
+    complete_contract(&capability, &provider, declarations, &mut contract);
     Ok(Route {
         capability,
         model,
@@ -704,7 +797,11 @@ mod tests {
     use serde_json::json;
 
     fn table(routes: Value) -> std::result::Result<RouteTable, String> {
-        parse_table(&json!({"fx": "routes/v1", "routes": routes}), &[])
+        parse_table(
+            &json!({"fx": "routes/v1", "routes": routes}),
+            &[],
+            &Declarations::built_in(),
+        )
     }
 
     fn price(price: Value) -> std::result::Result<RoutePrice, String> {
@@ -769,7 +866,7 @@ mod tests {
         );
         assert!(table(json!([])).unwrap().entries.is_empty());
         assert!(
-            parse_table(&json!({"fx": "routes/v1"}), &[])
+            parse_table(&json!({"fx": "routes/v1"}), &[], &Declarations::built_in())
                 .unwrap()
                 .entries
                 .is_empty()
@@ -1236,6 +1333,99 @@ mod tests {
         );
     }
 
+    /// FX's declarations, then `acme` declared with `family` (or none) and `bare` without one.
+    fn declaring(family: Option<&str>) -> Declarations {
+        let declared = |name: &str, family: Option<&str>| crate::providers::Declaration {
+            name: name.into(),
+            label: name.into(),
+            credential: None,
+            base_url: crate::providers::BaseUrl {
+                variable: None,
+                default: format!("https://api.{name}.test/v1"),
+            },
+            download_hosts: Vec::new(),
+            family: family.map(String::from),
+        };
+        Declarations::with(&[declared("acme", family), declared("bare", None)])
+    }
+
+    #[test]
+    fn a_declared_family_completes_its_provider_s_contracts() {
+        let read = |declarations: &Declarations, capability: &str, route: &str, contract| {
+            let entry = json!({"capability": capability, "route": route,
+                               "price": {"cap_usd": 0.05}, "contract": contract});
+            let document = json!({"fx": "routes/v1", "routes": [entry]});
+            parse_table(&document, &[], declarations).unwrap().entries[0]
+                .contract
+                .clone()
+        };
+        let family = declaring(Some("openai-compatible"));
+        assert_eq!(
+            read(&family, "structured.generate", "text-a@acme", json!({})),
+            json!({"adapter": "openai-compatible-structured", "adapter_behavior": 1})
+        );
+        assert_eq!(
+            read(
+                &family,
+                "agent.turn",
+                "text-a@acme",
+                json!({"adapter": null})
+            ),
+            json!({"adapter": "openai-compatible-tool-loop", "adapter_behavior": 1})
+        );
+        // A stated member is kept; another adapter gets no behaviour.
+        assert_eq!(
+            read(
+                &family,
+                "structured.generate",
+                "text-a@acme",
+                json!({"adapter_behavior": 2})
+            ),
+            json!({"adapter": "openai-compatible-structured", "adapter_behavior": 2})
+        );
+        assert_eq!(
+            read(
+                &family,
+                "structured.generate",
+                "text-a@acme",
+                json!({"adapter": "acme-chat"})
+            ),
+            json!({"adapter": "acme-chat"})
+        );
+        // A capability the family does not serve, a provider declared without a family, and one
+        // not declared keep their contracts, whatever their names.
+        for (declarations, capability, route) in [
+            (&family, "image.generate", "img-a@acme"),
+            (&family, "structured.generate", "text-a@bare"),
+            (&family, "structured.generate", "text-a@other"),
+            (&declaring(None), "structured.generate", "text-a@acme"),
+            (
+                &Declarations::built_in(),
+                "structured.generate",
+                "text-a@acme",
+            ),
+        ] {
+            assert_eq!(
+                read(declarations, capability, route, json!({})),
+                json!({}),
+                "{capability} {route}"
+            );
+        }
+        // FX's own providers are completed from FX's adapters, whatever is declared.
+        assert_eq!(
+            read(&family, "structured.generate", "text-a@gg", json!({})),
+            json!({"adapter": "gg-structured", "adapter_behavior": 1})
+        );
+        for served in FAMILY_ADAPTERS {
+            assert_eq!(served.behavior, "1", "{served:?}");
+            assert_eq!(
+                family_adapter(served.family, served.capability),
+                Some(&served)
+            );
+        }
+        assert_eq!(family_adapter("openai-compatible", "image.generate"), None);
+    }
+
     #[test]
     fn extends_copies_its_base_and_merges_its_contract() {
         let builtin = table(json!([
@@ -1248,8 +1438,13 @@ mod tests {
                           "nested": {"a": 1}}},
         ]))
         .unwrap();
-        let read =
-            |routes: Value| parse_table(&json!({"fx": "routes/v1", "routes": routes}), &[&builtin]);
+        let read = |routes: Value| {
+            parse_table(
+                &json!({"fx": "routes/v1", "routes": routes}),
+                &[&builtin],
+                &Declarations::built_in(),
+            )
+        };
         let extended = read(json!([
             {"capability": "image.generate", "route": "img-a@gg", "extends": "img-base@gg"},
         ]))
@@ -1347,7 +1542,12 @@ mod tests {
         let read = |extends: &str, capability: &str| {
             let routes = json!([{"capability": capability, "route": "img-a@gg",
                                  "extends": extends}]);
-            parse_table(&json!({"fx": "routes/v1", "routes": routes}), &[&builtin]).unwrap_err()
+            parse_table(
+                &json!({"fx": "routes/v1", "routes": routes}),
+                &[&builtin],
+                &Declarations::built_in(),
+            )
+            .unwrap_err()
         };
         assert_eq!(
             read("img-z@gg", "image.generate"),

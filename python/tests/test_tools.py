@@ -176,6 +176,42 @@ def test_contracts_are_completed_from_the_built_in_adapters() -> None:
     assert filled == "7f6238d4aa013ab3e87587914c9ee915b141d33a2432a8ff1f3a361874901b95"
 
 
+def test_contracts_are_completed_from_a_declared_family() -> None:
+    complete = digest.complete_contract
+    base = {"default": "https://api.acme.test/v1"}
+    families = digest.declared_families(
+        {
+            "acme": {"base_url": base, "family": "openai-compatible"},
+            "bare": {"base_url": base},
+            "odd": "not a declaration",
+        }
+    )
+    assert families == {"acme": "openai-compatible"}
+    assert complete("structured.generate", "acme", {}, families) == {
+        "adapter": "openai-compatible-structured",
+        "adapter_behavior": 1,
+    }
+    assert complete("agent.turn", "acme", {"adapter": None}, families) == {
+        "adapter": "openai-compatible-tool-loop",
+        "adapter_behavior": 1,
+    }
+    assert complete("structured.generate", "acme", {"adapter": "acme-chat"}, families) == {
+        "adapter": "acme-chat"
+    }
+    # The family is read from the declarations, never from a provider's name.
+    assert complete("structured.generate", "acme", {}) == {}
+    assert complete("structured.generate", "bare", {}, families) == {}
+    assert complete("image.generate", "acme", {}, families) == {}
+    # FX's own providers are completed from FX's adapters, whatever is declared.
+    assert complete("structured.generate", "gg", {}, {"gg": "openai-compatible"}) == {
+        "adapter": "gg-structured",
+        "adapter_behavior": 1,
+    }
+    table = digest.RouteTable(families)
+    table.read([{"capability": "agent.turn", "route": "text-a@acme"}], "t")
+    assert table.lookup("agent.turn", "text-a@acme")[1]["adapter"] == "openai-compatible-tool-loop"
+
+
 def test_route_tables_resolve_extends() -> None:
     builtin = digest.RouteTable()
     builtin.read(
@@ -1421,7 +1457,9 @@ def test_check_spec_routes_agree_with_the_built_in_adapters(
 ) -> None:
     check_spec, _ = adapters
     assert _check_routes(check_spec) == 0, capsys.readouterr().out
-    assert "30 built-in adapters and their references" in capsys.readouterr().out
+    assert "30 built-in adapters, 2 family adapters and their references" in (
+        capsys.readouterr().out
+    )
 
 
 def test_check_spec_routes_catch_a_behaviour_the_table_does_not_write(
@@ -1456,6 +1494,28 @@ def test_check_spec_routes_catch_digest_s_own_table(
     assert "fx-grok-image-v1 for image.edit on grok: not in digest.py's table" in out
     assert 'tripo-rig for mesh.rig on tripo: digest.py carries behaviour "1", the table `1`' in out
     assert "fx-fal-image-v1 for image.edit on fal: digest.py says default is True" in out
+
+
+def test_check_spec_routes_catch_digest_s_family_table(
+    adapters: tuple[Any, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    check_spec, _ = adapters
+    ours = dict(check_spec.digest.FAMILY_ADAPTERS)
+    ours[("openai-compatible", "agent.turn")] = ("openai-compatible-tool-loop", "1")
+    del ours[("openai-compatible", "structured.generate")]
+    monkeypatch.setattr(check_spec.digest, "FAMILY_ADAPTERS", ours)
+    assert _check_routes(check_spec) == 1
+    out = capsys.readouterr().out
+    assert (
+        "openai-compatible-structured for structured.generate of the openai-compatible family: "
+        "not in digest.py's table" in out
+    )
+    assert (
+        "openai-compatible-tool-loop for agent.turn of the openai-compatible family: digest.py "
+        'carries behaviour "1", the table `1`' in out
+    )
 
 
 def test_check_spec_routes_catch_a_reference_without_its_contract(

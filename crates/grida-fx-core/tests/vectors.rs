@@ -1,5 +1,6 @@
 //! The value layer against the spec's vectors.
 
+use grida_fx_core::providers::{BaseUrl, Declaration, Declarations};
 use grida_fx_core::routes::RouteTable;
 use grida_fx_core::value::{canon, check_markers, digest, file_digest, parse_json, write_json};
 use serde_json::Value;
@@ -102,6 +103,32 @@ fn route_refusal(entry: &Value, reason: &str) -> String {
     }
 }
 
+/// A case's `providers`, the planning project's declarations as fx.yaml gives them: only a
+/// declaration's `family` completes a contract, so the rest is read as far as it needs.
+fn declarations(case: &Value) -> Declarations {
+    let Some(providers) = case.get("providers").and_then(Value::as_object) else {
+        return Declarations::built_in();
+    };
+    let declared: Vec<Declaration> = providers
+        .iter()
+        .map(|(name, entry)| Declaration {
+            name: name.clone(),
+            label: name.clone(),
+            credential: None,
+            base_url: BaseUrl {
+                variable: None,
+                default: entry["base_url"]["default"].as_str().unwrap().to_string(),
+            },
+            download_hosts: Vec::new(),
+            family: entry
+                .get("family")
+                .and_then(Value::as_str)
+                .map(String::from),
+        })
+        .collect();
+    Declarations::with(&declared)
+}
+
 #[test]
 fn route_vectors() {
     let doc = vectors("identity/routes.json");
@@ -109,6 +136,7 @@ fn route_vectors() {
     let document = |routes: &Value| serde_json::json!({"fx": "routes/v1", "routes": routes});
     for case in cases(&doc, "cases") {
         let name = case["name"].as_str().unwrap();
+        let declared = declarations(case);
         let builtin = RouteTable::from_document(&document(&case["builtin"]), "builtin").unwrap();
         let mut catalog = if case["routes_given"] == true {
             RouteTable::new()
@@ -118,7 +146,8 @@ fn route_vectors() {
         let mut refused = None;
         for (i, table) in cases(case, "tables").iter().enumerate() {
             let label = format!("tables.{i}");
-            match RouteTable::from_document_over(&document(table), &label, &[&catalog, &builtin]) {
+            let bases = [&catalog, &builtin];
+            match RouteTable::from_document_over(&document(table), &label, &bases, &declared) {
                 Ok(read) => catalog.overlay(read),
                 Err(error) => {
                     refused = Some(error.message);

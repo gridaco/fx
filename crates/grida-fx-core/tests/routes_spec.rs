@@ -515,6 +515,58 @@ fn extends_reaches_the_catalog_so_far_then_the_built_in_table() {
 }
 
 #[test]
+fn a_declared_family_completes_its_provider_s_contracts_in_every_table() {
+    // identity.md §7 step 2: the planning project's declarations decide the family, for its
+    // route_tables and the --routes files alike; an undeclared provider keeps its contract.
+    let folder = tempfile::tempdir().unwrap();
+    let root = folder.path().to_path_buf();
+    std::fs::write(
+        root.join("fx.yaml"),
+        "fx: project/v1\nroute_tables: [chat.yaml]\nproviders:\n  acme:\n    base_url: { default: \"https://api.acme.test/v1\" }\n    family: openai-compatible\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("chat.yaml"),
+        "fx: routes/v1\nroutes:\n  - { capability: structured.generate, route: text-a@acme, price: { cap_usd: 0.05 } }\n  - { capability: structured.generate, route: text-a@other, price: { cap_usd: 0.05 } }\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("extra.yaml"),
+        "fx: routes/v1\nroutes:\n  - { capability: agent.turn, route: text-a@acme, price: { cap_usd: 0.05 } }\n",
+    )
+    .unwrap();
+    let project = Project::find(&root).unwrap();
+    let extra = [(root.join("extra.yaml"), "extra.yaml".to_string())];
+    let catalog = load_catalog(&project, &RouteTable::new(), &extra).unwrap();
+    let contract =
+        |capability: &str, id: &str| catalog.resolve(capability, id).unwrap().contract.clone();
+    assert_eq!(
+        contract("structured.generate", "text-a@acme"),
+        json!({"adapter": "openai-compatible-structured", "adapter_behavior": 1})
+    );
+    assert_eq!(
+        contract("agent.turn", "text-a@acme"),
+        json!({"adapter": "openai-compatible-tool-loop", "adapter_behavior": 1})
+    );
+    assert_eq!(contract("structured.generate", "text-a@other"), json!({}));
+    // Without the declaration, the same tables keep their contracts.
+    let undeclared = Project {
+        document: ProjectDoc {
+            providers: Vec::new(),
+            ..project.document.clone()
+        },
+        ..project.clone()
+    };
+    let catalog = load_catalog(&undeclared, &RouteTable::new(), &extra).unwrap();
+    for (capability, id) in [
+        ("structured.generate", "text-a@acme"),
+        ("agent.turn", "text-a@acme"),
+    ] {
+        assert_eq!(catalog.resolve(capability, id).unwrap().contract, json!({}));
+    }
+}
+
+#[test]
 fn the_built_in_catalog() {
     let all = builtins();
     assert_eq!(all.len(), 37);

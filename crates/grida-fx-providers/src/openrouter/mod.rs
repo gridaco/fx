@@ -180,12 +180,7 @@ pub(crate) fn not_served(call: &CallRequest) -> String {
 pub(crate) use crate::checks::serves;
 
 /// The reason with ` (request <id>)` when the response carries a safe request id.
-pub(crate) fn with_request_id(reason: String, response: &HttpResponse) -> String {
-    match crate::wire::request_id(response) {
-        Some(id) => format!("{reason} (request {id})"),
-        None => reason,
-    }
-}
+pub(crate) use crate::wire::with_request_id;
 
 /// Registers the five adapters on provider `openrouter`: for images, the generic one as the
 /// default and GPT Image's for a route that names it (spec/providers.md §2).

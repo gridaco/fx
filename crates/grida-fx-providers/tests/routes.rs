@@ -4,7 +4,8 @@
 
 use grida_fx_core::money::Usd;
 use grida_fx_core::routes::{
-    BUILT_IN_ADAPTERS, PriceUnit, Route, RouteTable, built_in_adapter, built_in_adapter_named,
+    BUILT_IN_ADAPTERS, FAMILY_ADAPTERS, PriceUnit, Route, RouteTable, built_in_adapter,
+    built_in_adapter_named,
 };
 use grida_fx_core::val::Val;
 use grida_fx_core::value::{canon, digest};
@@ -16,7 +17,9 @@ use grida_fx_providers::registry::Adapters;
 use grida_fx_providers::routes::{DEFAULT_ROUTES, default_table};
 use grida_fx_providers::testing::{CallBuilder, block_on, media, setup, test_keys};
 use grida_fx_providers::transport::replay::NoNetwork;
-use grida_fx_providers::{codex, elevenlabs, fal, gg, grok, openai, openrouter, tripo};
+use grida_fx_providers::{
+    codex, elevenlabs, fal, gg, grok, openai, openai_compatible, openrouter, tripo,
+};
 use indexmap::IndexMap;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
@@ -308,8 +311,20 @@ struct Written {
 }
 
 /// The rows of spec/providers.md §2's tables of built-in adapters: the defaults, then the
-/// adapters a route names.
+/// adapters a route names. The family table, after them, is [`written_family_adapters`]'s.
 fn written_adapters() -> Vec<Written> {
+    written_rows(false)
+}
+
+/// The rows of spec/providers.md §2's table of family adapters, each with its family as its
+/// provider.
+fn written_family_adapters() -> Vec<Written> {
+    written_rows(true)
+}
+
+/// The rows of spec/providers.md §2's tables: those of the provider tables, or of the family
+/// table.
+fn written_rows(families: bool) -> Vec<Written> {
     let text = read_spec("providers.md");
     let start = text
         .find("## 2. The built-in adapters")
@@ -320,11 +335,13 @@ fn written_adapters() -> Vec<Written> {
     let section = &text[start..end];
     let code = |cell: &str| cell.trim_matches('`').to_string();
     let mut tables = 0;
+    let mut family = false;
     section
         .lines()
         .filter_map(|line| {
             tables += usize::from(line.starts_with("| Provider | Capability |"));
-            line.starts_with("| `").then_some((line, tables))
+            family |= line.starts_with("| Family | Capability |");
+            (line.starts_with("| `") && family == families).then_some((line, tables))
         })
         .map(|(line, tables)| {
             let cells: Vec<&str> = line.trim_matches('|').split(" | ").map(str::trim).collect();
@@ -786,6 +803,66 @@ fn core_s_table_is_every_adapter_s_identity() {
             registry.serving(&route).and_then(Adapter::identity),
             Some(identity),
             "{capability} on {provider}"
+        );
+    }
+}
+
+/// The family table of spec/providers.md §2 is core's `FAMILY_ADAPTERS`, in its order, and each
+/// row is the identity of the family adapter that serves it and a row of its reference.
+#[test]
+fn the_family_adapters_are_spec_providers_2() {
+    let written = written_family_adapters();
+    let rows: Vec<(&str, &str, &str, &str)> = written
+        .iter()
+        .map(|w| {
+            (
+                w.provider.as_str(),
+                w.capability.as_str(),
+                w.adapter.as_str(),
+                w.behavior.as_str(),
+            )
+        })
+        .collect();
+    let ours: Vec<(&str, &str, &str, &str)> = FAMILY_ADAPTERS
+        .iter()
+        .map(|served| {
+            (
+                served.family,
+                served.capability,
+                served.adapter,
+                served.behavior,
+            )
+        })
+        .collect();
+    assert_eq!(rows, ours, "spec/providers.md §2, the family table");
+    let identities = [
+        (
+            openai_compatible::structured::CAPABILITY,
+            openai_compatible::structured::IDENTITY,
+        ),
+        (
+            openai_compatible::agent::CAPABILITY,
+            openai_compatible::agent::IDENTITY,
+        ),
+    ];
+    for (served, (capability, identity)) in FAMILY_ADAPTERS.iter().zip(identities) {
+        assert_eq!(served.family, openai_compatible::FAMILY);
+        assert_eq!(
+            (served.capability, served.adapter, served.behavior),
+            (capability, identity.adapter, identity.behavior)
+        );
+    }
+    for w in &written {
+        let path = format!("{}/../../spec/{}", env!("CARGO_MANIFEST_DIR"), w.reference);
+        let reference = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+        let row = format!("| `{}` | `{}` |", w.adapter, w.behavior);
+        assert!(
+            reference
+                .lines()
+                .any(|line| line.ends_with(&row) && line.contains(&format!("`{}`", w.capability))),
+            "{}: no row for {} {row}",
+            w.reference,
+            w.capability
         );
     }
 }
