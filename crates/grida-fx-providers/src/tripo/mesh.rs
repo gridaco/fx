@@ -2,18 +2,19 @@
 //!
 //! `submit`: refuse a bad request (no `front`, a view other than front/back/left/right, `front`
 //! alone, a view that is not PNG or JPEG, `face_limit` outside 48..25 000, no key); upload each
-//! view in the order front, back, left, right (`<view>.png` / `<view>.jpg`); then post
-//! `POST /generation/multiview-to-model` once with `{"model", "quad", "texture", "pbr",
-//! "face_limit"?, "inputs": [{"front": token}, …]}`. The handle is `{"task_id"}`.
+//! view in the order front, back, left, right (`<view>.png` / `<view>.jpg`); then post `POST
+//! /generation/multiview-to-model` once with `{"model", "quad", "texture", "pbr", "face_limit"?,
+//! "inputs": [{"front": token}, …]}`, then the provider options, which may set no member of
+//! [`OWNED`] (spec/adapters.md §8). The handle is `{"task_id"}`.
 //! `collect`: wait up to [`COLLECT_DEADLINE`]; download every model URL; keep the first FBX, else
 //! the first GLB, as file `model`; `data: {"facts": {"model_kind": <kind>}}`; cost from credits.
 //!
 //! Refusals come in the order of spec/adapters.md §4: the route, the request's shape
-//! (spec/capabilities.md §7), the key, the values (the view names, then their count, then
-//! `face_limit`), then the view files in the order front, back, left, right (each: its bytes, then
-//! its kind). A multiview task takes two views at least: Tripo refuses `front` alone only at the
-//! paid POST (HTTP 400, after the uploads, a failed call at the whole hold), so the adapter
-//! refuses it first, at $0, before anything is sent.
+//! (spec/capabilities.md §7), the key, the values (provider options, then the view names, then
+//! their count, then `face_limit`), then the view files in the order front, back, left, right
+//! (each: its bytes, then its kind). A multiview task takes two views at least: Tripo refuses
+//! `front` alone only at the paid POST (HTTP 400, after the uploads, a failed call at the whole
+//! hold), so the adapter refuses it first, at $0, before anything is sent.
 
 use super::TripoApi;
 use crate::BoxFuture;
@@ -38,6 +39,10 @@ pub const IDENTITY: Identity = Identity {
     adapter: ADAPTER,
     behavior: "1",
 };
+
+/// The members provider options may not set (spec/adapters.md §8; src/tripo/README.md): those of
+/// the paid body.
+pub const OWNED: &[&str] = &["model", "quad", "texture", "pbr", "face_limit", "inputs"];
 
 const CAPABILITY: &str = "mesh.generate";
 
@@ -78,6 +83,10 @@ impl TripoMesh {
         if let Err(reason) = api.client.credential("authorization", "Bearer ") {
             return api.refused(&reason);
         }
+        let options = match crate::wire::provider_options(call, OWNED) {
+            Ok(options) => options,
+            Err(reason) => return api.refused(&reason),
+        };
         let Values { views, params } = match request_values(call) {
             Ok(values) => values,
             Err(reason) => return api.refused(&reason),
@@ -111,6 +120,7 @@ impl TripoMesh {
         body.insert("model".into(), Value::String(call.route.model.clone()));
         body.extend(params);
         body.insert("inputs".into(), Value::Array(inputs));
+        body.extend(options);
         match api
             .post_task("/generation/multiview-to-model", Value::Object(body))
             .await

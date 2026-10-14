@@ -30,6 +30,9 @@ Every built-in type is declared, so a workflow using it plans and prices. A type
   crash collects instead of submitting again.
 - **Length-priced calls** (speech by characters, music by seconds) are priced from `max_chars` or
   `duration` when the text isn't known yet.
+- **Every generation type also takes `provider_options`**, parameters FX does not expose, by
+  provider: only the provider the call runs on reads its own
+  ([Parameters FX does not expose](13-providers.md#parameters-fx-does-not-expose)).
 
 **Judges and annotators** (see [Annotations and judges](06-annotations-and-judges.md); the free
 ones are local and run on Python):

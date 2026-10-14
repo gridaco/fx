@@ -70,6 +70,7 @@ This page says how to set it up, what it does well, and where it differs from th
 | `size: <W>x<H>` | **no**: refused while planning |
 | `references`, and an edit's `image` | yes: at most 5 pictures in all, PNG, JPEG or WebP |
 | `mask` | **no**: refused while planning |
+| `provider_options.codex` | **no**: refused when the call is sent, at $0; other providers' members are not read |
 
 ### Drawing from pictures
 
@@ -265,6 +266,7 @@ Codex at all: `Codex was not started: GRIDA_FX_NETWORK is off`.
 | `imagegen@codex does not support exact_size` | Leave `size` out, and size the picture after it (above). |
 | `imagegen@codex takes at most 5 input pictures, …` | Give the step fewer pictures, or use an API route for it. |
 | `… is image/gif; Codex takes PNG, JPEG or WebP` | Convert the picture first. |
+| `… Codex takes no provider_options` | Drop `provider_options.codex` from the step and the route; other providers' members may stay. |
 | `… the Codex usage limit is reached; it resets at …` | Wait for the reset, or use an API route. |
 | `Codex is not signed in: …`, or `Codex is signed in with an API key, …` | Run `codex login` and sign in with ChatGPT. |
 | `Codex's MCP servers could not be listed, …` | Check that `codex mcp list` works; update Codex. |

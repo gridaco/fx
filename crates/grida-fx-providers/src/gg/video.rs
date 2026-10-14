@@ -4,9 +4,10 @@
 //! `submit`: one `POST {base}/videos` with `{model, prompt, duration?, aspectRatio?, resolution?,
 //! providerOptions?}` and the attempt's `Idempotency-Key` ([`super::Gateway`]): `duration` a JSON
 //! integer when whole; `resolution` sent as is when it is `WIDTHxHEIGHT`, and a tier name (`720p`,
-//! `4k`) as `providerOptions: {gg: {resolutionTier}}`; `aspect_ratio` as `aspectRatio`. A request
-//! with a `first_frame` goes as `multipart/form-data` instead: that JSON as the text part `input`,
-//! then the frame as the file part `image`. GG takes no last frame.
+//! `4k`) as `providerOptions: {gg: {resolutionTier}}`; `aspect_ratio` as `aspectRatio`; then the
+//! provider options, which may set no member of [`OWNED`] (spec/adapters.md §8). A request with a
+//! `first_frame` goes as `multipart/form-data` instead: that JSON as the text part `input`, then
+//! the frame as the file part `image`. GG takes no last frame.
 //!
 //! `collect`: [`super::job::Jobs::collect`], reading `result.videos[0]`. The bytes decide: the
 //! file is the clip when it carries the MP4 signature and an MP4 video track. The answer is file
@@ -15,11 +16,11 @@
 //! exact size of a requested `WIDTHxHEIGHT`.
 //!
 //! Submit refusals, in this order (spec/adapters.md §4): another route's contract; a request that
-//! does not fit `video.generate`; no `GG_API_KEY`; a blank prompt; a last frame; a
-//! `resolution` that is neither a tier name nor `WIDTHxHEIGHT`; an `aspect_ratio` that is not
-//! `W:H`; a first frame whose file the call does not carry, is empty or is not PNG, JPEG or WebP.
-//! The model's own limits (durations, tiers, ratios, which models take a frame) are GG's to
-//! refuse, at no cost.
+//! does not fit `video.generate`; no `GG_API_KEY`; provider options ([`wire::provider_options`]); a
+//! blank prompt; a last frame; a `resolution` that is neither a tier name nor `WIDTHxHEIGHT`; an
+//! `aspect_ratio` that is not `W:H`; a first frame whose file the call does not carry, is empty or
+//! is not PNG, JPEG or WebP. The model's own limits (durations, tiers, ratios, which models take a
+//! frame) are GG's to refuse, at no cost.
 
 use super::Gateway;
 use super::job::{Jobs, Kind};
@@ -44,6 +45,18 @@ pub const IDENTITY: Identity = Identity {
     adapter: ADAPTER,
     behavior: "1",
 };
+
+/// The members provider options may not set (spec/adapters.md §8; src/gg/README.md): every
+/// member and part the submit has, `providerOptions`, which FX sends for a tier, included.
+pub const OWNED: &[&str] = &[
+    "model",
+    "prompt",
+    "duration",
+    "aspectRatio",
+    "resolution",
+    "providerOptions",
+    "image",
+];
 
 /// The most bytes of one clip.
 pub const MAX_VIDEO_BYTES: u64 = 512 * 1024 * 1024;
@@ -245,8 +258,12 @@ impl GgVideo {
         capabilities::check_request(&call.route.capability, &call.request)?;
         let gateway = &self.jobs.gateway;
         let credential = gateway.credential()?;
+        let options = wire::provider_options(call, OWNED)?;
         let clip = clip(&call.request)?;
-        let input = body(&call.route.model, &clip);
+        let mut input = body(&call.route.model, &clip);
+        if let Value::Object(members) = &mut input {
+            members.extend(options);
+        }
         let body = match frame(call)? {
             None => Body::Json(input),
             Some(image) => Body::Multipart(vec![Part::text("input", &input.to_string()), image]),

@@ -16,7 +16,7 @@ use grida_fx_providers::transport::replay::{
     Exchange, Expect, ExpectBody, NoNetwork, ReplayTransport, Reply,
 };
 use grida_fx_providers::transport::{
-    HttpResponse, Lane, Method, Transport, TransportError, TransportErrorKind,
+    Body, HttpResponse, Lane, Method, Transport, TransportError, TransportErrorKind,
 };
 use grida_fx_providers::{
     Adapter, Adapters, Answer, Endpoints, KeyName, Keys, RequestAdapter, Sent, Setup,
@@ -374,6 +374,86 @@ fn unset_speech_values_and_max_chars_are_never_sent() {
         let sent = block_on(speech(transport.clone(), test_keys()).send(&speech_call(request)));
         assert!(matches!(sent, Sent::Answered(_)), "{sent:?}");
         transport.assert_done();
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Provider options (spec/adapters.md §8)
+
+#[test]
+fn provider_options_follow_the_body_s_own_members() {
+    let call = CallBuilder::new("sound.generate", SOUND_ROUTE)
+        .contract(
+            json!({"adapter": "elevenlabs-sound-effect", "adapter_behavior": 1,
+                         "provider_options": {"elevenlabs": {"seed": 1}}}),
+        )
+        .request(
+            json!({"prompt": "wooden door opens", "duration": 2, "prompt_influence": 0.5,
+                        "provider_options": {"elevenlabs": {"seed": 7, "extra": [1]},
+                                             "openai": {"text": "never read"}}}),
+        )
+        .build();
+    let transport = Arc::new(ReplayTransport::new(vec![
+        expect_sound(
+            r#"{"text":"wooden door opens","model_id":"eleven_text_to_sound_v2","loop":false,"duration_seconds":2.0,"prompt_influence":0.5,"seed":7,"extra":[1]}"#,
+        )
+        .reply(mp3(MP3)),
+    ]));
+    answer_of(block_on(sound(transport.clone(), test_keys()).send(&call)));
+    transport.assert_done();
+    owns_what_it_sent(&transport, &["seed", "extra"], elevenlabs::sound::OWNED);
+    let call = speech_call(
+        json!({"text": "hello there", "voice": "6awt6FKyZGV0HyQEwisX",
+                                  "stability": 0.5, "language_code": "en",
+                                  "provider_options": {"elevenlabs": {"apply_text_normalization": "off"},
+                                                       "fal": {"text": "never read"}}}),
+    );
+    let transport = Arc::new(ReplayTransport::new(vec![
+        expect(
+            &speech_url("6awt6FKyZGV0HyQEwisX"),
+            r#"{"text":"hello there","model_id":"eleven_v3","voice_settings":{"stability":0.5},"language_code":"en","apply_text_normalization":"off"}"#,
+        )
+        .reply(mp3(MP3)),
+    ]));
+    answer_of(block_on(speech(transport.clone(), test_keys()).send(&call)));
+    transport.assert_done();
+    owns_what_it_sent(
+        &transport,
+        &["apply_text_normalization"],
+        elevenlabs::speech::OWNED,
+    );
+}
+
+/// Asserts that every member of the body `transport` captured, but the provider options
+/// `options`, is one in `owned`.
+fn owns_what_it_sent(transport: &ReplayTransport, options: &[&str], owned: &[&str]) {
+    let Body::Json(Value::Object(sent)) = &transport.requests()[0].body else {
+        panic!("a JSON body");
+    };
+    for name in sent.keys().filter(|name| !options.contains(&name.as_str())) {
+        assert!(owned.contains(&name.as_str()), "{name}");
+    }
+}
+
+#[test]
+fn provider_options_set_no_member_the_adapters_own() {
+    let sound = sound(Arc::new(NoNetwork), test_keys());
+    for name in elevenlabs::sound::OWNED {
+        let call = sound_call(json!({"prompt": " ",
+                                     "provider_options": {"elevenlabs": {*name: 1}}}));
+        assert_eq!(
+            refused_without_sending(&sound, &call),
+            format!("provider_options.elevenlabs.{name} is a member FX owns")
+        );
+    }
+    let speech = speech(Arc::new(NoNetwork), test_keys());
+    for name in elevenlabs::speech::OWNED {
+        let call = speech_call(json!({"text": " ", "voice": "v",
+                                      "provider_options": {"elevenlabs": {*name: 1}}}));
+        assert_eq!(
+            refused_without_sending(&speech, &call),
+            format!("provider_options.elevenlabs.{name} is a member FX owns")
+        );
     }
 }
 

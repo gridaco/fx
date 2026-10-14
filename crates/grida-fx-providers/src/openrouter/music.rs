@@ -1,12 +1,12 @@
 //! OpenRouter music (Lyria): `POST {base}/chat/completions` with `{"model", "messages": [{"role":
 //! "user", "content": <prompt>}], "modalities": ["text", "audio"], "audio": {"format": "mp3"},
-//! "stream": true}` (src/openrouter/README.md; spec/capabilities.md §9). `duration` is never sent:
-//! it stays in the call key only.
+//! "stream": true}`, then the provider options (src/openrouter/README.md; spec/capabilities.md §9;
+//! spec/adapters.md §8). `duration` is never sent: it stays in the call key only.
 //!
 //! Refusals, in the order of spec/adapters.md §4: the contract (`adapter: openrouter-music`,
-//! `adapter_behavior: 1`, each checked when present); the capability's shape; the key; a blank prompt
-//! (`a music call needs its prompt as text`); a serialized body over
-//! [`super::MAX_REQUEST_BYTES`].
+//! `adapter_behavior: 1`, each checked when present); the capability's shape; the key; provider
+//! options that set a member of [`OWNED`] ([`wire::provider_options`]); a blank prompt (`a music
+//! call needs its prompt as text`); a serialized body over [`super::MAX_REQUEST_BYTES`].
 //!
 //! The response is SSE when its `content-type` names `text/event-stream` or any line starts
 //! (after blanks) with `data:`; otherwise it is one buffered JSON object. In a stream only lines
@@ -40,6 +40,10 @@ use std::time::Duration;
 
 /// The label of every reason.
 pub const LABEL: &str = "OpenRouter music generation";
+
+/// The members provider options may not set (spec/adapters.md §8; src/openrouter/README.md):
+/// every member the body has, and `n`, which would change the answer.
+pub const OWNED: &[&str] = &["model", "messages", "modalities", "audio", "stream", "n"];
 
 /// The contract `adapter` this adapter serves.
 pub const CONTRACT_ADAPTER: &str = "openrouter-music";
@@ -87,6 +91,7 @@ impl OpenRouterMusic {
         }
         crate::capabilities::check_request(&route.capability, &call.request)?;
         let credential = self.client.credential("authorization", "Bearer ")?;
+        let options = wire::provider_options(call, OWNED)?;
         let prompt = call
             .request
             .get("prompt")
@@ -95,13 +100,17 @@ impl OpenRouterMusic {
         if prompt.trim().is_empty() {
             return Err("a music call needs its prompt as text".into());
         }
-        let body = json!({
-            "model": route.model.trim(),
-            "messages": [{"role": "user", "content": prompt}],
-            "modalities": ["text", "audio"],
-            "audio": {"format": FORMAT},
-            "stream": true,
-        });
+        let mut body = Map::new();
+        body.insert("model".into(), json!(route.model.trim()));
+        body.insert(
+            "messages".into(),
+            json!([{"role": "user", "content": prompt}]),
+        );
+        body.insert("modalities".into(), json!(["text", "audio"]));
+        body.insert("audio".into(), json!({"format": FORMAT}));
+        body.insert("stream".into(), json!(true));
+        body.extend(options);
+        let body = Value::Object(body);
         if wire::body_exceeds(&body, super::MAX_REQUEST_BYTES) {
             return Err(BODY_TOO_LARGE.into());
         }

@@ -20,6 +20,7 @@ The reference for FX's adapters on `codex`, under the adapter contract, [spec/ad
 - **Limits:** 60 s for Codex to accept the turn (starting the runtime too, on the invocation's first call), and 600 s for the whole send; a message from Codex is at most 64 MiB, refused as soon as it passes that.
 - **Refusals ([adapters.md](../../../../spec/adapters.md) §4), in this order:**
   - the route ([adapters.md](../../../../spec/adapters.md) §4 step 1) and the request ([adapters.md](../../../../spec/adapters.md) §4 step 2);
+  - provider options: Codex sends the runtime no parameters, so a `provider_options.codex`, the route's or the request's, that is not absent, `null` or `{}` is refused: `Codex takes no provider_options` ([adapters.md](../../../../spec/adapters.md) §8). Other providers' members are not read, so a step may carry them for the other routes it may run on;
   - a blank `prompt`: `an image call needs its prompt as text`;
   - a `size` other than `auto`: `Codex image generation takes no exact size: use size auto, and fx/image.resize@1 after it` (Shapes, above: an exact size would only fail the check);
   - a `background` other than `auto`, `opaque` or `transparent`: `background must be auto, opaque or transparent`;

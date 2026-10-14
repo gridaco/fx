@@ -966,11 +966,19 @@ fn what_codex_cannot_honour_is_refused_before_it_starts() {
                 json!({"prompt": "p", "size": "1024x1024"}),
                 json!({"prompt": "p", "references": [{"file": "a"}]}),
                 json!({"prompt": "p", "seed": 1}),
-                // The program vanished after it was found.
-                json!({"prompt": "p"}),
+                json!({"prompt": " ", "provider_options": {"codex": {"seed": 1}}}),
+                // Other providers' options are not read, and an empty member is none.
+                json!({"prompt": "p", "provider_options": {"codex": {}, "openai": {"seed": 1}}}),
             ] {
                 sent.push(adapter.send(&call(request).call).await);
             }
+            let mut route = contract();
+            route["provider_options"] = json!({"codex": {"seed": 1}});
+            let routed = CallBuilder::new("image.generate", "imagegen@codex")
+                .contract(route)
+                .request(json!({"prompt": "p"}))
+                .build();
+            sent.push(adapter.send(&routed.call).await);
             let png = media::png(2, 2, None);
             let pictures = [
                 with_pictures("image.edit", |b| {
@@ -1000,7 +1008,10 @@ fn what_codex_cannot_honour_is_refused_before_it_starts() {
             refused(codex::NO_EXACT_SIZE),
             refused("references[0] has no bytes to send"),
             refused("image.generate takes no member seed"),
+            refused("Codex takes no provider_options"),
+            // The program vanished after it was found.
             refused(codex::NOT_INSTALLED),
+            refused("Codex takes no provider_options"),
             refused("Codex image edits take no mask"),
             refused("Codex takes at most 5 input pictures"),
             refused("references[1] is image/gif; Codex takes PNG, JPEG or WebP"),

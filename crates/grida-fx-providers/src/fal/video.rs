@@ -1,11 +1,12 @@
 //! fal video: a queue long job (src/fal/README.md; spec/adapters.md §6).
 //!
 //! `submit`: one `POST {queue}/<model>` with `{"prompt", "image_url", "end_image_url"?,
-//! "aspect_ratio", "resolution", "duration"}` (`duration` a JSON integer); a 2xx with a
-//! `request_id` that is a safe id (`^[A-Za-z0-9_.:-]{1,96}$`), and `status_url` and
-//! `response_url` both under the queue base, becomes the handle `{"request_id", "status_path",
-//! "response_path"}` (the URLs minus `{queue}/`, a plain query kept; never a host name). Contract
-//! `adapter` must be `fal-queue` when present.
+//! "aspect_ratio", "resolution", "duration"}` (`duration` a JSON integer), then the provider
+//! options, which may set no member of [`OWNED`] (spec/adapters.md §8); a 2xx with a `request_id`
+//! that is a safe id (`^[A-Za-z0-9_.:-]{1,96}$`), and `status_url` and `response_url` both under
+//! the queue base, becomes the handle `{"request_id", "status_path", "response_path"}` (the URLs
+//! minus `{queue}/`, a plain query kept; never a host name). Contract `adapter` must be `fal-queue`
+//! when present.
 //!
 //! `collect`: polls `GET {queue}/<status_path>` every [`POLL`] until `COMPLETED` (or a truthy
 //! `error`), then `GET {queue}/<response_path>`, then downloads `video.url` **once** (https, no
@@ -17,10 +18,11 @@
 //! duration against the request (src/fal/README.md).
 //!
 //! Submit refusals, in this order (spec/adapters.md §4; src/fal/README.md): another route's
-//! contract; a request that does not fit `video.generate`; no `FAL_KEY`; a blank prompt, or one
-//! over [`MAX_PROMPT_CHARS`]; no `first_frame`; a `duration` that is not a whole number from 3 to
-//! 10; a `resolution` (default `720p`) or `aspect_ratio` (default `9:16`) the route does not draw;
-//! then `first_frame` and `last_frame`, each when it is not an `image/*` file (`<member> is <kind>,
+//! contract; a request that does not fit `video.generate`; no `FAL_KEY`; provider options that set
+//! a member of [`OWNED`] ([`crate::wire::provider_options`]); a blank prompt, or one over
+//! [`MAX_PROMPT_CHARS`]; no `first_frame`; a `duration` that is not a whole number from 3 to 10; a
+//! `resolution` (default `720p`) or `aspect_ratio` (default `9:16`) the route does not draw; then
+//! `first_frame` and `last_frame`, each when it is not an `image/*` file (`<member> is <kind>,
 //! not a picture`) or has no bytes.
 //!
 //! Submit statuses: 4xx other than 408 and 429 is `Failed { Some(0), false }`; 408, 429, 500, 502
@@ -68,6 +70,18 @@ pub const IDENTITY: Identity = Identity {
     adapter: CONTRACT_ADAPTER,
     behavior: "1",
 };
+
+/// The members provider options may not set (spec/adapters.md §8; src/fal/README.md): every
+/// member the submit body has, and `sync_mode`, which changes how fal returns its output.
+pub const OWNED: &[&str] = &[
+    "prompt",
+    "image_url",
+    "end_image_url",
+    "aspect_ratio",
+    "resolution",
+    "duration",
+    "sync_mode",
+];
 
 /// The submit's deadline.
 pub const SUBMIT_DEADLINE: Duration = Duration::from_secs(300);
@@ -408,6 +422,7 @@ impl FalVideo {
         }
         crate::capabilities::check_request(&call.route.capability, &call.request)?;
         let credential = client.credential(super::CREDENTIAL_HEADER, super::CREDENTIAL_PREFIX)?;
+        let options = crate::wire::provider_options(call, OWNED)?;
         let clip = clip(&call.request)?;
         let first = super::picture(call, clip.first_frame, "first_frame")?;
         let last = match clip.last_frame {
@@ -424,6 +439,7 @@ impl FalVideo {
         body.insert("aspect_ratio".into(), json!(clip.aspect_ratio));
         body.insert("resolution".into(), json!(clip.resolution));
         body.insert("duration".into(), json!(clip.seconds));
+        body.extend(options);
 
         let url = client.url(super::endpoint(&call.route.model));
         Ok(HttpRequest::new(Method::Post, url, Lane::Provider)

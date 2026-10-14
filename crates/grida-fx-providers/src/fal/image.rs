@@ -4,14 +4,16 @@
 //! Contract `adapter` must be `fx-fal-image-v1` when present. Body members in order: `prompt`,
 //! `num_images: 1`, `image_size` (only when `size` is given: `"auto"` or `{"width", "height"}`),
 //! `quality: "max"`, `background`, `output_format: "png"`, then for an edit `image_urls` (`image`
-//! first, then `references`) and `mask_url`. The answer is `root.images[0]` (`root` = `data` when
-//! that is an object, else the payload): a data URI decoded in place, or a `*.fal.media` URL
-//! downloaded once on the download lane with `accept: image/*`, no redirects, at most 64 MiB.
-//! Deadline 600 s for the POST and the download together. `cost`: `usage.cost` at the payload's
-//! top level ([`crate::wire::usd_ceil`]), else `None`. `check`: [`crate::wire::check_image`].
+//! first, then `references`) and `mask_url`, then the provider options. The answer is
+//! `root.images[0]` (`root` = `data` when that is an object, else the payload): a data URI decoded
+//! in place, or a `*.fal.media` URL downloaded once on the download lane with `accept: image/*`, no
+//! redirects, at most 64 MiB. Deadline 600 s for the POST and the download together. `cost`:
+//! `usage.cost` at the payload's top level ([`crate::wire::usd_ceil`]), else `None`. `check`:
+//! [`crate::wire::check_image`].
 //!
 //! Refused before sending (spec/adapters.md §4; src/fal/README.md), in this order: another route's
-//! contract; a request that does not fit its capability; no `FAL_KEY`; a blank prompt or one over
+//! contract; a request that does not fit its capability; no `FAL_KEY`; provider options that set a
+//! member of [`OWNED`] ([`crate::wire::provider_options`]); a blank prompt or one over
 //! [`MAX_PROMPT_CHARS`]; a `background` other than `auto`, `opaque` or `transparent`; references on
 //! a generate; more than [`MAX_PICTURES`] pictures on an edit; a `size` that is not `auto` or `WxH`
 //! inside the GPT Image envelope; then, in the order `image`, `references[<i>]`, `mask`, a picture
@@ -39,6 +41,20 @@ pub const IDENTITY: Identity = Identity {
     adapter: CONTRACT_ADAPTER,
     behavior: r#""1""#,
 };
+
+/// The members provider options may not set (spec/adapters.md §8; src/fal/README.md): every
+/// member the body has, and `sync_mode`, which changes how fal returns its output.
+pub const OWNED: &[&str] = &[
+    "prompt",
+    "num_images",
+    "image_size",
+    "quality",
+    "background",
+    "output_format",
+    "image_urls",
+    "mask_url",
+    "sync_mode",
+];
 
 /// The POST and the download together.
 pub const DEADLINE: Duration = Duration::from_secs(600);
@@ -86,6 +102,7 @@ impl FalImages {
         }
         crate::capabilities::check_request(&call.route.capability, &call.request)?;
         let credential = client.credential(super::CREDENTIAL_HEADER, super::CREDENTIAL_PREFIX)?;
+        let options = crate::wire::provider_options(call, OWNED)?;
         let request = &call.request;
         let edit = call.route.capability == "image.edit";
 
@@ -140,6 +157,7 @@ impl FalImages {
                 );
             }
         }
+        body.extend(options);
 
         let action = if edit { "edit" } else { "text-to-image" };
         let url = client.url(&format!("{}/{action}", super::endpoint(&call.route.model)));

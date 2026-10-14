@@ -16,7 +16,7 @@ use grida_fx_providers::transport::replay::{
 use grida_fx_providers::transport::{
     HttpResponse, Lane, Method, Part, Transport, TransportError, TransportErrorKind,
 };
-use grida_fx_providers::tripo::rig::{CHECK_DEADLINE, TripoRig};
+use grida_fx_providers::tripo::rig::{self, CHECK_DEADLINE, TripoRig};
 use grida_fx_providers::tripo::{POLL, TripoApi};
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -259,6 +259,53 @@ fn a_rig_is_checked_free_then_posted_once() {
         }
     );
     h.done();
+}
+
+#[test]
+fn provider_options_follow_the_paid_body_only() {
+    let mut b = CallBuilder::new("mesh.rig", ROUTE).contract(json!({
+        "adapter": "tripo-rig", "adapter_behavior": 1,
+        "provider_options": {"tripo": {"topology": "quad"}},
+    }));
+    let model = b.file("model/gltf-binary", media::GLB);
+    let call = b
+        .request(json!({"model": model,
+                        "provider_options": {"tripo": {"seed": 7},
+                                             "gg": {"rig_type": "never read"}}}))
+        .build();
+    // The upload and the free check carry none.
+    let h = harness(vec![
+        upload(),
+        check_posted(),
+        checked(json!({"riggable": true, "rig_type": "biped"})),
+        rig_posted(
+            r#"{"input":"tok1","model":"v1.0-20240301","rig_type":"biped","spec":"mixamo","out_format":"glb","topology":"quad","seed":7}"#,
+        ),
+    ]);
+    assert_eq!(
+        h.submit(&call),
+        Submitted::Accepted {
+            handle: plain_handle()
+        }
+    );
+    h.done();
+}
+
+#[test]
+fn provider_options_set_no_member_of_the_paid_body() {
+    let sent: serde_json::Map<String, Value> = serde_json::from_str(RIG_BODY).unwrap();
+    let names: Vec<&str> = sent.keys().map(String::as_str).collect();
+    assert_eq!(names, rig::OWNED);
+    // Refused before the upload: nothing is sent.
+    for name in rig::OWNED {
+        let call = rig_call(json!({"provider_options": {"tripo": {*name: 1}}}));
+        assert_eq!(
+            block_on(offline_rig(test_keys()).submit(&call)),
+            Submitted::Refused {
+                reason: format!("provider_options.tripo.{name} is a member FX owns")
+            }
+        );
+    }
 }
 
 #[test]

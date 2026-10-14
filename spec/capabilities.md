@@ -11,7 +11,7 @@ How a provider's adapter turns a request into an exchange, and how it is billed,
 
 **Requests.**
 - A request is a JSON object: the **canonical request** ([identity.md](identity.md) §9). Files are file values (`{"file": "<digest>"}`, [protocol.md](protocol.md) §3.2).
-- A body's `ctx` call sends whatever members it gives. A paid built-in sends its params, without `vars`, then its input ports (§14). The member tables below list the members in that order; `agent.turn`, which no built-in sends, in the order of [protocol.md](protocol.md) §6.2.
+- A body's `ctx` call sends whatever members it gives. A paid built-in sends its params, without `vars`, then its input ports (§14). The member tables below list the members in that order; `agent.turn`, which no built-in sends, in the order of [protocol.md](protocol.md) §6.2, then `provider_options`.
 - A paid built-in leaves out a param the step did not give and that has no default, and an input port without a value: neither is a member of the request. A param whose value is missing or `null` goes as `null` (§14; [protocol.md](protocol.md) §5.3 `params`). Absent and `null` are different requests, and so different call keys ([identity.md](identity.md) §9).
 - A request MUST be checked against its capability right after its route's contract, before anything else ([adapters.md](adapters.md) §4 step 2). The engine checks it before an adapter FX ships sees the call, and before a stand-in is asked ([protocol.md](protocol.md) §6.1), with these sentences:
   - A request that is not an object: `a request for <capability> is a JSON object`.
@@ -21,6 +21,7 @@ How a provider's adapter turns a request into an exchange, and how it is billed,
     - A required member that is absent: `<capability> needs <name>`.
     - A member of the wrong type: `<name> is <type>`. The type words are `text`, `a number`, `a whole number`, `true or false`, `an object`, `a list`, `a file`, `a list of files`, `files by name`, and `a JSON file or object`.
 - Checks on a member's value beyond its type are the route's, in its adapter's reference ([providers.md](providers.md) §2): non-blank text, ranges, enumerations, sizes, counts.
+- **`provider_options`.** Every capability takes an optional object `provider_options`: parameters FX does not expose, by provider (`{"fal": {"seed": 7}}`). Only the adapter of the call's route reads a member, its provider's, and adds its parameters to what it sends, over the route's own `contract.provider_options` ([adapters.md](adapters.md) §8). The other members are carried and not read, so one step may give options for each provider it may run on. The request check holds it to an object; what is in it is its adapter's to refuse. It is part of the request, so of the call key, and is recorded with it: it never holds a credential.
 
 In the tables below, a member's type is one of:
 - `text`, `number`, `integer` (a number with no fractional part), `boolean`, `object` or `list`;
@@ -68,6 +69,7 @@ A picture from a prompt.
 | `prompt` | text | required | sent verbatim; the rendered template of a built-in |
 | `size` | text | optional | `auto`, or `<W>x<H>` in pixels: an exact size the answer must have |
 | `background` | text | optional | `auto` (the default), `opaque` or `transparent` |
+| `provider_options` | object | optional | parameters FX does not expose, by provider (§1) |
 | `references` | file[] | optional | input pictures; a route without `image_input` refuses a non-empty list |
 
 **Answer:** the file `image` (`image/png`), with `data: null`.
@@ -108,6 +110,7 @@ A picture made from input pictures, optionally within a mask.
 | `prompt` | text | required | |
 | `size` | text | optional | as for `image.generate` |
 | `background` | text | optional | as for `image.generate` |
+| `provider_options` | object | optional | as for `image.generate` |
 | `image` | file | required | the first input picture |
 | `mask` | file | optional | which part of `image` may change: a PNG the size of `image` whose fully transparent pixels (alpha 0) mark the editable region. This is GPT Image's convention, which every route FX ships that takes a mask follows; adapters pass the mask through unchanged. It is a strong hint, not a protected region |
 | `references` | file[] | optional | more input pictures, after `image` |
@@ -144,6 +147,7 @@ A JSON value that meets a schema.
 | `system` | text | optional | a system prompt; blank means none |
 | `matte` | text | optional | the colour pictures are flattened on when a route reduces them; `#ffffff` by default |
 | `max_tokens` | integer | optional | at least 1; 16 000 by default |
+| `provider_options` | object | optional | as for `image.generate` |
 | `schema` | file \| object | required | a JSON Schema (draft 2020-12) whose root is an object |
 | `context` | file[] | optional | pictures (`image/*`) are shown; any other file is read as UTF-8 text and appended to the prompt |
 
@@ -160,7 +164,7 @@ A JSON value that meets a schema.
 
 ## 5. `agent.turn`
 
-One turn of the engine's agent loop ([protocol.md](protocol.md) §6.2). The engine builds every request; a body never sends one directly.
+One turn of the engine's agent loop ([protocol.md](protocol.md) §6.2). The engine builds every request of an agent run; a body may also send one itself, through `ctx.capability` ([protocol.md](protocol.md) §6.1).
 
 | Member | Type | | |
 |---|---|---|---|
@@ -169,6 +173,7 @@ One turn of the engine's agent loop ([protocol.md](protocol.md) §6.2). The engi
 | `tools` | list | required | `[{"name", "description", "parameters": <JSON Schema>}]`, the engine's `submit` included |
 | `tool_choice` | text | required | `auto` or `required` |
 | `max_tokens` | integer | optional | at least 1 |
+| `provider_options` | object | optional | as for `image.generate`; the engine's agent loop sends none ([protocol.md](protocol.md) §6.2), so an agent run's turns take only their route's `contract.provider_options`, and a body's own `agent.turn` call may carry its own |
 
 **Answer:** no files. `data` is `{"text": <text>, "tool_calls": [{"id": <text>, "name": <text>, "arguments": <object>}]}`. The engine checks this shape ([protocol.md](protocol.md) §6.2).
 
@@ -189,6 +194,7 @@ A clip from a prompt and frames. A long job.
 | `duration` | number | optional | seconds; a route may take whole seconds only |
 | `resolution` | text | optional | a route's tier name, such as `720p`, or `<W>x<H>` where a route takes an exact size |
 | `aspect_ratio` | text | optional | such as `9:16` |
+| `provider_options` | object | optional | as for `image.generate` |
 | `first_frame` | file | optional | the opening frame; a route may require it |
 | `last_frame` | file | optional | the closing frame; needs `first_frame` |
 
@@ -214,6 +220,7 @@ A 3D model from views of one subject. A long job.
 | `quad` | boolean | optional | quad topology |
 | `texture` | boolean | optional | a textured model |
 | `pbr` | boolean | optional | PBR materials |
+| `provider_options` | object | optional | as for `image.generate` |
 | `views` | file{} | required | pictures by view name; the multiview route takes `front` (required) and at least one of `back`, `left`, `right`, each PNG or JPEG |
 
 **Answer:** the file `model`, whose kind is `model/fbx` or `model/gltf-binary`, taken from its bytes. `data` is `{"facts": {"model_kind": <kind>}}`.
@@ -236,6 +243,7 @@ A rigged model from an unrigged one. A long job.
 | `rig_type` | text | optional | `biped` by default |
 | `skeleton` | text | optional | the skeleton convention; `mixamo` by default |
 | `allow_negative_check` | boolean | optional | rig a model the provider's free pre-check doubts; false by default |
+| `provider_options` | object | optional | as for `image.generate` |
 | `model` | file | required | `model/gltf-binary` |
 
 **Answer:** the file `model` (`model/gltf-binary`). `data` is `{"facts": {"riggable": <boolean or null>, "checked_rig_type": <the check's answer or null>, "advisory_override": <boolean>}}`.
@@ -256,6 +264,7 @@ A piece of music.
 |---|---|---|---|
 | `prompt` | text | required | structure and length are asked for in the prompt |
 | `duration` | number | optional | seconds; part of the call key and of pricing, but no route FX ships sends it |
+| `provider_options` | object | optional | as for `image.generate` |
 
 **Answer:** the file `audio` (`audio/mpeg`), with `data: null`. **Check:** the MP3 signature.
 
@@ -271,6 +280,7 @@ A sound effect.
 | `duration` | number | optional | seconds; the model chooses when absent |
 | `prompt_influence` | number | optional | 0 to 1 |
 | `loop` | boolean | optional | a seamless loop; false by default |
+| `provider_options` | object | optional | as for `image.generate` |
 
 **Answer:** the file `audio` (`audio/mpeg`), with `data: null`. **Check:** not empty, MP3, the MP3 signature.
 
@@ -291,6 +301,7 @@ Spoken text.
 | `stability` | number | optional | 0 to 1 |
 | `language_code` | text | optional | an ISO language code; `""` counts as absent |
 | `max_chars` | integer | optional | the most characters, for pricing per thousand characters; never sent |
+| `provider_options` | object | optional | as for `image.generate` |
 
 **Answer:** the file `audio` (`audio/mpeg`), with `data: null`. **Check:** as for `sound.generate`.
 
@@ -307,6 +318,7 @@ A picture's subject on a transparent background.
 
 | Member | Type | | |
 |---|---|---|---|
+| `provider_options` | object | optional | as for `image.generate` |
 | `image` | file | required | |
 
 **Answer:** the file `image` (`image/png`), with `data: null`. **Check:** a PNG by kind and signature.

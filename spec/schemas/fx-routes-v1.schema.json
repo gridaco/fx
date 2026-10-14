@@ -209,7 +209,16 @@
           },
           "contract": {
             "description": "Settings that change what the route returns. Part of its fingerprint, so of every identity it serves. Where one of FX's adapters serves the route's capability and provider, a left-out `adapter` or `adapter_behavior` is filled in from providers.md §2 before the fingerprint is taken (identity.md §7).",
-            "type": "object"
+            "type": "object",
+            "properties": {
+              "provider_options": {
+                "description": "Parameters FX does not expose, by provider: the route's provider's adapter adds its member's parameters to what it sends, under a step's own `provider_options` (adapters.md §8). Never a credential.",
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }

@@ -16,7 +16,7 @@ use grida_fx_providers::transport::replay::{
 use grida_fx_providers::transport::{
     HttpResponse, Lane, Method, Part, Transport, TransportError, TransportErrorKind,
 };
-use grida_fx_providers::tripo::mesh::{COLLECT_DEADLINE, TripoMesh};
+use grida_fx_providers::tripo::mesh::{self, COLLECT_DEADLINE, TripoMesh};
 use grida_fx_providers::tripo::{MAX_MODEL_BYTES, POLL, TripoApi, Waited};
 use serde_json::{Map, Value, json};
 use std::sync::Arc;
@@ -346,6 +346,53 @@ fn the_face_limit_bounds_are_inclusive() {
             "{limit}"
         );
         h.done();
+    }
+}
+
+#[test]
+fn provider_options_follow_the_paid_body_s_own_members() {
+    let mut b = CallBuilder::new("mesh.generate", ROUTE).contract(json!({
+        "adapter": "tripo-multiview", "adapter_behavior": 1,
+        "provider_options": {"tripo": {"texture_quality": "standard", "auto_size": true}},
+    }));
+    let front = b.file("image/png", &front_png());
+    let back = b.file("image/png", &back_png());
+    let call = b
+        .request(json!({"views": {"front": front, "back": back},
+                        "provider_options": {"tripo": {"texture_quality": "detailed"},
+                                             "gg": {"model": "never read"}}}))
+        .build();
+    let h = harness(after_uploads([post_expect(ExpectBody::JsonText(
+        r#"{"model":"P2-20260801","quad":false,"texture":true,"pbr":false,"inputs":[{"front":"tok1"},{"back":"tok2"}],"texture_quality":"detailed","auto_size":true}"#.into(),
+    ))
+    .reply(ok(json!({"task_id": "task1"})))]));
+    assert!(matches!(h.submit(&call), Submitted::Accepted { .. }));
+    h.done();
+}
+
+#[test]
+fn provider_options_set_no_member_of_the_paid_body() {
+    let sent: Map<String, Value> = serde_json::from_str(TWO_VIEW_BODY).unwrap();
+    for name in sent
+        .keys()
+        .chain(std::iter::once(&"face_limit".to_string()))
+    {
+        assert!(mesh::OWNED.contains(&name.as_str()), "{name}");
+    }
+    // Refused before the uploads: nothing is sent.
+    for name in mesh::OWNED {
+        let mut b = builder();
+        let front = b.file("image/png", &front_png());
+        let call = b
+            .request(json!({"views": {"front": front},
+                            "provider_options": {"tripo": {*name: 1}}}))
+            .build();
+        assert_eq!(
+            block_on(offline_mesh(test_keys()).submit(&call)),
+            Submitted::Refused {
+                reason: format!("provider_options.tripo.{name} is a member FX owns")
+            }
+        );
     }
 }
 

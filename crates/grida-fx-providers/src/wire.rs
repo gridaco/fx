@@ -1,6 +1,6 @@
-//! Wire helpers every adapter shares (spec/adapters.md §3–§5): base URLs, JSON bodies, strict
+//! Wire helpers every adapter shares (spec/adapters.md §3–§5, §8): base URLs, JSON bodies, strict
 //! base64 and data URLs, media types and byte signatures, reported costs, safe error details,
-//! request files, image sizes and the image checks.
+//! request files, provider options, image sizes and the image checks.
 //!
 //! These are complete and tested here; provider modules use them rather than their own copies, so
 //! two providers never disagree on what "a PNG", "a reported cost" or "an exact size" means.
@@ -426,6 +426,119 @@ pub fn read_file(file: &RequestFile, what: &str) -> Result<Vec<u8>, String> {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Provider options
+
+/// Where a call's provider options come from, in the order they merge (spec/adapters.md §8): the
+/// route's contract, then the request.
+fn option_sources(call: &CallRequest) -> [(Option<&Value>, &'static str); 2] {
+    [
+        (
+            call.route.contract.get("provider_options"),
+            "contract.provider_options",
+        ),
+        (call.request.get("provider_options"), "provider_options"),
+    ]
+}
+
+/// The parameters an adapter adds to what it sends (spec/adapters.md §8): the route's
+/// `contract.provider_options.<provider>`, then the request's `provider_options.<provider>`, for
+/// the route's provider; a request parameter replaces the route's of its name in place, and the
+/// request's others follow. Absent, `null` and `{}` add nothing, and other providers' members are
+/// not read. Refused, the route's before the request's: a member that is not an object (`<where>
+/// is an object`); a member that is a file value (`<where> holds a file: provider options are JSON
+/// only`); a parameter in `owned`, the members the adapter owns (`<where>.<name> is a member FX
+/// owns`); a file value anywhere in a parameter (`<where>.<name> holds a file: …`).
+pub fn provider_options(call: &CallRequest, owned: &[&str]) -> Result<Map<String, Value>, String> {
+    let provider = call.route.provider.as_str();
+    let mut merged = Map::new();
+    for (options, at) in option_sources(call) {
+        let parameters = match options {
+            None | Some(Value::Null) => continue,
+            Some(Value::Object(by_provider)) => match by_provider.get(provider) {
+                None | Some(Value::Null) => continue,
+                Some(member) if is_file(member) => {
+                    return Err(format!(
+                        "{at}.{provider} holds a file: provider options are JSON only"
+                    ));
+                }
+                Some(Value::Object(parameters)) => parameters,
+                Some(_) => return Err(format!("{at}.{provider} is an object")),
+            },
+            Some(_) => return Err(format!("{at} is an object")),
+        };
+        for (name, value) in parameters {
+            if owned.contains(&name.as_str()) {
+                return Err(format!("{at}.{provider}.{name} is a member FX owns"));
+            }
+            if holds_file(value) {
+                return Err(format!(
+                    "{at}.{provider}.{name} holds a file: provider options are JSON only"
+                ));
+            }
+            merged.insert(name.clone(), value.clone());
+        }
+    }
+    Ok(merged)
+}
+
+/// A runtime's refusal of provider options (spec/adapters.md §8): `<who> takes no
+/// provider_options` when the route's or the request's member for the route's provider is anything
+/// but absent, `null` or `{}`. Other providers' members are not read.
+pub fn no_provider_options(call: &CallRequest, who: &str) -> Result<(), String> {
+    let provider = call.route.provider.as_str();
+    for (options, _) in option_sources(call) {
+        let member = match options {
+            None | Some(Value::Null) => continue,
+            Some(Value::Object(by_provider)) => by_provider.get(provider),
+            Some(other) => Some(other),
+        };
+        match member {
+            None | Some(Value::Null) => {}
+            Some(Value::Object(parameters)) if parameters.is_empty() => {}
+            Some(_) => return Err(format!("{who} takes no provider_options")),
+        }
+    }
+    Ok(())
+}
+
+/// Whether `value` is a file value as the engine reads one (spec/protocol.md §3.2): an object
+/// whose only member, `file`, is a digest. `{"file": "a.png"}` is ordinary data (spec/identity.md
+/// §3), so a provider parameter of that shape is passed on.
+fn is_file(value: &Value) -> bool {
+    value.as_object().is_some_and(|map| {
+        map.len() == 1
+            && map
+                .get("file")
+                .and_then(Value::as_str)
+                .is_some_and(grida_fx_core::value::is_digest)
+    })
+}
+
+/// Whether a file value ([`is_file`]) is anywhere in `value`.
+fn holds_file(value: &Value) -> bool {
+    match value {
+        Value::Array(items) => items.iter().any(holds_file),
+        Value::Object(members) => is_file(value) || members.values().any(holds_file),
+        _ => false,
+    }
+}
+
+/// `options` as multipart text fields, in order: a string as itself, any other value as its JSON
+/// text (spec/adapters.md §8).
+pub fn option_fields(options: &Map<String, Value>) -> Vec<crate::transport::Part> {
+    options
+        .iter()
+        .map(|(name, value)| {
+            let text = match value {
+                Value::String(text) => text.clone(),
+                other => other.to_string(),
+            };
+            crate::transport::Part::text(name, &text)
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------------------------
 // Image sizes and checks
 
 /// An image request's `size`: `None` for absent, `null` or `"auto"`; `Some((w, h))` for `"WxH"`
@@ -760,5 +873,190 @@ mod tests {
         // {"a":"xxxx"} is 12 bytes.
         assert!(!body_exceeds(&json!({"a": "xxxx"}), 12));
         assert!(body_exceeds(&json!({"a": "xxxx"}), 11));
+    }
+
+    fn option_call(contract: Value, request: Value) -> crate::testing::TestCall {
+        crate::testing::CallBuilder::new("image.generate", "img-a@acme")
+            .contract(contract)
+            .request(request)
+            .build()
+    }
+
+    #[test]
+    fn provider_options_merge_the_route_s_under_the_request_s() {
+        let options = |contract: Value, request: Value| {
+            provider_options(&option_call(contract, request), &["prompt"])
+        };
+        // The route's first, in order; a request member replaces it in place, then the request's
+        // others; other providers' members are not read.
+        let merged = options(
+            json!({"provider_options": {"acme": {"b": 1, "a": {"x": 1}}, "other": {"c": 3}}}),
+            json!({"provider_options": {"acme": {"z": [1], "a": {"y": 2}}, "other": "x"}}),
+        )
+        .unwrap();
+        assert_eq!(
+            Value::Object(merged).to_string(),
+            r#"{"b":1,"a":{"y":2},"z":[1]}"#
+        );
+        // Absent, null and {} add nothing; a parameter's null is passed on.
+        for (contract, request) in [
+            (json!({}), json!({})),
+            (json!(null), json!({"provider_options": null})),
+            (
+                json!({"provider_options": null}),
+                json!({"provider_options": {"acme": null}}),
+            ),
+            (
+                json!({"provider_options": {"acme": {}}}),
+                json!({"provider_options": {}}),
+            ),
+        ] {
+            assert_eq!(options(contract, request), Ok(Map::new()));
+        }
+        let kept = options(
+            json!({}),
+            json!({"provider_options": {"acme": {"seed": null}}}),
+        );
+        assert_eq!(Value::Object(kept.unwrap()), json!({"seed": null}));
+    }
+
+    #[test]
+    fn provider_options_are_refused_route_first() {
+        let options = |contract: Value, request: Value| {
+            provider_options(&option_call(contract, request), &["prompt", "n"])
+        };
+        let file = json!({"file": "a".repeat(64)});
+        let cases = [
+            (
+                json!({"provider_options": []}),
+                json!({}),
+                "contract.provider_options is an object",
+            ),
+            (
+                json!({"provider_options": {"acme": 1}}),
+                json!({"provider_options": {"acme": 2}}),
+                "contract.provider_options.acme is an object",
+            ),
+            (
+                json!({}),
+                json!({"provider_options": {"acme": "x"}}),
+                "provider_options.acme is an object",
+            ),
+            (
+                json!({"provider_options": {"acme": {"n": 2}}}),
+                json!({"provider_options": {"acme": {"prompt": "p"}}}),
+                "contract.provider_options.acme.n is a member FX owns",
+            ),
+            (
+                json!({}),
+                json!({"provider_options": {"acme": {"seed": 1, "prompt": "p"}}}),
+                "provider_options.acme.prompt is a member FX owns",
+            ),
+            (
+                json!({}),
+                json!({"provider_options": {"acme": {"mask": {"layers": [file]}}}}),
+                "provider_options.acme.mask holds a file: provider options are JSON only",
+            ),
+            (
+                json!({"provider_options": {"acme": {"init": file}}}),
+                json!({}),
+                "contract.provider_options.acme.init holds a file: provider options are JSON only",
+            ),
+            // A member that is itself a file is not a parameter named `file`.
+            (
+                json!({"provider_options": {"acme": file}}),
+                json!({}),
+                "contract.provider_options.acme holds a file: provider options are JSON only",
+            ),
+            (
+                json!({"provider_options": {"acme": {"seed": 1}}}),
+                json!({"provider_options": {"acme": file}}),
+                "provider_options.acme holds a file: provider options are JSON only",
+            ),
+        ];
+        for (contract, request, refusal) in cases {
+            assert_eq!(options(contract, request), Err(refusal.to_string()));
+        }
+        // Another provider's member is never read, so never refused.
+        assert!(
+            options(
+                json!({"provider_options": {"other": {"prompt": file.clone()}}}),
+                json!({"provider_options": {"other": 1}}),
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn provider_options_pass_on_data_shaped_like_a_file() {
+        // Only a digest makes a file value (spec/identity.md §3): the rest is the provider's.
+        for not_a_file in [
+            json!({"file": "a.png"}),
+            json!({"file": "A".repeat(64)}),
+            json!({"file": "a".repeat(63)}),
+            json!({"file": 1}),
+        ] {
+            let request = json!({"provider_options": {"acme": {
+                "ref": not_a_file,
+                "nested": {"layers": [not_a_file]},
+            }}});
+            let merged = provider_options(&option_call(json!({}), request.clone()), &["prompt"]);
+            assert_eq!(
+                Value::Object(merged.unwrap()),
+                request["provider_options"]["acme"],
+                "{not_a_file}"
+            );
+            let member = json!({"provider_options": {"acme": not_a_file}});
+            let merged = provider_options(&option_call(member, json!({})), &["prompt"]);
+            assert_eq!(Value::Object(merged.unwrap()), not_a_file);
+        }
+    }
+
+    #[test]
+    fn a_runtime_refuses_its_own_provider_options_only() {
+        let refused = |contract: Value, request: Value| {
+            no_provider_options(&option_call(contract, request), "Acme")
+        };
+        assert_eq!(refused(json!({}), json!({})), Ok(()));
+        assert_eq!(
+            refused(
+                json!({"provider_options": {"acme": {}, "other": {"a": 1}}}),
+                json!({"provider_options": {"acme": null, "other": {"a": 1}}}),
+            ),
+            Ok(())
+        );
+        for (contract, request) in [
+            (json!({"provider_options": {"acme": {"a": 1}}}), json!({})),
+            (json!({}), json!({"provider_options": {"acme": {"a": 1}}})),
+            (json!({}), json!({"provider_options": {"acme": 1}})),
+            (json!({"provider_options": "x"}), json!({})),
+        ] {
+            assert_eq!(
+                refused(contract, request),
+                Err("Acme takes no provider_options".to_string())
+            );
+        }
+    }
+
+    #[test]
+    fn option_fields_are_text() {
+        let options = json!({"style": "ink", "steps": 4, "extra": {"a": [1, "b"]}});
+        let fields: Vec<(String, String)> = option_fields(options.as_object().unwrap())
+            .into_iter()
+            .map(|part| {
+                (
+                    part.name.clone(),
+                    String::from_utf8(part.data.clone()).unwrap(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            fields,
+            vec![
+                ("style".to_string(), "ink".to_string()),
+                ("steps".to_string(), "4".to_string()),
+                ("extra".to_string(), r#"{"a":[1,"b"]}"#.to_string()),
+            ]
+        );
     }
 }

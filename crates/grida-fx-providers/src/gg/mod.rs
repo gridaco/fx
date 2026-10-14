@@ -557,8 +557,9 @@ pub(crate) fn not_served(call: &CallRequest, why: Option<&str>) -> String {
 /// Reads a GG route contract (spec/adapters.md §4 step 1): `null` or an object whose `adapter`,
 /// when present, is `adapter`, whose `adapter_behavior`, when present, is one `behavior` accepts
 /// ([`crate::checks::serves`], the engine's check, made again here for a direct caller), and whose
-/// other members are among `members`. `null` members count as absent. The contract's members are
-/// handed back.
+/// other members are among `members` or `provider_options`, which the adapter reads when it builds
+/// its body ([`crate::wire::provider_options`]). `null` members count as absent. The contract's
+/// members are handed back.
 pub(crate) fn read_contract(
     call: &CallRequest,
     capabilities: &[&str],
@@ -575,7 +576,10 @@ pub(crate) fn read_contract(
         return Ok(serde_json::Map::new());
     };
     if let Some(member) = contract.keys().find(|key| {
-        !matches!(key.as_str(), "adapter" | "adapter_behavior") && !members.contains(&key.as_str())
+        !matches!(
+            key.as_str(),
+            "adapter" | "adapter_behavior" | "provider_options"
+        ) && !members.contains(&key.as_str())
     }) {
         return Err(not_served(
             call,
@@ -1003,6 +1007,7 @@ mod tests {
             read(json!({"adapter": "gg-x", "adapter_behavior": 1, "quality": "max"})).unwrap();
         assert_eq!(full.get("quality"), Some(&json!("max")));
         assert!(read(json!({"adapter": null, "adapter_behavior": null, "quality": null})).is_ok());
+        assert!(read(json!({"provider_options": {"gg": {"seed": 1}}})).is_ok());
         let foreign = "acme/img-a@gg is not a image.generate route this adapter serves";
         for contract in [
             json!({"adapter": "gg-y"}),

@@ -8,10 +8,11 @@
 //! 1. the route: capability `image.generate` or `image.edit` on provider `codex`, and a contract
 //!    whose `adapter` and `adapter_behavior`, each when present, are [`IDENTITY`]'s;
 //! 2. [`crate::capabilities::check_request`];
-//! 3. values: a blank prompt, a `size` other than `auto` (Codex picks its own sizes: asked for
-//!    1024x1024 it drew 1254x1254), an unknown `background`, a mask, more than [`MAX_PICTURES`]
-//!    pictures (`image`, then `references`), and each picture's file: carried, not empty, and
-//!    PNG, JPEG or WebP;
+//! 3. values: provider options for `codex`, from the route or the request, that are not empty
+//!    ([`crate::wire::no_provider_options`]: Codex takes none), a blank prompt, a `size` other
+//!    than `auto` (Codex picks its own sizes: asked for 1024x1024 it drew 1254x1254), an unknown
+//!    `background`, a mask, more than [`MAX_PICTURES`] pictures (`image`, then `references`), and
+//!    each picture's file: carried, not empty, and PNG, JPEG or WebP;
 //! 4. the runtime's Codex, started if need be ([`runtime`]): no program ([`NOT_INSTALLED`],
 //!    [`NETWORK_OFF`]), one older than [`MIN_VERSION`] or that names no version, MCP servers that
 //!    cannot be listed, or a sign-in other than ChatGPT is `Sent::Refused`, for this call and the
@@ -208,6 +209,7 @@ impl CodexImages {
     fn prepare<'a>(&self, call: &'a CallRequest) -> Result<Drawing<'a>, String> {
         served(&call.route)?;
         capabilities::check_request(&call.route.capability, &call.request)?;
+        crate::wire::no_provider_options(call, "Codex")?;
         let values = Values::read(&call.request)?;
         let pictures = values
             .pictures

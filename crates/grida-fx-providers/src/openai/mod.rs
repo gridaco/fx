@@ -9,11 +9,12 @@
 //!   `reference-00.<ext>`).
 //!
 //! Credential `authorization: Bearer <OPENAI_API_KEY>`; base `OPENAI_BASE_URL`, default
-//! `https://api.openai.com/v1`. Deadline 600 s per send; response cap 64 MiB. Wire constants
-//! (`n: 1`, `output_format: png`, `quality: max`, `moderation: low`; never `input_fidelity`,
-//! `response_format`, `seed`) are src/openai/README.md's. The answer is the one `b64_json` PNG
-//! as file `image`, `data: null`, `cost: None` (OpenAI reports no cost). [`check`] is
-//! [`crate::wire::check_image`]. Status classes: src/openai/README.md's table.
+//! `https://api.openai.com/v1`. Deadline 600 s per send; response cap 64 MiB. Wire constants (`n:
+//! 1`, `output_format: png`, `quality: max`, `moderation: low`; never `input_fidelity`,
+//! `response_format`, `seed`) are src/openai/README.md's; the request's provider options follow
+//! them, and may set none of [`OWNED`]. The answer is the one `b64_json` PNG as file `image`,
+//! `data: null`, `cost: None` (OpenAI reports no cost). [`check`] is [`crate::wire::check_image`].
+//! Status classes: src/openai/README.md's table.
 //!
 //! A send, in order (spec/adapters.md §4):
 //! 1. the route: capability `image.generate` or `image.edit` on provider `openai`, and a contract
@@ -21,8 +22,9 @@
 //!    `<model@provider> is not a <capability> route this adapter serves`;
 //! 2. [`crate::capabilities::check_request`];
 //! 3. the key: `OPENAI_API_KEY is not set`;
-//! 4. values: a blank prompt, an unknown `background`, a `size` that is not `auto` or `WxH` or
-//!    leaves the envelope, references on a generation, more than [`MAX_INPUT_IMAGES`] inputs;
+//! 4. values: provider options ([`wire::provider_options`]), a blank prompt, an unknown
+//!    `background`, a `size` that is not `auto` or `WxH` or leaves the envelope, references on a
+//!    generation, more than [`MAX_INPUT_IMAGES`] inputs;
 //! 5. files (`image`, then `references[i]`, then `mask`): a digest the call does not carry or an
 //!    empty store copy, a kind other than PNG, JPEG or WebP, bytes that do not decode as their
 //!    kind;
@@ -74,6 +76,26 @@ pub const IDENTITY: Identity = Identity {
     behavior: r#""1""#,
 };
 
+/// The members provider options may not set (spec/adapters.md §8; src/openai/README.md): every
+/// member and part the adapter sends, and those it never sends.
+pub const OWNED: &[&str] = &[
+    "model",
+    "prompt",
+    "n",
+    "output_format",
+    "size",
+    "quality",
+    "background",
+    "moderation",
+    "image",
+    "image[]",
+    "mask",
+    "input_fidelity",
+    "response_format",
+    "seed",
+    "stream",
+];
+
 /// The variable a redirect points at (spec/providers.md §1; spec/adapters.md §3.3).
 const BASE_URL_VARIABLE: &str = "OPENAI_BASE_URL";
 
@@ -106,6 +128,7 @@ impl OpenAiImages {
         let edit = served(&call.route)?;
         capabilities::check_request(&call.route.capability, &call.request)?;
         let credential = self.client.credential("authorization", "Bearer ")?;
+        let options = wire::provider_options(call, OWNED)?;
         let values = Values::read(&call.request, edit)?;
         let fields = fields(&call.route.model, &values);
         let request = |path: &str| {
@@ -115,16 +138,18 @@ impl OpenAiImages {
                 .max_response_bytes(MAX_RESPONSE_BYTES)
         };
         if !edit {
-            let body: Map<String, Value> = fields
+            let mut body: Map<String, Value> = fields
                 .into_iter()
                 .map(|(name, value)| (name.to_string(), value))
                 .collect();
+            body.extend(options);
             return Ok(request("images/generations").body(Body::Json(Value::Object(body))));
         }
         let mut parts: Vec<Part> = fields
             .iter()
             .map(|(name, value)| Part::text(name, &field_text(value)))
             .collect();
+        parts.extend(wire::option_fields(&options));
         let mut inputs = vec![("image".to_string(), &call.request["image"])];
         inputs.extend(
             values

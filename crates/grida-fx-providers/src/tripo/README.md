@@ -13,6 +13,7 @@ A route whose contract names another `adapter` or `adapter_behavior` than the on
   - `mesh.generate`, a long job: the free phase uploads the views, then `POST /generation/multiview-to-model`. Contract `adapter`: `tripo-multiview`, behaviour `1`.
   - `mesh.rig`, a long job: the free phase uploads the model, posts `POST /animations/rig-check` and waits for it; then `POST /animations/rig`. Contract `adapter`: `tripo-rig`, behaviour `1`.
 - **Credential:** `authorization: Bearer <TRIPO_API_KEY>` on every API request, and never on a model download.
+- **Provider options** ([adapters.md](../../../../spec/adapters.md) §8): the parameters of `provider_options.tripo` are added at the end of the paid body, never to an upload or the rig check. They are refused before the free phase, as the first of the values below, when they set a member of that body: `model`, `quad`, `texture`, `pbr`, `face_limit` and `inputs` for a mesh; `input`, `model`, `rig_type`, `spec` and `out_format` for a rig.
 - **The envelope.** Every API answer must be HTTP 200 exactly, with a JSON object `{"code": 0, "data": {...}}`. Tripo's error text is never read: a reason says `body withheld`. A refusal (below) names Tripo's error code when the body is a JSON object whose `code` is an integer, as ` (code <n>)` after the status (`Tripo refused the task with HTTP 400 (code 2002)`); nothing else of the body is kept.
 - **Limits:**
   - each upload, status read and download: 300 s;
@@ -21,15 +22,15 @@ A route whose contract names another `adapter` or `adapter_behavior` than the on
   - the poll interval: 5 s;
   - each model download: at most 150 000 000 bytes.
 - **Mesh.**
-  - Refused before sending, in this order: no views (`a mesh call needs its views, by name`); no `front`, or a view other than front, back, left or right (`a multiview task takes front and any of back, left, right`, followed by `; not <names>` listing the unknown names, sorted); `front` alone (`a multiview task takes front and at least one of back, left, right`); a `face_limit` outside 48 to 25 000 (`face_limit is 48 to 25000`); then, in the order front, back, left, right, a view that is not PNG or JPEG (`the <view> view is <kind>; Tripo takes PNG or JPEG`) or has no bytes ([adapters.md](../../../../spec/adapters.md) §4 step 5).
+  - Refused before sending, in this order: provider options (above); no views (`a mesh call needs its views, by name`); no `front`, or a view other than front, back, left or right (`a multiview task takes front and any of back, left, right`, followed by `; not <names>` listing the unknown names, sorted); `front` alone (`a multiview task takes front and at least one of back, left, right`); a `face_limit` outside 48 to 25 000 (`face_limit is 48 to 25000`); then, in the order front, back, left, right, a view that is not PNG or JPEG (`the <view> view is <kind>; Tripo takes PNG or JPEG`) or has no bytes ([adapters.md](../../../../spec/adapters.md) §4 step 5).
   - The views are uploaded in the order front, back, left, right (part `file`, named `<view>.png` or `<view>.jpg`).
-  - The paid body is `{model, quad, texture, pbr, face_limit?, inputs: [{"<view>": <token>}, …]}`, with `quad` false, `texture` true and `pbr` false when absent.
+  - The paid body is `{model, quad, texture, pbr, face_limit?, inputs: [{"<view>": <token>}, …]}`, with `quad` false, `texture` true and `pbr` false when absent, then the provider options.
   - The handle is `{"task_id"}`.
 - **Rig.**
-  - Refused before sending: a model the call does not carry or that has no bytes (`a rig call needs its model`), or one that is not `model/gltf-binary` (`Tripo rigs a GLB, not <kind>`).
+  - Refused before sending: provider options (above); a model the call does not carry or that has no bytes (`a rig call needs its model`), or one that is not `model/gltf-binary` (`Tripo rigs a GLB, not <kind>`).
   - The model is uploaded as `unrigged.glb`.
   - The check task must succeed with a boolean `riggable`. A doubted model, where `riggable` is not true or the check's `rig_type` differs from the request's (default `biped`), is refused unless `allow_negative_check` is true.
-  - The paid body is `{input, model, rig_type, spec: <skeleton, default mixamo>, out_format: glb}`.
+  - The paid body is `{input, model, rig_type, spec: <skeleton, default mixamo>, out_format: glb}`, then the provider options.
   - The handle is `{"task_id", "check": {"task_id", "riggable", "rig_type"}, "advisory_override"}`. The handle's `check.rig_type` is the check's `rig_type` when it is a string matching `^[A-Za-z0-9_.:-]{1,96}$`, else `null`. The answer's `checked_rig_type` is read from the handle the same way.
 - **Free phase:**
   - 400, 401, 403, 404, 413, 415 and 422 are `Refused`, and so is a check task that ends without success;

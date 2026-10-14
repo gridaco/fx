@@ -263,8 +263,9 @@ Types marked *planned* plan and price but cannot run yet.
 | `fx/vision.annotate@1`, `fx/vision.review@1`, `fx/structured.review@1`, `fx/audio.check_duration@1` | | *planned* |
 | `fx/image.compose@1`, `key`, `sheet`, `contact_sheet`; `fx/video.probe@1`, `frames`, `encode`; `fx/audio.normalize@1`, `trim`, `concat`, `mix`; `fx/annotations.mask@1`, `filter` | | *planned* |
 
-A prompt may be a template file (`prompt: ./prompts/draw.md`), rendered with the step's `vars:`
-and the workflow's `inputs`. Until `vision.review` runs, a model's judgement is a
+Every paid type also takes `provider_options`: parameters FX does not expose, by provider (Routes
+and providers, below). A prompt may be a template file (`prompt: ./prompts/draw.md`), rendered with
+the step's `vars:` and the workflow's `inputs`. Until `vision.review` runs, a model's judgement is a
 `structured.generate` answer read by a judge you write (recipe below).
 
 ## Routes and providers
@@ -300,6 +301,23 @@ A route is `model@provider`. Pick one per capability in `fx.yaml` `routes:`, or 
   dearer call is booked in full. The plan text adds a `note` per capped route (not in a stand-in
   run, which holds nothing), and `plan --json` marks each step that calls one with `capped: true`
   in its `price`. A `price` must state an amount: `usd: 0` is free, and `price: {}` is refused.
+- **Parameters FX does not expose** go in `provider_options`, an object by provider whose members
+  are the provider's own parameters: a paid step's `with:` takes it, and so does a route's
+  `contract`. Only the member of the provider the call runs on is sent, after FX's own members; a
+  step's parameter replaces the route's of the same name, and other providers' members are kept
+  for the routes a step may fall back to. A parameter FX sets itself (`prompt`, `size`, `model`,
+  `n`, `stream`, …; each provider's list is in its adapter's reference), and a file, are refused
+  before anything is sent, at $0. Codex and Grok Build take none. Options are part of the call's
+  identity (another value is another paid call) and are recorded with the run, so never put a key
+  in them. An agent run's turns take only their route's: the engine builds each turn's request.
+
+```yaml
+    with:
+      prompt: Name a colour.
+      schema: ./schemas/colour.json
+      provider_options:
+        openrouter: { seed: 7 }   # read only when the step runs on an @openrouter route
+```
 - **Your own route table** (`fx: routes/v1`, listed under `route_tables:` in `fx.yaml`): its entry
   for a capability and route replaces the built-in one. An entry may `extends:` another route of
   the same capability and provider, a built-in one (even with `--routes`) or one read before it,
@@ -318,6 +336,11 @@ routes:
     route: openai/gpt-image-2.5-sunburst@gg
     extends: openai/gpt-image-2.5-sunburst@gg   # the built-in entry, with more headroom
     price: { low_usd: 0.09, high_usd: 0.80 }     # replaces its whole price, size tiers included
+  - capability: structured.generate
+    route: openai/gpt-5.6-sol@openrouter
+    extends: openai/gpt-5.6-sol@openrouter
+    contract:
+      provider_options: { openrouter: { seed: 7 } }   # sent with every call; part of the route's identity
 ```
 
 - **Upgrading from 0.6.1:** a route of your own on a provider and capability FX has an adapter for,
@@ -329,7 +352,12 @@ routes:
   names `jpeg_output`, `webp_output` or `hosted_url_reference_input` is now refused while planning
   as no feature of its capability: drop the name, since every route answers PNG and sends input
   pictures inline. A route whose `price` states no amount (`price: {}`, which was $0) is now
-  refused: write `usd: 0` for a free route, or `cap_usd` for one whose price you do not know.
+  refused: write `usd: 0` for a free route, or `cap_usd` for one whose price you do not know. A
+  route of your own whose `contract` already named `provider_options`, which most adapters ignored,
+  now sends its provider's member, or is refused when the call is sent if that member sets a
+  parameter FX owns (on Codex and Grok Build, if it is not empty); its identity is unchanged, so a
+  call cached before still replays without them (`reroll` the step for a new one). One that is not
+  an object of objects is now refused while the table is read.
 
 ## Your own nodes
 
@@ -834,6 +862,10 @@ Python, `run(..., { standIn: fn })` in JavaScript, in your own process.
 | `routes.<n>.extends: <base> is not a <provider> route` | a route extends only a route of its own provider |
 | `routes.<n>.price: a price states an amount (usd, low_usd, high_usd) or a cap (cap_usd)` | give the route its price, or `cap_usd: N` when its price is not known; an empty `price` is not $0 |
 | `routes.<n>.price: {…} has more than 1 property` | `cap_usd` stands alone in `price`: drop the other members |
+| `… was refused: provider_options.<provider>.<name> is a member FX owns` (or `contract.provider_options…`) | FX sets that parameter itself: use the type's own setting, or leave it out |
+| `… was refused: provider_options.<provider>.<name> holds a file: provider options are JSON only` (or `provider_options.<provider> holds a file…`) | pass files through the type's inputs; options carry JSON only |
+| `… was refused: Codex takes no provider_options` (or `Grok Build …`) | drop `provider_options.codex` (or `.grok`); other providers' members may stay |
+| `routes.<n>.contract.provider_options.<provider>: … is not of type "object"` | write `provider_options: { <provider>: { <parameter>: <value> } }` |
 | `not installed (codex)` / `not installed (grok)` in doctor | install and sign in to Codex or Grok Build, or set `GRIDA_FX_TOOL_CODEX` / `GRIDA_FX_TOOL_GROK` |
 | `Codex … is older than 0.160.1` (or `too old (codex …)` in doctor) | update the Codex that doctor's `program` line names, or set `GRIDA_FX_TOOL_CODEX` to a newer one |
 | `python … too old` / `no grida` in doctor | `uv sync` or `pip install grida` in the project, or set `GRIDA_FX_PYTHON` |

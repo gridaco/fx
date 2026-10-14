@@ -9,9 +9,11 @@
 //! 1. the route: capability `image.generate` or `image.edit` on provider `grok`, and a contract
 //!    whose `adapter` and `adapter_behavior`, each when present, are [`IDENTITY`]'s;
 //! 2. [`crate::capabilities::check_request`];
-//! 3. values: a blank prompt, a `size` other than `auto`, a `transparent` background, a mask, more
-//!    than [`MAX_PICTURES`] pictures (`image`, then `references`), and each picture's file:
-//!    carried, not empty, and PNG or JPEG;
+//! 3. values: provider options for `grok`, from the route or the request, that are not empty
+//!    ([`crate::wire::no_provider_options`]: Grok Build takes none), a blank prompt, a `size`
+//!    other than `auto`, a `transparent` background, a mask, more than [`MAX_PICTURES`] pictures
+//!    (`image`, then `references`), and each picture's file: carried, not empty, and PNG or
+//!    JPEG;
 //! 4. the runtime's Grok Build, started if need be ([`runtime`]): no program ([`NOT_INSTALLED`],
 //!    [`NETWORK_OFF`]), an older one, or a sign-in that is not a subscription is `Sent::Refused`,
 //!    for this call and the invocation's others;
@@ -192,6 +194,7 @@ impl GrokImages {
     fn prepare<'a>(&self, call: &'a CallRequest) -> Result<Drawing<'a>, String> {
         served(&call.route)?;
         capabilities::check_request(&call.route.capability, &call.request)?;
+        crate::wire::no_provider_options(call, "Grok Build")?;
         let values = Values::read(&call.request)?;
         let pictures = values
             .pictures

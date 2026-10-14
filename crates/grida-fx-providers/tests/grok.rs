@@ -550,6 +550,10 @@ fn a_missing_grok_and_unhonoured_values_are_refused_before_anything_starts() {
             json!({"prompt": "p", "background": "transparent"}),
             grok::NO_TRANSPARENCY,
         ),
+        (
+            json!({"prompt": " ", "provider_options": {"grok": {"seed": 1}}}),
+            "Grok Build takes no provider_options",
+        ),
     ] {
         let call = CallBuilder::new("image.generate", "imagine@grok")
             .contract(contract())
@@ -557,7 +561,33 @@ fn a_missing_grok_and_unhonoured_values_are_refused_before_anything_starts() {
             .build();
         assert_eq!(send(&fake, &call), refused(reason));
     }
+    // A route's own are refused the same way.
+    let mut route = contract();
+    route["provider_options"] = json!({"grok": {"seed": 1}});
+    let call = CallBuilder::new("image.generate", "imagine@grok")
+        .contract(route)
+        .request(json!({"prompt": "p"}))
+        .build();
+    assert_eq!(
+        send(&fake, &call),
+        refused("Grok Build takes no provider_options")
+    );
     assert!(fake.lines("starts").is_empty());
+}
+
+#[test]
+fn provider_options_for_other_providers_are_not_read() {
+    let (sent, verified) = on_one_runtime(Err(grok::NOT_INSTALLED.into()), |adapter| async move {
+        let call = CallBuilder::new("image.generate", "imagine@grok")
+            .contract(contract())
+            .request(json!({"prompt": "p",
+                            "provider_options": {"grok": {}, "openai": {"seed": 1}}}))
+            .build();
+        adapter.send(&call).await
+    });
+    assert!(verified);
+    // Past the options, to the program.
+    assert_eq!(sent, refused(grok::NOT_INSTALLED));
 }
 
 #[test]

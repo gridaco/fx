@@ -3,26 +3,27 @@
 //! spec/capabilities.md §4).
 //!
 //! Contract: `adapter: openrouter-structured`, `adapter_behavior: 1`, optional `request_policy`
-//! ([`RequestPolicy`]) and `pictures` (absent: reduce to a 1600 px long edge flattened on `matte`;
-//! `"unchanged"`: send the file as is). The schema is a `json` file or an inline object; it is
-//! sent after `$ref` inlining and strict canonicalization ([`crate::chat::schema`]), named from its
-//! `title` (else `answer`). Text context files are appended to the prompt as
-//! `--- context <i> ---\n<text>`. The answer's value (`message.parsed`, else the JSON text of
-//! `message.content`, unwrapped from `completionState`) is `data: {"json": <value>}`; `cost` from
-//! `usage` ([`super::usage_cost`]). `check`: the value against the request's **original**
-//! schema (draft 2020-12; `format` not asserted), refused as `<path>: <message>`. Deadline 900 s
-//! for `openai/gpt-6-astra`, 1800 s otherwise.
+//! ([`RequestPolicy`]), `pictures` (absent: reduce to a 1600 px long edge flattened on `matte`;
+//! `"unchanged"`: send the file as is) and `provider_options` (spec/adapters.md §8). The schema is
+//! a `json` file or an inline object; it is sent after `$ref` inlining and strict canonicalization
+//! ([`crate::chat::schema`]), named from its `title` (else `answer`). Text context files are
+//! appended to the prompt as `--- context <i> ---\n<text>`. The answer's value (`message.parsed`,
+//! else the JSON text of `message.content`, unwrapped from `completionState`) is `data: {"json":
+//! <value>}`; `cost` from `usage` ([`super::usage_cost`]). `check`: the value against the request's
+//! **original** schema (draft 2020-12; `format` not asserted), refused as `<path>: <message>`.
+//! Deadline 900 s for `openai/gpt-6-astra`, 1800 s otherwise.
 //!
 //! `send`, in the order of spec/adapters.md §4 (the engine makes steps 1 and 2 before it, the
 //! contract's other members through `check_contract`; the adapter makes them again for a direct
 //! caller):
 //! 1. the contract (`read_contract`): `adapter` and `adapter_behavior`, when present, are this
-//!    adapter's; `request_policy` and `pictures` are valid; no other member;
+//!    adapter's; `request_policy` and `pictures` are valid; no other member but `provider_options`;
 //! 2. `capabilities::check_request`;
 //! 3. the key (`authorization: Bearer <OPENROUTER_API_KEY>`);
-//! 4. values: a non-blank `prompt`; `matte` a colour (`#rgb`, `#rrggbb`, `#rrggbbaa`);
-//!    `max_tokens` at least 1; an inline schema whose references inline and which compiles as a
-//!    draft 2020-12 JSON Schema;
+//! 4. values: provider options that set no member of [`OWNED`] ([`wire::provider_options`], added
+//!    after the body's own members); a non-blank `prompt`; `matte` a colour (`#rgb`, `#rrggbb`,
+//!    `#rrggbbaa`); `max_tokens` at least 1; an inline schema whose references inline and which
+//!    compiles as a draft 2020-12 JSON Schema;
 //! 5. files: the schema file (UTF-8 JSON, an object, then as an inline schema); each context
 //!    file, a picture (`image/*`, reduced unless the contract says `unchanged`) or UTF-8 text;
 //! 6. a body over 200 MiB is refused; otherwise one exchange.
@@ -62,6 +63,21 @@ pub const IDENTITY: Identity = Identity {
     adapter: CONTRACT_ADAPTER,
     behavior: "1",
 };
+
+/// The members provider options may not set (spec/adapters.md §8; src/openrouter/README.md):
+/// every member the body has, and those that would change the answer.
+pub const OWNED: &[&str] = &[
+    "model",
+    "messages",
+    "response_format",
+    "provider",
+    "reasoning",
+    "max_tokens",
+    "stream",
+    "n",
+    "tools",
+    "tool_choice",
+];
 
 /// The model whose structured calls get the shorter deadline (src/openrouter/README.md, "Limits").
 pub const FAST_DEADLINE_MODEL: &str = "openai/gpt-6-astra";
@@ -242,8 +258,9 @@ pub(super) struct ChatContract {
 /// `adapter_behavior` (the integer 1, which both OpenRouter chat adapters serve), when present,
 /// must be this adapter's ([`checks::contract`], the engine's check); `request_policy` is read by
 /// [`RequestPolicy::from_contract`]; `pictures` (absent or `"unchanged"`) only when
-/// `takes_pictures`; no other member. Refused with `<route> is not a <capability> route this
-/// adapter serves`, followed by `: <why>` when a member is not one it can serve.
+/// `takes_pictures`; `provider_options`, read when the body is built ([`wire::provider_options`]);
+/// no other member. Refused with `<route> is not a <capability> route this adapter serves`,
+/// followed by `: <why>` when a member is not one it can serve.
 pub(super) fn read_contract(
     route: &RouteRef,
     capability: &str,
@@ -271,7 +288,12 @@ pub(super) fn read_contract(
     checks::contract(route, &identity)?;
     let empty = Map::new();
     let contract = route.contract.as_object().unwrap_or(&empty);
-    let mut allowed = vec!["adapter", "adapter_behavior", "request_policy"];
+    let mut allowed = vec![
+        "adapter",
+        "adapter_behavior",
+        "request_policy",
+        "provider_options",
+    ];
     if takes_pictures {
         allowed.push("pictures");
     }
@@ -359,6 +381,7 @@ impl OpenRouterStructured {
         // 3. The key.
         let credential = self.client.credential("authorization", "Bearer ")?;
         // 4 and 5. Values, then files.
+        let options = wire::provider_options(call, OWNED)?;
         let prompt = chat::structured_prompt(
             call,
             contract.pictures_unchanged,
@@ -377,6 +400,7 @@ impl OpenRouterStructured {
             body.insert("reasoning".into(), reasoning);
         }
         body.insert("max_tokens".into(), json!(prompt.max_tokens));
+        body.extend(options);
         let body = Value::Object(body);
         if wire::body_exceeds(&body, super::MAX_REQUEST_BYTES) {
             return Err(super::BODY_TOO_LARGE.into());
@@ -605,6 +629,8 @@ mod tests {
         assert_eq!(ok.policy, RequestPolicy::default());
         assert!(!ok.pictures_unchanged);
         assert!(read(json!({})).is_ok());
+        // Provider options are read when the body is built, not here.
+        assert!(read(json!({"provider_options": {"openrouter": {"seed": 1}}})).is_ok());
         assert!(
             read(json!({"adapter": "openrouter-structured", "adapter_behavior": 1, "pictures": "unchanged"}))
                 .unwrap()

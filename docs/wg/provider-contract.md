@@ -262,19 +262,82 @@ Gate: `cargo test`, conformance, the viewer's checks, the SDKs' tests.
 
 ### M5. `provider_options`
 
-- [ ] Spec: every paid capability takes an optional object `provider_options`, keyed by
+- [x] Spec: every paid capability takes an optional object `provider_options`, keyed by
   provider. An adapter reads only its route's provider's member; members FX sets itself are
   refused; it never holds a credential, since requests are recorded verbatim. A route's
   `contract.provider_options` is merged under the step's.
-- [ ] Each paid built-in gets the optional param, with no default, so no key moves.
-- [ ] Adapters merge their member into the body: OpenAI, OpenRouter, fal, GG, Tripo and
+  - `capabilities.md` §1 and every member table (the row after the last param, before the input
+    ports; last for `agent.turn`); a new `adapters.md` §8, which §4 step 4 points to;
+    `identity.md` §7; `providers.md` §2; `protocol.md` §6.2; `fx-routes-v1` describes
+    `contract.provider_options` as an object of objects, so a bad shape is refused while the table
+    is read (`routes.<n>.contract.provider_options.<p>: … is not of type "object"`).
+  - `contract.provider_options` has the step's shape, an object by provider. The merge is
+    shallow: the route's parameters first, a step's replacing one of the same name in place, the
+    step's others after; all after FX's own members (`serde_json` keeps insertion order), so with
+    none no byte changes and no `adapter_behavior` moves. Under `extends`, a stated
+    `provider_options` replaces the base's whole, as every contract member does.
+  - Each adapter owns a fixed list, stated in its reference and exported as its `OWNED`: the
+    members it sets, whether or not a call sends them, those it never sends by design (OpenAI's
+    never-sent members, the mask GG refuses), those that would change what it reads in the answer
+    (`stream`, `response_format`, `n`, `sync_mode`), and those that restate a member it sets
+    (`max_tokens` beside GG's `max_completion_tokens`); `adapters.md` §8 names the four kinds.
+    Refusals, the first of step 4, the route's before the step's: `<where> is an object`,
+    `<where>.<name> is a member FX owns`, and a file value anywhere in the member,
+    `<where>.<name> holds a file: provider options are JSON only` (`<where> holds a file: …` when
+    the member is one). They come before any byte leaves, Tripo's uploads and GG's rig check
+    included. One helper, `wire::provider_options`, keyed by the route's provider. A file value
+    is the engine's, `{"file": <digest>}` (`protocol.md` §3.2), so `{"file": "a.png"}` is data
+    and is passed on.
+  - Code facts: the request check holds `provider_options` to an object only, so a stand-in run,
+    which runs no adapter, takes a provider member that is not an object. An adapter cannot keep a
+    credential out of the records, since with-values are recorded before any adapter sees them,
+    so the spec states the rule and FX does not look. GG's video wire already has a member
+    `providerOptions`; it is FX's whole.
+  - A project route whose contract already named `provider_options` now sends its provider's
+    member, or is refused, under an unchanged fingerprint. Up to 0.6.1 the member meant nothing:
+    GG's adapters and OpenRouter's chat adapters refused the contract (`the contract takes no
+    member provider_options`), and OpenAI, OpenRouter images and music, fal, Tripo, ElevenLabs,
+    Codex and Grok Build ignored it (`checks::serves` judges only `adapter` and
+    `adapter_behavior`). No `adapter_behavior` is bumped, a departure from the Defaults row on
+    bumps: the member had no meaning before, and a bump would move the fingerprint of every
+    built-in route those adapters serve, since each states its behaviour. A call cached before
+    replays without the options, as `identity.md` §7 and `llms.txt`'s upgrade note say.
+- [x] Each paid built-in gets the optional param, with no default, so no key moves.
+  - All 13 capability-body built-ins, the three without an adapter included, with no version
+    bump: `identity.md` ties no param to a built-in's `version`. No identity, plan or key digest
+    moved; the type listings did: 38 conformance expected files (`ports.params`, additions only)
+    and two `cli.rs` pins.
+- [x] Adapters merge their member into the body: OpenAI, OpenRouter, fal, GG, Tripo and
   ElevenLabs. Codex and Grok Build refuse a non-empty one.
-- [ ] Replay tests per adapter, for the pass-through and for the refusal of members FX sets.
-- [ ] `examples/movie-sprite`: its prompt-expansion setting goes through `provider_options`;
+  - Multipart bodies (OpenAI's and GG's edits) take them as text fields after FX's, before the
+    pictures; GG's jobs in their paid `input` JSON, never the rig check's, which stays `{}`.
+  - OpenRouter's structured and agent contracts, and every GG contract, now admit
+    `provider_options`.
+  - Codex and Grok Build refuse only their own member (`provider_options.codex`, `.grok`, the
+    route's or the step's): `Codex takes no provider_options`. Other providers' members are not
+    read, so a step may carry them for the routes it falls back to.
+  - `agent.turn`: the engine's agent loop builds each turn's request, so an agent run's turns
+    take only their route's; a body's own `agent.turn` call may carry its own.
+- [x] Replay tests per adapter, for the pass-through and for the refusal of members FX sets.
+  - Each adapter's test file pins the merged body (route and step options, another provider's
+    member ignored): its exact bytes, or for OpenRouter's chat bodies its members' order and the
+    options' values. It holds the members its bodies send to `OWNED`, and refuses each owned
+    member over a transport that sends nothing. `wire.rs` unit tests cover the merge and the
+    refusals; `routes_spec.rs` the route table's shape and `extends`.
+- [x] `examples/movie-sprite`: its prompt-expansion setting goes through `provider_options`;
   README and pasted plan output updated.
-- [ ] `llms.txt`; guide pages 03 and 13.
+  - Its route's contract carries `provider_options: {fal: {enable_prompt_expansion: false}}`.
+    The name is fal's published input schema for `fal-ai/wan/v2.7/image-to-video` (a boolean,
+    default true), checked 2026-10-14 and cited in `routes.yaml`; Grida Models
+    `v1.20261013.6` records it only for Wan 3.0's fal endpoints. The route's fingerprint moves,
+    as a project route's does when its contract changes; the pasted plan output does not.
+- [x] `llms.txt`; guide pages 03 and 13.
+  - Also `AGENT_READINESS.md` (AR-20, with the deferral of options for agent runs) and each
+    adapter's reference.
 
-Gate: `cargo test`, conformance, `check_examples`, `check_llms`.
+Gate: `cargo test`, conformance, `check_examples`, `check_llms`. `check_examples` checks only
+movie-sprite's links (self-contained); planning and running it are
+`tools/check_showcase_examples.py`'s.
 
 ### M6. Any model on GG, OpenRouter and fal
 
@@ -446,7 +509,19 @@ when the owner asks.
   carry no `capped`, so the viewer shows a capped plan's total as "est. $low – $high";
 - a call charged more than it held, a cap or a priced route's high: it is charged in full and
   can take the run past its ceiling by the difference, and nothing in the run's output flags it;
-  the plan's ceiling warning still ends "the run stops before crossing it".
+  the plan's ceiling warning still ends "the run stops before crossing it";
+- step-level `provider_options` for agent runs (`agent.run`, `protocol.md` §6.2, both SDKs'
+  `ctx.agent`): the engine builds each of an agent run's `agent.turn` requests, so its turns take
+  only their route's;
+- a plan-time guard for `provider_options`: a credential (FX cannot tell one from a parameter,
+  and with-values are recorded in `node_started.with` and the plan before any adapter sees them),
+  and a member an adapter owns, which is refused only when a call is sent (core's
+  `BUILT_IN_ADAPTERS` knows no adapter's owned members). The request check holds
+  `provider_options` to an object only, so a stand-in run takes a provider member that is not an
+  object;
+- provider options inside members FX owns whole: OpenRouter's `provider` (routing) on structured
+  output, agent turns and images (music sends none, so its options may give one), GG video's
+  `providerOptions` and ElevenLabs' `voice_settings` cannot be added to.
 
 **gridaco/models**, gaps found against `v1.20261013.6`:
 - no card for Gemini Omni Flash;

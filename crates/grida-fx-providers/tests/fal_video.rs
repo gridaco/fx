@@ -491,6 +491,60 @@ fn submit_statuses_follow_the_queue_table() {
     }
 }
 
+#[test]
+fn provider_options_follow_the_submit_body_s_own_members() {
+    let mut builder = CallBuilder::new("video.generate", ROUTE).contract(json!({
+        "adapter": "fal-queue", "adapter_behavior": 1,
+        "provider_options": {"fal": {"enable_prompt_expansion": true, "seed": 1}},
+    }));
+    let first_bytes = media::png(2, 2, Some(255));
+    let last_bytes = media::png(3, 3, None);
+    let first = builder.file("image/png", &first_bytes);
+    let last = builder.file("image/png", &last_bytes);
+    let call = builder
+        .request(
+            json!({"prompt": "A lantern sways.", "first_frame": first, "last_frame": last,
+                        "duration": 3, "resolution": "360p", "aspect_ratio": "9:16",
+                        "provider_options": {"fal": {"enable_prompt_expansion": false},
+                                             "gg": {"duration": 9}}}),
+        )
+        .build();
+    let body = json!({"prompt": "A lantern sways.", "image_url": data_url("image/png", &first_bytes),
+                      "end_image_url": data_url("image/png", &last_bytes),
+                      "aspect_ratio": "9:16", "resolution": "360p", "duration": 3,
+                      "enable_prompt_expansion": false, "seed": 1});
+    let answer =
+        json!({"request_id": "req-1", "status_url": STATUS_URL, "response_url": RESPONSE_URL});
+    let transport = Arc::new(ReplayTransport::new(vec![
+        Expect::post_json(SUBMIT_URL, Value::Null)
+            .credential("authorization", "Key test-fal-key")
+            .body(ExpectBody::JsonText(serde_json::to_string(&body).unwrap()))
+            .reply(ok(answer)),
+    ]));
+    assert_eq!(
+        submit(&transport, &call),
+        Submitted::Accepted { handle: handle() }
+    );
+    // Every member of that body but the options is one the adapter owns.
+    let Body::Json(Value::Object(sent)) = &transport.requests()[0].body else {
+        panic!("a JSON body");
+    };
+    for name in sent.keys().take(sent.len() - 2) {
+        assert!(video::OWNED.contains(&name.as_str()), "{name}");
+    }
+}
+
+#[test]
+fn provider_options_set_no_member_the_adapter_owns() {
+    for name in video::OWNED {
+        let call = call(json!({"prompt": " ", "provider_options": {"fal": {*name: 1}}}));
+        assert_eq!(
+            refused(&call, test_keys()),
+            format!("provider_options.fal.{name} is a member FX owns")
+        );
+    }
+}
+
 // 7. Collect -----------------------------------------------------------------------------------
 
 #[test]

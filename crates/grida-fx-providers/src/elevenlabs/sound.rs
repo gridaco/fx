@@ -1,7 +1,9 @@
 //! ElevenLabs sound effects: `POST {base}/sound-generation?output_format=mp3_44100_192` with
 //! `{"text": <prompt>, "model_id": <route model>, "loop", "duration_seconds"?,
-//! "prompt_influence"?}` (src/elevenlabs/README.md). Refused before sending: a blank prompt or one
-//! over 450 characters, `duration` outside 0.5..30, `prompt_influence` outside 0..1, no key.
+//! "prompt_influence"?}`, then the provider options, which may set no member of [`OWNED`]
+//! (src/elevenlabs/README.md; spec/adapters.md §8). Refused before sending: provider options
+//! ([`crate::wire::provider_options`]), a blank prompt or one over 450 characters, `duration`
+//! outside 0.5..30, `prompt_influence` outside 0..1, no key.
 //!
 //! The prompt goes out verbatim (not trimmed); `loop` is always sent (false when absent);
 //! `duration` and `prompt_influence` are sent only when given, as floats (`1` goes out as `1.0`),
@@ -22,6 +24,17 @@ pub const CAPABILITY: &str = "sound.generate";
 
 /// The contract's `adapter` (src/elevenlabs/README.md).
 pub const ADAPTER: &str = "elevenlabs-sound-effect";
+
+/// The members provider options may not set: every member the body has, and `output_format`,
+/// which FX sets in the query.
+pub const OWNED: &[&str] = &[
+    "text",
+    "model_id",
+    "loop",
+    "duration_seconds",
+    "prompt_influence",
+    "output_format",
+];
 
 pub const MAX_PROMPT_CHARS: usize = 450;
 pub const DURATION_SECONDS: std::ops::RangeInclusive<f64> = 0.5..=30.0;
@@ -52,11 +65,16 @@ impl RequestAdapter for ElevenLabsSound {
                 Ok(credential) => credential,
                 Err(reason) => return refused(&self.client, &reason),
             };
-            // Step 4: the values.
-            let body = match body(call) {
+            // Step 4: the values, provider options first.
+            let options = match crate::wire::provider_options(call, OWNED) {
+                Ok(options) => options,
+                Err(reason) => return refused(&self.client, &reason),
+            };
+            let mut body = match body(call) {
                 Ok(body) => body,
                 Err(reason) => return refused(&self.client, &reason),
             };
+            body.extend(options);
             post(&self.client, LABEL, "sound-generation", credential, body).await
         })
     }

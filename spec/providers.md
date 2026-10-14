@@ -57,6 +57,7 @@ FX registers one adapter for each capability and provider below ([adapters.md](a
 
 - A route whose contract names another `adapter`, or another `adapter_behavior` than its row's, when present, is refused before its adapter sees the call ([adapters.md](adapters.md) §4 step 1). `background.remove` on fal has no route (§3); its behaviour is the integer `1`, as for every route outside images.
 - A route table's contract on a capability and provider of a row is filled in from that row before its fingerprint is taken ([identity.md](identity.md) §7): a left-out `adapter` gets the row's, and a left-out `adapter_behavior` the row's behaviour unless the contract names another `adapter`. So a project route declared without a contract names the adapter that serves it, as every built-in route does.
+- Each reference lists the members its adapter owns, which `provider_options` may not set, and where the others go ([adapters.md](adapters.md) §8). The `codex` and `grok` adapters take none.
 - The `codex` and `grok` adapters work through a runtime and bill the user's own plan ([adapters.md](adapters.md) §1, §5). Every other adapter bills dollars, to the account of its provider's key (§1).
 
 ## 3. The built-in route table

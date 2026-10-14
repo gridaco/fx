@@ -10,7 +10,8 @@
 //! The wire, in this order: `model`, `prompt` (verbatim), `n: 1`, `size` when the request gives
 //! `WIDTHxHEIGHT` (`auto` and none are left out: the model chooses), the contract's `quality`, and
 //! `background` when the request gives one other than `auto` (the default everywhere, and a member
-//! some models do not take). An edit sends these as text fields, then each input picture (`image`,
+//! some models do not take), then the provider options, which may set no member of [`OWNED`]
+//! (spec/adapters.md §8). An edit sends these as text fields, then each input picture (`image`,
 //! then `references`) as a part `image[]` named `reference-NN.<png|jpg|webp>` from `01`. Every
 //! request carries its attempt's `Idempotency-Key` ([`super::Gateway`]).
 //!
@@ -24,8 +25,9 @@
 //! 1. the route: `image.generate` or `image.edit`, and a contract this adapter serves;
 //! 2. [`crate::capabilities::check_request`];
 //! 3. the key: `GG_API_KEY is not set`;
-//! 4. values: a blank prompt, an unknown `background`, a `size` that is neither `auto` nor
-//!    `WIDTHxHEIGHT`, references on a generation, a mask, more than [`MAX_INPUT_IMAGES`] pictures;
+//! 4. values: provider options ([`wire::provider_options`]), a blank prompt, an unknown
+//!    `background`, a `size` that is neither `auto` nor `WIDTHxHEIGHT`, references on a generation,
+//!    a mask, more than [`MAX_INPUT_IMAGES`] pictures;
 //! 5. files (`image`, then `references[i]`): a digest the call does not carry or an empty store
 //!    copy, a kind other than PNG, JPEG or WebP, bytes that do not decode as their kind;
 //! 6. one exchange, classified by [`super::classify`] ([`super::Gateway::exchange`]).
@@ -53,6 +55,22 @@ pub const IDENTITY: Identity = Identity {
     adapter: ADAPTER,
     behavior: r#""1""#,
 };
+
+/// The members provider options may not set (spec/adapters.md §8; src/gg/README.md): every
+/// member and part the adapter sends, the mask it refuses, and those that would change the answer.
+pub const OWNED: &[&str] = &[
+    "model",
+    "prompt",
+    "n",
+    "size",
+    "quality",
+    "background",
+    "image",
+    "image[]",
+    "mask",
+    "response_format",
+    "stream",
+];
 
 /// The whole-exchange deadline: GG answers within 600 s, then a margin for its answer to arrive.
 pub const DEADLINE: Duration = Duration::from_secs(630);
@@ -91,6 +109,7 @@ impl GgImages {
         let edit = call.route.capability == "image.edit";
         capabilities::check_request(&call.route.capability, &call.request)?;
         let credential = self.gateway.credential()?;
+        let options = wire::provider_options(call, OWNED)?;
         let values = Values::read(&call.request, edit)?;
         let fields = fields(&call.route.model, &values, quality.as_deref());
         let request = |path: &str| {
@@ -103,16 +122,18 @@ impl GgImages {
             )
         };
         if !edit {
-            let body: Map<String, Value> = fields
+            let mut body: Map<String, Value> = fields
                 .into_iter()
                 .map(|(name, value)| (name.to_string(), value))
                 .collect();
+            body.extend(options);
             return Ok(request("images/generations").body(Body::Json(Value::Object(body))));
         }
         let mut parts: Vec<Part> = fields
             .iter()
             .map(|(name, value)| Part::text(name, &field_text(value)))
             .collect();
+        parts.extend(wire::option_fields(&options));
         let mut inputs = vec![("image".to_string(), &call.request["image"])];
         inputs.extend(
             values

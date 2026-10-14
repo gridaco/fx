@@ -9,7 +9,7 @@
 //!
 //! Members are listed in the order a paid built-in sends them: its params without `vars`, then its
 //! input ports (spec/capabilities.md §14). `agent.turn`, which no built-in sends, lists them in
-//! the order of spec/protocol.md §6.2.
+//! the order of spec/protocol.md §6.2, then `provider_options`.
 //!
 //! Rules [`check_request`] applies (spec/capabilities.md §1), in this order:
 //! - the request is a JSON object: `a request for <capability> is a JSON object`;
@@ -21,7 +21,8 @@
 //!   object`).
 //!
 //! Value checks beyond the type (non-blank text, ranges, enums) are the adapter's, with the
-//! sentences of its reference (spec/providers.md §2).
+//! sentences of its reference (spec/providers.md §2), and so is what `provider_options`, an
+//! object every capability takes, holds ([`crate::wire::provider_options`]; spec/adapters.md §8).
 
 use serde_json::Value;
 
@@ -202,6 +203,7 @@ pub const CAPABILITIES: &[Capability] = &[
             req("tools", List),
             req("tool_choice", Text),
             opt("max_tokens", Integer),
+            opt("provider_options", Object),
         ],
         features: &["tool_use", "image_input"],
         files: &[],
@@ -209,7 +211,7 @@ pub const CAPABILITIES: &[Capability] = &[
     Capability {
         name: "background.remove",
         shape: Shape::Request,
-        members: &[req("image", File)],
+        members: &[opt("provider_options", Object), req("image", File)],
         features: &[],
         files: &[("image", "image/png")],
     },
@@ -220,6 +222,7 @@ pub const CAPABILITIES: &[Capability] = &[
             req("prompt", Text),
             opt("size", Text),
             opt("background", Text),
+            opt("provider_options", Object),
             req("image", File),
             opt("mask", File),
             opt("references", Files),
@@ -234,6 +237,7 @@ pub const CAPABILITIES: &[Capability] = &[
             req("prompt", Text),
             opt("size", Text),
             opt("background", Text),
+            opt("provider_options", Object),
             opt("references", Files),
         ],
         features: IMAGE_GENERATE_FEATURES,
@@ -247,6 +251,7 @@ pub const CAPABILITIES: &[Capability] = &[
             opt("quad", Boolean),
             opt("texture", Boolean),
             opt("pbr", Boolean),
+            opt("provider_options", Object),
             req("views", FilesByName),
         ],
         features: &["multiview", "textured_mesh", "quad", "pbr"],
@@ -259,6 +264,7 @@ pub const CAPABILITIES: &[Capability] = &[
             opt("rig_type", Text),
             opt("skeleton", Text),
             opt("allow_negative_check", Boolean),
+            opt("provider_options", Object),
             req("model", File),
         ],
         features: &["biped", "glb_input", "rig_check"],
@@ -267,7 +273,11 @@ pub const CAPABILITIES: &[Capability] = &[
     Capability {
         name: "music.generate",
         shape: Shape::Request,
-        members: &[req("prompt", Text), opt("duration", Number)],
+        members: &[
+            req("prompt", Text),
+            opt("duration", Number),
+            opt("provider_options", Object),
+        ],
         features: &[],
         files: &[("audio", "audio/mpeg")],
     },
@@ -279,6 +289,7 @@ pub const CAPABILITIES: &[Capability] = &[
             opt("duration", Number),
             opt("prompt_influence", Number),
             opt("loop", Boolean),
+            opt("provider_options", Object),
         ],
         features: &["exact_duration"],
         files: &[("audio", "audio/mpeg")],
@@ -292,6 +303,7 @@ pub const CAPABILITIES: &[Capability] = &[
             opt("stability", Number),
             opt("language_code", Text),
             opt("max_chars", Integer),
+            opt("provider_options", Object),
         ],
         features: &["audio_tags", "stability"],
         files: &[("audio", "audio/mpeg")],
@@ -304,6 +316,7 @@ pub const CAPABILITIES: &[Capability] = &[
             opt("system", Text),
             opt("matte", Text),
             opt("max_tokens", Integer),
+            opt("provider_options", Object),
             req("schema", FileOrObject),
             opt("context", Files),
         ],
@@ -318,6 +331,7 @@ pub const CAPABILITIES: &[Capability] = &[
             opt("duration", Number),
             opt("resolution", Text),
             opt("aspect_ratio", Text),
+            opt("provider_options", Object),
             opt("first_frame", File),
             opt("last_frame", File),
         ],

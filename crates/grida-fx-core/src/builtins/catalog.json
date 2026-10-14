@@ -29,6 +29,10 @@
     "vars": {
      "type": "object",
      "default": {}
+    },
+    "provider_options": {
+     "type": "object",
+     "x-fx-optional": true
     }
    },
    "outputs": {
@@ -72,6 +76,10 @@
     "vars": {
      "type": "object",
      "default": {}
+    },
+    "provider_options": {
+     "type": "object",
+     "x-fx-optional": true
     }
    },
    "outputs": {
@@ -115,6 +123,10 @@
     "max_tokens": {
      "type": "integer",
      "x-fx-optional": true
+    },
+    "provider_options": {
+     "type": "object",
+     "x-fx-optional": true
     }
    },
    "outputs": {
@@ -153,6 +165,10 @@
     "aspect_ratio": {
      "type": "string",
      "x-fx-optional": true
+    },
+    "provider_options": {
+     "type": "object",
+     "x-fx-optional": true
     }
    },
    "outputs": {
@@ -190,6 +206,10 @@
     "max_chars": {
      "type": "integer",
      "x-fx-optional": true
+    },
+    "provider_options": {
+     "type": "object",
+     "x-fx-optional": true
     }
    },
    "outputs": {
@@ -225,6 +245,10 @@
     "loop": {
      "type": "boolean",
      "default": false
+    },
+    "provider_options": {
+     "type": "object",
+     "x-fx-optional": true
     }
    },
    "outputs": {
@@ -251,6 +275,10 @@
     },
     "duration": {
      "type": "number",
+     "x-fx-optional": true
+    },
+    "provider_options": {
+     "type": "object",
      "x-fx-optional": true
     }
    },
@@ -289,6 +317,10 @@
     "pbr": {
      "type": "boolean",
      "default": false
+    },
+    "provider_options": {
+     "type": "object",
+     "x-fx-optional": true
     }
    },
    "outputs": {
@@ -322,6 +354,10 @@
     "allow_negative_check": {
      "type": "boolean",
      "default": false
+    },
+    "provider_options": {
+     "type": "object",
+     "x-fx-optional": true
     }
    },
    "outputs": {
@@ -343,7 +379,12 @@
    "inputs": {
     "image": "image"
    },
-   "params": {},
+   "params": {
+    "provider_options": {
+     "type": "object",
+     "x-fx-optional": true
+    }
+   },
    "outputs": {
     "image": "image/png"
    },
@@ -391,6 +432,10 @@
     "vars": {
      "type": "object",
      "default": {}
+    },
+    "provider_options": {
+     "type": "object",
+     "x-fx-optional": true
     }
    },
    "outputs": {
@@ -438,6 +483,10 @@
     "vars": {
      "type": "object",
      "default": {}
+    },
+    "provider_options": {
+     "type": "object",
+     "x-fx-optional": true
     }
    },
    "outputs": {
@@ -469,6 +518,10 @@
     },
     "criteria": {
      "type": "array",
+     "x-fx-optional": true
+    },
+    "provider_options": {
+     "type": "object",
      "x-fx-optional": true
     }
    },

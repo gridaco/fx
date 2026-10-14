@@ -1,17 +1,18 @@
-//! fal background removal: `POST {run}/<model>` (`fal-ai/birefnet/v2`) with `{"image_url",
-//! "model": "General Use (Light)", "operating_resolution": "1024x1024", "output_mask": false,
-//! "refine_foreground": true, "output_format": "png", "mask_only": false, "sync_mode": true}`
-//! (src/fal/README.md). The answer `root.image.url` is a data URI (decoded) or a `*.fal.media`
-//! URL (downloaded as for images). File `image` (`image/png`), `data: null`, cost from `usage.cost`.
-//! `check`: a PNG with its signature. Deadline 300 s. Contract `adapter` must be
-//! `fal-run-birefnet` when present. No route in the default table serves it yet (no published
-//! price has been recorded).
+//! fal background removal: `POST {run}/<model>` (`fal-ai/birefnet/v2`) with `{"image_url", "model":
+//! "General Use (Light)", "operating_resolution": "1024x1024", "output_mask": false,
+//! "refine_foreground": true, "output_format": "png", "mask_only": false, "sync_mode": true}`, then
+//! the provider options, which may set none of those eight members (src/fal/README.md;
+//! spec/adapters.md §8). The answer `root.image.url` is a data URI (decoded) or a `*.fal.media` URL
+//! (downloaded as for images). File `image` (`image/png`), `data: null`, cost from `usage.cost`.
+//! `check`: a PNG with its signature. Deadline 300 s. Contract `adapter` must be `fal-run-birefnet`
+//! when present. No route in the default table serves it yet (no published price has been
+//! recorded).
 //!
 //! Refused before sending, in this order: another route's contract; a request that does not fit
-//! `background.remove`; no `FAL_KEY`; an `image` that is not an `image/*` file (`image is <kind>,
-//! not a picture`) or has no bytes. Statuses are the run host's, as for
-//! images (src/fal/README.md). The answer may declare PNG, WebP or GIF; `width`, `height` and
-//! `mask_image` are not read.
+//! `background.remove`; no `FAL_KEY`; provider options that set a member of [`OWNED`]; an `image`
+//! that is not an `image/*` file (`image is <kind>, not a picture`) or has no bytes. Statuses are
+//! the run host's, as for images (src/fal/README.md). The answer may declare PNG, WebP or GIF;
+//! `width`, `height` and `mask_image` are not read.
 
 use super::FalClients;
 use super::output::{self, Rules};
@@ -32,6 +33,18 @@ pub const IDENTITY: Identity = Identity {
     adapter: CONTRACT_ADAPTER,
     behavior: "1",
 };
+
+/// The members provider options may not set: the eight the body has.
+pub const OWNED: &[&str] = &[
+    "image_url",
+    "model",
+    "operating_resolution",
+    "output_mask",
+    "refine_foreground",
+    "output_format",
+    "mask_only",
+    "sync_mode",
+];
 
 /// The POST and any download together.
 pub const DEADLINE: Duration = Duration::from_secs(300);
@@ -63,6 +76,7 @@ impl FalBackground {
         }
         crate::capabilities::check_request(&call.route.capability, &call.request)?;
         let credential = client.credential(super::CREDENTIAL_HEADER, super::CREDENTIAL_PREFIX)?;
+        let options = crate::wire::provider_options(call, OWNED)?;
         let image = super::picture(call, &call.request["image"], "image")?;
 
         let mut body = Map::new();
@@ -74,6 +88,7 @@ impl FalBackground {
         body.insert("output_format".into(), json!("png"));
         body.insert("mask_only".into(), json!(false));
         body.insert("sync_mode".into(), json!(true));
+        body.extend(options);
 
         let url = client.url(super::endpoint(&call.route.model));
         Ok(HttpRequest::new(Method::Post, url, Lane::Provider)

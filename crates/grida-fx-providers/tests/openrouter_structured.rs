@@ -180,6 +180,96 @@ fn a_byok_answer_counts_the_upstream_inference() {
     }
 }
 
+#[test]
+fn provider_options_follow_the_body_s_own_members() {
+    let schema = colour_schema();
+    let mut contract = text_contract();
+    contract["provider_options"] = json!({"openrouter": {"top_p": 0.5, "user": "route-a"}});
+    let call = call(
+        TEXT_ROUTE,
+        contract,
+        json!({"prompt": "Name a colour.", "schema": schema,
+               "provider_options": {"openrouter": {"user": "step-a", "seed": 7},
+                                    "gg": {"model": "never read"}}}),
+    );
+    let transport = replay(vec![expect(ExpectBody::Any).reply(completion(
+        json!({"role": "assistant", "content": "{\"name\": \"red\"}"}),
+        json!({"cost": 0.0001}),
+    ))]);
+    answered(send(&adapter_over(transport.clone(), test_keys()), &call));
+    let sent = sent_json(&transport, 0);
+    let names: Vec<&str> = sent
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "model",
+            "messages",
+            "response_format",
+            "provider",
+            "max_tokens",
+            "top_p",
+            "user",
+            "seed"
+        ]
+    );
+    assert_eq!(
+        (&sent["top_p"], &sent["user"], &sent["seed"]),
+        (&json!(0.5), &json!("step-a"), &json!(7))
+    );
+    // Every member of a body with all of them is one the adapter owns.
+    let all = call_with_astra_body();
+    for name in all.as_object().unwrap().keys() {
+        assert!(
+            openrouter::structured::OWNED.contains(&name.as_str()),
+            "{name}"
+        );
+    }
+}
+
+/// The body of a call on astra, whose contract sends every member the adapter can.
+fn call_with_astra_body() -> Value {
+    let transport = replay(vec![expect(ExpectBody::Any).reply(completion(
+        json!({"role": "assistant", "content": "{\"name\": \"red\"}"}),
+        json!({"cost": 0.0001}),
+    ))]);
+    let call = call(
+        ASTRA_ROUTE,
+        astra_contract(),
+        json!({"prompt": "Name a colour.", "schema": colour_schema()}),
+    );
+    answered(send(&adapter_over(transport.clone(), test_keys()), &call));
+    sent_json(&transport, 0)
+}
+
+#[test]
+fn provider_options_set_no_member_the_adapter_owns() {
+    for name in openrouter::structured::OWNED {
+        let request = json!({"prompt": " ", "schema": colour_schema(),
+                             "provider_options": {"openrouter": {*name: 1}}});
+        assert_refused(
+            &call(TEXT_ROUTE, text_contract(), request),
+            test_keys(),
+            &format!("provider_options.openrouter.{name} is a member FX owns"),
+        );
+        let mut contract = text_contract();
+        contract["provider_options"] = json!({"openrouter": {*name: 1}});
+        assert_refused(
+            &call(
+                TEXT_ROUTE,
+                contract,
+                json!({"prompt": "p", "schema": colour_schema()}),
+            ),
+            test_keys(),
+            &format!("contract.provider_options.openrouter.{name} is a member FX owns"),
+        );
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // One 2400x3000 RGBA picture, unchanged on astra, reduced on the text model
 

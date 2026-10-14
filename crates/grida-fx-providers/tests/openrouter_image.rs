@@ -7,7 +7,7 @@ use base64::engine::general_purpose::STANDARD;
 use grida_fx_core::money::Usd;
 use grida_fx_providers::adapter::{Answer, RequestAdapter, Sent};
 use grida_fx_providers::keys::Keys;
-use grida_fx_providers::openrouter::{self, image::OpenRouterImages};
+use grida_fx_providers::openrouter::{self, image, image::OpenRouterImages};
 use grida_fx_providers::testing::{CallBuilder, TestCall, block_on, media, setup, test_keys};
 use grida_fx_providers::transport::replay::{
     Exchange, Expect, ExpectBody, NoNetwork, ReplayTransport, Reply,
@@ -310,6 +310,76 @@ fn a_fixture_exchange_plays() {
         "{reason}"
     );
     assert!(reason.contains("20"), "{reason}");
+}
+
+// Provider options (spec/adapters.md §8) -------------------------------------------------------
+
+#[test]
+fn provider_options_follow_the_body_s_own_members() {
+    let call = CallBuilder::new("image.generate", ROUTE)
+        .contract(json!({
+            "adapter": "fx-openrouter-image-v1",
+            "adapter_behavior": "3",
+            "provider_options": {"openrouter": {"user": "route-a", "seed": 1}},
+        }))
+        .request(json!({
+            "prompt": "a lantern",
+            "provider_options": {"openrouter": {"seed": 7, "extra": {"b": [1]}},
+                                 "openai": {"prompt": "never read"}},
+        }))
+        .build();
+    let mut body = generate_body("a lantern", None, "auto");
+    body["user"] = json!("route-a");
+    body["seed"] = json!(7);
+    body["extra"] = json!({"b": [1]});
+    let png = media::png(2, 2, None);
+    answered(send_one(
+        &call,
+        Some(&body),
+        Reply::Response(image_answer(&png, None, None)),
+    ));
+}
+
+#[test]
+fn provider_options_set_no_member_the_adapter_owns() {
+    // Every member an edit's body has is one the adapter owns.
+    let reference = media::png(4, 4, None);
+    let mut builder = CallBuilder::new("image.edit", ROUTE).contract(contract("reference"));
+    let image = builder.file("image/png", &reference);
+    let call = builder
+        .request(json!({"prompt": "p", "image": image, "size": "1024x1024"}))
+        .build();
+    let png = media::png(1024, 1024, None);
+    let transport = Arc::new(ReplayTransport::new(vec![
+        Expect::new(Method::Post, URL, Lane::Provider)
+            .credential("authorization", &format!("Bearer {KEY}"))
+            .body(ExpectBody::Any)
+            .reply(image_answer(&png, None, None)),
+    ]));
+    answered(block_on(adapter(&transport).send(&call)));
+    let request = &transport.requests()[0];
+    let grida_fx_providers::transport::Body::Json(Value::Object(sent)) = &request.body else {
+        panic!("a JSON body");
+    };
+    for name in sent.keys() {
+        assert!(image::OWNED.contains(&name.as_str()), "{name}");
+    }
+    // Each is refused before the other values, from the step and from the route.
+    for name in image::OWNED {
+        let call = generate(json!({"prompt": " ", "provider_options": {"openrouter": {*name: 1}}}));
+        assert_eq!(
+            refused(&call),
+            format!("provider_options.openrouter.{name} is a member FX owns")
+        );
+        let call = CallBuilder::new("image.generate", ROUTE)
+            .contract(json!({"provider_options": {"openrouter": {*name: 1}}}))
+            .request(json!({"prompt": "p"}))
+            .build();
+        assert_eq!(
+            refused(&call),
+            format!("contract.provider_options.openrouter.{name} is a member FX owns")
+        );
+    }
 }
 
 // Refusals before sending ----------------------------------------------------------------------

@@ -22,6 +22,8 @@
 //!   again, which GG answers with the same check job. The handle is then `{"job_id", "check":
 //!   {"job_id", "riggable", "rig_type"}, "advisory_override"}`, the check's `rig_type` kept only
 //!   when it is a short plain string (`^[A-Za-z0-9_.:-]{1,96}$`), else `null`.
+//! - Each paid `input` ends with the provider options, which may set no member of [`MESH_OWNED`] or
+//!   [`RIG_OWNED`] (spec/adapters.md §8); a rig's check job takes none.
 //!
 //! Each answer is file `model`, the GLB the download holds (`glTF` first), with
 //! `data: {"facts": {"model_kind": "model/gltf-binary"}}` for a mesh and
@@ -29,10 +31,11 @@
 //! handle: `null`, `null` and `false` when no check ran.
 //!
 //! Submit refusals, in this order (spec/adapters.md §4): another route's contract, or one without
-//! an endpoint; a request that does not fit its capability; no `GG_API_KEY`; the
-//! values (a mesh's view names and count); then the files (a mesh's views in
-//! the order front, left, back, right, each PNG or JPEG; a rig's model, a GLB). The model's own
-//! limits (`face_limit`, rig types, skeletons) are GG's to refuse, at no cost.
+//! an endpoint; a request that does not fit its capability; no `GG_API_KEY`; the values (provider
+//! options, [`wire::provider_options`], before the check job; a mesh's view names and count); then
+//! the files (a mesh's views in the order front, left, back, right, each PNG or JPEG; a rig's
+//! model, a GLB). The model's own limits (`face_limit`, rig types, skeletons) are GG's to refuse,
+//! at no cost.
 
 use super::Gateway;
 use super::job::{Jobs, Kind, job_id};
@@ -64,6 +67,13 @@ pub const RIG_IDENTITY: Identity = Identity {
     adapter: RIG_ADAPTER,
     behavior: "1",
 };
+
+/// The `input` members provider options may not set on a mesh (spec/adapters.md §8;
+/// src/gg/README.md): the ones the adapter sends.
+pub const MESH_OWNED: &[&str] = &["texture", "pbr", "face_limit", "quad"];
+
+/// The `input` members provider options may not set on a rig: the ones the adapter sends.
+pub const RIG_OWNED: &[&str] = &["rig_type", "spec"];
 
 /// The view names GG takes, in the order they are sent.
 pub const VIEWS: [&str; 4] = ["front", "left", "back", "right"];
@@ -226,6 +236,7 @@ impl GgMesh {
         let endpoint = endpoints(call, "mesh.generate", &MESH_IDENTITY, &["endpoint"])?.endpoint;
         capabilities::check_request(&call.route.capability, &call.request)?;
         self.jobs.gateway.credential()?;
+        let options = wire::provider_options(call, MESH_OWNED)?;
         let views = view_names(&call.request)?;
         let mut input = Map::new();
         for flag in ["texture", "pbr"] {
@@ -239,6 +250,7 @@ impl GgMesh {
         if call.request.get("quad").and_then(Value::as_bool) == Some(true) {
             input.insert("quad".into(), json!(true));
         }
+        input.extend(options);
         let mut files = Vec::with_capacity(views.len());
         for name in VIEWS {
             let Some(value) = views.get(name) else {
@@ -345,6 +357,7 @@ impl GgRig {
         let endpoints = endpoints(call, "mesh.rig", &RIG_IDENTITY, &RIG_MEMBERS)?;
         capabilities::check_request(&call.route.capability, &call.request)?;
         self.jobs.gateway.credential()?;
+        let options = wire::provider_options(call, RIG_OWNED)?;
         let text = |name: &str, default: &str| match call.request.get(name) {
             Some(Value::String(text)) if !text.is_empty() => text.clone(),
             _ => default.to_string(),
@@ -353,6 +366,7 @@ impl GgRig {
         let mut input = Map::new();
         input.insert("rig_type".into(), json!(rig_type));
         input.insert("spec".into(), json!(text("skeleton", DEFAULT_SKELETON)));
+        input.extend(options);
         let value = call.request.get("model").unwrap_or(&Value::Null);
         let file = wire::request_file(call, value, "model")?;
         if file.kind != GLB {

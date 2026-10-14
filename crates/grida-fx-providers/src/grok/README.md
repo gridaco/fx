@@ -19,6 +19,7 @@ The reference for FX's adapters on `grok`, under the adapter contract, [spec/ada
 - **Limits:** 60 s for Grok Build to take the prompt (starting the runtime too, on the invocation's first call), and 300 s for the whole send; a message from Grok Build is at most 64 MiB, refused as soon as it passes that.
 - **Refusals ([adapters.md](../../../../spec/adapters.md) §4), in this order:**
   - the route ([adapters.md](../../../../spec/adapters.md) §4 step 1) and the request ([adapters.md](../../../../spec/adapters.md) §4 step 2);
+  - provider options: Grok Build sends the runtime no parameters, so a `provider_options.grok`, the route's or the request's, that is not absent, `null` or `{}` is refused: `Grok Build takes no provider_options` ([adapters.md](../../../../spec/adapters.md) §8). Other providers' members are not read, so a step may carry them for the other routes it may run on;
   - a blank `prompt`: `an image call needs its prompt as text`;
   - a `size` other than `auto`: `Grok Build image generation takes no exact size: use size auto, and fx/image.resize@1 after it`;
   - `background: transparent`: `Grok Build draws opaque images: it takes no transparent background`; any other value but `auto` and `opaque`: `background must be auto, opaque or transparent`;

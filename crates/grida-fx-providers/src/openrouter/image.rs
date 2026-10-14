@@ -3,17 +3,19 @@
 //!
 //! Contract: `adapter: fx-openrouter-image-v1`, `adapter_behavior: "3"` (a string), each checked
 //! when present (`super::serves`). Refusals, in the order of spec/adapters.md §4: the contract; the
-//! capability's shape ([`crate::capabilities::check_request`]); the key; then the values (a blank
-//! prompt, a mask, `background: transparent`, another unknown background, a `size` other than
-//! `auto` and the seven verified sizes ([`ALLOWED_SIZES`]), references on a generate, an edit with
-//! more than [`MAX_PICTURES`] pictures); then the files (each picture must be an `image/*` file
-//! with bytes); and last a serialized body over [`super::MAX_REQUEST_BYTES`].
+//! capability's shape ([`crate::capabilities::check_request`]); the key; then the values (provider
+//! options that set a member of [`OWNED`], [`crate::wire::provider_options`]; a blank prompt, a
+//! mask, `background: transparent`, another unknown background, a `size` other than `auto` and the
+//! seven verified sizes ([`ALLOWED_SIZES`]), references on a generate, an edit with more than
+//! [`MAX_PICTURES`] pictures); then the files (each picture must be an `image/*` file with bytes);
+//! and last a serialized body over [`super::MAX_REQUEST_BYTES`].
 //!
-//! Body, members in this order: `{"model", "prompt", "n": 1, "provider": {"allow_fallbacks":
-//! false, "options": {"openai": {"moderation": "low"}}}, "size"?, "quality": "max", "background",
-//! "input_references"?}`. `size` is sent when the request has one (`auto` included);
-//! `background` always (`auto` when absent); `input_references` on an edit only, `image` first and
-//! then `references`, each `{"type": "image_url", "image_url": {"url": <data URL>}}`.
+//! Body, members in this order: `{"model", "prompt", "n": 1, "provider": {"allow_fallbacks": false,
+//! "options": {"openai": {"moderation": "low"}}}, "size"?, "quality": "max", "background",
+//! "input_references"?}`, then the provider options. `size` is sent when the request has one
+//! (`auto` included); `background` always (`auto` when absent); `input_references` on an edit only,
+//! `image` first and then `references`, each `{"type": "image_url", "image_url": {"url": <data
+//! URL>}}`.
 //!
 //! Answer: `data` must hold exactly one object whose `b64_json` is strict base64 (a `url` is never
 //! fetched). Its kind is `media_type` when that member is present (a parameter-free PNG, JPEG or
@@ -56,6 +58,21 @@ pub const ALLOWED_SIZES: [&str; 7] = [
     "2560x1712",
 ];
 
+/// The members provider options may not set (spec/adapters.md §8; src/openrouter/README.md):
+/// every member the body has, and those that would change the answer.
+pub const OWNED: &[&str] = &[
+    "model",
+    "prompt",
+    "n",
+    "provider",
+    "size",
+    "quality",
+    "background",
+    "input_references",
+    "response_format",
+    "stream",
+];
+
 pub const DEADLINE: Duration = Duration::from_secs(600);
 pub const MAX_RESPONSE_BYTES: u64 = 64 * 1024 * 1024;
 
@@ -89,6 +106,7 @@ impl OpenRouterImages {
         }
         crate::capabilities::check_request(&route.capability, &call.request)?;
         let credential = self.client.credential("authorization", "Bearer ")?;
+        let options = wire::provider_options(call, OWNED)?;
 
         let request = &call.request;
         let edit = route.capability == "image.edit";
@@ -172,6 +190,7 @@ impl OpenRouterImages {
         if edit {
             body.insert("input_references".into(), Value::Array(pictures));
         }
+        body.extend(options);
         let body = Value::Object(body);
         if wire::body_exceeds(&body, super::MAX_REQUEST_BYTES) {
             return Err(BODY_TOO_LARGE.into());

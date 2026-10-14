@@ -107,3 +107,37 @@ capability FX serves, FX fills in what a project route's contract leaves out: it
 as `adapter`, and that adapter's `adapter_behavior` unless the contract names another adapter.
 So such a route always names its adapter. Every adapter checks both: up to 0.6.1, fal's and
 Tripo's checked only `adapter`, and served a route that named another `adapter_behavior`.
+
+## Parameters FX does not expose
+
+A provider often takes parameters FX has no setting for: a seed, a style, a safety switch. Give
+them in `provider_options`, by provider, on a step or in a route's `contract`:
+
+```yaml
+steps:
+  facts:
+    uses: fx/structured.generate@1
+    with:
+      prompt: Name a colour.
+      schema: ./schemas/colour.json
+      provider_options:
+        openrouter: { seed: 7 }
+```
+
+- **Only the provider the call runs on reads its member.** The others are kept, so a step that may
+  run on several routes can give each provider its own. The parameters go in the request after
+  FX's own, as the provider's API names them.
+- **A route can carry them too**, in its `contract` (`contract: { provider_options: { openrouter:
+  { seed: 7 } } }`). A step's parameter replaces the route's of the same name, and adds the rest.
+  An agent's turns take only their route's, since FX builds each turn's request itself.
+- **FX's own settings stay FX's.** A parameter FX sets itself (`prompt`, `size`, `model`, `n`,
+  `stream`, …) is refused before anything is sent, at $0, and so is a file: send files through the
+  type's inputs. Each provider's list is in its adapter's reference
+  ([providers.md §2](../../spec/providers.md#2-the-built-in-adapters)). Codex and Grok Build take
+  none.
+- **Options are part of the call.** Another value is another paid call, and the route's are part of
+  its identity. They are recorded with the run, so never put a key in them: keys come only from the
+  environment or `.env`.
+- **What the provider does with them is the provider's.** Beyond those refusals, FX does not
+  check a parameter's name or value: a provider that refuses it fails the call, and one that
+  changes its answer so FX's checks refuse it fails the attempt, billed.

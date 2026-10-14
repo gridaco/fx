@@ -13,7 +13,9 @@ The reference for FX's adapters on `openai`, under the adapter contract, [spec/a
   - An edit sends its text fields first, in that order.
   - Then each input image (`image` first, then `references`) as part `image[]`, named `reference-NN.<png|jpg|webp>` with `NN` from `01`.
   - Then the mask as part `mask`, named `reference-00.<ext>`.
+- **Provider options** ([adapters.md](../../../../spec/adapters.md) §8): the parameters of `provider_options.openai` follow FX's members: at the end of a generation's body, and in an edit as text fields after FX's, before the pictures. FX owns `model`, `prompt`, `n`, `output_format`, `size`, `quality`, `background` and `moderation`, the parts `image`, `image[]` and `mask`, and the members it never sends: `input_fidelity`, `response_format`, `seed` and `stream`.
 - **Refusals ([adapters.md](../../../../spec/adapters.md) §4 step 4–5), in this order:**
+  - provider options, with the sentences of [adapters.md](../../../../spec/adapters.md) §8;
   - a blank `prompt`: `an image call needs its prompt as text`;
   - a `background` other than `auto`, `opaque` or `transparent`: `background must be auto, opaque or transparent`;
   - a `size` that is not `auto` or `WxH`: `OpenAI image size must be auto or WIDTHxHEIGHT`; or one that leaves the envelope, checked in this order: edges multiples of 16 (`OpenAI image size edges must be multiples of 16`), the longer edge at most 3840 (`OpenAI image size edges must not exceed 3840 pixels`), aspect ratio at most 3:1 (`OpenAI image size aspect ratio must not exceed 3:1`), and 655 360 to 8 294 400 pixels (`OpenAI image size must contain between 655360 and 8294400 pixels`);

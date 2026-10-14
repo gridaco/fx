@@ -238,6 +238,10 @@
       "type": "string",
       "x-fx-template": true
      },
+     "provider_options": {
+      "type": "object",
+      "x-fx-optional": true
+     },
      "size": {
       "type": "string",
       "x-fx-optional": true
@@ -272,6 +276,10 @@
       "type": "string",
       "x-fx-template": true
      },
+     "provider_options": {
+      "type": "object",
+      "x-fx-optional": true
+     },
      "system": {
       "type": "string",
       "x-fx-optional": true,
@@ -299,6 +307,10 @@
     "params": {
      "criteria": {
       "type": "array",
+      "x-fx-optional": true
+     },
+     "provider_options": {
+      "type": "object",
       "x-fx-optional": true
      },
      "question": {

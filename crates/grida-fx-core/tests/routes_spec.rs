@@ -338,6 +338,45 @@ fn caps_and_prices_without_an_amount() {
 }
 
 #[test]
+fn a_contract_s_provider_options_are_objects_by_provider() {
+    let read = |contract: Value| {
+        let document = json!({"fx": "routes/v1", "routes": [
+            {"capability": "video.generate", "route": "vid-a@fal", "price": {"usd": 1},
+             "contract": contract},
+            {"capability": "video.generate", "route": "vid-b@fal", "extends": "vid-a@fal",
+             "contract": {"provider_options": {"fal": {"seed": 2}}}},
+        ]});
+        RouteTable::from_document(&document, "routes.yaml")
+    };
+    let table = read(json!({"provider_options": {"fal": {"seed": 1, "style": "ink"}}})).unwrap();
+    let route = table.resolve("video.generate", "vid-a@fal").unwrap();
+    assert_eq!(
+        route.contract["provider_options"],
+        json!({"fal": {"seed": 1, "style": "ink"}})
+    );
+    // An entry that extends a route and states them replaces the base's whole.
+    let extended = table.resolve("video.generate", "vid-b@fal").unwrap();
+    assert_eq!(
+        extended.contract["provider_options"],
+        json!({"fal": {"seed": 2}})
+    );
+    for (refused, message) in [
+        (
+            json!({"provider_options": {"fal": 1}}),
+            "routes.0.contract.provider_options.fal: 1 is not of type \"object\"",
+        ),
+        (
+            json!({"provider_options": []}),
+            "routes.0.contract.provider_options: [] is not of type \"object\"",
+        ),
+    ] {
+        let error = read(refused).unwrap_err();
+        assert_eq!(error.kind, ErrorKind::Document);
+        assert_eq!(error.message, format!("routes.yaml: {message}"));
+    }
+}
+
+#[test]
 fn catalogs_combine_in_order() {
     let folder = tempfile::tempdir().unwrap();
     let root = folder.path().to_path_buf();

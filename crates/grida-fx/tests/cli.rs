@@ -235,6 +235,7 @@ fn integrated_nodes_shows_one_type() {
          \x20 setting size: {{\"type\": \"string\", \"x-fx-optional\": true}}\n\
          \x20 setting background: {{\"default\": \"auto\", \"enum\": [\"opaque\", \"transparent\", \"auto\"]}}\n\
          \x20 setting vars: {{\"default\": {{}}, \"type\": \"object\"}}\n\
+         \x20 setting provider_options: {{\"type\": \"object\", \"x-fx-optional\": true}}\n\
          \x20 output  image: image/png\n\
          \x20 routes  gpt-image-2.5-sunburst@openai, imagegen@codex, imagine@grok, \
          openai/gpt-image-2.5-sunburst@gg, openai/gpt-image-2.5-sunburst@openrouter, \
@@ -1368,6 +1369,7 @@ fn integrated_documents_of_tiered_price() {
                     "aspect_ratio": {"type": "string", "x-fx-optional": true},
                     "duration": {"type": "number", "x-fx-optional": true},
                     "prompt": {"type": "string", "x-fx-template": true},
+                    "provider_options": {"type": "object", "x-fx-optional": true},
                     "resolution": {"type": "string", "x-fx-optional": true},
                 },
             },
