@@ -70,6 +70,12 @@ pub const MAX_PROMPT_CHARS: usize = 32_000;
 /// The most input pictures of an edit (`image` and `references`; the mask does not count).
 pub const MAX_PICTURES: usize = 16;
 
+/// The endpoint under a route's model that `image.generate` posts to.
+pub const GENERATE_ENDPOINT: &str = "text-to-image";
+
+/// The endpoint under a route's model that `image.edit` posts to.
+pub const EDIT_ENDPOINT: &str = "edit";
+
 /// The POST's response cap: an output picture inline as base64 is 4/3 of its bytes, plus JSON.
 pub(crate) const MAX_RESPONSE_BYTES: u64 = MAX_OUTPUT_BYTES / 3 * 4 + 4 * 1024 * 1024;
 
@@ -161,7 +167,11 @@ impl FalImages {
         }
         body.extend(options);
 
-        let action = if edit { "edit" } else { "text-to-image" };
+        let action = if edit {
+            EDIT_ENDPOINT
+        } else {
+            GENERATE_ENDPOINT
+        };
         let url = client.url(&format!("{}/{action}", super::endpoint(&call.route.model)));
         Ok(HttpRequest::new(Method::Post, url, Lane::Provider)
             .credential(credential)

@@ -25,7 +25,7 @@ Guardrails for working in this repository. [README.md](README.md) says what FX i
 | `fixtures/viewer/` | Canonical provider-free development harness for viewer topology, media, cache, takes, failures and recorded in-progress states; generated data stays outside the source fixture. |
 | `fixtures/host/grida/` | A stand-in for the npm `grida` command reduced to its `fx` verb; `tools/check_host.py` installs it beside packed `@grida/fx` and runs conformance through `grida fx`. |
 | `fixtures/control/` | Provider-free checkpoint and delayed-cleanup harness for cancellation acceptance, waiting, verified cleanup and resume. Copy it into a fresh project for each test. |
-| `tools/` | What runs outside the engine: the spec gate, the independent digest checker, packaging, `build_engine.py` (the engine into a checkout's SDK) and `check_examples.py`. |
+| `tools/` | What runs outside the engine: the spec gate, the independent digest checker, packaging, `build_engine.py` (the engine into a checkout's SDK), `check_examples.py` and `make_models.py` (the pinned Grida Models facts the built-in routes are checked against). |
 
 ## Rules
 
@@ -74,6 +74,7 @@ cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test --w
 (cd python && uv run ruff check --config pyproject.toml . ../tools ../conformance ../examples ../fixtures && uv run ruff format --check --config pyproject.toml . ../tools ../conformance/run.py ../examples ../fixtures && uv run pytest)
 (cd js/fx && bun --no-env-file run typecheck && bun --no-env-file test)
 uv run --project python python tools/check_spec.py
+uv run --project python python tools/make_models.py --check
 uv run --project python python conformance/run.py --command target/debug/grida-fx --js-sdk js/fx
 python3 tools/build_engine.py && uv run --project python python tools/check_examples.py
 uv run --project python python tools/check_llms.py

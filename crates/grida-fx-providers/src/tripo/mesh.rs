@@ -34,6 +34,9 @@ pub const FACE_LIMIT: std::ops::RangeInclusive<i64> = 48..=25_000;
 /// The route contract's `adapter` this adapter serves.
 pub const ADAPTER: &str = "tripo-multiview";
 
+/// The paid task's path.
+pub const PATH: &str = "/generation/multiview-to-model";
+
 /// The contract this adapter serves: [`ADAPTER`], and `adapter_behavior` the number 1.
 pub const IDENTITY: Identity = Identity {
     adapter: ADAPTER,
@@ -121,10 +124,7 @@ impl TripoMesh {
         body.extend(params);
         body.insert("inputs".into(), Value::Array(inputs));
         body.extend(options);
-        match api
-            .post_task("/generation/multiview-to-model", Value::Object(body))
-            .await
-        {
+        match api.post_task(PATH, Value::Object(body)).await {
             Ok(task_id) => Submitted::Accepted {
                 handle: json!({ "task_id": task_id }),
             },

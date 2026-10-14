@@ -17,6 +17,10 @@
 //!   spec/providers.md §2 and every registered adapter's identity;
 //! - prices parse, and the tiered routes price as spec/identity.md §12 reads them: the video
 //!   route by `resolution`, the image routes by `size`.
+//!
+//! `tests/models.rs` holds the table to the public facts of `routes/models.json`, the projection
+//! of a pinned Grida Models release that `tools/make_models.py` writes (spec/providers.md §3).
+//! Nothing here reads it: FX never needs Grida Models to run.
 
 use grida_fx_core::routes::RouteTable;
 

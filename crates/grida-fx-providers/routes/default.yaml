@@ -6,9 +6,9 @@
 # (spec/adapters.md §5).
 #
 # Grida Gateway (`@gg`) is Grida's own provider: one key, GG_API_KEY, serves its
-# text, image, video and 3D routes. It charges a model's regular tariff, so its routes take the
-# prices of the same model elsewhere. A call is booked at GG's settled charge, else at its whole
-# hold (src/gg/README.md; spec/providers.md §3).
+# text, image, video and 3D routes. Their prices are FX's allowances, taken from the same model
+# elsewhere until GG's own rates can be planned from. A call is booked at GG's settled charge,
+# else at its whole hold (src/gg/README.md; spec/providers.md §3).
 #
 # The Codex routes (imagegen@codex, for image.generate and image.edit) run on the user's own
 # signed-in Codex, which counts them against their plan: they are free to FX, $0, take at most 5
@@ -36,7 +36,9 @@
 # identity.
 #
 # Features are the names spec/capabilities.md lists for each capability. tests/routes.rs holds
-# this file to both specs and to the adapters of grida-fx-providers.
+# this file to both specs and to the adapters of grida-fx-providers, and tests/models.rs to the
+# public facts of models.json, the projection of a pinned Grida Models release that
+# tools/make_models.py writes beside it (spec/providers.md §3).
 fx: routes/v1
 routes:
 - capability: agent.turn
@@ -286,6 +288,7 @@ routes:
   requests_per_minute: 150
   max_input_pictures: 16
   features:
+  - alpha
   - authored_prompt_passthrough
   - auto_background
   - exact_size
@@ -547,6 +550,7 @@ routes:
         high_usd: 0.65
   requests_per_minute: 150
   features:
+  - alpha
   - authored_prompt_passthrough
   - auto_background
   - exact_size
@@ -782,6 +786,8 @@ routes:
       720p:
         low_usd: 0.1
         high_usd: 0.2
+  features:
+  - text_to_video
   concurrency: 1
   contract:
     adapter: gg-video

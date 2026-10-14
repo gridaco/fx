@@ -241,7 +241,7 @@ Types marked *planned* plan and price but cannot run yet.
 | Type | Settings → outputs | Notes |
 |---|---|---|
 | `fx/image.generate@1` | `prompt`, `size` (`WxH` or `auto`), `background` (`auto`, `opaque`, `transparent`), `references`, `vars` → `image` | paid; `references` only on `imagegen@codex` (≤5) and `imagine@grok` (≤3) of the built-in routes, and on a route of your own on OpenRouter that declares `image_input` |
-| `fx/image.edit@1` | `image`, `mask`, `references`, `prompt`, `size`, `background` → `image` | paid; masks only on `gpt-image-2.5-sunburst@openai` |
+| `fx/image.edit@1` | `image`, `mask`, `references`, `prompt`, `size`, `background` → `image` | paid; masks only on `gpt-image-2.5-sunburst@openai` and `openai/gpt-image-2.5/sunburst@fal` of the built-in routes |
 | `fx/structured.generate@1` | `prompt`, `system`, `context` (text, json, images), `schema`, `max_tokens`, `vars` → `json` | paid |
 | `fx/video.generate@1` | `prompt`, `first_frame`, `last_frame`, `duration`, `resolution`, `aspect_ratio` → `video` | paid, long job |
 | `fx/speech.generate@1` | `text`, `voice`, `stability`, `language_code`, `max_chars` → `audio` | paid |
@@ -405,7 +405,9 @@ routes:
   does not have is now `no adapter serves …` when a call is sent, not `… is not a <capability>
   route this adapter serves`. fal's video adapter takes the tiers and length its route's price
   declares, and a request without a first frame on a route that declares `text_to_video`; GG
-  image edits are limited by the route's `max_input_pictures`, not by FX.
+  image edits are limited by the route's `max_input_pictures`, not by FX. The built-in OpenRouter
+  image routes now take `background: transparent` (they refused it, so a step that `requires:
+  [alpha]` now plans on them), and the built-in GG video route declares `text_to_video`.
 
 ## Your own nodes
 

@@ -147,6 +147,7 @@ bun --no-env-file run build:viewer
 
 # Contracts and runnable examples
 uv run --project python python tools/check_spec.py
+uv run --project python python tools/make_models.py --check
 cargo build --locked -p grida-fx
 uv run --project python python conformance/run.py --command target/debug/grida-fx --js-sdk js/fx
 uv run --project python python tools/check_examples.py
@@ -159,6 +160,17 @@ Build the debug engine before using `target/debug/grida-fx`; the source-build
 helper defaults to the release profile. Use the Python and JavaScript checks in
 AGENTS.md when changing either SDK. Changes to public schemas, identities, or
 protocol behavior update their specification and conformance evidence together.
+
+The built-in route table is checked against a pinned release of
+[Grida Models](https://github.com/gridaco/models) (spec/providers.md §3), whose
+projection is `crates/grida-fx-providers/routes/models.json`. A new built-in route
+gets its card in `CARDS` of `tools/make_models.py` and a new projection: run
+`uv run --project python python tools/make_models.py --release <tag>` with the
+network, where `<tag>` is the tool's `RELEASE`, the pin. To move the pin, change
+`RELEASE` and the release spec/providers.md §3 names (`--check` holds them
+together), run the same command with the new tag, and fix what `cargo test -p
+grida-fx-providers --test models` then finds, in the routes or in its exceptions
+table.
 
 ## Viewer development
 

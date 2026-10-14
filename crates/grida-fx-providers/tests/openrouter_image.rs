@@ -288,6 +288,86 @@ fn every_verified_size_is_sent_verbatim() {
     }
 }
 
+// Transparent backgrounds: sent as given (Grida Models v1.20261013.6 records `background:
+// transparent` on the model's OpenRouter endpoint), and the check holds the answer to alpha.
+
+#[test]
+fn a_transparent_generate_sends_background_transparent() {
+    let call =
+        generate(json!({"prompt": "a kite", "size": "1024x1024", "background": "transparent"}));
+    let png = media::png_one_pixel_alpha(1024, 1024, 0);
+    let sent = send_one(
+        &call,
+        Some(&generate_body("a kite", Some("1024x1024"), "transparent")),
+        Reply::Response(image_answer(
+            &png,
+            Some("image/png"),
+            Some(json!({"cost": 0.42})),
+        )),
+    );
+    let answer = answered(sent);
+    assert_eq!(answer.cost, Some(Usd(420_000)));
+    let adapter = adapter_over(Arc::new(NoNetwork), test_keys());
+    assert_eq!(adapter.check(&call, &answer), Ok(()));
+    assert_eq!(
+        grida_fx_providers::checks::every_route(&call, &answer),
+        Ok(())
+    );
+}
+
+#[test]
+fn a_transparent_edit_sends_background_transparent() {
+    let picture = media::png(4, 4, Some(255));
+    let mut builder = CallBuilder::new("image.edit", ROUTE).contract(contract("reference"));
+    let image = builder.file("image/png", &picture);
+    let call = builder
+        .request(json!({"prompt": "cut it out", "image": image, "background": "transparent"}))
+        .build();
+    let mut body = generate_body("cut it out", None, "transparent");
+    body["input_references"] = json!([
+        {"type": "image_url", "image_url": {"url": data_url("image/png", &picture)}},
+    ]);
+    let png = media::png_one_pixel_alpha(4, 4, 0);
+    let answer = answered(send_one(
+        &call,
+        Some(&body),
+        Reply::Response(image_answer(&png, None, None)),
+    ));
+    assert_eq!(answer.files["image"].bytes, png);
+    let adapter = adapter_over(Arc::new(NoNetwork), test_keys());
+    assert_eq!(adapter.check(&call, &answer), Ok(()));
+}
+
+#[test]
+fn a_transparent_answer_without_alpha_fails_the_check() {
+    let adapter = adapter_over(Arc::new(NoNetwork), test_keys());
+    let call = generate(json!({"prompt": "p", "background": "transparent"}));
+    let image =
+        |bytes: Vec<u8>| Answer::new(Value::Null, None).with_file("image", "image/png", bytes);
+    let cases = [
+        (
+            media::png(4, 4, None),
+            "the picture asked for as transparent has no alpha channel",
+        ),
+        (
+            media::png(4, 4, Some(255)),
+            "the picture asked for as transparent has no transparent pixels",
+        ),
+    ];
+    for (bytes, reason) in cases {
+        let answer = image(bytes);
+        assert_eq!(adapter.check(&call, &answer), Err(reason.into()));
+        assert_eq!(
+            grida_fx_providers::checks::every_route(&call, &answer),
+            Err(reason.into())
+        );
+    }
+    assert_eq!(
+        adapter.check(&call, &image(media::png_one_pixel_alpha(4, 4, 128))),
+        Ok(())
+    );
+}
+
 #[test]
 fn a_fixture_exchange_plays() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -477,10 +557,6 @@ fn values_the_route_cannot_take_are_refused_in_order() {
         (
             json!({"prompt": " \n", "background": "transparent", "size": "7x7"}),
             "an image call needs its prompt as text",
-        ),
-        (
-            json!({"prompt": "p", "background": "transparent"}),
-            "OpenRouter image generation does not support transparent backgrounds",
         ),
         (
             json!({"prompt": "p", "background": "white", "size": "7x7"}),

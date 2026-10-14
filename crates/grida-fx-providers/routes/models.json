@@ -1,0 +1,1283 @@
+{
+  "routes": {
+    "P2-20260801@tripo": {
+      "card": {
+        "endpoints": [
+          {
+            "id": "/generation/text-to-model",
+            "input": "text",
+            "parameters": {
+              "auto_size": {
+                "type": "boolean"
+              },
+              "export_orientation": {
+                "enum": [
+                  "+x",
+                  "-x",
+                  "-y",
+                  "+y"
+                ],
+                "type": "string"
+              },
+              "export_uv": {
+                "type": "boolean"
+              },
+              "face_limit": {
+                "maximum": 50000,
+                "minimum": 48,
+                "type": "integer"
+              },
+              "image_seed": {
+                "type": "integer"
+              },
+              "model": {
+                "enum": [
+                  "P2-20260801"
+                ],
+                "type": "string"
+              },
+              "model_seed": {
+                "type": "integer"
+              },
+              "negative_prompt": {
+                "max_length": 255,
+                "type": "string"
+              },
+              "pbr": {
+                "type": "boolean"
+              },
+              "prompt": {
+                "max_length": 1024,
+                "type": "string"
+              },
+              "quad": {
+                "type": "boolean"
+              },
+              "texture": {
+                "type": "boolean"
+              },
+              "texture_quality": {
+                "enum": [
+                  "fast",
+                  "standard",
+                  "detailed",
+                  "extreme"
+                ],
+                "type": "string"
+              },
+              "texture_seed": {
+                "type": "integer"
+              },
+              "texture_version": {
+                "enum": [
+                  "v3.5-20260815",
+                  "v3.0-20250812",
+                  "v2.5-20250123"
+                ],
+                "type": "string"
+              }
+            }
+          },
+          {
+            "id": "/generation/image-to-model",
+            "input": "image",
+            "parameters": {
+              "auto_size": {
+                "type": "boolean"
+              },
+              "export_orientation": {
+                "enum": [
+                  "+x",
+                  "-x",
+                  "-y",
+                  "+y"
+                ],
+                "type": "string"
+              },
+              "export_uv": {
+                "type": "boolean"
+              },
+              "face_limit": {
+                "maximum": 50000,
+                "minimum": 48,
+                "type": "integer"
+              },
+              "input": {
+                "type": "string"
+              },
+              "model": {
+                "enum": [
+                  "P2-20260801"
+                ],
+                "type": "string"
+              },
+              "model_seed": {
+                "type": "integer"
+              },
+              "pbr": {
+                "type": "boolean"
+              },
+              "quad": {
+                "type": "boolean"
+              },
+              "texture": {
+                "type": "boolean"
+              },
+              "texture_quality": {
+                "enum": [
+                  "fast",
+                  "standard",
+                  "detailed",
+                  "extreme"
+                ],
+                "type": "string"
+              },
+              "texture_seed": {
+                "type": "integer"
+              },
+              "texture_version": {
+                "enum": [
+                  "v3.5-20260815",
+                  "v3.0-20250812",
+                  "v2.5-20250123"
+                ],
+                "type": "string"
+              }
+            }
+          },
+          {
+            "id": "/generation/multiview-to-model",
+            "input": "image",
+            "parameters": {
+              "auto_size": {
+                "type": "boolean"
+              },
+              "export_orientation": {
+                "enum": [
+                  "+x",
+                  "-x",
+                  "-y",
+                  "+y"
+                ],
+                "type": "string"
+              },
+              "export_uv": {
+                "type": "boolean"
+              },
+              "face_limit": {
+                "maximum": 50000,
+                "minimum": 48,
+                "type": "integer"
+              },
+              "inputs": {
+                "type": "array"
+              },
+              "model": {
+                "enum": [
+                  "P2-20260801"
+                ],
+                "type": "string"
+              },
+              "model_seed": {
+                "type": "integer"
+              },
+              "pbr": {
+                "type": "boolean"
+              },
+              "quad": {
+                "type": "boolean"
+              },
+              "texture": {
+                "type": "boolean"
+              },
+              "texture_quality": {
+                "enum": [
+                  "fast",
+                  "standard",
+                  "detailed",
+                  "extreme"
+                ],
+                "type": "string"
+              },
+              "texture_seed": {
+                "type": "integer"
+              },
+              "texture_version": {
+                "enum": [
+                  "v3.5-20260815",
+                  "v3.0-20250812",
+                  "v2.5-20250123"
+                ],
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "id": "tripo/p2",
+        "provider_coverage": {
+          "tripo": {
+            "disposition": "listed"
+          }
+        },
+        "reference_provider": "tripo"
+      },
+      "section": "three_d.model_generation.models"
+    },
+    "alibaba/wan-3.0@gg": {
+      "card": {
+        "id": "alibaba/wan-3.0",
+        "provider_coverage": {
+          "grida": {
+            "disposition": "listed"
+          }
+        },
+        "providers": {
+          "grida": {
+            "endpoints": [
+              {
+                "id": "video.alibaba.wan-3.0.image",
+                "input": "image",
+                "interface": "videos",
+                "operation": "video.alibaba.wan-3.0.image",
+                "published_pricing": {
+                  "components": [
+                    {
+                      "meter": "fal_output_units",
+                      "per_quantity": "1",
+                      "unit": "provider_unit",
+                      "usd_per_unit": "0.05"
+                    }
+                  ],
+                  "currency": "USD"
+                }
+              },
+              {
+                "id": "video.alibaba.wan-3.0.text",
+                "input": "text",
+                "interface": "videos",
+                "operation": "video.alibaba.wan-3.0.text",
+                "published_pricing": {
+                  "components": [
+                    {
+                      "meter": "fal_output_units",
+                      "per_quantity": "1",
+                      "unit": "provider_unit",
+                      "usd_per_unit": "0.05"
+                    }
+                  ],
+                  "currency": "USD"
+                }
+              }
+            ],
+            "id": "alibaba/wan-3.0",
+            "provider": "grida"
+          }
+        },
+        "reference_provider": "alibaba"
+      },
+      "section": "video.models"
+    },
+    "eleven_text_to_sound_v2@elevenlabs": {
+      "card": {
+        "id": "eleven_text_to_sound_v2",
+        "provider_coverage": {
+          "elevenlabs": {
+            "disposition": "listed"
+          }
+        },
+        "reference_provider": "elevenlabs"
+      },
+      "section": "audio.sound_effects.models"
+    },
+    "eleven_v3@elevenlabs": {
+      "card": {
+        "id": "eleven_v3",
+        "provider_coverage": {
+          "elevenlabs": {
+            "disposition": "listed"
+          }
+        },
+        "reference_provider": "elevenlabs"
+      },
+      "section": "audio.text_to_speech.models"
+    },
+    "google/gemini-omni-flash/v1.1/image-to-video@fal": null,
+    "google/lyria-3-pro-preview@openrouter": {
+      "card": {
+        "id": "google/lyria-3-pro",
+        "provider_coverage": {
+          "openrouter": {
+            "disposition": "listed"
+          }
+        },
+        "providers": {
+          "openrouter": {
+            "id": "google/lyria-3-pro-preview",
+            "provider": "openrouter"
+          }
+        },
+        "reference_provider": "google"
+      },
+      "section": "audio.music.models"
+    },
+    "gpt-image-2.5-sunburst@openai": {
+      "card": {
+        "id": "openai/gpt-image-2.5-sunburst",
+        "provider_coverage": {
+          "openai": {
+            "disposition": "listed"
+          }
+        },
+        "providers": {
+          "openai": {
+            "id": "gpt-image-2.5-sunburst",
+            "provider": "openai"
+          }
+        },
+        "reference_provider": "openai"
+      },
+      "section": "image.models"
+    },
+    "imagegen@codex": null,
+    "imagine@grok": null,
+    "openai/gpt-5.6-sol@gg": {
+      "card": {
+        "id": "openai/gpt-5.6-sol",
+        "provider_coverage": {
+          "grida": {
+            "disposition": "listed"
+          }
+        },
+        "providers": {
+          "grida": {
+            "capabilities": {
+              "image_input": true,
+              "reasoning": true,
+              "structured_output": true,
+              "tools": true
+            },
+            "endpoints": [
+              {
+                "id": "openai/gpt-5.6-sol",
+                "input": "text",
+                "published_pricing": {
+                  "components": [
+                    {
+                      "meter": "input_tokens",
+                      "per_quantity": "1",
+                      "quantity_range": {
+                        "max": "272000",
+                        "meter": "total_input_tokens",
+                        "min": "0"
+                      },
+                      "unit": "token",
+                      "usd_per_unit": "0.000004"
+                    },
+                    {
+                      "meter": "input_tokens",
+                      "per_quantity": "1",
+                      "quantity_range": {
+                        "meter": "total_input_tokens",
+                        "min": "272000"
+                      },
+                      "unit": "token",
+                      "usd_per_unit": "0.000008"
+                    },
+                    {
+                      "meter": "cached_input_tokens",
+                      "per_quantity": "1",
+                      "quantity_range": {
+                        "max": "272000",
+                        "meter": "total_input_tokens",
+                        "min": "0"
+                      },
+                      "unit": "token",
+                      "usd_per_unit": "0.0000004"
+                    },
+                    {
+                      "meter": "cached_input_tokens",
+                      "per_quantity": "1",
+                      "quantity_range": {
+                        "meter": "total_input_tokens",
+                        "min": "272000"
+                      },
+                      "unit": "token",
+                      "usd_per_unit": "0.0000008"
+                    },
+                    {
+                      "meter": "output_tokens",
+                      "per_quantity": "1",
+                      "quantity_range": {
+                        "max": "272000",
+                        "meter": "total_input_tokens",
+                        "min": "0"
+                      },
+                      "unit": "token",
+                      "usd_per_unit": "0.00002"
+                    },
+                    {
+                      "meter": "output_tokens",
+                      "per_quantity": "1",
+                      "quantity_range": {
+                        "meter": "total_input_tokens",
+                        "min": "272000"
+                      },
+                      "unit": "token",
+                      "usd_per_unit": "0.00003"
+                    },
+                    {
+                      "meter": "cache_write_tokens",
+                      "per_quantity": "1",
+                      "quantity_range": {
+                        "max": "272000",
+                        "meter": "total_input_tokens",
+                        "min": "0"
+                      },
+                      "unit": "token",
+                      "usd_per_unit": "0.000005"
+                    },
+                    {
+                      "meter": "cache_write_tokens",
+                      "per_quantity": "1",
+                      "quantity_range": {
+                        "meter": "total_input_tokens",
+                        "min": "272000"
+                      },
+                      "unit": "token",
+                      "usd_per_unit": "0.00001"
+                    }
+                  ],
+                  "currency": "USD"
+                }
+              }
+            ],
+            "id": "openai/gpt-5.6-sol",
+            "limits": {
+              "max_output_tokens": 128000
+            },
+            "provider": "grida"
+          }
+        },
+        "reference_provider": "openai"
+      },
+      "section": "text.catalog"
+    },
+    "openai/gpt-5.6-sol@openrouter": {
+      "card": {
+        "id": "openai/gpt-5.6-sol",
+        "provider_coverage": {
+          "openrouter": {
+            "disposition": "listed"
+          }
+        },
+        "providers": {
+          "openrouter": {
+            "capabilities": {
+              "image_input": true,
+              "reasoning": true,
+              "structured_output": true,
+              "tools": true
+            },
+            "endpoints": [
+              {
+                "id": "openai/gpt-5.6-sol",
+                "input": "text"
+              }
+            ],
+            "id": "openai/gpt-5.6-sol",
+            "limits": {
+              "max_output_tokens": 128000
+            },
+            "provider": "openrouter",
+            "token_pricing": {
+              "input": "0.000004",
+              "output": "0.00002",
+              "tiers": [
+                {
+                  "maximum_input_tokens": 272000,
+                  "meter": "input",
+                  "minimum_input_tokens": 0,
+                  "usd_per_token": "0.000004"
+                },
+                {
+                  "meter": "input",
+                  "minimum_input_tokens": 272000,
+                  "usd_per_token": "0.000008"
+                },
+                {
+                  "maximum_input_tokens": 272000,
+                  "meter": "output",
+                  "minimum_input_tokens": 0,
+                  "usd_per_token": "0.00002"
+                },
+                {
+                  "meter": "output",
+                  "minimum_input_tokens": 272000,
+                  "usd_per_token": "0.00003"
+                },
+                {
+                  "maximum_input_tokens": 272000,
+                  "meter": "input_cache_read",
+                  "minimum_input_tokens": 0,
+                  "usd_per_token": "0.0000004"
+                },
+                {
+                  "meter": "input_cache_read",
+                  "minimum_input_tokens": 272000,
+                  "usd_per_token": "0.0000008"
+                },
+                {
+                  "maximum_input_tokens": 272000,
+                  "meter": "input_cache_write",
+                  "minimum_input_tokens": 0,
+                  "usd_per_token": "0.000005"
+                },
+                {
+                  "meter": "input_cache_write",
+                  "minimum_input_tokens": 272000,
+                  "usd_per_token": "0.00001"
+                }
+              ],
+              "unit": "usd_per_token"
+            }
+          }
+        },
+        "reference_provider": "openai"
+      },
+      "section": "text.catalog"
+    },
+    "openai/gpt-6-astra@gg": {
+      "card": {
+        "id": "openai/gpt-6-astra",
+        "provider_coverage": {
+          "grida": {
+            "disposition": "listed"
+          }
+        },
+        "providers": {
+          "grida": {
+            "capabilities": {
+              "image_input": true,
+              "reasoning": true,
+              "structured_output": true,
+              "tools": true
+            },
+            "endpoints": [
+              {
+                "id": "openai/gpt-6-astra",
+                "input": "text",
+                "published_pricing": {
+                  "components": [
+                    {
+                      "meter": "input_tokens",
+                      "per_quantity": "1",
+                      "quantity_range": {
+                        "max": "272001",
+                        "meter": "total_input_tokens",
+                        "min": "0"
+                      },
+                      "unit": "token",
+                      "usd_per_unit": "0.00001"
+                    },
+                    {
+                      "meter": "input_tokens",
+                      "per_quantity": "1",
+                      "quantity_range": {
+                        "meter": "total_input_tokens",
+                        "min": "272001"
+                      },
+                      "unit": "token",
+                      "usd_per_unit": "0.00002"
+                    },
+                    {
+                      "meter": "cached_input_tokens",
+                      "per_quantity": "1",
+                      "quantity_range": {
+                        "max": "272001",
+                        "meter": "total_input_tokens",
+                        "min": "0"
+                      },
+                      "unit": "token",
+                      "usd_per_unit": "0.000001"
+                    },
+                    {
+                      "meter": "cached_input_tokens",
+                      "per_quantity": "1",
+                      "quantity_range": {
+                        "meter": "total_input_tokens",
+                        "min": "272001"
+                      },
+                      "unit": "token",
+                      "usd_per_unit": "0.000002"
+                    },
+                    {
+                      "meter": "output_tokens",
+                      "per_quantity": "1",
+                      "quantity_range": {
+                        "max": "272001",
+                        "meter": "total_input_tokens",
+                        "min": "0"
+                      },
+                      "unit": "token",
+                      "usd_per_unit": "0.00005"
+                    },
+                    {
+                      "meter": "output_tokens",
+                      "per_quantity": "1",
+                      "quantity_range": {
+                        "meter": "total_input_tokens",
+                        "min": "272001"
+                      },
+                      "unit": "token",
+                      "usd_per_unit": "0.000075"
+                    },
+                    {
+                      "meter": "cache_write_tokens",
+                      "per_quantity": "1",
+                      "quantity_range": {
+                        "max": "272001",
+                        "meter": "total_input_tokens",
+                        "min": "0"
+                      },
+                      "unit": "token",
+                      "usd_per_unit": "0.0000125"
+                    },
+                    {
+                      "meter": "cache_write_tokens",
+                      "per_quantity": "1",
+                      "quantity_range": {
+                        "meter": "total_input_tokens",
+                        "min": "272001"
+                      },
+                      "unit": "token",
+                      "usd_per_unit": "0.000025"
+                    }
+                  ],
+                  "currency": "USD"
+                }
+              }
+            ],
+            "id": "openai/gpt-6-astra",
+            "limits": {
+              "max_output_tokens": 128000
+            },
+            "provider": "grida"
+          }
+        },
+        "reference_provider": "openai"
+      },
+      "section": "text.catalog"
+    },
+    "openai/gpt-6-astra@openrouter": {
+      "card": {
+        "id": "openai/gpt-6-astra",
+        "provider_coverage": {
+          "openrouter": {
+            "disposition": "listed"
+          }
+        },
+        "providers": {
+          "openrouter": {
+            "capabilities": {
+              "image_input": true,
+              "reasoning": true,
+              "structured_output": true,
+              "tools": true
+            },
+            "endpoints": [
+              {
+                "id": "openai/gpt-6-astra",
+                "input": "text"
+              }
+            ],
+            "id": "openai/gpt-6-astra",
+            "limits": {
+              "max_output_tokens": 128000
+            },
+            "provider": "openrouter",
+            "token_pricing": {
+              "input": "0.00001",
+              "output": "0.00005",
+              "tiers": [
+                {
+                  "maximum_input_tokens": 272000,
+                  "meter": "input",
+                  "minimum_input_tokens": 0,
+                  "usd_per_token": "0.00001"
+                },
+                {
+                  "meter": "input",
+                  "minimum_input_tokens": 272000,
+                  "usd_per_token": "0.00002"
+                },
+                {
+                  "maximum_input_tokens": 272000,
+                  "meter": "output",
+                  "minimum_input_tokens": 0,
+                  "usd_per_token": "0.00005"
+                },
+                {
+                  "meter": "output",
+                  "minimum_input_tokens": 272000,
+                  "usd_per_token": "0.000075"
+                },
+                {
+                  "maximum_input_tokens": 272000,
+                  "meter": "input_cache_read",
+                  "minimum_input_tokens": 0,
+                  "usd_per_token": "0.000001"
+                },
+                {
+                  "meter": "input_cache_read",
+                  "minimum_input_tokens": 272000,
+                  "usd_per_token": "0.000002"
+                },
+                {
+                  "maximum_input_tokens": 272000,
+                  "meter": "input_cache_write",
+                  "minimum_input_tokens": 0,
+                  "usd_per_token": "0.0000125"
+                },
+                {
+                  "meter": "input_cache_write",
+                  "minimum_input_tokens": 272000,
+                  "usd_per_token": "0.000025"
+                }
+              ],
+              "unit": "usd_per_token"
+            }
+          }
+        },
+        "reference_provider": "openai"
+      },
+      "section": "text.catalog"
+    },
+    "openai/gpt-image-2.5-sunburst@gg": {
+      "card": {
+        "id": "openai/gpt-image-2.5-sunburst",
+        "provider_coverage": {
+          "grida": {
+            "disposition": "listed"
+          }
+        },
+        "providers": {
+          "grida": {
+            "endpoints": [
+              {
+                "id": "image.openai.gpt-image-2.5-sunburst.references",
+                "input": "multi_image",
+                "interface": "images.edits",
+                "operation": "image.openai.gpt-image-2.5-sunburst.references",
+                "published_pricing": {
+                  "components": [
+                    {
+                      "meter": "fal_output_units",
+                      "per_quantity": "1",
+                      "unit": "provider_unit",
+                      "usd_per_unit": "1"
+                    }
+                  ],
+                  "currency": "USD"
+                }
+              },
+              {
+                "id": "image.openai.gpt-image-2.5-sunburst.text",
+                "input": "text",
+                "interface": "images.generations",
+                "operation": "image.openai.gpt-image-2.5-sunburst.text",
+                "published_pricing": {
+                  "components": [
+                    {
+                      "meter": "fal_output_units",
+                      "per_quantity": "1",
+                      "unit": "provider_unit",
+                      "usd_per_unit": "1"
+                    }
+                  ],
+                  "currency": "USD"
+                }
+              }
+            ],
+            "id": "openai/gpt-image-2.5-sunburst",
+            "provider": "grida"
+          }
+        },
+        "reference_provider": "openai"
+      },
+      "section": "image.models"
+    },
+    "openai/gpt-image-2.5-sunburst@openrouter": {
+      "card": {
+        "id": "openai/gpt-image-2.5-sunburst",
+        "provider_coverage": {
+          "openrouter": {
+            "disposition": "listed"
+          }
+        },
+        "providers": {
+          "openrouter": {
+            "endpoints": [
+              {
+                "id": "openai/gpt-image-2.5-sunburst",
+                "input": "text",
+                "parameters": {
+                  "aspect_ratio": {
+                    "enum": [
+                      "1:1",
+                      "3:2",
+                      "2:3",
+                      "4:3",
+                      "3:4",
+                      "16:9",
+                      "9:16",
+                      "21:9",
+                      "auto"
+                    ]
+                  },
+                  "background": {
+                    "enum": [
+                      "auto",
+                      "transparent",
+                      "opaque"
+                    ]
+                  },
+                  "input_references": {
+                    "maximum": 16,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "n": {
+                    "maximum": 10,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "output_compression": {
+                    "maximum": 100,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "quality": {
+                    "enum": [
+                      "auto",
+                      "low",
+                      "medium",
+                      "high",
+                      "xhigh",
+                      "max"
+                    ]
+                  }
+                }
+              }
+            ],
+            "id": "openai/gpt-image-2.5-sunburst",
+            "provider": "openrouter"
+          }
+        },
+        "reference_provider": "openai"
+      },
+      "section": "image.models"
+    },
+    "openai/gpt-image-2.5/sunburst@fal": {
+      "card": {
+        "id": "openai/gpt-image-2.5-sunburst",
+        "provider_coverage": {
+          "fal": {
+            "disposition": "listed"
+          }
+        },
+        "providers": {
+          "fal": {
+            "endpoints": [
+              {
+                "id": "openai/gpt-image-2.5/sunburst/edit",
+                "image_constraints": {
+                  "aspect_ratio": {
+                    "max": 3
+                  },
+                  "max_edge": 3840,
+                  "max_pixels": 8294400,
+                  "min_pixels": 655360,
+                  "step": 16
+                },
+                "input": "image",
+                "parameters": {
+                  "background": {
+                    "enum": [
+                      "auto",
+                      "transparent",
+                      "opaque"
+                    ],
+                    "type": "string"
+                  },
+                  "image_size": {
+                    "enum": [
+                      "square_hd",
+                      "square",
+                      "portrait_4_3",
+                      "portrait_16_9",
+                      "landscape_4_3",
+                      "landscape_16_9",
+                      "auto"
+                    ]
+                  },
+                  "image_size.height": {
+                    "maximum": 3840,
+                    "minimum": 1,
+                    "multiple_of": 16,
+                    "type": "integer"
+                  },
+                  "image_size.width": {
+                    "maximum": 3840,
+                    "minimum": 1,
+                    "multiple_of": 16,
+                    "type": "integer"
+                  },
+                  "image_urls": {
+                    "max_items": 16,
+                    "type": "array"
+                  },
+                  "num_images": {
+                    "maximum": 10,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "output_compression": {
+                    "maximum": 100,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "output_format": {
+                    "enum": [
+                      "jpeg",
+                      "png",
+                      "webp"
+                    ],
+                    "type": "string"
+                  },
+                  "prompt": {
+                    "max_length": 32000,
+                    "min_length": 1,
+                    "type": "string"
+                  },
+                  "quality": {
+                    "enum": [
+                      "auto",
+                      "low",
+                      "medium",
+                      "high",
+                      "xhigh",
+                      "max"
+                    ],
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "id": "openai/gpt-image-2.5/sunburst/text-to-image",
+                "image_constraints": {
+                  "aspect_ratio": {
+                    "max": 3
+                  },
+                  "max_edge": 3840,
+                  "max_pixels": 8294400,
+                  "min_pixels": 655360,
+                  "step": 16
+                },
+                "input": "text",
+                "parameters": {
+                  "background": {
+                    "enum": [
+                      "auto",
+                      "transparent",
+                      "opaque"
+                    ],
+                    "type": "string"
+                  },
+                  "image_size": {
+                    "enum": [
+                      "square_hd",
+                      "square",
+                      "portrait_4_3",
+                      "portrait_16_9",
+                      "landscape_4_3",
+                      "landscape_16_9",
+                      "auto"
+                    ]
+                  },
+                  "image_size.height": {
+                    "maximum": 3840,
+                    "minimum": 1,
+                    "multiple_of": 16,
+                    "type": "integer"
+                  },
+                  "image_size.width": {
+                    "maximum": 3840,
+                    "minimum": 1,
+                    "multiple_of": 16,
+                    "type": "integer"
+                  },
+                  "num_images": {
+                    "maximum": 10,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "output_compression": {
+                    "maximum": 100,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "output_format": {
+                    "enum": [
+                      "jpeg",
+                      "png",
+                      "webp"
+                    ],
+                    "type": "string"
+                  },
+                  "prompt": {
+                    "max_length": 32000,
+                    "min_length": 1,
+                    "type": "string"
+                  },
+                  "quality": {
+                    "enum": [
+                      "auto",
+                      "low",
+                      "medium",
+                      "high",
+                      "xhigh",
+                      "max"
+                    ],
+                    "type": "string"
+                  }
+                }
+              }
+            ],
+            "id": "openai/gpt-image-2.5/sunburst/text-to-image",
+            "provider": "fal"
+          }
+        },
+        "reference_provider": "openai"
+      },
+      "section": "image.models"
+    },
+    "tripo/p2@gg": {
+      "card": {
+        "id": "tripo/p2",
+        "provider_coverage": {
+          "grida": {
+            "disposition": "listed"
+          }
+        },
+        "providers": {
+          "grida": {
+            "endpoints": [
+              {
+                "id": "three-d.tripo.p2.image",
+                "input": "image",
+                "interface": "endpoints",
+                "operation": "three-d.tripo.p2.image",
+                "published_pricing": {
+                  "components": [
+                    {
+                      "meter": "provider_credits",
+                      "per_quantity": "1",
+                      "unit": "provider_credit",
+                      "usd_per_unit": "0.01"
+                    }
+                  ],
+                  "currency": "USD"
+                }
+              },
+              {
+                "id": "three-d.tripo.p2.multiview",
+                "input": "multi_image",
+                "interface": "endpoints",
+                "operation": "three-d.tripo.p2.multiview",
+                "published_pricing": {
+                  "components": [
+                    {
+                      "meter": "provider_credits",
+                      "per_quantity": "1",
+                      "unit": "provider_credit",
+                      "usd_per_unit": "0.01"
+                    }
+                  ],
+                  "currency": "USD"
+                }
+              },
+              {
+                "id": "three-d.tripo.p2.text",
+                "input": "text",
+                "interface": "endpoints",
+                "operation": "three-d.tripo.p2.text",
+                "published_pricing": {
+                  "components": [
+                    {
+                      "meter": "provider_credits",
+                      "per_quantity": "1",
+                      "unit": "provider_credit",
+                      "usd_per_unit": "0.01"
+                    }
+                  ],
+                  "currency": "USD"
+                }
+              }
+            ],
+            "id": "tripo/p2",
+            "provider": "grida"
+          }
+        },
+        "reference_provider": "tripo"
+      },
+      "section": "three_d.model_generation.models"
+    },
+    "tripo/rig-v1.0@gg": {
+      "card": {
+        "id": "tripo/rig-v1.0",
+        "provider_coverage": {
+          "grida": {
+            "disposition": "listed"
+          }
+        },
+        "providers": {
+          "grida": {
+            "endpoints": [
+              {
+                "id": "three-d.tripo.rig-v1.0.mesh",
+                "input": "asset",
+                "interface": "endpoints",
+                "operation": "three-d.tripo.rig-v1.0.mesh",
+                "published_pricing": {
+                  "components": [
+                    {
+                      "meter": "provider_credits",
+                      "per_quantity": "1",
+                      "unit": "provider_credit",
+                      "usd_per_unit": "0.01"
+                    }
+                  ],
+                  "currency": "USD"
+                }
+              }
+            ],
+            "id": "tripo/rig-v1.0",
+            "provider": "grida"
+          }
+        },
+        "reference_provider": "tripo"
+      },
+      "rig_check": {
+        "provider_coverage": {
+          "grida": {
+            "disposition": "listed"
+          }
+        },
+        "providers": {
+          "grida": {
+            "endpoints": [
+              {
+                "id": "three-d.tripo.rig-check",
+                "input": "asset",
+                "interface": "endpoints",
+                "operation": "three-d.tripo.rig-check",
+                "published_pricing": {
+                  "components": [
+                    {
+                      "meter": "provider_credits",
+                      "per_quantity": "1",
+                      "unit": "provider_credit",
+                      "usd_per_unit": "0.01"
+                    }
+                  ],
+                  "currency": "USD"
+                }
+              }
+            ],
+            "id": "three-d.tripo.rig-check",
+            "provider": "grida"
+          }
+        },
+        "reference_provider": "tripo"
+      },
+      "section": "three_d.rigging.models"
+    },
+    "v1.0-20240301@tripo": {
+      "card": {
+        "endpoints": [
+          {
+            "id": "/animations/rig",
+            "input": "task",
+            "parameters": {
+              "input": {
+                "type": "string"
+              },
+              "model": {
+                "enum": [
+                  "v1.0-20240301"
+                ],
+                "type": "string"
+              },
+              "out_format": {
+                "enum": [
+                  "glb",
+                  "fbx"
+                ],
+                "type": "string"
+              },
+              "rig_type": {
+                "enum": [
+                  "biped"
+                ],
+                "type": "string"
+              },
+              "spec": {
+                "enum": [
+                  "tripo",
+                  "mixamo"
+                ],
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "id": "tripo/rig-v1.0",
+        "provider_coverage": {
+          "tripo": {
+            "disposition": "listed"
+          }
+        },
+        "reference_provider": "tripo"
+      },
+      "rig_check": {
+        "endpoints": [
+          {
+            "id": "/animations/rig-check",
+            "input": "task",
+            "parameters": {
+              "input": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "provider_coverage": {
+          "tripo": {
+            "disposition": "listed"
+          }
+        },
+        "reference_provider": "tripo"
+      },
+      "section": "three_d.rigging.models"
+    }
+  },
+  "source": {
+    "asset": "models.v1.json",
+    "bytes": 601554,
+    "license": "MIT",
+    "release": "v1.20261013.6",
+    "repository": "https://github.com/gridaco/models",
+    "schema": "https://grida.co/schemas/ai-model-facts-v1.json",
+    "sha256": "0da7a3a2f65961ea71dc70bb729cf24ccb0d23288fb66d199e34b890c454a141"
+  }
+}

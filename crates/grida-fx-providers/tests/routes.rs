@@ -821,12 +821,12 @@ fn features_say_what_the_adapters_honour() {
     let openai = "gpt-image-2.5-sunburst@openai";
     let openrouter = "openai/gpt-image-2.5-sunburst@openrouter";
     let fal = "openai/gpt-image-2.5/sunburst@fal";
-    // OpenRouter refuses a mask and a transparent background (src/openrouter/README.md); GG takes
-    // a transparent background and refuses a mask (src/gg/README.md).
+    // Every GPT Image route takes a transparent background: OpenRouter's since Grida Models
+    // recorded its endpoint taking one (src/openrouter/README.md). OpenRouter and GG refuse a mask
+    // (src/openrouter/README.md; src/gg/README.md).
     for capability in ["image.generate", "image.edit"] {
         assert!(has(capability, openai, "alpha") && has(capability, fal, "alpha"));
-        assert!(has(capability, gg, "alpha"));
-        assert!(!has(capability, openrouter, "alpha"));
+        assert!(has(capability, gg, "alpha") && has(capability, openrouter, "alpha"));
     }
     // Codex makes every background and draws from pictures, but takes no exact size and no
     // mask (src/codex/README.md).
@@ -940,11 +940,19 @@ fn every_example_table_declares_only_what_fx_honours() {
                     assert!(!route.features.contains("image_input"), "{label}: {id}");
                 }
             }
-            // OpenRouter's image adapter refuses a mask and a transparent background
-            // (src/openrouter/README.md).
+            // OpenRouter's image adapters refuse a mask, and the generic one a transparent
+            // background (src/openrouter/README.md).
             if route.provider == "openrouter" && route.capability.starts_with("image.") {
-                assert!(!route.features.contains("alpha"), "{label}: {id}");
                 assert!(!route.features.contains("mask"), "{label}: {id}");
+                let generic = registry
+                    .serving_contract(&route.capability, &route.provider, &route.contract)
+                    .and_then(Adapter::identity)
+                    .is_some_and(|identity| {
+                        identity.adapter == openrouter::generic_image::CONTRACT_ADAPTER
+                    });
+                if generic {
+                    assert!(!route.features.contains("alpha"), "{label}: {id}");
+                }
             }
         }
     }

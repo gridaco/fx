@@ -69,6 +69,9 @@ pub const MAX_MODEL_BYTES: u64 = 150_000_000;
 /// Micro-dollars per Tripo credit.
 pub const MICROS_PER_CREDIT: i64 = 10_000;
 
+/// The free riggability check's path.
+pub const CHECK_PATH: &str = "/animations/rig-check";
+
 /// The task statuses that are not over yet.
 const RUNNING: [&str; 2] = ["queued", "running"];
 
@@ -416,14 +419,10 @@ impl TripoApi {
     /// Every failure is free-phase: `Refused` or `NotReceived`.
     pub(crate) async fn post_check(&self, file_token: &str) -> Result<String, Submitted> {
         let credential = self.credential().map_err(|reason| self.refused(&reason))?;
-        let request = HttpRequest::new(
-            Method::Post,
-            self.client.url("/animations/rig-check"),
-            Lane::Provider,
-        )
-        .credential(credential)
-        .body(Body::Json(serde_json::json!({"input": file_token})))
-        .timeout(POST_DEADLINE);
+        let request = HttpRequest::new(Method::Post, self.client.url(CHECK_PATH), Lane::Provider)
+            .credential(credential)
+            .body(Body::Json(serde_json::json!({"input": file_token})))
+            .timeout(POST_DEADLINE);
         let response = match self.send(request).await {
             Ok(response) => response,
             Err(error) if refused_by_transport(&error) => {

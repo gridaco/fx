@@ -436,15 +436,42 @@ Gate: `cargo test`, conformance, `check_llms`.
 
 ### M7. Grida Models facts and OpenRouter transparency
 
-- [ ] `tools/make_models.py --release <tag>`, run by hand with the network:
+- [x] `tools/make_models.py --release <tag>`, run by hand with the network:
   - downloads `models.v1.json` and verifies its SHA-256;
   - validates it against that release's schema;
   - keeps only the schema-defined members that FX's routes use;
   - writes `crates/grida-fx-providers/routes/models.json` with a `source` block (repository,
     release, asset, bytes, SHA-256, schema `$id`).
   `--check` verifies it offline. The full release is never committed.
-- [ ] Pinned to `v1.20261013.6`.
-- [ ] `crates/grida-fx-providers/tests/models.rs` checks every route's public facts against the
+  - The SHA-256 is verified against the release's own `SHA256SUMS`, for `models.v1.json`,
+    `models.v1.schema.json` and `manifest.json`, whose `version` must be the tag and whose entries
+    for `models.json` and `schemas/models.schema.json` must agree with both files. `--from <dir>`
+    reads the four assets from a folder with the same checks. The run of 2026-10-14 downloaded
+    them from github.com; the projection is 38,626 bytes.
+  - `CARDS` maps each route id of the table to its model's card (section and id), or to none:
+    Codex, Grok Build and Gemini Omni Flash. Writing holds it to the release: each card must bind
+    its route's model on its provider, and no card may bind a route given none, so a card that
+    appears is not missed. FX's `gg` is Models' `grida`.
+  - The projection is `{source, routes}`: per route id `null`, or `{section, card}` and for a rig
+    `rig_check`, the section's rig-check operation. A card keeps only what concerns the route's
+    provider: its coverage, its binding, and the card's own endpoints when the provider is its
+    `reference_provider` (Tripo's endpoints are there). `KEEP` lists the members kept of each
+    schema object, checked against the release's schema when the file is written: every endpoint
+    of the binding and every parameter are kept, so a feature documented on an endpoint FX does
+    not call is still seen; URLs, qualifications, calculators, `token_pricing`'s flat cache rates
+    and the members the schema does not define (a card's `pricing`, `sizes`, `constraints`, a
+    binding's `references`, `transparent_background`) are not. Code fact: rates are kept by
+    member, not by meter, so the cache meters of `token_pricing`'s tiers and of GG's
+    `published_pricing` components stay; the price check reads only the input and output meters.
+  - `source` also carries `license: MIT`, the catalogue data's. `--check` holds the file to its
+    canonical text (two-space indents, sorted members), `source` to the pin, `routes` to the
+    table's route ids and `CARDS`, every member to `KEEP`, and the release `providers.md` §3
+    names to the pin.
+- [x] Pinned to `v1.20261013.6`: `RELEASE` in the tool, which `--release` must name, so moving the
+  pin is one reviewed line, the release `providers.md` §3 names, and a new projection
+  (CONTRIBUTING.md says how). A new built-in route needs its card in `CARDS` and a new
+  projection too.
+- [x] `crates/grida-fx-providers/tests/models.rs` checks every route's public facts against the
   projection:
   - wire ids and endpoint ids;
   - features from documented parameters, intersected with adapter support, both ways: a
@@ -454,12 +481,70 @@ Gate: `cargo test`, conformance, `check_llms`.
   - text token prices as bounds, never equality.
 
   Each exception sits in one table with its reason, and an exception no longer needed fails.
-- [ ] OpenRouter GPT Image: `alpha` on both routes; the adapter sends `background:
+  - Ids: a binding's id is the route's model, but on fal, whose binding id is one of its
+    endpoints; a route sends to one of its provider's recorded endpoints: fal's
+    `<model>/text-to-image` and `<model>/edit` (`fal::image::GENERATE_ENDPOINT`,
+    `EDIT_ENDPOINT`), Tripo's paths (`tripo::mesh::PATH`, `tripo::rig::PATH`; Tripo has no
+    binding, so its card's endpoints, whose `model` lists the route's), the GG 3D routes'
+    `endpoint`. Code fact: GG's image and video routes post to `/images/generations`,
+    `/images/edits` and `/videos`, never to an endpoint id, so they are held to a GG endpoint of
+    that `interface`. ElevenLabs has no binding: its routes are held to the card id. Every route
+    with a card has its provider `listed`.
+  - GG's 3D endpoints: the mesh route's `endpoint` takes `multi_image`, the rig's `asset`, and its
+    `check_endpoint` is the rig-check operation's GG endpoint; Tripo's rig route checks at the
+    operation's path (`tripo::CHECK_PATH`).
+  - Features: three hand tables in the test, the mapping to facts (`documented`), each adapter's
+    support from its reference (`honoured`) and `EXCEPTIONS`. Chat features come from the
+    binding's `capabilities`. Code fact: GG's text bindings record them too in `v1.20261013.6`,
+    so they are checked as OpenRouter's are, not excepted. Image, video, 3D and audio features
+    come from the inputs and parameters of the endpoints the adapter sends to. Three features no
+    member of the schema can show are in `UNMAPPED`: `authored_prompt_passthrough`, `audio_tags`
+    (`input.audio_tags` is not schema-defined) and `glb_input` (`input.formats` is not). A route
+    that asks for a reasoning effort runs on a binding with `reasoning`. The check found one
+    more feature documented and honoured but not declared: GG serves Wan 3.0's text operation,
+    and `gg-video` already sent a request without a first frame, so `alibaba/wan-3.0@gg` now
+    declares `text_to_video`. Features are not identity: no fingerprint moved.
+  - Limits, FX's within the provider's: the declared input pictures; `wire::SIZE_ENVELOPE`
+    (`check_size_envelope`'s literals lifted into a constant, its sentences unchanged), where
+    the OpenAI and fal adapters hold a size to it, and the sizes a GPT Image route prices or
+    serves, against `image_constraints` and fal's `image_size` edges (GG's routes are priced by
+    size too, but leave sizes to GG); fal's prompt (32,000 characters); Tripo's face limit (48
+    to 25,000, within 48 to 50,000, so no exception: the follow-up stays); a structured route's
+    default `max_tokens` (16,000) within `max_output_tokens` (128,000). Code fact: an agent turn
+    sends no `max_tokens` by default (`chat::agent_prompt`), so its routes are not held to it.
+  - Prices, the formula decided: (a) a `structured.generate` route's high is at least the default
+    `max_tokens` (16,000) times its highest published output rate; (b) within one capability and
+    provider, a model whose every input and output rate is at least another's, at every input
+    length either publishes a band from, has a low and a high at least the other's. Rates are
+    OpenRouter's `token_pricing` tiers and GG's per-token components banded by
+    `total_input_tokens`, in exact decimals (units of 10^-18 dollars: Models has 7 places, `Usd`
+    6). Both hold: sol's structured high $0.60 ≥ 16,000 × $0.00003 = $0.48, astra's $1.50 ≥
+    $1.20, and astra is priced above sol in all four pairs.
+  - `EXCEPTIONS`: no card for Codex and Grok Build (runtimes with no provider facts) or Gemini
+    Omni Flash; no endpoint on the OpenAI binding; no request parameters on GG's image and 3D
+    endpoints, and no `image_constraints` on GG's image endpoints; no `size` or `output_format`
+    on OpenRouter, and `image_constraints` only on fal; no mask parameter; no ElevenLabs binding.
+    Each test fails on an exception it did not need.
+- [x] OpenRouter GPT Image: `alpha` on both routes; the adapter sends `background:
   transparent`; replay tests for the body and the answer's check. `adapter_behavior` stays
   `"3"`, since no body it sent before changes.
-- [ ] `providers.md`: GG's prices are said to be FX's allowances; GG's image picture limit.
-- [ ] Drift: `llms.txt` and guide page 05 on masks, since fal's edit route takes one.
-- [ ] CI: `make_models.py --check` in the `spec` job; AGENTS.md's verification list.
+  - The refusal `OpenRouter image generation does not support transparent backgrounds` is gone,
+    the one sentence that changes. A generate and an edit pin their bodies; the adapter's check
+    and the every-route check refuse an RGB answer and an opaque RGBA one, and take one with a
+    transparent pixel. `tests/routes.rs` asserts `alpha` on both routes, and still keeps an
+    example's OpenRouter route on the generic adapter from declaring it.
+- [x] `providers.md`: GG's prices are said to be FX's allowances; GG's image picture limit.
+  - §3: GG publishes its image, video and 3D rates in its own units (`fal_output_units`,
+    `provider_credits`) with no quantity per request, so its routes take another provider's
+    prices until those can be planned from; its text rates equal OpenRouter's. M6 had declared
+    the limit (16, on the `image.edit` route only); §3 now calls it GPT Image's. §3 also says the
+    table is checked against the projection, and that the GG video route declares
+    `text_to_video`. The `default.yaml` header follows.
+- [x] Drift: `llms.txt` and guide page 05 on masks, since fal's edit route takes one.
+  - Also `llms.txt`'s upgrade note (OpenRouter's transparency, GG video's `text_to_video`) and
+    page 05's video row.
+- [x] CI: `make_models.py --check` in the `spec` job; AGENTS.md's verification list.
+  - Also AGENTS.md's `tools/` row and CONTRIBUTING.md's checks.
 
 Gate: `cargo test`, `check_spec`, `make_models.py --check`, `check_llms`.
 
@@ -573,7 +658,11 @@ when the owner asks.
 - ElevenLabs speech's allowance for long texts: its high is $0.05 a call, and its answers
   report no cost;
 - a live check that OpenRouter's transparent answers carry alpha, which needs the owner's go
-  and a cap;
+  and a cap: Grida Models records `background: transparent` on the endpoint but no
+  `output_format`, so a transparent answer in another format would fail the check, billed;
+- one list of the features each adapter honours: `tests/models.rs` (`honoured`) and
+  `tests/routes.rs` (`features_say_what_the_adapters_honour`) each keep their own by hand, since
+  no adapter exports one;
 - Tripo's face limit: 25,000 in FX, 50,000 in Models;
 - caps in a repeat whose list only a run produces: the graph's `pending` entry carries only
   `high_usd`, never `capped`, and the plan notes no capped route that only such a repeat binds,
@@ -604,8 +693,8 @@ when the owner asks.
   defaults (`360p`, `720p`, `1080p`, `4k`; 3 to 10 seconds);
 - `text_to_video` while planning: a step without a `first_frame` implies no feature, so on a
   route that does not declare `text_to_video` it is refused only when the call is sent (at $0,
-  as before M6). The built-in GG video route does not declare it, and `gg-video` does not judge
-  it;
+  as before M6). `gg-video` does not judge it (the built-in GG video route declares it since
+  M7);
 - stand-in runs and route limits: a stand-in holds an answer to the adapter's check, which reads
   no route limit, so a stand-in takes a frameless request, a tier or a length that `fal-queue`
   refuses on a live submit (up to 0.6.1 its check refused a frameless request and every tier and
@@ -634,4 +723,10 @@ when the owner asks.
 - `input_references` is typed as an integer on OpenRouter;
 - no `size` on OpenRouter;
 - `image_constraints` only on fal;
-- no `references` (the number of input pictures) on 4 of its 17 OpenRouter image bindings.
+- no `references` (the number of input pictures) on 4 of its 17 OpenRouter image bindings;
+- no `output_format` on OpenRouter;
+- the rigging card's `input.formats` and a speech card's `input.audio_tags` are not
+  schema-defined;
+- no request parameters on the `grida` endpoints for images, video and 3D;
+- Tripo's `/generation/multiview-to-model` is recorded with input `image`, where GG's multiview
+  endpoint for the same model has `multi_image`.

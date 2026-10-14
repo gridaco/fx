@@ -35,6 +35,9 @@ pub const COLLECT_DEADLINE: Duration = Duration::from_secs(600);
 /// The route contract's `adapter` this adapter serves.
 pub const ADAPTER: &str = "tripo-rig";
 
+/// The paid task's path.
+pub const PATH: &str = "/animations/rig";
+
 /// The contract this adapter serves: [`ADAPTER`], and `adapter_behavior` the number 1.
 pub const IDENTITY: Identity = Identity {
     adapter: ADAPTER,
@@ -127,7 +130,7 @@ impl TripoRig {
         body.insert("out_format".into(), json!("glb"));
         body.extend(options);
         let body = Value::Object(body);
-        match api.post_task("/animations/rig", body).await {
+        match api.post_task(PATH, body).await {
             Ok(task_id) => Submitted::Accepted {
                 handle: json!({
                     "task_id": task_id,

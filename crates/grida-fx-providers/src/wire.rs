@@ -649,28 +649,60 @@ pub fn parse_size(value: Option<&Value>) -> Result<Option<(u32, u32)>, String> {
     }
 }
 
-/// The GPT Image exact-size envelope (src/openai/README.md; src/fal/README.md), checked in this
-/// order: edges multiples of 16; the longer edge at most 3840; aspect ratio at most 3:1; between
-/// 655 360 and 8 294 400 pixels. `label` starts each sentence (`OpenAI image size …`).
+/// The GPT Image exact-size envelope: what [`check_size_envelope`] holds a size to.
+pub struct SizeEnvelope {
+    /// Each edge is a multiple of this.
+    pub step: u32,
+    /// The longest edge.
+    pub max_edge: u32,
+    /// The most the longer edge may be of the shorter.
+    pub max_aspect: u32,
+    /// The fewest pixels.
+    pub min_pixels: u64,
+    /// The most pixels.
+    pub max_pixels: u64,
+}
+
+/// GPT Image's envelope (src/openai/README.md; src/fal/README.md).
+pub const SIZE_ENVELOPE: SizeEnvelope = SizeEnvelope {
+    step: 16,
+    max_edge: 3840,
+    max_aspect: 3,
+    min_pixels: 655_360,
+    max_pixels: 8_294_400,
+};
+
+/// The GPT Image exact-size envelope ([`SIZE_ENVELOPE`]), checked in this order: edges multiples
+/// of 16; the longer edge at most 3840; aspect ratio at most 3:1; between 655 360 and 8 294 400
+/// pixels. `label` starts each sentence (`OpenAI image size …`).
 pub fn check_size_envelope(width: u32, height: u32, label: &str) -> Result<(), String> {
+    let SizeEnvelope {
+        step,
+        max_edge,
+        max_aspect,
+        min_pixels,
+        max_pixels,
+    } = SIZE_ENVELOPE;
     let (long, short) = (width.max(height) as u64, width.min(height) as u64);
-    if !width.is_multiple_of(16) || !height.is_multiple_of(16) {
-        return Err(format!("{label} image size edges must be multiples of 16"));
-    }
-    if long > 3840 {
+    if !width.is_multiple_of(step) || !height.is_multiple_of(step) {
         return Err(format!(
-            "{label} image size edges must not exceed 3840 pixels"
+            "{label} image size edges must be multiples of {step}"
         ));
     }
-    if long > 3 * short {
+    if long > max_edge as u64 {
         return Err(format!(
-            "{label} image size aspect ratio must not exceed 3:1"
+            "{label} image size edges must not exceed {max_edge} pixels"
+        ));
+    }
+    if long > max_aspect as u64 * short {
+        return Err(format!(
+            "{label} image size aspect ratio must not exceed {max_aspect}:1"
         ));
     }
     let area = width as u64 * height as u64;
-    if !(655_360..=8_294_400).contains(&area) {
+    if !(min_pixels..=max_pixels).contains(&area) {
         return Err(format!(
-            "{label} image size must contain between 655360 and 8294400 pixels"
+            "{label} image size must contain between {min_pixels} and {max_pixels} pixels"
         ));
     }
     Ok(())
