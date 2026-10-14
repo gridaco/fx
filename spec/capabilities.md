@@ -58,7 +58,7 @@ In the tables below, a member's type is one of:
   A value the plan does not know yet (a step's output that is only a list as a whole, say) implies nothing. A feature the route lacks is refused as `<route> does not support <feature>` at `<w>.with.<member>`, once per feature, and not again for `requires:`. So a request the route's adapter would refuse is refused while planning, at $0. A call a node's body makes at run time is checked only before it is sent ([adapters.md](adapters.md) §4).
 - **Input-picture limits.** A route may declare `max_input_pictures`, the most input pictures it takes in one call (`image` and `references`; a mask does not count). A step whose request would carry more is refused while planning, at `<w>.with.references`: `<route> takes at most <n> input pictures, not <count>`. The count is known while the list's length is, even when its pictures are not made yet.
 - Each capability's section lists its features. Only those names have a meaning for it. A route in the built-in table ([providers.md](providers.md) §3) MUST declare only names from its capability's list, and only what its adapter honours.
-- Every route FX ships sends input pictures inline. A route whose provider takes an output format (OpenAI, fal) asks for PNG; OpenRouter's image endpoint takes none, so its routes ask for nothing. Every route's check refuses an answer that is not a PNG (§2), so no feature names another output format.
+- Every route FX ships sends input pictures inline. A route whose provider takes an output format (OpenAI, fal) asks for PNG; OpenRouter's image endpoint takes none, so its routes ask for nothing. Every route's check refuses an answer that is not a PNG (§2), so no feature names another output format. Grok Build's adapter, which cannot ask for PNG, and the generic OpenRouter and fal adapters a route on any other model gets, which send nothing chosen for one model, encode the picture they get as a PNG, the same pixels ([providers.md](providers.md) §2); every other adapter's answer must already be one.
 
 ## 2. `image.generate`
 
@@ -133,7 +133,7 @@ A picture made from input pictures, optionally within a mask.
 | `authored_prompt_passthrough` | as for `image.generate` |
 | `mask` | the route takes a `mask` |
 
-**Limits a route may have:** an exact-size envelope or a fixed list of sizes, no transparency, no mask, and a limit on the number of input pictures. They are enforced as refusals (each adapter's reference, [providers.md](providers.md) §2), and while planning where §1 says. The routes FX ships take at most 16 input pictures (`image` and `references`; the mask does not count), Codex's at most 5 and Grok Build's at most 3; GG's are limited by each model ([providers.md](providers.md) §3).
+**Limits a route may have:** an exact-size envelope or a fixed list of sizes, no transparency, no mask, and a limit on the number of input pictures. They are enforced as refusals (each adapter's reference, [providers.md](providers.md) §2), and while planning where §1 says. The routes FX ships take at most 16 input pictures (`image` and `references`; the mask does not count), Codex's at most 5 and Grok Build's at most 3, as each declares ([providers.md](providers.md) §3).
 
 **Pricing:** as for `image.generate`, with a larger allowance for the input pictures ([providers.md](providers.md) §3).
 
@@ -195,7 +195,7 @@ A clip from a prompt and frames. A long job.
 | `resolution` | text | optional | a route's tier name, such as `720p`, or `<W>x<H>` where a route takes an exact size |
 | `aspect_ratio` | text | optional | such as `9:16` |
 | `provider_options` | object | optional | as for `image.generate` |
-| `first_frame` | file | optional | the opening frame; a route may require it |
+| `first_frame` | file | optional | the opening frame; a route may require it, unless it declares `text_to_video` |
 | `last_frame` | file | optional | the closing frame; needs `first_frame` |
 
 **Answer:** the file `video` (`video/mp4`). `data` is `{"facts": {"width", "height", "duration_seconds", "fps"}}`, with numbers from the clip's file facts ([facts.md](facts.md)).
@@ -206,6 +206,7 @@ A clip from a prompt and frames. A long job.
 
 | Feature | Meaning |
 |---|---|
+| `text_to_video` | the route draws from the prompt alone, without a `first_frame` |
 | `first_last_frame` | both `first_frame` and `last_frame` are honoured |
 
 **Pricing:** per second, in tiers by `resolution` ([identity.md](identity.md) §12).

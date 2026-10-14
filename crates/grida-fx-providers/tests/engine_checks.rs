@@ -23,19 +23,27 @@ fn registry() -> Adapters {
     adapters(&setup(Arc::new(NoNetwork), Keys::none()))
 }
 
-fn route(capability: &str, provider: &str) -> RouteRef {
+fn route(capability: &str, provider: &str, contract: Value) -> RouteRef {
     RouteRef {
         capability: capability.into(),
         model: "m".into(),
         provider: provider.into(),
-        contract: Value::Null,
+        contract,
+        limits: Default::default(),
     }
 }
 
-fn serving(registry: &Adapters, capability: &str, provider: &str) -> Adapter {
+/// The adapter serving a route of `capability` on `provider` that names `adapter`, or names none.
+fn serving(
+    registry: &Adapters,
+    capability: &str,
+    provider: &str,
+    adapter: Option<&str>,
+) -> Adapter {
+    let contract = adapter.map_or(Value::Null, |adapter| json!({"adapter": adapter}));
     registry
-        .serving(&route(capability, provider))
-        .unwrap_or_else(|| panic!("no adapter serves {capability} on {provider}"))
+        .serving(&route(capability, provider, contract))
+        .unwrap_or_else(|| panic!("no adapter serves {capability} on {provider} ({adapter:?})"))
         .clone()
 }
 
@@ -44,7 +52,8 @@ fn read_spec(name: &str) -> String {
     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"))
 }
 
-/// `(provider, capability, adapter, behaviour as JSON)` for each row of spec/providers.md §2.
+/// `(provider, capability, adapter, behaviour as JSON)` for each row of spec/providers.md §2's
+/// two tables, the defaults first.
 fn written_adapters() -> Vec<(String, String, String, String)> {
     let text = read_spec("providers.md");
     let start = text
@@ -73,9 +82,9 @@ fn written_adapters() -> Vec<(String, String, String, String)> {
 fn every_adapter_names_the_contract_spec_providers_2_gives_it() {
     let registry = registry();
     let written = written_adapters();
-    assert_eq!(written.len(), registry.served().len());
+    assert_eq!(written.len(), registry.registered().len());
     for (provider, capability, adapter, behavior) in written {
-        let identity = serving(&registry, &capability, &provider)
+        let identity = serving(&registry, &capability, &provider, Some(&adapter))
             .identity()
             .unwrap_or_else(|| panic!("{capability} on {provider} names no contract"));
         assert_eq!(identity.adapter, adapter, "{capability} on {provider}");
@@ -87,7 +96,10 @@ fn every_adapter_names_the_contract_spec_providers_2_gives_it() {
 fn every_built_in_route_passes_the_engines_contract_check() {
     let registry = registry();
     for route in default_table().unwrap().entries.values() {
-        let adapter = serving(&registry, &route.capability, &route.provider);
+        let adapter = registry
+            .serving(&RouteRef::of(route))
+            .unwrap_or_else(|| panic!("no adapter serves {}", route.id()))
+            .clone();
         let call = CallBuilder::new(&route.capability, &route.id())
             .contract(route.contract.clone())
             .build();
@@ -109,7 +121,7 @@ fn a_live_registry_keeps_each_adapters_own_contract_judgement() {
         .contract(json!({"pictures": "small"}))
         .build();
     assert_eq!(
-        serving(&registry, "structured.generate", "openrouter").check_contract(&call),
+        serving(&registry, "structured.generate", "openrouter", None).check_contract(&call),
         Err(concat!(
             "acme/text-a@openrouter is not a structured.generate route this adapter serves: ",
             r#"pictures is "unchanged" or absent"#
@@ -118,7 +130,7 @@ fn a_live_registry_keeps_each_adapters_own_contract_judgement() {
     );
     let call = CallBuilder::new("mesh.generate", "acme/mesh-a@gg").build();
     assert_eq!(
-        serving(&registry, "mesh.generate", "gg").check_contract(&call),
+        serving(&registry, "mesh.generate", "gg", None).check_contract(&call),
         Err(concat!(
             "acme/mesh-a@gg is not a mesh.generate route this adapter serves: ",
             "the contract names no GG endpoint"
@@ -271,19 +283,25 @@ fn the_engine_refuses_what_each_adapter_refuses_with_the_same_sentence_first() {
     let registry = registry();
     let mut refused = 0;
     let mut passed = 0;
-    for (capability_name, provider) in registry.served() {
-        let adapter = serving(&registry, &capability_name, &provider);
+    for registered in registry.registered() {
+        let (capability_name, provider) = (registered.capability, registered.provider);
+        let adapter = serving(
+            &registry,
+            capability_name,
+            provider,
+            Some(registered.identity.adapter),
+        );
         let identity = adapter.identity().unwrap();
         let redactor = match &adapter {
             Adapter::Request(adapter) => adapter.redactor(),
             Adapter::Job(adapter) => adapter.redactor(),
         };
-        let mut pictures = CallBuilder::new(&capability_name, &format!("acme/m-a@{provider}"));
-        let requests = requests(&mut pictures, &capability_name);
-        for contract in contracts(&identity, &capability_name, &provider) {
+        let mut pictures = CallBuilder::new(capability_name, &format!("acme/m-a@{provider}"));
+        let requests = requests(&mut pictures, capability_name);
+        for contract in contracts(&identity, capability_name, provider) {
             for request in &requests {
                 let mut builder =
-                    CallBuilder::new(&capability_name, &format!("acme/m-a@{provider}"))
+                    CallBuilder::new(capability_name, &format!("acme/m-a@{provider}"))
                         .contract(contract.clone())
                         .request(request.clone());
                 // The one picture every file value of the requests names, stored for this call.
@@ -300,7 +318,7 @@ fn the_engine_refuses_what_each_adapter_refuses_with_the_same_sentence_first() {
                         refused += 1;
                     }
                     Ok(()) => {
-                        assert_eq!(direct, later_refusal(&provider), "{at}");
+                        assert_eq!(direct, later_refusal(provider), "{at}");
                         passed += 1;
                     }
                 }

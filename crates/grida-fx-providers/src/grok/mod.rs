@@ -413,10 +413,10 @@ async fn draw(
     let left = deadline.saturating_sub(began.elapsed());
     let drawn = match tokio::time::timeout(left, drawing.image()).await {
         Ok(Ok(bytes)) => {
-            let png = tokio::task::spawn_blocking(move || to_png(bytes));
+            let png = tokio::task::spawn_blocking(move || wire::to_png(bytes, IMAGE));
             drawing.settle().await;
             png.await
-                .unwrap_or_else(|_| Err(NOT_ENCODED.into()))
+                .unwrap_or_else(|_| Err(wire::not_encoded(IMAGE)))
                 .map_err(Stop::Failed)
         }
         Ok(Err(stop)) => Err(stop),
@@ -656,22 +656,9 @@ async fn end(
     }
 }
 
-/// The reason of an image that could not be encoded as PNG.
-const NOT_ENCODED: &str = "Grok Build's image could not be encoded as PNG";
-
-/// The answer's PNG: a PNG as it is, any other image decoded and encoded as PNG, the same pixels.
-fn to_png(bytes: Vec<u8>) -> Result<Vec<u8>, String> {
-    if wire::sniff_image(&bytes) == Some("image/png") {
-        return Ok(bytes);
-    }
-    let picture = image::load_from_memory(&bytes)
-        .map_err(|_| "Grok Build's image is not decodable".to_string())?;
-    let mut png = Vec::new();
-    picture
-        .write_with_encoder(image::codecs::png::PngEncoder::new(&mut png))
-        .map_err(|_| NOT_ENCODED.to_string())?;
-    Ok(png)
-}
+/// The answer's picture in a refusal of its PNG ([`wire::to_png`]): `Grok Build's image is not
+/// decodable`, `… could not be encoded as PNG`.
+const IMAGE: &str = "Grok Build's image";
 
 #[cfg(test)]
 mod tests {
@@ -684,6 +671,7 @@ mod tests {
             model: "imagine".into(),
             provider: provider.into(),
             contract,
+            limits: Default::default(),
         }
     }
 
@@ -849,16 +837,20 @@ mod tests {
 
     #[test]
     fn a_jpeg_becomes_a_png_of_the_same_pixels() {
-        let png = to_png(crate::testing::media::jpeg(8, 4)).unwrap();
+        let png = wire::to_png(crate::testing::media::jpeg(8, 4), IMAGE).unwrap();
         assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"));
         let decoded = image::load_from_memory(&png).unwrap();
         assert_eq!((decoded.width(), decoded.height()), (8, 4));
         assert!(!decoded.color().has_alpha());
         let already = crate::testing::media::png(2, 2, None);
-        assert_eq!(to_png(already.clone()).unwrap(), already);
+        assert_eq!(wire::to_png(already.clone(), IMAGE).unwrap(), already);
         assert_eq!(
-            to_png(b"not an image".to_vec()),
+            wire::to_png(b"not an image".to_vec(), IMAGE),
             Err("Grok Build's image is not decodable".into())
+        );
+        assert_eq!(
+            wire::not_encoded(IMAGE),
+            "Grok Build's image could not be encoded as PNG"
         );
     }
 }

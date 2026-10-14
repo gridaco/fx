@@ -3,7 +3,9 @@
 //! spec/providers.md §2, and the adapters this crate registers.
 
 use grida_fx_core::money::Usd;
-use grida_fx_core::routes::{BUILT_IN_ADAPTERS, PriceUnit, Route, RouteTable, built_in_adapter};
+use grida_fx_core::routes::{
+    BUILT_IN_ADAPTERS, PriceUnit, Route, RouteTable, built_in_adapter, built_in_adapter_named,
+};
 use grida_fx_core::val::Val;
 use grida_fx_core::value::{canon, digest};
 use grida_fx_providers::adapter::{Adapter, RouteRef, Sent, Submitted};
@@ -269,7 +271,7 @@ fn expected_routes() -> Vec<Expected> {
     ]
 }
 
-/// The contract the adapter of `capability` on `provider` serves, its `adapter` and its
+/// The contract the default adapter of `capability` on `provider` serves, its `adapter` and its
 /// `adapter_behavior` as JSON: core's table of FX's adapters, which completes a route's contract
 /// (spec/identity.md §7) and which `core_s_table_is_every_adapter_s_identity` holds to the
 /// adapters.
@@ -277,13 +279,14 @@ fn contract_for(capability: &str, provider: &str) -> Option<(&'static str, &'sta
     built_in_adapter(capability, provider).map(|served| (served.adapter, served.behavior))
 }
 
+/// The behaviour, as JSON, of the adapter of `capability` on `provider` named `adapter`, default
+/// or not.
+fn behavior_of(capability: &str, provider: &str, adapter: &str) -> Option<&'static str> {
+    built_in_adapter_named(capability, provider, adapter).map(|served| served.behavior)
+}
+
 fn route_ref(route: &Route) -> RouteRef {
-    RouteRef {
-        capability: route.capability.clone(),
-        model: route.model.clone(),
-        provider: route.provider.clone(),
-        contract: route.contract.clone(),
-    }
+    RouteRef::of(route)
 }
 
 fn read_spec(name: &str) -> String {
@@ -291,7 +294,7 @@ fn read_spec(name: &str) -> String {
     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"))
 }
 
-/// One row of spec/providers.md §2's table of built-in adapters.
+/// One row of spec/providers.md §2's tables of built-in adapters.
 struct Written {
     capability: String,
     provider: String,
@@ -300,9 +303,12 @@ struct Written {
     behavior: String,
     /// The adapter's reference, relative to spec/.
     reference: String,
+    /// Whether the row is in the first table, its pair's default.
+    default: bool,
 }
 
-/// The rows of spec/providers.md §2's table of built-in adapters.
+/// The rows of spec/providers.md §2's tables of built-in adapters: the defaults, then the
+/// adapters a route names.
 fn written_adapters() -> Vec<Written> {
     let text = read_spec("providers.md");
     let start = text
@@ -313,10 +319,14 @@ fn written_adapters() -> Vec<Written> {
         .map_or(text.len(), |at| start + at);
     let section = &text[start..end];
     let code = |cell: &str| cell.trim_matches('`').to_string();
+    let mut tables = 0;
     section
         .lines()
-        .filter(|line| line.starts_with("| `"))
-        .map(|line| {
+        .filter_map(|line| {
+            tables += usize::from(line.starts_with("| Provider | Capability |"));
+            line.starts_with("| `").then_some((line, tables))
+        })
+        .map(|(line, tables)| {
             let cells: Vec<&str> = line.trim_matches('|').split(" | ").map(str::trim).collect();
             assert_eq!(cells.len(), 5, "{line}");
             let reference = cells[4].split_once("](").expect("a link").1;
@@ -326,6 +336,7 @@ fn written_adapters() -> Vec<Written> {
                 adapter: code(cells[2]),
                 behavior: code(cells[3]),
                 reference: reference.trim_end_matches(')').to_string(),
+                default: tables == 1,
             }
         })
         .collect()
@@ -573,14 +584,11 @@ fn image_contracts_carry_their_behaviour_as_a_string_and_the_rest_as_an_integer(
 fn every_contract_names_the_adapter_that_serves_its_route() {
     for route in table().entries.values() {
         let id = route.id();
-        let (adapter, behavior) = contract_for(&route.capability, &route.provider)
-            .unwrap_or_else(|| panic!("no adapter serves {} on {id}", route.capability));
-        assert_eq!(
-            route.contract["adapter"],
-            json!(adapter),
-            "{} {id}",
-            route.capability
-        );
+        let adapter = route.contract["adapter"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{} {id} names no adapter", route.capability));
+        let behavior = behavior_of(&route.capability, &route.provider, adapter)
+            .unwrap_or_else(|| panic!("no adapter {adapter} serves {} on {id}", route.capability));
         assert_eq!(
             canon(&route.contract["adapter_behavior"]),
             behavior,
@@ -588,12 +596,21 @@ fn every_contract_names_the_adapter_that_serves_its_route() {
             route.capability
         );
     }
+    // The OpenRouter and fal image routes name GPT Image's adapters, not their generic defaults.
+    for route in table().entries.values() {
+        let gpt = match (route.capability.as_str(), route.provider.as_str()) {
+            ("image.generate" | "image.edit", "openrouter") => openrouter::image::CONTRACT_ADAPTER,
+            ("image.generate" | "image.edit", "fal") => fal::image::CONTRACT_ADAPTER,
+            _ => continue,
+        };
+        assert_eq!(route.contract["adapter"], json!(gpt), "{}", route.id());
+    }
 }
 
 #[test]
 fn the_contracts_are_spec_providers_2_and_each_reference_heads_with_its_own() {
     let written = written_adapters();
-    let rows: Vec<(&str, &str, &str, &str)> = written
+    let rows: Vec<(&str, &str, &str, &str, bool)> = written
         .iter()
         .map(|w| {
             (
@@ -601,11 +618,12 @@ fn the_contracts_are_spec_providers_2_and_each_reference_heads_with_its_own() {
                 w.provider.as_str(),
                 w.adapter.as_str(),
                 w.behavior.as_str(),
+                w.default,
             )
         })
         .collect();
-    // Core's table lists the rows of spec/providers.md §2, in its order.
-    let ours: Vec<(&str, &str, &str, &str)> = BUILT_IN_ADAPTERS
+    // Core's table lists the rows of spec/providers.md §2, in its order, defaults first.
+    let ours: Vec<(&str, &str, &str, &str, bool)> = BUILT_IN_ADAPTERS
         .iter()
         .map(|served| {
             (
@@ -613,6 +631,7 @@ fn the_contracts_are_spec_providers_2_and_each_reference_heads_with_its_own() {
                 served.provider,
                 served.adapter,
                 served.behavior,
+                served.default,
             )
         })
         .collect();
@@ -656,12 +675,31 @@ fn every_route_is_served_by_an_adapter_of_its_capability_s_shape() {
 
 #[test]
 fn the_adapters_serve_exactly_the_contracts_of_spec_providers_2() {
-    let served: BTreeSet<(String, String)> = registry().served().into_iter().collect();
+    let registry = registry();
+    let served: BTreeSet<(String, String)> = registry.served().into_iter().collect();
     let expected: BTreeSet<(String, String)> = BUILT_IN_ADAPTERS
         .iter()
         .map(|served| (served.capability.to_string(), served.provider.to_string()))
         .collect();
     assert_eq!(served, expected);
+    // Each adapter under its contract `adapter`, and the defaults, as the table lists them.
+    let registered: BTreeSet<(&str, &str, &str, bool)> = registry
+        .registered()
+        .iter()
+        .map(|r| (r.capability, r.provider, r.identity.adapter, r.default))
+        .collect();
+    let listed: BTreeSet<(&str, &str, &str, bool)> = BUILT_IN_ADAPTERS
+        .iter()
+        .map(|served| {
+            (
+                served.capability,
+                served.provider,
+                served.adapter,
+                served.default,
+            )
+        })
+        .collect();
+    assert_eq!(registered, listed);
     for (capability, provider) in &served {
         assert!(
             capability_is_shipped(capability),
@@ -688,37 +726,65 @@ fn the_adapters_serve_exactly_the_contracts_of_spec_providers_2() {
 #[test]
 fn core_s_table_is_every_adapter_s_identity() {
     let registry = registry();
-    assert_eq!(registry.served().len(), BUILT_IN_ADAPTERS.len());
-    for (capability, provider) in registry.served() {
-        let route = RouteRef {
-            capability: capability.clone(),
-            model: "m".into(),
-            provider: provider.clone(),
-            contract: Value::Null,
-        };
-        let identity = registry
-            .serving(&route)
-            .and_then(Adapter::identity)
-            .unwrap_or_else(|| panic!("{capability} on {provider} names no contract"));
-        let served = built_in_adapter(&capability, &provider)
-            .unwrap_or_else(|| panic!("core knows no adapter of {capability} on {provider}"));
-        assert_eq!(
-            (served.adapter, served.behavior),
-            (identity.adapter, identity.behavior),
-            "{capability} on {provider}"
-        );
-        // A route declared with no contract is completed to one its adapter serves.
-        let read = RouteTable::from_document(
+    assert_eq!(registry.registered().len(), BUILT_IN_ADAPTERS.len());
+    let read = |capability: &str, provider: &str, contract: Value| {
+        let table = RouteTable::from_document(
             &json!({"fx": "routes/v1", "routes": [
-                {"capability": capability, "route": format!("m@{provider}"), "price": {"usd": 0}},
+                {"capability": capability, "route": format!("m@{provider}"), "price": {"usd": 0},
+                 "contract": contract},
             ]}),
             "routes.yaml",
         )
         .unwrap();
-        let contract = &read.entries[0].contract;
+        table.entries[0].contract.clone()
+    };
+    for registered in registry.registered() {
+        let (capability, provider, identity) = (
+            registered.capability,
+            registered.provider,
+            registered.identity,
+        );
+        let served =
+            built_in_adapter_named(capability, provider, identity.adapter).unwrap_or_else(|| {
+                panic!(
+                    "core knows no adapter {} of {capability} on {provider}",
+                    identity.adapter
+                )
+            });
+        assert_eq!(
+            (served.behavior, served.default),
+            (identity.behavior, registered.default),
+            "{} for {capability} on {provider}",
+            identity.adapter
+        );
+        // A route that names the adapter alone is completed to its behaviour.
+        let contract = read(capability, provider, json!({"adapter": identity.adapter}));
+        assert!(
+            identity.behaves(&contract["adapter_behavior"]),
+            "{} for {capability} on {provider}",
+            identity.adapter
+        );
+        if !registered.default {
+            continue;
+        }
+        // A route declared with no contract is completed to one its default serves, and the
+        // registry hands it that default.
+        let contract = read(capability, provider, json!({}));
         assert_eq!(contract["adapter"], json!(identity.adapter));
         assert!(
             identity.behaves(&contract["adapter_behavior"]),
+            "{capability} on {provider}"
+        );
+        let route = RouteRef {
+            capability: capability.into(),
+            model: "m".into(),
+            provider: provider.into(),
+            contract,
+            limits: Default::default(),
+        };
+        assert_eq!(
+            registry.serving(&route).and_then(Adapter::identity),
+            Some(identity),
             "{capability} on {provider}"
         );
     }
@@ -857,12 +923,22 @@ fn every_example_table_declares_only_what_fx_honours() {
             if !registry.serves(&route.capability, &route.provider) {
                 continue;
             }
-            // Every image.generate adapter of FX but Codex's and Grok Build's refuses references
-            // (spec/providers.md §2).
-            if route.capability == "image.generate"
-                && !matches!(route.provider.as_str(), "codex" | "grok")
-            {
-                assert!(!route.features.contains("image_input"), "{label}: {id}");
+            // Every image.generate adapter of FX refuses references but Codex's, Grok Build's and
+            // OpenRouter's generic one (spec/providers.md §2), so the adapter that serves the
+            // route decides.
+            if route.capability == "image.generate" {
+                let serving = registry
+                    .serving_contract(&route.capability, &route.provider, &route.contract)
+                    .and_then(Adapter::identity)
+                    .map(|identity| identity.adapter);
+                let takes_references = [
+                    codex::ADAPTER,
+                    grok::ADAPTER,
+                    openrouter::generic_image::CONTRACT_ADAPTER,
+                ];
+                if !serving.is_some_and(|adapter| takes_references.contains(&adapter)) {
+                    assert!(!route.features.contains("image_input"), "{label}: {id}");
+                }
             }
             // OpenRouter's image adapter refuses a mask and a transparent background
             // (src/openrouter/README.md).
@@ -1166,12 +1242,12 @@ fn the_adapters_name_their_contracts_as_the_table_does() {
         (
             "image.generate",
             "openrouter",
-            openrouter::image::CONTRACT_ADAPTER,
+            openrouter::generic_image::CONTRACT_ADAPTER,
         ),
         (
             "image.edit",
             "openrouter",
-            openrouter::image::CONTRACT_ADAPTER,
+            openrouter::generic_image::CONTRACT_ADAPTER,
         ),
         (
             "structured.generate",
@@ -1188,7 +1264,11 @@ fn the_adapters_name_their_contracts_as_the_table_does() {
             "openrouter",
             openrouter::music::CONTRACT_ADAPTER,
         ),
-        ("image.generate", "fal", fal::image::CONTRACT_ADAPTER),
+        (
+            "image.generate",
+            "fal",
+            fal::generic_image::CONTRACT_ADAPTER,
+        ),
         ("image.generate", "codex", codex::ADAPTER),
         ("image.edit", "codex", codex::ADAPTER),
         ("image.generate", "grok", grok::ADAPTER),
@@ -1220,7 +1300,11 @@ fn the_adapters_name_their_contracts_as_the_table_does() {
         ("mesh.generate", "gg", gg::mesh::MESH_IDENTITY),
         ("mesh.rig", "gg", gg::mesh::RIG_IDENTITY),
         ("image.generate", "openai", openai::IDENTITY),
-        ("image.generate", "openrouter", openrouter::image::IDENTITY),
+        (
+            "image.generate",
+            "openrouter",
+            openrouter::generic_image::IDENTITY,
+        ),
         (
             "structured.generate",
             "openrouter",
@@ -1228,7 +1312,7 @@ fn the_adapters_name_their_contracts_as_the_table_does() {
         ),
         ("agent.turn", "openrouter", openrouter::agent::IDENTITY),
         ("music.generate", "openrouter", openrouter::music::IDENTITY),
-        ("image.generate", "fal", fal::image::IDENTITY),
+        ("image.generate", "fal", fal::generic_image::IDENTITY),
         ("video.generate", "fal", fal::video::IDENTITY),
         ("background.remove", "fal", fal::background::IDENTITY),
         ("mesh.generate", "tripo", tripo::mesh::IDENTITY),
@@ -1253,10 +1337,25 @@ fn the_adapters_name_their_contracts_as_the_table_does() {
             "{capability} on {provider}"
         );
     }
+    // The adapters a route names: GPT Image's, on both capabilities.
+    for (provider, identity) in [
+        ("openrouter", openrouter::image::IDENTITY),
+        ("fal", fal::image::IDENTITY),
+    ] {
+        for capability in ["image.generate", "image.edit"] {
+            let served = built_in_adapter_named(capability, provider, identity.adapter).unwrap();
+            assert_eq!(
+                served.behavior, identity.behavior,
+                "{capability} on {provider}"
+            );
+            assert!(!served.default, "{capability} on {provider}");
+        }
+    }
 }
 
-/// spec/providers.md §3: a route that takes input pictures declares the most its adapter takes,
-/// except GG's, whose models' limits GG checks; a route that takes none declares nothing.
+/// spec/providers.md §3: a route that takes input pictures declares the most its adapter takes:
+/// the adapter's own limit, or for GG, which holds an edit to its route's, GPT Image's; a route
+/// that takes none declares nothing.
 #[test]
 fn input_picture_limits_are_the_adapters_own() {
     for route in table().entries.values() {
@@ -1267,6 +1366,7 @@ fn input_picture_limits_are_the_adapters_own() {
             ("image.edit", "openai") => Some(openai::MAX_INPUT_IMAGES),
             ("image.edit", "openrouter") => Some(openrouter::image::MAX_PICTURES),
             ("image.edit", "fal") => Some(fal::image::MAX_PICTURES),
+            ("image.edit", "gg") => Some(gg::image::MAX_INPUT_IMAGES),
             _ => None,
         };
         assert_eq!(

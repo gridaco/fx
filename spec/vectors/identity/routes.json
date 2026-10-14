@@ -74,6 +74,34 @@
    ]
   },
   {
+   "name": "a pair with more than one adapter fills in its default",
+   "note": "providers.md section 2: OpenRouter's and fal's image defaults are their generic adapters, not GPT Image's, which a route must name.",
+   "builtin": [],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "image.generate", "route": "acme/img-a@openrouter", "price": {"cap_usd": 0.5}}, {"capability": "image.edit", "route": "acme/img-a/edit@fal", "price": {"cap_usd": 0.5}}]
+   ],
+   "expect": [
+    {"capability": "image.generate", "route": "acme/img-a@openrouter", "contract": {"adapter": "openrouter-image", "adapter_behavior": "1"}, "digest": "c47886b22113a49d3bd869fc62f18416393788a11f3d78803b8f14cc2110dac4"},
+    {"capability": "image.edit", "route": "acme/img-a/edit@fal", "contract": {"adapter": "fal-image", "adapter_behavior": "1"}, "digest": "6fb22c5bcf756aa2fda9ddaa489594d8ce748b463183083122f7f775148af474"}
+   ]
+  },
+  {
+   "name": "a contract naming a pair's other adapter gets that adapter's behaviour",
+   "note": "fx-openrouter-image-v1 serves only a route that names it, with the behaviour the string \"3\"; a behaviour alone names the default, which refuses \"3\" when a call is sent; an adapter of another pair gets none.",
+   "builtin": [],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "image.generate", "route": "acme/img-b@openrouter", "price": {"usd": 0.1}, "contract": {"adapter": "fx-openrouter-image-v1"}}, {"capability": "image.edit", "route": "acme/img-b@fal", "price": {"usd": 0.1}, "contract": {"adapter": "fx-fal-image-v1", "adapter_behavior": null}}, {"capability": "image.generate", "route": "acme/img-c@openrouter", "price": {"usd": 0.1}, "contract": {"adapter": "fal-image"}}, {"capability": "image.generate", "route": "acme/img-d@openrouter", "price": {"usd": 0.1}, "contract": {"adapter_behavior": "3"}}]
+   ],
+   "expect": [
+    {"capability": "image.generate", "route": "acme/img-b@openrouter", "contract": {"adapter": "fx-openrouter-image-v1", "adapter_behavior": "3"}, "digest": "4b78dee8bc944ac17e2b0def642a98d168e1840c8600aa4d929122d22019c2b3"},
+    {"capability": "image.edit", "route": "acme/img-b@fal", "contract": {"adapter": "fx-fal-image-v1", "adapter_behavior": "1"}, "digest": "37f13319dd742c2df5d694c4fa4da14fff235a412635bec51bb06a823601b504"},
+    {"capability": "image.generate", "route": "acme/img-c@openrouter", "contract": {"adapter": "fal-image"}, "digest": "aa60a467663d4eed3d8866b3fba0c52497fd257c0ce7073bb91cb978bdcb3acb"},
+    {"capability": "image.generate", "route": "acme/img-d@openrouter", "contract": {"adapter": "openrouter-image", "adapter_behavior": "3"}, "digest": "159ae06524924c6c668956866777e68a3a6b23d0b8fe2327a521003dd3352a4d"}
+   ]
+  },
+  {
    "name": "an extended route takes its base's contract",
    "note": "extends is not hashed: the fingerprint is the one of an entry that states the same contract.",
    "builtin": [

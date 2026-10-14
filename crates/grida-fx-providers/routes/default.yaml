@@ -28,10 +28,11 @@
 #
 # The contract object of each entry is part of its route fingerprint, and so of every cache key
 # the route serves: editing one changes those keys. Its `adapter` and `adapter_behavior` are the
-# ones spec/providers.md §2 names for the capability's adapter on that provider. The image routes
-# carry `adapter_behavior` as a string, every other route as the integer 1. Every entry states
-# both, so filling in a contract that leaves them out (spec/identity.md §7) changes none of these
-# routes. Price, features, max_input_pictures, concurrency and requests_per_minute are not
+# ones spec/providers.md §2 names for the adapter that serves it: the OpenRouter and fal image
+# routes name GPT Image's, from its second table, not their pairs' generic defaults. The image
+# routes carry `adapter_behavior` as a string, every other route as the integer 1. Every entry
+# states both, so filling in a contract that leaves them out (spec/identity.md §7) changes none of
+# these routes. Price, features, max_input_pictures, concurrency and requests_per_minute are not
 # identity.
 #
 # Features are the names spec/capabilities.md lists for each capability. tests/routes.rs holds
@@ -237,6 +238,7 @@ routes:
       2880x960:
         low_usd: 0.1
         high_usd: 0.32
+  max_input_pictures: 16
   features:
   - alpha
   - authored_prompt_passthrough

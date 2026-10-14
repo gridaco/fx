@@ -332,8 +332,9 @@ mod tests {
         // Live: every provider's adapters, whether or not a key is present.
         let table = builtin_routes().unwrap();
         for ((capability, id), route) in &table.entries {
+            let route = grida_fx_providers::RouteRef::of(route);
             assert!(
-                engine.adapters.serves(capability, &route.provider),
+                engine.adapters.serving(&route).is_some(),
                 "no adapter serves {id} for {capability}"
             );
         }

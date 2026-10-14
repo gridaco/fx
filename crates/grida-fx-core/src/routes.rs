@@ -20,11 +20,11 @@
 //!   copies the base's price, features, limits and pacing where it states none, and the base's
 //!   contract members it does not state. Refused: `<base> is not a <provider> route`; `no route
 //!   <base> serves <capability>`.
-//! - [`BUILT_IN_ADAPTERS`]: on a capability and provider one of FX's adapters serves, a left-out
-//!   or `null` `adapter` becomes that adapter's name, and a left-out or `null` `adapter_behavior`
-//!   its behaviour when `adapter` is that name ([`complete_contract`]). The core knows FX's
-//!   adapters by this table alone; the providers crate's tests hold it to every adapter it
-//!   registers.
+//! - [`BUILT_IN_ADAPTERS`]: on a capability and provider FX's adapters serve, a left-out or `null`
+//!   `adapter` becomes the name of that pair's default, and a left-out or `null`
+//!   `adapter_behavior` the behaviour of the pair's adapter `adapter` names ([`complete_contract`]).
+//!   The core knows FX's adapters by this table alone; the providers crate's tests hold it to
+//!   every adapter it registers.
 //!
 //! Prices are read in micro-dollars ([`Usd`]); an amount with more than 6 decimal places is
 //! refused (identity.md §12), judged on the number's JCS text (`1e-7 has more than 6 decimal
@@ -135,6 +135,9 @@ pub struct BuiltInAdapter {
     /// The contract's `adapter_behavior` as canonical JSON: `"1"` (the string) or `1` (the
     /// number).
     pub behavior: &'static str,
+    /// Whether it is its capability and provider's default, which serves a route whose contract
+    /// names no `adapter`: one per pair. Any other serves only a route that names it.
+    pub default: bool,
 }
 
 impl BuiltInAdapter {
@@ -155,25 +158,30 @@ const fn served(
         provider,
         adapter,
         behavior,
+        default: true,
     }
 }
 
-/// The adapters FX ships, one per capability and provider, as spec/providers.md §2 lists them.
-pub const BUILT_IN_ADAPTERS: [BuiltInAdapter; 26] = [
+/// An adapter that serves only a route whose contract names it.
+const fn named(
+    capability: &'static str,
+    provider: &'static str,
+    adapter: &'static str,
+    behavior: &'static str,
+) -> BuiltInAdapter {
+    BuiltInAdapter {
+        default: false,
+        ..served(capability, provider, adapter, behavior)
+    }
+}
+
+/// The adapters FX ships, as spec/providers.md §2 lists them: each capability and provider's
+/// default, in its first table's order, then the adapters a route names, in its second's.
+pub const BUILT_IN_ADAPTERS: [BuiltInAdapter; 30] = [
     served("image.generate", "openai", "fx-openai-image-v1", r#""1""#),
     served("image.edit", "openai", "fx-openai-image-v1", r#""1""#),
-    served(
-        "image.generate",
-        "openrouter",
-        "fx-openrouter-image-v1",
-        r#""3""#,
-    ),
-    served(
-        "image.edit",
-        "openrouter",
-        "fx-openrouter-image-v1",
-        r#""3""#,
-    ),
+    served("image.generate", "openrouter", "openrouter-image", r#""1""#),
+    served("image.edit", "openrouter", "openrouter-image", r#""1""#),
     served(
         "structured.generate",
         "openrouter",
@@ -182,8 +190,8 @@ pub const BUILT_IN_ADAPTERS: [BuiltInAdapter; 26] = [
     ),
     served("agent.turn", "openrouter", "openrouter-tool-loop", "1"),
     served("music.generate", "openrouter", "openrouter-music", "1"),
-    served("image.generate", "fal", "fx-fal-image-v1", r#""1""#),
-    served("image.edit", "fal", "fx-fal-image-v1", r#""1""#),
+    served("image.generate", "fal", "fal-image", r#""1""#),
+    served("image.edit", "fal", "fal-image", r#""1""#),
     served("video.generate", "fal", "fal-queue", "1"),
     served("background.remove", "fal", "fal-run-birefnet", "1"),
     served("mesh.generate", "tripo", "tripo-multiview", "1"),
@@ -206,28 +214,59 @@ pub const BUILT_IN_ADAPTERS: [BuiltInAdapter; 26] = [
     served("mesh.rig", "gg", "gg-rig", "1"),
     served("image.generate", "grok", "fx-grok-image-v1", r#""1""#),
     served("image.edit", "grok", "fx-grok-image-v1", r#""1""#),
+    named(
+        "image.generate",
+        "openrouter",
+        "fx-openrouter-image-v1",
+        r#""3""#,
+    ),
+    named(
+        "image.edit",
+        "openrouter",
+        "fx-openrouter-image-v1",
+        r#""3""#,
+    ),
+    named("image.generate", "fal", "fx-fal-image-v1", r#""1""#),
+    named("image.edit", "fal", "fx-fal-image-v1", r#""1""#),
 ];
 
-/// The adapter FX ships for `capability` on `provider`, if any.
+/// The default FX ships for `capability` on `provider`, if any: the adapter of a route whose
+/// contract names none.
 pub fn built_in_adapter(capability: &str, provider: &str) -> Option<&'static BuiltInAdapter> {
-    BUILT_IN_ADAPTERS
-        .iter()
-        .find(|served| served.capability == capability && served.provider == provider)
+    BUILT_IN_ADAPTERS.iter().find(|served| {
+        served.default && served.capability == capability && served.provider == provider
+    })
 }
 
-/// Completes `contract` from the adapter FX ships for `capability` on `provider`, if any
-/// (identity.md §7 step 2): a left-out or `null` `adapter` becomes the adapter's name, then a
-/// left-out or `null` `adapter_behavior` its behaviour when `adapter` is that name.
+/// The adapter FX ships for `capability` on `provider` under the contract `adapter` name `adapter`,
+/// default or not.
+pub fn built_in_adapter_named(
+    capability: &str,
+    provider: &str,
+    adapter: &str,
+) -> Option<&'static BuiltInAdapter> {
+    BUILT_IN_ADAPTERS.iter().find(|served| {
+        served.capability == capability && served.provider == provider && served.adapter == adapter
+    })
+}
+
+/// Completes `contract` from the adapters FX ships for `capability` on `provider`, if any
+/// (identity.md §7 step 2): a left-out or `null` `adapter` becomes the default's name, then a
+/// left-out or `null` `adapter_behavior` the behaviour of the adapter `adapter` names.
 pub fn complete_contract(capability: &str, provider: &str, contract: &mut Map<String, Value>) {
-    let Some(served) = built_in_adapter(capability, provider) else {
+    let Some(default) = built_in_adapter(capability, provider) else {
         return;
     };
     let left_out = |member: Option<&Value>| member.is_none_or(Value::is_null);
     if left_out(contract.get("adapter")) {
-        contract.insert("adapter".into(), Value::from(served.adapter));
+        contract.insert("adapter".into(), Value::from(default.adapter));
     }
-    if left_out(contract.get("adapter_behavior"))
-        && contract.get("adapter").and_then(Value::as_str) == Some(served.adapter)
+    let named = contract
+        .get("adapter")
+        .and_then(Value::as_str)
+        .and_then(|adapter| built_in_adapter_named(capability, provider, adapter));
+    if let Some(served) = named
+        && left_out(contract.get("adapter_behavior"))
     {
         contract.insert("adapter_behavior".into(), served.behavior_value());
     }
@@ -1062,12 +1101,23 @@ mod tests {
     }
 
     #[test]
-    fn built_in_adapters_are_one_per_capability_and_provider() {
+    fn built_in_adapters_have_one_default_per_capability_and_provider() {
+        let defaults: Vec<(&str, &str)> = BUILT_IN_ADAPTERS
+            .iter()
+            .filter(|served| served.default)
+            .map(|served| (served.capability, served.provider))
+            .collect();
         let pairs: BTreeSet<(&str, &str)> = BUILT_IN_ADAPTERS
             .iter()
             .map(|served| (served.capability, served.provider))
             .collect();
-        assert_eq!(pairs.len(), BUILT_IN_ADAPTERS.len());
+        assert_eq!(defaults.len(), pairs.len());
+        assert_eq!(defaults.iter().copied().collect::<BTreeSet<_>>(), pairs);
+        let named: BTreeSet<(&str, &str, &str)> = BUILT_IN_ADAPTERS
+            .iter()
+            .map(|served| (served.capability, served.provider, served.adapter))
+            .collect();
+        assert_eq!(named.len(), BUILT_IN_ADAPTERS.len());
         for served in BUILT_IN_ADAPTERS {
             let behavior = served.behavior_value();
             assert_eq!(crate::value::canon(&behavior), served.behavior);
@@ -1081,6 +1131,19 @@ mod tests {
         assert_eq!(
             built_in_adapter("image.edit", "gg").map(|served| served.adapter),
             Some("gg-image")
+        );
+        assert_eq!(
+            built_in_adapter("image.edit", "openrouter").map(|served| served.adapter),
+            Some("openrouter-image")
+        );
+        assert_eq!(
+            built_in_adapter_named("image.edit", "openrouter", "fx-openrouter-image-v1")
+                .map(|served| (served.behavior, served.default)),
+            Some((r#""3""#, false))
+        );
+        assert_eq!(
+            built_in_adapter_named("image.edit", "fal", "fx-openrouter-image-v1"),
+            None
         );
         assert_eq!(built_in_adapter("vision.review", "gg"), None);
         assert_eq!(built_in_adapter("image.generate", "acme"), None);
@@ -1123,6 +1186,36 @@ mod tests {
                 json!({"adapter": "elevenlabs-speech"})
             ),
             json!({"adapter": "elevenlabs-speech", "adapter_behavior": 1})
+        );
+        // A pair with more than one adapter fills in its default, and the behaviour of the one
+        // the contract names.
+        let open = |contract| contract_of("image.edit", "acme/img-a@openrouter", contract);
+        assert_eq!(
+            open(json!({})),
+            json!({"adapter": "openrouter-image", "adapter_behavior": "1"})
+        );
+        assert_eq!(
+            open(json!({"adapter": "fx-openrouter-image-v1"})),
+            json!({"adapter": "fx-openrouter-image-v1", "adapter_behavior": "3"})
+        );
+        // GPT Image's behaviour alone names the default, which refuses it when a call is sent;
+        // up to 0.6.1 it was served by GPT Image's adapter.
+        assert_eq!(
+            open(json!({"adapter_behavior": "3"})),
+            json!({"adapter": "openrouter-image", "adapter_behavior": "3"})
+        );
+        assert_eq!(
+            contract_of(
+                "image.generate",
+                "acme/img-a@fal",
+                json!({"adapter": "fx-fal-image-v1", "adapter_behavior": null})
+            ),
+            json!({"adapter": "fx-fal-image-v1", "adapter_behavior": "1"})
+        );
+        assert_eq!(
+            open(json!({"adapter": "fal-image"})),
+            json!({"adapter": "fal-image"}),
+            "another pair's adapter gets no behaviour"
         );
         // A pair no adapter of FX serves keeps its contract, on any provider.
         assert_eq!(

@@ -1,5 +1,7 @@
-//! OpenRouter images: `POST {base}/images` for both `image.generate` and `image.edit`
-//! (src/openrouter/README.md; spec/capabilities.md §2–§3).
+//! OpenRouter images on GPT Image: `POST {base}/images` for both `image.generate` and `image.edit`
+//! (src/openrouter/README.md, "Images on GPT Image"; spec/capabilities.md §2–§3). Registered for a
+//! route whose contract names it, as the built-in routes do; a route that names no adapter gets
+//! [`super::generic_image`].
 //!
 //! Contract: `adapter: fx-openrouter-image-v1`, `adapter_behavior: "3"` (a string), each checked
 //! when present (`super::serves`). Refusals, in the order of spec/adapters.md §4: the contract; the

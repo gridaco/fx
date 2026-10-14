@@ -669,6 +669,7 @@ mod tests {
                 model: "acme/img-a".into(),
                 provider: PROVIDER.into(),
                 contract: json!({}),
+                limits: Default::default(),
             },
             request: json!({}),
             files: indexmap::IndexMap::new(),

@@ -156,8 +156,22 @@ def test_contracts_are_completed_from_the_built_in_adapters() -> None:
     assert complete("speech.generate", "elevenlabs", {})["adapter_behavior"] == 1
     assert complete("vision.review", "gg", {}) == {}
     assert complete("image.generate", "acme", {"adapter": None}) == {"adapter": None}
+    # A pair with more than one adapter: its default, and the behaviour of the one named.
+    assert complete("image.edit", "openrouter", {}) == {
+        "adapter": "openrouter-image",
+        "adapter_behavior": "1",
+    }
+    assert complete("image.edit", "openrouter", {"adapter": "fx-openrouter-image-v1"}) == {
+        "adapter": "fx-openrouter-image-v1",
+        "adapter_behavior": "3",
+    }
+    assert complete("image.edit", "fal", {"adapter": "fx-openrouter-image-v1"}) == {
+        "adapter": "fx-openrouter-image-v1"
+    }
+    assert complete("image.edit", "fal", {"adapter": ["fal-image"]}) == {"adapter": ["fal-image"]}
     # Every built-in route already names both, so its fingerprint does not move.
-    assert len(digest.BUILT_IN_ADAPTERS) == 26
+    assert len(digest.BUILT_IN_ADAPTERS) == 30
+    assert sum(default for _, default in digest.BUILT_IN_ADAPTERS.values()) == 26
     filled = digest.route_fingerprint("image.generate", "img-a@gg", gg_image)
     assert filled == "7f6238d4aa013ab3e87587914c9ee915b141d33a2432a8ff1f3a361874901b95"
 
@@ -1407,7 +1421,7 @@ def test_check_spec_routes_agree_with_the_built_in_adapters(
 ) -> None:
     check_spec, _ = adapters
     assert _check_routes(check_spec) == 0, capsys.readouterr().out
-    assert "26 built-in adapters and their references" in capsys.readouterr().out
+    assert "30 built-in adapters and their references" in capsys.readouterr().out
 
 
 def test_check_spec_routes_catch_a_behaviour_the_table_does_not_write(
@@ -1433,13 +1447,15 @@ def test_check_spec_routes_catch_digest_s_own_table(
 ) -> None:
     check_spec, _ = adapters
     ours = dict(check_spec.digest.BUILT_IN_ADAPTERS)
-    ours[("mesh.rig", "tripo")] = ("tripo-rig", "1")
-    del ours[("image.edit", "grok")]
+    ours[("mesh.rig", "tripo", "tripo-rig")] = ("1", True)
+    del ours[("image.edit", "grok", "fx-grok-image-v1")]
+    ours[("image.edit", "fal", "fx-fal-image-v1")] = ("1", True)
     monkeypatch.setattr(check_spec.digest, "BUILT_IN_ADAPTERS", ours)
     assert _check_routes(check_spec) == 1
     out = capsys.readouterr().out
-    assert "image.edit on grok: not in digest.py's table" in out
-    assert 'mesh.rig on tripo: digest.py carries behaviour "1", the table `1`' in out
+    assert "fx-grok-image-v1 for image.edit on grok: not in digest.py's table" in out
+    assert 'tripo-rig for mesh.rig on tripo: digest.py carries behaviour "1", the table `1`' in out
+    assert "fx-fal-image-v1 for image.edit on fal: digest.py says default is True" in out
 
 
 def test_check_spec_routes_catch_a_reference_without_its_contract(

@@ -6,7 +6,7 @@ The reference for FX's adapters on `openai`, under the adapter contract, [spec/a
 |---|---|---|
 | `image.generate`, `image.edit` | `fx-openai-image-v1` | `"1"` |
 
-- **Capabilities:** `image.generate` (`POST {base}/images/generations`, JSON) and `image.edit` (`POST {base}/images/edits`, multipart). One request per send. Contract `adapter`: `fx-openai-image-v1`, behaviour `"1"`, the string: the number `1` is another contract, with another fingerprint, and is refused ([adapters.md](../../../../spec/adapters.md) §4 step 1), as OpenRouter's image adapter refuses the number `3`.
+- **Capabilities:** `image.generate` (`POST {base}/images/generations`, JSON) and `image.edit` (`POST {base}/images/edits`, multipart). One request per send. Contract `adapter`: `fx-openai-image-v1`, behaviour `"1"`, the string: the number `1` is another contract, with another fingerprint, and is refused ([adapters.md](../../../../spec/adapters.md) §4 step 1), as OpenRouter's GPT Image adapter (`fx-openrouter-image-v1`) refuses the number `3`.
 - **Credential:** `authorization: Bearer <OPENAI_API_KEY>`.
 - **Limits:** deadline 600 s per send; response cap 64 MiB.
 - **Wire.** Always `n: 1`, `output_format: png`, `quality: max`, `moderation: low`, and `background` (including `auto`). `size` only when given (including `auto`). Never `input_fidelity` (the model refuses it), `response_format`, `seed` or `stream`.

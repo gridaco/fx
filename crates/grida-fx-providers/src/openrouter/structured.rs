@@ -485,6 +485,7 @@ mod tests {
             model: "acme/text-a".into(),
             provider: "openrouter".into(),
             contract,
+            limits: Default::default(),
         }
     }
 

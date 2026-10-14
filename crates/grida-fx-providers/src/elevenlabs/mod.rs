@@ -333,6 +333,7 @@ mod tests {
                 model: "eleven_text_to_sound_v2".into(),
                 provider: "elevenlabs".into(),
                 contract,
+                limits: Default::default(),
             },
             request: json!({}),
             files: IndexMap::new(),

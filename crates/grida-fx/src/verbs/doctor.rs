@@ -77,8 +77,9 @@
 //! - one line per route of the planning project's catalog (the built-in table, then `fx.yaml`
 //!   `route_tables`), sorted by capability, then id: `route     <capability> <model@provider>
 //!   servable`, `… no key (<VARIABLE>)`, `… not installed (codex)` (or `(grok)`), `… too old
-//!   (codex <version>; FX needs 0.160.1+)`, `… no version (codex)` or `… no adapter`, as
-//!   `live::servable` answers over every provider's adapters built on `live::offline_setup`.
+//!   (codex <version>; FX needs 0.160.1+)`, `… no version (codex)` or `… no adapter` (no adapter
+//!   of the capability on the provider, or none under the `adapter` the route's contract names),
+//!   as `live::servable` answers over every provider's adapters built on `live::offline_setup`.
 
 use crate::cli::DoctorArgs;
 use crate::print::{labelled, print_line};
@@ -94,7 +95,7 @@ use grida_fx_protocol::DescribeParams;
 use grida_fx_providers::installed::Version;
 use grida_fx_providers::keys::{ALLOWED, Environment, KeySource};
 use grida_fx_providers::live::{self, Installed, Servable};
-use grida_fx_providers::{Endpoints, KeyName, Keys};
+use grida_fx_providers::{Endpoints, KeyName, Keys, RouteRef};
 use grida_fx_runtime::host::locate::{
     MINIMUM_NODE, MINIMUM_PYTHON, NO_SDK, Probe, node_runtime, python_interpreter,
 };
@@ -286,7 +287,7 @@ fn uses_lines(
                 Some(id) => match catalog.resolve(capability, id) {
                     Ok(route) => {
                         let servable =
-                            live::servable(&adapters, keys, installed, capability, &route.provider);
+                            live::servable(&adapters, keys, installed, &RouteRef::of(route));
                         let served = servable == Servable::Yes;
                         (format!("{id} {}", servable_text(servable)), served)
                     }
@@ -450,7 +451,7 @@ fn route_lines(catalog: &RouteTable, keys: &Keys, installed: &[Installed]) -> Ve
     routes
         .into_iter()
         .map(|(capability, id, route)| {
-            let servable = live::servable(&adapters, keys, installed, capability, &route.provider);
+            let servable = live::servable(&adapters, keys, installed, &RouteRef::of(route));
             let state = servable_text(servable);
             labelled("route", &format!("{capability} {id} {state}"))
         })
@@ -737,6 +738,39 @@ mod tests {
             ]
         );
         assert!(lines.iter().all(|line| !line.contains(value)));
+    }
+
+    #[test]
+    fn route_lines_judge_a_route_by_the_adapter_its_contract_names() {
+        // Made-up models on providers FX speaks are served by their pairs' defaults; a contract
+        // naming an adapter FX does not have is served by none.
+        let entries = [
+            "{ capability: image.generate, route: acme/img-a@openrouter, price: { cap_usd: 0.5 } }",
+            "{ capability: image.edit, route: acme/img-a/edit@fal, price: { cap_usd: 0.5 } }",
+            "{ capability: image.edit, route: acme/img-a@gg, price: { cap_usd: 0.5 } }",
+            "{ capability: image.generate, route: acme/img-b@openrouter, price: { usd: 0.1 }, \
+             contract: { adapter: fx-openrouter-image-v1 } }",
+            "{ capability: image.generate, route: acme/img-c@openrouter, price: { usd: 0.1 }, \
+             contract: { adapter: acme-x } }",
+        ];
+        let text = format!("fx: routes/v1\nroutes:\n  - {}\n", entries.join("\n  - "));
+        let document = grida_fx_core::yaml::load(text.as_bytes(), "routes.yaml").unwrap();
+        let catalog = RouteTable::from_document(&document, "routes.yaml").unwrap();
+        let keys = Keys::from_pairs(&[
+            (KeyName::OpenRouter, "fx-made-up-or-value"),
+            (KeyName::Fal, "fx-made-up-fal-value"),
+            (KeyName::GridaGateway, "fx-made-up-gg-value"),
+        ]);
+        assert_eq!(
+            route_lines(&catalog, &keys, &[]),
+            [
+                "route     image.edit acme/img-a/edit@fal servable",
+                "route     image.edit acme/img-a@gg servable",
+                "route     image.generate acme/img-a@openrouter servable",
+                "route     image.generate acme/img-b@openrouter servable",
+                "route     image.generate acme/img-c@openrouter no adapter",
+            ]
+        );
     }
 
     /// Codex found on `PATH` naming `version`, and no Grok Build.

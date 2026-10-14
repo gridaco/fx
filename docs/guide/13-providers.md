@@ -102,11 +102,63 @@ included; restating the same route this way keeps its identity, so its cached re
 ([route tables](05-running.md#name-a-run-or-continue-it)).
 
 A route's `contract` names the adapter that serves it, as `adapter` and `adapter_behavior`
-([providers.md §2](../../spec/providers.md#2-the-built-in-adapters)). On a provider and
-capability FX serves, FX fills in what a project route's contract leaves out: its adapter's name
-as `adapter`, and that adapter's `adapter_behavior` unless the contract names another adapter.
-So such a route always names its adapter. Every adapter checks both: up to 0.6.1, fal's and
-Tripo's checked only `adapter`, and served a route that named another `adapter_behavior`.
+([providers.md §2](../../spec/providers.md#2-the-built-in-adapters)), and the name picks the
+adapter: a provider may have more than one for a capability. On a provider and capability FX
+serves, FX fills in what a project route's contract leaves out: the provider's default for the
+capability as `adapter`, and the `adapter_behavior` of the adapter the contract names. So such a
+route always names its adapter. A contract that names an adapter FX does not have is served by
+none: `grida fx doctor` says `no adapter`, and a live call on it is refused. Every adapter checks
+its behaviour: up to 0.6.1, fal's and Tripo's checked only `adapter`, and served a route that
+named another `adapter_behavior`.
+
+## A model FX does not list
+
+New models arrive faster than FX's built-in table. On a provider FX speaks, a route of your own is
+enough: name the model, and give a cap when you do not know its price.
+
+```yaml
+# routes/models.yaml, listed under route_tables: in fx.yaml
+fx: routes/v1
+routes:
+  - capability: image.generate
+    route: acme/img-a@openrouter        # made up: any image model OpenRouter serves
+    price: { cap_usd: 0.20 }            # each call holds $0.20 and is booked at what OpenRouter reports
+    features: [image_input]
+    max_input_pictures: 8
+  - capability: image.edit
+    route: acme/img-a/edit@fal          # made up: fal's edit endpoint of a model
+    price: { cap_usd: 0.20 }
+    contract:
+      provider_options: { fal: { seed: 7 } }
+```
+
+- **OpenRouter and fal images.** A route whose `contract` names no `adapter` gets FX's generic
+  image adapter for the provider. It sends what the provider's image models share, the prompt and the input
+  pictures, then your `provider_options`, and nothing FX chose for one model: no size, quality or
+  background. The picture it gets back becomes a PNG, the same pixels. On fal the model is the
+  endpoint id as fal publishes it, the generate endpoint for `image.generate` and the edit
+  endpoint for `image.edit`. An exact `size`, a `mask` or a transparent `background` is refused
+  before anything is sent: leave it out and give the model's own parameter in `provider_options`
+  ([Parameters FX does not expose](#parameters-fx-does-not-expose)).
+- **GPT Image.** The built-in OpenRouter and fal image routes name GPT Image's own adapters,
+  which send what FX chose for it: maximum quality, its exact sizes and, on OpenRouter, its
+  moderation. A route that `extends` one of them keeps that adapter, so extend one for a GPT
+  Image model FX does not list, and declare a route whose contract names no adapter for any other
+  model.
+- **GG.** A new model id is enough for images, video, structured output and agent turns: GG
+  checks each model's own request. A 3D route also names GG's `endpoint` in its `contract` (and a
+  rig route may name a `check_endpoint`), as the built-in GG 3D routes do. GG image edits take at
+  most the pictures the route declares (`max_input_pictures`, 16 on the built-in route).
+- **fal video.** A video route of your own on fal draws the `resolution` tiers its price names and
+  up to its `max_units` seconds; a capped route, whose price states neither, draws `360p`, `720p`,
+  `1080p` and `4k`, from 3 to 10 seconds. It needs a first frame unless it declares the feature
+  `text_to_video` (`features: [text_to_video]`), for a model that draws from the prompt alone;
+  the built-in route does not. It sends the built-in route's request (`image_url`,
+  `end_image_url`, a whole-number `duration`, `aspect_ratio`, `resolution`), so it fits only a
+  fal endpoint that takes that shape.
+
+Each adapter's reference lists what it sends and refuses
+([providers.md §2](../../spec/providers.md#2-the-built-in-adapters)).
 
 ## Parameters FX does not expose
 
@@ -130,8 +182,8 @@ steps:
 - **A route can carry them too**, in its `contract` (`contract: { provider_options: { openrouter:
   { seed: 7 } } }`). A step's parameter replaces the route's of the same name, and adds the rest.
   An agent's turns take only their route's, since FX builds each turn's request itself.
-- **FX's own settings stay FX's.** A parameter FX sets itself (`prompt`, `size`, `model`, `n`,
-  `stream`, …) is refused before anything is sent, at $0, and so is a file: send files through the
+- **FX's own settings stay FX's.** A parameter FX sets itself (`prompt`, `model`, `n`, `stream`,
+  …) is refused before anything is sent, at $0, and so is a file: send files through the
   type's inputs. Each provider's list is in its adapter's reference
   ([providers.md §2](../../spec/providers.md#2-the-built-in-adapters)). Codex and Grok Build take
   none.

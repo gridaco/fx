@@ -53,7 +53,7 @@ Ratified 2026-10-14.
 
 | Job | Needs |
 |---|---|
-| A model FX does not list, on a provider it speaks | a route: `extends` and the new model id, with a cap when it has no price |
+| A model FX does not list, on a provider it speaks | a route: the new model id, with a cap when it has no price, and `extends` where a built-in route's adapter fits the model |
 | A parameter FX does not expose | `provider_options` |
 | A provider that speaks the OpenAI chat wire | a declaration |
 | Any other provider | a declaration and an adapter in Python or TypeScript |
@@ -341,23 +341,96 @@ movie-sprite's links (self-contained); planning and running it are
 
 ### M6. Any model on GG, OpenRouter and fal
 
-- [ ] The registry keys adapters by capability, provider and contract `adapter`. A route
+- [x] The registry keys adapters by capability, provider and contract `adapter`. A route
   without one takes its provider's default for the capability.
-- [ ] OpenRouter images: a generic adapter, the default for routes FX does not ship, sends what
+  - `Adapters::register` makes an adapter its pair's default and names it by its `Identity`;
+    `register_named` adds one only a route that names it gets. `serving` reads the contract's
+    `adapter` as a string, else takes the default. A name no adapter of the pair has is served by
+    none: `no_route` (`no adapter serves …`) and doctor's `no adapter`, so a contract naming an
+    unknown adapter is no longer `capability_refused` (`adapters.md` §1, §4 step 1;
+    `protocol.md` §6.1). The engine's contract check now guards `adapter_behavior` only in
+    practice. `live::servable` takes the route, contract included.
+  - `providers.md` §2 keeps one row per pair, its default, and gains a second table of the
+    adapters a route must name: GPT Image's on OpenRouter and fal. Core's `BUILT_IN_ADAPTERS`
+    gains a `default` flag (30 rows, in the spec's order). The fill (`identity.md` §7) gives a
+    left-out `adapter` the default's name and a left-out `adapter_behavior` the behaviour of the
+    pair's adapter the contract names, so `adapter: fx-openrouter-image-v1` alone still gets
+    `"3"`. digest.py, `check_spec` (j) and two new route vectors follow. No built-in fingerprint
+    moved (the 29-pin test); M3's vectors used no OpenRouter or fal image pair, so none was
+    regenerated. A project OpenRouter image route whose contract states `adapter_behavior: "3"`
+    without an `adapter`, which GPT Image served up to 0.6.1, now names the generic default and
+    is refused when a call is sent; `providers.md` §2 and `llms.txt`'s upgrade note say so, and a
+    vector pins its completion. On fal the one behaviour, `"1"`, is both adapters'.
+  - A route's limits reach its adapter as `RouteRef::limits` (`RouteLimits`:
+    `max_input_pictures`, `price.max_units` of a route priced per second, `price.by` with its
+    tier names, and the features `image_input` and `text_to_video`), never identity. So an
+    adapter holds a request to them before sending only, never when a job already sent is
+    collected (`adapters.md` §4 step 4 and §6).
+- [x] OpenRouter images: a generic adapter, the default for routes FX does not ship, sends what
   the request and `provider_options` say, with no forced quality, moderation or size list. An
   answer that is not a PNG becomes one, as Grok Build's do. The built-in routes keep
   `fx-openrouter-image-v1` unchanged.
-- [ ] fal images: the same, with fal's common request and answer shapes taken from the fal
+  - Contract `openrouter-image`, behaviour `"1"`. The wire is what published facts support: Grida
+    Models `v1.20261013.6` records request parameters only on OpenRouter's OpenAI bindings, and
+    `references.max` on 13 of its 17 image bindings. So the body is `{model, prompt,
+    input_references?}`, then the options. What it cannot send faithfully is refused before
+    sending with a sentence naming `provider_options`: a mask, an exact size, `background:
+    transparent`; `auto` and `opaque` are not sent (the image check holds an opaque request).
+    It owns `model`, `prompt`, `input_references`, `n`, `response_format` and `stream`.
+  - A generate's references are sent only on a route that declares `image_input`, else refused
+    before sending with the plan's sentence (`<route> does not support image_input`), as
+    `capabilities.md` §2 says: a node body's call and a step whose list only a run produces are
+    judged only then. `RouteLimits` carries the feature, as it does `text_to_video`.
+  - "Returned no single image" is `Failed { cost, retryable: false }`: FX asks for no count. The
+    PNG conversion is `wire::to_png`, shared with Grok Build (its sentences unchanged), on a
+    blocking thread.
+- [x] fal images: the same, with fal's common request and answer shapes taken from the fal
   endpoint parameters that Models records. The GPT Image envelope stays with the GPT Image
   adapter.
-- [ ] fal video (`fal-queue`): durations, resolutions and aspect ratios come from the route (its
+  - Contract `fal-image`, behaviour `"1"`. It posts to `{run}/<model>` as given: text and edit
+    endpoint ids differ, even in namespace, so nothing is appended. The body is `{prompt,
+    image_urls?}`, then the options: Models records `prompt` on all 23 fal image endpoints and
+    `image_urls` on all 11 that take pictures. It owns `prompt`, `image_urls`, `num_images` and
+    `sync_mode`, and refuses references on a generate.
+  - Code fact: Models records no answer shapes for fal (no fal endpoint has a
+    `result_schema_url`). The answer shape, `images`, a list of files each with a `url`, is
+    fal's own published schemas' (checked 2026-10-14, as was `num_images` defaulting to 1), and
+    the answer is read as GPT Image's (`fal/output.rs`), then made a PNG.
+- [x] fal video (`fal-queue`): durations, resolutions and aspect ratios come from the route (its
   price units and tiers), not constants; the first frame is sent only when given. No byte it
   sends today changes.
-- [ ] GG images: the picture limit comes from the route; the built-in GG image routes declare
+  - Code fact: a route table holds only the most seconds and the tiers. The route's resolutions
+    are its price's tiers when it is priced `by: resolution` (else the adapter's four), and its
+    most seconds its per-second `max_units`, rounded down (else 10). The minimum (3), whole
+    seconds, the two aspect ratios, the defaults (`720p`, `9:16`) and the short sides stay
+    `fal-queue` constants. The check judges a clip's size only where it knows the tier's short
+    side.
+  - A route draws from the prompt alone only when it declares a new `video.generate` feature,
+    `text_to_video` (`capabilities.md` §6, `features.json`, `capabilities.rs`); any other refuses
+    a request without a first frame at $0, as every route did (`this route draws from a first
+    frame`), so the built-in image-to-video route still does. A last frame without a first frame
+    is refused (`last_frame needs first_frame`, `capabilities.md` §6). Every request sent before
+    had a first frame and a built-in tier, so none of its bytes changes.
+  - The check of a collected clip reads the request with the defaults and none of the route's
+    limits (`clip(request, None)`), since they are not identity: a job sent at a tier, a length or
+    without a frame that its route's table no longer takes is still collected and checked
+    (`adapters.md` §4 step 4 and §6; M3 kept a submitted job collectable for the same reason).
+- [x] GG images: the picture limit comes from the route; the built-in GG image routes declare
   `max_input_pictures: 16`.
-- [ ] A replay test per generic adapter with a made-up model; `doctor` and `plan` report the
+  - Code fact: only the `image.edit` route declares it, since `image.generate` on GG takes no
+    references. A route that declares none leaves the count to GG.
+- [x] A replay test per generic adapter with a made-up model; `doctor` and `plan` report the
   route as servable.
-- [ ] `llms.txt`; guide page 13.
+  - `tests/openrouter_generic_image.rs` and `tests/fal_generic_image.rs` (`acme/img-a@openrouter`,
+    `acme/img-a@fal`, `acme/img-a/edit@fal`), a JPEG answer converted to PNG included; the
+    stand-in and engine-check matrices cover every registered adapter, named ones included.
+  - Code fact: `plan` says nothing of servability. A CLI test plans made-up models on OpenRouter,
+    fal (images and video) and GG (exit 0), and doctor's `uses` lines say `servable`, and `no
+    adapter` for a contract naming one FX does not have. A made-up model was already `servable`
+    before M6; the unknown adapter is what is new.
+- [x] `llms.txt`; guide page 13.
+  - Also guide pages 03 and 05, `AGENT_READINESS.md` (AR-20), and the OpenRouter, fal and GG
+    references.
 
 Gate: `cargo test`, conformance, `check_llms`.
 
@@ -520,10 +593,38 @@ when the owner asks.
   `provider_options` to an object only, so a stand-in run takes a provider member that is not an
   object;
 - provider options inside members FX owns whole: OpenRouter's `provider` (routing) on structured
-  output, agent turns and images (music sends none, so its options may give one), GG video's
-  `providerOptions` and ElevenLabs' `voice_settings` cannot be added to.
+  output, agent turns and GPT Image (music and the generic image adapter send none, so their
+  options may give one), GG video's `providerOptions` and ElevenLabs' `voice_settings` cannot be
+  added to;
+- route-declared video limits: `fx-routes-v1` has no member for a route's aspect ratios, minimum
+  duration, default tier or a tier's size, so `fal-queue` keeps them as constants (`9:16` and
+  `16:9`, 3 seconds, `720p` at `9:16`, short sides 360 to 2160) and its check does not judge
+  the size of another tier. A capped route's price (`cap_usd` alone) has neither tiers nor
+  `max_units`, so a capped fal video route, the case a cap is for, is held to the adapter's
+  defaults (`360p`, `720p`, `1080p`, `4k`; 3 to 10 seconds);
+- `text_to_video` while planning: a step without a `first_frame` implies no feature, so on a
+  route that does not declare `text_to_video` it is refused only when the call is sent (at $0,
+  as before M6). The built-in GG video route does not declare it, and `gg-video` does not judge
+  it;
+- stand-in runs and route limits: a stand-in holds an answer to the adapter's check, which reads
+  no route limit, so a stand-in takes a frameless request, a tier or a length that `fal-queue`
+  refuses on a live submit (up to 0.6.1 its check refused a frameless request and every tier and
+  length outside its constants), and a node body's generate with references on an OpenRouter
+  route that does not declare `image_input`, which the generic adapter refuses on a live send;
+- a generic fal video adapter: fal's video request shapes diverge by endpoint (Models
+  `v1.20261013.6`, 12 endpoints): the first frame is `image_url` on 6 and `start_image_url` on
+  1; `duration` is an integer on 3, a string `"4"` to `"30"` (or `auto`) on 3, and `"4s"`,
+  `"6s"` or `"8s"` on 6; no endpoint records an end frame. `fal-queue` fits only endpoints
+  with the built-in route's shape;
+- a count for the generic image adapters: they own `n` (OpenRouter) and `num_images` (fal), so a
+  model that draws several pictures by default fails, billed and not drawn again (`returned no
+  single image`); fal's published schemas default `num_images` to 1 where an endpoint takes it;
+- exact sizes on the generic image adapters: a model's own size parameter goes in
+  `provider_options`, so the image check cannot hold the answer to it, and a step that asks for
+  an exact `size` is refused there.
 
 **gridaco/models**, gaps found against `v1.20261013.6`:
+- no answer shapes for fal's endpoints (only `grida` bindings have `result_schema_url`);
 - no card for Gemini Omni Flash;
 - no endpoint facts on the OpenAI binding;
 - no mask facts;
@@ -532,4 +633,5 @@ when the owner asks.
 - no ElevenLabs binding or US-dollar rate;
 - `input_references` is typed as an integer on OpenRouter;
 - no `size` on OpenRouter;
-- `image_constraints` only on fal.
+- `image_constraints` only on fal;
+- no `references` (the number of input pictures) on 4 of its 17 OpenRouter image bindings.

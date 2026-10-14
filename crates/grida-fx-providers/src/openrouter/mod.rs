@@ -1,17 +1,18 @@
-//! OpenRouter: images, structured output, agent turns and music, all synchronous
-//! (src/openrouter/README.md; spec/capabilities.md).
+//! OpenRouter: images (on any model, and on GPT Image), structured output, agent turns and music,
+//! all synchronous (src/openrouter/README.md; spec/capabilities.md).
 //!
 //! Credential `authorization: Bearer <OPENROUTER_API_KEY>`; base `OPENROUTER_BASE_URL`, default
 //! `https://openrouter.ai/api/v1`. Every request is one JSON body (pictures as data URLs); no
 //! downloads, no multipart, no long jobs. Costs come from `usage` ([`usage_cost`]: `usage.cost`,
 //! plus the upstream inference on the user's own provider key), the last SSE `usage` for music.
-//! Status classes, shared by the four adapters, are src/openrouter/README.md's table, implemented
+//! Status classes, shared by the five adapters, are src/openrouter/README.md's table, implemented
 //! once in [`classify`]; so are the contract check
 //! (`serves`, `not_served`: the engine's, [`crate::checks`], made again for a direct caller), the
 //! request-body cap ([`crate::wire::body_exceeds`]) and request ids
 //! in reasons (`with_request_id`).
 
 pub mod agent;
+pub mod generic_image;
 pub mod image;
 pub mod music;
 pub mod structured;
@@ -41,7 +42,7 @@ pub fn client(setup: &Setup) -> Client {
 
 /// How an exchange that is not a 2xx becomes a [`Sent`] (spec/adapters.md §3.2 and the
 /// statuses of src/openrouter/README.md); `label` is the capability's (`OpenRouter image
-/// generation`, …). A 2xx comes back as `Ok` for the adapter to parse. Shared by the four adapters,
+/// generation`, …). A 2xx comes back as `Ok` for the adapter to parse. Shared by the five adapters,
 /// so they classify alike. A request the transport refused itself (the network turned off, a URL it
 /// cannot use) is `Refused`: nothing left, so resending cannot help.
 #[allow(clippy::result_large_err)] // `Sent` is what every caller returns at once
@@ -186,16 +187,16 @@ pub(crate) fn with_request_id(reason: String, response: &HttpResponse) -> String
     }
 }
 
-/// Registers the four adapters on provider `openrouter`.
+/// Registers the five adapters on provider `openrouter`: for images, the generic one as the
+/// default and GPT Image's for a route that names it (spec/providers.md §2).
 pub fn register(adapters: &mut Adapters, setup: &Setup) {
     let client = client(setup);
+    let generic = Arc::new(generic_image::OpenRouterGenericImages::new(client.clone()));
     let images = Arc::new(image::OpenRouterImages::new(client.clone()));
-    adapters.register(
-        "image.generate",
-        "openrouter",
-        Adapter::Request(images.clone()),
-    );
-    adapters.register("image.edit", "openrouter", Adapter::Request(images));
+    for capability in ["image.generate", "image.edit"] {
+        adapters.register(capability, "openrouter", Adapter::Request(generic.clone()));
+        adapters.register_named(capability, "openrouter", Adapter::Request(images.clone()));
+    }
     adapters.register(
         "structured.generate",
         "openrouter",

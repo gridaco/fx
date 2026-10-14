@@ -351,6 +351,7 @@ fn request(capability: &str) -> CallRequest {
             model: "img-a".into(),
             provider: "acme".into(),
             contract: json!({}),
+            limits: Default::default(),
         },
         request: json!({"prompt": "a lantern by the river"}),
         files: IndexMap::new(),

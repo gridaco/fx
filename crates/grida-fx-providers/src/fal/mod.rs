@@ -1,12 +1,13 @@
-//! fal: `image.generate` and `image.edit` on the synchronous host, `video.generate` as a queue
-//! long job, and `background.remove` (src/fal/README.md; spec/capabilities.md).
+//! fal: `image.generate` and `image.edit` on the synchronous host (on any model, and on GPT
+//! Image), `video.generate` as a queue long job, and `background.remove` (src/fal/README.md;
+//! spec/capabilities.md).
 //!
 //! Credential `authorization: Key <FAL_KEY>`, attached only to requests to the run host
 //! (`FAL_BASE_URL`, default `https://fal.run`) and the queue host (`https://queue.fal.run`), never
 //! to a result download. Pictures go inline as data URLs under their own `image/*` kind (no
 //! multipart, no uploads); a file of another kind is refused before sending. Every adapter
-//! first refuses a route whose `contract.adapter` is present and is not its own
-//! (src/fal/README.md), since the registry is keyed by provider, not model.
+//! first refuses a route whose contract is not its own (src/fal/README.md): the engine's check,
+//! made again for a direct caller.
 //!
 //! What the adapters share lives here: the output host check ([`is_fal_media_url`]), the contract
 //! guard, the answer root and reported cost, the run host's status classes (spec/adapters.md
@@ -14,6 +15,7 @@
 //! a picture out of an answer (a data URL or a hosted download) is `output`.
 
 pub mod background;
+pub mod generic_image;
 pub mod image;
 mod output;
 pub mod video;
@@ -74,12 +76,16 @@ impl FalClients {
     }
 }
 
-/// Registers fal's four adapters on provider `fal`.
+/// Registers fal's four adapters on provider `fal`: for images, the generic one as the default
+/// and GPT Image's for a route that names it (spec/providers.md §2).
 pub fn register(adapters: &mut Adapters, setup: &Setup) {
     let clients = FalClients::new(setup);
+    let generic = Arc::new(generic_image::FalGenericImages::new(clients.clone()));
     let images = Arc::new(image::FalImages::new(clients.clone()));
-    adapters.register("image.generate", "fal", Adapter::Request(images.clone()));
-    adapters.register("image.edit", "fal", Adapter::Request(images));
+    for capability in ["image.generate", "image.edit"] {
+        adapters.register(capability, "fal", Adapter::Request(generic.clone()));
+        adapters.register_named(capability, "fal", Adapter::Request(images.clone()));
+    }
     adapters.register(
         "video.generate",
         "fal",
@@ -312,6 +318,7 @@ mod tests {
                 model: "img-a".into(),
                 provider: "fal".into(),
                 contract,
+                limits: Default::default(),
             },
             request: json!({}),
             files: IndexMap::new(),

@@ -4,7 +4,9 @@
 //! (`spec/vectors/facts/mp4/`) and `testing::media::MP4_HEAD`.
 
 use grida_fx_core::money::Usd;
-use grida_fx_providers::adapter::{Answer, CallRequest, Collected, LongJob, Submitted};
+use grida_fx_providers::adapter::{
+    Answer, AnsweredFile, CallRequest, Collected, LongJob, RouteLimits, Submitted,
+};
 use grida_fx_providers::clock::{Clock, FakeClock};
 use grida_fx_providers::fal::FalClients;
 use grida_fx_providers::fal::video::{
@@ -216,6 +218,112 @@ fn a_submit_without_last_frame_uses_the_default_tier_and_ratio() {
 }
 
 #[test]
+fn a_submit_without_a_first_frame_sends_none_on_a_route_that_draws_from_the_prompt_alone() {
+    let mut call = call(json!({"first_frame": null}));
+    call.call.route.limits.text_to_video = true;
+    let body = json!({"prompt": "A lantern sways.", "aspect_ratio": "9:16", "resolution": "360p",
+                      "duration": 3});
+    let transport = Arc::new(ReplayTransport::new(vec![
+        Expect::post_json(SUBMIT_URL, Value::Null)
+            .credential("authorization", "Key test-fal-key")
+            .body(ExpectBody::JsonText(serde_json::to_string(&body).unwrap()))
+            .reply(ok(json!({"request_id": "req-1", "status_url": STATUS_URL,
+                             "response_url": RESPONSE_URL}))),
+    ]));
+    assert_eq!(
+        submit(&transport, &call),
+        Submitted::Accepted { handle: handle() }
+    );
+}
+
+/// The built-in route restated in a table of the user's own with other limits: priced per second
+/// up to 15.5, in tiers `480p` and `1080p`, and drawing from the prompt alone.
+fn declared_limits() -> RouteLimits {
+    let table = grida_fx_core::routes::RouteTable::from_document(
+        &json!({"fx": "routes/v1", "routes": [{
+            "capability": "video.generate", "route": ROUTE,
+            "price": {"low_usd": 0.05, "high_usd": 0.15, "unit": "second", "max_units": 15.5,
+                      "by": "resolution",
+                      "tiers": {"480p": {"low_usd": 0.05, "high_usd": 0.06},
+                                "1080p": {"low_usd": 0.1, "high_usd": 0.15}}},
+            "features": ["text_to_video"]}]}),
+        "routes.yaml",
+    )
+    .unwrap();
+    RouteLimits::of(&table.entries[0])
+}
+
+#[test]
+fn the_route_s_tiers_and_length_are_what_a_submit_takes() {
+    let limits = declared_limits();
+    assert_eq!(limits.max_whole_seconds(), Some(15));
+    assert!(limits.text_to_video);
+    let with_limits = |request: Value| {
+        let mut call = call(request);
+        call.call.route.limits = limits.clone();
+        call
+    };
+    let call = with_limits(json!({"duration": 15, "resolution": "480p", "first_frame": null}));
+    let body = json!({"prompt": "A lantern sways.", "aspect_ratio": "9:16", "resolution": "480p",
+                      "duration": 15});
+    let transport = Arc::new(ReplayTransport::new(vec![
+        Expect::post_json(SUBMIT_URL, Value::Null)
+            .credential("authorization", "Key test-fal-key")
+            .body(ExpectBody::JsonText(serde_json::to_string(&body).unwrap()))
+            .reply(ok(json!({"request_id": "req-1", "status_url": STATUS_URL,
+                             "response_url": RESPONSE_URL}))),
+    ]));
+    assert_eq!(
+        submit(&transport, &call),
+        Submitted::Accepted { handle: handle() }
+    );
+    for (request, sentence) in [
+        (
+            json!({"duration": 16, "resolution": "480p"}),
+            "this route draws whole seconds from 3 to 15, not 16",
+        ),
+        (
+            json!({"resolution": "360p"}),
+            "this route draws no 360p clip at 9:16",
+        ),
+        (
+            json!({"resolution": null}),
+            "this route draws no 720p clip at 9:16",
+        ),
+    ] {
+        assert_eq!(
+            refused(&with_limits(request.clone()), test_keys()),
+            sentence,
+            "{request}"
+        );
+    }
+    // A route that does not draw from the prompt alone needs a first frame, and a last frame
+    // needs one on any route.
+    let last = json!({"file": "f".repeat(64)});
+    assert_eq!(
+        refused(
+            &with_limits(json!({"first_frame": null, "last_frame": last})),
+            test_keys()
+        ),
+        "last_frame needs first_frame"
+    );
+    // The built-in route's limits are the adapter's own, and it draws from a first frame.
+    let built_in = grida_fx_providers::routes::default_table().unwrap();
+    let route = &built_in.entries[&("video.generate".to_string(), ROUTE.to_string())];
+    let limits = RouteLimits::of(route);
+    assert!(!limits.text_to_video);
+    assert_eq!(limits.max_whole_seconds(), Some(video::MAX_SECONDS));
+    let mut tiers = limits.tiers_by("resolution").unwrap().to_vec();
+    tiers.sort();
+    let mut own: Vec<String> = video::RESOLUTIONS
+        .iter()
+        .map(|(name, _)| name.to_string())
+        .collect();
+    own.sort();
+    assert_eq!(tiers, own);
+}
+
+#[test]
 fn submit_refusals_send_nothing() {
     let unknown = json!({"file": "f".repeat(64)});
     let cases: Vec<(Value, String)> = vec![
@@ -240,6 +348,10 @@ fn submit_refusals_send_nothing() {
         ),
         (
             json!({"first_frame": null}),
+            "this route draws from a first frame".into(),
+        ),
+        (
+            json!({"first_frame": null, "last_frame": unknown}),
             "this route draws from a first frame".into(),
         ),
         (
@@ -1244,6 +1356,41 @@ fn the_check_compares_size_and_duration() {
     assert_eq!(
         ClipFacts::of_mp4(AUDIO_ONLY).unwrap_err(),
         "the file carries no video stream"
+    );
+}
+
+#[test]
+fn a_job_is_checked_whatever_its_route_now_declares() {
+    // adapters.md §4: a route's limits are not identity, so a job sent at a tier, a length or
+    // without a frame its route then took is checked against its request alone.
+    let mut call = call(json!({"first_frame": null, "resolution": "720p", "duration": 5}));
+    call.call.route.limits = RouteLimits {
+        max_seconds: Some(grida_fx_core::money::Units::from_f64(4.0)),
+        tiers: Some(("resolution".into(), vec!["480p".into()])),
+        ..RouteLimits::default()
+    };
+    assert_eq!(
+        refused(&call, test_keys()),
+        "this route draws from a first frame"
+    );
+    let adapter = video_with(Arc::new(NoNetwork), test_keys(), Arc::new(FakeClock::new()));
+    let answer = |bytes: Vec<u8>| {
+        let mut answer = Answer::new(Value::Null, None);
+        let kind = "video/mp4".to_string();
+        answer
+            .files
+            .insert("video".into(), AnsweredFile { kind, bytes });
+        answer
+    };
+    assert_eq!(
+        adapter.check(&call, &answer(media::mp4(720, 1280, 24, 120))),
+        Ok(())
+    );
+    assert_eq!(
+        adapter
+            .check(&call, &answer(media::mp4(720, 1280, 24, 72)))
+            .unwrap_err(),
+        "the clip runs 3.000 s, not 5 s"
     );
 }
 

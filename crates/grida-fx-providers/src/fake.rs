@@ -275,6 +275,7 @@ mod tests {
                 model: "img-a".into(),
                 provider: "acme".into(),
                 contract: json!({}),
+                limits: Default::default(),
             },
             request: json!({"prompt": "a lantern"}),
             files: IndexMap::new(),

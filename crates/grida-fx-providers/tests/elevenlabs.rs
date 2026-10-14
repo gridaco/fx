@@ -849,6 +849,7 @@ fn a_key_echoed_in_the_content_type_never_reaches_the_check_s_sentence() {
         model: "eleven_text_to_sound_v2".into(),
         provider: "elevenlabs".into(),
         contract: sound_contract(),
+        limits: Default::default(),
     };
     let Some(Adapter::Request(live)) = registered.serving(&route) else {
         panic!("sound.generate is served on elevenlabs");

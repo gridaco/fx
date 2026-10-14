@@ -100,12 +100,13 @@ when a `--routes` file leaves that table out), and state only what differs. It t
 price, features, input-picture limit, pacing and contract; a member it states replaces the
 base's whole, except `contract`, whose members merge one by one. `extends` is not part of the
 route's identity, so an entry that extends a route to reprice it keeps every cached result.
-Where one of FX's adapters serves the capability and provider, a contract that leaves out
-`adapter` gets that adapter's name, and one that leaves out `adapter_behavior` gets its
-behaviour unless the contract names another adapter. A project route on such a capability and
-provider whose contract left out `adapter`, or named FX's adapter and left out
-`adapter_behavior`, under FX 0.6.1 or earlier hashes differently once after the upgrade, so its
-steps and paid calls run again; a route on any other pair keeps its fingerprint.
+Where FX's adapters serve the capability and provider, a contract that leaves out `adapter`
+gets the name of the provider's default for the capability, and one that leaves out
+`adapter_behavior` gets the behaviour of the adapter it names (none when FX has no adapter of
+that name). A project route on such a capability and provider whose contract left out
+`adapter`, or named one of FX's adapters and left out `adapter_behavior`, under FX 0.6.1 or
+earlier hashes differently once after the upgrade, so its steps and paid calls run again; a
+route on any other pair keeps its fingerprint.
 
 The built-in table ships with the command. Its prices are planning allowances in US dollars, not
 provider quotes: what a call costs is settled from what the provider reports, else from the whole
@@ -145,8 +146,10 @@ This entry holds $0.80 for each call, more than the built-in entry holds for any
 it states replaces the base's whole, size tiers included, so a price meant for one size holds too
 little for a larger one.
 
-A route on a provider FX has no adapter for still plans and prices, but a live
-call on it is refused (`no adapter serves …`). `grida fx nodes <type>` lists the routes that
+A route on a provider FX has no adapter for, or whose `contract` names an adapter FX does
+not have, still plans and prices, but a live call on it is refused (`no adapter serves …`). A
+model FX does not list, on a provider it has an adapter for, runs on a route of your own
+([AI providers](13-providers.md#a-model-fx-does-not-list)). `grida fx nodes <type>` lists the routes that
 serve a type; `grida fx doctor` says which of them a live run could serve.
 
 `<target>` is one of:
@@ -238,9 +241,10 @@ A `program` line names the Codex or Grok Build a live run would start, where FX 
 A route is `servable`, has `no key` (and names the variable to set), is `not installed (codex)`
 or `not installed (grok)` (no Codex or Grok Build found), `too old (codex 0.150.0; FX needs
 0.160.1+)` or `no version (codex)` (a Codex a live run would refuse), or has `no adapter` (no
-provider of FX serves it). A missing key alone doesn't change doctor's exit status, unless the
-target uses a route that needs it (below); a `.env` or base URL that a live run would refuse does:
-doctor prints `keys      <why>` and exits 1.
+adapter of FX serves the capability on that provider, or none under the `adapter` its contract
+names). A missing key alone doesn't change doctor's exit status, unless the target uses a route
+that needs it (below); a `.env` or base URL that a live run would refuse does: doctor prints
+`keys      <why>` and exits 1.
 
 **The target's routes come first.** With a target, `grida fx doctor <target>` lists, right after the
 Python and Node lines, the routes the workflow's paid steps use, each with whether a live run could
@@ -599,8 +603,9 @@ discarded.
 2. **The answer's shape:** the files the capability returns, by name and kind, and its `data`
    (`the answer holds no image`, `image.generate returns no file named mask`,
    `structured.generate returns its data as {"json": <value>}`).
-3. **The route's check:** the check of FX's adapter for the route's provider when FX has one (built
-   with no key, so it sends nothing), else the check the capability makes on every route. For a
+3. **The route's check:** the check of the FX adapter that would serve the route (the one its
+   contract's `adapter` names, else the provider's default for the capability) when FX has one
+   (built with no key, so it sends nothing), else the check the capability makes on every route. For a
    picture: a PNG of the exact `size`, with an alpha channel when `transparent` was asked and no
    transparent pixel when `opaque` was (`the image is 32x32, not 64x64`). For
    `structured.generate`, its schema; for audio, an MP3.

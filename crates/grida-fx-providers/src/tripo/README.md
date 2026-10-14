@@ -7,7 +7,7 @@ The reference for FX's adapters on `tripo`, under the adapter contract, [spec/ad
 | `mesh.generate` | `tripo-multiview` | `1` |
 | `mesh.rig` | `tripo-rig` | `1` |
 
-A route whose contract names another `adapter` or `adapter_behavior` than the ones above is refused ([adapters.md](../../../../spec/adapters.md) §4 step 1). Up to FX 0.6.1, these adapters checked only `adapter`.
+A route whose contract names one of these adapters with another `adapter_behavior` than the one above is refused ([adapters.md](../../../../spec/adapters.md) §4 step 1), and one that names an `adapter` not above is served by none ([adapters.md](../../../../spec/adapters.md) §1). Up to FX 0.6.1, these adapters checked only `adapter`.
 
 - **Capabilities:**
   - `mesh.generate`, a long job: the free phase uploads the views, then `POST /generation/multiview-to-model`. Contract `adapter`: `tripo-multiview`, behaviour `1`.

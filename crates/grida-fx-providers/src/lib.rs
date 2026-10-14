@@ -46,9 +46,9 @@
 //! adapter makes steps 1 and 2 again for a caller that hands it a call directly, through the same
 //! functions, so the order its module doc gives is its whole order.
 //!
-//! [`Adapters`] maps a capability and a provider to an adapter. Without `--live` the `grida-fx`
-//! binary registers none, so every uncached paid call is refused with `no_route` ("no adapter
-//! serves").
+//! [`Adapters`] maps a capability, a provider and a contract's `adapter` to an adapter, with a
+//! default per capability and provider ([`registry`]). Without `--live` the `grida-fx` binary
+//! registers none, so every uncached paid call is refused with `no_route` ("no adapter serves").
 
 pub mod acp;
 pub mod adapter;
@@ -82,7 +82,7 @@ pub mod wire;
 
 pub use adapter::{
     Adapter, Answer, AnsweredFile, CallRequest, Collected, LongJob, RequestAdapter, RequestFile,
-    RouteRef, Sent, Submitted,
+    RouteLimits, RouteRef, Sent, Submitted,
 };
 pub use keys::{KeyName, Keys, Secret};
 pub use registry::Adapters;

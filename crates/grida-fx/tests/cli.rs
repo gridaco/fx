@@ -533,6 +533,74 @@ fn integrated_doctor_names_the_planning_projects_interpreter_after_the_homes() {
 }
 
 #[test]
+fn integrated_a_model_fx_does_not_list_plans_and_doctor_serves_it() {
+    // Made-up models on providers FX speaks, each with a cap: the providers' default adapters
+    // serve them (spec/providers.md §2), and a contract naming an adapter FX does not have is
+    // served by none.
+    let project = tempfile::tempdir().unwrap();
+    let root = project.path();
+    std::fs::write(
+        root.join("fx.yaml"),
+        "fx: project/v1\nroute_tables: [routes.yaml]\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("routes.yaml"),
+        "fx: routes/v1\nroutes:\n\
+         - { capability: image.generate, route: acme/img-a@openrouter, price: { cap_usd: 0.5 } }\n\
+         - { capability: image.generate, route: acme/img-a@fal, price: { cap_usd: 0.5 } }\n\
+         - { capability: image.generate, route: acme/img-a@gg, price: { cap_usd: 0.5 } }\n\
+         - { capability: video.generate, route: acme/vid-a@fal, price: { cap_usd: 2 } }\n\
+         - { capability: image.generate, route: acme/img-c@openrouter, price: { cap_usd: 0.5 }, \
+         contract: { adapter: acme-x } }\n",
+    )
+    .unwrap();
+    let step = |name: &str, kind: &str, route: &str| {
+        format!(
+            "  {name}:\n    uses: fx/{kind}@1\n    route: {route}\n    with: {{ prompt: a kite }}\n"
+        )
+    };
+    let steps = [
+        step("draw", "image.generate", "acme/img-a@openrouter"),
+        step("draw_fal", "image.generate", "acme/img-a@fal"),
+        step("draw_gg", "image.generate", "acme/img-a@gg"),
+        step("clip", "video.generate", "acme/vid-a@fal"),
+        step("other", "image.generate", "acme/img-c@openrouter"),
+    ];
+    std::fs::write(
+        root.join("case.yaml"),
+        format!(
+            "fx: workflow/v1\nid: case\ntitle: Case\nsteps:\n{}",
+            steps.concat()
+        ),
+    )
+    .unwrap();
+    let output = grida_fx(root, &["plan", "case.yaml"]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    let output = command(root, &["doctor", "case.yaml"])
+        .env("OPENROUTER_API_KEY", MADE_UP_KEY)
+        .env("FAL_KEY", MADE_UP_KEY)
+        .env("GG_API_KEY", MADE_UP_KEY)
+        .output()
+        .unwrap();
+    assert_eq!(status(&output), 1, "{}", stderr(&output));
+    assert_no_key(&output);
+    let text = stdout(&output);
+    let uses: Vec<&str> = text.lines().filter(|l| l.starts_with("uses ")).collect();
+    assert_eq!(
+        uses,
+        [
+            "uses      image.generate acme/img-a@fal servable (1 step)",
+            "uses      image.generate acme/img-a@gg servable (1 step)",
+            "uses      image.generate acme/img-a@openrouter servable (1 step)",
+            "uses      image.generate acme/img-c@openrouter no adapter (1 step)",
+            "uses      video.generate acme/vid-a@fal servable (1 step)",
+        ],
+        "{text}"
+    );
+}
+
+#[test]
 fn integrated_doctor_puts_the_targets_routes_first() {
     let project = tempfile::tempdir().unwrap();
     let root = project.path();

@@ -27,13 +27,14 @@
 //! 3. the key: `GG_API_KEY is not set`;
 //! 4. values: provider options ([`wire::provider_options`]), a blank prompt, an unknown
 //!    `background`, a `size` that is neither `auto` nor `WIDTHxHEIGHT`, references on a generation,
-//!    a mask, more than [`MAX_INPUT_IMAGES`] pictures;
+//!    a mask, more pictures than the route's `max_input_pictures` when it declares one (the
+//!    built-in edit route declares [`MAX_INPUT_IMAGES`]);
 //! 5. files (`image`, then `references[i]`): a digest the call does not carry or an empty store
 //!    copy, a kind other than PNG, JPEG or WebP, bytes that do not decode as their kind;
 //! 6. one exchange, classified by [`super::classify`] ([`super::Gateway::exchange`]).
 //!
-//! Model limits (sizes, counts, which members a model takes) are GG's to refuse, before any paid
-//! work and at no cost.
+//! Model limits (sizes, counts beyond the route's, which members a model takes) are GG's to
+//! refuse, before any paid work and at no cost.
 
 use super::Gateway;
 use crate::BoxFuture;
@@ -78,7 +79,8 @@ pub const DEADLINE: Duration = Duration::from_secs(630);
 /// The response cap.
 pub const MAX_RESPONSE_BYTES: u64 = 64 * 1024 * 1024;
 
-/// The most input pictures of an edit (`image` plus `references`).
+/// The most input pictures GPT Image takes in an edit (`image` plus `references`): what the
+/// built-in edit route declares as its `max_input_pictures`, which the adapter holds an edit to.
 pub const MAX_INPUT_IMAGES: usize = 16;
 
 /// The refusal of a `size` that is not `auto` or `WxH`.
@@ -110,7 +112,7 @@ impl GgImages {
         capabilities::check_request(&call.route.capability, &call.request)?;
         let credential = self.gateway.credential()?;
         let options = wire::provider_options(call, OWNED)?;
-        let values = Values::read(&call.request, edit)?;
+        let values = Values::read(&call.request, edit, call.route.limits.max_input_pictures)?;
         let fields = fields(&call.route.model, &values, quality.as_deref());
         let request = |path: &str| {
             self.gateway.paid(
@@ -233,8 +235,9 @@ struct Values<'a> {
 }
 
 impl<'a> Values<'a> {
-    /// Reads and checks the values of a request that passed its capability's check.
-    fn read(request: &'a Value, edit: bool) -> Result<Values<'a>, String> {
+    /// Reads and checks the values of a request that passed its capability's check; `most` is the
+    /// route's picture limit, if it declares one.
+    fn read(request: &'a Value, edit: bool, most: Option<u32>) -> Result<Values<'a>, String> {
         let prompt = request.get("prompt").and_then(Value::as_str).unwrap_or("");
         if prompt.trim().is_empty() {
             return Err("an image call needs its prompt as text".into());
@@ -263,9 +266,12 @@ impl<'a> Values<'a> {
         if !wire::is_absent(request.get("mask")) {
             return Err("GG image edits take no mask".into());
         }
-        if edit && 1 + references.len() > MAX_INPUT_IMAGES {
+        if let Some(most) = most
+            && edit
+            && 1 + references.len() > most as usize
+        {
             return Err(format!(
-                "GG image edits support at most {MAX_INPUT_IMAGES} input images"
+                "GG image edits support at most {most} input images"
             ));
         }
         Ok(Values {
@@ -355,7 +361,7 @@ mod tests {
     #[test]
     fn values_are_read_or_refused_in_order() {
         let read = |request: Value, edit: bool| {
-            Values::read(&request, edit)
+            Values::read(&request, edit, Some(16))
                 .map(|v| (v.background.map(str::to_string), v.size.map(str::to_string)))
         };
         assert_eq!(
@@ -372,7 +378,8 @@ mod tests {
             ),
             Ok((Some("transparent".into()), Some("1024x1536".into())))
         );
-        let refused = |request: Value, edit: bool| Values::read(&request, edit).unwrap_err();
+        let refused =
+            |request: Value, edit: bool| Values::read(&request, edit, Some(16)).unwrap_err();
         assert_eq!(
             refused(json!({"prompt": "  "}), false),
             "an image call needs its prompt as text"
@@ -395,15 +402,22 @@ mod tests {
         );
         let many: Vec<Value> = (0..16).map(|_| json!({"file": "a"})).collect();
         assert_eq!(
-            refused(json!({"prompt": "p", "references": many}), true),
+            refused(json!({"prompt": "p", "references": many.clone()}), true),
             "GG image edits support at most 16 input images"
+        );
+        // The limit is the route's: none declared is GG's to check.
+        let request = json!({"prompt": "p", "references": many});
+        assert!(Values::read(&request, true, None).is_ok());
+        assert_eq!(
+            Values::read(&request, true, Some(4)).unwrap_err(),
+            "GG image edits support at most 4 input images"
         );
     }
 
     #[test]
     fn fields_leave_out_what_the_model_chooses() {
         let request = json!({"prompt": "p", "background": "opaque", "size": "1024x1024"});
-        let values = Values::read(&request, false).unwrap();
+        let values = Values::read(&request, false, None).unwrap();
         let names: Vec<&str> = fields(" acme/img-a ", &values, Some("max"))
             .iter()
             .map(|(name, _)| *name)
@@ -413,7 +427,7 @@ mod tests {
             ["model", "prompt", "n", "size", "quality", "background"]
         );
         let bare = json!({"prompt": "p"});
-        let values = Values::read(&bare, false).unwrap();
+        let values = Values::read(&bare, false, None).unwrap();
         assert_eq!(
             fields("acme/img-a", &values, None),
             vec![

@@ -942,6 +942,7 @@ mod tests {
                 model: "sfx-a".into(),
                 provider: "acme".into(),
                 contract: json!({}),
+                limits: Default::default(),
             },
             request: json!({"prompt": "a door"}),
             files: indexmap::IndexMap::new(),

@@ -726,6 +726,7 @@ mod tests {
             model: "imagegen".into(),
             provider: provider.into(),
             contract,
+            limits: Default::default(),
         }
     }
 

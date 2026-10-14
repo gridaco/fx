@@ -4,13 +4,15 @@ The reference for FX's adapters on `openrouter`, under the adapter contract, [sp
 
 | Capability | Contract `adapter` | `adapter_behavior` |
 |---|---|---|
+| `image.generate`, `image.edit` | `openrouter-image` | `"1"` |
 | `image.generate`, `image.edit` | `fx-openrouter-image-v1` | `"3"` |
 | `structured.generate` | `openrouter-structured` | `1` |
 | `agent.turn` | `openrouter-tool-loop` | `1` |
 | `music.generate` | `openrouter-music` | `1` |
 
 - **Capabilities:**
-  - `image.generate` and `image.edit` (`POST {base}/images`). Contract `adapter`: `fx-openrouter-image-v1`, behaviour `"3"`.
+  - `image.generate` and `image.edit` on any model (`POST {base}/images`). Contract `adapter`: `openrouter-image`, behaviour `"1"`, the string: the default of both capabilities, which serves a route whose contract names no adapter ([providers.md](../../../../spec/providers.md) §2).
+  - `image.generate` and `image.edit` on GPT Image (`POST {base}/images`). Contract `adapter`: `fx-openrouter-image-v1`, behaviour `"3"`: only a route that names it, as the built-in routes do.
   - `structured.generate` (`POST {base}/chat/completions`, a strict `json_schema` response format). Contract `adapter`: `openrouter-structured`, behaviour `1`.
   - `agent.turn` (`POST {base}/chat/completions`, strict function tools). Contract `adapter`: `openrouter-tool-loop`, behaviour `1`.
   - `music.generate` (`POST {base}/chat/completions`, `stream: true`, audio `mp3`). Contract `adapter`: `openrouter-music`, behaviour `1`.
@@ -26,19 +28,35 @@ The reference for FX's adapters on `openrouter`, under the adapter contract, [sp
   | Music | 900 s | 128 MiB |
 
 - **Provider options** ([adapters.md](../../../../spec/adapters.md) §8): the parameters of `provider_options.openrouter` are added at the end of each body, after FX's members, and are refused, as the first of the values below, when they set a member FX owns:
-  - images: `model`, `prompt`, `n`, `provider`, `size`, `quality`, `background`, `input_references`, `response_format` and `stream`;
+  - images on any model: `model`, `prompt`, `input_references`, `n`, `response_format` and `stream`;
+  - images on GPT Image: `model`, `prompt`, `n`, `provider`, `size`, `quality`, `background`, `input_references`, `response_format` and `stream`;
   - structured output: `model`, `messages`, `response_format`, `provider`, `reasoning`, `max_tokens`, `stream`, `n`, `tools` and `tool_choice`;
   - agent turns: `model`, `messages`, `tools`, `tool_choice`, `provider`, `reasoning`, `max_tokens`, `stream`, `n` and `response_format`; the engine's agent loop sends a turn none, so an agent run's turns take only the route's;
   - music: `model`, `messages`, `modalities`, `audio`, `stream` and `n`.
 
-  OpenRouter's own routing is `provider`, which FX sets for structured output and agent turns from the contract's `request_policy` (below), and for images itself: provider options cannot add to it there. Music sends no `provider`, so its options may give one.
+  OpenRouter's own routing is `provider`, which FX sets for structured output and agent turns from the contract's `request_policy` (below), and for GPT Image itself: provider options cannot add to it there. Images on any model and music send no `provider`, so their options may give one.
 - **Route contract policy.** The structured and agent contracts take only `adapter`, `adapter_behavior`, `request_policy`, `provider_options` and (structured only) `pictures`; another member is refused as `<route> is not a <capability> route this adapter serves: the contract takes no member <m>`, and so is a bad value, with its sentence after the colon. `request_policy` (optional) gives:
   - `provider`: `require_parameters` must be true, and is the default (`request_policy.provider.require_parameters must be true`); `only` is a non-empty list of distinct provider slugs (`request_policy.provider.only is a non-empty list of distinct provider slugs`); `allow_fallbacks` is a boolean (`request_policy.provider.allow_fallbacks is true or false`);
   - `reasoning.effort`: `request_policy.reasoning.effort is one of none, minimal, low, medium, high, xhigh, max`;
   - `image_detail`, which applies to every picture: `request_policy.image_detail is one of auto, low, high, original`.
 
   Objects must be objects (`request_policy is an object`, `request_policy.provider is an object`, `request_policy.reasoning is an object`) and take no other member (`<where> takes no member <m>`). `pictures: unchanged` sends structured pictures as they are (`pictures is "unchanged" or absent`). Otherwise each picture is fitted into 1600 × 1600, flattened on `matte`, and sent as PNG.
-- **Images.** Refused before sending, in this order:
+- **Images on any model** (`openrouter-image`). The adapter sends what OpenRouter's image models share, and nothing FX chose for one model: no quality, no size, no moderation, no routing. A parameter of the model's own goes in `provider_options.openrouter`.
+  - Refused before sending, in this order:
+    - provider options (above);
+    - a blank `prompt`: `an image call needs its prompt as text`;
+    - a mask: `OpenRouter's generic image adapter sends no mask: give the model's own parameter in provider_options.openrouter`;
+    - `background: transparent`: `OpenRouter's generic image adapter sends no transparent background: give the model's own parameter in provider_options.openrouter`; a `background` other than `auto`, `opaque` or `transparent`: `background must be auto, opaque or transparent`;
+    - a `size` that is not `auto` or `<W>x<H>`: `size must be auto or WIDTHxHEIGHT`; an exact size: `OpenRouter's generic image adapter sends no exact size: give the model's own parameter in provider_options.openrouter`;
+    - references on a generate, on a route that does not declare the feature `image_input`: `<route> does not support image_input`, the sentence a plan gives ([capabilities.md](../../../../spec/capabilities.md) §1), for a call the plan could not judge;
+    - more input pictures than the route's `max_input_pictures`, when it declares one: `<route> takes at most <n> input pictures, not <count>`;
+    - a picture that is not an `image/*` file: `<member> is <kind>, not a picture` (`image`, or `references[<i>]` counted from 0);
+    - a body over 200 MiB: `request body exceeds 200 MiB`.
+  - The body is `{model, prompt, input_references?}`, then the provider options. `input_references` is sent when the call has pictures: an edit's `image`, then `references`, or a generate's `references` on a route that declares `image_input`, each `{"type": "image_url", "image_url": {"url": <data URL>}}`. `size: auto`, `background: auto` and `background: opaque` are not sent: the model draws its own default, and the check holds an opaque request to an opaque picture.
+  - The answer is `data[0].b64_json`, strict base64, never a URL. `data` holding anything but one object is `OpenRouter image generation returned no single image`, `Failed { cost, retryable: false }`: FX asked for no count, so another attempt would draw as many. The bytes decide the kind (`media_type` is not read): a PNG is kept as it is, and a JPEG, WebP or GIF (its first frame) is decoded and encoded as PNG, the same pixels. Bytes that do not decode are `OpenRouter's image is not decodable`, and a picture that cannot be encoded is `OpenRouter's image could not be encoded as PNG`, each `Failed { cost, retryable: true }`. The answer is file `image` (`image/png`), with `data: null`.
+  - The check is every image route's ([capabilities.md](../../../../spec/capabilities.md) §2): a PNG that decodes, opaque when asked for.
+  - Facts: [Grida Models](https://github.com/gridaco/models) `v1.20261013.6` records no request parameters on OpenRouter's image models but GPT Image's, and, on 13 of its 17 OpenRouter image bindings, the number of input pictures each takes (`references.max`, 1 to 16); the endpoint and its answer are the ones the GPT Image adapter reads.
+- **Images on GPT Image** (`fx-openrouter-image-v1`). Refused before sending, in this order:
   - provider options (above);
   - a blank `prompt`: `an image call needs its prompt as text`;
   - a mask: `OpenRouter image generation has no masked-edit route`;

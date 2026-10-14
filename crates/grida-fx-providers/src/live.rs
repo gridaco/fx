@@ -114,33 +114,16 @@ pub fn adapters(setup: &Setup) -> Adapters {
     crate::codex::register(&mut registered, setup);
     crate::grok::register(&mut registered, setup);
     let redactor = setup.redactor();
-    let mut adapters = Adapters::new();
-    for (capability, provider) in registered.served() {
-        let route = RouteRef {
-            capability: capability.clone(),
-            model: String::new(),
-            provider: provider.clone(),
-            contract: Value::Null,
-        };
-        let Some(adapter) = registered.serving(&route) else {
-            continue;
-        };
-        let redacting = match adapter {
-            Adapter::Request(inner) => Adapter::Request(Arc::new(Redacting {
-                inner: Arc::clone(inner),
-                redactor: redactor.clone(),
-            })),
-            Adapter::Job(inner) => Adapter::Job(Arc::new(Redacting {
-                inner: Arc::clone(inner),
-                redactor: redactor.clone(),
-            })),
-        };
-        adapters.register(&capability, &provider, redacting);
-    }
-    for runtime in registered.runtimes() {
-        adapters.keep_runtime(Arc::clone(runtime));
-    }
-    adapters
+    registered.map(|adapter| match adapter {
+        Adapter::Request(inner) => Adapter::Request(Arc::new(Redacting {
+            inner: Arc::clone(inner),
+            redactor: redactor.clone(),
+        })),
+        Adapter::Job(inner) => Adapter::Job(Arc::new(Redacting {
+            inner: Arc::clone(inner),
+            redactor: redactor.clone(),
+        })),
+    })
 }
 
 /// An adapter as registered, answering [`RequestAdapter::redactor`] with the invocation's
@@ -211,7 +194,8 @@ impl LongJob for Redacting<dyn LongJob> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Servable {
     Yes,
-    /// No adapter of this crate serves the capability on the provider.
+    /// No adapter of this crate serves the route: none of its capability on its provider, or
+    /// none under the `adapter` its contract names.
     NoAdapter,
     /// An adapter serves it, but the provider's key is missing.
     NoKey(KeyName),
@@ -285,19 +269,20 @@ pub async fn installed() -> Vec<Installed> {
     found
 }
 
-/// Whether `capability` on `provider` is servable with `keys` by `adapters`. The route of a
-/// program the user installed is servable when `installed` holds it found, and of a version a
-/// live run starts.
+/// Whether `route` is servable with `keys` by `adapters`: an adapter serves it
+/// ([`Adapters::serving`], by its contract's `adapter`), and its provider's key is present. The
+/// route of a program the user installed is servable when `installed` holds it found, and of a
+/// version a live run starts.
 pub fn servable(
     adapters: &Adapters,
     keys: &Keys,
     installed: &[Installed],
-    capability: &str,
-    provider: &str,
+    route: &RouteRef,
 ) -> Servable {
-    if !adapters.serves(capability, provider) {
+    if adapters.serving(route).is_none() {
         return Servable::NoAdapter;
     }
+    let provider = route.provider.as_str();
     if let Some(program) = installed.iter().find(|program| program.name == provider) {
         return match (&program.program, &program.version) {
             (None, _) => Servable::NoProgram(program.name),
@@ -332,7 +317,7 @@ mod tests {
         let table = crate::routes::default_table().unwrap();
         for ((capability, id), route) in &table.entries {
             assert!(
-                adapters.serves(capability, &route.provider),
+                adapters.serving(&RouteRef::of(route)).is_some(),
                 "no adapter serves {id} for {capability}"
             );
         }
@@ -352,12 +337,15 @@ mod tests {
             plain.served(),
             "the same routes, in order"
         );
-        for (capability, provider) in adapters.served() {
+        assert_eq!(adapters.registered(), plain.registered());
+        for registered in adapters.registered() {
+            let (capability, provider) = (registered.capability, registered.provider);
             let route = RouteRef {
-                capability: capability.clone(),
+                capability: capability.into(),
                 model: "m".into(),
-                provider: provider.clone(),
-                contract: Value::Null,
+                provider: provider.into(),
+                contract: serde_json::json!({"adapter": registered.identity.adapter}),
+                limits: Default::default(),
             };
             let redactor = match adapters.serving(&route) {
                 Some(Adapter::Request(adapter)) => adapter.redactor(),
@@ -367,7 +355,8 @@ mod tests {
             assert_eq!(
                 redactor.reason("x openai-test-key-0123 tripo-test-key-0123"),
                 "x [redacted] [redacted]",
-                "{capability} on {provider}"
+                "{} for {capability} on {provider}",
+                registered.identity.adapter
             );
         }
     }
@@ -413,18 +402,58 @@ mod tests {
         assert!(!offline.is_empty());
     }
 
+    fn route(capability: &str, id: &str, contract: Value) -> RouteRef {
+        let (model, provider) = grida_fx_core::routes::parse_route_id(id).unwrap();
+        RouteRef {
+            capability: capability.into(),
+            model,
+            provider,
+            contract,
+            limits: Default::default(),
+        }
+    }
+
     #[test]
     fn a_route_without_its_key_is_not_servable() {
         let keys = Keys::from_pairs(&[(KeyName::Fal, "fal-test-key")]);
         let adapters = adapters(&setup(keys.clone()));
-        let servable = |capability, provider| servable(&adapters, &keys, &[], capability, provider);
-        assert_eq!(servable("video.generate", "fal"), Servable::Yes);
+        let servable = |capability, id, contract| {
+            servable(&adapters, &keys, &[], &route(capability, id, contract))
+        };
+        let none = Value::Null;
         assert_eq!(
-            servable("mesh.rig", "tripo"),
+            servable("video.generate", "vid-a@fal", none.clone()),
+            Servable::Yes
+        );
+        assert_eq!(
+            servable("mesh.rig", "rig-a@tripo", none.clone()),
             Servable::NoKey(KeyName::Tripo)
         );
-        assert_eq!(servable("image.generate", "acme"), Servable::NoAdapter);
-        assert_eq!(servable("video.generate", "openai"), Servable::NoAdapter);
+        assert_eq!(
+            servable("image.generate", "img-a@acme", none.clone()),
+            Servable::NoAdapter
+        );
+        assert_eq!(
+            servable("video.generate", "vid-a@openai", none),
+            Servable::NoAdapter
+        );
+        // The contract's adapter picks among the pair's adapters: a name none has is no adapter.
+        let named = |adapter: &str| serde_json::json!({"adapter": adapter});
+        for adapter in ["fal-image", "fx-fal-image-v1"] {
+            assert_eq!(
+                servable("image.edit", "acme/img-a@fal", named(adapter)),
+                Servable::Yes,
+                "{adapter}"
+            );
+        }
+        assert_eq!(
+            servable("image.edit", "acme/img-a@fal", named("acme-image")),
+            Servable::NoAdapter
+        );
+        assert_eq!(
+            servable("video.generate", "vid-a@fal", named("fal-image")),
+            Servable::NoAdapter
+        );
     }
 
     #[test]
@@ -439,8 +468,14 @@ mod tests {
             }),
             version,
         };
-        let servable = |installed: &[Installed], provider| {
-            servable(&adapters, &keys, installed, "image.generate", provider)
+        let servable = |installed: &[Installed], provider: &str| {
+            let id = format!("img-a@{provider}");
+            servable(
+                &adapters,
+                &keys,
+                installed,
+                &route("image.generate", &id, Value::Null),
+            )
         };
         let older = Version::Older {
             version: "0.150.0".into(),

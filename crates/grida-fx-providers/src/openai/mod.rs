@@ -535,6 +535,7 @@ mod tests {
             model: "img-a".into(),
             provider: provider.into(),
             contract,
+            limits: Default::default(),
         }
     }
 

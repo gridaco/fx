@@ -1,6 +1,7 @@
 //! Wire helpers every adapter shares (spec/adapters.md §3–§5, §8): base URLs, JSON bodies, strict
 //! base64 and data URLs, media types and byte signatures, reported costs, safe error details,
-//! request files, provider options, image sizes and the image checks.
+//! request files, provider options, what a generic image adapter sends, image sizes, the image
+//! checks, and a picture encoded as PNG.
 //!
 //! These are complete and tested here; provider modules use them rather than their own copies, so
 //! two providers never disagree on what "a PNG", "a reported cost" or "an exact size" means.
@@ -523,6 +524,94 @@ fn holds_file(value: &Value) -> bool {
     }
 }
 
+// ---------------------------------------------------------------------------------------------
+// Generic image requests
+
+/// What a generic image adapter sends of an image request: its prompt, and its input pictures,
+/// `image` then `references` (`references[<i>]`, from 0), each with its member name.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GenericImage<'a> {
+    pub prompt: &'a str,
+    pub pictures: Vec<(String, &'a Value)>,
+}
+
+/// The values a generic image adapter sends (src/openrouter/README.md, src/fal/README.md, "Images
+/// on any model"), after the refusals of step 4 of spec/adapters.md §4 that are not provider
+/// options, in this order: a blank prompt; a mask; `background: transparent`, then a background
+/// other than `auto`, `opaque` or `transparent`; a `size` that is not `auto` or `WxH`
+/// ([`parse_size`]), then an exact size; references on a generate unless `generate_references`
+/// (`<label> takes no references`), and then on a route that does not declare `image_input`
+/// (`<route> does not support image_input`, the plan's sentence, spec/capabilities.md §1); more
+/// pictures than the route's `max_input_pictures`. What the
+/// adapter cannot send faithfully is refused as `<who> sends no <mask | transparent background |
+/// exact size>: give the model's own parameter in provider_options.<provider>`; `auto` and
+/// `opaque`, which the model's default and the image check cover, are not sent.
+pub fn generic_image<'a>(
+    call: &'a CallRequest,
+    who: &str,
+    label: &str,
+    generate_references: bool,
+) -> Result<GenericImage<'a>, String> {
+    let request = &call.request;
+    let not_sent = |what: &str| {
+        format!(
+            "{who} sends no {what}: give the model's own parameter in provider_options.{}",
+            call.route.provider
+        )
+    };
+    let prompt = request.get("prompt").and_then(Value::as_str).unwrap_or("");
+    if prompt.trim().is_empty() {
+        return Err("an image call needs its prompt as text".into());
+    }
+    if !is_absent(request.get("mask")) {
+        return Err(not_sent("mask"));
+    }
+    match request.get("background") {
+        None | Some(Value::Null) => {}
+        Some(Value::String(b)) if b == "auto" || b == "opaque" => {}
+        Some(Value::String(b)) if b == "transparent" => {
+            return Err(not_sent("transparent background"));
+        }
+        Some(_) => return Err("background must be auto, opaque or transparent".into()),
+    }
+    if parse_size(request.get("size"))?.is_some() {
+        return Err(not_sent("exact size"));
+    }
+    let edit = call.route.capability == "image.edit";
+    let references: &[Value] = request
+        .get("references")
+        .and_then(Value::as_array)
+        .map_or(&[], Vec::as_slice);
+    if !edit && !references.is_empty() {
+        if !generate_references {
+            return Err(format!("{label} takes no references"));
+        }
+        if !call.route.limits.image_input {
+            return Err(format!("{} does not support image_input", call.route.id()));
+        }
+    }
+    let mut pictures = Vec::new();
+    if edit && let Some(image) = request.get("image") {
+        pictures.push(("image".to_string(), image));
+    }
+    pictures.extend(
+        references
+            .iter()
+            .enumerate()
+            .map(|(i, value)| (format!("references[{i}]"), value)),
+    );
+    if let Some(most) = call.route.limits.max_input_pictures
+        && pictures.len() > most as usize
+    {
+        return Err(format!(
+            "{} takes at most {most} input pictures, not {}",
+            call.route.id(),
+            pictures.len()
+        ));
+    }
+    Ok(GenericImage { prompt, pictures })
+}
+
 /// `options` as multipart text fields, in order: a string as itself, any other value as its JSON
 /// text (spec/adapters.md §8).
 pub fn option_fields(options: &Map<String, Value>) -> Vec<crate::transport::Part> {
@@ -646,6 +735,35 @@ pub fn check_png(kind: &str, bytes: &[u8]) -> Result<(), String> {
         kind
     };
     Err(format!("the answer is {found}, not image/png"))
+}
+
+/// A picture as PNG (spec/capabilities.md §1): a PNG as it is, any other picture the decoder reads
+/// (JPEG, WebP, GIF: the first frame) decoded and encoded as PNG, the same pixels. `subject` names
+/// the picture in the refusals: `<subject> is not decodable`, then [`not_encoded`]. Decoding a
+/// large picture takes a while: an adapter calls it off the async threads ([`to_png_blocking`]).
+pub fn to_png(bytes: Vec<u8>, subject: &str) -> Result<Vec<u8>, String> {
+    if sniff_image(&bytes) == Some("image/png") {
+        return Ok(bytes);
+    }
+    let picture =
+        image::load_from_memory(&bytes).map_err(|_| format!("{subject} is not decodable"))?;
+    let mut png = Vec::new();
+    picture
+        .write_with_encoder(image::codecs::png::PngEncoder::new(&mut png))
+        .map_err(|_| not_encoded(subject))?;
+    Ok(png)
+}
+
+/// `<subject> could not be encoded as PNG`.
+pub fn not_encoded(subject: &str) -> String {
+    format!("{subject} could not be encoded as PNG")
+}
+
+/// [`to_png`] on a blocking thread.
+pub async fn to_png_blocking(bytes: Vec<u8>, subject: &'static str) -> Result<Vec<u8>, String> {
+    tokio::task::spawn_blocking(move || to_png(bytes, subject))
+        .await
+        .unwrap_or_else(|_| Err(not_encoded(subject)))
 }
 
 /// Whether a PNG's pixel data decodes in full. The file facts read only the header of a picture
@@ -1058,5 +1176,134 @@ mod tests {
                 ("extra".to_string(), r#"{"a":[1,"b"]}"#.to_string()),
             ]
         );
+    }
+
+    fn generic(capability: &str, request: Value, most: Option<u32>) -> Result<Vec<String>, String> {
+        let mut call = crate::testing::CallBuilder::new(capability, "acme/img-a@acme")
+            .request(request)
+            .build();
+        call.call.route.limits.max_input_pictures = most;
+        generic_image(
+            &call,
+            "Acme's generic image adapter",
+            "Acme image generation",
+            false,
+        )
+        .map(|image| {
+            image
+                .pictures
+                .into_iter()
+                .map(|(member, _)| member)
+                .collect()
+        })
+    }
+
+    #[test]
+    fn a_generic_image_sends_its_prompt_and_pictures_and_refuses_what_it_cannot_send() {
+        let picture = json!({"file": "a".repeat(64)});
+        let edit = json!({"prompt": "p", "image": picture, "references": [picture, picture],
+                          "size": "auto", "background": "opaque"});
+        assert_eq!(
+            generic("image.edit", edit.clone(), Some(3)),
+            Ok(vec![
+                "image".into(),
+                "references[0]".into(),
+                "references[1]".into()
+            ])
+        );
+        assert_eq!(
+            generic(
+                "image.generate",
+                json!({"prompt": "p", "background": null}),
+                None
+            ),
+            Ok(Vec::new())
+        );
+        let hint = "give the model's own parameter in provider_options.acme";
+        let refused =
+            |capability: &str, request: Value| generic(capability, request, Some(2)).unwrap_err();
+        for (request, sentence) in [
+            (
+                json!({"prompt": " "}),
+                "an image call needs its prompt as text".to_string(),
+            ),
+            (
+                json!({"prompt": "p", "mask": picture}),
+                format!("Acme's generic image adapter sends no mask: {hint}"),
+            ),
+            (
+                json!({"prompt": "p", "background": "transparent"}),
+                format!("Acme's generic image adapter sends no transparent background: {hint}"),
+            ),
+            (
+                json!({"prompt": "p", "background": "clear"}),
+                "background must be auto, opaque or transparent".to_string(),
+            ),
+            (
+                json!({"prompt": "p", "size": "1K"}),
+                "size must be auto or WIDTHxHEIGHT".to_string(),
+            ),
+            (
+                json!({"prompt": "p", "size": "1024x1024"}),
+                format!("Acme's generic image adapter sends no exact size: {hint}"),
+            ),
+            (
+                json!({"prompt": "p", "references": [picture]}),
+                "Acme image generation takes no references".to_string(),
+            ),
+        ] {
+            assert_eq!(
+                refused("image.generate", request.clone()),
+                sentence,
+                "{request}"
+            );
+        }
+        assert_eq!(
+            refused("image.edit", edit),
+            "acme/img-a@acme takes at most 2 input pictures, not 3"
+        );
+    }
+
+    #[test]
+    fn a_generate_s_references_need_a_route_that_declares_image_input() {
+        let picture = json!({"file": "a".repeat(64)});
+        let request = json!({"prompt": "p", "references": [picture]});
+        let mut call = crate::testing::CallBuilder::new("image.generate", "acme/img-a@acme")
+            .request(request)
+            .build();
+        let sent = |call: &crate::testing::TestCall| {
+            generic_image(call, "Acme's generic image adapter", "Acme", true)
+                .map(|image| image.pictures.len())
+        };
+        assert_eq!(
+            sent(&call),
+            Err("acme/img-a@acme does not support image_input".into())
+        );
+        call.call.route.limits.image_input = true;
+        assert_eq!(sent(&call), Ok(1));
+    }
+
+    #[test]
+    fn a_picture_becomes_a_png_of_the_same_pixels() {
+        let png = to_png(crate::testing::media::jpeg(8, 4), "Acme's image").unwrap();
+        assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"));
+        let decoded = image::load_from_memory(&png).unwrap();
+        assert_eq!((decoded.width(), decoded.height()), (8, 4));
+        assert!(!decoded.color().has_alpha());
+        let already = crate::testing::media::png(2, 2, None);
+        assert_eq!(to_png(already.clone(), "Acme's image").unwrap(), already);
+        assert_eq!(
+            to_png(b"not an image".to_vec(), "Acme's image"),
+            Err("Acme's image is not decodable".into())
+        );
+        assert_eq!(
+            not_encoded("Acme's image"),
+            "Acme's image could not be encoded as PNG"
+        );
+        let blocking = crate::testing::block_on(to_png_blocking(
+            crate::testing::media::jpeg(2, 2),
+            "Acme's image",
+        ));
+        assert!(blocking.unwrap().starts_with(b"\x89PNG"));
     }
 }

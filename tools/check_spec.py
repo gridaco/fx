@@ -29,10 +29,12 @@ It prints one line per check and exits non-zero when any check fails:
       YAML subset and validates against fx-routes-v1; its size is the one spec/providers.md
       section 3 states; every route's capability has its section in spec/capabilities.md and is
       a paid built-in's of the standard library (or agent.turn, the engine's own); every feature
-      is in its capability's feature table; every contract's adapter and adapter_behavior are
-      the ones the built-in adapters table of spec/providers.md section 2 gives its capability
-      and provider, whose every reference exists and heads with the same contracts, and which
-      tools/digest.py's own copy (BUILT_IN_ADAPTERS, which completes a contract) agrees with;
+      is in its capability's feature table; every contract's adapter is one the built-in
+      adapters tables of spec/providers.md section 2 give its capability and provider (the
+      first table their defaults, one per pair; the second the adapters a route must name),
+      with that row's adapter_behavior; every reference those tables link exists and heads
+      with the same contracts, and tools/digest.py's own copy (BUILT_IN_ADAPTERS, which
+      completes a contract) agrees with them, defaults included;
       and the guide's table of built-in routes (docs/guide/05-running.md) lists every route
       under its capability with the table's prices;
   (k) the planner's feature vocabulary (crates/grida-fx-core/src/expand/features.json) lists, for
@@ -665,15 +667,19 @@ _REFERENCE_ROW = re.compile(
 )
 
 
-def _builtin_adapters(text: str) -> dict[tuple[str, str], tuple[str, str, str]]:
-    """spec/providers.md section 2: (capability, provider) -> (adapter, behaviour, reference),
-    the behaviour as its cell writes it (`"1"` or `1`)."""
-    rows: dict[tuple[str, str], tuple[str, str, str]] = {}
+def _builtin_adapters(text: str) -> dict[tuple[str, str, str], tuple[str, str, bool]]:
+    """spec/providers.md section 2: (capability, provider, adapter) -> (behaviour, reference,
+    default), the behaviour as its cell writes it (`"1"` or `1`); a row of the first table is its
+    pair's default, one of the second is not."""
+    rows: dict[tuple[str, str, str], tuple[str, str, bool]] = {}
+    tables = 0
     for line in _section(text, "The built-in adapters").splitlines():
+        if line.startswith("| Provider | Capability |"):
+            tables += 1
         row = _ADAPTER_ROW.match(line)
         if row:
             provider, capability, adapter, behavior, reference = row.groups()
-            rows[(capability, provider)] = (adapter, behavior, reference)
+            rows[(capability, provider, adapter)] = (behavior, reference, tables == 1)
     return rows
 
 
@@ -691,11 +697,13 @@ def _behavior_problem(contract: dict[str, Any], cell: str) -> str | None:
     return None
 
 
-def _check_adapter_references(rows: dict[tuple[str, str], tuple[str, str, str]]) -> list[str]:
-    """Every reference the table links exists, and its own table lists the same contracts."""
+def _check_adapter_references(
+    rows: dict[tuple[str, str, str], tuple[str, str, bool]],
+) -> list[str]:
+    """Every reference the tables link exists, and its own table lists the same contracts."""
     problems: list[str] = []
     expected: dict[str, set[tuple[str, str, str]]] = {}
-    for (capability, _), (adapter, behavior, reference) in rows.items():
+    for (capability, _, adapter), (behavior, reference, _) in rows.items():
         expected.setdefault(reference, set()).add((capability, adapter, behavior))
     for reference, want in sorted(expected.items()):
         path = (SPEC / reference).resolve()
@@ -715,25 +723,26 @@ def _check_adapter_references(rows: dict[tuple[str, str], tuple[str, str, str]])
     return problems
 
 
-def _check_digest_adapters(rows: dict[tuple[str, str], tuple[str, str, str]]) -> list[str]:
-    """digest.py's copy of the built-in adapters names each row's adapter and behaviour."""
+def _check_digest_adapters(rows: dict[tuple[str, str, str], tuple[str, str, bool]]) -> list[str]:
+    """digest.py's copy of the built-in adapters names each row's adapter, behaviour and
+    default."""
     problems: list[str] = []
     ours = digest.BUILT_IN_ADAPTERS
     for key in sorted(set(rows) | set(ours)):
-        capability, provider = key
+        capability, provider, adapter = key
+        where = f"{adapter} for {capability} on {provider}"
         if key not in ours:
-            problems.append(f"{capability} on {provider}: not in digest.py's table")
+            problems.append(f"{where}: not in digest.py's table")
             continue
         if key not in rows:
-            problems.append(f"{capability} on {provider}: in digest.py's table only")
+            problems.append(f"{where}: in digest.py's table only")
             continue
-        adapter, behavior = ours[key]
-        contract = {"adapter": adapter, "adapter_behavior": behavior}
-        if adapter != rows[key][0]:
-            problems.append(f"{capability} on {provider}: digest.py names {adapter}")
-        problem = _behavior_problem(contract, rows[key][1])
+        behavior, default = ours[key]
+        problem = _behavior_problem({"adapter_behavior": behavior}, rows[key][0])
         if problem:
-            problems.append(f"{capability} on {provider}: digest.py {problem}")
+            problems.append(f"{where}: digest.py {problem}")
+        if default != rows[key][2]:
+            problems.append(f"{where}: digest.py says default is {default}")
     return problems
 
 
@@ -783,13 +792,17 @@ def check_default_routes(gate: Gate, schemas: dict[str, Any]) -> None:
         if capability not in std:
             problems.append(f"{where}: no paid built-in of the standard library calls it")
         contract = route.get("contract") or {}
-        row = adapters.get((capability, name.rsplit("@", 1)[-1]))
-        if row is None:
+        provider = name.rsplit("@", 1)[-1]
+        names = sorted(a for (c, p, a) in adapters if (c, p) == (capability, provider))
+        if not names:
             problems.append(f"{where}: spec/providers.md section 2 has no adapter for it")
             continue
-        if contract.get("adapter") != row[0]:
-            problems.append(f"{where}: its contract's adapter is not {row[0]}")
-        behavior = _behavior_problem(contract, row[1])
+        adapter = contract.get("adapter")
+        row = adapters.get((capability, provider, adapter)) if isinstance(adapter, str) else None
+        if row is None:
+            problems.append(f"{where}: its contract's adapter is not one of {names}")
+            continue
+        behavior = _behavior_problem(contract, row[0])
         if behavior:
             problems.append(f"{where}: {behavior}")
     gate.result(

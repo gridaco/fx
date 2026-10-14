@@ -1,5 +1,7 @@
-//! fal images: `POST {run}/<model>/text-to-image` (`image.generate`) and `POST {run}/<model>/edit`
-//! (`image.edit`), JSON bodies, then one download of a hosted output (src/fal/README.md).
+//! fal images on GPT Image: `POST {run}/<model>/text-to-image` (`image.generate`) and `POST
+//! {run}/<model>/edit` (`image.edit`), JSON bodies, then one download of a hosted output
+//! (src/fal/README.md, "Images on GPT Image"). Registered for a route whose contract names it, as
+//! the built-in routes do; a route that names no adapter gets [`super::generic_image`].
 //!
 //! Contract `adapter` must be `fx-fal-image-v1` when present. Body members in order: `prompt`,
 //! `num_images: 1`, `image_size` (only when `size` is given: `"auto"` or `{"width", "height"}`),
@@ -72,7 +74,7 @@ pub const MAX_PICTURES: usize = 16;
 pub(crate) const MAX_RESPONSE_BYTES: u64 = MAX_OUTPUT_BYTES / 3 * 4 + 4 * 1024 * 1024;
 
 /// What an image answer may declare (src/fal/README.md).
-const RULES: Rules = Rules {
+pub(crate) const RULES: Rules = Rules {
     allowed: &["image/png", "image/jpeg", "image/webp"],
     check_dimensions: true,
     max_bytes: MAX_OUTPUT_BYTES,

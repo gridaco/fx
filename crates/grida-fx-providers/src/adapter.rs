@@ -11,7 +11,8 @@
 use crate::BoxFuture;
 use crate::redact::Redactor;
 use crate::transport::HttpResponse;
-use grida_fx_core::money::Usd;
+use grida_fx_core::money::{Units, Usd};
+use grida_fx_core::routes::{PriceUnit, Route};
 use indexmap::IndexMap;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -19,7 +20,8 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// The route a call goes to (spec/identity.md §7): what an adapter needs to address the
-/// provider. Prices, features and pacing are the engine's business and are not here.
+/// provider, and the limits its table declares. Prices, pacing and the features the engine judges
+/// are the engine's business and are not here.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RouteRef {
     pub capability: String,
@@ -28,12 +30,81 @@ pub struct RouteRef {
     /// The route's contract object, as its table's reading completed it (spec/identity.md §7);
     /// `{}` when none.
     pub contract: Value,
+    /// What the route's table declares of the calls it takes ([`RouteLimits`]).
+    pub limits: RouteLimits,
 }
 
 impl RouteRef {
+    /// The route a call on `route` goes to, its limits included.
+    pub fn of(route: &Route) -> RouteRef {
+        RouteRef {
+            capability: route.capability.clone(),
+            model: route.model.clone(),
+            provider: route.provider.clone(),
+            contract: route.contract.clone(),
+            limits: RouteLimits::of(route),
+        }
+    }
+
     /// `model@provider`.
     pub fn id(&self) -> String {
         format!("{}@{}", self.model, self.provider)
+    }
+}
+
+/// What a route's table declares of the calls it takes, for an adapter that holds a request to
+/// the route's limits rather than its own: the GG and generic image adapters to the picture limit,
+/// OpenRouter's generic image adapter to whether a generate takes references, fal's video adapter
+/// to the tiers, the length and whether a first frame is needed (their references). None of it is
+/// part of the route's fingerprint (spec/identity.md §7), so an adapter holds a request to it only
+/// before sending, never when a job already sent is collected (spec/adapters.md §4 step 4, §6).
+/// Default: nothing declared.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct RouteLimits {
+    /// `max_input_pictures`: the most input pictures one call takes; `None` when none is
+    /// declared.
+    pub max_input_pictures: Option<u32>,
+    /// `price.max_units` of a route priced per second: the most seconds one call carries.
+    pub max_seconds: Option<Units>,
+    /// The setting the price is tiered by (`price.by`), and its tiers' names in the table's order.
+    pub tiers: Option<(String, Vec<String>)>,
+    /// Whether the route declares the feature `image_input`: an `image.generate` route takes
+    /// `references` (spec/capabilities.md §2).
+    pub image_input: bool,
+    /// Whether the route declares the feature `text_to_video`: it draws a clip from the prompt
+    /// alone (spec/capabilities.md §6).
+    pub text_to_video: bool,
+}
+
+impl RouteLimits {
+    /// The limits `route`'s table declares.
+    pub fn of(route: &Route) -> RouteLimits {
+        let price = &route.price;
+        RouteLimits {
+            max_input_pictures: route.max_input_pictures,
+            max_seconds: price.max_units.filter(|_| price.unit == PriceUnit::Second),
+            tiers: price
+                .by
+                .clone()
+                .map(|by| (by, price.tiers.keys().cloned().collect())),
+            image_input: route.features.contains("image_input"),
+            text_to_video: route.features.contains("text_to_video"),
+        }
+    }
+
+    /// The names of the price's tiers when it is tiered by `setting`.
+    pub fn tiers_by(&self, setting: &str) -> Option<&[String]> {
+        match &self.tiers {
+            Some((by, names)) if by == setting => Some(names),
+            _ => None,
+        }
+    }
+
+    /// [`RouteLimits::max_seconds`] in whole seconds, rounded down.
+    pub fn max_whole_seconds(&self) -> Option<u64> {
+        let units = self.max_seconds?;
+        let divisor = 10i128.checked_pow(units.scale)?;
+        u64::try_from(units.mantissa.max(0) / divisor).ok()
     }
 }
 
@@ -519,6 +590,7 @@ mod tests {
             model: "img-a".into(),
             provider: "acme".into(),
             contract: json!({}),
+            limits: Default::default(),
         };
         assert_eq!(route.id(), "img-a@acme");
     }
@@ -604,6 +676,7 @@ mod tests {
                 model: "img-a".into(),
                 provider: "acme".into(),
                 contract: json!({"adapter": "x"}),
+                limits: Default::default(),
             },
             request: json!({}),
             files: IndexMap::new(),
@@ -716,6 +789,7 @@ mod tests {
                 model: "vid-a".into(),
                 provider: "acme".into(),
                 contract: json!({}),
+                limits: Default::default(),
             },
             request: json!({}),
             files: IndexMap::new(),

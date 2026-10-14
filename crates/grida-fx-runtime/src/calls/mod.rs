@@ -28,7 +28,9 @@
 //!    call on any provider its ledger does not admit with `not_live` too: `<capability> on <route
 //!    id> is a paid call, and this run has no ceiling: pass --max-usd (…)`.
 //! 6. the adapter: none serving the route is `no_route`: `no adapter serves <capability> on <route
-//!    id>`. This is checked after the cache and the live check, so recorded calls replay offline
+//!    id>`, for a provider without an adapter of the capability, or a contract whose `adapter`
+//!    names none of them (spec/adapters.md §1). This is checked after the cache and the live
+//!    check, so recorded calls replay offline
 //!    and without adapters (spec/protocol.md §6.1 step 4; spec/store.md §4). An adapter FX ships
 //!    gets the engine's checks around it ([`checked`]): its route's contract and the request
 //!    before each send or submit, inside the attempt, and the capability's every-route check after
@@ -694,9 +696,7 @@ impl Lead<'_> {
 
         let route_ref = RouteRef {
             capability: capability.to_string(),
-            model: route.model.clone(),
-            provider: route.provider.clone(),
-            contract: route.contract.clone(),
+            ..RouteRef::of(route)
         };
 
         // 4, in a stand-in run: the stand-in answers, refuses or fails the call; a decline goes

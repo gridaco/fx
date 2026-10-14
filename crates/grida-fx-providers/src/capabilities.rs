@@ -335,7 +335,7 @@ pub const CAPABILITIES: &[Capability] = &[
             opt("first_frame", File),
             opt("last_frame", File),
         ],
-        features: &["first_last_frame"],
+        features: &["text_to_video", "first_last_frame"],
         files: &[("video", "video/mp4")],
     },
 ];

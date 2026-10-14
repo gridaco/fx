@@ -235,6 +235,7 @@ fn route(capability: &str, model: &str, adapter: &str) -> RouteRef {
         model: model.into(),
         provider: "elevenlabs".into(),
         contract: json!({"adapter": adapter, "adapter_behavior": 1}),
+        limits: Default::default(),
     }
 }
 

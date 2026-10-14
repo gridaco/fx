@@ -42,8 +42,9 @@
 //! <capability> names none for it`) and only checked to be a kind (spec/identity.md §4; `<name> is
 //! <kind>, not a kind`), and `data` is kept as it is.
 //!
-//! **The route's check** is the check of the adapter FX registers for the route's capability and
-//! provider, from a registry built with no keys over a transport that refuses every exchange
+//! **The route's check** is the check of the adapter FX would serve the route with (the one its
+//! contract's `adapter` names, else its capability and provider's default; spec/adapters.md §1),
+//! from a registry built with no keys over a transport that refuses every exchange
 //! ([`live::offline_setup`]): only its `check` is ever called. A route no adapter serves gets the
 //! check spec/capabilities.md gives its capability for every route ([`checks::every_route`]), and
 //! a capability with none gets none.
@@ -111,8 +112,8 @@ impl StandInChecks {
 
     /// The answer's shape (module doc), with the kinds of files that gave none and the `data` of
     /// `video.generate` and `mesh.generate` written, and then the route's check: the registered
-    /// adapter's when one serves the route's capability and provider, else the capability's
-    /// every-route check. Returns the answer to store, with no cost. A refusal is `call_failed`.
+    /// adapter's when one serves the route, else the capability's every-route check. Returns the
+    /// answer to store, with no cost. A refusal is `call_failed`.
     pub fn answer(
         &self,
         call: &CallRequest,

@@ -423,52 +423,68 @@ def route_fingerprint(capability: str, route_id: str, contract: Any = None) -> s
     return digest(route_object(capability, route_id, contract))
 
 
-# spec/providers.md section 2: the contract each adapter FX ships serves, by capability and
-# provider: its `adapter`, and its `adapter_behavior` as the JSON value the table writes.
-# tools/check_spec.py holds this copy to that table.
-BUILT_IN_ADAPTERS: dict[tuple[str, str], tuple[str, Any]] = {
-    ("image.generate", "openai"): ("fx-openai-image-v1", "1"),
-    ("image.edit", "openai"): ("fx-openai-image-v1", "1"),
-    ("image.generate", "openrouter"): ("fx-openrouter-image-v1", "3"),
-    ("image.edit", "openrouter"): ("fx-openrouter-image-v1", "3"),
-    ("structured.generate", "openrouter"): ("openrouter-structured", 1),
-    ("agent.turn", "openrouter"): ("openrouter-tool-loop", 1),
-    ("music.generate", "openrouter"): ("openrouter-music", 1),
-    ("image.generate", "fal"): ("fx-fal-image-v1", "1"),
-    ("image.edit", "fal"): ("fx-fal-image-v1", "1"),
-    ("video.generate", "fal"): ("fal-queue", 1),
-    ("background.remove", "fal"): ("fal-run-birefnet", 1),
-    ("mesh.generate", "tripo"): ("tripo-multiview", 1),
-    ("mesh.rig", "tripo"): ("tripo-rig", 1),
-    ("sound.generate", "elevenlabs"): ("elevenlabs-sound-effect", 1),
-    ("speech.generate", "elevenlabs"): ("elevenlabs-speech", 1),
-    ("image.generate", "codex"): ("fx-codex-image-v1", "2"),
-    ("image.edit", "codex"): ("fx-codex-image-v1", "2"),
-    ("image.generate", "gg"): ("gg-image", "1"),
-    ("image.edit", "gg"): ("gg-image", "1"),
-    ("structured.generate", "gg"): ("gg-structured", 1),
-    ("agent.turn", "gg"): ("gg-tool-loop", 1),
-    ("video.generate", "gg"): ("gg-video", 1),
-    ("mesh.generate", "gg"): ("gg-mesh", 1),
-    ("mesh.rig", "gg"): ("gg-rig", 1),
-    ("image.generate", "grok"): ("fx-grok-image-v1", "1"),
-    ("image.edit", "grok"): ("fx-grok-image-v1", "1"),
+# spec/providers.md section 2: the contract each adapter FX ships serves, by capability, provider
+# and contract `adapter`: its `adapter_behavior` as the JSON value the table writes, and whether it
+# is its pair's default (the first table), which serves a route whose contract names no adapter;
+# the others (the second table) serve only a route that names them. tools/check_spec.py holds
+# this copy to those tables.
+BUILT_IN_ADAPTERS: dict[tuple[str, str, str], tuple[Any, bool]] = {
+    ("image.generate", "openai", "fx-openai-image-v1"): ("1", True),
+    ("image.edit", "openai", "fx-openai-image-v1"): ("1", True),
+    ("image.generate", "openrouter", "openrouter-image"): ("1", True),
+    ("image.edit", "openrouter", "openrouter-image"): ("1", True),
+    ("structured.generate", "openrouter", "openrouter-structured"): (1, True),
+    ("agent.turn", "openrouter", "openrouter-tool-loop"): (1, True),
+    ("music.generate", "openrouter", "openrouter-music"): (1, True),
+    ("image.generate", "fal", "fal-image"): ("1", True),
+    ("image.edit", "fal", "fal-image"): ("1", True),
+    ("video.generate", "fal", "fal-queue"): (1, True),
+    ("background.remove", "fal", "fal-run-birefnet"): (1, True),
+    ("mesh.generate", "tripo", "tripo-multiview"): (1, True),
+    ("mesh.rig", "tripo", "tripo-rig"): (1, True),
+    ("sound.generate", "elevenlabs", "elevenlabs-sound-effect"): (1, True),
+    ("speech.generate", "elevenlabs", "elevenlabs-speech"): (1, True),
+    ("image.generate", "codex", "fx-codex-image-v1"): ("2", True),
+    ("image.edit", "codex", "fx-codex-image-v1"): ("2", True),
+    ("image.generate", "gg", "gg-image"): ("1", True),
+    ("image.edit", "gg", "gg-image"): ("1", True),
+    ("structured.generate", "gg", "gg-structured"): (1, True),
+    ("agent.turn", "gg", "gg-tool-loop"): (1, True),
+    ("video.generate", "gg", "gg-video"): (1, True),
+    ("mesh.generate", "gg", "gg-mesh"): (1, True),
+    ("mesh.rig", "gg", "gg-rig"): (1, True),
+    ("image.generate", "grok", "fx-grok-image-v1"): ("1", True),
+    ("image.edit", "grok", "fx-grok-image-v1"): ("1", True),
+    ("image.generate", "openrouter", "fx-openrouter-image-v1"): ("3", False),
+    ("image.edit", "openrouter", "fx-openrouter-image-v1"): ("3", False),
+    ("image.generate", "fal", "fx-fal-image-v1"): ("1", False),
+    ("image.edit", "fal", "fx-fal-image-v1"): ("1", False),
 }
 
 
 def complete_contract(capability: str, provider: str, contract: dict[str, Any]) -> dict[str, Any]:
-    """Step 2 of identity.md section 7: where one of FX's adapters serves the capability and
-    provider, a left-out or null `adapter` becomes its name, then a left-out or null
-    `adapter_behavior` its behaviour when `adapter` is that name."""
+    """Step 2 of identity.md section 7: where FX's adapters serve the capability and provider, a
+    left-out or null `adapter` becomes the name of the pair's default, then a left-out or null
+    `adapter_behavior` the behaviour of the pair's adapter `adapter` names."""
     completed = dict(contract)
-    served = BUILT_IN_ADAPTERS.get((capability, provider))
-    if served is None:
+    behaviors: dict[str, Any] = {}
+    default = None
+    for (*pair, adapter), (behavior, is_default) in BUILT_IN_ADAPTERS.items():
+        if pair == [capability, provider]:
+            behaviors[adapter] = behavior
+            if is_default:
+                default = adapter
+    if default is None:
         return completed
-    adapter, behavior = served
     if completed.get("adapter") is None:
-        completed["adapter"] = adapter
-    if completed.get("adapter_behavior") is None and completed.get("adapter") == adapter:
-        completed["adapter_behavior"] = behavior
+        completed["adapter"] = default
+    adapter = completed.get("adapter")
+    if (
+        completed.get("adapter_behavior") is None
+        and isinstance(adapter, str)
+        and adapter in behaviors
+    ):
+        completed["adapter_behavior"] = behaviors[adapter]
     return completed
 
 

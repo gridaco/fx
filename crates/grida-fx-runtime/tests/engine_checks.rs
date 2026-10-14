@@ -163,7 +163,7 @@ async fn a_contract_the_adapter_does_not_serve_is_refused_inside_the_attempt_at_
             fake.as_request()
         };
         let services = run(dir.path(), adapter);
-        let route = img_a(json!({"adapter": "acme-other"}));
+        let route = img_a(json!({"adapter": "acme-image", "adapter_behavior": "2"}));
         let (answered, counter) = draw(&services, route, lantern()).await;
         let error = rpc(answered);
         assert_eq!(error.code, ErrorCode::CapabilityRefused.code());
@@ -188,6 +188,30 @@ async fn a_contract_the_adapter_does_not_serve_is_refused_inside_the_attempt_at_
 }
 
 #[tokio::test]
+async fn a_contract_naming_an_adapter_none_is_registered_under_is_no_route() {
+    // The registry picks the adapter by the contract's `adapter` (spec/adapters.md §1): one it
+    // does not have serves nothing, before any hold.
+    let dir = tempfile::tempdir().unwrap();
+    let fake = FakeAdapter::default().with_identity(ACME);
+    let services = run(dir.path(), fake.as_request());
+    let (answered, counter) = draw(
+        &services,
+        img_a(json!({"adapter": "acme-other"})),
+        lantern(),
+    )
+    .await;
+    let error = rpc(answered);
+    assert_eq!(error.code, ErrorCode::NoRoute.code());
+    assert_eq!(
+        error.message,
+        "no adapter serves image.generate on img-a@acme"
+    );
+    assert!(fake.log().is_empty(), "the adapter never saw the call");
+    assert!(budget(dir.path()).is_empty(), "nothing was held");
+    assert_eq!(counter.cost(), None);
+}
+
+#[tokio::test]
 async fn the_adapters_own_contract_judgement_comes_between_the_engines_two_checks() {
     let pictures = Arc::new(|call: &grida_fx_providers::CallRequest| {
         match call.route.contract.get("pictures") {
@@ -201,7 +225,7 @@ async fn the_adapters_own_contract_judgement_comes_between_the_engines_two_check
     });
     let cases = [
         (
-            json!({"adapter": "acme-other", "pictures": "small"}),
+            json!({"adapter_behavior": "2", "pictures": "small"}),
             json!({}),
             FOREIGN.to_string(),
         ),
@@ -290,12 +314,7 @@ async fn an_answer_the_capabilitys_every_route_check_refuses_is_billed() {
     let dir = tempfile::tempdir().unwrap();
     let fake = FakeAdapter::plain(vec![not_png()]);
     let services = run(dir.path(), fake.as_request());
-    let (answered, _) = draw(
-        &services,
-        img_a(json!({"adapter": "acme-other"})),
-        lantern(),
-    )
-    .await;
+    let (answered, _) = draw(&services, img_a(json!({})), lantern()).await;
     assert_eq!(answered.unwrap().charged, Usd(10_000));
 }
 
@@ -316,7 +335,7 @@ async fn a_submitted_job_is_collected_without_the_engines_refusals() {
     )
     .with_identity(ACME);
     let services = run(dir.path(), fake.as_job());
-    let route = img_a(json!({"adapter": "acme-other"}));
+    let route = img_a(json!({"adapter": "acme-image", "adapter_behavior": "2"}));
     let fingerprint = route.fingerprint();
     let key = call_key("image.generate", &fingerprint, &lantern(), &[1]);
     services

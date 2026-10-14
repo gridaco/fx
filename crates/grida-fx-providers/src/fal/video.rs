@@ -1,8 +1,9 @@
 //! fal video: a queue long job (src/fal/README.md; spec/adapters.md §6).
 //!
-//! `submit`: one `POST {queue}/<model>` with `{"prompt", "image_url", "end_image_url"?,
-//! "aspect_ratio", "resolution", "duration"}` (`duration` a JSON integer), then the provider
-//! options, which may set no member of [`OWNED`] (spec/adapters.md §8); a 2xx with a `request_id`
+//! `submit`: one `POST {queue}/<model>` with `{"prompt", "image_url"?, "end_image_url"?,
+//! "aspect_ratio", "resolution", "duration"}` (`duration` a JSON integer; `image_url` only when the
+//! request gives a first frame), then the provider options, which may set no member of [`OWNED`]
+//! (spec/adapters.md §8); a 2xx with a `request_id`
 //! that is a safe id (`^[A-Za-z0-9_.:-]{1,96}$`), and `status_url` and `response_url` both under
 //! the queue base, becomes the handle `{"request_id", "status_path", "response_path"}` (the URLs
 //! minus `{queue}/`, a plain query kept; never a host name). Contract `adapter` must be `fal-queue`
@@ -15,15 +16,23 @@
 //! min(remaining, 60 s), sleeping through the injected [`Clock`]. The answer is file `video`
 //! (`video/mp4`) and `data: {"facts": {"width", "height", "duration_seconds", "fps"}}` from the
 //! clip's file facts; `cost` from the result's top-level `usage.cost`. `check`: the clip's size and
-//! duration against the request (src/fal/README.md).
+//! duration against the request (src/fal/README.md), read with the defaults and none of the route's
+//! limits, which are not identity and may have changed since the job was sent.
 //!
 //! Submit refusals, in this order (spec/adapters.md §4; src/fal/README.md): another route's
 //! contract; a request that does not fit `video.generate`; no `FAL_KEY`; provider options that set
 //! a member of [`OWNED`] ([`crate::wire::provider_options`]); a blank prompt, or one over
-//! [`MAX_PROMPT_CHARS`]; no `first_frame`; a `duration` that is not a whole number from 3 to 10; a
-//! `resolution` (default `720p`) or `aspect_ratio` (default `9:16`) the route does not draw; then
-//! `first_frame` and `last_frame`, each when it is not an `image/*` file (`<member> is <kind>,
-//! not a picture`) or has no bytes.
+//! [`MAX_PROMPT_CHARS`]; no `first_frame` on a route that does not declare `text_to_video`; a
+//! `last_frame` without a `first_frame`; a `duration` that is not a whole number from
+//! [`MIN_SECONDS`] to the route's most; a `resolution` (default `720p`) or `aspect_ratio` (default
+//! `9:16`) the route does not draw; then `first_frame` and `last_frame`, each when it is not an
+//! `image/*` file (`<member> is <kind>, not a picture`) or has no bytes.
+//!
+//! The route's limits ([`RouteLimits`]) are the tiers it draws, when its price is tiered by
+//! `resolution` (else [`RESOLUTIONS`]), its most seconds, its price's `max_units` when priced per
+//! second (else [`MAX_SECONDS`]), and whether it draws from the prompt alone, its feature
+//! `text_to_video`. The minimum, the whole seconds, the aspect ratios, the defaults and the short
+//! sides are this adapter's: a route table has no member for them.
 //!
 //! Submit statuses: 4xx other than 408 and 429 is `Failed { Some(0), false }`; 408, 429, 500, 502
 //! and 503 are `NotReceived`; any other status, a 2xx without a usable handle, or a handle outside
@@ -48,7 +57,7 @@
 
 use super::FalClients;
 use crate::BoxFuture;
-use crate::adapter::{Answer, CallRequest, Collected, Identity, LongJob, Submitted};
+use crate::adapter::{Answer, CallRequest, Collected, Identity, LongJob, RouteLimits, Submitted};
 use crate::clock::Clock;
 use crate::setup::Client;
 use crate::transport::{
@@ -123,11 +132,16 @@ const JSON_RESPONSE_BYTES: u64 = 4 * 1024 * 1024;
 /// The longest path a handle holds.
 const MAX_PATH_CHARS: usize = 1024;
 
-/// The whole seconds the route draws.
-const SECONDS: std::ops::RangeInclusive<u64> = 3..=10;
+/// The fewest whole seconds a clip runs.
+pub const MIN_SECONDS: u64 = 3;
 
-/// The tiers the route draws, with their short sides.
-const RESOLUTIONS: [(&str, u32); 4] = [("360p", 360), ("720p", 720), ("1080p", 1080), ("4k", 2160)];
+/// The most whole seconds of a route that declares none (module doc).
+pub const MAX_SECONDS: u64 = 10;
+
+/// The tiers a route draws whose price names none, with their short sides: the tiers whose size
+/// the check knows.
+pub const RESOLUTIONS: [(&str, u32); 4] =
+    [("360p", 360), ("720p", 720), ("1080p", 1080), ("4k", 2160)];
 
 /// The aspect ratios the route draws.
 const ASPECTS: [&str; 2] = ["9:16", "16:9"];
@@ -149,15 +163,18 @@ impl FalVideo {
 #[derive(Debug, Clone, PartialEq)]
 struct Clip<'a> {
     prompt: &'a str,
-    first_frame: &'a Value,
+    first_frame: Option<&'a Value>,
     last_frame: Option<&'a Value>,
     seconds: u64,
     resolution: &'a str,
     aspect_ratio: &'a str,
 }
 
-/// The value refusals of the module doc, in order. The request already fits `video.generate`.
-fn clip(request: &Value) -> Result<Clip<'_>, String> {
+/// The value refusals of the module doc, in order, against the route's `limits` on a submit. A
+/// collected clip's check passes `None`: it reads the request with the defaults and holds it to no
+/// route limit, so a job sent before the route's table changed is still collected. The request
+/// already fits `video.generate`.
+fn clip<'a>(request: &'a Value, limits: Option<&RouteLimits>) -> Result<Clip<'a>, String> {
     let prompt = request.get("prompt").and_then(Value::as_str).unwrap_or("");
     if prompt.trim().is_empty() {
         return Err("a clip needs its prompt as text".into());
@@ -167,31 +184,44 @@ fn clip(request: &Value) -> Result<Clip<'_>, String> {
             "the prompt is longer than {MAX_PROMPT_CHARS} characters"
         ));
     }
-    let first_frame = match request.get("first_frame") {
-        Some(frame) if crate::capabilities::is_file_value(frame) => frame,
-        _ => return Err("this route draws from a first frame".into()),
-    };
+    let frame = |name: &str| request.get(name).filter(|frame| !frame.is_null());
+    let (first_frame, last_frame) = (frame("first_frame"), frame("last_frame"));
+    if first_frame.is_none() && limits.is_some_and(|limits| !limits.text_to_video) {
+        return Err("this route draws from a first frame".into());
+    }
+    if last_frame.is_some() && first_frame.is_none() {
+        return Err("last_frame needs first_frame".into());
+    }
+    // The check knows no most: the route's may have changed since the job was sent.
+    let most = limits.map(|limits| limits.max_whole_seconds().unwrap_or(MAX_SECONDS));
     let duration = request.get("duration").unwrap_or(&Value::Null);
-    let seconds = whole_seconds(duration).ok_or_else(|| {
-        format!(
-            "this route draws whole seconds from 3 to 10, not {}",
-            value_text(duration)
-        )
-    })?;
+    let seconds = whole_seconds(duration)
+        .filter(|seconds| *seconds >= MIN_SECONDS && most.is_none_or(|most| *seconds <= most))
+        .ok_or_else(|| {
+            let to = most.map_or_else(String::new, |most| format!(" to {most}"));
+            format!(
+                "this route draws whole seconds from {MIN_SECONDS}{to}, not {}",
+                value_text(duration)
+            )
+        })?;
     let text = |name: &str, default: &'static str| match request.get(name) {
         None | Some(Value::Null) => Some(default),
         Some(value) => value.as_str(),
     };
     let (resolution, aspect_ratio) = (text("resolution", "720p"), text("aspect_ratio", "9:16"));
+    let drawn = |resolution: &str| match limits.map(|limits| limits.tiers_by("resolution")) {
+        None => true,
+        Some(Some(tiers)) => tiers.iter().any(|tier| tier == resolution),
+        Some(None) => RESOLUTIONS.iter().any(|(name, _)| *name == resolution),
+    };
     match (resolution, aspect_ratio) {
         (Some(resolution), Some(aspect_ratio))
-            if RESOLUTIONS.iter().any(|(name, _)| *name == resolution)
-                && ASPECTS.contains(&aspect_ratio) =>
+            if drawn(resolution) && ASPECTS.contains(&aspect_ratio) =>
         {
             Ok(Clip {
                 prompt,
                 first_frame,
-                last_frame: request.get("last_frame").filter(|frame| !frame.is_null()),
+                last_frame,
                 seconds,
                 resolution,
                 aspect_ratio,
@@ -205,16 +235,14 @@ fn clip(request: &Value) -> Result<Clip<'_>, String> {
     }
 }
 
-/// A whole number of seconds the route draws (`3`, `3.0`), else `None`.
+/// A whole, non-negative number of seconds (`3`, `3.0`), else `None`.
 fn whole_seconds(duration: &Value) -> Option<u64> {
     let Value::Number(n) = duration else {
         return None;
     };
     let x = grida_fx_core::value::as_f64(n);
     let whole = x.is_finite() && x.fract() == 0.0 && x >= 0.0;
-    whole
-        .then_some(x as u64)
-        .filter(|seconds| SECONDS.contains(seconds))
+    whole.then_some(x as u64)
 }
 
 /// A request value as a refusal shows it: a number in its JCS form, text as is, else its JSON.
@@ -226,9 +254,9 @@ fn value_text(value: &Value) -> String {
     }
 }
 
-/// The size a clip of `resolution` at `aspect_ratio` has: the short side 360, 720, 1080 or 2160,
-/// the long side `short × 16 ÷ 9` (integer division), portrait for `9:16` and landscape for
-/// `16:9`. `None` for a tier or ratio the route does not draw.
+/// The size a clip of `resolution` at `aspect_ratio` has: the short side 360, 720, 1080 or 2160
+/// ([`RESOLUTIONS`]), the long side `short × 16 ÷ 9` (integer division), portrait for `9:16` and
+/// landscape for `16:9`. `None` for another tier or ratio, whose size the adapter does not know.
 pub fn expected_size(resolution: &str, aspect_ratio: &str) -> Option<(u32, u32)> {
     let short = RESOLUTIONS
         .iter()
@@ -242,21 +270,19 @@ pub fn expected_size(resolution: &str, aspect_ratio: &str) -> Option<(u32, u32)>
     }
 }
 
-/// The check of a collected clip (src/fal/README.md): its size is
-/// [`expected_size`] (`the clip is <w>x<h>, not <W>x<H>`), and its duration is within
-/// `1/fps + 0.01` s of `seconds` (`the clip runs <x> s, not <n> s`).
+/// The check of a collected clip (src/fal/README.md): its size is [`expected_size`] when the
+/// adapter knows it (`the clip is <w>x<h>, not <W>x<H>`; a clip of another tier the route draws is
+/// not held to a size), and its duration is within `1/fps + 0.01` s of `seconds` (`the clip runs
+/// <x> s, not <n> s`).
 pub fn check_clip(
     facts: &ClipFacts,
     resolution: &str,
     aspect_ratio: &str,
     seconds: f64,
 ) -> Result<(), String> {
-    let Some((width, height)) = expected_size(resolution, aspect_ratio) else {
-        return Err(format!(
-            "this route draws no {resolution} clip at {aspect_ratio}"
-        ));
-    };
-    if (facts.width, facts.height) != (width, height) {
+    if let Some((width, height)) = expected_size(resolution, aspect_ratio)
+        && (facts.width, facts.height) != (width, height)
+    {
         return Err(format!(
             "the clip is {}x{}, not {width}x{height}",
             facts.width, facts.height
@@ -423,8 +449,11 @@ impl FalVideo {
         crate::capabilities::check_request(&call.route.capability, &call.request)?;
         let credential = client.credential(super::CREDENTIAL_HEADER, super::CREDENTIAL_PREFIX)?;
         let options = crate::wire::provider_options(call, OWNED)?;
-        let clip = clip(&call.request)?;
-        let first = super::picture(call, clip.first_frame, "first_frame")?;
+        let clip = clip(&call.request, Some(&call.route.limits))?;
+        let first = match clip.first_frame {
+            Some(frame) => Some(super::picture(call, frame, "first_frame")?),
+            None => None,
+        };
         let last = match clip.last_frame {
             Some(frame) => Some(super::picture(call, frame, "last_frame")?),
             None => None,
@@ -432,7 +461,9 @@ impl FalVideo {
 
         let mut body = Map::new();
         body.insert("prompt".into(), Value::String(clip.prompt.to_string()));
-        body.insert("image_url".into(), Value::String(first));
+        if let Some(first) = first {
+            body.insert("image_url".into(), Value::String(first));
+        }
         if let Some(last) = last {
             body.insert("end_image_url".into(), Value::String(last));
         }
@@ -788,7 +819,7 @@ impl LongJob for FalVideo {
     }
 
     fn check(&self, call: &CallRequest, answer: &Answer) -> Result<(), String> {
-        let clip = clip(&call.request)?;
+        let clip = clip(&call.request, None)?;
         let Some(file) = answer.files.get("video") else {
             return Err("the answer carries no video".into());
         };
@@ -815,8 +846,9 @@ mod tests {
         let frame = json!({"file": "a".repeat(64)});
         let ok = json!({"prompt": "p", "first_frame": frame, "duration": 3.0,
                         "resolution": null, "aspect_ratio": null});
+        let none = RouteLimits::default();
         let clip_of = |request: &Value| {
-            clip(request).map(|c| {
+            clip(request, Some(&none)).map(|c| {
                 (
                     c.seconds,
                     c.resolution.to_string(),
@@ -828,7 +860,7 @@ mod tests {
         let with = |member: &str, value: Value| {
             let mut request = ok.clone();
             request[member] = value;
-            clip(&request).unwrap_err()
+            clip(&request, Some(&none)).unwrap_err()
         };
         assert_eq!(
             with("prompt", json!("  ")),
@@ -839,12 +871,32 @@ mod tests {
             "the prompt is longer than 20000 characters"
         );
         assert!(
-            clip(&json!({"prompt": "é".repeat(20_000), "first_frame": frame, "duration": 3}))
-                .is_ok()
+            clip(
+                &json!({"prompt": "é".repeat(20_000), "first_frame": frame, "duration": 3}),
+                Some(&none)
+            )
+            .is_ok()
         );
+        // A route draws from a first frame unless it declares text_to_video, and a last frame
+        // needs one.
+        let frameless = json!({"prompt": "p", "duration": 3});
+        let last_only =
+            json!({"prompt": "p", "duration": 3, "first_frame": null, "last_frame": frame});
+        for request in [&frameless, &last_only] {
+            assert_eq!(
+                clip(request, Some(&none)).unwrap_err(),
+                "this route draws from a first frame"
+            );
+        }
+        let text_to_video = RouteLimits {
+            text_to_video: true,
+            ..RouteLimits::default()
+        };
+        let no_frame = clip(&frameless, Some(&text_to_video)).unwrap();
+        assert_eq!((no_frame.first_frame, no_frame.last_frame), (None, None));
         assert_eq!(
-            with("first_frame", Value::Null),
-            "this route draws from a first frame"
+            clip(&last_only, Some(&text_to_video)).unwrap_err(),
+            "last_frame needs first_frame"
         );
         for (duration, shown) in [
             (json!(12), "12"),
@@ -869,8 +921,85 @@ mod tests {
         let mut no_duration = ok.clone();
         no_duration.as_object_mut().unwrap().remove("duration");
         assert_eq!(
-            clip(&no_duration).unwrap_err(),
+            clip(&no_duration, Some(&none)).unwrap_err(),
             "this route draws whole seconds from 3 to 10, not null"
+        );
+    }
+
+    #[test]
+    fn the_check_reads_the_request_without_the_route_s_limits() {
+        // A job is collected after its route's table changed: no tier, length or frame the route
+        // takes now is required of it, and the defaults still apply.
+        let read =
+            |request: Value| clip(&request, None).map(|c| (c.seconds, c.resolution.to_string()));
+        assert_eq!(
+            read(json!({"prompt": "p", "duration": 30, "resolution": "480p"})),
+            Ok((30, "480p".into()))
+        );
+        assert_eq!(
+            read(json!({"prompt": "p", "duration": 3})),
+            Ok((3, "720p".into()))
+        );
+        assert_eq!(
+            read(json!({"prompt": "p", "duration": 3.5})).unwrap_err(),
+            "this route draws whole seconds from 3, not 3.5"
+        );
+        assert_eq!(
+            read(json!({"prompt": "p", "duration": 3, "aspect_ratio": "4:3"})).unwrap_err(),
+            "this route draws no 720p clip at 4:3"
+        );
+        assert_eq!(
+            read(json!({"prompt": "p", "duration": 3, "last_frame": {"file": "a".repeat(64)}}))
+                .unwrap_err(),
+            "last_frame needs first_frame"
+        );
+    }
+
+    #[test]
+    fn the_route_s_tiers_and_length_are_what_it_draws() {
+        let limits = RouteLimits {
+            max_input_pictures: None,
+            max_seconds: Some(grida_fx_core::money::Units::from_f64(15.5)),
+            tiers: Some(("resolution".into(), vec!["480p".into(), "1080p".into()])),
+            text_to_video: true,
+            ..RouteLimits::default()
+        };
+        let limits = Some(&limits);
+        let request = |resolution: &str, duration: u64| json!({"prompt": "p", "duration": duration, "resolution": resolution});
+        assert!(clip(&request("480p", 15), limits).is_ok());
+        assert!(clip(&request("1080p", 3), limits).is_ok());
+        assert_eq!(
+            clip(&request("480p", 16), limits).unwrap_err(),
+            "this route draws whole seconds from 3 to 15, not 16"
+        );
+        // A tier the route does not price is not drawn, the adapter's default included.
+        assert_eq!(
+            clip(&request("720p", 5), limits).unwrap_err(),
+            "this route draws no 720p clip at 9:16"
+        );
+        assert_eq!(
+            clip(&json!({"prompt": "p", "duration": 5}), limits).unwrap_err(),
+            "this route draws no 720p clip at 9:16"
+        );
+        // Tiers by another setting are not resolutions.
+        let by_size = RouteLimits {
+            tiers: Some(("size".into(), vec!["480p".into()])),
+            text_to_video: true,
+            ..RouteLimits::default()
+        };
+        assert!(clip(&request("4k", 5), Some(&by_size)).is_ok());
+        assert!(clip(&request("480p", 5), Some(&by_size)).is_err());
+        // A tier whose size the adapter does not know is not held to one.
+        let clip = ClipFacts {
+            width: 480,
+            height: 854,
+            duration_seconds: 5.0,
+            fps: 24.0,
+        };
+        assert_eq!(check_clip(&clip, "480p", "9:16", 5.0), Ok(()));
+        assert_eq!(
+            check_clip(&clip, "480p", "9:16", 8.0).unwrap_err(),
+            "the clip runs 5.000 s, not 8 s"
         );
     }
 
