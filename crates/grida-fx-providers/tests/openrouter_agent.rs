@@ -756,7 +756,7 @@ fn the_key_never_reaches_a_reason_an_answer_or_a_url() {
         assert!(request.headers.iter().all(|(_, v)| !v.contains(KEY)));
         assert!(!format!("{request:?}").contains(KEY));
         assert_eq!(
-            request.credential.as_ref().map(|c| c.header),
+            request.credential.as_ref().map(|c| c.header.as_str()),
             Some("authorization")
         );
     }

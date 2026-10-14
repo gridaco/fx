@@ -1,0 +1,9 @@
+fx: workflow/v1
+id: case
+title: A declared provider
+steps:
+  draw:
+    uses: fx/image.generate@1
+    with: { prompt: a kite }
+outputs:
+  image: ${{ steps.draw.outputs.image }}

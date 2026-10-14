@@ -447,7 +447,7 @@ impl FalVideo {
             return Err(refusal);
         }
         crate::capabilities::check_request(&call.route.capability, &call.request)?;
-        let credential = client.credential(super::CREDENTIAL_HEADER, super::CREDENTIAL_PREFIX)?;
+        let credential = client.credential()?;
         let options = crate::wire::provider_options(call, OWNED)?;
         let clip = clip(&call.request, Some(&call.route.limits))?;
         let first = match clip.first_frame {
@@ -547,8 +547,7 @@ impl FalVideo {
         let Some(job) = Job::from_handle(handle) else {
             return unreachable("a fal video job handle is not one this adapter wrote");
         };
-        let credential = match client.credential(super::CREDENTIAL_HEADER, super::CREDENTIAL_PREFIX)
-        {
+        let credential = match client.credential() {
             Ok(credential) => credential,
             Err(reason) => return unreachable(&reason),
         };

@@ -109,7 +109,7 @@ impl FalImages {
             return Err(refusal);
         }
         crate::capabilities::check_request(&call.route.capability, &call.request)?;
-        let credential = client.credential(super::CREDENTIAL_HEADER, super::CREDENTIAL_PREFIX)?;
+        let credential = client.credential()?;
         let options = crate::wire::provider_options(call, OWNED)?;
         let request = &call.request;
         let edit = call.route.capability == "image.edit";

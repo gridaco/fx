@@ -95,6 +95,7 @@ routes:                             # the model for each capability, where a ste
 # workflows: [workflows, ../tools/art] # where a workflow id is looked for (replaces the default)
 # cache: ../shared-cache               # share a cache across projects
 # sources: [acme_lib]                  # packages whose source counts toward your nodes' identity
+# providers: { acme: … }               # providers FX does not ship (see Routes and providers)
 ```
 
 A path that starts with `./` or `../` in a workflow (`uses:`, `prompt:`, `schema:`, a file in
@@ -288,11 +289,38 @@ A route is `model@provider`. Pick one per capability in `fx.yaml` `routes:`, or 
   API key, counted against the user's own subscription and booked by FX at $0. Neither takes an
   exact `size` (leave it out and resize after) or a `mask`; Grok Build has no transparency. A run
   whose paid calls are all on them needs no ceiling (it runs under $0 and refuses other routes).
-- **Keys** come from the environment, else the project's `.env` (only the eleven FX key and base
-  URL names are read). Keys never go in `fx.yaml` or a workflow. Without `--live` no key is used.
+- **Keys** come from the environment, else the project's `.env` (only the key and base URL names
+  of FX's providers and of those `fx.yaml` declares are read). Keys never go in `fx.yaml` or a
+  workflow. Without `--live` no key is used.
   `*_BASE_URL` variables point a provider at a proxy; `HTTPS_PROXY`/`ALL_PROXY` are honoured.
   HTTPS trusts the public roots and the platform's certificate store (`SSL_CERT_FILE`/`SSL_CERT_DIR`
   in its place when set), so a proxy whose root the machine trusts works.
+- **A provider FX does not ship** is declared under `providers:` in `fx.yaml`: the variable its
+  key comes from (sent as `authorization: Bearer <key>` unless `header` and `scheme` say
+  otherwise; no `credential` for a server that needs no key), its base URL (`https` unless it is
+  this machine, with no userinfo, query or fragment) and the variable that may move it, the hosts
+  its results may be downloaded from, and its `family` (`openai-compatible`). FX reads its
+  variables from the environment or `.env` as it reads its own, redacts its key, keeps both from
+  Codex, Grok Build, the background service and the browser opener (node hosts inherit FX's
+  environment, as before), and `grida fx doctor` lists it
+  (`provider  acme api.acme.test ACME_API_KEY missing`). It bills dollars. A declaration is not
+  part of any identity. No adapter serves a declared provider yet: its routes plan and price, and
+  a live call on one is refused (`no adapter serves …`). A name FX ships (`gg`, `openai`,
+  `openrouter`, `fal`, `tripo`, `elevenlabs`, `codex`, `grok`), a variable already read,
+  `GRIDA_FX_*`, proxy, certificate, `PATH` and `HOME` variables, and a default base URL that
+  breaks the address rule are refused.
+
+```yaml
+# fx.yaml
+fx: project/v1
+routes:
+  image.generate: openai/gpt-image-2.5-sunburst@gg   # FX's own providers need no declaration
+providers:
+  acme:                                    # its routes are <model>@acme
+    credential: { variable: ACME_API_KEY } # header and scheme: authorization, Bearer
+    base_url: { variable: ACME_BASE_URL, default: "https://api.acme.test/v1" }
+    family: openai-compatible
+```
 - Built-in prices are planning allowances; a call is booked at what the provider reports, else at
   its whole reservation. A route on a provider with no adapter still plans; live it is refused,
   and so is one whose `contract` names an `adapter` FX does not have (doctor: `no adapter`).
@@ -407,7 +435,9 @@ routes:
   declares, and a request without a first frame on a route that declares `text_to_video`; GG
   image edits are limited by the route's `max_input_pictures`, not by FX. The built-in OpenRouter
   image routes now take `background: transparent` (they refused it, so a step that `requires:
-  [alpha]` now plans on them), and the built-in GG video route declares `text_to_video`.
+  [alpha]` now plans on them), and the built-in GG video route declares `text_to_video`. A Tripo
+  model whose address has a fragment is no longer downloaded (`a Tripo model address is outside
+  Tripo's own hosts`), as a fal output's never was.
 
 ## Your own nodes
 
@@ -918,6 +948,10 @@ Python, `run(..., { standIn: fn })` in JavaScript, in your own process.
 | `… was refused: provider_options.<provider>.<name> holds a file: provider options are JSON only` (or `provider_options.<provider> holds a file…`) | pass files through the type's inputs; options carry JSON only |
 | `… was refused: Codex takes no provider_options` (or `Grok Build …`) | drop `provider_options.codex` (or `.grok`); other providers' members may stay |
 | `routes.<n>.contract.provider_options.<provider>: … is not of type "object"` | write `provider_options: { <provider>: { <parameter>: <value> } }` |
+| `fx.yaml: providers.<name>: <name> is a provider FX ships` | declare it under another name; FX's own providers need no declaration |
+| `fx.yaml: providers.<name>.credential.variable: <VARIABLE> is already read for <provider>` (or `.base_url.variable`) | give the declaration a variable of its own |
+| `fx.yaml: providers.<name>.credential.variable: <VARIABLE> is reserved for FX and the programs it starts` (or `.base_url.variable`) | `GRIDA_FX_*`, proxy, certificate, `PATH` and `HOME` variables cannot hold a key or an address: name another |
+| `fx.yaml: providers.<name>.base_url.default: <name> base_url must use HTTPS unless it targets a loopback host` (or `must be an HTTP(S) URL without credentials, query, or fragment`, `must use a valid network port`) | give the default as `https://host[:port]/path`, or `http://` for this machine only (`localhost`, `127.0.0.1`) |
 | `not installed (codex)` / `not installed (grok)` in doctor | install and sign in to Codex or Grok Build, or set `GRIDA_FX_TOOL_CODEX` / `GRIDA_FX_TOOL_GROK` |
 | `Codex … is older than 0.160.1` (or `too old (codex …)` in doctor) | update the Codex that doctor's `program` line names, or set `GRIDA_FX_TOOL_CODEX` to a newer one |
 | `python … too old` / `no grida` in doctor | `uv sync` or `pip install grida` in the project, or set `GRIDA_FX_PYTHON` |

@@ -267,7 +267,7 @@ fn prepare(request: &HttpRequest) -> Result<Prepared, TransportError> {
             )
         })?;
         value.set_sensitive(true);
-        headers.append(header_name(credential.header)?, value);
+        headers.append(header_name(&credential.header)?, value);
     }
     Ok(Prepared { headers, body })
 }
@@ -433,8 +433,8 @@ mod tests {
 
     fn credential() -> Credential {
         Credential {
-            header: "authorization",
-            prefix: "Bearer ",
+            header: "authorization".into(),
+            prefix: "Bearer ".into(),
             secret: Secret::new("sk-test-transport-1"),
         }
     }
@@ -572,8 +572,8 @@ mod tests {
         assert_eq!(error.kind, TransportErrorKind::Refused);
         assert!(!error.reason.contains("bad name"), "{}", error.reason);
         let bad_key = post(Body::Empty).credential(Credential {
-            header: "xi-api-key",
-            prefix: "",
+            header: "xi-api-key".into(),
+            prefix: "".into(),
             secret: Secret::new("key\r\nx-evil: 1"),
         });
         let error = prepare(&bad_key).unwrap_err();
@@ -926,8 +926,8 @@ mod tests {
                 Lane::Provider,
             )
             .credential(Credential {
-                header: "authorization",
-                prefix: "Bearer ",
+                header: "authorization".into(),
+                prefix: "Bearer ".into(),
                 secret: Secret::new("test-key-not-real-proxy"),
             })
             .body(Body::Json(json!({"model": "img-a"})))

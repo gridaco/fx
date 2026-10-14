@@ -20,22 +20,6 @@ fn repository() -> PathBuf {
         .unwrap()
 }
 
-/// The variables no child inherits: the six provider keys and the five base URLs
-/// (spec/providers.md §1).
-const PROVIDER_VARIABLES: [&str; 11] = [
-    "GG_API_KEY",
-    "OPENAI_API_KEY",
-    "OPENROUTER_API_KEY",
-    "FAL_KEY",
-    "TRIPO_API_KEY",
-    "ELEVENLABS_API_KEY",
-    "OPENAI_BASE_URL",
-    "OPENROUTER_BASE_URL",
-    "FAL_BASE_URL",
-    "ELEVENLABS_BASE_URL",
-    "GG_BASE_URL",
-];
-
 /// `grida-fx` in `cwd` with a minimal environment: no provider key or base URL, the network off
 /// (`--live` builds its adapters over a transport that sends nothing) and the `.env` file off.
 fn command(cwd: &Path, args: &[&str]) -> Command {
@@ -52,7 +36,9 @@ fn command(cwd: &Path, args: &[&str]) -> Command {
         // No Codex and no Grok Build, whatever this machine has installed.
         .env("GRIDA_FX_TOOL_CODEX", cwd.join("no-codex"))
         .env("GRIDA_FX_TOOL_GROK", cwd.join("no-grok"));
-    for name in PROVIDER_VARIABLES {
+    // The variables of FX's provider declarations (spec/providers.md §1), as the engine lists
+    // them, kept out even if the minimal environment above gains one.
+    for name in grida_fx_core::providers::Declarations::built_in().variables() {
         command.env_remove(name);
     }
     command
@@ -1297,6 +1283,200 @@ fn integrated_doctor_refuses_a_malformed_key_file() {
     // Missing keys alone do not change the exit status; the file off, all is well again.
     let output = command(project.path(), &["doctor"]).output().unwrap();
     assert_eq!(status(&output), 0, "{}", stderr(&output));
+}
+
+/// A project that declares `acme` (an OpenAI-compatible provider whose key and base URL have
+/// their own variables) and `local` (a keyless one on this machine), with an `acme` chat route.
+const DECLARING: &str = "fx: project/v1\nroute_tables: [routes.yaml]\nproviders:\n  acme:\n    \
+                         credential: { variable: ACME_API_KEY }\n    base_url: { variable: \
+                         ACME_BASE_URL, default: \"https://api.acme.test/v1\" }\n    family: \
+                         openai-compatible\n  local:\n    base_url: { default: \
+                         \"http://127.0.0.1:8080/v1\" }\n    family: openai-compatible\n";
+
+#[test]
+fn integrated_doctor_lists_declared_providers_and_their_keys() {
+    let project = empty_project();
+    std::fs::write(project.path().join("fx.yaml"), DECLARING).unwrap();
+    std::fs::write(
+        project.path().join("routes.yaml"),
+        "fx: routes/v1\nroutes:\n  - { capability: structured.generate, route: chat-a@acme, \
+         price: { cap_usd: 0.05 } }\n",
+    )
+    .unwrap();
+    let doctor = |process: &[(&str, &str)], dotenv: bool| {
+        let mut command = command(project.path(), &["doctor"]);
+        if dotenv {
+            command.env_remove("GRIDA_FX_DISABLE_DOTENV");
+        }
+        for (name, value) in process {
+            command.env(name, value);
+        }
+        command.output().unwrap()
+    };
+    let output = doctor(&[], false);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    let text = stdout(&output);
+    let lines: Vec<&str> = text.lines().collect();
+    // The built-in key lines, unchanged, then one line per declaration, in its order.
+    assert_eq!(lines[3], "key       GG_API_KEY missing", "{text}");
+    assert_eq!(lines[8], "key       ELEVENLABS_API_KEY missing", "{text}");
+    assert_eq!(
+        lines[9..11],
+        [
+            "provider  acme api.acme.test ACME_API_KEY missing",
+            "provider  local 127.0.0.1:8080 needs no key",
+        ],
+        "{text}"
+    );
+    // No adapter serves a declared provider's routes yet.
+    assert!(
+        text.contains("\nroute     structured.generate chat-a@acme no adapter\n"),
+        "{text}"
+    );
+    // Its key and base URL from the environment, then from the planning project's `.env`.
+    let output = doctor(
+        &[
+            ("ACME_API_KEY", MADE_UP_KEY),
+            ("ACME_BASE_URL", "https://proxy.acme.test:8443/v1"),
+        ],
+        false,
+    );
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    assert_no_key(&output);
+    assert!(
+        stdout(&output)
+            .contains("\nprovider  acme proxy.acme.test:8443 ACME_API_KEY present (environment)\n"),
+        "{}",
+        stdout(&output)
+    );
+    std::fs::write(
+        project.path().join(".env"),
+        format!("ACME_API_KEY={MADE_UP_KEY}\n"),
+    )
+    .unwrap();
+    let output = doctor(&[], true);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    assert_no_key(&output);
+    assert!(
+        stdout(&output).contains("\nprovider  acme api.acme.test ACME_API_KEY present (.env)\n"),
+        "{}",
+        stdout(&output)
+    );
+    // A refused base URL stops a live run, so doctor exits 1 and names the variable.
+    let output = doctor(&[("ACME_BASE_URL", "http://proxy.acme.test")], false);
+    assert_eq!(status(&output), 1, "{}", stderr(&output));
+    assert!(
+        stdout(&output).contains(
+            "\nkeys      ACME_BASE_URL: acme base_url must use HTTPS unless it targets a loopback \
+             host\n"
+        ),
+        "{}",
+        stdout(&output)
+    );
+    // Another provider's refused base URL leaves this one's own.
+    let output = doctor(
+        &[
+            ("OPENAI_BASE_URL", "http://proxy.example.test"),
+            ("ACME_BASE_URL", "https://proxy.acme.test:8443/v1"),
+        ],
+        false,
+    );
+    assert_eq!(status(&output), 1, "{}", stderr(&output));
+    let text = stdout(&output);
+    assert!(
+        text.contains(
+            "\nkeys      OPENAI_BASE_URL: OpenAI base_url must use HTTPS unless it targets a \
+             loopback host\n"
+        ) && text.contains("\nprovider  acme proxy.acme.test:8443 ACME_API_KEY missing\n"),
+        "{text}"
+    );
+    // A declared key held in a base URL is refused without showing it.
+    let output = doctor(
+        &[
+            ("ACME_API_KEY", MADE_UP_KEY),
+            (
+                "OPENAI_BASE_URL",
+                &format!("https://proxy.example.test/{MADE_UP_KEY}"),
+            ),
+        ],
+        false,
+    );
+    assert_eq!(status(&output), 1, "{}", stderr(&output));
+    assert_no_key(&output);
+    assert!(
+        stdout(&output).contains("\nkeys      OPENAI_BASE_URL holds a credential\n"),
+        "{}",
+        stdout(&output)
+    );
+}
+
+#[test]
+fn integrated_a_declared_provider_plans_and_a_refused_declaration_stops_every_verb() {
+    let project = drawing_project(
+        "fx: project/v1\nroutes:\n  image.generate: img-a@acme\nproviders:\n  acme:\n    \
+         base_url: { default: \"https://api.acme.test/v1\" }\n",
+    );
+    let output = grida_fx(project.path(), &["plan", "case", "--routes", "routes.yaml"]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    // A live run on it is refused before anything is sent: no adapter serves it.
+    let output = grida_fx(
+        project.path(),
+        &[
+            "run",
+            "case",
+            "--routes",
+            "routes.yaml",
+            "--live",
+            "--max-usd",
+            "1",
+        ],
+    );
+    assert_eq!(status(&output), 1, "{}", stderr(&output));
+    assert!(
+        stdout(&output).contains("no adapter serves"),
+        "{}",
+        stdout(&output)
+    );
+    for (providers, refusal) in [
+        (
+            "  fal:\n    base_url: { default: \"https://fal.example.test\" }\n",
+            "fx.yaml: providers.fal: fal is a provider FX ships",
+        ),
+        (
+            "  acme:\n    credential: { variable: FAL_KEY }\n    base_url: { default: \
+             \"https://api.acme.test\" }\n",
+            "fx.yaml: providers.acme.credential.variable: FAL_KEY is already read for fal",
+        ),
+        (
+            "  acme:\n    credential: { variable: HTTPS_PROXY }\n    base_url: { default: \
+             \"https://api.acme.test\" }\n",
+            "fx.yaml: providers.acme.credential.variable: HTTPS_PROXY is reserved for FX and the \
+             programs it starts",
+        ),
+        (
+            "  acme:\n    base_url: { default: \"http://api.acme.test\" }\n",
+            "fx.yaml: providers.acme.base_url.default: acme base_url must use HTTPS unless it \
+             targets a loopback host",
+        ),
+    ] {
+        std::fs::write(
+            project.path().join("fx.yaml"),
+            format!("fx: project/v1\nproviders:\n{providers}"),
+        )
+        .unwrap();
+        for argv in [
+            &["plan", "case", "--routes", "routes.yaml"][..],
+            &["doctor"][..],
+        ] {
+            let output = grida_fx(project.path(), argv);
+            assert_eq!(status(&output), 2, "{argv:?}: {}", stdout(&output));
+            assert!(
+                stderr(&output).contains(refusal),
+                "{argv:?}: {}",
+                stderr(&output)
+            );
+        }
+    }
 }
 
 #[cfg(unix)]

@@ -1,0 +1,89 @@
+# A project that declares providers (providers.md §1): `acme`, with its key's variable and
+# header, a base URL its own variable moves, download hosts and a family, and `local`, a keyless
+# server on this machine. A declaration is configuration, not identity: the workflow on an acme
+# route plans, and expands to the same graph with and without the declarations (expand.json,
+# saved twice). doctor lists each declared provider after the built-in keys, with its base URL's
+# host and where its key comes from. A declaration that takes a name FX ships, a variable a
+# built-in reads, one FX or the programs it starts read for themselves (in any letter case), or a
+# plain-http default base URL off this machine is refused while fx.yaml is read (exit 2).
+steps:
+- argv: [plan, case, --routes, routes.yaml]
+  save: plan.txt
+- argv: [expand, case, --routes, routes.yaml]
+  save: expand.json
+  json: true
+- argv: [doctor]
+  mentions:
+  - "provider  acme api.acme.test ACME_API_KEY missing"
+  - "provider  local 127.0.0.1:8080 needs no key"
+- files:
+    fx.yaml: |
+      fx: project/v1
+      routes:
+        image.generate: img-a@acme
+  argv: [expand, case, --routes, routes.yaml]
+  save: expand.json
+  json: true
+- files:
+    fx.yaml: |
+      fx: project/v1
+      providers:
+        fal:
+          base_url: { default: "https://fal.example.test" }
+  argv: [plan, case, --routes, routes.yaml]
+  status: 2
+  mentions:
+  - "fx.yaml: providers.fal: fal is a provider FX ships"
+- files:
+    fx.yaml: |
+      fx: project/v1
+      providers:
+        codex:
+          base_url: { default: "https://codex.example.test" }
+  argv: [plan, case, --routes, routes.yaml]
+  status: 2
+  mentions:
+  - "fx.yaml: providers.codex: codex is a provider FX ships"
+- files:
+    fx.yaml: |
+      fx: project/v1
+      providers:
+        acme:
+          credential: { variable: ACME_API_KEY }
+          base_url: { variable: OPENAI_BASE_URL, default: "https://api.acme.test/v1" }
+  argv: [plan, case, --routes, routes.yaml]
+  status: 2
+  mentions:
+  - "fx.yaml: providers.acme.base_url.variable: OPENAI_BASE_URL is already read for openai"
+- files:
+    fx.yaml: |
+      fx: project/v1
+      providers:
+        acme:
+          credential: { variable: https_proxy }
+          base_url: { default: "https://api.acme.test/v1" }
+  argv: [doctor]
+  status: 2
+  mentions:
+  - "fx.yaml: providers.acme.credential.variable: https_proxy is reserved for FX and the programs it starts"
+- files:
+    fx.yaml: |
+      fx: project/v1
+      providers:
+        acme:
+          credential: { variable: GRIDA_FX_NETWORK }
+          base_url: { default: "https://api.acme.test/v1" }
+  argv: [plan, case, --routes, routes.yaml]
+  status: 2
+  mentions:
+  - "fx.yaml: providers.acme.credential.variable: GRIDA_FX_NETWORK is reserved for FX and the programs it starts"
+- files:
+    fx.yaml: |
+      fx: project/v1
+      providers:
+        acme:
+          base_url: { default: "http://api.acme.test/v1" }
+  argv: [plan, case, --routes, routes.yaml]
+  status: 2
+  mentions:
+  - "fx.yaml: providers.acme.base_url.default: acme base_url must use HTTPS unless it targets a loopback host"

@@ -83,7 +83,7 @@ impl TripoMesh {
         if let Err(reason) = crate::capabilities::check_request(CAPABILITY, &call.request) {
             return api.refused(&reason);
         }
-        if let Err(reason) = api.client.credential("authorization", "Bearer ") {
+        if let Err(reason) = api.client.credential() {
             return api.refused(&reason);
         }
         let options = match crate::wire::provider_options(call, OWNED) {

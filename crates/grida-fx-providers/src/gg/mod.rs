@@ -124,7 +124,7 @@ impl Gateway {
     /// The `authorization: Bearer <GG_API_KEY>` credential, or `GG_API_KEY
     /// is not set`.
     pub fn credential(&self) -> Result<Credential, String> {
-        self.client.credential("authorization", "Bearer ")
+        self.client.credential()
     }
 
     /// The `Idempotency-Key` of `call`'s attempt (module doc): printable ASCII, no spaces, at most
@@ -392,7 +392,7 @@ pub fn request_id(response: &HttpResponse) -> Option<String> {
 
 /// The client of GG's API.
 pub fn client(setup: &Setup) -> Client {
-    setup.client(KeyName::GridaGateway, &setup.endpoints.gg)
+    setup.client(KeyName::GridaGateway)
 }
 
 /// GG's error `code` (`invalid_request`, `insufficient_credit`, …) when the body is its error

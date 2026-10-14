@@ -489,7 +489,7 @@ def main() -> int:
             report = generate(command, prepare_output(args.output))
         else:
             with tempfile.TemporaryDirectory(prefix="fx-observation-") as scratch:
-                report = generate(command, prepare_output(Path(scratch) / "evidence"))
+                report = generate(command, prepare_output(Path(scratch).resolve() / "evidence"))
         print(json.dumps(report, sort_keys=True))
         return 0
     except (ValueError, OSError, subprocess.SubprocessError) as error:

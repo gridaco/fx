@@ -9,7 +9,7 @@
 //! `duration` and `prompt_influence` are sent only when given, as floats (`1` goes out as `1.0`),
 //! so the provider's defaults apply otherwise. Characters are counted as Unicode scalar values.
 
-use super::{CREDENTIAL_HEADER, check_route, float, number, post, refused, within};
+use super::{check_route, float, number, post, refused, within};
 use crate::BoxFuture;
 use crate::adapter::{Answer, CallRequest, Identity, RequestAdapter, Sent};
 use crate::capabilities;
@@ -61,7 +61,7 @@ impl RequestAdapter for ElevenLabsSound {
             {
                 return refused(&self.client, &reason);
             }
-            let credential = match self.client.credential(CREDENTIAL_HEADER, "") {
+            let credential = match self.client.credential() {
                 Ok(credential) => credential,
                 Err(reason) => return refused(&self.client, &reason),
             };

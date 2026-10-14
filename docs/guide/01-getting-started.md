@@ -150,8 +150,8 @@ replaces the default, so name `workflows` too if you keep workflows there as wel
 itself, or a folder above it, is refused, since it would search your runs and cache. A workflow in a
 folder with an `fx.yaml` of its own keeps that project as its home: its `./` paths, node modules and
 route defaults are that project's, with your `routes:` winning. The runs, the cache, the budget, the
-route tables and the takes file (`<id>.takes.yaml` at your root) stay those of the project you run
-from.
+route tables, the provider declarations and the takes file (`<id>.takes.yaml` at your root) stay
+those of the project you run from.
 
 Keep `runs/`, `.fx/`, `.venv/` and `node_modules/` out of source control. A project file is
 recommended, not required for execution. For a one-off workflow, call `run` directly; use

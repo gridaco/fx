@@ -683,7 +683,7 @@ fn the_key_never_leaves_the_credential_slot() {
                 .credential
                 .expect("the provider lane carries the key");
             assert_eq!(
-                (credential.header, credential.prefix),
+                (credential.header.as_str(), credential.prefix.as_str()),
                 ("authorization", "Bearer ")
             );
         }

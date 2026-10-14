@@ -17,51 +17,55 @@ use serde_json::{Map, Value};
 use std::sync::LazyLock;
 
 // ---------------------------------------------------------------------------------------------
-// Base URLs
+// Base URLs and download hosts
 
-/// Normalizes a provider base URL (spec/providers.md §1): trimmed, trailing `/` removed; an
-/// `http`/`https` URL with a host, no userinfo, no query, no fragment and a valid port; `http`
-/// only for a loopback host (`localhost`, or a loopback IP). `label` names the provider in the
-/// refusal (`OpenAI base_url must …`).
-pub fn normalize_base_url(value: &str, label: &str) -> Result<String, String> {
-    let trimmed = value.trim().trim_end_matches('/');
-    let shape = || {
-        format!("{label} base_url must be an HTTP(S) URL without credentials, query, or fragment")
-    };
-    let url = match url::Url::parse(trimmed) {
-        Ok(url) => url,
-        Err(url::ParseError::InvalidPort) => {
-            return Err(format!("{label} base_url must use a valid network port"));
-        }
-        Err(_) => return Err(shape()),
-    };
-    if !matches!(url.scheme(), "http" | "https")
-        || url.host_str().is_none()
-        || !url.username().is_empty()
-        || url.password().is_some()
-        || url.query().is_some()
-        || url.fragment().is_some()
-        || trimmed.contains('?')
-        || trimmed.contains('#')
-    {
-        return Err(shape());
-    }
-    if url.scheme() == "http" && !is_loopback(&url) {
-        return Err(format!(
-            "{label} base_url must use HTTPS unless it targets a loopback host"
-        ));
-    }
-    Ok(trimmed.to_string())
+/// Normalizes a provider base URL (spec/providers.md §1); the core's, which reads declared
+/// defaults with it.
+pub use grida_fx_core::providers::normalize_base_url;
+
+pub(crate) use grida_fx_core::providers::is_loopback;
+
+/// Why a result's URL is not downloaded ([`download_url`]): it does not parse, or it is not on its
+/// provider's hosts. Each caller words its own sentence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OffHost {
+    Malformed,
+    Outside,
 }
 
-pub(crate) fn is_loopback(url: &url::Url) -> bool {
-    match url.host() {
-        Some(url::Host::Domain(domain)) => domain
-            .trim_end_matches('.')
-            .eq_ignore_ascii_case("localhost"),
-        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
-        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
-        None => false,
+/// A result's URL, parsed, when it may be downloaded from a provider whose declaration lists
+/// `hosts` (spec/providers.md §1): `https`; a host that is a name, not an address, and is one of
+/// `hosts` or lies below a `*.<domain>` entry's domain, compared in lower case without trailing
+/// dots; no userinfo; no port but 443 (which the parser drops); no fragment. A query is allowed.
+/// A download sends the provider's text as given; the transport parses it with the same parser,
+/// so the host checked here is the host asked.
+pub fn download_url(url: &str, hosts: &[String]) -> Result<url::Url, OffHost> {
+    let parsed = url::Url::parse(url).map_err(|_| OffHost::Malformed)?;
+    if parsed.scheme() != "https"
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+        || parsed.port().is_some()
+        || parsed.fragment().is_some()
+    {
+        return Err(OffHost::Outside);
+    }
+    let Some(url::Host::Domain(domain)) = parsed.host() else {
+        return Err(OffHost::Outside);
+    };
+    let host = domain.trim_end_matches('.').to_ascii_lowercase();
+    let listed = hosts.iter().any(|entry| match entry.strip_prefix("*.") {
+        Some(below) => {
+            host.strip_suffix(below)
+                .is_some_and(|rest| rest.ends_with('.'))
+                && !host.starts_with('.')
+                && !host.contains("..")
+        }
+        None => host == *entry,
+    });
+    if listed {
+        Ok(parsed)
+    } else {
+        Err(OffHost::Outside)
     }
 }
 
@@ -850,6 +854,46 @@ mod tests {
         assert_eq!(
             normalize_base_url("https://api.example.test:99999", "Acme").unwrap_err(),
             "Acme base_url must use a valid network port"
+        );
+    }
+
+    #[test]
+    fn downloads_are_held_to_the_declared_hosts() {
+        let hosts = ["cdn.acme.test".to_string(), "*.media.acme.test".to_string()];
+        for good in [
+            "https://cdn.acme.test/a.png",
+            "https://CDN.Acme.Test./a.png?sig=1",
+            "https://cdn.acme.test:443/a.png",
+            "https://v1.media.acme.test/a.png",
+            "https://a.b.media.acme.test/a.png",
+        ] {
+            assert!(download_url(good, &hosts).is_ok(), "{good}");
+        }
+        for bad in [
+            "http://cdn.acme.test/a.png",
+            "https://media.acme.test/a.png",
+            "https://evilmedia.acme.test/a.png",
+            "https://media.acme.test.evil.example/a.png",
+            "https://other.acme.test/a.png",
+            "https://user:pw@cdn.acme.test/a.png",
+            "https://cdn.acme.test:8443/a.png",
+            "https://cdn.acme.test/a.png#frag",
+            "https://127.0.0.1/a.png",
+            "https://[::1]/a.png",
+            "data:image/png;base64,aGVsbG8=",
+        ] {
+            assert_eq!(download_url(bad, &hosts), Err(OffHost::Outside), "{bad}");
+        }
+        for malformed in ["not a url", "", "https://cdn.acme.test:99999/a.png"] {
+            assert_eq!(
+                download_url(malformed, &hosts),
+                Err(OffHost::Malformed),
+                "{malformed}"
+            );
+        }
+        assert_eq!(
+            download_url("https://cdn.acme.test/a.png", &[]),
+            Err(OffHost::Outside)
         );
     }
 

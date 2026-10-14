@@ -1,0 +1,12 @@
+fx: project/v1
+routes:
+  image.generate: img-a@acme
+providers:
+  acme:
+    credential: { variable: ACME_API_KEY, header: authorization, scheme: Bearer }
+    base_url: { variable: ACME_BASE_URL, default: "https://api.acme.test/v1" }
+    download_hosts: [cdn.acme.test, "*.media.acme.test"]
+    family: openai-compatible
+  local:
+    base_url: { default: "http://127.0.0.1:8080/v1" }
+    family: openai-compatible

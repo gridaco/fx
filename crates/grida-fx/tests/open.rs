@@ -379,3 +379,57 @@ fn view_open_conflicts_with_no_open_before_reading_the_plan_or_serving() {
     );
     assert_eq!(std::fs::read_dir(folder.path()).unwrap().count(), 0);
 }
+
+/// The browser opener starts without the variables the planning project declares, FX's own
+/// included, also when the command runs from another project's directory.
+#[test]
+fn the_browser_opener_withholds_the_planning_projects_declared_variables() {
+    let here = tempfile::tempdir().unwrap();
+    std::fs::write(here.path().join("fx.yaml"), "fx: project/v1\n").unwrap();
+    let other = tempfile::tempdir().unwrap();
+    std::fs::write(
+        other.path().join("fx.yaml"),
+        "fx: project/v1\nproviders:\n  acme:\n    credential: { variable: ACME_API_KEY }\n    \
+         base_url: { default: \"https://api.acme.test/v1\" }\n",
+    )
+    .unwrap();
+    std::fs::write(
+        other.path().join("workflow.yaml"),
+        "fx: workflow/v1\nid: case\ntitle: Case\nsteps:\n  draw:\n    uses: \
+         fx/image.generate@1\n    with: { prompt: a kite }\n",
+    )
+    .unwrap();
+    let bin = here.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let receipt = here.path().join("opener.txt");
+    let opened = here.path().join("opened");
+    write_program(
+        &bin.join(if cfg!(target_os = "macos") {
+            "open"
+        } else {
+            "xdg-open"
+        }),
+        &format!(
+            "#!/bin/sh\nprintf '%s %s %s\\n' \"${{ACME_API_KEY-unset}}\" \"${{GG_API_KEY-unset}}\" \
+             \"${{OTHER-unset}}\" > '{}'\n: > '{}'\n",
+            receipt.display(),
+            opened.display()
+        ),
+    );
+    let mut command = command(here.path());
+    command
+        .env("PATH", &bin)
+        .env("ACME_API_KEY", "acme-test-key")
+        .env("GG_API_KEY", "gg-test-key")
+        .env("OTHER", "kept")
+        .arg("plan")
+        .arg(other.path().join("workflow.yaml"))
+        .args(["--standalone", "--open"]);
+    let viewer = spawn(command);
+    await_file(&opened);
+    assert_eq!(
+        std::fs::read_to_string(&receipt).unwrap(),
+        "unset unset kept\n"
+    );
+    drop(viewer);
+}

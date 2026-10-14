@@ -4,6 +4,7 @@
 
 use crate::cli::{LogsArgs, ServiceArgs, StartArgs};
 use grida_fx_core::docs::project::Project;
+use grida_fx_core::providers::Declarations;
 use grida_fx_core::{Error, ErrorKind};
 use grida_fx_viewer::service::Catalog;
 use serde_json::{Value, json};
@@ -293,7 +294,10 @@ fn start_service(args: &StartArgs) -> Result<u8, Error> {
         }
         print_status(&existing, args.json)?;
         if args.open {
-            super::view::launch_browser(existing["url"].as_str().unwrap_or_default().into());
+            super::view::launch_browser(
+                existing["url"].as_str().unwrap_or_default().into(),
+                &project.declarations(),
+            );
         }
         return Ok(0);
     }
@@ -306,11 +310,17 @@ fn start_service(args: &StartArgs) -> Result<u8, Error> {
     if args.background {
         background(&project, &catalog, port, args)
     } else {
-        foreground(catalog, port, args)
+        foreground(catalog, port, args, &project.declarations())
     }
 }
 
-fn foreground(catalog: Catalog, port: u16, args: &StartArgs) -> Result<u8, Error> {
+/// Serves in this process. The browser opener withholds `declarations`' variables.
+fn foreground(
+    catalog: Catalog,
+    port: u16,
+    args: &StartArgs,
+    declarations: &Declarations,
+) -> Result<u8, Error> {
     let lock = owned_file(&catalog.state_dir().join(LOCK), false)
         .map_err(|error| Error::io("service lock", &error))?;
     let deadline = Instant::now() + WAIT;
@@ -334,6 +344,7 @@ fn foreground(catalog: Catalog, port: u16, args: &StartArgs) -> Result<u8, Error
                     if args.open {
                         super::view::launch_browser(
                             existing["url"].as_str().unwrap_or_default().into(),
+                            declarations,
                         );
                     }
                     return Ok(0);
@@ -371,7 +382,10 @@ fn foreground(catalog: Catalog, port: u16, args: &StartArgs) -> Result<u8, Error
         }
         print_status(&value, args.json)?;
         if args.open {
-            super::view::launch_browser(value["url"].as_str().unwrap_or_default().into());
+            super::view::launch_browser(
+                value["url"].as_str().unwrap_or_default().into(),
+                declarations,
+            );
         }
         let outcome = tokio::select! {
             outcome = &mut serving => outcome,
@@ -473,6 +487,24 @@ fn background(
     background_with_executable(project, catalog, port, args, &executable)
 }
 
+/// The background service's command: `start --project <root> --port <port>` in the project,
+/// without any variable the project's provider declarations read, FX's own included
+/// (spec/providers.md §1), and with the `.env` file off.
+fn service_command(project: &Project, port: u16, executable: &Path) -> Command {
+    let mut command = Command::new(executable);
+    command
+        .args(["start", "--project"])
+        .arg(&project.root)
+        .arg("--port")
+        .arg(port.to_string())
+        .current_dir(&project.root);
+    for name in project.declarations().variables() {
+        command.env_remove(name);
+    }
+    command.env("GRIDA_FX_DISABLE_DOTENV", "1");
+    command
+}
+
 fn background_with_executable(
     project: &Project,
     catalog: &Catalog,
@@ -497,23 +529,14 @@ fn background_with_executable(
     let mut reader = log
         .try_clone()
         .map_err(|error| Error::io("service log", &error))?;
-    let mut command = Command::new(executable);
+    let mut command = service_command(project, port, executable);
     command
-        .args(["start", "--project"])
-        .arg(&project.root)
-        .arg("--port")
-        .arg(port.to_string())
-        .current_dir(&project.root)
         .stdin(Stdio::null())
         .stdout(
             log.try_clone()
                 .map_err(|error| Error::io("service log", &error))?,
         )
         .stderr(log);
-    for name in grida_fx_providers::keys::ALLOWED {
-        command.env_remove(name);
-    }
-    command.env("GRIDA_FX_DISABLE_DOTENV", "1");
     let tag = random_id().map_err(|error| Error::io("service attempt", &error))?[..16].to_owned();
     command.env(ATTEMPT, &tag);
     #[cfg(unix)]
@@ -563,7 +586,10 @@ fn background_with_executable(
             }
             print_status(&value, args.json)?;
             if args.open {
-                super::view::launch_browser(value["url"].as_str().unwrap_or_default().into());
+                super::view::launch_browser(
+                    value["url"].as_str().unwrap_or_default().into(),
+                    &project.declarations(),
+                );
             }
             return Ok(0);
         }
@@ -722,6 +748,35 @@ mod tests {
             json: false,
         };
         background_with_executable(&project, &catalog, 1, &args, &executable).unwrap_err()
+    }
+
+    #[test]
+    fn the_service_inherits_no_declared_variable() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(
+            root.path().join("fx.yaml"),
+            "fx: project/v1\nproviders:\n  acme:\n    credential: { variable: ACME_API_KEY }\n    \
+             base_url: { variable: ACME_BASE_URL, default: \"https://api.acme.test/v1\" }\n",
+        )
+        .unwrap();
+        let project = Project::find(root.path()).unwrap();
+        let command = service_command(&project, 1, Path::new("grida-fx"));
+        let removed: Vec<String> = command
+            .get_envs()
+            .filter(|(_, value)| value.is_none())
+            .map(|(name, _)| name.to_string_lossy().into_owned())
+            .collect();
+        for name in [
+            "GG_API_KEY",
+            "FAL_BASE_URL",
+            "ACME_API_KEY",
+            "ACME_BASE_URL",
+        ] {
+            assert!(
+                removed.iter().any(|removed| removed == name),
+                "{name}: {removed:?}"
+            );
+        }
     }
 
     /// The failure names the cause this attempt's service wrote, not one an earlier attempt left

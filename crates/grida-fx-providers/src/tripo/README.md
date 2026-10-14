@@ -44,7 +44,7 @@ A route whose contract names one of these adapters with another `adapter_behavio
 - **Tasks.**
   - `GET /tasks/<id>` must answer for the same task id, with a status of `queued`, `running`, `success`, `failed`, `cancelled`, `banned` or `expired`.
   - Model URLs are the `https://` strings under object keys (arrays are not entered; keys match `[A-Za-z0-9_]+`) whose path names `model` or `mesh`. There are 1 to 8 distinct URLs, each at most 20 480 characters with no control character.
-  - Downloads go only to `tripo3d.ai`, its subdomains, and `tripo-data.rg1.data.tripo3d.com` (https, port 443, no userinfo). Each model is downloaded at Tripo's URL, byte for byte. Each file is sniffed: `glTF` is GLB, `Kaydara FBX Binary` is FBX, and anything else ends the job.
+  - Downloads go only to Tripo's declared download hosts ([providers.md](../../../../spec/providers.md) §1): `tripo3d.ai`, its subdomains, and `tripo-data.rg1.data.tripo3d.com` (https, port 443, no userinfo, no fragment; a host is compared without a trailing `.`). Up to 0.6.1 a model URL with a fragment was downloaded, and one whose host ended in `.` was off Tripo's hosts. Each model is downloaded at Tripo's URL, byte for byte. Each file is sniffed: `glTF` is GLB, `Kaydara FBX Binary` is FBX, and anything else ends the job.
   - A mesh answer keeps the first FBX, else the first GLB, as file `model`, with `data: {"facts": {"model_kind"}}`.
   - A rig answer needs exactly one GLB, as file `model`, with `data: {"facts": {"riggable", "checked_rig_type", "advisory_override"}}` taken from the handle.
 - **Collect:**

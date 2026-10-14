@@ -83,13 +83,14 @@ impl Lane {
     }
 }
 
-/// A credential the transport attaches as the header `header: <prefix><secret>`.
+/// A credential the transport attaches as the header `header: <prefix><secret>`, as its
+/// provider's declaration says (spec/providers.md §1).
 #[derive(Clone, PartialEq)]
 pub struct Credential {
     /// The header name, lowercase (`authorization`, `xi-api-key`).
-    pub header: &'static str,
+    pub header: String,
     /// What precedes the secret (`Bearer `, `Key `, or empty).
-    pub prefix: &'static str,
+    pub prefix: String,
     pub secret: Secret,
 }
 
@@ -472,8 +473,8 @@ mod tests {
     #[test]
     fn credentials_never_print() {
         let credential = Credential {
-            header: "authorization",
-            prefix: "Bearer ",
+            header: "authorization".into(),
+            prefix: "Bearer ".into(),
             secret: secret(),
         };
         let shown = format!("{credential:?}");
@@ -496,8 +497,8 @@ mod tests {
             Lane::Download,
         )
         .credential(Credential {
-            header: "authorization",
-            prefix: "Key ",
+            header: "authorization".into(),
+            prefix: "Key ".into(),
             secret: secret(),
         });
         let error = check_request(&request).unwrap_err();

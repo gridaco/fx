@@ -550,25 +550,103 @@ Gate: `cargo test`, `check_spec`, `make_models.py --check`, `check_llms`.
 
 ### M8. Provider declarations
 
-- [ ] Spec (`providers.md`): a declaration names the provider (the route grammar, not a built-in
-  name), its credential (variable, header, scheme), its base URL (variable and default; https
-  unless loopback), its download hosts, and its family or adapter. Refused: a built-in
+- [x] Spec (`providers.md`): a declaration names the provider (the route grammar, not a built-in
+  name), its credential (variable, header, scheme), its base URL (an optional variable and a
+  default; https unless loopback), its download hosts, and its family or adapter. Refused: a built-in
   provider's name; a variable a built-in or another declaration claims; `GRIDA_FX_*`, proxy and
   certificate variables.
-- [ ] `fx-project-v1`: `providers:`.
-- [ ] Built-in declarations replace the fixed key, variable, endpoint and provider lists.
+  - §1 keeps its heading and gains the built-in declarations as a table (key, header, base URL
+    and its variable, default base, download hosts), which a core test holds the code to, and the
+    `providers:` member. Codex and Grok Build are runtimes, not declarations; the name check
+    covers all eight names FX ships.
+  - Code facts: Tripo has no base-URL variable, so `base_url.variable` is optional and
+    `base_url.default` required; fal's queue host stays a constant (`setup::FAL_QUEUE`), since only
+    its run host is configurable. Base-URL refusals name the provider by a label (`Grida Gateway`,
+    `OpenAI`, …), a declared provider by its name.
+  - `credential` is optional: a provider without one is sent no key and needs none (a server on
+    this machine). `header` defaults to `authorization`, lowercase; `scheme` to `Bearer`, and `""`
+    sends the key bare. A variable is the `.env` grammar, `[A-Za-z_][A-Za-z0-9_]*`. `family` is
+    optional and `openai-compatible` is its one value; no adapter serves a family until M9, so a
+    declared provider's routes plan and price, a live call is `no_route` and doctor says
+    `no adapter`. `adapter` is M10's.
+  - Refused while `fx.yaml` is read (exit 2), `fx.yaml: providers.<name>…: <sentence>`: `<name> is
+    a provider FX ships`; `<VARIABLE> is already read for <provider>` (a built-in, an earlier
+    declaration, or the same one's other variable), compared in any letter case, since Windows
+    reads variables so; `<VARIABLE> is reserved for FX and the programs it starts` for `GRIDA_FX_*`,
+    `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY`, `NO_PROXY`, `SSL_CERT_FILE`, `SSL_CERT_DIR`, and
+    also `PATH` and `HOME`, which the scrubs would otherwise take from the programs FX starts, in
+    any letter case; a default base URL that does not normalize, with the base-URL sentences.
+    Codex's and Grok Build's withheld extras (`CODEX_API_KEY`, `XAI_API_KEY`, …) are not read by
+    FX, so a declaration may read them.
+  - Declarations come from the planning project's `fx.yaml` (`store.md`'s list of the planning
+    project's settings gains `providers`), are not identity and are not written to `plan.json`.
+- [x] `fx-project-v1`: `providers:`.
+  - The schema holds the shape (a name `[a-z0-9._-]+`, a lowercase header, a scheme token, a
+    variable, a host or `*.` and a domain of two labels or more, the one family) and describes
+    the refusals the parser makes, which come after it.
+- [x] Built-in declarations replace the fixed key, variable, endpoint and provider lists.
   - Credential headers and prefixes are owned values.
   - The `.env` loader reads the declared names, and the redactor learns their values.
   - The environment scrubs (Codex and Grok Build children, the service, the browser opener) use
-    the computed list.
+    the computed list. Node hosts inherit FX's environment as before (`protocol.md` §1), declared
+    variables set there included; `providers.md` §1 says so.
   - Codex and Grok Build stay runtimes.
-- [ ] One download-host allowlist helper, used by fal and Tripo.
-- [ ] `doctor` lists declared providers with their key state and base-URL host.
-- [ ] The tools' and tests' key lists read the engine's list, or stay in step with it.
-- [ ] A conformance case declares `acme`: plan, `doctor`, and the refused declarations.
-- [ ] `llms.txt` (it says "only these eleven variables"); guide pages 05 and 13.
+  - Core's `providers.rs`: `Declaration`, `built_in()` in doctor's order, `RUNTIMES`, and
+    `Declarations` (FX's, then the project's; `variables()` gives the keys in order, then the base
+    URLs, so the built-in list is the eleven in their old order). `normalize_base_url` and
+    `is_loopback` moved there (with the `url` dependency) so a declared default is refused while
+    the file is read; `wire` re-exports them. `Project::declarations()`.
+  - `keys::ALLOWED`, `setup::BASE_URL_VARIABLES`, `live::PROVIDERS` and the fixed `Endpoints`
+    fields are gone. `KeyName` stays as a typed handle on the built-in declarations, its
+    variable read from them. `Environment::read` takes the declarations; `Keys` is keyed by
+    provider and carries the declarations it was read for, so `Setup::new` and `live::servable`
+    keep their signatures, and `Servable::NoKey` names the variable. `Endpoints` is a base per
+    provider, plus fal's queue. `Client::credential()` takes no arguments: the header and scheme
+    are the declaration's. No credential byte changed: every replay fixture passes unchanged.
+  - Scrubs: `Setup::withheld()` reaches `CodexRuntime::new` and `GrokRuntime::new`;
+    `codex::version`, `live::installed` (doctor's probe) and the commands take the declared
+    variables. The service's child is built by `service_command` from the project's
+    declarations. `launch_browser` takes the declarations of the project its caller works in:
+    the planning project (`run`, `plan`, `view <target>`), the project `start` serves, and for
+    `inspect` the working directory's; `view --run` and `view --plan` read no project, so theirs
+    are the working directory's project's, else FX's own. `tests/open.rs` plans another
+    project's workflow with `--open` and holds the opener to that project's declarations.
+- [x] One download-host allowlist helper, used by fal and Tripo.
+  - `wire::download_url(url, hosts)`, refusing with `OffHost::Malformed` or `Outside`, each caller
+    keeping its sentences; `Client` carries its declaration's hosts. Code fact: fal's image and
+    background-removal answers check hosts, its video adapter and GG take any `https` URL
+    (unchanged; a follow-up).
+  - One rule set, fal's: Tripo now refuses a model URL with a fragment and accepts a host with a
+    trailing `.`; its reference says both, and `llms.txt`'s upgrade note the fragment, the one a
+    user can meet.
+- [x] `doctor` lists declared providers with their key state and base-URL host.
+  - After the built-in `key` lines, which are unchanged: `provider  <name> <host> <VARIABLE>
+    present (environment)` (or `present (.env)`, `missing`), or `… needs no key`, `<host>` with
+    the port a base URL names, the default's when its variable is refused. Each base URL is read
+    on its own (`Endpoints::each_from_environment`), so a refused variable moves no other
+    provider's host, and each refused one has its `keys` line; a live run still stops at the first.
+- [x] The tools' and tests' key lists read the engine's list, or stay in step with it.
+  - Code fact: no command prints the list, and the examples' checks stand alone, so
+    `crates/grida-fx/tests/key_lists.rs` holds the 17 lists (tools, examples, both SDKs' tests)
+    to the engine's: the six keys, or for `check_llms.py` and `demo_viewer.py` all eleven
+    variables. `cli.rs` takes the engine's list.
+- [x] A conformance case declares `acme`: plan, `doctor`, and the refused declarations.
+  - `providers-declared`: `acme` and a keyless `local`; the workflow on an `acme` route plans and
+    expands to the same graph without the declarations (saved twice); `doctor`'s `provider` lines
+    by `mentions`; six refusals. It binds no chat route on a family provider: M9 may. The
+    README gains a `doctor` row.
+- [x] `llms.txt` (it says "only the eleven FX key and base URL names are read"); guide pages 05
+  and 13.
+  - Code fact: "Only these eleven variables are read", which this item quoted, was
+    `providers.md`'s; guide page 05 said "only those eleven names". Also `llms.txt`'s `fx.yaml`
+    block, a declaration with its refusals in the errors table, and the upgrade note (Tripo's
+    fragment); page 13's "A provider FX does not ship"; `AGENT_READINESS.md` (AR-20, with no SDK
+    API: neither SDK writes `fx.yaml`); the Codex, Grok Build, fal and Tripo references;
+    `adapters.md`'s download rule; the starter's `.env.example`.
 
-Gate: the whole verification list.
+Gate: the whole verification list. `tools/check_observation.py` resolves its scratch folder
+before `prepare_output`, which refuses a path through a symbolic link: macOS's temporary folder
+is under `/var`, a link to `/private/var`, so the gate needs it on macOS.
 
 ### M9. OpenAI-compatible providers
 
@@ -710,7 +788,19 @@ when the owner asks.
   single image`); fal's published schemas default `num_images` to 1 where an endpoint takes it;
 - exact sizes on the generic image adapters: a model's own size parameter goes in
   `provider_options`, so the image check cannot hold the answer to it, and a step that asks for
-  an exact `size` is refused there.
+  an exact `size` is refused there;
+- download hosts for fal video and GG: `fal/video.rs` (`result_video`) and `gg/job.rs`
+  (`result_file`) download from any `https` host, so their declarations list none (fal's lists
+  `fal.media` for its image and background answers);
+- the browser opener's declarations for a recorded run or plan: `inspect <run>`, `view --run
+  <dir>` and `view --plan <file>` withhold those of the working directory's project, which is not
+  the run's when its folder lies in another project, since a run's `plan.json` holds only
+  project-relative paths;
+- a declared credential header the transport also sets: a declaration may name `content-type` or
+  `accept-encoding`, which `transport/http.rs` sets itself;
+- the redirect sentences' variables: `gg::BASE_URL_VARIABLE`, `elevenlabs::BASE_URL_VARIABLE`,
+  fal's `RUN_BASE_VARIABLE`, OpenAI's `BASE_URL_VARIABLE` and OpenRouter's literal restate the
+  declarations' base-URL variables.
 
 **gridaco/models**, gaps found against `v1.20261013.6`:
 - no answer shapes for fal's endpoints (only `grida` bindings have `result_schema_url`);

@@ -103,7 +103,7 @@ impl OpenRouterAgent {
         // 2. The capability.
         capabilities::check_request(CAPABILITY, &call.request)?;
         // 3. The key.
-        let credential = self.client.credential("authorization", "Bearer ")?;
+        let credential = self.client.credential()?;
         // 4 and 5. Values, then files.
         let options = wire::provider_options(call, OWNED)?;
         let policy = &contract.policy;

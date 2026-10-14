@@ -309,6 +309,8 @@ enum State {
 pub struct CodexRuntime {
     /// The program, or the refusal of every call.
     program: Result<Program, String>,
+    /// The declared variables Codex never inherits ([`super::withheld`]).
+    variables: Arc<[String]>,
     state: tokio::sync::Mutex<State>,
     /// The user's usage limit, once a call found it reached: `Some(resets_at)`, the unix time it
     /// resets when Codex gave it. No call starts while it holds.
@@ -316,9 +318,12 @@ pub struct CodexRuntime {
 }
 
 impl CodexRuntime {
-    pub fn new(program: Result<Program, String>) -> CodexRuntime {
+    /// The runtime of `program`, which starts without the declared `variables`
+    /// ([`crate::setup::Setup::withheld`]).
+    pub fn new(program: Result<Program, String>, variables: Arc<[String]>) -> CodexRuntime {
         CodexRuntime {
             program,
+            variables,
             state: tokio::sync::Mutex::new(State::Idle),
             limit: Mutex::new(None),
         }
@@ -363,7 +368,7 @@ impl CodexRuntime {
         }
         *state = State::Idle;
         let program = self.program.clone().map_err(Stop::Refused)?;
-        match open(&program).await {
+        match open(&program, &self.variables).await {
             Ok(connection) => {
                 let connection = Arc::new(connection);
                 *state = State::Running(Arc::clone(&connection));
@@ -393,22 +398,22 @@ impl Runtime for CodexRuntime {
 }
 
 /// Starts a Codex and checks its version and sign-in (module doc).
-async fn open(program: &Program) -> Result<Connection, Stop> {
+async fn open(program: &Program, variables: &[String]) -> Result<Connection, Stop> {
     let folder = tempfile::Builder::new()
         .prefix("grida-fx-codex-")
         .tempdir()
         .map_err(|error| Stop::Failed(grida_fx_core::error::io_reason(&error)))?;
-    let version = super::version(&program.path, folder.path())
+    let version = super::version(&program.path, folder.path(), variables)
         .await
         .map_err(Stop::Refused)?;
     super::check_version(program, &version).map_err(Stop::Refused)?;
     let program = program.path.as_path();
-    let servers = super::mcp_servers(program, folder.path())
+    let servers = super::mcp_servers(program, folder.path(), variables)
         .await
         .map_err(Stop::Refused)?;
     let mut args = vec!["app-server".to_string()];
     args.extend(super::settings(servers));
-    let mut child = super::command(program, &args, folder.path())
+    let mut child = super::command(program, &args, folder.path(), variables)
         .spawn()
         .map_err(|error| Stop::Refused(super::not_started(&error)))?;
     let Some(group) = Group::enlist(&mut child) else {

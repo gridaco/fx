@@ -69,6 +69,7 @@ use crate::cli::RunArgs;
 use crate::print::{labelled, print_line, shown_path};
 use grida_fx_core::host::{Language, NodeHost};
 use grida_fx_core::project::{PlanRequest, Planner, make_planner};
+use grida_fx_core::providers::Declarations;
 use grida_fx_core::val::{FileValue, Val};
 use grida_fx_core::{Error, ErrorKind};
 use grida_fx_runtime::engine::{Engine, scrub_paths};
@@ -271,9 +272,10 @@ fn plan_and_run(
                 "control   unavailable"
             });
             let root = &ready.folder;
+            let declarations = project.declarations();
             // Observation is independent: a bind failure must not fail or hold up execution.
             if !args.no_view && (args.standalone || !project.has_file) {
-                match RunViewer::start(engine, root, args.open) {
+                match RunViewer::start(engine, root, args.open, &declarations) {
                     Ok(host) => viewer = Some(host),
                     Err(_) => crate::print::print_error(&Error::usage(
                         "standalone viewer unavailable; the workflow will continue. Reopen it with inspect RUN --standalone after completion.",
@@ -283,6 +285,7 @@ fn plan_and_run(
                 super::view::report_service(
                     super::service::register_run(&project, root, args.open),
                     args.open,
+                    &declarations,
                 );
             }
         },
@@ -324,7 +327,13 @@ struct RunViewer {
 }
 
 impl RunViewer {
-    fn start(engine: &Engine, root: &Path, open: bool) -> std::io::Result<Self> {
+    /// The browser opener withholds `declarations`' variables.
+    fn start(
+        engine: &Engine,
+        root: &Path,
+        open: bool,
+        declarations: &Declarations,
+    ) -> std::io::Result<Self> {
         let server = engine.handle.block_on(grida_fx_viewer::bind(root, 0))?;
         let url = server.url().to_string();
         let (stop, stopped) = tokio::sync::oneshot::channel();
@@ -343,7 +352,7 @@ impl RunViewer {
         });
         print_line(&labelled("view", &url));
         if open {
-            super::view::launch_browser(url);
+            super::view::launch_browser(url, declarations);
         }
         Ok(Self {
             stop: Some(stop),

@@ -623,8 +623,8 @@ mod tests {
     fn post(url: &str, body: Value) -> HttpRequest {
         HttpRequest::new(Method::Post, url, Lane::Provider)
             .credential(Credential {
-                header: "authorization",
-                prefix: "Bearer ",
+                header: "authorization".into(),
+                prefix: "Bearer ".into(),
                 secret: Secret::new("test-key"),
             })
             .header("content-type", "application/json")
@@ -734,8 +734,8 @@ mod tests {
         ]);
         let request = HttpRequest::new(Method::Get, "https://files.example.test/x", Lane::Download)
             .credential(Credential {
-                header: "authorization",
-                prefix: "",
+                header: "authorization".into(),
+                prefix: "".into(),
                 secret: Secret::new("k"),
             });
         assert!(block_on(transport.send(request)).is_err());

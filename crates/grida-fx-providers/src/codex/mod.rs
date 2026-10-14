@@ -101,8 +101,8 @@ pub const NO_EXACT_SIZE: &str = "Codex image generation takes no exact size: use
 /// The refusal when `GRIDA_FX_NETWORK` is off: Codex generates over the network.
 pub const NETWORK_OFF: &str = "Codex was not started: GRIDA_FX_NETWORK is off";
 
-/// Variables Codex never inherits besides the allowlisted ones ([`crate::keys::ALLOWED`]): with
-/// any of them it could bill, or send its requests, somewhere other than the user's plan.
+/// Variables Codex never inherits besides the declared ones ([`crate::setup::Setup::withheld`]):
+/// with any of them it could bill, or send its requests, somewhere other than the user's plan.
 const ALSO_WITHHELD: [&str; 5] = [
     "CODEX_API_KEY",
     "OPENAI_ORG_ID",
@@ -251,7 +251,7 @@ impl RequestAdapter for CodexImages {
 /// the setup's program, which the registry keeps to shut it down with the invocation. Codex brings
 /// its own sign-in and network: no key, no transport.
 pub fn register(adapters: &mut Adapters, setup: &Setup) {
-    let runtime = Arc::new(CodexRuntime::new(setup.codex.clone()));
+    let runtime = Arc::new(CodexRuntime::new(setup.codex.clone(), setup.withheld()));
     let images = Arc::new(CodexImages::new(Arc::clone(&runtime)));
     for capability in ["image.generate", "image.edit"] {
         adapters.register(capability, "codex", Adapter::Request(images.clone()));
@@ -271,10 +271,16 @@ pub fn find_program(env: &dyn Fn(&str) -> Option<String>, app: &Path) -> Option<
 }
 
 /// Step 4: Codex's version, as `codex --version` names it (`codex-cli 0.160.1`), against
-/// [`MIN_VERSION`]; the refusal when it cannot be started. Codex runs in `folder`.
-pub fn version<'a>(program: &'a Path, folder: &'a Path) -> BoxFuture<'a, Result<Version, String>> {
+/// [`MIN_VERSION`]; the refusal when it cannot be started. Codex runs in `folder`, without the
+/// declared `variables` ([`withheld`]).
+pub fn version<'a>(
+    program: &'a Path,
+    folder: &'a Path,
+    variables: &'a [String],
+) -> BoxFuture<'a, Result<Version, String>> {
     Box::pin(async move {
-        match installed::ask_version(program, folder, &ALSO_WITHHELD, ASK_DEADLINE).await {
+        let withheld = withheld(variables);
+        match installed::ask_version(program, folder, &withheld, ASK_DEADLINE).await {
             Ok(named) => Ok(Version::of(named.as_deref(), MIN_VERSION)),
             Err(error) => Err(not_started(&error)),
         }
@@ -310,9 +316,9 @@ pub(super) fn not_started(error: &std::io::Error) -> String {
     }
 }
 
-/// Every variable Codex never inherits.
-pub fn withheld() -> impl Iterator<Item = &'static str> {
-    installed::withheld(&ALSO_WITHHELD)
+/// Every variable Codex never inherits: the declared `variables`, then [`ALSO_WITHHELD`].
+pub fn withheld(variables: &[String]) -> Vec<String> {
+    installed::withheld(variables, &ALSO_WITHHELD)
 }
 
 /// The turn's text ([`IDENTITY`]'s behaviour): the image tool's arguments, the pictures'
@@ -400,9 +406,15 @@ fn picture<'a>(call: &'a CallRequest, value: &Value, member: &str) -> Result<Pic
 }
 
 /// A command that starts `program` with `args` in `folder`: Codex's own environment, less
-/// [`withheld`]; no stderr; in a process group of its own; killed when dropped.
-pub(super) fn command(program: &Path, args: &[String], folder: &Path) -> Command {
-    installed::command(program, args, folder, &ALSO_WITHHELD)
+/// [`withheld`] of the declared `variables`; no stderr; in a process group of its own; killed when
+/// dropped.
+pub(super) fn command(
+    program: &Path,
+    args: &[String],
+    folder: &Path,
+    variables: &[String],
+) -> Command {
+    installed::command(program, args, folder, &withheld(variables))
 }
 
 /// `-c` settings: [`SETTINGS`] first.
@@ -419,12 +431,16 @@ pub(super) fn settings(extra: impl IntoIterator<Item = String>) -> Vec<String> {
 /// list --json` names them with apps and plugins off (a server only a plugin defines cannot be
 /// named: Codex refuses its setting). A list Codex will not give is a refusal: those servers' tools
 /// would otherwise be offered to the turn.
-pub(super) async fn mcp_servers(program: &Path, folder: &Path) -> Result<Vec<String>, String> {
+pub(super) async fn mcp_servers(
+    program: &Path,
+    folder: &Path,
+    variables: &[String],
+) -> Result<Vec<String>, String> {
     let refused =
         || "Codex's MCP servers could not be listed, so they cannot be turned off".to_string();
     let mut args = settings([]);
     args.extend(["mcp", "list", "--json"].map(String::from));
-    let mut command = command(program, &args, folder);
+    let mut command = command(program, &args, folder, variables);
     command.stdin(Stdio::null());
     let output = match tokio::time::timeout(ASK_DEADLINE, command.output()).await {
         Ok(Ok(output)) if output.status.success() => output,
@@ -915,11 +931,26 @@ mod tests {
 
     #[test]
     fn codex_inherits_no_key_and_no_account_setting() {
-        let withheld: Vec<&str> = withheld().collect();
-        for variable in crate::keys::ALLOWED.iter().chain(&ALSO_WITHHELD) {
+        let variables = grida_fx_core::providers::Declarations::built_in().variables();
+        let withheld = withheld(&variables);
+        let also = ALSO_WITHHELD.map(String::from);
+        for variable in variables.iter().chain(&also) {
             assert!(withheld.contains(variable), "{variable}");
         }
-        assert!(withheld.contains(&"OPENAI_API_KEY") && withheld.contains(&"OPENAI_BASE_URL"));
+        let has = |name: &str| withheld.iter().any(|v| v == name);
+        assert!(has("OPENAI_API_KEY") && has("OPENAI_BASE_URL"));
+        // A project's declared variables too, removed from the command's environment.
+        let declared = ["ACME_API_KEY".to_string(), "ACME_BASE_URL".to_string()];
+        let started = command(Path::new("codex"), &[], Path::new("."), &declared);
+        let removed: Vec<String> = started
+            .as_std()
+            .get_envs()
+            .filter(|(_, value)| value.is_none())
+            .map(|(name, _)| name.to_string_lossy().into_owned())
+            .collect();
+        for variable in declared.iter().chain(&also) {
+            assert!(removed.contains(variable), "{variable}: {removed:?}");
+        }
     }
 
     #[test]

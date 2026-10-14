@@ -58,22 +58,27 @@
 //! routes) and before the `tool` and `missing` lines, for the **planning** project (the one found
 //! from where the command runs; with a target, the project planning would use). Nothing that could
 //! reach the network is constructed:
-//! - the allowlisted variables are read as a live run reads them (the process environment, then
-//!   the planning project's `.env` unless `GRIDA_FX_DISABLE_DOTENV=1`). A `.env` that is refused
-//!   prints `keys      <sentence>` (the sentence names the file, the variable and the line, never a
-//!   value) and the rest is reported from the process environment alone; a base-URL variable
-//!   that is refused prints `keys      <VARIABLE>: <sentence>` (or `… holds a credential`).
-//!   Either makes doctor exit 1, as either stops a live run;
-//! - one line per provider in `live::PROVIDERS` order: `key       <VARIABLE> present
-//!   (environment)`, `… present (.env)` or `… missing`. A missing key alone does not change the
-//!   exit status, unless a route the target uses needs it (its `uses` line is then not
-//!   servable). A key's value is never printed;
+//! - the variables the planning project's provider declarations name (FX's own and its
+//!   `providers:`) are read as a live run reads them (the process environment, then the planning
+//!   project's `.env` unless `GRIDA_FX_DISABLE_DOTENV=1`). A `.env` that is refused prints
+//!   `keys      <sentence>` (the sentence names the file, the variable and the line, never a
+//!   value) and the rest is reported from the process environment alone; each base-URL
+//!   variable that is refused prints `keys      <VARIABLE>: <sentence>` (or `… holds a
+//!   credential`). Either makes doctor exit 1, as either stops a live run;
+//! - one line per built-in declaration, in their order: `key       <VARIABLE> present
+//!   (environment)`, `… present (.env)` or `… missing`; then one per declaration of the project,
+//!   in its order: `provider  <name> <host> <VARIABLE> present (environment)` (or the other two
+//!   states), or `provider  <name> <host> needs no key` for one without a credential, `<host>`
+//!   its base URL's host (with a port the URL names), the default's when its variable is refused.
+//!   A missing key alone does not change the exit status, unless a route the target uses needs
+//!   it (its `uses` line is then not servable). A key's value is never printed;
 //! - one line per program the user installed (Codex, then Grok Build), found and asked its
-//!   version once (`live::installed`), as a live run would: `program   <name> <path> (<origin>,
-//!   <version>)`, `<origin>` being where it was found (`GRIDA_FX_TOOL_CODEX`, `PATH`, `the
-//!   ChatGPT app`; `GRIDA_FX_TOOL_GROK`, `PATH`, `~/.grok/bin`), and `<version>` what Codex names
-//!   (`no version` when it names none; Grok Build names its own once started, so its line has
-//!   none); else `program   <name> not installed`. These lines do not set the exit status;
+//!   version once (`live::installed`, without the declared variables), as a live run would:
+//!   `program   <name> <path> (<origin>, <version>)`, `<origin>` being where it was found
+//!   (`GRIDA_FX_TOOL_CODEX`, `PATH`, `the ChatGPT app`; `GRIDA_FX_TOOL_GROK`, `PATH`,
+//!   `~/.grok/bin`), and `<version>` what Codex names (`no version` when it names none; Grok
+//!   Build names its own once started, so its line has none); else `program   <name> not
+//!   installed`. These lines do not set the exit status;
 //! - one line per route of the planning project's catalog (the built-in table, then `fx.yaml`
 //!   `route_tables`), sorted by capability, then id: `route     <capability> <model@provider>
 //!   servable`, `… no key (<VARIABLE>)`, `… not installed (codex)` (or `(grok)`), `… too old
@@ -89,13 +94,14 @@ use grida_fx_core::docs::project::Project;
 use grida_fx_core::docs::workflow::{Step, Steps};
 use grida_fx_core::host::{HostFailure, Language, NodeHost};
 use grida_fx_core::project::load_target;
+use grida_fx_core::providers::{Declarations, shown_host};
 use grida_fx_core::registry::{Registry, RegistryError, Resolved};
 use grida_fx_core::routes::{Route, RouteTable, load_catalog};
 use grida_fx_protocol::DescribeParams;
 use grida_fx_providers::installed::Version;
-use grida_fx_providers::keys::{ALLOWED, Environment, KeySource};
+use grida_fx_providers::keys::{Environment, KeySource};
 use grida_fx_providers::live::{self, Installed, Servable};
-use grida_fx_providers::{Endpoints, KeyName, Keys, RouteRef};
+use grida_fx_providers::{Endpoints, Keys, RouteRef};
 use grida_fx_runtime::host::locate::{
     MINIMUM_NODE, MINIMUM_PYTHON, NO_SDK, Probe, node_runtime, python_interpreter,
 };
@@ -306,7 +312,7 @@ fn uses_lines(
 fn servable_text(servable: Servable) -> String {
     match servable {
         Servable::Yes => "servable".to_string(),
-        Servable::NoKey(key) => format!("no key ({})", key.variable()),
+        Servable::NoKey(variable) => format!("no key ({variable})"),
         Servable::NoAdapter => "no adapter".to_string(),
         Servable::NoProgram(program) => format!("not installed ({program})"),
         Servable::TooOld {
@@ -332,29 +338,30 @@ struct Providers {
 }
 
 impl Providers {
-    /// Reads the allowlisted variables of `project` through `env` and describes them and the
+    /// Reads the declared variables of `project` through `env` and describes them and the
     /// project's routes. Only a route table that cannot be read is an error.
     fn of(project: &Project, env: &dyn Fn(&str) -> Option<String>) -> Result<Providers, Error> {
         let mut lines = Vec::new();
-        let environment =
-            match Environment::read(env, Some(&crate::engine::dotenv_path(&project.root))) {
-                Ok(environment) => environment,
-                Err(sentence) => {
-                    lines.push(dotenv_refusal(&sentence));
-                    process_environment(env)
-                }
-            };
+        let declarations = project.declarations();
+        let dotenv = crate::engine::dotenv_path(&project.root);
+        let environment = match Environment::read(env, Some(&dotenv), &declarations) {
+            Ok(environment) => environment,
+            Err(sentence) => {
+                lines.push(dotenv_refusal(&sentence));
+                process_environment(env, &declarations)
+            }
+        };
         let keys = Keys::from_environment(&environment);
-        if let Err(sentence) = Endpoints::from_environment(&environment, &keys) {
-            lines.push(labelled("keys", &sentence));
-        }
+        let (endpoints, refusals) = Endpoints::each_from_environment(&environment, &keys);
+        lines.extend(refusals.iter().map(|sentence| labelled("keys", sentence)));
         let refused = !lines.is_empty();
         lines.extend(key_lines(&keys));
+        lines.extend(provider_lines(&keys, &endpoints));
         let installed = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .map_err(|error| Error::io("the programs' versions", &error))?
-            .block_on(live::installed());
+            .block_on(live::installed(&declarations.variables()));
         lines.extend(program_lines(&installed));
         let catalog = load_catalog(project, &crate::engine::builtin_routes()?, &[])?;
         lines.extend(route_lines(&catalog, &keys, &installed));
@@ -384,33 +391,62 @@ fn dotenv_refusal(sentence: &str) -> String {
     }
 }
 
-/// The allowlisted variables of the process alone (trimmed; blank is unset), for when the `.env`
+/// The declared variables of the process alone (trimmed; blank is unset), for when the `.env`
 /// is refused.
-fn process_environment(env: &dyn Fn(&str) -> Option<String>) -> Environment {
-    let values: Vec<(&str, String)> = ALLOWED
-        .iter()
-        .filter_map(|name| env(name).map(|value| (*name, value)))
+fn process_environment(
+    env: &dyn Fn(&str) -> Option<String>,
+    declarations: &Declarations,
+) -> Environment {
+    let values: Vec<(String, String)> = declarations
+        .variables()
+        .into_iter()
+        .filter_map(|name| env(&name).map(|value| (name, value)))
         .collect();
     let pairs: Vec<(&str, &str)> = values
         .iter()
-        .map(|(name, value)| (*name, value.as_str()))
+        .map(|(name, value)| (name.as_str(), value.as_str()))
         .collect();
-    Environment::from_pairs(&pairs)
+    Environment::declared(&pairs, declarations)
 }
 
-/// One `key` line per provider, in `live::PROVIDERS` order: where its key came from, never its
+/// Where the key of `provider` came from, as a `key` or `provider` line says it.
+fn key_state(keys: &Keys, provider: &str) -> &'static str {
+    match keys.source_of(provider) {
+        Some(KeySource::Environment) => "present (environment)",
+        Some(KeySource::DotEnv) => "present (.env)",
+        None => "missing",
+    }
+}
+
+/// One `key` line per built-in declaration, in their order: where its key came from, never its
 /// value.
 fn key_lines(keys: &Keys) -> Vec<String> {
-    live::PROVIDERS
+    grida_fx_core::providers::built_in()
         .iter()
-        .filter_map(|provider| KeyName::of_provider(provider))
-        .map(|key| {
-            let state = match keys.source(key) {
-                Some(KeySource::Environment) => "present (environment)",
-                Some(KeySource::DotEnv) => "present (.env)",
-                None => "missing",
+        .filter_map(|declaration| {
+            let variable = &declaration.credential.as_ref()?.variable;
+            let state = key_state(keys, &declaration.name);
+            Some(labelled("key", &format!("{variable} {state}")))
+        })
+        .collect()
+}
+
+/// One `provider` line per declaration of the project, in its order (module doc, "Providers"):
+/// its base URL's host and where its key came from, never the key.
+fn provider_lines(keys: &Keys, endpoints: &Endpoints) -> Vec<String> {
+    keys.declarations()
+        .declared()
+        .iter()
+        .map(|declaration| {
+            let name = &declaration.name;
+            let base = endpoints
+                .base(name)
+                .unwrap_or(&declaration.base_url.default);
+            let key = match &declaration.credential {
+                Some(credential) => format!("{} {}", credential.variable, key_state(keys, name)),
+                None => "needs no key".to_string(),
             };
-            labelled("key", &format!("{} {state}", key.variable()))
+            labelled("provider", &format!("{name} {} {key}", shown_host(base)))
         })
         .collect()
 }
@@ -607,6 +643,8 @@ fn is_builtin(uses: &str) -> bool {
 mod tests {
     use super::*;
     use grida_fx_core::docs::workflow::ViewSetting;
+    use grida_fx_core::providers::{BaseUrl, Credential, Declaration};
+    use grida_fx_providers::KeyName;
 
     fn step(uses: Option<&str>, members: Option<Vec<(&str, Rc<Step>)>>) -> Rc<Step> {
         Rc::new(Step {
@@ -693,6 +731,78 @@ mod tests {
             ]
         );
         assert!(lines.iter().all(|line| !line.contains(value)));
+    }
+
+    #[test]
+    fn provider_lines_name_each_declared_providers_host_and_key() {
+        let declare = |name: &str, variable: Option<&str>, default: &str| Declaration {
+            name: name.into(),
+            label: name.into(),
+            credential: variable.map(|variable| Credential {
+                variable: variable.into(),
+                header: "authorization".into(),
+                scheme: "Bearer".into(),
+            }),
+            base_url: BaseUrl {
+                variable: Some(format!("{}_BASE_URL", name.to_ascii_uppercase())),
+                default: default.into(),
+            },
+            download_hosts: Vec::new(),
+            family: Some("openai-compatible".into()),
+        };
+        let declarations = Declarations::with(&[
+            declare("acme", Some("ACME_API_KEY"), "https://api.acme.test/v1"),
+            declare("other", Some("OTHER_KEY"), "https://api.other.test"),
+            declare("local", None, "http://127.0.0.1:8080/v1"),
+        ]);
+        let value = "fx-made-up-acme-value-5e2b";
+        let environment = Environment::declared(
+            &[
+                ("ACME_API_KEY", value),
+                ("OTHER_BASE_URL", "https://proxy.other.test:8443/v1"),
+            ],
+            &declarations,
+        );
+        let keys = Keys::from_environment(&environment);
+        let endpoints = Endpoints::from_environment(&environment, &keys).unwrap();
+        let lines = provider_lines(&keys, &endpoints);
+        assert_eq!(
+            lines,
+            [
+                "provider  acme api.acme.test ACME_API_KEY present (environment)",
+                "provider  other proxy.other.test:8443 OTHER_KEY missing",
+                "provider  local 127.0.0.1:8080 needs no key",
+            ]
+        );
+        assert!(lines.iter().all(|line| !line.contains(value)));
+        // A refused base-URL variable leaves its own provider at its default, and no other.
+        let environment = Environment::declared(
+            &[
+                ("OPENAI_BASE_URL", "http://proxy.example.test"),
+                ("ACME_BASE_URL", "http://proxy.acme.test"),
+                ("OTHER_BASE_URL", "https://proxy.other.test:8443/v1"),
+            ],
+            &declarations,
+        );
+        let keys = Keys::from_environment(&environment);
+        let (endpoints, refusals) = Endpoints::each_from_environment(&environment, &keys);
+        assert_eq!(
+            refusals,
+            [
+                "OPENAI_BASE_URL: OpenAI base_url must use HTTPS unless it targets a loopback host",
+                "ACME_BASE_URL: acme base_url must use HTTPS unless it targets a loopback host",
+            ]
+        );
+        assert_eq!(
+            provider_lines(&keys, &endpoints)[..2],
+            [
+                "provider  acme api.acme.test ACME_API_KEY missing",
+                "provider  other proxy.other.test:8443 OTHER_KEY missing",
+            ]
+        );
+        // The built-in `key` lines are unchanged by a declaration.
+        assert_eq!(key_lines(&keys).len(), 6);
+        assert!(provider_lines(&Keys::none(), &Endpoints::default()).is_empty());
     }
 
     /// A table of `(capability, route)` pairs, priced alike.
@@ -1005,7 +1115,7 @@ mod tests {
                 .find(|(key, _)| *key == name)
                 .map(|(_, value)| value.to_string())
         };
-        let environment = process_environment(&env);
+        let environment = process_environment(&env, &Declarations::built_in());
         assert_eq!(environment.get("FAL_KEY"), Some("fal-made-up"));
         assert_eq!(environment.source("FAL_KEY"), Some(KeySource::Environment));
         assert_eq!(environment.get("TRIPO_API_KEY"), None);

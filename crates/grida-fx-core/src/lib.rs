@@ -18,6 +18,7 @@ pub mod lock;
 pub mod money;
 pub mod plan;
 pub mod project;
+pub mod providers;
 pub mod registry;
 pub mod routes;
 pub mod spec;

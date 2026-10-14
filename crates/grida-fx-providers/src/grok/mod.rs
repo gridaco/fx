@@ -126,8 +126,9 @@ fn profile() -> Value {
 /// and telemetry and the features that act on their own off.
 pub const OVERLAY: &str = r#"{"features":{"telemetry":false,"image_gen":true,"video_gen":false,"web_fetch":false,"lsp_tools":false,"write_file":false,"backend_tools":false,"codebase_indexing":false,"ask_user_question":false,"session_recap":false,"turn_summary":false}}"#;
 
-/// Variables Grok Build never inherits besides the allowlisted ones ([`crate::keys::ALLOWED`]):
-/// with `XAI_API_KEY` it could bill an API account; `GROK_CONFIG_PATH` would replace FX's overlay.
+/// Variables Grok Build never inherits besides the declared ones
+/// ([`crate::setup::Setup::withheld`]): with `XAI_API_KEY` it could bill an API account;
+/// `GROK_CONFIG_PATH` would replace FX's overlay.
 const ALSO_WITHHELD: [&str; 2] = ["XAI_API_KEY", "GROK_CONFIG_PATH"];
 
 /// The kinds of picture Grok's image edits read, and the extension its copy takes.
@@ -238,7 +239,7 @@ impl RequestAdapter for GrokImages {
 /// Registers the adapter for `image.generate` and `image.edit` on `grok`, over one runtime of the
 /// setup's program, which the registry keeps to shut it down with the invocation.
 pub fn register(adapters: &mut Adapters, setup: &Setup) {
-    let runtime = Arc::new(GrokRuntime::new(setup.grok.clone()));
+    let runtime = Arc::new(GrokRuntime::new(setup.grok.clone(), setup.withheld()));
     let images = Arc::new(GrokImages::new(Arc::clone(&runtime)));
     for capability in ["image.generate", "image.edit"] {
         adapters.register(capability, "grok", Adapter::Request(images.clone()));
@@ -265,9 +266,9 @@ pub fn find_program(env: &dyn Fn(&str) -> Option<String>) -> Option<Program> {
     installed::find_program(env, PROGRAM_VARIABLE, "grok", fallback)
 }
 
-/// Every variable Grok Build never inherits.
-pub fn withheld() -> impl Iterator<Item = &'static str> {
-    installed::withheld(&ALSO_WITHHELD)
+/// Every variable Grok Build never inherits: the declared `variables`, then [`ALSO_WITHHELD`].
+pub fn withheld(variables: &[String]) -> Vec<String> {
+    installed::withheld(variables, &ALSO_WITHHELD)
 }
 
 /// The variables every Grok Build FX starts gets: API-key sign-in off, no update during a run, no
@@ -292,11 +293,11 @@ pub fn environment() -> Vec<(String, String)> {
 }
 
 /// A command that starts `grok agent --no-leader stdio` from `program` in `folder`: Grok Build's
-/// own environment, less [`withheld`], plus [`environment`]; no stderr; in a process group of its
-/// own; killed when dropped.
-fn command(program: &Path, folder: &Path) -> Command {
+/// own environment, less [`withheld`] of the declared `variables`, plus [`environment`]; no
+/// stderr; in a process group of its own; killed when dropped.
+fn command(program: &Path, folder: &Path, variables: &[String]) -> Command {
     let args = ["agent", "--no-leader", "stdio"];
-    let mut command = installed::command(program, args, folder, &ALSO_WITHHELD);
+    let mut command = installed::command(program, args, folder, &withheld(variables));
     command.envs(environment());
     command
 }
@@ -819,8 +820,28 @@ mod tests {
 
     #[test]
     fn grok_inherits_no_key_and_starts_locked_down() {
-        let withheld: Vec<&str> = withheld().collect();
-        assert!(withheld.contains(&"XAI_API_KEY") && withheld.contains(&"OPENAI_API_KEY"));
+        let withheld = withheld(&grida_fx_core::providers::Declarations::built_in().variables());
+        let has = |name: &str| withheld.iter().any(|v| v == name);
+        assert!(has("XAI_API_KEY") && has("OPENAI_API_KEY") && has("FAL_BASE_URL"));
+        let started = command(
+            Path::new("grok"),
+            Path::new("."),
+            &["ACME_API_KEY".to_string()],
+        );
+        let removed: Vec<String> = started
+            .as_std()
+            .get_envs()
+            .filter(|(_, value)| value.is_none())
+            .map(|(name, _)| name.to_string_lossy().into_owned())
+            .collect();
+        assert!(
+            removed.iter().any(|name| name == "ACME_API_KEY"),
+            "{removed:?}"
+        );
+        assert!(
+            removed.iter().any(|name| name == "XAI_API_KEY"),
+            "{removed:?}"
+        );
         let set = environment();
         let value = |name: &str| set.iter().find(|(n, _)| n == name).map(|(_, v)| v.as_str());
         assert_eq!(value("GROK_DISABLE_API_KEY_AUTH"), Some("1"));

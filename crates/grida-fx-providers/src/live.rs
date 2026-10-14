@@ -15,7 +15,7 @@ use crate::adapter::{
 };
 use crate::clock::SystemClock;
 use crate::installed::{Program, Version};
-use crate::keys::{KeyName, Keys};
+use crate::keys::Keys;
 use crate::redact::Redactor;
 use crate::registry::Adapters;
 use crate::setup::{Endpoints, Setup};
@@ -23,18 +23,6 @@ use crate::transport::http::{HttpConfig, HttpTransport};
 use serde_json::Value;
 use std::path::Path;
 use std::sync::Arc;
-
-/// The providers this crate serves, in the order `doctor` lists them: Grida Gateway first.
-pub const PROVIDERS: [&str; 8] = [
-    "gg",
-    "openai",
-    "openrouter",
-    "fal",
-    "tripo",
-    "elevenlabs",
-    "codex",
-    "grok",
-];
 
 /// Whether a live run may reach the network ([`crate::transport::NETWORK_VARIABLE`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -197,8 +185,8 @@ pub enum Servable {
     /// No adapter of this crate serves the route: none of its capability on its provider, or
     /// none under the `adapter` its contract names.
     NoAdapter,
-    /// An adapter serves it, but the provider's key is missing.
-    NoKey(KeyName),
+    /// An adapter serves it, but the provider's key is missing: the variable it is read from.
+    NoKey(String),
     /// An adapter serves it through a program that is not installed (`codex`, `grok`).
     NoProgram(&'static str),
     /// An adapter serves it through a program older than a live run starts.
@@ -214,9 +202,9 @@ pub enum Servable {
 /// Where the environment finds a program.
 type Finder = fn(&dyn Fn(&str) -> Option<String>) -> Option<Program>;
 
-/// How a program is asked its version before a live run starts it: the program, and a folder it
-/// may run in.
-type Asker = for<'a> fn(&'a Path, &'a Path) -> BoxFuture<'a, Result<Version, String>>;
+/// How a program is asked its version before a live run starts it: the program, a folder it may
+/// run in, and the declared variables it never inherits.
+type Asker = for<'a> fn(&'a Path, &'a Path, &'a [String]) -> BoxFuture<'a, Result<Version, String>>;
 
 /// The providers that are programs the user installed: how each is found, and how it is asked
 /// its version before it starts, when it is (Grok Build names its own once started).
@@ -245,8 +233,9 @@ pub struct Installed {
 }
 
 /// Every program the user installed ([`PROGRAMS`]), as the process environment finds it, each
-/// asked its version as a live run asks it (in the system's temporary folder).
-pub async fn installed() -> Vec<Installed> {
+/// asked its version as a live run asks it (in the system's temporary folder, without
+/// `withheld`, the declared variables: [`Setup::withheld`]).
+pub async fn installed(withheld: &[String]) -> Vec<Installed> {
     let env = |name: &str| std::env::var(name).ok();
     let folder = std::env::temp_dir();
     let mut found = Vec::new();
@@ -254,7 +243,7 @@ pub async fn installed() -> Vec<Installed> {
         let program = find(&env);
         let version = match (&program, ask) {
             (Some(program), Some(ask)) => Some(
-                ask(&program.path, &folder)
+                ask(&program.path, &folder, withheld)
                     .await
                     .unwrap_or(Version::Unnamed),
             ),
@@ -270,9 +259,9 @@ pub async fn installed() -> Vec<Installed> {
 }
 
 /// Whether `route` is servable with `keys` by `adapters`: an adapter serves it
-/// ([`Adapters::serving`], by its contract's `adapter`), and its provider's key is present. The
-/// route of a program the user installed is servable when `installed` holds it found, and of a
-/// version a live run starts.
+/// ([`Adapters::serving`], by its contract's `adapter`), and the key its provider's declaration
+/// names, if any, is present. The route of a program the user installed is servable when
+/// `installed` holds it found, and of a version a live run starts.
 pub fn servable(
     adapters: &Adapters,
     keys: &Keys,
@@ -295,8 +284,11 @@ pub fn servable(
             (Some(_), _) => Servable::Yes,
         };
     }
-    match KeyName::of_provider(provider) {
-        Some(key) if keys.get(key).is_none() => Servable::NoKey(key),
+    let declared = keys.declarations().get(provider);
+    match declared.and_then(|declaration| declaration.credential.as_ref()) {
+        Some(credential) if keys.of(provider).is_none() => {
+            Servable::NoKey(credential.variable.clone())
+        }
         _ => Servable::Yes,
     }
 }
@@ -305,7 +297,9 @@ pub fn servable(
 mod tests {
     use super::*;
     use crate::clock::FakeClock;
+    use crate::keys::KeyName;
     use crate::transport::replay::NoNetwork;
+    use grida_fx_core::providers::{BaseUrl, Credential, Declaration, Declarations};
 
     fn setup(keys: Keys) -> Setup {
         Setup::new(Arc::new(NoNetwork), keys, Arc::new(FakeClock::new()))
@@ -324,12 +318,36 @@ mod tests {
         assert!(adapters.serves("background.remove", "fal"));
     }
 
+    /// The built-in declarations and `acme`, a project's, with a key.
+    fn declared() -> Declarations {
+        Declarations::with(&[Declaration {
+            name: "acme".into(),
+            label: "acme".into(),
+            credential: Some(Credential {
+                variable: "ACME_API_KEY".into(),
+                header: "authorization".into(),
+                scheme: "Bearer".into(),
+            }),
+            base_url: BaseUrl {
+                variable: None,
+                default: "https://api.acme.test/v1".into(),
+            },
+            download_hosts: Vec::new(),
+            family: Some("openai-compatible".into()),
+        }])
+    }
+
     #[test]
     fn every_adapter_redacts_with_every_key_of_the_invocation() {
-        let keys = Keys::from_pairs(&[
-            (KeyName::OpenAi, "openai-test-key-0123"),
-            (KeyName::Tripo, "tripo-test-key-0123"),
-        ]);
+        let environment = crate::keys::Environment::declared(
+            &[
+                ("OPENAI_API_KEY", "openai-test-key-0123"),
+                ("TRIPO_API_KEY", "tripo-test-key-0123"),
+                ("ACME_API_KEY", "acme-test-key-0123"),
+            ],
+            &declared(),
+        );
+        let keys = Keys::from_environment(&environment);
         let plain = adapters(&setup(Keys::none()));
         let adapters = adapters(&setup(keys));
         assert_eq!(
@@ -353,8 +371,8 @@ mod tests {
                 None => panic!("{capability} on {provider} is served"),
             };
             assert_eq!(
-                redactor.reason("x openai-test-key-0123 tripo-test-key-0123"),
-                "x [redacted] [redacted]",
+                redactor.reason("x openai-test-key-0123 tripo-test-key-0123 acme-test-key-0123"),
+                "x [redacted] [redacted] [redacted]",
                 "{} for {capability} on {provider}",
                 registered.identity.adapter
             );
@@ -427,10 +445,17 @@ mod tests {
         );
         assert_eq!(
             servable("mesh.rig", "rig-a@tripo", none.clone()),
-            Servable::NoKey(KeyName::Tripo)
+            Servable::NoKey("TRIPO_API_KEY".into())
         );
         assert_eq!(
             servable("image.generate", "img-a@acme", none.clone()),
+            Servable::NoAdapter
+        );
+        // A declared provider has no adapter yet, with or without its key.
+        let keys = Keys::from_environment(&crate::keys::Environment::declared(&[], &declared()));
+        let chat = route("structured.generate", "chat-a@acme", none.clone());
+        assert_eq!(
+            super::servable(&adapters, &keys, &[], &chat),
             Servable::NoAdapter
         );
         assert_eq!(

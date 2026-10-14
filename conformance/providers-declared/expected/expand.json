@@ -1,0 +1,94 @@
+{
+ "estimate": {
+  "ceiling_usd": null,
+  "high_usd": 0.04,
+  "low_usd": 0.01
+ },
+ "instances": [
+  {
+   "bindings": [],
+   "id": "draw#1",
+   "identity": "bbb4a14e9e0ec26d0f9904231b52a0d30a391fa09acaa4bd5c3508be0991fc14",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "draw",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.04,
+    "low_usd": 0.01
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+     "route": "img-a@acme"
+    }
+   },
+   "state": "planned",
+   "step": "draw",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "a kite",
+    "vars": {}
+   }
+  }
+ ],
+ "kind": "fx-graph-v1",
+ "pending": [],
+ "problems": [],
+ "scopes": [],
+ "types": {
+  "fx/image.generate@1": {
+   "identity": "fx/image.generate@1.1",
+   "ports": {
+    "inputs": {
+     "references": "image[]?"
+    },
+    "outputs": {
+     "image": "image/png"
+    },
+    "params": {
+     "background": {
+      "default": "auto",
+      "enum": [
+       "opaque",
+       "transparent",
+       "auto"
+      ]
+     },
+     "prompt": {
+      "type": "string",
+      "x-fx-template": true
+     },
+     "provider_options": {
+      "type": "object",
+      "x-fx-optional": true
+     },
+     "size": {
+      "type": "string",
+      "x-fx-optional": true
+     },
+     "vars": {
+      "default": {},
+      "type": "object"
+     }
+    }
+   }
+  }
+ },
+ "workflow": {
+  "file": "workflows/case.yaml",
+  "id": "case",
+  "title": "A declared provider"
+ }
+}

@@ -31,7 +31,8 @@ pytestmark = pytest.mark.skipif(
     reason="needs the engine beside the SDK (python3 tools/build_engine.py) on a POSIX system",
 )
 
-#: Every provider key FX reads (``spec/providers.md`` section 1), kept out of the runs.
+#: The keys of FX's built-in providers (``spec/providers.md`` section 1), kept out of the runs; in
+#: step with the engine's (``crates/grida-fx/tests/key_lists.rs``).
 KEYS = (
     "GG_API_KEY",
     "OPENAI_API_KEY",

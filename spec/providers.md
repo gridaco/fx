@@ -1,26 +1,56 @@
 # Providers
 
-The providers FX speaks: where their keys and endpoints come from (§1), the adapters FX ships for them (§2), the route table FX ships (§3), and the feature names FX renamed (§4). How an adapter talks to its provider, and how each answer becomes an attempt's outcome and its bill, is the adapter contract, [adapters.md](adapters.md). What a capability's request and answer hold is [capabilities.md](capabilities.md).
+The providers FX speaks: how each is declared and where its keys and endpoints come from (§1), the adapters FX ships for them (§2), the route table FX ships (§3), and the feature names FX renamed (§4). How an adapter talks to its provider, and how each answer becomes an attempt's outcome and its bill, is the adapter contract, [adapters.md](adapters.md). What a capability's request and answer hold is [capabilities.md](capabilities.md).
 
 ## 1. Keys and endpoints
 
-| Provider | Key | Base URL | Default base |
-|---|---|---|---|
-| `gg` | `GG_API_KEY` | `GG_BASE_URL` | `https://gateway.grida.ai/v1` |
-| `openai` | `OPENAI_API_KEY` | `OPENAI_BASE_URL` | `https://api.openai.com/v1` |
-| `openrouter` | `OPENROUTER_API_KEY` | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` |
-| `fal` | `FAL_KEY` | `FAL_BASE_URL` (the run host) | `https://fal.run`; queue `https://queue.fal.run` |
-| `tripo` | `TRIPO_API_KEY` | none | `https://openapi.tripo3d.ai/v3` |
-| `elevenlabs` | `ELEVENLABS_API_KEY` | `ELEVENLABS_BASE_URL` | `https://api.elevenlabs.io/v1` |
+Every provider FX sends requests to is **declared**: its credential (the variable that holds its key, and the header the key is sent in), its base URL (its default, and the variable that may move it), and the hosts its results may be downloaded from. FX's own providers are the built-in declarations below; a project declares others in its `fx.yaml`. A declaration is configuration, as a base URL is: it is not part of a route's fingerprint, and a plan does not record it.
 
-- **Only these eleven variables are read.** A variable comes from the process environment when it is set and not blank (trimmed). Otherwise it comes from the planning project's `.env` file, if there is one. `GRIDA_FX_DISABLE_DOTENV=1` turns the file off.
-- **The `.env` file is optional**, and it is read for these eleven names only. Lines that name other variables are skipped without reading their values. It is refused when it is a symlink or not a regular file (`.env must be a regular file`), cannot be read (`.env could not be read`), or is not UTF-8 (`.env must be valid UTF-8`). Blank lines and `#` comments are skipped.
-  - An assignment is `[export] NAME = value`. A line that starts with an allowed name and is not an assignment is refused: `.env contains malformed assignment for <NAME> on line <n>`.
-  - An allowed name may appear only once: `.env contains duplicate key: <NAME>`.
+| Provider | Key | Header | Base URL | Default base | Download hosts |
+|---|---|---|---|---|---|
+| `gg` | `GG_API_KEY` | `authorization: Bearer <key>` | `GG_BASE_URL` | `https://gateway.grida.ai/v1` | |
+| `openai` | `OPENAI_API_KEY` | `authorization: Bearer <key>` | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | |
+| `openrouter` | `OPENROUTER_API_KEY` | `authorization: Bearer <key>` | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | |
+| `fal` | `FAL_KEY` | `authorization: Key <key>` | `FAL_BASE_URL` (the run host) | `https://fal.run`; queue `https://queue.fal.run` | `fal.media`, `*.fal.media` |
+| `tripo` | `TRIPO_API_KEY` | `authorization: Bearer <key>` | none | `https://openapi.tripo3d.ai/v3` | `tripo3d.ai`, `*.tripo3d.ai`, `tripo-data.rg1.data.tripo3d.com` |
+| `elevenlabs` | `ELEVENLABS_API_KEY` | `xi-api-key: <key>` | `ELEVENLABS_BASE_URL` | `https://api.elevenlabs.io/v1` | |
+
+- **Codex and Grok Build are runtimes, not declarations.** The `codex` and `grok` adapters work through a program the user installed, which brings its own sign-in and network (§2): FX reads no key or base URL for them. Their names and the six above are FX's providers.
+- **A project declares a provider** under `providers:` in the planning project's `fx.yaml` ([store.md](store.md)), by its name, the provider part of its routes (`<model>@acme`):
+
+  ```yaml
+  providers:
+    acme:
+      credential: { variable: ACME_API_KEY, header: authorization, scheme: Bearer }
+      base_url: { variable: ACME_BASE_URL, default: "https://api.acme.test/v1" }
+      download_hosts: [cdn.acme.test, "*.acme.test"]
+      family: openai-compatible
+  ```
+
+  - The name is `[a-z0-9._-]+`, as in a route.
+  - `credential` is optional: a provider declared without one is sent no key and needs none, such as a server on this machine. Its `variable` is required. `header` defaults to `authorization` and is lowercase; `scheme` defaults to `Bearer`, and `""` sends the key bare. The key travels as `<header>: <scheme> <key>`, or `<header>: <key>` with no scheme.
+  - `base_url.default` is required. It is normalized as any base URL is (below) when the file is read, and so must be `https` unless it names a loopback host. `base_url.variable` is optional; when it is set, its value replaces the default, as a built-in's does.
+  - `download_hosts` lists the hosts a result may be downloaded from: a host, or `*.` and a domain for every host below that domain (not the domain itself). It is empty when left out.
+  - `family` is the wire the provider speaks: `openai-compatible`, the one family. No adapter serves a family yet, so a declared provider's routes plan and price, and a live call on one is refused with `no_route` ([protocol.md](protocol.md) §6.1), as on any provider no adapter serves; `grida-fx doctor` reports such a route as `no adapter`.
+  - A declared provider bills dollars, to the account of its key. No declaration can claim a plan, as Codex and Grok Build do (§2).
+
+  A variable is `[A-Za-z_][A-Za-z0-9_]*`, the `.env` file's grammar. A declaration is refused when `fx.yaml` is read (exit 2), each refusal reading `fx.yaml: providers.<name>…: <sentence>`:
+  - a name FX ships, the eight above: `providers.<name>: <name> is a provider FX ships`;
+  - a variable that a built-in declaration, an earlier declaration or the same one already reads, compared in any letter case: `providers.<name>.credential.variable: <VARIABLE> is already read for <provider>` (or `….base_url.variable`);
+  - a variable FX or the programs it starts read for themselves: any `GRIDA_FX_` variable, the proxy variables `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY` and `NO_PROXY`, the certificate variables `SSL_CERT_FILE` and `SSL_CERT_DIR` ([adapters.md](adapters.md) §2), `PATH` and `HOME`, each in any letter case: `… <VARIABLE> is reserved for FX and the programs it starts`;
+  - a default base URL that does not normalize: `providers.<name>.base_url.default: <name> base_url must …`, with the base-URL sentences below.
+
+  The variables Codex and Grok Build are started without beside the declared ones (`CODEX_API_KEY`, `XAI_API_KEY`, …; [Codex](../crates/grida-fx-providers/src/codex/README.md), [Grok Build](../crates/grida-fx-providers/src/grok/README.md)) are not read by FX, so a declaration may read them.
+- **Only the declared variables are read:** the eleven of the built-in declarations, then each declaration's key and base-URL variable. A variable comes from the process environment when it is set and not blank (trimmed). Otherwise it comes from the planning project's `.env` file, if there is one. `GRIDA_FX_DISABLE_DOTENV=1` turns the file off.
+- **The `.env` file is optional**, and it is read for the declared names only. Lines that name other variables are skipped without reading their values. It is refused when it is a symlink or not a regular file (`.env must be a regular file`), cannot be read (`.env could not be read`), or is not UTF-8 (`.env must be valid UTF-8`). Blank lines and `#` comments are skipped.
+  - An assignment is `[export] NAME = value`. A line that starts with a declared name and is not an assignment is refused: `.env contains malformed assignment for <NAME> on line <n>`.
+  - A declared name may appear only once: `.env contains duplicate key: <NAME>`.
   - A value may be unquoted (a trailing ` #` comment is removed, and a quote inside it is refused), `'single quoted'` (literal), or `"double quoted"` (a JSON string literal: `.env contains malformed quoted value for <NAME> on line <n>`). An empty value is refused: `.env contains an empty value for <NAME>`. A control character in the decoded value is refused: `.env contains an unsafe value for <NAME>`.
   - Every refusal names the variable and the line, never the value.
-- **A base URL** is trimmed and loses a trailing `/`. It must be an `http(s)` URL with a host, no userinfo, no query, no fragment and a valid port, and `http` is allowed only for a loopback host. The refusals are `<Provider> base_url must be an HTTP(S) URL without credentials, query, or fragment`, `… must use a valid network port` and `… must use HTTPS unless it targets a loopback host`. A base URL that contains a key's value is refused: `<VARIABLE> holds a credential`. A base URL is configuration: it is not part of a route's fingerprint.
-- **Key values are never printed.** `grida-fx doctor` says which keys are present and where each came from (environment or `.env`), never a value.
+- **A base URL** is trimmed and loses a trailing `/`. It must be an `http(s)` URL with a host, no userinfo, no query, no fragment and a valid port, and `http` is allowed only for a loopback host. The refusals are `<Provider> base_url must be an HTTP(S) URL without credentials, query, or fragment`, `… must use a valid network port` and `… must use HTTPS unless it targets a loopback host`, `<Provider>` being `Grida Gateway`, `OpenAI`, `OpenRouter`, `fal` or `ElevenLabs` for a built-in, and the name for a declared provider. A base URL that contains a key's value is refused: `<VARIABLE> holds a credential`. A base URL is configuration: it is not part of a route's fingerprint.
+- **A download** of a result, at a URL the provider returned, is held to the provider's hosts by an adapter that checks them: the URL is `https`, its host a name (not an address) that is one of `download_hosts` or lies below a `*.` entry's domain, compared in lower case without a trailing `.`, with no userinfo, no port but 443 and no fragment. FX's fal image and background-removal adapters and its Tripo adapters check theirs ([fal](../crates/grida-fx-providers/src/fal/README.md), [Tripo](../crates/grida-fx-providers/src/tripo/README.md)); its GG adapters and fal's video adapter take any `https` URL ([GG](../crates/grida-fx-providers/src/gg/README.md)).
+- **Codex, Grok Build, the background service and the browser opener never inherit a declared variable.** Codex and Grok Build (§2), the background service `grida-fx start --background` starts, and the program that opens a browser start without every declared variable of the project the command works in: the planning project, the project `start` serves, or for `inspect` the project of the directory FX runs in. `view --run` and `view --plan` read no project, so their browser opener takes the declarations of the project of the directory FX runs in, or the built-in ones alone when that `fx.yaml` cannot be read. A node host ([protocol.md](protocol.md) §1), and so every program user code starts, inherits FX's environment as before: a declared variable set there reaches it, and one read only from `.env` does not.
+- **Key values are never printed,** and every key's value, a declared provider's too, is redacted from the reasons an adapter gives ([adapters.md](adapters.md) §7). `grida-fx doctor` says which keys are present and where each came from (environment or `.env`), never a value: a `key` line for each built-in declaration, and for each of the project's declarations `provider  <name> <host> <VARIABLE> present (environment)` (or `present (.env)`, or `missing`), or `provider  <name> <host> needs no key` for one declared without a credential, `<host>` being its base URL's host, with its port when the URL names one, or its default's when its variable is refused.
 
 ## 2. The built-in adapters
 

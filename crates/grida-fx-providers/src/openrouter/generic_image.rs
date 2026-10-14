@@ -83,7 +83,7 @@ impl OpenRouterGenericImages {
             return Err(not_served(call));
         }
         crate::capabilities::check_request(&route.capability, &call.request)?;
-        let credential = self.client.credential("authorization", "Bearer ")?;
+        let credential = self.client.credential()?;
         let options = wire::provider_options(call, OWNED)?;
         let image = wire::generic_image(call, WHO, LABEL, true)?;
 

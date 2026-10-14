@@ -69,7 +69,7 @@ impl FalGenericImages {
             return Err(refusal);
         }
         crate::capabilities::check_request(&call.route.capability, &call.request)?;
-        let credential = client.credential(super::CREDENTIAL_HEADER, super::CREDENTIAL_PREFIX)?;
+        let credential = client.credential()?;
         let options = wire::provider_options(call, OWNED)?;
         let image = wire::generic_image(call, WHO, LABEL, false)?;
 

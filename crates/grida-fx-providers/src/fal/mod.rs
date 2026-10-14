@@ -30,34 +30,10 @@ use serde_json::{Map, Value};
 use std::sync::Arc;
 use std::time::Duration;
 
-/// The image output host check of src/fal/README.md: `https`, a host that is `fal.media` or
-/// ends with `.fal.media` (lowercased, trailing dots removed), no userinfo, port absent or 443, no
-/// fragment. A query is allowed.
+/// The image output host check of src/fal/README.md: [`crate::wire::download_url`] over fal's
+/// declared download hosts, `fal.media` and its subdomains (spec/providers.md §1).
 pub fn is_fal_media_url(url: &str) -> bool {
-    fal_media_url(url).is_some()
-}
-
-/// The parsed URL when it passes [`is_fal_media_url`]. A download sends the provider's text as
-/// given; the transport parses it with the same parser, so the host checked here is the host
-/// asked.
-pub(crate) fn fal_media_url(url: &str) -> Option<url::Url> {
-    let parsed = url::Url::parse(url).ok()?;
-    if parsed.scheme() != "https"
-        || !parsed.username().is_empty()
-        || parsed.password().is_some()
-        // The URL parser drops a default port, so `:443` reads as absent here.
-        || parsed.port().is_some()
-        || parsed.fragment().is_some()
-    {
-        return None;
-    }
-    let url::Host::Domain(domain) = parsed.host()? else {
-        return None;
-    };
-    let host = domain.trim_end_matches('.').to_ascii_lowercase();
-    let on_fal_media = host == "fal.media"
-        || (host.ends_with(".fal.media") && !host.starts_with('.') && !host.contains(".."));
-    on_fal_media.then_some(parsed)
+    crate::wire::download_url(url, &KeyName::Fal.declaration().download_hosts).is_ok()
 }
 
 /// The run-host client and the queue-host client (same key).
@@ -70,8 +46,8 @@ pub struct FalClients {
 impl FalClients {
     pub fn new(setup: &Setup) -> FalClients {
         FalClients {
-            run: setup.client(KeyName::Fal, &setup.endpoints.fal_run),
-            queue: setup.client(KeyName::Fal, &setup.endpoints.fal_queue),
+            run: setup.client(KeyName::Fal),
+            queue: setup.client_at(KeyName::Fal, &setup.endpoints.fal_queue),
         }
     }
 }
@@ -100,10 +76,6 @@ pub fn register(adapters: &mut Adapters, setup: &Setup) {
         Adapter::Request(Arc::new(background::FalBackground::new(clients))),
     );
 }
-
-/// The credential header and prefix fal takes on its run and queue hosts.
-pub(crate) const CREDENTIAL_HEADER: &str = "authorization";
-pub(crate) const CREDENTIAL_PREFIX: &str = "Key ";
 
 /// The base-URL variable a run-host redirect points at (spec/adapters.md §3.3).
 pub(crate) const RUN_BASE_VARIABLE: &str = "FAL_BASE_URL";

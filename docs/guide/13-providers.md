@@ -80,7 +80,9 @@ a missing key refuses only the calls that need it, before anything is sent.
 
 `OPENAI_BASE_URL`, `OPENROUTER_BASE_URL`, `FAL_BASE_URL`, `ELEVENLABS_BASE_URL` and `GG_BASE_URL`
 point a provider at another address, such as a proxy. How FX reads keys and the `.env` file:
-[Keys and live runs](05-running.md#keys-and-live-runs).
+[Keys and live runs](05-running.md#keys-and-live-runs). A provider FX does not ship is declared
+in `fx.yaml` with the variables of its own key and address
+([below](#a-provider-fx-does-not-ship)).
 
 ## The built-in routes
 
@@ -159,6 +161,51 @@ routes:
 
 Each adapter's reference lists what it sends and refuses
 ([providers.md §2](../../spec/providers.md#2-the-built-in-adapters)).
+
+## A provider FX does not ship
+
+A provider FX has no adapter for is declared in `fx.yaml`, under `providers:`, by the name its
+routes give it:
+
+```yaml
+# fx.yaml
+fx: project/v1
+providers:
+  acme:
+    credential: { variable: ACME_API_KEY }   # sent as authorization: Bearer <key>
+    base_url: { variable: ACME_BASE_URL, default: "https://api.acme.test/v1" }
+    download_hosts: [cdn.acme.test]
+    family: openai-compatible
+```
+
+- **`credential`** names the variable its key comes from, and how the key is sent: `header`
+  (`authorization` unless you say otherwise) and `scheme` (`Bearer`, or `""` for the bare key).
+  Leave `credential` out for a server that needs no key, such as one on this machine.
+- **`base_url`** is its address, `https` unless it is this machine (`localhost`, `127.0.0.1`),
+  and the variable that may move it, as `OPENAI_BASE_URL` moves OpenAI's.
+- **`download_hosts`** are the hosts its results may be downloaded from: a host, or `*.` and a
+  domain for every host below it.
+- **`family`** is the wire it speaks: `openai-compatible`, the OpenAI chat API.
+
+FX reads a declared provider's key and address as it reads its own: from the environment, else
+the project's `.env`. It redacts the key wherever it would be shown, keeps both variables from
+Codex, Grok Build, the background service and the program that opens your browser, and
+`grida fx doctor` lists the provider with its address and where its key came from:
+
+```
+provider  acme api.acme.test ACME_API_KEY present (.env)
+```
+
+A declared provider bills dollars, to its own account. Declarations are settings, not part of any
+identity: changing one moves no cache. No adapter serves a declared provider yet, so its routes
+plan and price, and a live call on one is refused (`no adapter serves …`; `no adapter` in
+doctor).
+
+A declaration may not take the name of a provider FX ships (`gg`, `openai`, `openrouter`, `fal`,
+`tripo`, `elevenlabs`, `codex`, `grok`), a variable FX or another declaration already reads, or a
+variable FX and the programs it starts read for themselves: `GRIDA_FX_*`, the proxy and certificate
+variables, `PATH` and `HOME`. Each is refused when `fx.yaml` is read, naming the declaration
+([providers.md §1](../../spec/providers.md#1-keys-and-endpoints)).
 
 ## Parameters FX does not expose
 

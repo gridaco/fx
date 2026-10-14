@@ -42,7 +42,7 @@ A route whose contract names an adapter of its capability with another `adapter_
     - a `size` that is not `auto` or `WxH` (`fal image size must be auto or WIDTHxHEIGHT`), or outside the envelope of [OpenAI's](../openai/README.md), with sentences starting `fal image size`;
     - then, in the order `image`, `references[<i>]` (counted from 0), `mask`: a picture that is not an `image/*` file: `<member> is <kind>, not a picture`.
   - The body is `{prompt, num_images: 1, image_size?, quality: max, background, output_format: png, image_urls?, mask_url?}`, then the provider options. `image_size` is `"auto"` or `{width, height}`, and pictures are data URLs under their own kind.
-  - The answer is `root.images[0]`, where `root` is the payload's `data` when that is an object, else the payload. It is either a data URL, or a URL on `fal.media` or a subdomain of it (https, port 443, no userinfo, no fragment) downloaded once, at the URL exactly as fal gave it, with `accept: image/*`. Any other URL is refused before a request. The download is at most 64 MiB.
+  - The answer is `root.images[0]`, where `root` is the payload's `data` when that is an object, else the payload. It is either a data URL, or a URL on fal's declared download hosts, `fal.media` or a subdomain of it (https, port 443, no userinfo, no fragment; [providers.md](../../../../spec/providers.md) §1) downloaded once, at the URL exactly as fal gave it, with `accept: image/*`. Any other URL is refused before a request. The download is at most 64 MiB.
   - The deadline is 600 s for the POST and the download together.
 - **Video.**
   - Refused before sending, in this order:

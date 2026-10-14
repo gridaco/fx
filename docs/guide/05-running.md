@@ -178,7 +178,9 @@ speech and music have no GG route yet. `GG_BASE_URL`, `OPENAI_BASE_URL`,
 `OPENROUTER_BASE_URL`, `FAL_BASE_URL` and `ELEVENLABS_BASE_URL` point a provider at another
 address, such as a proxy. A key that is missing refuses only the calls that need it, before
 anything is sent and for nothing: the step fails, refused with `GG_API_KEY is not set`.
-Without `--live` no key is used.
+Without `--live` no key is used. A provider FX does not ship is declared in `fx.yaml`, with the
+variables of its own key and address
+([AI providers](13-providers.md#a-provider-fx-does-not-ship)).
 
 **No API key: your Codex.** With Codex installed and signed in to your ChatGPT account, the route
 `imagegen@codex` draws images with no key and nothing to buy: it is priced at $0, and a run whose
@@ -193,15 +195,16 @@ name, are never proxied: they go straight there, and `HTTP_PROXY` is not used
 ([adapters.md §2](../../spec/adapters.md#2-the-transport)).
 
 **The `.env` file.** A variable set (and not blank) in the environment wins. Otherwise FX reads it
-from the `.env` file of the project you run from, if there is one, and only those eleven names: a
-line naming anything else is skipped without being read. A line is `NAME=value` (an `export`
-before it is fine), with the value unquoted, in `'single quotes'` taken as written, or in `"double
-quotes"` with JSON escapes; blank lines and `#` comments are skipped. A file FX cannot use stops a
-live run before anything is planned (exit 2), with a message that names the variable and the line
-and never the value: a symlink or anything but a plain file, text that is not UTF-8, a name given
-twice, an empty value, a quote out of place, or a control character in the value. Keys are never
-printed, logged or recorded. `GRIDA_FX_DISABLE_DOTENV=1` turns the file off, so only the
-environment counts (credential-free checks set it).
+from the `.env` file of the project you run from, if there is one, and only the eleven key and
+base-URL names above and the ones that project's `fx.yaml` declares: a line naming anything else
+is skipped without being read. A line is `NAME=value` (an `export` before it is fine), with the
+value unquoted, in `'single quotes'` taken as written, or in `"double quotes"` with JSON escapes;
+blank lines and `#` comments are skipped. A file FX cannot use stops a live run before anything is
+planned (exit 2), with a message that names the variable and the line and never the value: a
+symlink or anything but a plain file, text that is not UTF-8, a name given twice, an empty value,
+a quote out of place, or a control character in the value. Keys are never printed, logged or
+recorded. `GRIDA_FX_DISABLE_DOTENV=1` turns the file off, so only the environment counts
+(credential-free checks set it).
 
 **Trying `--live` without the network.** With `GRIDA_FX_NETWORK=off`, a live run builds its
 adapters as usual, but nothing leaves the machine: every provider request is refused before it is
@@ -209,9 +212,10 @@ sent, and the step fails with a message that names `GRIDA_FX_NETWORK`, for nothi
 paths use it.
 
 **Checking keys and routes.** `grida fx doctor` prints, after the engine, Python and Node lines,
-where each key comes from, which Codex and Grok Build it found, and which routes a live run could
-serve, for the project you run from (the built-in table and its `route_tables`); with a target, the
-tools and node types the workflow needs follow:
+where each key comes from (and for each provider `fx.yaml` declares, a `provider` line with its
+address too), which Codex and Grok Build it found, and which routes a live run could serve, for
+the project you run from (the built-in table and its `route_tables`); with a target, the tools
+and node types the workflow needs follow:
 
 ```
 engine    grida-fx 0.6.1

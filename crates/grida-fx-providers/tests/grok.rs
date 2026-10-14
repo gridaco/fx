@@ -26,6 +26,11 @@ case "$GROK_CONFIG" in *'"image_gen":true'*) ;; *) exit 9 ;; esac
 echo start >> "$here/starts"
 "#;
 
+/// The variables of the built-in declarations, which the program never inherits.
+fn withheld() -> Arc<[String]> {
+    Arc::from(grida_fx_core::providers::Declarations::built_in().variables())
+}
+
 /// `initialize` (Grok Build `version`, sign-in methods `methods`), then, when `cached_token` is
 /// offered, `authenticate` with it (an account billed through the API when `billed`).
 fn handshake(version: &str, methods: &[&str], billed: bool) -> String {
@@ -199,7 +204,7 @@ fn on_one_runtime<T, F: Future<Output = T>>(
         .build()
         .unwrap();
     tokio.block_on(async {
-        let runtime = Arc::new(GrokRuntime::new(program));
+        let runtime = Arc::new(GrokRuntime::new(program, withheld()));
         let adapter = GrokImages::new(Arc::clone(&runtime))
             .with_deadlines(Duration::from_secs(20), Duration::from_secs(30));
         let out = test(adapter).await;

@@ -27,9 +27,10 @@
 //! - [`adapters_for`]: without `live`, an empty registry and nothing constructed, so every
 //!   uncached paid call is refused (a recorded call still replays from the store). With `live`
 //!   (spec/adapters.md §1; spec/providers.md §1):
-//!   1. the allowlisted variables ([`provider_environment`]): the process environment, then the
-//!      planning project's `.env` (`<planning project>/.env`) for the names the process does not
-//!      set, unless the process sets `GRIDA_FX_DISABLE_DOTENV=1`;
+//!   1. the variables the planning project's provider declarations name, FX's own and its
+//!      `providers:` ([`provider_environment`]): the process environment, then the planning
+//!      project's `.env` (`<planning project>/.env`) for the names the process does not set,
+//!      unless the process sets `GRIDA_FX_DISABLE_DOTENV=1`;
 //!   2. the keys of that environment, and the endpoints (the default bases, with each base-URL
 //!      variable in its place);
 //!   3. `grida_fx_providers::live::live_setup` over the default transport, or over the `Offline`
@@ -50,6 +51,7 @@
 //! [`plan`] and [`shutdown`] also mark when a run's runner takes interruptions
 //! ([`crate::interrupt`]): from the end of planning until the engine is shut down.
 
+use grida_fx_core::docs::project::Project;
 use grida_fx_core::error::io_reason;
 use grida_fx_core::host::Language;
 use grida_fx_core::host::{NodeHost, PlanTimeRunner};
@@ -177,7 +179,7 @@ pub fn adapters_for(
     if !live {
         return Ok(Adapters::new());
     }
-    let (keys, endpoints) = provider_environment(&planner.project.root, env)?;
+    let (keys, endpoints) = provider_environment(&planner.project, env)?;
     let setup = live::live_setup(keys, endpoints, Network::from_env(env)).map_err(|reason| {
         Error::new(
             ErrorKind::Internal,
@@ -187,16 +189,17 @@ pub fn adapters_for(
     Ok(live::adapters(&setup))
 }
 
-/// The keys and endpoints of the planning project at `project_root` (spec/providers.md §1): the
-/// allowlisted variables from `env`, then from `<project_root>/.env` (unless `env` gives
+/// The keys and endpoints of the planning project `project` (spec/providers.md §1): the
+/// variables its declarations name from `env`, then from its `.env` (unless `env` gives
 /// `GRIDA_FX_DISABLE_DOTENV=1`). A `.env` or base-URL refusal is a usage error; its sentence
 /// names the variable or the line, never a value.
 pub fn provider_environment(
-    project_root: &Path,
+    project: &Project,
     env: &dyn Fn(&str) -> Option<String>,
 ) -> Result<(Keys, Endpoints), Error> {
+    let dotenv = dotenv_path(&project.root);
     let environment =
-        Environment::read(env, Some(&dotenv_path(project_root))).map_err(Error::usage)?;
+        Environment::read(env, Some(&dotenv), &project.declarations()).map_err(Error::usage)?;
     let keys = Keys::from_environment(&environment);
     let endpoints = Endpoints::from_environment(&environment, &keys).map_err(Error::usage)?;
     Ok((keys, endpoints))
@@ -386,7 +389,7 @@ mod tests {
         assert!(adapters.serves("video.generate", "fal"));
         // A good file gives its keys.
         std::fs::write(root.join(".env"), format!("FAL_KEY={value}\n")).unwrap();
-        let (keys, _) = provider_environment(&root, &network_off).unwrap();
+        let (keys, _) = provider_environment(&planner.project, &network_off).unwrap();
         assert_eq!(
             keys.source(grida_fx_providers::KeyName::Fal),
             Some(grida_fx_providers::keys::KeySource::DotEnv)

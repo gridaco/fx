@@ -105,17 +105,17 @@ fn numbers(version: &str) -> Option<[u64; 3]> {
     parts.next().is_none().then_some(numbers)
 }
 
-/// What `program --version` names within `deadline`, started as [`command`] starts it with stdin
-/// closed: the first word it prints that is a version (`codex-cli 0.160.1`; a leading `v` passed
-/// over), as [`version`] keeps it. `None` when it fails, prints none, or runs out of time; an
-/// error when it cannot be started.
+/// What `program --version` names within `deadline`, started as [`command`] starts it (without
+/// `withheld`) with stdin closed: the first word it prints that is a version (`codex-cli
+/// 0.160.1`; a leading `v` passed over), as [`version`] keeps it. `None` when it fails, prints
+/// none, or runs out of time; an error when it cannot be started.
 pub(crate) async fn ask_version(
     program: &Path,
     folder: &Path,
-    also: &'static [&'static str],
+    withheld: &[String],
     deadline: Duration,
 ) -> std::io::Result<Option<String>> {
-    let mut command = command(program, ["--version"], folder, also);
+    let mut command = command(program, ["--version"], folder, withheld);
     command.stdin(Stdio::null());
     let child = command.spawn()?;
     let output = match tokio::time::timeout(deadline, child.wait_with_output()).await {
@@ -145,27 +145,25 @@ fn executable(path: &Path) -> bool {
     }
 }
 
-/// Every variable the program never inherits: the allowlisted keys ([`crate::keys::ALLOWED`]),
-/// then `also`.
-pub(crate) fn withheld(also: &'static [&'static str]) -> impl Iterator<Item = &'static str> {
-    crate::keys::ALLOWED
-        .iter()
-        .copied()
-        .chain(also.iter().copied())
+/// Every variable the program never inherits: the declared ones (`variables`,
+/// [`crate::setup::Setup::withheld`]), then `also`.
+pub(crate) fn withheld(variables: &[String], also: &[&str]) -> Vec<String> {
+    let also = also.iter().map(|variable| variable.to_string());
+    variables.iter().cloned().chain(also).collect()
 }
 
 /// A command that starts `program` with `args` in `folder`: its own environment, less
-/// [`withheld`]`(also)`; no stderr; killed when dropped; and in a process group of its own, which
-/// [`crate::process_group::Group::enlist`] takes the child to lead.
+/// `withheld` ([`withheld`]); no stderr; killed when dropped; and in a process group of its own,
+/// which [`crate::process_group::Group::enlist`] takes the child to lead.
 pub(crate) fn command(
     program: &Path,
     args: impl IntoIterator<Item = impl AsRef<OsStr>>,
     folder: &Path,
-    also: &'static [&'static str],
+    withheld: &[String],
 ) -> Command {
     let mut command = Command::new(program);
     command.args(args).current_dir(folder);
-    for variable in withheld(also) {
+    for variable in withheld {
         command.env_remove(variable);
     }
     command

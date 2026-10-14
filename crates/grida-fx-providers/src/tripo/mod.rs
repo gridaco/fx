@@ -47,6 +47,7 @@ use crate::transport::{
     Body, Credential, HttpRequest, HttpResponse, Lane, Method, Part, Phase, TransportError,
     TransportErrorKind,
 };
+use crate::wire::OffHost;
 use grida_fx_core::money::Usd;
 use indexmap::IndexMap;
 use regex::Regex;
@@ -109,9 +110,6 @@ const MAX_MODEL_URLS: usize = 8;
 
 /// The longest model URL, in characters.
 const MAX_URL_CHARS: usize = 20_480;
-
-/// The storage host outside `tripo3d.ai` that Tripo serves models from.
-const STORAGE_HOST: &str = "tripo-data.rg1.data.tripo3d.com";
 
 static FILE_TOKEN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[A-Za-z0-9_-]{1,256}$").expect("a valid pattern"));
@@ -179,7 +177,7 @@ pub enum Waited {
 impl TripoApi {
     pub fn new(setup: &Setup) -> TripoApi {
         TripoApi {
-            client: setup.client(KeyName::Tripo, &setup.endpoints.tripo),
+            client: setup.client(KeyName::Tripo),
             clock: Arc::clone(&setup.clock),
         }
     }
@@ -371,7 +369,8 @@ impl TripoApi {
     /// `Err(Download::…)` says whether the job is over (`Ended`) or may be collected again
     /// (`Unreachable`).
     pub async fn download(&self, url: &str) -> Result<(String, Vec<u8>), Download> {
-        check_model_host(url).map_err(|reason| Download::Ended(reason.into()))?;
+        check_model_host(url, &self.client.download_hosts)
+            .map_err(|reason| Download::Ended(reason.into()))?;
         let redactor = self.client.redactor.with(url);
         let request = HttpRequest::new(Method::Get, url, Lane::Download)
             .timeout(READ_DEADLINE)
@@ -412,7 +411,7 @@ impl TripoApi {
 
     /// The API credential, or `TRIPO_API_KEY is not set`.
     fn credential(&self) -> Result<Credential, String> {
-        self.client.credential("authorization", "Bearer ")
+        self.client.credential()
     }
 
     /// Posts the free riggability check (`POST /animations/rig-check`) and returns its task id.
@@ -748,28 +747,15 @@ fn visit_output<'a>(
     Ok(())
 }
 
-/// A model URL is on one of Tripo's own hosts (src/tripo/README.md, "Tasks"): `https`, no
-/// userinfo, port absent or 443, and the host `tripo3d.ai`, a subdomain of it, or Tripo's storage
-/// host.
-fn check_model_host(url: &str) -> Result<(), &'static str> {
-    let Ok(parsed) = url::Url::parse(url) else {
-        return Err("a Tripo model address is malformed; details withheld");
-    };
-    let outside = "a Tripo model address is outside Tripo's own hosts";
-    let Some(url::Host::Domain(host)) = parsed.host() else {
-        return Err(outside);
-    };
-    let host = host.to_ascii_lowercase();
-    let ours = host == "tripo3d.ai" || host.ends_with(".tripo3d.ai") || host == STORAGE_HOST;
-    if parsed.scheme() != "https"
-        || !parsed.username().is_empty()
-        || parsed.password().is_some()
-        || !matches!(parsed.port(), None | Some(443))
-        || !ours
-    {
-        return Err(outside);
+/// A model URL is on one of Tripo's own hosts (src/tripo/README.md, "Tasks"): its declared
+/// download hosts, `tripo3d.ai`, a subdomain of it, or Tripo's storage host, as
+/// [`crate::wire::download_url`] holds a download to them.
+fn check_model_host(url: &str, hosts: &[String]) -> Result<(), &'static str> {
+    match crate::wire::download_url(url, hosts) {
+        Ok(_) => Ok(()),
+        Err(OffHost::Malformed) => Err("a Tripo model address is malformed; details withheld"),
+        Err(OffHost::Outside) => Err("a Tripo model address is outside Tripo's own hosts"),
     }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -913,6 +899,8 @@ mod tests {
 
     #[test]
     fn model_hosts_are_tripos_own() {
+        let hosts = &KeyName::Tripo.declaration().download_hosts;
+        let check_model_host = |url| check_model_host(url, hosts);
         for good in [
             "https://tripo3d.ai/m.glb",
             "https://api.tripo3d.ai/m.glb",

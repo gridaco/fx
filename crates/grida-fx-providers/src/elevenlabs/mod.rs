@@ -42,9 +42,6 @@ pub const AUDIO_KIND: &str = "audio/mpeg";
 /// The answer's one file.
 pub const AUDIO_FILE: &str = "audio";
 
-/// The credential header (no prefix).
-pub const CREDENTIAL_HEADER: &str = "xi-api-key";
-
 /// The variable that moves the base URL, named when a response redirects (spec/adapters.md §3.3).
 pub const BASE_URL_VARIABLE: &str = "ELEVENLABS_BASE_URL";
 
@@ -62,7 +59,7 @@ const UNKNOWN_KIND: &str = "application/octet-stream";
 
 /// The shared client.
 pub fn client(setup: &Setup) -> Client {
-    setup.client(KeyName::ElevenLabs, &setup.endpoints.elevenlabs)
+    setup.client(KeyName::ElevenLabs)
 }
 
 /// An exchange's outcome (src/elevenlabs/README.md table): a 2xx becomes the answer (file `audio`),
@@ -483,7 +480,7 @@ mod tests {
     fn a_missing_key_is_named_by_its_variable() {
         let client = client(&setup(Arc::new(NoNetwork), Keys::none()));
         assert_eq!(
-            client.credential(CREDENTIAL_HEADER, "").unwrap_err(),
+            client.credential().unwrap_err(),
             "ELEVENLABS_API_KEY is not set"
         );
         assert_eq!(client.base, "https://api.elevenlabs.io/v1");

@@ -170,7 +170,7 @@ fn a_rate_limit_carries_the_wait_it_asks_for() {
 #[test]
 fn a_clients_reasons_hold_no_key_and_no_secret_shape() {
     let setup = setup(Arc::new(NoNetwork), test_keys());
-    let client = setup.client(KeyName::Fal, &setup.endpoints.fal_run);
+    let client = setup.client(KeyName::Fal);
     let key = test_keys()
         .get(KeyName::Fal)
         .expect("a made-up fal key")
@@ -234,8 +234,8 @@ fn a_download_refuses_every_header_named_like_a_credential() {
     assert_eq!(check_request(&accept), Ok(()));
     let mut by_hand = HttpRequest::new(Method::Post, "https://api.example.test/v1", Lane::Provider)
         .credential(Credential {
-            header: "xi-api-key",
-            prefix: "",
+            header: "xi-api-key".into(),
+            prefix: "".into(),
             secret: grida_fx_providers::Secret::new("test-key-not-real"),
         });
     by_hand
@@ -267,8 +267,8 @@ fn requests_and_responses_debug_without_urls_values_or_bodies() {
         Lane::Provider,
     )
     .credential(Credential {
-        header: "authorization",
-        prefix: "Bearer ",
+        header: "authorization".into(),
+        prefix: "Bearer ".into(),
         secret: grida_fx_providers::Secret::new("test-key-not-real-debug"),
     })
     .body(Body::Json(serde_json::json!({

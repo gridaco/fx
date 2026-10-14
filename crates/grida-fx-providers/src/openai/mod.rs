@@ -118,7 +118,7 @@ pub struct OpenAiImages {
 impl OpenAiImages {
     pub fn new(setup: &Setup) -> OpenAiImages {
         OpenAiImages {
-            client: setup.client(KeyName::OpenAi, &setup.endpoints.openai),
+            client: setup.client(KeyName::OpenAi),
         }
     }
 
@@ -127,7 +127,7 @@ impl OpenAiImages {
     fn prepare(&self, call: &CallRequest) -> Result<HttpRequest, String> {
         let edit = served(&call.route)?;
         capabilities::check_request(&call.route.capability, &call.request)?;
-        let credential = self.client.credential("authorization", "Bearer ")?;
+        let credential = self.client.credential()?;
         let options = wire::provider_options(call, OWNED)?;
         let values = Values::read(&call.request, edit)?;
         let fields = fields(&call.route.model, &values);

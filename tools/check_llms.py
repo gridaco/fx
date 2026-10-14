@@ -45,7 +45,8 @@ JS_SDK = ROOT / "js" / "fx"
 ENGINE = ROOT / "python" / "src" / "grida" / "fx" / "_bin" / "grida-fx"
 REPOSITORY = "https://github.com/gridaco/fx/"
 
-#: Every variable FX reads a key or a provider address from (spec/providers.md §1).
+#: Every variable FX's built-in providers read a key or an address from (spec/providers.md §1); in
+#: step with the engine's (crates/grida-fx/tests/key_lists.rs).
 KEYS = (
     "GG_API_KEY",
     "OPENAI_API_KEY",

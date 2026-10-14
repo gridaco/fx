@@ -110,6 +110,11 @@ impl Fake {
     }
 }
 
+/// The variables of the built-in declarations, which the program never inherits.
+fn withheld() -> Arc<[String]> {
+    Arc::from(grida_fx_core::providers::Declarations::built_in().variables())
+}
+
 /// A fake Codex whose script is `body`.
 fn fake(body: &str) -> Fake {
     let dir = tempfile::tempdir().unwrap();
@@ -187,7 +192,7 @@ fn images(
         path,
         origin: "PATH",
     });
-    let runtime = Arc::new(CodexRuntime::new(program));
+    let runtime = Arc::new(CodexRuntime::new(program, withheld()));
     let adapter = CodexImages::new(Arc::clone(&runtime))
         .with_deadlines(Duration::from_secs(start), Duration::from_secs(whole));
     (runtime, adapter)
@@ -574,7 +579,8 @@ fn codex_names_its_version_as_it_prints_it() {
         .build()
         .unwrap();
     let folder = tempfile::tempdir().unwrap();
-    let version = |fake: &Fake| tokio.block_on(codex::version(&fake.program, folder.path()));
+    let version =
+        |fake: &Fake| tokio.block_on(codex::version(&fake.program, folder.path(), &withheld()));
     let supported = |v: &str| Ok(Version::Supported(v.into()));
     for (printed, expected) in [
         ("codex-cli 0.160.1", supported("0.160.1")),
@@ -602,7 +608,7 @@ fn codex_names_its_version_as_it_prints_it() {
     );
     let missing = Path::new("/nonexistent/codex");
     assert_eq!(
-        tokio.block_on(codex::version(missing, folder.path())),
+        tokio.block_on(codex::version(missing, folder.path(), &withheld())),
         Err(codex::NOT_INSTALLED.to_string())
     );
 }

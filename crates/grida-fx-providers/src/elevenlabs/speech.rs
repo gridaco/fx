@@ -12,7 +12,7 @@
 //! refused (`language_code must not be blank`): the provider would refuse it after billing the
 //! hold. `voice_settings` holds `stability` alone, as a float.
 
-use super::{CREDENTIAL_HEADER, check_route, float, number, post, refused, within};
+use super::{check_route, float, number, post, refused, within};
 use crate::BoxFuture;
 use crate::adapter::{Answer, CallRequest, Identity, RequestAdapter, Sent};
 use crate::capabilities;
@@ -68,7 +68,7 @@ impl RequestAdapter for ElevenLabsSpeech {
             {
                 return refused(&self.client, &reason);
             }
-            let credential = match self.client.credential(CREDENTIAL_HEADER, "") {
+            let credential = match self.client.credential() {
                 Ok(credential) => credential,
                 Err(reason) => return refused(&self.client, &reason),
             };

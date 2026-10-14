@@ -37,7 +37,7 @@ pub const BODY_TOO_LARGE: &str = "request body exceeds 200 MiB";
 
 /// The shared client.
 pub fn client(setup: &Setup) -> Client {
-    setup.client(KeyName::OpenRouter, &setup.endpoints.openrouter)
+    setup.client(KeyName::OpenRouter)
 }
 
 /// How an exchange that is not a 2xx becomes a [`Sent`] (spec/adapters.md §3.2 and the

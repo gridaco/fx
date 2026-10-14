@@ -4,12 +4,14 @@
 //! `.env` or the process environment (the process is a closure over made-up pairs), and every
 //! value is made up.
 
+use grida_fx_core::providers::{Declaration, Declarations};
 use grida_fx_providers::keys::{
-    ALLOWED, DISABLE_DOTENV, Environment, KeyName, KeySource, Keys, parse_dotenv, read_dotenv,
+    DISABLE_DOTENV, Environment, KeyName, KeySource, Keys, parse_dotenv, read_dotenv,
 };
 use grida_fx_providers::setup::Endpoints;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 /// A process environment of made-up pairs.
 fn process(pairs: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> + use<> {
@@ -29,7 +31,15 @@ fn dotenv(text: impl AsRef<[u8]>) -> (tempfile::TempDir, PathBuf) {
 }
 
 fn read(pairs: &[(&str, &str)], path: Option<&Path>) -> Result<Environment, String> {
-    Environment::read(&process(pairs), path)
+    Environment::read(&process(pairs), path, &Declarations::built_in())
+}
+
+/// The variables the built-in declarations read: spec/providers.md §1's eleven.
+static VARIABLES: LazyLock<Vec<String>> = LazyLock::new(|| Declarations::built_in().variables());
+
+/// [`VARIABLES`], as the `.env` reader takes them.
+fn allowed() -> Vec<&'static str> {
+    VARIABLES.iter().map(String::as_str).collect()
 }
 
 /// The refusal of a `.env` with `text`, checked to hold none of `values`.
@@ -88,12 +98,7 @@ fn only_allowlisted_values_are_loaded_from_the_dotenv() {
     let keys = Keys::from_environment(&environment);
     assert_eq!(
         keys.present(),
-        [
-            KeyName::OpenAi,
-            KeyName::OpenRouter,
-            KeyName::Fal,
-            KeyName::ElevenLabs
-        ]
+        ["openai", "openrouter", "fal", "elevenlabs"]
     );
     assert_eq!(keys.source(KeyName::OpenAi), Some(KeySource::DotEnv));
     assert!(!format!("{keys:?}").contains("file-openai"));
@@ -166,11 +171,11 @@ fn a_missing_dotenv_is_fine() {
     let dir = tempfile::tempdir().expect("a temporary directory");
     let path = dir.path().join(".env");
     assert_eq!(read(&[], Some(&path)), Ok(Environment::default()));
-    assert_eq!(read_dotenv(&path, &ALLOWED), Ok(BTreeMap::new()));
+    assert_eq!(read_dotenv(&path, &allowed()), Ok(BTreeMap::new()));
     // A path through a file that is not a directory is missing too.
     let (_other, file) = dotenv("FAL_KEY=x\n");
     assert_eq!(
-        read_dotenv(&file.join(".env"), &ALLOWED),
+        read_dotenv(&file.join(".env"), &allowed()),
         Ok(BTreeMap::new())
     );
 }
@@ -312,7 +317,7 @@ fn a_directory_is_not_a_dotenv() {
 // The value forms
 
 fn parsed(text: &str) -> BTreeMap<String, String> {
-    parse_dotenv(text, &ALLOWED).expect("a valid .env")
+    parse_dotenv(text, &allowed()).expect("a valid .env")
 }
 
 #[test]
@@ -361,11 +366,11 @@ fn every_line_break_counts_and_crlf_is_one() {
     assert_eq!(values["OPENAI_API_KEY"], "b");
     assert_eq!(values["TRIPO_API_KEY"], "c");
     assert_eq!(
-        parse_dotenv("\r\n\r\nFAL_KEY nope\r\n", &ALLOWED),
+        parse_dotenv("\r\n\r\nFAL_KEY nope\r\n", &allowed()),
         Err(".env contains malformed assignment for FAL_KEY on line 3".to_string())
     );
     assert_eq!(
-        parse_dotenv("A=1\u{2028}FAL_KEY nope", &ALLOWED),
+        parse_dotenv("A=1\u{2028}FAL_KEY nope", &allowed()),
         Err(".env contains malformed assignment for FAL_KEY on line 2".to_string())
     );
 }
@@ -392,18 +397,19 @@ fn endpoints(pairs: &[(&str, &str)]) -> Result<Endpoints, String> {
 #[test]
 fn defaults_hold_without_base_urls() {
     assert_eq!(endpoints(&[]), Ok(Endpoints::default()));
-    assert_eq!(
-        Endpoints::default(),
-        Endpoints {
-            gg: "https://gateway.grida.ai/v1".into(),
-            openai: "https://api.openai.com/v1".into(),
-            openrouter: "https://openrouter.ai/api/v1".into(),
-            fal_run: "https://fal.run".into(),
-            fal_queue: "https://queue.fal.run".into(),
-            tripo: "https://openapi.tripo3d.ai/v3".into(),
-            elevenlabs: "https://api.elevenlabs.io/v1".into(),
-        }
-    );
+    let defaults = Endpoints::default();
+    for (provider, base) in [
+        ("gg", "https://gateway.grida.ai/v1"),
+        ("openai", "https://api.openai.com/v1"),
+        ("openrouter", "https://openrouter.ai/api/v1"),
+        ("fal", "https://fal.run"),
+        ("tripo", "https://openapi.tripo3d.ai/v3"),
+        ("elevenlabs", "https://api.elevenlabs.io/v1"),
+    ] {
+        assert_eq!(defaults.base(provider), Some(base), "{provider}");
+    }
+    assert_eq!(defaults.fal_queue, "https://queue.fal.run");
+    assert_eq!(defaults.base("acme"), None);
 }
 
 #[test]
@@ -431,12 +437,12 @@ fn a_base_url_allows_cleartext_to_a_loopback_host() {
         "http://[::1]:8765/v1/",
     ] {
         let found = endpoints(&[("OPENAI_BASE_URL", value)]).expect("loopback is allowed");
-        assert_eq!(found.openai, value.trim_end_matches('/'));
+        assert_eq!(found.base("openai"), Some(value.trim_end_matches('/')));
         let setup = grida_fx_providers::testing::setup(
             std::sync::Arc::new(grida_fx_providers::transport::replay::NoNetwork),
             Keys::none(),
         );
-        let client = setup.client(KeyName::OpenAi, &found.openai);
+        let client = setup.client_at(KeyName::OpenAi, found.base("openai").unwrap());
         assert_eq!(
             client.url("images/generations"),
             format!("{}/images/generations", value.trim_end_matches('/'))
@@ -505,7 +511,7 @@ fn a_base_url_holding_a_key_is_refused_without_showing_either() {
 fn fal_base_url_moves_the_run_host_only() {
     let found = endpoints(&[("FAL_BASE_URL", " https://fal-proxy.example.test/ ")])
         .expect("a valid base URL");
-    assert_eq!(found.fal_run, "https://fal-proxy.example.test");
+    assert_eq!(found.base("fal"), Some("https://fal-proxy.example.test"));
     assert_eq!(found.fal_queue, "https://queue.fal.run");
     assert_eq!(
         endpoints(&[("FAL_BASE_URL", "http://fal-proxy.example.test")]),
@@ -522,6 +528,111 @@ fn base_urls_come_from_the_dotenv_too() {
     let environment = read(&[], Some(&path)).expect("a valid .env");
     let keys = Keys::from_environment(&environment);
     let found = Endpoints::from_environment(&environment, &keys).expect("valid");
-    assert_eq!(found.elevenlabs, "https://audio-proxy.example.test/v1");
-    assert_eq!(found.openai, Endpoints::default().openai);
+    assert_eq!(
+        found.base("elevenlabs"),
+        Some("https://audio-proxy.example.test/v1")
+    );
+    assert_eq!(found.base("openai"), Endpoints::default().base("openai"));
+}
+
+// ---------------------------------------------------------------------------------------------
+// A project's declarations
+
+/// `acme`, declared as a project's `fx.yaml` would: a bare key in `x-api-key`, and a base URL
+/// its own variable moves.
+fn acme() -> Declarations {
+    use grida_fx_core::providers::{BaseUrl, Credential};
+    Declarations::with(&[Declaration {
+        name: "acme".into(),
+        label: "acme".into(),
+        credential: Some(Credential {
+            variable: "ACME_API_KEY".into(),
+            header: "x-api-key".into(),
+            scheme: String::new(),
+        }),
+        base_url: BaseUrl {
+            variable: Some("ACME_BASE_URL".into()),
+            default: "https://api.acme.test/v1".into(),
+        },
+        download_hosts: Vec::new(),
+        family: Some("openai-compatible".into()),
+    }])
+}
+
+#[test]
+fn a_declared_providers_variables_are_read_as_a_built_ins() {
+    let declarations = acme();
+    let (_dir, path) = dotenv(
+        "ACME_API_KEY=file-acme\n\
+         ACME_BASE_URL=https://proxy.acme.test/v1/\n\
+         ACME_OTHER=ignored-value\n",
+    );
+    let environment =
+        Environment::read(&process(&[]), Some(&path), &declarations).expect("a valid .env");
+    assert_eq!(environment.get("ACME_API_KEY"), Some("file-acme"));
+    assert_eq!(environment.get("ACME_OTHER"), None);
+    let keys = Keys::from_environment(&environment);
+    assert_eq!(keys.present(), ["acme"]);
+    assert_eq!(keys.source_of("acme"), Some(KeySource::DotEnv));
+    assert_eq!(keys.of("acme").map(|key| key.expose()), Some("file-acme"));
+    let found = Endpoints::from_environment(&environment, &keys).expect("valid");
+    assert_eq!(found.base("acme"), Some("https://proxy.acme.test/v1"));
+    // The redactor learns its key, and the programs FX starts never inherit its variables.
+    let setup = grida_fx_providers::testing::setup(
+        std::sync::Arc::new(grida_fx_providers::transport::replay::NoNetwork),
+        keys,
+    );
+    assert_eq!(setup.redactor().reason("x file-acme"), "x [redacted]");
+    let withheld = setup.withheld();
+    assert!(
+        withheld.iter().any(|v| v == "ACME_API_KEY")
+            && withheld.iter().any(|v| v == "ACME_BASE_URL")
+    );
+    assert_eq!(
+        setup.endpoints.base("acme"),
+        Some("https://api.acme.test/v1")
+    );
+    // Read for the built-in declarations alone, the file's acme lines are skipped unread.
+    let built_in = read(&[], Some(&path)).expect("a valid .env");
+    assert_eq!(built_in.get("ACME_API_KEY"), None);
+    let (_dir, malformed) = dotenv("ACME_API_KEY nope\n");
+    assert_eq!(read(&[], Some(&malformed)), Ok(Environment::default()));
+    assert_eq!(
+        Environment::read(&process(&[]), Some(&malformed), &declarations),
+        Err(".env contains malformed assignment for ACME_API_KEY on line 1".to_string())
+    );
+}
+
+#[test]
+fn a_declared_base_url_is_refused_by_its_name() {
+    let declarations = acme();
+    let endpoints = |pairs: &[(&str, &str)]| {
+        let environment = Environment::declared(pairs, &declarations);
+        Endpoints::from_environment(&environment, &Keys::from_environment(&environment))
+    };
+    assert_eq!(
+        endpoints(&[("ACME_BASE_URL", "http://proxy.acme.test")]),
+        Err("ACME_BASE_URL: acme base_url must use HTTPS unless it targets a loopback host".into())
+    );
+    // A declared key held in a built-in's base URL, and a built-in's key in a declared one.
+    assert_eq!(
+        endpoints(&[
+            ("ACME_API_KEY", "made-up-acme-key"),
+            (
+                "OPENAI_BASE_URL",
+                "https://proxy.example.test/made-up-acme-key"
+            ),
+        ]),
+        Err("OPENAI_BASE_URL holds a credential".into())
+    );
+    assert_eq!(
+        endpoints(&[
+            ("FAL_KEY", "made-up-fal-key"),
+            (
+                "ACME_BASE_URL",
+                "https://proxy.example.test/made-up-fal-key"
+            ),
+        ]),
+        Err("ACME_BASE_URL holds a credential".into())
+    );
 }

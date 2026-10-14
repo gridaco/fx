@@ -145,7 +145,7 @@ fn assert_key_only_in_credential(transport: &ReplayTransport) {
         assert!(request.headers.iter().all(|(_, v)| !v.contains(KEY)));
         assert_eq!(request.lane, Lane::Provider);
         assert_eq!(
-            request.credential.as_ref().map(|c| c.header),
+            request.credential.as_ref().map(|c| c.header.as_str()),
             Some("xi-api-key")
         );
     }
@@ -296,10 +296,7 @@ fn the_base_url_comes_from_the_endpoints() {
         .reply(mp3(MP3)),
     ]));
     let setup = Setup {
-        endpoints: Endpoints {
-            elevenlabs: "http://127.0.0.1:8089/v1".into(),
-            ..Endpoints::default()
-        },
+        endpoints: Endpoints::default().with_base("elevenlabs", "http://127.0.0.1:8089/v1"),
         ..Setup::new(transport.clone(), test_keys(), Arc::new(FakeClock::new()))
     };
     let adapter = ElevenLabsSound::new(elevenlabs::client(&setup));
