@@ -60,9 +60,9 @@ Ratified 2026-10-14.
 
 ## Working rules
 
-- **One draft PR,** from the branch `provider-contract`. The owner reviews and merges it.
-  Commits stay local and are pushed once, when the plan is done or the session must stop; the
-  draft PR opens then.
+- **Local work, one branch.** Everything lands as commits on the branch `provider-contract` and
+  stays local: nothing is pushed and no pull request or issue is opened until the owner asks
+  (2026-10-14). The owner reviews and merges the pull request.
 - **Commits follow the milestones in order.** Each commit builds and passes the checks for what
   it touches, and each milestone ends with its gate green. A milestone ticks its boxes here in
   its last commit.
@@ -354,8 +354,8 @@ Gate: the whole verification list, `check_host` included.
 - [ ] `llms.txt`: recipes for a new model and a declared provider; the errors table.
 - [ ] `skills/grida-fx` and its onboarding reference.
 - [ ] `AGENT_READINESS.md`: AR-20 Current, with its evidence.
-- [ ] The follow-up issues filed, each linked from this page.
-- [ ] The whole verification list; push; open the draft PR.
+- [ ] The follow-ups written up on this page, ready to file when the owner asks.
+- [ ] The whole verification list, green on the branch.
 
 ## Defaults
 
@@ -382,7 +382,8 @@ Gate: the whole verification list, `check_host` included.
 
 ## Follow-ups
 
-Filed as issues in M11, or as soon as a milestone leaves something out, with only verified facts.
+Listed here as each milestone leaves something out, with only verified facts, and filed as issues
+when the owner asks.
 
 **gridaco/fx:**
 - a project-level Models pin and model import (#69's P5);
