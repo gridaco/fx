@@ -1399,6 +1399,55 @@ steps:
 }
 
 #[test]
+fn capped_prices() {
+    let mut project = Project::new();
+    project.routes = "\
+fx: routes/v1
+routes:
+  - { capability: image.generate, route: img-a@acme, price: { low_usd: 0.01, high_usd: 0.04 } }
+  - { capability: image.generate, route: img-x@acme, price: { cap_usd: 1.5 } }
+  - { capability: structured.generate, route: llm-a@acme, price: { low_usd: 0.001, high_usd: 0.002 } }
+  - { capability: structured.generate, route: llm-x@acme, extends: llm-a@acme, price: { cap_usd: 0.25 } }
+"
+    .into();
+    project
+        .defaults
+        .insert("structured.generate".into(), "llm-x@acme".into());
+    let expansion = project.expand(
+        "\
+fx: workflow/v1
+id: case
+title: Capped prices
+steps:
+  capped:
+    uses: fx/image.generate@1
+    route: img-x@acme
+    with: { prompt: a kite }
+  priced:
+    uses: fx/image.generate@1
+    route: img-a@acme
+    with: { prompt: a kite }
+  mixed:
+    uses: ./nodes/cases.py#paid
+",
+    );
+    assert!(expansion.problems.is_empty(), "{:?}", problems(&expansion));
+    // A capped call is priced at nothing to its cap.
+    let capped = get(&expansion, "capped#1");
+    usd(0, 1_500_000, capped);
+    assert!(capped.capped() && capped.prices[0].capped);
+    assert!(!get(&expansion, "priced#1").capped());
+    // 2 × (0.01–0.04) + 5 × (0–0.25): one capped capability caps the instance.
+    let mixed = get(&expansion, "mixed#1");
+    usd(20_000, 1_330_000, mixed);
+    assert_eq!(
+        mixed.prices.iter().map(|p| p.capped).collect::<Vec<_>>(),
+        [false, true]
+    );
+    assert!(mixed.capped());
+}
+
+#[test]
 fn independent_of_a_group_never_conflicts() {
     let project = Project::new();
     let expansion = project.expand(

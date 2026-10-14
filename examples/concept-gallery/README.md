@@ -43,9 +43,9 @@ estimate  $0.09 – $28.40   ceiling $12.00   ⚠ the worst case exceeds the cei
   + `review` $1.50) at worst = $23.60, priced exactly once phase 1 has made the list. Until then
   an entity's size is unknown, so `draw` is priced at the route's whole range; then each is
   priced at its size's tier: $0.50 for a character or a place, $0.43 for an object.
-- **The ceiling** is the project's $12 (`fx.yaml`), or `--max-usd`: the run stops before crossing
-  it. The figures are each route's allowance, a worst case; what a call costs is settled from
-  what the provider reports
+- **The ceiling** is the project's $12 (`fx.yaml`), or `--max-usd`: the run reserves each call
+  against it before making it. The figures are each route's allowance, a worst case; what a call
+  costs is settled from what the provider reports
   ([Cost, cache and takes](https://github.com/gridaco/fx/blob/main/docs/guide/04-cost-and-cache.md#before-spending-the-plan)).
 
 ```bash

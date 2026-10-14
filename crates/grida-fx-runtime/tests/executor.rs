@@ -831,6 +831,7 @@ fn calling_job(identity: &str) -> InstanceJob {
             max_units: None,
             by: None,
             tiers: IndexMap::new(),
+            capped: false,
         },
         features: Default::default(),
         concurrency: None,

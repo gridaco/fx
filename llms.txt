@@ -2,8 +2,8 @@
 
 > Grida FX is a workflow engine for generated assets (images, video, audio, 3D models, structured
 > text) and ordinary local code. You describe steps in a YAML workflow; FX plans the run offline
-> with its price, runs only what changed, caches every result by content, never spends past a
-> ceiling, and records how each result was made. The command is `grida fx`.
+> with its price, runs only what changed, caches every result by content, reserves every paid call
+> against a ceiling, and records how each result was made. The command is `grida fx`.
 
 Version: 0.6.1
 
@@ -294,6 +294,12 @@ A route is `model@provider`. Pick one per capability in `fx.yaml` `routes:`, or 
   in its place when set), so a proxy whose root the machine trusts works.
 - Built-in prices are planning allowances; a call is booked at what the provider reports, else at
   its whole reservation. A route on a provider with no adapter still plans; live it is refused.
+- **A route whose price you do not know** takes a cap instead: `price: { cap_usd: N }`, alone in
+  `price`. Each call is planned at $0 to N and holds N against the ceiling, and is booked at what
+  the provider reports, else at N. The cap is what FX holds, not a limit the provider honours: a
+  dearer call is booked in full. The plan text adds a `note` per capped route (not in a stand-in
+  run, which holds nothing), and `plan --json` marks each step that calls one with `capped: true`
+  in its `price`. A `price` must state an amount: `usd: 0` is free, and `price: {}` is refused.
 - **Your own route table** (`fx: routes/v1`, listed under `route_tables:` in `fx.yaml`): its entry
   for a capability and route replaces the built-in one. An entry may `extends:` another route of
   the same capability and provider, a built-in one (even with `--routes`) or one read before it,
@@ -322,7 +328,8 @@ routes:
   FX's is now refused when a call is sent, as on every other provider. A step whose `requires:`
   names `jpeg_output`, `webp_output` or `hosted_url_reference_input` is now refused while planning
   as no feature of its capability: drop the name, since every route answers PNG and sends input
-  pictures inline.
+  pictures inline. A route whose `price` states no amount (`price: {}`, which was $0) is now
+  refused: write `usd: 0` for a free route, or `cap_usd` for one whose price you do not know.
 
 ## Your own nodes
 
@@ -825,6 +832,8 @@ Python, `run(..., { standIn: fn })` in JavaScript, in your own process.
 | `no adapter serves <route> …` | FX cannot call that provider; pick a built-in route (`grida fx nodes <type>`) |
 | `routes.<n>.extends: no route <base> serves <capability>` | `extends` names a route of the same capability declared earlier (in the same table or one read before) or a built-in one; check the id and the order |
 | `routes.<n>.extends: <base> is not a <provider> route` | a route extends only a route of its own provider |
+| `routes.<n>.price: a price states an amount (usd, low_usd, high_usd) or a cap (cap_usd)` | give the route its price, or `cap_usd: N` when its price is not known; an empty `price` is not $0 |
+| `routes.<n>.price: {…} has more than 1 property` | `cap_usd` stands alone in `price`: drop the other members |
 | `not installed (codex)` / `not installed (grok)` in doctor | install and sign in to Codex or Grok Build, or set `GRIDA_FX_TOOL_CODEX` / `GRIDA_FX_TOOL_GROK` |
 | `Codex … is older than 0.160.1` (or `too old (codex …)` in doctor) | update the Codex that doctor's `program` line names, or set `GRIDA_FX_TOOL_CODEX` to a newer one |
 | `python … too old` / `no grida` in doctor | `uv sync` or `pip install grida` in the project, or set `GRIDA_FX_PYTHON` |

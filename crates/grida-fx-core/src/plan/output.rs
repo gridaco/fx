@@ -12,8 +12,8 @@
 //!   identity), `with` (each value's `shown` form, pending as `{"pending": …}`), `routes`
 //!   `{cap: {route, fingerprint}}`, `state`, `identity`, `phase`, `key`, `judges`, `judged_by`
 //!   (link order), `waiting_on` (sorted), `needs` (first-seen order), `reads` (the sorted union
-//!   of what it read, waits on and needs, without itself), `price` `{low_usd, high_usd}`,
-//!   `view`, and `reason` only when set.
+//!   of what it read, waits on and needs, without itself), `price` `{low_usd, high_usd}` (with
+//!   `capped: true` only when a call is on a capped route), `view`, and `reason` only when set.
 //! - [`identity_document`]: `{id: identity or null}` for planned, maybe and done instances.
 //! - [`price_document`]: `{"phases": [{phase, steps, calls: [lo, hi], low_usd, high_usd,
 //!   then}], "estimate": {low_usd, high_usd}, "ceiling_usd"}`.
@@ -91,6 +91,10 @@ pub fn instance_document(instance: &Instance) -> Value {
             )
         })
         .collect();
+    let mut price = json!({"low_usd": usd(instance.low()), "high_usd": usd(instance.high())});
+    if instance.capped() {
+        price["capped"] = Value::Bool(true);
+    }
     let type_identity = if instance.ty.identity.is_empty() {
         Value::Null
     } else {
@@ -116,7 +120,7 @@ pub fn instance_document(instance: &Instance) -> Value {
         "reads": instance.inputs_from().into_iter().collect::<Vec<_>>(),
         "bindings": instance.bindings,
         "interface_bindings": instance.interface_bindings,
-        "price": {"low_usd": usd(instance.low()), "high_usd": usd(instance.high())},
+        "price": price,
         "view": instance.view,
     });
     if let (Some(reason), Value::Object(map)) = (&instance.reason, &mut document)
@@ -424,6 +428,32 @@ mod tests {
         assert_eq!(document["take"], json!([2]));
         assert_eq!(document["identity"], hex('a'));
         assert_eq!(document["price"], json!({"low_usd": 0, "high_usd": 0}));
+    }
+
+    #[test]
+    fn a_capped_call_marks_its_instance_price() {
+        let mut draw = instance(
+            "draw#1",
+            State::Planned,
+            1,
+            &[(2, 20_000, 80_000), (1, 0, 1_500_000)],
+            None,
+        );
+        assert!(!draw.capped());
+        assert_eq!(
+            instance_document(&draw)["price"],
+            json!({"low_usd": 0.02, "high_usd": 1.58})
+        );
+        draw.prices[1].capped = true;
+        assert!(draw.capped());
+        let document = instance_document(&draw);
+        assert_eq!(
+            document["price"],
+            json!({"low_usd": 0.02, "high_usd": 1.58, "capped": true})
+        );
+        let (mut plan, planner) = builtin_plan();
+        plan.expansion.instances.insert(draw.id.clone(), draw);
+        assert_valid_graph(&graph_document(&plan, &planner));
     }
 
     #[test]

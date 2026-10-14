@@ -10,8 +10,8 @@ A workflow engine for images, audio, video, 3D and the code around them.
 
 A build system for generated assets.
 
-- **Priced before it spends.** The whole run is priced up front, and a live run never crosses
-  its ceiling.
+- **Priced before it spends.** The whole run is priced up front, and a live run reserves each call
+  against its ceiling before making it.
 - **Never pays twice.** Results and paid calls are cached by content, and an interrupted run picks
   up where it stopped.
 - **Judged, not just generated.** Steps can judge each other's output, draw again when rejected,

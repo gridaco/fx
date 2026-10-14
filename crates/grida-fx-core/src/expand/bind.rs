@@ -349,6 +349,7 @@ pub fn call_price(route: &Route, with: &IndexMap<String, Val>, count: u32) -> Ca
         calls: count,
         low: low.times(count as u64),
         high: high.times(count as u64),
+        capped: route.price.capped,
     }
 }
 

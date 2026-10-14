@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { canvasGraph, layoutGraph, parseGraph, parseViewerView, type GraphDocument, type GraphInstance } from "../src/index";
+import { canvasGraph, layoutGraph, parseGraph, parseViewerView, priceLabel, type GraphDocument, type GraphInstance } from "../src/index";
 
 export function step(id: string, changes: Partial<GraphInstance> = {}): GraphInstance {
   return {
@@ -43,6 +43,28 @@ describe("plan boundary and graph projection", () => {
     const duplicate = graph();
     duplicate.instances.push(duplicate.instances[0]);
     expect(() => parseGraph(duplicate)).toThrow("does not match");
+  });
+  test("an instance price may be capped, and only by true", () => {
+    const input = graph();
+    input.instances[0].price = { low_usd: 0.02, high_usd: 1.58, capped: true };
+    expect(parseGraph(input)).toEqual(input);
+    for (const capped of [false, "true", 1]) {
+      const refused = graph() as unknown as Record<string, any>;
+      refused.instances[0].price = { low_usd: 0, high_usd: 1.5, capped };
+      expect(() => parseGraph(refused)).toThrow("does not match");
+    }
+    const unknown = graph() as unknown as Record<string, any>;
+    unknown.instances[0].price = { low_usd: 0, high_usd: 1.5, cap_usd: 1.5 };
+    expect(() => parseGraph(unknown)).toThrow("does not match");
+  });
+  test("a price reads as an estimate, or up to its worst case when capped", () => {
+    const money = (usd: number) => `$${usd.toFixed(2)}`;
+    expect(priceLabel({ low_usd: 0, high_usd: 0 }, money)).toBe("");
+    expect(priceLabel({ low_usd: 0, high_usd: 0 }, money, "est. $0.00")).toBe("est. $0.00");
+    expect(priceLabel({ low_usd: 0.4, high_usd: 0.4 }, money)).toBe("est. $0.40");
+    expect(priceLabel({ low_usd: 0.4, high_usd: 1.2 }, money)).toBe("est. $0.40 – $1.20");
+    expect(priceLabel({ low_usd: 0, high_usd: 1.5, capped: true }, money)).toBe("up to $1.50");
+    expect(priceLabel({ low_usd: 0.02, high_usd: 1.58, capped: true }, money)).toBe("up to $1.58");
   });
   test("accepts an unversioned type named by its export and source, and refuses the retired form", () => {
     const digest = "a".repeat(64);

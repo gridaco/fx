@@ -1,0 +1,7 @@
+case  ·  1 phase
+phase 1   5 steps   5 provider calls   $0.01 – $6.04
+cached    0 of 4 known steps
+estimate  $0.01 – $6.04
+note      image.edit on img-x@acme has no price: each call holds its cap, $0.75, and is charged what the provider reports, else the cap
+note      image.generate on img-x@acme has no price: each call holds its cap, $1.50, and is charged what the provider reports, else the cap
+note      image.generate on img-y@acme has no price: each call holds its cap, $2.25, and is charged what the provider reports, else the cap

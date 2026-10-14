@@ -31,8 +31,8 @@
 //!    has the stand-in store (`<cache>/stand-in`) as its store and asks the stand-in.
 //! 3. Plan through the engine ([`crate::engine::plan`]: `at: plan` steps run, `cached` is the
 //!    store's). A plan with problems prints the plan (`plan::render::render`; a stand-in run's
-//!    with `plan::render::render_stand_in`, which never warns that the ceiling stops the run)
-//!    and exits 1 without creating a folder.
+//!    with `plan::render::render_stand_in`, which never warns that the ceiling stops the run nor
+//!    notes a capped route's hold) and exits 1 without creating a folder.
 //! 4. The folder: `--name` atomically claims a source-scoped name; `--resume` requires its
 //!    recorded run to exist, with the current plan and mode checked by the runner. `--run` is
 //!    relative to the working directory, named as typed, and retains create/resume behavior; else

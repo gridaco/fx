@@ -50,10 +50,15 @@
             "pattern": "^.+@[a-z0-9._-]+$"
           },
           "price": {
-            "description": "What one call costs, low to high: per call, per second, or per thousand characters. Amounts are US dollars with at most 6 decimal places (identity.md §12). `0 <= low_usd <= high_usd`, and every tier lies within that range; a reader refuses a table that breaks either rule.",
+            "description": "What one call costs, low to high: per call, per second, or per thousand characters; or, for a route with no known price, a per-call cap (`cap_usd`). Amounts are US dollars with at most 6 decimal places (identity.md §12). A price states an amount (`usd`, `low_usd`, `high_usd` or `cap_usd`), `0 <= low_usd <= high_usd`, and every tier lies within that range; a reader refuses a table that breaks any of these rules.",
             "type": "object",
             "additionalProperties": false,
             "properties": {
+              "cap_usd": {
+                "description": "A capped route: its price is not known, so each call holds this amount and is charged what the provider reports, else the whole cap (adapters.md §5). A call is priced at 0 to the cap. The cap is what FX holds, not a limit the provider honours: a reported cost above it is charged in full. It stands alone.",
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
               "usd": {
                 "description": "Shorthand for `low_usd` and `high_usd` both set to this amount.",
                 "type": "number",
@@ -140,6 +145,17 @@
                   "required": [
                     "max_units"
                   ]
+                }
+              },
+              {
+                "description": "`cap_usd` stands alone.",
+                "if": {
+                  "required": [
+                    "cap_usd"
+                  ]
+                },
+                "then": {
+                  "maxProperties": 1
                 }
               },
               {

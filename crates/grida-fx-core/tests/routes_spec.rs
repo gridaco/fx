@@ -34,6 +34,7 @@ fn route(capability: &str, model: &str, provider: &str, contract: Value) -> Rout
             max_units: None,
             by: None,
             tiers: IndexMap::new(),
+            capped: false,
         },
         features: BTreeSet::new(),
         concurrency: None,
@@ -110,6 +111,7 @@ fn tiered() -> Route {
             ("360p".to_string(), (Usd(30_000), Usd(37_500))),
             ("4k".to_string(), (Usd(300_000), Usd(375_000))),
         ]),
+        capped: false,
     })
 }
 
@@ -154,6 +156,7 @@ fn length_priced_calls() {
         max_units: Some(Units::whole(5000)),
         by: None,
         tiers: IndexMap::new(),
+        capped: false,
     });
     // 11 characters: Unicode scalar values, not bytes.
     let text = Val::Str("h\u{e9}llo w\u{f6}rld".into());
@@ -193,6 +196,7 @@ fn call_counts_multiply_whole_prices() {
         max_units: None,
         by: None,
         tiers: IndexMap::new(),
+        capped: false,
     })
     .cost(&IndexMap::new());
     assert_eq!(
@@ -284,6 +288,53 @@ fn route_tables_from_documents() {
             .message,
         "routes.yaml: routes.0.price: a price is a non-negative range, low to high"
     );
+}
+
+#[test]
+fn caps_and_prices_without_an_amount() {
+    let read = |price: Value| {
+        let document = json!({"fx": "routes/v1", "routes": [
+            {"capability": "image.generate", "route": "img-x@acme", "price": price},
+        ]});
+        RouteTable::from_document(&document, "routes.yaml")
+    };
+    let capped = read(json!({"cap_usd": 1.5})).unwrap();
+    let route = capped.resolve("image.generate", "img-x@acme").unwrap();
+    assert!(route.price.capped);
+    assert_eq!(route.cost(&IndexMap::new()), (Usd::ZERO, Usd(1_500_000)));
+    // The parser refuses a price that states no amount; the schema only describes the rule.
+    for empty in [json!({}), json!({"unit": "second", "max_units": 10})] {
+        let error = read(empty).unwrap_err();
+        assert_eq!(error.kind, ErrorKind::Route);
+        assert_eq!(
+            error.message,
+            "routes.yaml: routes.0.price: a price states an amount (usd, low_usd, high_usd) or a \
+             cap (cap_usd)"
+        );
+    }
+    assert_eq!(
+        read(json!({"cap_usd": 0.0000001})).unwrap_err().message,
+        "routes.yaml: routes.0.price.cap_usd: 1e-7 has more than 6 decimal places"
+    );
+    // The schema refuses a cap beside another member, and a cap of nothing, first.
+    for (refused, message) in [
+        (
+            json!({"cap_usd": 1.5, "high_usd": 2}),
+            r#"routes.0.price: {"cap_usd":1.5,"high_usd":2} has more than 1 property"#,
+        ),
+        (
+            json!({"cap_usd": 1.5, "unit": "call"}),
+            r#"routes.0.price: {"cap_usd":1.5,"unit":"call"} has more than 1 property"#,
+        ),
+        (
+            json!({"cap_usd": 0}),
+            "routes.0.price.cap_usd: 0 is less than or equal to the minimum of 0",
+        ),
+    ] {
+        let error = read(refused).unwrap_err();
+        assert_eq!(error.kind, ErrorKind::Document);
+        assert_eq!(error.message, format!("routes.yaml: {message}"));
+    }
 }
 
 #[test]

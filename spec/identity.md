@@ -254,10 +254,11 @@ A repeated step's path carries its key in brackets, quoted: `entity['ada'].draw#
 ## 12. Money
 
 - Prices and costs are US dollars with at most 6 decimal places.
-- A route price with more decimal places is refused when the route table is read.
+- A route price or cap with more decimal places is refused when the route table is read.
 - Engines compute money in whole micro-dollars (integers). Division rounds half to even.
 - Money is written as JSON numbers. `0` and `0.0` are the same value (§1).
 - A tiered price ([fx-routes-v1](schemas/fx-routes-v1.schema.json) `by` and `tiers`) prices a call at the tier its `by` setting names, when that setting is text. A setting that is absent, is not text, is not known to the plan yet, or names no tier prices the call at the route's whole range. A tier outside that range is refused when the route table is read.
+- A capped route ([fx-routes-v1](schemas/fx-routes-v1.schema.json) `cap_usd`) has no known price: it prices each call at $0 to its cap, and each attempt holds the cap ([protocol.md](protocol.md) §6.1 step 6). A price that states no amount, neither `usd`, `low_usd`, `high_usd` nor `cap_usd`, is refused when the route table is read; it is not $0.
 
 ## 13. Content addressing, not a chain
 

@@ -8,7 +8,7 @@
 
 use grida_fx_core::builtins::builtin;
 use grida_fx_core::money::{Units, Usd};
-use grida_fx_core::routes::{PriceUnit, Route, RoutePrice};
+use grida_fx_core::routes::{PriceUnit, Route, RoutePrice, RouteTable};
 use grida_fx_core::spec::{CallBound, NodeSpec, Port};
 use grida_fx_core::val::{FileContent, FileValue, Val};
 use grida_fx_core::value::{digest, file_digest};
@@ -17,7 +17,7 @@ use grida_fx_providers::fake::{FakeAdapter, FakeCall};
 use grida_fx_providers::testing::media;
 use grida_fx_providers::{Adapters, Answer, AnsweredFile, Collected, Sent, Submitted};
 use grida_fx_runtime::calls::pacing::Pacing;
-use grida_fx_runtime::calls::{CallCounter, CallError, CallSite, call};
+use grida_fx_runtime::calls::{CallAnswer, CallCounter, CallError, CallSite, call};
 use grida_fx_runtime::engine::{Cancel, Engine, RunFiles, Services};
 use grida_fx_runtime::events::{EventLog, read_events};
 use grida_fx_runtime::executor::capability_node::{request_of, run as run_node};
@@ -57,6 +57,7 @@ fn route(capability: &str, model: &str, provider: &str, high_micros: i64) -> Rou
             max_units: None,
             by: None,
             tiers: IndexMap::new(),
+            capped: false,
         },
         features: Default::default(),
         concurrency: None,
@@ -1629,6 +1630,77 @@ async fn a_ceiling_between_two_tiers_refuses_only_the_larger_hold() {
         assert_eq!(data["remaining_usd"], json!(0.5));
         assert!(fake.log().is_empty());
     }
+}
+
+/// `img-x@acme`, capped at $1.50 a call, read from a table as a project's would be.
+fn img_capped() -> Route {
+    let table = b"fx: routes/v1\nroutes:\n  \
+        - { capability: image.generate, route: img-x@acme, price: { cap_usd: 1.5 } }\n";
+    let document = grida_fx_core::yaml::load(table, "routes.yaml").unwrap();
+    let table = RouteTable::from_document(&document, "routes.yaml").unwrap();
+    table
+        .resolve("image.generate", "img-x@acme")
+        .unwrap()
+        .clone()
+}
+
+/// One call on [`img_capped`] under `ceiling`, answered at `cost`: the holds it reserved, and
+/// its answer or refusal, and what the ledger charged.
+async fn capped_call(
+    ceiling: Usd,
+    cost: Option<Usd>,
+) -> (Vec<Value>, Result<CallAnswer, CallError>, Usd) {
+    let dir = tempfile::tempdir().unwrap();
+    let fake = FakeAdapter::plain(vec![Sent::Answered(answered(b"png", cost))]);
+    let mut adapters = Adapters::new();
+    adapters.register("image.generate", "acme", fake.as_request());
+    let log_path = dir.path().join("events.jsonl");
+    let events = Arc::new(EventLog::open(&log_path, "inv", "plan").unwrap());
+    let ledger = Arc::new(Ledger::new(Some(ceiling), Some(Arc::clone(&events))));
+    let services = live_with(
+        engine(dir.path(), adapters, true),
+        Arc::clone(&ledger),
+        Some(events),
+    );
+    let outcome = call(
+        &services,
+        &site(vec![img_capped()], &[("image.generate", 1)]),
+        &CallCounter::new(),
+        &RunFiles::new(),
+        "image.generate",
+        lantern_request(),
+    )
+    .await;
+    let reserved = read_events(&log_path)
+        .unwrap()
+        .into_iter()
+        .filter(|event| event["event"] == "budget_reserved")
+        .map(|event| event["amount_usd"].clone())
+        .collect();
+    (reserved, outcome, ledger.charged())
+}
+
+#[tokio::test]
+async fn a_capped_call_holds_its_cap_and_is_charged_what_is_reported_else_the_cap() {
+    for (reported, charged) in [
+        (Some(Usd(300_000)), Usd(300_000)),
+        // The cap is what FX holds, not a limit: a cost above it is charged in full.
+        (Some(Usd(2_000_000)), Usd(2_000_000)),
+        (None, Usd(1_500_000)),
+    ] {
+        let (reserved, outcome, ledger) = capped_call(Usd(10_000_000), reported).await;
+        assert_eq!(reserved, [json!(1.5)], "{reported:?}");
+        let answer = outcome.unwrap();
+        assert_eq!(answer.cost, reported);
+        assert_eq!((answer.charged, ledger), (charged, charged));
+    }
+    // A ceiling below the cap refuses the call before it is sent.
+    let (reserved, outcome, ledger) = capped_call(Usd(1_000_000), Some(Usd(1))).await;
+    assert!(reserved.is_empty());
+    let error = rpc(outcome);
+    assert_eq!(error.code, ErrorCode::CeilingExceeded.code());
+    assert_eq!(error.data.unwrap()["needed_usd"], json!(1.5));
+    assert_eq!(ledger, Usd::ZERO);
 }
 
 fn job_record(state: JobState, handle: Option<Value>) -> JobRecord {

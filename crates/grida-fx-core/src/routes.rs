@@ -28,13 +28,16 @@
 //!
 //! Prices are read in micro-dollars ([`Usd`]); an amount with more than 6 decimal places is
 //! refused (identity.md §12), judged on the number's JCS text (`1e-7 has more than 6 decimal
-//! places`). A price's other refusals read: `a price is a
-//! non-negative range, low to high`; `a length-priced route declares the most units one call
-//! carries`; `a tiered price names the setting it is priced by, and its tiers`; `price tier
-//! {name} lies outside the route's range`. Every refusal reads `<file>: <where>: <sentence>`,
-//! `<where>` the instance path joined by `.` as in schema refusals: `routes.0.price.low_usd`,
-//! `routes.0.price`, `routes.1` for a duplicate, `routes.0.route` for a bad route id,
-//! `routes.0.extends` for a base.
+//! places`). A capped route's price is `cap_usd` alone: per call, $0 to the cap, and
+//! [`RoutePrice::capped`]. A price's other refusals read: `a price states an amount (usd,
+//! low_usd, high_usd) or a cap (cap_usd)`; `a cap (cap_usd) stands alone`; `a cap is more than
+//! 0` (at `.cap_usd`); `a price is a non-negative range, low to high`; `a length-priced route
+//! declares the most units one call carries`; `a tiered price names the setting it is priced by,
+//! and its tiers`; `price tier {name} lies outside the route's range`. The schema refuses a cap
+//! beside other members, or of 0, before these are read. Every refusal reads `<file>: <where>:
+//! <sentence>`, `<where>` the instance path joined by `.` as in schema refusals:
+//! `routes.0.price.low_usd`, `routes.0.price`, `routes.1` for a duplicate, `routes.0.route` for a
+//! bad route id, `routes.0.extends` for a base.
 //!
 //! One call's price for a step's with-values (`Route::cost`): the tier is `with[by]` when it is
 //! text, else the whole range. Per call, the range as is. Per unit, the call's length is
@@ -73,6 +76,10 @@ pub struct RoutePrice {
     pub max_units: Option<Units>,
     pub by: Option<String>,
     pub tiers: IndexMap<String, (Usd, Usd)>,
+    /// A capped route (`cap_usd`): no price is known, so `low` is 0 and `high` the cap, per call
+    /// and untiered. Each attempt holds the cap and is charged what the provider reports, else the
+    /// cap (spec/adapters.md §5).
+    pub capped: bool,
 }
 
 impl RoutePrice {
@@ -556,6 +563,7 @@ fn parse_price(price: &Value, at: &str) -> std::result::Result<RoutePrice, Strin
             .transpose()
     };
     let usd = read("usd")?;
+    let cap = read("cap_usd")?;
     let low = read("low_usd")?.or(usd).unwrap_or(Usd::ZERO);
     let high = read("high_usd")?.or(usd).unwrap_or(Usd::ZERO);
     let unit = match price.get("unit") {
@@ -592,6 +600,32 @@ fn parse_price(price: &Value, at: &str) -> std::result::Result<RoutePrice, Strin
         }
         Some(_) => return Err(format!("{at}.tiers: not an object")),
     }
+    if let Some(cap) = cap {
+        if price.len() > 1 {
+            return Err(format!("{at}: a cap (cap_usd) stands alone"));
+        }
+        if cap <= Usd::ZERO {
+            return Err(format!("{at}.cap_usd: a cap is more than 0"));
+        }
+        return Ok(RoutePrice {
+            low: Usd::ZERO,
+            high: cap,
+            unit: PriceUnit::Call,
+            max_units: None,
+            by: None,
+            tiers: IndexMap::new(),
+            capped: true,
+        });
+    }
+    // An empty price was $0 up to 0.6.1; a route with no known price is capped instead.
+    if !["usd", "low_usd", "high_usd"]
+        .iter()
+        .any(|member| price.contains_key(*member))
+    {
+        return Err(format!(
+            "{at}: a price states an amount (usd, low_usd, high_usd) or a cap (cap_usd)"
+        ));
+    }
     if low < Usd::ZERO || high < low {
         return Err(format!(
             "{at}: a price is a non-negative range, low to high"
@@ -621,6 +655,7 @@ fn parse_price(price: &Value, at: &str) -> std::result::Result<RoutePrice, Strin
         max_units: max_units.map(Units::from_f64),
         by,
         tiers,
+        capped: false,
     })
 }
 
@@ -687,7 +722,8 @@ mod tests {
         assert_eq!(b.contract, json!({}));
         assert_eq!(b.concurrency, None);
         assert!(b.features.is_empty());
-        assert_eq!(price(json!({})).unwrap().high, Usd::ZERO);
+        assert!(!a.price.capped && !b.price.capped);
+        assert_eq!(price(json!({"high_usd": 0.5})).unwrap().low, Usd::ZERO);
         assert_eq!(
             price(json!({"low_usd": 0.5})).unwrap_err(),
             "routes.0.price: a price is a non-negative range, low to high"
@@ -756,6 +792,56 @@ mod tests {
             "routes.0.price.tiers.x.high_usd: 1e-7 has more than 6 decimal places"
         );
         assert!(price(json!({"usd": 0.000001})).is_ok());
+        // A price that states no amount is no longer $0.
+        for empty in [json!({}), json!({"unit": "second", "max_units": 10})] {
+            assert_eq!(
+                price(empty).unwrap_err(),
+                "routes.0.price: a price states an amount (usd, low_usd, high_usd) or a cap \
+                 (cap_usd)"
+            );
+        }
+    }
+
+    #[test]
+    fn a_cap_prices_each_call_at_nothing_to_the_cap() {
+        let capped = priced(json!({"cap_usd": 1.5}));
+        assert_eq!(
+            capped.price,
+            RoutePrice {
+                low: Usd::ZERO,
+                high: Usd(1_500_000),
+                unit: PriceUnit::Call,
+                max_units: None,
+                by: None,
+                tiers: IndexMap::new(),
+                capped: true,
+            }
+        );
+        assert_eq!(
+            micros(capped.cost(&with(&[("duration", Val::Number(5.0))]))),
+            (0, 1_500_000)
+        );
+        assert!(price(json!({"cap_usd": 0.000001})).unwrap().capped);
+        for (beside, member) in [("usd", 0.1), ("low_usd", 0.1), ("high_usd", 2.0)] {
+            assert_eq!(
+                price(json!({"cap_usd": 1.5, beside: member})).unwrap_err(),
+                "routes.0.price: a cap (cap_usd) stands alone"
+            );
+        }
+        assert_eq!(
+            price(json!({"cap_usd": 1.5, "unit": "second", "max_units": 10})).unwrap_err(),
+            "routes.0.price: a cap (cap_usd) stands alone"
+        );
+        for nothing in [json!(0), json!(-1)] {
+            assert_eq!(
+                price(json!({"cap_usd": nothing})).unwrap_err(),
+                "routes.0.price.cap_usd: a cap is more than 0"
+            );
+        }
+        assert_eq!(
+            price(json!({"cap_usd": 0.0000001})).unwrap_err(),
+            "routes.0.price.cap_usd: 1e-7 has more than 6 decimal places"
+        );
     }
 
     #[test]
@@ -770,7 +856,7 @@ mod tests {
             json!({"capability": "image.edit", "route": "img-a@acme", "price": {"usd": 0.04}});
         assert_eq!(table(json!([entry, other])).unwrap().entries.len(), 2);
         // Every entry is read before duplicates are looked for.
-        let bad = json!({"capability": "x", "route": "nope", "price": {}});
+        let bad = json!({"capability": "x", "route": "nope", "price": {"usd": 0.04}});
         assert_eq!(
             table(json!([entry, entry, bad])).unwrap_err(),
             "routes.2.route: a route is model@provider, not 'nope'"
@@ -780,12 +866,13 @@ mod tests {
     #[test]
     fn shape_errors_name_the_entry() {
         assert_eq!(
-            table(json!([{"route": "m@p", "price": {}}])).unwrap_err(),
+            table(json!([{"route": "m@p", "price": {"usd": 0.04}}])).unwrap_err(),
             "routes.0.capability: missing, or not text"
         );
+        let paced = json!([{"capability": "c", "route": "m@p", "price": {"usd": 0.04},
+                            "concurrency": 0}]);
         assert_eq!(
-            table(json!([{"capability": "c", "route": "m@p", "price": {}, "concurrency": 0}]))
-                .unwrap_err(),
+            table(paced).unwrap_err(),
             "routes.0.concurrency: not a whole number of at least 1"
         );
         assert_eq!(
@@ -1125,6 +1212,22 @@ mod tests {
         .unwrap();
         assert_eq!(chained.entries[0].price, base.price);
         assert_eq!(chained.entries[1].contract["quality"], json!("low"));
+        // A restated cap replaces the base's whole price, tiers included, and a cap is inherited
+        // as any price is.
+        let capped = read(json!([
+            {"capability": "image.generate", "route": "img-a@gg", "extends": "img-base@gg",
+             "price": {"cap_usd": 2}},
+            {"capability": "image.generate", "route": "img-b@gg", "extends": "img-a@gg"},
+        ]))
+        .unwrap();
+        for route in capped.entries.values() {
+            assert!(route.price.capped, "{}", route.id());
+            assert_eq!(
+                (route.price.low, route.price.high),
+                (Usd::ZERO, Usd(2_000_000))
+            );
+            assert!(route.price.tiers.is_empty() && route.price.by.is_none());
+        }
         // Without a base, an entry names its price.
         assert_eq!(
             table(json!([{"capability": "image.generate", "route": "img-a@gg"}])).unwrap_err(),

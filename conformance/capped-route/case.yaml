@@ -1,0 +1,41 @@
+# Routes with a cap and no price (fx-routes-v1 `cap_usd`): each call is priced at $0 to its cap,
+# an instance with a capped call carries `capped: true` in its price, and the plan notes each
+# capped capability and route once (plan.txt). img-y@acme extends a priced route and restates its
+# price as a cap. A price that states no amount, a cap beside another member, and a cap with more
+# than 6 decimal places are refused while the table is read (exit 2).
+steps:
+- argv: [plan, case, --routes, routes.yaml]
+  save: plan.txt
+- argv: [expand, case, --routes, routes.yaml]
+  save: expand.json
+  json: true
+- argv: [price, case, --routes, routes.yaml]
+  save: price.json
+  json: true
+- files:
+    empty.yaml: |
+      fx: routes/v1
+      routes:
+        - { capability: image.generate, route: img-z@acme, price: { unit: call } }
+  argv: [expand, case, --routes, routes.yaml, --routes, empty.yaml]
+  status: 2
+  mentions:
+  - "empty.yaml: routes.0.price: a price states an amount (usd, low_usd, high_usd) or a cap (cap_usd)"
+- files:
+    beside.yaml: |
+      fx: routes/v1
+      routes:
+        - { capability: image.generate, route: img-z@acme, price: { cap_usd: 1.5, high_usd: 2 } }
+  argv: [expand, case, --routes, routes.yaml, --routes, beside.yaml]
+  status: 2
+  mentions:
+  - "beside.yaml: routes.0.price"
+- files:
+    places.yaml: |
+      fx: routes/v1
+      routes:
+        - { capability: image.generate, route: img-z@acme, price: { cap_usd: 0.0000001 } }
+  argv: [expand, case, --routes, routes.yaml, --routes, places.yaml]
+  status: 2
+  mentions:
+  - "places.yaml: routes.0.price.cap_usd: 1e-7 has more than 6 decimal places"

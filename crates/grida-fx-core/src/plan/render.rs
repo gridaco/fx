@@ -19,7 +19,9 @@
 //! - The ceiling warning appears when a ceiling exists and the estimate's high end exceeds it,
 //!   except in a stand-in run ([`render_stand_in`]): it bills nothing, so the ceiling stops
 //!   nothing there (the ceiling itself is still shown).
-//! - `note` lines are the plan's warnings, `refused` lines its problems, both in order.
+//! - `note` lines are the plan's warnings, then its capped-route notes ([`Plan::capped_notes`])
+//!   except in a stand-in run, which holds and charges no cap; `refused` lines are its problems,
+//!   all in order.
 //!
 //! Amounts are shown with two decimals the way Python's `f"${x:.2f}"` shows a
 //! float: the amount as the nearest double, correctly rounded (Rust's `{:.2}` rounds the same
@@ -44,14 +46,17 @@ pub fn render(plan: &Plan, planner: &Planner) -> String {
     render_as(plan, planner, true)
 }
 
-/// The plan of a stand-in run as text: no ceiling warning (module doc).
+/// The plan of a stand-in run as text: no ceiling warning and no capped-route notes (module doc).
 pub fn render_stand_in(plan: &Plan, planner: &Planner) -> String {
     render_as(plan, planner, false)
 }
 
 fn render_as(plan: &Plan, planner: &Planner, billed: bool) -> String {
     let phases = plan.phases();
-    let warnings = plan.warnings(planner);
+    let mut warnings = plan.warnings(planner);
+    if billed {
+        warnings.extend(plan.capped_notes());
+    }
     lay_out(&Summary {
         workflow: &planner.workflow.workflow.id,
         phases: &phases,
@@ -156,7 +161,7 @@ fn money_range(low: Usd, high: Usd) -> String {
 }
 
 /// `$x.xx` (module doc).
-fn dollars(amount: Usd) -> String {
+pub(crate) fn dollars(amount: Usd) -> String {
     format!("${:.2}", amount.0 as f64 / 1_000_000.0)
 }
 

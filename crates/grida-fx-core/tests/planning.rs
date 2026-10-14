@@ -14,6 +14,7 @@ use grida_fx_core::host::{FakeHost, NoCache, PlanTimeRunner};
 use grida_fx_core::inputs::bind::RootInputs;
 use grida_fx_core::lock::lock;
 use grida_fx_core::money::Usd;
+use grida_fx_core::plan::render::{render, render_stand_in};
 use grida_fx_core::plan::{Estimate, PhaseSummary, Plan, make_plan};
 use grida_fx_core::project::{
     PlanRequest, Planner, Target, find_workflow, load_target, make_planner, project_workflow_files,
@@ -1759,6 +1760,7 @@ fn inst(path: &str, phase: u32, state: State, prices: &[(&str, &str, u32, i64, i
                 calls: *calls,
                 low: usd(*low),
                 high: usd(*high),
+                capped: false,
             })
             .collect(),
         phase,
@@ -2038,6 +2040,56 @@ fn takes_entries_that_name_no_step_are_noted() {
             "the takes file names zeta, which no step is any more; move it with grida-fx takes mv case \"zeta\" <new path>",
         ]
     );
+}
+
+#[test]
+fn capped_routes_are_noted_once_each_after_the_takes_notes_when_the_run_bills() {
+    let (_fixture, planner) = hand_planner(&["gone"]);
+    let table = RouteTable::from_document(
+        &json!({"fx": "routes/v1", "routes": [
+            {"capability": "image.generate", "route": "img-x@acme", "price": {"cap_usd": 1.5}},
+            {"capability": "image.edit", "route": "img-x@acme", "price": {"cap_usd": 0.75}},
+            {"capability": "image.generate", "route": "img-y@acme", "price": {"cap_usd": 3}},
+            {"capability": "image.generate", "route": "img-a@acme", "price": {"usd": 0.04}},
+        ]}),
+        "routes.yaml",
+    )
+    .unwrap();
+    let on = |path: &str, state: State, capability: &str, route: &str| {
+        let mut instance = inst(path, 1, state, &[]);
+        let route = table.resolve(capability, route).unwrap().clone();
+        instance.routes.insert(capability.into(), route);
+        instance
+    };
+    let plan = plan_of(
+        vec![
+            on("a", State::Planned, "image.generate", "img-x@acme"),
+            on("b", State::Maybe, "image.generate", "img-x@acme"),
+            on("c", State::Planned, "image.edit", "img-x@acme"),
+            on("d", State::Absent, "image.generate", "img-y@acme"),
+            on("e", State::Planned, "image.generate", "img-a@acme"),
+        ],
+        Vec::new(),
+    );
+    let moved = "the takes file names gone, which no step is any more; move it with grida-fx takes mv case \"gone\" <new path>";
+    let capped = [
+        "image.edit on img-x@acme has no price: each call holds its cap, $0.75, and is charged what the provider reports, else the cap",
+        "image.generate on img-x@acme has no price: each call holds its cap, $1.50, and is charged what the provider reports, else the cap",
+    ];
+    assert_eq!(plan.warnings(&planner), [moved]);
+    assert_eq!(plan.capped_notes(), capped);
+    let notes = |text: String| -> Vec<String> {
+        text.lines()
+            .filter_map(|line| line.strip_prefix("note      "))
+            .map(str::to_string)
+            .collect()
+    };
+    assert_eq!(
+        notes(render(&plan, &planner)),
+        [moved, capped[0], capped[1]]
+    );
+    // A stand-in run holds and charges nothing, so it notes no cap.
+    assert_eq!(notes(render_stand_in(&plan, &planner)), [moved]);
 }
 
 #[test]

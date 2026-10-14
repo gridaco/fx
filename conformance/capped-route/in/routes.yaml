@@ -1,0 +1,6 @@
+fx: routes/v1
+routes:
+  - { capability: image.generate, route: img-a@acme, price: { low_usd: 0.01, high_usd: 0.04 } }
+  - { capability: image.generate, route: img-x@acme, price: { cap_usd: 1.5 } }
+  - { capability: image.edit, route: img-x@acme, price: { cap_usd: 0.75 } }
+  - { capability: image.generate, route: img-y@acme, extends: img-a@acme, price: { cap_usd: 2.25 } }

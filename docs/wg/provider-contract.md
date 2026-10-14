@@ -204,17 +204,59 @@ Gate: `cargo test`, conformance with no expected file moved, `check_spec`, `pyte
 
 ### M4. Capped routes
 
-- [ ] Spec: `price: {cap_usd: N}` stands alone; `price: {}` is refused; the hold is the cap
-  (`protocol.md` §6.1); costs (`adapters.md`); decimals (`identity.md` §12).
-- [ ] Schemas: `fx-routes-v1`; in `fx-graph-v1`, an instance's `price` gains an optional
+- [x] Spec: `price: {cap_usd: N}` stands alone; a price that states no amount is refused; the
+  hold is the cap (`protocol.md` §6.1); costs (`adapters.md` §5); decimals (`identity.md` §12).
+  - Not only `price: {}`: any price without `usd`, `low_usd`, `high_usd` or `cap_usd` was $0
+    (`{unit: second, max_units: 10}` too), and is refused. An explicit $0 (`usd: 0`, or the Codex
+    and Grok Build routes' `low_usd: 0, high_usd: 0`) stays valid, and `high_usd` alone still
+    means a low of 0.
+  - `cap_usd` is more than 0 (`usd: 0` already means free). A capped call's low is $0 and its
+    high, the hold, is the cap. A reported cost above the cap is charged in full (R8: charged
+    what the provider reports), so the cap is the hold, not a limit the provider honours, and a
+    run can end above its ceiling by the difference, as on a priced route.
+  - Under `extends`, a restated `price` replaces the base's whole (M3's rule), so a cap over a
+    tiered base keeps no tier, and an entry that states no price inherits its base's cap.
+- [x] Schemas: `fx-routes-v1`; in `fx-graph-v1`, an instance's `price` gains an optional
   `capped: true`.
-- [ ] Core: the route price's flag, the refusals in `parse_price`, and a plan note per capped
+  - Both refusals are described in the schema and enforced by the parser, like the range rule.
+    The schema also checks that a cap stands alone, with an `if`/`then` (`maxProperties: 1`),
+    not an `anyOf`, whose refusal the engine's messages would collapse; so the engine prints
+    `routes.<n>.price: {…} has more than 1 property` for it, and the parser's own sentence for a
+    price that states no amount.
+  - An instance is `capped: true` when any of its calls is capped: one instance may call several
+    capabilities on several routes, so its `low_usd` and `high_usd` may mix prices and caps.
+    `capped` is written only when true, so no expected graph moved.
+- [x] Core: the route price's flag, the refusals in `parse_price`, and a plan note per capped
   route.
-- [ ] Browser and SDKs: `web/fx-web` accepts `capped`; the viewer shows "up to $N"; the
+  - `RoutePrice::capped` and `CallPrice::capped`, and `Instance::capped()`. The runtime needed
+    no change: the hold is the route's high (`route.cost`), and settlement charges the reported
+    cost, else the hold.
+  - The note is one per capability and capped route of the live instances, sorted, after the
+    takes notes: `<capability> on <route> has no price: each call holds its cap, $N, and is
+    charged what the provider reports, else the cap`. Notes are in the plan's text only; `plan
+    --json` carries only `capped`. They are `Plan::capped_notes`, apart from `Plan::warnings`,
+    since a stand-in run's plan text leaves them out: it holds and charges nothing, as it already
+    leaves out the ceiling warning.
+  - A capped route on Codex or Grok Build is no longer priced at $0, so a live run on it needs
+    a ceiling, as for any route that is not free.
+- [x] Browser and SDKs: `web/fx-web` accepts `capped`; the viewer shows "up to $N"; the
   TypeScript document types.
-- [ ] Tests: the parser, the plan's text and graph, and settlement with and without a reported
+  - The label is `priceLabel` in `web/fx-web`, with its tests, so the viewer's React code only
+    calls it. The Python SDK hands the graph back as plain dicts and needs no change.
+- [x] Tests: the parser, the plan's text and graph, and settlement with and without a reported
   cost. A conformance case plans a capped route.
-- [ ] `llms.txt`; guide page 04.
+  - Settlement is tested with a reported cost under the cap, one above it, none, and a ceiling
+    below the cap (`tests/calls.rs`); the case is `capped-route`, with the refusals.
+- [x] `llms.txt`; guide page 04.
+  - Guide page 05 says a stand-in run notes no cap. The README's "a live run never crosses its
+    ceiling" now says a live run reserves each call against its ceiling, since a call charged
+    more than it held is charged in full. `llms.txt`'s summary ("never spends past a ceiling"),
+    guide page 04's opening ("never spends money you didn't plan for") and page 02's "no paid
+    call is made that could cross it" moved with it, and so did the prose of the
+    `character-3d` and `concept-gallery` examples' READMEs ("stops before crossing it"), but
+    not their pasted plan output. Page 04's cap example gives a made-up model id that extends
+    OpenRouter's built-in image route, the job a cap is for.
+    `conformance/README.md` lists `capped-route`.
 
 Gate: `cargo test`, conformance, the viewer's checks, the SDKs' tests.
 
@@ -396,7 +438,15 @@ when the owner asks.
   report no cost;
 - a live check that OpenRouter's transparent answers carry alpha, which needs the owner's go
   and a cap;
-- Tripo's face limit: 25,000 in FX, 50,000 in Models.
+- Tripo's face limit: 25,000 in FX, 50,000 in Models;
+- caps in a repeat whose list only a run produces: the graph's `pending` entry carries only
+  `high_usd`, never `capped`, and the plan notes no capped route that only such a repeat binds,
+  since `Plan::capped_notes` reads the expanded instances;
+- caps beyond the instance: `price --json`, the graph's `estimate` and the viewer's run estimate
+  carry no `capped`, so the viewer shows a capped plan's total as "est. $low – $high";
+- a call charged more than it held, a cap or a priced route's high: it is charged in full and
+  can take the run past its ceiling by the difference, and nothing in the run's output flags it;
+  the plan's ceiling warning still ends "the run stops before crossing it".
 
 **gridaco/models**, gaps found against `v1.20261013.6`:
 - no card for Gemini Omni Flash;

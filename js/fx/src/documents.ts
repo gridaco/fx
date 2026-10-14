@@ -49,7 +49,10 @@ export interface GraphInstance {
   waiting_on: string[];
   needs: string[];
   reads: string[];
-  price: PriceRange;
+  /** `capped` when one of its calls is on a capped route (a route table's `cap_usd`): that call
+   * counts nothing in `low_usd` and its cap in `high_usd`, and is charged what the provider
+   * reports, else the cap. */
+  price: PriceRange & { capped?: true };
   view?: boolean | string;
   [field: string]: unknown;
 }

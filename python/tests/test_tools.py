@@ -911,7 +911,8 @@ def test_check_graph_lets_a_later_table_replace_an_entry(project: Path) -> None:
     other = project / "other.yaml"
     other.write_text(
         "fx: routes/v1\nroutes:\n"
-        "  - { capability: image.generate, route: img-a@acme, price: {}, contract: { v: 2 } }\n",
+        "  - { capability: image.generate, route: img-a@acme, price: { usd: 0 },"
+        " contract: { v: 2 } }\n",
         "utf-8",
     )
     replaced = digest.route_fingerprint("image.generate", "img-a@acme", {"v": 2})
@@ -923,7 +924,8 @@ def test_check_graph_lets_a_later_table_replace_an_entry(project: Path) -> None:
 def test_check_graph_reads_route_tables_in_listed_order(project: Path) -> None:
     (project / "late.yaml").write_text(
         "fx: routes/v1\nroutes:\n"
-        "  - { capability: image.generate, route: img-a@acme, price: {}, contract: { v: 3 } }\n",
+        "  - { capability: image.generate, route: img-a@acme, price: { usd: 0 },"
+        " contract: { v: 3 } }\n",
         "utf-8",
     )
     replaced = digest.route_fingerprint("image.generate", "img-a@acme", {"v": 3})
@@ -940,8 +942,8 @@ def test_check_graph_refuses_a_duplicate_within_one_table(
     other = project / "other.yaml"
     other.write_text(
         "fx: routes/v1\nroutes:\n"
-        "  - { capability: image.generate, route: img-a@acme, price: {} }\n"
-        "  - { capability: image.generate, route: img-a@acme, price: {} }\n",
+        "  - { capability: image.generate, route: img-a@acme, price: { usd: 0 } }\n"
+        "  - { capability: image.generate, route: img-a@acme, price: { usd: 0 } }\n",
         "utf-8",
     )
     assert _run_check(project, _graph(), "--routes", str(other)) == 1
@@ -952,7 +954,8 @@ def test_check_graph_extends_the_built_in_table_under_routes(project: Path) -> N
     builtin = project / "builtin.yaml"
     builtin.write_text(
         "fx: routes/v1\nroutes:\n"
-        "  - { capability: image.generate, route: img-base@acme, price: {}, contract: { v: 7 } }\n",
+        "  - { capability: image.generate, route: img-base@acme, price: { usd: 0 },"
+        " contract: { v: 7 } }\n",
         "utf-8",
     )
     other = project / "other.yaml"

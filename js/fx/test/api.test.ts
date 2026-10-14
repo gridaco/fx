@@ -89,6 +89,7 @@ describe.skipIf(engine === null)("the SDK, driving the engine", () => {
             route: "img-a@acme",
             price: { low_usd: 0.01, high_usd: 0.04 },
           },
+          { capability: "image.generate", route: "img-x@acme", price: { cap_usd: 1.5 } },
         ],
       }),
     );
@@ -111,6 +112,12 @@ describe.skipIf(engine === null)("the SDK, driving the engine", () => {
       steps: { draw: { uses: "fx/image.generate@1", requires: ["alpha"], with: { prompt: "x" } } },
     });
     writeFileSync(join(cwd, "workflows", "broken.yaml"), toYaml(broken));
+    const capped = workflow({
+      id: "capped",
+      title: "A route with a cap and no price",
+      steps: { draw: { uses: "fx/image.generate@1", route: "img-x@acme", with: { prompt: "x" } } },
+    });
+    writeFileSync(join(cwd, "workflows", "capped.yaml"), toYaml(capped));
   }, SLOW);
   afterAll(() => folder.cleanup());
 
@@ -148,6 +155,17 @@ describe.skipIf(engine === null)("the SDK, driving the engine", () => {
       expect(priced.phases[0]?.calls).toEqual([1, 1]);
       // The temporary inputs files are gone.
       expect(readdirSync(cwd).filter((name) => name.startsWith(".grida-fx-inputs-"))).toEqual([]);
+    },
+    SLOW,
+  );
+
+  test(
+    "a capped route's call is priced at nothing to its cap, and marked",
+    async () => {
+      const graph = await expand("workflows/capped.yaml", options);
+      expect(graph.instances[0]?.price).toEqual({ low_usd: 0, high_usd: 1.5, capped: true });
+      const uncapped = await expand("workflows/icon.yaml", { ...options, inputs: { name: "x" } });
+      expect(uncapped.instances[0]?.price).toEqual({ low_usd: 0.01, high_usd: 0.04 });
     },
     SLOW,
   );

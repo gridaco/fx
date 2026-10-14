@@ -547,7 +547,8 @@ is asked only the rest.
 
 **Never with `--live` or `--yes-up-to`** (exit 2): a stand-in run spends nothing and runs every
 phase. `--max-usd` is accepted and changes nothing, since nothing is reserved: the plan shows the
-ceiling but never warns that the run stops before crossing it. `--deliver` works as in any run. `plan` and the other planning commands take no stand-in: planning never makes
+ceiling but never warns that the run stops before crossing it, and notes no capped route.
+`--deliver` works as in any run. `plan` and the other planning commands take no stand-in: planning never makes
 a paid call.
 
 **The function** takes one call, and may be `async`:

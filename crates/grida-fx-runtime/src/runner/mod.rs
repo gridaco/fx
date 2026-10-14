@@ -1759,6 +1759,7 @@ while (message := read()) is not None:
             calls: 1,
             low: Usd::ZERO,
             high: Usd::parse("0.5").unwrap(),
+            capped: false,
         }];
         let tooled = vec![priced];
         assert_eq!(
@@ -1812,7 +1813,7 @@ while (message := read()) is not None:
         let routed = |provider: &str| {
             let table = format!(
                 "fx: routes/v1\nroutes:\n  - capability: image.generate\n    route: m@{provider}\n    \
-                 price: {{}}\n"
+                 price: {{ usd: 0 }}\n"
             );
             let document = grida_fx_core::yaml::load(table.as_bytes(), "routes.yaml").unwrap();
             let table =

@@ -5,13 +5,15 @@ import { isInterfaceBindings, isWorkflowScopes, projectScopes, type InterfaceBin
 
 export type PlanState = "planned" | "maybe" | "absent" | "blocked" | "failed" | "done";
 export interface Price { low_usd: number; high_usd: number }
+/** An instance's price; `capped` when one of its calls is on a capped route, which holds its cap. */
+export interface InstancePrice extends Price { capped?: true }
 export interface GraphInstance {
   id: string; path: string; step: string; take: number[]; uses: string; type: string | null;
   with: Record<string, unknown>;
   routes: Record<string, { route: string; fingerprint: string }>;
   state: PlanState; identity: string | null; phase: number; key: string | null;
   judges: string | null; judged_by: string[]; waiting_on: string[]; needs: string[]; reads: string[];
-  price: Price; view?: boolean | string; reason?: string;
+  price: InstancePrice; view?: boolean | string; reason?: string;
   bindings?: PortBinding[];
   interface_bindings?: InterfaceBinding[];
 }
@@ -52,8 +54,17 @@ function fields(value: Record<string, unknown>, required: string[], optional: st
 function optional(value: Record<string, unknown>, name: string, validate: (item: unknown) => boolean) {
   return !(name in value) || validate(value[name]);
 }
-function price(value: unknown): value is Price {
-  return isRecord(value) && fields(value, ["low_usd", "high_usd"]) && isAmount(value.low_usd) && isAmount(value.high_usd);
+function price(value: unknown): value is InstancePrice {
+  return isRecord(value) && fields(value, ["low_usd", "high_usd"], ["capped"]) && isAmount(value.low_usd) && isAmount(value.high_usd)
+    && optional(value, "capped", (item) => item === true);
+}
+
+/** "est. $0.40" or "est. $0.40 – $1.20"; "up to $1.50" when a call is capped, since only its
+ * worst case is known; `free` for a price of nothing. `money` formats an amount of dollars. */
+export function priceLabel(price: InstancePrice, money: (usd: number) => string, free = ""): string {
+  if (price.capped) return `up to ${money(price.high_usd)}`;
+  if (price.high_usd === 0) return free;
+  return `est. ${money(price.low_usd)}${price.high_usd === price.low_usd ? "" : ` – ${money(price.high_usd)}`}`;
 }
 function withValue(value: unknown, depth = 0): boolean {
   if (depth > 512) return false;
