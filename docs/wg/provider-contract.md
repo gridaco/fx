@@ -451,7 +451,7 @@ Gate: `cargo test`, conformance, `check_llms`.
     reads the four assets from a folder with the same checks. The run of 2026-10-14 downloaded
     them from github.com; the projection is 38,626 bytes.
   - `CARDS` maps each route id of the table to its model's card (section and id), or to none:
-    Codex, Grok Build and Gemini Omni Flash. Writing holds it to the release: each card must bind
+    Codex and Grok Build (and Gemini Omni Flash, until `v1.20261014.1` gave it a card). Writing holds it to the release: each card must bind
     its route's model on its provider, and no card may bind a route given none, so a card that
     appears is not missed. FX's `gg` is Models' `grida`.
   - The projection is `{source, routes}`: per route id `null`, or `{section, card}` and for a rig
@@ -473,6 +473,12 @@ Gate: `cargo test`, conformance, `check_llms`.
   pin is one reviewed line, the release `providers.md` §3 names, and a new projection
   (CONTRIBUTING.md says how). A new built-in route needs its card in `CARDS` and a new
   projection too.
+  - Re-pinned on 2026-10-15 to `v1.20261014.1`, the latest release, with the same schema (byte
+    for byte). Writing refused it until `CARDS` mapped the fal video route to its new card,
+    `video.models/google/gemini-omni-1.1-flash`, whose fal endpoint is the route's id and whose
+    parameters are `fal-queue`'s constants (3 to 10 whole seconds, `16:9` and `9:16`, `360p` to
+    `4k`, a prompt of at most 20,000 characters, an end frame); the test exception for its
+    missing card went with it. Of the gaps below, only that card is filled.
 - [x] `crates/grida-fx-providers/tests/models.rs` checks every route's public facts against the
   projection:
   - wire ids and endpoint ids;
@@ -1109,13 +1115,16 @@ The list they were filed from:
   length outside its constants), and a node body's generate with references on an OpenRouter
   route that does not declare `image_input`, which the generic adapter refuses on a live send;
 - a generic fal video adapter: fal's video request shapes diverge by endpoint (Models
-  `v1.20261013.6`, 12 endpoints): the first frame is `image_url` on 6 and `start_image_url` on
-  1; `duration` is an integer on 3, a string `"4"` to `"30"` (or `auto`) on 3, and `"4s"`,
-  `"6s"` or `"8s"` on 6; no endpoint records an end frame. `fal-queue` fits only endpoints
-  with the built-in route's shape;
+  `v1.20261014.1`, 22 endpoints): the first frame is `image_url` on 10 and `start_image_url` on
+  1; `duration` is an integer on 8, a number on 2, a string `"4"` to `"30"` (or `auto`) on 4,
+  `"4s"`, `"6s"` or `"8s"` on 6, and untyped on 2; an end frame (`end_image_url`) on 3.
+  `fal-queue` fits only endpoints with the built-in route's shape;
 - a count for the generic image adapters: they own `n` (OpenRouter) and `num_images` (fal), so a
   model that draws several pictures by default fails, billed and not drawn again (`returned no
   single image`); fal's published schemas default `num_images` to 1 where an endpoint takes it;
+- fal image endpoints the generic adapter does not fit: Models `v1.20261014.1` records Ideogram
+  4.5's edit taking one `image_url` and `reference_image_urls`, where `fal-image` sends
+  `image_urls`, and pictures cannot go in `provider_options`, which hold JSON only;
 - exact sizes on the generic image adapters: a model's own size parameter goes in
   `provider_options`, so the image check cannot hold the answer to it, and a step that asks for
   an exact `size` is refused there;
@@ -1195,11 +1204,12 @@ The list they were filed from:
   on the user's machine say, is refused without a ceiling (`refused: a live run needs a ceiling:
   …`); only runs on Codex and Grok Build, which bill a plan, go without one (decision 5).
 
-**gridaco/models**, gaps found against `v1.20261013.6`:
+**gridaco/models**, gaps found against `v1.20261013.6`; `v1.20261014.1` fills the second (the
+others still stand there, with the same schema):
 - no answer shapes for fal's endpoints (only `grida` bindings have `result_schema_url`);
-- no card for Gemini Omni Flash;
+- no card for Gemini Omni Flash (filled in `v1.20261014.1`);
 - no endpoint facts on the OpenAI binding;
-- no mask facts;
+- no mask facts (`v1.20261014.1` records one, on Ideogram 4.5's fal edit, none on FX's routes);
 - GG's meters have no quantity per request;
 - media prices sit outside the schema, and `token_pricing` cannot express image models;
 - no ElevenLabs binding or US-dollar rate;

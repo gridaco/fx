@@ -288,7 +288,7 @@ fn every_verified_size_is_sent_verbatim() {
     }
 }
 
-// Transparent backgrounds: sent as given (Grida Models v1.20261013.6 records `background:
+// Transparent backgrounds: sent as given (Grida Models v1.20261014.1 records `background:
 // transparent` on the model's OpenRouter endpoint), and the check holds the answer to alpha.
 
 #[test]

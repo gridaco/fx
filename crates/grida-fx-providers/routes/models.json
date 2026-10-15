@@ -301,7 +301,94 @@
       },
       "section": "audio.text_to_speech.models"
     },
-    "google/gemini-omni-flash/v1.1/image-to-video@fal": null,
+    "google/gemini-omni-flash/v1.1/image-to-video@fal": {
+      "card": {
+        "id": "google/gemini-omni-1.1-flash",
+        "provider_coverage": {
+          "fal": {
+            "disposition": "listed"
+          }
+        },
+        "providers": {
+          "fal": {
+            "endpoints": [
+              {
+                "id": "google/gemini-omni-flash/v1.1/text-to-video",
+                "input": "text",
+                "parameters": {
+                  "aspect_ratio": {
+                    "enum": [
+                      "16:9",
+                      "9:16"
+                    ],
+                    "type": "string"
+                  },
+                  "duration": {
+                    "maximum": 10,
+                    "minimum": 3,
+                    "type": "integer"
+                  },
+                  "prompt": {
+                    "max_length": 20000,
+                    "type": "string"
+                  },
+                  "resolution": {
+                    "enum": [
+                      "360p",
+                      "720p",
+                      "1080p",
+                      "4k"
+                    ],
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "id": "google/gemini-omni-flash/v1.1/image-to-video",
+                "input": "image",
+                "parameters": {
+                  "aspect_ratio": {
+                    "enum": [
+                      "16:9",
+                      "9:16"
+                    ],
+                    "type": "string"
+                  },
+                  "duration": {
+                    "maximum": 10,
+                    "minimum": 3,
+                    "type": "integer"
+                  },
+                  "end_image_url": {
+                    "type": "string"
+                  },
+                  "image_url": {
+                    "type": "string"
+                  },
+                  "prompt": {
+                    "max_length": 20000,
+                    "type": "string"
+                  },
+                  "resolution": {
+                    "enum": [
+                      "360p",
+                      "720p",
+                      "1080p",
+                      "4k"
+                    ],
+                    "type": "string"
+                  }
+                }
+              }
+            ],
+            "id": "google/gemini-omni-flash/v1.1/text-to-video",
+            "provider": "fal"
+          }
+        },
+        "reference_provider": "google"
+      },
+      "section": "video.models"
+    },
     "google/lyria-3-pro-preview@openrouter": {
       "card": {
         "id": "google/lyria-3-pro",
@@ -1273,11 +1360,11 @@
   },
   "source": {
     "asset": "models.v1.json",
-    "bytes": 601554,
+    "bytes": 692753,
     "license": "MIT",
-    "release": "v1.20261013.6",
+    "release": "v1.20261014.1",
     "repository": "https://github.com/gridaco/models",
     "schema": "https://grida.co/schemas/ai-model-facts-v1.json",
-    "sha256": "0da7a3a2f65961ea71dc70bb729cf24ccb0d23288fb66d199e34b890c454a141"
+    "sha256": "9ab487ff6d9623d439449d192a9ef2af5f05336ec3a056d354d547892e973c6c"
   }
 }

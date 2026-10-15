@@ -63,12 +63,6 @@ const EXCEPTIONS: &[Exception] = &[
         reason: "a runtime on the user's own subscription, which publishes no provider facts",
     },
     Exception {
-        routes: &["google/gemini-omni-flash/v1.1/image-to-video@fal"],
-        capabilities: &["video.generate"],
-        checks: &["card"],
-        reason: "Grida Models has no card for Gemini Omni Flash",
-    },
-    Exception {
         routes: &[OPENAI_IMAGE],
         capabilities: IMAGES,
         checks: IMAGE_PARAMETERS,

@@ -59,7 +59,7 @@ OUT = ROUTES_DIR / "models.json"
 SPEC = REPO / "spec" / "providers.md"
 
 REPOSITORY = "https://github.com/gridaco/models"
-RELEASE = "v1.20261013.6"
+RELEASE = "v1.20261014.1"
 ASSET = "models.v1.json"
 SCHEMA_ASSET = "models.v1.schema.json"
 SUMS = "SHA256SUMS"
@@ -94,7 +94,7 @@ CARDS: dict[str, tuple[str, str] | None] = {
     ),
     "eleven_v3@elevenlabs": ("audio.text_to_speech.models", "eleven_v3"),
     "alibaba/wan-3.0@gg": ("video.models", "alibaba/wan-3.0"),
-    "google/gemini-omni-flash/v1.1/image-to-video@fal": None,
+    "google/gemini-omni-flash/v1.1/image-to-video@fal": ("video.models", "google/gemini-omni-1.1-flash"),
 }
 RIGGING = "three_d.rigging.models"
 RIG_CHECK = "three_d.rig_check.operation"
