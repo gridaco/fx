@@ -49,6 +49,7 @@ fn img_a(contract: Value) -> Route {
         requests_per_minute: None,
         max_input_pictures: None,
         contract,
+        drift: None,
     }
 }
 

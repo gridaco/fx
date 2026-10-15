@@ -29,8 +29,21 @@
  *   its check ({@link serveAgents}).
  * - `stand_in.load` and `stand_in.answer` (§5.7): the host answers for a stand-in
  *   ({@link serveStandIns}), and refuses `describe`, `build` and `run` from then on.
+ * - `adapter.load` (§5.8), on any host but a stand-in host, and not while a run is pending
+ *   (`-32600`): loads the project module `path` as `describe` does and finds the export
+ *   `attribute`, made by `adapter()`; the result is `{adapter: {version, capabilities}, closure}`,
+ *   or `load_failed` (`… failed to import: …`, `<path>: <attribute> is not an export declared with
+ *   adapter()`). The host keeps serving what it served: the planning host goes on describing and
+ *   building ({@link serveAdapters}).
+ * - `adapter.send`, `adapter.submit` and `adapter.collect` (§5.8), for an adapter this session
+ *   loaded: answered by an {@link AdapterServer}, several at once, in any order; each call's
+ *   `fetch` (§6.8) goes to the engine with its `call_id` and no `run_id`. `-32602` for params of
+ *   another shape, an adapter not loaded (`no adapter <path>#<attribute> is loaded on this
+ *   host`) and a capability it does not serve with the method (`<path>#<attribute> does not serve
+ *   <capability> with adapter.send`). A fault of the adapter is answered `internal` and its stack
+ *   logged on stderr.
  * - `$/cancel` (§5.6): for the pending run, aborts `ctx.signal`; for a request being served
- *   ({@link Host.serve}) or a stand-in's call, answers it `cancelled` at once.
+ *   ({@link Host.serve}), a stand-in's call or an adapter's call, answers it `cancelled` at once.
  * - `shutdown` → `null`; then `exit` ends the process with status 0 (1 without `shutdown`), and so
  *   does the end of the input. A pending run is not waited for.
  *
@@ -44,6 +57,15 @@ import { dirname, isAbsolute, normalize, relative, sep } from "node:path";
 import type { Readable } from "node:stream";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Worker } from "node:worker_threads";
+import {
+  ADAPTER_METHODS,
+  AdapterCall,
+  type AdapterRecord,
+  AdapterServer,
+  adapterRecordOf,
+  functionFor,
+  NotACall,
+} from "./adapter.js";
 import { type ClosureEntry, Closures, type Misspelling, NotAnEsModule, type RunScope } from "./closure.js";
 import {
   type AgentLoop,
@@ -155,7 +177,8 @@ type Incoming =
 
 /** A host request the engine has not answered yet. */
 interface Waiting {
-  readonly runId: string;
+  /** Null for a request of no run (`fetch`). */
+  readonly runId: string | null;
   readonly method: string;
   readonly resolve: (value: unknown) => void;
   readonly reject: (error: unknown) => void;
@@ -194,10 +217,11 @@ export class Session {
     }
   }
 
-  /** Sends the host request `method` for `runId` and waits for its result. A `TypeError` (nothing
-   * sent) when the params are not an I-JSON value the engine can read. */
-  request(runId: string, method: string, params: Record<string, unknown>): Promise<unknown> {
-    const sent = { run_id: runId, ...params };
+  /** Sends the host request `method` for `runId` and waits for its result; with no `runId`, the
+   * params go as they are (`fetch`, which carries an adapter call's `call_id`, §6.8). A
+   * `TypeError` (nothing sent) when the params are not an I-JSON value the engine can read. */
+  request(runId: string | null, method: string, params: Record<string, unknown>): Promise<unknown> {
+    const sent = runId === null ? { ...params } : { run_id: runId, ...params };
     try {
       checkValue(sent, "", 1);
     } catch (error) {
@@ -1105,6 +1129,16 @@ export class Host {
     throw new LoadError(text);
   }
 
+  /** The project module at `path`, loaded once per session as `describe` loads it, and its source
+   * closure (§5.1); a `load_failed` refusal when it cannot be loaded. */
+  async projectModule(path: string): Promise<{
+    readonly namespace: Record<string, unknown>;
+    readonly closure: readonly ClosureEntry[];
+  }> {
+    const loaded = await this.#loadOrRefuse(path, `no module file ${path}`);
+    return { namespace: loaded.namespace, closure: this.closures.closure(loaded.url) };
+  }
+
   /** {@link Host.#load}, its failure a `load_failed` refusal. */
   async #loadOrRefuse(path: string, missing: string): Promise<Loaded> {
     try {
@@ -1402,6 +1436,7 @@ export function main(input: number, output: number, exit: (status: number) => ne
   // The methods served beside the session's own, before it reads its first message.
   serveAgents(host);
   serveStandIns(host);
+  serveAdapters(host);
   host.listen(input);
 }
 
@@ -1551,4 +1586,75 @@ function shownFile(path: string): string {
     }
   }
   return given;
+}
+
+// -- adapters: adapter.load, adapter.send, adapter.submit, adapter.collect -------------------
+
+/**
+ * Serves project adapters (§5.8): `adapter.load` imports the project module as `describe` does
+ * and takes the export `attribute` names, made by `adapter()`; the calls of an adapter this
+ * session loaded are answered by an {@link AdapterServer}, and their `fetch` requests go to the
+ * engine without a `run_id`. A fault of the adapter is logged on stderr with its stack.
+ */
+export function serveAdapters(host: Host): void {
+  const loaded = new Map<string, AdapterRecord>();
+  const server = new AdapterServer({
+    errorText: (error) => host.errorText(error),
+    onFault: (error, name) => {
+      const data = host.nodeError(error).data as { traceback?: unknown };
+      const traceback =
+        typeof data.traceback === "string" && data.traceback ? data.traceback : host.errorText(error);
+      log(`the adapter ${name} failed:\n${traceback}`);
+    },
+  });
+  host.methods.set("adapter.load", async (_id, given) => {
+    if (host.standingIn) {
+      throw new Refusal(INVALID_REQUEST, "this host answers for a stand-in");
+    }
+    if (host.pendingRun() !== null) {
+      throw new Refusal(INVALID_REQUEST, "adapter.load came while a run is pending");
+    }
+    const params = objectParams(given);
+    const path = projectPath(params.path, "adapter.load's path");
+    const attribute = params.attribute;
+    if (typeof attribute !== "string" || !IDENTIFIER.test(attribute)) {
+      throw new Refusal(INVALID_PARAMS, "adapter.load's attribute is a name");
+    }
+    const module = await host.projectModule(path);
+    const record = adapterRecordOf(exportOf(module.namespace, attribute));
+    if (record === undefined) {
+      throw new Refusal(LOAD_FAILED, `${path}: ${attribute} is not an export declared with adapter()`);
+    }
+    loaded.set(`${path}#${attribute}`, record);
+    return {
+      adapter: { version: record.version, capabilities: { ...record.capabilities } },
+      closure: module.closure.map((entry) => ({ label: entry.label, path: entry.path })),
+    };
+  });
+  const fetch = (params: Record<string, unknown>) => host.session.request(null, "fetch", params);
+  for (const method of ADAPTER_METHODS) {
+    host.methods.set(method, (id, given) => {
+      const params = objectParams(given);
+      const controller = new AbortController();
+      let call: AdapterCall;
+      try {
+        call = new AdapterCall(params, { method, fetch, signal: controller.signal });
+      } catch (error) {
+        throw error instanceof NotACall ? new Refusal(INVALID_PARAMS, error.message) : error;
+      }
+      const target = params.adapter as { readonly path: string; readonly attribute: string };
+      const name = `${target.path}#${target.attribute}`;
+      const record = loaded.get(name);
+      if (record === undefined) {
+        throw new Refusal(INVALID_PARAMS, `no adapter ${name} is loaded on this host`);
+      }
+      const fn = functionFor(record, method, call.capability);
+      if (fn === undefined) {
+        throw new Refusal(INVALID_PARAMS, `${name} does not serve ${call.capability} with ${method}`);
+      }
+      server.start(id, { method, fn, call, controller, name }, (reply) => host.answer(id, reply));
+      return LATER;
+    });
+  }
+  host.cancellers.push((id) => server.cancel(id));
 }

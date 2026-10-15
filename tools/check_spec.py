@@ -21,7 +21,9 @@ It prints one line per check and exits non-zero when any check fails:
   (g) the worked examples in spec/identity.md agree with spec/vectors/identity/examples.json;
   (h) every expected fx-graph-v1 output of a conformance case passes digest.py --check-graph,
       with the case's in/ as the project, the route tables its step passed, and the built-in
-      table (in the catalog when the step passed none, and a base for `extends` either way);
+      table (in the catalog when the step passed none, and a base for `extends` either way), and
+      --current-lock: a case that declares a versioned adapter commits its fx.lock entry for the
+      adapter's current version, so that version is a fact;
   (i) the identity vectors agree with other readers and writers: every JSON output case that
       identity.md section 5 says Python's json.dumps writes the same is written the same, and
       every reserved-marker case is refused (or read) by the YAML reader as by the JSON reader;
@@ -577,6 +579,7 @@ def check_expected_graphs(gate: Gate) -> None:
                 command += ["--routes", str(project / route_file)]
             if DEFAULT_ROUTES.is_file():
                 command += ["--builtin-routes", str(DEFAULT_ROUTES)]
+            command.append("--current-lock")
             done = subprocess.run(command, capture_output=True, text=True, timeout=120)
             output = (done.stdout + done.stderr).strip().splitlines()
             problems = [] if done.returncode == 0 else output

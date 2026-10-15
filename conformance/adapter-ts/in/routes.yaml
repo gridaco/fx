@@ -1,0 +1,4 @@
+fx: routes/v1
+routes:
+  - { capability: structured.generate, route: text-a@acme, price: { cap_usd: 0.05 } }
+  - { capability: structured.generate, route: text-b@acme-jobs, price: { cap_usd: 0.05 } }

@@ -28,7 +28,7 @@
 //!   uncached paid call is refused (a recorded call still replays from the store). With `live`
 //!   (spec/adapters.md §1; spec/providers.md §1):
 //!   1. the variables the planning project's provider declarations name, FX's own and its
-//!      `providers:` ([`provider_environment`]): the process environment, then the planning
+//!      `providers:` ([`provider_variables`]): the process environment, then the planning
 //!      project's `.env` (`<planning project>/.env`) for the names the process does not set,
 //!      unless the process sets `GRIDA_FX_DISABLE_DOTENV=1`;
 //!   2. the keys of that environment, and the endpoints (the default bases, with each base-URL
@@ -37,7 +37,14 @@
 //!      transport when `GRIDA_FX_NETWORK=off` (every exchange is refused before it leaves);
 //!   4. every provider's adapters on that setup (`live::adapters`), a family's for each provider
 //!      the planning project declares with one included, registered whether or not their key is
-//!      present: a call without its key is refused before sending.
+//!      present: a call without its key is refused before sending;
+//!   5. the planning project's own adapters, which planning loaded
+//!      (`grida_fx_runtime::adapter_host::register`): for each declaration with one, an adapter
+//!      host, the node host program of the module's language found from the planning project
+//!      (`HostSpec::locate`, its sources the planning project's), started on its first call with
+//!      the network off too, its environment FX's without every declared variable but its own
+//!      declaration's, which it gets as step 1 read them, from the environment or `.env`
+//!      (spec/adapters.md §9). Nothing starts while the adapters are built.
 //!
 //!   A `.env` or base-URL refusal is a usage error (exit 2) whose message names the variable or
 //!   the `.env` line, never a value; building the adapters prints nothing.
@@ -58,11 +65,13 @@ use grida_fx_core::host::Language;
 use grida_fx_core::host::{NodeHost, PlanTimeRunner};
 use grida_fx_core::plan::{Plan, make_plan};
 use grida_fx_core::project::Planner;
+use grida_fx_core::providers::Declaration;
 use grida_fx_core::routes::RouteTable;
 use grida_fx_core::{Error, ErrorKind};
-use grida_fx_providers::keys::Environment;
+use grida_fx_providers::keys::{Environment, Secret};
 use grida_fx_providers::live::{self, Network};
 use grida_fx_providers::{Adapters, Endpoints, Keys};
+use grida_fx_runtime::adapter_host::{self, Launch, ProcessLaunch};
 use grida_fx_runtime::engine::Engine;
 use grida_fx_runtime::host::locate::{self, node_host_entry};
 use grida_fx_runtime::host::pool::HostPool;
@@ -180,30 +189,67 @@ pub fn adapters_for(
     if !live {
         return Ok(Adapters::new());
     }
-    let (keys, endpoints) = provider_environment(&planner.project, env)?;
+    let (environment, keys, endpoints) = provider_variables(&planner.project, env)?;
     let setup = live::live_setup(keys, endpoints, Network::from_env(env)).map_err(|reason| {
         Error::new(
             ErrorKind::Internal,
             format!("cannot start the provider transport: {reason}"),
         )
     })?;
-    Ok(live::adapters(&setup))
+    let mut adapters = live::adapters(&setup);
+    let project = &planner.project;
+    adapter_host::register(&mut adapters, &setup, |declaration, adapter| {
+        let (withheld, given) = adapter_environment(declaration, &environment);
+        let spec = Language::of_module(&adapter.path).and_then(|language| {
+            HostSpec::locate(
+                language,
+                &project.root,
+                None,
+                project.document.sources.clone(),
+                env,
+            )
+        });
+        let spec = spec.map(|spec| spec.with_environment(withheld, given));
+        Arc::new(ProcessLaunch::new(spec)) as Arc<dyn Launch>
+    });
+    Ok(adapters)
 }
 
-/// The keys and endpoints of the planning project `project` (spec/providers.md §1): the
-/// variables its declarations name from `env`, then from its `.env` (unless `env` gives
+/// The environment of `declaration`'s adapter host (module doc, step 5): every variable the
+/// declarations of `environment` read but its own, withheld; its own, as `environment` holds
+/// them, given.
+fn adapter_environment(
+    declaration: &Declaration,
+    environment: &Environment,
+) -> (Vec<String>, Vec<(String, Secret)>) {
+    let own: Vec<&str> = declaration.variables().collect();
+    let withheld = environment
+        .declarations()
+        .variables()
+        .into_iter()
+        .filter(|name| !own.contains(&name.as_str()))
+        .collect();
+    let given = own
+        .iter()
+        .filter_map(|name| Some((name.to_string(), Secret::new(environment.get(name)?))))
+        .collect();
+    (withheld, given)
+}
+
+/// The variables, keys and endpoints of the planning project `project` (spec/providers.md §1):
+/// the variables its declarations name from `env`, then from its `.env` (unless `env` gives
 /// `GRIDA_FX_DISABLE_DOTENV=1`). A `.env` or base-URL refusal is a usage error; its sentence
 /// names the variable or the line, never a value.
-pub fn provider_environment(
+pub fn provider_variables(
     project: &Project,
     env: &dyn Fn(&str) -> Option<String>,
-) -> Result<(Keys, Endpoints), Error> {
+) -> Result<(Environment, Keys, Endpoints), Error> {
     let dotenv = dotenv_path(&project.root);
     let environment =
         Environment::read(env, Some(&dotenv), &project.declarations()).map_err(Error::usage)?;
     let keys = Keys::from_environment(&environment);
     let endpoints = Endpoints::from_environment(&environment, &keys).map_err(Error::usage)?;
-    Ok((keys, endpoints))
+    Ok((environment, keys, endpoints))
 }
 
 /// The planning project's key file.
@@ -368,6 +414,117 @@ mod tests {
         assert_eq!(asked.get(), 0);
     }
 
+    /// A planner over a project at `root` that declares `acme` with `adapters/acme.py#acme`,
+    /// which the planning host loads as serving `image.generate`, and `other`, declared with a
+    /// key of its own.
+    fn adapter_planner(root: &Path) -> Planner {
+        let project_file = "fx: project/v1\nproviders:\n  acme:\n    credential: { variable: \
+                            ACME_API_KEY }\n    base_url: { variable: ACME_BASE_URL, default: \
+                            \"https://api.acme.test/v1\" }\n    adapter: adapters/acme.py#acme\n  \
+                            other:\n    credential: { variable: OTHER_API_KEY }\n    base_url: { \
+                            default: \"https://api.other.test\" }\n";
+        std::fs::create_dir_all(root.join("adapters")).unwrap();
+        std::fs::write(root.join("adapters/acme.py"), "acme = adapter()\n").unwrap();
+        let _ = planner_in(root, "fx: project/v1\n");
+        std::fs::write(root.join("fx.yaml"), project_file).unwrap();
+        let mut host = FakeHost::new().with_adapter(
+            "adapters/acme.py#acme",
+            Ok(grida_fx_protocol::AdapterLoadResult {
+                adapter: grida_fx_protocol::AdapterDeclaration {
+                    version: Some(1),
+                    capabilities: [(
+                        "image.generate".to_string(),
+                        grida_fx_protocol::CallKind::Request,
+                    )]
+                    .into_iter()
+                    .collect(),
+                },
+                closure: vec![grida_fx_protocol::ClosureEntry {
+                    label: "adapters/acme.py".into(),
+                    path: root.join("adapters/acme.py").to_string_lossy().into_owned(),
+                }],
+            }),
+        );
+        let request = PlanRequest {
+            target: "case".into(),
+            cwd: root.to_path_buf(),
+            routes: vec!["routes.yaml".into()],
+            ..PlanRequest::default()
+        };
+        make_planner(&request, &mut host).unwrap()
+    }
+
+    #[test]
+    fn a_live_engine_registers_the_planning_projects_own_adapters() {
+        let folder = tempfile::tempdir().unwrap();
+        let root = folder.path().canonicalize().unwrap();
+        let planner = adapter_planner(&root);
+        let route = planner
+            .routes
+            .resolve("image.generate", "img-a@acme")
+            .unwrap();
+        assert_eq!(
+            route.contract,
+            serde_json::json!({"adapter": "adapters/acme.py#acme", "adapter_behavior": 1})
+        );
+        let runtime = runtime().unwrap();
+        let _entered = runtime.enter();
+        let plain = adapters_for(
+            &planner_in(&root, "fx: project/v1\n"),
+            true,
+            &offline_env(&[]),
+        )
+        .unwrap();
+        let adapters = adapters_for(&adapter_planner(&root), true, &offline_env(&[])).unwrap();
+        let served = adapters
+            .serving(&grida_fx_providers::RouteRef::of(route))
+            .unwrap();
+        let identity = served.identity().unwrap();
+        assert_eq!(
+            (identity.adapter, identity.behavior),
+            ("adapters/acme.py#acme", "1")
+        );
+        assert!(!adapters.serves("video.generate", "acme"));
+        // Its host is kept with the run's runtimes; nothing has started.
+        assert_eq!(adapters.runtimes().len(), plain.runtimes().len() + 1);
+        assert!(runtime.block_on(adapters.shutdown()));
+    }
+
+    #[test]
+    fn an_adapter_host_gets_its_own_declarations_variables_and_no_other() {
+        let folder = tempfile::tempdir().unwrap();
+        let root = folder.path().canonicalize().unwrap();
+        let planner = adapter_planner(&root);
+        std::fs::write(
+            root.join(".env"),
+            "ACME_API_KEY=acme-made-up-key\nOTHER_API_KEY=other-made-up-key\n",
+        )
+        .unwrap();
+        let env = |name: &str| {
+            (name == "ACME_BASE_URL").then(|| "https://proxy.acme.test/v1".to_string())
+        };
+        let (environment, _, endpoints) = provider_variables(&planner.project, &env).unwrap();
+        assert_eq!(endpoints.base("acme"), Some("https://proxy.acme.test/v1"));
+        let declarations = planner.project.declarations();
+        let (withheld, given) =
+            adapter_environment(declarations.get("acme").unwrap(), &environment);
+        assert!(withheld.iter().any(|name| name == "OTHER_API_KEY"));
+        assert!(withheld.iter().any(|name| name == "OPENAI_API_KEY"));
+        assert!(withheld.iter().any(|name| name == "GG_BASE_URL"));
+        assert!(!withheld.iter().any(|name| name.starts_with("ACME_")));
+        let given: Vec<(&str, &str)> = given
+            .iter()
+            .map(|(name, value)| (name.as_str(), value.expose()))
+            .collect();
+        assert_eq!(
+            given,
+            [
+                ("ACME_API_KEY", "acme-made-up-key"),
+                ("ACME_BASE_URL", "https://proxy.acme.test/v1")
+            ]
+        );
+    }
+
     #[test]
     fn a_live_engine_reads_the_planning_projects_key_file() {
         let folder = tempfile::tempdir().unwrap();
@@ -390,7 +547,7 @@ mod tests {
         assert!(adapters.serves("video.generate", "fal"));
         // A good file gives its keys.
         std::fs::write(root.join(".env"), format!("FAL_KEY={value}\n")).unwrap();
-        let (keys, _) = provider_environment(&planner.project, &network_off).unwrap();
+        let (_, keys, _) = provider_variables(&planner.project, &network_off).unwrap();
         assert_eq!(
             keys.source(grida_fx_providers::KeyName::Fal),
             Some(grida_fx_providers::keys::KeySource::DotEnv)

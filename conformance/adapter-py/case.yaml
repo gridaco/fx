@@ -1,0 +1,137 @@
+# Project adapters in Python (adapters.md §9): fx.yaml declares `acme`, keyed by ACME_API_KEY and
+# served by adapters/acme.py#acme, a request adapter, and the keyless `acme-jobs`, served by
+# adapters/acme.py#acme_jobs, a long-job adapter of the same module. Both are synthetic and made
+# up: they answer from what they are asked and make no request, and the network is off. Both are
+# versioned, and the committed fx.lock holds them, so `lock --check` passes.
+# - doctor names each adapter, its version and each capability's kind.
+# - Planning loads both adapters on the planning host and needs no adapter host: plan.txt shows
+#   the two capped routes; expand.json's fingerprints are of each route's contract completed
+#   with its adapter's name and version (`{"adapter": "adapters/acme.py#acme",
+#   "adapter_behavior": 1}`), which check_spec (h) recomputes from fx.yaml and fx.lock.
+# - runs/one, live with a made-up key (the step's env): `name` is answered at once after a fetch
+#   the engine refuses before it leaves (the network is off), its adapter host given its own
+#   key; `slowly` is submitted, then collected, by a host given no key of another declaration;
+#   each route's contract reaches the adapter completed; `refused` is refused with a reason that
+#   holds the key, which reaches no output and no record ([redacted]). Each answer is charged
+#   the cost its adapter reports ($0.01 and $0.02), the refusal nothing: the run spends $0.03
+#   and exits 1.
+# - runs/two, without the key: `name` and `slowly` are result-cache hits that ask no adapter,
+#   and `refused` is refused before its adapter is asked, since its declaration's key is not
+#   set; nothing is spent.
+# - runs/stand-in: in/stand_in.py answers the adapters' routes, and no adapter host starts (a
+#   run without --live builds no adapter). Its answers get the check every structured.generate
+#   route gets, as the adapters' do: `name`'s is stored, `slowly`'s fails the schema, and
+#   `refused` is declined.
+# - An edit to a module the adapters import moves their source closure, so the plan reports the
+#   drift on each step their routes serve (exit 1) and `lock --check` refuses it, until
+#   `lock --same` confirms both adapters.
+# - A declaration that names an attribute the module does not declare with adapter(), a missing
+#   module, and a family beside an adapter, refuse the command (exit 2).
+steps:
+- argv: [lock, --check]
+- argv: [doctor]
+  mentions:
+  - "provider  acme api.acme.test ACME_API_KEY missing"
+  - "provider  acme-jobs jobs.acme.test needs no key"
+  - "adapter   acme adapters/acme.py#acme version 1: structured.generate (request)"
+  - "adapter   acme-jobs adapters/acme.py#acme_jobs version 1: structured.generate (job)"
+- argv: [plan, case, --routes, routes.yaml, --max-usd, "1"]
+  save: plan.txt
+- argv: [expand, case, --routes, routes.yaml]
+  save: expand.json
+  json: true
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, --live, --max-usd, "1"]
+  env:
+    ACME_API_KEY: acme-made-up-key-5e1f
+  status: 1
+  mentions:
+  - "result    failed   spent $0.03"
+  - "failed    refused#1: structured.generate on text-a@acme was refused: no colours for [redacted]"
+  never_mentions:
+  - acme-made-up-key-5e1f
+  - "{project}"
+- read: runs/one/outputs/name.json
+  save: name.json
+  json: true
+- read: runs/one/outputs/slowly.json
+  save: slowly.json
+  json: true
+- argv: [project, runs/one]
+  save: project-one.json
+  json: true
+  never_mentions:
+  - acme-made-up-key-5e1f
+- argv: [run, case, --routes, routes.yaml, --run, runs/two, --live, --max-usd, "1"]
+  status: 1
+  mentions:
+  - "result    failed   spent $0.00"
+  - "failed    refused#1: structured.generate on text-a@acme was refused: ACME_API_KEY is not set"
+- argv: [project, runs/two]
+  save: project-two.json
+  json: true
+- argv: [run, case, --routes, routes.yaml, --run, runs/stand-in, --stand-in, "stand_in.py#answer"]
+  status: 1
+  mentions:
+  - "stand-in  stand_in.py#answer"
+  - "result    failed   spent $0.00"
+  - "failed    slowly#1: structured.generate on text-b@acme-jobs failed: name: 3 is not of type \"string\""
+  - "failed    refused#1: structured.generate on text-a@acme is a paid call the stand-in declined"
+- read: runs/stand-in/outputs/name.json
+  save: stand-in-name.json
+  json: true
+- files:
+    adapters/colours.py: |
+      """The colours acme's synthetic adapter answers with, edited."""
+
+      ASKED = "teal"
+      WAITED_FOR = "slate"
+  argv: [expand, case, --routes, routes.yaml]
+  status: 1
+  mentions:
+  - "adapters/acme.py#acme: its source changed but version 1 did not; bump the version, or confirm no change in behaviour with "
+  - "lock --same adapters/acme.py#acme"
+  - "adapters/acme.py#acme_jobs: its source changed but version 1 did not"
+- argv: [lock, --check]
+  status: 1
+  mentions:
+  - "changed   adapters/acme.py#acme: its source changed but version 1 did not; bump it, or confirm with --same adapters/acme.py#acme"
+  - "changed   adapters/acme.py#acme_jobs: "
+- argv: [lock, --same, "adapters/acme.py#acme", --same, "adapters/acme.py#acme_jobs"]
+  mentions:
+  - "fx.lock: 0 versioned node types, 2 versioned adapters"
+- argv: [lock, --check]
+- argv: [expand, case, --routes, routes.yaml]
+- files:
+    fx.yaml: |
+      fx: project/v1
+      providers:
+        acme:
+          base_url: { default: "https://api.acme.test/v1" }
+          adapter: adapters/acme.py#painter
+  argv: [plan, case, --routes, routes.yaml]
+  status: 2
+  mentions:
+  - "fx.yaml: providers.acme.adapter: adapters/acme.py: painter is not declared with adapter()"
+- files:
+    fx.yaml: |
+      fx: project/v1
+      providers:
+        acme:
+          base_url: { default: "https://api.acme.test/v1" }
+          adapter: adapters/missing.py#acme
+  argv: [plan, case, --routes, routes.yaml]
+  status: 2
+  mentions:
+  - "fx.yaml: providers.acme.adapter: no file adapters/missing.py"
+- files:
+    fx.yaml: |
+      fx: project/v1
+      providers:
+        acme:
+          base_url: { default: "https://api.acme.test/v1" }
+          family: openai-compatible
+          adapter: adapters/acme.py#acme
+  argv: [plan, case, --routes, routes.yaml]
+  status: 2
+  mentions:
+  - "fx.yaml: providers.acme: a provider has a family or an adapter, not both"

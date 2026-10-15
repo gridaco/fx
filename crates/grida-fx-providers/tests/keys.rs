@@ -556,6 +556,7 @@ fn acme() -> Declarations {
         },
         download_hosts: Vec::new(),
         family: Some("openai-compatible".into()),
+        adapter: None,
     }])
 }
 

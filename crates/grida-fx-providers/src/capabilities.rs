@@ -1,8 +1,9 @@
 //! The capabilities FX ships, as data (spec/capabilities.md): each one's canonical request members,
 //! the features a route of it may declare, and what its answer carries. The engine calls
-//! [`check_request`] before an adapter FX ships sees a call ([`crate::checks::request`];
-//! spec/adapters.md §4 step 2), and each adapter again for a direct caller, so every route of a
-//! capability refuses the same malformed request with the same sentence. `tests/capabilities.rs`
+//! [`check_request`] before an adapter FX ships, or a project adapter, sees a call
+//! ([`crate::checks::request`]; spec/adapters.md §4 step 2), and each adapter FX ships again for a
+//! direct caller, so every route of a capability refuses the same malformed request with the same
+//! sentence. `tests/capabilities.rs`
 //! holds this table to spec/capabilities.md (every member table and feature list) and to the
 //! standard library's paid built-ins; `tests/routes.rs` holds the built-in route table's features
 //! to [`Capability::features`].

@@ -1,0 +1,182 @@
+{
+ "estimate": {
+  "ceiling_usd": null,
+  "high_usd": 0.15,
+  "low_usd": 0
+ },
+ "instances": [
+  {
+   "bindings": [],
+   "id": "name#1",
+   "identity": "e754959af8dc6f47af52133b3545314a4c17d9828331f4808494bbf08b85e76c",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "name",
+   "phase": 1,
+   "price": {
+    "capped": true,
+    "high_usd": 0.05,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {
+    "structured.generate": {
+     "fingerprint": "dda86166a6df4b7f3ef667fa7c011ab8f7a443000fb84010663bf39b93728a42",
+     "route": "text-a@acme"
+    }
+   },
+   "state": "planned",
+   "step": "name",
+   "take": [
+    1
+   ],
+   "type": "fx/structured.generate@1.1",
+   "uses": "fx/structured.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "matte": "#ffffff",
+    "prompt": "Name a colour.",
+    "schema": {
+     "file": "6fc6118ab871d0157e370adee71bbb8e62d83f0dd1c5ac36caf118f48bba36c9"
+    },
+    "vars": {}
+   }
+  },
+  {
+   "bindings": [],
+   "id": "slowly#1",
+   "identity": "63a933f3b71895562683fbc646a0b6f991a467516b025e03503dddbaf2dd030f",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "slowly",
+   "phase": 1,
+   "price": {
+    "capped": true,
+    "high_usd": 0.05,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {
+    "structured.generate": {
+     "fingerprint": "757e5ca54c9c14acf69d11f2d624de93a087458831b4394e063c92cb87373209",
+     "route": "text-b@acme-jobs"
+    }
+   },
+   "state": "planned",
+   "step": "slowly",
+   "take": [
+    1
+   ],
+   "type": "fx/structured.generate@1.1",
+   "uses": "fx/structured.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "matte": "#ffffff",
+    "prompt": "Name a colour slowly.",
+    "schema": {
+     "file": "6fc6118ab871d0157e370adee71bbb8e62d83f0dd1c5ac36caf118f48bba36c9"
+    },
+    "vars": {}
+   }
+  },
+  {
+   "bindings": [],
+   "id": "refused#1",
+   "identity": "0683154d256dec1abc94b09330478d6ad2b7250e6979bf51ec2c8fd98bbf2be3",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "refused",
+   "phase": 1,
+   "price": {
+    "capped": true,
+    "high_usd": 0.05,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {
+    "structured.generate": {
+     "fingerprint": "dda86166a6df4b7f3ef667fa7c011ab8f7a443000fb84010663bf39b93728a42",
+     "route": "text-a@acme"
+    }
+   },
+   "state": "planned",
+   "step": "refused",
+   "take": [
+    1
+   ],
+   "type": "fx/structured.generate@1.1",
+   "uses": "fx/structured.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "matte": "#ffffff",
+    "prompt": "refuse",
+    "schema": {
+     "file": "6fc6118ab871d0157e370adee71bbb8e62d83f0dd1c5ac36caf118f48bba36c9"
+    },
+    "vars": {}
+   }
+  }
+ ],
+ "kind": "fx-graph-v1",
+ "pending": [],
+ "problems": [],
+ "scopes": [],
+ "types": {
+  "fx/structured.generate@1": {
+   "identity": "fx/structured.generate@1.1",
+   "ports": {
+    "inputs": {
+     "context": "file[]?",
+     "schema": "json"
+    },
+    "outputs": {
+     "json": "json"
+    },
+    "params": {
+     "matte": {
+      "default": "#ffffff",
+      "type": "string"
+     },
+     "max_tokens": {
+      "type": "integer",
+      "x-fx-optional": true
+     },
+     "prompt": {
+      "type": "string",
+      "x-fx-template": true
+     },
+     "provider_options": {
+      "type": "object",
+      "x-fx-optional": true
+     },
+     "system": {
+      "type": "string",
+      "x-fx-optional": true,
+      "x-fx-template": true
+     },
+     "vars": {
+      "default": {},
+      "type": "object"
+     }
+    }
+   }
+  }
+ },
+ "workflow": {
+  "file": "workflows/case.yaml",
+  "id": "case",
+  "title": "Colours from a project adapter"
+ }
+}

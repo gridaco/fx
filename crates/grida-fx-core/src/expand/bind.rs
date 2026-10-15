@@ -4,11 +4,12 @@
 //! `<w>.route` when `route:` is set, `{spec.name} makes no paid call to check` at `<w>.requires`.
 //! Per capability: the step's `route:` when the type calls exactly one capability (else it is
 //! ignored), else fx.yaml's default; none: `no route for {cap}: set route: on the step or
-//! routes.{cap} in fx.yaml`; [`crate::routes::RouteTable::resolve`] errors at `<w>.route`;
-//! missing features `{route} does not support {a, b}` at `<w>.requires` (route still bound);
-//! price `cost × count`. `independent_of`: `no step {name}`, and `shares the model {models}
-//! with {name}; route one of them to a different model`, comparing underlying models of the other
-//! step's direct instances.
+//! routes.{cap} in fx.yaml`; [`crate::routes::RouteTable::resolve`] errors at `<w>.route`; the
+//! lock drift of a project adapter that serves the route ([`crate::routes::Route::drift`]) at
+//! `<w>.route` (route still bound); missing features `{route} does not support {a, b}` at
+//! `<w>.requires` (route still bound); price `cost × count`. `independent_of`: `no step
+//! {name}`, and `shares the model {models} with {name}; route one of them to a different model`,
+//! comparing underlying models of the other step's direct instances.
 //!
 //! Feature names (spec/capabilities.md §1 "Features"): a name in `requires:` that is a feature of
 //! none of the capabilities the type calls is refused once, before any route is bound, at
@@ -214,6 +215,10 @@ impl Expander<'_> {
                     continue;
                 }
             };
+            // The lock drift of the project adapter that serves it (spec/adapters.md §9).
+            if let Some(drift) = &route.drift {
+                self.problem(&format!("{where_}.route"), drift.clone());
+            }
             let own = spec.capability.as_deref() == Some(capability.as_str());
             let mut reported = BTreeSet::new();
             for (feature, member) in implied.iter().filter(|_| own) {

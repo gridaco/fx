@@ -33,12 +33,12 @@ plans, records and exports are byte-identical under each (the invoker, `GRIDA_FX
   unsupported platform `grida fx` explains this and exits 1; the rest of `grida` is unaffected.
 - **Your own engine.** `GRIDA_FX_BIN` points every launcher and both SDKs at a `grida-fx` binary,
   such as a source build or one built for another platform.
-- **Python node bodies.** Python nodes, builders and the local built-ins (`image.resize`,
-  `files.copy`, `package`, …) need the Python package even when FX runs through npm, and in a
-  TypeScript project too; `GRIDA_FX_PYTHON` selects the interpreter.
-- **TypeScript node bodies.** TypeScript (and JavaScript) nodes, builders and stand-in files run
-  in `@grida/fx`'s node host, `<node> <@grida/fx>/dist/host-entry.js`, on Node.js 24 or later
-  (type stripping and `module.registerHooks`; Bun and Deno cannot host). `<node>` is
+- **Python node bodies.** Python nodes, builders, adapters and the local built-ins
+  (`image.resize`, `files.copy`, `package`, …) need the Python package even when FX runs through
+  npm, and in a TypeScript project too; `GRIDA_FX_PYTHON` selects the interpreter.
+- **TypeScript node bodies.** TypeScript (and JavaScript) nodes, builders, stand-in files and
+  adapters run in `@grida/fx`'s node host, `<node> <@grida/fx>/dist/host-entry.js`, on Node.js
+  24 or later (type stripping and `module.registerHooks`; Bun and Deno cannot host). `<node>` is
   `GRIDA_FX_NODE`, else `GRIDA_FX_SDK_NODE`, else `node` on `PATH`. `dist/host-entry.js` comes
   from the `@grida/fx` the workflow's project resolves (`node_modules/@grida/fx`, in the project
   or a folder above it), else from the one the planning project resolves, else it is

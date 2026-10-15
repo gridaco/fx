@@ -11,6 +11,7 @@
 //! | [`ledger`] | the ceiling, step budgets, holds and their settlement |
 //! | [`calls`] | the `capability` request path, the retry owner, route pacing |
 //! | [`stand_in`] | stand-in runs: the answerer of a stand-in's calls, the checks its answers meet |
+//! | [`adapter_host`] | a project's own adapters in a live run: the adapter host, its calls, `fetch` |
 //! | [`agent`] | the agent loop (`agent.run`) |
 //! | [`executor`] | one attempt of one instance: result cache, select, paid built-ins, host runs, accepting results |
 //! | [`runner`] | one run invocation: refusals, resume, scheduling, dispatch, outputs |
@@ -21,6 +22,7 @@
 //!
 //! Each module's doc names the spec sections it follows.
 
+pub mod adapter_host;
 pub mod agent;
 pub mod calls;
 pub mod control;

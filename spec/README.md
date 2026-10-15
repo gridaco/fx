@@ -18,8 +18,8 @@ These documents define FX independently of any implementation. The Rust engine, 
 | [distribution.md](distribution.md) | The ways to run FX (`grida fx`, `grida-fx`, `python -m grida.fx`), the invoker, the host contract and the release order |
 | [protocol.md](protocol.md) | The node protocol between the engine and a node host, and the Python and TypeScript hosts |
 | [capabilities.md](capabilities.md) | Each paid capability's canonical request, its answer, and the features a route declares |
-| [adapters.md](adapters.md) | The adapter contract, version 1: where adapters run, the transport, how provider answers become outcomes and bills, refusals, long jobs, downloads and reasons, and provider options |
-| [providers.md](providers.md) | Provider declarations (FX's own and a project's `providers:`), their keys and endpoints, the built-in adapters, the family adapters and their references, the built-in route table, and renamed features |
+| [adapters.md](adapters.md) | The adapter contract, version 1: where adapters run, the transport, how provider answers become outcomes and bills, refusals, long jobs, downloads and reasons, provider options, and the binding of a project's own adapters, which run out of process (§9) |
+| [providers.md](providers.md) | Provider declarations (FX's own and a project's `providers:`), their keys and endpoints, the built-in adapters, the family adapters and their references, a declaration's own adapter, the built-in route table, and renamed features |
 | [schemas/](schemas/) | JSON Schemas for every document and record |
 | [vectors/](vectors/) | Test vectors: canonical JSON, YAML, identity examples, file facts |
 

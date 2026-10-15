@@ -64,6 +64,7 @@ fn route(capability: &str, model: &str, provider: &str, high_micros: i64) -> Rou
         requests_per_minute: None,
         max_input_pictures: None,
         contract: json!({}),
+        drift: None,
     }
 }
 

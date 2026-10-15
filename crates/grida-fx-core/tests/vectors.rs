@@ -1,6 +1,9 @@
 //! The value layer against the spec's vectors.
 
-use grida_fx_core::providers::{BaseUrl, Declaration, Declarations};
+use grida_fx_core::providers::{
+    BaseUrl, Declaration, Declarations, DeclaredAdapter, LoadedAdapter,
+};
+use grida_fx_core::registry::SourceDigests;
 use grida_fx_core::routes::RouteTable;
 use grida_fx_core::value::{canon, check_markers, digest, file_digest, parse_json, write_json};
 use serde_json::Value;
@@ -104,7 +107,8 @@ fn route_refusal(entry: &Value, reason: &str) -> String {
 }
 
 /// A case's `providers`, the planning project's declarations as fx.yaml gives them: only a
-/// declaration's `family` completes a contract, so the rest is read as far as it needs.
+/// declaration's `family` or `adapter` completes a contract, so the rest is read as far as it
+/// needs. A declared adapter is as the case's `adapters` says loading found it.
 fn declarations(case: &Value) -> Declarations {
     let Some(providers) = case.get("providers").and_then(Value::as_object) else {
         return Declarations::built_in();
@@ -124,9 +128,39 @@ fn declarations(case: &Value) -> Declarations {
                 .get("family")
                 .and_then(Value::as_str)
                 .map(String::from),
+            adapter: entry
+                .get("adapter")
+                .and_then(Value::as_str)
+                .map(|name| loaded_adapter(name, &case["adapters"][name])),
         })
         .collect();
     Declarations::with(&declared)
+}
+
+/// The adapter `name` (`<path>#<attribute>`) as loading found it, from a case's `adapters`: its
+/// `version`, its `capabilities` and, without a version, its `source` file digests.
+fn loaded_adapter(name: &str, loaded: &Value) -> DeclaredAdapter {
+    let (path, attribute) = name.rsplit_once('#').unwrap();
+    let files = loaded
+        .get("source")
+        .and_then(Value::as_object)
+        .into_iter()
+        .flatten()
+        .map(|(label, digest)| (label.clone(), digest.as_str().unwrap().to_string()))
+        .collect();
+    DeclaredAdapter {
+        path: path.into(),
+        attribute: attribute.into(),
+        loaded: Some(LoadedAdapter {
+            version: loaded["version"].as_u64(),
+            capabilities: serde_json::from_value(loaded["capabilities"].clone()).unwrap(),
+            source: SourceDigests {
+                files,
+                resources: Default::default(),
+            },
+            drift: None,
+        }),
+    }
 }
 
 #[test]

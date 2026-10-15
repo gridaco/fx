@@ -1,7 +1,7 @@
 # @grida/fx
 
 Grida FX for JavaScript and TypeScript: an SDK to write workflow files, node types and builders,
-and to plan, price and run them; the host that runs your TypeScript nodes; and the standalone
+and to plan, price and run them; the host that runs your TypeScript nodes and adapters; and the standalone
 `grida-fx` command. Grida FX is a workflow engine for generative asset pipelines: write a workflow
 file, and FX plans it, prices it before anything is spent, caches every paid call by its request,
 and records the run. It works with one Grida Gateway key (`GG_API_KEY`), or your own provider
@@ -30,8 +30,8 @@ your machine:
 
 **Native Windows is not supported yet**: the engine's runner uses Unix process groups and signals. Use
 WSL 2, which runs the Linux packages. Linux with musl (Alpine) is not supported either. The SDK and
-`grida-fx` need Node 18 or later; hosting TypeScript nodes, builders and stand-in files needs
-Node 24 or later ([Writing node types](#writing-node-types)).
+`grida-fx` need Node 18 or later; hosting TypeScript nodes, builders, stand-in files and
+adapters needs Node 24 or later ([Writing node types](#writing-node-types)).
 
 For the `grida` command, this package exports its launcher as `@grida/fx/cli` (`launch`,
 `HOST_CONTRACT`); see [spec/distribution.md](https://github.com/gridaco/fx/blob/main/spec/distribution.md).
@@ -288,6 +288,141 @@ The command takes a stand-in from a file instead:
 on Node 24 or later. The
 [stand-in guide](https://github.com/gridaco/fx/blob/main/docs/guide/05-running.md#stand-ins-testing-without-a-provider)
 has the whole contract.
+
+## Project adapters: a provider of your own
+
+A project serves a provider FX does not ship with its own adapter, which the engine runs in this
+package's node host
+([adapters.md §9](https://github.com/gridaco/fx/blob/main/spec/adapters.md#9-project-adapters)).
+`fx.yaml` declares the provider and names the adapter, `<path>#<export>`:
+
+```yaml
+providers:
+  acme:
+    credential: { variable: ACME_API_KEY }
+    base_url: { default: "https://api.acme.test/v1" }
+    download_hosts: [files.acme.test]
+    adapter: adapters/acme.ts#acme
+```
+
+```ts
+// adapters/acme.ts
+import { adapter, Answered, FetchError } from "@grida/fx";
+
+const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms));
+
+export const acme = adapter({
+  requests: ["structured.generate"],
+  jobs: ["video.generate"],
+  // One structured.generate request, sent once.
+  send: async (call) => {
+    let response;
+    try {
+      response = await call.fetch(`${call.baseUrl}/chat`, {
+        method: "POST",
+        json: { model: call.route.model, prompt: String(call.request.prompt) },
+        credential: true,
+        timeoutS: 60,
+      });
+    } catch (error) {
+      if (!(error instanceof FetchError)) throw error;
+      // refused, not_sent or after_send (adapters.md §3.2)
+      if (error.phase === "refused") return { outcome: "refused", reason: error.reason };
+      if (error.phase === "not_sent") return { outcome: "not_received", reason: error.reason };
+      return { outcome: "failed", reason: error.reason, retryable: true };
+    }
+    if (response.status !== 200) {
+      const reason = `acme returned HTTP ${response.status}`;
+      return { outcome: "failed", reason, retryable: response.status >= 500 };
+    }
+    const body = response.json() as { answer: { name: string }; cost_usd?: number };
+    return Answered.json(body.answer, { costUsd: body.cost_usd });
+  },
+  // A video.generate job, submitted once.
+  submit: async (call) => {
+    let response;
+    try {
+      response = await call.fetch(`${call.baseUrl}/videos`, {
+        method: "POST",
+        json: { prompt: String(call.request.prompt) },
+        credential: true,
+        timeoutS: 60,
+      });
+    } catch (error) {
+      if (!(error instanceof FetchError)) throw error;
+      if (error.phase === "refused") return { outcome: "refused", reason: error.reason };
+      if (error.phase === "not_sent") return { outcome: "not_received", reason: error.reason };
+      return { outcome: "uncertain", reason: error.reason }; // acme may have taken the job
+    }
+    if (response.status !== 202) {
+      return { outcome: "uncertain", reason: `acme returned HTTP ${response.status}` };
+    }
+    return { outcome: "accepted", handle: { id: (response.json() as { id: string }).id } };
+  },
+  // Polls with its own clock, until its own deadline.
+  collect: async (call) => {
+    for (let poll = 0; poll < 120; poll += 1) {
+      let job: { status: string; url: string; cost_usd?: number };
+      try {
+        const url = `${call.baseUrl}/videos/${call.handle.id}`;
+        job = (await call.fetch(url, { credential: true, timeoutS: 30 })).json() as typeof job;
+      } catch (error) {
+        if (!(error instanceof FetchError)) throw error;
+        return { outcome: "unreachable", reason: error.reason };
+      }
+      if (job.status === "failed") {
+        return { outcome: "ended", reason: "acme could not make the video", costUsd: job.cost_usd };
+      }
+      if (job.status === "done") {
+        const clip = await call.fetch(job.url, { lane: "download", timeoutS: 120 });
+        return { outcome: "answered", files: { video: clip.body }, costUsd: job.cost_usd };
+      }
+      await sleep(5000);
+    }
+    return { outcome: "unreachable", reason: "acme's video is still being made" };
+  },
+  version: 1,
+});
+```
+
+- **The declaration.** `adapter({ requests, jobs, send, submit, collect, version })`, exported
+  from a project module. `send` serves each capability of `requests`; `submit` and `collect`
+  each of `jobs`. `version` is an integer of at least 0, which `grida-fx lock` locks as a node
+  type's; without one, every edit to the module or a project module it imports changes the
+  identity of its routes. Planning loads the module, so its top-level code runs then too. `tsc`
+  refuses a declaration without a capability, `requests` without `send`, `jobs` without `submit`
+  and `collect`, and a field `adapter()` doesn't know; the declaration is checked again when the
+  module loads.
+- **The call.** Each function takes an `AdapterCall`: `capability` (typed as the capabilities
+  the function serves), `route.id`, `.model`, `.provider` and `.contract`, `baseUrl`, `key`,
+  `attempt`, `takes` and `take`, `handle` (in `collect`), `request` (every file in it an
+  `AdapterFile`: `digest`, `kind`, `size`, `path`, `bytes()`), `files` (the same files by
+  digest) and `signal`, aborted when the engine drops the call. A function or an async function;
+  calls are answered at once, in any order, on the host's one event loop.
+- **The outcome** is a plain object named by `outcome`. `send` returns `answered`,
+  `not_received` (provably not received: sent again), `refused` (nothing was sent) or `failed`
+  (`retryable` says whether to try again); `submit` returns `accepted` with a handle,
+  `uncertain`, or one of the last three; `collect` returns `answered`, `ended` or
+  `unreachable`. `costUsd` is the provider's own figure: left out, the engine charges the whole
+  hold or the route's cap. An answer's files are as a stand-in's (`Answered.json(value)` for
+  `structured.generate`), and the engine checks them as it checks a provider's. `tsc` refuses an
+  outcome its function's method does not take and a member it does not have (`cost_usd` for
+  `costUsd`); a function written on its own says its type (`async function send(call:
+  AdapterCall): Promise<SendOutcome>`; `collect` takes a `CollectCall`). Anything thrown, or
+  another value, ends the call as if the host were lost.
+- **The network.** `await call.fetch(url, { method, headers, json, body, contentType, lane,
+  credential, timeoutS, maxResponseBytes })` makes one exchange through the engine: never
+  retried, no redirect followed, at most 300 seconds and 64 MiB. With `credential: true` the
+  engine attaches the declaration's key, only to the base URL's origin, so the code never handles
+  it; downloads (`lane: "download"`) are held to `download_hosts`. It resolves to a
+  `FetchResponse` (`status`, `headers` as `[name, value]` pairs, `body` bytes, `json()`,
+  `text()`) or rejects with a `FetchError` (`phase`, `reason`). An adapter may use its own HTTP
+  client (`fetch`, say) instead, keeping the same rules itself, and sending nothing while
+  `GRIDA_FX_NETWORK` is `off`, which the engine cannot stop for it; its host's environment has
+  its own declaration's key and no other's.
+- **Testing.** `grida-fx run … --live --max-usd 1` with `GRIDA_FX_NETWORK=off` runs the adapter
+  with every `fetch` refused before it leaves; `new AdapterCall(params, { fetch })` builds a call
+  for a unit test, with a function standing in for the engine.
 
 The [guide](https://github.com/gridaco/fx/tree/main/docs/guide) covers workflow files, nodes,
 cost and cache, and running.

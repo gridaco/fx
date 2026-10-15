@@ -640,6 +640,7 @@ fn declared_adapter_for(
         },
         download_hosts: Vec::new(),
         family: Some("openai-compatible".into()),
+        adapter: None,
     };
     let environment =
         Environment::declared(&[("ACME_API_KEY", ACME_KEY)], &Declarations::with(&[acme]));

@@ -25,9 +25,13 @@
 //!   `adapter_behavior` the behaviour of the pair's adapter `adapter` names ([`complete_contract`]).
 //!   On a provider the planning project declares with a `family`, [`FAMILY_ADAPTERS`] does the
 //!   same for the capabilities that family serves: the family is read from the declarations
-//!   ([`load_catalog`] passes the project's), never from the provider's name. The core knows FX's
-//!   adapters by these tables alone; the providers crate's tests hold them to every adapter it
-//!   registers.
+//!   ([`load_catalog`] passes the project's), never from the provider's name. On one it declares
+//!   with an `adapter`, the adapter planning loaded ([`crate::adapters::load_declared`]) does the
+//!   same for the capabilities it declares: its name `<path>#<attribute>`, and its version or
+//!   `source:<digest>` ([`crate::providers::LoadedAdapter::behavior`]); a route whose completed
+//!   contract names it gets the adapter's lock drift ([`Route::drift`]), which the expander
+//!   reports on each step that binds it. The core knows FX's adapters by these tables alone; the
+//!   providers crate's tests hold them to every adapter it registers.
 //!
 //! Prices are read in micro-dollars ([`Usd`]); an amount with more than 6 decimal places is
 //! refused (identity.md §12), judged on the number's JCS text (`1e-7 has more than 6 decimal
@@ -127,6 +131,8 @@ pub struct Route {
     pub requests_per_minute: Option<u32>,
     /// The contract object, completed as the module doc says; `{}` when none.
     pub contract: Value,
+    /// The serving project adapter's lock drift (module doc): not part of the fingerprint.
+    pub drift: Option<String>,
 }
 
 /// The contract one of FX's adapters serves (spec/providers.md §2).
@@ -291,36 +297,57 @@ pub fn built_in_adapter_named(
     })
 }
 
-/// The adapters that serve `capability` on `provider`, as (contract `adapter`, behaviour as
-/// canonical JSON, whether it is the default): FX's own, else those of the family `declarations`
-/// give the provider.
-fn serving(
-    capability: &str,
-    provider: &str,
-    declarations: &Declarations,
-) -> Vec<(&'static str, &'static str, bool)> {
+/// One adapter that serves a capability on a provider: its contract `adapter`, its behaviour,
+/// and whether it is the pair's default.
+struct Serving {
+    adapter: String,
+    behavior: Value,
+    default: bool,
+}
+
+/// The adapters that serve `capability` on `provider`: FX's own, else those of the family, or the
+/// loaded adapter, `declarations` give the provider.
+fn serving(capability: &str, provider: &str, declarations: &Declarations) -> Vec<Serving> {
+    let behavior = |text: &str| serde_json::from_str(text).expect("a behaviour is JSON");
     let own: Vec<_> = BUILT_IN_ADAPTERS
         .iter()
         .filter(|served| served.capability == capability && served.provider == provider)
-        .map(|served| (served.adapter, served.behavior, served.default))
+        .map(|served| Serving {
+            adapter: served.adapter.into(),
+            behavior: behavior(served.behavior),
+            default: served.default,
+        })
         .collect();
     if !own.is_empty() {
         return own;
     }
-    let family = declarations
-        .get(provider)
-        .and_then(|declaration| declaration.family.as_deref());
-    family
+    let Some(declaration) = declarations.get(provider) else {
+        return Vec::new();
+    };
+    let family = declaration
+        .family
+        .as_deref()
         .and_then(|family| family_adapter(family, capability))
-        .map(|served| (served.adapter, served.behavior, true))
-        .into_iter()
-        .collect()
+        .map(|served| Serving {
+            adapter: served.adapter.into(),
+            behavior: behavior(served.behavior),
+            default: true,
+        });
+    let adapter = declaration.adapter.as_ref().and_then(|adapter| {
+        let loaded = adapter.loaded.as_ref().filter(|l| l.serves(capability))?;
+        Some(Serving {
+            adapter: adapter.name(),
+            behavior: loaded.behavior(),
+            default: true,
+        })
+    });
+    family.into_iter().chain(adapter).collect()
 }
 
 /// Completes `contract` from the adapters that serve `capability` on `provider`, if any
-/// (identity.md §7 step 2): FX's own, else those of the family `declarations` give `provider`. A
-/// left-out or `null` `adapter` becomes the default's name, then a left-out or `null`
-/// `adapter_behavior` the behaviour of the adapter `adapter` names.
+/// (identity.md §7 step 2): FX's own, else the family's or the loaded adapter `declarations` give
+/// `provider`. A left-out or `null` `adapter` becomes the default's name, then a left-out or
+/// `null` `adapter_behavior` the behaviour of the adapter `adapter` names.
 pub fn complete_contract(
     capability: &str,
     provider: &str,
@@ -328,23 +355,36 @@ pub fn complete_contract(
     contract: &mut Map<String, Value>,
 ) {
     let adapters = serving(capability, provider, declarations);
-    let Some(&(default, _, _)) = adapters.iter().find(|(_, _, default)| *default) else {
+    let Some(default) = adapters.iter().find(|served| served.default) else {
         return;
     };
     let left_out = |member: Option<&Value>| member.is_none_or(Value::is_null);
     if left_out(contract.get("adapter")) {
-        contract.insert("adapter".into(), Value::from(default));
+        contract.insert("adapter".into(), Value::from(default.adapter.as_str()));
     }
     let named = contract.get("adapter").and_then(Value::as_str);
     let behavior = named
-        .and_then(|name| adapters.iter().find(|(adapter, _, _)| *adapter == name))
-        .map(|(_, behavior, _)| *behavior);
+        .and_then(|name| adapters.iter().find(|served| served.adapter == name))
+        .map(|served| served.behavior.clone());
     if let Some(behavior) = behavior
         && left_out(contract.get("adapter_behavior"))
     {
-        let value = serde_json::from_str(behavior).expect("a behaviour is JSON");
-        contract.insert("adapter_behavior".into(), value);
+        contract.insert("adapter_behavior".into(), behavior);
     }
+}
+
+/// The lock drift of the project adapter a completed `contract` names on `provider`, for a
+/// capability it serves ([`Route::drift`]).
+fn adapter_drift(
+    capability: &str,
+    provider: &str,
+    declarations: &Declarations,
+    contract: &Map<String, Value>,
+) -> Option<String> {
+    let adapter = declarations.get(provider)?.adapter.as_ref()?;
+    let loaded = adapter.loaded.as_ref().filter(|l| l.serves(capability))?;
+    let named = contract.get("adapter").and_then(Value::as_str)?;
+    (named == adapter.name()).then(|| loaded.drift.clone())?
 }
 
 impl Route {
@@ -658,6 +698,7 @@ fn parse_route(
         }
     }
     complete_contract(&capability, &provider, declarations, &mut contract);
+    let drift = adapter_drift(&capability, &provider, declarations, &contract);
     Ok(Route {
         capability,
         model,
@@ -668,6 +709,7 @@ fn parse_route(
         concurrency,
         requests_per_minute,
         contract: Value::Object(contract),
+        drift,
     })
 }
 
@@ -1345,8 +1387,124 @@ mod tests {
             },
             download_hosts: Vec::new(),
             family: family.map(String::from),
+            adapter: None,
         };
         Declarations::with(&[declared("acme", family), declared("bare", None)])
+    }
+
+    /// FX's declarations, then `acme` declared with `adapters/acme.py#acme`, loaded with
+    /// `version` and serving `image.generate` (a request) and `video.generate` (a job), or not
+    /// loaded; `drift` is its lock drift.
+    fn declaring_adapter(loaded: bool, version: Option<u64>, drift: Option<&str>) -> Declarations {
+        use crate::providers::{DeclaredAdapter, LoadedAdapter};
+        use grida_fx_protocol::CallKind;
+        let source = crate::registry::SourceDigests {
+            files: [("adapters/acme.py".to_string(), "a".repeat(64))].into(),
+            resources: Default::default(),
+        };
+        let loaded = loaded.then(|| LoadedAdapter {
+            version,
+            capabilities: [
+                ("image.generate".to_string(), CallKind::Request),
+                ("video.generate".to_string(), CallKind::Job),
+            ]
+            .into_iter()
+            .collect(),
+            source,
+            drift: drift.map(String::from),
+        });
+        let mut declarations = declaring(None).declared().to_vec();
+        declarations[0].adapter = Some(DeclaredAdapter {
+            path: "adapters/acme.py".into(),
+            attribute: "acme".into(),
+            loaded,
+        });
+        Declarations::with(&declarations)
+    }
+
+    #[test]
+    fn a_declared_adapter_completes_its_provider_s_contracts() {
+        let read = |declarations: &Declarations, capability: &str, route: &str, contract| {
+            let entry = json!({"capability": capability, "route": route,
+                               "price": {"cap_usd": 0.05}, "contract": contract});
+            let document = json!({"fx": "routes/v1", "routes": [entry]});
+            parse_table(&document, &[], declarations).unwrap().entries[0].clone()
+        };
+        let name = "adapters/acme.py#acme";
+        let versioned = declaring_adapter(true, Some(3), None);
+        let route = read(&versioned, "image.generate", "img-a@acme", json!({}));
+        assert_eq!(
+            route.contract,
+            json!({"adapter": name, "adapter_behavior": 3})
+        );
+        assert_eq!(route.drift, None);
+        let source = crate::registry::SourceDigests {
+            files: [("adapters/acme.py".to_string(), "a".repeat(64))].into(),
+            resources: Default::default(),
+        };
+        let unversioned = declaring_adapter(true, None, None);
+        assert_eq!(
+            read(
+                &unversioned,
+                "video.generate",
+                "vid-a@acme",
+                json!({"adapter": null})
+            )
+            .contract,
+            json!({"adapter": name, "adapter_behavior": format!("source:{}", source.digest())})
+        );
+        // A stated member is kept; another adapter gets no behaviour.
+        assert_eq!(
+            read(
+                &versioned,
+                "image.generate",
+                "img-a@acme",
+                json!({"adapter_behavior": "3"})
+            )
+            .contract,
+            json!({"adapter": name, "adapter_behavior": "3"})
+        );
+        assert_eq!(
+            read(
+                &versioned,
+                "image.generate",
+                "img-a@acme",
+                json!({"adapter": "acme-v2"})
+            )
+            .contract,
+            json!({"adapter": "acme-v2"})
+        );
+        // A capability it does not declare, an adapter not loaded, and another provider keep
+        // their contracts.
+        for (declarations, capability, route) in [
+            (&versioned, "structured.generate", "text-a@acme"),
+            (&versioned, "image.generate", "img-a@bare"),
+            (
+                &declaring_adapter(false, Some(3), None),
+                "image.generate",
+                "img-a@acme",
+            ),
+        ] {
+            let route = read(declarations, capability, route, json!({}));
+            assert_eq!(route.contract, json!({}), "{capability}");
+            assert_eq!(route.drift, None);
+        }
+        // Its drift goes with each route it serves, and with no other.
+        let drifted = declaring_adapter(true, Some(3), Some("drifted"));
+        let route = read(&drifted, "image.generate", "img-a@acme", json!({}));
+        assert_eq!(route.drift.as_deref(), Some("drifted"));
+        assert_eq!(
+            route.fingerprint(),
+            read(&versioned, "image.generate", "img-a@acme", json!({})).fingerprint(),
+            "drift is not part of the fingerprint"
+        );
+        let other = read(
+            &drifted,
+            "image.generate",
+            "img-a@acme",
+            json!({"adapter": "x"}),
+        );
+        assert_eq!(other.drift, None);
     }
 
     #[test]

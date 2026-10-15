@@ -39,6 +39,7 @@ fn declarations() -> Declarations {
         },
         download_hosts: Vec::new(),
         family: Some(openai_compatible::FAMILY.into()),
+        adapter: None,
     };
     let key = Credential {
         variable: "ACME_API_KEY".into(),

@@ -40,6 +40,7 @@ fn registry() -> Adapters {
         },
         download_hosts: Vec::new(),
         family: Some("openai-compatible".into()),
+        adapter: None,
     };
     let environment = Environment::declared(&[], &Declarations::with(&[acme]));
     adapters(&setup(

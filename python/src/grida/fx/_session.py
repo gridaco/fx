@@ -15,7 +15,9 @@ the same run.
 - **The body loop** is an asyncio event loop on a thread of its own. An ``async def`` body runs
   on it; a plain ``def`` body runs in a worker thread (``asyncio.to_thread``).
 - **Writes** go through one lock, one whole frame at a time.
-- **Host requests** are numbered from 1. :meth:`Channel.request` blocks the calling thread
+- **Host requests** are numbered from 1. Each carries its run's ``run_id``, except ``fetch``,
+  which a project adapter's call sends with its ``call_id`` (section 6.8) and
+  :meth:`Session.request` sends as it is given. :meth:`Channel.request` blocks the calling thread
   (any thread: the loop thread too, since the reader resolves futures itself);
   :meth:`Channel.request_async` awaits on the loop. An error answer raises the
   :class:`~grida.fx._errors.EngineError` of its code. Params the engine could not read (outside
@@ -44,7 +46,8 @@ from grida.fx._protocol import INTERNAL, check_value, write_message
 class _Pending:
     """A host request the engine has not answered yet."""
 
-    run_id: str
+    #: ``None`` for a request of no run (``fetch``).
+    run_id: str | None
     method: str
     #: What the caller waits on: the result, or the engine's error. A caller that stops waiting
     #: may cancel it.
@@ -95,10 +98,11 @@ class Session:
         with self._write_lock:
             write_message(self.writer, message)
 
-    def request(self, run_id: str, method: str, params: dict[str, Any]) -> Future[Any]:
+    def request(self, run_id: str | None, method: str, params: dict[str, Any]) -> Future[Any]:
         """Sends the host request ``method`` for ``run_id`` and returns the future its answer
-        resolves. ``ValueError`` (nothing sent) when the params are not an I-JSON value."""
-        sent = {"run_id": run_id, **params}
+        resolves; with no ``run_id``, the params go as they are (``fetch``). ``ValueError``
+        (nothing sent) when the params are not an I-JSON value."""
+        sent = dict(params) if run_id is None else {"run_id": run_id, **params}
         _check(method, sent)
         future: Future[Any] = Future()
         answered: Future[None] = Future()

@@ -719,27 +719,238 @@ and `pytest`.
 
 ### M10. Project adapters in Python and TypeScript
 
-- [ ] Spec: the out-of-process binding (`adapters.md`); in `protocol.md`, the methods
+- [x] Spec: the out-of-process binding (`adapters.md`); in `protocol.md`, the methods
   `adapter.load`, `adapter.send`, `adapter.submit` and `adapter.collect`, and the host-to-engine
   `fetch`, added within protocol v1; their schemas.
-- [ ] A declaration's `adapter: <path>#<attribute>`; `fx.lock` `adapters`. Identity: the contract
+  - The wire, within `fx-node-protocol-v1` and with no new error code: `adapter.load {path,
+    attribute}` answers `{adapter: {version, capabilities: {<capability>: request | job}},
+    closure}`; the calls carry `call_id`, the adapter, the route (`id`, `model`, `provider`, the
+    completed `contract`), the declaration's `base_url`, the request, its `files` as `{digest,
+    kind, size, path}` (a call's files have no name or facts), `take`, `key`, `attempt` and, to
+    collect, `handle`. Their results are outcomes named by `outcome`, a new convention, since
+    they share `reason` and `cost_usd`. `fetch` carries the call's `call_id`, never a `run_id`.
+  - `adapter.load` is answered by the planning host too: the fingerprint, and so every call key,
+    is taken while planning, and the engine must know a capability's kind (request or job) before
+    its first call, so a plan, a dry run and an offline replay need the adapter's language's
+    host, never an adapter host. A declared adapter that cannot be loaded refuses the command
+    (exit 2), `fx.yaml: providers.<name>.adapter: <sentence>`.
+  - Identity (`adapters.md` §9, `identity.md` §7): `adapter` is `<path>#<attribute>`,
+    `adapter_behavior` the version or `source:<digest>`, the digest of the `fx-node-source-v1`
+    object with no resources; `fx.lock`'s `adapters` and drift reported on the step, as a node
+    type's.
+  - The adapter host: one per declaration with an adapter, started on the first call of a live
+    run (the network off included), outside the pools, shut down and verified with the run; the
+    second exception to one job per host, and `protocol.md`'s "never talks to a provider" now
+    excepts it. Its environment has its own declaration's variables, from `.env` too, and no other
+    declaration's. A lost host, an adapter's error or an unreadable result: a send `Failed { cost:
+    None, retryable: false }` (Codex's precedent; a retryable one could hold up to six times), a
+    submit `Uncertain`, a collect `Unreachable`. Each call is refused when the host's load
+    differs from the plan's.
+  - The engine makes `adapters.md` §4 steps 1 to 3 (the key too), holds an answer to its shape as
+    a stand-in's, then makes the every-route check; there is no `adapter.check`, so the adapter
+    judges inside its send and collect. The adapter's reported cost is read: the adapter contract
+    carries it (the Default below is the family's). A handle must be an object that holds no
+    key's value, else the submit is `Uncertain`.
+  - `fetch`: GET and POST (`transport::Method` has no other); deadlines and caps at most 300 s and
+    64 MiB, `HttpRequest::new`'s defaults; the credential only when asked, on the provider and
+    upload lanes, and only to the base URL's origin; downloads held to the declaration's
+    download hosts, so a declaration that lists none downloads nothing through it; failures as
+    `refused`, `not_sent` or `after_send`.
+  - `providers.md` §1: `adapter` beside `family`, one or the other (`providers.<name>: a provider
+    has a family or an adapter, not both`, the parser's, after the schema); §2's registration and
+    fill; `fx-project-v1` (`adapter`, without `./` or `..`) and `fx-lock-v1` (`adapters`).
+    `protocol.md` §8 gives both SDKs' API: `adapter(…)`, an `AdapterCall`, the outcomes
+    (Python's `Answered`, `NotReceived`, `Refused`, `Failed`, `Accepted`, `Uncertain`, `Ended`,
+    `Unreachable`; TypeScript's plain objects), `call.fetch` and `FetchError`.
+  - After review: `protocol.md` §3.1 (an adapter call's files are not file refs), §5.7 and §5.8
+    (a stand-in host, and a host with a run pending, refuse `adapter.load`), §6.1 step 7 and
+    `capabilities.md` §1 (the engine checks a project adapter's request as it checks one for an
+    adapter FX ships, and holds its answer to its shape, then to the every-route check), and
+    §6.8, which now says what the code does: the declaration's own credential header is refused
+    on every lane.
+    `adapters.md` §9: a project adapter MUST keep the network switch for a client of its own,
+    which the engine cannot turn off; `llms.txt`, guides 05 and 13 and both SDK READMEs no longer
+    say the switch stops every request.
+  - After the second review: `adapters.md` §9 and `protocol.md` §5.8 say that a send or a submit
+    never written whole to a host whose connection had ended is `NotReceived`, sent again to a new
+    host; `capabilities.md` §13 and `providers.md` §3 that a capability FX ships no adapter for is
+    served by a project adapter that declares it.
+  - After the third review: `fx-routes-v1`'s `contract` says that a project adapter completes a
+    left-out `adapter` and `adapter_behavior` too, with its name and its version or source.
+- [x] A declaration's `adapter: <path>#<attribute>`; `fx.lock` `adapters`. Identity: the contract
   `adapter` is the declared adapter, and `adapter_behavior` is its version, or `source:<digest>`.
-- [ ] Engine:
+  - Core's `providers::DeclaredAdapter` (`path`, `attribute`, `loaded`) and `LoadedAdapter`
+    (version, each capability's kind, the closure's digests, drift). `adapters::load_declared`
+    fills them in `make_planner`'s step 5, before the home's host is opened and the route tables
+    are read, with the planning host pointed at the planning project; `NodeHost::load_adapter`
+    (`FakeHost::with_adapter` for tests); `registry::closure_digests` hashes the closure. The
+    drift is judged against the planning project's `fx.lock`, which is the home's only when the
+    two are one project.
+  - The fill: `routes::complete_contract` completes a declared provider's routes from its loaded
+    adapter as from a family, for each capability the adapter declares. `Route::drift`, not
+    hashed, carries a drifted adapter's sentence to every route whose contract names it, and
+    binding reports it at `<step>.route`, the route still bound.
+  - `fx.lock`: `LockFile.adapters`, written after `nodes` only when there is one (the header and
+    `lock-write`'s file do not move). `grida-fx lock` loads every declared adapter and judges each
+    versioned one as a node type (`unlocked  <key>: run grida-fx lock`, `changed   <path>#<attr>:
+    …`, `--same <path>#<attribute>`). Code fact: no spec states `lock`'s count line; with an
+    adapter in the lock it reads `fx.lock: <n> versioned node types, <m> versioned adapters`.
+  - Code fact: the providers crate's `Identity` holds `&'static str`, and the registry keys its
+    adapters by it, so a project adapter's identity is interned once per distinct text
+    (`Identity::interned`) rather than changing every adapter FX ships.
+  - `tools/digest.py` reads `fx.yaml`'s `adapter` and `fx.lock`'s `adapters`: a versioned
+    adapter's routes are checked against the contract it completes, or as written (it cannot know
+    which capabilities the adapter declares); an adapter `fx.lock` gives no single version for is a
+    note. `python/tests/test_digest.py`.
+  - After the third review: `fx.lock`'s version is a guess, since `grida-fx lock` never drops an
+    entry and planning uses the adapter's own version, or its source, whatever the lock holds (a
+    version bumped before `lock`, or one removed). A route that guess does not complete is a note,
+    not a failure, unless `--current-lock` says the lock is current, as `check_spec` (h) does for
+    the conformance cases, which commit it so.
+  - Vectors: `spec/vectors/identity/routes.json` gains three cases of a declared adapter (its
+    capabilities' routes filled, its stated members kept, an unversioned one known by its source),
+    whose `adapters` member gives what loading told planning: version, capabilities and the
+    source's file digests. `tests/vectors.rs` and `digest.py` both reproduce them.
+- [x] Engine:
   - an adapter host started lazily in a live run, outside the pools, and shut down with the run;
   - an RPC adapter for send, submit and collect;
-  - a host lost mid-send is `Failed { retryable }`, mid-submit `Uncertain`, mid-collect
-    `Unreachable`;
+  - a host lost mid-send is `Failed { cost: None, retryable: false }`, mid-submit `Uncertain`,
+    mid-collect `Unreachable`;
   - handles must be objects;
   - cancellation at the invocation;
   - dollars only;
   - declared credentials passed into the host's environment.
-- [ ] `fetch`: the engine's transport, with the credential attached by the engine, the network
+  - `crates/grida-fx-runtime/src/adapter_host.rs`: `register` (one `AdapterHost`, kept as a
+    `Runtime`, and one `ProjectAdapter` per declared capability, a request adapter or a long job
+    by its kind, its provider's default), `Launch` (`ProcessLaunch` over
+    `HostProcess::start_accountable`; tests launch a peer on an in-memory connection; `NoLaunch`
+    for doctor). The engine's checks wrap it as any adapter (`calls::checked`); the key is checked
+    before a send or a submit; each call is `c<n>` on a task of its own, its drop sending
+    `$/cancel`. `HostSpec::with_environment` withholds every other declared variable and gives the
+    declaration's own, as `.env` or the environment gave them (`engine.rs`, `adapter_environment`).
+  - Decisions: a host that cannot start, cannot load the adapter, or loads another one than the
+    plan's is not started again in the run (Codex's refused runtime), so each send and submit is
+    `Refused` and each collect `Unreachable` (`adapters.md` §9 now says so); an answer whose shape
+    is refused is billed as a check's refusal (`Failed { retryable: true }`, a collected one
+    `Ended`), at the reported cost; a broken protocol ends its calls as a lost host does (`the
+    adapter host broke the protocol: …`); the planning host names the SDK that predates adapters
+    with the version `initialize` reported.
+  - `doctor`: an `adapter` line per declaration with one, loaded as planning loads it (`version
+    <v>: <capability> (request), …`, or `cannot load: <sentence>`, exit 1), and the routes of its
+    capabilities judged as served by it (`providers.md` §1 says so).
+  - After review: a host whose start its call abandoned (a run stopped while the adapter loads),
+    one that died and one that would not serve are each ended on a task of their own, which the
+    run's cleanup waits for and counts; a host process dropped before it was reaped leaves the
+    cleanup unverified (`HostProcess::start_accountable`, as the pools' start); and a host the
+    engine ends tells the calls still waiting on it how it ended, rather than leaving them to the
+    watcher it stopped. `tests/adapter_host.rs` pins both.
+  - After the second review: a call whose request was never written whole, the host's connection
+    having ended between the check that the host is alive and the write, is no longer taken for
+    a lost pending call: `Connection::try_request_cancellable` says whether a request that got no
+    result may have reached the host (`Unanswered::written`), and such a send or submit is
+    `NotReceived`, which the engine sends again and `running()` gives a new host. Every reason
+    built from the host's result (an unreadable one, a refused shape) passes the call's
+    redactor, which knows the URLs it downloaded, not only the invocation's keys.
+    `tests/adapter_host.rs` pins both, and `host::connection`'s tests the written flag.
+  - After the third review: the module docs of `calls`, `calls::checked`, `calls::retry` and the
+    providers crate's `checks` and `capabilities` say that the engine's checks wrap a project
+    adapter as one FX ships, as the code does (`checked` wraps every adapter that names an
+    identity).
+- [x] `fetch`: the engine's transport, with the credential attached by the engine, the network
   switch, caps and deadlines.
-- [ ] SDKs: an adapter authoring API in `grida.fx` and `@grida/fx`, with outcome types and
+  - Refused with `-32602`: an unknown `call_id`, a body on a GET, a header name that is not a
+    lowercase token, a body that is not base64, `timeout_s` or `max_response_bytes` out of range;
+    a dropped call's fetch is `cancelled`. Refused before it leaves: a credential on the download
+    lane, to another origin (`wire::same_origin`), or whose key is not set (`protocol.md` §6.8 now
+    says so); the declaration's own credential header set by the adapter; a download off the
+    declaration's hosts; whatever the transport refuses (`Offline` with the network off).
+    Downloads join the redactor of the call's reasons.
+- [x] SDKs: an adapter authoring API in `grida.fx` and `@grida/fx`, with outcome types and
   concurrent calls; tests; READMEs; `protocol.md` §8.
-- [ ] Conformance: `adapter-py` and `adapter-ts`, each a synthetic `acme` adapter run live with
+  - Python, done: `grida/fx/_adapter.py` (`adapter()`, `Adapter`, `AdapterCall`, `AdapterRoute`,
+    `AdapterFile`, `FetchResponse`, `FetchError`, the eight outcomes, the `Server` that answers
+    calls), exported from `grida.fx`; the host answers `adapter.load` on any host but a stand-in
+    host, and the calls on the body loop; `fetch` goes out without a `run_id`
+    (`Session.request(None, …)`). Tests: `tests/test_adapter.py`, the adapter host in
+    `tests/test_host.py`, a live run through the engine in `tests/test_adapter_engine.py`, and
+    `crates/grida-fx-runtime/tests/python_host.rs` (`the_real_python_host_serves_a_project_adapter`).
+  - Decisions: `$/cancel` answers the call `cancelled` at once, a coroutine function's task
+    cancelled and a plain function's return discarded (a stand-in's waits for its coroutine to
+    end); a fault ends only its own call (a stand-in's stops every later one); `Failed`'s
+    `retryable` is a required keyword, as TypeScript's member is required; each outcome holds its
+    scalar members when made, and its files, data and handle when sent; an answer's files take an
+    `AdapterFile` too; `fetch` lowercases header names and raises what the engine would refuse
+    with `-32602` before sending; `fetch` is a coroutine only, as `ctx.capability` is. A host
+    refuses `adapter.load` on a stand-in host and while a run is pending (`-32600`), and a call
+    for a capability its adapter does not serve with the method (`-32602`, `<path>#<attribute>
+    does not serve <capability> with adapter.send`; `protocol.md` §5.8 now says so).
+  - TypeScript, done: `js/fx/src/adapter.ts` (`adapter()`, `Adapter`, `AdapterCall`, a class
+    generic over the capabilities its function serves and its handle, with `CollectCall` for
+    `collect`; `FetchResponse`, `FetchError`; the outcome types `Answered`, `NotReceived`,
+    `Refused`, `Failed`, `Accepted`, `Uncertain`, `Ended`, `Unreachable`, `SendOutcome`,
+    `SubmitOutcome` and `CollectOutcome`, with `Answered.json`; the `AdapterServer` that answers
+    calls) and `AdapterFile` in `files.ts`, exported from `@grida/fx`; `host.ts`'s
+    `serveAdapters` answers `adapter.load` on any host but a stand-in host, and the calls on the
+    host's event loop; `fetch` goes out without a `run_id` (`Session.request(null, …)`). Tests:
+    `test/adapter.test.ts`, the adapter host in `test/host-adapter.test.ts`, a live run through
+    the engine in `test/adapter-engine.test.ts`, the types in `test/types/adapter-types.ts`, and
+    `crates/grida-fx-runtime/tests/typescript_host.rs`
+    (`the_real_typescript_host_serves_a_project_adapter`).
+  - Decisions: the declaration's types refuse what `node()`'s refuse for a body, where `tsc` can
+    see it: no capability, `requests` without `send`, `jobs` without `submit` and `collect`, a
+    field `adapter()` does not know, an outcome a function's method does not take, and a member
+    an outcome does not have (`cost_usd` for `costUsd`, a `refused` with a `costUsd`), the last by
+    a constraint on each function's inferred outcomes, since TypeScript checks no function's
+    return for excess members; each function's `call.capability` is typed as the capabilities it
+    serves, and `collect`'s `call.handle` as a `JobHandle`. Outcomes are plain objects, held to
+    their members when sent (Python's hold their scalars when made): a member an outcome does not
+    have is refused (`Refused holds outcome and reason, not 'costUsd'`), one whose value is
+    `undefined` is left out, and an answer's `files` and `data` may be left out, as Python's
+    defaults leave them. `fetch` takes a `URL` as well as a string, `headers` as an object or as
+    pairs (a `Headers`, a `Map`), `json: null` as JSON's null (only `undefined` leaves the body
+    out), refuses an option it does not know, and names its options as TypeScript writes them
+    (`timeoutS is above 0 and at most 300`, `a body needs its contentType`). `$/cancel` aborts
+    `call.signal` with a `Cancelled`. Every refusal of the declaration, the call's params,
+    `fetch`'s options and an outcome is a `TypeError`, as `node()`'s and a stand-in's are. A
+    stand-in's answer now leaves out a file whose value is `undefined`, as `protocol.md` §8.2
+    says of every value the SDK sends; it was refused before. Each answer takes its own call's
+    files, as Python's: a stand-in's an `InputFile`, an adapter's an `AdapterFile`
+    (`protocol.md` §8.1 and §8.2 say so).
+- [x] Conformance: `adapter-py` and `adapter-ts`, each a synthetic `acme` adapter run live with
   the network off: an answer, a refusal and a long job.
-- [ ] `llms.txt`; guide pages 03 and 13.
+  - Each case declares `acme`, keyed, served by a request adapter, and the keyless `acme-jobs`,
+    served by a long-job adapter of the same module (`adapters/acme.py#acme` and `#acme_jobs`;
+    `adapters/acme.ts#acme` and `#acmeJobs`), both versioned, with the committed `fx.lock`'s
+    `adapters`, so `check_spec` (h) recomputes each route's fingerprint through `digest.py` from
+    `fx.yaml` and `fx.lock`. The adapters make no request: the one `fetch` is refused before it
+    leaves. A run answers one call, submits and collects a job, and refuses one with a reason
+    that holds the key, which reaches neither the terminal nor the record (`[redacted]`); a second
+    run without the key is answered from the result cache and refuses the call before its
+    adapter (`ACME_API_KEY is not set`). The cases also pin `doctor`'s `adapter` lines, the drift
+    an edit to an imported module makes until `lock --same`, and three load refusals. The
+    TypeScript case's bytes differ from the Python one's only through the adapters' names.
+  - `conformance/run.py` gains a step's `env`: variables for that step's command alone, which
+    may not be one the runner sets nor any `GRIDA_FX_*`, so a made-up key can prove redaction
+    while the network stays off.
+  - Each case also answers the adapters' routes with a stand-in (`stand_in.py`, `stand_in.ts`):
+    a run without `--live` builds no adapter, so no adapter host starts, and the answers get the
+    every-route check, which stores one and refuses one that breaks the schema.
+- [x] `llms.txt`; guide pages 03 and 13.
+  - `llms.txt`: an `adapter` bullet under Routes and providers, a recipe for a Python adapter
+    (planned by `check_llms`) with its TypeScript form, Python and Node needed for adapters, and
+    the errors table's rows for the load refusals, the family-or-adapter refusal, the SDK that
+    predates adapters, an adapter's failure, a changed adapter, drift and `fetch`'s refusals.
+    Guide page 13 gains "Your own adapter"; page 03 a section that places adapters beside node
+    types and their versions. `lock`'s help now says it pins adapters too. `AGENT_READINESS.md`
+    AR-20 gains the adapters' evidence and stays Proposed until M11.
+  - After the second review: `llms.txt` and AR-20 say what the code does: planning and a dry
+    run refuse an adapter that cannot load (exit 2), and `doctor` prints `adapter   <name>
+    <path>#<attribute> cannot load: <sentence>` and exits 1, as `providers.md` §1 and guide 05
+    say.
+  - After the third review: guide 01 lists adapters among what Python and Node run, so a project
+    of paid built-ins that declares a Python adapter needs Python, as `llms.txt` says;
+    `python/README.md`, `CONTRIBUTING.md` and guide 05 name adapters beside nodes, builders and
+    stand-ins.
 
 Gate: the whole verification list, `check_host` included.
 
@@ -768,8 +979,8 @@ Gate: the whole verification list, `check_host` included.
 | A generic adapter's wire | only what published facts support (Models' endpoint parameters, the provider's own published schema). Otherwise ship the selection and `provider_options` only, and file a follow-up |
 | An answer that is not a PNG | converted to PNG in the adapter, as Grok Build's are |
 | A declared provider's billing | dollars only; no declaration can claim a plan |
-| A declared provider's errors | the default status table; never `Some(0)` |
-| A declared provider's cost | none read; the hold or the cap is charged |
+| A declared provider's errors | the OpenAI-compatible family's: the default status table, never `Some(0)`; a project adapter's: the outcomes it returns, a `failed` or `ended` one's `cost_usd` of 0 included (M10) |
+| A declared provider's cost | the OpenAI-compatible family's: none read, so the hold or the cap is charged; a project adapter's: the cost it reports, as the adapter contract says (M10) |
 | New protocol methods | added within protocol v1; hosts answer unknown methods with -32601 |
 | Project adapters in conformance | run live with the network off; the synthetic adapter makes no request |
 | The Models file | one generated projection; the full release is never committed |
@@ -864,14 +1075,48 @@ when the owner asks.
   `provider_options`, so a route cannot ask for a picture `detail`, a reasoning effort or
   `pictures: unchanged`, and the token limit is always `max_tokens`: the family owns
   `max_completion_tokens`, so a server that takes only that name cannot be given a limit;
-- a declared provider's refusals and costs: every 4xx but 408 and 429 costs `None`, so a server
-  that refuses a request it never ran (a `json_schema` response format it does not take, say) is
-  charged the whole hold or cap, and a reported cost (`usage.cost`) is never read; a declaration
-  has no member to say either;
+- an OpenAI-compatible provider's refusals and costs: every 4xx but 408 and 429 costs `None`, so
+  a server that refuses a request it never ran (a `json_schema` response format it does not take,
+  say) is charged the whole hold or cap, and a reported cost (`usage.cost`) is never read; its
+  declaration has no member to say either (a project adapter reports its own cost and outcome);
 - stand-in checks for declared providers: `StandInChecks::new` builds its registry with
   `Keys::none()`, FX's declarations only, so a declared route's stand-in answer gets the
-  every-route check; that is what the family checks, but an adapter of M10 with a check of its
-  own would be skipped.
+  every-route check, which is what the family checks (a project adapter has no check of its own:
+  see the next item);
+- an `adapter.check` method: a project adapter judges an answer only inside its send and collect
+  (`adapters.md` §9), so a stand-in's answer on its route gets the every-route check alone;
+- `fetch` methods beyond GET and POST: `transport::Method` has only those two;
+- offline replay through `fetch`: the replay transport is test-only
+  (`#[cfg(any(test, feature = "testing"))]` in `transport/mod.rs`);
+- project adapters in packages under `sources:` (R4): a declaration names a module of the
+  planning project, which may import one from a package, whose files then count in its closure;
+- a route's limits for a project adapter: `adapter.send` carries no `max_input_pictures`, tiers,
+  `max_units` or features (the providers crate's `RouteLimits`), so a project adapter cannot hold
+  a request to them (`adapters.md` §4 step 4);
+- a deadline on a project adapter's request: the engine sets none (`adapters.md` §9), so an
+  adapter that never answers holds its call until the run is stopped;
+- redacting an adapter host's standard error: a Python host's is inherited and a TypeScript
+  host's copied line by line (`protocol.md` §1), neither redacted;
+- private paths in a project adapter's reasons: `adapter_host.rs` redacts its reasons with the
+  invocation's keys and the call's downloads only, never with the engine's private roots
+  (`Engine::scrub`), and an `uncertain` submit's reason is kept as its job record's note;
+- an adapter's identity for independent checkers: neither the graph nor `plan.json` records a
+  declared adapter's capabilities, version or source digest, so `tools/digest.py` cannot check an
+  unversioned adapter's routes, nor tell a capability the adapter serves from one it does not,
+  and takes a versioned one's version from `fx.lock`, whose entry may be stale (`lock` never drops
+  one): without `--current-lock`, a route that version does not complete is only a note;
+- adapter drift in `doctor`: its `adapter` line does not say when a versioned adapter's source no
+  longer matches `fx.lock`; planning reports it on the step;
+- a live run's events in conformance: `budget_reserved` and `budget_settled` name the call's
+  `node_id` as `<instance>/<invocation id>.<n>`, which `conformance/run.py` does not normalise,
+  so `adapter-py` and `adapter-ts` pin the run's record through `project` instead of its
+  `events.jsonl`;
+- files in conformance's `never_mentions`: the runner checks only a command's output, so no case
+  can show that a key is absent from a file the run writes (the events, a call record); the SDKs'
+  engine tests (`python/tests/test_adapter_engine.py`, `js/fx/test/adapter-engine.test.ts`) read
+  the files;
+- `fx.lock`'s header: it says `the source behind each versioned node type` also when the file
+  holds adapters, kept so that the lock fixtures do not move.
 
 **gridaco/models**, gaps found against `v1.20261013.6`:
 - no answer shapes for fal's endpoints (only `grida` bindings have `result_schema_url`);

@@ -51,9 +51,12 @@ subscription, images can come from [your own Codex](12-codex.md) or
 ### When FX needs Python
 
 The engine itself runs the paid built-in types (`image.generate`, `structured.generate`, …),
-`fx/select@1` and every file fact. Your own nodes and builders run in their language: TypeScript
-ones on Node ([below](#when-fx-needs-node)), Python ones on Python. Python runs:
+`fx/select@1` and every file fact. Your own nodes, builders and
+[adapters](13-providers.md#your-own-adapter) run in their language: TypeScript ones on Node
+([below](#when-fx-needs-node)), Python ones on Python. Python runs:
 - your own Python nodes and builders, which import `from grida.fx import node, Ctx`;
+- your own Python adapters, which import `from grida.fx import adapter`: planning loads each one
+  a project declares, and a live call on a route its provider serves runs in it;
 - the built-in local types, whatever language your own nodes are in: `image.resize`,
   `image.crop`, `image.pad`, `image.mirror_repeat`, `image.check_alpha`, `image.check_size`,
   `json.merge`, `files.copy` and `package`.
@@ -64,20 +67,22 @@ the `.venv` of the workflow's project, else the `.venv` of the project you run f
 that runs the SDK when you run through it ([Running](05-running.md#from-python)), else `python3`
 on `PATH`. An older Python is refused before FX starts it (macOS's own `/usr/bin/python3` is
 3.9): run `uv sync` or `pip install grida` in the project, or set `GRIDA_FX_PYTHON`. A project
-whose steps are all paid built-ins, `select` and nodes of your own in TypeScript needs no Python.
+whose steps are all paid built-ins, `select` and nodes of your own in TypeScript needs no Python,
+unless it declares a Python adapter of its own.
 The first workflow below uses `image.check_alpha`, so it needs Python.
 
 ### When FX needs Node
 
-Your own nodes, builders and [stand-ins](05-running.md#stand-ins-testing-without-a-provider) in
-TypeScript (or JavaScript) run on Node, in the node host that `@grida/fx` carries. A project with
-any of them needs Node 24 or later (Bun and Deno cannot host nodes), and should install
-`@grida/fx` (`npm install @grida/fx`): your modules import `node` from it, and `tsc` checks them
-against it. FX hosts them with the `@grida/fx` the workflow's project would import, else the one
-the project you run from would import, else the one that started FX, such as the one `grida fx`
-carries. FX uses `GRIDA_FX_NODE` when it is set, else the Node that runs `grida fx` or the
-JavaScript SDK ([Running](05-running.md#from-javascript)), else `node` on `PATH`. An older Node is
-refused before FX starts it: install Node 24 or later, or set `GRIDA_FX_NODE`.
+Your own nodes, builders, [stand-ins](05-running.md#stand-ins-testing-without-a-provider) and
+[adapters](13-providers.md#your-own-adapter) in TypeScript (or JavaScript) run on Node, in the
+node host that `@grida/fx` carries; planning loads a project's adapters too. A project with any of
+them needs Node 24 or later (Bun and Deno cannot host nodes), and should install `@grida/fx`
+(`npm install @grida/fx`): your modules import `node` (or `adapter`) from it, and `tsc` checks
+them against it. FX hosts them with the `@grida/fx` the workflow's project would import, else the
+one the project you run from would import, else the one that started FX, such as the one
+`grida fx` carries. FX uses `GRIDA_FX_NODE` when it is set, else the Node that runs `grida fx` or
+the JavaScript SDK ([Running](05-running.md#from-javascript)), else `node` on `PATH`. An older Node
+is refused before FX starts it: install Node 24 or later, or set `GRIDA_FX_NODE`.
 
 ## A project
 

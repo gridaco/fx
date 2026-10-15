@@ -831,6 +831,7 @@ fn integrated_drift_and_missing_resources() {
     let digest = pinned_source(&fixture, &mut host);
     let lock_of = |digest: &str| LockFile {
         nodes: [("nodes/n.py#pinned@2".to_string(), digest.to_string())].into(),
+        adapters: Default::default(),
     };
     let mut drifted = fixture.registry_with(lock_of(&"0".repeat(64)));
     let resolved = node(drifted.node_type("./nodes/n.py#pinned", &mut host));
@@ -2130,4 +2131,189 @@ fn a_plan_with_no_problems_is_ok() {
     assert_eq!(plan.estimate(), Estimate::default());
     plan.problems.push(Problem::new("a", "x"));
     assert!(!plan.ok());
+}
+
+// ------------------------------------------------------------ project adapters
+
+const ACME_ADAPTER: &str = "fx: project/v1\nroute_tables: [routes.yaml]\nroutes:\n  \
+                            image.generate: img-a@acme\nproviders:\n  acme:\n    base_url: { \
+                            default: \"https://api.acme.test/v1\" }\n    adapter: \
+                            adapters/acme.py#acme\n";
+
+const DRAW: &str = "fx: workflow/v1\nid: draw\ntitle: Draw\nsteps:\n  draw:\n    uses: \
+                    fx/image.generate@1\n    with: { prompt: a kite }\n";
+
+/// A project declaring `acme` with an adapter, a capped `img-a@acme` image route, and a workflow
+/// that draws on it; the host answers `adapter.load` with `version`.
+fn adapter_project(version: Option<u64>) -> (Fixture, FakeHost) {
+    let fixture = Fixture::new();
+    fixture.write("fx.yaml", ACME_ADAPTER);
+    fixture.write(
+        "routes.yaml",
+        "fx: routes/v1\nroutes:\n  - { capability: image.generate, route: img-a@acme, price: { \
+         cap_usd: 0.05 } }\n",
+    );
+    fixture.write("workflows/draw.yaml", DRAW);
+    fixture.write(
+        "adapters/acme.py",
+        "acme = adapter(requests=['image.generate'])\n",
+    );
+    let host = FakeHost::new().with_adapter(
+        "adapters/acme.py#acme",
+        Ok(grida_fx_protocol::AdapterLoadResult {
+            adapter: grida_fx_protocol::AdapterDeclaration {
+                version,
+                capabilities: [(
+                    "image.generate".to_string(),
+                    grida_fx_protocol::CallKind::Request,
+                )]
+                .into_iter()
+                .collect(),
+            },
+            closure: fixture.closure(&["adapters/acme.py"]),
+        }),
+    );
+    (fixture, host)
+}
+
+fn adapter_digest(fixture: &Fixture) -> String {
+    SourceDigests {
+        files: [(
+            "adapters/acme.py".to_string(),
+            grida_fx_core::value::file_digest(
+                &std::fs::read(fixture.root.join("adapters/acme.py")).unwrap(),
+            ),
+        )]
+        .into(),
+        resources: Default::default(),
+    }
+    .digest()
+}
+
+/// spec/adapters.md §9: planning loads the adapter before it reads the route tables, and the
+/// table's contract is completed with the adapter's name and behaviour.
+#[test]
+fn integrated_a_declared_adapter_completes_its_routes_while_planning() {
+    let (fixture, mut host) = adapter_project(Some(3));
+    let mut planner = make_planner(&request(&fixture, "draw"), &mut host).unwrap();
+    assert_eq!(host.adapter_calls, 1);
+    let route = planner
+        .routes
+        .resolve("image.generate", "img-a@acme")
+        .unwrap();
+    assert_eq!(
+        route.contract,
+        json!({"adapter": "adapters/acme.py#acme", "adapter_behavior": 3})
+    );
+    let plan = make_plan(&mut planner, &mut host, None, &NoCache).unwrap();
+    assert!(plan.ok(), "{:?}", plan.problems);
+
+    // Unversioned, the behaviour is its source.
+    let (fixture, mut host) = adapter_project(None);
+    let planner = make_planner(&request(&fixture, "draw"), &mut host).unwrap();
+    let route = planner
+        .routes
+        .resolve("image.generate", "img-a@acme")
+        .unwrap();
+    assert_eq!(
+        route.contract["adapter_behavior"],
+        json!(format!("source:{}", adapter_digest(&fixture)))
+    );
+}
+
+#[test]
+fn integrated_an_adapter_that_cannot_be_loaded_refuses_planning() {
+    let (fixture, _) = adapter_project(Some(3));
+    let error = make_planner(&request(&fixture, "draw"), &mut FakeHost::new()).unwrap_err();
+    assert_eq!(error.kind, ErrorKind::Plan);
+    assert_eq!(
+        error.message,
+        "fx.yaml: providers.acme.adapter: adapters/acme.py: acme is not declared with adapter()"
+    );
+}
+
+/// A versioned adapter whose source no longer matches fx.lock: each step on a route it serves
+/// gets the drift at `<step>.route`; `lock --same` confirms it.
+#[test]
+fn integrated_adapter_lock_drift() {
+    let (fixture, mut host) = adapter_project(Some(3));
+    fixture.write(
+        "fx.lock",
+        &format!(
+            "fx: lock/v1\nnodes: {{}}\nadapters:\n  \"adapters/acme.py#acme@3\": \"{}\"\n",
+            "0".repeat(64)
+        ),
+    );
+    let mut planner = make_planner(&request(&fixture, "draw"), &mut host).unwrap();
+    let plan = make_plan(&mut planner, &mut host, None, &NoCache).unwrap();
+    let drift = "adapters/acme.py#acme: its source changed but version 3 did not; bump the \
+                 version, or confirm no change in behaviour with grida-fx lock --same \
+                 adapters/acme.py#acme";
+    assert_eq!(plan.problems, [Problem::new("draw.route", drift)]);
+
+    let project = Project::find(&fixture.root).unwrap();
+    let changed = "changed   adapters/acme.py#acme: its source changed but version 3 did not; \
+                   bump it, or confirm with --same adapters/acme.py#acme";
+    let checked = lock(&project, &[], true, &mut host).unwrap();
+    assert_eq!(
+        (checked.lines.clone(), checked.status),
+        (vec![changed.to_string()], 1)
+    );
+    let same = ["adapters/acme.py#acme".to_string()];
+    let confirmed = lock(&project, &same, false, &mut host).unwrap();
+    assert_eq!(
+        confirmed.lines,
+        ["fx.lock: 0 versioned node types, 1 versioned adapters"]
+    );
+    assert_eq!(
+        confirmed.write.unwrap().adapters,
+        [(
+            "adapters/acme.py#acme@3".to_string(),
+            adapter_digest(&fixture)
+        )]
+        .into()
+    );
+}
+
+#[test]
+fn lock_names_unlocked_adapters_and_writes_them() {
+    let (fixture, mut host) = adapter_project(Some(3));
+    let project = Project::find(&fixture.root).unwrap();
+    let checked = lock(&project, &[], true, &mut host).unwrap();
+    assert_eq!(
+        checked.lines,
+        ["unlocked  adapters/acme.py#acme@3: run grida-fx lock"]
+    );
+    assert_eq!(checked.status, 1);
+    let written = lock(&project, &[], false, &mut host).unwrap();
+    assert_eq!(
+        written.lines,
+        ["fx.lock: 0 versioned node types, 1 versioned adapters"]
+    );
+    let lock_file = written.write.unwrap();
+    assert!(lock_file.nodes.is_empty());
+    assert_eq!(
+        lock_file.adapters,
+        [(
+            "adapters/acme.py#acme@3".to_string(),
+            adapter_digest(&fixture)
+        )]
+        .into()
+    );
+    // Locked, it plans without drift and checks clean.
+    fixture.write(
+        "fx.lock",
+        &grida_fx_core::docs::lock::render_lock(&lock_file),
+    );
+    let checked = lock(&project, &[], true, &mut host).unwrap();
+    assert_eq!(
+        checked.lines,
+        ["fx.lock: 0 versioned node types, 1 versioned adapters, all locked"]
+    );
+    // An unversioned adapter is never locked.
+    let (fixture, mut host) = adapter_project(None);
+    let project = Project::find(&fixture.root).unwrap();
+    let written = lock(&project, &[], false, &mut host).unwrap();
+    assert_eq!(written.lines, ["fx.lock: 0 versioned node types"]);
+    assert!(written.write.unwrap().adapters.is_empty());
 }

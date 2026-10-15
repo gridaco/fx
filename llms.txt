@@ -48,15 +48,16 @@ grida fx doctor        # the engine, Python, Node, keys, Codex/Grok Build and ro
   `python -m grida.fx` (from the Python package) are the same FX with the same verbs, project
   files, cache and records; `--version` tells installations apart.
 - Platforms: macOS, Linux (glibc 2.28+), x64 and arm64; Windows through WSL 2.
-- **Python is needed** for your own Python nodes and builders, and for the built-in local types
-  (`image.resize`, `image.crop`, `image.pad`, `image.mirror_repeat`, `image.check_alpha`,
-  `image.check_size`, `json.merge`, `files.copy`, `package`). FX picks `GRIDA_FX_PYTHON`, else the
-  workflow project's `.venv`, else the `.venv` of the project you run from, else the SDK's own
-  Python, else `python3` on `PATH`; older than 3.11 is refused.
-- **Node 24+ is needed** for TypeScript nodes, builders and stand-ins (Bun and Deno cannot host
-  nodes). FX picks `GRIDA_FX_NODE`, else the Node running `grida fx` or the SDK, else `node`.
+- **Python is needed** for your own Python nodes, builders and adapters, and for the built-in
+  local types (`image.resize`, `image.crop`, `image.pad`, `image.mirror_repeat`,
+  `image.check_alpha`, `image.check_size`, `json.merge`, `files.copy`, `package`). FX picks
+  `GRIDA_FX_PYTHON`, else the workflow project's `.venv`, else the `.venv` of the project you run
+  from, else the SDK's own Python, else `python3` on `PATH`; older than 3.11 is refused.
+- **Node 24+ is needed** for TypeScript nodes, builders, stand-ins and adapters (Bun and Deno
+  cannot host nodes). FX picks `GRIDA_FX_NODE`, else the Node running `grida fx` or the SDK, else
+  `node`.
 - Paid built-in types (`image.generate`, `structured.generate`, …) and `fx/select@1` run in the
-  engine and need neither.
+  engine and need neither, unless a route's provider is served by your own adapter.
 
 ## A project
 
@@ -299,10 +300,10 @@ A route is `model@provider`. Pick one per capability in `fx.yaml` `routes:`, or 
   key comes from (sent as `authorization: Bearer <key>` unless `header` and `scheme` say
   otherwise; no `credential` for a server that needs no key), its base URL (`https` unless it is
   this machine, with no userinfo, query or fragment) and the variable that may move it, the hosts
-  its results may be downloaded from, and its `family` (`openai-compatible`). FX reads its
-  variables from the environment or `.env` as it reads its own, redacts its key, keeps both from
-  Codex, Grok Build, the background service and the browser opener (node hosts inherit FX's
-  environment, as before), and `grida fx doctor` lists it
+  its results may be downloaded from, and either its `family` (`openai-compatible`) or its
+  `adapter` (your own, below). FX reads its variables from the environment or `.env` as it reads
+  its own, redacts its key, keeps both from Codex, Grok Build, the background service and the
+  browser opener (node hosts inherit FX's environment, as before), and `grida fx doctor` lists it
   (`provider  acme api.acme.test ACME_API_KEY missing`). It bills dollars. A name FX ships (`gg`,
   `openai`, `openrouter`, `fal`, `tripo`, `elevenlabs`, `codex`, `grok`), a variable already read,
   `GRIDA_FX_*`, proxy, certificate, `PATH` and `HOME` variables, and a default base URL that
@@ -319,8 +320,37 @@ A route is `model@provider`. Pick one per capability in `fx.yaml` `routes:`, or 
   `adapter`, or names the family's adapter and leaves out `adapter_behavior`, is filled in with
   the family's (`openai-compatible-structured`, `openai-compatible-tool-loop`, behaviour `1`), so
   declaring or dropping the family changes those routes' identity once. A route of another
-  capability, or on a provider declared without a family, has no adapter: it plans and prices,
-  and a live call on it is refused (`no adapter serves …`).
+  capability, or on a provider declared with neither a family nor an adapter, has no adapter: it
+  plans and prices, and a live call on it is refused (`no adapter serves …`).
+- **`adapter: <path>#<name>`** serves any other provider with your own code, in Python
+  (`grida.fx`) or TypeScript (`@grida/fx`): a module of the project declares
+  `adapter(requests=[…], jobs=[…], send=…, submit=…, collect=…, version=N)` (TypeScript:
+  `export const acme = adapter({ … })`), a request capability answered by `send`, a long job's by
+  `submit` and then `collect`. Planning and a dry run load it on the planning host of its
+  language, so its top-level code runs then, and one that cannot load refuses the command
+  (exit 2, `fx.yaml: providers.<name>.adapter: …`). `doctor` loads it too and prints
+  `adapter   acme adapters/acme.py#acme version 1: structured.generate (request)`, or
+  `adapter   acme adapters/acme.py#acme cannot load: <why>` and exits 1. Each of its routes'
+  `contract` gets `adapter: <path>#<name>` and `adapter_behavior`, its `version`, else
+  `source:<digest>` of the module and the project modules it imports, so moving the module or
+  renaming the export changes their identity. `grida fx lock` pins a versioned adapter in
+  `fx.lock`'s `adapters` as a node type is pinned (`--same <path>#<name>` confirms an edit). A live
+  run, with the network off too, starts one host per declaration on its first call, in the
+  project's root, with its own declaration's key and base URL variables and no other's, and
+  stops it with the run. The engine checks the request and the key before `send` or `submit` and
+  the answer after, as for FX's own adapters; the adapter returns an outcome (`Answered`,
+  `NotReceived`, `Refused`, `Failed`; `Accepted`, `Uncertain`; `Ended`, `Unreachable`; plain
+  objects named by `outcome` in TypeScript) and the call is charged the `cost_usd` it reports,
+  else the whole hold or cap. An exception, an unreadable outcome or a lost host is an unknown
+  outcome: a send is billed in full and not sent again, a submit is uncertain, a collect
+  unreachable. `await call.fetch(url, method=, json=, credential=True, lane=, timeout_s=)` makes
+  one exchange through FX (no retry, no redirect, at most 300 s and 64 MiB): the engine attaches
+  the key, only to the base URL's origin, holds downloads (`lane="download"`) to
+  `download_hosts`, and refuses everything with `GRIDA_FX_NETWORK=off`; it raises `FetchError`
+  (`phase`: `refused`, `not_sent`, `after_send`). An adapter may use its own HTTP client instead,
+  sending each request once with retries off, and sending nothing when `GRIDA_FX_NETWORK` is
+  `off`, which FX cannot stop for it. A reason that holds the key reaches no record. It bills
+  dollars.
 
 ```yaml
 # fx.yaml
@@ -509,7 +539,7 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
 | `grida fx nodes [type]`, `grida fx schema <target>`, `grida fx doctor [target]` | discovery and readiness |
 | `grida fx expand`, `identity`, `price <target>`; `grida fx project <run>`; `grida fx observe <run> [--snapshot]` | JSON for tools |
 | `grida fx start [--background] [--port N] [--open]`, `status [--json]`, `stop`, `logs [--lines N]` | the project's local viewer service |
-| `grida fx init [dir] [--template NAME] [--list-templates]`, `grida fx lock [--same NODE]… [--check]` | project setup, node version locks |
+| `grida fx init [dir] [--template NAME] [--list-templates]`, `grida fx lock [--same NODE]… [--check]` | project setup, node and adapter version locks |
 
 `<target>` is a workflow file, a workflow id, or a builder (`file.py:build`, `file.ts:build`, with
 `--arg name=value`). `<run>` is a run folder, a workflow id, or `WORKFLOW_ID/NAME`.
@@ -529,8 +559,10 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
   the same files for a person; agents use `--deliver` or `export`.
 - **Exit status.** `0` done; `1` refused or not ok (plan problems, a run not ok, a missing
   delivery); `2` unreadable input or a usage mistake; `130` interrupted or cancelled.
-- **Offline checks.** `GRIDA_FX_NETWORK=off` refuses every provider request before sending;
-  `GRIDA_FX_DISABLE_DOTENV=1` ignores `.env`.
+- **Offline checks.** `GRIDA_FX_NETWORK=off` refuses every request FX's transport would send
+  (FX's adapters, and a project adapter's `fetch`) before sending; a project adapter's own HTTP
+  client is not stopped, and must check the switch itself. `GRIDA_FX_DISABLE_DOTENV=1` ignores
+  `.env`.
 
 ### From Python and JavaScript
 
@@ -998,6 +1030,135 @@ strict schema to `https://api.acme.test/v1/chat/completions`; the model's own pa
 `provider_options: { acme: { … } }`. A server on this machine (`http://127.0.0.1:8080/v1`) needs no
 `credential`.
 
+### A provider of your own, with an adapter in Python
+
+```yaml
+# fx.yaml
+fx: project/v1
+route_tables: [routes/acme.yaml]
+providers:
+  acme:                                      # stands for your provider; its routes are <model>@acme
+    credential: { variable: ACME_API_KEY }   # attached by FX when the adapter asks
+    base_url: { variable: ACME_BASE_URL, default: "https://api.acme.test/v1" }
+    adapter: adapters/acme.py#acme           # <module>#<name>, a module of this project
+```
+
+```yaml
+# routes/acme.yaml
+fx: routes/v1
+routes:
+  - capability: structured.generate
+    route: text-a@acme
+    price: { cap_usd: 0.05 }       # charged what the adapter reports, else the cap
+```
+
+```python
+# adapters/acme.py
+import json
+
+from grida.fx import Answered, Failed, FetchError, NotReceived, Refused, adapter
+
+
+async def send(call):  # one structured.generate request, sent once
+    request = {
+        "model": call.route.model,
+        "prompt": call.request["prompt"],
+        "schema": json.loads(call.request["schema"].read_bytes()),
+    }
+    try:
+        response = await call.fetch(
+            f"{call.base_url}/answers",
+            method="POST",
+            json=request,
+            credential=True,
+            timeout_s=60,
+        )
+    except FetchError as error:  # refused, not_sent or after_send
+        if error.phase == "refused":
+            return Refused(error.reason)
+        if error.phase == "not_sent":
+            return NotReceived(error.reason)
+        return Failed(error.reason, retryable=True)
+    if response.status != 200:
+        return Failed(f"acme returned HTTP {response.status}", retryable=response.status >= 500)
+    body = response.json()
+    return Answered.json(body["answer"], cost_usd=body.get("cost_usd"))
+
+
+acme = adapter(requests=["structured.generate"], send=send, version=1)
+```
+
+```json
+// schemas/colour.json
+{ "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"] }
+```
+
+```yaml
+# workflows/colour.yaml
+fx: workflow/v1
+id: colour
+title: A colour from your own adapter
+steps:
+  name:
+    uses: fx/structured.generate@1
+    route: text-a@acme
+    with:
+      prompt: Name a colour for a copper lantern.
+      schema: ./schemas/colour.json
+outputs:
+  colour: ${{ steps.name.outputs.json }}
+```
+
+```sh
+grida fx plan colour
+grida fx lock
+grida fx doctor
+GRIDA_FX_NETWORK=off grida fx run colour --live --max-usd 1
+grida fx run colour --live --max-usd 1
+```
+
+The plan loads the adapter in the project's Python, which needs `grida` (`GRIDA_FX_PYTHON`
+names another), and prices the call at $0 to $0.05. `lock` pins the adapter's source in
+`fx.lock`: commit it, and bump `version` when its behaviour changes. `doctor` says `adapter   acme
+adapters/acme.py#acme version 1: structured.generate (request)`, and `servable` for the route
+once `ACME_API_KEY` is set. With the network off, the adapter runs and its `fetch` is refused
+before it leaves: the step fails `… was refused: the network is off (GRIDA_FX_NETWORK=off)`, at
+$0, which tests everything but the provider. A long job (`video.generate`, say) goes in `jobs=`
+with `submit` returning `Accepted({…})` and `collect` polling, by its own clock, until it
+returns `Answered`, `Ended` or `Unreachable`. In TypeScript the module is `adapters/acme.ts`
+(`adapter: adapters/acme.ts#acme`), the outcomes are plain objects:
+
+```ts
+import { Answered, adapter, FetchError } from "@grida/fx";
+
+export const acme = adapter({
+  requests: ["structured.generate"],
+  send: async (call) => {
+    let response;
+    try {
+      response = await call.fetch(`${call.baseUrl}/answers`, {
+        method: "POST",
+        json: { model: call.route.model, prompt: String(call.request.prompt) },
+        credential: true,
+        timeoutS: 60,
+      });
+    } catch (error) {
+      if (!(error instanceof FetchError)) throw error; // an unknown outcome: billed in full
+      if (error.phase === "refused") return { outcome: "refused", reason: error.reason };
+      if (error.phase === "not_sent") return { outcome: "not_received", reason: error.reason };
+      return { outcome: "failed", reason: error.reason, retryable: true };
+    }
+    if (response.status !== 200) {
+      const reason = `acme returned HTTP ${response.status}`;
+      return { outcome: "failed", reason, retryable: response.status >= 500 };
+    }
+    const body = response.json() as { answer: { name: string }; cost_usd?: number };
+    return Answered.json(body.answer, { costUsd: body.cost_usd });
+  },
+  version: 1,
+});
+```
+
 ## When something fails
 
 | You see | Do |
@@ -1007,9 +1168,9 @@ strict schema to `https://api.acme.test/v1/chat/completions`; the model's own pa
 | `inputs: 'name' is a required property` | give the input: `-- --name …` or `--inputs file.yaml` |
 | `… is a paid call; run with --live` | the step needs a provider: ask the user, then `--live` with a ceiling |
 | `refused: a live run needs a ceiling: …` | add `--max-usd N` (agreed with the user) or a `budget:` |
-| `… was refused: GG_API_KEY is not set` | the user sets the key (environment or `.env`); check with `grida fx doctor` |
+| `… was refused: GG_API_KEY is not set` (or a declared provider's variable) | the user sets the key (environment or `.env`); check with `grida fx doctor` |
 | `<route> does not support exact_size` (or `alpha`, `mask`, `image_input`) | change the setting or the route; for Codex and Grok Build leave `size` out and resize after |
-| `no adapter serves <route> …` | FX cannot call that provider for that capability (a declared provider needs `family: openai-compatible`, which serves `structured.generate` and `agent.turn`), or the route's `contract` names an `adapter` FX does not have: pick a built-in route (`grida fx nodes <type>`), declare the family, or fix or drop `contract.adapter` |
+| `no adapter serves <route> …` | FX cannot call that provider for that capability (a declared provider needs `family: openai-compatible`, which serves `structured.generate` and `agent.turn`, or an `adapter` that declares the capability), or the route's `contract` names an `adapter` FX does not have: pick a built-in route (`grida fx nodes <type>`), declare the family or the capability, or fix or drop `contract.adapter` |
 | `… was refused: <provider>'s generic image adapter sends no exact size: give the model's own parameter in provider_options.<provider>` (or `no mask`, `no transparent background`) | leave `size` (or `mask`, or a transparent `background`) out, and pass the model's own parameter in `provider_options` |
 | `… returned no single image` | the model answered no picture, or several, and FX takes one per call: pick another model or route |
 | `routes.<n>.extends: no route <base> serves <capability>` | `extends` names a route of the same capability declared earlier (in the same table or one read before) or a built-in one; check the id and the order |
@@ -1024,13 +1185,19 @@ strict schema to `https://api.acme.test/v1/chat/completions`; the model's own pa
 | `fx.yaml: providers.<name>.credential.variable: <VARIABLE> is already read for <provider>` (or `.base_url.variable`) | give the declaration a variable of its own |
 | `fx.yaml: providers.<name>.credential.variable: <VARIABLE> is reserved for FX and the programs it starts` (or `.base_url.variable`) | `GRIDA_FX_*`, proxy, certificate, `PATH` and `HOME` variables cannot hold a key or an address: name another |
 | `fx.yaml: providers.<name>.base_url.default: <name> base_url must use HTTPS unless it targets a loopback host` (or `must be an HTTP(S) URL without credentials, query, or fragment`, `must use a valid network port`) | give the default as `https://host[:port]/path`, or `http://` for this machine only (`localhost`, `127.0.0.1`) |
+| `fx.yaml: providers.<name>: a provider has a family or an adapter, not both` | keep one: `family` for an OpenAI-compatible server, `adapter` for your own code |
+| `fx.yaml: providers.<name>.adapter: <path>: <name> is not declared with adapter()` (TypeScript: `is not an export declared with adapter()`), `no file <path>`, `<path> failed to import: …` (doctor: `adapter   <name> <path>#<name> cannot load: …`) | name a module of the project and a top-level `adapter(...)` in it (exported in TypeScript); fix what its import raised |
+| `fx.yaml: providers.<name>.adapter: the project's grida <version> cannot load adapters: upgrade grida` (or `@grida/fx`) | upgrade the project's SDK, or set `GRIDA_FX_PYTHON` / `GRIDA_FX_NODE` to one that has it |
+| `… failed: the adapter <path>#<name> failed: <Type>: <message>` (or `the adapter host exited …`, `… answered something FX cannot read: …`) | your adapter raised (its traceback is on standard error), returned what its method does not take, or its host stopped; the call is billed in full: fix the adapter before running again |
+| `… was refused: the adapter <path>#<name> changed since the run was planned` (or `the adapter host for <path>#<name> could not be started: …`) | the module changed, or its host could not start, after planning: run again, which plans again |
+| `FetchError` `<provider>'s credential goes only to the origin of its base URL` (or `the download is not on <provider>'s download hosts`, `the network is off (GRIDA_FX_NETWORK=off)`) | build the URL on `call.base_url`, list the host under the declaration's `download_hosts`, or turn the network on |
 | `not installed (codex)` / `not installed (grok)` in doctor | install and sign in to Codex or Grok Build, or set `GRIDA_FX_TOOL_CODEX` / `GRIDA_FX_TOOL_GROK` |
 | `Codex … is older than 0.160.1` (or `too old (codex …)` in doctor) | update the Codex that doctor's `program` line names, or set `GRIDA_FX_TOOL_CODEX` to a newer one |
 | `python … too old` / `no grida` in doctor | `uv sync` or `pip install grida` in the project, or set `GRIDA_FX_PYTHON` |
 | `node … too old` / `no @grida/fx` | Node 24+, `npm install @grida/fx`, or set `GRIDA_FX_NODE` |
 | `take <n> of <path> no longer produces the picked result …` | the request changed since the pick: `grida fx pick` or `reroll` again |
 | `stopped   phase 2 may cost up to $…` | the next phase needs approval: run again with a higher `--yes-up-to` |
-| a versioned node's source changed | bump `version`, or `grida fx lock --same <file>#<name>` |
+| a versioned node's or adapter's source changed (`… its source changed but version <n> did not …`) | bump `version`, or `grida fx lock --same <file>#<name>` |
 | `port 8787 is in use` | `grida fx start --background --port <N>` |
 | a `submitting` job in `grida fx jobs` | check the provider's dashboard, then `grida fx jobs --forget <key>` |
 

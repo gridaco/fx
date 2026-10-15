@@ -24,6 +24,10 @@
 //! - [`Connection::request_cancellable`] sends `$/cancel {id}` when its token fires and keeps
 //!   waiting for the answer (the host answers `cancelled`); the caller decides how long to wait.
 //!   A response that arrives for a request whose caller stopped waiting is discarded.
+//! - [`Connection::try_request_cancellable`] also says whether a request that got no result may
+//!   have reached the host ([`Unanswered`]): it provably did not when the connection had ended
+//!   before it was written, or its frame was not written whole, since a host acts only on a
+//!   whole frame.
 
 use crate::engine::Cancel;
 use grida_fx_core::value::parse_json;
@@ -62,6 +66,32 @@ impl fmt::Display for ConnectionError {
 }
 
 impl std::error::Error for ConnectionError {}
+
+/// A request that got no result ([`Connection::try_request_cancellable`]): why, and whether the
+/// host may have received it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Unanswered {
+    pub error: ConnectionError,
+    /// `false` only when the request provably never reached the host: the connection had ended
+    /// before it was written, or its frame was not written whole.
+    pub written: bool,
+}
+
+impl Unanswered {
+    fn unsent(error: ConnectionError) -> Unanswered {
+        Unanswered {
+            error,
+            written: false,
+        }
+    }
+
+    fn written(error: ConnectionError) -> Unanswered {
+        Unanswered {
+            error,
+            written: true,
+        }
+    }
+}
 
 /// Serves what a host sends: requests (answered with a result or an error) and notifications.
 pub trait Incoming: Send + Sync {
@@ -168,7 +198,9 @@ impl Connection {
         method: &str,
         params: Option<Value>,
     ) -> Result<Value, ConnectionError> {
-        self.call(method, params, None).await
+        self.call(method, params, None)
+            .await
+            .map_err(|unanswered| unanswered.error)
     }
 
     /// As [`Connection::request`], sending `$/cancel` for it when `cancel` fires (module doc).
@@ -178,6 +210,19 @@ impl Connection {
         params: Option<Value>,
         cancel: &Cancel,
     ) -> Result<Value, ConnectionError> {
+        self.try_request_cancellable(method, params, cancel)
+            .await
+            .map_err(|unanswered| unanswered.error)
+    }
+
+    /// As [`Connection::request_cancellable`], saying whether a request that got no result may
+    /// have reached the host (module doc).
+    pub async fn try_request_cancellable(
+        &self,
+        method: &str,
+        params: Option<Value>,
+        cancel: &Cancel,
+    ) -> Result<Value, Unanswered> {
         self.call(method, params, Some(cancel)).await
     }
 
@@ -228,22 +273,24 @@ impl Connection {
         method: &str,
         params: Option<Value>,
         cancel: Option<&Cancel>,
-    ) -> Result<Value, ConnectionError> {
-        let (id, mut answer) = self.register()?;
+    ) -> Result<Value, Unanswered> {
+        let (id, mut answer) = self.register().map_err(Unanswered::unsent)?;
         let request = Message::Request {
             id: Id::Number(id),
             method: method.to_string(),
             params,
         };
-        if let Err(error) = self.send(&request).await {
+        if let Err(unanswered) = self.write(&request).await {
             self.state().pending.remove(&id);
-            return Err(error);
+            return Err(unanswered);
         }
         let mut asked = false;
         loop {
             tokio::select! {
                 received = &mut answer => {
-                    return received.unwrap_or_else(|_| Err(self.ended_error()));
+                    return received
+                        .unwrap_or_else(|_| Err(self.ended_error()))
+                        .map_err(Unanswered::written);
                 }
                 _ = cancelled(cancel), if !asked => {
                     asked = true;
@@ -285,29 +332,38 @@ impl Connection {
 
     /// Writes one message as one frame, on a task of its own (module doc).
     async fn send(&self, message: &Message) -> Result<(), ConnectionError> {
-        self.check_open()?;
+        self.write(message)
+            .await
+            .map_err(|unanswered| unanswered.error)
+    }
+
+    /// [`Connection::send`], saying whether a message that failed may have been written whole.
+    async fn write(&self, message: &Message) -> Result<(), Unanswered> {
+        self.check_open().map_err(Unanswered::unsent)?;
         let body = serde_json::to_vec(&message.to_value()).map_err(|e| {
-            ConnectionError::Protocol(format!(
+            Unanswered::unsent(ConnectionError::Protocol(format!(
                 "a message cannot be written: {}",
                 super::read_reason(&e)
-            ))
+            )))
         })?;
         let mut frame = Vec::with_capacity(body.len() + 32);
         write_message(&mut frame, &body).map_err(|e| {
-            ConnectionError::Protocol(format!(
+            Unanswered::unsent(ConnectionError::Protocol(format!(
                 "a message cannot be written: {}",
                 grida_fx_core::error::io_reason(&e)
-            ))
+            )))
         })?;
         let connection = self.clone();
         match tokio::spawn(async move { connection.write_frame(frame).await }).await {
-            Ok(written) => written,
-            Err(_) => Err(ConnectionError::Protocol(
+            Ok(written) => written.map_err(Unanswered::unsent),
+            // Where it stopped is not known: it may have been written whole.
+            Err(_) => Err(Unanswered::written(ConnectionError::Protocol(
                 "writing to the node host stopped before the message was written".into(),
-            )),
+            ))),
         }
     }
 
+    /// Writes one frame; an error means it was not written whole.
     async fn write_frame(&self, frame: Vec<u8>) -> Result<(), ConnectionError> {
         let mut writer = self.inner.writer.lock().await;
         // The connection may have ended while this write waited for the writer.
@@ -1321,6 +1377,60 @@ mod tests {
         assert!(!connection.is_open());
         // The id was spent: ids never repeat.
         assert_eq!(connection.state().next_id, 2);
+    }
+
+    #[tokio::test]
+    async fn a_request_that_got_no_result_says_whether_it_was_written() {
+        let cancel = Cancel::new();
+        let unsent = Err(Unanswered {
+            error: ConnectionError::Closed,
+            written: false,
+        });
+        // An input that refuses the frame: never written whole.
+        let (engine_reads, _host_writes) = duplex(64);
+        let connection = Connection::start(engine_reads, BrokenPipe, Arc::new(NoIncoming));
+        assert_eq!(
+            connection
+                .try_request_cancellable("adapter.send", None, &cancel)
+                .await,
+            unsent
+        );
+        // A connection that had ended before the request.
+        assert_eq!(
+            connection
+                .try_request_cancellable("adapter.send", None, &cancel)
+                .await,
+            unsent
+        );
+        let (connection, mut host) = connect(Arc::new(NoIncoming));
+        host.close().await;
+        connection.closed().await;
+        assert_eq!(
+            connection
+                .try_request_cancellable("adapter.send", None, &cancel)
+                .await,
+            unsent
+        );
+        // Written whole, then the host's output ended: it may have been received.
+        let (connection, mut host) = connect(Arc::new(NoIncoming));
+        let pending = {
+            let connection = connection.clone();
+            let cancel = cancel.clone();
+            tokio::spawn(async move {
+                connection
+                    .try_request_cancellable("adapter.send", None, &cancel)
+                    .await
+            })
+        };
+        host.read().await.unwrap();
+        host.close().await;
+        assert_eq!(
+            pending.await.unwrap(),
+            Err(Unanswered {
+                error: ConnectionError::Closed,
+                written: true,
+            })
+        );
     }
 
     #[tokio::test]

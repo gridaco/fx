@@ -3,10 +3,11 @@
 //! - [`Language`]: the language of a project module, chosen by its file suffix (protocol.md §1):
 //!   `.py` is Python; `.ts`, `.mts`, `.js` and `.mjs` are TypeScript. Builders and stand-in files
 //!   choose their host the same way.
-//! - [`NodeHost`]: `describe` and `build` over the node protocol (protocol.md §5.1, §5.2). The
-//!   runtime's hosts implement it, one per language behind one that dispatches by suffix (each
-//!   starts its process lazily, on the first call for a module of its language, so a project
-//!   without node modules needs neither Python nor Node). Tests use [`FakeHost`].
+//! - [`NodeHost`]: `describe`, `build` and `adapter.load` over the node protocol (protocol.md
+//!   §5.1, §5.2, §5.8). The runtime's hosts implement it, one per language behind one that
+//!   dispatches by suffix (each starts its process lazily, on the first call for a module of its
+//!   language, so a project without node modules needs neither Python nor Node). Tests use
+//!   [`FakeHost`].
 //! - [`PlanTimeRunner`]: runs an `at: plan` instance's body while planning. The runtime's
 //!   runner implements it; without one, a plan that needs it gets the problem
 //!   `<step>: running an at: plan step needs a plan-time runner, and planning has none`.
@@ -18,7 +19,8 @@ use crate::error::Error;
 use crate::expand::{Instance, NodeResult};
 use crate::project::Planner;
 use grida_fx_protocol::{
-    BuildParams, BuildResult, DescribeParams, DescribeResult, ModuleDescription, RpcError,
+    AdapterLoadParams, AdapterLoadResult, BuildParams, BuildResult, DescribeParams, DescribeResult,
+    ModuleDescription, RpcError,
 };
 use indexmap::IndexMap;
 use std::path::Path;
@@ -171,6 +173,15 @@ pub trait NodeHost {
     fn describe(&mut self, params: &DescribeParams) -> Result<DescribeResult, HostFailure>;
     /// `build` (protocol.md §5.2).
     fn build(&mut self, params: &BuildParams) -> Result<BuildResult, HostFailure>;
+    /// `adapter.load` (protocol.md §5.8), on the host of the module's language. A host whose SDK
+    /// predates adapters answers `-32601`, which the runtime's hosts turn into a `load_failed`
+    /// naming the SDK to upgrade (spec/adapters.md §9). `Unavailable` for a host that cannot
+    /// start, or whose answer FX cannot read: `the node host answered adapter.load with something
+    /// FX cannot read: <where>`.
+    fn load_adapter(
+        &mut self,
+        params: &AdapterLoadParams,
+    ) -> Result<AdapterLoadResult, HostFailure>;
 }
 
 /// A host for callers that have none: every call is `Unavailable`.
@@ -189,17 +200,25 @@ impl NodeHost for NoHost {
     fn build(&mut self, _: &BuildParams) -> Result<BuildResult, HostFailure> {
         Err(HostFailure::Unavailable("no node host is available".into()))
     }
+
+    fn load_adapter(&mut self, _: &AdapterLoadParams) -> Result<AdapterLoadResult, HostFailure> {
+        Err(HostFailure::Unavailable("no node host is available".into()))
+    }
 }
 
-/// A scripted host for tests: modules by path, builds by `path:function`. `describe` answers each
-/// target from `modules` (filtered to the attribute when one is given; an unknown module is a
-/// `Failed` entry `<path> failed to import: ModuleNotFoundError`) and counts calls.
+/// A scripted host for tests: modules by path, builds by `path:function`, adapters by
+/// `path#attribute`. `describe` answers each target from `modules` (filtered to the attribute
+/// when one is given; an unknown module is a `Failed` entry `<path> failed to import:
+/// ModuleNotFoundError`), `adapter.load` from `adapters` (an unknown one is `load_failed`, `<path>:
+/// <attribute> is not declared with adapter()`), and each counts its calls.
 #[derive(Debug, Default, Clone)]
 pub struct FakeHost {
     pub modules: IndexMap<String, ModuleDescription>,
     pub builds: IndexMap<String, Result<BuildResult, RpcError>>,
+    pub adapters: IndexMap<String, Result<AdapterLoadResult, HostFailure>>,
     pub describe_calls: usize,
     pub build_calls: usize,
+    pub adapter_calls: usize,
 }
 
 impl FakeHost {
@@ -215,6 +234,16 @@ impl FakeHost {
             }
         };
         self.modules.insert(path, description);
+        self
+    }
+
+    /// Adds the answer to `adapter.load` of `<path>#<attribute>`.
+    pub fn with_adapter(
+        mut self,
+        name: &str,
+        answer: Result<AdapterLoadResult, HostFailure>,
+    ) -> FakeHost {
+        self.adapters.insert(name.to_string(), answer);
         self
     }
 }
@@ -281,6 +310,26 @@ impl NodeHost for FakeHost {
             None => Err(HostFailure::Rpc(RpcError::new(
                 grida_fx_protocol::ErrorCode::LoadFailed,
                 format!("{} has no function {}", params.path, params.function),
+            ))),
+        }
+    }
+
+    fn load_adapter(
+        &mut self,
+        params: &AdapterLoadParams,
+    ) -> Result<AdapterLoadResult, HostFailure> {
+        self.adapter_calls += 1;
+        match self
+            .adapters
+            .get(&format!("{}#{}", params.path, params.attribute))
+        {
+            Some(answer) => answer.clone(),
+            None => Err(HostFailure::Rpc(RpcError::new(
+                grida_fx_protocol::ErrorCode::LoadFailed,
+                format!(
+                    "{}: {} is not declared with adapter()",
+                    params.path, params.attribute
+                ),
             ))),
         }
     }

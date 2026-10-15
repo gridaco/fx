@@ -68,7 +68,14 @@ STEP_KEYS = {
     "mentions",
     "never_mentions",
     "absent",
+    "env",
 }
+# A step's own environment variables (`env`): a name of the shell's form, never one the runner
+# sets for every step, `NODE_OPTIONS` or an FX setting, so no step can turn the network on, read a
+# `.env`, choose another host or reach FX's own store.
+ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+RESERVED_ENV_PREFIX = "GRIDA_FX_"
+RESERVED_ENV = {"NODE_OPTIONS"}
 # The ways a saved text may be compared by meaning; a step uses at most one.
 FORMATS = ("json", "jsonl", "yaml")
 # Run-event members whose values differ between machines and invocations. They are dropped only
@@ -230,7 +237,8 @@ def step_environment(home: Path, passed: dict[str, str]) -> dict[str, str]:
 
     No provider key, tool override, FX cache location or locale can change what a case prints,
     and a case that runs `--live` reaches no provider: the network is off and no `.env` is read
-    (spec/adapters.md section 2; spec/providers.md section 1).
+    (spec/adapters.md section 2; spec/providers.md section 1). A step's `env` adds to this, never
+    over it (check_step_env): a made-up key for a provider the case declares.
     """
 
     return {
@@ -393,7 +401,27 @@ def load_case(case: Path) -> list[dict[str, Any]]:
         absent = step.get("absent", [])
         if not isinstance(absent, list) or not all(map(_is_path, absent)):
             raise CaseFailure(f"{where}: absent is a list of relative paths inside the project")
+        if "env" in step:
+            check_step_env(step["env"], argv is not None, where)
     return steps
+
+
+def check_step_env(given: object, has_argv: bool, where: str) -> None:
+    """A step's `env`: variables for its command alone, beside the minimal environment."""
+
+    if not has_argv:
+        raise CaseFailure(f"{where}: env needs argv")
+    if not isinstance(given, dict) or not all(
+        isinstance(name, str) and isinstance(value, str) for name, value in given.items()
+    ):
+        raise CaseFailure(f"{where}: env maps variable names to text")
+    reserved = set(step_environment(Path(), {})) | {PYTHON_HOST, NODE_HOST, *TOOLCHAIN_HOMES}
+    reserved |= RESERVED_ENV
+    for name in given:
+        if not ENV_NAME.fullmatch(name):
+            raise CaseFailure(f"{where}: env: {name!r} is not a variable name")
+        if name in reserved or name.upper().startswith(RESERVED_ENV_PREFIX):
+            raise CaseFailure(f"{where}: env: {name} is the runner's to set")
 
 
 def run_case(
@@ -430,7 +458,12 @@ def run_case(
             label = f"step {number} ({shlex.join(step['argv'])})"
             stdin = step["stdin"].encode("utf-8") if "stdin" in step else None
             status, stdout, stderr = run_command(
-                [*command, *step["argv"]], project, env, stdin, timeout_s, label
+                [*command, *step["argv"]],
+                project,
+                {**env, **step.get("env", {})},
+                stdin,
+                timeout_s,
+                label,
             )
             expected_status = step.get("status", 0)
             if status != expected_status:

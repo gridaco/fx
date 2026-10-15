@@ -13,7 +13,7 @@ How a provider's adapter turns a request into an exchange, and how it is billed,
 - A request is a JSON object: the **canonical request** ([identity.md](identity.md) §9). Files are file values (`{"file": "<digest>"}`, [protocol.md](protocol.md) §3.2).
 - A body's `ctx` call sends whatever members it gives. A paid built-in sends its params, without `vars`, then its input ports (§14). The member tables below list the members in that order; `agent.turn`, which no built-in sends, in the order of [protocol.md](protocol.md) §6.2, then `provider_options`.
 - A paid built-in leaves out a param the step did not give and that has no default, and an input port without a value: neither is a member of the request. A param whose value is missing or `null` goes as `null` (§14; [protocol.md](protocol.md) §5.3 `params`). Absent and `null` are different requests, and so different call keys ([identity.md](identity.md) §9).
-- A request MUST be checked against its capability right after its route's contract, before anything else ([adapters.md](adapters.md) §4 step 2). The engine checks it before an adapter FX ships sees the call, and before a stand-in is asked ([protocol.md](protocol.md) §6.1), with these sentences:
+- A request MUST be checked against its capability right after its route's contract, before anything else ([adapters.md](adapters.md) §4 step 2). The engine checks it before an adapter FX ships or a project adapter ([adapters.md](adapters.md) §9) sees the call, and before a stand-in is asked ([protocol.md](protocol.md) §6.1), with these sentences:
   - A request that is not an object: `a request for <capability> is a JSON object`.
   - A member the capability does not define is refused: `<capability> takes no member <name>`.
   - Then each member, in the table's order:
@@ -32,8 +32,8 @@ In the tables below, a member's type is one of:
 
 **Answers.**
 - An answer holds files by name, which the engine stores ([store.md](store.md) §3), and `data`: JSON, or `null`. It holds what the sections below name and nothing else.
-- A section's *Every route's check* (or *Check*) holds on every route of its capability. The engine makes it on each answer of an adapter FX ships, after the adapter's own check ([adapters.md](adapters.md) §3.4), and on a stand-in's answer on a route FX has no adapter for ([protocol.md](protocol.md) §6.1, *Stand-in answers*). *A route's check* is its adapter's alone.
-- A stand-in's answer ([protocol.md](protocol.md) §5.7), which no adapter shaped, is held to this before any other check ([protocol.md](protocol.md) §6.1, *Stand-in answers*), with these sentences, the first that applies winning:
+- A section's *Every route's check* (or *Check*) holds on every route of its capability. The engine makes it on each answer of an adapter FX ships, after the adapter's own check ([adapters.md](adapters.md) §3.4), on each answer of a project adapter, after its shape ([adapters.md](adapters.md) §9), and on a stand-in's answer on a route FX has no adapter for ([protocol.md](protocol.md) §6.1, *Stand-in answers*). *A route's check* is its adapter's alone.
+- A stand-in's answer ([protocol.md](protocol.md) §5.7), or a project adapter's ([adapters.md](adapters.md) §9), which no adapter FX ships shaped, is held to this before any other check ([protocol.md](protocol.md) §6.1, *Stand-in answers* and step 7), with these sentences, the first that applies winning:
   - a file a section below names is missing: `the answer holds no <name>`;
   - a file it does not name: `<capability> returns no file named <name>`;
   - a file of another kind than the one named (for `mesh.generate`, than `model/fbx` or `model/gltf-binary`): `<name> is <kind>, not <kind>`;
@@ -330,7 +330,7 @@ FX ships an adapter for it on fal, but the built-in route table has no route for
 
 ## 13. Capabilities without an adapter
 
-`vision.annotate`, `vision.review` and `structured.review` are declared by the standard library's annotator and judges, but FX ships no adapter for them. A call on one is `no_route`.
+`vision.annotate`, `vision.review` and `structured.review` are declared by the standard library's annotator and judges, but FX ships no adapter for them. A call on one is `no_route`, unless its route's provider is declared with a project adapter that declares the capability ([adapters.md](adapters.md) §9).
 
 ## 14. The standard library
 

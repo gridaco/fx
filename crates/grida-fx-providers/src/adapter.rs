@@ -447,6 +447,30 @@ impl Identity {
     pub fn behaves(&self, value: &Value) -> bool {
         grida_fx_core::value::canon(value) == self.behavior
     }
+
+    /// The identity of an adapter known only once its project is planned, a project's own
+    /// (spec/adapters.md §9): `adapter` (`<path>#<attribute>`) and its behaviour `behavior` as
+    /// canonical JSON. Each distinct text is kept once for the life of the process, so a
+    /// long-lived process that plans again keeps one copy of each.
+    pub fn interned(adapter: &str, behavior: &str) -> Identity {
+        Identity {
+            adapter: intern(adapter),
+            behavior: intern(behavior),
+        }
+    }
+}
+
+/// `text`, kept once for the life of the process ([`Identity::interned`]).
+fn intern(text: &str) -> &'static str {
+    static KEPT: std::sync::LazyLock<std::sync::Mutex<std::collections::HashSet<&'static str>>> =
+        std::sync::LazyLock::new(Default::default);
+    let mut kept = KEPT.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(found) = kept.get(text) {
+        return found;
+    }
+    let leaked: &'static str = Box::leak(text.to_owned().into_boxed_str());
+    kept.insert(leaked);
+    leaked
 }
 
 /// An adapter for calls answered within one request.
@@ -461,9 +485,10 @@ pub trait RequestAdapter: Send + Sync {
     }
 
     /// The contract this adapter serves; `None`, the default, names none. For an adapter that names
-    /// one (every adapter FX ships), the engine refuses a call before [`RequestAdapter::send`] as
-    /// spec/adapters.md §4 steps 1 and 2 say, and holds an answer to the capability's every-route
-    /// check after [`RequestAdapter::check`] (spec/adapters.md §3.4).
+    /// one (every adapter FX ships, and a project adapter), the engine refuses a call before
+    /// [`RequestAdapter::send`] as spec/adapters.md §4 steps 1 and 2 say, and holds an answer to
+    /// the capability's every-route check after [`RequestAdapter::check`] (spec/adapters.md
+    /// §3.4).
     fn identity(&self) -> Option<Identity> {
         None
     }
@@ -692,6 +717,15 @@ mod tests {
             assert_eq!(adapter.identity(), None);
             assert_eq!(adapter.check_contract(&call), Ok(()));
         }
+    }
+
+    #[test]
+    fn a_project_adapters_identity_is_interned() {
+        let first = Identity::interned("adapters/acme.py#acme", "3");
+        let again = Identity::interned(&String::from("adapters/acme.py#acme"), "3");
+        assert_eq!(first, again);
+        assert!(std::ptr::eq(first.adapter, again.adapter));
+        assert!(first.behaves(&json!(3)) && !first.behaves(&json!("3")));
     }
 
     #[test]

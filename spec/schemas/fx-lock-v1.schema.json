@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:grida-fx:schema:fx-lock-v1",
   "title": "FX lock file, fx.lock (fx: lock/v1)",
-  "description": "The source digest behind each versioned project node type (identity.md §6). Planning refuses a type whose source no longer matches its entry. A versioned type with no entry plans normally, and `grida-fx lock --check` reports it as unlocked. Written by `grida-fx lock`; commit it.",
+  "description": "The source digest behind each versioned project node type (identity.md §6), and behind each versioned project adapter the project declares (adapters.md §9). Planning refuses a type, or a route served by an adapter, whose source no longer matches its entry. A versioned type or adapter with no entry plans normally, and `grida-fx lock --check` reports it as unlocked. Written by `grida-fx lock`; commit it.",
   "type": "object",
   "required": [
     "fx",
@@ -19,6 +19,18 @@
       "propertyNames": {
         "type": "string",
         "pattern": "^[^./#][^#]*#[A-Za-z_][A-Za-z0-9_]*@(?:0|[1-9][0-9]*)$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      }
+    },
+    "adapters": {
+      "description": "`<path>#<attribute>@<version>` of each versioned adapter the project declares (providers.md section 1) to `digest(source)`, its source closure hashed as a node type's with no resources. Written only when there is one.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^(?:[^/\\\\.#][^/\\\\#]*|\\.[^/\\\\.#][^/\\\\#]*|\\.\\.[^/\\\\#]+)(?:/(?:[^/\\\\.#][^/\\\\#]*|\\.[^/\\\\.#][^/\\\\#]*|\\.\\.[^/\\\\#]+))*#[A-Za-z_][A-Za-z0-9_]*@(?:0|[1-9][0-9]*)$"
       },
       "additionalProperties": {
         "type": "string",

@@ -1,0 +1,76 @@
+{
+ "instances": {
+  "name#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": 0.01
+   },
+   "path": "name",
+   "state": "succeeded"
+  },
+  "refused#1": {
+   "error": "structured.generate on text-a@acme was refused: no colours for [redacted]",
+   "path": "refused",
+   "state": "failed"
+  },
+  "slowly#1": {
+   "cache": "miss",
+   "facts": {
+    "cost_usd": 0.02
+   },
+   "path": "slowly",
+   "state": "succeeded"
+  }
+ },
+ "run": {
+  "run_finished": {
+   "charged_usd": 0.03,
+   "event": "run_finished",
+   "failed": [
+    "refused#1"
+   ],
+   "incomplete": false,
+   "ok": false,
+   "outputs": {
+    "name": {
+     "file": {
+      "digest": "1dd26913e134546692bf31f8c6b02be08050911c31b2bd23e19c11b891e92a67",
+      "kind": "json",
+      "name": "name/json",
+      "size": 212
+     }
+    },
+    "slowly": {
+     "file": {
+      "digest": "550c7de4cf0a72bb15e8ae1cc81737adf3f21a423b9827b2e74227bea628a1ec",
+      "kind": "json",
+      "name": "slowly/json",
+      "size": 150
+     }
+    }
+   },
+   "plan": "6579807a5020a0ec7e626520b0d91e77ac535bc95db6245d28c89e9a3b62f868",
+   "stopped": null
+  },
+  "run_started": {
+   "ceiling_usd": 1,
+   "charged_usd": 0,
+   "estimate": {
+    "high_usd": 0.15,
+    "low_usd": 0
+   },
+   "event": "run_started",
+   "plan": "6579807a5020a0ec7e626520b0d91e77ac535bc95db6245d28c89e9a3b62f868",
+   "repeat": {
+    "live": true,
+    "max_usd": 1,
+    "routes": [
+     "routes.yaml"
+    ],
+    "workflow": "case"
+   },
+   "resumed": false,
+   "workflow": "case"
+  }
+ }
+}

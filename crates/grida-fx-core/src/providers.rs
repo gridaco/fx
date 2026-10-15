@@ -7,12 +7,15 @@
 //! planning project's `fx.yaml` ([`parse`]); [`Declarations`] is the built-in ones, then the
 //! project's. The keys, the `.env` reader, the base URLs, `doctor` and the variables Codex, Grok
 //! Build, the background service and the browser opener never inherit all read them. A
-//! declaration is configuration and is not hashed; only its `family` reaches a route's
-//! fingerprint, through the contract it completes ([`crate::routes::complete_contract`],
-//! [`crate::routes::FAMILY_ADAPTERS`]; spec/identity.md §7).
+//! declaration is configuration and is not hashed; only its `family` or its `adapter` reaches a
+//! route's fingerprint, through the contract it completes ([`crate::routes::complete_contract`],
+//! [`crate::routes::FAMILY_ADAPTERS`], a declared adapter's [`LoadedAdapter`]; spec/identity.md
+//! §7). A declared adapter is read as `<path>#<attribute>` ([`DeclaredAdapter`]); what it serves
+//! is learned only by loading it while planning ([`crate::adapters::load_declared`]).
 //!
 //! A declaration is refused while `fx.yaml` is read, `<file>: providers.<name>…: <sentence>`:
 //! - a name FX ships: `<name> is a provider FX ships`;
+//! - a family and an adapter both: `a provider has a family or an adapter, not both`;
 //! - a variable already read, by a built-in declaration, an earlier one or the same one, compared
 //!   in any letter case: `<VARIABLE> is already read for <provider>`;
 //! - a variable FX or the programs it starts read for themselves ([`reserved`]):
@@ -20,6 +23,9 @@
 //! - a default base URL that does not normalize ([`normalize_base_url`]).
 
 use crate::error::{Error, Result};
+use crate::registry::SourceDigests;
+use grida_fx_protocol::CallKind;
+use indexmap::IndexMap;
 use serde_json::Value;
 use std::sync::{Arc, LazyLock};
 
@@ -70,6 +76,57 @@ pub struct Declaration {
     pub download_hosts: Vec<String>,
     /// The wire it speaks (`openai-compatible`), for a declared provider that names one.
     pub family: Option<String>,
+    /// Its own adapter, for a declared provider that names one (spec/adapters.md §9).
+    pub adapter: Option<DeclaredAdapter>,
+}
+
+/// A declaration's `adapter`: a project module's adapter (spec/adapters.md §9).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeclaredAdapter {
+    /// The module, POSIX, relative to the planning project's root, without `./` or `..`.
+    pub path: String,
+    /// The module-level name it is declared under.
+    pub attribute: String,
+    /// What loading it while planning learned ([`crate::adapters::load_declared`]); `None` until
+    /// then, and then nothing serves the provider and no contract is completed from it.
+    pub loaded: Option<LoadedAdapter>,
+}
+
+impl DeclaredAdapter {
+    /// `<path>#<attribute>`: its name in a contract's `adapter` and in messages.
+    pub fn name(&self) -> String {
+        format!("{}#{}", self.path, self.attribute)
+    }
+}
+
+/// What a declared adapter told planning, and the digest of its source (spec/adapters.md §9).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoadedAdapter {
+    /// Its version; `None` for one whose behaviour is its source.
+    pub version: Option<u64>,
+    /// Each capability it serves, in its order, and whether it is a request or a job.
+    pub capabilities: IndexMap<String, CallKind>,
+    /// Its source closure's file digests, with no resources (spec/identity.md §6).
+    pub source: SourceDigests,
+    /// A versioned adapter whose source no longer matches fx.lock: the problem every step on a
+    /// route it serves gets.
+    pub drift: Option<String>,
+}
+
+impl LoadedAdapter {
+    /// Its contract's `adapter_behavior` (spec/identity.md §7): the version, an integer, or
+    /// `source:<digest>`.
+    pub fn behavior(&self) -> Value {
+        match self.version {
+            Some(version) => Value::from(version),
+            None => Value::String(format!("source:{}", self.source.digest())),
+        }
+    }
+
+    /// Whether it serves `capability`.
+    pub fn serves(&self, capability: &str) -> bool {
+        self.capabilities.contains_key(capability)
+    }
 }
 
 impl Declaration {
@@ -106,6 +163,7 @@ fn built(
         },
         download_hosts: download_hosts.iter().map(|host| host.to_string()).collect(),
         family: None,
+        adapter: None,
     }
 }
 
@@ -294,6 +352,14 @@ pub(crate) fn parse(value: Option<&Value>, label: &str) -> Result<Vec<Declaratio
             return Err(refuse(name, &format!("{name} is a provider FX ships")));
         }
         let text = |value: Option<&Value>| value.and_then(Value::as_str).map(String::from);
+        let family = text(entry.get("family"));
+        let adapter = text(entry.get("adapter"));
+        if family.is_some() && adapter.is_some() {
+            return Err(refuse(
+                name,
+                "a provider has a family or an adapter, not both",
+            ));
+        }
         let mut claim = |where_: &str, variable: &str| -> Result<()> {
             if reserved(variable) {
                 return Err(refuse(
@@ -341,7 +407,16 @@ pub(crate) fn parse(value: Option<&Value>, label: &str) -> Result<Vec<Declaratio
             credential,
             base_url: BaseUrl { variable, default },
             download_hosts,
-            family: text(entry.get("family")),
+            family,
+            // The schema holds its shape: `<path>#<attribute>`, the attribute after the last `#`.
+            adapter: adapter.and_then(|written| {
+                let (path, attribute) = written.rsplit_once('#')?;
+                Some(DeclaredAdapter {
+                    path: path.into(),
+                    attribute: attribute.into(),
+                    loaded: None,
+                })
+            }),
         });
     }
     Ok(declared)
@@ -487,6 +562,7 @@ mod tests {
                 },
                 download_hosts: vec!["cdn.acme.test".into(), "*.acme.test".into()],
                 family: Some("openai-compatible".into()),
+                adapter: None,
             }
         );
         assert_eq!(declared[1].credential, None);
@@ -602,6 +678,48 @@ mod tests {
         }
         assert!(
             parsed(json!({"acme": {"base_url": {"default": "http://localhost:8080"}}})).is_ok()
+        );
+    }
+
+    #[test]
+    fn a_declaration_names_a_family_or_an_adapter() {
+        let base = json!({"default": "https://media.acme.test/v2"});
+        let declared = parsed(json!({
+            "acme-media": {"base_url": base, "adapter": "adapters/media.v2/acme.py#acme_media"},
+        }))
+        .unwrap();
+        let adapter = declared[0].adapter.as_ref().unwrap();
+        assert_eq!(adapter.path, "adapters/media.v2/acme.py");
+        assert_eq!(adapter.attribute, "acme_media");
+        assert_eq!(adapter.name(), "adapters/media.v2/acme.py#acme_media");
+        assert_eq!(adapter.loaded, None);
+        assert_eq!(declared[0].family, None);
+        assert_eq!(
+            parsed(json!({"acme": {
+                "base_url": base,
+                "family": "openai-compatible",
+                "adapter": "adapters/acme.py#acme",
+            }})),
+            Err("fx.yaml: providers.acme: a provider has a family or an adapter, not both".into())
+        );
+    }
+
+    #[test]
+    fn a_loaded_adapters_behaviour_is_its_version_or_its_source() {
+        let mut loaded = LoadedAdapter {
+            version: Some(3),
+            capabilities: [("image.generate".to_string(), CallKind::Request)]
+                .into_iter()
+                .collect(),
+            source: SourceDigests::default(),
+            drift: None,
+        };
+        assert_eq!(loaded.behavior(), json!(3));
+        assert!(loaded.serves("image.generate") && !loaded.serves("video.generate"));
+        loaded.version = None;
+        assert_eq!(
+            loaded.behavior(),
+            json!(format!("source:{}", SourceDigests::default().digest()))
         );
     }
 

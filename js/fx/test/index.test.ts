@@ -31,6 +31,7 @@ test("the SDK's surface", () => {
     "expr",
     "node",
     "tool",
+    "adapter",
   ]) {
     expect(typeof (fx as Record<string, unknown>)[name]).toBe("function");
   }
@@ -66,6 +67,12 @@ test("the SDK's surface", () => {
   for (const name of ["json", "turn", "submit"] as const) {
     expect(typeof fx.Answer[name]).toBe("function");
   }
+  // What project adapters use.
+  for (const name of ["AdapterCall", "AdapterFile", "FetchResponse", "FetchError"]) {
+    expect(typeof (fx as Record<string, unknown>)[name]).toBe("function");
+  }
+  expect(new fx.FetchError("refused", "x")).toBeInstanceOf(Error);
+  expect(typeof fx.Answered.json).toBe("function");
 });
 
 test("a workflow document, written for the engine", () => {

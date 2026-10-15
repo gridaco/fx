@@ -1,0 +1,9 @@
+{
+ "contract": {
+  "adapter": "adapters/acme.ts#acmeJobs",
+  "adapter_behavior": 1
+ },
+ "job": "14bbd0d54bfe",
+ "key_given": false,
+ "name": "slate"
+}

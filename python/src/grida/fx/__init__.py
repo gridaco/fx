@@ -15,12 +15,34 @@
   :class:`StandInCall` (spec/protocol.md section 5.7), which returns an :class:`Answer` or
   :data:`DECLINE`, or raises :class:`CallRefused` or :class:`CallFailed`
   (:mod:`grida.fx._stand_in`).
+- :func:`adapter` declares a project adapter (spec/adapters.md section 9): ``send``, ``submit``
+  and ``collect`` take an :class:`AdapterCall` and return its outcome, :class:`Answered`,
+  :class:`NotReceived`, :class:`Refused`, :class:`Failed`, :class:`Accepted`,
+  :class:`Uncertain`, :class:`Ended` or :class:`Unreachable`; ``call.fetch`` returns a
+  :class:`FetchResponse` or raises :class:`FetchError` (:mod:`grida.fx._adapter`).
 - :mod:`grida.fx.std` holds the Python bodies of the standard node types.
 
 ``python -P -m grida.fx.host`` is the node host the engine starts (:mod:`grida.fx.host`);
 ``python -m grida.fx <verb>`` runs the engine.
 """
 
+from grida.fx._adapter import (
+    Accepted,
+    Adapter,
+    AdapterCall,
+    AdapterFile,
+    AdapterRoute,
+    Answered,
+    Ended,
+    Failed,
+    FetchError,
+    FetchResponse,
+    NotReceived,
+    Refused,
+    Uncertain,
+    Unreachable,
+    adapter,
+)
 from grida.fx._agent import Agent, Tool, ToolInvocationError, ToolReply, ToolResult, tool
 from grida.fx._api import (
     Failure,
@@ -73,25 +95,37 @@ from grida.fx._stand_in import DECLINE, Answer, StandInCall
 
 __all__ = [
     "DECLINE",
+    "Accepted",
+    "Adapter",
+    "AdapterCall",
+    "AdapterFile",
+    "AdapterRoute",
     "Agent",
     "Answer",
+    "Answered",
     "CallFailed",
     "CallRefused",
     "CallResult",
     "CapabilityError",
     "CeilingExceeded",
     "Ctx",
+    "Ended",
     "EngineError",
+    "Failed",
     "Failure",
+    "FetchError",
+    "FetchResponse",
     "FxError",
     "Group",
     "InputFile",
     "NodeFailure",
     "NodeSpec",
+    "NotReceived",
     "Output",
     "Plan",
     "PlanRefused",
     "PortSpec",
+    "Refused",
     "RunResult",
     "RunRecord",
     "RunObservationError",
@@ -109,7 +143,10 @@ __all__ = [
     "ToolInvocationError",
     "ToolReply",
     "ToolResult",
+    "Uncertain",
+    "Unreachable",
     "Workflow",
+    "adapter",
     "cancel",
     "cancel_async",
     "inspect_control",

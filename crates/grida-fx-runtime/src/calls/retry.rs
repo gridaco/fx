@@ -13,9 +13,9 @@
 //! [`MAX_RETRY_AFTER`] (60 s) (spec/adapters.md §3.3).
 //!
 //! **Checking an answer.** An answer is accepted only when, in this order, the adapter's `check`
-//! passes (for an adapter FX ships, followed by the capability's every-route check:
-//! [`super::checked`]), its `data` survives being written as the call record writes it and read
-//! back (its canonical form, spec/identity.md §2, which is what the record replays), and the
+//! passes (for an adapter FX ships or a project adapter, followed by the capability's every-route
+//! check: [`super::checked`]), its `data` survives being written as the call record writes it and
+//! read back (its canonical form, spec/identity.md §2, which is what the record replays), and the
 //! engine's own check for the capability ([`Attempts::check`]; the shape of an `agent.turn` reply)
 //! passes on that canonical form. The accepted answer carries the canonical `data`, so a live
 //! answer and its replay are the same value. Any refusal fails the attempt as billed, before

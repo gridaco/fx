@@ -1,0 +1,13 @@
+{
+ "attempt": 1,
+ "contract": {
+  "adapter": "adapters/acme.py#acme",
+  "adapter_behavior": 1
+ },
+ "fetched": [
+  "refused",
+  "the network is off (GRIDA_FX_NETWORK=off)"
+ ],
+ "key_given": true,
+ "name": "teal"
+}

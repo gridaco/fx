@@ -16,6 +16,14 @@
 //! with status 1) and `fx.lock: <n> versioned node types` printed. A module that fails to load,
 //! or a missing declared resource, is an error (exit 2) naming it, never a crash. A project with
 //! no node modules never starts a host.
+//!
+//! Then every adapter the project declares (spec/adapters.md §9) is loaded on its language's host
+//! ([`crate::adapters::load`]; one that cannot be loaded is `fx.yaml: providers.<name>.adapter:
+//! <sentence>`, exit 2), and each versioned one, `<path>#<attribute>@<version>`, gets its source
+//! digest under `adapters`, judged as a node type's: `unlocked`, or `changed   <path>#<attribute>:
+//! …` unless `--same` names `<path>#<attribute>`. When the lock holds adapters, the count line
+//! reads `fx.lock: <n> versioned node types, <m> versioned adapters` (`…, all locked` with
+//! `check`).
 
 use crate::docs::lock::LockFile;
 use crate::docs::project::Project;
@@ -44,7 +52,10 @@ pub fn lock(
     check: bool,
     host: &mut dyn NodeHost,
 ) -> Result<LockReport> {
-    let mut locked = crate::project::read_lock_at(&project.root)?.nodes;
+    let LockFile {
+        nodes: mut locked,
+        mut adapters,
+    } = crate::project::read_lock_at(&project.root)?;
     let mut registry = Registry::new(
         project.root.clone(),
         project.document.sources.clone(),
@@ -112,13 +123,30 @@ pub fn lock(
             }
         }
     }
+    status = status.max(lock_adapters(
+        project,
+        same,
+        check,
+        host,
+        &mut adapters,
+        &mut lines,
+    )?);
     let count = locked.len();
+    let counted = if adapters.is_empty() {
+        format!(
+            "{}: {count} versioned node types",
+            crate::docs::lock::LOCK_FILE
+        )
+    } else {
+        format!(
+            "{}: {count} versioned node types, {} versioned adapters",
+            crate::docs::lock::LOCK_FILE,
+            adapters.len()
+        )
+    };
     if check {
         if status == 0 {
-            lines.push(format!(
-                "{}: {count} versioned node types, all locked",
-                crate::docs::lock::LOCK_FILE
-            ));
+            lines.push(format!("{counted}, all locked"));
         }
         return Ok(LockReport {
             lines,
@@ -126,15 +154,66 @@ pub fn lock(
             write: None,
         });
     }
-    lines.push(format!(
-        "{}: {count} versioned node types",
-        crate::docs::lock::LOCK_FILE
-    ));
+    lines.push(counted);
     Ok(LockReport {
         lines,
         status,
-        write: Some(LockFile { nodes: locked }),
+        write: Some(LockFile {
+            nodes: locked,
+            adapters,
+        }),
     })
+}
+
+/// Locks every versioned adapter `project` declares into `locked` (module doc), adding its lines;
+/// its status.
+fn lock_adapters(
+    project: &Project,
+    same: &[String],
+    check: bool,
+    host: &mut dyn NodeHost,
+    locked: &mut std::collections::BTreeMap<String, String>,
+    lines: &mut Vec<String>,
+) -> Result<i32> {
+    let declared: Vec<_> = project
+        .document
+        .providers
+        .iter()
+        .filter_map(|declaration| Some((&declaration.name, declaration.adapter.as_ref()?)))
+        .collect();
+    if declared.is_empty() {
+        return Ok(0);
+    }
+    host.open_project(&project.root, &project.document.sources)
+        .map_err(Error::from)?;
+    let mut status = 0;
+    for (name, adapter) in declared {
+        let loaded = crate::adapters::load(&project.root, adapter, host).map_err(|sentence| {
+            Error::plan(format!("fx.yaml: providers.{name}.adapter: {sentence}"))
+        })?;
+        let Some(version) = loaded.version else {
+            continue;
+        };
+        let key = crate::adapters::lock_key(adapter, version);
+        let digest = loaded.source.digest();
+        if check && !locked.contains_key(&key) {
+            lines.push(format!("unlocked  {key}: run grida-fx lock"));
+            status = 1;
+            continue;
+        }
+        let named = adapter.name();
+        let differs = locked.get(&key).is_some_and(|old| *old != digest);
+        if differs && !same.contains(&named) {
+            lines.push(format!(
+                "changed   {named}: its source changed but version {version} did not; bump it, \
+                 or confirm with --same {named}"
+            ));
+            status = 1;
+            continue;
+        }
+        locked.insert(key, digest);
+    }
+    Ok(status)
 }
 
 /// Every node module under `root/nodes` (module doc), as POSIX paths relative to the root,

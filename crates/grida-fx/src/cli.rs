@@ -83,7 +83,7 @@ pub enum Verb {
     Nodes(NodesArgs),
     /// the keys, routes and tools a workflow needs
     Doctor(DoctorArgs),
-    /// pin versioned node types to their source
+    /// pin versioned node types and adapters to their source
     Lock(LockArgs),
     /// run a workflow; --live admits paid calls, within a ceiling
     Run(RunArgs),

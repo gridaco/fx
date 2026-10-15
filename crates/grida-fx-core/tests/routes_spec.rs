@@ -41,6 +41,7 @@ fn route(capability: &str, model: &str, provider: &str, contract: Value) -> Rout
         requests_per_minute: None,
         max_input_pictures: None,
         contract,
+        drift: None,
     }
 }
 

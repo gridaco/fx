@@ -882,6 +882,9 @@ fn every_type_validates_against_its_definition() {
         &StandInAnswerResult::Decline { decline: True },
     );
 
+    // A project adapter (protocol.md §5.8, §6.8).
+    adapter_samples(&mut s);
+
     // Whole messages.
     messages(&mut s);
 
@@ -896,6 +899,296 @@ fn every_type_validates_against_its_definition() {
     );
     for block in BUILDING_BLOCKS {
         assert!(s.defs.get(block).is_some(), "{block} is not in the schema");
+    }
+}
+
+fn adapter_target() -> AdapterTarget {
+    AdapterTarget {
+        path: "adapters/acme.py".into(),
+        attribute: "acme".into(),
+    }
+}
+
+/// An `adapter.send` of an `image.edit` call with one input picture.
+fn adapter_call() -> AdapterCallParams {
+    AdapterCallParams {
+        call_id: "c1".into(),
+        adapter: adapter_target(),
+        capability: "image.edit".into(),
+        route: AdapterRoute {
+            id: "img-a@acme".into(),
+            model: "img-a".into(),
+            provider: "acme".into(),
+            contract: map(vec![
+                ("adapter", json!("adapters/acme.py#acme")),
+                ("adapter_behavior", json!(1)),
+            ]),
+        },
+        base_url: "https://api.acme.test/v1".into(),
+        request: map(vec![
+            ("prompt", json!("a kite at dusk")),
+            ("image", json!({"file": DIGEST})),
+        ]),
+        files: map(vec![(
+            DIGEST,
+            AdapterFile {
+                digest: DIGEST.into(),
+                kind: "image/png".into(),
+                size: 136,
+                path: "/work/acme/.fx/cache/files/ad/ad5e".into(),
+            },
+        )]),
+        take: vec![2, 1],
+        key: DIGEST.into(),
+        attempt: 1,
+    }
+}
+
+fn adapter_answer() -> AdapterAnswer {
+    AdapterAnswer {
+        files: map(vec![(
+            "image",
+            StandInFileWire {
+                base64: "iVBORw0KGgo=".into(),
+                kind: Some("image/png".into()),
+            },
+        )]),
+        data: Value::Null,
+        cost_usd: Some(0.04),
+        usage: Some(AdapterUsage {
+            input_tokens: Some(1200),
+            cached_input_tokens: None,
+            output_tokens: Some(4160),
+        }),
+    }
+}
+
+/// Every adapter definition: a typed sample of each, and each outcome against its own entry.
+fn adapter_samples(s: &mut Schema) {
+    s.typed("adapter_target", &adapter_target());
+    s.typed("adapter_load_params", &adapter_target());
+    let capabilities = map(vec![
+        ("image.edit", CallKind::Request),
+        ("video.generate", CallKind::Job),
+    ]);
+    for version in [Some(3), None] {
+        s.typed(
+            "adapter_load_result",
+            &AdapterLoadResult {
+                adapter: AdapterDeclaration {
+                    version,
+                    capabilities: capabilities.clone(),
+                },
+                closure: vec![ClosureEntry {
+                    label: "adapters/acme.py".into(),
+                    path: "/work/acme/adapters/acme.py".into(),
+                }],
+            },
+        );
+    }
+    let call = adapter_call();
+    s.typed("adapter_route", &call.route);
+    s.typed("adapter_file", &call.files[DIGEST]);
+    s.typed("adapter_send_params", &call);
+    s.typed("adapter_submit_params", &call);
+    s.typed(
+        "adapter_collect_params",
+        &AdapterCollectParams::new(call, map(vec![("job", json!("j-1"))])),
+    );
+    s.typed("adapter_usage", &AdapterUsage::default());
+    s.typed("adapter_usage", &adapter_answer().usage.unwrap());
+
+    let sends = [
+        (
+            "outcome_answered",
+            AdapterSendResult::Answered(adapter_answer()),
+        ),
+        (
+            "outcome_answered",
+            AdapterSendResult::Answered(AdapterAnswer {
+                files: IndexMap::new(),
+                data: json!({"json": {"title": "Kite"}}),
+                cost_usd: None,
+                usage: None,
+            }),
+        ),
+        (
+            "outcome_not_received",
+            AdapterSendResult::NotReceived {
+                reason: "acme returned HTTP 429".into(),
+                retry_after_s: Some(1.5),
+            },
+        ),
+        (
+            "outcome_refused",
+            AdapterSendResult::Refused {
+                reason: "prompt is blank".into(),
+            },
+        ),
+        (
+            "outcome_failed",
+            AdapterSendResult::Failed {
+                reason: "acme returned HTTP 500".into(),
+                retryable: true,
+                cost_usd: None,
+            },
+        ),
+        (
+            "outcome_failed",
+            AdapterSendResult::Failed {
+                reason: "acme returned HTTP 400: the size is not served".into(),
+                retryable: false,
+                cost_usd: Some(0.0),
+            },
+        ),
+    ];
+    for (outcome, result) in sends {
+        let value = s.typed("adapter_send_result", &result);
+        s.valid(outcome, &value);
+    }
+    let submits = [
+        (
+            "outcome_accepted",
+            AdapterSubmitResult::Accepted {
+                handle: map(vec![("job", json!("j-1")), ("frames", json!(48))]),
+            },
+        ),
+        (
+            "outcome_uncertain",
+            AdapterSubmitResult::Uncertain {
+                reason: "acme video submission timed out after the request left".into(),
+            },
+        ),
+        (
+            "outcome_not_received",
+            AdapterSubmitResult::NotReceived {
+                reason: "no connection".into(),
+                retry_after_s: None,
+            },
+        ),
+        (
+            "outcome_refused",
+            AdapterSubmitResult::Refused {
+                reason: "a first frame is needed".into(),
+            },
+        ),
+        (
+            "outcome_failed",
+            AdapterSubmitResult::Failed {
+                reason: "acme returned HTTP 422".into(),
+                retryable: false,
+                cost_usd: Some(0.25),
+            },
+        ),
+    ];
+    for (outcome, result) in submits {
+        let value = s.typed("adapter_submit_result", &result);
+        s.valid(outcome, &value);
+    }
+    let collects = [
+        (
+            "outcome_answered",
+            AdapterCollectResult::Answered(AdapterAnswer {
+                files: map(vec![(
+                    "video",
+                    StandInFileWire {
+                        base64: "AAAAIGZ0eXBpc29t".into(),
+                        kind: None,
+                    },
+                )]),
+                data: Value::Null,
+                cost_usd: None,
+                usage: None,
+            }),
+        ),
+        (
+            "outcome_ended",
+            AdapterCollectResult::Ended {
+                reason: "acme cancelled the job".into(),
+                cost_usd: Some(0.0),
+            },
+        ),
+        (
+            "outcome_unreachable",
+            AdapterCollectResult::Unreachable {
+                reason: "still running at the collect deadline".into(),
+            },
+        ),
+    ];
+    for (outcome, result) in collects {
+        let value = s.typed("adapter_collect_result", &result);
+        s.valid(outcome, &value);
+    }
+
+    s.typed(
+        "http_header",
+        &("content-type".to_string(), "image/png".to_string()),
+    );
+    s.typed(
+        "fetch_body",
+        &FetchBody::Json {
+            json: json!({"prompt": "a kite"}),
+        },
+    );
+    s.typed(
+        "fetch_body",
+        &FetchBody::Bytes {
+            base64: "iVBORw0KGgo=".into(),
+            content_type: "image/png".into(),
+        },
+    );
+    s.typed(
+        "fetch_params",
+        &FetchParams {
+            call_id: "c1".into(),
+            method: FetchMethod::Post,
+            url: "https://api.acme.test/v1/edits".into(),
+            headers: Some(vec![("accept".into(), "application/json".into())]),
+            body: Some(FetchBody::Json {
+                json: json!({"prompt": "a kite at dusk"}),
+            }),
+            lane: FetchLane::Provider,
+            credential: Some(true),
+            timeout_s: Some(120.0),
+            max_response_bytes: Some(16 * 1024 * 1024),
+        },
+    );
+    s.typed(
+        "fetch_params",
+        &FetchParams {
+            call_id: "c1".into(),
+            method: FetchMethod::Get,
+            url: "https://files.acme.test/out/j-1.png".into(),
+            headers: None,
+            body: None,
+            lane: FetchLane::Download,
+            credential: None,
+            timeout_s: None,
+            max_response_bytes: None,
+        },
+    );
+    s.typed(
+        "fetch_result",
+        &FetchResult::Response {
+            status: 200,
+            headers: vec![("content-type".into(), "image/png".into())],
+            base64: "iVBORw0KGgo=".into(),
+        },
+    );
+    for phase in [
+        FetchPhase::Refused,
+        FetchPhase::NotSent,
+        FetchPhase::AfterSend,
+    ] {
+        s.typed(
+            "fetch_result",
+            &FetchResult::Failed {
+                error: FetchFailure {
+                    phase,
+                    reason: "the network is off (GRIDA_FX_NETWORK=off)".into(),
+                },
+            },
+        );
     }
 }
 
@@ -974,6 +1267,39 @@ fn messages(s: &mut Schema) {
         "request",
         request(6, method::STAND_IN_ANSWER, Some(answer)),
     );
+    let load = serde_json::to_value(adapter_target()).unwrap();
+    check(s, "request", request(7, method::ADAPTER_LOAD, Some(load)));
+    let call = adapter_call();
+    let send = serde_json::to_value(&call).unwrap();
+    check(
+        s,
+        "request",
+        request(8, method::ADAPTER_SEND, Some(send.clone())),
+    );
+    check(s, "request", request(9, method::ADAPTER_SUBMIT, Some(send)));
+    let collect = serde_json::to_value(AdapterCollectParams::new(
+        call,
+        map(vec![("job", json!("j-1"))]),
+    ))
+    .unwrap();
+    check(
+        s,
+        "request",
+        request(10, method::ADAPTER_COLLECT, Some(collect)),
+    );
+    let fetch = serde_json::to_value(FetchParams {
+        call_id: "c1".into(),
+        method: FetchMethod::Get,
+        url: "https://api.acme.test/v1/jobs/j-1".into(),
+        headers: None,
+        body: None,
+        lane: FetchLane::Provider,
+        credential: Some(true),
+        timeout_s: None,
+        max_response_bytes: None,
+    })
+    .unwrap();
+    check(s, "request", request(11, method::FETCH, Some(fetch)));
     check(
         s,
         "notification",
@@ -1024,6 +1350,22 @@ fn messages(s: &mut Schema) {
     s.invalid(
         "notification",
         &json!({"jsonrpc": "2.0", "method": "progress"}),
+    );
+    // A fetch names its call, never a run; a collect carries its handle.
+    s.invalid(
+        "request",
+        &json!({"jsonrpc": "2.0", "id": 1, "method": "fetch",
+                "params": {"run_id": "r1", "method": "GET", "url": "u", "lane": "provider"}}),
+    );
+    let mut send = serde_json::to_value(adapter_call()).unwrap();
+    s.invalid(
+        "request",
+        &json!({"jsonrpc": "2.0", "id": 1, "method": "adapter.collect", "params": send.clone()}),
+    );
+    send["handle"] = json!({"job": "j-1"});
+    s.invalid(
+        "request",
+        &json!({"jsonrpc": "2.0", "id": 1, "method": "adapter.send", "params": send}),
     );
 }
 
@@ -1101,6 +1443,126 @@ fn schema_and_serde_refuse_the_same_shapes() {
         json!({"files": {"image": {"kind": "image/png"}}, "data": null}),
     );
     s.refused::<StandInLoadParams>("stand_in_load_params", json!({"path": "/w/s.py"}));
+
+    // A project adapter's messages.
+    s.refused::<AdapterLoadParams>("adapter_load_params", json!({"path": "adapters/acme.py"}));
+    s.refused::<AdapterLoadResult>(
+        "adapter_load_result",
+        json!({"adapter": {"capabilities": {"image.generate": "request"}}, "closure": []}),
+    );
+    s.refused::<AdapterLoadResult>(
+        "adapter_load_result",
+        json!({"adapter": {"version": 1, "capabilities": {"image.generate": "stream"}}, "closure": []}),
+    );
+    s.refused::<AdapterLoadResult>(
+        "adapter_load_result",
+        json!({"adapter": {"version": -1, "capabilities": {}}, "closure": []}),
+    );
+    let mut send = serde_json::to_value(adapter_call()).unwrap();
+    send.as_object_mut().unwrap().shift_remove("base_url");
+    s.refused::<AdapterCallParams>("adapter_send_params", send);
+    let mut collect = serde_json::to_value(adapter_call()).unwrap();
+    collect["handle"] = json!("j-1");
+    s.refused::<AdapterCollectParams>("adapter_collect_params", collect);
+    s.refused::<AdapterSendResult>("adapter_send_result", json!({"files": {}, "data": null}));
+    s.refused::<AdapterSendResult>(
+        "adapter_send_result",
+        json!({"outcome": "answered", "files": {}}),
+    );
+    s.refused::<AdapterSendResult>(
+        "adapter_send_result",
+        json!({"outcome": "accepted", "handle": {"job": "j-1"}}),
+    );
+    s.refused::<AdapterSendResult>(
+        "adapter_send_result",
+        json!({"outcome": "refused", "reason": "no", "cost_usd": 0.5}),
+    );
+    s.refused::<AdapterSendResult>(
+        "adapter_send_result",
+        json!({"outcome": "failed", "reason": "no"}),
+    );
+    s.refused::<AdapterSendResult>(
+        "adapter_send_result",
+        json!({"outcome": "answered", "files": {"image": {"kind": "image/png"}}, "data": null}),
+    );
+    s.refused::<AdapterSubmitResult>(
+        "adapter_submit_result",
+        json!({"outcome": "accepted", "handle": "j-1"}),
+    );
+    s.refused::<AdapterSubmitResult>(
+        "adapter_submit_result",
+        json!({"outcome": "answered", "files": {}, "data": null}),
+    );
+    s.refused::<AdapterCollectResult>(
+        "adapter_collect_result",
+        json!({"outcome": "uncertain", "reason": "no"}),
+    );
+    s.refused::<AdapterCollectResult>("adapter_collect_result", json!({"outcome": "ended"}));
+    s.refused::<FetchParams>(
+        "fetch_params",
+        json!({"call_id": "c1", "method": "PUT", "url": "u", "lane": "provider"}),
+    );
+    s.refused::<FetchParams>(
+        "fetch_params",
+        json!({"call_id": "c1", "method": "GET", "url": "u", "lane": "cdn"}),
+    );
+    s.refused::<FetchParams>(
+        "fetch_params",
+        json!({"run_id": "r1", "method": "GET", "url": "u", "lane": "provider"}),
+    );
+    s.refused::<FetchParams>(
+        "fetch_params",
+        json!({"call_id": "c1", "method": "GET", "url": "u", "lane": "provider", "headers": [["accept"]]}),
+    );
+    s.refused::<FetchParams>(
+        "fetch_params",
+        json!({"call_id": "c1", "method": "POST", "url": "u", "lane": "provider",
+               "body": {"json": {}, "base64": "AA=="}}),
+    );
+    s.refused::<FetchResult>(
+        "fetch_result",
+        json!({"error": {"phase": "lost", "reason": "no"}}),
+    );
+    s.refused::<FetchResult>(
+        "fetch_result",
+        json!({"status": 200, "headers": [], "base64": "", "error": {"phase": "refused", "reason": "no"}}),
+    );
+    // What only the schema says, and the engine checks when it reads the message: a body on a GET,
+    // the caps of a fetch, a blank reason, a cost below 0, an attempt past 6, a header named in
+    // capitals.
+    s.invalid(
+        "fetch_params",
+        &json!({"call_id": "c1", "method": "GET", "url": "u", "lane": "provider", "body": {"json": {}}}),
+    );
+    s.invalid(
+        "fetch_params",
+        &json!({"call_id": "c1", "method": "GET", "url": "u", "lane": "provider", "timeout_s": 301}),
+    );
+    s.invalid(
+        "fetch_params",
+        &json!({"call_id": "c1", "method": "GET", "url": "u", "lane": "provider", "timeout_s": 0}),
+    );
+    s.invalid(
+        "fetch_params",
+        &json!({"call_id": "c1", "method": "GET", "url": "u", "lane": "provider",
+                "max_response_bytes": 67_108_865}),
+    );
+    s.invalid(
+        "fetch_params",
+        &json!({"call_id": "c1", "method": "GET", "url": "u", "lane": "provider",
+                "headers": [["Accept", "image/png"]]}),
+    );
+    s.invalid(
+        "adapter_send_result",
+        &json!({"outcome": "refused", "reason": ""}),
+    );
+    s.invalid(
+        "adapter_send_result",
+        &json!({"outcome": "failed", "reason": "no", "retryable": false, "cost_usd": -1}),
+    );
+    let mut seventh = serde_json::to_value(adapter_call()).unwrap();
+    seventh["attempt"] = json!(7);
+    s.invalid("adapter_send_params", &seventh);
 }
 
 /// The fenced block of protocol.md §9 that starts with ```` ```jsonc ````.

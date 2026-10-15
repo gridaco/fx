@@ -142,8 +142,9 @@ fn shown(kind: &str) -> String {
     }
 }
 
-/// The shape of the module doc, as the answer to check and store.
-fn shape(
+/// The shape of the module doc, as the answer to check and store: a stand-in's, and a project
+/// adapter's, which FX did not shape either (spec/adapters.md §9).
+pub fn shape(
     capability: &str,
     files: IndexMap<String, StandInFile>,
     data: Value,

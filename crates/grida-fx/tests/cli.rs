@@ -1479,6 +1479,135 @@ fn integrated_a_declared_family_serves_its_provider_s_chat_routes_live() {
     assert!(text.contains("no adapter serves"), "{text}");
 }
 
+/// A fake Python host for a project adapter: the planning host and the adapter host alike. It
+/// loads `adapters/acme.py#acme` as serving `structured.generate`, and answers a send after one
+/// `fetch` with the credential, writing what the fetch answered and which keys it sees to
+/// `seen.json`.
+const FAKE_ADAPTER_HOST: &str = r#"
+import json, os, sys
+def read():
+    length = None
+    while True:
+        line = sys.stdin.buffer.readline()
+        if not line:
+            return None
+        if line == b"\r\n":
+            break
+        name, _, value = line.decode("ascii").partition(":")
+        if name.strip().lower() == "content-length":
+            length = int(value.strip())
+    return json.loads(sys.stdin.buffer.read(length))
+def write(message):
+    body = json.dumps(message).encode()
+    sys.stdout.buffer.write(b"Content-Length: %d\r\n\r\n" % len(body) + body)
+    sys.stdout.buffer.flush()
+while True:
+    message = read()
+    if message is None or message.get("method") == "exit":
+        sys.exit(0)
+    method, params = message.get("method"), message.get("params") or {}
+    if method == "initialize":
+        result = {"protocol": params["protocol"],
+                  "host": {"language": "python", "version": "3", "sdk_version": "0"}}
+    elif method == "adapter.load":
+        result = {"adapter": {"version": 1, "capabilities": {"structured.generate": "request"}},
+                  "closure": [{"label": "adapters/acme.py",
+                               "path": os.path.join(os.getcwd(), "adapters/acme.py")}]}
+    elif method == "adapter.send":
+        write({"jsonrpc": "2.0", "id": "f1", "method": "fetch", "params": {
+            "call_id": params["call_id"], "method": "POST",
+            "url": params["base_url"] + "/chat", "body": {"json": {"model": "text-a"}},
+            "lane": "provider", "credential": True}})
+        fetched = read()
+        with open("seen.json", "w") as f:
+            json.dump({"fetched": fetched["result"], "route": params["route"],
+                       "acme": "ACME_API_KEY" in os.environ,
+                       "openai": "OPENAI_API_KEY" in os.environ}, f)
+        result = {"outcome": "answered", "files": {}, "data": {"json": {"name": "teal"}},
+                  "cost_usd": 0.01}
+    elif method == "describe":
+        result = {"modules": [], "builtins": []}
+    else:
+        result = None
+    write({"jsonrpc": "2.0", "id": message["id"], "result": result})
+"#;
+
+/// A live run on a route served by a project adapter (spec/adapters.md §9): planning loads the
+/// adapter and completes the route's contract; the run starts an adapter host with the network
+/// off, which gets its own key and no other declaration's, and whose `fetch` the engine refuses
+/// before it leaves.
+#[test]
+fn integrated_a_project_adapter_serves_its_routes_live() {
+    let found = Command::new("python3")
+        .arg("--version")
+        .output()
+        .is_ok_and(|output| output.status.success());
+    if !found {
+        eprintln!("skipped: python3 is not on PATH");
+        return;
+    }
+    let project = empty_project();
+    let root = project.path();
+    std::fs::write(
+        root.join("fx.yaml"),
+        "fx: project/v1\nroute_tables: [routes.yaml]\nproviders:\n  acme:\n    credential: { \
+         variable: ACME_API_KEY }\n    base_url: { default: \"https://api.acme.test/v1\" }\n    \
+         adapter: adapters/acme.py#acme\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("routes.yaml"),
+        "fx: routes/v1\nroutes:\n  - { capability: structured.generate, route: text-a@acme, \
+         price: { cap_usd: 0.05 } }\n",
+    )
+    .unwrap();
+    std::fs::create_dir(root.join("adapters")).unwrap();
+    std::fs::write(root.join("adapters/acme.py"), "acme = adapter()\n").unwrap();
+    std::fs::create_dir(root.join("schemas")).unwrap();
+    std::fs::write(
+        root.join("schemas/colour.json"),
+        r#"{"type": "object", "properties": {"name": {"type": "string"}}}"#,
+    )
+    .unwrap();
+    std::fs::create_dir(root.join("workflows")).unwrap();
+    std::fs::write(
+        root.join("workflows/chat.yaml"),
+        "fx: workflow/v1\nid: chat\ntitle: Chat\nsteps:\n  name:\n    uses: \
+         fx/structured.generate@1\n    route: text-a@acme\n    with:\n      prompt: Name a \
+         colour.\n      schema: ./schemas/colour.json\noutputs:\n  name: ${{ \
+         steps.name.outputs.json }}\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("fake_host.py"), FAKE_ADAPTER_HOST).unwrap();
+    let python = root.join("bin/python");
+    std::fs::create_dir_all(root.join("bin")).unwrap();
+    grida_fx_providers::testing::write_program(
+        &python,
+        "#!/bin/sh\nexec python3 \"$(dirname \"$0\")/../fake_host.py\"\n",
+    );
+    let output = command(root, &["run", "chat", "--live", "--max-usd", "1"])
+        .env("GRIDA_FX_PYTHON", &python)
+        .env("ACME_API_KEY", MADE_UP_KEY)
+        .env("OPENAI_API_KEY", "fx-made-up-openai-key")
+        .output()
+        .unwrap();
+    assert_eq!(status(&output), 0, "{}{}", stdout(&output), stderr(&output));
+    assert_no_key(&output);
+    let seen: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(root.join("seen.json")).unwrap()).unwrap();
+    assert_eq!(
+        seen,
+        serde_json::json!({
+            "fetched": {"error": {"phase": "refused",
+                                  "reason": "the network is off (GRIDA_FX_NETWORK=off)"}},
+            "route": {"id": "text-a@acme", "model": "text-a", "provider": "acme",
+                      "contract": {"adapter": "adapters/acme.py#acme", "adapter_behavior": 1}},
+            "acme": true,
+            "openai": false
+        })
+    );
+}
+
 #[test]
 fn integrated_a_declared_provider_plans_and_a_refused_declaration_stops_every_verb() {
     let project = drawing_project(

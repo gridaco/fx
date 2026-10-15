@@ -1,0 +1,25 @@
+fx: workflow/v1
+id: case
+title: Colours from a project adapter
+steps:
+  name:
+    uses: fx/structured.generate@1
+    route: text-a@acme
+    with:
+      prompt: Name a colour.
+      schema: ./schemas/colour.json
+  slowly:
+    uses: fx/structured.generate@1
+    route: text-b@acme-jobs
+    with:
+      prompt: Name a colour slowly.
+      schema: ./schemas/colour.json
+  refused:
+    uses: fx/structured.generate@1
+    route: text-a@acme
+    with:
+      prompt: refuse
+      schema: ./schemas/colour.json
+outputs:
+  name: ${{ steps.name.outputs.json }}
+  slowly: ${{ steps.slowly.outputs.json }}

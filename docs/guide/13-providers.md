@@ -12,6 +12,7 @@ one serves.
 | [Your own Grok Build](#your-own-grok-build) | Grok Build, signed in to a Grok subscription | images | your Grok subscription; $0 to FX |
 | [Grida Gateway](#grida-gateway) | `GG_API_KEY` | text, agent turns, images, video, 3D models and rigs | your organization's Grida AI credits |
 | [Your own keys](#your-own-provider-keys) | each provider's key | that provider's routes | each provider's account |
+| [A provider FX does not ship](#a-provider-fx-does-not-ship) | a declaration in `fx.yaml`, and an adapter of your own unless it speaks OpenAI's chat API | its routes | the provider's account |
 
 You can mix them: a project picks a route per capability in `fx.yaml`, and a step can name its own
 `route:`. `grida fx doctor` says which keys FX found, where, and which routes a live run could
@@ -187,6 +188,8 @@ providers:
   domain for every host below it.
 - **`family`** is the wire it speaks: `openai-compatible`, the OpenAI Chat Completions API. That
   is all FX needs to run the provider's `structured.generate` and `agent.turn` routes (below).
+- **`adapter`**, in place of `family`, names [your own adapter](#your-own-adapter), for any other
+  provider: `<path>#<name>`, a module of the project and the name it declares the adapter under.
 
 FX reads a declared provider's key and address as it reads its own: from the environment, else
 the project's `.env`. It redacts the key wherever it would be shown, keeps both variables from
@@ -198,7 +201,7 @@ provider  acme api.acme.test ACME_API_KEY present (.env)
 ```
 
 A declared provider bills dollars, to its own account. Declarations are settings: changing a key's
-variable or the address moves no cache. Only `family` reaches a route's identity
+variable or the address moves no cache. Only `family` and `adapter` reach a route's identity
 ([below](#an-openai-compatible-provider)).
 
 A declaration may not take the name of a provider FX ships (`gg`, `openai`, `openrouter`, `fal`,
@@ -234,12 +237,117 @@ routes:
   identity once.
 - **Statuses** are FX's defaults: a 408 or a 429 is sent again, any other 4xx fails the call, and
   a 5xx is billed and tried again.
-- A route of another capability, or on a provider declared without a family, has no adapter: it
-  plans and prices, and a live call on it is refused (`no adapter serves …`; `no adapter` in
-  doctor).
+- A route of another capability, or on a provider declared with neither a family nor an
+  adapter, has no adapter: it plans and prices, and a live call on it is refused (`no adapter
+  serves …`; `no adapter` in doctor).
 
 The [OpenAI-compatible reference](../../crates/grida-fx-providers/src/openai_compatible/README.md)
 lists what the adapters send and refuse.
+
+### Your own adapter
+
+For any other provider, write its adapter: a module of your project, in Python or TypeScript,
+that turns FX's request into the provider's and the provider's answer into FX's. FX runs it in a
+node host of its language, as it runs your nodes, and keeps the rest: the checks of each request
+and answer, the key, the ceiling, the retries, the cache and the record.
+
+```yaml
+# fx.yaml
+fx: project/v1
+providers:
+  acme:
+    credential: { variable: ACME_API_KEY }
+    base_url: { default: "https://api.acme.test/v1" }
+    adapter: adapters/acme.py#acme
+```
+
+```python
+# adapters/acme.py
+import json
+
+from grida.fx import Answered, Failed, FetchError, NotReceived, Refused, adapter
+
+
+async def send(call):  # one structured.generate request, sent once
+    request = {
+        "model": call.route.model,
+        "prompt": call.request["prompt"],
+        "schema": json.loads(call.request["schema"].read_bytes()),
+    }
+    try:
+        response = await call.fetch(
+            f"{call.base_url}/answers",
+            method="POST",
+            json=request,
+            credential=True,
+            timeout_s=60,
+        )
+    except FetchError as error:
+        if error.phase == "refused":
+            return Refused(error.reason)
+        if error.phase == "not_sent":
+            return NotReceived(error.reason)
+        return Failed(error.reason, retryable=True)
+    if response.status != 200:
+        return Failed(f"acme returned HTTP {response.status}", retryable=response.status >= 500)
+    body = response.json()
+    return Answered.json(body["answer"], cost_usd=body.get("cost_usd"))
+
+
+acme = adapter(requests=["structured.generate"], send=send, version=1)
+```
+
+- **What it serves.** `adapter(requests=[…], jobs=[…], send=…, submit=…, collect=…)` names
+  each capability it serves on its provider: a request, sent once by `send`, or a long job,
+  submitted once by `submit` and then collected by `collect`, which polls with its own clock. A
+  capability it does not name has no adapter on that provider. In TypeScript, `export const acme
+  = adapter({ … })` from `@grida/fx`, and its outcomes are plain objects
+  (`{ outcome: "refused", reason }`); `tsc` refuses an outcome a function may not return.
+- **When it runs.** Planning loads the module on the planning host, so its top-level code runs
+  then, and a module that cannot load refuses the command (`fx.yaml: providers.acme.adapter: …`).
+  `grida fx doctor` names it with its version and each capability's kind:
+
+  ```
+  adapter   acme adapters/acme.py#acme version 1: structured.generate (request)
+  ```
+
+  A live run, even with the network off, starts its own host on its first call, in the project's
+  root, and stops it with the run. That host's environment holds its own declaration's key and
+  base URL and no other declaration's. A plan, a dry run and a stand-in run start none.
+- **Outcomes.** `send` returns `Answered`, `NotReceived` (the provider provably never received
+  the request: FX sends it again, unbilled), `Refused` (nothing was sent: $0) or `Failed`
+  (`retryable` says whether FX may try again; it is billed). `submit` returns `Accepted` with a
+  handle (a JSON object holding what `collect` needs, never a key), `Uncertain`, or one of the
+  last three; `collect` returns `Answered`, `Ended` or `Unreachable`. An answer is checked as a
+  provider's answer to FX's own adapter is. The call is charged the `cost_usd` the outcome
+  reports, else its whole hold or the route's cap. Anything raised, an outcome its method does not
+  take, or a host that stops, ends the call as an unknown outcome: a send is billed in full and
+  never sent again.
+- **The network.** `await call.fetch(…)` makes one exchange through FX's transport: never retried,
+  no redirect followed, at most 300 seconds and 64 MiB. With `credential=True` FX attaches the
+  key itself, only to the origin of `call.base_url`; downloads (`lane="download"`) go only to the
+  declaration's `download_hosts`; and with `GRIDA_FX_NETWORK=off` every exchange is refused
+  before it leaves. A failure raises `FetchError`, whose `phase` (`refused`, `not_sent`,
+  `after_send`) says which outcome to return. An adapter may use its own HTTP client or a
+  vendor's SDK instead, if it sends each request once, with retries off, and sends nothing while
+  `GRIDA_FX_NETWORK` is `off`: FX cannot turn off a client it does not own.
+- **Identity and versions.** Each route the adapter serves gets `adapter: adapters/acme.py#acme`
+  and `adapter_behavior: 1`, its version, in its `contract`; without a version, the digest of the
+  module and the project modules it imports. So moving the module, renaming the adapter, or
+  bumping its version draws its routes' calls again. `grida fx lock` pins a versioned adapter's
+  source in `fx.lock`, as a [node type's](03-nodes.md#versions), and a later edit that keeps the
+  version is refused on each step it serves until you bump it or confirm it with
+  `grida fx lock --same adapters/acme.py#acme`.
+- **Secrets.** FX redacts the key, and every URL the adapter downloads through `fetch`, from the
+  reasons it records. What the adapter prints on its standard error is not redacted.
+- **Testing.** `GRIDA_FX_NETWORK=off grida fx run <workflow> --live --max-usd 1` runs the adapter
+  with every `fetch` refused before it leaves, so nothing sent through `fetch` reaches the
+  provider; an adapter with its own client must check the switch itself. A stand-in run answers
+  the routes' calls without the adapter, and starts no adapter host.
+
+The SDK READMEs give the whole API ([Python](../../python/README.md#project-adapters-a-provider-of-your-own),
+[TypeScript](../../js/fx/README.md#project-adapters-a-provider-of-your-own)), and
+[adapters.md §9](../../spec/adapters.md#9-project-adapters) the contract.
 
 ## Parameters FX does not expose
 

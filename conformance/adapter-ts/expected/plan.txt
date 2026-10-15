@@ -1,0 +1,6 @@
+case  ·  1 phase
+phase 1   3 steps   3 provider calls   $0.00 – $0.15
+cached    0 of 3 known steps
+estimate  $0.00 – $0.15   ceiling $1.00
+note      structured.generate on text-a@acme has no price: each call holds its cap, $0.05, and is charged what the provider reports, else the cap
+note      structured.generate on text-b@acme-jobs has no price: each call holds its cap, $0.05, and is charged what the provider reports, else the cap

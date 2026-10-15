@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { CallFailed, CallRefused, Cancelled } from "../src/engine-errors.js";
-import { InputFile } from "../src/files.js";
+import { AdapterFile, InputFile } from "../src/files.js";
 import { frame, Refusal } from "../src/protocol.js";
 import {
   Answer,
@@ -178,6 +178,10 @@ test("isDecline tells DECLINE from an answer", () => {
 test("an answer's undefined members are left out; an undefined array item is refused", async () => {
   expect(await encode({ data: { a: 1, b: undefined } })).toEqual({ files: {}, data: { a: 1 } });
   expect(await encode({ files: undefined, data: undefined })).toEqual({ files: {}, data: null });
+  expect(await encode({ files: { image: undefined, raw: new TextEncoder().encode("raw") } })).toEqual({
+    files: { raw: { base64: b64("raw") } },
+    data: null,
+  });
   const sent = frame({ jsonrpc: "2.0", id: 1, result: await encode(Answer.submit({ x: 1, note: undefined })) });
   expect(sent.toString("utf8")).toEndWith(
     '{"files":{},"data":{"text":"","tool_calls":[{"id":"call_1","name":"submit","arguments":{"x":1}}]}}}',
@@ -215,6 +219,11 @@ test.each([
   [{ files: { image: new URL("https://acme-user:acme-token@files.acme.test/a.png?sig=abc") } }, "image is an https: URL, not a file: URL"],
   [{ files: { image: new URL("data:image/png;base64,AA==") } }, "image is a data: URL, not a file: URL"],
   [{ files: { image: new ArrayBuffer(1) } }, "an answer's file is bytes, an InputFile, {bytes, kind} or a file: URL; image is an ArrayBuffer"],
+  // An adapter's call hands out AdapterFile objects; a stand-in's answer takes its own call's files.
+  [
+    { files: { image: new AdapterFile({ digest: DIGEST, kind: "image/png", size: 1, path: "/acme/a.png" }) } },
+    "an answer's file is bytes, an InputFile, {bytes, kind} or a file: URL; image is an AdapterFile",
+  ],
   [{ files: { image: { bytes: new Uint8Array(1), kind: 3 } } }, "an answer's file kind is a file kind; image's is 3"],
   [{ files: { Image: new Uint8Array(1) } }, "an answer's files are named in lowercase ([a-z][a-z0-9_]*), not 'Image'"],
   [{ files: [new Uint8Array(1)] }, "an answer's files are an object of names to files, not an array"],

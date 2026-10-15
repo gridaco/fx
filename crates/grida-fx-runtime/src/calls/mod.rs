@@ -32,9 +32,10 @@
 //!    names none of them (spec/adapters.md §1). This is checked after the cache and the live
 //!    check, so recorded calls replay offline
 //!    and without adapters (spec/protocol.md §6.1 step 4; spec/store.md §4). An adapter FX ships
-//!    gets the engine's checks around it ([`checked`]): its route's contract and the request
-//!    before each send or submit, inside the attempt, and the capability's every-route check after
-//!    its own check of an answer (spec/adapters.md §3.4, §4).
+//!    or a project adapter (spec/adapters.md §9) gets the engine's checks around it
+//!    ([`checked`]): its route's contract and the request before each send or submit, inside the
+//!    attempt, and the capability's every-route check after its own check of an answer
+//!    (spec/adapters.md §3.4, §4).
 //! 7. the job record: unreadable stops the run ([`CallError::Fault`]); `submitting` is
 //!    `job_unsettled`: `<capability> on <route id> (take <take>) was being submitted when a run
 //!    stopped, and nobody can say whether the provider took it. Check the provider's dashboard,

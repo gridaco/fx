@@ -336,6 +336,7 @@ mod tests {
             },
             download_hosts: Vec::new(),
             family: Some("openai-compatible".into()),
+            adapter: None,
         }])
     }
 

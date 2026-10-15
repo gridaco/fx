@@ -25,7 +25,7 @@ standalone `grida-fx` command and the source setup are in
 | `grida fx nodes [type]` | built-in and project node types, with settings and routes |
 | `grida fx schema <target>` | the JSON Schema its `inputs:` compile to |
 | `grida fx doctor [target]` | the Python, Node, keys, routes and tools a workflow needs, the target's own routes first ([below](#keys-and-live-runs)) |
-| `grida fx lock [where] [--same <node>]… [--check]` | node version locks; repeat `--same` to confirm several |
+| `grida fx lock [where] [--same <node>]… [--check]` | node and adapter version locks; `--same` confirms a node type's or an adapter's `<path>#<attr>`, repeated for several |
 | `grida fx expand`, `identity`, `price <target> [inputs]` | the expanded graph, each instance's identity, the price by phase, as JSON |
 | `grida fx project <run>` | a run's record projected to its state, as JSON |
 | `grida fx observe <run> [--after cursor] [--limit 256]` / `observe <run> --snapshot` | consistent snapshot or bounded recorded events, as JSON ([contract](../../spec/observation.md)) |
@@ -207,13 +207,16 @@ recorded. `GRIDA_FX_DISABLE_DOTENV=1` turns the file off, so only the environmen
 (credential-free checks set it).
 
 **Trying `--live` without the network.** With `GRIDA_FX_NETWORK=off`, a live run builds its
-adapters as usual, but nothing leaves the machine: every provider request is refused before it is
-sent, and the step fails with a message that names `GRIDA_FX_NETWORK`, for nothing. Tests of live
-paths use it.
+adapters as usual, but nothing FX sends leaves the machine: every request through FX's transport
+(FX's adapters, and a [project adapter's](13-providers.md#your-own-adapter) `fetch`) is refused
+before it is sent, and the step fails with a message that names `GRIDA_FX_NETWORK`, for nothing.
+A project adapter's own HTTP client is not stopped: such an adapter checks the switch itself.
+Tests of live paths use it.
 
 **Checking keys and routes.** `grida fx doctor` prints, after the engine, Python and Node lines,
 where each key comes from (and for each provider `fx.yaml` declares, a `provider` line with its
-address too), which Codex and Grok Build it found, and which routes a live run could serve, for
+address too, and for one served by [its own adapter](13-providers.md#your-own-adapter) an
+`adapter` line), which Codex and Grok Build it found, and which routes a live run could serve, for
 the project you run from (the built-in table and its `route_tables`); with a target, the tools
 and node types the workflow needs follow:
 
@@ -248,7 +251,9 @@ or `not installed (grok)` (no Codex or Grok Build found), `too old (codex 0.150.
 adapter of FX serves the capability on that provider, or none under the `adapter` its contract
 names). A missing key alone doesn't change doctor's exit status, unless the target uses a route
 that needs it (below); a `.env` or base URL that a live run would refuse does: doctor prints
-`keys      <why>` and exits 1.
+`keys      <why>` and exits 1. So does an adapter that cannot load, as a plan would refuse it:
+its line reads `adapter   acme adapters/acme.py#acme cannot load: <why>` where a loaded one reads
+`adapter   acme adapters/acme.py#acme version 1: structured.generate (request)`.
 
 **The target's routes come first.** With a target, `grida fx doctor <target>` lists, right after the
 Python and Node lines, the routes the workflow's paid steps use, each with whether a live run could
@@ -510,8 +515,8 @@ const images = result.outputs["images"]; // a keyed collection is a Map, in its 
   process, offline and for nothing ([below](#stand-ins-testing-without-a-provider));
   `result.standIn` says whether a run had one.
 - **Your Node runs the TypeScript nodes when nothing else is chosen:** the SDK (and `grida fx`)
-  tells the engine the Node it runs on, and TypeScript node bodies, builders and a TypeScript
-  `--stand-in` file run on it unless `GRIDA_FX_NODE` chooses another. Hosting them needs Node 24
+  tells the engine the Node it runs on, and TypeScript node bodies, builders, adapters and a
+  TypeScript `--stand-in` file run on it unless `GRIDA_FX_NODE` chooses another. Hosting them needs Node 24
   or later ([Getting started](01-getting-started.md#when-fx-needs-node)); run under Bun, the SDK
   leaves the choice to `node` on `PATH`.
 

@@ -33,6 +33,28 @@ pub enum OffHost {
     Outside,
 }
 
+/// Whether `url` has the origin of `base` (scheme, host and port, the scheme's default port
+/// counted), as a project adapter's `fetch` holds its credential to (spec/adapters.md §9). Either
+/// one not parsing, or without a host, is no match.
+pub fn same_origin(url: &str, base: &str) -> bool {
+    let origin = |text: &str| {
+        let parsed = url::Url::parse(text).ok()?;
+        let host = parsed
+            .host_str()?
+            .trim_end_matches('.')
+            .to_ascii_lowercase();
+        Some((
+            parsed.scheme().to_string(),
+            host,
+            parsed.port_or_known_default(),
+        ))
+    };
+    match (origin(url), origin(base)) {
+        (Some(url), Some(base)) => url == base,
+        _ => false,
+    }
+}
+
 /// A result's URL, parsed, when it may be downloaded from a provider whose declaration lists
 /// `hosts` (spec/providers.md §1): `https`; a host that is a name, not an address, and is one of
 /// `hosts` or lies below a `*.<domain>` entry's domain, compared in lower case without trailing
@@ -904,6 +926,35 @@ mod tests {
             download_url("https://cdn.acme.test/a.png", &[]),
             Err(OffHost::Outside)
         );
+    }
+
+    #[test]
+    fn an_origin_is_its_scheme_host_and_port() {
+        let base = "https://api.acme.test/v1";
+        for same in [
+            "https://api.acme.test/v1/draw",
+            "https://API.acme.test:443/jobs?id=1",
+            "https://api.acme.test./other",
+        ] {
+            assert!(same_origin(same, base), "{same}");
+        }
+        for other in [
+            "http://api.acme.test/v1",
+            "https://api.acme.test:8443/v1",
+            "https://files.acme.test/v1",
+            "https://acme.test/v1",
+            "not a url",
+        ] {
+            assert!(!same_origin(other, base), "{other}");
+        }
+        assert!(same_origin(
+            "http://127.0.0.1:8080/v1/x",
+            "http://127.0.0.1:8080/v1"
+        ));
+        assert!(!same_origin(
+            "http://127.0.0.1:8081/v1",
+            "http://127.0.0.1:8080"
+        ));
     }
 
     #[test]

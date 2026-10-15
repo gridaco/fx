@@ -1,5 +1,6 @@
-//! The engine's checks around an adapter FX ships (spec/adapters.md §3.4, §4; spec/capabilities.md
-//! §1): [`checked`] wraps the adapter the registry hands the call path.
+//! The engine's checks around an adapter that names its identity, one FX ships or a project
+//! adapter (spec/adapters.md §3.4, §4, §9; spec/capabilities.md §1): [`checked`] wraps the
+//! adapter the registry hands the call path.
 //!
 //! - **Before a send or a submit**, the route's contract against the adapter's identity, the
 //!   adapter's own judgement of its other contract members, and the request against its capability

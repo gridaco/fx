@@ -106,6 +106,7 @@ pub(crate) fn route(capability: &str, model: &str, provider: &str) -> Route {
         requests_per_minute: None,
         max_input_pictures: None,
         contract: json!({}),
+        drift: None,
     }
 }
 

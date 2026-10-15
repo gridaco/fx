@@ -208,7 +208,7 @@
             "minimum": 1
           },
           "contract": {
-            "description": "Settings that change what the route returns. Part of its fingerprint, so of every identity it serves. Where one of FX's adapters serves the route's capability and provider, a left-out `adapter` or `adapter_behavior` is filled in from providers.md §2 before the fingerprint is taken (identity.md §7).",
+            "description": "Settings that change what the route returns. Part of its fingerprint, so of every identity it serves. Where an adapter serves the route's capability and provider (one of FX's, one of the family the planning project declares the provider with, or the project adapter it declares it with), a left-out or null `adapter` or `adapter_behavior` is filled in before the fingerprint is taken: from providers.md §2, or with the project adapter's `<path>#<attribute>` and its version or `source:<digest>` (adapters.md §9; identity.md §7).",
             "type": "object",
             "properties": {
               "provider_options": {

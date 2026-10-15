@@ -240,6 +240,7 @@ mod tests {
             },
             download_hosts: Vec::new(),
             family: Some(FAMILY.into()),
+            adapter: None,
         };
         Declarations::with(&[
             declare("acme", Some("ACME_API_KEY"), Some("ACME_BASE_URL")),

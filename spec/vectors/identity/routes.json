@@ -1,6 +1,6 @@
 {
  "kind": "fx-route-vectors-v1",
- "description": "Route tables read into a catalog (identity.md section 7): each case's builtin table stands in for the built-in default table, and its tables follow in catalog order. providers, when given, is the planning project's declarations as fx.yaml's providers: gives them; only a declaration's family completes a contract. routes_given leaves the built-in table out of the catalog, as a --routes file does; it still serves as a base. expect lists catalog entries with their completed contract and fingerprint; absent lists routes the catalog must not hold; refuse names the table and entry that is refused, and why: no_base or other_provider.",
+ "description": "Route tables read into a catalog (identity.md section 7): each case's builtin table stands in for the built-in default table, and its tables follow in catalog order. providers, when given, is the planning project's declarations as fx.yaml's providers: gives them; only a declaration's family or adapter completes a contract. adapters, given with a declared adapter, is what loading each one told planning, by its name: its version (an integer, or null), its capabilities as adapter.load gives them, and for one without a version its source, the file digests of its source closure by label. routes_given leaves the built-in table out of the catalog, as a --routes file does; it still serves as a base. expect lists catalog entries with their completed contract and fingerprint; absent lists routes the catalog must not hold; refuse names the table and entry that is refused, and why: no_base or other_provider.",
  "cases": [
   {
    "name": "a contract left out on a pair an adapter of FX serves is filled in",
@@ -142,6 +142,51 @@
    "expect": [
     {"capability": "structured.generate", "route": "text-b@acme", "contract": {"adapter_behavior": 2, "adapter": "openai-compatible-structured"}, "digest": "fe32a95908d79b320ccb27b4b986ebb9f973955dd59186c5225b9f939ebeeae9"},
     {"capability": "agent.turn", "route": "text-b@acme", "contract": {"adapter": "acme-chat"}, "digest": "d1bf8ca0041334db65760da00a6d581674db854c4a61aaa297909a2ed9709db2"}
+   ]
+  },
+  {
+   "name": "a declared adapter fills its provider's routes for the capabilities it declares",
+   "note": "identity.md section 7, step 2, a declared adapter: acme is declared with the adapter adapters/acme.py#acme, which loading found at version 1, declaring structured.generate (a request) and image.generate (a job). Its routes of those capabilities get its name and version, null counting as left out; agent.turn, which it does not declare, keeps its contract.",
+   "providers": {"acme": {"base_url": {"default": "https://api.acme.test/v1"}, "adapter": "adapters/acme.py#acme"}},
+   "adapters": {"adapters/acme.py#acme": {"version": 1, "capabilities": {"structured.generate": "request", "image.generate": "job"}}},
+   "builtin": [],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "structured.generate", "route": "text-a@acme", "price": {"cap_usd": 0.05}}, {"capability": "image.generate", "route": "img-a@acme", "price": {"usd": 0.01}, "contract": {"adapter": null}}, {"capability": "agent.turn", "route": "text-a@acme", "price": {"cap_usd": 0.05}}]
+   ],
+   "expect": [
+    {"capability": "structured.generate", "route": "text-a@acme", "contract": {"adapter": "adapters/acme.py#acme", "adapter_behavior": 1}, "digest": "5c339a6c0382d6033c2e33d5316e4cffd196709ecc4daf890bc2a9656a92ff1d"},
+    {"capability": "image.generate", "route": "img-a@acme", "contract": {"adapter": "adapters/acme.py#acme", "adapter_behavior": 1}, "digest": "2b87a60b3575d6b0fb8a62cfca7cd4094da92a67ba1bae093e28262c9e983fda"},
+    {"capability": "agent.turn", "route": "text-a@acme", "contract": {}, "digest": "78d1e86bde1d0dac6288be377ddde8f4b4f4017367b7304466f113efac1ac879"}
+   ]
+  },
+  {
+   "name": "a declared adapter's stated members are kept",
+   "note": "A stated behaviour is kept, and refused when a call is sent; a contract naming another adapter gets no behaviour.",
+   "providers": {"acme": {"base_url": {"default": "https://api.acme.test/v1"}, "adapter": "adapters/acme.py#acme"}},
+   "adapters": {"adapters/acme.py#acme": {"version": 1, "capabilities": {"structured.generate": "request", "image.generate": "job"}}},
+   "builtin": [],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "structured.generate", "route": "text-b@acme", "price": {"cap_usd": 0.05}, "contract": {"adapter_behavior": 2}}, {"capability": "image.generate", "route": "img-b@acme", "price": {"usd": 0.01}, "contract": {"adapter": "acme-paint"}}]
+   ],
+   "expect": [
+    {"capability": "structured.generate", "route": "text-b@acme", "contract": {"adapter_behavior": 2, "adapter": "adapters/acme.py#acme"}, "digest": "53fac578689b2dd282d91b433544c65755cdd73c5511a6464b7944c0dbf7f215"},
+    {"capability": "image.generate", "route": "img-b@acme", "contract": {"adapter": "acme-paint"}, "digest": "b4e99957f07322523f72da81fff6a0583dbaa43c7558fb2e6efbe8cc2a64a863"}
+   ]
+  },
+  {
+   "name": "an adapter without a version is known by its source",
+   "note": "adapters/acme.ts#acme declares no version: its behaviour is the string source: followed by the digest of its fx-node-source-v1 object (identity.md section 6), whose files are the adapter's source closure, given here by its file digests, and whose resources are empty. An edit to either file moves the fingerprint.",
+   "providers": {"acme": {"base_url": {"default": "https://api.acme.test/v1"}, "adapter": "adapters/acme.ts#acme"}},
+   "adapters": {"adapters/acme.ts#acme": {"version": null, "capabilities": {"structured.generate": "request"}, "source": {"adapters/acme.ts": "c6539ade8948bc741141c854273041bab1f0a4718860723ead9b56d0c5f49cea", "adapters/colours.ts": "2443d463291746af4ecf2565c5d4b0e49468b9d05a13d7965d715ad40603ea7d"}}},
+   "builtin": [],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "structured.generate", "route": "text-a@acme", "price": {"cap_usd": 0.05}}]
+   ],
+   "expect": [
+    {"capability": "structured.generate", "route": "text-a@acme", "contract": {"adapter": "adapters/acme.ts#acme", "adapter_behavior": "source:484cf019dc82ac836faf539627d68c2bcd0b3d05f1247f3c6e28a3667566cf32"}, "digest": "584c976038f221f2514bd22ab92d3438a8ff8c019d474fde43659a58f6fa835e"}
    ]
   },
   {

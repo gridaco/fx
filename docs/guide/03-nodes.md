@@ -2,7 +2,8 @@
 
 A node type is one kind of work. You use built-in ones by name. When none fits, write your own in
 [Python](#writing-a-node-type-in-python) or [TypeScript](#writing-a-node-type-in-typescript), or in
-[any language](#other-languages) that speaks the node protocol.
+[any language](#other-languages) that speaks the node protocol. A provider FX does not ship is
+served by an [adapter](#adapters-a-provider-of-your-own), project code of the same kind.
 
 ## Built-in node types (`fx/...`)
 
@@ -294,7 +295,8 @@ project you choose how that identity is set:
   - A versioned node with no `fx.lock` entry yet plans normally; `grida fx lock --check` reports
     it as unlocked.
 
-Built-in node types always carry versions; their major version is in `uses:`.
+Built-in node types always carry versions; their major version is in `uses:`. Your own
+[adapters](#adapters-a-provider-of-your-own) are versioned and locked the same way.
 
 ## Writing a node type in TypeScript
 
@@ -496,6 +498,48 @@ imports count by their literal paths (relative, `#` and `.json` alike; `import t
 nothing), whether or not they run. Import project files statically and spell paths as they are
 on disk: a body that loads a project file outside that list when it runs fails its step and says
 why. List a file that only a package, a worker or a child process loads under `resources`.
+
+## Adapters: a provider of your own
+
+A node never calls a provider itself: it asks FX, which routes, prices, checks, retries and
+caches each call. When the provider is one FX does not ship, you write its **adapter** instead, a
+module of the project in Python or TypeScript that maps FX's request to the provider's and its
+answer back, and `fx.yaml` names it on the provider's declaration:
+
+```yaml
+# fx.yaml
+providers:
+  acme:
+    credential: { variable: ACME_API_KEY }
+    base_url: { default: "https://api.acme.test/v1" }
+    adapter: adapters/acme.py#acme
+```
+
+```python
+# adapters/acme.py
+from grida.fx import Answered, adapter
+
+
+async def send(call):  # structured.generate on any <model>@acme route
+    response = await call.fetch(
+        f"{call.base_url}/answers",
+        method="POST",
+        json={"model": call.route.model, "prompt": call.request["prompt"]},
+        credential=True,  # FX attaches the key, only to the base URL's origin
+    )
+    body = response.json()
+    return Answered.json(body["answer"], cost_usd=body.get("cost_usd"))
+
+
+acme = adapter(requests=["structured.generate"], send=send, version=1)
+```
+
+An adapter is project code as a node type is: FX loads it in the node host of its language,
+while planning too, and its identity follows its `version`, whose source `grida fx lock` pins, or,
+without one, its source. Every node then reaches the provider through its routes, `<model>@acme`,
+as it reaches FX's own. [AI providers](13-providers.md#your-own-adapter) explains the outcomes an
+adapter returns (this sketch returns only an answer, so a failed exchange is billed in full), how
+it reaches the network, and how to test it with the network off.
 
 ## Other languages
 

@@ -1,20 +1,21 @@
 //! The checks more than one route makes: the engine's before a send (spec/adapters.md §4), and the
 //! answer checks (spec/adapters.md §3.4; spec/capabilities.md).
 //!
-//! **Before a send.** The engine refuses a call of an adapter FX ships before the adapter sees it
-//! ([`before_send`]): its route's contract against the adapter's [`Identity`] ([`contract`]),
-//! then the adapter's own judgement of its other contract members, then the request against its
-//! capability ([`request`]). The adapters' own guards for direct callers call [`serves`] and
-//! [`contract`] too, so the engine and an adapter never disagree on a contract.
+//! **Before a send.** The engine refuses a call of an adapter FX ships, or of a project adapter
+//! (spec/adapters.md §9), before the adapter sees it ([`before_send`]): its route's contract
+//! against the adapter's [`Identity`] ([`contract`]), then the adapter's own judgement of its other
+//! contract members, then the request against its capability ([`request`]). The adapters' own
+//! guards for direct callers call [`serves`] and [`contract`] too, so the engine and an adapter
+//! never disagree on a contract.
 //!
 //! **Answers.** Adapters' `check`s call these, so two routes never disagree on what "an exact
 //! size", "an MP3" or "meets the schema" means, and each keeps its own sentences where they differ
 //! (a missing file, an unreadable size). [`every_route`] is the check spec/capabilities.md gives a
 //! capability for every route (its *Every route's check*, or *Check*; never *A route's check*):
-//! what the engine holds an answer of an adapter FX ships to after the adapter's own check
-//! ([`every_route_with`], with the adapter's redactor), and what an answer no adapter of FX made is
-//! held to, a stand-in's on a route FX has no adapter for (spec/protocol.md §6.1, *Stand-in
-//! answers*; [`crate::stand_in`]).
+//! what the engine holds an answer of an adapter FX ships, or of a project adapter, to after the
+//! adapter's own check ([`every_route_with`], with the adapter's redactor), and what an answer no
+//! adapter of FX made is held to, a stand-in's on a route FX has no adapter for or one a project
+//! adapter serves (spec/protocol.md §6.1, *Stand-in answers*; [`crate::stand_in`]).
 //!
 //! A check judges the call (its route, request, files and take) and the answer alone, never
 //! anything its adapter's send or collect kept (spec/adapters.md §3.4), so a stand-in's answer can

@@ -1,0 +1,6 @@
+# fx.lock: the source behind each versioned node type; commit it
+fx: lock/v1
+nodes: {}
+adapters:
+  adapters/acme.ts#acme@1: 229b75a0733808e739d4c78d23d7706592da2e4fd16ebfab91072118b7b16f1f
+  adapters/acme.ts#acmeJobs@1: 229b75a0733808e739d4c78d23d7706592da2e4fd16ebfab91072118b7b16f1f

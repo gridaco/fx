@@ -838,6 +838,7 @@ fn calling_job(identity: &str) -> InstanceJob {
         requests_per_minute: None,
         max_input_pictures: None,
         contract: json!({}),
+        drift: None,
     };
     job.routes = IndexMap::from([("image.generate".to_string(), route)]);
     job
