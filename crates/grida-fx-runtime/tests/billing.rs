@@ -43,12 +43,14 @@ fn route(capability: &str, model: &str, high: i64) -> Route {
             max_units: None,
             by: None,
             tiers: IndexMap::new(),
+            capped: false,
         },
         features: Default::default(),
         concurrency: None,
         requests_per_minute: None,
         max_input_pictures: None,
         contract: json!({}),
+        drift: None,
     }
 }
 

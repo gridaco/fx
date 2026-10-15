@@ -1,13 +1,16 @@
 //! The capabilities FX ships, as data (spec/capabilities.md): each one's canonical request members,
-//! the features a route of it may declare, and what its answer carries. Adapters call
-//! [`check_request`] first (spec/providers.md §5 step 2), so every route of a capability refuses
-//! the same malformed request with the same sentence. `tests/capabilities.rs` holds this table to
-//! spec/capabilities.md (every member table and feature list) and to the standard library's paid
-//! built-ins; `tests/routes.rs` holds the built-in route table's features to [`Capability::features`].
+//! the features a route of it may declare, and what its answer carries. The engine calls
+//! [`check_request`] before an adapter FX ships, or a project adapter, sees a call
+//! ([`crate::checks::request`]; spec/adapters.md §4 step 2), and each adapter FX ships again for a
+//! direct caller, so every route of a capability refuses the same malformed request with the same
+//! sentence. `tests/capabilities.rs`
+//! holds this table to spec/capabilities.md (every member table and feature list) and to the
+//! standard library's paid built-ins; `tests/routes.rs` holds the built-in route table's features
+//! to [`Capability::features`].
 //!
 //! Members are listed in the order a paid built-in sends them: its params without `vars`, then its
 //! input ports (spec/capabilities.md §14). `agent.turn`, which no built-in sends, lists them in
-//! the order of spec/protocol.md §6.2.
+//! the order of spec/protocol.md §6.2, then `provider_options`.
 //!
 //! Rules [`check_request`] applies (spec/capabilities.md §1), in this order:
 //! - the request is a JSON object: `a request for <capability> is a JSON object`;
@@ -19,7 +22,8 @@
 //!   object`).
 //!
 //! Value checks beyond the type (non-blank text, ranges, enums) are the adapter's, with the
-//! sentences spec/providers.md §9 gives per provider.
+//! sentences of its reference (spec/providers.md §2), and so is what `provider_options`, an
+//! object every capability takes, holds ([`crate::wire::provider_options`]; spec/adapters.md §8).
 
 use serde_json::Value;
 
@@ -168,10 +172,7 @@ const IMAGE_GENERATE_FEATURES: &[&str] = &[
     "custom_exact_size",
     "flexible_size",
     "image_input",
-    "hosted_url_reference_input",
     "png_output",
-    "jpeg_output",
-    "webp_output",
     "maximum_quality",
     "authored_prompt_passthrough",
 ];
@@ -186,10 +187,7 @@ const IMAGE_EDIT_FEATURES: &[&str] = &[
     "custom_exact_size",
     "flexible_size",
     "image_input",
-    "hosted_url_reference_input",
     "png_output",
-    "jpeg_output",
-    "webp_output",
     "maximum_quality",
     "authored_prompt_passthrough",
     "mask",
@@ -206,6 +204,7 @@ pub const CAPABILITIES: &[Capability] = &[
             req("tools", List),
             req("tool_choice", Text),
             opt("max_tokens", Integer),
+            opt("provider_options", Object),
         ],
         features: &["tool_use", "image_input"],
         files: &[],
@@ -213,7 +212,7 @@ pub const CAPABILITIES: &[Capability] = &[
     Capability {
         name: "background.remove",
         shape: Shape::Request,
-        members: &[req("image", File)],
+        members: &[opt("provider_options", Object), req("image", File)],
         features: &[],
         files: &[("image", "image/png")],
     },
@@ -224,6 +223,7 @@ pub const CAPABILITIES: &[Capability] = &[
             req("prompt", Text),
             opt("size", Text),
             opt("background", Text),
+            opt("provider_options", Object),
             req("image", File),
             opt("mask", File),
             opt("references", Files),
@@ -238,6 +238,7 @@ pub const CAPABILITIES: &[Capability] = &[
             req("prompt", Text),
             opt("size", Text),
             opt("background", Text),
+            opt("provider_options", Object),
             opt("references", Files),
         ],
         features: IMAGE_GENERATE_FEATURES,
@@ -251,6 +252,7 @@ pub const CAPABILITIES: &[Capability] = &[
             opt("quad", Boolean),
             opt("texture", Boolean),
             opt("pbr", Boolean),
+            opt("provider_options", Object),
             req("views", FilesByName),
         ],
         features: &["multiview", "textured_mesh", "quad", "pbr"],
@@ -263,6 +265,7 @@ pub const CAPABILITIES: &[Capability] = &[
             opt("rig_type", Text),
             opt("skeleton", Text),
             opt("allow_negative_check", Boolean),
+            opt("provider_options", Object),
             req("model", File),
         ],
         features: &["biped", "glb_input", "rig_check"],
@@ -271,7 +274,11 @@ pub const CAPABILITIES: &[Capability] = &[
     Capability {
         name: "music.generate",
         shape: Shape::Request,
-        members: &[req("prompt", Text), opt("duration", Number)],
+        members: &[
+            req("prompt", Text),
+            opt("duration", Number),
+            opt("provider_options", Object),
+        ],
         features: &[],
         files: &[("audio", "audio/mpeg")],
     },
@@ -283,6 +290,7 @@ pub const CAPABILITIES: &[Capability] = &[
             opt("duration", Number),
             opt("prompt_influence", Number),
             opt("loop", Boolean),
+            opt("provider_options", Object),
         ],
         features: &["exact_duration"],
         files: &[("audio", "audio/mpeg")],
@@ -296,6 +304,7 @@ pub const CAPABILITIES: &[Capability] = &[
             opt("stability", Number),
             opt("language_code", Text),
             opt("max_chars", Integer),
+            opt("provider_options", Object),
         ],
         features: &["audio_tags", "stability"],
         files: &[("audio", "audio/mpeg")],
@@ -308,6 +317,7 @@ pub const CAPABILITIES: &[Capability] = &[
             opt("system", Text),
             opt("matte", Text),
             opt("max_tokens", Integer),
+            opt("provider_options", Object),
             req("schema", FileOrObject),
             opt("context", Files),
         ],
@@ -322,10 +332,11 @@ pub const CAPABILITIES: &[Capability] = &[
             opt("duration", Number),
             opt("resolution", Text),
             opt("aspect_ratio", Text),
+            opt("provider_options", Object),
             opt("first_frame", File),
             opt("last_frame", File),
         ],
-        features: &["first_last_frame"],
+        features: &["text_to_video", "first_last_frame"],
         files: &[("video", "video/mp4")],
     },
 ];

@@ -31,11 +31,12 @@ uv run --project python python conformance/run.py --command target/debug/grida-f
   path is made absolute from where you run the script, without following symbolic links (a
   virtual environment's `python` is one); a bare name such as `python3` is passed on unchanged.
   A stand-in case whose stand-in is Python (`run --stand-in <file>.py#<function>`) needs it
-  too, even without a `nodes/` folder: its stand-in is served by the same Python host. Only the
+  too, even without a `nodes/` folder: its stand-in is served by the same Python host, as are a
+  project adapter's (`adapter-py`) while planning and in a live run. Only the
   cases with no Python node module or stand-in, and that run no built-in local type (whose bodies
   are Python's, [protocol.md](../spec/protocol.md) §1), run without it.
 - **TypeScript node bodies.** The cases named `*-ts`, and `mixed-hosts`, use node types,
-  builders and stand-ins written in TypeScript, which the engine runs in the TypeScript node
+  builders, stand-ins and project adapters written in TypeScript, which the engine runs in the TypeScript node
   host of `@grida/fx` on Node 24 or later. Their `in/package.json` depends on `@grida/fx`, and
   the runner installs a built `@grida/fx` into each such project's `node_modules/@grida/fx`
   (its `package.json` and `dist/`, copied as `npm install` would place them), from `--js-sdk`,
@@ -125,10 +126,11 @@ Each step is a mapping with these keys and no others:
 | `jsonl` | boolean | compare the saved text as JSON Lines, such as a run's `events.jsonl` (below) |
 | `yaml` | boolean | compare the saved text as YAML, by converting it to JSON (below) |
 | `absent` | list of paths | project paths that must hold no file once the step is done: nothing is there, or only folders with no file anywhere below them (an empty folder is no record) |
+| `env` | mapping of name to string | environment variables for this step's command alone, beside the runner's (Environment, below): a made-up key for a provider the case declares, so the case can show it is redacted (`adapter-py`) |
 
 - A step needs `argv`, `read`, `files` or `absent`. In one step, `files` are written first, then
   `argv` runs, then `read` is read, then every `absent` path is checked.
-- `status`, `mentions`, `never_mentions` and `stdin` need `argv`. `read`, `json`, `jsonl` and
+- `status`, `mentions`, `never_mentions`, `stdin` and `env` need `argv`. `read`, `json`, `jsonl` and
   `yaml` need `save`, and `save` needs `argv` or `read`. `json`, `jsonl` and `yaml` exclude each
   other.
 - Paths in `files`, `read`, `absent` and `invalid_inputs` are POSIX and relative. They may not
@@ -147,8 +149,8 @@ document the host of its file's language makes (`builder-ts`).
 | Command | What a case reads from it |
 |---|---|
 | `expand <target>`, `identity <target>`, `price <target>` | the expanded graph, each instance's identity, the price by phase, as JSON on stdout |
-| `plan <target> [--json]` | whether the workflow plans (a workflow found by id, or not found); with `--json`, the expanded graph as `expand` prints it |
-| `run <target> --run <folder> [--deliver <output>=<path>]… [--max-usd <n>]` | a local run in `<folder>`, or the continuation of the run that folder holds; its exit status and summary lines (`result    ok   spent $0.00`, `failed    <id>: <error>`, `stopped   <message>`, `refused: …`); the files it writes under the folder; with `--deliver`, the output files copied to `<path>` (`{key}` once per element) after the run. No case runs `--live`: one passes it only beside `--stand-in`, a usage error |
+| `plan <target> [--json]` | whether the workflow plans (a workflow found by id, or not found), and its text (phases, estimate, `note` lines); with `--json`, the expanded graph as `expand` prints it |
+| `run <target> --run <folder> [--deliver <output>=<path>]… [--max-usd <n>] [--live]` | a local run in `<folder>`, or the continuation of the run that folder holds; its exit status and summary lines (`result    ok   spent $0.00`, `failed    <id>: <error>`, `stopped   <message>`, `refused: …`); the files it writes under the folder; with `--deliver`, the output files copied to `<path>` (`{key}` once per element) after the run. Only `adapter-py` and `adapter-ts` run `--live`, where every paid call goes to a synthetic project adapter that makes no request and the network is off; another case passes it only beside `--stand-in`, a usage error |
 | `plan <file>:<function> --arg <name>=<value>…`, `run <file>:<function> --arg <name>=<value>… --run <folder>` | a builder target: the builder is given each `--arg` as a string and returns the workflow, which plans and runs as a workflow file would; a function that does not return a workflow, one the file does not have, or a file no node host runs exits 2 |
 | `run <target> … --stand-in <file>#<function>` (or `--stand-in=…`) for a `.py`, `.ts`, `.mts`, `.js` or `.mjs` file | a stand-in run: the paid calls the cache cannot answer go to `<function>` in the case's `<file>`, served in the project folder by the host of the file's language, offline and for nothing; its summary has the line `stand-in  <source as typed>`, and it keeps its records in the stand-in store, `<cache>/stand-in/`. Its usage errors (with `--live` or `--yes-up-to`; a source of another form, such as a `.tsx` file, `--stand-in takes <file>#<function> for a .py, .ts, .mts, .js or .mjs file, or -`; a missing file; `--stand-in -` when standard input is not a socket) and a stand-in that cannot be loaded exit 2 |
 | `project <folder>` | the run's record projected to its state, as JSON on stdout |
@@ -157,7 +159,8 @@ document the host of its file's language makes (`builder-ts`).
 | `reroll <folder> <step>` | the next take of a step path, written to the workflow's takes file; one line saying so and a `next` line, on stdout: the command that repeats the folder's run, or advice when its record cannot repeat it |
 | `pick <folder> <step> <take>` | a take chosen for a step path, with its result's digest, written to the takes file; one line saying so and a `next` line as `reroll` prints it, on stdout |
 | `takes list <target>` | the takes file's entries, one line each (`<step>  take <n>[  <digest>]`), on stdout |
-| `lock [--check] [--same <type>]` | `fx.lock`, written or checked |
+| `lock [--check] [--same <path>#<attr>]…` | `fx.lock`, written or checked; `--same` confirms a versioned node type or project adapter whose source changed |
+| `doctor` | whether the project file reads (exit 0, or 2 for a refused `fx.yaml`), the line of each provider `fx.yaml` declares, `provider  <name> <host> <VARIABLE> missing` or `… needs no key`, and of each project adapter, `adapter   <name> <path>#<attr> version <v>: <capability> (request)`, checked with `mentions` only: its other lines describe the machine (its Python, Node, Codex and Grok Build) and the routes an engine ships |
 | `cache prune [--forget-user <id>] [--yes] [--json]` | what pruning the store would remove, or removed with `--yes`, per store (`removed   <n> results, <n> calls (paid $<x>), <n> files: <bytes>; keeps …`), or the same as JSON (fx-cache-prune-v1); a refusal (`refused: <code>: …`) exits 1 and removes nothing |
 | `runs list --json` | the project's runs, newest first, as JSON on stdout (fx-run-list-v1) |
 | `runs remove <run>… [--yes] [--json]`, `runs remove --state <state>… [--yes] [--json]` | what a removal would do, or did with `--yes`: one line per run (`would remove  <folder>  (<state>)`, `removed       <folder>  (<state>)`) and what the filters passed over, or the same as JSON (fx-run-removal-v1); a selection that is not a run exits 2 and removes nothing |
@@ -231,16 +234,23 @@ Each step runs with a minimal environment, never the caller's:
 - `HOME`, a fresh empty folder for the case;
 - `NO_COLOR=1`, `LANG=C.UTF-8` and `PYTHONDONTWRITEBYTECODE=1`;
 - `GRIDA_FX_NETWORK=off` and `GRIDA_FX_DISABLE_DOTENV=1`, so no provider is reached and no `.env`
-  is read ([providers.md](../spec/providers.md) §2, §3);
+  is read ([adapters.md](../spec/adapters.md) §2; [providers.md](../spec/providers.md) §1);
 - `GRIDA_FX_PYTHON` and `GRIDA_FX_NODE`, each passed through when set (a path made absolute,
   above);
 - `RUSTUP_HOME` and `CARGO_HOME`, from the caller, else `~/.rustup` and `~/.cargo` when those
   folders exist, so that a `cargo run` command still finds its toolchain once `HOME` is replaced.
 
-No provider key, `GRIDA_FX_TOOL_<NAME>` override, FX cache location, `NODE_OPTIONS` or SDK
+A step's `env` adds variables for that step alone, never over these: a name the runner sets,
+`NODE_OPTIONS`, and any `GRIDA_FX_*` in any letter case, fail the case before any step runs. It holds made-up
+values only, such as a declared provider's key whose redaction the case pins.
+
+No real provider key, `GRIDA_FX_TOOL_<NAME>` override, FX cache location, `NODE_OPTIONS` or SDK
 variable (`GRIDA_FX_SDK_*`) can reach a case, and no case spends: a case that needs a paid call's
-answer seeds the project's store with it (`cache-replay`), or answers it with a stand-in
-(`stand-in-image`).
+answer seeds the project's store with it (`cache-replay`), answers it with a stand-in
+(`stand-in-image`), or declares a made-up provider whose synthetic project adapter answers it
+and makes no request (`adapter-py`). Such a case commits its `in/fx.lock` with the adapter's
+entry for its current version (run `lock` after changing it): `tools/check_spec.py` recomputes
+each route fingerprint the case saves from that version (`tools/digest.py --current-lock`).
 
 ## Recording expected output
 
@@ -263,12 +273,15 @@ alone.
 
 | Case | What it pins |
 |---|---|
+| `adapter-py` | project adapters in Python (`providers.<name>.adapter`): a request adapter for a keyed provider and a long-job adapter for a keyless one, both synthetic and versioned, loaded while planning and named by `doctor`; each route's contract completed with its adapter's name and version; a live run with the network off answers one call (after a `fetch` the engine refuses), submits and collects a job, and refuses one with a reason whose made-up key is redacted, charged what each adapter reports; without the key, a result-cache hit asks nothing and a call is refused before its adapter; a stand-in answers the adapters' routes, starting no adapter host, its answers held to the same every-route check; an edit to an imported module is drift until `lock --same`; an undeclared attribute, a missing module and a family beside an adapter refused (exit 2) |
+| `adapter-ts` | `adapter-py` with the adapters and the stand-in in TypeScript: the same steps, and bytes that differ only through the adapters' names |
 | `at-plan` | an `at: plan` step runs while planning, and a `for_each` over its output expands to keyed instances; its price |
 | `at-plan-run` | an `at: plan` step in a run: its keyed `for_each` of local steps runs, collected into one output; the `at: plan` step is not run again |
 | `builder-ts` | a TypeScript builder (`workflows/build.ts:build --arg count=3`) of TypeScript nodes: planned, run, and answered by the result cache in a second folder; `reroll` writes the takes file beside the builder; a function that returns no workflow, one the file lacks and a `.tsx` builder refused (exit 2) |
 | `cache-prune` | `cache prune` over a hand-written store: refused until the store's earlier users (`legacy`) are forgotten; a preview removes nothing; what the run names stays (a result, and a paid answer only its reservation names) with their files, the rest goes and its cost is reported; a second prune removes nothing |
 | `cache-replay` | a paid call answered offline from a seeded call record, without `--live`; a second run answered from the result cache |
 | `cache-replay-miss` | the same project without a store: a paid call without `--live` is refused (exit 1), naming the capability, the route and `--live` |
+| `capped-route` | routes with a cap and no price (`price: {cap_usd: N}`): each call priced at $0 to its cap, an instance with a capped call marked `capped: true` in its price, one plan `note` per capped capability and route, and a cap on an entry that `extends` a priced route; a price that states no amount, a cap beside another member and a cap with more than 6 decimal places refused while the table is read (exit 2) |
 | `closure-errors-ts` | what the TypeScript node host refuses about a source closure: an import of a missing file and an import spelled unlike the file on disk, refused while planning with project-relative paths; a body that imports a project module by a path it computes when it runs fails the node (`node_failure`) |
 | `coalesce-field` | `a.b ?? c` falls back when an object has no field `b` (table rows without an optional field, in `if:` and in `with:`), while a missing field elsewhere is still refused |
 | `conditions-select` | `if:` on an input and on a judge's fact, `on_reject: continue`, and `fx/select@1` with `first_of` |
@@ -290,10 +303,12 @@ alone.
 | `output-isolation-ts` | what a TypeScript body writes to standard output (`console.log`, `process.stdout.write`, children with inherited stdio, a child's child) reaches the engine's standard error, never its standard output or the protocol, and the run succeeds |
 | `phase` | a `for_each` over a step's output with `max:` makes a pending second phase, priced at its maximum |
 | `picture-limits` | what a step's own request asks of its route, refused while planning (exit 1): references on a route without `image_input`, an exact size and a transparent background it lacks, and more input pictures than an edit route's `max_input_pictures`, counted before they are made |
+| `providers-declared` | providers declared in `fx.yaml` (`providers:`): a workflow on a declared provider's image route plans, and expands to the same graph without the declarations; its `structured.generate` route, declared without a contract, is completed with the `openai-compatible` family's adapter, and keeps its bare contract's fingerprint once the provider is no longer declared; `doctor` lists each with its base URL's host and its key's state; a name FX ships, a variable a built-in reads, a variable FX or its programs read for themselves (in any letter case) and a plain-http default base URL off this machine refused while `fx.yaml` is read (exit 2) |
 | `refusals` | six planning problems in one plan (an assertion, a feature under its old name, a missing feature, `independent_of`, an unknown route, an unbounded repeat), exit 1 |
 | `refusals-ts` | `.tsx`, `.cts` and `.cjs` modules and a `.js` module Node loads as CommonJS refused while planning (exit 1); a NaN fact, a `Map` in a JSON output and a keyed output returned as a plain object fail their nodes |
 | `repeat-keyed` | a keyed `for_each` over an input list, collected into one step |
 | `resource-missing` | a declared resource that is not in the project is a planning problem (exit 1), never a crash |
+| `route-extends` | a route that `extends` another takes its price, features and contract, and restates what differs (a contract member, a price); `extends` is not hashed; a base no table read so far holds, or one on another provider, is refused (exit 2) |
 | `run-cache-hit` | the same plan run into a second folder: every step is a result-cache hit, with the same output bytes |
 | `run-deliver` | `--deliver` of a one-file and a keyed output (keys made safe paths), left alone when unchanged; an undeclared output refused before the run (exit 2) |
 | `run-failures` | `ctx.fail` keeps its node facts (in the run's events), an exception is a `node_error`, a reader of a failed step is skipped as blocked; the run goes on, lists its failures in the expansion's order and exits 1 |

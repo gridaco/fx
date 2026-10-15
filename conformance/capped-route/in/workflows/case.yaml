@@ -1,0 +1,23 @@
+fx: workflow/v1
+id: case
+title: Capped routes
+steps:
+  priced:
+    uses: fx/image.generate@1
+    with: { prompt: a kite }
+  capped:
+    uses: fx/image.generate@1
+    route: img-x@acme
+    with: { prompt: a kite }
+  again:
+    uses: fx/image.generate@1
+    route: img-x@acme
+    with: { prompt: a lantern }
+  edit:
+    uses: fx/image.edit@1
+    route: img-x@acme
+    with: { image: "${{ steps.capped.outputs.image }}", prompt: the kite at dusk }
+  extended:
+    uses: fx/image.generate@1
+    route: img-y@acme
+    with: { prompt: a kite }

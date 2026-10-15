@@ -369,9 +369,9 @@ implementation; installation alone does not authorize invocation.
 ## Codex-backed image generation for local workflows
 
 **Status: in review, 2026-10-12** ([gridaco/fx#46](https://github.com/gridaco/fx/pull/46)), as
-the route `imagegen@codex` of `image.generate`
-([spec/providers.md §9.6](spec/providers.md#96-codex)). Users signed into Codex with ChatGPT pick
-it in `fx.yaml` and run with no provider key. `codex` bills the user's plan, not dollars: a live run whose
+the route `imagegen@codex` of `image.generate` ([the Codex adapter's
+reference](crates/grida-fx-providers/src/codex/README.md)). Users signed into Codex with ChatGPT
+pick it in `fx.yaml` and run with no provider key. `codex` bills the user's plan, not dollars: a live run whose
 calls are all on it needs no `--max-usd`, runs under a ceiling of $0 and refuses any other
 provider. Codex is a *runtime* the engine owns: one `codex app-server` per invocation, started
 on the first Codex call, shared by the rest (a thread each) and shut down with the run; its
@@ -431,7 +431,7 @@ Follow-ups:
 
 **Grok Build: in review, 2026-10-13** ([gridaco/fx#72](https://github.com/gridaco/fx/issues/72)),
 as the route `imagine@grok` of `image.generate` and `image.edit`
-([spec/providers.md §9.8](spec/providers.md#98-grok-build)): Grok Build's own ACP server
+([the Grok Build adapter's reference](crates/grida-fx-providers/src/grok/README.md)): Grok Build's own ACP server
 (`grok agent --no-leader stdio`) through FX's ACP client ([`acp`](crates/grida-fx-providers/src/acp/mod.rs)),
 a session per call whose agent offers only Grok Build's two image tools, billed to the user's
 subscription (`Billing::Plan`). Verified with fake Grok Build programs in tests and real runs on
@@ -442,7 +442,8 @@ Grok Build 1.0.52. Follow-ups:
   client is provider-neutral. Still per runtime: the JSON-RPC connection (Codex's app-server
   client and [`acp`](crates/grida-fx-providers/src/acp/mod.rs) differ only in routing keys and
   request answers), the start-once runtime state, the version check (gridaco/fx#73 for Codex),
-  and spec/providers.md §9.6 and §9.8, which restate the same rules; share them spec first.
+  and the Codex and Grok Build adapters' references, which restate the same rules; share them spec
+  first.
 - **An aspect ratio.** Grok Build's tools take one (`1:1`, `16:9`, `9:16`, …); FX leaves it unset
   until `image.generate` has a shape setting (gridaco/fx#57).
 - **Retrying a failed image tool.** A passing network error between Grok Build and xAI fails the
@@ -461,8 +462,8 @@ gridaco/fx#72.
 
 ## Grida Gateway follow-ups
 
-**Status: in review, 2026-10-12.** Grida Gateway (`@gg`, [spec/providers.md
-§9.7](spec/providers.md#97-grida-gateway)) serves text, agent turns, images, video, 3D models and
+**Status: in review, 2026-10-12.** Grida Gateway (`@gg`, [its adapter
+reference](crates/grida-fx-providers/src/gg/README.md)) serves text, agent turns, images, video, 3D models and
 rigs with one key, `GG_API_KEY`, and is what the docs recommend first. FX books a GG call at
 GG's settled charge, read from the response or its billing readback; one that has not settled
 within a short wait is booked at its whole hold.

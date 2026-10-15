@@ -1,12 +1,13 @@
-//! Reading one output picture out of a fal answer (spec/providers.md §8, §9.3): the object
-//! `root.images[0]` of an image call or `root.image` of a background removal.
+//! Reading one output picture out of a fal answer (spec/adapters.md §7; src/fal/README.md): the
+//! object `root.images[0]` of an image call or `root.image` of a background removal.
 //!
 //! In order:
 //! 1. `url` is a non-blank string;
 //! 2. `content_type`, when present and not `null`, normalizes to one of the route's media types;
 //! 3. a data URL is decoded in place: its media type normalized the same way and equal to the
 //!    declared one when both exist, strict base64, at most the cap;
-//! 4. any other URL must pass [`super::is_fal_media_url`] before anything is requested; it is
+//! 4. any other URL must pass [`super::is_fal_media_url`], on fal's declared download hosts
+//!    ([`crate::setup::Client::download_url`]), before anything is requested; it is
 //!    added to the redactor, then fetched **once**, at the URL exactly as fal gave it (FX does not
 //!    re-encode it), on the download lane with only `accept: image/*`, no credential, no redirect,
 //!    the cap and the time left. A non-2xx answer
@@ -114,7 +115,7 @@ async fn download(
     remaining: Duration,
 ) -> Result<(Vec<u8>, Option<&'static str>), String> {
     let fail = |text: &str| redactor.reason(text);
-    let Some(target) = super::fal_media_url(url) else {
+    let Ok(target) = client.download_url(url) else {
         return Err(fail(
             "fal hosted output must use HTTPS on fal.media without userinfo or a custom port",
         ));

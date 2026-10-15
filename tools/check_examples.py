@@ -56,7 +56,8 @@ EXAMPLES = ROOT / "examples"
 #: The checkout's JavaScript SDK: its ``dist`` is built by ``bun run build`` there.
 JS_SDK = ROOT / "js" / "fx"
 
-#: Every provider key FX reads (spec/providers.md §3), kept out of the runs.
+#: The keys of FX's built-in providers (spec/providers.md §1), kept out of the runs; in step with
+#: the engine's (crates/grida-fx/tests/key_lists.rs).
 KEYS = (
     "GG_API_KEY",
     "OPENAI_API_KEY",

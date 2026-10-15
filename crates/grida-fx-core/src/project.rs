@@ -18,9 +18,13 @@
 //! 3. the inputs schema ([`crate::inputs::compile_inputs`], `$ref` relative to the home);
 //! 4. input flags from `rest`, then the inputs ([`crate::inputs::bind::load_inputs`]; `--inputs`
 //!    files relative to `cwd`, named as typed);
-//! 5. the home project (the nearest fx.yaml at or above the workflow file, also for a workflow
-//!    found outside the planning project), its fx.lock, the registry (route defaults: the
-//!    home's, overridden by the planning project's), and [`NodeHost::open_project`] on the home;
+//! 5. the planning project's own adapters ([`crate::adapters::load_declared`]: `adapter.load`
+//!    on the planning host, pointed at the planning project, each held to that project's fx.lock
+//!    `adapters`; one that cannot be loaded is `fx.yaml: providers.<name>.adapter: <sentence>`);
+//!    then the home project (the nearest fx.yaml at or above the workflow file, also for a
+//!    workflow found outside the planning project), its fx.lock, the registry (route defaults:
+//!    the home's, overridden by the planning project's), and [`NodeHost::open_project`] on the
+//!    home;
 //! 6. the route catalog ([`crate::routes::load_catalog`]: the request's built-in table unless
 //!    `--routes` is given, the planning project's `route_tables`, then `--routes` files relative
 //!    to `cwd`);
@@ -482,16 +486,17 @@ pub fn make_planner(request: &PlanRequest, host: &mut dyn NodeHost) -> Result<Pl
         .map(|file| (absolute(cwd, file), file.clone()))
         .collect();
     let inputs = crate::inputs::bind::load_inputs(&schema, &files, flags, cwd)?;
-    // 5. The home, its lock, the registry.
+    // 5. The planning project's adapters; the home, its lock, the registry.
     let home = loaded.home()?;
     let LoadedTarget {
-        project,
+        mut project,
         mut workflow,
         builder_takes,
     } = loaded;
     if builder_takes.is_none() {
         workflow.source = workflow_source(&home, &workflow.path);
     }
+    crate::adapters::load_declared(&mut project, host)?;
     let locks = read_lock_at(&home.root)?;
     let mut route_defaults = home.route_defaults();
     route_defaults.extend(project.route_defaults());

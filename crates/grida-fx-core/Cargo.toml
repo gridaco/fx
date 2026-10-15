@@ -18,6 +18,8 @@ indexmap.workspace = true
 yaml-rust2.workspace = true
 jsonschema.workspace = true
 regex.workspace = true
+# Base URLs of declared providers (src/providers.rs).
+url.workspace = true
 png.workspace = true
 gif.workspace = true
 image-webp.workspace = true

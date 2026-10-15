@@ -105,6 +105,10 @@
       "type": "string",
       "x-fx-template": true
      },
+     "provider_options": {
+      "type": "object",
+      "x-fx-optional": true
+     },
      "size": {
       "type": "string",
       "x-fx-optional": true
@@ -131,6 +135,10 @@
      "prompt": {
       "type": "string",
       "x-fx-template": true
+     },
+     "provider_options": {
+      "type": "object",
+      "x-fx-optional": true
      }
     }
    }

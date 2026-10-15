@@ -1,16 +1,18 @@
-//! OpenRouter: images, structured output, agent turns and music, all synchronous
-//! (spec/providers.md §9.2; spec/capabilities.md).
+//! OpenRouter: images (on any model, and on GPT Image), structured output, agent turns and music,
+//! all synchronous (src/openrouter/README.md; spec/capabilities.md).
 //!
 //! Credential `authorization: Bearer <OPENROUTER_API_KEY>`; base `OPENROUTER_BASE_URL`, default
 //! `https://openrouter.ai/api/v1`. Every request is one JSON body (pictures as data URLs); no
 //! downloads, no multipart, no long jobs. Costs come from `usage` ([`usage_cost`]: `usage.cost`,
 //! plus the upstream inference on the user's own provider key), the last SSE `usage` for music.
-//! Status classes, shared by the four adapters, are spec/providers.md §9.2's table, implemented
+//! Status classes, shared by the five adapters, are src/openrouter/README.md's table, implemented
 //! once in [`classify`]; so are the contract check
-//! (`serves`, `not_served`), the request-body cap ([`crate::wire::body_exceeds`]) and request ids
+//! (`serves`, `not_served`: the engine's, [`crate::checks`], made again for a direct caller), the
+//! request-body cap ([`crate::wire::body_exceeds`]) and request ids
 //! in reasons (`with_request_id`).
 
 pub mod agent;
+pub mod generic_image;
 pub mod image;
 pub mod music;
 pub mod structured;
@@ -35,14 +37,14 @@ pub const BODY_TOO_LARGE: &str = "request body exceeds 200 MiB";
 
 /// The shared client.
 pub fn client(setup: &Setup) -> Client {
-    setup.client(KeyName::OpenRouter, &setup.endpoints.openrouter)
+    setup.client(KeyName::OpenRouter)
 }
 
-/// How an exchange that is not a 2xx becomes a [`Sent`] (spec/providers.md §4.2 and the §9.2
-/// table); `label` is the capability's (`OpenRouter image generation`, …). A 2xx comes back as
-/// `Ok` for the adapter to parse. Shared by the four adapters, so they classify alike. A request
-/// the transport refused itself (the network turned off, a URL it cannot use) is `Refused`:
-/// nothing left, so resending cannot help.
+/// How an exchange that is not a 2xx becomes a [`Sent`] (spec/adapters.md §3.2 and the
+/// statuses of src/openrouter/README.md); `label` is the capability's (`OpenRouter image
+/// generation`, …). A 2xx comes back as `Ok` for the adapter to parse. Shared by the five adapters,
+/// so they classify alike. A request the transport refused itself (the network turned off, a URL it
+/// cannot use) is `Refused`: nothing left, so resending cannot help.
 #[allow(clippy::result_large_err)] // `Sent` is what every caller returns at once
 pub fn classify(
     client: &Client,
@@ -95,7 +97,7 @@ pub fn classify(
             }
         }
         // OpenRouter's 408 means the request timed out there: it arrived, and the work may be
-        // done (spec/providers.md §9.2).
+        // done (src/openrouter/README.md).
         408 => Sent::Failed {
             reason,
             cost: None,
@@ -142,13 +144,13 @@ pub fn classify(
     })
 }
 
-/// The cost a response's `usage` reports (spec/providers.md §9.2 "Cost"): `usage.cost`, rounded up
-/// (spec/providers.md §6). On a request that ran on the user's own provider key (BYOK: `is_byok`
+/// The cost a response's `usage` reports (src/openrouter/README.md, "Cost"): `usage.cost`, rounded
+/// up (spec/adapters.md §5). On a request that ran on the user's own provider key (BYOK: `is_byok`
 /// is true, or `cost_details.upstream_inference_cost` is given), `cost` is only OpenRouter's fee
-/// and the upstream provider bills the inference to the user's own account, so the cost is
-/// `cost` plus `upstream_inference_cost`, each rounded up. `None` when `cost` is missing or not a
-/// cost, and when a BYOK request's upstream cost is missing or not a cost: the engine then
-/// charges the whole hold, never less than the call may have cost.
+/// and the upstream provider bills the inference to the user's own account, so the cost is `cost`
+/// plus `upstream_inference_cost`, each rounded up. `None` when `cost` is missing or not a cost,
+/// and when a BYOK request's upstream cost is missing or not a cost: the engine then charges the
+/// whole hold, never less than the call may have cost.
 pub fn usage_cost(usage: Option<&Value>) -> Option<Usd> {
     let usage = usage?.as_object()?;
     let cost = crate::wire::usd_ceil(usage.get("cost")?)?;
@@ -168,53 +170,28 @@ static SAFE_NUMBER: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new
     regex::Regex::new(r"^[0-9]{1,6}(?:\.[0-9]{1,3})?$").expect("a valid pattern")
 });
 
-/// `<route> is not a <capability> route this adapter serves` (spec/providers.md §5 step 1).
+/// `<route> is not a <capability> route this adapter serves` (spec/adapters.md §4 step 1).
 pub(crate) fn not_served(call: &CallRequest) -> String {
-    format!(
-        "{} is not a {} route this adapter serves",
-        call.route.id(),
-        call.route.capability
-    )
+    crate::checks::not_served(&call.route)
 }
 
-/// Whether a route contract is one the adapter `adapter` serves (spec/providers.md §5 step 1):
-/// `null` or an object whose `adapter`, when present, is `adapter`, and whose `adapter_behavior`,
-/// when present, is one `behavior` accepts. `null` members count as absent.
-pub(crate) fn serves(contract: &Value, adapter: &str, behavior: impl Fn(&Value) -> bool) -> bool {
-    let contract = match contract {
-        Value::Null => return true,
-        Value::Object(contract) => contract,
-        _ => return false,
-    };
-    let named = match contract.get("adapter") {
-        None | Some(Value::Null) => true,
-        Some(name) => name.as_str() == Some(adapter),
-    };
-    let behaves = match contract.get("adapter_behavior") {
-        None | Some(Value::Null) => true,
-        Some(value) => behavior(value),
-    };
-    named && behaves
-}
+/// Whether a route contract is one the adapter `adapter` serves (spec/adapters.md §4 step 1): the
+/// engine's check, which each adapter makes again for a direct caller.
+pub(crate) use crate::checks::serves;
 
 /// The reason with ` (request <id>)` when the response carries a safe request id.
-pub(crate) fn with_request_id(reason: String, response: &HttpResponse) -> String {
-    match crate::wire::request_id(response) {
-        Some(id) => format!("{reason} (request {id})"),
-        None => reason,
-    }
-}
+pub(crate) use crate::wire::with_request_id;
 
-/// Registers the four adapters on provider `openrouter`.
+/// Registers the five adapters on provider `openrouter`: for images, the generic one as the
+/// default and GPT Image's for a route that names it (spec/providers.md §2).
 pub fn register(adapters: &mut Adapters, setup: &Setup) {
     let client = client(setup);
+    let generic = Arc::new(generic_image::OpenRouterGenericImages::new(client.clone()));
     let images = Arc::new(image::OpenRouterImages::new(client.clone()));
-    adapters.register(
-        "image.generate",
-        "openrouter",
-        Adapter::Request(images.clone()),
-    );
-    adapters.register("image.edit", "openrouter", Adapter::Request(images));
+    for capability in ["image.generate", "image.edit"] {
+        adapters.register(capability, "openrouter", Adapter::Request(generic.clone()));
+        adapters.register_named(capability, "openrouter", Adapter::Request(images.clone()));
+    }
     adapters.register(
         "structured.generate",
         "openrouter",

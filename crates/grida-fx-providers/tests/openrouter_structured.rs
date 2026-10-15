@@ -1,4 +1,4 @@
-//! OpenRouter `structured.generate` over synthetic exchanges (spec/providers.md §9.2;
+//! OpenRouter `structured.generate` over synthetic exchanges (src/openrouter/README.md;
 //! spec/capabilities.md §4). Nothing here reaches a network: every send goes to a
 //! `ReplayTransport` that asserts the request, and every refusal runs over a transport that saw
 //! no request. Pictures are built in code (`testing::media::png`).
@@ -141,7 +141,7 @@ fn the_text_model_sends_a_plain_question() {
     );
 }
 
-/// classify C2 (spec/providers.md §9.2 "Cost"): a request OpenRouter ran on the user's own
+/// classify C2 (src/openrouter/README.md, "Cost"): a request OpenRouter ran on the user's own
 /// provider key reports only its fee as `usage.cost`; the upstream charge counts too, and a BYOK
 /// answer without it is charged the whole hold. A structural failure bills the same way.
 #[test]
@@ -177,6 +177,96 @@ fn a_byok_answer_counts_the_upstream_inference() {
         };
         assert_eq!(failed_cost, cost, "{usage}");
         transport.assert_done();
+    }
+}
+
+#[test]
+fn provider_options_follow_the_body_s_own_members() {
+    let schema = colour_schema();
+    let mut contract = text_contract();
+    contract["provider_options"] = json!({"openrouter": {"top_p": 0.5, "user": "route-a"}});
+    let call = call(
+        TEXT_ROUTE,
+        contract,
+        json!({"prompt": "Name a colour.", "schema": schema,
+               "provider_options": {"openrouter": {"user": "step-a", "seed": 7},
+                                    "gg": {"model": "never read"}}}),
+    );
+    let transport = replay(vec![expect(ExpectBody::Any).reply(completion(
+        json!({"role": "assistant", "content": "{\"name\": \"red\"}"}),
+        json!({"cost": 0.0001}),
+    ))]);
+    answered(send(&adapter_over(transport.clone(), test_keys()), &call));
+    let sent = sent_json(&transport, 0);
+    let names: Vec<&str> = sent
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "model",
+            "messages",
+            "response_format",
+            "provider",
+            "max_tokens",
+            "top_p",
+            "user",
+            "seed"
+        ]
+    );
+    assert_eq!(
+        (&sent["top_p"], &sent["user"], &sent["seed"]),
+        (&json!(0.5), &json!("step-a"), &json!(7))
+    );
+    // Every member of a body with all of them is one the adapter owns.
+    let all = call_with_astra_body();
+    for name in all.as_object().unwrap().keys() {
+        assert!(
+            openrouter::structured::OWNED.contains(&name.as_str()),
+            "{name}"
+        );
+    }
+}
+
+/// The body of a call on astra, whose contract sends every member the adapter can.
+fn call_with_astra_body() -> Value {
+    let transport = replay(vec![expect(ExpectBody::Any).reply(completion(
+        json!({"role": "assistant", "content": "{\"name\": \"red\"}"}),
+        json!({"cost": 0.0001}),
+    ))]);
+    let call = call(
+        ASTRA_ROUTE,
+        astra_contract(),
+        json!({"prompt": "Name a colour.", "schema": colour_schema()}),
+    );
+    answered(send(&adapter_over(transport.clone(), test_keys()), &call));
+    sent_json(&transport, 0)
+}
+
+#[test]
+fn provider_options_set_no_member_the_adapter_owns() {
+    for name in openrouter::structured::OWNED {
+        let request = json!({"prompt": " ", "schema": colour_schema(),
+                             "provider_options": {"openrouter": {*name: 1}}});
+        assert_refused(
+            &call(TEXT_ROUTE, text_contract(), request),
+            test_keys(),
+            &format!("provider_options.openrouter.{name} is a member FX owns"),
+        );
+        let mut contract = text_contract();
+        contract["provider_options"] = json!({"openrouter": {*name: 1}});
+        assert_refused(
+            &call(
+                TEXT_ROUTE,
+                contract,
+                json!({"prompt": "p", "schema": colour_schema()}),
+            ),
+            test_keys(),
+            &format!("contract.provider_options.openrouter.{name} is a member FX owns"),
+        );
     }
 }
 
@@ -715,7 +805,7 @@ fn a_transport_that_refuses_is_a_refusal() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Refusals before sending, in the order of spec/providers.md §5
+// Refusals before sending, in the order of spec/adapters.md §4
 
 #[test]
 fn refusals_come_in_order_and_send_nothing() {

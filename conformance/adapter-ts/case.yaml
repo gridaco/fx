@@ -1,0 +1,114 @@
+# adapter-py in TypeScript (adapters.md §9; protocol.md §8.2): the same declarations, served by
+# adapters/acme.ts#acme, a request adapter, and adapters/acme.ts#acmeJobs, a long-job adapter of
+# the same module, in the TypeScript node host of @grida/fx, and in/stand_in.ts as the stand-in.
+# Every step pins what adapter-py's does. The bytes differ from adapter-py's only through the adapters' names, which are part of
+# each route's contract: the fingerprints, so the plan's digest and the call keys (`slowly`'s
+# job), and the outputs that hold the contract. plan.txt is adapter-py's, byte for byte.
+steps:
+- argv: [lock, --check]
+- argv: [doctor]
+  mentions:
+  - "provider  acme api.acme.test ACME_API_KEY missing"
+  - "provider  acme-jobs jobs.acme.test needs no key"
+  - "adapter   acme adapters/acme.ts#acme version 1: structured.generate (request)"
+  - "adapter   acme-jobs adapters/acme.ts#acmeJobs version 1: structured.generate (job)"
+- argv: [plan, case, --routes, routes.yaml, --max-usd, "1"]
+  save: plan.txt
+- argv: [expand, case, --routes, routes.yaml]
+  save: expand.json
+  json: true
+- argv: [run, case, --routes, routes.yaml, --run, runs/one, --live, --max-usd, "1"]
+  env:
+    ACME_API_KEY: acme-made-up-key-8a2c
+  status: 1
+  mentions:
+  - "result    failed   spent $0.03"
+  - "failed    refused#1: structured.generate on text-a@acme was refused: no colours for [redacted]"
+  never_mentions:
+  - acme-made-up-key-8a2c
+  - "{project}"
+- read: runs/one/outputs/name.json
+  save: name.json
+  json: true
+- read: runs/one/outputs/slowly.json
+  save: slowly.json
+  json: true
+- argv: [project, runs/one]
+  save: project-one.json
+  json: true
+  never_mentions:
+  - acme-made-up-key-8a2c
+- argv: [run, case, --routes, routes.yaml, --run, runs/two, --live, --max-usd, "1"]
+  status: 1
+  mentions:
+  - "result    failed   spent $0.00"
+  - "failed    refused#1: structured.generate on text-a@acme was refused: ACME_API_KEY is not set"
+- argv: [project, runs/two]
+  save: project-two.json
+  json: true
+- argv: [run, case, --routes, routes.yaml, --run, runs/stand-in, --stand-in, "stand_in.ts#answer"]
+  status: 1
+  mentions:
+  - "stand-in  stand_in.ts#answer"
+  - "result    failed   spent $0.00"
+  - "failed    slowly#1: structured.generate on text-b@acme-jobs failed: name: 3 is not of type \"string\""
+  - "failed    refused#1: structured.generate on text-a@acme is a paid call the stand-in declined"
+- read: runs/stand-in/outputs/name.json
+  save: stand-in-name.json
+  json: true
+- files:
+    adapters/colours.ts: |
+      // The colours acme's synthetic adapter answers with, edited.
+
+      export const ASKED = "teal";
+      export const WAITED_FOR = "slate";
+  argv: [expand, case, --routes, routes.yaml]
+  status: 1
+  mentions:
+  - "adapters/acme.ts#acme: its source changed but version 1 did not; bump the version, or confirm no change in behaviour with "
+  - "lock --same adapters/acme.ts#acme"
+  - "adapters/acme.ts#acmeJobs: its source changed but version 1 did not"
+- argv: [lock, --check]
+  status: 1
+  mentions:
+  - "changed   adapters/acme.ts#acme: its source changed but version 1 did not; bump it, or confirm with --same adapters/acme.ts#acme"
+  - "changed   adapters/acme.ts#acmeJobs: "
+- argv: [lock, --same, "adapters/acme.ts#acme", --same, "adapters/acme.ts#acmeJobs"]
+  mentions:
+  - "fx.lock: 0 versioned node types, 2 versioned adapters"
+- argv: [lock, --check]
+- argv: [expand, case, --routes, routes.yaml]
+- files:
+    fx.yaml: |
+      fx: project/v1
+      providers:
+        acme:
+          base_url: { default: "https://api.acme.test/v1" }
+          adapter: adapters/acme.ts#painter
+  argv: [plan, case, --routes, routes.yaml]
+  status: 2
+  mentions:
+  - "fx.yaml: providers.acme.adapter: adapters/acme.ts: painter is not an export declared with adapter()"
+- files:
+    fx.yaml: |
+      fx: project/v1
+      providers:
+        acme:
+          base_url: { default: "https://api.acme.test/v1" }
+          adapter: adapters/missing.ts#acme
+  argv: [plan, case, --routes, routes.yaml]
+  status: 2
+  mentions:
+  - "fx.yaml: providers.acme.adapter: no file adapters/missing.ts"
+- files:
+    fx.yaml: |
+      fx: project/v1
+      providers:
+        acme:
+          base_url: { default: "https://api.acme.test/v1" }
+          family: openai-compatible
+          adapter: adapters/acme.ts#acme
+  argv: [plan, case, --routes, routes.yaml]
+  status: 2
+  mentions:
+  - "fx.yaml: providers.acme: a provider has a family or an adapter, not both"

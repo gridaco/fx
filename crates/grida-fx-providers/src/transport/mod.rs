@@ -1,4 +1,4 @@
-//! The injected transport: one HTTP exchange per [`Transport::send`] (spec/providers.md §2).
+//! The injected transport: one HTTP exchange per [`Transport::send`] (spec/adapters.md §2).
 //!
 //! Adapters are thin clients over this trait (docs/wg/overview.md decision 9): they build an
 //! [`HttpRequest`], hand it to the transport once, and classify what comes back. The transport
@@ -10,7 +10,7 @@
 //! - it attaches the request's [`Credential`] as one header, and refuses a credential on the
 //!   [`Lane::Download`] lane before anything leaves (a result URL is another host), whether in
 //!   the credential slot or as a header named like one ([`check_request`]);
-//! - it never lets a proxy see a credential (spec/providers.md §2 item 9): a plain `http` or
+//! - it never lets a proxy see a credential (spec/adapters.md §2 item 9): a plain `http` or
 //!   loopback request goes direct, and only `https` to a remote host may be tunnelled;
 //! - it reports a failure with its [`Phase`]: [`Phase::NotSent`] only when the request provably
 //!   never left (no connection was established: DNS, TCP connect, TLS handshake, connect or pool
@@ -62,7 +62,7 @@ impl Method {
     }
 }
 
-/// What an exchange is for (spec/providers.md §2). It decides whether a credential may travel.
+/// What an exchange is for (spec/adapters.md §2). It decides whether a credential may travel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Lane {
     /// A request to the provider's API: may carry the provider's credential.
@@ -83,13 +83,14 @@ impl Lane {
     }
 }
 
-/// A credential the transport attaches as the header `header: <prefix><secret>`.
+/// A credential the transport attaches as the header `header: <prefix><secret>`, as its
+/// provider's declaration says (spec/providers.md §1).
 #[derive(Clone, PartialEq)]
 pub struct Credential {
     /// The header name, lowercase (`authorization`, `xi-api-key`).
-    pub header: &'static str,
+    pub header: String,
     /// What precedes the secret (`Bearer `, `Key `, or empty).
-    pub prefix: &'static str,
+    pub prefix: String,
     pub secret: Secret,
 }
 
@@ -381,7 +382,7 @@ impl fmt::Display for TransportError {
     }
 }
 
-/// The variable that turns the network off for a live run (spec/providers.md §2):
+/// The variable that turns the network off for a live run (spec/adapters.md §2):
 /// `GRIDA_FX_NETWORK=off` makes `--live` build its adapters over [`Offline`].
 pub const NETWORK_VARIABLE: &str = "GRIDA_FX_NETWORK";
 
@@ -408,7 +409,7 @@ impl Transport for Offline {
 /// Whether a header name is a credential's, or named like one: `authorization`,
 /// `proxy-authorization`, `cookie`, and any name containing `auth`, `cookie`, `key`, `token`,
 /// `secret`, `session`, `credential`, `password` or `signature` (`xi-api-key`, `x-api-key`,
-/// `x-auth-token`). The download lane refuses them all (spec/providers.md §2 item 5).
+/// `x-auth-token`). The download lane refuses them all (spec/adapters.md §2 item 5).
 pub fn names_a_credential(name: &str) -> bool {
     const PARTS: [&str; 9] = [
         "auth",
@@ -425,7 +426,7 @@ pub fn names_a_credential(name: &str) -> bool {
     PARTS.iter().any(|part| name.contains(part))
 }
 
-/// The checks every transport makes before anything leaves (spec/providers.md §2): an absolute
+/// The checks every transport makes before anything leaves (spec/adapters.md §2): an absolute
 /// `http`/`https` URL with a host and no userinfo; on the download lane, no credential and no
 /// header named like one ([`names_a_credential`]); on the other lanes, no header that takes the
 /// credential's place.
@@ -472,8 +473,8 @@ mod tests {
     #[test]
     fn credentials_never_print() {
         let credential = Credential {
-            header: "authorization",
-            prefix: "Bearer ",
+            header: "authorization".into(),
+            prefix: "Bearer ".into(),
             secret: secret(),
         };
         let shown = format!("{credential:?}");
@@ -496,8 +497,8 @@ mod tests {
             Lane::Download,
         )
         .credential(Credential {
-            header: "authorization",
-            prefix: "Key ",
+            header: "authorization".into(),
+            prefix: "Key ".into(),
             secret: secret(),
         });
         let error = check_request(&request).unwrap_err();

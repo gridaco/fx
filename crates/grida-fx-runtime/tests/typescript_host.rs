@@ -7,8 +7,8 @@
 //! which body) is checked without Node or the `grida` package. Every fake logs what it was asked
 //! to `<language>.jsonl` beside the project. The tests skip when `python3` is not on `PATH`.
 //!
-//! One test runs the real TypeScript host: it skips unless Node 24 or later is on `PATH` and the
-//! repository's `js/fx/dist/host-entry.js` has been built.
+//! Two tests run the real TypeScript host, one a node and one a project adapter: they skip unless
+//! Node 24 or later is on `PATH` and the repository's `js/fx/dist/host-entry.js` has been built.
 #![cfg(unix)]
 
 use grida_fx_core::host::{HostFailure, Language, NodeHost};
@@ -725,5 +725,214 @@ fn a_real_typescript_host_describes_and_runs_a_node() {
     let outcome = plan_and_run(&fixture, &mut hosts, engine);
     assert!(outcome.ok, "{outcome:?}");
     assert_eq!(output_text(&store, &outcome, "text"), "HELLO");
+    runtime.shutdown_timeout(Duration::from_secs(10));
+}
+
+const REAL_ADAPTER: &str = r#"import { type AdapterCall, Answered, adapter, FetchError, type SendOutcome } from "@grida/fx";
+import { JOB } from "./kites.ts";
+
+async function send(call: AdapterCall): Promise<SendOutcome> {
+  if (call.request.prompt === "refuse") {
+    return { outcome: "refused", reason: "no kites today" };
+  }
+  let fetched = "sent";
+  try {
+    await call.fetch(`${call.baseUrl}/draw`, { method: "POST", json: {}, credential: true });
+  } catch (error) {
+    if (!(error instanceof FetchError)) {
+      throw error;
+    }
+    fetched = `${error.phase}: ${error.reason}`;
+  }
+  return Answered.json({ fetched, key: "ACME_API_KEY" in process.env }, { costUsd: 0.01 });
+}
+
+export const acme = adapter({
+  requests: ["structured.generate"],
+  jobs: ["acme.render"],
+  send,
+  submit: (call) => ({ outcome: "accepted", handle: { job: `${JOB}${call.take}` } }),
+  collect: async (call) => ({ outcome: "answered", data: { job: call.handle.job ?? null }, costUsd: 0.5 }),
+  version: 2,
+});
+"#;
+
+/// A project adapter (spec/adapters.md §9) of the real `@grida/fx`: the planning host loads it,
+/// and an adapter host, started as a live run starts one, serves a send whose `fetch` the engine
+/// refuses (the network is off), a refusal, and a long job submitted and collected, then ends
+/// verified with the run. The twin of python_host.rs's
+/// `the_real_python_host_serves_a_project_adapter`.
+#[test]
+fn the_real_typescript_host_serves_a_project_adapter() {
+    use grida_fx_core::money::Usd;
+    use grida_fx_core::providers::{
+        BaseUrl, Credential, Declaration, Declarations, DeclaredAdapter, LoadedAdapter,
+    };
+    use grida_fx_protocol::{AdapterLoadParams, CallKind, ErrorCode, RpcError};
+    use grida_fx_providers::adapter::{
+        Adapter, Answer, CallRequest, Collected, RouteRef, Sent, Submitted,
+    };
+    use grida_fx_providers::clock::FakeClock;
+    use grida_fx_providers::keys::{Environment, Keys, Secret};
+    use grida_fx_providers::setup::Setup;
+    use grida_fx_providers::transport::Offline;
+    use grida_fx_runtime::adapter_host::{self, Launch, ProcessLaunch};
+
+    const KEY: &str = "acme-made-up-key-90ad";
+    let Some((node, entry)) = real_node_host() else {
+        return;
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(dir.path()).unwrap().join("acme");
+    std::fs::create_dir_all(root.join("adapters")).unwrap();
+    std::fs::write(root.join("fx.yaml"), "fx: project/v1\n").unwrap();
+    std::fs::write(root.join("package.json"), "{\"type\": \"module\"}\n").unwrap();
+    std::fs::write(
+        root.join("adapters/kites.ts"),
+        "export const JOB = \"j-\";\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("adapters/acme.ts"), REAL_ADAPTER).unwrap();
+
+    // Planning: the planning host loads the adapter, and goes on serving.
+    let mut planning = LanguageHost::typescript()
+        .with_program(node.clone())
+        .with_entry(entry.clone());
+    planning.open_project(&root, &[]).unwrap();
+    let loaded = planning
+        .load_adapter(&AdapterLoadParams {
+            path: "adapters/acme.ts".into(),
+            attribute: "acme".into(),
+        })
+        .unwrap();
+    assert_eq!(loaded.adapter.version, Some(2));
+    let kinds: Vec<_> = loaded.adapter.capabilities.clone().into_iter().collect();
+    assert_eq!(
+        kinds,
+        [
+            ("structured.generate".to_string(), CallKind::Request),
+            ("acme.render".to_string(), CallKind::Job)
+        ]
+    );
+    let labels: Vec<&str> = loaded.closure.iter().map(|e| e.label.as_str()).collect();
+    assert_eq!(labels, ["adapters/acme.ts", "adapters/kites.ts"]);
+    let missing = planning
+        .load_adapter(&AdapterLoadParams {
+            path: "adapters/acme.ts".into(),
+            attribute: "send".into(),
+        })
+        .unwrap_err();
+    assert_eq!(
+        missing,
+        HostFailure::Rpc(RpcError::new(
+            ErrorCode::LoadFailed,
+            "adapters/acme.ts: send is not an export declared with adapter()"
+        ))
+    );
+    let described = planning.describe(&targets(&["adapters/kites.ts"])).unwrap();
+    assert!(
+        matches!(&described.modules[0], ModuleDescription::Described { types, .. } if types.is_empty()),
+        "{described:?}"
+    );
+    planning.shutdown().unwrap();
+
+    // The live run: one adapter host for the declaration, with its own key.
+    let declaration = Declaration {
+        name: "acme".into(),
+        label: "acme".into(),
+        credential: Some(Credential {
+            variable: "ACME_API_KEY".into(),
+            header: "authorization".into(),
+            scheme: "Bearer".into(),
+        }),
+        base_url: BaseUrl {
+            variable: None,
+            default: "https://api.acme.test/v1".into(),
+        },
+        download_hosts: Vec::new(),
+        family: None,
+        adapter: Some(DeclaredAdapter {
+            path: "adapters/acme.ts".into(),
+            attribute: "acme".into(),
+            loaded: Some(LoadedAdapter {
+                version: Some(2),
+                capabilities: loaded.adapter.capabilities.clone(),
+                source: grida_fx_core::registry::closure_digests(&loaded.closure).unwrap(),
+                drift: None,
+            }),
+        }),
+    };
+    let declarations = Declarations::with(&[declaration]);
+    let setup = Setup::new(
+        Arc::new(Offline),
+        Keys::from_environment(&Environment::declared(
+            &[("ACME_API_KEY", KEY)],
+            &declarations,
+        )),
+        Arc::new(FakeClock::new()),
+    );
+    let spec = HostSpec::typescript(&node, &entry, "node", &root, Vec::new())
+        .unchecked()
+        .with_environment(Vec::new(), vec![("ACME_API_KEY".into(), Secret::new(KEY))]);
+    let launch: Arc<dyn Launch> = Arc::new(ProcessLaunch::new(Ok(spec)));
+    let mut adapters = Adapters::new();
+    adapter_host::register(&mut adapters, &setup, |_, _| Arc::clone(&launch));
+    let route = |capability: &str| RouteRef {
+        capability: capability.into(),
+        model: "model-a".into(),
+        provider: "acme".into(),
+        contract: json!({"adapter": "adapters/acme.ts#acme", "adapter_behavior": 2}),
+        limits: Default::default(),
+    };
+    let call = |capability: &str, prompt: &str| CallRequest {
+        route: route(capability),
+        request: json!({ "prompt": prompt }),
+        files: IndexMap::new(),
+        take: vec![1, 3],
+        key: "k".repeat(64),
+        attempt: 1,
+    };
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        let Some(Adapter::Request(sender)) = adapters.serving(&route("structured.generate")) else {
+            panic!("a request adapter");
+        };
+        assert_eq!(
+            sender.send(&call("structured.generate", "a kite")).await,
+            Sent::Answered(Answer::new(
+                json!({"json": {
+                    "fetched": "refused: the network is off (GRIDA_FX_NETWORK=off)",
+                    "key": true
+                }}),
+                Some(Usd(10_000))
+            ))
+        );
+        assert_eq!(
+            sender.send(&call("structured.generate", "refuse")).await,
+            Sent::Refused {
+                reason: "no kites today".into()
+            }
+        );
+        let Some(Adapter::Job(job)) = adapters.serving(&route("acme.render")) else {
+            panic!("a long job");
+        };
+        assert_eq!(
+            job.submit(&call("acme.render", "a kite")).await,
+            Submitted::Accepted {
+                handle: json!({"job": "j-3"})
+            }
+        );
+        assert_eq!(
+            job.collect(&call("acme.render", "a kite"), &json!({"job": "j-3"}))
+                .await,
+            Collected::Answered(Answer::new(json!({"job": "j-3"}), Some(Usd(500_000))))
+        );
+        for runtime in adapters.runtimes() {
+            assert!(runtime.shutdown().await, "the adapter host ends verified");
+        }
+    });
     runtime.shutdown_timeout(Duration::from_secs(10));
 }

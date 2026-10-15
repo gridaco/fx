@@ -1,7 +1,7 @@
 import { StrictMode, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { ArrowLeft, ArrowUpRight, Check, ChevronRight, Copy, Download, FileText, List, RefreshCw, Square, Workflow, X } from "lucide-react";
-import { OutputArchiveController, ServiceIndexProjection, ViewerController, elapsedLabel, outputFiles, ownsKeys, ViewerEntryController, type Artifact, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun } from "@grida/fx-web";
+import { OutputArchiveController, ServiceIndexProjection, ViewerController, elapsedLabel, outputFiles, ownsKeys, priceLabel, ViewerEntryController, type Artifact, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun } from "@grida/fx-web";
 import { StateIcon, StateLabel, Status, Values, WorkflowCanvas, money, type WorkflowCanvasHandle } from "@grida/fx-react";
 import "./style.css";
 
@@ -66,12 +66,6 @@ function duration(ms: number) {
   return seconds < 60 ? `${seconds} s` : `${Math.floor(seconds / 60)}m ${String(Math.round(seconds % 60)).padStart(2, "0")}s`;
 }
 
-/** "est. $0.40" or "est. $0.40 – $1.20"; nothing for a step that pays for nothing. */
-function estimate(price: { low_usd: number; high_usd: number }, free = "") {
-  if (price.high_usd === 0) return free;
-  return `est. ${money(price.low_usd)}${price.high_usd === price.low_usd ? "" : ` – ${money(price.high_usd)}`}`;
-}
-
 /** Literal settings and wired inputs, split by the node's declared settings. */
 function split(values: Record<string, unknown>, node?: CanvasStep) {
   const settings = new Set(node?.ports?.settings.map((setting) => setting.name));
@@ -109,7 +103,7 @@ function PlanDetails({ plan, instance, pending, canvasNode }: { plan: GraphDocum
   const meta = plan.steps?.[instance.step];
   const [inputs, settings] = split(instance.with, canvasNode);
   return <>
-    <Heading title={meta?.title || instance.path} id={instance.id} kind="step id" state={instance.state} meta={[estimate(instance.price)]} />
+    <Heading title={meta?.title || instance.path} id={instance.id} kind="step id" state={instance.state} meta={[priceLabel(instance.price, money)]} />
     {meta?.description && <p className="fx-detail-copy">{meta.description}</p>}
     {instance.reason && <Problem>{instance.reason}</Problem>}
     <Section title="Routes" values={Object.fromEntries(Object.entries(instance.routes).map(([capability, route]) => [capability, route.route]))} artifacts={none} />
@@ -212,7 +206,7 @@ function WorkflowView() {
             ? <button onClick={() => controller.goToScope(crumb.id)} title={crumb.id ?? crumb.title}>{crumb.title}</button>
             : <button onClick={() => { controller.select(null); setAbout(!about); }} aria-current="page" aria-expanded={about}>{crumb.title}</button>}</li>)}</ol>
           {run ? <><StateLabel state={cancelling ? "cancelling" : run.state} /><RunTime run={run} />{run.charged_usd !== null && <><Dot /><span className="fx-bar-cost">{money(run.charged_usd)}</span></>}</>
-            : view.estimate && <span className="fx-bar-cost">{estimate(view.estimate, "est. $0.00")}</span>}
+            : view.estimate && <span className="fx-bar-cost">{priceLabel(view.estimate, money, "est. $0.00")}</span>}
           {(run?.stand_in || plan?.stand_in) && <span className="fx-badge">Stand-in</span>}
           {notices.length > 0 && <button onClick={() => { controller.select(null); setAbout(true); }} className="fx-bar-notice" title={notices.join("\n")}>{notices.length} {plan ? (notices.length === 1 ? "problem" : "problems") : (notices.length === 1 ? "notice" : "notices")}</button>}
         </nav>

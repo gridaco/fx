@@ -1,4 +1,4 @@
-//! OpenRouter music (spec/providers.md §9.2; spec/capabilities.md §9), offline: every exchange is
+//! OpenRouter music (src/openrouter/README.md; spec/capabilities.md §9), offline: every exchange is
 //! scripted on a `ReplayTransport` that asserts each request, and every refusal runs over
 //! `NoNetwork`, which panics on any send. Audio is `testing::media::MP3` followed by
 //! `testing::media::MP3_FRAME` (an ID3 tag, then an MPEG frame sync), here and in the fixture
@@ -410,6 +410,50 @@ fn bytes_without_the_mp3_signature_fail_the_check() {
     );
 }
 
+// Provider options (spec/adapters.md §8) ---------------------------------------------------------
+
+#[test]
+fn provider_options_follow_the_body_s_own_members() {
+    let encoded = b64(&mp3());
+    let event = json!({"choices": [{"delta": {"audio": {"data": encoded, "format": "mp3"}}}]});
+    let call = CallBuilder::new("music.generate", ROUTE)
+        .contract(json!({"adapter": "openrouter-music", "adapter_behavior": 1,
+                         "provider_options": {"openrouter": {"seed": 1}}}))
+        .request(json!({"prompt": "a calm harbour theme",
+                        "provider_options": {"openrouter": {"seed": 7, "user": "u-1"},
+                                             "gg": {"model": "never read"}}}))
+        .build();
+    let transport = Arc::new(ReplayTransport::new(vec![
+        Expect::new(Method::Post, URL, Lane::Provider)
+            .credential("authorization", &format!("Bearer {KEY}"))
+            .body(ExpectBody::JsonText(
+                r#"{"model":"google/lyria-3-pro-preview","messages":[{"role":"user","content":"a calm harbour theme"}],"modalities":["text","audio"],"audio":{"format":"mp3"},"stream":true,"seed":7,"user":"u-1"}"#.into(),
+            ))
+            .reply(
+                HttpResponse::new(200, stream(&[event]).into_bytes())
+                    .with_header("content-type", "text/event-stream"),
+            ),
+    ]));
+    answered(block_on(
+        adapter_over(transport.clone(), test_keys()).send(&call),
+    ));
+    transport.assert_done();
+}
+
+#[test]
+fn provider_options_set_no_member_the_adapter_owns() {
+    for name in body("p").as_object().unwrap().keys() {
+        assert!(openrouter::music::OWNED.contains(&name.as_str()), "{name}");
+    }
+    for name in openrouter::music::OWNED {
+        let call = call(json!({"prompt": " ", "provider_options": {"openrouter": {*name: 1}}}));
+        assert_eq!(
+            refused(&call, test_keys()),
+            format!("provider_options.openrouter.{name} is a member FX owns")
+        );
+    }
+}
+
 // Refusals ---------------------------------------------------------------------------------------
 
 #[test]
@@ -431,7 +475,7 @@ fn foreign_contracts_are_refused_before_anything_else() {
             "{contract}"
         );
     }
-    // Each member is checked when present (spec/providers.md §5 step 1).
+    // Each member is checked when present (spec/adapters.md §4 step 1).
     for contract in [
         json!({}),
         json!({"adapter": "openrouter-music"}),
@@ -639,7 +683,7 @@ fn the_key_never_leaves_the_credential_slot() {
                 .credential
                 .expect("the provider lane carries the key");
             assert_eq!(
-                (credential.header, credential.prefix),
+                (credential.header.as_str(), credential.prefix.as_str()),
                 ("authorization", "Bearer ")
             );
         }

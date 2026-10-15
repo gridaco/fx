@@ -1,18 +1,27 @@
-//! The built-in default route table (spec/identity.md §7; spec/providers.md §10):
+//! The built-in default route table (spec/identity.md §7; spec/providers.md §3):
 //! `routes/default.yaml`, embedded in the binary. The `grida-fx` command hands it to planning as
-//! `PlanRequest::builtin_routes`; a `--routes` file leaves it out, and a project's `route_tables`
-//! override its entries.
+//! `PlanRequest::builtin_routes`; a `--routes` file leaves it out of the catalog, and a project's
+//! `route_tables` override its entries. A project's entry may extend one of its entries, even
+//! under `--routes` (spec/identity.md §7).
 //!
 //! What `tests/routes.rs` holds the table to:
-//! - 26 routes over 10 capabilities, each fingerprint input (capability, model, provider,
-//!   contract) as written there, so an accidental edit of an identity is caught;
+//! - 29 routes over 10 capabilities, each fingerprint input (capability, model, provider,
+//!   contract) as written there and each fingerprint as a literal digest, so an accidental edit
+//!   of an identity is caught;
 //! - every capability is one of [`crate::capabilities::CAPABILITIES`], and every feature is in
 //!   that capability's [`features`](crate::capabilities::Capability::features);
 //! - every route is served by an adapter of this crate (`live::adapters`), whose kind matches the
-//!   capability's shape, and every contract names the `adapter` (and `adapter_behavior`) that
-//!   spec/providers.md §9 gives that adapter;
+//!   capability's shape, and every contract names the `adapter` and `adapter_behavior` that
+//!   spec/providers.md §2 gives that adapter;
+//! - core's [`grida_fx_core::routes::BUILT_IN_ADAPTERS`], which completes a route's contract, is
+//!   spec/providers.md §2 and every registered adapter's identity, and its `FAMILY_ADAPTERS` the
+//!   family table there and the identities of [`crate::openai_compatible`]'s adapters;
 //! - prices parse, and the tiered routes price as spec/identity.md §12 reads them: the video
 //!   route by `resolution`, the image routes by `size`.
+//!
+//! `tests/models.rs` holds the table to the public facts of `routes/models.json`, the projection
+//! of a pinned Grida Models release that `tools/make_models.py` writes (spec/providers.md §3).
+//! Nothing here reads it: FX never needs Grida Models to run.
 
 use grida_fx_core::routes::RouteTable;
 

@@ -34,12 +34,14 @@ fn route(capability: &str, model: &str, provider: &str, contract: Value) -> Rout
             max_units: None,
             by: None,
             tiers: IndexMap::new(),
+            capped: false,
         },
         features: BTreeSet::new(),
         concurrency: None,
         requests_per_minute: None,
         max_input_pictures: None,
         contract,
+        drift: None,
     }
 }
 
@@ -110,6 +112,7 @@ fn tiered() -> Route {
             ("360p".to_string(), (Usd(30_000), Usd(37_500))),
             ("4k".to_string(), (Usd(300_000), Usd(375_000))),
         ]),
+        capped: false,
     })
 }
 
@@ -154,6 +157,7 @@ fn length_priced_calls() {
         max_units: Some(Units::whole(5000)),
         by: None,
         tiers: IndexMap::new(),
+        capped: false,
     });
     // 11 characters: Unicode scalar values, not bytes.
     let text = Val::Str("h\u{e9}llo w\u{f6}rld".into());
@@ -193,6 +197,7 @@ fn call_counts_multiply_whole_prices() {
         max_units: None,
         by: None,
         tiers: IndexMap::new(),
+        capped: false,
     })
     .cost(&IndexMap::new());
     assert_eq!(
@@ -287,6 +292,92 @@ fn route_tables_from_documents() {
 }
 
 #[test]
+fn caps_and_prices_without_an_amount() {
+    let read = |price: Value| {
+        let document = json!({"fx": "routes/v1", "routes": [
+            {"capability": "image.generate", "route": "img-x@acme", "price": price},
+        ]});
+        RouteTable::from_document(&document, "routes.yaml")
+    };
+    let capped = read(json!({"cap_usd": 1.5})).unwrap();
+    let route = capped.resolve("image.generate", "img-x@acme").unwrap();
+    assert!(route.price.capped);
+    assert_eq!(route.cost(&IndexMap::new()), (Usd::ZERO, Usd(1_500_000)));
+    // The parser refuses a price that states no amount; the schema only describes the rule.
+    for empty in [json!({}), json!({"unit": "second", "max_units": 10})] {
+        let error = read(empty).unwrap_err();
+        assert_eq!(error.kind, ErrorKind::Route);
+        assert_eq!(
+            error.message,
+            "routes.yaml: routes.0.price: a price states an amount (usd, low_usd, high_usd) or a \
+             cap (cap_usd)"
+        );
+    }
+    assert_eq!(
+        read(json!({"cap_usd": 0.0000001})).unwrap_err().message,
+        "routes.yaml: routes.0.price.cap_usd: 1e-7 has more than 6 decimal places"
+    );
+    // The schema refuses a cap beside another member, and a cap of nothing, first.
+    for (refused, message) in [
+        (
+            json!({"cap_usd": 1.5, "high_usd": 2}),
+            r#"routes.0.price: {"cap_usd":1.5,"high_usd":2} has more than 1 property"#,
+        ),
+        (
+            json!({"cap_usd": 1.5, "unit": "call"}),
+            r#"routes.0.price: {"cap_usd":1.5,"unit":"call"} has more than 1 property"#,
+        ),
+        (
+            json!({"cap_usd": 0}),
+            "routes.0.price.cap_usd: 0 is less than or equal to the minimum of 0",
+        ),
+    ] {
+        let error = read(refused).unwrap_err();
+        assert_eq!(error.kind, ErrorKind::Document);
+        assert_eq!(error.message, format!("routes.yaml: {message}"));
+    }
+}
+
+#[test]
+fn a_contract_s_provider_options_are_objects_by_provider() {
+    let read = |contract: Value| {
+        let document = json!({"fx": "routes/v1", "routes": [
+            {"capability": "video.generate", "route": "vid-a@fal", "price": {"usd": 1},
+             "contract": contract},
+            {"capability": "video.generate", "route": "vid-b@fal", "extends": "vid-a@fal",
+             "contract": {"provider_options": {"fal": {"seed": 2}}}},
+        ]});
+        RouteTable::from_document(&document, "routes.yaml")
+    };
+    let table = read(json!({"provider_options": {"fal": {"seed": 1, "style": "ink"}}})).unwrap();
+    let route = table.resolve("video.generate", "vid-a@fal").unwrap();
+    assert_eq!(
+        route.contract["provider_options"],
+        json!({"fal": {"seed": 1, "style": "ink"}})
+    );
+    // An entry that extends a route and states them replaces the base's whole.
+    let extended = table.resolve("video.generate", "vid-b@fal").unwrap();
+    assert_eq!(
+        extended.contract["provider_options"],
+        json!({"fal": {"seed": 2}})
+    );
+    for (refused, message) in [
+        (
+            json!({"provider_options": {"fal": 1}}),
+            "routes.0.contract.provider_options.fal: 1 is not of type \"object\"",
+        ),
+        (
+            json!({"provider_options": []}),
+            "routes.0.contract.provider_options: [] is not of type \"object\"",
+        ),
+    ] {
+        let error = read(refused).unwrap_err();
+        assert_eq!(error.kind, ErrorKind::Document);
+        assert_eq!(error.message, format!("routes.yaml: {message}"));
+    }
+}
+
+#[test]
 fn catalogs_combine_in_order() {
     let folder = tempfile::tempdir().unwrap();
     let root = folder.path().to_path_buf();
@@ -373,6 +464,107 @@ fn catalogs_combine_in_order() {
     )
     .unwrap();
     assert!(replaced.resolve("mesh.rig", "rig-a@acme").is_err());
+}
+
+#[test]
+fn extends_reaches_the_catalog_so_far_then_the_built_in_table() {
+    // identity.md §7: load_catalog hands each table the catalog so far, then the built-in table,
+    // which serves as a base even when a --routes file leaves it out of the catalog.
+    let folder = tempfile::tempdir().unwrap();
+    let root = folder.path().to_path_buf();
+    std::fs::write(
+        root.join("project.yaml"),
+        "fx: routes/v1\nroutes:\n  - { capability: image.generate, route: img-a@acme, price: { usd: 0.04 }, contract: { quality: high } }\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("extra.yaml"),
+        "fx: routes/v1\nroutes:\n  - { capability: image.generate, route: img-b@acme, extends: img-a@acme }\n  - { capability: mesh.rig, route: rig-b@acme, extends: rig-a@acme, contract: { endpoint: b } }\n",
+    )
+    .unwrap();
+    let project = Project {
+        root: root.clone(),
+        document: ProjectDoc {
+            route_tables: vec!["project.yaml".into()],
+            ..ProjectDoc::default()
+        },
+        has_file: true,
+    };
+    let builtin = RouteTable::from_document(
+        &json!({"fx": "routes/v1", "routes": [
+            {"capability": "image.generate", "route": "img-a@acme", "price": {"usd": 0.09}, "contract": {"quality": "low"}},
+            {"capability": "mesh.rig", "route": "rig-a@acme", "price": {"usd": 0.5}, "contract": {"endpoint": "a", "check": true}},
+        ]}),
+        "built-in",
+    )
+    .unwrap();
+    let catalog = load_catalog(
+        &project,
+        &builtin,
+        &[(root.join("extra.yaml"), "extra.yaml".into())],
+    )
+    .unwrap();
+    // The project's entry, which replaced the built-in one, is the base.
+    let image = catalog.resolve("image.generate", "img-b@acme").unwrap();
+    assert_eq!(image.price.high, Usd(40_000));
+    assert_eq!(image.contract, json!({"quality": "high"}));
+    // A route only the built-in table holds is a base under --routes, though not in the catalog.
+    assert!(catalog.resolve("mesh.rig", "rig-a@acme").is_err());
+    let rig = catalog.resolve("mesh.rig", "rig-b@acme").unwrap();
+    assert_eq!(rig.price.high, Usd(500_000));
+    assert_eq!(rig.contract, json!({"endpoint": "b", "check": true}));
+}
+
+#[test]
+fn a_declared_family_completes_its_provider_s_contracts_in_every_table() {
+    // identity.md §7 step 2: the planning project's declarations decide the family, for its
+    // route_tables and the --routes files alike; an undeclared provider keeps its contract.
+    let folder = tempfile::tempdir().unwrap();
+    let root = folder.path().to_path_buf();
+    std::fs::write(
+        root.join("fx.yaml"),
+        "fx: project/v1\nroute_tables: [chat.yaml]\nproviders:\n  acme:\n    base_url: { default: \"https://api.acme.test/v1\" }\n    family: openai-compatible\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("chat.yaml"),
+        "fx: routes/v1\nroutes:\n  - { capability: structured.generate, route: text-a@acme, price: { cap_usd: 0.05 } }\n  - { capability: structured.generate, route: text-a@other, price: { cap_usd: 0.05 } }\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("extra.yaml"),
+        "fx: routes/v1\nroutes:\n  - { capability: agent.turn, route: text-a@acme, price: { cap_usd: 0.05 } }\n",
+    )
+    .unwrap();
+    let project = Project::find(&root).unwrap();
+    let extra = [(root.join("extra.yaml"), "extra.yaml".to_string())];
+    let catalog = load_catalog(&project, &RouteTable::new(), &extra).unwrap();
+    let contract =
+        |capability: &str, id: &str| catalog.resolve(capability, id).unwrap().contract.clone();
+    assert_eq!(
+        contract("structured.generate", "text-a@acme"),
+        json!({"adapter": "openai-compatible-structured", "adapter_behavior": 1})
+    );
+    assert_eq!(
+        contract("agent.turn", "text-a@acme"),
+        json!({"adapter": "openai-compatible-tool-loop", "adapter_behavior": 1})
+    );
+    assert_eq!(contract("structured.generate", "text-a@other"), json!({}));
+    // Without the declaration, the same tables keep their contracts.
+    let undeclared = Project {
+        document: ProjectDoc {
+            providers: Vec::new(),
+            ..project.document.clone()
+        },
+        ..project.clone()
+    };
+    let catalog = load_catalog(&undeclared, &RouteTable::new(), &extra).unwrap();
+    for (capability, id) in [
+        ("structured.generate", "text-a@acme"),
+        ("agent.turn", "text-a@acme"),
+    ] {
+        assert_eq!(catalog.resolve(capability, id).unwrap().contract, json!({}));
+    }
 }
 
 #[test]

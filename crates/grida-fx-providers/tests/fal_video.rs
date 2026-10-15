@@ -1,10 +1,12 @@
-//! fal `video.generate`, a queue long job (spec/providers.md §7, §9.3), over synthetic exchanges
-//! and a `FakeClock`, so polling takes microseconds. Every test that sends asserts each request;
-//! every refusal runs over `NoNetwork`. Clips are the committed facts vectors
+//! fal `video.generate`, a queue long job (spec/adapters.md §6; src/fal/README.md), over synthetic
+//! exchanges and a `FakeClock`, so polling takes microseconds. Every test that sends asserts each
+//! request; every refusal runs over `NoNetwork`. Clips are the committed facts vectors
 //! (`spec/vectors/facts/mp4/`) and `testing::media::MP4_HEAD`.
 
 use grida_fx_core::money::Usd;
-use grida_fx_providers::adapter::{Answer, CallRequest, Collected, LongJob, Submitted};
+use grida_fx_providers::adapter::{
+    Answer, AnsweredFile, CallRequest, Collected, LongJob, RouteLimits, Submitted,
+};
 use grida_fx_providers::clock::{Clock, FakeClock};
 use grida_fx_providers::fal::FalClients;
 use grida_fx_providers::fal::video::{
@@ -124,7 +126,7 @@ fn refused(call: &CallRequest, keys: Keys) -> String {
 }
 
 /// The reason of an `Ended` collect that reports no cost, as every one does when no read reported
-/// a cost (spec/providers.md §9.3).
+/// a cost (src/fal/README.md).
 fn ended(collected: Collected) -> String {
     match collected {
         Collected::Ended { reason, cost: None } => reason,
@@ -216,6 +218,112 @@ fn a_submit_without_last_frame_uses_the_default_tier_and_ratio() {
 }
 
 #[test]
+fn a_submit_without_a_first_frame_sends_none_on_a_route_that_draws_from_the_prompt_alone() {
+    let mut call = call(json!({"first_frame": null}));
+    call.call.route.limits.text_to_video = true;
+    let body = json!({"prompt": "A lantern sways.", "aspect_ratio": "9:16", "resolution": "360p",
+                      "duration": 3});
+    let transport = Arc::new(ReplayTransport::new(vec![
+        Expect::post_json(SUBMIT_URL, Value::Null)
+            .credential("authorization", "Key test-fal-key")
+            .body(ExpectBody::JsonText(serde_json::to_string(&body).unwrap()))
+            .reply(ok(json!({"request_id": "req-1", "status_url": STATUS_URL,
+                             "response_url": RESPONSE_URL}))),
+    ]));
+    assert_eq!(
+        submit(&transport, &call),
+        Submitted::Accepted { handle: handle() }
+    );
+}
+
+/// The built-in route restated in a table of the user's own with other limits: priced per second
+/// up to 15.5, in tiers `480p` and `1080p`, and drawing from the prompt alone.
+fn declared_limits() -> RouteLimits {
+    let table = grida_fx_core::routes::RouteTable::from_document(
+        &json!({"fx": "routes/v1", "routes": [{
+            "capability": "video.generate", "route": ROUTE,
+            "price": {"low_usd": 0.05, "high_usd": 0.15, "unit": "second", "max_units": 15.5,
+                      "by": "resolution",
+                      "tiers": {"480p": {"low_usd": 0.05, "high_usd": 0.06},
+                                "1080p": {"low_usd": 0.1, "high_usd": 0.15}}},
+            "features": ["text_to_video"]}]}),
+        "routes.yaml",
+    )
+    .unwrap();
+    RouteLimits::of(&table.entries[0])
+}
+
+#[test]
+fn the_route_s_tiers_and_length_are_what_a_submit_takes() {
+    let limits = declared_limits();
+    assert_eq!(limits.max_whole_seconds(), Some(15));
+    assert!(limits.text_to_video);
+    let with_limits = |request: Value| {
+        let mut call = call(request);
+        call.call.route.limits = limits.clone();
+        call
+    };
+    let call = with_limits(json!({"duration": 15, "resolution": "480p", "first_frame": null}));
+    let body = json!({"prompt": "A lantern sways.", "aspect_ratio": "9:16", "resolution": "480p",
+                      "duration": 15});
+    let transport = Arc::new(ReplayTransport::new(vec![
+        Expect::post_json(SUBMIT_URL, Value::Null)
+            .credential("authorization", "Key test-fal-key")
+            .body(ExpectBody::JsonText(serde_json::to_string(&body).unwrap()))
+            .reply(ok(json!({"request_id": "req-1", "status_url": STATUS_URL,
+                             "response_url": RESPONSE_URL}))),
+    ]));
+    assert_eq!(
+        submit(&transport, &call),
+        Submitted::Accepted { handle: handle() }
+    );
+    for (request, sentence) in [
+        (
+            json!({"duration": 16, "resolution": "480p"}),
+            "this route draws whole seconds from 3 to 15, not 16",
+        ),
+        (
+            json!({"resolution": "360p"}),
+            "this route draws no 360p clip at 9:16",
+        ),
+        (
+            json!({"resolution": null}),
+            "this route draws no 720p clip at 9:16",
+        ),
+    ] {
+        assert_eq!(
+            refused(&with_limits(request.clone()), test_keys()),
+            sentence,
+            "{request}"
+        );
+    }
+    // A route that does not draw from the prompt alone needs a first frame, and a last frame
+    // needs one on any route.
+    let last = json!({"file": "f".repeat(64)});
+    assert_eq!(
+        refused(
+            &with_limits(json!({"first_frame": null, "last_frame": last})),
+            test_keys()
+        ),
+        "last_frame needs first_frame"
+    );
+    // The built-in route's limits are the adapter's own, and it draws from a first frame.
+    let built_in = grida_fx_providers::routes::default_table().unwrap();
+    let route = &built_in.entries[&("video.generate".to_string(), ROUTE.to_string())];
+    let limits = RouteLimits::of(route);
+    assert!(!limits.text_to_video);
+    assert_eq!(limits.max_whole_seconds(), Some(video::MAX_SECONDS));
+    let mut tiers = limits.tiers_by("resolution").unwrap().to_vec();
+    tiers.sort();
+    let mut own: Vec<String> = video::RESOLUTIONS
+        .iter()
+        .map(|(name, _)| name.to_string())
+        .collect();
+    own.sort();
+    assert_eq!(tiers, own);
+}
+
+#[test]
 fn submit_refusals_send_nothing() {
     let unknown = json!({"file": "f".repeat(64)});
     let cases: Vec<(Value, String)> = vec![
@@ -240,6 +348,10 @@ fn submit_refusals_send_nothing() {
         ),
         (
             json!({"first_frame": null}),
+            "this route draws from a first frame".into(),
+        ),
+        (
+            json!({"first_frame": null, "last_frame": unknown}),
             "this route draws from a first frame".into(),
         ),
         (
@@ -491,6 +603,60 @@ fn submit_statuses_follow_the_queue_table() {
     }
 }
 
+#[test]
+fn provider_options_follow_the_submit_body_s_own_members() {
+    let mut builder = CallBuilder::new("video.generate", ROUTE).contract(json!({
+        "adapter": "fal-queue", "adapter_behavior": 1,
+        "provider_options": {"fal": {"enable_prompt_expansion": true, "seed": 1}},
+    }));
+    let first_bytes = media::png(2, 2, Some(255));
+    let last_bytes = media::png(3, 3, None);
+    let first = builder.file("image/png", &first_bytes);
+    let last = builder.file("image/png", &last_bytes);
+    let call = builder
+        .request(
+            json!({"prompt": "A lantern sways.", "first_frame": first, "last_frame": last,
+                        "duration": 3, "resolution": "360p", "aspect_ratio": "9:16",
+                        "provider_options": {"fal": {"enable_prompt_expansion": false},
+                                             "gg": {"duration": 9}}}),
+        )
+        .build();
+    let body = json!({"prompt": "A lantern sways.", "image_url": data_url("image/png", &first_bytes),
+                      "end_image_url": data_url("image/png", &last_bytes),
+                      "aspect_ratio": "9:16", "resolution": "360p", "duration": 3,
+                      "enable_prompt_expansion": false, "seed": 1});
+    let answer =
+        json!({"request_id": "req-1", "status_url": STATUS_URL, "response_url": RESPONSE_URL});
+    let transport = Arc::new(ReplayTransport::new(vec![
+        Expect::post_json(SUBMIT_URL, Value::Null)
+            .credential("authorization", "Key test-fal-key")
+            .body(ExpectBody::JsonText(serde_json::to_string(&body).unwrap()))
+            .reply(ok(answer)),
+    ]));
+    assert_eq!(
+        submit(&transport, &call),
+        Submitted::Accepted { handle: handle() }
+    );
+    // Every member of that body but the options is one the adapter owns.
+    let Body::Json(Value::Object(sent)) = &transport.requests()[0].body else {
+        panic!("a JSON body");
+    };
+    for name in sent.keys().take(sent.len() - 2) {
+        assert!(video::OWNED.contains(&name.as_str()), "{name}");
+    }
+}
+
+#[test]
+fn provider_options_set_no_member_the_adapter_owns() {
+    for name in video::OWNED {
+        let call = call(json!({"prompt": " ", "provider_options": {"fal": {*name: 1}}}));
+        assert_eq!(
+            refused(&call, test_keys()),
+            format!("provider_options.fal.{name} is a member FX owns")
+        );
+    }
+}
+
 // 7. Collect -----------------------------------------------------------------------------------
 
 #[test]
@@ -538,8 +704,9 @@ fn collect_polls_through_a_dropped_read_then_downloads_without_credential() {
 
 #[test]
 fn an_unusable_result_costs_what_the_result_read_reports() {
-    // spec/providers.md §7, §9.3: fal finished the job and reported its cost, so an unusable
-    // result is booked at that figure, as an answer would be; without a figure, the whole hold.
+    // spec/adapters.md §6; src/fal/README.md: fal finished the job and reported its cost, so an
+    // unusable result is booked at that figure, as an answer would be; without a figure, the whole
+    // hold.
     let not_mp4 = || {
         Expect::download(VIDEO_URL).reply(
             HttpResponse::new(200, b"not a clip".to_vec()).with_header("content-type", "video/mp4"),
@@ -598,6 +765,29 @@ fn a_fixture_plays_the_same_collect() {
     };
     assert_eq!(answer.cost, Some(Usd(300_000)));
     assert_eq!(answer.data["facts"]["fps"], json!(24));
+}
+
+#[test]
+fn a_job_is_collected_whatever_behaviour_its_route_names() {
+    // src/fal/README.md: a submit is refused, but a job already submitted (under FX 0.6.1, which
+    // read no behaviour) is collected, since the call's key fixed its contract.
+    let mut builder = CallBuilder::new("video.generate", ROUTE)
+        .contract(json!({"adapter": "fal-queue", "adapter_behavior": 2}));
+    let first = builder.file("image/png", &media::png(2, 2, Some(255)));
+    let call = builder
+        .request(json!({"prompt": "p", "first_frame": first, "duration": 3}))
+        .build();
+    assert_eq!(
+        refused(&call, test_keys()),
+        format!("{ROUTE} is not a video.generate route this adapter serves")
+    );
+    let transport = Arc::new(ReplayTransport::new(vec![
+        completed(),
+        result(),
+        Expect::download(VIDEO_URL).reply(clip_reply()),
+    ]));
+    let collected = collect(&transport, &Arc::new(FakeClock::new()), &call);
+    assert!(matches!(collected, Collected::Answered(_)), "{collected:?}");
 }
 
 #[test]
@@ -897,8 +1087,8 @@ fn downloads_that_end_or_stop_collecting() {
 
 #[test]
 fn the_bytes_decide_the_kind_not_the_headers() {
-    // A valid MP4 is answered whatever its content-type header or declared type says: §9.3 ends
-    // a job only when the bytes are not MP4.
+    // A valid MP4 is answered whatever its content-type header or declared type says: fal's
+    // README ends a job only when the bytes are not MP4.
     let results = [
         json!({"video": {"url": VIDEO_URL}}),
         json!({"video": {"url": VIDEO_URL, "content_type": "video/webm"}}),
@@ -936,7 +1126,7 @@ fn the_bytes_decide_the_kind_not_the_headers() {
 
 #[test]
 fn a_failed_download_is_unreachable_and_made_once() {
-    // spec/providers.md §8: a result file is fetched once per collect. A failure a later collect
+    // spec/adapters.md §7: a result file is fetched once per collect. A failure a later collect
     // may not repeat leaves the job `submitted`; the next collect reads the result again.
     let cases: Vec<(Exchange, &str)> = vec![
         (
@@ -1166,6 +1356,41 @@ fn the_check_compares_size_and_duration() {
     assert_eq!(
         ClipFacts::of_mp4(AUDIO_ONLY).unwrap_err(),
         "the file carries no video stream"
+    );
+}
+
+#[test]
+fn a_job_is_checked_whatever_its_route_now_declares() {
+    // adapters.md §4: a route's limits are not identity, so a job sent at a tier, a length or
+    // without a frame its route then took is checked against its request alone.
+    let mut call = call(json!({"first_frame": null, "resolution": "720p", "duration": 5}));
+    call.call.route.limits = RouteLimits {
+        max_seconds: Some(grida_fx_core::money::Units::from_f64(4.0)),
+        tiers: Some(("resolution".into(), vec!["480p".into()])),
+        ..RouteLimits::default()
+    };
+    assert_eq!(
+        refused(&call, test_keys()),
+        "this route draws from a first frame"
+    );
+    let adapter = video_with(Arc::new(NoNetwork), test_keys(), Arc::new(FakeClock::new()));
+    let answer = |bytes: Vec<u8>| {
+        let mut answer = Answer::new(Value::Null, None);
+        let kind = "video/mp4".to_string();
+        answer
+            .files
+            .insert("video".into(), AnsweredFile { kind, bytes });
+        answer
+    };
+    assert_eq!(
+        adapter.check(&call, &answer(media::mp4(720, 1280, 24, 120))),
+        Ok(())
+    );
+    assert_eq!(
+        adapter
+            .check(&call, &answer(media::mp4(720, 1280, 24, 72)))
+            .unwrap_err(),
+        "the clip runs 3.000 s, not 5 s"
     );
 }
 

@@ -1,0 +1,100 @@
+{
+ "estimate": {
+  "ceiling_usd": null,
+  "high_usd": 0.05,
+  "low_usd": 0
+ },
+ "instances": [
+  {
+   "bindings": [],
+   "id": "name#1",
+   "identity": "0701df3a5fdcd0d89a36bf7b353acc87d724b2d321e4ef87b478dd2bddd78950",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "name",
+   "phase": 1,
+   "price": {
+    "capped": true,
+    "high_usd": 0.05,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {
+    "structured.generate": {
+     "fingerprint": "c349af10e0a600f63fef6013c88dc88926acf949c5bcade06c74bc4563217099",
+     "route": "text-a@acme"
+    }
+   },
+   "state": "planned",
+   "step": "name",
+   "take": [
+    1
+   ],
+   "type": "fx/structured.generate@1.1",
+   "uses": "fx/structured.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "matte": "#ffffff",
+    "prompt": "Name a colour.",
+    "schema": {
+     "file": "6fc6118ab871d0157e370adee71bbb8e62d83f0dd1c5ac36caf118f48bba36c9"
+    },
+    "vars": {}
+   }
+  }
+ ],
+ "kind": "fx-graph-v1",
+ "pending": [],
+ "problems": [],
+ "scopes": [],
+ "types": {
+  "fx/structured.generate@1": {
+   "identity": "fx/structured.generate@1.1",
+   "ports": {
+    "inputs": {
+     "context": "file[]?",
+     "schema": "json"
+    },
+    "outputs": {
+     "json": "json"
+    },
+    "params": {
+     "matte": {
+      "default": "#ffffff",
+      "type": "string"
+     },
+     "max_tokens": {
+      "type": "integer",
+      "x-fx-optional": true
+     },
+     "prompt": {
+      "type": "string",
+      "x-fx-template": true
+     },
+     "provider_options": {
+      "type": "object",
+      "x-fx-optional": true
+     },
+     "system": {
+      "type": "string",
+      "x-fx-optional": true,
+      "x-fx-template": true
+     },
+     "vars": {
+      "default": {},
+      "type": "object"
+     }
+    }
+   }
+  }
+ },
+ "workflow": {
+  "file": "workflows/chat.yaml",
+  "id": "chat",
+  "title": "A declared family's chat route"
+ }
+}

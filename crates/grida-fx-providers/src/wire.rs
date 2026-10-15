@@ -1,6 +1,7 @@
-//! Wire helpers every adapter shares (spec/providers.md §4–§6): base URLs, JSON bodies, strict
+//! Wire helpers every adapter shares (spec/adapters.md §3–§5, §8): base URLs, JSON bodies, strict
 //! base64 and data URLs, media types and byte signatures, reported costs, safe error details,
-//! request files, image sizes and the image checks.
+//! request files, provider options, what a generic image adapter sends, image sizes, the image
+//! checks, and a picture encoded as PNG.
 //!
 //! These are complete and tested here; provider modules use them rather than their own copies, so
 //! two providers never disagree on what "a PNG", "a reported cost" or "an exact size" means.
@@ -16,51 +17,77 @@ use serde_json::{Map, Value};
 use std::sync::LazyLock;
 
 // ---------------------------------------------------------------------------------------------
-// Base URLs
+// Base URLs and download hosts
 
-/// Normalizes a provider base URL (spec/providers.md §3): trimmed, trailing `/` removed; an
-/// `http`/`https` URL with a host, no userinfo, no query, no fragment and a valid port; `http`
-/// only for a loopback host (`localhost`, or a loopback IP). `label` names the provider in the
-/// refusal (`OpenAI base_url must …`).
-pub fn normalize_base_url(value: &str, label: &str) -> Result<String, String> {
-    let trimmed = value.trim().trim_end_matches('/');
-    let shape = || {
-        format!("{label} base_url must be an HTTP(S) URL without credentials, query, or fragment")
-    };
-    let url = match url::Url::parse(trimmed) {
-        Ok(url) => url,
-        Err(url::ParseError::InvalidPort) => {
-            return Err(format!("{label} base_url must use a valid network port"));
-        }
-        Err(_) => return Err(shape()),
-    };
-    if !matches!(url.scheme(), "http" | "https")
-        || url.host_str().is_none()
-        || !url.username().is_empty()
-        || url.password().is_some()
-        || url.query().is_some()
-        || url.fragment().is_some()
-        || trimmed.contains('?')
-        || trimmed.contains('#')
-    {
-        return Err(shape());
-    }
-    if url.scheme() == "http" && !is_loopback(&url) {
-        return Err(format!(
-            "{label} base_url must use HTTPS unless it targets a loopback host"
-        ));
-    }
-    Ok(trimmed.to_string())
+/// Normalizes a provider base URL (spec/providers.md §1); the core's, which reads declared
+/// defaults with it.
+pub use grida_fx_core::providers::normalize_base_url;
+
+pub(crate) use grida_fx_core::providers::is_loopback;
+
+/// Why a result's URL is not downloaded ([`download_url`]): it does not parse, or it is not on its
+/// provider's hosts. Each caller words its own sentence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OffHost {
+    Malformed,
+    Outside,
 }
 
-pub(crate) fn is_loopback(url: &url::Url) -> bool {
-    match url.host() {
-        Some(url::Host::Domain(domain)) => domain
+/// Whether `url` has the origin of `base` (scheme, host and port, the scheme's default port
+/// counted), as a project adapter's `fetch` holds its credential to (spec/adapters.md §9). Either
+/// one not parsing, or without a host, is no match.
+pub fn same_origin(url: &str, base: &str) -> bool {
+    let origin = |text: &str| {
+        let parsed = url::Url::parse(text).ok()?;
+        let host = parsed
+            .host_str()?
             .trim_end_matches('.')
-            .eq_ignore_ascii_case("localhost"),
-        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
-        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
-        None => false,
+            .to_ascii_lowercase();
+        Some((
+            parsed.scheme().to_string(),
+            host,
+            parsed.port_or_known_default(),
+        ))
+    };
+    match (origin(url), origin(base)) {
+        (Some(url), Some(base)) => url == base,
+        _ => false,
+    }
+}
+
+/// A result's URL, parsed, when it may be downloaded from a provider whose declaration lists
+/// `hosts` (spec/providers.md §1): `https`; a host that is a name, not an address, and is one of
+/// `hosts` or lies below a `*.<domain>` entry's domain, compared in lower case without trailing
+/// dots; no userinfo; no port but 443 (which the parser drops); no fragment. A query is allowed.
+/// A download sends the provider's text as given; the transport parses it with the same parser,
+/// so the host checked here is the host asked.
+pub fn download_url(url: &str, hosts: &[String]) -> Result<url::Url, OffHost> {
+    let parsed = url::Url::parse(url).map_err(|_| OffHost::Malformed)?;
+    if parsed.scheme() != "https"
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+        || parsed.port().is_some()
+        || parsed.fragment().is_some()
+    {
+        return Err(OffHost::Outside);
+    }
+    let Some(url::Host::Domain(domain)) = parsed.host() else {
+        return Err(OffHost::Outside);
+    };
+    let host = domain.trim_end_matches('.').to_ascii_lowercase();
+    let listed = hosts.iter().any(|entry| match entry.strip_prefix("*.") {
+        Some(below) => {
+            host.strip_suffix(below)
+                .is_some_and(|rest| rest.ends_with('.'))
+                && !host.starts_with('.')
+                && !host.contains("..")
+        }
+        None => host == *entry,
+    });
+    if listed {
+        Ok(parsed)
+    } else {
+        Err(OffHost::Outside)
     }
 }
 
@@ -96,11 +123,20 @@ pub fn request_id(response: &HttpResponse) -> Option<String> {
         .map(str::to_string)
 }
 
+/// The reason with ` (request <id>)` when the response carries a safe request id
+/// ([`request_id`]).
+pub fn with_request_id(reason: String, response: &HttpResponse) -> String {
+    match request_id(response) {
+        Some(id) => format!("{reason} (request {id})"),
+        None => reason,
+    }
+}
+
 static SAFE_FIELD: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[A-Za-z0-9_.:-]{1,96}$").expect("a valid pattern"));
 
 /// The allowlisted detail of an error body in the `{"error": {...}}` envelope OpenAI and
-/// OpenRouter use (spec/providers.md §8):
+/// OpenRouter use (spec/adapters.md §7):
 /// 1. `error` must be an object; when `error.metadata.raw` is a string holding JSON with an
 ///    `error` object, that inner object is used instead;
 /// 2. from `message`, only fixed summaries, matched case-insensitively, de-duplicated, in this
@@ -314,7 +350,7 @@ pub fn matches_signature(kind: &str, bytes: &[u8]) -> bool {
 // ---------------------------------------------------------------------------------------------
 // Costs
 
-/// A reported cost in US dollars (spec/providers.md §6): a JSON number that is finite and not
+/// A reported cost in US dollars (spec/adapters.md §5): a JSON number that is finite and not
 /// negative (booleans, strings and `null` are not costs), converted exactly from its JCS text and
 /// **rounded up** to whole micro-dollars, so a cost is never under-counted (`1e-7` → `Usd(1)`).
 pub fn usd_ceil(value: &Value) -> Option<Usd> {
@@ -426,6 +462,207 @@ pub fn read_file(file: &RequestFile, what: &str) -> Result<Vec<u8>, String> {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Provider options
+
+/// Where a call's provider options come from, in the order they merge (spec/adapters.md §8): the
+/// route's contract, then the request.
+fn option_sources(call: &CallRequest) -> [(Option<&Value>, &'static str); 2] {
+    [
+        (
+            call.route.contract.get("provider_options"),
+            "contract.provider_options",
+        ),
+        (call.request.get("provider_options"), "provider_options"),
+    ]
+}
+
+/// The parameters an adapter adds to what it sends (spec/adapters.md §8): the route's
+/// `contract.provider_options.<provider>`, then the request's `provider_options.<provider>`, for
+/// the route's provider; a request parameter replaces the route's of its name in place, and the
+/// request's others follow. Absent, `null` and `{}` add nothing, and other providers' members are
+/// not read. Refused, the route's before the request's: a member that is not an object (`<where>
+/// is an object`); a member that is a file value (`<where> holds a file: provider options are JSON
+/// only`); a parameter in `owned`, the members the adapter owns (`<where>.<name> is a member FX
+/// owns`); a file value anywhere in a parameter (`<where>.<name> holds a file: …`).
+pub fn provider_options(call: &CallRequest, owned: &[&str]) -> Result<Map<String, Value>, String> {
+    let provider = call.route.provider.as_str();
+    let mut merged = Map::new();
+    for (options, at) in option_sources(call) {
+        let parameters = match options {
+            None | Some(Value::Null) => continue,
+            Some(Value::Object(by_provider)) => match by_provider.get(provider) {
+                None | Some(Value::Null) => continue,
+                Some(member) if is_file(member) => {
+                    return Err(format!(
+                        "{at}.{provider} holds a file: provider options are JSON only"
+                    ));
+                }
+                Some(Value::Object(parameters)) => parameters,
+                Some(_) => return Err(format!("{at}.{provider} is an object")),
+            },
+            Some(_) => return Err(format!("{at} is an object")),
+        };
+        for (name, value) in parameters {
+            if owned.contains(&name.as_str()) {
+                return Err(format!("{at}.{provider}.{name} is a member FX owns"));
+            }
+            if holds_file(value) {
+                return Err(format!(
+                    "{at}.{provider}.{name} holds a file: provider options are JSON only"
+                ));
+            }
+            merged.insert(name.clone(), value.clone());
+        }
+    }
+    Ok(merged)
+}
+
+/// A runtime's refusal of provider options (spec/adapters.md §8): `<who> takes no
+/// provider_options` when the route's or the request's member for the route's provider is anything
+/// but absent, `null` or `{}`. Other providers' members are not read.
+pub fn no_provider_options(call: &CallRequest, who: &str) -> Result<(), String> {
+    let provider = call.route.provider.as_str();
+    for (options, _) in option_sources(call) {
+        let member = match options {
+            None | Some(Value::Null) => continue,
+            Some(Value::Object(by_provider)) => by_provider.get(provider),
+            Some(other) => Some(other),
+        };
+        match member {
+            None | Some(Value::Null) => {}
+            Some(Value::Object(parameters)) if parameters.is_empty() => {}
+            Some(_) => return Err(format!("{who} takes no provider_options")),
+        }
+    }
+    Ok(())
+}
+
+/// Whether `value` is a file value as the engine reads one (spec/protocol.md §3.2): an object
+/// whose only member, `file`, is a digest. `{"file": "a.png"}` is ordinary data (spec/identity.md
+/// §3), so a provider parameter of that shape is passed on.
+fn is_file(value: &Value) -> bool {
+    value.as_object().is_some_and(|map| {
+        map.len() == 1
+            && map
+                .get("file")
+                .and_then(Value::as_str)
+                .is_some_and(grida_fx_core::value::is_digest)
+    })
+}
+
+/// Whether a file value ([`is_file`]) is anywhere in `value`.
+fn holds_file(value: &Value) -> bool {
+    match value {
+        Value::Array(items) => items.iter().any(holds_file),
+        Value::Object(members) => is_file(value) || members.values().any(holds_file),
+        _ => false,
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Generic image requests
+
+/// What a generic image adapter sends of an image request: its prompt, and its input pictures,
+/// `image` then `references` (`references[<i>]`, from 0), each with its member name.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GenericImage<'a> {
+    pub prompt: &'a str,
+    pub pictures: Vec<(String, &'a Value)>,
+}
+
+/// The values a generic image adapter sends (src/openrouter/README.md, src/fal/README.md, "Images
+/// on any model"), after the refusals of step 4 of spec/adapters.md §4 that are not provider
+/// options, in this order: a blank prompt; a mask; `background: transparent`, then a background
+/// other than `auto`, `opaque` or `transparent`; a `size` that is not `auto` or `WxH`
+/// ([`parse_size`]), then an exact size; references on a generate unless `generate_references`
+/// (`<label> takes no references`), and then on a route that does not declare `image_input`
+/// (`<route> does not support image_input`, the plan's sentence, spec/capabilities.md §1); more
+/// pictures than the route's `max_input_pictures`. What the
+/// adapter cannot send faithfully is refused as `<who> sends no <mask | transparent background |
+/// exact size>: give the model's own parameter in provider_options.<provider>`; `auto` and
+/// `opaque`, which the model's default and the image check cover, are not sent.
+pub fn generic_image<'a>(
+    call: &'a CallRequest,
+    who: &str,
+    label: &str,
+    generate_references: bool,
+) -> Result<GenericImage<'a>, String> {
+    let request = &call.request;
+    let not_sent = |what: &str| {
+        format!(
+            "{who} sends no {what}: give the model's own parameter in provider_options.{}",
+            call.route.provider
+        )
+    };
+    let prompt = request.get("prompt").and_then(Value::as_str).unwrap_or("");
+    if prompt.trim().is_empty() {
+        return Err("an image call needs its prompt as text".into());
+    }
+    if !is_absent(request.get("mask")) {
+        return Err(not_sent("mask"));
+    }
+    match request.get("background") {
+        None | Some(Value::Null) => {}
+        Some(Value::String(b)) if b == "auto" || b == "opaque" => {}
+        Some(Value::String(b)) if b == "transparent" => {
+            return Err(not_sent("transparent background"));
+        }
+        Some(_) => return Err("background must be auto, opaque or transparent".into()),
+    }
+    if parse_size(request.get("size"))?.is_some() {
+        return Err(not_sent("exact size"));
+    }
+    let edit = call.route.capability == "image.edit";
+    let references: &[Value] = request
+        .get("references")
+        .and_then(Value::as_array)
+        .map_or(&[], Vec::as_slice);
+    if !edit && !references.is_empty() {
+        if !generate_references {
+            return Err(format!("{label} takes no references"));
+        }
+        if !call.route.limits.image_input {
+            return Err(format!("{} does not support image_input", call.route.id()));
+        }
+    }
+    let mut pictures = Vec::new();
+    if edit && let Some(image) = request.get("image") {
+        pictures.push(("image".to_string(), image));
+    }
+    pictures.extend(
+        references
+            .iter()
+            .enumerate()
+            .map(|(i, value)| (format!("references[{i}]"), value)),
+    );
+    if let Some(most) = call.route.limits.max_input_pictures
+        && pictures.len() > most as usize
+    {
+        return Err(format!(
+            "{} takes at most {most} input pictures, not {}",
+            call.route.id(),
+            pictures.len()
+        ));
+    }
+    Ok(GenericImage { prompt, pictures })
+}
+
+/// `options` as multipart text fields, in order: a string as itself, any other value as its JSON
+/// text (spec/adapters.md §8).
+pub fn option_fields(options: &Map<String, Value>) -> Vec<crate::transport::Part> {
+    options
+        .iter()
+        .map(|(name, value)| {
+            let text = match value {
+                Value::String(text) => text.clone(),
+                other => other.to_string(),
+            };
+            crate::transport::Part::text(name, &text)
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------------------------
 // Image sizes and checks
 
 /// An image request's `size`: `None` for absent, `null` or `"auto"`; `Some((w, h))` for `"WxH"`
@@ -447,34 +684,66 @@ pub fn parse_size(value: Option<&Value>) -> Result<Option<(u32, u32)>, String> {
     }
 }
 
-/// The GPT Image exact-size envelope (spec/providers.md §9.1, §9.3), checked in this order: edges
-/// multiples of 16; the longer edge at most 3840; aspect ratio at most 3:1; between 655 360 and
-/// 8 294 400 pixels. `label` starts each sentence (`OpenAI image size …`).
+/// The GPT Image exact-size envelope: what [`check_size_envelope`] holds a size to.
+pub struct SizeEnvelope {
+    /// Each edge is a multiple of this.
+    pub step: u32,
+    /// The longest edge.
+    pub max_edge: u32,
+    /// The most the longer edge may be of the shorter.
+    pub max_aspect: u32,
+    /// The fewest pixels.
+    pub min_pixels: u64,
+    /// The most pixels.
+    pub max_pixels: u64,
+}
+
+/// GPT Image's envelope (src/openai/README.md; src/fal/README.md).
+pub const SIZE_ENVELOPE: SizeEnvelope = SizeEnvelope {
+    step: 16,
+    max_edge: 3840,
+    max_aspect: 3,
+    min_pixels: 655_360,
+    max_pixels: 8_294_400,
+};
+
+/// The GPT Image exact-size envelope ([`SIZE_ENVELOPE`]), checked in this order: edges multiples
+/// of 16; the longer edge at most 3840; aspect ratio at most 3:1; between 655 360 and 8 294 400
+/// pixels. `label` starts each sentence (`OpenAI image size …`).
 pub fn check_size_envelope(width: u32, height: u32, label: &str) -> Result<(), String> {
+    let SizeEnvelope {
+        step,
+        max_edge,
+        max_aspect,
+        min_pixels,
+        max_pixels,
+    } = SIZE_ENVELOPE;
     let (long, short) = (width.max(height) as u64, width.min(height) as u64);
-    if !width.is_multiple_of(16) || !height.is_multiple_of(16) {
-        return Err(format!("{label} image size edges must be multiples of 16"));
-    }
-    if long > 3840 {
+    if !width.is_multiple_of(step) || !height.is_multiple_of(step) {
         return Err(format!(
-            "{label} image size edges must not exceed 3840 pixels"
+            "{label} image size edges must be multiples of {step}"
         ));
     }
-    if long > 3 * short {
+    if long > max_edge as u64 {
         return Err(format!(
-            "{label} image size aspect ratio must not exceed 3:1"
+            "{label} image size edges must not exceed {max_edge} pixels"
+        ));
+    }
+    if long > max_aspect as u64 * short {
+        return Err(format!(
+            "{label} image size aspect ratio must not exceed {max_aspect}:1"
         ));
     }
     let area = width as u64 * height as u64;
-    if !(655_360..=8_294_400).contains(&area) {
+    if !(min_pixels..=max_pixels).contains(&area) {
         return Err(format!(
-            "{label} image size must contain between 655360 and 8294400 pixels"
+            "{label} image size must contain between {min_pixels} and {max_pixels} pixels"
         ));
     }
     Ok(())
 }
 
-/// The image checks after an answer (spec/providers.md §4.4; each refusal fails the attempt as
+/// The image checks after an answer (spec/adapters.md §3.4; each refusal fails the attempt as
 /// billed), in this order:
 /// 1. the kind is `image/png` and the bytes carry the PNG signature:
 ///    `the answer is <kind>, not image/png`;
@@ -535,6 +804,35 @@ pub fn check_png(kind: &str, bytes: &[u8]) -> Result<(), String> {
     Err(format!("the answer is {found}, not image/png"))
 }
 
+/// A picture as PNG (spec/capabilities.md §1): a PNG as it is, any other picture the decoder reads
+/// (JPEG, WebP, GIF: the first frame) decoded and encoded as PNG, the same pixels. `subject` names
+/// the picture in the refusals: `<subject> is not decodable`, then [`not_encoded`]. Decoding a
+/// large picture takes a while: an adapter calls it off the async threads ([`to_png_blocking`]).
+pub fn to_png(bytes: Vec<u8>, subject: &str) -> Result<Vec<u8>, String> {
+    if sniff_image(&bytes) == Some("image/png") {
+        return Ok(bytes);
+    }
+    let picture =
+        image::load_from_memory(&bytes).map_err(|_| format!("{subject} is not decodable"))?;
+    let mut png = Vec::new();
+    picture
+        .write_with_encoder(image::codecs::png::PngEncoder::new(&mut png))
+        .map_err(|_| not_encoded(subject))?;
+    Ok(png)
+}
+
+/// `<subject> could not be encoded as PNG`.
+pub fn not_encoded(subject: &str) -> String {
+    format!("{subject} could not be encoded as PNG")
+}
+
+/// [`to_png`] on a blocking thread.
+pub async fn to_png_blocking(bytes: Vec<u8>, subject: &'static str) -> Result<Vec<u8>, String> {
+    tokio::task::spawn_blocking(move || to_png(bytes, subject))
+        .await
+        .unwrap_or_else(|_| Err(not_encoded(subject)))
+}
+
 /// Whether a PNG's pixel data decodes in full. The file facts read only the header of a picture
 /// without alpha, so pixel data cut short would pass them; this decodes every row.
 pub fn png_decodes(bytes: &[u8]) -> bool {
@@ -588,6 +886,75 @@ mod tests {
             normalize_base_url("https://api.example.test:99999", "Acme").unwrap_err(),
             "Acme base_url must use a valid network port"
         );
+    }
+
+    #[test]
+    fn downloads_are_held_to_the_declared_hosts() {
+        let hosts = ["cdn.acme.test".to_string(), "*.media.acme.test".to_string()];
+        for good in [
+            "https://cdn.acme.test/a.png",
+            "https://CDN.Acme.Test./a.png?sig=1",
+            "https://cdn.acme.test:443/a.png",
+            "https://v1.media.acme.test/a.png",
+            "https://a.b.media.acme.test/a.png",
+        ] {
+            assert!(download_url(good, &hosts).is_ok(), "{good}");
+        }
+        for bad in [
+            "http://cdn.acme.test/a.png",
+            "https://media.acme.test/a.png",
+            "https://evilmedia.acme.test/a.png",
+            "https://media.acme.test.evil.example/a.png",
+            "https://other.acme.test/a.png",
+            "https://user:pw@cdn.acme.test/a.png",
+            "https://cdn.acme.test:8443/a.png",
+            "https://cdn.acme.test/a.png#frag",
+            "https://127.0.0.1/a.png",
+            "https://[::1]/a.png",
+            "data:image/png;base64,aGVsbG8=",
+        ] {
+            assert_eq!(download_url(bad, &hosts), Err(OffHost::Outside), "{bad}");
+        }
+        for malformed in ["not a url", "", "https://cdn.acme.test:99999/a.png"] {
+            assert_eq!(
+                download_url(malformed, &hosts),
+                Err(OffHost::Malformed),
+                "{malformed}"
+            );
+        }
+        assert_eq!(
+            download_url("https://cdn.acme.test/a.png", &[]),
+            Err(OffHost::Outside)
+        );
+    }
+
+    #[test]
+    fn an_origin_is_its_scheme_host_and_port() {
+        let base = "https://api.acme.test/v1";
+        for same in [
+            "https://api.acme.test/v1/draw",
+            "https://API.acme.test:443/jobs?id=1",
+            "https://api.acme.test./other",
+        ] {
+            assert!(same_origin(same, base), "{same}");
+        }
+        for other in [
+            "http://api.acme.test/v1",
+            "https://api.acme.test:8443/v1",
+            "https://files.acme.test/v1",
+            "https://acme.test/v1",
+            "not a url",
+        ] {
+            assert!(!same_origin(other, base), "{other}");
+        }
+        assert!(same_origin(
+            "http://127.0.0.1:8080/v1/x",
+            "http://127.0.0.1:8080/v1"
+        ));
+        assert!(!same_origin(
+            "http://127.0.0.1:8081/v1",
+            "http://127.0.0.1:8080"
+        ));
     }
 
     #[test]
@@ -760,5 +1127,319 @@ mod tests {
         // {"a":"xxxx"} is 12 bytes.
         assert!(!body_exceeds(&json!({"a": "xxxx"}), 12));
         assert!(body_exceeds(&json!({"a": "xxxx"}), 11));
+    }
+
+    fn option_call(contract: Value, request: Value) -> crate::testing::TestCall {
+        crate::testing::CallBuilder::new("image.generate", "img-a@acme")
+            .contract(contract)
+            .request(request)
+            .build()
+    }
+
+    #[test]
+    fn provider_options_merge_the_route_s_under_the_request_s() {
+        let options = |contract: Value, request: Value| {
+            provider_options(&option_call(contract, request), &["prompt"])
+        };
+        // The route's first, in order; a request member replaces it in place, then the request's
+        // others; other providers' members are not read.
+        let merged = options(
+            json!({"provider_options": {"acme": {"b": 1, "a": {"x": 1}}, "other": {"c": 3}}}),
+            json!({"provider_options": {"acme": {"z": [1], "a": {"y": 2}}, "other": "x"}}),
+        )
+        .unwrap();
+        assert_eq!(
+            Value::Object(merged).to_string(),
+            r#"{"b":1,"a":{"y":2},"z":[1]}"#
+        );
+        // Absent, null and {} add nothing; a parameter's null is passed on.
+        for (contract, request) in [
+            (json!({}), json!({})),
+            (json!(null), json!({"provider_options": null})),
+            (
+                json!({"provider_options": null}),
+                json!({"provider_options": {"acme": null}}),
+            ),
+            (
+                json!({"provider_options": {"acme": {}}}),
+                json!({"provider_options": {}}),
+            ),
+        ] {
+            assert_eq!(options(contract, request), Ok(Map::new()));
+        }
+        let kept = options(
+            json!({}),
+            json!({"provider_options": {"acme": {"seed": null}}}),
+        );
+        assert_eq!(Value::Object(kept.unwrap()), json!({"seed": null}));
+    }
+
+    #[test]
+    fn provider_options_are_refused_route_first() {
+        let options = |contract: Value, request: Value| {
+            provider_options(&option_call(contract, request), &["prompt", "n"])
+        };
+        let file = json!({"file": "a".repeat(64)});
+        let cases = [
+            (
+                json!({"provider_options": []}),
+                json!({}),
+                "contract.provider_options is an object",
+            ),
+            (
+                json!({"provider_options": {"acme": 1}}),
+                json!({"provider_options": {"acme": 2}}),
+                "contract.provider_options.acme is an object",
+            ),
+            (
+                json!({}),
+                json!({"provider_options": {"acme": "x"}}),
+                "provider_options.acme is an object",
+            ),
+            (
+                json!({"provider_options": {"acme": {"n": 2}}}),
+                json!({"provider_options": {"acme": {"prompt": "p"}}}),
+                "contract.provider_options.acme.n is a member FX owns",
+            ),
+            (
+                json!({}),
+                json!({"provider_options": {"acme": {"seed": 1, "prompt": "p"}}}),
+                "provider_options.acme.prompt is a member FX owns",
+            ),
+            (
+                json!({}),
+                json!({"provider_options": {"acme": {"mask": {"layers": [file]}}}}),
+                "provider_options.acme.mask holds a file: provider options are JSON only",
+            ),
+            (
+                json!({"provider_options": {"acme": {"init": file}}}),
+                json!({}),
+                "contract.provider_options.acme.init holds a file: provider options are JSON only",
+            ),
+            // A member that is itself a file is not a parameter named `file`.
+            (
+                json!({"provider_options": {"acme": file}}),
+                json!({}),
+                "contract.provider_options.acme holds a file: provider options are JSON only",
+            ),
+            (
+                json!({"provider_options": {"acme": {"seed": 1}}}),
+                json!({"provider_options": {"acme": file}}),
+                "provider_options.acme holds a file: provider options are JSON only",
+            ),
+        ];
+        for (contract, request, refusal) in cases {
+            assert_eq!(options(contract, request), Err(refusal.to_string()));
+        }
+        // Another provider's member is never read, so never refused.
+        assert!(
+            options(
+                json!({"provider_options": {"other": {"prompt": file.clone()}}}),
+                json!({"provider_options": {"other": 1}}),
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn provider_options_pass_on_data_shaped_like_a_file() {
+        // Only a digest makes a file value (spec/identity.md §3): the rest is the provider's.
+        for not_a_file in [
+            json!({"file": "a.png"}),
+            json!({"file": "A".repeat(64)}),
+            json!({"file": "a".repeat(63)}),
+            json!({"file": 1}),
+        ] {
+            let request = json!({"provider_options": {"acme": {
+                "ref": not_a_file,
+                "nested": {"layers": [not_a_file]},
+            }}});
+            let merged = provider_options(&option_call(json!({}), request.clone()), &["prompt"]);
+            assert_eq!(
+                Value::Object(merged.unwrap()),
+                request["provider_options"]["acme"],
+                "{not_a_file}"
+            );
+            let member = json!({"provider_options": {"acme": not_a_file}});
+            let merged = provider_options(&option_call(member, json!({})), &["prompt"]);
+            assert_eq!(Value::Object(merged.unwrap()), not_a_file);
+        }
+    }
+
+    #[test]
+    fn a_runtime_refuses_its_own_provider_options_only() {
+        let refused = |contract: Value, request: Value| {
+            no_provider_options(&option_call(contract, request), "Acme")
+        };
+        assert_eq!(refused(json!({}), json!({})), Ok(()));
+        assert_eq!(
+            refused(
+                json!({"provider_options": {"acme": {}, "other": {"a": 1}}}),
+                json!({"provider_options": {"acme": null, "other": {"a": 1}}}),
+            ),
+            Ok(())
+        );
+        for (contract, request) in [
+            (json!({"provider_options": {"acme": {"a": 1}}}), json!({})),
+            (json!({}), json!({"provider_options": {"acme": {"a": 1}}})),
+            (json!({}), json!({"provider_options": {"acme": 1}})),
+            (json!({"provider_options": "x"}), json!({})),
+        ] {
+            assert_eq!(
+                refused(contract, request),
+                Err("Acme takes no provider_options".to_string())
+            );
+        }
+    }
+
+    #[test]
+    fn option_fields_are_text() {
+        let options = json!({"style": "ink", "steps": 4, "extra": {"a": [1, "b"]}});
+        let fields: Vec<(String, String)> = option_fields(options.as_object().unwrap())
+            .into_iter()
+            .map(|part| {
+                (
+                    part.name.clone(),
+                    String::from_utf8(part.data.clone()).unwrap(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            fields,
+            vec![
+                ("style".to_string(), "ink".to_string()),
+                ("steps".to_string(), "4".to_string()),
+                ("extra".to_string(), r#"{"a":[1,"b"]}"#.to_string()),
+            ]
+        );
+    }
+
+    fn generic(capability: &str, request: Value, most: Option<u32>) -> Result<Vec<String>, String> {
+        let mut call = crate::testing::CallBuilder::new(capability, "acme/img-a@acme")
+            .request(request)
+            .build();
+        call.call.route.limits.max_input_pictures = most;
+        generic_image(
+            &call,
+            "Acme's generic image adapter",
+            "Acme image generation",
+            false,
+        )
+        .map(|image| {
+            image
+                .pictures
+                .into_iter()
+                .map(|(member, _)| member)
+                .collect()
+        })
+    }
+
+    #[test]
+    fn a_generic_image_sends_its_prompt_and_pictures_and_refuses_what_it_cannot_send() {
+        let picture = json!({"file": "a".repeat(64)});
+        let edit = json!({"prompt": "p", "image": picture, "references": [picture, picture],
+                          "size": "auto", "background": "opaque"});
+        assert_eq!(
+            generic("image.edit", edit.clone(), Some(3)),
+            Ok(vec![
+                "image".into(),
+                "references[0]".into(),
+                "references[1]".into()
+            ])
+        );
+        assert_eq!(
+            generic(
+                "image.generate",
+                json!({"prompt": "p", "background": null}),
+                None
+            ),
+            Ok(Vec::new())
+        );
+        let hint = "give the model's own parameter in provider_options.acme";
+        let refused =
+            |capability: &str, request: Value| generic(capability, request, Some(2)).unwrap_err();
+        for (request, sentence) in [
+            (
+                json!({"prompt": " "}),
+                "an image call needs its prompt as text".to_string(),
+            ),
+            (
+                json!({"prompt": "p", "mask": picture}),
+                format!("Acme's generic image adapter sends no mask: {hint}"),
+            ),
+            (
+                json!({"prompt": "p", "background": "transparent"}),
+                format!("Acme's generic image adapter sends no transparent background: {hint}"),
+            ),
+            (
+                json!({"prompt": "p", "background": "clear"}),
+                "background must be auto, opaque or transparent".to_string(),
+            ),
+            (
+                json!({"prompt": "p", "size": "1K"}),
+                "size must be auto or WIDTHxHEIGHT".to_string(),
+            ),
+            (
+                json!({"prompt": "p", "size": "1024x1024"}),
+                format!("Acme's generic image adapter sends no exact size: {hint}"),
+            ),
+            (
+                json!({"prompt": "p", "references": [picture]}),
+                "Acme image generation takes no references".to_string(),
+            ),
+        ] {
+            assert_eq!(
+                refused("image.generate", request.clone()),
+                sentence,
+                "{request}"
+            );
+        }
+        assert_eq!(
+            refused("image.edit", edit),
+            "acme/img-a@acme takes at most 2 input pictures, not 3"
+        );
+    }
+
+    #[test]
+    fn a_generate_s_references_need_a_route_that_declares_image_input() {
+        let picture = json!({"file": "a".repeat(64)});
+        let request = json!({"prompt": "p", "references": [picture]});
+        let mut call = crate::testing::CallBuilder::new("image.generate", "acme/img-a@acme")
+            .request(request)
+            .build();
+        let sent = |call: &crate::testing::TestCall| {
+            generic_image(call, "Acme's generic image adapter", "Acme", true)
+                .map(|image| image.pictures.len())
+        };
+        assert_eq!(
+            sent(&call),
+            Err("acme/img-a@acme does not support image_input".into())
+        );
+        call.call.route.limits.image_input = true;
+        assert_eq!(sent(&call), Ok(1));
+    }
+
+    #[test]
+    fn a_picture_becomes_a_png_of_the_same_pixels() {
+        let png = to_png(crate::testing::media::jpeg(8, 4), "Acme's image").unwrap();
+        assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"));
+        let decoded = image::load_from_memory(&png).unwrap();
+        assert_eq!((decoded.width(), decoded.height()), (8, 4));
+        assert!(!decoded.color().has_alpha());
+        let already = crate::testing::media::png(2, 2, None);
+        assert_eq!(to_png(already.clone(), "Acme's image").unwrap(), already);
+        assert_eq!(
+            to_png(b"not an image".to_vec(), "Acme's image"),
+            Err("Acme's image is not decodable".into())
+        );
+        assert_eq!(
+            not_encoded("Acme's image"),
+            "Acme's image could not be encoded as PNG"
+        );
+        let blocking = crate::testing::block_on(to_png_blocking(
+            crate::testing::media::jpeg(2, 2),
+            "Acme's image",
+        ));
+        assert!(blocking.unwrap().starts_with(b"\x89PNG"));
     }
 }

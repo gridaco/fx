@@ -114,6 +114,8 @@ pub struct CallPrice {
     pub calls: u32,
     pub low: Usd,
     pub high: Usd,
+    /// The route is capped: `low` counts nothing for these calls, and `high` their caps.
+    pub capped: bool,
 }
 
 /// One node type run once, at one take, in one repeat position.
@@ -186,6 +188,11 @@ impl Instance {
 
     pub fn high(&self) -> Usd {
         self.prices.iter().map(|p| p.high).sum()
+    }
+
+    /// Whether any of its calls is on a capped route.
+    pub fn capped(&self) -> bool {
+        self.prices.iter().any(|p| p.capped)
     }
 
     /// The last take number.

@@ -1,0 +1,168 @@
+{
+ "estimate": {
+  "ceiling_usd": null,
+  "high_usd": 0.09,
+  "low_usd": 0.05
+ },
+ "instances": [
+  {
+   "bindings": [],
+   "id": "base#1",
+   "identity": "e7aa86798258d531666f9376b51d3e7d017feab20937f6f060d993250322e3d5",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "base",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.04,
+    "low_usd": 0.02
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "4e7c8fd3c925cc1b49ab330d079ee20f6d86ed8e210cd1f9db53c97970990910",
+     "route": "img-a@acme"
+    }
+   },
+   "state": "planned",
+   "step": "base",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "transparent",
+    "prompt": "a kite",
+    "vars": {}
+   }
+  },
+  {
+   "bindings": [],
+   "id": "low#1",
+   "identity": "8ee2e8cda28cfbd7df30f7449ba7e42ce070de7e05c7bacd8ea26b1042da81eb",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "low",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.04,
+    "low_usd": 0.02
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "29334b650d4045c0c7a851ffb0c3f338df819a4f8010822fb14007f6447c5c2c",
+     "route": "img-b@acme"
+    }
+   },
+   "state": "planned",
+   "step": "low",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "transparent",
+    "prompt": "a kite",
+    "vars": {}
+   }
+  },
+  {
+   "bindings": [],
+   "id": "cheap#1",
+   "identity": "6ce7732d15fb813a1e9b73e572455004af0970794e189ded410b7f8994b81335",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "cheap",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.01,
+    "low_usd": 0.01
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "2c32c3d5086eba4c6af6c602fc97415fa9b1f58d0e03143a8927a33bac1876e4",
+     "route": "img-c@acme"
+    }
+   },
+   "state": "planned",
+   "step": "cheap",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "a kite",
+    "vars": {}
+   }
+  }
+ ],
+ "kind": "fx-graph-v1",
+ "pending": [],
+ "problems": [],
+ "scopes": [],
+ "types": {
+  "fx/image.generate@1": {
+   "identity": "fx/image.generate@1.1",
+   "ports": {
+    "inputs": {
+     "references": "image[]?"
+    },
+    "outputs": {
+     "image": "image/png"
+    },
+    "params": {
+     "background": {
+      "default": "auto",
+      "enum": [
+       "opaque",
+       "transparent",
+       "auto"
+      ]
+     },
+     "prompt": {
+      "type": "string",
+      "x-fx-template": true
+     },
+     "provider_options": {
+      "type": "object",
+      "x-fx-optional": true
+     },
+     "size": {
+      "type": "string",
+      "x-fx-optional": true
+     },
+     "vars": {
+      "default": {},
+      "type": "object"
+     }
+    }
+   }
+  }
+ },
+ "workflow": {
+  "file": "workflows/case.yaml",
+  "id": "case",
+  "title": "Extended routes"
+ }
+}

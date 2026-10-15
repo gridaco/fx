@@ -10,10 +10,7 @@
    "custom_exact_size",
    "flexible_size",
    "image_input",
-   "hosted_url_reference_input",
    "png_output",
-   "jpeg_output",
-   "webp_output",
    "maximum_quality",
    "authored_prompt_passthrough"
   ],
@@ -25,10 +22,7 @@
    "custom_exact_size",
    "flexible_size",
    "image_input",
-   "hosted_url_reference_input",
    "png_output",
-   "jpeg_output",
-   "webp_output",
    "maximum_quality",
    "authored_prompt_passthrough",
    "mask"
@@ -42,6 +36,7 @@
    "image_input"
   ],
   "video.generate": [
+   "text_to_video",
    "first_last_frame"
   ],
   "mesh.generate": [

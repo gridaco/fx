@@ -3,11 +3,48 @@
  * installs it, with the engine package for the machine); this package drives it: plan, price and
  * run workflows, read their runs, and write workflow documents and builders. It also writes node
  * types in TypeScript (`node`, with agent tools made by `tool`), answers paid calls with stand-ins
- * (`run(target, { standIn })`, `Answer`, `DECLINE`), and holds the TypeScript node host the engine
- * starts to run those nodes (`dist/host-entry.js`, Node 24 or later).
+ * (`run(target, { standIn })`, `Answer`, `DECLINE`), serves a provider of the project's own with
+ * an adapter (`adapter`, whose functions take an `AdapterCall` and return an outcome), and holds
+ * the TypeScript node host the engine starts to run those nodes and adapters
+ * (`dist/host-entry.js`, Node 24 or later).
  */
 
-export const version = "0.6.1";
+export const version = "0.7.0";
+
+export {
+  type Accepted,
+  type Adapter,
+  type AdapterAnswerFile,
+  AdapterCall,
+  type AdapterCallOptions,
+  type AdapterDecl,
+  type AdapterRoute,
+  type AdapterUsage,
+  type AdapterValue,
+  Answered,
+  adapter,
+  type CallKind,
+  type CollectCall,
+  type CollectFunction,
+  type CollectOutcome,
+  type Ended,
+  type EngineFetch,
+  type Failed,
+  FetchError,
+  type FetchLane,
+  type FetchOptions,
+  type FetchPhase,
+  FetchResponse,
+  type JobHandle,
+  type NotReceived,
+  type Refused,
+  type SendFunction,
+  type SendOutcome,
+  type SubmitFunction,
+  type SubmitOutcome,
+  type Uncertain,
+  type Unreachable,
+} from "./adapter.js";
 
 export {
   engineVersion,
@@ -94,7 +131,7 @@ export {
   UnknownFile,
 } from "./engine-errors.js";
 export { FxError, type FxErrorDetails } from "./errors.js";
-export { InputFile, type Output } from "./files.js";
+export { AdapterFile, InputFile, type Output } from "./files.js";
 export {
   type BodyReturn,
   type Family,

@@ -1,8 +1,8 @@
-//! The OpenAI Images adapter over synthetic exchanges (spec/providers.md §4, §5 and §9.1;
-//! spec/capabilities.md §2–§3). Nothing here reaches a network: every send goes to a
-//! `ReplayTransport` that asserts the exact request, to `NoNetwork` (which panics on any send) or
-//! to `Offline`. The key is the made-up `test-openai-key`; every picture is built in code (the
-//! `testing::media` PNGs and JPEGs, and the WebP encoder below).
+//! The OpenAI Images adapter over synthetic exchanges (spec/adapters.md §3, §4;
+//! src/openai/README.md; spec/capabilities.md §2–§3). Nothing here reaches a network: every send
+//! goes to a `ReplayTransport` that asserts the exact request, to `NoNetwork` (which panics on any
+//! send) or to `Offline`. The key is the made-up `test-openai-key`; every picture is built in code
+//! (the `testing::media` PNGs and JPEGs, and the WebP encoder below).
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
@@ -399,6 +399,129 @@ fn an_edit_takes_sixteen_input_images() {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Provider options (spec/adapters.md §8)
+
+/// The contract with the route's own provider options.
+fn contract_with_options(options: Value) -> Value {
+    let mut contract = contract();
+    contract["provider_options"] = options;
+    contract
+}
+
+#[test]
+fn generate_adds_provider_options_after_its_own_members() {
+    let image = media::png(2, 2, None);
+    let transport = Arc::new(ReplayTransport::new(vec![
+        expect(
+            GENERATIONS,
+            ExpectBody::JsonText(
+                r#"{"model":"img-a","prompt":"a kite","n":1,"output_format":"png","quality":"max","background":"auto","moderation":"low","user":"step-a","output_compression":80,"partial":{"a":[1]}}"#
+                    .into(),
+            ),
+        )
+        .reply(ok(&image)),
+    ]));
+    let call = CallBuilder::new("image.generate", ROUTE)
+        .contract(contract_with_options(json!({
+            "openai": {"user": "route-a", "output_compression": 80},
+            "fal": {"prompt": "never read"},
+        })))
+        .request(json!({
+            "prompt": "a kite",
+            "provider_options": {
+                "openai": {"partial": {"a": [1]}, "user": "step-a"},
+                "gg": {"model": "never read"},
+            },
+        }))
+        .build();
+    answered(send(&transport, &call));
+    transport.assert_done();
+}
+
+#[test]
+fn an_edit_sends_provider_options_as_text_fields_before_its_pictures() {
+    let picture = media::png(2, 2, Some(255));
+    let mut builder = edit_builder();
+    let image = builder.file("image/png", &picture);
+    let call = builder
+        .request(json!({
+            "prompt": "p",
+            "image": image,
+            "provider_options": {"openai": {"user": "step-a", "output_compression": 80,
+                                            "extra": {"b": true}}},
+        }))
+        .build();
+    let mut parts = text_parts("p", None, "auto");
+    parts.push(Part::text("user", "step-a"));
+    parts.push(Part::text("output_compression", "80"));
+    parts.push(Part::text("extra", r#"{"b":true}"#));
+    parts.push(Part::file(
+        "image[]",
+        "reference-01.png",
+        "image/png",
+        picture.clone(),
+    ));
+    let transport = Arc::new(ReplayTransport::new(vec![
+        expect(EDITS, ExpectBody::Multipart(parts)).reply(ok(&picture)),
+    ]));
+    answered(send(&transport, &call));
+    transport.assert_done();
+}
+
+#[test]
+fn provider_options_set_no_member_the_adapter_owns() {
+    // Every member and part the adapter sends is one it owns.
+    let picture = media::png(2, 2, Some(255));
+    let mut builder = edit_builder();
+    let image = builder.file("image/png", &picture);
+    let mask = builder.file("image/png", &media::png_one_pixel_alpha(2, 2, 0));
+    let call = builder
+        .request(json!({"prompt": "p", "image": image, "mask": mask, "size": "1024x1024"}))
+        .build();
+    let transport = Arc::new(ReplayTransport::new(vec![
+        expect(EDITS, ExpectBody::Any).reply(ok(&picture)),
+    ]));
+    answered(send(&transport, &call));
+    let Body::Multipart(parts) = &transport.requests()[0].body else {
+        panic!("an edit is multipart");
+    };
+    for part in parts {
+        assert!(openai::OWNED.contains(&part.name.as_str()), "{}", part.name);
+    }
+    // Each is refused, before any other value, from the step and from the route.
+    for name in openai::OWNED {
+        let call = generate(json!({"prompt": " ", "provider_options": {"openai": {*name: 1}}}));
+        assert_eq!(
+            refused(&call),
+            format!("provider_options.openai.{name} is a member FX owns")
+        );
+        let call = CallBuilder::new("image.generate", ROUTE)
+            .contract(contract_with_options(json!({"openai": {*name: 1}})))
+            .request(json!({"prompt": "a kite"}))
+            .build();
+        assert_eq!(
+            refused(&call),
+            format!("contract.provider_options.openai.{name} is a member FX owns")
+        );
+    }
+    // A file value is refused, and so is a member that is not an object.
+    let mut builder = edit_builder();
+    let image = builder.file("image/png", &picture);
+    let call = builder
+        .request(json!({"prompt": "p", "image": image,
+                        "provider_options": {"openai": {"extra": [image]}}}))
+        .build();
+    assert_eq!(
+        refused(&call),
+        "provider_options.openai.extra holds a file: provider options are JSON only"
+    );
+    let call = generate(json!({"prompt": "a kite", "provider_options": {"openai": "low"}}));
+    assert_eq!(refused(&call), "provider_options.openai is an object");
+    let call = generate(json!({"prompt": "a kite", "provider_options": "low"}));
+    assert_eq!(refused(&call), "provider_options is an object");
+}
+
+// ---------------------------------------------------------------------------------------------
 // Refusals: nothing is sent (`NoNetwork` panics on any send)
 
 #[test]
@@ -407,8 +530,9 @@ fn the_route_must_be_one_this_adapter_serves() {
         json!({"adapter": "acme-openai-image-v1", "adapter_behavior": "1"}),
         json!({"adapter": "fx-openrouter-image-v1"}),
         json!({"adapter": ADAPTER, "adapter_behavior": "2"}),
-        // routes-caps F3: the behaviour is the text "1" (spec/providers.md §9.1, §10); the number
-        // 1 is another contract with another fingerprint, refused as OpenRouter refuses 3.
+        // routes-caps F3: the behaviour is the text "1" (src/openai/README.md; spec/providers.md
+        // §3); the number 1 is another contract with another fingerprint, refused as OpenRouter
+        // refuses 3.
         json!({"adapter": ADAPTER, "adapter_behavior": 1}),
     ] {
         let call = CallBuilder::new("image.generate", ROUTE)
@@ -827,7 +951,7 @@ fn an_answer_carries_only_the_image() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Statuses (spec/providers.md §4.3 with §9.1's overrides)
+// Statuses (spec/adapters.md §3.3 with the overrides of src/openai/README.md)
 
 fn envelope(status: u16, error: Value) -> HttpResponse {
     HttpResponse::json(status, &json!({ "error": error }))
@@ -991,7 +1115,7 @@ fn rate_limits_are_not_received_and_quota_ends_the_call() {
 }
 
 /// classify C1: OpenAI's 408 is its own timeout, after the request arrived. The work may be done,
-/// so it is a billed, retryable failure (spec/providers.md §9.1), never a free resend.
+/// so it is a billed, retryable failure (src/openai/README.md), never a free resend.
 #[test]
 fn a_408_is_billed_and_retryable() {
     for (response, reason) in [
@@ -1059,7 +1183,7 @@ fn a_redirect_is_not_followed() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Transport failures (spec/providers.md §4.2)
+// Transport failures (spec/adapters.md §3.2)
 
 fn failing(error: TransportError) -> Sent {
     let transport = Arc::new(ReplayTransport::new(vec![

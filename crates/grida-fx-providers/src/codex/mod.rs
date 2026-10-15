@@ -1,18 +1,18 @@
 //! Codex: `image.generate` and `image.edit` through the user's own Codex, signed in with ChatGPT
-//! (spec/providers.md §9.6).
+//! (src/codex/README.md).
 //!
 //! No key and no HTTP: the adapter draws through a [`CodexRuntime`], one `codex app-server` an
 //! invocation starts on its first Codex call, keeps for the others and shuts down with the run.
 //! Codex owns sign-in, the model and the usage; FX never reads its credential files, and its calls
 //! bill the user's plan ([`Billing::Plan`]), never dollars. One send, in order:
 //! 1. the route: capability `image.generate` or `image.edit` on provider `codex`, and a contract
-//!    whose `adapter` (when present) is [`ADAPTER`] and whose `adapter_behavior` (when present)
-//!    is [`ADAPTER_BEHAVIOR`];
+//!    whose `adapter` and `adapter_behavior`, each when present, are [`IDENTITY`]'s;
 //! 2. [`crate::capabilities::check_request`];
-//! 3. values: a blank prompt, a `size` other than `auto` (Codex picks its own sizes: asked for
-//!    1024x1024 it drew 1254x1254), an unknown `background`, a mask, more than [`MAX_PICTURES`]
-//!    pictures (`image`, then `references`), and each picture's file: carried, not empty, and
-//!    PNG, JPEG or WebP;
+//! 3. values: provider options for `codex`, from the route or the request, that are not empty
+//!    ([`crate::wire::no_provider_options`]: Codex takes none), a blank prompt, a `size` other
+//!    than `auto` (Codex picks its own sizes: asked for 1024x1024 it drew 1254x1254), an unknown
+//!    `background`, a mask, more than [`MAX_PICTURES`] pictures (`image`, then `references`), and
+//!    each picture's file: carried, not empty, and PNG, JPEG or WebP;
 //! 4. the runtime's Codex, started if need be ([`runtime`]): no program ([`NOT_INSTALLED`],
 //!    [`NETWORK_OFF`]), one older than [`MIN_VERSION`] or that names no version, MCP servers that
 //!    cannot be listed, or a sign-in other than ChatGPT is `Sent::Refused`, for this call and the
@@ -38,7 +38,7 @@ pub use runtime::CodexRuntime;
 
 use crate::BoxFuture;
 use crate::adapter::{
-    Adapter, Answer, Billing, CallRequest, RequestAdapter, RouteRef, Sent, Usage,
+    Adapter, Answer, Billing, CallRequest, Identity, RequestAdapter, RouteRef, Sent, Usage,
 };
 use crate::capabilities;
 use crate::installed::{self, Picture, Program, Version, failed};
@@ -60,9 +60,13 @@ pub const LABEL: &str = "Codex image generation";
 /// The route contract's `adapter` this adapter serves.
 pub const ADAPTER: &str = "fx-codex-image-v1";
 
-/// The route contract's `adapter_behavior` this adapter serves. It names [`instructions`] and
-/// the settings of a Codex conversation: a change to either is a new behaviour.
-pub const ADAPTER_BEHAVIOR: &str = "2";
+/// The contract this adapter serves: [`ADAPTER`], and `adapter_behavior` the text `"2"`. The
+/// behaviour names [`instructions`] and the settings of a Codex conversation: a change to either is
+/// a new behaviour.
+pub const IDENTITY: Identity = Identity {
+    adapter: ADAPTER,
+    behavior: r#""2""#,
+};
 
 /// The most input pictures of one call (`image` and `references`): Codex's image tool draws
 /// nothing for more.
@@ -97,8 +101,8 @@ pub const NO_EXACT_SIZE: &str = "Codex image generation takes no exact size: use
 /// The refusal when `GRIDA_FX_NETWORK` is off: Codex generates over the network.
 pub const NETWORK_OFF: &str = "Codex was not started: GRIDA_FX_NETWORK is off";
 
-/// Variables Codex never inherits besides the allowlisted ones ([`crate::keys::ALLOWED`]): with
-/// any of them it could bill, or send its requests, somewhere other than the user's plan.
+/// Variables Codex never inherits besides the declared ones ([`crate::setup::Setup::withheld`]):
+/// with any of them it could bill, or send its requests, somewhere other than the user's plan.
 const ALSO_WITHHELD: [&str; 5] = [
     "CODEX_API_KEY",
     "OPENAI_ORG_ID",
@@ -205,6 +209,7 @@ impl CodexImages {
     fn prepare<'a>(&self, call: &'a CallRequest) -> Result<Drawing<'a>, String> {
         served(&call.route)?;
         capabilities::check_request(&call.route.capability, &call.request)?;
+        crate::wire::no_provider_options(call, "Codex")?;
         let values = Values::read(&call.request)?;
         let pictures = values
             .pictures
@@ -233,6 +238,10 @@ impl RequestAdapter for CodexImages {
         crate::checks::image(call, image, None)
     }
 
+    fn identity(&self) -> Option<Identity> {
+        Some(IDENTITY)
+    }
+
     fn billing(&self) -> Billing {
         Billing::Plan
     }
@@ -242,7 +251,7 @@ impl RequestAdapter for CodexImages {
 /// the setup's program, which the registry keeps to shut it down with the invocation. Codex brings
 /// its own sign-in and network: no key, no transport.
 pub fn register(adapters: &mut Adapters, setup: &Setup) {
-    let runtime = Arc::new(CodexRuntime::new(setup.codex.clone()));
+    let runtime = Arc::new(CodexRuntime::new(setup.codex.clone(), setup.withheld()));
     let images = Arc::new(CodexImages::new(Arc::clone(&runtime)));
     for capability in ["image.generate", "image.edit"] {
         adapters.register(capability, "codex", Adapter::Request(images.clone()));
@@ -262,10 +271,16 @@ pub fn find_program(env: &dyn Fn(&str) -> Option<String>, app: &Path) -> Option<
 }
 
 /// Step 4: Codex's version, as `codex --version` names it (`codex-cli 0.160.1`), against
-/// [`MIN_VERSION`]; the refusal when it cannot be started. Codex runs in `folder`.
-pub fn version<'a>(program: &'a Path, folder: &'a Path) -> BoxFuture<'a, Result<Version, String>> {
+/// [`MIN_VERSION`]; the refusal when it cannot be started. Codex runs in `folder`, without the
+/// declared `variables` ([`withheld`]).
+pub fn version<'a>(
+    program: &'a Path,
+    folder: &'a Path,
+    variables: &'a [String],
+) -> BoxFuture<'a, Result<Version, String>> {
     Box::pin(async move {
-        match installed::ask_version(program, folder, &ALSO_WITHHELD, ASK_DEADLINE).await {
+        let withheld = withheld(variables);
+        match installed::ask_version(program, folder, &withheld, ASK_DEADLINE).await {
             Ok(named) => Ok(Version::of(named.as_deref(), MIN_VERSION)),
             Err(error) => Err(not_started(&error)),
         }
@@ -301,12 +316,12 @@ pub(super) fn not_started(error: &std::io::Error) -> String {
     }
 }
 
-/// Every variable Codex never inherits.
-pub fn withheld() -> impl Iterator<Item = &'static str> {
-    installed::withheld(&ALSO_WITHHELD)
+/// Every variable Codex never inherits: the declared `variables`, then [`ALSO_WITHHELD`].
+pub fn withheld(variables: &[String]) -> Vec<String> {
+    installed::withheld(variables, &ALSO_WITHHELD)
 }
 
-/// The turn's text (behaviour [`ADAPTER_BEHAVIOR`]): the image tool's arguments, the pictures'
+/// The turn's text ([`IDENTITY`]'s behaviour): the image tool's arguments, the pictures'
 /// paths in order, fixed instructions, then the authored prompt verbatim. Codex draws an opaque
 /// image unless `transparent_background` is true, so `auto` is opaque.
 pub fn instructions(values: &Values<'_>, pictures: &[PathBuf]) -> String {
@@ -334,7 +349,7 @@ pub fn instructions(values: &Values<'_>, pictures: &[PathBuf]) -> String {
 
 /// Step 1: whether the route is one this adapter serves.
 fn served(route: &RouteRef) -> Result<(), String> {
-    installed::served(route, "codex", ADAPTER, ADAPTER_BEHAVIOR)
+    installed::served(route, "codex", &IDENTITY)
 }
 
 /// A request's values after step 3.
@@ -391,9 +406,15 @@ fn picture<'a>(call: &'a CallRequest, value: &Value, member: &str) -> Result<Pic
 }
 
 /// A command that starts `program` with `args` in `folder`: Codex's own environment, less
-/// [`withheld`]; no stderr; in a process group of its own; killed when dropped.
-pub(super) fn command(program: &Path, args: &[String], folder: &Path) -> Command {
-    installed::command(program, args, folder, &ALSO_WITHHELD)
+/// [`withheld`] of the declared `variables`; no stderr; in a process group of its own; killed when
+/// dropped.
+pub(super) fn command(
+    program: &Path,
+    args: &[String],
+    folder: &Path,
+    variables: &[String],
+) -> Command {
+    installed::command(program, args, folder, &withheld(variables))
 }
 
 /// `-c` settings: [`SETTINGS`] first.
@@ -410,12 +431,16 @@ pub(super) fn settings(extra: impl IntoIterator<Item = String>) -> Vec<String> {
 /// list --json` names them with apps and plugins off (a server only a plugin defines cannot be
 /// named: Codex refuses its setting). A list Codex will not give is a refusal: those servers' tools
 /// would otherwise be offered to the turn.
-pub(super) async fn mcp_servers(program: &Path, folder: &Path) -> Result<Vec<String>, String> {
+pub(super) async fn mcp_servers(
+    program: &Path,
+    folder: &Path,
+    variables: &[String],
+) -> Result<Vec<String>, String> {
     let refused =
         || "Codex's MCP servers could not be listed, so they cannot be turned off".to_string();
     let mut args = settings([]);
     args.extend(["mcp", "list", "--json"].map(String::from));
-    let mut command = command(program, &args, folder);
+    let mut command = command(program, &args, folder, variables);
     command.stdin(Stdio::null());
     let output = match tokio::time::timeout(ASK_DEADLINE, command.output()).await {
         Ok(Ok(output)) if output.status.success() => output,
@@ -717,6 +742,7 @@ mod tests {
             model: "imagegen".into(),
             provider: provider.into(),
             contract,
+            limits: Default::default(),
         }
     }
 
@@ -905,11 +931,26 @@ mod tests {
 
     #[test]
     fn codex_inherits_no_key_and_no_account_setting() {
-        let withheld: Vec<&str> = withheld().collect();
-        for variable in crate::keys::ALLOWED.iter().chain(&ALSO_WITHHELD) {
+        let variables = grida_fx_core::providers::Declarations::built_in().variables();
+        let withheld = withheld(&variables);
+        let also = ALSO_WITHHELD.map(String::from);
+        for variable in variables.iter().chain(&also) {
             assert!(withheld.contains(variable), "{variable}");
         }
-        assert!(withheld.contains(&"OPENAI_API_KEY") && withheld.contains(&"OPENAI_BASE_URL"));
+        let has = |name: &str| withheld.iter().any(|v| v == name);
+        assert!(has("OPENAI_API_KEY") && has("OPENAI_BASE_URL"));
+        // A project's declared variables too, removed from the command's environment.
+        let declared = ["ACME_API_KEY".to_string(), "ACME_BASE_URL".to_string()];
+        let started = command(Path::new("codex"), &[], Path::new("."), &declared);
+        let removed: Vec<String> = started
+            .as_std()
+            .get_envs()
+            .filter(|(_, value)| value.is_none())
+            .map(|(name, _)| name.to_string_lossy().into_owned())
+            .collect();
+        for variable in declared.iter().chain(&also) {
+            assert!(removed.contains(variable), "{variable}: {removed:?}");
+        }
     }
 
     #[test]

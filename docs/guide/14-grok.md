@@ -65,6 +65,7 @@ This page says how to set it up, what it does well, and where it differs from th
 | `size: <W>x<H>` | **no**: refused while planning |
 | `references`, and an edit's `image` | yes: at most 3 pictures in all, PNG or JPEG |
 | `mask` | **no**: refused while planning |
+| `provider_options.grok` | **no**: refused when the call is sent, at $0; other providers' members are not read |
 
 ### Drawing from pictures
 
@@ -188,9 +189,10 @@ not CI or a server. With `GRIDA_FX_NETWORK=off`, FX does not start Grok Build at
 | `Grok Build's image tools need a SuperGrok subscription …` | Use an account whose subscription includes images, or another route. |
 | `imagine@grok does not support exact_size` | Leave `size` out, and size the picture after it (above). |
 | `imagine@grok does not support alpha` | Use a route with transparency for this step. |
+| `… Grok Build takes no provider_options` | Drop `provider_options.grok` from the step and the route; other providers' members may stay. |
 | `… Grok Build's image tool failed` | FX already tried again; run again later. |
 | `… Grok Build's image tool was refused (HTTP 400)` | xAI refused the request as sent; change the step (fewer pictures, another prompt). |
 | `Grok Build was not started: GRIDA_FX_NETWORK is off` | Unset `GRIDA_FX_NETWORK`. |
 
 How the route is specified, sentence by sentence, is
-[providers.md §9.8](../../spec/providers.md#98-grok-build).
+[the Grok Build adapter's reference](../../crates/grida-fx-providers/src/grok/README.md).

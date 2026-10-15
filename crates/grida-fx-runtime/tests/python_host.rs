@@ -1109,3 +1109,202 @@ fn a_stand_in_host_that_exits_with_its_pipes_held_is_seen_to_go() {
     assert!(lost.is_ok(), "the answerer is reported lost");
     assert!(started.elapsed() < Duration::from_secs(20));
 }
+
+/// A project adapter (spec/adapters.md §9) of the real `grida.fx`: the planning host loads it,
+/// and an adapter host, started as a live run starts one, serves a send whose `fetch` the engine
+/// refuses (the network is off), a refusal, and a long job submitted and collected, then ends
+/// verified with the run.
+#[test]
+fn the_real_python_host_serves_a_project_adapter() {
+    use grida_fx_core::money::Usd;
+    use grida_fx_core::providers::{
+        BaseUrl, Credential, Declaration, Declarations, DeclaredAdapter, LoadedAdapter,
+    };
+    use grida_fx_protocol::{AdapterLoadParams, CallKind, RpcError};
+    use grida_fx_providers::Adapters;
+    use grida_fx_providers::adapter::{
+        Adapter, Answer, CallRequest, Collected, RouteRef, Sent, Submitted,
+    };
+    use grida_fx_providers::clock::FakeClock;
+    use grida_fx_providers::keys::{Environment, Keys, Secret};
+    use grida_fx_providers::setup::Setup;
+    use grida_fx_providers::transport::Offline;
+    use grida_fx_runtime::adapter_host::{self, Launch, ProcessLaunch};
+    use grida_fx_runtime::host::process::HostSpec;
+    use std::sync::Arc;
+
+    const KEY: &str = "acme-made-up-key-5e1f";
+    let Some(python) = real_python() else {
+        eprintln!("skipped: neither GRIDA_FX_PYTHON nor python/.venv is set up");
+        return;
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let root = canonical(dir.path()).join("acme");
+    std::fs::create_dir_all(root.join("adapters")).unwrap();
+    std::fs::write(root.join("fx.yaml"), "fx: project/v1\n").unwrap();
+    std::fs::write(root.join("adapters/kites.py"), "JOB = \"j-\"\n").unwrap();
+    std::fs::write(
+        root.join("adapters/acme.py"),
+        "import os\n\n\
+         from grida.fx import Accepted, Answered, FetchError, Refused, adapter\n\n\
+         from adapters.kites import JOB\n\n\n\
+         async def send(call):\n\
+         \x20   if call.request[\"prompt\"] == \"refuse\":\n\
+         \x20       return Refused(\"no kites today\")\n\
+         \x20   try:\n\
+         \x20       await call.fetch(call.base_url + \"/draw\", method=\"POST\", json={}, credential=True)\n\
+         \x20       fetched = \"sent\"\n\
+         \x20   except FetchError as error:\n\
+         \x20       fetched = error.phase + \": \" + error.reason\n\
+         \x20   key = \"ACME_API_KEY\" in os.environ\n\
+         \x20   return Answered.json({\"fetched\": fetched, \"key\": key}, cost_usd=0.01)\n\n\n\
+         def submit(call):\n\
+         \x20   return Accepted({\"job\": JOB + str(call.take)})\n\n\n\
+         async def collect(call):\n\
+         \x20   return Answered(data={\"job\": call.handle[\"job\"]}, cost_usd=0.5)\n\n\n\
+         acme = adapter(\n\
+         \x20   requests=[\"structured.generate\"],\n\
+         \x20   jobs=[\"acme.render\"],\n\
+         \x20   send=send,\n\
+         \x20   submit=submit,\n\
+         \x20   collect=collect,\n\
+         \x20   version=2,\n\
+         )\n",
+    )
+    .unwrap();
+
+    // Planning: the planning host loads the adapter, and goes on serving.
+    let mut planning = LanguageHost::python().with_program(python.clone());
+    planning.open_project(&root, &[]).unwrap();
+    let loaded = planning
+        .load_adapter(&AdapterLoadParams {
+            path: "adapters/acme.py".into(),
+            attribute: "acme".into(),
+        })
+        .unwrap();
+    assert_eq!(loaded.adapter.version, Some(2));
+    let kinds: Vec<_> = loaded.adapter.capabilities.clone().into_iter().collect();
+    assert_eq!(
+        kinds,
+        [
+            ("structured.generate".to_string(), CallKind::Request),
+            ("acme.render".to_string(), CallKind::Job)
+        ]
+    );
+    let labels: Vec<&str> = loaded.closure.iter().map(|e| e.label.as_str()).collect();
+    assert_eq!(labels, ["adapters/acme.py", "adapters/kites.py"]);
+    let missing = planning
+        .load_adapter(&AdapterLoadParams {
+            path: "adapters/acme.py".into(),
+            attribute: "send".into(),
+        })
+        .unwrap_err();
+    assert_eq!(
+        missing,
+        HostFailure::Rpc(RpcError::new(
+            ErrorCode::LoadFailed,
+            "adapters/acme.py: send is not declared with adapter()"
+        ))
+    );
+    planning.shutdown().unwrap();
+
+    // The live run: one adapter host for the declaration, with its own key.
+    let declaration = Declaration {
+        name: "acme".into(),
+        label: "acme".into(),
+        credential: Some(Credential {
+            variable: "ACME_API_KEY".into(),
+            header: "authorization".into(),
+            scheme: "Bearer".into(),
+        }),
+        base_url: BaseUrl {
+            variable: None,
+            default: "https://api.acme.test/v1".into(),
+        },
+        download_hosts: Vec::new(),
+        family: None,
+        adapter: Some(DeclaredAdapter {
+            path: "adapters/acme.py".into(),
+            attribute: "acme".into(),
+            loaded: Some(LoadedAdapter {
+                version: Some(2),
+                capabilities: loaded.adapter.capabilities.clone(),
+                source: grida_fx_core::registry::closure_digests(&loaded.closure).unwrap(),
+                drift: None,
+            }),
+        }),
+    };
+    let declarations = Declarations::with(&[declaration]);
+    let setup = Setup::new(
+        Arc::new(Offline),
+        Keys::from_environment(&Environment::declared(
+            &[("ACME_API_KEY", KEY)],
+            &declarations,
+        )),
+        Arc::new(FakeClock::new()),
+    );
+    let spec = HostSpec::python(&python, python.display().to_string(), &root, Vec::new())
+        .unchecked()
+        .with_environment(Vec::new(), vec![("ACME_API_KEY".into(), Secret::new(KEY))]);
+    let launch: Arc<dyn Launch> = Arc::new(ProcessLaunch::new(Ok(spec)));
+    let mut adapters = Adapters::new();
+    adapter_host::register(&mut adapters, &setup, |_, _| Arc::clone(&launch));
+    let route = |capability: &str| RouteRef {
+        capability: capability.into(),
+        model: "model-a".into(),
+        provider: "acme".into(),
+        contract: json!({"adapter": "adapters/acme.py#acme", "adapter_behavior": 2}),
+        limits: Default::default(),
+    };
+    let call = |capability: &str, prompt: &str| CallRequest {
+        route: route(capability),
+        request: json!({ "prompt": prompt }),
+        files: IndexMap::new(),
+        take: vec![1, 3],
+        key: "k".repeat(64),
+        attempt: 1,
+    };
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        let Some(Adapter::Request(sender)) = adapters.serving(&route("structured.generate")) else {
+            panic!("a request adapter");
+        };
+        assert_eq!(
+            sender.send(&call("structured.generate", "a kite")).await,
+            Sent::Answered(Answer::new(
+                json!({"json": {
+                    "fetched": "refused: the network is off (GRIDA_FX_NETWORK=off)",
+                    "key": true
+                }}),
+                Some(Usd(10_000))
+            ))
+        );
+        assert_eq!(
+            sender.send(&call("structured.generate", "refuse")).await,
+            Sent::Refused {
+                reason: "no kites today".into()
+            }
+        );
+        let Some(Adapter::Job(job)) = adapters.serving(&route("acme.render")) else {
+            panic!("a long job");
+        };
+        let submitted = job.submit(&call("acme.render", "a kite")).await;
+        assert_eq!(
+            submitted,
+            Submitted::Accepted {
+                handle: json!({"job": "j-3"})
+            }
+        );
+        assert_eq!(
+            job.collect(&call("acme.render", "a kite"), &json!({"job": "j-3"}))
+                .await,
+            Collected::Answered(Answer::new(json!({"job": "j-3"}), Some(Usd(500_000))))
+        );
+        for runtime in adapters.runtimes() {
+            assert!(runtime.shutdown().await, "the adapter host ends verified");
+        }
+    });
+}

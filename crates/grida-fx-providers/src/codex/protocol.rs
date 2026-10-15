@@ -1,7 +1,7 @@
-//! What `codex app-server` says, read (spec/providers.md §9.6): JSON-RPC 2.0 messages, the
+//! What `codex app-server` says, read (src/codex/README.md): JSON-RPC 2.0 messages, the
 //! account, image items, turn failures and token usage. Reasons are fixed sentences with bounded
 //! tokens from Codex's closed vocabularies, never Codex's own text, which can name private paths
-//! (spec/providers.md §8).
+//! (spec/adapters.md §7).
 
 use super::Stop;
 use crate::adapter::Usage;
@@ -84,7 +84,7 @@ pub(super) fn check_account(read: &Value) -> Result<(), Stop> {
 }
 
 /// The error code of a request Codex's app-server rejected on arrival because it is overloaded:
-/// the request was provably not received (spec/providers.md §9.6).
+/// the request was provably not received (src/codex/README.md).
 pub(super) const OVERLOADED: i64 = -32001;
 
 /// The reason of a request rejected with [`OVERLOADED`].

@@ -1,4 +1,4 @@
-//! fal `background.remove` (spec/providers.md §9.3) over synthetic exchanges. Every test that
+//! fal `background.remove` (src/fal/README.md) over synthetic exchanges. Every test that
 //! sends asserts each request; every refusal runs over `NoNetwork`. Media are built in code.
 
 use grida_fx_core::money::Usd;
@@ -61,6 +61,55 @@ fn answered(sent: Sent) -> Answer {
     match sent {
         Sent::Answered(answer) => answer,
         other => panic!("expected an answer, got {other:?}"),
+    }
+}
+
+#[test]
+fn provider_options_follow_the_fixed_members() {
+    let source = media::png(2, 2, Some(255));
+    let mut builder = CallBuilder::new("background.remove", ROUTE).contract(json!({
+        "adapter": "fal-run-birefnet", "adapter_behavior": 1,
+        "provider_options": {"fal": {"seed": 1}},
+    }));
+    let image = builder.file("image/png", &source);
+    let call = builder
+        .request(json!({"image": image,
+                        "provider_options": {"fal": {"extra": [1]},
+                                             "openai": {"model": "never read"}}}))
+        .build();
+    let body = json!({"image_url": data_url("image/png", &source), "model": "General Use (Light)",
+                      "operating_resolution": "1024x1024", "output_mask": false,
+                      "refine_foreground": true, "output_format": "png", "mask_only": false,
+                      "sync_mode": true, "seed": 1, "extra": [1]});
+    let cutout = media::png(2, 2, Some(0));
+    let transport = Arc::new(ReplayTransport::new(vec![
+        Expect::post_json(URL, Value::Null)
+            .credential("authorization", "Key test-fal-key")
+            .body(ExpectBody::JsonText(serde_json::to_string(&body).unwrap()))
+            .reply(HttpResponse::json(
+                200,
+                &json!({"image": {"url": data_url("image/png", &cutout)}}),
+            )),
+    ]));
+    answered(send(&transport, &call));
+    // The fixed members are the ones the adapter owns, and each is refused.
+    let names: Vec<&str> = body
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    assert_eq!(&names[..names.len() - 2], background::OWNED);
+    for name in background::OWNED {
+        let mut builder = CallBuilder::new("background.remove", ROUTE);
+        let image = builder.file("image/png", &source);
+        let call = builder
+            .request(json!({"image": image, "provider_options": {"fal": {*name: 1}}}))
+            .build();
+        assert_eq!(
+            refused(&call, test_keys()),
+            format!("provider_options.fal.{name} is a member FX owns")
+        );
     }
 }
 

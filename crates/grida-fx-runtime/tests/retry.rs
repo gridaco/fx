@@ -351,6 +351,7 @@ fn request(capability: &str) -> CallRequest {
             model: "img-a".into(),
             provider: "acme".into(),
             contract: json!({}),
+            limits: Default::default(),
         },
         request: json!({"prompt": "a lantern by the river"}),
         files: IndexMap::new(),
@@ -1440,7 +1441,7 @@ async fn a_job_that_ended_without_a_result_is_settled_in_full() {
 
 #[tokio::test(start_paused = true)]
 async fn a_job_that_ended_at_a_reported_cost_is_settled_at_it() {
-    // spec/providers.md §6: an ended job bills what its adapter reports, else its whole hold.
+    // spec/adapters.md §5: an ended job bills what its adapter reports, else its whole hold.
     for cost in [Usd::ZERO, Usd(5_000)] {
         let rig = Rig::new();
         let fake = FakeAdapter::long_job(

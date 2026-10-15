@@ -33,12 +33,12 @@ plans, records and exports are byte-identical under each (the invoker, `GRIDA_FX
   unsupported platform `grida fx` explains this and exits 1; the rest of `grida` is unaffected.
 - **Your own engine.** `GRIDA_FX_BIN` points every launcher and both SDKs at a `grida-fx` binary,
   such as a source build or one built for another platform.
-- **Python node bodies.** Python nodes, builders and the local built-ins (`image.resize`,
-  `files.copy`, `package`, …) need the Python package even when FX runs through npm, and in a
-  TypeScript project too; `GRIDA_FX_PYTHON` selects the interpreter.
-- **TypeScript node bodies.** TypeScript (and JavaScript) nodes, builders and stand-in files run
-  in `@grida/fx`'s node host, `<node> <@grida/fx>/dist/host-entry.js`, on Node.js 24 or later
-  (type stripping and `module.registerHooks`; Bun and Deno cannot host). `<node>` is
+- **Python node bodies.** Python nodes, builders, adapters and the local built-ins
+  (`image.resize`, `files.copy`, `package`, …) need the Python package even when FX runs through
+  npm, and in a TypeScript project too; `GRIDA_FX_PYTHON` selects the interpreter.
+- **TypeScript node bodies.** TypeScript (and JavaScript) nodes, builders, stand-in files and
+  adapters run in `@grida/fx`'s node host, `<node> <@grida/fx>/dist/host-entry.js`, on Node.js
+  24 or later (type stripping and `module.registerHooks`; Bun and Deno cannot host). `<node>` is
   `GRIDA_FX_NODE`, else `GRIDA_FX_SDK_NODE`, else `node` on `PATH`. `dist/host-entry.js` comes
   from the `@grida/fx` the workflow's project resolves (`node_modules/@grida/fx`, in the project
   or a folder above it), else from the one the planning project resolves, else it is
@@ -147,6 +147,7 @@ bun --no-env-file run build:viewer
 
 # Contracts and runnable examples
 uv run --project python python tools/check_spec.py
+uv run --project python python tools/make_models.py --check
 cargo build --locked -p grida-fx
 uv run --project python python conformance/run.py --command target/debug/grida-fx --js-sdk js/fx
 uv run --project python python tools/check_examples.py
@@ -159,6 +160,17 @@ Build the debug engine before using `target/debug/grida-fx`; the source-build
 helper defaults to the release profile. Use the Python and JavaScript checks in
 AGENTS.md when changing either SDK. Changes to public schemas, identities, or
 protocol behavior update their specification and conformance evidence together.
+
+The built-in route table is checked against a pinned release of
+[Grida Models](https://github.com/gridaco/models) (spec/providers.md §3), whose
+projection is `crates/grida-fx-providers/routes/models.json`. A new built-in route
+gets its card in `CARDS` of `tools/make_models.py` and a new projection: run
+`uv run --project python python tools/make_models.py --release <tag>` with the
+network, where `<tag>` is the tool's `RELEASE`, the pin. To move the pin, change
+`RELEASE` and the release spec/providers.md §3 names (`--check` holds them
+together), run the same command with the new tag, and fix what `cargo test -p
+grida-fx-providers --test models` then finds, in the routes or in its exceptions
+table.
 
 ## Viewer development
 

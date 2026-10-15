@@ -7,6 +7,10 @@
 //! - [`FakeAdapter::with_check`]: refuse answers whose `data` holds `{"bad": true}` (any check
 //!   the test gives, [`refuse_bad`] being that one), to pin "checks after an answer fail the
 //!   attempt as billed". Without a check every answer passes.
+//! - [`FakeAdapter::with_identity`] and [`FakeAdapter::with_contract_check`]: the contract it
+//!   serves and its judgement of the contract's other members, so the engine checks its calls as
+//!   it checks an adapter FX ships (spec/adapters.md §3.4, §4). Without an identity the engine
+//!   checks nothing around it.
 //!
 //! A script that runs out answers `Sent::Failed { reason: "the fake adapter's script ran out",
 //! cost: None, retryable: false }` (or the long-job equivalents), so a test that sends more than
@@ -17,7 +21,7 @@
 
 use crate::BoxFuture;
 use crate::adapter::{
-    Adapter, Answer, CallRequest, Collected, LongJob, RequestAdapter, Sent, Submitted,
+    Adapter, Answer, CallRequest, Collected, Identity, LongJob, RequestAdapter, Sent, Submitted,
 };
 use serde_json::Value;
 use std::collections::VecDeque;
@@ -46,6 +50,9 @@ impl FakeCall {
 /// A check over an answer.
 pub type FakeCheck = Arc<dyn Fn(&Answer) -> Result<(), String> + Send + Sync>;
 
+/// A judgement of a call's route contract ([`RequestAdapter::check_contract`]).
+pub type FakeContractCheck = Arc<dyn Fn(&CallRequest) -> Result<(), String> + Send + Sync>;
+
 /// The check the module doc names: refuses an answer whose `data` holds `"bad": true`.
 pub fn refuse_bad() -> FakeCheck {
     Arc::new(|answer: &Answer| {
@@ -64,6 +71,8 @@ pub struct FakeAdapter {
     submits: Arc<Mutex<VecDeque<Submitted>>>,
     collects: Arc<Mutex<VecDeque<Collected>>>,
     check: Option<FakeCheck>,
+    identity: Option<Identity>,
+    contract_check: Option<FakeContractCheck>,
     /// Every call made, in order.
     pub calls: Arc<Mutex<Vec<FakeCall>>>,
 }
@@ -75,6 +84,8 @@ impl std::fmt::Debug for FakeAdapter {
             .field("submits", &*lock(&self.submits))
             .field("collects", &*lock(&self.collects))
             .field("check", &self.check.is_some())
+            .field("identity", &self.identity)
+            .field("contract_check", &self.contract_check.is_some())
             .field("calls", &lock(&self.calls).len())
             .finish()
     }
@@ -109,6 +120,29 @@ impl FakeAdapter {
         FakeAdapter {
             check: Some(check),
             ..self
+        }
+    }
+
+    /// The same adapter, serving the contract of `identity`.
+    pub fn with_identity(self, identity: Identity) -> FakeAdapter {
+        FakeAdapter {
+            identity: Some(identity),
+            ..self
+        }
+    }
+
+    /// The same adapter, judging a call's route contract with `check`.
+    pub fn with_contract_check(self, check: FakeContractCheck) -> FakeAdapter {
+        FakeAdapter {
+            contract_check: Some(check),
+            ..self
+        }
+    }
+
+    fn apply_contract_check(&self, call: &CallRequest) -> Result<(), String> {
+        match &self.contract_check {
+            Some(check) => check(call),
+            None => Ok(()),
         }
     }
 
@@ -188,6 +222,14 @@ impl RequestAdapter for FakeAdapter {
     fn check(&self, _call: &CallRequest, answer: &Answer) -> Result<(), String> {
         self.apply_check(answer)
     }
+
+    fn identity(&self) -> Option<Identity> {
+        self.identity
+    }
+
+    fn check_contract(&self, call: &CallRequest) -> Result<(), String> {
+        self.apply_contract_check(call)
+    }
 }
 
 impl LongJob for FakeAdapter {
@@ -208,6 +250,14 @@ impl LongJob for FakeAdapter {
     fn check(&self, _call: &CallRequest, answer: &Answer) -> Result<(), String> {
         self.apply_check(answer)
     }
+
+    fn identity(&self) -> Option<Identity> {
+        self.identity
+    }
+
+    fn check_contract(&self, call: &CallRequest) -> Result<(), String> {
+        self.apply_contract_check(call)
+    }
 }
 
 #[cfg(test)]
@@ -225,6 +275,7 @@ mod tests {
                 model: "img-a".into(),
                 provider: "acme".into(),
                 contract: json!({}),
+                limits: Default::default(),
             },
             request: json!({"prompt": "a lantern"}),
             files: IndexMap::new(),

@@ -2,7 +2,8 @@
 
 A node type is one kind of work. You use built-in ones by name. When none fits, write your own in
 [Python](#writing-a-node-type-in-python) or [TypeScript](#writing-a-node-type-in-typescript), or in
-[any language](#other-languages) that speaks the node protocol.
+[any language](#other-languages) that speaks the node protocol. A provider FX does not ship is
+served by an [adapter](#adapters-a-provider-of-your-own), project code of the same kind.
 
 ## Built-in node types (`fx/...`)
 
@@ -13,7 +14,7 @@ Every built-in type is declared, so a workflow using it plans and prices. A type
 
 | Type | Inputs and settings → output |
 |---|---|
-| `image.generate@1` | `prompt`, `size`, `background` → `image`. It also takes `references`, input pictures to draw from: only `imagegen@codex` (up to 5) and `imagine@grok` (up to 3) accept them; on the other routes, use `image.edit@1`. |
+| `image.generate@1` | `prompt`, `size`, `background` → `image`. It also takes `references`, input pictures to draw from: of the built-in routes, only `imagegen@codex` (up to 5) and `imagine@grok` (up to 3) accept them, and so does a route of your own on OpenRouter that declares `image_input` ([AI providers](13-providers.md#a-model-fx-does-not-list)); on the other routes, use `image.edit@1`. |
 | `image.edit@1` | `image`, `mask` (a PNG the size of `image`: fully transparent pixels mark where it may change; a strong hint, not a guarantee), `references`, `prompt`, `size`, `background` → `image` |
 | `structured.generate@1` | `prompt`, `system`, `context` (text, json and images; images are reduced and flattened onto `matte:`, white by default), `schema`, `max_tokens` → `json` |
 | `video.generate@1` | `prompt`, `first_frame`, `last_frame`, `duration`, `resolution`, `aspect_ratio` → `video` |
@@ -30,6 +31,9 @@ Every built-in type is declared, so a workflow using it plans and prices. A type
   crash collects instead of submitting again.
 - **Length-priced calls** (speech by characters, music by seconds) are priced from `max_chars` or
   `duration` when the text isn't known yet.
+- **Every generation type also takes `provider_options`**, parameters FX does not expose, by
+  provider: only the provider the call runs on reads its own
+  ([Parameters FX does not expose](13-providers.md#parameters-fx-does-not-expose)).
 
 **Judges and annotators** (see [Annotations and judges](06-annotations-and-judges.md); the free
 ones are local and run on Python):
@@ -291,7 +295,8 @@ project you choose how that identity is set:
   - A versioned node with no `fx.lock` entry yet plans normally; `grida fx lock --check` reports
     it as unlocked.
 
-Built-in node types always carry versions; their major version is in `uses:`.
+Built-in node types always carry versions; their major version is in `uses:`. Your own
+[adapters](#adapters-a-provider-of-your-own) are versioned and locked the same way.
 
 ## Writing a node type in TypeScript
 
@@ -493,6 +498,50 @@ imports count by their literal paths (relative, `#` and `.json` alike; `import t
 nothing), whether or not they run. Import project files statically and spell paths as they are
 on disk: a body that loads a project file outside that list when it runs fails its step and says
 why. List a file that only a package, a worker or a child process loads under `resources`.
+
+## Adapters: a provider of your own
+
+A node never calls a provider itself: it asks FX, which routes, prices, checks, retries and
+caches each call. When the provider is one FX does not ship, a
+[community provider](15-community-providers.md), you write its **adapter** instead, a module of
+the project in Python or TypeScript that maps FX's request to the provider's and its answer back,
+and `fx.yaml` names it on the provider's declaration:
+
+```yaml
+# fx.yaml
+providers:
+  acme:
+    credential: { variable: ACME_API_KEY }
+    base_url: { default: "https://api.acme.test/v1" }
+    adapter: adapters/acme.py#acme
+```
+
+```python
+# adapters/acme.py
+from grida.fx import Answered, adapter
+
+
+async def send(call):  # structured.generate on any <model>@acme route
+    response = await call.fetch(
+        f"{call.base_url}/answers",
+        method="POST",
+        json={"model": call.route.model, "prompt": call.request["prompt"]},
+        credential=True,  # FX attaches the key, only to the base URL's origin
+    )
+    body = response.json()
+    return Answered.json(body["answer"], cost_usd=body.get("cost_usd"))
+
+
+acme = adapter(requests=["structured.generate"], send=send, version=1)
+```
+
+An adapter is project code as a node type is: FX loads it in the node host of its language,
+while planning too, and its identity follows its `version`, whose source `grida fx lock` pins, or,
+without one, its source. Every node then reaches the provider through its routes, `<model>@acme`,
+as it reaches FX's own.
+[Community providers](15-community-providers.md#outcomes-and-what-each-costs) explains the
+outcomes an adapter returns (this sketch returns only an answer, so a failed exchange is billed in
+full), how it reaches the network, and how to test it with the network off.
 
 ## Other languages
 

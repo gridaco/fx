@@ -1,10 +1,12 @@
 //! Chat Completions as FX speaks it, whichever provider serves the route: the structured-output
 //! prompt and answer (spec/capabilities.md §4) and the agent turn's transcript, tools and reply
-//! (§5), with the pictures they carry (spec/providers.md §9.2; Grida Gateway's adapters, §9.7,
-//! send the same messages).
+//! (§5), with the pictures they carry (src/openrouter/README.md; Grida Gateway's adapters,
+//! src/gg/README.md, send the same messages).
 //!
 //! What a provider adds is its own module's: the endpoint and credential, provider members of the
-//! body (OpenRouter's routing and reasoning), how a status classifies, and what a call costs.
+//! body (OpenRouter's routing and reasoning), how a status classifies, and what a call costs. The
+//! request itself ([`completions_request`]), a 2xx that does not become an answer
+//! ([`structural`]) and the tokens a completion counts ([`usage`]) are shared here too.
 //!
 //! **Structured output** ([`structured_prompt`], [`structured_value`]). The schema is a `json`
 //! file or an inline object, sent after `$ref` inlining and strict canonicalization ([`schema`]),
@@ -24,13 +26,17 @@
 
 pub mod schema;
 
-use crate::adapter::CallRequest;
+use crate::adapter::{CallRequest, Sent, Usage};
 use crate::capabilities;
 use crate::checks;
+use crate::setup::Client;
+use crate::transport::{Body, Credential, HttpRequest, HttpResponse, Lane, Method};
 use crate::wire;
+use grida_fx_core::money::Usd;
 use regex::Regex;
 use serde_json::{Map, Value, json};
 use std::sync::LazyLock;
+use std::time::Duration;
 
 /// The default `max_tokens` of a structured call.
 pub const DEFAULT_MAX_TOKENS: u64 = 16_000;
@@ -83,6 +89,59 @@ pub fn message_text(content: Option<&Value>) -> String {
     }
 }
 
+/// The one `POST {base}/chat/completions` of a call: `body` as JSON, with `credential` when the
+/// provider takes one, under `timeout` and a response cap of `max_response_bytes`.
+pub fn completions_request(
+    client: &Client,
+    credential: Option<Credential>,
+    body: Value,
+    timeout: Duration,
+    max_response_bytes: u64,
+) -> HttpRequest {
+    let request = HttpRequest::new(Method::Post, client.url("chat/completions"), Lane::Provider)
+        .body(Body::Json(body))
+        .timeout(timeout)
+        .max_response_bytes(max_response_bytes);
+    match credential {
+        Some(credential) => request.credential(credential),
+        None => request,
+    }
+}
+
+/// A structural failure of a 2xx (spec/adapters.md §3.4): billed at `cost`, retryable, the reason
+/// naming the response's request id ([`wire::with_request_id`]) and redacted.
+pub fn structural(
+    client: &Client,
+    response: &HttpResponse,
+    reason: &str,
+    cost: Option<Usd>,
+) -> Sent {
+    let reason = wire::with_request_id(reason.to_string(), response);
+    Sent::Failed {
+        reason: client.reason(&reason),
+        cost,
+        retryable: true,
+    }
+}
+
+/// The tokens a completion's `usage` counts, when it counts any: `prompt_tokens` (cache reads
+/// included), `prompt_tokens_details.cached_tokens` and `completion_tokens` (reasoning included).
+pub fn usage(body: &Map<String, Value>) -> Option<Usage> {
+    let usage = body.get("usage")?.as_object()?;
+    let count = |value: Option<&Value>| value.and_then(Value::as_u64);
+    let counted = Usage {
+        input_tokens: count(usage.get("prompt_tokens")),
+        cached_input_tokens: count(
+            usage
+                .get("prompt_tokens_details")
+                .and_then(|details| details.get("cached_tokens")),
+        ),
+        output_tokens: count(usage.get("completion_tokens")),
+        ..Usage::default()
+    };
+    (counted != Usage::default()).then_some(counted)
+}
+
 /// `max_tokens`: absent or `null` is `None`; otherwise a whole number of at least 1 (the type is
 /// [`capabilities::check_request`]'s).
 pub fn max_tokens(value: Option<&Value>) -> Result<Option<u64>, String> {
@@ -114,11 +173,12 @@ pub struct StructuredPrompt {
     pub max_tokens: u64,
 }
 
-/// Steps 4 and 5 of a structured call (spec/providers.md §5, §9.2), for a request that passed its
-/// capability's check: the values (a non-blank `prompt`; `matte` a colour; `max_tokens` at least
-/// 1; an inline schema whose references inline and which compiles as a draft 2020-12 JSON
-/// Schema), then the files (the schema file, then each context file, a picture or UTF-8 text).
-/// Pictures go as they are when `pictures_unchanged`, else reduced; each part carries `detail`.
+/// Steps 4 and 5 of a structured call (spec/adapters.md §4; src/openrouter/README.md), for a
+/// request that passed its capability's check: the values (a non-blank `prompt`; `matte` a colour;
+/// `max_tokens` at least 1; an inline schema whose references inline and which compiles as a draft
+/// 2020-12 JSON Schema), then the files (the schema file, then each context file, a picture or
+/// UTF-8 text). Pictures go as they are when `pictures_unchanged`, else reduced; each part carries
+/// `detail`.
 pub fn structured_prompt(
     call: &CallRequest,
     pictures_unchanged: bool,
@@ -296,7 +356,7 @@ fn over(src: [u8; 4], matte: [u8; 4]) -> [u8; 3] {
     [channel(0), channel(1), channel(2)]
 }
 
-/// A picture reduced for a structured call (spec/providers.md §9.2): decoded, flattened on
+/// A picture reduced for a structured call (src/openrouter/README.md): decoded, flattened on
 /// `matte`, fitted into [`PICTURE_EDGE`] × [`PICTURE_EDGE`] with Lanczos3 when larger, and
 /// encoded as an RGB PNG data URL. `None` when the bytes do not decode.
 ///
@@ -355,7 +415,7 @@ fn sent_schema(original: &Value) -> Result<Value, String> {
 }
 
 /// Unwraps the `completionState` envelopes a provider sometimes puts around an answer
-/// (spec/providers.md §9.2): a string holding such an object is parsed; a complete envelope
+/// (src/openrouter/README.md): a string holding such an object is parsed; a complete envelope
 /// gives its `entries` (as an object), `items` (as a list) or `value`; an incomplete or
 /// malformed one is left as it is; anything else is unwrapped member by member.
 fn unwrap_completion(value: Value) -> Value {
@@ -421,12 +481,13 @@ pub struct AgentPrompt {
     pub max_tokens: Option<u64>,
 }
 
-/// Steps 4 and 5 of an agent turn (spec/providers.md §5, §9.2), for a request that passed its
-/// capability's check: the values (each tool's name `^[a-z][a-z0-9_]{0,63}$`, non-blank
-/// description and object `parameters`; `max_tokens` at least 1; the transcript: known roles, text
-/// contents, an id on every assistant call and every tool message, pictures as file values), then
-/// the files: every picture's kind before any file is read (`messages[<i>].images[<j>] is <kind>,
-/// not a picture`), then each as a data URL of its kind. Each picture part carries `detail`.
+/// Steps 4 and 5 of an agent turn (spec/adapters.md §4; src/openrouter/README.md), for a request
+/// that passed its capability's check: the values (each tool's name `^[a-z][a-z0-9_]{0,63}$`,
+/// non-blank description and object `parameters`; `max_tokens` at least 1; the transcript: known
+/// roles, text contents, an id on every assistant call and every tool message, pictures as file
+/// values), then the files: every picture's kind before any file is read
+/// (`messages[<i>].images[<j>] is <kind>, not a picture`), then each as a data URL of its kind.
+/// Each picture part carries `detail`.
 pub fn agent_prompt(call: &CallRequest, detail: Option<&str>) -> Result<AgentPrompt, String> {
     // 4. Values.
     let request = &call.request;
@@ -677,7 +738,7 @@ fn wire_messages(
     Ok(out)
 }
 
-/// The calls of a reply (spec/providers.md §9.2), or the structural failure's sentence.
+/// The calls of a reply (src/openrouter/README.md), or the structural failure's sentence.
 fn reply_calls(value: Option<&Value>) -> Result<Vec<Value>, &'static str> {
     let entries = match value {
         None | Some(Value::Null) => return Ok(Vec::new()),

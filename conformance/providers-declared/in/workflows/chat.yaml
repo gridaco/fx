@@ -1,0 +1,12 @@
+fx: workflow/v1
+id: chat
+title: A declared family's chat route
+steps:
+  name:
+    uses: fx/structured.generate@1
+    route: text-a@acme
+    with:
+      prompt: Name a colour.
+      schema: ./schemas/colour.json
+outputs:
+  name: ${{ steps.name.outputs.json }}

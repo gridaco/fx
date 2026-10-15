@@ -33,7 +33,7 @@ use crate::expand::{ExpandEnv, Expansion, Instance, ResultStatus, State};
 use crate::host::{NodeHost, PlanTimeRunner, ResultCache};
 use crate::money::Usd;
 use crate::project::Planner;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 /// The problem of an at-plan instance while no plan-time runner exists.
 pub const AT_PLAN_UNAVAILABLE: &str =
@@ -180,6 +180,30 @@ impl Plan {
                     "the takes file names {step}, which no step is any more; move it with \
                      grida-fx takes mv {} \"{step}\" <new path>",
                     planner.workflow.workflow.id
+                )
+            })
+            .collect()
+    }
+
+    /// One note per capability and capped route a live instance binds, sorted by capability and
+    /// route: `{capability} on {route} has no price: each call holds its cap, ${cap}, and is
+    /// charged what the provider reports, else the cap`. [`render::render`] prints them, for
+    /// `plan` and for a run that bills; [`render::render_stand_in`] leaves them out, since a
+    /// stand-in run holds and charges nothing.
+    pub fn capped_notes(&self) -> Vec<String> {
+        let capped: BTreeMap<(&str, String), Usd> = self
+            .live()
+            .flat_map(|i| i.routes.values())
+            .filter(|route| route.price.capped)
+            .map(|route| ((route.capability.as_str(), route.id()), route.price.high))
+            .collect();
+        capped
+            .into_iter()
+            .map(|((capability, route), cap)| {
+                format!(
+                    "{capability} on {route} has no price: each call holds its cap, {}, and is \
+                     charged what the provider reports, else the cap",
+                    render::dollars(cap)
                 )
             })
             .collect()

@@ -1,4 +1,4 @@
-//! Grida Gateway's adapters (spec/providers.md §9.7) over synthetic exchanges and a `FakeClock`.
+//! Grida Gateway's adapters (src/gg/README.md) over synthetic exchanges and a `FakeClock`.
 //! Nothing here reaches a network: every send goes to a `ReplayTransport` that asserts the request,
 //! and every refusal runs over a transport that saw no request. Pictures are built in code
 //! (`testing::media`); the clip is the committed facts vector (`spec/vectors/facts/mp4/`).
@@ -21,7 +21,7 @@ use grida_fx_providers::transport::replay::{
     Exchange, Expect, ExpectBody, NoNetwork, ReplayTransport,
 };
 use grida_fx_providers::transport::{
-    HttpResponse, Lane, Method, Part, Transport, TransportError, TransportErrorKind,
+    Body, HttpResponse, Lane, Method, Part, Transport, TransportError, TransportErrorKind,
 };
 use grida_fx_providers::wire;
 use serde_json::{Value, json};
@@ -1630,4 +1630,346 @@ fn a_failure_gg_accepted_costs_its_settled_charge() {
         }
     ));
     transport.assert_done();
+}
+
+// ---------------------------------------------------------------------------------------------
+// Provider options (spec/adapters.md §8)
+
+#[test]
+fn image_provider_options_follow_fx_s_members() {
+    let png = media::png(2, 2, Some(255));
+    let mut contract = image_contract();
+    contract["provider_options"] = json!({"gg": {"seed": 1, "user": "route-a"}});
+    // A generation's JSON body.
+    let transport = replay(vec![
+        post("images/generations")
+            .body(ExpectBody::JsonText(
+                r#"{"model":"openai/gpt-image-2.5-sunburst","prompt":"A kite.","n":1,"size":"1024x1024","quality":"max","background":"opaque","seed":7,"user":"route-a","style":{"ink":true}}"#.into(),
+            ))
+            .reply(picture_answer(&png, "1000")),
+    ]);
+    let call = CallBuilder::new("image.generate", IMAGE_ROUTE)
+        .contract(contract.clone())
+        .request(
+            json!({"prompt": "A kite.", "size": "1024x1024", "background": "opaque",
+                        "provider_options": {"gg": {"seed": 7, "style": {"ink": true}},
+                                             "openai": {"model": "never read"}}}),
+        )
+        .build();
+    answered(block_on(
+        GgImages::new(gateway(transport.clone(), test_keys())).send(&call),
+    ));
+    transport.assert_done();
+    owns_what_it_sent(&transport, &["seed", "user", "style"], gg::image::OWNED);
+    // An edit's text fields, before its pictures.
+    let mut builder = CallBuilder::new("image.edit", IMAGE_ROUTE).contract(contract);
+    let image = builder.file("image/png", &png);
+    let call = builder
+        .request(json!({"prompt": "p", "image": image}))
+        .build();
+    let transport = replay(vec![
+        post("images/edits")
+            .body(ExpectBody::Multipart(vec![
+                Part::text("model", "openai/gpt-image-2.5-sunburst"),
+                Part::text("prompt", "p"),
+                Part::text("n", "1"),
+                Part::text("quality", "max"),
+                Part::text("seed", "1"),
+                Part::text("user", "route-a"),
+                Part::file("image[]", "reference-01.png", "image/png", png.clone()),
+            ]))
+            .reply(picture_answer(&png, "1000")),
+    ]);
+    answered(block_on(
+        GgImages::new(gateway(transport.clone(), test_keys())).send(&call),
+    ));
+    transport.assert_done();
+    owns_what_it_sent(&transport, &["seed", "user"], gg::image::OWNED);
+}
+
+#[test]
+fn text_provider_options_follow_fx_s_members() {
+    let schema = json!({"type": "object"});
+    let transport = replay(vec![
+        post("chat/completions")
+            .body(ExpectBody::JsonText(
+                r#"{"model":"openai/gpt-5.6-sol","messages":[{"role":"user","content":"p"}],"response_format":{"type":"json_schema","json_schema":{"name":"answer","strict":true,"schema":{"type":"object"}}},"max_completion_tokens":16000,"reasoning_effort":"high","verbosity":"low","seed":7}"#.into(),
+            ))
+            .reply(completion(json!({"role": "assistant", "content": "{}"}))),
+    ]);
+    let call = CallBuilder::new("structured.generate", TEXT_ROUTE)
+        .contract(json!({"adapter": "gg-structured", "adapter_behavior": 1,
+                         "reasoning_effort": "high",
+                         "provider_options": {"gg": {"verbosity": "low"}}}))
+        .request(json!({"prompt": "p", "schema": schema,
+                        "provider_options": {"gg": {"seed": 7},
+                                             "openrouter": {"model": "never read"}}}))
+        .build();
+    answered(block_on(
+        GgStructured::new(gateway(transport.clone(), test_keys())).send(&call),
+    ));
+    transport.assert_done();
+    owns_what_it_sent(
+        &transport,
+        &["verbosity", "seed"],
+        gg::chat::STRUCTURED_OWNED,
+    );
+    // A turn's: the route's, then those of a body's own `agent.turn` call (the engine's agent
+    // loop sends none).
+    let transport = replay(vec![
+        post("chat/completions")
+            .body(ExpectBody::JsonText(
+                r#"{"model":"openai/gpt-5.6-sol","messages":[{"role":"user","content":"Go."}],"tools":[],"tool_choice":"auto","max_completion_tokens":100,"reasoning_effort":"low","parallel_tool_calls":true,"user":"route-a","seed":7}"#.into(),
+            ))
+            .reply(completion(json!({"role": "assistant", "content": "done"}))),
+    ]);
+    let call = CallBuilder::new("agent.turn", TEXT_ROUTE)
+        .contract(json!({"reasoning_effort": "low",
+                         "provider_options": {"gg": {"parallel_tool_calls": false,
+                                                     "user": "route-a"}}}))
+        .request(
+            json!({"system": "", "messages": [{"role": "user", "content": "Go."}],
+                        "tools": [], "tool_choice": "auto", "max_tokens": 100,
+                        "provider_options": {"gg": {"parallel_tool_calls": true, "seed": 7},
+                                             "openrouter": {"model": "never read"}}}),
+        )
+        .build();
+    answered(block_on(
+        GgAgent::new(gateway(transport.clone(), test_keys())).send(&call),
+    ));
+    transport.assert_done();
+    owns_what_it_sent(
+        &transport,
+        &["parallel_tool_calls", "user", "seed"],
+        gg::chat::TURN_OWNED,
+    );
+}
+
+#[test]
+fn job_provider_options_follow_fx_s_members_in_the_paid_input() {
+    // Video: the JSON body, and the input beside a first frame.
+    let transport = replay(vec![
+        post("videos")
+            .body(ExpectBody::JsonText(
+                r#"{"model":"alibaba/wan-3.0","prompt":"p","duration":2,"aspectRatio":"9:16","providerOptions":{"gg":{"resolutionTier":"480p"}},"seed":7}"#.into(),
+            ))
+            .reply(HttpResponse::json(
+                202,
+                &job("accepted", "pending", reserved()),
+            )),
+    ]);
+    let call = video_call(json!({"prompt": "p", "duration": 2, "aspect_ratio": "9:16",
+                                 "resolution": "480p",
+                                 "provider_options": {"gg": {"seed": 7},
+                                                      "fal": {"prompt": "never read"}}}));
+    assert!(matches!(
+        block_on(video_adapter(&transport, &Arc::new(FakeClock::new())).submit(&call)),
+        Submitted::Accepted { .. }
+    ));
+    transport.assert_done();
+    owns_what_it_sent(&transport, &["seed"], video::OWNED);
+    let png = media::png(2, 2, None);
+    let mut builder = CallBuilder::new("video.generate", VIDEO_ROUTE)
+        .contract(json!({"provider_options": {"gg": {"seed": 7}}}));
+    let frame = builder.file("image/png", &png);
+    let call = builder
+        .request(json!({"prompt": "p", "first_frame": frame, "resolution": "1280x720"}))
+        .build();
+    let transport = replay(vec![
+        post("videos")
+            .body(ExpectBody::Multipart(vec![
+                Part::text(
+                    "input",
+                    r#"{"model":"alibaba/wan-3.0","prompt":"p","resolution":"1280x720","seed":7}"#,
+                ),
+                Part::file("image", "first-frame.png", "image/png", png),
+            ]))
+            .reply(HttpResponse::json(
+                202,
+                &job("accepted", "pending", reserved()),
+            )),
+    ]);
+    assert!(matches!(
+        block_on(video_adapter(&transport, &Arc::new(FakeClock::new())).submit(&call)),
+        Submitted::Accepted { .. }
+    ));
+    transport.assert_done();
+    owns_what_it_sent(&transport, &["seed"], video::OWNED);
+    // A rig: the paid input carries them, the free check's input stays {}.
+    let mut contract = checked_rig_contract();
+    contract["provider_options"] = json!({"gg": {"topology": "quad"}});
+    let mut builder = CallBuilder::new("mesh.rig", RIG_ROUTE).contract(contract);
+    let model = builder.file("model/gltf-binary", media::GLB);
+    let call = builder.request(json!({"model": model})).build();
+    let transport = replay(vec![
+        check_post().reply(HttpResponse::json(
+            202,
+            &check_job("accepted", "pending", Value::Null),
+        )),
+        check_reply(check_job(
+            "succeeded",
+            "available",
+            json!({"riggable": true, "rig_type": "biped"}),
+        )),
+        post("endpoints/three-d.tripo.rig-v1.0.mesh")
+            .body(ExpectBody::Multipart(vec![
+                Part::text(
+                    "input",
+                    r#"{"rig_type":"biped","spec":"mixamo","topology":"quad"}"#,
+                ),
+                Part::file(
+                    "mesh",
+                    "unrigged.glb",
+                    "model/gltf-binary",
+                    media::GLB.to_vec(),
+                ),
+            ]))
+            .reply(HttpResponse::json(
+                202,
+                &model_job("accepted", "pending", reserved()),
+            )),
+    ]);
+    assert!(matches!(
+        block_on(rig_adapter(&transport).submit(&call)),
+        Submitted::Accepted { .. }
+    ));
+    transport.assert_done();
+    owns_what_it_sent(&transport, &["topology"], gg::mesh::RIG_OWNED);
+    // A mesh.
+    let front = media::png(2, 2, None);
+    let mut builder = CallBuilder::new("mesh.generate", MESH_ROUTE).contract(mesh_contract());
+    let front_file = builder.file("image/png", &front);
+    let left_file = builder.file("image/png", &front);
+    let call = builder
+        .request(
+            json!({"views": {"front": front_file, "left": left_file}, "texture": true,
+                        "pbr": true, "face_limit": 1000, "quad": true,
+                        "provider_options": {"gg": {"texture_quality": "detailed"}}}),
+        )
+        .build();
+    let transport = replay(vec![
+        post("endpoints/three-d.tripo.p2.multiview")
+            .body(ExpectBody::Multipart(vec![
+                Part::text(
+                    "input",
+                    r#"{"texture":true,"pbr":true,"face_limit":1000,"quad":true,"texture_quality":"detailed"}"#,
+                ),
+                Part::file("images.front", "front.png", "image/png", front.clone()),
+                Part::file("images.left", "left.png", "image/png", front),
+            ]))
+            .reply(HttpResponse::json(
+                202,
+                &model_job("accepted", "pending", reserved()),
+            )),
+    ]);
+    assert!(matches!(
+        block_on(mesh_adapter(&transport).submit(&call)),
+        Submitted::Accepted { .. }
+    ));
+    transport.assert_done();
+    owns_what_it_sent(&transport, &["texture_quality"], gg::mesh::MESH_OWNED);
+}
+
+/// Asserts that every member FX set in the last body `transport` captured, all but the provider
+/// options `options`, is one in `owned`: a JSON body's members, a job's paid `input`'s, else a
+/// multipart body's parts.
+fn owns_what_it_sent(transport: &ReplayTransport, options: &[&str], owned: &[&str]) {
+    let requests = transport.requests();
+    let names: Vec<String> = match &requests.last().expect("a request").body {
+        Body::Json(Value::Object(body)) => body.keys().cloned().collect(),
+        Body::Multipart(parts) => match parts.iter().find(|part| part.name == "input") {
+            Some(input) => serde_json::from_slice::<serde_json::Map<String, Value>>(&input.data)
+                .unwrap()
+                .keys()
+                .cloned()
+                .collect(),
+            None => parts.iter().map(|part| part.name.clone()).collect(),
+        },
+        _ => panic!("a JSON or multipart body"),
+    };
+    for name in names
+        .iter()
+        .filter(|name| !options.contains(&name.as_str()))
+    {
+        assert!(owned.contains(&name.as_str()), "{name}");
+    }
+}
+
+#[test]
+fn provider_options_set_no_member_gg_s_adapters_own() {
+    let owned = |sent: Sent| match sent {
+        Sent::Refused { reason } => reason,
+        other => panic!("refused, not {other:?}"),
+    };
+    let submitted = |submitted: Submitted| match submitted {
+        Submitted::Refused { reason } => reason,
+        other => panic!("refused, not {other:?}"),
+    };
+    let sentence = |name: &str| format!("provider_options.gg.{name} is a member FX owns");
+    let images = GgImages::new(gateway(Arc::new(NoNetwork), test_keys()));
+    for name in gg::image::OWNED {
+        let call = image_call(
+            "image.generate",
+            json!({"prompt": " ", "provider_options": {"gg": {*name: 1}}}),
+        );
+        assert_eq!(owned(block_on(images.send(&call))), sentence(name));
+    }
+    let structured = GgStructured::new(gateway(Arc::new(NoNetwork), test_keys()));
+    for name in gg::chat::STRUCTURED_OWNED {
+        let call = CallBuilder::new("structured.generate", TEXT_ROUTE)
+            .request(json!({"prompt": " ", "schema": {"type": "object"},
+                            "provider_options": {"gg": {*name: 1}}}))
+            .build();
+        assert_eq!(owned(block_on(structured.send(&call))), sentence(name));
+    }
+    let agent = GgAgent::new(gateway(Arc::new(NoNetwork), test_keys()));
+    for name in gg::chat::TURN_OWNED {
+        let call = CallBuilder::new("agent.turn", TEXT_ROUTE)
+            .request(json!({
+                "system": "", "messages": [], "tools": [], "tool_choice": "auto",
+                "provider_options": {"gg": {*name: 1}}
+            }))
+            .build();
+        assert_eq!(owned(block_on(agent.send(&call))), sentence(name));
+        let call = CallBuilder::new("agent.turn", TEXT_ROUTE)
+            .contract(json!({"provider_options": {"gg": {*name: 1}}}))
+            .request(json!({"system": "", "messages": [], "tools": [], "tool_choice": "auto"}))
+            .build();
+        assert_eq!(
+            owned(block_on(agent.send(&call))),
+            format!("contract.{}", sentence(name))
+        );
+    }
+    let video = GgVideo::new(
+        gateway(Arc::new(NoNetwork), test_keys()),
+        Arc::new(FakeClock::new()),
+    );
+    for name in video::OWNED {
+        let call = video_call(json!({"prompt": " ", "provider_options": {"gg": {*name: 1}}}));
+        assert_eq!(submitted(block_on(video.submit(&call))), sentence(name));
+    }
+    let mesh = GgMesh::new(
+        gateway(Arc::new(NoNetwork), test_keys()),
+        Arc::new(FakeClock::new()),
+    );
+    for name in gg::mesh::MESH_OWNED {
+        let call = CallBuilder::new("mesh.generate", MESH_ROUTE)
+            .contract(mesh_contract())
+            .request(json!({"views": {}, "provider_options": {"gg": {*name: 1}}}))
+            .build();
+        assert_eq!(submitted(block_on(mesh.submit(&call))), sentence(name));
+    }
+    // A rig's are refused before its free check: nothing is sent.
+    let rig = GgRig::new(
+        gateway(Arc::new(NoNetwork), test_keys()),
+        Arc::new(FakeClock::new()),
+    );
+    for name in gg::mesh::RIG_OWNED {
+        let mut builder = CallBuilder::new("mesh.rig", RIG_ROUTE).contract(checked_rig_contract());
+        let model = builder.file("model/gltf-binary", media::GLB);
+        let call = builder
+            .request(json!({"model": model, "provider_options": {"gg": {*name: 1}}}))
+            .build();
+        assert_eq!(submitted(block_on(rig.submit(&call))), sentence(name));
+    }
 }

@@ -90,12 +90,14 @@ pub fn run(args: &InspectArgs) -> Result<u8, Error> {
     let status = u8::from(verification.is_some_and(|v| !v.problems.is_empty()));
     if args.open || args.standalone {
         let project = Project::find(&cwd)?;
+        let declarations = project.declarations();
         if args.standalone || !project.has_file {
-            super::view::serve(None, Some(&folder), 0, args.open)?;
+            super::view::serve(None, Some(&folder), 0, args.open, &declarations)?;
         } else {
             super::view::report_service(
                 super::service::register_run(&project, &folder, args.open),
                 args.open,
+                &declarations,
             );
         }
     }

@@ -54,31 +54,47 @@
 //! not make that step's calls. Routes need no inputs: they are written in the workflow and
 //! fx.yaml.
 //!
-//! **Providers** (spec/providers.md §3, §10), after the engine and host lines (and the target's
+//! **Providers** (spec/providers.md §1, §3), after the engine and host lines (and the target's
 //! routes) and before the `tool` and `missing` lines, for the **planning** project (the one found
 //! from where the command runs; with a target, the project planning would use). Nothing that could
 //! reach the network is constructed:
-//! - the allowlisted variables are read as a live run reads them (the process environment, then
-//!   the planning project's `.env` unless `GRIDA_FX_DISABLE_DOTENV=1`). A `.env` that is refused
-//!   prints `keys      <sentence>` (the sentence names the file, the variable and the line, never a
-//!   value) and the rest is reported from the process environment alone; a base-URL variable
-//!   that is refused prints `keys      <VARIABLE>: <sentence>` (or `… holds a credential`).
-//!   Either makes doctor exit 1, as either stops a live run;
-//! - one line per provider in `live::PROVIDERS` order: `key       <VARIABLE> present
-//!   (environment)`, `… present (.env)` or `… missing`. A missing key alone does not change the
-//!   exit status, unless a route the target uses needs it (its `uses` line is then not
-//!   servable). A key's value is never printed;
+//! - the variables the planning project's provider declarations name (FX's own and its
+//!   `providers:`) are read as a live run reads them (the process environment, then the planning
+//!   project's `.env` unless `GRIDA_FX_DISABLE_DOTENV=1`). A `.env` that is refused prints
+//!   `keys      <sentence>` (the sentence names the file, the variable and the line, never a
+//!   value) and the rest is reported from the process environment alone; each base-URL
+//!   variable that is refused prints `keys      <VARIABLE>: <sentence>` (or `… holds a
+//!   credential`). Either makes doctor exit 1, as either stops a live run;
+//! - one line per built-in declaration, in their order: `key       <VARIABLE> present
+//!   (environment)`, `… present (.env)` or `… missing`; then one per declaration of the project,
+//!   in its order: `provider  <name> <host> <VARIABLE> present (environment)` (or the other two
+//!   states), or `provider  <name> <host> needs no key` for one without a credential, `<host>`
+//!   its base URL's host (with a port the URL names), the default's when its variable is refused.
+//!   A missing key alone does not change the exit status, unless a route the target uses needs
+//!   it (its `uses` line is then not servable). A key's value is never printed;
+//! - one line per declaration of the project with an adapter (spec/adapters.md §9), in its order,
+//!   each adapter loaded on the node host of its language, pointed at the planning project, as
+//!   planning loads it (`grida_fx_core::adapters::load`): `adapter   <name> <path>#<attribute>
+//!   version <v>: <capability> (request), <capability> (job)` (`unversioned:` for one without a
+//!   version), or `adapter   <name> <path>#<attribute> cannot load: <sentence>`, which makes doctor
+//!   exit 1, as planning would refuse the project;
 //! - one line per program the user installed (Codex, then Grok Build), found and asked its
-//!   version once (`live::installed`), as a live run would: `program   <name> <path> (<origin>,
-//!   <version>)`, `<origin>` being where it was found (`GRIDA_FX_TOOL_CODEX`, `PATH`, `the
-//!   ChatGPT app`; `GRIDA_FX_TOOL_GROK`, `PATH`, `~/.grok/bin`), and `<version>` what Codex names
-//!   (`no version` when it names none; Grok Build names its own once started, so its line has
-//!   none); else `program   <name> not installed`. These lines do not set the exit status;
+//!   version once (`live::installed`, without the declared variables), as a live run would:
+//!   `program   <name> <path> (<origin>, <version>)`, `<origin>` being where it was found
+//!   (`GRIDA_FX_TOOL_CODEX`, `PATH`, `the ChatGPT app`; `GRIDA_FX_TOOL_GROK`, `PATH`,
+//!   `~/.grok/bin`), and `<version>` what Codex names (`no version` when it names none; Grok
+//!   Build names its own once started, so its line has none); else `program   <name> not
+//!   installed`. These lines do not set the exit status;
 //! - one line per route of the planning project's catalog (the built-in table, then `fx.yaml`
 //!   `route_tables`), sorted by capability, then id: `route     <capability> <model@provider>
 //!   servable`, `… no key (<VARIABLE>)`, `… not installed (codex)` (or `(grok)`), `… too old
-//!   (codex <version>; FX needs 0.160.1+)`, `… no version (codex)` or `… no adapter`, as
-//!   `live::servable` answers over every provider's adapters built on `live::offline_setup`.
+//!   (codex <version>; FX needs 0.160.1+)`, `… no version (codex)` or `… no adapter` (no adapter
+//!   of the capability on the provider, or none under the `adapter` the route's contract names),
+//!   as `live::servable` answers over every provider's adapters built on `live::offline_setup`,
+//!   a family's for each provider the planning project declares with one included, and each
+//!   project adapter that loaded (`adapter_host::register`, with a launcher that never starts a
+//!   host), so a route it serves is `servable` or `no key`. Its routes' contracts are completed
+//!   from it as planning completes them.
 
 use crate::cli::DoctorArgs;
 use crate::print::{labelled, print_line};
@@ -88,13 +104,15 @@ use grida_fx_core::docs::project::Project;
 use grida_fx_core::docs::workflow::{Step, Steps};
 use grida_fx_core::host::{HostFailure, Language, NodeHost};
 use grida_fx_core::project::load_target;
+use grida_fx_core::providers::{Declarations, shown_host};
 use grida_fx_core::registry::{Registry, RegistryError, Resolved};
 use grida_fx_core::routes::{Route, RouteTable, load_catalog};
-use grida_fx_protocol::DescribeParams;
+use grida_fx_protocol::{CallKind, DescribeParams};
 use grida_fx_providers::installed::Version;
-use grida_fx_providers::keys::{ALLOWED, Environment, KeySource};
+use grida_fx_providers::keys::{Environment, KeySource};
 use grida_fx_providers::live::{self, Installed, Servable};
-use grida_fx_providers::{Endpoints, KeyName, Keys};
+use grida_fx_providers::{Adapters, Endpoints, Keys, RouteRef};
+use grida_fx_runtime::adapter_host::{self, Launch, NoLaunch};
 use grida_fx_runtime::host::locate::{
     MINIMUM_NODE, MINIMUM_PYTHON, NO_SDK, Probe, node_runtime, python_interpreter,
 };
@@ -104,6 +122,7 @@ use indexmap::IndexMap;
 use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 use std::rc::Rc;
+use std::sync::Arc;
 
 pub fn run(args: &DoctorArgs) -> Result<u8, Error> {
     let env = |name: &str| std::env::var(name).ok();
@@ -115,7 +134,7 @@ pub fn run(args: &DoctorArgs) -> Result<u8, Error> {
     ));
     let Some(target) = &args.target else {
         let mut host = crate::print::host();
-        let project = Project::find(&cwd)?;
+        let mut project = Project::find(&cwd)?;
         print_line(&python_line(
             host.member(Language::Python),
             &project,
@@ -128,12 +147,13 @@ pub fn run(args: &DoctorArgs) -> Result<u8, Error> {
             None,
             &env,
         ));
-        let providers = Providers::of(&project, &env)?;
+        let adapters = adapter_lines(&mut project, &mut host);
+        let providers = Providers::of(&project, &env, adapters)?;
         providers.print();
         return Ok(u8::from(providers.refused));
     };
     let mut host = crate::print::planning_host(target, &cwd);
-    let (project, workflow) = load_target(target, &cwd, &IndexMap::new(), &mut host)?;
+    let (mut project, workflow) = load_target(target, &cwd, &IndexMap::new(), &mut host)?;
     let home = super::schema::home_of(target, project.clone(), &workflow)?;
     print_line(&python_line(
         host.member(Language::Python),
@@ -147,7 +167,8 @@ pub fn run(args: &DoctorArgs) -> Result<u8, Error> {
         Some(&project.root),
         &env,
     ));
-    let providers = Providers::of(&project, &env)?;
+    let adapters = adapter_lines(&mut project, &mut host);
+    let providers = Providers::of(&project, &env, adapters)?;
     let mut route_defaults = home.route_defaults();
     route_defaults.extend(project.route_defaults());
     let mut registry = Registry::new(
@@ -276,7 +297,7 @@ fn uses_lines(
     keys: &Keys,
     installed: &[Installed],
 ) -> (Vec<String>, bool) {
-    let adapters = live::adapters(&live::offline_setup(keys.clone()));
+    let adapters = served_by(keys);
     let mut unservable = false;
     let lines = used
         .iter()
@@ -286,7 +307,7 @@ fn uses_lines(
                 Some(id) => match catalog.resolve(capability, id) {
                     Ok(route) => {
                         let servable =
-                            live::servable(&adapters, keys, installed, capability, &route.provider);
+                            live::servable(&adapters, keys, installed, &RouteRef::of(route));
                         let served = servable == Servable::Yes;
                         (format!("{id} {}", servable_text(servable)), served)
                     }
@@ -301,11 +322,82 @@ fn uses_lines(
     (lines, unservable)
 }
 
+/// Every adapter a live run with `keys` would register, its project adapters among them, built
+/// on `live::offline_setup`: nothing it holds can reach the network or start a host.
+fn served_by(keys: &Keys) -> Adapters {
+    let setup = live::offline_setup(keys.clone());
+    let mut adapters = live::adapters(&setup);
+    adapter_host::register(&mut adapters, &setup, |_, _| {
+        Arc::new(NoLaunch("doctor starts no adapter host".into())) as Arc<dyn Launch>
+    });
+    adapters
+}
+
+/// The `adapter` lines of `project`'s declarations (module doc, "Providers"), each adapter loaded
+/// into its declaration as planning loads it, and whether one cannot be loaded.
+fn adapter_lines(project: &mut Project, host: &mut dyn NodeHost) -> (Vec<String>, bool) {
+    let declares = |project: &Project| {
+        project
+            .document
+            .providers
+            .iter()
+            .any(|declaration| declaration.adapter.is_some())
+    };
+    if !declares(project) {
+        return (Vec::new(), false);
+    }
+    let opened = host
+        .open_project(&project.root, &project.document.sources)
+        .map_err(|failure| Error::from(failure).message);
+    let root = project.root.clone();
+    let mut lines = Vec::new();
+    let mut failed = false;
+    for declaration in &mut project.document.providers {
+        let Some(adapter) = &mut declaration.adapter else {
+            continue;
+        };
+        let name = adapter.name();
+        let loaded = opened
+            .clone()
+            .and_then(|()| grida_fx_core::adapters::load(&root, adapter, host));
+        let text = match loaded {
+            Ok(loaded) => {
+                let version = match loaded.version {
+                    Some(version) => format!("version {version}"),
+                    None => "unversioned".to_string(),
+                };
+                let served: Vec<String> = loaded
+                    .capabilities
+                    .iter()
+                    .map(|(capability, kind)| {
+                        let kind = match kind {
+                            CallKind::Request => "request",
+                            CallKind::Job => "job",
+                        };
+                        format!("{capability} ({kind})")
+                    })
+                    .collect();
+                adapter.loaded = Some(loaded);
+                format!("{version}: {}", served.join(", "))
+            }
+            Err(sentence) => {
+                failed = true;
+                format!("cannot load: {sentence}")
+            }
+        };
+        lines.push(labelled(
+            "adapter",
+            &format!("{} {name} {text}", declaration.name),
+        ));
+    }
+    (lines, failed)
+}
+
 /// How a `route` or `uses` line says whether a live run could serve a route.
 fn servable_text(servable: Servable) -> String {
     match servable {
         Servable::Yes => "servable".to_string(),
-        Servable::NoKey(key) => format!("no key ({})", key.variable()),
+        Servable::NoKey(variable) => format!("no key ({variable})"),
         Servable::NoAdapter => "no adapter".to_string(),
         Servable::NoProgram(program) => format!("not installed ({program})"),
         Servable::TooOld {
@@ -321,7 +413,7 @@ fn servable_text(servable: Servable) -> String {
 #[derive(Debug, Clone)]
 struct Providers {
     lines: Vec<String>,
-    /// The `.env` or a base URL was refused: a live run would not start.
+    /// The `.env`, a base URL or a project adapter was refused: a live run would not start.
     refused: bool,
     /// The keys a live run would have, the programs it would find, and the planning project's
     /// catalog.
@@ -331,29 +423,37 @@ struct Providers {
 }
 
 impl Providers {
-    /// Reads the allowlisted variables of `project` through `env` and describes them and the
-    /// project's routes. Only a route table that cannot be read is an error.
-    fn of(project: &Project, env: &dyn Fn(&str) -> Option<String>) -> Result<Providers, Error> {
+    /// Reads the declared variables of `project` through `env` and describes them, its
+    /// `adapters` lines and whether one cannot be loaded ([`adapter_lines`]), and the project's
+    /// routes. Only a route table that cannot be read is an error.
+    fn of(
+        project: &Project,
+        env: &dyn Fn(&str) -> Option<String>,
+        adapters: (Vec<String>, bool),
+    ) -> Result<Providers, Error> {
         let mut lines = Vec::new();
-        let environment =
-            match Environment::read(env, Some(&crate::engine::dotenv_path(&project.root))) {
-                Ok(environment) => environment,
-                Err(sentence) => {
-                    lines.push(dotenv_refusal(&sentence));
-                    process_environment(env)
-                }
-            };
+        let declarations = project.declarations();
+        let dotenv = crate::engine::dotenv_path(&project.root);
+        let environment = match Environment::read(env, Some(&dotenv), &declarations) {
+            Ok(environment) => environment,
+            Err(sentence) => {
+                lines.push(dotenv_refusal(&sentence));
+                process_environment(env, &declarations)
+            }
+        };
         let keys = Keys::from_environment(&environment);
-        if let Err(sentence) = Endpoints::from_environment(&environment, &keys) {
-            lines.push(labelled("keys", &sentence));
-        }
-        let refused = !lines.is_empty();
+        let (endpoints, refusals) = Endpoints::each_from_environment(&environment, &keys);
+        lines.extend(refusals.iter().map(|sentence| labelled("keys", sentence)));
+        let (adapter_lines, unloaded) = adapters;
+        let refused = !lines.is_empty() || unloaded;
         lines.extend(key_lines(&keys));
+        lines.extend(provider_lines(&keys, &endpoints));
+        lines.extend(adapter_lines);
         let installed = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .map_err(|error| Error::io("the programs' versions", &error))?
-            .block_on(live::installed());
+            .block_on(live::installed(&declarations.variables()));
         lines.extend(program_lines(&installed));
         let catalog = load_catalog(project, &crate::engine::builtin_routes()?, &[])?;
         lines.extend(route_lines(&catalog, &keys, &installed));
@@ -383,33 +483,62 @@ fn dotenv_refusal(sentence: &str) -> String {
     }
 }
 
-/// The allowlisted variables of the process alone (trimmed; blank is unset), for when the `.env`
+/// The declared variables of the process alone (trimmed; blank is unset), for when the `.env`
 /// is refused.
-fn process_environment(env: &dyn Fn(&str) -> Option<String>) -> Environment {
-    let values: Vec<(&str, String)> = ALLOWED
-        .iter()
-        .filter_map(|name| env(name).map(|value| (*name, value)))
+fn process_environment(
+    env: &dyn Fn(&str) -> Option<String>,
+    declarations: &Declarations,
+) -> Environment {
+    let values: Vec<(String, String)> = declarations
+        .variables()
+        .into_iter()
+        .filter_map(|name| env(&name).map(|value| (name, value)))
         .collect();
     let pairs: Vec<(&str, &str)> = values
         .iter()
-        .map(|(name, value)| (*name, value.as_str()))
+        .map(|(name, value)| (name.as_str(), value.as_str()))
         .collect();
-    Environment::from_pairs(&pairs)
+    Environment::declared(&pairs, declarations)
 }
 
-/// One `key` line per provider, in `live::PROVIDERS` order: where its key came from, never its
+/// Where the key of `provider` came from, as a `key` or `provider` line says it.
+fn key_state(keys: &Keys, provider: &str) -> &'static str {
+    match keys.source_of(provider) {
+        Some(KeySource::Environment) => "present (environment)",
+        Some(KeySource::DotEnv) => "present (.env)",
+        None => "missing",
+    }
+}
+
+/// One `key` line per built-in declaration, in their order: where its key came from, never its
 /// value.
 fn key_lines(keys: &Keys) -> Vec<String> {
-    live::PROVIDERS
+    grida_fx_core::providers::built_in()
         .iter()
-        .filter_map(|provider| KeyName::of_provider(provider))
-        .map(|key| {
-            let state = match keys.source(key) {
-                Some(KeySource::Environment) => "present (environment)",
-                Some(KeySource::DotEnv) => "present (.env)",
-                None => "missing",
+        .filter_map(|declaration| {
+            let variable = &declaration.credential.as_ref()?.variable;
+            let state = key_state(keys, &declaration.name);
+            Some(labelled("key", &format!("{variable} {state}")))
+        })
+        .collect()
+}
+
+/// One `provider` line per declaration of the project, in its order (module doc, "Providers"):
+/// its base URL's host and where its key came from, never the key.
+fn provider_lines(keys: &Keys, endpoints: &Endpoints) -> Vec<String> {
+    keys.declarations()
+        .declared()
+        .iter()
+        .map(|declaration| {
+            let name = &declaration.name;
+            let base = endpoints
+                .base(name)
+                .unwrap_or(&declaration.base_url.default);
+            let key = match &declaration.credential {
+                Some(credential) => format!("{} {}", credential.variable, key_state(keys, name)),
+                None => "needs no key".to_string(),
             };
-            labelled("key", &format!("{} {state}", key.variable()))
+            labelled("provider", &format!("{name} {} {key}", shown_host(base)))
         })
         .collect()
 }
@@ -440,7 +569,7 @@ fn program_lines(installed: &[Installed]) -> Vec<String> {
 
 /// One `route` line per route of `catalog`, sorted by capability, then id.
 fn route_lines(catalog: &RouteTable, keys: &Keys, installed: &[Installed]) -> Vec<String> {
-    let adapters = live::adapters(&live::offline_setup(keys.clone()));
+    let adapters = served_by(keys);
     let mut routes: Vec<(&str, String, &Route)> = catalog
         .entries
         .values()
@@ -450,7 +579,7 @@ fn route_lines(catalog: &RouteTable, keys: &Keys, installed: &[Installed]) -> Ve
     routes
         .into_iter()
         .map(|(capability, id, route)| {
-            let servable = live::servable(&adapters, keys, installed, capability, &route.provider);
+            let servable = live::servable(&adapters, keys, installed, &RouteRef::of(route));
             let state = servable_text(servable);
             labelled("route", &format!("{capability} {id} {state}"))
         })
@@ -606,6 +735,8 @@ fn is_builtin(uses: &str) -> bool {
 mod tests {
     use super::*;
     use grida_fx_core::docs::workflow::ViewSetting;
+    use grida_fx_core::providers::{BaseUrl, Credential, Declaration};
+    use grida_fx_providers::KeyName;
 
     fn step(uses: Option<&str>, members: Option<Vec<(&str, Rc<Step>)>>) -> Rc<Step> {
         Rc::new(Step {
@@ -694,6 +825,155 @@ mod tests {
         assert!(lines.iter().all(|line| !line.contains(value)));
     }
 
+    #[test]
+    fn provider_lines_name_each_declared_providers_host_and_key() {
+        let declare = |name: &str, variable: Option<&str>, default: &str| Declaration {
+            name: name.into(),
+            label: name.into(),
+            credential: variable.map(|variable| Credential {
+                variable: variable.into(),
+                header: "authorization".into(),
+                scheme: "Bearer".into(),
+            }),
+            base_url: BaseUrl {
+                variable: Some(format!("{}_BASE_URL", name.to_ascii_uppercase())),
+                default: default.into(),
+            },
+            download_hosts: Vec::new(),
+            family: Some("openai-compatible".into()),
+            adapter: None,
+        };
+        let declarations = Declarations::with(&[
+            declare("acme", Some("ACME_API_KEY"), "https://api.acme.test/v1"),
+            declare("other", Some("OTHER_KEY"), "https://api.other.test"),
+            declare("local", None, "http://127.0.0.1:8080/v1"),
+        ]);
+        let value = "fx-made-up-acme-value-5e2b";
+        let environment = Environment::declared(
+            &[
+                ("ACME_API_KEY", value),
+                ("OTHER_BASE_URL", "https://proxy.other.test:8443/v1"),
+            ],
+            &declarations,
+        );
+        let keys = Keys::from_environment(&environment);
+        let endpoints = Endpoints::from_environment(&environment, &keys).unwrap();
+        let lines = provider_lines(&keys, &endpoints);
+        assert_eq!(
+            lines,
+            [
+                "provider  acme api.acme.test ACME_API_KEY present (environment)",
+                "provider  other proxy.other.test:8443 OTHER_KEY missing",
+                "provider  local 127.0.0.1:8080 needs no key",
+            ]
+        );
+        assert!(lines.iter().all(|line| !line.contains(value)));
+        // A refused base-URL variable leaves its own provider at its default, and no other.
+        let environment = Environment::declared(
+            &[
+                ("OPENAI_BASE_URL", "http://proxy.example.test"),
+                ("ACME_BASE_URL", "http://proxy.acme.test"),
+                ("OTHER_BASE_URL", "https://proxy.other.test:8443/v1"),
+            ],
+            &declarations,
+        );
+        let keys = Keys::from_environment(&environment);
+        let (endpoints, refusals) = Endpoints::each_from_environment(&environment, &keys);
+        assert_eq!(
+            refusals,
+            [
+                "OPENAI_BASE_URL: OpenAI base_url must use HTTPS unless it targets a loopback host",
+                "ACME_BASE_URL: acme base_url must use HTTPS unless it targets a loopback host",
+            ]
+        );
+        assert_eq!(
+            provider_lines(&keys, &endpoints)[..2],
+            [
+                "provider  acme api.acme.test ACME_API_KEY missing",
+                "provider  other proxy.other.test:8443 OTHER_KEY missing",
+            ]
+        );
+        // The built-in `key` lines are unchanged by a declaration.
+        assert_eq!(key_lines(&keys).len(), 6);
+        assert!(provider_lines(&Keys::none(), &Endpoints::default()).is_empty());
+    }
+
+    #[test]
+    fn a_declared_adapter_has_a_line_and_serves_its_routes() {
+        let folder = tempfile::tempdir().unwrap();
+        let root = folder.path().canonicalize().unwrap();
+        std::fs::write(
+            root.join("fx.yaml"),
+            "fx: project/v1\nproviders:\n  acme:\n    credential: { variable: ACME_API_KEY }\n    \
+             base_url: { default: \"https://api.acme.test/v1\" }\n    adapter: \
+             adapters/acme.py#acme\n  bad:\n    base_url: { default: \"https://bad.test\" }\n    \
+             adapter: adapters/missing.py#bad\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join("adapters")).unwrap();
+        std::fs::write(root.join("adapters/acme.py"), "acme = adapter()\n").unwrap();
+        let mut project = Project::find(&root).unwrap();
+        let mut host = grida_fx_core::host::FakeHost::new().with_adapter(
+            "adapters/acme.py#acme",
+            Ok(grida_fx_protocol::AdapterLoadResult {
+                adapter: grida_fx_protocol::AdapterDeclaration {
+                    version: Some(1),
+                    capabilities: [
+                        ("image.generate".to_string(), CallKind::Request),
+                        ("video.generate".to_string(), CallKind::Job),
+                    ]
+                    .into_iter()
+                    .collect(),
+                },
+                closure: vec![grida_fx_protocol::ClosureEntry {
+                    label: "adapters/acme.py".into(),
+                    path: root.join("adapters/acme.py").to_string_lossy().into_owned(),
+                }],
+            }),
+        );
+        let (lines, failed) = adapter_lines(&mut project, &mut host);
+        assert_eq!(
+            lines,
+            [
+                "adapter   acme adapters/acme.py#acme version 1: image.generate (request), \
+                 video.generate (job)",
+                "adapter   bad adapters/missing.py#bad cannot load: no file adapters/missing.py",
+            ]
+        );
+        assert!(failed);
+        // Its routes are completed and served by it; one of a capability it does not declare,
+        // by none.
+        let text = "fx: routes/v1\nroutes:\n  - { capability: image.generate, route: img-a@acme, \
+                    price: { cap_usd: 0.1 } }\n  - { capability: structured.generate, route: \
+                    text-a@acme, price: { cap_usd: 0.1 } }\n";
+        let document = grida_fx_core::yaml::load(text.as_bytes(), "routes.yaml").unwrap();
+        let declarations = project.declarations();
+        let catalog =
+            RouteTable::from_document_over(&document, "routes.yaml", &[], &declarations).unwrap();
+        let without = Keys::from_environment(&Environment::declared(&[], &declarations));
+        assert_eq!(
+            route_lines(&catalog, &without, &[]),
+            [
+                "route     image.generate img-a@acme no key (ACME_API_KEY)",
+                "route     structured.generate text-a@acme no adapter",
+            ]
+        );
+        let with = Keys::from_environment(&Environment::declared(
+            &[("ACME_API_KEY", "acme-made-up-value")],
+            &declarations,
+        ));
+        assert_eq!(
+            route_lines(&catalog, &with, &[])[0],
+            "route     image.generate img-a@acme servable"
+        );
+        // A project without adapters asks no host.
+        let mut plain = Project::find(folder.path().join("adapters").as_path()).unwrap();
+        plain.document.providers.clear();
+        let mut unasked = grida_fx_core::host::FakeHost::new();
+        assert_eq!(adapter_lines(&mut plain, &mut unasked), (Vec::new(), false));
+        assert_eq!(unasked.adapter_calls, 0);
+    }
+
     /// A table of `(capability, route)` pairs, priced alike.
     fn table(routes: &[(&str, &str)]) -> RouteTable {
         let entries: Vec<String> = routes
@@ -737,6 +1017,39 @@ mod tests {
             ]
         );
         assert!(lines.iter().all(|line| !line.contains(value)));
+    }
+
+    #[test]
+    fn route_lines_judge_a_route_by_the_adapter_its_contract_names() {
+        // Made-up models on providers FX speaks are served by their pairs' defaults; a contract
+        // naming an adapter FX does not have is served by none.
+        let entries = [
+            "{ capability: image.generate, route: acme/img-a@openrouter, price: { cap_usd: 0.5 } }",
+            "{ capability: image.edit, route: acme/img-a/edit@fal, price: { cap_usd: 0.5 } }",
+            "{ capability: image.edit, route: acme/img-a@gg, price: { cap_usd: 0.5 } }",
+            "{ capability: image.generate, route: acme/img-b@openrouter, price: { usd: 0.1 }, \
+             contract: { adapter: fx-openrouter-image-v1 } }",
+            "{ capability: image.generate, route: acme/img-c@openrouter, price: { usd: 0.1 }, \
+             contract: { adapter: acme-x } }",
+        ];
+        let text = format!("fx: routes/v1\nroutes:\n  - {}\n", entries.join("\n  - "));
+        let document = grida_fx_core::yaml::load(text.as_bytes(), "routes.yaml").unwrap();
+        let catalog = RouteTable::from_document(&document, "routes.yaml").unwrap();
+        let keys = Keys::from_pairs(&[
+            (KeyName::OpenRouter, "fx-made-up-or-value"),
+            (KeyName::Fal, "fx-made-up-fal-value"),
+            (KeyName::GridaGateway, "fx-made-up-gg-value"),
+        ]);
+        assert_eq!(
+            route_lines(&catalog, &keys, &[]),
+            [
+                "route     image.edit acme/img-a/edit@fal servable",
+                "route     image.edit acme/img-a@gg servable",
+                "route     image.generate acme/img-a@openrouter servable",
+                "route     image.generate acme/img-b@openrouter servable",
+                "route     image.generate acme/img-c@openrouter no adapter",
+            ]
+        );
     }
 
     /// Codex found on `PATH` naming `version`, and no Grok Build.
@@ -971,7 +1284,7 @@ mod tests {
                 .find(|(key, _)| *key == name)
                 .map(|(_, value)| value.to_string())
         };
-        let environment = process_environment(&env);
+        let environment = process_environment(&env, &Declarations::built_in());
         assert_eq!(environment.get("FAL_KEY"), Some("fal-made-up"));
         assert_eq!(environment.source("FAL_KEY"), Some(KeySource::Environment));
         assert_eq!(environment.get("TRIPO_API_KEY"), None);

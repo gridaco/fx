@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:grida-fx:schema:fx-project-v1",
   "title": "FX project file, fx.yaml (fx: project/v1)",
-  "description": "`fx.yaml` marks a project's root: where runs and the cache live, the default budget and routes, the route tables to load, where node sources are, and where workflows are found by id.",
+  "description": "`fx.yaml` marks a project's root: where runs and the cache live, the default budget and routes, the route tables to load, the providers it declares, where node sources are, and where workflows are found by id.",
   "type": "object",
   "required": [
     "fx"
@@ -62,6 +62,18 @@
       },
       "uniqueItems": true,
       "default": []
+    },
+    "providers": {
+      "description": "Providers the project declares beside FX's own (providers.md §1), by name: the provider part of their routes (`<model>@<name>`). A declaration names the variable its key comes from and the header it is sent in, its base URL and the variable that may move it, the hosts its results may be downloaded from, and the wire it speaks. It is configuration and is not hashed: only its family or its adapter reaches a fingerprint, by completing the contract of each of the provider's routes that leaves out `adapter` or `adapter_behavior` (identity.md §7). Refused while the file is read, beyond this schema: a declaration that names both a family and an adapter; a name FX ships (`gg`, `openai`, `openrouter`, `fal`, `tripo`, `elevenlabs`, `codex`, `grok`); a variable a built-in declaration, an earlier declaration or the same one already reads; a `GRIDA_FX_` variable, a proxy or certificate variable, `PATH` or `HOME`, in any letter case; a default base URL that is not `https`, unless it names a loopback host, or that has userinfo, a query or a fragment.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z0-9._-]+$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/provider"
+      },
+      "default": {}
     },
     "view_origins": {
       "description": "Views are planned, not implemented: the origins a view may load from. Recorded in plan.json and otherwise ignored.",
@@ -137,6 +149,87 @@
           "maximum": 1024
         }
       }
+    },
+    "provider": {
+      "type": "object",
+      "required": [
+        "base_url"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "credential": {
+          "description": "Where the key comes from and how it is sent: `<header>: <scheme> <key>`, or `<header>: <key>` when the scheme is empty. Left out, the provider is sent no key and needs none.",
+          "$ref": "#/$defs/credential"
+        },
+        "base_url": {
+          "$ref": "#/$defs/base_url"
+        },
+        "download_hosts": {
+          "description": "The hosts a result may be downloaded from, over https: a host, or `*.` and a domain for every host below it (not the domain itself).",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(?:\\*\\.)?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$"
+          },
+          "uniqueItems": true,
+          "default": []
+        },
+        "family": {
+          "description": "The wire the provider speaks: openai-compatible, the OpenAI Chat Completions API, whose adapters serve the provider's structured.generate and agent.turn routes and complete their contracts (identity.md section 7). With neither a family nor an adapter, no adapter serves the provider: its routes plan and price, and a live call on one is refused (no_route).",
+          "enum": [
+            "openai-compatible"
+          ]
+        },
+        "adapter": {
+          "description": "The provider's own adapter, in Python or TypeScript (adapters.md section 9): `<path>#<attribute>`, a module of the planning project, POSIX and relative to its root, without `./` and without `..` segments, and the name the module declares it under with the SDK's `adapter()`. It serves every capability it declares on the provider, and its name and its version, or its source, complete the contract of each of the provider's routes (identity.md section 7). A declaration names a family or an adapter, not both.",
+          "type": "string",
+          "pattern": "^(?:[^/\\\\.#][^/\\\\#]*|\\.[^/\\\\.#][^/\\\\#]*|\\.\\.[^/\\\\#]+)(?:/(?:[^/\\\\.#][^/\\\\#]*|\\.[^/\\\\.#][^/\\\\#]*|\\.\\.[^/\\\\#]+))*#[A-Za-z_][A-Za-z0-9_]*$"
+        }
+      }
+    },
+    "credential": {
+      "type": "object",
+      "required": [
+        "variable"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "variable": {
+          "$ref": "#/$defs/variable"
+        },
+        "header": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$",
+          "default": "authorization"
+        },
+        "scheme": {
+          "type": "string",
+          "pattern": "^(?:[A-Za-z][A-Za-z0-9-]*)?$",
+          "default": "Bearer"
+        }
+      }
+    },
+    "base_url": {
+      "type": "object",
+      "required": [
+        "default"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "variable": {
+          "description": "The variable whose value, when set, replaces the default.",
+          "$ref": "#/$defs/variable"
+        },
+        "default": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "variable": {
+      "description": "An environment variable, named as the `.env` file names one.",
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
     }
   }
 }

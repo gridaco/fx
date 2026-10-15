@@ -8,15 +8,29 @@ rather than taken from a library.
 Usage:
     python tools/digest.py --check-examples [--examples <examples.json>]
     python tools/digest.py --check-graph <graph.json> --project <dir> [--routes <routes.yaml> ...]
-                           [--builtin-routes <default.yaml>]
+                           [--builtin-routes <default.yaml>] [--current-lock]
     python tools/digest.py --canon <file.json | ->
 
---check-examples also checks markers.json and json_output.json when they sit beside the
-examples file. --check-graph builds the route catalog of identity.md section 7 from the built-in
-default table (--builtin-routes, the engine's routes/default.yaml, read as a plain route table
-and left out when a --routes file is given), fx.yaml's route_tables, and then each --routes
-file. Without --builtin-routes the built-in table is unknown here, and a route found in no
-table is a note, not a failure.
+--check-examples also checks markers.json, json_output.json and routes.json when they sit beside
+the examples file. --check-graph builds the route catalog of identity.md section 7 from the
+built-in default table (--builtin-routes, the engine's routes/default.yaml, read as a plain route
+table and left out of the catalog when a --routes file is given, though an entry may still extend
+one of its routes), fx.yaml's route_tables, and then each --routes file, completing each contract
+as section 7 says, with the families and the adapters fx.yaml's providers declare. Without
+--builtin-routes the built-in table is unknown here, and a route found in no table is a note, not
+a failure.
+
+A declared adapter (`providers.<name>.adapter: <path>#<attribute>`, adapters.md section 9) is
+known here only by its name and, for a versioned one, the version fx.lock's `adapters` records
+(`<path>#<attribute>@<version>`): this checker runs no node host, so it cannot learn an
+unversioned adapter's source closure, nor which capabilities an adapter declares. A route on such
+a provider is checked against its contract completed with the adapter's name and version, or, for
+a capability the adapter may not declare, as written; a route whose adapter's version fx.lock does
+not give (one entry for its name) is a note, not a failure. That version is a guess: fx.lock keeps
+an entry after the adapter's version changes or goes, and planning uses the adapter's own version,
+or its source, whatever fx.lock holds, so a route the guess does not complete is a note too.
+--current-lock says fx.lock is current (a conformance case, whose `lock --check` step shows it),
+which makes that a failure.
 
 Only the standard library is needed, plus PyYAML when a YAML file (a route table, fx.yaml,
 fx.lock) has to be read.
@@ -420,6 +434,109 @@ def route_object(capability: str, route_id: str, contract: Any = None) -> dict[s
 
 def route_fingerprint(capability: str, route_id: str, contract: Any = None) -> str:
     return digest(route_object(capability, route_id, contract))
+
+
+# spec/providers.md section 2: the contract each adapter FX ships serves, by capability, provider
+# and contract `adapter`: its `adapter_behavior` as the JSON value the table writes, and whether it
+# is its pair's default (the first table), which serves a route whose contract names no adapter;
+# the others (the second table) serve only a route that names them. tools/check_spec.py holds
+# this copy to those tables.
+BUILT_IN_ADAPTERS: dict[tuple[str, str, str], tuple[Any, bool]] = {
+    ("image.generate", "openai", "fx-openai-image-v1"): ("1", True),
+    ("image.edit", "openai", "fx-openai-image-v1"): ("1", True),
+    ("image.generate", "openrouter", "openrouter-image"): ("1", True),
+    ("image.edit", "openrouter", "openrouter-image"): ("1", True),
+    ("structured.generate", "openrouter", "openrouter-structured"): (1, True),
+    ("agent.turn", "openrouter", "openrouter-tool-loop"): (1, True),
+    ("music.generate", "openrouter", "openrouter-music"): (1, True),
+    ("image.generate", "fal", "fal-image"): ("1", True),
+    ("image.edit", "fal", "fal-image"): ("1", True),
+    ("video.generate", "fal", "fal-queue"): (1, True),
+    ("background.remove", "fal", "fal-run-birefnet"): (1, True),
+    ("mesh.generate", "tripo", "tripo-multiview"): (1, True),
+    ("mesh.rig", "tripo", "tripo-rig"): (1, True),
+    ("sound.generate", "elevenlabs", "elevenlabs-sound-effect"): (1, True),
+    ("speech.generate", "elevenlabs", "elevenlabs-speech"): (1, True),
+    ("image.generate", "codex", "fx-codex-image-v1"): ("2", True),
+    ("image.edit", "codex", "fx-codex-image-v1"): ("2", True),
+    ("image.generate", "gg", "gg-image"): ("1", True),
+    ("image.edit", "gg", "gg-image"): ("1", True),
+    ("structured.generate", "gg", "gg-structured"): (1, True),
+    ("agent.turn", "gg", "gg-tool-loop"): (1, True),
+    ("video.generate", "gg", "gg-video"): (1, True),
+    ("mesh.generate", "gg", "gg-mesh"): (1, True),
+    ("mesh.rig", "gg", "gg-rig"): (1, True),
+    ("image.generate", "grok", "fx-grok-image-v1"): ("1", True),
+    ("image.edit", "grok", "fx-grok-image-v1"): ("1", True),
+    ("image.generate", "openrouter", "fx-openrouter-image-v1"): ("3", False),
+    ("image.edit", "openrouter", "fx-openrouter-image-v1"): ("3", False),
+    ("image.generate", "fal", "fx-fal-image-v1"): ("1", False),
+    ("image.edit", "fal", "fx-fal-image-v1"): ("1", False),
+}
+
+# spec/providers.md section 2, its third table: the adapters of each family a declaration may
+# name, by family and capability, each the default of its capability on a provider declared with
+# that family: its contract `adapter` and `adapter_behavior`. tools/check_spec.py holds this copy
+# to that table.
+FAMILY_ADAPTERS: dict[tuple[str, str], tuple[str, Any]] = {
+    ("openai-compatible", "structured.generate"): ("openai-compatible-structured", 1),
+    ("openai-compatible", "agent.turn"): ("openai-compatible-tool-loop", 1),
+}
+
+
+# A declared adapter whose behaviour this checker cannot know (module doc).
+UNKNOWN = object()
+
+
+def complete_contract(
+    capability: str,
+    provider: str,
+    contract: dict[str, Any],
+    families: dict[str, str] | None = None,
+    adapters: dict[str, tuple[str, Any]] | None = None,
+    declares: dict[str, set[str]] | None = None,
+) -> dict[str, Any]:
+    """Step 2 of identity.md section 7: where FX's adapters serve the capability and provider, a
+    left-out or null `adapter` becomes the name of the pair's default, then a left-out or null
+    `adapter_behavior` the behaviour of the pair's adapter `adapter` names. A provider FX does not
+    ship is completed the same way from the adapters of the family `families` (the planning
+    project's declarations: provider -> family) give it, or from the adapter `adapters` give it
+    (provider -> its name and behaviour, the behaviour UNKNOWN when this checker cannot know it,
+    which leaves `adapter_behavior` out), never from its name, for a capability the adapter
+    declares. Only its host knows which those are: `declares` gives them where they are known
+    (provider -> capabilities, as a route vector gives them), and an adapter it does not name is
+    taken to serve the capability."""
+    completed = dict(contract)
+    behaviors: dict[str, Any] = {}
+    default = None
+    for (*pair, adapter), (behavior, is_default) in BUILT_IN_ADAPTERS.items():
+        if pair == [capability, provider]:
+            behaviors[adapter] = behavior
+            if is_default:
+                default = adapter
+    family = (families or {}).get(provider)
+    served = FAMILY_ADAPTERS.get((family, capability)) if family is not None else None
+    if default is None and served is not None:
+        default = served[0]
+        behaviors[default] = served[1]
+    declared = (adapters or {}).get(provider)
+    serves = (declares or {}).get(provider)
+    if default is None and declared is not None and (serves is None or capability in serves):
+        default = declared[0]
+        if declared[1] is not UNKNOWN:
+            behaviors[default] = declared[1]
+    if default is None:
+        return completed
+    if completed.get("adapter") is None:
+        completed["adapter"] = default
+    adapter = completed.get("adapter")
+    if (
+        completed.get("adapter_behavior") is None
+        and isinstance(adapter, str)
+        and adapter in behaviors
+    ):
+        completed["adapter_behavior"] = behaviors[adapter]
+    return completed
 
 
 def step_object(
@@ -877,9 +994,58 @@ def check_json_output_vectors(path: Path) -> list[str]:
     return failures
 
 
+def check_route_vectors(path: Path) -> list[str]:
+    """vectors/identity/routes.json: route tables read into a catalog, each contract completed
+    (identity.md section 7)."""
+    failures: list[str] = []
+    for case in _cases(path, "fx-route-vectors-v1"):
+        name = case.get("name", "<unnamed>")
+        refuse = case.get("refuse")
+        try:
+            builtin = RouteTable()
+            builtin.read(case.get("builtin", []), "builtin")
+            catalog = RouteTable(
+                declared_families(case.get("providers")),
+                *vector_adapters(case.get("providers"), case.get("adapters")),
+            )
+            if not case.get("routes_given"):
+                catalog.entries.update(builtin.entries)
+            for index, table in enumerate(case["tables"]):
+                catalog.read(table, f"tables[{index}]", builtin)
+        except RefusedInput as error:
+            if refuse is None:
+                failures.append(f"{name}: refused: {error}")
+                continue
+            where = f"tables[{refuse['table']}]: routes[{refuse['entry']}]"
+            if error.code != refuse["reason"] or not str(error).startswith(where):
+                failures.append(f"{name}: refused {error.code} ({error}), expected {refuse}")
+            continue
+        if refuse is not None:
+            failures.append(f"{name}: should be refused as {refuse['reason']}")
+            continue
+        for want in case.get("expect", []):
+            found = catalog.lookup(want["capability"], want["route"])
+            if found is None:
+                failures.append(f"{name}: {want['route']} for {want['capability']} is missing")
+                continue
+            contract = found[1]
+            if canon(contract) != canon(want["contract"]):
+                failures.append(
+                    f"{name}: {want['route']} has contract {canon(contract).decode('utf-8')}"
+                )
+            got = route_fingerprint(want["capability"], want["route"], contract)
+            if got != want["digest"]:
+                failures.append(f"{name}: {want['route']} fingerprint {got}, expected digest")
+        for absent in case.get("absent", []):
+            if catalog.lookup(absent["capability"], absent["route"]) is not None:
+                failures.append(f"{name}: {absent['route']} should not be in the catalog")
+    return failures
+
+
 IDENTITY_VECTORS = {
     "markers.json": check_marker_vectors,
     "json_output.json": check_json_output_vectors,
+    "routes.json": check_route_vectors,
 }
 
 
@@ -893,28 +1059,50 @@ class RouteTable:
 
     Tables are loaded in catalog order. A later table's entry for a capability and route
     replaces an earlier one, contract included; two entries for one capability and route within
-    one table are refused. The built-in default table is the engine's, unknown here.
+    one table are refused. Each entry's contract is completed as it is read: its `extends` base's
+    members first, then the serving adapter's identity (BUILT_IN_ADAPTERS, else FAMILY_ADAPTERS
+    for a provider `families` gives a family). Only contracts are kept, since nothing else of a
+    route is hashed.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        families: dict[str, str] | None = None,
+        adapters: dict[str, tuple[str, Any]] | None = None,
+        declares: dict[str, set[str]] | None = None,
+    ) -> None:
         self.entries: dict[tuple[str, str], tuple[str, dict[str, Any]]] = {}
+        self.families: dict[str, str] = dict(families or {})
+        # provider -> (name, behaviour or UNKNOWN): the adapters the planning project declares.
+        self.adapters: dict[str, tuple[str, Any]] = dict(adapters or {})
+        # provider -> the capabilities its adapter declares, where they are known (a vector's).
+        self.declares: dict[str, set[str]] = dict(declares or {})
+        # The entries a declared adapter completed: their contract as completed without it, for
+        # a capability the adapter may not declare, and whether its behaviour is known.
+        self.declared: dict[tuple[str, str], tuple[dict[str, Any], bool]] = {}
 
-    def load(self, path: Path) -> None:
+    def load(self, path: Path, builtin: RouteTable | None = None) -> None:
         document = read_yaml_file(path)
         if not isinstance(document, dict) or document.get("fx") != "routes/v1":
             raise RefusedInput(f"{path}: not a route table (fx: routes/v1)", "invalid_document")
         routes = document.get("routes")
         if not isinstance(routes, list):
             raise RefusedInput(f"{path}: routes must be a list", "invalid_document")
+        self.read(routes, str(path), builtin)
+
+    def read(self, routes: list[Any], label: str, builtin: RouteTable | None = None) -> None:
+        """Lay one table's entries over the catalog, in order. An entry's `extends` names an
+        earlier entry of the same table, else an entry of the catalog so far, else `builtin`'s."""
+        read: dict[tuple[str, str], tuple[str, dict[str, Any]]] = {}
         seen: dict[tuple[str, str], int] = {}
         for index, entry in enumerate(routes):
-            where = f"{path}: routes[{index}]"
+            where = f"{label}: routes[{index}]"
             if not isinstance(entry, dict):
                 raise RefusedInput(f"{where}: not a mapping", "invalid_document")
             capability, route_id = entry.get("capability"), entry.get("route")
             if not isinstance(capability, str) or not isinstance(route_id, str):
                 raise RefusedInput(f"{where}: needs capability and route", "invalid_document")
-            split_route(route_id)
+            _, provider = split_route(route_id)
             key = (capability, route_id)
             if key in seen:
                 raise RefusedInput(
@@ -926,11 +1114,109 @@ class RouteTable:
             contract = entry.get("contract", {})
             if not isinstance(contract, dict):
                 raise RefusedInput(f"{where}: contract must be a mapping", "invalid_document")
-            self.entries[key] = (where, contract)
+            if "extends" in entry:
+                base = self._base(entry["extends"], capability, provider, where, read, builtin)
+                contract = {**base, **contract}
+            completed = complete_contract(
+                capability, provider, contract, self.families, self.adapters, self.declares
+            )
+            read[key] = (where, completed)
+            without = complete_contract(capability, provider, contract, self.families)
+            self.declared.pop(key, None)
+            if completed != without:
+                known = self.adapters[provider][1] is not UNKNOWN
+                self.declared[key] = (without, known)
+        self.entries.update(read)
+
+    def _base(
+        self,
+        extends: Any,
+        capability: str,
+        provider: str,
+        where: str,
+        read: dict[tuple[str, str], tuple[str, dict[str, Any]]],
+        builtin: RouteTable | None,
+    ) -> dict[str, Any]:
+        """The contract of an entry's base (identity.md section 7, step 1)."""
+        if not isinstance(extends, str):
+            raise RefusedInput(f"{where}: extends must be a route", "invalid_document")
+        if split_route(extends)[1] != provider:
+            raise RefusedInput(
+                f"{where}: extends {extends}, which is not a {provider} route", "other_provider"
+            )
+        key = (capability, extends)
+        for table in (read, self.entries, builtin.entries if builtin else {}):
+            if key in table:
+                return table[key][1]
+        raise RefusedInput(
+            f"{where}: extends {extends}, which no table read so far holds for {capability}",
+            "no_base",
+        )
 
     def lookup(self, capability: str, route_id: str) -> tuple[str, dict[str, Any]] | None:
         """(where it was declared, its contract) of the entry in force, or None."""
         return self.entries.get((capability, route_id))
+
+
+def declared_adapters(providers: Any, locked: dict[str, str]) -> dict[str, tuple[str, Any]]:
+    """provider -> (name, behaviour), from fx.yaml's `providers:` (spec/providers.md section 1):
+    each declaration that names an adapter, `<path>#<attribute>`, its behaviour the version of
+    its one fx.lock `adapters` entry (`locked`, `<name>@<version>` -> digest), else UNKNOWN (module
+    doc)."""
+    if not isinstance(providers, dict):
+        return {}
+    found: dict[str, tuple[str, Any]] = {}
+    for provider, entry in providers.items():
+        name = entry.get("adapter") if isinstance(entry, dict) else None
+        if not isinstance(name, str):
+            continue
+        versions = [
+            key.rpartition("@")[2]
+            for key in locked
+            if key.rpartition("@")[0] == name and key.rpartition("@")[2].isdigit()
+        ]
+        behavior: Any = int(versions[0]) if len(versions) == 1 else UNKNOWN
+        found[str(provider)] = (name, behavior)
+    return found
+
+
+def vector_adapters(
+    providers: Any, loaded: Any
+) -> tuple[dict[str, tuple[str, Any]], dict[str, set[str]]]:
+    """A route vector's declared adapters: provider -> (name, behaviour), and provider -> the
+    capabilities the adapter declares, from the case's `providers` (fx.yaml's) and `adapters`
+    (what loading each adapter told planning, by its name: `version`, `capabilities` as
+    adapter.load gives them, and for one without a version `source`, its source closure's file
+    digests by label). An unversioned adapter's behaviour is `source:` and the digest of its
+    fx-node-source-v1 object, with no resources (identity.md section 7)."""
+    if not isinstance(providers, dict):
+        return {}, {}
+    names: dict[str, tuple[str, Any]] = {}
+    declares: dict[str, set[str]] = {}
+    for provider, entry in providers.items():
+        name = entry.get("adapter") if isinstance(entry, dict) else None
+        if not isinstance(name, str):
+            continue
+        given = (loaded or {})[name]
+        version = given["version"]
+        behavior = (
+            version if version is not None else "source:" + node_source_digest(given["source"], {})
+        )
+        names[str(provider)] = (name, behavior)
+        declares[str(provider)] = set(given["capabilities"])
+    return names, declares
+
+
+def declared_families(providers: Any) -> dict[str, str]:
+    """provider -> family, from fx.yaml's `providers:` (spec/providers.md section 1): each
+    declaration that names a family."""
+    if not isinstance(providers, dict):
+        return {}
+    return {
+        str(name): entry["family"]
+        for name, entry in providers.items()
+        if isinstance(entry, dict) and isinstance(entry.get("family"), str)
+    }
 
 
 def _contains_pending(value: Any) -> bool:
@@ -996,15 +1282,26 @@ def _unsafe_relative(path: str) -> bool:
 
 
 class GraphCheck:
-    def __init__(self, project: Path, route_files: list[Path], builtin: Path | None = None) -> None:
+    def __init__(
+        self,
+        project: Path,
+        route_files: list[Path],
+        builtin: Path | None = None,
+        current_lock: bool = False,
+    ) -> None:
         self.project = project
+        # fx.lock's adapter versions are facts, not guesses (module doc).
+        self.current_lock = current_lock
         self.failures: list[str] = []
         self.notes: list[str] = []
         self.counts = {"identities": 0, "routes": 0, "sources": 0, "locks": 0, "plans": 0}
         self.routes = RouteTable()
         # identity.md section 7: the built-in default table heads the catalog unless a
-        # --routes file is given. Unless it is handed in, this checker does not know that table.
-        self.builtin = builtin if not route_files else None
+        # --routes file is given, and an entry may extend one of its routes either way. Unless it
+        # is handed in, this checker does not know that table.
+        self.builtin = RouteTable()
+        if builtin is not None:
+            self.builtin.load(builtin)
         self.builtin_table = not route_files and builtin is None
         self.lock: dict[str, str] = {}
         self._load_project(route_files)
@@ -1013,9 +1310,22 @@ class GraphCheck:
         self.failures.append(message)
 
     def _load_project(self, route_files: list[Path]) -> None:
-        # The catalog, in order: the built-in table (when known), fx.yaml's route_tables in
-        # their listed order (relative to the project root), then each --routes file.
-        tables: list[Path] = [self.builtin] if self.builtin is not None else []
+        # The catalog, in order: the built-in table (when known, and no --routes file is given),
+        # fx.yaml's route_tables in their listed order (relative to the project root), then each
+        # --routes file.
+        if not route_files:
+            self.routes.entries.update(self.builtin.entries)
+        locked_adapters: dict[str, str] = {}
+        lock_file = self.project / "fx.lock"
+        if lock_file.is_file():
+            document = read_yaml_file(lock_file)
+            nodes = document.get("nodes") if isinstance(document, dict) else None
+            if isinstance(nodes, dict):
+                self.lock = {str(k): str(v) for k, v in nodes.items()}
+            adapters = document.get("adapters") if isinstance(document, dict) else None
+            if isinstance(adapters, dict):
+                locked_adapters = {str(k): str(v) for k, v in adapters.items()}
+        tables: list[Path] = []
         project_file = self.project / "fx.yaml"
         if project_file.is_file():
             document = read_yaml_file(project_file)
@@ -1023,15 +1333,12 @@ class GraphCheck:
             if listed is not None and not isinstance(listed, list):
                 raise RefusedInput(f"{project_file}: route_tables must be a list", "invalid")
             tables.extend(self.project / str(item) for item in listed or [])
+            if isinstance(document, dict):
+                self.routes.families = declared_families(document.get("providers"))
+                self.routes.adapters = declared_adapters(document.get("providers"), locked_adapters)
         tables.extend(route_files)
         for path in tables:
-            self.routes.load(path)
-        lock_file = self.project / "fx.lock"
-        if lock_file.is_file():
-            document = read_yaml_file(lock_file)
-            nodes = document.get("nodes") if isinstance(document, dict) else None
-            if isinstance(nodes, dict):
-                self.lock = {str(k): str(v) for k, v in nodes.items()}
+            self.routes.load(path, self.builtin)
 
     def _project_file(self, relative: str, what: str) -> Path | None:
         """The project file at a project-relative path; None (and a failure) if unsafe."""
@@ -1231,6 +1538,26 @@ class GraphCheck:
         where, contract = entry
         hashed = route_object(capability, route_id, contract)
         computed = digest(hashed)
+        declared = self.routes.declared.get((capability, route_id))
+        if declared is not None:
+            without, known = declared
+            if printed == route_fingerprint(capability, route_id, without):
+                self.counts["routes"] += 1
+                return
+            adapter, version = self.routes.adapters[route_id.rpartition("@")[2]]
+            if not known:
+                self.notes.append(
+                    f"{name}: {route_id} for {capability} is served by {adapter}, whose version "
+                    "fx.lock does not give, so its fingerprint is not checked"
+                )
+                return
+            if printed != computed and not self.current_lock:
+                self.notes.append(
+                    f"{name}: {route_id} for {capability} is served by {adapter}, whose version "
+                    f"may not be fx.lock's {version} (an entry stays after its version changes "
+                    "or goes), so its fingerprint is not checked"
+                )
+                return
         self.counts["routes"] += 1
         if printed != computed:
             self.fail(
@@ -1342,9 +1669,13 @@ class GraphCheck:
 
 
 def check_graph(
-    graph_path: Path, project: Path, route_files: list[Path], builtin: Path | None = None
+    graph_path: Path,
+    project: Path,
+    route_files: list[Path],
+    builtin: Path | None = None,
+    current_lock: bool = False,
 ) -> GraphCheck:
-    checker = GraphCheck(project, route_files, builtin)
+    checker = GraphCheck(project, route_files, builtin, current_lock)
     checker.check(read_json_file(graph_path))
     return checker
 
@@ -1376,7 +1707,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--builtin-routes",
         type=Path,
-        help="the built-in default route table (left out with --routes)",
+        help="the built-in default route table (left out of the catalog with --routes, but still "
+        "extended)",
+    )
+    parser.add_argument(
+        "--current-lock",
+        action="store_true",
+        help="fx.lock is current, so a declared adapter's version there is a fact, not a guess",
     )
     args = parser.parse_args(argv)
 
@@ -1406,7 +1743,9 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.project is None:
             parser.error("--check-graph needs --project")
-        checker = check_graph(args.check_graph, args.project, args.routes, args.builtin_routes)
+        checker = check_graph(
+            args.check_graph, args.project, args.routes, args.builtin_routes, args.current_lock
+        )
     except (RefusedInput, OSError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

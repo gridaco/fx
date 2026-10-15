@@ -1,26 +1,30 @@
-//! fal images: `POST {run}/<model>/text-to-image` (`image.generate`) and `POST {run}/<model>/edit`
-//! (`image.edit`), JSON bodies, then one download of a hosted output (spec/providers.md §9.3).
+//! fal images on GPT Image: `POST {run}/<model>/text-to-image` (`image.generate`) and `POST
+//! {run}/<model>/edit` (`image.edit`), JSON bodies, then one download of a hosted output
+//! (src/fal/README.md, "Images on GPT Image"). Registered for a route whose contract names it, as
+//! the built-in routes do; a route that names no adapter gets [`super::generic_image`].
 //!
 //! Contract `adapter` must be `fx-fal-image-v1` when present. Body members in order: `prompt`,
 //! `num_images: 1`, `image_size` (only when `size` is given: `"auto"` or `{"width", "height"}`),
 //! `quality: "max"`, `background`, `output_format: "png"`, then for an edit `image_urls` (`image`
-//! first, then `references`) and `mask_url`. The answer is `root.images[0]` (`root` = `data` when
-//! that is an object, else the payload): a data URI decoded in place, or a `*.fal.media` URL
-//! downloaded once on the download lane with `accept: image/*`, no redirects, at most 64 MiB.
-//! Deadline 600 s for the POST and the download together. `cost`: `usage.cost` at the payload's
-//! top level ([`crate::wire::usd_ceil`]), else `None`. `check`: [`crate::wire::check_image`].
+//! first, then `references`) and `mask_url`, then the provider options. The answer is
+//! `root.images[0]` (`root` = `data` when that is an object, else the payload): a data URI decoded
+//! in place, or a `*.fal.media` URL downloaded once on the download lane with `accept: image/*`, no
+//! redirects, at most 64 MiB. Deadline 600 s for the POST and the download together. `cost`:
+//! `usage.cost` at the payload's top level ([`crate::wire::usd_ceil`]), else `None`. `check`:
+//! [`crate::wire::check_image`].
 //!
-//! Refused before sending (spec/providers.md §5, §9.3), in this order: another route's contract;
-//! a request that does not fit its capability; no `FAL_KEY`; a blank prompt or one over
-//! [`MAX_PROMPT_CHARS`]; a `background` other than `auto`, `opaque` or `transparent`; references
-//! on a generate; more than [`MAX_PICTURES`] pictures on an edit; a `size` that is not `auto` or
-//! `WxH` inside the GPT Image envelope; then, in the order `image`, `references[<i>]`, `mask`, a
-//! picture that is not an `image/*` file (`<member> is <kind>, not a picture`) or has no bytes.
+//! Refused before sending (spec/adapters.md §4; src/fal/README.md), in this order: another route's
+//! contract; a request that does not fit its capability; no `FAL_KEY`; provider options that set a
+//! member of [`OWNED`] ([`crate::wire::provider_options`]); a blank prompt or one over
+//! [`MAX_PROMPT_CHARS`]; a `background` other than `auto`, `opaque` or `transparent`; references on
+//! a generate; more than [`MAX_PICTURES`] pictures on an edit; a `size` that is not `auto` or `WxH`
+//! inside the GPT Image envelope; then, in the order `image`, `references[<i>]`, `mask`, a picture
+//! that is not an `image/*` file (`<member> is <kind>, not a picture`) or has no bytes.
 
 use super::FalClients;
 use super::output::{self, Rules};
 use crate::BoxFuture;
-use crate::adapter::{Answer, CallRequest, RequestAdapter, Sent};
+use crate::adapter::{Answer, CallRequest, Identity, RequestAdapter, Sent};
 use crate::transport::{Body, HttpRequest, Lane, Method};
 use serde_json::{Map, Value, json};
 use std::time::{Duration, Instant};
@@ -34,6 +38,26 @@ pub const DOWNLOAD_LABEL: &str = output::DOWNLOAD_LABEL;
 /// The contract `adapter` this adapter serves.
 pub const CONTRACT_ADAPTER: &str = "fx-fal-image-v1";
 
+/// The contract this adapter serves: [`CONTRACT_ADAPTER`], and `adapter_behavior` the text `"1"`.
+pub const IDENTITY: Identity = Identity {
+    adapter: CONTRACT_ADAPTER,
+    behavior: r#""1""#,
+};
+
+/// The members provider options may not set (spec/adapters.md §8; src/fal/README.md): every
+/// member the body has, and `sync_mode`, which changes how fal returns its output.
+pub const OWNED: &[&str] = &[
+    "prompt",
+    "num_images",
+    "image_size",
+    "quality",
+    "background",
+    "output_format",
+    "image_urls",
+    "mask_url",
+    "sync_mode",
+];
+
 /// The POST and the download together.
 pub const DEADLINE: Duration = Duration::from_secs(600);
 
@@ -46,11 +70,17 @@ pub const MAX_PROMPT_CHARS: usize = 32_000;
 /// The most input pictures of an edit (`image` and `references`; the mask does not count).
 pub const MAX_PICTURES: usize = 16;
 
+/// The endpoint under a route's model that `image.generate` posts to.
+pub const GENERATE_ENDPOINT: &str = "text-to-image";
+
+/// The endpoint under a route's model that `image.edit` posts to.
+pub const EDIT_ENDPOINT: &str = "edit";
+
 /// The POST's response cap: an output picture inline as base64 is 4/3 of its bytes, plus JSON.
 pub(crate) const MAX_RESPONSE_BYTES: u64 = MAX_OUTPUT_BYTES / 3 * 4 + 4 * 1024 * 1024;
 
-/// What an image answer may declare (spec/providers.md §9.3).
-const RULES: Rules = Rules {
+/// What an image answer may declare (src/fal/README.md).
+pub(crate) const RULES: Rules = Rules {
     allowed: &["image/png", "image/jpeg", "image/webp"],
     check_dimensions: true,
     max_bytes: MAX_OUTPUT_BYTES,
@@ -70,16 +100,17 @@ impl FalImages {
         FalImages { clients }
     }
 
-    /// Steps 1 to 5 of spec/providers.md §5, then the request (module doc).
+    /// Steps 1 to 5 of spec/adapters.md §4, then the request (module doc).
     fn prepare(&self, call: &CallRequest) -> Result<HttpRequest, String> {
         let client = &self.clients.run;
         if let Some(refusal) =
-            super::contract_refusal(call, CONTRACT_ADAPTER, &["image.generate", "image.edit"])
+            super::contract_refusal(call, &IDENTITY, &["image.generate", "image.edit"])
         {
             return Err(refusal);
         }
         crate::capabilities::check_request(&call.route.capability, &call.request)?;
-        let credential = client.credential(super::CREDENTIAL_HEADER, super::CREDENTIAL_PREFIX)?;
+        let credential = client.credential()?;
+        let options = crate::wire::provider_options(call, OWNED)?;
         let request = &call.request;
         let edit = call.route.capability == "image.edit";
 
@@ -134,8 +165,13 @@ impl FalImages {
                 );
             }
         }
+        body.extend(options);
 
-        let action = if edit { "edit" } else { "text-to-image" };
+        let action = if edit {
+            EDIT_ENDPOINT
+        } else {
+            GENERATE_ENDPOINT
+        };
         let url = client.url(&format!("{}/{action}", super::endpoint(&call.route.model)));
         Ok(HttpRequest::new(Method::Post, url, Lane::Provider)
             .credential(credential)
@@ -206,7 +242,7 @@ fn background(request: &Value) -> Result<&str, String> {
 }
 
 /// `image_size` for `size`: nothing when absent or `null`, `"auto"`, or `{"width", "height"}`
-/// within the GPT Image envelope (spec/providers.md §9.1, with sentences starting `fal image
+/// within the GPT Image envelope (src/openai/README.md, with sentences starting `fal image
 /// size`).
 fn image_size(size: Option<&Value>) -> Result<Option<Value>, String> {
     match size {
@@ -235,6 +271,10 @@ impl RequestAdapter for FalImages {
             .ok()
             .flatten();
         crate::checks::image(call, file, size)
+    }
+
+    fn identity(&self) -> Option<Identity> {
+        Some(IDENTITY)
     }
 }
 

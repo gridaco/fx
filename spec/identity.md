@@ -1,6 +1,6 @@
 # Identity
 
-Every cache in FX is keyed by a content identity. This document defines each one exactly, so that any implementation (the Rust engine, the independent checker in `tools/digest.py`, a future one) computes the same bytes and the same digests. A change here is a change to every cache: it needs a new `kind` version and a migration note.
+Every cache in FX is keyed by a content identity. This document defines each one exactly, so that any implementation (the Rust engine, the independent checker in `tools/digest.py`, a future one) computes the same bytes and the same digests. A change here is a change to every cache: it needs a new `kind` version and a migration note. The one exception is the route contract's completion (§7), which kept `fx-route-v1` because it moved no built-in fingerprint.
 
 The words MUST, MUST NOT and SHOULD are used as in RFC 2119.
 
@@ -128,7 +128,7 @@ source = {
 
 Up to and including the 0.1.0 release, an unversioned type's identity was `source:` + `digest(source)`, without the export. Records made under that rule are not rewritten. An unversioned step planned now misses the result cache once and runs again; the paid calls it makes are still answered by the call cache, because a call key holds no type identity (§9). The plan digest of a workflow that uses an unversioned type changes with it (§10), so resuming a run folder planned under the old rule is refused: start a new run. Built-in and versioned types, `digest(source)` itself and `fx.lock` are unchanged.
 
-A versioned type's source digest is not part of its identity. It is recorded in `fx.lock`, and planning refuses a type whose source no longer matches its lock entry: the author either bumps the version or confirms that behaviour did not change (`grida-fx lock --same`). A versioned type with no lock entry plans normally, and `grida-fx lock --check` reports it as unlocked.
+A versioned type's source digest is not part of its identity. It is recorded in `fx.lock`, and planning refuses a type whose source no longer matches its lock entry: the author either bumps the version or confirms that behaviour did not change (`grida-fx lock --same`). A versioned type with no lock entry plans normally, and `grida-fx lock --check` reports it as unlocked. A project adapter's source is hashed the same way, with no resources, and a versioned one is locked the same way, under `fx.lock`'s `adapters` (§7; [adapters.md](adapters.md) §9).
 
 ## 7. Route fingerprint
 
@@ -140,7 +140,7 @@ route_fingerprint = digest({
   "capability": capability,
   "model": model,
   "provider": provider,
-  "contract": contract,   // the route's declared contract object, {} when none
+  "contract": contract,   // the route's contract object, completed as below; {} when none
 })
 ```
 
@@ -152,6 +152,23 @@ Price, features, input-picture limits, concurrency and pacing are not part of it
 3. each `--routes` file, in the order given.
 
 A later table's entry for the same capability and route replaces an earlier one, contract included; this is how a project overrides a built-in price. Two entries for the same capability and route within one table are refused.
+
+**The contract.** A route's contract is the object its entry declares, `{}` when none, completed when the table is read, in this order:
+
+1. **`extends`.** An entry may name, in `extends`, another route of the same capability and provider, its base. The entry starts from the base's price, features, `max_input_pictures`, `concurrency`, `requests_per_minute` and contract. A member the entry states replaces the base's whole, except `contract`, whose members merge one level deep: a member the entry's contract states replaces the base's member of that name, and the base's other members stay. With a base, `price` may be left out.
+   - The base is an entry already read, else the built-in default table's entry, which serves as a base even when a `--routes` file leaves that table out of the catalog. An entry already read is an earlier entry of the same table, else the entry in force in the catalog built so far, so it wins over a built-in entry of the same route. An entry may name its own route, to restate the entry it replaces.
+   - The base is copied as it is when the entry is read: a later table that replaces the base changes no route that extended it.
+   - `extends` itself is never hashed: an entry that extends a route and one that states the same members are the same route.
+   - A base on another provider, or one that no table read so far holds for the entry's capability, is refused while the table is read.
+2. **The serving adapter's identity.** Where FX's adapters serve the route's capability and provider ([providers.md](providers.md) §2), a contract that leaves out `adapter` gets the name of that pair's default, and one that leaves out `adapter_behavior` gets the behaviour of the pair's adapter its `adapter` names, from either of that section's first two tables, typed exactly as the table writes it: the string `"1"` and the number `1` are different contracts. A member whose value is `null` counts as left out. A contract whose `adapter` names none of the pair's adapters gets no behaviour. A route on a capability and provider no adapter of FX's serves keeps its contract as completed by step 1, even on a provider other capabilities of which FX serves (`vision.review` on `gg`).
+   - **A declared family.** A route on a provider the planning project declares with a `family` ([providers.md](providers.md) §1) is completed the same way from that family's adapters ([providers.md](providers.md) §2), for a capability the family serves: its `structured.generate` route gets `openai-compatible-structured` and the number `1`. The family is read from the planning project's declarations, never from the provider's name, so a provider it does not declare, or declares without a family, keeps its contract, whatever its name. The declaration itself is not hashed, but its family is the serving adapter: declaring one, or dropping it, changes the fingerprint of each of the provider's routes whose contract left out a member the family fills, and a route whose contract states both keeps its fingerprint either way.
+   - **A declared adapter.** A route on a provider the planning project declares with an `adapter` ([providers.md](providers.md) §1), a project adapter ([adapters.md](adapters.md) §9), is completed the same way from that adapter, for a capability it declares: a contract that leaves out `adapter` gets its name, `<path>#<attribute>` as the declaration writes it (`adapters/acme.py#acme`), and one whose `adapter` is that name and that leaves out `adapter_behavior` gets its behaviour: its version, an integer (`3`), or, for an adapter without a version, the string `"source:"` followed by `digest(source)`, where `source` is §6's `fx-node-source-v1` object of the adapter's source closure, with `resources` empty. As with a family, the declaration is read from the planning project, never inferred from the provider's name, and is not hashed: what is hashed is the adapter's name and behaviour. So declaring an adapter, dropping it, moving or renaming its module or its attribute, or changing its version changes the fingerprint of each of the provider's routes whose contract left out a member it fills, and an unversioned adapter's routes change with any edit to a file of its closure. A versioned adapter's source digest is kept in `fx.lock` under `adapters` and checked as a versioned type's is (§6).
+
+Every route of the built-in table names both members, so step 2 changes none of their fingerprints.
+
+A contract's `provider_options` ([adapters.md](adapters.md) §8) is a member like any other: it is hashed with the rest, and an entry that extends a route and states it replaces the base's whole. Up to and including the 0.6.1 release it meant nothing: GG's adapters and OpenRouter's chat adapters refused a contract that named it, and every other adapter ignored it. A route whose contract named it now sends its provider's member, or is refused ([adapters.md](adapters.md) §8), under the same fingerprint: no `adapter_behavior` moves, since the member had no meaning before and a new behaviour would move the fingerprint of every built-in route those adapters serve. A call cached before still replays, without the options.
+
+Up to and including the 0.6.1 release, the contract was hashed as the entry declared it, and `extends` did not exist. Records made under that rule are not rewritten. A project route whose capability and provider FX's adapters serve, and whose contract left out `adapter` (or set it to `null`), or named one of those adapters and left out `adapter_behavior` (or set it to `null`), now has another fingerprint. Its steps miss the result cache once and run again, and its paid calls miss the call cache, since a call key holds the route fingerprint (§9), and are paid again. The plan digest holds the fingerprints too (§10), so resuming a run folder planned under the old rule is refused: start a new run. The kind stays `fx-route-v1`, the one exception to the rule at the top of this document: every built-in fingerprint is unchanged, and the routes that move are exactly the ones step 2 fills in.
 
 ## 8. Step identity
 
@@ -241,10 +258,11 @@ A repeated step's path carries its key in brackets, quoted: `entity['ada'].draw#
 ## 12. Money
 
 - Prices and costs are US dollars with at most 6 decimal places.
-- A route price with more decimal places is refused when the route table is read.
+- A route price or cap with more decimal places is refused when the route table is read.
 - Engines compute money in whole micro-dollars (integers). Division rounds half to even.
 - Money is written as JSON numbers. `0` and `0.0` are the same value (§1).
 - A tiered price ([fx-routes-v1](schemas/fx-routes-v1.schema.json) `by` and `tiers`) prices a call at the tier its `by` setting names, when that setting is text. A setting that is absent, is not text, is not known to the plan yet, or names no tier prices the call at the route's whole range. A tier outside that range is refused when the route table is read.
+- A capped route ([fx-routes-v1](schemas/fx-routes-v1.schema.json) `cap_usd`) has no known price: it prices each call at $0 to its cap, and each attempt holds the cap ([protocol.md](protocol.md) §6.1 step 6). A price that states no amount, neither `usd`, `low_usd`, `high_usd` nor `cap_usd`, is refused when the route table is read; it is not $0.
 
 ## 13. Content addressing, not a chain
 
@@ -256,7 +274,7 @@ not exist yet.
 
 ## 14. Worked examples
 
-Each example gives the object, its canonical bytes and its digest. The same examples are in `vectors/identity/examples.json`, and `tools/digest.py --check-examples` reproduces every one.
+Each example gives the object, its canonical bytes and its digest. The same examples are in `vectors/identity/examples.json`, and `tools/digest.py --check-examples` reproduces every one. How a route's contract is completed (§7) cannot be seen in a hashed object, so `vectors/identity/routes.json` pins it from the tables a reader is given: a route `img-a@gg` serving `image.generate`, declared with no contract, has the contract `{"adapter":"gg-image","adapter_behavior":"1"}` and the fingerprint `7f6238d4aa013ab3e87587914c9ee915b141d33a2432a8ff1f3a361874901b95`.
 
 **A file.** The 8 bytes `one\ntwo\n`:
 

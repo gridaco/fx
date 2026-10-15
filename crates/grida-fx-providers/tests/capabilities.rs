@@ -60,7 +60,7 @@ struct Sent {
 }
 
 /// The member type a param's JSON Schema admits: `string` or a string `enum` is text, and
-/// `number`, `integer` and `boolean` are themselves.
+/// `number`, `integer`, `boolean` and `object` are themselves.
 fn param_type(schema: &Value) -> Result<MemberType, String> {
     if let Some(values) = schema.get("enum") {
         return match values.as_array() {
@@ -75,6 +75,7 @@ fn param_type(schema: &Value) -> Result<MemberType, String> {
         Some("number") => Ok(MemberType::Number),
         Some("integer") => Ok(MemberType::Integer),
         Some("boolean") => Ok(MemberType::Boolean),
+        Some("object") => Ok(MemberType::Object),
         other => Err(format!("a param of type {other:?} is no member type")),
     }
 }
@@ -595,8 +596,7 @@ fn the_type_words_are_the_refusals_words() {
         .collect();
     let words: Vec<&str> = ALL_TYPES.iter().map(|ty| ty.word()).collect();
     assert_eq!(listed, words);
-    // And a refusal uses them: one member of each type a member has (no member is an object),
-    // given a value of another type.
+    // And a refusal uses them: one member of each type, given a value of another type.
     let mut refused = 0;
     for ty in ALL_TYPES {
         let Some((capability, member)) = CAPABILITIES
@@ -623,5 +623,5 @@ fn the_type_words_are_the_refusals_words() {
             Err(format!("{} is {}", member.name, ty.word()))
         );
     }
-    assert_eq!(refused, ALL_TYPES.len() - 1);
+    assert_eq!(refused, ALL_TYPES.len());
 }

@@ -1,6 +1,6 @@
-//! The user's Grok Build as a runtime (spec/providers.md §1, §9.8): one `grok agent --no-leader
-//! stdio` an invocation starts on its first Grok call and keeps for the others, and shuts down
-//! with the run ([`crate::adapter::Runtime`]).
+//! The user's Grok Build as a runtime (spec/adapters.md §1; src/grok/README.md): one `grok agent
+//! --no-leader stdio` an invocation starts on its first Grok call and keeps for the others, and
+//! shuts down with the run ([`crate::adapter::Runtime`]).
 //!
 //! Starting it, once: Grok Build in a scratch folder and a process group of its own, with the
 //! environment of [`super::environment`]; then `initialize` (its version, at least
@@ -102,6 +102,8 @@ impl Started {
 pub struct GrokRuntime {
     /// The program, or the refusal of every call.
     program: Result<PathBuf, String>,
+    /// The declared variables Grok Build never inherits ([`super::withheld`]).
+    variables: Arc<[String]>,
     running: tokio::sync::Mutex<Option<Arc<Started>>>,
     /// Grok Build cannot draw on the user's subscription: every later call of the invocation is
     /// refused.
@@ -109,9 +111,12 @@ pub struct GrokRuntime {
 }
 
 impl GrokRuntime {
-    pub fn new(program: Result<PathBuf, String>) -> GrokRuntime {
+    /// The runtime of `program`, which starts without the declared `variables`
+    /// ([`crate::setup::Setup::withheld`]).
+    pub fn new(program: Result<PathBuf, String>, variables: Arc<[String]>) -> GrokRuntime {
         GrokRuntime {
             program,
+            variables,
             running: tokio::sync::Mutex::new(None),
             refused: Mutex::new(None),
         }
@@ -136,7 +141,7 @@ impl GrokRuntime {
             started.connection.shutdown().await;
         }
         let program = self.program.clone().map_err(Stop::Refused)?;
-        match open(&program).await {
+        match open(&program, &self.variables).await {
             Ok(started) => {
                 let started = Arc::new(started);
                 *running = Some(Arc::clone(&started));
@@ -172,12 +177,12 @@ fn policy() -> Policy {
 }
 
 /// Starts a Grok Build and checks its version and sign-in (module doc).
-async fn open(program: &Path) -> Result<Started, Stop> {
+async fn open(program: &Path, variables: &[String]) -> Result<Started, Stop> {
     let folder = tempfile::Builder::new()
         .prefix("grida-fx-grok-")
         .tempdir()
         .map_err(|error| Stop::Failed(grida_fx_core::error::io_reason(&error)))?;
-    let mut child = match super::command(program, folder.path()).spawn() {
+    let mut child = match super::command(program, folder.path(), variables).spawn() {
         Ok(child) => child,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             return Err(Stop::Refused(super::NOT_INSTALLED.into()));

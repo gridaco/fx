@@ -99,12 +99,14 @@ pub(crate) fn route(capability: &str, model: &str, provider: &str) -> Route {
             max_units: None,
             by: None,
             tiers: IndexMap::new(),
+            capped: false,
         },
         features: BTreeSet::new(),
         concurrency: None,
         requests_per_minute: None,
         max_input_pictures: None,
         contract: json!({}),
+        drift: None,
     }
 }
 
@@ -145,6 +147,7 @@ pub(crate) fn instance_of(
                 calls,
                 low: Usd(low),
                 high: Usd(high),
+                capped: false,
             })
             .collect(),
         phase,

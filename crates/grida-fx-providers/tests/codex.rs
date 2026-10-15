@@ -1,4 +1,4 @@
-//! The Codex adapter and runtime (spec/providers.md §9.6) against fake Codex programs: shell
+//! The Codex adapter and runtime (src/codex/README.md) against fake Codex programs: shell
 //! scripts that speak the app-server's side of the conversation. No real Codex is ever started.
 //!
 //! The runtime's reader and writer run on the tokio runtime that started them, so each test runs
@@ -110,6 +110,11 @@ impl Fake {
     }
 }
 
+/// The variables of the built-in declarations, which the program never inherits.
+fn withheld() -> Arc<[String]> {
+    Arc::from(grida_fx_core::providers::Declarations::built_in().variables())
+}
+
 /// A fake Codex whose script is `body`.
 fn fake(body: &str) -> Fake {
     let dir = tempfile::tempdir().unwrap();
@@ -187,7 +192,7 @@ fn images(
         path,
         origin: "PATH",
     });
-    let runtime = Arc::new(CodexRuntime::new(program));
+    let runtime = Arc::new(CodexRuntime::new(program, withheld()));
     let adapter = CodexImages::new(Arc::clone(&runtime))
         .with_deadlines(Duration::from_secs(start), Duration::from_secs(whole));
     (runtime, adapter)
@@ -574,7 +579,8 @@ fn codex_names_its_version_as_it_prints_it() {
         .build()
         .unwrap();
     let folder = tempfile::tempdir().unwrap();
-    let version = |fake: &Fake| tokio.block_on(codex::version(&fake.program, folder.path()));
+    let version =
+        |fake: &Fake| tokio.block_on(codex::version(&fake.program, folder.path(), &withheld()));
     let supported = |v: &str| Ok(Version::Supported(v.into()));
     for (printed, expected) in [
         ("codex-cli 0.160.1", supported("0.160.1")),
@@ -602,7 +608,7 @@ fn codex_names_its_version_as_it_prints_it() {
     );
     let missing = Path::new("/nonexistent/codex");
     assert_eq!(
-        tokio.block_on(codex::version(missing, folder.path())),
+        tokio.block_on(codex::version(missing, folder.path(), &withheld())),
         Err(codex::NOT_INSTALLED.to_string())
     );
 }
@@ -966,11 +972,19 @@ fn what_codex_cannot_honour_is_refused_before_it_starts() {
                 json!({"prompt": "p", "size": "1024x1024"}),
                 json!({"prompt": "p", "references": [{"file": "a"}]}),
                 json!({"prompt": "p", "seed": 1}),
-                // The program vanished after it was found.
-                json!({"prompt": "p"}),
+                json!({"prompt": " ", "provider_options": {"codex": {"seed": 1}}}),
+                // Other providers' options are not read, and an empty member is none.
+                json!({"prompt": "p", "provider_options": {"codex": {}, "openai": {"seed": 1}}}),
             ] {
                 sent.push(adapter.send(&call(request).call).await);
             }
+            let mut route = contract();
+            route["provider_options"] = json!({"codex": {"seed": 1}});
+            let routed = CallBuilder::new("image.generate", "imagegen@codex")
+                .contract(route)
+                .request(json!({"prompt": "p"}))
+                .build();
+            sent.push(adapter.send(&routed.call).await);
             let png = media::png(2, 2, None);
             let pictures = [
                 with_pictures("image.edit", |b| {
@@ -1000,7 +1014,10 @@ fn what_codex_cannot_honour_is_refused_before_it_starts() {
             refused(codex::NO_EXACT_SIZE),
             refused("references[0] has no bytes to send"),
             refused("image.generate takes no member seed"),
+            refused("Codex takes no provider_options"),
+            // The program vanished after it was found.
             refused(codex::NOT_INSTALLED),
+            refused("Codex takes no provider_options"),
             refused("Codex image edits take no mask"),
             refused("Codex takes at most 5 input pictures"),
             refused("references[1] is image/gif; Codex takes PNG, JPEG or WebP"),

@@ -80,8 +80,10 @@ seconds at 720p or 1080p. The source plate fixes the portrait or landscape frami
 add a 25% planning allowance: an 8-second 720p take plans at $0.80–$1.00.
 This project route does not change FX's built-in video default.
 
-Wan's prompt expansion defaults to enabled. FX's current queue adapter does not
-expose that setting, so provider-side rewriting may affect the motion brief.
+Wan's prompt expansion defaults to enabled, and would rewrite the motion brief.
+The route turns it off through fal's own parameter,
+`provider_options: {fal: {enable_prompt_expansion: false}}` in its contract,
+which FX passes to fal as written.
 Content moderation also remains enabled. A matching first and last frame guides
 the generation; it does not promise a clean loop or consistent animation.
 Local finishing and visual review are still necessary.

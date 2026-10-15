@@ -1,11 +1,13 @@
-//! GG video: `video.generate`, a long job (spec/providers.md §9.7, §7) run by [`super::job`].
+//! GG video: `video.generate`, a long job (src/gg/README.md; spec/adapters.md §6) run by
+//! [`super::job`].
 //!
 //! `submit`: one `POST {base}/videos` with `{model, prompt, duration?, aspectRatio?, resolution?,
 //! providerOptions?}` and the attempt's `Idempotency-Key` ([`super::Gateway`]): `duration` a JSON
 //! integer when whole; `resolution` sent as is when it is `WIDTHxHEIGHT`, and a tier name (`720p`,
-//! `4k`) as `providerOptions: {gg: {resolutionTier}}`; `aspect_ratio` as `aspectRatio`. A request
-//! with a `first_frame` goes as `multipart/form-data` instead: that JSON as the text part `input`,
-//! then the frame as the file part `image`. GG takes no last frame.
+//! `4k`) as `providerOptions: {gg: {resolutionTier}}`; `aspect_ratio` as `aspectRatio`; then the
+//! provider options, which may set no member of [`OWNED`] (spec/adapters.md §8). A request with a
+//! `first_frame` goes as `multipart/form-data` instead: that JSON as the text part `input`, then
+//! the frame as the file part `image`. GG takes no last frame.
 //!
 //! `collect`: [`super::job::Jobs::collect`], reading `result.videos[0]`. The bytes decide: the
 //! file is the clip when it carries the MP4 signature and an MP4 video track. The answer is file
@@ -13,17 +15,17 @@
 //! `check`: the clip runs within [`DURATION_TOLERANCE`] of a requested `duration`, and has the
 //! exact size of a requested `WIDTHxHEIGHT`.
 //!
-//! Submit refusals, in this order (spec/providers.md §5): another route's contract; a request that
-//! does not fit `video.generate`; no `GG_API_KEY`; a blank prompt; a last frame; a
-//! `resolution` that is neither a tier name nor `WIDTHxHEIGHT`; an `aspect_ratio` that is not
-//! `W:H`; a first frame whose file the call does not carry, is empty or is not PNG, JPEG or WebP.
-//! The model's own limits (durations, tiers, ratios, which models take a frame) are GG's to
-//! refuse, at no cost.
+//! Submit refusals, in this order (spec/adapters.md §4): another route's contract; a request that
+//! does not fit `video.generate`; no `GG_API_KEY`; provider options ([`wire::provider_options`]); a
+//! blank prompt; a last frame; a `resolution` that is neither a tier name nor `WIDTHxHEIGHT`; an
+//! `aspect_ratio` that is not `W:H`; a first frame whose file the call does not carry, is empty or
+//! is not PNG, JPEG or WebP. The model's own limits (durations, tiers, ratios, which models take a
+//! frame) are GG's to refuse, at no cost.
 
 use super::Gateway;
 use super::job::{Jobs, Kind};
 use crate::BoxFuture;
-use crate::adapter::{Answer, CallRequest, Collected, LongJob, Submitted};
+use crate::adapter::{Answer, CallRequest, Collected, Identity, LongJob, Submitted};
 use crate::capabilities;
 use crate::checks::ClipFacts;
 use crate::clock::Clock;
@@ -37,6 +39,24 @@ pub use super::job::{COLLECT_DEADLINE, POLL, READ_DEADLINE, SETTLE_WAIT, SUBMIT_
 
 /// The contract `adapter` this adapter serves.
 pub const ADAPTER: &str = "gg-video";
+
+/// The contract this adapter serves: [`ADAPTER`], behaviour the number 1.
+pub const IDENTITY: Identity = Identity {
+    adapter: ADAPTER,
+    behavior: "1",
+};
+
+/// The members provider options may not set (spec/adapters.md §8; src/gg/README.md): every
+/// member and part the submit has, `providerOptions`, which FX sends for a tier, included.
+pub const OWNED: &[&str] = &[
+    "model",
+    "prompt",
+    "duration",
+    "aspectRatio",
+    "resolution",
+    "providerOptions",
+    "image",
+];
 
 /// The most bytes of one clip.
 pub const MAX_VIDEO_BYTES: u64 = 512 * 1024 * 1024;
@@ -102,7 +122,7 @@ impl GgVideo {
     }
 }
 
-/// The request's values, once they pass (step 4 of spec/providers.md §5).
+/// The request's values, once they pass (step 4 of spec/adapters.md §4).
 #[derive(Debug, Clone, PartialEq)]
 struct Clip<'a> {
     prompt: &'a str,
@@ -210,9 +230,16 @@ fn pixels(text: &str) -> Option<(u32, u32)> {
     Some((captures[1].parse().ok()?, captures[2].parse().ok()?))
 }
 
-/// Reads this adapter's route contract (spec/providers.md §5 step 1).
+/// Reads this adapter's route contract (spec/adapters.md §4 step 1).
 fn contract(call: &CallRequest) -> Result<(), String> {
-    super::read_contract(call, &["video.generate"], ADAPTER, |v| v == &json!(1), &[]).map(|_| ())
+    super::read_contract(
+        call,
+        &["video.generate"],
+        ADAPTER,
+        |v| IDENTITY.behaves(v),
+        &[],
+    )
+    .map(|_| ())
 }
 
 /// The clip the download holds (module doc).
@@ -225,14 +252,18 @@ fn deliver(bytes: Vec<u8>) -> Result<Answer, String> {
 }
 
 impl GgVideo {
-    /// Steps 1 to 5 of spec/providers.md §5, then the submit request (module doc).
+    /// Steps 1 to 5 of spec/adapters.md §4, then the submit request (module doc).
     fn prepare(&self, call: &CallRequest) -> Result<HttpRequest, String> {
         contract(call)?;
         capabilities::check_request(&call.route.capability, &call.request)?;
         let gateway = &self.jobs.gateway;
         let credential = gateway.credential()?;
+        let options = wire::provider_options(call, OWNED)?;
         let clip = clip(&call.request)?;
-        let input = body(&call.route.model, &clip);
+        let mut input = body(&call.route.model, &clip);
+        if let Value::Object(members) = &mut input {
+            members.extend(options);
+        }
         let body = match frame(call)? {
             None => Body::Json(input),
             Some(image) => Body::Multipart(vec![Part::text("input", &input.to_string()), image]),
@@ -266,6 +297,14 @@ impl LongJob for GgVideo {
         };
         let facts = ClipFacts::of_mp4(&file.bytes)?;
         check_clip(&facts, &call.request)
+    }
+
+    fn identity(&self) -> Option<Identity> {
+        Some(IDENTITY)
+    }
+
+    fn check_contract(&self, call: &CallRequest) -> Result<(), String> {
+        contract(call)
     }
 }
 

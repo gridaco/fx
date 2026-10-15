@@ -1,4 +1,4 @@
-//! OpenRouter `agent.turn` over synthetic exchanges (spec/providers.md §9.2;
+//! OpenRouter `agent.turn` over synthetic exchanges (src/openrouter/README.md;
 //! spec/capabilities.md §5; spec/protocol.md §6.2 step 3). Nothing here reaches a network: every
 //! send goes to a `ReplayTransport` that asserts the request, and every refusal runs over a
 //! transport that saw no request.
@@ -279,6 +279,84 @@ fn the_text_model_route_sends_the_provider_defaults() {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Provider options: the engine's agent loop sends a turn none, so its turns take only the
+// route's; a body's own `agent.turn` call may carry its own
+
+#[test]
+fn provider_options_follow_the_body_s_own_members() {
+    let mut contract = astra_contract();
+    contract["provider_options"] = json!({
+        "openrouter": {"parallel_tool_calls": false, "user": "route-a"},
+        "gg": {"model": "never read"}
+    });
+    let mut request = simple_request();
+    request["max_tokens"] = json!(4000);
+    request["provider_options"] = json!({
+        "openrouter": {"user": "step-a", "seed": 7},
+        "gg": {"tools": "never read"}
+    });
+    let transport = replay(vec![expect(ExpectBody::Any).reply(reply(
+        json!({"role": "assistant", "content": "ok"}),
+        json!({"cost": 0.0001}),
+    ))]);
+    block_on(adapter_over(transport.clone(), test_keys()).send(&turn(
+        ASTRA_ROUTE,
+        contract,
+        request,
+    )));
+    let sent = sent_json(&transport, 0);
+    let names: Vec<&str> = sent
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "model",
+            "messages",
+            "tools",
+            "tool_choice",
+            "provider",
+            "reasoning",
+            "max_tokens",
+            "parallel_tool_calls",
+            "user",
+            "seed"
+        ]
+    );
+    assert_eq!(
+        (&sent["parallel_tool_calls"], &sent["user"], &sent["seed"]),
+        (&json!(false), &json!("step-a"), &json!(7))
+    );
+    let options = ["parallel_tool_calls", "user", "seed"];
+    for name in names.iter().filter(|name| !options.contains(name)) {
+        assert!(openrouter::agent::OWNED.contains(name), "{name}");
+    }
+}
+
+#[test]
+fn provider_options_set_no_member_the_adapter_owns() {
+    for name in openrouter::agent::OWNED {
+        let mut request = simple_request();
+        request["provider_options"] = json!({"openrouter": {*name: 1}});
+        assert_refused(
+            &turn(TEXT_ROUTE, text_contract(), request),
+            test_keys(),
+            &format!("provider_options.openrouter.{name} is a member FX owns"),
+        );
+        let mut contract = text_contract();
+        contract["provider_options"] = json!({"openrouter": {*name: 1}});
+        assert_refused(
+            &turn(TEXT_ROUTE, contract, simple_request()),
+            test_keys(),
+            &format!("contract.provider_options.openrouter.{name} is a member FX owns"),
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Replies
 
 #[test]
@@ -525,7 +603,7 @@ fn refusals_come_in_order_and_send_nothing() {
     );
 }
 
-/// wire-diff WD-1 (spec/providers.md §9.2 "Agent turns"): a picture that is not an `image/*`
+/// wire-diff WD-1 (src/openrouter/README.md, "Agent turns"): a picture that is not an `image/*`
 /// file is refused before anything is sent, naming its place in the transcript, instead of
 /// going out labelled `image/png`. Kinds are judged before any file is read.
 #[test]
@@ -678,7 +756,7 @@ fn the_key_never_reaches_a_reason_an_answer_or_a_url() {
         assert!(request.headers.iter().all(|(_, v)| !v.contains(KEY)));
         assert!(!format!("{request:?}").contains(KEY));
         assert_eq!(
-            request.credential.as_ref().map(|c| c.header),
+            request.credential.as_ref().map(|c| c.header.as_str()),
             Some("authorization")
         );
     }

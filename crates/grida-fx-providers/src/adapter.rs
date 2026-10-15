@@ -11,7 +11,8 @@
 use crate::BoxFuture;
 use crate::redact::Redactor;
 use crate::transport::HttpResponse;
-use grida_fx_core::money::Usd;
+use grida_fx_core::money::{Units, Usd};
+use grida_fx_core::routes::{PriceUnit, Route};
 use indexmap::IndexMap;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -19,20 +20,91 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// The route a call goes to (spec/identity.md §7): what an adapter needs to address the
-/// provider. Prices, features and pacing are the engine's business and are not here.
+/// provider, and the limits its table declares. Prices, pacing and the features the engine judges
+/// are the engine's business and are not here.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RouteRef {
     pub capability: String,
     pub model: String,
     pub provider: String,
-    /// The route's declared contract object; `{}` when none.
+    /// The route's contract object, as its table's reading completed it (spec/identity.md §7);
+    /// `{}` when none.
     pub contract: Value,
+    /// What the route's table declares of the calls it takes ([`RouteLimits`]).
+    pub limits: RouteLimits,
 }
 
 impl RouteRef {
+    /// The route a call on `route` goes to, its limits included.
+    pub fn of(route: &Route) -> RouteRef {
+        RouteRef {
+            capability: route.capability.clone(),
+            model: route.model.clone(),
+            provider: route.provider.clone(),
+            contract: route.contract.clone(),
+            limits: RouteLimits::of(route),
+        }
+    }
+
     /// `model@provider`.
     pub fn id(&self) -> String {
         format!("{}@{}", self.model, self.provider)
+    }
+}
+
+/// What a route's table declares of the calls it takes, for an adapter that holds a request to
+/// the route's limits rather than its own: the GG and generic image adapters to the picture limit,
+/// OpenRouter's generic image adapter to whether a generate takes references, fal's video adapter
+/// to the tiers, the length and whether a first frame is needed (their references). None of it is
+/// part of the route's fingerprint (spec/identity.md §7), so an adapter holds a request to it only
+/// before sending, never when a job already sent is collected (spec/adapters.md §4 step 4, §6).
+/// Default: nothing declared.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct RouteLimits {
+    /// `max_input_pictures`: the most input pictures one call takes; `None` when none is
+    /// declared.
+    pub max_input_pictures: Option<u32>,
+    /// `price.max_units` of a route priced per second: the most seconds one call carries.
+    pub max_seconds: Option<Units>,
+    /// The setting the price is tiered by (`price.by`), and its tiers' names in the table's order.
+    pub tiers: Option<(String, Vec<String>)>,
+    /// Whether the route declares the feature `image_input`: an `image.generate` route takes
+    /// `references` (spec/capabilities.md §2).
+    pub image_input: bool,
+    /// Whether the route declares the feature `text_to_video`: it draws a clip from the prompt
+    /// alone (spec/capabilities.md §6).
+    pub text_to_video: bool,
+}
+
+impl RouteLimits {
+    /// The limits `route`'s table declares.
+    pub fn of(route: &Route) -> RouteLimits {
+        let price = &route.price;
+        RouteLimits {
+            max_input_pictures: route.max_input_pictures,
+            max_seconds: price.max_units.filter(|_| price.unit == PriceUnit::Second),
+            tiers: price
+                .by
+                .clone()
+                .map(|by| (by, price.tiers.keys().cloned().collect())),
+            image_input: route.features.contains("image_input"),
+            text_to_video: route.features.contains("text_to_video"),
+        }
+    }
+
+    /// The names of the price's tiers when it is tiered by `setting`.
+    pub fn tiers_by(&self, setting: &str) -> Option<&[String]> {
+        match &self.tiers {
+            Some((by, names)) if by == setting => Some(names),
+            _ => None,
+        }
+    }
+
+    /// [`RouteLimits::max_seconds`] in whole seconds, rounded down.
+    pub fn max_whole_seconds(&self) -> Option<u64> {
+        let units = self.max_seconds?;
+        let divisor = 10i128.checked_pow(units.scale)?;
+        u64::try_from(units.mantissa.max(0) / divisor).ok()
     }
 }
 
@@ -71,7 +143,7 @@ pub struct AnsweredFile {
     pub bytes: Vec<u8>,
 }
 
-/// How a provider bills its calls (spec/providers.md §6).
+/// How a provider bills its calls (spec/adapters.md §5).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Billing {
     /// In US dollars, to the account of the key FX sends: what the ceiling bounds.
@@ -178,7 +250,7 @@ pub enum Sent {
     /// nothing. The engine may send the same request again under the same attempt, at $0.
     /// `retry_after` is the wait the provider asked for before that ([`retry_after`]; `None` when
     /// it asked for none): the engine waits at least its own backoff, and at least `retry_after`
-    /// up to its cap (spec/providers.md §4.3).
+    /// up to its cap (spec/adapters.md §3.3).
     NotReceived {
         reason: String,
         retry_after: Option<Duration>,
@@ -346,13 +418,59 @@ pub enum Collected {
     Answered(Answer),
     /// The job ended without a result: the record becomes `settled`, the call fails
     /// `call_failed`, and a later run submits it anew. `cost` is what the ended job costs
-    /// (spec/providers.md §7): the provider's own figure for it, as for an answer when the job
-    /// finished with an unusable result; `Some(0)` only where spec/providers.md §9 says so; `None`
-    /// otherwise, and the run that submitted the job then charges its whole hold.
+    /// (spec/adapters.md §6): the provider's own figure for it, as for an answer when the job
+    /// finished with an unusable result; `Some(0)` only where its reference says so
+    /// (spec/providers.md §2); `None` otherwise, and the run that submitted the job then charges
+    /// its whole hold.
     Ended { reason: String, cost: Option<Usd> },
     /// Collecting failed and the job may still be running: the record stays `submitted`, the
     /// call fails `call_failed`, and a later run collects again.
     Unreachable { reason: String },
+}
+
+/// The contract an adapter FX ships serves, as a route's contract names it (spec/providers.md §2):
+/// its `adapter`, and its `adapter_behavior` as canonical JSON (spec/identity.md §2), such as
+/// `"1"` for the string and `1` for the number. The engine holds each call's route to it before
+/// the adapter sees the call ([`crate::checks::contract`]; spec/adapters.md §4 step 1), and core's
+/// [`grida_fx_core::routes::BUILT_IN_ADAPTERS`] and [`grida_fx_core::routes::FAMILY_ADAPTERS`],
+/// which complete a route's contract when a table is read (spec/identity.md §7), name the same
+/// (`tests/routes.rs`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Identity {
+    pub adapter: &'static str,
+    pub behavior: &'static str,
+}
+
+impl Identity {
+    /// Whether `value`, a contract's `adapter_behavior`, is the behaviour this adapter serves:
+    /// its canonical JSON is [`Identity::behavior`].
+    pub fn behaves(&self, value: &Value) -> bool {
+        grida_fx_core::value::canon(value) == self.behavior
+    }
+
+    /// The identity of an adapter known only once its project is planned, a project's own
+    /// (spec/adapters.md §9): `adapter` (`<path>#<attribute>`) and its behaviour `behavior` as
+    /// canonical JSON. Each distinct text is kept once for the life of the process, so a
+    /// long-lived process that plans again keeps one copy of each.
+    pub fn interned(adapter: &str, behavior: &str) -> Identity {
+        Identity {
+            adapter: intern(adapter),
+            behavior: intern(behavior),
+        }
+    }
+}
+
+/// `text`, kept once for the life of the process ([`Identity::interned`]).
+fn intern(text: &str) -> &'static str {
+    static KEPT: std::sync::LazyLock<std::sync::Mutex<std::collections::HashSet<&'static str>>> =
+        std::sync::LazyLock::new(Default::default);
+    let mut kept = KEPT.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(found) = kept.get(text) {
+        return found;
+    }
+    let leaked: &'static str = Box::leak(text.to_owned().into_boxed_str());
+    kept.insert(leaked);
+    leaked
 }
 
 /// An adapter for calls answered within one request.
@@ -366,16 +484,33 @@ pub trait RequestAdapter: Send + Sync {
         Ok(())
     }
 
+    /// The contract this adapter serves; `None`, the default, names none. For an adapter that names
+    /// one (every adapter FX ships, and a project adapter), the engine refuses a call before
+    /// [`RequestAdapter::send`] as spec/adapters.md §4 steps 1 and 2 say, and holds an answer to
+    /// the capability's every-route check after [`RequestAdapter::check`] (spec/adapters.md
+    /// §3.4).
+    fn identity(&self) -> Option<Identity> {
+        None
+    }
+
+    /// The adapter's judgement of its route's other contract members (spec/adapters.md §4 step
+    /// 1), which the engine makes after its own check of the contract and before its check of the
+    /// request. A refusal is a sentence. None by default.
+    fn check_contract(&self, _call: &CallRequest) -> Result<(), String> {
+        Ok(())
+    }
+
     /// How this adapter's calls are billed ([`Billing`]); dollars unless it says otherwise.
     fn billing(&self) -> Billing {
         Billing::Dollars
     }
 
-    /// The redactor every reason of this adapter's calls passes through last (spec/providers.md
-    /// §8). The engine's retry owner redacts with it each reason it reports: the adapter's own,
-    /// its check's, and the engine's checks of the answer. A live invocation's adapters answer
-    /// with the redactor over every key of the invocation ([`crate::live::adapters`]); the
-    /// default masks the known secret shapes only.
+    /// The redactor every reason of this adapter's calls passes through last (spec/adapters.md
+    /// §7). The engine's retry owner redacts with it each reason it reports: the adapter's own,
+    /// its check's, the engine's refusals before a send ([`crate::checks::before_send`]), and the
+    /// engine's checks of the answer. A live invocation's adapters answer with the redactor over
+    /// every key of the invocation ([`crate::live::adapters`]); the default masks the known secret
+    /// shapes only.
     fn redactor(&self) -> Redactor {
         Redactor::default()
     }
@@ -395,6 +530,17 @@ pub trait LongJob: Send + Sync {
         Ok(())
     }
 
+    /// As [`RequestAdapter::identity`]: the engine's refusals come before
+    /// [`LongJob::submit`], never before [`LongJob::collect`].
+    fn identity(&self) -> Option<Identity> {
+        None
+    }
+
+    /// As [`RequestAdapter::check_contract`].
+    fn check_contract(&self, _call: &CallRequest) -> Result<(), String> {
+        Ok(())
+    }
+
     /// As [`RequestAdapter::billing`].
     fn billing(&self) -> Billing {
         Billing::Dollars
@@ -407,7 +553,7 @@ pub trait LongJob: Send + Sync {
 }
 
 /// A runtime some adapters share: a program the user installed and signed into (Codex), started
-/// on an invocation's first call that needs it and kept for the others (spec/providers.md §1). The
+/// on an invocation's first call that needs it and kept for the others (spec/adapters.md §1). The
 /// engine owns its life: it is shut down with the run ([`crate::Adapters::shutdown`]).
 pub trait Runtime: Send + Sync {
     /// Ends the runtime and everything it started. Whether everything is verifiably ended; a
@@ -428,6 +574,23 @@ impl Adapter {
         match self {
             Adapter::Request(adapter) => adapter.billing(),
             Adapter::Job(adapter) => adapter.billing(),
+        }
+    }
+
+    /// The contract the adapter serves ([`RequestAdapter::identity`]).
+    pub fn identity(&self) -> Option<Identity> {
+        match self {
+            Adapter::Request(adapter) => adapter.identity(),
+            Adapter::Job(adapter) => adapter.identity(),
+        }
+    }
+
+    /// The adapter's judgement of its route's other contract members
+    /// ([`RequestAdapter::check_contract`]).
+    pub fn check_contract(&self, call: &CallRequest) -> Result<(), String> {
+        match self {
+            Adapter::Request(adapter) => adapter.check_contract(call),
+            Adapter::Job(adapter) => adapter.check_contract(call),
         }
     }
 }
@@ -453,6 +616,7 @@ mod tests {
             model: "img-a".into(),
             provider: "acme".into(),
             contract: json!({}),
+            limits: Default::default(),
         };
         assert_eq!(route.id(), "img-a@acme");
     }
@@ -510,6 +674,58 @@ mod tests {
                 }
             })
         }
+    }
+
+    #[test]
+    fn an_identity_compares_its_behaviour_as_canonical_json() {
+        let text = Identity {
+            adapter: "fx-acme-image-v1",
+            behavior: r#""1""#,
+        };
+        assert!(text.behaves(&json!("1")));
+        for other in [json!(1), json!(1.0), json!("2"), json!(["1"]), json!(true)] {
+            assert!(!text.behaves(&other), "{other}");
+        }
+        let number = Identity {
+            adapter: "acme-video",
+            behavior: "1",
+        };
+        assert!(number.behaves(&json!(1)));
+        assert!(number.behaves(&json!(1.0)), "the same number");
+        for other in [json!("1"), json!(2), json!(1.5)] {
+            assert!(!number.behaves(&other), "{other}");
+        }
+        // An adapter names none unless it says so, and judges no other member.
+        let call = CallRequest {
+            route: RouteRef {
+                capability: "image.generate".into(),
+                model: "img-a".into(),
+                provider: "acme".into(),
+                contract: json!({"adapter": "x"}),
+                limits: Default::default(),
+            },
+            request: json!({}),
+            files: IndexMap::new(),
+            take: vec![1],
+            key: "0".repeat(64),
+            attempt: 1,
+        };
+        for adapter in [
+            Adapter::Request(Arc::new(Silent)),
+            Adapter::Job(Arc::new(Silent)),
+        ] {
+            assert_eq!(adapter.identity(), None);
+            assert_eq!(adapter.check_contract(&call), Ok(()));
+        }
+    }
+
+    #[test]
+    fn a_project_adapters_identity_is_interned() {
+        let first = Identity::interned("adapters/acme.py#acme", "3");
+        let again = Identity::interned(&String::from("adapters/acme.py#acme"), "3");
+        assert_eq!(first, again);
+        assert!(std::ptr::eq(first.adapter, again.adapter));
+        assert!(first.behaves(&json!(3)) && !first.behaves(&json!("3")));
     }
 
     #[test]
@@ -608,6 +824,7 @@ mod tests {
                 model: "vid-a".into(),
                 provider: "acme".into(),
                 contract: json!({}),
+                limits: Default::default(),
             },
             request: json!({}),
             files: IndexMap::new(),

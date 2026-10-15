@@ -1,5 +1,5 @@
 //! The providers' checks of a stand-in's answer (spec/protocol.md §6.1 "Stand-in answers";
-//! spec/capabilities.md §1 "Answers"; spec/providers.md §4.4): the request check, the shape and
+//! spec/capabilities.md §1 "Answers"; spec/adapters.md §3.4): the request check, the shape and
 //! its sentences, the kinds of files that gave none, the data FX writes, and the route's check,
 //! an adapter's or every route's. Nothing is sent: the adapters are built keyless over a
 //! transport that refuses every exchange. Media are built in code, except two clips read from
@@ -643,14 +643,29 @@ fn a_route_an_adapter_serves_gets_its_check() {
         ),
         "size must be auto or WIDTHxHEIGHT"
     );
-    // fal's check reads a size it cannot read as none.
-    assert!(
-        checked(
-            &call("image.generate", "img-a@fal", request),
+    // fal's generic default judges the size as every route does; its GPT Image adapter, which a
+    // route names, reads a size it cannot read as none.
+    assert_eq!(
+        refusal(
+            &call("image.generate", "img-a@fal", request.clone()),
             one("image", &png),
             Value::Null
-        )
-        .is_ok()
+        ),
+        "size must be auto or WIDTHxHEIGHT"
+    );
+    let gpt = CallBuilder::new("image.generate", "img-a@fal")
+        .contract(json!({"adapter": "fx-fal-image-v1"}))
+        .request(request)
+        .build();
+    assert!(checked(&gpt, one("image", &png), Value::Null).is_ok());
+    // A route that names an adapter FX does not have gets every route's check.
+    let unknown = CallBuilder::new("image.generate", "img-a@fal")
+        .contract(json!({"adapter": "acme-image"}))
+        .request(json!({"prompt": "p", "size": "big"}))
+        .build();
+    assert_eq!(
+        refusal(&unknown, one("image", &png), Value::Null),
+        "size must be auto or WIDTHxHEIGHT"
     );
 
     let sound = json!({"prompt": "p"});
@@ -698,18 +713,33 @@ fn a_route_an_adapter_serves_gets_its_check() {
         )
         .is_ok()
     );
+    // A clip drawn without a first frame is held to the request too; a last frame needs one.
     let no_frame = call(
         "video.generate",
         "vid-a@fal",
         json!({"prompt": "p", "duration": 3}),
     );
-    assert_eq!(
-        refusal(
+    assert!(
+        checked(
             &no_frame,
             one("video", &media::mp4(720, 1280, 24, 72)),
             Value::Null
+        )
+        .is_ok()
+    );
+    let last_only = call_with_picture(
+        "video.generate",
+        "vid-a@fal",
+        "last_frame",
+        json!({"prompt": "p", "duration": 3}),
+    );
+    assert_eq!(
+        refusal(
+            &last_only,
+            one("video", &media::mp4(720, 1280, 24, 72)),
+            Value::Null
         ),
-        "this route draws from a first frame"
+        "last_frame needs first_frame"
     );
 }
 
@@ -903,28 +933,35 @@ fn accepted_live(
     }
 }
 
-/// spec/providers.md §4.4: an adapter's check judges only the call and the answer, so an answer
+/// spec/adapters.md §3.4: an adapter's check judges only the call and the answer, so an answer
 /// it accepts live passes it the same as a stand-in's answer.
 #[test]
 fn every_adapters_check_takes_a_stand_ins_answer_as_it_takes_a_live_one() {
     let registered = adapters(&offline_setup(Keys::none()));
     let checks = StandInChecks::new();
-    let served = registered.served();
-    assert!(served.len() >= 14, "{served:?}");
-    for (capability, provider) in served {
-        let (call, files, data, live) = accepted_live(&capability, &provider);
+    let every = registered.registered();
+    assert!(every.len() >= 18, "{every:?}");
+    for adapter in every {
+        let (capability, provider) = (adapter.capability, adapter.provider);
+        let name = adapter.identity.adapter;
+        let (mut call, files, data, live) = accepted_live(capability, provider);
+        call.call.route.contract = json!({"adapter": name});
         let accepted = match registered.serving(&call.route) {
             Some(Adapter::Request(adapter)) => adapter.check(&call, &live),
             Some(Adapter::Job(adapter)) => adapter.check(&call, &live),
-            None => panic!("{capability} on {provider} is served"),
+            None => panic!("{name} serves {capability} on {provider}"),
         };
-        assert_eq!(accepted, Ok(()), "{capability} on {provider}, live");
+        assert_eq!(
+            accepted,
+            Ok(()),
+            "{name} for {capability} on {provider}, live"
+        );
         // And the stand-in's answer, once shaped, is the adapter's: the kinds and the data FX
         // writes are the ones the adapter answers with.
         assert_eq!(
             checks.answer(&call, files, data),
             Ok(live),
-            "{capability} on {provider}, stand-in"
+            "{name} for {capability} on {provider}, stand-in"
         );
     }
 }

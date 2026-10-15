@@ -39,6 +39,7 @@ CALL = EXAMPLES["call"]["digest"]
 NODE_SOURCE = EXAMPLES["node_source"]["digest"]
 MARKERS_FILE = REPO / "spec" / "vectors" / "identity" / "markers.json"
 JSON_OUTPUT_FILE = REPO / "spec" / "vectors" / "identity" / "json_output.json"
+ROUTES_FILE = REPO / "spec" / "vectors" / "identity" / "routes.json"
 MARKER_CASES = json.loads(MARKERS_FILE.read_text("utf-8"))["cases"]
 JSON_OUTPUT_CASES = json.loads(JSON_OUTPUT_FILE.read_text("utf-8"))["cases"]
 
@@ -74,6 +75,22 @@ def test_check_examples_reports_nothing() -> None:
     assert digest.check_examples(EXAMPLES_FILE) == []
     assert digest.check_marker_vectors(MARKERS_FILE) == []
     assert digest.check_json_output_vectors(JSON_OUTPUT_FILE) == []
+    assert digest.check_route_vectors(ROUTES_FILE) == []
+
+
+def test_check_route_vectors_catches_a_wrong_contract_and_refusal(tmp_path: Path) -> None:
+    document = json.loads(ROUTES_FILE.read_text("utf-8"))
+    cases = document["cases"]
+    filled = next(c for c in cases if "expect" in c)
+    filled["expect"][0]["contract"] = {}
+    refused = next(c for c in cases if "refuse" in c)
+    refused["refuse"]["reason"] = "other_provider"
+    path = tmp_path / "routes.json"
+    path.write_text(json.dumps(document), "utf-8")
+    failures = digest.check_route_vectors(path)
+    assert len(failures) == 2, failures
+    assert f"{filled['name']}: img-a@gg has contract" in failures[0]
+    assert f"{refused['name']}: refused no_base" in failures[1]
 
 
 def test_check_examples_covers_every_formula() -> None:
@@ -123,6 +140,112 @@ def test_route_fingerprint() -> None:
     assert digest.route_fingerprint("image.generate", "img-a@acme", {}) == ROUTE
     assert digest.route_fingerprint("image.generate", "img-a@acme", {"size": 1024}) != ROUTE
     assert digest.route_fingerprint("image.edit", "img-a@acme") != ROUTE
+
+
+def test_contracts_are_completed_from_the_built_in_adapters() -> None:
+    complete = digest.complete_contract
+    gg_image = {"adapter": "gg-image", "adapter_behavior": "1"}
+    assert complete("image.generate", "gg", {}) == gg_image
+    assert complete("image.edit", "gg", {"adapter": None, "adapter_behavior": None}) == gg_image
+    assert complete("image.generate", "gg", {"adapter_behavior": 1}) == {
+        "adapter": "gg-image",
+        "adapter_behavior": 1,
+    }
+    assert complete("image.generate", "gg", {"adapter": "acme-image"}) == {"adapter": "acme-image"}
+    # The behaviour is typed as spec/providers.md section 2 writes it.
+    assert complete("speech.generate", "elevenlabs", {})["adapter_behavior"] == 1
+    assert complete("vision.review", "gg", {}) == {}
+    assert complete("image.generate", "acme", {"adapter": None}) == {"adapter": None}
+    # A pair with more than one adapter: its default, and the behaviour of the one named.
+    assert complete("image.edit", "openrouter", {}) == {
+        "adapter": "openrouter-image",
+        "adapter_behavior": "1",
+    }
+    assert complete("image.edit", "openrouter", {"adapter": "fx-openrouter-image-v1"}) == {
+        "adapter": "fx-openrouter-image-v1",
+        "adapter_behavior": "3",
+    }
+    assert complete("image.edit", "fal", {"adapter": "fx-openrouter-image-v1"}) == {
+        "adapter": "fx-openrouter-image-v1"
+    }
+    assert complete("image.edit", "fal", {"adapter": ["fal-image"]}) == {"adapter": ["fal-image"]}
+    # Every built-in route already names both, so its fingerprint does not move.
+    assert len(digest.BUILT_IN_ADAPTERS) == 30
+    assert sum(default for _, default in digest.BUILT_IN_ADAPTERS.values()) == 26
+    filled = digest.route_fingerprint("image.generate", "img-a@gg", gg_image)
+    assert filled == "7f6238d4aa013ab3e87587914c9ee915b141d33a2432a8ff1f3a361874901b95"
+
+
+def test_contracts_are_completed_from_a_declared_family() -> None:
+    complete = digest.complete_contract
+    base = {"default": "https://api.acme.test/v1"}
+    families = digest.declared_families(
+        {
+            "acme": {"base_url": base, "family": "openai-compatible"},
+            "bare": {"base_url": base},
+            "odd": "not a declaration",
+        }
+    )
+    assert families == {"acme": "openai-compatible"}
+    assert complete("structured.generate", "acme", {}, families) == {
+        "adapter": "openai-compatible-structured",
+        "adapter_behavior": 1,
+    }
+    assert complete("agent.turn", "acme", {"adapter": None}, families) == {
+        "adapter": "openai-compatible-tool-loop",
+        "adapter_behavior": 1,
+    }
+    assert complete("structured.generate", "acme", {"adapter": "acme-chat"}, families) == {
+        "adapter": "acme-chat"
+    }
+    # The family is read from the declarations, never from a provider's name.
+    assert complete("structured.generate", "acme", {}) == {}
+    assert complete("structured.generate", "bare", {}, families) == {}
+    assert complete("image.generate", "acme", {}, families) == {}
+    # FX's own providers are completed from FX's adapters, whatever is declared.
+    assert complete("structured.generate", "gg", {}, {"gg": "openai-compatible"}) == {
+        "adapter": "gg-structured",
+        "adapter_behavior": 1,
+    }
+    table = digest.RouteTable(families)
+    table.read([{"capability": "agent.turn", "route": "text-a@acme"}], "t")
+    assert table.lookup("agent.turn", "text-a@acme")[1]["adapter"] == "openai-compatible-tool-loop"
+
+
+def test_route_tables_resolve_extends() -> None:
+    builtin = digest.RouteTable()
+    builtin.read(
+        [{"capability": "image.generate", "route": "img-base@gg", "contract": {"quality": "max"}}],
+        "builtin",
+    )
+    base = {"adapter": "gg-image", "adapter_behavior": "1", "quality": "max"}
+    assert builtin.lookup("image.generate", "img-base@gg") == ("builtin: routes[0]", base)
+    catalog = digest.RouteTable()
+    catalog.read(
+        [
+            {"capability": "image.generate", "route": "img-a@gg", "extends": "img-base@gg"},
+            {
+                "capability": "image.generate",
+                "route": "img-b@gg",
+                "extends": "img-a@gg",
+                "contract": {"quality": "high"},
+            },
+        ],
+        "t",
+        builtin,
+    )
+    assert catalog.lookup("image.generate", "img-a@gg") == ("t: routes[0]", base)
+    assert catalog.lookup("image.generate", "img-b@gg")[1] == {**base, "quality": "high"}
+    assert catalog.lookup("image.generate", "img-base@gg") is None
+    for extends, capability, code in [
+        ("img-z@gg", "image.generate", "no_base"),
+        ("img-base@gg", "image.edit", "no_base"),
+        ("img-base@acme", "image.generate", "other_provider"),
+    ]:
+        entry = {"capability": capability, "route": "img-c@gg", "extends": extends}
+        with pytest.raises(digest.RefusedInput) as refused:
+            digest.RouteTable().read([entry], "t", builtin)
+        assert refused.value.code == code
 
 
 def test_route_splits_at_the_last_at() -> None:
@@ -838,7 +961,8 @@ def test_check_graph_lets_a_later_table_replace_an_entry(project: Path) -> None:
     other = project / "other.yaml"
     other.write_text(
         "fx: routes/v1\nroutes:\n"
-        "  - { capability: image.generate, route: img-a@acme, price: {}, contract: { v: 2 } }\n",
+        "  - { capability: image.generate, route: img-a@acme, price: { usd: 0 },"
+        " contract: { v: 2 } }\n",
         "utf-8",
     )
     replaced = digest.route_fingerprint("image.generate", "img-a@acme", {"v": 2})
@@ -850,7 +974,8 @@ def test_check_graph_lets_a_later_table_replace_an_entry(project: Path) -> None:
 def test_check_graph_reads_route_tables_in_listed_order(project: Path) -> None:
     (project / "late.yaml").write_text(
         "fx: routes/v1\nroutes:\n"
-        "  - { capability: image.generate, route: img-a@acme, price: {}, contract: { v: 3 } }\n",
+        "  - { capability: image.generate, route: img-a@acme, price: { usd: 0 },"
+        " contract: { v: 3 } }\n",
         "utf-8",
     )
     replaced = digest.route_fingerprint("image.generate", "img-a@acme", {"v": 3})
@@ -867,12 +992,34 @@ def test_check_graph_refuses_a_duplicate_within_one_table(
     other = project / "other.yaml"
     other.write_text(
         "fx: routes/v1\nroutes:\n"
-        "  - { capability: image.generate, route: img-a@acme, price: {} }\n"
-        "  - { capability: image.generate, route: img-a@acme, price: {} }\n",
+        "  - { capability: image.generate, route: img-a@acme, price: { usd: 0 } }\n"
+        "  - { capability: image.generate, route: img-a@acme, price: { usd: 0 } }\n",
         "utf-8",
     )
     assert _run_check(project, _graph(), "--routes", str(other)) == 1
     assert "already declared" in capsys.readouterr().err
+
+
+def test_check_graph_extends_the_built_in_table_under_routes(project: Path) -> None:
+    builtin = project / "builtin.yaml"
+    builtin.write_text(
+        "fx: routes/v1\nroutes:\n"
+        "  - { capability: image.generate, route: img-base@acme, price: { usd: 0 },"
+        " contract: { v: 7 } }\n",
+        "utf-8",
+    )
+    other = project / "other.yaml"
+    other.write_text(
+        "fx: routes/v1\nroutes:\n"
+        "  - { capability: image.generate, route: img-a@acme, extends: img-base@acme }\n",
+        "utf-8",
+    )
+    extended = digest.route_fingerprint("image.generate", "img-a@acme", {"v": 7})
+    graph = _with_fingerprint(_graph(), extended)
+    routes = ["--routes", str(other), "--builtin-routes", str(builtin)]
+    assert _run_check(project, graph, *routes) == 0
+    # Without the built-in table, the base is in no table read so far.
+    assert _run_check(project, graph, "--routes", str(other)) == 1
 
 
 def test_check_graph_route_in_no_table(project: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -1208,7 +1355,7 @@ def _kind(table: dict[str, Any]) -> None:
         (_renamed_but_still_a_feature, "renamed alpha: it is still a feature"),
         (
             _renamed_but_never_dropped,
-            "renamed old_alpha: spec/providers.md section 11 does not name it",
+            "renamed old_alpha: spec/providers.md section 4 does not name it",
         ),
         (_kind, "kind is 'fx-features-v2', not 'fx-features-v1'"),
     ],
@@ -1231,7 +1378,7 @@ def test_check_spec_feature_vocabulary_follows_the_spec_text(
     vocabulary: tuple[Any, Path, Path], capsys: pytest.CaptureFixture[str]
 ) -> None:
     check_spec, spec, _ = vocabulary
-    # A feature row added to the spec, and a rename that section 11 no longer names.
+    # A feature row added to the spec, and a rename that section 4 no longer names.
     capabilities = spec / "capabilities.md"
     text = capabilities.read_text("utf-8")
     row = "| `exact_duration` |"
@@ -1246,7 +1393,7 @@ def test_check_spec_feature_vocabulary_follows_the_spec_text(
     assert _check_vocabulary(check_spec) == 1
     out = capsys.readouterr().out
     assert "sound.generate: not its feature table (extra [], missing ['loop_seamless'])" in out
-    assert "renamed data_url_reference_input: spec/providers.md section 11 does not name it" in out
+    assert "renamed data_url_reference_input: spec/providers.md section 4 does not name it" in out
 
 
 @pytest.mark.parametrize(
@@ -1277,3 +1424,144 @@ def test_check_spec_feature_vocabulary_refuses_a_malformed_table(
         features.write_text(content, "utf-8")
     assert _check_vocabulary(check_spec) == 1
     assert expected in capsys.readouterr().out
+
+
+# --- tools/check_spec.py: the built-in adapters (j) ---------------------------------------------
+
+
+@pytest.fixture
+def adapters(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Any, Path]:
+    """check_spec with spec/ and the adapters' references copied into `tmp_path`."""
+    check_spec = _load_check_spec()
+    spec = tmp_path / "spec"
+    spec.mkdir()
+    for name in ("capabilities.md", "providers.md"):
+        (spec / name).write_bytes((REPO / "spec" / name).read_bytes())
+    source = REPO / "crates" / "grida-fx-providers" / "src"
+    for reference in source.glob("*/README.md"):
+        copy = tmp_path / reference.relative_to(REPO)
+        copy.parent.mkdir(parents=True)
+        copy.write_bytes(reference.read_bytes())
+    monkeypatch.setattr(check_spec, "SPEC", spec)
+    return check_spec, tmp_path
+
+
+def _check_routes(check_spec: Any) -> int:
+    gate = check_spec.Gate()
+    check_spec.check_default_routes(gate, {})
+    return gate.failures
+
+
+def test_check_spec_routes_agree_with_the_built_in_adapters(
+    adapters: tuple[Any, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    check_spec, _ = adapters
+    assert _check_routes(check_spec) == 0, capsys.readouterr().out
+    assert "30 built-in adapters, 2 family adapters and their references" in (
+        capsys.readouterr().out
+    )
+
+
+def test_check_spec_routes_catch_a_behaviour_the_table_does_not_write(
+    adapters: tuple[Any, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    check_spec, root = adapters
+    providers = root / "spec" / "providers.md"
+    row = "| `fal` | `video.generate` | `fal-queue` | `1` |"
+    text = providers.read_text("utf-8")
+    assert text.count(row) == 1
+    providers.write_text(text.replace(row, row.replace("`1`", '`"1"`')), "utf-8")
+    assert _check_routes(check_spec) == 3
+    out = capsys.readouterr().out
+    assert 'image-to-video@fal: carries behaviour 1, the table `"1"`' in out
+    assert "src/fal/README.md: its table lists [('video.generate', 'fal-queue', '`1`')]" in out
+    assert 'video.generate on fal: digest.py carries behaviour 1, the table `"1"`' in out
+
+
+def test_check_spec_routes_catch_digest_s_own_table(
+    adapters: tuple[Any, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    check_spec, _ = adapters
+    ours = dict(check_spec.digest.BUILT_IN_ADAPTERS)
+    ours[("mesh.rig", "tripo", "tripo-rig")] = ("1", True)
+    del ours[("image.edit", "grok", "fx-grok-image-v1")]
+    ours[("image.edit", "fal", "fx-fal-image-v1")] = ("1", True)
+    monkeypatch.setattr(check_spec.digest, "BUILT_IN_ADAPTERS", ours)
+    assert _check_routes(check_spec) == 1
+    out = capsys.readouterr().out
+    assert "fx-grok-image-v1 for image.edit on grok: not in digest.py's table" in out
+    assert 'tripo-rig for mesh.rig on tripo: digest.py carries behaviour "1", the table `1`' in out
+    assert "fx-fal-image-v1 for image.edit on fal: digest.py says default is True" in out
+
+
+def test_check_spec_routes_catch_digest_s_family_table(
+    adapters: tuple[Any, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    check_spec, _ = adapters
+    ours = dict(check_spec.digest.FAMILY_ADAPTERS)
+    ours[("openai-compatible", "agent.turn")] = ("openai-compatible-tool-loop", "1")
+    del ours[("openai-compatible", "structured.generate")]
+    monkeypatch.setattr(check_spec.digest, "FAMILY_ADAPTERS", ours)
+    assert _check_routes(check_spec) == 1
+    out = capsys.readouterr().out
+    assert (
+        "openai-compatible-structured for structured.generate of the openai-compatible family: "
+        "not in digest.py's table" in out
+    )
+    assert (
+        "openai-compatible-tool-loop for agent.turn of the openai-compatible family: digest.py "
+        'carries behaviour "1", the table `1`' in out
+    )
+
+
+def test_check_spec_routes_catch_a_reference_without_its_contract(
+    adapters: tuple[Any, Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    check_spec, root = adapters
+    reference = root / "crates" / "grida-fx-providers" / "src" / "tripo" / "README.md"
+    row = "| `mesh.rig` | `tripo-rig` | `1` |\n"
+    text = reference.read_text("utf-8")
+    assert text.count(row) == 1
+    reference.write_text(text.replace(row, ""), "utf-8")
+    assert _check_routes(check_spec) == 1
+    assert "lacks [('mesh.rig', 'tripo-rig', '`1`')]" in capsys.readouterr().out
+
+
+# --- tools/check_spec.py: references to the sections of spec files (l) --------------------------
+
+
+def _check_references(check_spec: Any, monkeypatch: pytest.MonkeyPatch, files: list[Path]) -> int:
+    monkeypatch.setattr(check_spec, "_text_files", lambda: files)
+    gate = check_spec.Gate()
+    check_spec.check_section_references(gate)
+    return gate.failures
+
+
+def test_check_spec_section_references(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    check_spec = _load_check_spec()
+    spec = tmp_path / "spec"
+    spec.mkdir()
+    (spec / "acme.md").write_text("# Acme\n\n## 1. One\n\n### 1.2 Two\n\n## 3. Three\n", "utf-8")
+    (spec / "README.md").write_text("# Contracts\n\n## 9. Not a contract\n", "utf-8")
+    monkeypatch.setattr(check_spec, "SPEC", spec)
+    good = tmp_path / "good.rs"
+    good.write_text(
+        "//! [acme.md](acme.md) §1, §1.2 and §3; spec/acme.md section 3; (spec/acme.md\n"
+        "//! §1.2); `acme.md` §1–§3; README.md §7; docs/acme.md §9\n",
+        "utf-8",
+    )
+    assert _check_references(check_spec, monkeypatch, [good]) == 0, capsys.readouterr().out
+    assert "7 references to sections of spec files" in capsys.readouterr().out
+    bad = tmp_path / "bad.md"
+    bad.write_text("See [acme.md](../spec/acme.md) §2,\nand acme.md §1, §4.\n", "utf-8")
+    assert _check_references(check_spec, monkeypatch, [good, bad]) == 1
+    out = capsys.readouterr().out
+    assert "bad.md:1: acme.md has no section 2" in out
+    assert "bad.md:2: acme.md has no section 4" in out
+    assert "section 1\n" not in out

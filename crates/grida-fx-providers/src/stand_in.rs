@@ -1,16 +1,17 @@
 //! The providers' checks of a stand-in's answer (spec/protocol.md §5.7, §6.1 *Stand-in answers*;
-//! spec/providers.md §1, §4.4).
+//! spec/adapters.md §1, §3.4).
 //!
 //! A stand-in run answers each paid call the call cache cannot answer with a function the caller
 //! supplies, instead of a provider. The engine holds such an answer to what a provider's answer is
 //! held to. [`StandInChecks`] makes the checks that are the providers':
 //! - [`StandInChecks::request`], sub-step 1: the request against its capability, before the
-//!   stand-in is asked (spec/capabilities.md §1; spec/providers.md §5 step 2). The route's
-//!   refusals of values (spec/providers.md §5 steps 1, 3, 4 and 5) live inside each adapter's
-//!   send, and are not made;
+//!   stand-in is asked (spec/capabilities.md §1; spec/adapters.md §4 step 2), as the engine checks
+//!   it before an adapter's send ([`checks::request`]). The route's refusals (spec/adapters.md §4
+//!   steps 1, 3, 4 and 5), its contract included, are not made;
 //! - [`StandInChecks::answer`], sub-steps 3.1 and 3.2: the answer's shape, since no adapter made
-//!   it, and then the route's check. The round trip of `data` through canonical JSON and the
-//!   engine's check of `agent.turn` (3.3 and 3.4) are the engine's.
+//!   it, and then the route's check: one check, where a live answer of FX's adapter meets both
+//!   the adapter's and the capability's every-route check. The round trip of `data` through
+//!   canonical JSON and the engine's check of `agent.turn` (3.3 and 3.4) are the engine's.
 //!
 //! **The shape** (spec/capabilities.md §1, *Answers*), the first refusal winning, for a capability
 //! FX ships ([`capabilities::CAPABILITIES`]):
@@ -41,11 +42,14 @@
 //! <capability> names none for it`) and only checked to be a kind (spec/identity.md §4; `<name> is
 //! <kind>, not a kind`), and `data` is kept as it is.
 //!
-//! **The route's check** is the check of the adapter FX registers for the route's capability and
-//! provider, from a registry built with no keys over a transport that refuses every exchange
+//! **The route's check** is the check of the adapter FX would serve the route with (the one its
+//! contract's `adapter` names, else its capability and provider's default; spec/adapters.md §1),
+//! from a registry built with no keys over a transport that refuses every exchange
 //! ([`live::offline_setup`]): only its `check` is ever called. A route no adapter serves gets the
 //! check spec/capabilities.md gives its capability for every route ([`checks::every_route`]), and
-//! a capability with none gets none.
+//! a capability with none gets none. The registry holds FX's own declarations only
+//! ([`Keys::none`]), so a route on a provider the planning project declares gets the every-route
+//! check, which is all a family's adapters check (spec/adapters.md §1).
 
 use crate::adapter::{Adapter, Answer, AnsweredFile, CallRequest};
 use crate::capabilities;
@@ -102,19 +106,16 @@ impl StandInChecks {
     }
 
     /// The request check of spec/capabilities.md §1 ([`capabilities::check_request`]) for a
-    /// capability FX ships; `Ok(())` for any other. A refusal is `capability_refused`, and the
-    /// stand-in is not asked.
+    /// capability FX ships; `Ok(())` for any other: the engine's own before a send
+    /// ([`checks::request`]). A refusal is `capability_refused`, and the stand-in is not asked.
     pub fn request(&self, capability: &str, request: &Value) -> Result<(), String> {
-        match capabilities::capability(capability) {
-            Some(_) => capabilities::check_request(capability, request),
-            None => Ok(()),
-        }
+        checks::request(capability, request)
     }
 
     /// The answer's shape (module doc), with the kinds of files that gave none and the `data` of
     /// `video.generate` and `mesh.generate` written, and then the route's check: the registered
-    /// adapter's when one serves the route's capability and provider, else the capability's
-    /// every-route check. Returns the answer to store, with no cost. A refusal is `call_failed`.
+    /// adapter's when one serves the route, else the capability's every-route check. Returns the
+    /// answer to store, with no cost. A refusal is `call_failed`.
     pub fn answer(
         &self,
         call: &CallRequest,
@@ -141,8 +142,9 @@ fn shown(kind: &str) -> String {
     }
 }
 
-/// The shape of the module doc, as the answer to check and store.
-fn shape(
+/// The shape of the module doc, as the answer to check and store: a stand-in's, and a project
+/// adapter's, which FX did not shape either (spec/adapters.md §9).
+pub fn shape(
     capability: &str,
     files: IndexMap<String, StandInFile>,
     data: Value,

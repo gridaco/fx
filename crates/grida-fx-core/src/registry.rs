@@ -117,6 +117,27 @@ fn digests_object(digests: &BTreeMap<String, String>) -> Value {
     )
 }
 
+/// Hashes a source closure as the host reported it, with no resources: a project adapter's source
+/// (spec/adapters.md §9), and the files of a node type's. Errors are problem texts (a label that
+/// is not a relative path; a file that cannot be read).
+pub fn closure_digests(closure: &[ClosureEntry]) -> std::result::Result<SourceDigests, String> {
+    let mut digests = SourceDigests::default();
+    for entry in closure {
+        if !is_relative_label(&entry.label) {
+            return Err(format!(
+                "the node host named a source file {}, which is not a relative path",
+                crate::text::py_repr_str(&entry.label)
+            ));
+        }
+        let bytes = std::fs::read(&entry.path)
+            .map_err(|error| format!("cannot read {}: {}", entry.label, io_reason(&error)))?;
+        digests
+            .files
+            .insert(entry.label.clone(), crate::value::file_digest(&bytes));
+    }
+    Ok(digests)
+}
+
 /// Where a resolved type comes from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypeOrigin {
@@ -410,20 +431,7 @@ impl Registry {
         closure: &[ClosureEntry],
         resources: &[String],
     ) -> std::result::Result<SourceDigests, String> {
-        let mut digests = SourceDigests::default();
-        for entry in closure {
-            if !is_relative_label(&entry.label) {
-                return Err(format!(
-                    "the node host named a source file {}, which is not a relative path",
-                    crate::text::py_repr_str(&entry.label)
-                ));
-            }
-            let bytes = std::fs::read(&entry.path)
-                .map_err(|error| format!("cannot read {}: {}", entry.label, io_reason(&error)))?;
-            digests
-                .files
-                .insert(entry.label.clone(), crate::value::file_digest(&bytes));
-        }
+        let mut digests = closure_digests(closure)?;
         for resource in resources {
             let bytes = match read_project_bytes(&self.root, resource) {
                 Ok(Some(bytes)) => bytes,

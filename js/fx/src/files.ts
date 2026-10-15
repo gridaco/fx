@@ -1,8 +1,8 @@
 /**
  * Files in a run: {@link InputFile}, a file the engine handed the run, and {@link Output}, a file
- * the body made with `ctx.out`.
+ * the body made with `ctx.out`; and {@link AdapterFile}, a file a project adapter's call names.
  *
- * Both carry a brand (`Symbol.for`), so the host recognises them whichever copy of `@grida/fx`
+ * Each carries a brand (`Symbol.for`), so the host recognises them whichever copy of `@grida/fx`
  * made them. An output leaves the host only when it is returned, put in a request, or shown to an
  * agent (`spec/protocol.md` §3.4, §6.7).
  */
@@ -120,6 +120,60 @@ class MadeOutput implements Output {
 /** A new {@link Output}. */
 export function makeOutput(kind: string, source: OutputSource): Output {
   return new MadeOutput(kind, source);
+}
+
+/** The brand of an {@link AdapterFile}: where its bytes are, and its kind. */
+export const ADAPTER_FILE: unique symbol = Symbol.for("grida.fx.adapter_file") as never;
+
+/** What an {@link AdapterFile}'s brand holds. */
+export interface AdapterFileRecord {
+  readonly path: string;
+  readonly kind: string;
+}
+
+/**
+ * A file a project adapter's call names (`spec/protocol.md` §5.8): its `digest`, `kind` and
+ * `size`, and the `path` of its store copy, which an adapter reads and never writes, moves or
+ * deletes. An adapter may answer with it as one of its files, which keeps its kind.
+ */
+export class AdapterFile {
+  readonly digest: string;
+  readonly kind: string;
+  readonly size: number;
+  readonly path: string;
+  declare readonly [ADAPTER_FILE]: AdapterFileRecord;
+
+  /** Made by the host from an `adapter_file` the engine sent. */
+  constructor(file: {
+    readonly digest: string;
+    readonly kind: string;
+    readonly size: number;
+    readonly path: string;
+  }) {
+    this.digest = String(file.digest);
+    this.kind = String(file.kind);
+    this.size = Number(file.size);
+    this.path = String(file.path);
+    Object.defineProperty(this, ADAPTER_FILE, { value: Object.freeze({ path: this.path, kind: this.kind }) });
+  }
+
+  /** The file's bytes. */
+  async bytes(): Promise<Uint8Array> {
+    return readFile(this.path);
+  }
+
+  toString(): string {
+    return `AdapterFile(${this.digest}, ${this.kind})`;
+  }
+}
+
+/** Where an {@link AdapterFile} of any copy of `@grida/fx` is, and its kind; undefined for
+ * anything else. */
+export function adapterFileOf(value: unknown): AdapterFileRecord | undefined {
+  const found = objectBrand(value, ADAPTER_FILE) as Partial<AdapterFileRecord> | undefined;
+  return typeof found?.path === "string" && typeof found.kind === "string"
+    ? (found as AdapterFileRecord)
+    : undefined;
 }
 
 /** The file ref of an {@link InputFile} of any copy of `@grida/fx`; undefined for anything

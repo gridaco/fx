@@ -1,0 +1,9 @@
+{
+ "contract": {
+  "adapter": "adapters/acme.py#acme_jobs",
+  "adapter_behavior": 1
+ },
+ "job": "655a845c0937",
+ "key_given": false,
+ "name": "slate"
+}

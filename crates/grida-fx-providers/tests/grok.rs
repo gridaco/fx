@@ -1,4 +1,4 @@
-//! The Grok Build adapter and runtime (spec/providers.md §9.8) against fake Grok Build programs:
+//! The Grok Build adapter and runtime (src/grok/README.md) against fake Grok Build programs:
 //! shell scripts that speak the agent's side of ACP. No real Grok Build is ever started.
 //!
 //! The runtime's reader and writer run on the tokio runtime that started them, so each test runs
@@ -25,6 +25,11 @@ case "$*" in "agent --no-leader stdio") ;; *) exit 9 ;; esac
 case "$GROK_CONFIG" in *'"image_gen":true'*) ;; *) exit 9 ;; esac
 echo start >> "$here/starts"
 "#;
+
+/// The variables of the built-in declarations, which the program never inherits.
+fn withheld() -> Arc<[String]> {
+    Arc::from(grida_fx_core::providers::Declarations::built_in().variables())
+}
 
 /// `initialize` (Grok Build `version`, sign-in methods `methods`), then, when `cached_token` is
 /// offered, `authenticate` with it (an account billed through the API when `billed`).
@@ -199,7 +204,7 @@ fn on_one_runtime<T, F: Future<Output = T>>(
         .build()
         .unwrap();
     tokio.block_on(async {
-        let runtime = Arc::new(GrokRuntime::new(program));
+        let runtime = Arc::new(GrokRuntime::new(program, withheld()));
         let adapter = GrokImages::new(Arc::clone(&runtime))
             .with_deadlines(Duration::from_secs(20), Duration::from_secs(30));
         let out = test(adapter).await;
@@ -550,6 +555,10 @@ fn a_missing_grok_and_unhonoured_values_are_refused_before_anything_starts() {
             json!({"prompt": "p", "background": "transparent"}),
             grok::NO_TRANSPARENCY,
         ),
+        (
+            json!({"prompt": " ", "provider_options": {"grok": {"seed": 1}}}),
+            "Grok Build takes no provider_options",
+        ),
     ] {
         let call = CallBuilder::new("image.generate", "imagine@grok")
             .contract(contract())
@@ -557,7 +566,33 @@ fn a_missing_grok_and_unhonoured_values_are_refused_before_anything_starts() {
             .build();
         assert_eq!(send(&fake, &call), refused(reason));
     }
+    // A route's own are refused the same way.
+    let mut route = contract();
+    route["provider_options"] = json!({"grok": {"seed": 1}});
+    let call = CallBuilder::new("image.generate", "imagine@grok")
+        .contract(route)
+        .request(json!({"prompt": "p"}))
+        .build();
+    assert_eq!(
+        send(&fake, &call),
+        refused("Grok Build takes no provider_options")
+    );
     assert!(fake.lines("starts").is_empty());
+}
+
+#[test]
+fn provider_options_for_other_providers_are_not_read() {
+    let (sent, verified) = on_one_runtime(Err(grok::NOT_INSTALLED.into()), |adapter| async move {
+        let call = CallBuilder::new("image.generate", "imagine@grok")
+            .contract(contract())
+            .request(json!({"prompt": "p",
+                            "provider_options": {"grok": {}, "openai": {"seed": 1}}}))
+            .build();
+        adapter.send(&call).await
+    });
+    assert!(verified);
+    // Past the options, to the program.
+    assert_eq!(sent, refused(grok::NOT_INSTALLED));
 }
 
 #[test]

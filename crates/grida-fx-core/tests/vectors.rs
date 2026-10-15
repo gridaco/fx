@@ -1,5 +1,10 @@
 //! The value layer against the spec's vectors.
 
+use grida_fx_core::providers::{
+    BaseUrl, Declaration, Declarations, DeclaredAdapter, LoadedAdapter,
+};
+use grida_fx_core::registry::SourceDigests;
+use grida_fx_core::routes::RouteTable;
 use grida_fx_core::value::{canon, check_markers, digest, file_digest, parse_json, write_json};
 use serde_json::Value;
 use std::path::PathBuf;
@@ -85,6 +90,141 @@ fn identity_examples() {
         }
         if let Some(want) = example.get("digest") {
             assert_eq!(digest(&object), want.as_str().unwrap(), "{name}");
+        }
+    }
+}
+
+/// The engine's sentence for a refusal of `vectors/identity/routes.json`, by its reason.
+fn route_refusal(entry: &Value, reason: &str) -> String {
+    let text = |key: &str| entry[key].as_str().unwrap().to_string();
+    let (extends, capability) = (text("extends"), text("capability"));
+    let provider = text("route").rsplit_once('@').unwrap().1.to_string();
+    match reason {
+        "no_base" => format!("no route {extends} serves {capability}"),
+        "other_provider" => format!("{extends} is not a {provider} route"),
+        other => panic!("no reason {other}"),
+    }
+}
+
+/// A case's `providers`, the planning project's declarations as fx.yaml gives them: only a
+/// declaration's `family` or `adapter` completes a contract, so the rest is read as far as it
+/// needs. A declared adapter is as the case's `adapters` says loading found it.
+fn declarations(case: &Value) -> Declarations {
+    let Some(providers) = case.get("providers").and_then(Value::as_object) else {
+        return Declarations::built_in();
+    };
+    let declared: Vec<Declaration> = providers
+        .iter()
+        .map(|(name, entry)| Declaration {
+            name: name.clone(),
+            label: name.clone(),
+            credential: None,
+            base_url: BaseUrl {
+                variable: None,
+                default: entry["base_url"]["default"].as_str().unwrap().to_string(),
+            },
+            download_hosts: Vec::new(),
+            family: entry
+                .get("family")
+                .and_then(Value::as_str)
+                .map(String::from),
+            adapter: entry
+                .get("adapter")
+                .and_then(Value::as_str)
+                .map(|name| loaded_adapter(name, &case["adapters"][name])),
+        })
+        .collect();
+    Declarations::with(&declared)
+}
+
+/// The adapter `name` (`<path>#<attribute>`) as loading found it, from a case's `adapters`: its
+/// `version`, its `capabilities` and, without a version, its `source` file digests.
+fn loaded_adapter(name: &str, loaded: &Value) -> DeclaredAdapter {
+    let (path, attribute) = name.rsplit_once('#').unwrap();
+    let files = loaded
+        .get("source")
+        .and_then(Value::as_object)
+        .into_iter()
+        .flatten()
+        .map(|(label, digest)| (label.clone(), digest.as_str().unwrap().to_string()))
+        .collect();
+    DeclaredAdapter {
+        path: path.into(),
+        attribute: attribute.into(),
+        loaded: Some(LoadedAdapter {
+            version: loaded["version"].as_u64(),
+            capabilities: serde_json::from_value(loaded["capabilities"].clone()).unwrap(),
+            source: SourceDigests {
+                files,
+                resources: Default::default(),
+            },
+            drift: None,
+        }),
+    }
+}
+
+#[test]
+fn route_vectors() {
+    let doc = vectors("identity/routes.json");
+    assert_eq!(doc["kind"], "fx-route-vectors-v1");
+    let document = |routes: &Value| serde_json::json!({"fx": "routes/v1", "routes": routes});
+    for case in cases(&doc, "cases") {
+        let name = case["name"].as_str().unwrap();
+        let declared = declarations(case);
+        let builtin = RouteTable::from_document(&document(&case["builtin"]), "builtin").unwrap();
+        let mut catalog = if case["routes_given"] == true {
+            RouteTable::new()
+        } else {
+            builtin.clone()
+        };
+        let mut refused = None;
+        for (i, table) in cases(case, "tables").iter().enumerate() {
+            let label = format!("tables.{i}");
+            let bases = [&catalog, &builtin];
+            match RouteTable::from_document_over(&document(table), &label, &bases, &declared) {
+                Ok(read) => catalog.overlay(read),
+                Err(error) => {
+                    refused = Some(error.message);
+                    break;
+                }
+            }
+        }
+        if let Some(refuse) = case.get("refuse") {
+            let (t, e) = (
+                refuse["table"].as_u64().unwrap(),
+                refuse["entry"].as_u64().unwrap(),
+            );
+            let entry = &case["tables"][t as usize][e as usize];
+            let reason = route_refusal(entry, refuse["reason"].as_str().unwrap());
+            assert_eq!(
+                refused.as_deref(),
+                Some(format!("tables.{t}: routes.{e}.extends: {reason}").as_str()),
+                "{name}"
+            );
+            continue;
+        }
+        assert_eq!(refused, None, "{name}");
+        for want in cases(case, "expect") {
+            let capability = want["capability"].as_str().unwrap();
+            let route = catalog
+                .resolve(capability, want["route"].as_str().unwrap())
+                .unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert_eq!(canon(&route.contract), canon(&want["contract"]), "{name}");
+            assert_eq!(
+                route.fingerprint(),
+                want["digest"].as_str().unwrap(),
+                "{name}"
+            );
+        }
+        for absent in case
+            .get("absent")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            let capability = absent["capability"].as_str().unwrap();
+            let id = absent["route"].as_str().unwrap();
+            assert!(catalog.resolve(capability, id).is_err(), "{name}: {id}");
         }
     }
 }

@@ -121,8 +121,12 @@ of unrelated side effects.
 For paid work, use FX capabilities such as `ctx.image_generate` or
 `ctx.capability`, with declared `calls`. Do not implement your own provider retry,
 cache, billing, or provenance layer. Direct HTTP calls escape FX's pricing and
-spending controls. Read the
-[node guide](https://github.com/gridaco/fx/blob/main/docs/guide/03-nodes.md)
+spending controls. To reach a provider FX does not ship, declare it in `fx.yaml`
+and give it routes and, unless it speaks the OpenAI Chat Completions API, an
+adapter (`adapter(...)` from `grida.fx` or `@grida/fx`): nodes then reach it
+through `ctx.capability` like any provider
+([Community providers](https://github.com/gridaco/fx/blob/main/docs/guide/15-community-providers.md)).
+Read the [node guide](https://github.com/gridaco/fx/blob/main/docs/guide/03-nodes.md)
 before introducing a capability or judge.
 
 **Cache limitation of older engines, including the 0.1.0 release:** distinct

@@ -46,6 +46,7 @@ uses their plan.
 | Their own Codex | Codex, signed in with ChatGPT | images only | their ChatGPT plan; $0 to FX |
 | Grida Gateway (GG) | one `GG_API_KEY` | text, agent turns, images, video, 3D models and rigs | their organization's Grida AI credits |
 | Their own keys | each provider's key | that provider's routes | each provider's account |
+| A provider FX does not ship (a community provider) | its key, and a declaration in `fx.yaml` | the routes the project gives it | the provider's account |
 
 When the user has no preference and needs more than images, suggest Grida
 Gateway: one key and one account cover every modality FX's workflows usually
@@ -120,6 +121,29 @@ Ask the user to create keys only for the providers their routes use:
 | Tripo | `TRIPO_API_KEY` | <https://platform.tripo3d.ai/api-keys> |
 | ElevenLabs | `ELEVENLABS_API_KEY` | <https://elevenlabs.io/app/settings/api-keys> |
 
+### A provider FX does not ship
+
+FX 0.7 and later serve a provider the project declares, a *community provider*:
+a model server on the user's machine, a company gateway, a vendor FX does not
+list. Ask the user for three things, never the key itself: the name of the
+variable that will hold its key (none for a server that needs no key), its base
+URL, and whether it speaks the OpenAI Chat Completions API. Then, with their
+agreement, declare it in `fx.yaml`:
+
+```yaml
+providers:
+  acme:                                      # its routes are <model>@acme
+    credential: { variable: ACME_API_KEY }   # the user sets ACME_API_KEY
+    base_url: { variable: ACME_BASE_URL, default: "https://api.acme.test/v1" }
+    family: openai-compatible                # structured output and agent turns
+```
+
+A provider that speaks another API needs `adapter: <path>#<name>` in place of
+`family`, an adapter written in the project in Python or TypeScript. Give each of
+its routes a price or a `cap_usd` in a route table of the project's own. The
+[Community providers](https://github.com/gridaco/fx/blob/main/docs/guide/15-community-providers.md)
+guide covers declarations, routes and adapters end to end.
+
 ## 4. Verify
 
 ```sh
@@ -135,6 +159,12 @@ or set `GRIDA_FX_TOOL_CODEX`. `too old (codex …)` means the Codex its `program
 line names is older than 0.160.1: the user updates it or sets
 `GRIDA_FX_TOOL_CODEX` to a newer one.
 
+A declared provider has a `provider` line (`provider  acme api.acme.test
+ACME_API_KEY missing`, or `needs no key`), and one served by an adapter an
+`adapter` line naming its version and capabilities, or `cannot load: …`, which
+makes doctor exit 1. A route on a declared provider is `no adapter` when neither
+its family nor its adapter serves the capability.
+
 ## 5. Pick routes and make the first paid run
 
 List the routes for a capability and set the project's defaults in `fx.yaml`
@@ -142,6 +172,20 @@ with the user:
 
 ```sh
 grida fx nodes image.generate
+```
+
+When the model the user wants is not listed, on GG, OpenRouter or fal, add a route
+of the project's own instead of waiting for FX: list a route table under
+`route_tables:` in `fx.yaml` and give the model's id as the provider names it,
+with `price: { cap_usd: N }` when its price is unknown (agree N with the user):
+
+```yaml
+# routes/models.yaml
+fx: routes/v1
+routes:
+  - capability: image.generate
+    route: acme/img-a@openrouter   # the model id as OpenRouter names it
+    price: { cap_usd: 0.20 }       # each call holds $0.20, charged what OpenRouter reports
 ```
 
 ```yaml

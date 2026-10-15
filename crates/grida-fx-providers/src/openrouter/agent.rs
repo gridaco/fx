@@ -1,25 +1,30 @@
 //! OpenRouter agent turns: one `agent.turn` (spec/protocol.md §6.2 step 3) as one
-//! `POST {base}/chat/completions` with strict function tools (spec/providers.md §9.2;
+//! `POST {base}/chat/completions` with strict function tools (src/openrouter/README.md;
 //! spec/capabilities.md §5).
 //!
 //! Contract: `adapter: openrouter-tool-loop`, `adapter_behavior: 1`, optional `request_policy`
-//! ([`super::structured::RequestPolicy`]). The engine's transcript maps to the wire: a system
-//! message when `system` is non-empty; user messages with pictures as content parts (`detail` from
-//! the policy); assistant messages with `content: null` when empty and `tool_calls` whose
-//! `arguments` string is passed through byte for byte; tool messages as `{"role": "tool",
-//! "tool_call_id", "content"}` (no `name`), their pictures regrouped into a following user message
-//! `Pictures the tools returned.`. Tools: `{"type": "function", "function": {"name",
-//! "description", "parameters": <strict schema>, "strict": true}}`. The answer is
-//! `data: {"text", "tool_calls": [{"id", "name", "arguments": <object>}]}`, `cost` from
-//! `usage` ([`super::usage_cost`]); the engine checks its shape. Deadline 600 s.
+//! ([`super::structured::RequestPolicy`]) and `provider_options` (spec/adapters.md §8: the engine's
+//! agent loop sends none, so an agent run's turns take only the route's). The engine's transcript
+//! maps to the wire: a system message when `system` is non-empty; user messages with pictures as
+//! content parts (`detail` from the policy); assistant messages with `content: null` when empty and
+//! `tool_calls` whose `arguments` string is passed through byte for byte; tool messages as
+//! `{"role": "tool", "tool_call_id", "content"}` (no `name`), their pictures regrouped into a
+//! following user message `Pictures the tools returned.`. Tools: `{"type": "function", "function":
+//! {"name", "description", "parameters": <strict schema>, "strict": true}}`. The answer is `data:
+//! {"text", "tool_calls": [{"id", "name", "arguments": <object>}]}`, `cost` from `usage`
+//! ([`super::usage_cost`]); the engine checks its shape. Deadline 600 s.
 //!
-//! `send`, in the order of spec/providers.md §5:
+//! `send`, in the order of spec/adapters.md §4 (the engine makes steps 1 and 2 before it, the
+//! contract's other members through `check_contract`; the adapter makes them again for a direct
+//! caller):
 //! 1. the contract (`structured::read_contract`, no `pictures` member);
 //! 2. `capabilities::check_request`;
 //! 3. the key (`authorization: Bearer <OPENROUTER_API_KEY>`);
-//! 4. values: each tool's name (`^[a-z][a-z0-9_]{0,63}$`), non-blank description and object
-//!    `parameters`; `max_tokens` at least 1; the transcript (known roles, text contents, an id on
-//!    every assistant call and every tool message, pictures as file values);
+//! 4. values: provider options that set no member of [`OWNED`] ([`wire::provider_options`], added
+//!    after the body's own members); each tool's name (`^[a-z][a-z0-9_]{0,63}$`), non-blank
+//!    description and object `parameters`; `max_tokens` at least 1; the transcript (known roles,
+//!    text contents, an id on every assistant call and every tool message, pictures as file
+//!    values);
 //! 5. files: every picture, as a data URL of its kind. A file that is not `image/*` is refused
 //!    before any file is read: `messages[<i>].images[<j>] is <kind>, not a picture`;
 //! 6. a body over 200 MiB is refused; otherwise one exchange.
@@ -31,7 +36,7 @@
 
 use super::structured;
 use crate::BoxFuture;
-use crate::adapter::{Answer, CallRequest, RequestAdapter, Sent};
+use crate::adapter::{Answer, CallRequest, Identity, RequestAdapter, Sent};
 use crate::capabilities;
 use crate::chat;
 use crate::setup::Client;
@@ -52,6 +57,27 @@ pub const DEADLINE: Duration = Duration::from_secs(600);
 
 /// The capability this adapter serves.
 pub const CAPABILITY: &str = "agent.turn";
+
+/// The members provider options may not set (spec/adapters.md §8; src/openrouter/README.md):
+/// every member the body has, and those that would change the answer.
+pub const OWNED: &[&str] = &[
+    "model",
+    "messages",
+    "tools",
+    "tool_choice",
+    "provider",
+    "reasoning",
+    "max_tokens",
+    "stream",
+    "n",
+    "response_format",
+];
+
+/// The contract this adapter serves: [`CONTRACT_ADAPTER`], behaviour the number 1.
+pub const IDENTITY: Identity = Identity {
+    adapter: CONTRACT_ADAPTER,
+    behavior: "1",
+};
 
 /// OpenRouter's agent-turn adapter (module doc).
 #[derive(Debug, Clone)]
@@ -77,11 +103,12 @@ impl OpenRouterAgent {
         // 2. The capability.
         capabilities::check_request(CAPABILITY, &call.request)?;
         // 3. The key.
-        let credential = self.client.credential("authorization", "Bearer ")?;
+        let credential = self.client.credential()?;
         // 4 and 5. Values, then files.
+        let options = wire::provider_options(call, OWNED)?;
         let policy = &contract.policy;
         let prompt = chat::agent_prompt(call, policy.image_detail.as_deref())?;
-        // The body (spec/providers.md §9.2).
+        // The body (src/openrouter/README.md).
         let mut body = Map::new();
         body.insert(
             "model".into(),
@@ -97,6 +124,7 @@ impl OpenRouterAgent {
         if let Some(max_tokens) = prompt.max_tokens {
             body.insert("max_tokens".into(), json!(max_tokens));
         }
+        body.extend(options);
         let body = Value::Object(body);
         if wire::body_exceeds(&body, super::MAX_REQUEST_BYTES) {
             return Err(super::BODY_TOO_LARGE.into());
@@ -104,7 +132,7 @@ impl OpenRouterAgent {
         Ok(Prepared { credential, body })
     }
 
-    /// A 2xx's body as an answer (spec/providers.md §9.2).
+    /// A 2xx's body as an answer (src/openrouter/README.md).
     fn parse(&self, response: &HttpResponse) -> Sent {
         let body = match wire::json_object(&response.body, LABEL) {
             Ok(body) => body,
@@ -146,5 +174,13 @@ impl RequestAdapter for OpenRouterAgent {
                 Err(sent) => sent,
             }
         })
+    }
+
+    fn identity(&self) -> Option<Identity> {
+        Some(IDENTITY)
+    }
+
+    fn check_contract(&self, call: &CallRequest) -> Result<(), String> {
+        structured::read_contract(&call.route, CAPABILITY, CONTRACT_ADAPTER, false).map(|_| ())
     }
 }

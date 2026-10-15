@@ -1,0 +1,307 @@
+{
+ "kind": "fx-route-vectors-v1",
+ "description": "Route tables read into a catalog (identity.md section 7): each case's builtin table stands in for the built-in default table, and its tables follow in catalog order. providers, when given, is the planning project's declarations as fx.yaml's providers: gives them; only a declaration's family or adapter completes a contract. adapters, given with a declared adapter, is what loading each one told planning, by its name: its version (an integer, or null), its capabilities as adapter.load gives them, and for one without a version its source, the file digests of its source closure by label. routes_given leaves the built-in table out of the catalog, as a --routes file does; it still serves as a base. expect lists catalog entries with their completed contract and fingerprint; absent lists routes the catalog must not hold; refuse names the table and entry that is refused, and why: no_base or other_provider.",
+ "cases": [
+  {
+   "name": "a contract left out on a pair an adapter of FX serves is filled in",
+   "note": "identity.md section 7, step 2: the adapter's name and its behaviour, typed as providers.md section 2 writes it (the string \"1\" for gg-image).",
+   "builtin": [],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "image.generate", "route": "img-a@gg", "price": {"usd": 0.01}}]
+   ],
+   "expect": [
+    {"capability": "image.generate", "route": "img-a@gg", "contract": {"adapter": "gg-image", "adapter_behavior": "1"}, "digest": "7f6238d4aa013ab3e87587914c9ee915b141d33a2432a8ff1f3a361874901b95"}
+   ]
+  },
+  {
+   "name": "the behaviour of a capability outside images is the number 1",
+   "builtin": [],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "speech.generate", "route": "voice-a@elevenlabs", "price": {"usd": 0.01}, "contract": {"adapter": "elevenlabs-speech"}}]
+   ],
+   "expect": [
+    {"capability": "speech.generate", "route": "voice-a@elevenlabs", "contract": {"adapter": "elevenlabs-speech", "adapter_behavior": 1}, "digest": "66e09f6aa6b811c7ae6e64ed83eaa6201e1972f1b066598263dfaab79f444821"}
+   ]
+  },
+  {
+   "name": "null counts as left out",
+   "builtin": [],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "structured.generate", "route": "text-a@gg", "price": {"usd": 0.01}, "contract": {"adapter": null, "adapter_behavior": null, "pictures": "unchanged"}}]
+   ],
+   "expect": [
+    {"capability": "structured.generate", "route": "text-a@gg", "contract": {"adapter": "gg-structured", "adapter_behavior": 1, "pictures": "unchanged"}, "digest": "1814cc41ac8ab15a849afd5801a37b9076d2e0b382f6a7bf9278ef0fdc535e03"}
+   ]
+  },
+  {
+   "name": "a stated behaviour is kept",
+   "note": "The number 1 is not gg-image's behaviour: the route plans, and its calls are refused (adapters.md section 4).",
+   "builtin": [],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "image.generate", "route": "img-a@gg", "price": {"usd": 0.01}, "contract": {"adapter_behavior": 1}}]
+   ],
+   "expect": [
+    {"capability": "image.generate", "route": "img-a@gg", "contract": {"adapter_behavior": 1, "adapter": "gg-image"}, "digest": "5ab81b56b20b95ad3595680169a38a315458e6ae78194645f72b2e0123554c40"}
+   ]
+  },
+  {
+   "name": "a contract naming another adapter gets no behaviour",
+   "builtin": [],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "image.generate", "route": "img-a@gg", "price": {"usd": 0.01}, "contract": {"adapter": "acme-image"}}]
+   ],
+   "expect": [
+    {"capability": "image.generate", "route": "img-a@gg", "contract": {"adapter": "acme-image"}, "digest": "7564bb2978514c1c99088a08506ef1a70042ee24b8d781967b81aa19e2b4a90c"}
+   ]
+  },
+  {
+   "name": "a pair no adapter of FX serves keeps its contract",
+   "note": "gg serves other capabilities, but not vision.review; acme serves none.",
+   "builtin": [],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "vision.review", "route": "review-a@gg", "price": {"usd": 0.01}}, {"capability": "image.generate", "route": "img-a@acme", "price": {"usd": 0.01}}, {"capability": "image.edit", "route": "img-a@acme", "price": {"usd": 0.01}, "contract": {"adapter": null}}]
+   ],
+   "expect": [
+    {"capability": "vision.review", "route": "review-a@gg", "contract": {}, "digest": "c857a9e9e7f9aa5e5a1a019f05735c177b61079c2305feabe1d4da22d97cfd8f"},
+    {"capability": "image.generate", "route": "img-a@acme", "contract": {}, "digest": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4"},
+    {"capability": "image.edit", "route": "img-a@acme", "contract": {"adapter": null}, "digest": "dbeb8b4386a3f9a4f832a21ef5ce88e3e3c36c38f934b7345e9749727004f11f"}
+   ]
+  },
+  {
+   "name": "a pair with more than one adapter fills in its default",
+   "note": "providers.md section 2: OpenRouter's and fal's image defaults are their generic adapters, not GPT Image's, which a route must name.",
+   "builtin": [],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "image.generate", "route": "acme/img-a@openrouter", "price": {"cap_usd": 0.5}}, {"capability": "image.edit", "route": "acme/img-a/edit@fal", "price": {"cap_usd": 0.5}}]
+   ],
+   "expect": [
+    {"capability": "image.generate", "route": "acme/img-a@openrouter", "contract": {"adapter": "openrouter-image", "adapter_behavior": "1"}, "digest": "c47886b22113a49d3bd869fc62f18416393788a11f3d78803b8f14cc2110dac4"},
+    {"capability": "image.edit", "route": "acme/img-a/edit@fal", "contract": {"adapter": "fal-image", "adapter_behavior": "1"}, "digest": "6fb22c5bcf756aa2fda9ddaa489594d8ce748b463183083122f7f775148af474"}
+   ]
+  },
+  {
+   "name": "a contract naming a pair's other adapter gets that adapter's behaviour",
+   "note": "fx-openrouter-image-v1 serves only a route that names it, with the behaviour the string \"3\"; a behaviour alone names the default, which refuses \"3\" when a call is sent; an adapter of another pair gets none.",
+   "builtin": [],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "image.generate", "route": "acme/img-b@openrouter", "price": {"usd": 0.1}, "contract": {"adapter": "fx-openrouter-image-v1"}}, {"capability": "image.edit", "route": "acme/img-b@fal", "price": {"usd": 0.1}, "contract": {"adapter": "fx-fal-image-v1", "adapter_behavior": null}}, {"capability": "image.generate", "route": "acme/img-c@openrouter", "price": {"usd": 0.1}, "contract": {"adapter": "fal-image"}}, {"capability": "image.generate", "route": "acme/img-d@openrouter", "price": {"usd": 0.1}, "contract": {"adapter_behavior": "3"}}]
+   ],
+   "expect": [
+    {"capability": "image.generate", "route": "acme/img-b@openrouter", "contract": {"adapter": "fx-openrouter-image-v1", "adapter_behavior": "3"}, "digest": "4b78dee8bc944ac17e2b0def642a98d168e1840c8600aa4d929122d22019c2b3"},
+    {"capability": "image.edit", "route": "acme/img-b@fal", "contract": {"adapter": "fx-fal-image-v1", "adapter_behavior": "1"}, "digest": "37f13319dd742c2df5d694c4fa4da14fff235a412635bec51bb06a823601b504"},
+    {"capability": "image.generate", "route": "acme/img-c@openrouter", "contract": {"adapter": "fal-image"}, "digest": "aa60a467663d4eed3d8866b3fba0c52497fd257c0ce7073bb91cb978bdcb3acb"},
+    {"capability": "image.generate", "route": "acme/img-d@openrouter", "contract": {"adapter": "openrouter-image", "adapter_behavior": "3"}, "digest": "159ae06524924c6c668956866777e68a3a6b23d0b8fe2327a521003dd3352a4d"}
+   ]
+  },
+  {
+   "name": "a declared family fills its provider's chat routes",
+   "note": "identity.md section 7, step 2, a declared family: acme is declared with family openai-compatible, whose adapters (providers.md section 2) serve structured.generate and agent.turn; image.generate has none, so its contract is kept.",
+   "providers": {"acme": {"base_url": {"default": "https://api.acme.test/v1"}, "family": "openai-compatible"}},
+   "builtin": [],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "structured.generate", "route": "text-a@acme", "price": {"cap_usd": 0.05}}, {"capability": "agent.turn", "route": "text-a@acme", "price": {"cap_usd": 0.05}, "contract": {"adapter": null}}, {"capability": "image.generate", "route": "img-a@acme", "price": {"usd": 0.01}}]
+   ],
+   "expect": [
+    {"capability": "structured.generate", "route": "text-a@acme", "contract": {"adapter": "openai-compatible-structured", "adapter_behavior": 1}, "digest": "c349af10e0a600f63fef6013c88dc88926acf949c5bcade06c74bc4563217099"},
+    {"capability": "agent.turn", "route": "text-a@acme", "contract": {"adapter": "openai-compatible-tool-loop", "adapter_behavior": 1}, "digest": "3f5b552eded964844c3135b4f48c9ff96eddd7e9338e3319df757816b0a38b92"},
+    {"capability": "image.generate", "route": "img-a@acme", "contract": {}, "digest": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4"}
+   ]
+  },
+  {
+   "name": "a family completes a contract only where the planning project declares it",
+   "note": "The family is read from the declarations, never from the provider's name: acme declared without a family, and other not declared, keep their contracts.",
+   "providers": {"acme": {"base_url": {"default": "https://api.acme.test/v1"}}},
+   "builtin": [],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "structured.generate", "route": "text-a@acme", "price": {"cap_usd": 0.05}}, {"capability": "agent.turn", "route": "text-a@other", "price": {"cap_usd": 0.05}}]
+   ],
+   "expect": [
+    {"capability": "structured.generate", "route": "text-a@acme", "contract": {}, "digest": "b84a7f3e9926f76c4c628e5bfb6cf513d87f0e570b13a65c954113c5c171a055"},
+    {"capability": "agent.turn", "route": "text-a@other", "contract": {}, "digest": "7ce912645327f86aafb110b714a11f53d2697ec3d287e97b1719e6638e52ae8d"}
+   ]
+  },
+  {
+   "name": "a family's stated members are kept",
+   "note": "A stated behaviour is kept, and refused when a call is sent; a contract naming another adapter gets no behaviour.",
+   "providers": {"acme": {"base_url": {"default": "https://api.acme.test/v1"}, "family": "openai-compatible"}},
+   "builtin": [],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "structured.generate", "route": "text-b@acme", "price": {"cap_usd": 0.05}, "contract": {"adapter_behavior": 2}}, {"capability": "agent.turn", "route": "text-b@acme", "price": {"cap_usd": 0.05}, "contract": {"adapter": "acme-chat"}}]
+   ],
+   "expect": [
+    {"capability": "structured.generate", "route": "text-b@acme", "contract": {"adapter_behavior": 2, "adapter": "openai-compatible-structured"}, "digest": "fe32a95908d79b320ccb27b4b986ebb9f973955dd59186c5225b9f939ebeeae9"},
+    {"capability": "agent.turn", "route": "text-b@acme", "contract": {"adapter": "acme-chat"}, "digest": "d1bf8ca0041334db65760da00a6d581674db854c4a61aaa297909a2ed9709db2"}
+   ]
+  },
+  {
+   "name": "a declared adapter fills its provider's routes for the capabilities it declares",
+   "note": "identity.md section 7, step 2, a declared adapter: acme is declared with the adapter adapters/acme.py#acme, which loading found at version 1, declaring structured.generate (a request) and image.generate (a job). Its routes of those capabilities get its name and version, null counting as left out; agent.turn, which it does not declare, keeps its contract.",
+   "providers": {"acme": {"base_url": {"default": "https://api.acme.test/v1"}, "adapter": "adapters/acme.py#acme"}},
+   "adapters": {"adapters/acme.py#acme": {"version": 1, "capabilities": {"structured.generate": "request", "image.generate": "job"}}},
+   "builtin": [],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "structured.generate", "route": "text-a@acme", "price": {"cap_usd": 0.05}}, {"capability": "image.generate", "route": "img-a@acme", "price": {"usd": 0.01}, "contract": {"adapter": null}}, {"capability": "agent.turn", "route": "text-a@acme", "price": {"cap_usd": 0.05}}]
+   ],
+   "expect": [
+    {"capability": "structured.generate", "route": "text-a@acme", "contract": {"adapter": "adapters/acme.py#acme", "adapter_behavior": 1}, "digest": "5c339a6c0382d6033c2e33d5316e4cffd196709ecc4daf890bc2a9656a92ff1d"},
+    {"capability": "image.generate", "route": "img-a@acme", "contract": {"adapter": "adapters/acme.py#acme", "adapter_behavior": 1}, "digest": "2b87a60b3575d6b0fb8a62cfca7cd4094da92a67ba1bae093e28262c9e983fda"},
+    {"capability": "agent.turn", "route": "text-a@acme", "contract": {}, "digest": "78d1e86bde1d0dac6288be377ddde8f4b4f4017367b7304466f113efac1ac879"}
+   ]
+  },
+  {
+   "name": "a declared adapter's stated members are kept",
+   "note": "A stated behaviour is kept, and refused when a call is sent; a contract naming another adapter gets no behaviour.",
+   "providers": {"acme": {"base_url": {"default": "https://api.acme.test/v1"}, "adapter": "adapters/acme.py#acme"}},
+   "adapters": {"adapters/acme.py#acme": {"version": 1, "capabilities": {"structured.generate": "request", "image.generate": "job"}}},
+   "builtin": [],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "structured.generate", "route": "text-b@acme", "price": {"cap_usd": 0.05}, "contract": {"adapter_behavior": 2}}, {"capability": "image.generate", "route": "img-b@acme", "price": {"usd": 0.01}, "contract": {"adapter": "acme-paint"}}]
+   ],
+   "expect": [
+    {"capability": "structured.generate", "route": "text-b@acme", "contract": {"adapter_behavior": 2, "adapter": "adapters/acme.py#acme"}, "digest": "53fac578689b2dd282d91b433544c65755cdd73c5511a6464b7944c0dbf7f215"},
+    {"capability": "image.generate", "route": "img-b@acme", "contract": {"adapter": "acme-paint"}, "digest": "b4e99957f07322523f72da81fff6a0583dbaa43c7558fb2e6efbe8cc2a64a863"}
+   ]
+  },
+  {
+   "name": "an adapter without a version is known by its source",
+   "note": "adapters/acme.ts#acme declares no version: its behaviour is the string source: followed by the digest of its fx-node-source-v1 object (identity.md section 6), whose files are the adapter's source closure, given here by its file digests, and whose resources are empty. An edit to either file moves the fingerprint.",
+   "providers": {"acme": {"base_url": {"default": "https://api.acme.test/v1"}, "adapter": "adapters/acme.ts#acme"}},
+   "adapters": {"adapters/acme.ts#acme": {"version": null, "capabilities": {"structured.generate": "request"}, "source": {"adapters/acme.ts": "c6539ade8948bc741141c854273041bab1f0a4718860723ead9b56d0c5f49cea", "adapters/colours.ts": "2443d463291746af4ecf2565c5d4b0e49468b9d05a13d7965d715ad40603ea7d"}}},
+   "builtin": [],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "structured.generate", "route": "text-a@acme", "price": {"cap_usd": 0.05}}]
+   ],
+   "expect": [
+    {"capability": "structured.generate", "route": "text-a@acme", "contract": {"adapter": "adapters/acme.ts#acme", "adapter_behavior": "source:484cf019dc82ac836faf539627d68c2bcd0b3d05f1247f3c6e28a3667566cf32"}, "digest": "584c976038f221f2514bd22ab92d3438a8ff8c019d474fde43659a58f6fa835e"}
+   ]
+  },
+  {
+   "name": "an extended route takes its base's contract",
+   "note": "extends is not hashed: the fingerprint is the one of an entry that states the same contract.",
+   "builtin": [
+    {"capability": "image.generate", "route": "img-base@gg", "price": {"low_usd": 0.1, "high_usd": 0.5}, "features": ["text_to_image", "alpha"], "concurrency": 1, "contract": {"adapter": "gg-image", "adapter_behavior": "1", "quality": "max"}}
+   ],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "image.generate", "route": "img-a@gg", "extends": "img-base@gg"}]
+   ],
+   "expect": [
+    {"capability": "image.generate", "route": "img-a@gg", "contract": {"adapter": "gg-image", "adapter_behavior": "1", "quality": "max"}, "digest": "e49282b0bc29187c1fbfb77102577468f0bbe453720c268fc7c745d32328ee4c"},
+    {"capability": "image.generate", "route": "img-base@gg", "contract": {"adapter": "gg-image", "adapter_behavior": "1", "quality": "max"}, "digest": "7cac3cc9efc94d7378f3e231d8c69a42b4c90dd770981496a8ffc06f464abac6"}
+   ]
+  },
+  {
+   "name": "an extended contract merges one level deep",
+   "builtin": [
+    {"capability": "image.generate", "route": "img-base@gg", "price": {"low_usd": 0.1, "high_usd": 0.5}, "features": ["text_to_image", "alpha"], "concurrency": 1, "contract": {"adapter": "gg-image", "adapter_behavior": "1", "quality": "max"}}
+   ],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "image.generate", "route": "img-a@gg", "extends": "img-base@gg", "contract": {"quality": "high", "style": {"tone": "warm"}}}]
+   ],
+   "expect": [
+    {"capability": "image.generate", "route": "img-a@gg", "contract": {"adapter": "gg-image", "adapter_behavior": "1", "quality": "high", "style": {"tone": "warm"}}, "digest": "9df3a3518f30dff67e743771147e79077ad731c5886fa8e8d57e3cfd0954d56c"}
+   ]
+  },
+  {
+   "name": "the built-in table is a base under --routes",
+   "builtin": [
+    {"capability": "image.generate", "route": "img-base@gg", "price": {"low_usd": 0.1, "high_usd": 0.5}, "features": ["text_to_image", "alpha"], "concurrency": 1, "contract": {"adapter": "gg-image", "adapter_behavior": "1", "quality": "max"}}
+   ],
+   "routes_given": true,
+   "tables": [
+    [{"capability": "image.generate", "route": "img-a@gg", "extends": "img-base@gg"}]
+   ],
+   "expect": [
+    {"capability": "image.generate", "route": "img-a@gg", "contract": {"adapter": "gg-image", "adapter_behavior": "1", "quality": "max"}, "digest": "e49282b0bc29187c1fbfb77102577468f0bbe453720c268fc7c745d32328ee4c"}
+   ],
+   "absent": [
+    {"capability": "image.generate", "route": "img-base@gg"}
+   ]
+  },
+  {
+   "name": "an entry already read wins over the built-in one",
+   "builtin": [
+    {"capability": "image.generate", "route": "img-base@gg", "price": {"low_usd": 0.1, "high_usd": 0.5}, "features": ["text_to_image", "alpha"], "concurrency": 1, "contract": {"adapter": "gg-image", "adapter_behavior": "1", "quality": "max"}}
+   ],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "image.generate", "route": "img-base@gg", "extends": "img-base@gg", "contract": {"quality": "low"}}],
+    [{"capability": "image.generate", "route": "img-a@gg", "extends": "img-base@gg"}]
+   ],
+   "expect": [
+    {"capability": "image.generate", "route": "img-base@gg", "contract": {"adapter": "gg-image", "adapter_behavior": "1", "quality": "low"}, "digest": "2611b5d5ec822af36064b4b4e4a20f4bae81e802910a441453b47e522c354bd9"},
+    {"capability": "image.generate", "route": "img-a@gg", "contract": {"adapter": "gg-image", "adapter_behavior": "1", "quality": "low"}, "digest": "389bd5b67b29f4e82b136dd3e675aad938def0601ac6696e5a6e8994899f6ee0"}
+   ]
+  },
+  {
+   "name": "an earlier entry of the same table is a base, and a copy",
+   "builtin": [],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "image.generate", "route": "img-b@acme", "price": {"usd": 0.01}, "contract": {"v": 1}}, {"capability": "image.generate", "route": "img-a@acme", "extends": "img-b@acme", "contract": {"w": 2}}],
+    [{"capability": "image.generate", "route": "img-b@acme", "price": {"usd": 0.01}, "contract": {"v": 2}}]
+   ],
+   "expect": [
+    {"capability": "image.generate", "route": "img-a@acme", "contract": {"v": 1, "w": 2}, "digest": "2e9a7d7af87f8f559668f7dc370eb0b0eddbd57a971a7ba226c4a9bd3dfffb4f"},
+    {"capability": "image.generate", "route": "img-b@acme", "contract": {"v": 2}, "digest": "8c79aeb67f974fc7e4fb751dcca2a79e11d1e7114cc96bf6f9ed6e8675cfdb21"}
+   ]
+  },
+  {
+   "name": "a base no table holds is refused",
+   "builtin": [
+    {"capability": "image.generate", "route": "img-base@gg", "price": {"low_usd": 0.1, "high_usd": 0.5}, "features": ["text_to_image", "alpha"], "concurrency": 1, "contract": {"adapter": "gg-image", "adapter_behavior": "1", "quality": "max"}}
+   ],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "image.generate", "route": "img-a@gg", "extends": "img-z@gg"}]
+   ],
+   "refuse": {"table": 0, "entry": 0, "reason": "no_base"}
+  },
+  {
+   "name": "a base of another capability is refused",
+   "builtin": [
+    {"capability": "image.generate", "route": "img-base@gg", "price": {"low_usd": 0.1, "high_usd": 0.5}, "features": ["text_to_image", "alpha"], "concurrency": 1, "contract": {"adapter": "gg-image", "adapter_behavior": "1", "quality": "max"}}
+   ],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "image.edit", "route": "img-a@gg", "extends": "img-base@gg"}]
+   ],
+   "refuse": {"table": 0, "entry": 0, "reason": "no_base"}
+  },
+  {
+   "name": "a later entry of the same table is no base",
+   "builtin": [],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "image.generate", "route": "img-a@acme", "extends": "img-b@acme"}, {"capability": "image.generate", "route": "img-b@acme", "price": {"usd": 0.01}}]
+   ],
+   "refuse": {"table": 0, "entry": 0, "reason": "no_base"}
+  },
+  {
+   "name": "a base on another provider is refused",
+   "builtin": [
+    {"capability": "image.generate", "route": "img-base@gg", "price": {"low_usd": 0.1, "high_usd": 0.5}, "features": ["text_to_image", "alpha"], "concurrency": 1, "contract": {"adapter": "gg-image", "adapter_behavior": "1", "quality": "max"}}
+   ],
+   "routes_given": false,
+   "tables": [
+    [{"capability": "image.generate", "route": "img-a@acme", "extends": "img-base@gg"}]
+   ],
+   "refuse": {"table": 0, "entry": 0, "reason": "other_provider"}
+  }
+ ]
+}

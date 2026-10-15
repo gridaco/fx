@@ -1,11 +1,12 @@
-//! Provider keys: the allowlisted loader (spec/providers.md §3).
+//! Provider keys: the allowlisted loader (spec/providers.md §1).
 //!
-//! FX reads exactly six key variables, under their providers' usual names ([`KeyName`]), and
-//! five base-URL variables ([`ALLOWED`]); an [`Environment`] holds what it found. Values come
-//! from the process environment first; the planning project's `.env` file is read only for those
-//! eleven names and only when the process does not set them; `GRIDA_FX_DISABLE_DOTENV=1` (in the
-//! process) turns the file off. A value is never printed,
-//! logged, written to a record, an event, an error or a fixture: [`Secret`] prints as
+//! FX reads only the variables its provider declarations name
+//! ([`grida_fx_core::providers::Declarations`]): each provider's key and base-URL variable, the
+//! eleven of the built-in declarations and those the planning project declares. An
+//! [`Environment`] holds what it found. Values come from the process environment first; the
+//! planning project's `.env` file is read only for those names and only when the process does not
+//! set them; `GRIDA_FX_DISABLE_DOTENV=1` (in the process) turns the file off. A value is never
+//! printed, logged, written to a record, an event, an error or a fixture: [`Secret`] prints as
 //! `[redacted]`, and only a transport reads it ([`Secret::expose`]).
 //!
 //! **`.env` rules** ([`parse_dotenv`], [`read_dotenv`]), each refusal naming the variable and the
@@ -32,6 +33,7 @@
 //! a blank value counts as unset. The file is read whenever it is not turned off, so a malformed
 //! `.env` is refused even when the process sets every name.
 
+use grida_fx_core::providers::{Declaration, Declarations};
 use regex::Regex;
 use std::collections::BTreeMap;
 use std::fmt;
@@ -68,8 +70,8 @@ impl fmt::Display for Secret {
     }
 }
 
-/// The allowlisted key variables, one per provider. Grida Gateway comes first: one key serves
-/// every capability it routes.
+/// The keys of FX's own providers, one per built-in declaration, for code that names one. Grida
+/// Gateway comes first: one key serves every capability it routes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum KeyName {
     GridaGateway,
@@ -81,6 +83,7 @@ pub enum KeyName {
 }
 
 impl KeyName {
+    /// In the built-in declarations' order.
     pub const ALL: [KeyName; 6] = [
         KeyName::GridaGateway,
         KeyName::OpenAi,
@@ -89,18 +92,6 @@ impl KeyName {
         KeyName::Tripo,
         KeyName::ElevenLabs,
     ];
-
-    /// The environment variable.
-    pub fn variable(self) -> &'static str {
-        match self {
-            KeyName::GridaGateway => "GG_API_KEY",
-            KeyName::OpenAi => "OPENAI_API_KEY",
-            KeyName::OpenRouter => "OPENROUTER_API_KEY",
-            KeyName::Fal => "FAL_KEY",
-            KeyName::Tripo => "TRIPO_API_KEY",
-            KeyName::ElevenLabs => "ELEVENLABS_API_KEY",
-        }
-    }
 
     /// The provider name routes use (`model@<provider>`).
     pub fn provider(self) -> &'static str {
@@ -114,15 +105,36 @@ impl KeyName {
         }
     }
 
-    /// The key a provider's routes need.
+    /// The provider's built-in declaration.
+    pub fn declaration(self) -> &'static Declaration {
+        grida_fx_core::providers::built_in()
+            .iter()
+            .find(|declaration| declaration.name == self.provider())
+            .expect("every key names a built-in declaration")
+    }
+
+    /// The environment variable, as the declaration names it.
+    pub fn variable(self) -> &'static str {
+        let credential = self.declaration().credential.as_ref();
+        &credential
+            .expect("a built-in declaration names its key")
+            .variable
+    }
+
+    /// The key a provider's routes need, for one of FX's own.
     pub fn of_provider(provider: &str) -> Option<KeyName> {
         KeyName::ALL.into_iter().find(|k| k.provider() == provider)
     }
 
     /// The sentence a call without this key is refused with.
     pub fn missing(self) -> String {
-        format!("{} is not set", self.variable())
+        not_set(self.variable())
     }
+}
+
+/// The sentence a call without the key in `variable` is refused with.
+pub fn not_set(variable: &str) -> String {
+    format!("{variable} is not set")
 }
 
 /// Where a value came from, for `grida-fx doctor` (never the value).
@@ -132,44 +144,32 @@ pub enum KeySource {
     DotEnv,
 }
 
-/// Every variable the loader reads: the six keys, then the five base-URL variables
-/// ([`crate::setup::BASE_URL_VARIABLES`]).
-pub const ALLOWED: [&str; 11] = [
-    "GG_API_KEY",
-    "OPENAI_API_KEY",
-    "OPENROUTER_API_KEY",
-    "FAL_KEY",
-    "TRIPO_API_KEY",
-    "ELEVENLABS_API_KEY",
-    "GG_BASE_URL",
-    "OPENAI_BASE_URL",
-    "OPENROUTER_BASE_URL",
-    "FAL_BASE_URL",
-    "ELEVENLABS_BASE_URL",
-];
-
-/// The allowlisted variables of one invocation, after precedence (module doc). Values never
-/// print.
+/// The declared variables of one invocation, after precedence (module doc), and the declarations
+/// they were read for. Values never print.
 #[derive(Clone, Default, PartialEq)]
 pub struct Environment {
     values: BTreeMap<String, (String, KeySource)>,
+    declarations: Declarations,
 }
 
 impl Environment {
-    /// Reads [`ALLOWED`] (module doc): `process` reads a process variable; `dotenv` is the
-    /// planning project's `.env`, read unless `process` gives `GRIDA_FX_DISABLE_DOTENV` = `1`.
-    /// Errors are the module doc's sentences.
+    /// Reads the variables of `declarations` (module doc): `process` reads a process variable;
+    /// `dotenv` is the planning project's `.env`, read unless `process` gives
+    /// `GRIDA_FX_DISABLE_DOTENV` = `1`. Errors are the module doc's sentences.
     pub fn read(
         process: &dyn Fn(&str) -> Option<String>,
         dotenv: Option<&Path>,
+        declarations: &Declarations,
     ) -> Result<Environment, String> {
+        let names = declarations.variables();
+        let allowed: Vec<&str> = names.iter().map(String::as_str).collect();
         let disabled = process(DISABLE_DOTENV).is_some_and(|value| value.trim() == "1");
         let file = match dotenv {
-            Some(path) if !disabled => read_dotenv(path, &ALLOWED)?,
+            Some(path) if !disabled => read_dotenv(path, &allowed)?,
             _ => BTreeMap::new(),
         };
         let mut values = BTreeMap::new();
-        for name in ALLOWED {
+        for name in allowed {
             let from_process = process(name)
                 .map(|value| value.trim().to_string())
                 .filter(|value| !value.is_empty());
@@ -185,16 +185,26 @@ impl Environment {
                 values.insert(name.to_string(), found);
             }
         }
-        Ok(Environment { values })
+        Ok(Environment {
+            values,
+            declarations: declarations.clone(),
+        })
     }
 
-    /// Values given directly, as from the process (tests use made-up values). Names off the
-    /// allowlist and blank values are left out.
+    /// Values given directly, as from the process (tests use made-up values), for the built-in
+    /// declarations. Names they do not read and blank values are left out.
     pub fn from_pairs(pairs: &[(&str, &str)]) -> Environment {
+        Environment::declared(pairs, &Declarations::built_in())
+    }
+
+    /// Values given directly, as from the process, for `declarations`. Names they do not read and
+    /// blank values are left out.
+    pub fn declared(pairs: &[(&str, &str)], declarations: &Declarations) -> Environment {
+        let names = declarations.variables();
         Environment {
             values: pairs
                 .iter()
-                .filter(|(name, value)| ALLOWED.contains(name) && !value.trim().is_empty())
+                .filter(|(name, value)| names.iter().any(|n| n == name) && !value.trim().is_empty())
                 .map(|(name, value)| {
                     (
                         name.to_string(),
@@ -202,6 +212,7 @@ impl Environment {
                     )
                 })
                 .collect(),
+            declarations: declarations.clone(),
         }
     }
 
@@ -213,6 +224,11 @@ impl Environment {
     pub fn source(&self, name: &str) -> Option<KeySource> {
         self.values.get(name).map(|(_, source)| *source)
     }
+
+    /// The declarations it was read for.
+    pub fn declarations(&self) -> &Declarations {
+        &self.declarations
+    }
 }
 
 impl fmt::Debug for Environment {
@@ -223,61 +239,96 @@ impl fmt::Debug for Environment {
     }
 }
 
-/// The keys of one invocation.
+/// The keys of one invocation, by provider in the declarations' order, and the declarations
+/// they were read for (the built-in ones unless an [`Environment`] says otherwise).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Keys {
-    found: BTreeMap<KeyName, (Secret, KeySource)>,
+    found: Vec<(String, Secret, KeySource)>,
+    declarations: Declarations,
 }
 
 impl Keys {
-    /// No keys.
+    /// No keys, for the built-in declarations.
     pub fn none() -> Keys {
         Keys::default()
     }
 
     /// Keys given directly, as from the environment (tests use made-up values).
     pub fn from_pairs(pairs: &[(KeyName, &str)]) -> Keys {
+        let declarations = Declarations::built_in();
+        let found = declarations
+            .iter()
+            .filter_map(|declaration| {
+                let (_, value) = pairs
+                    .iter()
+                    .find(|(name, _)| name.provider() == declaration.name)?;
+                let secret = Secret::new(value);
+                Some((declaration.name.clone(), secret, KeySource::Environment))
+            })
+            .collect();
         Keys {
-            found: pairs
-                .iter()
-                .map(|(name, value)| (*name, (Secret::new(value), KeySource::Environment)))
-                .collect(),
+            found,
+            declarations,
         }
     }
 
-    /// The six keys of an [`Environment`].
+    /// The keys of an [`Environment`]: each declared credential's variable it holds.
     pub fn from_environment(environment: &Environment) -> Keys {
+        let declarations = environment.declarations().clone();
+        let found = declarations
+            .iter()
+            .filter_map(|declaration| {
+                let variable = &declaration.credential.as_ref()?.variable;
+                let value = environment.get(variable)?;
+                let source = environment.source(variable)?;
+                Some((declaration.name.clone(), Secret::new(value), source))
+            })
+            .collect();
         Keys {
-            found: KeyName::ALL
-                .into_iter()
-                .filter_map(|name| {
-                    let value = environment.get(name.variable())?;
-                    let source = environment.source(name.variable())?;
-                    Some((name, (Secret::new(value), source)))
-                })
-                .collect(),
+            found,
+            declarations,
         }
     }
 
     pub fn get(&self, name: KeyName) -> Option<&Secret> {
-        self.found.get(&name).map(|(secret, _)| secret)
+        self.of(name.provider())
     }
 
     pub fn source(&self, name: KeyName) -> Option<KeySource> {
-        self.found.get(&name).map(|(_, source)| *source)
+        self.source_of(name.provider())
     }
 
-    /// The names that have a key, in [`KeyName::ALL`] order.
-    pub fn present(&self) -> Vec<KeyName> {
-        self.found.keys().copied().collect()
+    /// The key of `provider`, built-in or declared.
+    pub fn of(&self, provider: &str) -> Option<&Secret> {
+        let found = self.found.iter().find(|(name, _, _)| name == provider);
+        found.map(|(_, secret, _)| secret)
+    }
+
+    /// Where the key of `provider` came from.
+    pub fn source_of(&self, provider: &str) -> Option<KeySource> {
+        let found = self.found.iter().find(|(name, _, _)| name == provider);
+        found.map(|(_, _, source)| *source)
+    }
+
+    /// The providers that have a key, in the declarations' order.
+    pub fn present(&self) -> Vec<&str> {
+        self.found
+            .iter()
+            .map(|(name, _, _)| name.as_str())
+            .collect()
     }
 
     /// Every key's value, for redaction.
     pub fn secrets(&self) -> Vec<Secret> {
         self.found
-            .values()
-            .map(|(secret, _)| secret.clone())
+            .iter()
+            .map(|(_, secret, _)| secret.clone())
             .collect()
+    }
+
+    /// The declarations the keys were read for.
+    pub fn declarations(&self) -> &Declarations {
+        &self.declarations
     }
 }
 
@@ -456,7 +507,7 @@ mod tests {
         assert!(!format!("{keys:?}").contains("fal-secret"));
         assert_eq!(format!("{}", keys.get(KeyName::Fal).unwrap()), "[redacted]");
         assert_eq!(keys.get(KeyName::Fal).unwrap().expose(), "fal-secret");
-        assert_eq!(keys.present(), [KeyName::Fal]);
+        assert_eq!(keys.present(), ["fal"]);
         assert!(keys.get(KeyName::Tripo).is_none());
     }
 
@@ -472,16 +523,22 @@ mod tests {
         assert_eq!(environment.get("TRIPO_API_KEY"), None);
         assert!(!format!("{environment:?}").contains("fal-secret"));
         let keys = Keys::from_environment(&environment);
-        assert_eq!(keys.present(), [KeyName::Fal]);
+        assert_eq!(keys.present(), ["fal"]);
         assert_eq!(keys.get(KeyName::Fal).unwrap().expose(), "fal-secret");
         assert_eq!(keys.source(KeyName::Fal), Some(KeySource::Environment));
     }
 
     #[test]
-    fn the_allowlist_is_the_keys_then_the_base_urls() {
+    fn the_keys_are_the_built_in_declarations() {
+        let providers: Vec<&str> = KeyName::ALL.iter().map(|k| k.provider()).collect();
+        let declared: Vec<&str> = grida_fx_core::providers::built_in()
+            .iter()
+            .map(|d| d.name.as_str())
+            .collect();
+        assert_eq!(providers, declared);
+        let variables = Declarations::built_in().variables();
         let keys: Vec<&str> = KeyName::ALL.iter().map(|k| k.variable()).collect();
-        assert_eq!(ALLOWED[..6], keys[..]);
-        assert_eq!(ALLOWED[6..], crate::setup::BASE_URL_VARIABLES[..]);
+        assert_eq!(variables[..6], keys[..]);
     }
 
     #[test]

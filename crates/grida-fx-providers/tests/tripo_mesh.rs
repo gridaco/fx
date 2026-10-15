@@ -1,4 +1,4 @@
-//! Tripo `mesh.generate` over synthetic exchanges (spec/providers.md §7, §9.4;
+//! Tripo `mesh.generate` over synthetic exchanges (spec/adapters.md §6; src/tripo/README.md;
 //! spec/capabilities.md §7). Nothing here reaches the network: every exchange is scripted on a
 //! `ReplayTransport` (which panics on any request it was not given) or the setup is built over
 //! `NoNetwork`; time is a `FakeClock`. The key is the made-up `test-tripo-key`.
@@ -16,7 +16,7 @@ use grida_fx_providers::transport::replay::{
 use grida_fx_providers::transport::{
     HttpResponse, Lane, Method, Part, Transport, TransportError, TransportErrorKind,
 };
-use grida_fx_providers::tripo::mesh::{COLLECT_DEADLINE, TripoMesh};
+use grida_fx_providers::tripo::mesh::{self, COLLECT_DEADLINE, TripoMesh};
 use grida_fx_providers::tripo::{MAX_MODEL_BYTES, POLL, TripoApi, Waited};
 use serde_json::{Map, Value, json};
 use std::sync::Arc;
@@ -270,7 +270,7 @@ fn answered(outcome: Collected) -> grida_fx_providers::Answer {
 
 #[test]
 fn a_mesh_is_uploaded_in_tripos_order_and_posted_once() {
-    // spec/providers.md §9.4 "Mesh": views named back then front upload as front, back.
+    // src/tripo/README.md, "Mesh": views named back then front upload as front, back.
     let h = harness(vec![
         upload("front.png", "image/png", &front_png(), "tok1"),
         upload("back.png", "image/png", &back_png(), "tok2"),
@@ -298,7 +298,7 @@ fn a_mesh_is_uploaded_in_tripos_order_and_posted_once() {
 
 #[test]
 fn defaults_jpeg_names_and_four_views_in_order() {
-    // spec/providers.md §9.4 "Mesh": defaults, JPEG names, four views in order.
+    // src/tripo/README.md, "Mesh": defaults, JPEG names, four views in order.
     let mut b = builder();
     let jpeg = media::JPEG_HEAD;
     let left_png = media::png(3, 3, None);
@@ -350,8 +350,55 @@ fn the_face_limit_bounds_are_inclusive() {
 }
 
 #[test]
+fn provider_options_follow_the_paid_body_s_own_members() {
+    let mut b = CallBuilder::new("mesh.generate", ROUTE).contract(json!({
+        "adapter": "tripo-multiview", "adapter_behavior": 1,
+        "provider_options": {"tripo": {"texture_quality": "standard", "auto_size": true}},
+    }));
+    let front = b.file("image/png", &front_png());
+    let back = b.file("image/png", &back_png());
+    let call = b
+        .request(json!({"views": {"front": front, "back": back},
+                        "provider_options": {"tripo": {"texture_quality": "detailed"},
+                                             "gg": {"model": "never read"}}}))
+        .build();
+    let h = harness(after_uploads([post_expect(ExpectBody::JsonText(
+        r#"{"model":"P2-20260801","quad":false,"texture":true,"pbr":false,"inputs":[{"front":"tok1"},{"back":"tok2"}],"texture_quality":"detailed","auto_size":true}"#.into(),
+    ))
+    .reply(ok(json!({"task_id": "task1"})))]));
+    assert!(matches!(h.submit(&call), Submitted::Accepted { .. }));
+    h.done();
+}
+
+#[test]
+fn provider_options_set_no_member_of_the_paid_body() {
+    let sent: Map<String, Value> = serde_json::from_str(TWO_VIEW_BODY).unwrap();
+    for name in sent
+        .keys()
+        .chain(std::iter::once(&"face_limit".to_string()))
+    {
+        assert!(mesh::OWNED.contains(&name.as_str()), "{name}");
+    }
+    // Refused before the uploads: nothing is sent.
+    for name in mesh::OWNED {
+        let mut b = builder();
+        let front = b.file("image/png", &front_png());
+        let call = b
+            .request(json!({"views": {"front": front},
+                            "provider_options": {"tripo": {*name: 1}}}))
+            .build();
+        assert_eq!(
+            block_on(offline_mesh(test_keys()).submit(&call)),
+            Submitted::Refused {
+                reason: format!("provider_options.tripo.{name} is a member FX owns")
+            }
+        );
+    }
+}
+
+#[test]
 fn bad_requests_are_refused_before_anything_is_sent() {
-    // spec/providers.md §5, §9.4, with a view Tripo does not take.
+    // spec/adapters.md §4; src/tripo/README.md, with a view Tripo does not take.
     let refused = |call: TestCall, keys: Keys| -> String {
         match block_on(offline_mesh(keys).submit(&call)) {
             Submitted::Refused { reason } => {
@@ -497,7 +544,7 @@ fn bad_requests_are_refused_before_anything_is_sent() {
         ),
         "TRIPO_API_KEY is not set"
     );
-    // The key is checked before the values (spec/providers.md §5).
+    // The key is checked before the values (spec/adapters.md §4).
     for names in [&["three_quarter"][..], &["front"][..]] {
         assert_eq!(
             refused(with_views(names, json!({})), Keys::none()),
@@ -542,9 +589,9 @@ fn bad_requests_are_refused_before_anything_is_sent() {
 
 #[test]
 fn a_front_view_alone_is_refused_before_anything_is_sent() {
-    // spec/providers.md §5 step 4, §9.4 "Mesh": a multiview task takes front and at least one of
-    // back, left, right. Tripo refuses front alone only at the paid POST, so FX asks nothing: no
-    // upload, no task, $0.
+    // spec/adapters.md §4 step 4; src/tripo/README.md, "Mesh": a multiview task takes front and at
+    // least one of back, left, right. Tripo refuses front alone only at the paid POST, so FX asks
+    // nothing: no upload, no task, $0.
     let h = harness(Vec::new());
     let mut b = builder();
     let front = b.file("image/png", &front_png());
@@ -563,7 +610,7 @@ fn a_front_view_alone_is_refused_before_anything_is_sent() {
 
 #[test]
 fn a_failed_upload_posts_no_task() {
-    // spec/providers.md §9.4 "Free phase": every failure is NotReceived, except deterministic
+    // src/tripo/README.md, "Free phase": every failure is NotReceived, except deterministic
     // statuses.
     let png = front_png();
     let not_received: Vec<(&str, Exchange)> = vec![
@@ -694,7 +741,7 @@ fn a_failed_upload_posts_no_task() {
 
 #[test]
 fn the_paid_post_is_sent_once_whatever_happens() {
-    // spec/providers.md §9.4 "Paid POST": a post whose outcome is unknown is never repeated.
+    // src/tripo/README.md, "Paid POST": a post whose outcome is unknown is never repeated.
     let uncertain = |detail: &str| Submitted::Uncertain {
         reason: format!("Tripo may have taken the task; it is not posted again ({detail})"),
     };
@@ -822,7 +869,8 @@ fn the_paid_post_is_sent_once_whatever_happens() {
 
 #[test]
 fn a_finished_mesh_is_downloaded_with_its_cost() {
-    // spec/providers.md §7, §9.4: a mesh task is posted once and collected with its cost.
+    // spec/adapters.md §6; src/tripo/README.md: a mesh task is posted once and collected with its
+    // cost.
     let h = harness(vec![
         read("task1", "queued"),
         read("task1", "running"),
@@ -852,7 +900,7 @@ fn a_finished_mesh_is_downloaded_with_its_cost() {
 
 #[test]
 fn an_fbx_is_preferred_and_every_model_is_downloaded() {
-    // spec/providers.md §9.4 "Tasks": a mesh is posted once and its FBX kept.
+    // src/tripo/README.md, "Tasks": a mesh is posted once and its FBX kept.
     let glb_url = "https://api.tripo3d.ai/out/model.glb";
     let cases: Vec<(Value, Vec<Exchange>, &str, Vec<u8>)> = vec![
         (
@@ -900,7 +948,7 @@ fn an_fbx_is_preferred_and_every_model_is_downloaded() {
 
 #[test]
 fn a_task_tripo_ended_is_over() {
-    // spec/providers.md §9.4 "Collect": Tripo returns the frozen credits of a failed or cancelled
+    // src/tripo/README.md, "Collect": Tripo returns the frozen credits of a failed or cancelled
     // task, and documents nothing for a banned or expired one.
     for (state, cost) in [
         ("failed", Some(Usd::ZERO)),
@@ -955,7 +1003,7 @@ fn a_task_tripo_ended_is_over() {
 
 #[test]
 fn a_task_still_running_at_the_deadline_stays_tripos() {
-    // spec/providers.md §7: one still running stays Tripo's. Clock 0, 0, 100
+    // spec/adapters.md §6: one still running stays Tripo's. Clock 0, 0, 100
     // and a deadline of 10 s make exactly two reads.
     let clock = FakeClock::scripted(&[Duration::ZERO, Duration::ZERO, Duration::from_secs(100)]);
     let h = harness_with(
@@ -1014,7 +1062,7 @@ fn a_task_still_running_at_the_deadline_stays_tripos() {
 
 #[test]
 fn polls_that_fail_are_polls_that_saw_nothing() {
-    // spec/providers.md §7: status reads are polling.
+    // spec/adapters.md §6: status reads are polling.
     let h = harness(vec![
         read_expect("task1").reply(HttpResponse::new(502, Vec::new())),
         read_expect("task1").fail(not_sent()),
@@ -1099,7 +1147,7 @@ fn polls_that_fail_are_polls_that_saw_nothing() {
 
 #[test]
 fn an_answer_about_another_task_or_an_unknown_status_is_unreachable() {
-    // spec/providers.md §7: not Ended, since the job may still run.
+    // spec/adapters.md §6: not Ended, since the job may still run.
     let unknown = Collected::Unreachable {
         reason: "Tripo answered for another task, or with an unknown status".into(),
     };
@@ -1119,7 +1167,7 @@ fn an_answer_about_another_task_or_an_unknown_status_is_unreachable() {
 
 #[test]
 fn the_output_scan_decides_what_is_downloaded() {
-    // spec/providers.md §9.4 "Tasks": a model from another host is refused.
+    // src/tripo/README.md, "Tasks": a model from another host is refused.
     // The task succeeded, so an unusable output costs what its success read reports (125 credits).
     let ended = |reason: &str| Collected::Ended {
         reason: reason.into(),
@@ -1244,7 +1292,7 @@ fn the_output_scan_decides_what_is_downloaded() {
 
 #[test]
 fn downloads_are_fetched_once_and_capped() {
-    // spec/providers.md §8, §9.4: downloads.
+    // spec/adapters.md §7; src/tripo/README.md: downloads.
     let signed = "https://tripo-data.rg1.data.tripo3d.com/out/model.glb?sig=signed-secret";
     let unreachable = |reason: &str| Collected::Unreachable {
         reason: reason.into(),
@@ -1322,7 +1370,7 @@ fn downloads_are_fetched_once_and_capped() {
 
 #[test]
 fn the_cost_is_the_finished_tasks_credits_rounded_up() {
-    // The round-up rule of spec/providers.md §6.
+    // The round-up rule of spec/adapters.md §5.
     let cases: Vec<(Option<Value>, Option<Usd>)> = vec![
         (Some(json!(125)), Some(Usd(1_250_000))),
         (Some(json!(12.5)), Some(Usd(125_000))),
@@ -1356,8 +1404,9 @@ fn the_cost_is_the_finished_tasks_credits_rounded_up() {
 
 #[test]
 fn an_unusable_output_costs_what_its_success_read_reports() {
-    // spec/providers.md §7, §9.4 "Collect", "Cost": the task succeeded, so Tripo charged it, and
-    // the read says how much. A figure that is absent or cannot be read is the whole hold (`None`).
+    // spec/adapters.md §6; src/tripo/README.md, "Collect", "Cost": the task succeeded, so Tripo
+    // charged it, and the read says how much. A figure that is absent or cannot be read is the
+    // whole hold (`None`).
     let off_host = json!({"model": "https://example.com/model.glb"});
     let not_a_model = json!({"model": STORAGE});
     let cases: Vec<(Option<Value>, Option<Usd>)> = vec![
@@ -1392,7 +1441,7 @@ fn an_unusable_output_costs_what_its_success_read_reports() {
 
 #[test]
 fn a_later_run_only_collects() {
-    // spec/providers.md §7: a fresh adapter collects by the handle alone.
+    // spec/adapters.md §6: a fresh adapter collects by the handle alone.
     let h = harness(vec![
         read("task7", "running"),
         success("task7", json!({"model": STORAGE}), json!("2.5")),

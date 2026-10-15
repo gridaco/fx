@@ -53,7 +53,8 @@ and answers:
 - ``$/cancel`` (section 5.6): for the pending run, sets ``ctx.cancelled`` (the body decides what
   to do); for a pending ``tool.invoke`` or ``agent.check``, answers it ``cancelled`` at once and
   cancels its task; for a pending ``stand_in.answer``, cancels it as
-  :class:`~grida.fx._stand_in.Answerer` says.
+  :class:`~grida.fx._stand_in.Answerer` says; for a pending adapter call, as
+  :class:`~grida.fx._adapter.Server` says.
 - ``stand_in.load`` (section 5.7), for a stand-in host, which the engine starts in its own working
   directory: loads the file at the absolute ``path`` as a module of its own, ``_fx_stand_in``, not
   as a project module (it may lie outside the project), with the file's folder first on
@@ -64,6 +65,19 @@ and answers:
 - ``stand_in.answer`` (section 5.7), once a stand-in is loaded: answered on the body loop by an
   :class:`~grida.fx._stand_in.Answerer` (several may be pending; they are answered one at a time,
   in order). A fault of the stand-in is answered ``internal`` and its traceback logged on stderr.
+- ``adapter.load`` (section 5.8), on any host but a stand-in host, and not while a run is pending
+  (``-32600``): loads the project module ``path`` as ``describe`` does and finds ``attribute``, a
+  :class:`~grida.fx._adapter.Adapter`; the result is ``{adapter: {version, capabilities},
+  closure}``, or ``load_failed`` (``… failed to import: …``, ``<path>: <attribute> is not
+  declared with adapter()``, ``<path>: its source closure cannot be read: …``). The host keeps
+  serving what it served: the planning host goes on describing and building.
+- ``adapter.send``, ``adapter.submit`` and ``adapter.collect`` (section 5.8), for an adapter this
+  session loaded: answered on the body loop by a :class:`~grida.fx._adapter.Server`, several at
+  once, in any order; each call's ``fetch`` (section 6.8) goes to the engine with its
+  ``call_id`` and no ``run_id``. ``-32602`` for params of another shape, an adapter not loaded
+  (``no adapter <path>#<attribute> is loaded on this host``) and a capability it does not serve
+  with the method (``<path>#<attribute> does not serve <capability> with adapter.send``). A fault
+  of the adapter is answered ``internal`` and its traceback logged on stderr.
 - ``shutdown`` → ``null`` (a pending run still finishes and is answered); then the ``exit``
   notification ends the process with status 0 (1 if no ``shutdown`` came first). End of stdin
   ends the process. The process ends with ``os._exit`` once the protocol stream is flushed and
@@ -106,6 +120,8 @@ from pathlib import Path
 from typing import Any, BinaryIO
 
 from grida.fx import std
+from grida.fx._adapter import METHODS as ADAPTER_CALLS
+from grida.fx._adapter import Adapter, AdapterCall, Server, function_for
 from grida.fx._agent import Agent
 from grida.fx._builder import Workflow
 from grida.fx._closure import ClosureError, source_closure
@@ -202,6 +218,9 @@ class Host:
         self._serving: dict[Any, tuple[str, concurrent.futures.Future[None] | None]] = {}
         #: The stand-in this host answers for, once ``stand_in.load`` loaded it.
         self._stand_in: Answerer | None = None
+        #: The adapters ``adapter.load`` loaded, by ``(path, attribute)``, and their calls.
+        self._adapters: dict[tuple[str, str], Adapter] = {}
+        self._adapter_calls = Server(error_text=self._error_text, on_fault=self._adapter_fault)
 
     # -- the session -------------------------------------------------------------------------
 
@@ -297,6 +316,14 @@ class Host:
             return self.stand_in_load(_params(params))
         if method == "stand_in.answer":
             return self.stand_in_answer(request_id, _params(params))
+        if method == "adapter.load" and self._stand_in is not None:
+            raise _Refusal(INVALID_REQUEST, "this host answers for a stand-in")
+        if method == "adapter.load" and self._pending_run() is not None:
+            raise _Refusal(INVALID_REQUEST, "adapter.load came while a run is pending")
+        if method == "adapter.load":
+            return self.adapter_load(_params(params))
+        if method in ADAPTER_CALLS:
+            return self.adapter_call(request_id, method, _params(params))
         if method in ("describe", "build", "run") and self._stand_in is not None:
             raise _Refusal(INVALID_REQUEST, "this host answers for a stand-in")
         if method in ("describe", "build", "run") and self._pending_run() is not None:
@@ -760,6 +787,8 @@ class Host:
         if served is None:
             if self._stand_in is not None:
                 self.session.loop().call_soon_threadsafe(self._stand_in.cancel, target)
+            if self._adapters:
+                self.session.loop().call_soon_threadsafe(self._adapter_calls.cancel, target)
             return
         method, task = served
         self._answer(target, error={"code": CANCELLED, "message": f"the engine cancelled {method}"})
@@ -831,6 +860,68 @@ class Host:
 
     def _stand_in_fault(self, error: BaseException) -> None:
         _log(f"grida.fx.host: the stand-in failed:\n{self._traceback(error)}")
+
+    # -- adapters: adapter.load, adapter.send, adapter.submit, adapter.collect -----------------
+
+    def adapter_load(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Loads a project adapter (module docstring): its declaration and its source closure."""
+        path = _project_path(params.get("path"), "adapter.load's path")
+        attribute = params.get("attribute")
+        if not isinstance(attribute, str) or not _FUNCTION.fullmatch(attribute):
+            raise _Refusal(INVALID_PARAMS, "adapter.load's attribute is a Python name")
+        try:
+            module, file = self._load(path, f"no module file {path}")
+        except _LoadError as error:
+            raise _Refusal(LOAD_FAILED, str(error)) from None
+        try:
+            value = getattr(module, attribute, None)
+        except BaseException:
+            value = None
+        if not isinstance(value, Adapter):
+            raise _Refusal(LOAD_FAILED, f"{path}: {attribute} is not declared with adapter()")
+        try:
+            closure = source_closure(file, self._root(), self.sources)
+        except ClosureError as error:
+            raise _Refusal(
+                LOAD_FAILED, f"{path}: its source closure cannot be read: {error}"
+            ) from None
+        self._adapters[(path, attribute)] = value
+        return {
+            "adapter": {"version": value.version, "capabilities": value.capabilities},
+            "closure": [{"label": label, "path": str(where)} for label, where in closure],
+        }
+
+    def adapter_call(self, request_id: Any, method: str, params: dict[str, Any]) -> object:
+        """Starts answering an adapter call on the body loop; it is answered from there."""
+        try:
+            call = AdapterCall(params, method, fetch=self._fetch)
+        except ValueError as error:
+            raise _Refusal(INVALID_PARAMS, str(error)) from None
+        path, attribute = params["adapter"]["path"], params["adapter"]["attribute"]
+        name = f"{path}#{attribute}"
+        declared = self._adapters.get((path, attribute))
+        if declared is None:
+            raise _Refusal(INVALID_PARAMS, f"no adapter {name} is loaded on this host")
+        function = function_for(declared, method, call.capability)
+        if function is None:
+            raise _Refusal(INVALID_PARAMS, f"{name} does not serve {call.capability} with {method}")
+
+        def reply(answer: dict[str, Any]) -> None:
+            self._answer(request_id, answer.get("result"), answer.get("error"))
+
+        # Started by a callback, not a task, so a `$/cancel` read next finds the call.
+        self.session.loop().call_soon_threadsafe(
+            self._adapter_calls.start, request_id, method, function, call, reply, name
+        )
+        return _LATER
+
+    async def _fetch(self, params: dict[str, Any]) -> Any:
+        """Sends a call's ``fetch`` (section 6.8), which carries no ``run_id``, and awaits it on
+        whichever loop awaits the call (a plain function's own, with ``asyncio.run``)."""
+        return await asyncio.wrap_future(self.session.request(None, "fetch", params))
+
+    def _adapter_fault(self, error: BaseException, name: str) -> None:
+        _log(f"grida.fx.host: the adapter {name} failed:\n{self._traceback(error)}")
 
     # -- modules -----------------------------------------------------------------------------
 

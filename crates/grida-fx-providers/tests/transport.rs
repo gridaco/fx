@@ -1,8 +1,8 @@
-//! The transport's pure parts (spec/providers.md §2, §4.3, §8): multipart encoding, the default
+//! The transport's pure parts (spec/adapters.md §2, §3.3, §7): multipart encoding, the default
 //! transport's configuration, the `retry_after` a rate-limited response asks for, and the
 //! redaction every reason passes through.
 //!
-//! The default reqwest transport is never constructed here (spec/providers.md §2); its header,
+//! The default reqwest transport is never constructed here (spec/adapters.md §2); its header,
 //! body, cap and classification logic is unit-tested inside `transport::http`. Nothing here sends.
 
 use grida_fx_providers::adapter::{RETRY_AFTER_LIMIT, retry_after_at};
@@ -133,7 +133,7 @@ fn the_default_transport_is_configured_not_built() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// retry_after (spec/providers.md §4.3: a 429 is NotReceived, and the wait it asks for is kept)
+// retry_after (spec/adapters.md §3.3: a 429 is NotReceived, and the wait it asks for is kept)
 
 fn rate_limited(headers: &[(&str, &str)]) -> HttpResponse {
     headers
@@ -165,12 +165,12 @@ fn a_rate_limit_carries_the_wait_it_asks_for() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Reasons (spec/providers.md §8)
+// Reasons (spec/adapters.md §7)
 
 #[test]
 fn a_clients_reasons_hold_no_key_and_no_secret_shape() {
     let setup = setup(Arc::new(NoNetwork), test_keys());
-    let client = setup.client(KeyName::Fal, &setup.endpoints.fal_run);
+    let client = setup.client(KeyName::Fal);
     let key = test_keys()
         .get(KeyName::Fal)
         .expect("a made-up fal key")
@@ -205,7 +205,7 @@ fn a_clients_reasons_hold_no_key_and_no_secret_shape() {
     assert!(Keys::none().secrets().is_empty());
 }
 
-/// spec/providers.md §2 item 5: a download carries no credential, through the credential slot or
+/// spec/adapters.md §2 item 5: a download carries no credential, through the credential slot or
 /// as a header named like one, in any case; the provider lane may not set the credential's header
 /// by hand either. Each is refused before anything leaves.
 #[test]
@@ -234,8 +234,8 @@ fn a_download_refuses_every_header_named_like_a_credential() {
     assert_eq!(check_request(&accept), Ok(()));
     let mut by_hand = HttpRequest::new(Method::Post, "https://api.example.test/v1", Lane::Provider)
         .credential(Credential {
-            header: "xi-api-key",
-            prefix: "",
+            header: "xi-api-key".into(),
+            prefix: "".into(),
             secret: grida_fx_providers::Secret::new("test-key-not-real"),
         });
     by_hand
@@ -267,8 +267,8 @@ fn requests_and_responses_debug_without_urls_values_or_bodies() {
         Lane::Provider,
     )
     .credential(Credential {
-        header: "authorization",
-        prefix: "Bearer ",
+        header: "authorization".into(),
+        prefix: "Bearer ".into(),
         secret: grida_fx_providers::Secret::new("test-key-not-real-debug"),
     })
     .body(Body::Json(serde_json::json!({

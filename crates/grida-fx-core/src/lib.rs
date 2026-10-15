@@ -5,6 +5,7 @@
 //! `grida-fx-runtime` implements; tests use a fake. Each module's doc names the spec sections it
 //! follows.
 
+pub mod adapters;
 pub mod builtins;
 pub mod docs;
 pub mod error;
@@ -18,6 +19,7 @@ pub mod lock;
 pub mod money;
 pub mod plan;
 pub mod project;
+pub mod providers;
 pub mod registry;
 pub mod routes;
 pub mod spec;

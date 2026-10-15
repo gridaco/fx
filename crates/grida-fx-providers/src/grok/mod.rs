@@ -1,5 +1,5 @@
 //! Grok Build: `image.generate` and `image.edit` through the user's own Grok Build, signed in with
-//! a Grok subscription (spec/providers.md §9.8).
+//! a Grok subscription (src/grok/README.md).
 //!
 //! No key and no HTTP: the adapter draws through a [`GrokRuntime`], one `grok agent --no-leader
 //! stdio` an invocation starts on its first Grok call, keeps for the others and shuts down with the
@@ -7,12 +7,13 @@
 //! FX never reads its credential files, and its calls bill the user's subscription
 //! ([`Billing::Plan`]), never dollars. One send, in order:
 //! 1. the route: capability `image.generate` or `image.edit` on provider `grok`, and a contract
-//!    whose `adapter` (when present) is [`ADAPTER`] and whose `adapter_behavior` (when present)
-//!    is [`ADAPTER_BEHAVIOR`];
+//!    whose `adapter` and `adapter_behavior`, each when present, are [`IDENTITY`]'s;
 //! 2. [`crate::capabilities::check_request`];
-//! 3. values: a blank prompt, a `size` other than `auto`, a `transparent` background, a mask, more
-//!    than [`MAX_PICTURES`] pictures (`image`, then `references`), and each picture's file:
-//!    carried, not empty, and PNG or JPEG;
+//! 3. values: provider options for `grok`, from the route or the request, that are not empty
+//!    ([`crate::wire::no_provider_options`]: Grok Build takes none), a blank prompt, a `size`
+//!    other than `auto`, a `transparent` background, a mask, more than [`MAX_PICTURES`] pictures
+//!    (`image`, then `references`), and each picture's file: carried, not empty, and PNG or
+//!    JPEG;
 //! 4. the runtime's Grok Build, started if need be ([`runtime`]): no program ([`NOT_INSTALLED`],
 //!    [`NETWORK_OFF`]), an older one, or a sign-in that is not a subscription is `Sent::Refused`,
 //!    for this call and the invocation's others;
@@ -38,7 +39,7 @@ pub use runtime::GrokRuntime;
 use crate::BoxFuture;
 use crate::acp::{Failure, Notes};
 use crate::adapter::{
-    Adapter, Answer, Billing, CallRequest, RequestAdapter, RouteRef, Sent, Usage,
+    Adapter, Answer, Billing, CallRequest, Identity, RequestAdapter, RouteRef, Sent, Usage,
 };
 use crate::capabilities;
 use crate::installed::{self, Picture, Program, failed};
@@ -59,10 +60,13 @@ pub const LABEL: &str = "Grok Build image generation";
 /// The route contract's `adapter` this adapter serves.
 pub const ADAPTER: &str = "fx-grok-image-v1";
 
-/// The route contract's `adapter_behavior` this adapter serves. It names [`instructions`], the
-/// session's agent ([`profile`]) and the settings of [`environment`]: a change to any is a new
-/// behaviour.
-pub const ADAPTER_BEHAVIOR: &str = "1";
+/// The contract this adapter serves: [`ADAPTER`], and `adapter_behavior` the text `"1"`. The
+/// behaviour names [`instructions`], the session's agent ([`profile`]) and the settings of
+/// [`environment`]: a change to any is a new behaviour.
+pub const IDENTITY: Identity = Identity {
+    adapter: ADAPTER,
+    behavior: r#""1""#,
+};
 
 /// The oldest Grok Build whose behaviour this adapter was verified on.
 pub const MIN_VERSION: &str = "1.0.52";
@@ -122,8 +126,9 @@ fn profile() -> Value {
 /// and telemetry and the features that act on their own off.
 pub const OVERLAY: &str = r#"{"features":{"telemetry":false,"image_gen":true,"video_gen":false,"web_fetch":false,"lsp_tools":false,"write_file":false,"backend_tools":false,"codebase_indexing":false,"ask_user_question":false,"session_recap":false,"turn_summary":false}}"#;
 
-/// Variables Grok Build never inherits besides the allowlisted ones ([`crate::keys::ALLOWED`]):
-/// with `XAI_API_KEY` it could bill an API account; `GROK_CONFIG_PATH` would replace FX's overlay.
+/// Variables Grok Build never inherits besides the declared ones
+/// ([`crate::setup::Setup::withheld`]): with `XAI_API_KEY` it could bill an API account;
+/// `GROK_CONFIG_PATH` would replace FX's overlay.
 const ALSO_WITHHELD: [&str; 2] = ["XAI_API_KEY", "GROK_CONFIG_PATH"];
 
 /// The kinds of picture Grok's image edits read, and the extension its copy takes.
@@ -190,6 +195,7 @@ impl GrokImages {
     fn prepare<'a>(&self, call: &'a CallRequest) -> Result<Drawing<'a>, String> {
         served(&call.route)?;
         capabilities::check_request(&call.route.capability, &call.request)?;
+        crate::wire::no_provider_options(call, "Grok Build")?;
         let values = Values::read(&call.request)?;
         let pictures = values
             .pictures
@@ -221,6 +227,10 @@ impl RequestAdapter for GrokImages {
         crate::checks::image(call, image, None)
     }
 
+    fn identity(&self) -> Option<Identity> {
+        Some(IDENTITY)
+    }
+
     fn billing(&self) -> Billing {
         Billing::Plan
     }
@@ -229,7 +239,7 @@ impl RequestAdapter for GrokImages {
 /// Registers the adapter for `image.generate` and `image.edit` on `grok`, over one runtime of the
 /// setup's program, which the registry keeps to shut it down with the invocation.
 pub fn register(adapters: &mut Adapters, setup: &Setup) {
-    let runtime = Arc::new(GrokRuntime::new(setup.grok.clone()));
+    let runtime = Arc::new(GrokRuntime::new(setup.grok.clone(), setup.withheld()));
     let images = Arc::new(GrokImages::new(Arc::clone(&runtime)));
     for capability in ["image.generate", "image.edit"] {
         adapters.register(capability, "grok", Adapter::Request(images.clone()));
@@ -256,9 +266,9 @@ pub fn find_program(env: &dyn Fn(&str) -> Option<String>) -> Option<Program> {
     installed::find_program(env, PROGRAM_VARIABLE, "grok", fallback)
 }
 
-/// Every variable Grok Build never inherits.
-pub fn withheld() -> impl Iterator<Item = &'static str> {
-    installed::withheld(&ALSO_WITHHELD)
+/// Every variable Grok Build never inherits: the declared `variables`, then [`ALSO_WITHHELD`].
+pub fn withheld(variables: &[String]) -> Vec<String> {
+    installed::withheld(variables, &ALSO_WITHHELD)
 }
 
 /// The variables every Grok Build FX starts gets: API-key sign-in off, no update during a run, no
@@ -283,16 +293,16 @@ pub fn environment() -> Vec<(String, String)> {
 }
 
 /// A command that starts `grok agent --no-leader stdio` from `program` in `folder`: Grok Build's
-/// own environment, less [`withheld`], plus [`environment`]; no stderr; in a process group of its
-/// own; killed when dropped.
-fn command(program: &Path, folder: &Path) -> Command {
+/// own environment, less [`withheld`] of the declared `variables`, plus [`environment`]; no
+/// stderr; in a process group of its own; killed when dropped.
+fn command(program: &Path, folder: &Path, variables: &[String]) -> Command {
     let args = ["agent", "--no-leader", "stdio"];
-    let mut command = installed::command(program, args, folder, &ALSO_WITHHELD);
+    let mut command = installed::command(program, args, folder, &withheld(variables));
     command.envs(environment());
     command
 }
 
-/// The prompt's text (behaviour [`ADAPTER_BEHAVIOR`]): which tool to call once and with what, the
+/// The prompt's text ([`IDENTITY`]'s behaviour): which tool to call once and with what, the
 /// pictures' paths in order, fixed instructions, then the authored prompt verbatim.
 pub fn instructions(prompt: &str, pictures: &[PathBuf]) -> String {
     let mut text = if pictures.is_empty() {
@@ -318,7 +328,7 @@ pub fn instructions(prompt: &str, pictures: &[PathBuf]) -> String {
 
 /// Step 1: whether the route is one this adapter serves.
 fn served(route: &RouteRef) -> Result<(), String> {
-    installed::served(route, "grok", ADAPTER, ADAPTER_BEHAVIOR)
+    installed::served(route, "grok", &IDENTITY)
 }
 
 /// A request's values after step 3.
@@ -404,10 +414,10 @@ async fn draw(
     let left = deadline.saturating_sub(began.elapsed());
     let drawn = match tokio::time::timeout(left, drawing.image()).await {
         Ok(Ok(bytes)) => {
-            let png = tokio::task::spawn_blocking(move || to_png(bytes));
+            let png = tokio::task::spawn_blocking(move || wire::to_png(bytes, IMAGE));
             drawing.settle().await;
             png.await
-                .unwrap_or_else(|_| Err(NOT_ENCODED.into()))
+                .unwrap_or_else(|_| Err(wire::not_encoded(IMAGE)))
                 .map_err(Stop::Failed)
         }
         Ok(Err(stop)) => Err(stop),
@@ -647,22 +657,9 @@ async fn end(
     }
 }
 
-/// The reason of an image that could not be encoded as PNG.
-const NOT_ENCODED: &str = "Grok Build's image could not be encoded as PNG";
-
-/// The answer's PNG: a PNG as it is, any other image decoded and encoded as PNG, the same pixels.
-fn to_png(bytes: Vec<u8>) -> Result<Vec<u8>, String> {
-    if wire::sniff_image(&bytes) == Some("image/png") {
-        return Ok(bytes);
-    }
-    let picture = image::load_from_memory(&bytes)
-        .map_err(|_| "Grok Build's image is not decodable".to_string())?;
-    let mut png = Vec::new();
-    picture
-        .write_with_encoder(image::codecs::png::PngEncoder::new(&mut png))
-        .map_err(|_| NOT_ENCODED.to_string())?;
-    Ok(png)
-}
+/// The answer's picture in a refusal of its PNG ([`wire::to_png`]): `Grok Build's image is not
+/// decodable`, `… could not be encoded as PNG`.
+const IMAGE: &str = "Grok Build's image";
 
 #[cfg(test)]
 mod tests {
@@ -675,6 +672,7 @@ mod tests {
             model: "imagine".into(),
             provider: provider.into(),
             contract,
+            limits: Default::default(),
         }
     }
 
@@ -822,8 +820,28 @@ mod tests {
 
     #[test]
     fn grok_inherits_no_key_and_starts_locked_down() {
-        let withheld: Vec<&str> = withheld().collect();
-        assert!(withheld.contains(&"XAI_API_KEY") && withheld.contains(&"OPENAI_API_KEY"));
+        let withheld = withheld(&grida_fx_core::providers::Declarations::built_in().variables());
+        let has = |name: &str| withheld.iter().any(|v| v == name);
+        assert!(has("XAI_API_KEY") && has("OPENAI_API_KEY") && has("FAL_BASE_URL"));
+        let started = command(
+            Path::new("grok"),
+            Path::new("."),
+            &["ACME_API_KEY".to_string()],
+        );
+        let removed: Vec<String> = started
+            .as_std()
+            .get_envs()
+            .filter(|(_, value)| value.is_none())
+            .map(|(name, _)| name.to_string_lossy().into_owned())
+            .collect();
+        assert!(
+            removed.iter().any(|name| name == "ACME_API_KEY"),
+            "{removed:?}"
+        );
+        assert!(
+            removed.iter().any(|name| name == "XAI_API_KEY"),
+            "{removed:?}"
+        );
         let set = environment();
         let value = |name: &str| set.iter().find(|(n, _)| n == name).map(|(_, v)| v.as_str());
         assert_eq!(value("GROK_DISABLE_API_KEY_AUTH"), Some("1"));
@@ -840,16 +858,20 @@ mod tests {
 
     #[test]
     fn a_jpeg_becomes_a_png_of_the_same_pixels() {
-        let png = to_png(crate::testing::media::jpeg(8, 4)).unwrap();
+        let png = wire::to_png(crate::testing::media::jpeg(8, 4), IMAGE).unwrap();
         assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"));
         let decoded = image::load_from_memory(&png).unwrap();
         assert_eq!((decoded.width(), decoded.height()), (8, 4));
         assert!(!decoded.color().has_alpha());
         let already = crate::testing::media::png(2, 2, None);
-        assert_eq!(to_png(already.clone()).unwrap(), already);
+        assert_eq!(wire::to_png(already.clone(), IMAGE).unwrap(), already);
         assert_eq!(
-            to_png(b"not an image".to_vec()),
+            wire::to_png(b"not an image".to_vec(), IMAGE),
             Err("Grok Build's image is not decodable".into())
+        );
+        assert_eq!(
+            wire::not_encoded(IMAGE),
+            "Grok Build's image could not be encoded as PNG"
         );
     }
 }

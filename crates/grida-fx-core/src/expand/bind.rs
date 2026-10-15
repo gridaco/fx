@@ -4,22 +4,23 @@
 //! `<w>.route` when `route:` is set, `{spec.name} makes no paid call to check` at `<w>.requires`.
 //! Per capability: the step's `route:` when the type calls exactly one capability (else it is
 //! ignored), else fx.yaml's default; none: `no route for {cap}: set route: on the step or
-//! routes.{cap} in fx.yaml`; [`crate::routes::RouteTable::resolve`] errors at `<w>.route`;
-//! missing features `{route} does not support {a, b}` at `<w>.requires` (route still bound);
-//! price `cost × count`. `independent_of`: `no step {name}`, and `shares the model {models}
-//! with {name}; route one of them to a different model`, comparing underlying models of the other
-//! step's direct instances.
+//! routes.{cap} in fx.yaml`; [`crate::routes::RouteTable::resolve`] errors at `<w>.route`; the
+//! lock drift of a project adapter that serves the route ([`crate::routes::Route::drift`]) at
+//! `<w>.route` (route still bound); missing features `{route} does not support {a, b}` at
+//! `<w>.requires` (route still bound); price `cost × count`. `independent_of`: `no step
+//! {name}`, and `shares the model {models} with {name}; route one of them to a different model`,
+//! comparing underlying models of the other step's direct instances.
 //!
 //! Feature names (spec/capabilities.md §1 "Features"): a name in `requires:` that is a feature of
 //! none of the capabilities the type calls is refused once, before any route is bound, at
 //! `<w>.requires`: `{name} is not an image.generate feature (spec/capabilities.md)` (several
 //! capabilities: `an image.generate or structured.generate feature`), followed by `; FX calls it
 //! {feature}` when the name is a renamed one of their features (spec/providers.md
-//! §11). It is then left out of every route's missing features. A type that calls a capability
+//! §4). It is then left out of every route's missing features. A type that calls a capability
 //! FX does not define (spec/capabilities.md §13, or a project's own) has no vocabulary to check
 //! against, so its routes alone decide. The vocabulary is data, `features.json`: each
 //! capability's features and the renamed ones; `tools/check_spec.py` and this module's tests hold
-//! it to spec/capabilities.md and spec/providers.md §11.
+//! it to spec/capabilities.md and spec/providers.md §4.
 //!
 //! A capability step's own request (spec/capabilities.md §1): for `image.generate` and
 //! `image.edit`, the with-values imply features ([`implied_features`]), each one the route lacks
@@ -66,7 +67,7 @@ pub fn capability_features(capability: &str) -> Option<&'static [String]> {
     vocabulary().capabilities.get(capability).map(Vec::as_slice)
 }
 
-/// FX's name for a renamed feature (spec/providers.md §11).
+/// FX's name for a renamed feature (spec/providers.md §4).
 pub fn renamed_feature(name: &str) -> Option<&'static str> {
     vocabulary().renamed.get(name).map(String::as_str)
 }
@@ -214,6 +215,10 @@ impl Expander<'_> {
                     continue;
                 }
             };
+            // The lock drift of the project adapter that serves it (spec/adapters.md §9).
+            if let Some(drift) = &route.drift {
+                self.problem(&format!("{where_}.route"), drift.clone());
+            }
             let own = spec.capability.as_deref() == Some(capability.as_str());
             let mut reported = BTreeSet::new();
             for (feature, member) in implied.iter().filter(|_| own) {
@@ -349,6 +354,7 @@ pub fn call_price(route: &Route, with: &IndexMap<String, Val>, count: u32) -> Ca
         calls: count,
         low: low.times(count as u64),
         high: high.times(count as u64),
+        capped: route.price.capped,
     }
 }
 
@@ -660,7 +666,9 @@ mod tests {
     #[test]
     fn every_renamed_feature_is_one_providers_md_drops_for_a_feature_of_fx() {
         let providers = spec_text("providers.md");
-        let changes = &providers[providers.find("## 11. ").expect("providers.md §11")..];
+        let changes = &providers[providers
+            .find("## 4. Renamed features")
+            .expect("providers.md §4")..];
         let all: BTreeSet<&str> = vocabulary()
             .capabilities
             .values()
@@ -671,7 +679,7 @@ mod tests {
         for (old, new) in &vocabulary().renamed {
             assert!(
                 changes.contains(&format!("`{old}`")),
-                "{old} in providers.md §11"
+                "{old} in providers.md §4"
             );
             assert!(!all.contains(old.as_str()), "{old} is still a feature");
             assert!(all.contains(new.as_str()), "{new} is a feature");

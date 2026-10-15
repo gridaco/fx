@@ -12,6 +12,7 @@ one serves.
 | [Your own Grok Build](#your-own-grok-build) | Grok Build, signed in to a Grok subscription | images | your Grok subscription; $0 to FX |
 | [Grida Gateway](#grida-gateway) | `GG_API_KEY` | text, agent turns, images, video, 3D models and rigs | your organization's Grida AI credits |
 | [Your own keys](#your-own-provider-keys) | each provider's key | that provider's routes | each provider's account |
+| [A provider FX does not ship](#a-provider-fx-does-not-ship) | a declaration in `fx.yaml`, and an adapter of your own unless it speaks OpenAI's chat API: a [community provider](15-community-providers.md) | its routes | the provider's account |
 
 You can mix them: a project picks a route per capability in `fx.yaml`, and a step can name its own
 `route:`. `grida fx doctor` says which keys FX found, where, and which routes a live run could
@@ -55,7 +56,7 @@ GG_API_KEY=…
 ```
 
 in the environment, or in a `.env` file in your project (keep it out of version control). FX books
-a GG call at what GG charged for it ([providers.md §9.7](../../spec/providers.md#97-grida-gateway)).
+a GG call at what GG charged for it ([GG's adapter reference](../../crates/grida-fx-providers/src/gg/README.md)).
 
 The key needs both scopes, `text` for text and agent steps and `media` for everything else.
 GG's own API reference, written for people and agents alike, is
@@ -80,7 +81,9 @@ a missing key refuses only the calls that need it, before anything is sent.
 
 `OPENAI_BASE_URL`, `OPENROUTER_BASE_URL`, `FAL_BASE_URL`, `ELEVENLABS_BASE_URL` and `GG_BASE_URL`
 point a provider at another address, such as a proxy. How FX reads keys and the `.env` file:
-[Keys and live runs](05-running.md#keys-and-live-runs).
+[Keys and live runs](05-running.md#keys-and-live-runs). A provider FX does not ship is declared
+in `fx.yaml` with the variables of its own key and address
+([below](#a-provider-fx-does-not-ship)).
 
 ## The built-in routes
 
@@ -96,4 +99,136 @@ point a provider at another address, such as a proxy. How FX reads keys and the 
 The routes themselves, with their models and planning prices, are in FX's built-in route table:
 `grida fx nodes <type>` lists a capability's routes, and `grida fx doctor` says which ones a live
 run could serve. A project can add or restate routes in its own `route_tables:`
-([where prices come from](04-cost-and-cache.md#before-spending-the-plan)).
+([where prices come from](04-cost-and-cache.md#before-spending-the-plan)). An entry that
+`extends:` a built-in route states only what differs, a price say, and keeps the rest, contract
+included; restating the same route this way keeps its identity, so its cached results stay
+([route tables](05-running.md#name-a-run-or-continue-it)).
+
+A route's `contract` names the adapter that serves it, as `adapter` and `adapter_behavior`
+([providers.md §2](../../spec/providers.md#2-the-built-in-adapters)), and the name picks the
+adapter: a provider may have more than one for a capability. On a provider and capability FX
+serves, FX fills in what a project route's contract leaves out: the provider's default for the
+capability as `adapter`, and the `adapter_behavior` of the adapter the contract names. So such a
+route always names its adapter. A contract that names an adapter FX does not have is served by
+none: `grida fx doctor` says `no adapter`, and a live call on it is refused. Every adapter checks
+its behaviour: up to 0.6.1, fal's and Tripo's checked only `adapter`, and served a route that
+named another `adapter_behavior`.
+
+## A model FX does not list
+
+New models arrive faster than FX's built-in table. On a provider FX speaks, a route of your own is
+enough: name the model, and give a cap when you do not know its price.
+
+```yaml
+# routes/models.yaml, listed under route_tables: in fx.yaml
+fx: routes/v1
+routes:
+  - capability: image.generate
+    route: acme/img-a@openrouter        # made up: any image model OpenRouter serves
+    price: { cap_usd: 0.20 }            # each call holds $0.20 and is booked at what OpenRouter reports
+    features: [image_input]
+    max_input_pictures: 8
+  - capability: image.edit
+    route: acme/img-a/edit@fal          # made up: fal's edit endpoint of a model
+    price: { cap_usd: 0.20 }
+    contract:
+      provider_options: { fal: { seed: 7 } }
+```
+
+- **OpenRouter and fal images.** A route whose `contract` names no `adapter` gets FX's generic
+  image adapter for the provider. It sends what the provider's image models share, the prompt and the input
+  pictures, then your `provider_options`, and nothing FX chose for one model: no size, quality or
+  background. The picture it gets back becomes a PNG, the same pixels. On fal the model is the
+  endpoint id as fal publishes it, the generate endpoint for `image.generate` and the edit
+  endpoint for `image.edit`. An exact `size`, a `mask` or a transparent `background` is refused
+  before anything is sent: leave it out and give the model's own parameter in `provider_options`
+  ([Parameters FX does not expose](#parameters-fx-does-not-expose)).
+- **GPT Image.** The built-in OpenRouter and fal image routes name GPT Image's own adapters,
+  which send what FX chose for it: maximum quality, its exact sizes and, on OpenRouter, its
+  moderation. A route that `extends` one of them keeps that adapter, so extend one for a GPT
+  Image model FX does not list, and declare a route whose contract names no adapter for any other
+  model.
+- **OpenRouter text.** A new model id is enough for structured output and agent turns: the route
+  gets FX's OpenRouter chat adapters, which send the model, the messages and a strict JSON schema
+  (or strict function tools). A route's `contract.request_policy` may pin OpenRouter's routing and
+  reasoning effort, as the built-in `openai/gpt-6-astra@openrouter` route does
+  ([OpenRouter's reference](../../crates/grida-fx-providers/src/openrouter/README.md)).
+- **GG.** A new model id is enough for images, video, structured output and agent turns: GG
+  checks each model's own request. A 3D route also names GG's `endpoint` in its `contract` (and a
+  rig route may name a `check_endpoint`), as the built-in GG 3D routes do. GG image edits take at
+  most the pictures the route declares (`max_input_pictures`, 16 on the built-in route).
+- **fal video.** A video route of your own on fal draws the `resolution` tiers its price names and
+  up to its `max_units` seconds; a capped route, whose price states neither, draws `360p`, `720p`,
+  `1080p` and `4k`, from 3 to 10 seconds. It needs a first frame unless it declares the feature
+  `text_to_video` (`features: [text_to_video]`), for a model that draws from the prompt alone;
+  the built-in route does not. It sends the built-in route's request (`image_url`,
+  `end_image_url`, a whole-number `duration`, `aspect_ratio`, `resolution`), so it fits only a
+  fal endpoint that takes that shape.
+
+Each adapter's reference lists what it sends and refuses
+([providers.md §2](../../spec/providers.md#2-the-built-in-adapters)).
+
+## A provider FX does not ship
+
+A provider FX does not ship is a **community provider**: your project declares it in `fx.yaml`,
+under `providers:`, by the name its routes give it (`<model>@acme`), with the variable its key
+comes from, its address and the hosts its results may be downloaded from. Then it needs one of:
+
+- **`family: openai-compatible`**, for a server that speaks the OpenAI Chat Completions API, a
+  model server on your machine included: FX's own adapters serve its `structured.generate` and
+  `agent.turn` routes, with no code of yours;
+- **`adapter: <path>#<name>`**, for any other provider: an adapter you write in Python or
+  TypeScript, a module of the project that turns FX's request into the provider's and its answer
+  into FX's.
+
+```yaml
+# fx.yaml
+fx: project/v1
+providers:
+  acme:
+    credential: { variable: ACME_API_KEY }   # sent as authorization: Bearer <key>
+    base_url: { variable: ACME_BASE_URL, default: "https://api.acme.test/v1" }
+    family: openai-compatible                # or adapter: adapters/acme.py#acme
+```
+
+FX reads its key from the environment or `.env` as it reads its own, redacts it, and books its
+calls in dollars against your ceiling, at a price or a cap its routes give; `grida fx doctor`
+lists it (`provider  acme api.acme.test ACME_API_KEY missing`). FX keeps the checks, the
+retries, the cache and the record, as for its own providers.
+[Community providers](15-community-providers.md) is the whole job: the declaration and its
+refusals, routes for it, the OpenAI-compatible family, writing an adapter in Python and in
+TypeScript, checking it offline, identity, sharing it, and its limits.
+
+## Parameters FX does not expose
+
+A provider often takes parameters FX has no setting for: a seed, a style, a safety switch. Give
+them in `provider_options`, by provider, on a step or in a route's `contract`:
+
+```yaml
+steps:
+  facts:
+    uses: fx/structured.generate@1
+    with:
+      prompt: Name a colour.
+      schema: ./schemas/colour.json
+      provider_options:
+        openrouter: { seed: 7 }
+```
+
+- **Only the provider the call runs on reads its member.** The others are kept, so a step that may
+  run on several routes can give each provider its own. The parameters go in the request after
+  FX's own, as the provider's API names them.
+- **A route can carry them too**, in its `contract` (`contract: { provider_options: { openrouter:
+  { seed: 7 } } }`). A step's parameter replaces the route's of the same name, and adds the rest.
+  An agent's turns take only their route's, since FX builds each turn's request itself.
+- **FX's own settings stay FX's.** A parameter FX sets itself (`prompt`, `model`, `n`, `stream`,
+  …) is refused before anything is sent, at $0, and so is a file: send files through the
+  type's inputs. Each provider's list is in its adapter's reference
+  ([providers.md §2](../../spec/providers.md#2-the-built-in-adapters)). Codex and Grok Build take
+  none.
+- **Options are part of the call.** Another value is another paid call, and the route's are part of
+  its identity. They are recorded with the run, so never put a key in them: keys come only from the
+  environment or `.env`.
+- **What the provider does with them is the provider's.** Beyond those refusals, FX does not
+  check a parameter's name or value: a provider that refuses it fails the call, and one that
+  changes its answer so FX's checks refuse it fails the attempt, billed.

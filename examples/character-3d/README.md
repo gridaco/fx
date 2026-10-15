@@ -67,7 +67,8 @@ uv run python -m grida.fx run workflow.yaml --inputs inputs/nami/inputs.yaml \
   --name nami --live --max-usd 30 --open
 ```
 
-The $30 ceiling is a limit, not a completion guarantee. The engine stops before crossing it.
+The $30 ceiling is a limit, not a completion guarantee: the engine reserves each call against it
+before making it.
 A fresh run generates new front/back references and meshes from the downloaded canonical
 image; it does not contain the website's paid cache or reproduce its artwork byte for byte.
 The supplied brief uses one whole mesh and fixed mitten hands, and does not promise articulated fingers, facial animation or

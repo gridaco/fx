@@ -1,0 +1,11 @@
+fx: project/v1
+routes:
+  structured.generate: text-a@acme
+providers:
+  acme:
+    credential: { variable: ACME_API_KEY }
+    base_url: { default: "https://api.acme.test/v1" }
+    adapter: adapters/acme.py#acme
+  acme-jobs:
+    base_url: { default: "https://jobs.acme.test/v1" }
+    adapter: adapters/acme.py#acme_jobs

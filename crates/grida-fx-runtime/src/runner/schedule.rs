@@ -515,6 +515,7 @@ mod tests {
             calls: 1,
             low: Usd::ZERO,
             high: usd(high),
+            capped: false,
         });
         i
     }

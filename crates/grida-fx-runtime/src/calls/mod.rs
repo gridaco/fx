@@ -28,8 +28,14 @@
 //!    call on any provider its ledger does not admit with `not_live` too: `<capability> on <route
 //!    id> is a paid call, and this run has no ceiling: pass --max-usd (…)`.
 //! 6. the adapter: none serving the route is `no_route`: `no adapter serves <capability> on <route
-//!    id>`. This is checked after the cache and the live check, so recorded calls replay offline
-//!    and without adapters (spec/protocol.md §6.1 step 4; spec/store.md §4).
+//!    id>`, for a provider without an adapter of the capability, or a contract whose `adapter`
+//!    names none of them (spec/adapters.md §1). This is checked after the cache and the live
+//!    check, so recorded calls replay offline
+//!    and without adapters (spec/protocol.md §6.1 step 4; spec/store.md §4). An adapter FX ships
+//!    or a project adapter (spec/adapters.md §9) gets the engine's checks around it
+//!    ([`checked`]): its route's contract and the request before each send or submit, inside the
+//!    attempt, and the capability's every-route check after its own check of an answer
+//!    (spec/adapters.md §3.4, §4).
 //! 7. the job record: unreadable stops the run ([`CallError::Fault`]); `submitting` is
 //!    `job_unsettled`: `<capability> on <route id> (take <take>) was being submitted when a run
 //!    stopped, and nobody can say whether the provider took it. Check the provider's dashboard,
@@ -44,11 +50,12 @@
 //!    instance's step budgets.
 //! 9. the retry owner ([`retry`]), with the engine's own check of the capability's answers
 //!    ([`engine_check`]: an `agent.turn` reply must be `{"text", "tool_calls"}`, spec/protocol.md
-//!    §6.2); then the answer's files are stored, the call record published, the job record
-//!    removed, and `call {cached: false, cost_usd}` emitted (`cost_usd` the attempt's reported
-//!    cost, `null` when none, 0 for a collected job). The answer handed back is the published
-//!    record read back as a cache hit reads it (its `data` canonical, its files in the record's
-//!    order), so a live call and its replay give the caller the same value.
+//!    §6.2), after the adapter's check and the every-route check ([`checked`]); then the answer's
+//!    files are stored, the call record published, the job record removed, and
+//!    `call {cached: false, cost_usd}` emitted (`cost_usd` the attempt's reported cost, `null` when
+//!    none, 0 for a collected job). The answer handed back is the published record read back as a
+//!    cache hit reads it (its `data` canonical, its files in the record's order), so a live call
+//!    and its replay give the caller the same value.
 //!
 //! **Stand-in answers** (spec/protocol.md §6.1 "Stand-in answers"). In a run whose engine has a
 //! stand-in ([`crate::stand_in`]), step 4's cache is the stand-in store (the engine's store), and
@@ -92,6 +99,7 @@
 //! settles. Every call counts as running until it returns ([`flights::Flights::track`]), and
 //! [`Services::calls_settled`] waits until none is: a run waits for it before it ends.
 
+pub mod checked;
 pub mod flights;
 pub mod pacing;
 pub mod retry;
@@ -689,9 +697,7 @@ impl Lead<'_> {
 
         let route_ref = RouteRef {
             capability: capability.to_string(),
-            model: route.model.clone(),
-            provider: route.provider.clone(),
-            contract: route.contract.clone(),
+            ..RouteRef::of(route)
         };
 
         // 4, in a stand-in run: the stand-in answers, refuses or fails the call; a decline goes
@@ -734,8 +740,14 @@ impl Lead<'_> {
             ));
         }
 
-        // 6. The adapter.
-        let Some(adapter) = services.engine.adapters.serving(&route_ref).cloned() else {
+        // 6. The adapter, with the engine's checks around it.
+        let Some(adapter) = services
+            .engine
+            .adapters
+            .serving(&route_ref)
+            .cloned()
+            .map(checked::checked)
+        else {
             return Err(known.error(
                 ErrorCode::NoRoute,
                 format!("no adapter serves {capability} on {route_id}"),

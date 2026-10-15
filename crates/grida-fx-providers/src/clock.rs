@@ -1,4 +1,4 @@
-//! Time for long-job polling (spec/providers.md §7): adapters never sleep except while a
+//! Time for long-job polling (spec/adapters.md §6): adapters never sleep except while a
 //! `collect` (or a free pre-check inside a `submit`) polls a provider job, and they do it through
 //! an injected [`Clock`] so tests poll instantly.
 

@@ -3,7 +3,7 @@
 //! [`write_program`] for any test that starts a program it wrote. Everything here is synthetic:
 //! made-up keys, media built in code.
 
-use crate::adapter::{CallRequest, RequestFile, RouteRef};
+use crate::adapter::{CallRequest, RequestFile, RouteLimits, RouteRef};
 use crate::clock::{Clock, FakeClock};
 use crate::keys::{KeyName, Keys};
 use crate::setup::Setup;
@@ -95,7 +95,8 @@ pub struct CallBuilder {
 }
 
 impl CallBuilder {
-    /// A call of `capability` on `route` (`model@provider`), with contract `{}` and request `{}`.
+    /// A call of `capability` on `route` (`model@provider`), with contract `{}`, no limits and
+    /// request `{}`.
     pub fn new(capability: &str, route: &str) -> CallBuilder {
         let (model, provider) = parse_route_id(route).expect("a route id model@provider");
         CallBuilder {
@@ -104,6 +105,7 @@ impl CallBuilder {
                 model,
                 provider,
                 contract: json!({}),
+                limits: Default::default(),
             },
             request: json!({}),
             files: IndexMap::new(),
@@ -113,6 +115,12 @@ impl CallBuilder {
 
     pub fn contract(mut self, contract: Value) -> CallBuilder {
         self.route.contract = contract;
+        self
+    }
+
+    /// The limits the route's table declares (none by default).
+    pub fn limits(mut self, limits: RouteLimits) -> CallBuilder {
+        self.route.limits = limits;
         self
     }
 

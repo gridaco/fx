@@ -1,10 +1,11 @@
-//! Tripo `mesh.rig`: a free riggability check, then the paid rig (spec/providers.md §9.4).
+//! Tripo `mesh.rig`: a free riggability check, then the paid rig (src/tripo/README.md).
 //!
 //! `submit`: refuse a model that is not `model/gltf-binary` (or no key); upload it as
-//! `unrigged.glb`; post `POST /animations/rig-check` `{"input": token}` and wait for that task up to
-//! [`CHECK_DEADLINE`]; a doubted model (`riggable` not true, or `rig_type` not the requested one) is
-//! refused unless `allow_negative_check` is true; then post `POST /animations/rig` once with
-//! `{"input", "model", "rig_type", "spec": <skeleton>, "out_format": "glb"}`. The handle is
+//! `unrigged.glb`; post `POST /animations/rig-check` `{"input": token}` and wait for that task up
+//! to [`CHECK_DEADLINE`]; a doubted model (`riggable` not true, or `rig_type` not the requested
+//! one) is refused unless `allow_negative_check` is true; then post `POST /animations/rig` once
+//! with `{"input", "model", "rig_type", "spec": <skeleton>, "out_format": "glb"}`, then the
+//! provider options, which may set no member of [`OWNED`] (spec/adapters.md §8). The handle is
 //! `{"task_id", "check": {"task_id", "riggable", "rig_type"}, "advisory_override"}`, where the
 //! check's `rig_type` is kept only when it is a short plain string (`^[A-Za-z0-9_.:-]{1,96}$`),
 //! else `null`, so a handle and an answer never carry a provider URL.
@@ -12,16 +13,17 @@
 //! `model`; `data: {"facts": {"riggable", "checked_rig_type", "advisory_override"}}` from the
 //! handle; cost from the rig task's credits.
 //!
-//! The whole check is the free phase (spec/providers.md §7): a check task that ends without
+//! The whole check is the free phase (spec/adapters.md §6): a check task that ends without
 //! success is `Refused`; one still running at its deadline, an answer about another task, or a
 //! `riggable` that is not a boolean is `NotReceived`, and the engine resends the whole submit.
-//! Refusals before anything is sent come in the order of spec/providers.md §5: the route, the
-//! request's shape (spec/capabilities.md §8), the key, then the model file (its bytes, its kind).
+//! Refusals before anything is sent come in the order of spec/adapters.md §4: the route, the
+//! request's shape (spec/capabilities.md §8), the key, provider options, then the model file (its
+//! bytes, its kind).
 
 use super::{TripoApi, Waited};
 use crate::BoxFuture;
-use crate::adapter::{Answer, CallRequest, Collected, LongJob, Submitted};
-use serde_json::{Value, json};
+use crate::adapter::{Answer, CallRequest, Collected, Identity, LongJob, Submitted};
+use serde_json::{Map, Value, json};
 use std::time::Duration;
 
 /// How long the free check may take.
@@ -32,6 +34,19 @@ pub const COLLECT_DEADLINE: Duration = Duration::from_secs(600);
 
 /// The route contract's `adapter` this adapter serves.
 pub const ADAPTER: &str = "tripo-rig";
+
+/// The paid task's path.
+pub const PATH: &str = "/animations/rig";
+
+/// The contract this adapter serves: [`ADAPTER`], and `adapter_behavior` the number 1.
+pub const IDENTITY: Identity = Identity {
+    adapter: ADAPTER,
+    behavior: "1",
+};
+
+/// The members provider options may not set (spec/adapters.md §8; src/tripo/README.md): those of
+/// the paid body.
+pub const OWNED: &[&str] = &["input", "model", "rig_type", "spec", "out_format"];
 
 const CAPABILITY: &str = "mesh.rig";
 
@@ -54,15 +69,19 @@ impl TripoRig {
 
     async fn submit_call(&self, call: &CallRequest) -> Submitted {
         let api = &self.api;
-        if let Err(reason) = super::check_route(call, CAPABILITY, ADAPTER) {
+        if let Err(reason) = super::check_route(call, CAPABILITY, &IDENTITY) {
             return api.refused(&reason);
         }
         if let Err(reason) = crate::capabilities::check_request(CAPABILITY, &call.request) {
             return api.refused(&reason);
         }
-        if let Err(reason) = api.client.credential("authorization", "Bearer ") {
+        if let Err(reason) = api.client.credential() {
             return api.refused(&reason);
         }
+        let options = match crate::wire::provider_options(call, OWNED) {
+            Ok(options) => options,
+            Err(reason) => return api.refused(&reason),
+        };
         let glb = match model_bytes(call) {
             Ok(glb) => glb,
             Err(reason) => return api.refused(&reason),
@@ -103,14 +122,15 @@ impl TripoRig {
         }
 
         // The paid POST, once.
-        let body = json!({
-            "input": token,
-            "model": call.route.model,
-            "rig_type": rig_type,
-            "spec": skeleton,
-            "out_format": "glb",
-        });
-        match api.post_task("/animations/rig", body).await {
+        let mut body = Map::new();
+        body.insert("input".into(), json!(token));
+        body.insert("model".into(), json!(call.route.model));
+        body.insert("rig_type".into(), json!(rig_type));
+        body.insert("spec".into(), json!(skeleton));
+        body.insert("out_format".into(), json!("glb"));
+        body.extend(options);
+        let body = Value::Object(body);
+        match api.post_task(PATH, body).await {
             Ok(task_id) => Submitted::Accepted {
                 handle: json!({
                     "task_id": task_id,
@@ -171,7 +191,7 @@ impl TripoRig {
     }
 }
 
-/// The model's bytes (spec/providers.md §5 step 5): a file the call carries, of kind
+/// The model's bytes (spec/adapters.md §4 step 5): a file the call carries, of kind
 /// `model/gltf-binary`, readable and not empty.
 fn model_bytes(call: &CallRequest) -> Result<Vec<u8>, String> {
     let missing = || "a rig call needs its model".to_string();
@@ -202,5 +222,9 @@ impl LongJob for TripoRig {
         handle: &'a Value,
     ) -> BoxFuture<'a, Collected> {
         Box::pin(self.collect_call(handle))
+    }
+
+    fn identity(&self) -> Option<Identity> {
+        Some(IDENTITY)
     }
 }

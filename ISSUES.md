@@ -6,7 +6,7 @@ Known problems that are not fixed yet. Each says what was seen, what is known, a
 
 **Status:** open. A design gap, not a bug.
 
-An answer holds only its files and its `data`: "no request id, no usage, no provider URL" ([providers.md](spec/providers.md) §4.4, and the §11 change notes). That rule is right for the answer, since a call record is replayed to node bodies and must not depend on which provider made it. But nothing else keeps the provider's usage either: not the call record, and not the run's events. FX reads the cost it needs and drops the rest.
+An answer holds only its files and its `data`: "no request id, no usage, no provider URL" ([adapters.md](spec/adapters.md) §3.4). That rule is right for the answer, since a call record is replayed to node bodies and must not depend on which provider made it. But nothing else keeps the provider's usage either: not the call record, and not the run's events. FX reads the cost it needs and drops the rest.
 
 So a bill cannot be explained after the fact:
 
@@ -14,9 +14,9 @@ So a bill cannot be explained after the fact:
 - OpenAI reports token usage and no cost, so FX books an OpenAI image at its whole hold and keeps none of the tokens. Nothing then shows whether the hold covered the call.
 - No request or generation id is kept, so a call cannot be looked up at the provider afterwards.
 
-The per-size image prices of [providers.md](spec/providers.md) §10 could only be measured from an earlier engine's records, which kept the usage block. Issue 2 is open because FX's own run kept nothing.
+The per-size image prices of [providers.md](spec/providers.md) §3 could only be measured from an earlier engine's records, which kept the usage block. Issue 2 is open because FX's own run kept nothing.
 
-**Proposal.** Keep answers as they are. Record what the provider reported on the run's `call` event: the token counts and the cost breakdown, as allowlisted numbers, and the provider's request id when it is a safe id ([providers.md](spec/providers.md) §8). None of it is a secret, none of it enters a call key, and a replay would carry no usage, since nothing was billed. Spec: [protocol.md](spec/protocol.md) (the `call` event), [providers.md](spec/providers.md) §4.4 and each provider's section of §9, and the events schema.
+**Proposal.** Keep answers as they are. Record what the provider reported on the run's `call` event: the token counts and the cost breakdown, as allowlisted numbers, and the provider's request id when it is a safe id ([adapters.md](spec/adapters.md) §7). None of it is a secret, none of it enters a call key, and a replay would carry no usage, since nothing was billed. Spec: [protocol.md](spec/protocol.md) (the `call` event), [adapters.md](spec/adapters.md) §3.4 and each adapter's reference ([providers.md](spec/providers.md) §2), and the events schema.
 
 ## 2. OpenRouter billed twice the image output for one call
 
@@ -39,7 +39,7 @@ The per-size image prices of [providers.md](spec/providers.md) §10 could only b
 
 **Open candidates:**
 
-1. **`moderation: low`.** FX always passes it to OpenAI through `provider.options` ([providers.md](spec/providers.md) §9.2). The earlier calls that billed the single count did not send it. It is the only request difference found, and no mechanism is known for it to double the output.
+1. **`moderation: low`.** FX always passes it to OpenAI through `provider.options` ([OpenRouter's adapter reference](crates/grida-fx-providers/src/openrouter/README.md)). The earlier calls that billed the single count did not send it. It is the only request difference found, and no mechanism is known for it to double the output.
 2. **An unannounced change since late September**, at OpenRouter (counting the output twice) or at OpenAI (the model drawing twice as much at `max`).
 
 **Seen since.** On 2026-10-12, a 1024x1024 `max` generate (background `opaque`) on
@@ -54,4 +54,4 @@ does not send `moderation: low`; it does not say which upstream GG used.
 - **Two 1024x1024 `max` calls on OpenRouter**, one with `moderation: low` and one without (about $0.85), separate candidate 1 from candidate 2.
 - **Once issue 1 is fixed**, any new call shows its breakdown in the run.
 
-**What depends on it.** FX's OpenRouter image highs cover twice the output as a precaution. They are only holds, since OpenRouter reports its cost. If OpenAI itself now bills twice, the OpenAI and fal highs under-count by up to one output: a 1024x1024 generate would cost about $0.42 and be booked at $0.29 ([providers.md](spec/providers.md) §10, "An open risk").
+**What depends on it.** FX's OpenRouter image highs cover twice the output as a precaution. They are only holds, since OpenRouter reports its cost. If OpenAI itself now bills twice, the OpenAI and fal highs under-count by up to one output: a 1024x1024 generate would cost about $0.42 and be booked at $0.29 ([providers.md](spec/providers.md) §3, "An open risk").

@@ -10,12 +10,14 @@
 //! `..` segment reads `nodes is a folder inside the project`. A `workflows:`
 //! folder that is the project root or a folder above it, lexically or once its symbolic links
 //! are resolved, is refused when the file is found (spec/store.md, *Finding a workflow by id*):
-//! searching it would read the project's own runs and store.
+//! searching it would read the project's own runs and store. `providers:` declares the project's
+//! own providers, refused as [`crate::providers`] says.
 
 use super::workflow::Budget;
 use super::{Schema, check_kind, validate};
 use crate::error::{Error, Result};
 use crate::money::Usd;
+use crate::providers::{Declaration, Declarations};
 use indexmap::IndexMap;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -38,6 +40,8 @@ pub struct ProjectDoc {
     pub budget: Option<Budget>,
     pub routes: IndexMap<String, RouteDefault>,
     pub route_tables: Vec<String>,
+    /// The providers it declares, in its order (spec/providers.md §1).
+    pub providers: Vec<Declaration>,
     pub view_origins: Vec<String>,
     pub sources: Vec<String>,
     pub nodes: String,
@@ -54,6 +58,7 @@ impl Default for ProjectDoc {
             budget: None,
             routes: IndexMap::new(),
             route_tables: Vec::new(),
+            providers: Vec::new(),
             view_origins: Vec::new(),
             sources: Vec::new(),
             nodes: "nodes".into(),
@@ -116,6 +121,11 @@ impl Project {
             .iter()
             .map(|(k, v)| (k.clone(), v.route.clone()))
             .collect()
+    }
+
+    /// FX's provider declarations, then this project's (spec/providers.md §1).
+    pub fn declarations(&self) -> Declarations {
+        Declarations::with(&self.document.providers)
     }
 }
 
@@ -234,6 +244,7 @@ pub(crate) fn parse_project(value: &Value, label: &str) -> Result<ProjectDoc> {
         budget,
         routes,
         route_tables: texts("route_tables")?,
+        providers: crate::providers::parse(value.get("providers"), label)?,
         view_origins: texts("view_origins")?,
         sources: texts("sources")?,
         nodes: text("nodes", "nodes")?,
@@ -326,6 +337,48 @@ mod tests {
             let found = message(json!({"fx": "project/v1", "workflows": workflows}));
             assert!(found.starts_with("fx.yaml: workflows"), "{found}");
         }
+    }
+
+    #[test]
+    fn a_project_declares_providers() {
+        let document = json!({
+            "fx": "project/v1",
+            "providers": {
+                "acme": {
+                    "credential": {"variable": "ACME_API_KEY"},
+                    "base_url": {"default": "https://api.acme.test/v1"},
+                    "family": "openai-compatible",
+                },
+            },
+        });
+        let project = parse_project(&document, "fx.yaml").unwrap();
+        assert_eq!(project.providers.len(), 1);
+        assert_eq!(project.providers[0].name, "acme");
+        let message = |providers: Value| {
+            parse_project(
+                &json!({"fx": "project/v1", "providers": providers}),
+                "fx.yaml",
+            )
+            .unwrap_err()
+            .message
+        };
+        let base = json!({"default": "https://api.acme.test"});
+        // The schema's refusals come first, then the declarations' own.
+        for bad in [
+            json!({"Acme": {"base_url": base}}),
+            json!({"acme": {}}),
+            json!({"acme": {"base_url": base, "family": "acme-wire"}}),
+            json!({"acme": {"base_url": base, "credential": {"variable": "1KEY"}}}),
+            json!({"acme": {"base_url": base, "download_hosts": ["*.test"]}}),
+            json!({"acme": {"base_url": base, "credential": {"variable": "K", "header": "X-Key"}}}),
+        ] {
+            let found = message(bad.clone());
+            assert!(found.starts_with("fx.yaml: providers"), "{bad}: {found}");
+        }
+        assert_eq!(
+            message(json!({"fal": {"base_url": base}})),
+            "fx.yaml: providers.fal: fal is a provider FX ships"
+        );
     }
 
     #[cfg(unix)]

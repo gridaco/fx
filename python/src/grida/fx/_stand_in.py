@@ -147,7 +147,7 @@ class StandInCall:
             id=instance["id"], path=instance["path"], step=instance["step"]
         )
         self.files: dict[str, InputFile] = {digest: InputFile(ref) for digest, ref in files.items()}
-        self.request: dict[str, Any] = _with_input_files(request, self.files)
+        self.request: dict[str, Any] = with_files(request, self.files)
 
     def __repr__(self) -> str:
         return (
@@ -156,18 +156,19 @@ class StandInCall:
         )
 
 
-def _with_input_files(value: Any, files: Mapping[str, InputFile]) -> Any:
+def with_files(value: Any, files: Mapping[str, Any]) -> Any:
     """A copy of a JSON value with every file value (an object whose only member is ``file``
-    with a digest) as the :class:`InputFile` of its digest."""
+    with a digest) as the file of its digest in ``files``: an :class:`InputFile` here, an
+    ``AdapterFile`` for a project adapter's call."""
     if isinstance(value, Mapping):
         digest = value.get("file")
         if len(value) == 1 and isinstance(digest, str) and _DIGEST.fullmatch(digest):
             if digest not in files:
                 raise ValueError(f"the request holds the file {digest}, which files does not hold")
             return files[digest]
-        return {key: _with_input_files(item, files) for key, item in value.items()}
+        return {key: with_files(item, files) for key, item in value.items()}
     if isinstance(value, list):
-        return [_with_input_files(item, files) for item in value]
+        return [with_files(item, files) for item in value]
     return value
 
 
@@ -401,7 +402,7 @@ class Answerer:
         else:
             self._on_thread.add(request_id)
             try:
-                returned = await _on_thread(self.function, call)
+                returned = await on_thread(self.function, call)
             finally:
                 self._on_thread.discard(request_id)
         if inspect.isawaitable(returned):
@@ -409,9 +410,12 @@ class Answerer:
         return returned
 
 
-def _on_thread(function: Callable[[StandInCall], Any], call: StandInCall) -> asyncio.Future[Any]:
-    """Calls ``function(call)`` on a daemon thread of its own (module docstring), in a copy of
-    the caller's context; the future the loop awaits."""
+def on_thread(
+    function: Callable[[Any], Any], call: Any, name: str = "grida.fx stand-in"
+) -> asyncio.Future[Any]:
+    """Calls ``function(call)`` on a daemon thread of its own named ``name`` (module docstring),
+    in a copy of the caller's context; the future the loop awaits. A project adapter's plain
+    functions run the same way (:mod:`grida.fx._adapter`)."""
     loop = asyncio.get_running_loop()
     future: asyncio.Future[Any] = loop.create_future()
     context = contextvars.copy_context()
@@ -427,14 +431,14 @@ def _on_thread(function: Callable[[StandInCall], Any], call: StandInCall) -> asy
     def work() -> None:
         try:
             result, error = context.run(function, call), None
-        except BaseException as raised:  # the stand-in's, handed to the loop
+        except BaseException as raised:  # the function's, handed to the loop
             result, error = None, raised
         try:
             loop.call_soon_threadsafe(settle, result, error)
         except RuntimeError:
             pass  # the loop has closed: nobody waits for the answer
 
-    threading.Thread(target=work, name="grida.fx stand-in", daemon=True).start()
+    threading.Thread(target=work, name=name, daemon=True).start()
     return future
 
 

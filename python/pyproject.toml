@@ -1,6 +1,6 @@
 [project]
 name = "grida"
-version = "0.6.1"
+version = "0.7.0"
 description = "Grida FX for Python: author nodes and workflows, and drive the grida-fx engine."
 readme = "README.md"
 license = "Apache-2.0"
@@ -42,8 +42,8 @@ src = ["src", "../tools", "../conformance"]
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.isort]
-# Conformance fixtures import their project's own `nodes` package.
-known-local-folder = ["nodes"]
+# Conformance fixtures import their project's own `nodes` and `adapters` packages.
+known-local-folder = ["nodes", "adapters"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

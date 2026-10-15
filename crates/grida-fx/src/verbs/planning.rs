@@ -19,6 +19,7 @@
 use crate::cli::PlanArgs;
 use crate::print::{print_json, print_line};
 use grida_fx_core::Error;
+use grida_fx_core::docs::project::Project;
 use grida_fx_core::money::Usd;
 use grida_fx_core::plan::{Plan, output, render};
 use grida_fx_core::project::{PlanRequest, Planner, make_planner};
@@ -69,23 +70,26 @@ pub fn run(verb: PlanVerb, args: &PlanArgs) -> Result<u8, Error> {
     };
     if verb == PlanVerb::Plan && (args.open || args.standalone) {
         let graph = materialized(&plan, &planner);
+        let declarations = planner.project.declarations();
         if args.standalone || !planner.project.has_file {
-            super::view::serve(Some(graph), None, 0, args.open)?;
+            super::view::serve(Some(graph), None, 0, args.open, &declarations)?;
         } else {
             super::view::report_service(
                 super::service::register_plan(&planner.project, &graph, args.open),
                 args.open,
+                &declarations,
             );
         }
     }
     Ok(status)
 }
 
-/// Uses the same offline planner as `plan` to materialize a browser's static graph.
-/// A refused plan remains inspectable, with its planning problems in the document.
-pub(crate) fn graph(args: &PlanArgs) -> Result<Value, Error> {
+/// Uses the same offline planner as `plan` to materialize a browser's static graph, and gives
+/// the planning project with it. A refused plan remains inspectable, with its planning problems
+/// in the document.
+pub(crate) fn graph(args: &PlanArgs) -> Result<(Value, Project), Error> {
     let (plan, planner) = planned(args)?;
-    Ok(materialized(&plan, &planner))
+    Ok((materialized(&plan, &planner), planner.project))
 }
 
 /// The graph a viewer serves for a plan: the graph document with `steps` (every declared step,

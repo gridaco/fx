@@ -2,6 +2,8 @@
 # Schema and public rates checked 2026-10-12:
 # https://fal.ai/models/fal-ai/wan/v2.7/image-to-video/api
 # https://fal.ai/models/fal-ai/wan/v2.7/image-to-video
+# enable_prompt_expansion (boolean, default true) is in fal's published input schema,
+# checked 2026-10-14: https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/wan/v2.7/image-to-video
 # Vendor rates are $0.10/s at 720p and $0.15/s at 1080p. Highs add 25% planning
 # allowance; an unreported bill is booked at that high, not treated as free.
 fx: routes/v1
@@ -26,3 +28,7 @@ routes:
     contract:
       adapter: fal-queue
       adapter_behavior: 1
+      # Keep the motion brief as written: fal rewrites prompts unless told not to.
+      provider_options:
+        fal:
+          enable_prompt_expansion: false

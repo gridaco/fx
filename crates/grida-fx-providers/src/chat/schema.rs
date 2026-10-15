@@ -1,4 +1,4 @@
-//! JSON Schemas as the strict mode of Chat Completions takes them (spec/providers.md §9.2,
+//! JSON Schemas as the strict mode of Chat Completions takes them (src/openrouter/README.md,
 //! "Schemas"; OpenRouter and Grida Gateway alike).
 //!
 //! - [`inline_refs`]: when the root has a `$defs` object, every object whose `$ref` starts with

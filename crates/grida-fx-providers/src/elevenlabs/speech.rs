@@ -1,8 +1,10 @@
 //! ElevenLabs speech: `POST {base}/text-to-speech/<voice>?output_format=mp3_44100_192` with
-//! `{"text", "model_id": <route model>, "voice_settings"?: {"stability"}, "language_code"?}`
-//! (spec/providers.md §9.5). Refused before sending: blank text or over 5000 characters, a voice
-//! that is not `^[A-Za-z0-9_-]{1,128}$`, `stability` outside 0..1, no key. `language_code` null or
-//! `""` is not sent; `max_chars` (pricing only) is never sent.
+//! `{"text", "model_id": <route model>, "voice_settings"?: {"stability"}, "language_code"?}`, then
+//! the provider options, which may set no member of [`OWNED`] (src/elevenlabs/README.md;
+//! spec/adapters.md §8). Refused before sending: provider options
+//! ([`crate::wire::provider_options`]), blank text or over 5000 characters, a voice that is not
+//! `^[A-Za-z0-9_-]{1,128}$`, `stability` outside 0..1, no key. `language_code` null or `""` is not
+//! sent; `max_chars` (pricing only) is never sent.
 //!
 //! The text goes out verbatim, delivery tags included. The voice is checked, not encoded: it is a
 //! path segment, so anything outside the voice-id alphabet (`/`, `?`, `#`, spaces) is refused
@@ -10,9 +12,9 @@
 //! refused (`language_code must not be blank`): the provider would refuse it after billing the
 //! hold. `voice_settings` holds `stability` alone, as a float.
 
-use super::{CREDENTIAL_HEADER, check_route, float, number, post, refused, within};
+use super::{check_route, float, number, post, refused, within};
 use crate::BoxFuture;
-use crate::adapter::{Answer, CallRequest, RequestAdapter, Sent};
+use crate::adapter::{Answer, CallRequest, Identity, RequestAdapter, Sent};
 use crate::capabilities;
 use crate::setup::Client;
 use regex::Regex;
@@ -25,8 +27,18 @@ pub const LABEL: &str = "ElevenLabs speech generation";
 /// The capability this adapter serves.
 pub const CAPABILITY: &str = "speech.generate";
 
-/// The contract's `adapter` (spec/providers.md §9.5).
+/// The contract's `adapter` (src/elevenlabs/README.md).
 pub const ADAPTER: &str = "elevenlabs-speech";
+
+/// The members provider options may not set: every member the body has, and `output_format`,
+/// which FX sets in the query.
+pub const OWNED: &[&str] = &[
+    "text",
+    "model_id",
+    "voice_settings",
+    "language_code",
+    "output_format",
+];
 
 pub const MAX_TEXT_CHARS: usize = 5000;
 pub const STABILITY: std::ops::RangeInclusive<f64> = 0.0..=1.0;
@@ -50,21 +62,26 @@ impl ElevenLabsSpeech {
 impl RequestAdapter for ElevenLabsSpeech {
     fn send<'a>(&'a self, call: &'a CallRequest) -> BoxFuture<'a, Sent> {
         Box::pin(async move {
-            // spec/providers.md §5, steps 1 to 3.
+            // spec/adapters.md §4, steps 1 to 3.
             if let Err(reason) = check_route(call, CAPABILITY, ADAPTER)
                 .and_then(|()| capabilities::check_request(CAPABILITY, &call.request))
             {
                 return refused(&self.client, &reason);
             }
-            let credential = match self.client.credential(CREDENTIAL_HEADER, "") {
+            let credential = match self.client.credential() {
                 Ok(credential) => credential,
                 Err(reason) => return refused(&self.client, &reason),
             };
-            // Step 4: the values.
-            let (voice, body) = match body(call) {
+            // Step 4: the values, provider options first.
+            let options = match crate::wire::provider_options(call, OWNED) {
+                Ok(options) => options,
+                Err(reason) => return refused(&self.client, &reason),
+            };
+            let (voice, mut body) = match body(call) {
                 Ok(checked) => checked,
                 Err(reason) => return refused(&self.client, &reason),
             };
+            body.extend(options);
             let path = format!("text-to-speech/{voice}");
             post(&self.client, LABEL, &path, credential, body).await
         })
@@ -73,10 +90,14 @@ impl RequestAdapter for ElevenLabsSpeech {
     fn check(&self, _call: &CallRequest, answer: &Answer) -> Result<(), String> {
         super::check_audio(&self.client, LABEL, answer)
     }
+
+    fn identity(&self) -> Option<Identity> {
+        Some(super::identity(ADAPTER))
+    }
 }
 
 /// The voice and the wire body of a request whose shape `capabilities::check_request` accepted,
-/// or the refusal of its first out-of-range value (spec/providers.md §9.5 "Speech").
+/// or the refusal of its first out-of-range value (src/elevenlabs/README.md, "Speech").
 fn body(call: &CallRequest) -> Result<(&str, Map<String, Value>), String> {
     let request = &call.request;
     let text = request.get("text").and_then(Value::as_str).unwrap_or("");

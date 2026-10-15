@@ -118,8 +118,8 @@ export class CeilingExceeded extends CapabilityError {
   static override readonly code: number = -32014;
 }
 
-/** `capability_refused`: the adapter refused before sending; settled at $0. A stand-in throws it
- * to refuse the call it was asked. */
+/** `capability_refused`: the engine or the adapter refused the call before sending; settled at
+ * $0. A stand-in throws it to refuse the call it was asked. */
 export class CallRefused extends CapabilityError {
   static override readonly code: number = -32015;
 }

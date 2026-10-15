@@ -1,24 +1,26 @@
-//! fal: `image.generate` and `image.edit` on the synchronous host, `video.generate` as a queue
-//! long job, and `background.remove` (spec/providers.md §9.3; spec/capabilities.md).
+//! fal: `image.generate` and `image.edit` on the synchronous host (on any model, and on GPT
+//! Image), `video.generate` as a queue long job, and `background.remove` (src/fal/README.md;
+//! spec/capabilities.md).
 //!
 //! Credential `authorization: Key <FAL_KEY>`, attached only to requests to the run host
 //! (`FAL_BASE_URL`, default `https://fal.run`) and the queue host (`https://queue.fal.run`), never
 //! to a result download. Pictures go inline as data URLs under their own `image/*` kind (no
 //! multipart, no uploads); a file of another kind is refused before sending. Every adapter
-//! first refuses a route whose `contract.adapter` is present and is not its own (§9.3), since the
-//! registry is keyed by provider, not model.
+//! first refuses a route whose contract is not its own (src/fal/README.md): the engine's check,
+//! made again for a direct caller.
 //!
 //! What the adapters share lives here: the output host check ([`is_fal_media_url`]), the contract
-//! guard, the answer root and reported cost, the run host's status classes (spec/providers.md
-//! §4.2, §4.3 and §9.3) and the one place this module builds a `NotReceived`. Reading a picture
-//! out of an answer (a data URL or a hosted download) is `output`.
+//! guard, the answer root and reported cost, the run host's status classes (spec/adapters.md
+//! §3.2, §3.3 and src/fal/README.md) and the one place this module builds a `NotReceived`. Reading
+//! a picture out of an answer (a data URL or a hosted download) is `output`.
 
 pub mod background;
+pub mod generic_image;
 pub mod image;
 mod output;
 pub mod video;
 
-use crate::adapter::{Adapter, CallRequest, Sent, Submitted};
+use crate::adapter::{Adapter, CallRequest, Identity, Sent, Submitted};
 use crate::keys::KeyName;
 use crate::registry::Adapters;
 use crate::setup::{Client, Setup};
@@ -28,34 +30,10 @@ use serde_json::{Map, Value};
 use std::sync::Arc;
 use std::time::Duration;
 
-/// The image output host check of spec/providers.md §9.3: `https`, a host that is `fal.media` or
-/// ends with `.fal.media` (lowercased, trailing dots removed), no userinfo, port absent or 443, no
-/// fragment. A query is allowed.
+/// The image output host check of src/fal/README.md: [`crate::wire::download_url`] over fal's
+/// declared download hosts, `fal.media` and its subdomains (spec/providers.md §1).
 pub fn is_fal_media_url(url: &str) -> bool {
-    fal_media_url(url).is_some()
-}
-
-/// The parsed URL when it passes [`is_fal_media_url`]. A download sends the provider's text as
-/// given; the transport parses it with the same parser, so the host checked here is the host
-/// asked.
-pub(crate) fn fal_media_url(url: &str) -> Option<url::Url> {
-    let parsed = url::Url::parse(url).ok()?;
-    if parsed.scheme() != "https"
-        || !parsed.username().is_empty()
-        || parsed.password().is_some()
-        // The URL parser drops a default port, so `:443` reads as absent here.
-        || parsed.port().is_some()
-        || parsed.fragment().is_some()
-    {
-        return None;
-    }
-    let url::Host::Domain(domain) = parsed.host()? else {
-        return None;
-    };
-    let host = domain.trim_end_matches('.').to_ascii_lowercase();
-    let on_fal_media = host == "fal.media"
-        || (host.ends_with(".fal.media") && !host.starts_with('.') && !host.contains(".."));
-    on_fal_media.then_some(parsed)
+    crate::wire::download_url(url, &KeyName::Fal.declaration().download_hosts).is_ok()
 }
 
 /// The run-host client and the queue-host client (same key).
@@ -68,18 +46,22 @@ pub struct FalClients {
 impl FalClients {
     pub fn new(setup: &Setup) -> FalClients {
         FalClients {
-            run: setup.client(KeyName::Fal, &setup.endpoints.fal_run),
-            queue: setup.client(KeyName::Fal, &setup.endpoints.fal_queue),
+            run: setup.client(KeyName::Fal),
+            queue: setup.client_at(KeyName::Fal, &setup.endpoints.fal_queue),
         }
     }
 }
 
-/// Registers fal's four adapters on provider `fal`.
+/// Registers fal's four adapters on provider `fal`: for images, the generic one as the default
+/// and GPT Image's for a route that names it (spec/providers.md §2).
 pub fn register(adapters: &mut Adapters, setup: &Setup) {
     let clients = FalClients::new(setup);
+    let generic = Arc::new(generic_image::FalGenericImages::new(clients.clone()));
     let images = Arc::new(image::FalImages::new(clients.clone()));
-    adapters.register("image.generate", "fal", Adapter::Request(images.clone()));
-    adapters.register("image.edit", "fal", Adapter::Request(images));
+    for capability in ["image.generate", "image.edit"] {
+        adapters.register(capability, "fal", Adapter::Request(generic.clone()));
+        adapters.register_named(capability, "fal", Adapter::Request(images.clone()));
+    }
     adapters.register(
         "video.generate",
         "fal",
@@ -95,33 +77,21 @@ pub fn register(adapters: &mut Adapters, setup: &Setup) {
     );
 }
 
-/// The credential header and prefix fal takes on its run and queue hosts.
-pub(crate) const CREDENTIAL_HEADER: &str = "authorization";
-pub(crate) const CREDENTIAL_PREFIX: &str = "Key ";
-
-/// The base-URL variable a run-host redirect points at (spec/providers.md §4.3).
+/// The base-URL variable a run-host redirect points at (spec/adapters.md §3.3).
 pub(crate) const RUN_BASE_VARIABLE: &str = "FAL_BASE_URL";
 
-/// Step 1 of spec/providers.md §5: `None` when the route is one of `capabilities` and its
-/// contract's `adapter` is absent or `own`; else the refusal sentence.
+/// Step 1 of spec/adapters.md §4: `None` when the route is one of `capabilities` and its
+/// contract is one `own` serves (the engine's check, [`crate::checks::contract`], made again for a
+/// direct caller); else the refusal sentence.
 pub(crate) fn contract_refusal(
     call: &CallRequest,
-    own: &str,
+    own: &Identity,
     capabilities: &[&str],
 ) -> Option<String> {
-    let adapter = call.route.contract.get("adapter");
-    let serves_capability = capabilities.contains(&call.route.capability.as_str());
-    let own_contract =
-        crate::wire::is_absent(adapter) || adapter.and_then(Value::as_str) == Some(own);
-    if serves_capability && own_contract {
-        None
-    } else {
-        Some(format!(
-            "{} is not a {} route this adapter serves",
-            call.route.id(),
-            call.route.capability
-        ))
+    if !capabilities.contains(&call.route.capability.as_str()) {
+        return Some(crate::checks::not_served(&call.route));
     }
+    crate::checks::contract(&call.route, own).err()
 }
 
 /// The route's model as an endpoint id: surrounding whitespace and `/` removed.
@@ -129,7 +99,7 @@ pub(crate) fn endpoint(model: &str) -> &str {
     model.trim().trim_matches('/')
 }
 
-/// The answer's root (spec/providers.md §9.3): the payload's `data` when that is an object, else
+/// The answer's root (src/fal/README.md): the payload's `data` when that is an object, else
 /// the payload.
 pub(crate) fn answer_root(payload: &Map<String, Value>) -> &Map<String, Value> {
     match payload.get("data") {
@@ -138,7 +108,8 @@ pub(crate) fn answer_root(payload: &Map<String, Value>) -> &Map<String, Value> {
     }
 }
 
-/// The reported cost: `usage.cost` at the payload's top level only (spec/providers.md §6, §9.3).
+/// The reported cost: `usage.cost` at the payload's top level only (spec/adapters.md §5;
+/// src/fal/README.md).
 pub(crate) fn reported_cost(payload: &Map<String, Value>) -> Option<Usd> {
     payload
         .get("usage")
@@ -146,7 +117,7 @@ pub(crate) fn reported_cost(payload: &Map<String, Value>) -> Option<Usd> {
         .and_then(crate::wire::usd_ceil)
 }
 
-/// A request picture as a data URL, under its own kind (step 5 of spec/providers.md §5): a file the
+/// A request picture as a data URL, under its own kind (step 5 of spec/adapters.md §4): a file the
 /// call carries (`<member> has no bytes to send`), of an `image/*` kind (`<member> is <kind>, not
 /// a picture`), whose store copy reads and is not empty. A file of another kind is refused before
 /// anything leaves rather than sent under a picture's label, since fal may take a paid job it then
@@ -160,7 +131,7 @@ pub(crate) fn picture(call: &CallRequest, value: &Value, member: &str) -> Result
     Ok(crate::wire::data_url(&file.kind, &bytes))
 }
 
-/// Whether `text` is a provider id a handle or a reason may hold (spec/providers.md §7, §8):
+/// Whether `text` is a provider id a handle or a reason may hold (spec/adapters.md §6, §7):
 /// `^[A-Za-z0-9_.:-]{1,96}$`.
 pub(crate) fn is_safe_id(text: &str) -> bool {
     (1..=96).contains(&text.len())
@@ -169,11 +140,11 @@ pub(crate) fn is_safe_id(text: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || b"_.:-".contains(&b))
 }
 
-/// The wait a 408 or 429 asks for: the shared parser (spec/providers.md §4.3).
+/// The wait a 408 or 429 asks for: the shared parser (spec/adapters.md §3.3).
 pub(crate) use crate::adapter::retry_after;
 
 /// The sentence of a provider's "took nothing" answer: `retry_after`, when the provider sent one,
-/// goes into the reason (spec/providers.md §4.3).
+/// goes into the reason (spec/adapters.md §3.3).
 fn took_nothing_reason(client: &Client, text: &str, retry_after: Option<Duration>) -> String {
     match retry_after {
         Some(after) => client.reason(&format!(
@@ -205,7 +176,7 @@ pub(crate) fn submit_not_received(
 }
 
 /// `<label> returned HTTP <n>`, plus the provider's request id when it is a safe field. Never a
-/// response body (spec/providers.md §8, §9.3).
+/// response body (spec/adapters.md §7; src/fal/README.md).
 pub(crate) fn status_text(label: &str, response: &HttpResponse) -> String {
     let mut text = crate::wire::status_reason(label, response.status, None);
     if let Some(id) = crate::wire::request_id(response) {
@@ -214,11 +185,11 @@ pub(crate) fn status_text(label: &str, response: &HttpResponse) -> String {
     text
 }
 
-/// How a run-host exchange becomes a [`Sent`] unless it is a 2xx (spec/providers.md §4.2, §4.3,
-/// §9.3): a transport refusal is `Refused`; `not_sent` is `NotReceived`; `after_send` is
-/// `Failed { None, true }`; 408 and 429 are `NotReceived`; a 3xx is `Failed { None, false }`
-/// naming `FAL_BASE_URL`; another 4xx is `Failed { Some(0), false }` (fal validates before it
-/// runs, and does not bill a refusal); a 5xx (or anything else) is `Failed { None, true }`.
+/// How a run-host exchange becomes a [`Sent`] unless it is a 2xx (spec/adapters.md §3.2, §3.3;
+/// src/fal/README.md): a transport refusal is `Refused`; `not_sent` is `NotReceived`; `after_send`
+/// is `Failed { None, true }`; 408 and 429 are `NotReceived`; a 3xx is `Failed { None, false }`
+/// naming `FAL_BASE_URL`; another 4xx is `Failed { Some(0), false }` (fal validates before it runs,
+/// and does not bill a refusal); a 5xx (or anything else) is `Failed { None, true }`.
 #[allow(clippy::result_large_err)] // `Sent` is what every caller returns at once
 pub(crate) fn classify_run(
     client: &Client,
@@ -261,7 +232,7 @@ pub(crate) fn classify_run(
     })
 }
 
-/// A failed plain exchange (spec/providers.md §4.2).
+/// A failed plain exchange (spec/adapters.md §3.2).
 fn transport_sent(client: &Client, label: &str, error: &TransportError) -> Sent {
     match (error.kind, error.phase) {
         (TransportErrorKind::Refused, _) => Sent::Refused {
@@ -280,7 +251,7 @@ fn transport_sent(client: &Client, label: &str, error: &TransportError) -> Sent 
     }
 }
 
-/// Whether a status member counts as set (spec/providers.md §9.3, "a truthy `error`"): anything
+/// Whether a status member counts as set (src/fal/README.md, "a truthy `error`"): anything
 /// but `null`, `false`, `0`, `""`, `[]` and `{}`.
 pub(crate) fn truthy(value: &Value) -> bool {
     match value {
@@ -319,6 +290,7 @@ mod tests {
                 model: "img-a".into(),
                 provider: "fal".into(),
                 contract,
+                limits: Default::default(),
             },
             request: json!({}),
             files: IndexMap::new(),
@@ -363,22 +335,23 @@ mod tests {
         let own = |contract| {
             contract_refusal(
                 &call("image.generate", contract),
-                "fx-fal-image-v1",
+                &image::IDENTITY,
                 &["image.generate"],
             )
         };
+        let refusal = Some("img-a@fal is not a image.generate route this adapter serves".into());
         assert_eq!(own(json!({})), None);
         assert_eq!(own(json!({"adapter": null})), None);
         assert_eq!(own(json!({"adapter": "fx-fal-image-v1", "x": 1})), None);
-        assert_eq!(
-            own(json!({"adapter": "acme-openai-image-v1"})),
-            Some("img-a@fal is not a image.generate route this adapter serves".into())
-        );
+        assert_eq!(own(json!({"adapter_behavior": "1"})), None);
+        assert_eq!(own(json!({"adapter": "acme-openai-image-v1"})), refusal);
         assert!(own(json!({"adapter": 1})).is_some());
+        // The behaviour is checked as every adapter's is: the number 1 is another contract.
+        assert_eq!(own(json!({"adapter_behavior": 1})), refusal);
         assert_eq!(
             contract_refusal(
                 &call("video.generate", json!({})),
-                "fx-fal-image-v1",
+                &image::IDENTITY,
                 &["image.generate"]
             ),
             Some("img-a@fal is not a video.generate route this adapter serves".into())

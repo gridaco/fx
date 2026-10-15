@@ -1,4 +1,4 @@
-//! fal `image.generate` and `image.edit` (spec/providers.md §9.3) over synthetic exchanges. Every
+//! fal `image.generate` and `image.edit` (src/fal/README.md) over synthetic exchanges. Every
 //! test that sends asserts each request; every refusal runs over `NoNetwork`. Media are built in
 //! code (`testing::media`).
 
@@ -190,6 +190,61 @@ fn an_absent_or_null_size_sends_no_image_size() {
             )]));
         answered(send(&transport, &generate(request)));
     }
+}
+
+#[test]
+fn provider_options_follow_the_body_s_own_members() {
+    let mut contract = contract();
+    contract["provider_options"] = json!({"fal": {"seed": 1, "enable_safety_checker": false}});
+    let mut builder = CallBuilder::new("image.edit", ROUTE).contract(contract);
+    let first = media::png(2, 2, Some(255));
+    let mask = media::png(2, 2, Some(0));
+    let image_file = builder.file("image/png", &first);
+    let mask_file = builder.file("image/png", &mask);
+    let call = builder
+        .request(
+            json!({"prompt": "p", "image": image_file, "mask": mask_file, "size": "auto",
+                        "provider_options": {"fal": {"seed": 7, "style": {"ink": true}},
+                                             "openai": {"prompt": "never read"}}}),
+        )
+        .build();
+    let body = json!({"prompt": "p", "num_images": 1, "image_size": "auto", "quality": "max",
+                      "background": "auto", "output_format": "png",
+                      "image_urls": [data_url("image/png", &first)],
+                      "mask_url": data_url("image/png", &mask),
+                      "seed": 7, "enable_safety_checker": false, "style": {"ink": true}});
+    let (_, url) = data_png(2, 2);
+    let transport =
+        Arc::new(ReplayTransport::new(vec![post(EDIT_URL, &body).reply(
+            HttpResponse::json(200, &json!({"images": [{"url": url}]})),
+        )]));
+    answered(send(&transport, &call));
+    // Every member of that body but the options is one the adapter owns.
+    let Body::Json(Value::Object(sent)) = &transport.requests()[0].body else {
+        panic!("a JSON body");
+    };
+    for name in sent.keys().take(sent.len() - 3) {
+        assert!(image::OWNED.contains(&name.as_str()), "{name}");
+    }
+}
+
+#[test]
+fn provider_options_set_no_member_the_adapter_owns() {
+    for name in image::OWNED {
+        let call = generate(json!({"prompt": " ", "provider_options": {"fal": {*name: 1}}}));
+        assert_eq!(
+            refused(&call),
+            format!("provider_options.fal.{name} is a member FX owns")
+        );
+    }
+    let call = CallBuilder::new("image.generate", ROUTE)
+        .contract(json!({"provider_options": {"fal": {"num_images": 2}}}))
+        .request(json!({"prompt": "p"}))
+        .build();
+    assert_eq!(
+        refused(&call),
+        "contract.provider_options.fal.num_images is a member FX owns"
+    );
 }
 
 // 2. Refusals ----------------------------------------------------------------------------------

@@ -1,0 +1,4 @@
+fx: routes/v1
+routes:
+  - { capability: image.generate, route: img-a@acme, price: { low_usd: 0.01, high_usd: 0.04 } }
+  - { capability: structured.generate, route: text-a@acme, price: { cap_usd: 0.05 } }

@@ -1,4 +1,4 @@
-//! Redaction of every sentence an adapter reports (spec/providers.md §8).
+//! Redaction of every sentence an adapter reports (spec/adapters.md §7).
 //!
 //! A reason (`Sent::Failed`, `Collected::Ended`, …) reaches events, errors and the terminal, so it
 //! never holds a key, an authorization header, a signed URL, an upload token, a data URL or a

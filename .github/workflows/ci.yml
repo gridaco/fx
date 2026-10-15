@@ -138,6 +138,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.2.0
       - run: uv sync --locked --project python
       - run: uv run --locked --project python python tools/check_spec.py
+      - run: uv run --locked --project python python tools/make_models.py --check
 
   # Every conformance case, through the command line of a fresh grida-fx, with the repository's
   # Python SDK and its built @grida/fx hosting the node bodies. --strict: a case without reviewed

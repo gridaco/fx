@@ -1,21 +1,31 @@
-//! The answer checks more than one route makes (spec/providers.md §4.4; spec/capabilities.md).
+//! The checks more than one route makes: the engine's before a send (spec/adapters.md §4), and the
+//! answer checks (spec/adapters.md §3.4; spec/capabilities.md).
 //!
-//! Adapters' `check`s call these, so two routes never disagree on what "an exact size", "an MP3"
-//! or "meets the schema" means, and each keeps its own sentences where they differ (a missing
-//! file, an unreadable size). [`every_route`] is the check spec/capabilities.md gives a capability
-//! for every route (its *Every route's check*, or *Check*; never *A route's check*): what an
-//! answer no adapter of FX made is held to, a stand-in's on a route FX has no adapter for
-//! (spec/protocol.md §6.1, *Stand-in answers*; [`crate::stand_in`]).
+//! **Before a send.** The engine refuses a call of an adapter FX ships, or of a project adapter
+//! (spec/adapters.md §9), before the adapter sees it ([`before_send`]): its route's contract
+//! against the adapter's [`Identity`] ([`contract`]), then the adapter's own judgement of its other
+//! contract members, then the request against its capability ([`request`]). The adapters' own
+//! guards for direct callers call [`serves`] and [`contract`] too, so the engine and an adapter
+//! never disagree on a contract.
+//!
+//! **Answers.** Adapters' `check`s call these, so two routes never disagree on what "an exact
+//! size", "an MP3" or "meets the schema" means, and each keeps its own sentences where they differ
+//! (a missing file, an unreadable size). [`every_route`] is the check spec/capabilities.md gives a
+//! capability for every route (its *Every route's check*, or *Check*; never *A route's check*):
+//! what the engine holds an answer of an adapter FX ships, or of a project adapter, to after the
+//! adapter's own check ([`every_route_with`], with the adapter's redactor), and what an answer no
+//! adapter of FX made is held to, a stand-in's on a route FX has no adapter for or one a project
+//! adapter serves (spec/protocol.md §6.1, *Stand-in answers*; [`crate::stand_in`]).
 //!
 //! A check judges the call (its route, request, files and take) and the answer alone, never
-//! anything its adapter's send or collect kept (spec/providers.md §4.4), so a stand-in's answer can
+//! anything its adapter's send or collect kept (spec/adapters.md §3.4), so a stand-in's answer can
 //! be held to it.
 //!
 //! [`ClipFacts`] are the facts a clip's answer carries as `data` (spec/capabilities.md §6), which
 //! fal's video adapter takes from the clip it downloads and the stand-in checks from the clip a
 //! stand-in answers.
 
-use crate::adapter::{Answer, AnsweredFile, CallRequest};
+use crate::adapter::{Answer, AnsweredFile, CallRequest, Identity, RouteRef};
 use crate::capabilities;
 use crate::redact::{Redactor, bounded};
 use crate::wire;
@@ -30,27 +40,108 @@ pub const MAX_KIND_CHARS: usize = 96;
 /// The kind of every audio answer FX ships (spec/capabilities.md §9–§11).
 const MP3: &str = "audio/mpeg";
 
+// ---------------------------------------------------------------------------------------------
+// Before a send
+
+/// `<route> is not a <capability> route this adapter serves` (spec/adapters.md §4 step 1).
+pub fn not_served(route: &RouteRef) -> String {
+    format!(
+        "{} is not a {} route this adapter serves",
+        route.id(),
+        route.capability
+    )
+}
+
+/// Whether `contract` is one an adapter named `adapter` serves (spec/adapters.md §4 step 1):
+/// `null`, or an object whose `adapter`, when present, is `adapter`, and whose `adapter_behavior`,
+/// when present, is one `behaves` accepts. A `null` member counts as absent; any other contract
+/// is refused.
+pub fn serves(contract: &Value, adapter: &str, behaves: impl Fn(&Value) -> bool) -> bool {
+    let contract = match contract {
+        Value::Null => return true,
+        Value::Object(contract) => contract,
+        _ => return false,
+    };
+    let named = match contract.get("adapter") {
+        None | Some(Value::Null) => true,
+        Some(name) => name.as_str() == Some(adapter),
+    };
+    let behaved = match contract.get("adapter_behavior") {
+        None | Some(Value::Null) => true,
+        Some(value) => behaves(value),
+    };
+    named && behaved
+}
+
+/// Step 1 of spec/adapters.md §4 for an adapter of `identity`: the route's contract is one it
+/// [`serves`], its behaviour compared as canonical JSON ([`Identity::behaves`]). Refused with
+/// [`not_served`].
+pub fn contract(route: &RouteRef, identity: &Identity) -> Result<(), String> {
+    let behaves = |value: &Value| identity.behaves(value);
+    if serves(&route.contract, identity.adapter, behaves) {
+        Ok(())
+    } else {
+        Err(not_served(route))
+    }
+}
+
+/// Step 2 of spec/adapters.md §4: the request against its capability
+/// ([`capabilities::check_request`]) for a capability FX ships; `Ok` for any other, which
+/// spec/capabilities.md does not define.
+pub fn request(capability: &str, request: &Value) -> Result<(), String> {
+    match capabilities::capability(capability) {
+        Some(_) => capabilities::check_request(capability, request),
+        None => Ok(()),
+    }
+}
+
+/// The engine's refusals before a send or submit of an adapter of `identity`, in order
+/// (spec/adapters.md §4 steps 1 and 2): [`contract`]; `own`, the adapter's judgement of its other
+/// contract members; [`request`]. The first refusal is the sentence, not yet redacted.
+pub fn before_send(
+    call: &CallRequest,
+    identity: &Identity,
+    own: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    contract(&call.route, identity)?;
+    own()?;
+    request(&call.route.capability, &call.request)
+}
+
+// ---------------------------------------------------------------------------------------------
+// Answers
+
+/// [`every_route_with`] with the default redactor, which masks the known secret shapes only.
+pub fn every_route(call: &CallRequest, answer: &Answer) -> Result<(), String> {
+    every_route_with(call, answer, &Redactor::default())
+}
+
 /// The check spec/capabilities.md gives the call's capability for every route, by its section:
 /// - `image.generate`, `image.edit` (§2, §3): the request's `size` read as `auto` or `<W>x<H>`
 ///   (`size must be auto or WIDTHxHEIGHT`), then [`image`];
-/// - `structured.generate` (§4): [`structured`], with the default redactor;
+/// - `structured.generate` (§4): [`structured`];
 /// - `music.generate` (§9): [`audio_signature`];
 /// - `sound.generate`, `speech.generate` (§10, §11): [`audio`], labelled with the capability;
 /// - `background.remove` (§12): [`wire::check_png`].
 ///
 /// A named file that is missing is refused as `the answer holds no <name>`. Any other capability
-/// has no such check: `Ok`.
-pub fn every_route(call: &CallRequest, answer: &Answer) -> Result<(), String> {
+/// has no such check: `Ok`. `redactor` is the one [`structured`] and [`audio`] redact what they
+/// quote with: the adapter's, when the engine checks an adapter's answer.
+pub fn every_route_with(
+    call: &CallRequest,
+    answer: &Answer,
+    redactor: &Redactor,
+) -> Result<(), String> {
     let capability = call.route.capability.as_str();
     match capability {
         "image.generate" | "image.edit" => {
             let size = wire::parse_size(call.request.get("size"))?;
             image(call, named(answer, "image")?, size)
         }
-        "structured.generate" => structured(call, answer, &Redactor::default()),
+        "structured.generate" => structured(call, answer, redactor),
         "music.generate" => audio_signature(named(answer, "audio")?),
         "sound.generate" | "speech.generate" => {
-            audio(answer.files.get("audio"), capability, &Redactor::default())
+            audio(answer.files.get("audio"), capability, redactor)
         }
         "background.remove" => {
             let image = named(answer, "image")?;
@@ -440,6 +531,132 @@ mod tests {
         assert!(refusal.starts_with("k: "), "{refusal}");
         assert!(!refusal.contains(secret), "{refusal}");
         assert!(refusal.chars().count() <= SCHEMA_REFUSAL_CHARS);
+    }
+
+    #[test]
+    fn a_contract_is_served_when_its_adapter_and_behaviour_are_the_adapters_or_absent() {
+        let text = Identity {
+            adapter: "fx-acme-image-v1",
+            behavior: r#""1""#,
+        };
+        let route = |contract: Value| {
+            CallBuilder::new("image.generate", "img-a@acme")
+                .contract(contract)
+                .build()
+                .route
+                .clone()
+        };
+        for served in [
+            json!({"adapter": "fx-acme-image-v1", "adapter_behavior": "1", "quality": "x"}),
+            json!({"adapter": "fx-acme-image-v1"}),
+            json!({"adapter_behavior": "1"}),
+            json!({"adapter": null, "adapter_behavior": null}),
+            json!({}),
+            Value::Null,
+        ] {
+            assert_eq!(contract(&route(served.clone()), &text), Ok(()), "{served}");
+        }
+        let refusal = "img-a@acme is not a image.generate route this adapter serves";
+        for refused in [
+            json!({"adapter": "fx-acme-image-v2"}),
+            json!({"adapter": 1}),
+            json!({"adapter_behavior": 1}),
+            json!({"adapter_behavior": "2"}),
+            json!([]),
+            json!("fx-acme-image-v1"),
+        ] {
+            assert_eq!(
+                contract(&route(refused.clone()), &text),
+                Err(refusal.to_string()),
+                "{refused}"
+            );
+        }
+    }
+
+    #[test]
+    fn before_a_send_the_contract_comes_first_then_the_adapters_own_then_the_request() {
+        let identity = Identity {
+            adapter: "acme-structured",
+            behavior: "1",
+        };
+        let call = |contract: Value, request: Value| {
+            CallBuilder::new("structured.generate", "text-a@acme")
+                .contract(contract)
+                .request(request)
+                .build()
+        };
+        let own = |call: &CallRequest| match call.route.contract.get("pictures") {
+            Some(pictures) if *pictures != "unchanged" => Err(format!(
+                "{}: pictures is \"unchanged\" or absent",
+                not_served(&call.route)
+            )),
+            _ => Ok(()),
+        };
+        let check = |call: &CallRequest| before_send(call, &identity, || own(call));
+        let foreign = call(
+            json!({"adapter": "acme-tool-loop", "pictures": "x"}),
+            json!({}),
+        );
+        assert_eq!(
+            check(&foreign),
+            Err("text-a@acme is not a structured.generate route this adapter serves".into())
+        );
+        let pictures = call(json!({"pictures": "small"}), json!({}));
+        assert_eq!(
+            check(&pictures),
+            Err(concat!(
+                "text-a@acme is not a structured.generate route this adapter serves: ",
+                r#"pictures is "unchanged" or absent"#
+            )
+            .into())
+        );
+        let empty = call(json!({"adapter_behavior": 1}), json!({}));
+        assert_eq!(
+            check(&empty),
+            Err("structured.generate needs prompt".into())
+        );
+        let fits = call(
+            json!({}),
+            json!({"prompt": "p", "schema": {"type": "object"}}),
+        );
+        assert_eq!(check(&fits), Ok(()));
+        // A capability FX does not ship has no request check.
+        assert_eq!(request("acme.draw", &json!([])), Ok(()));
+        assert_eq!(
+            request("structured.generate", &json!([])),
+            Err("a request for structured.generate is a JSON object".into())
+        );
+    }
+
+    #[test]
+    fn every_route_redacts_with_the_redactor_it_is_given() {
+        let secret = "acme-secret-0123456789";
+        let redactor = Redactor::new(vec![Secret::new(secret)]);
+        let call = CallBuilder::new("structured.generate", "text-a@acme")
+            .request(json!({"prompt": "p", "schema": {"type": "object",
+                "properties": {"k": {"type": "integer"}}}}))
+            .build();
+        let answer = Answer::new(json!({"json": {"k": secret.repeat(40)}}), None);
+        let refusal = every_route_with(&call, &answer, &redactor).unwrap_err();
+        assert!(refusal.starts_with("k: "), "{refusal}");
+        assert!(!refusal.contains(secret), "{refusal}");
+        assert!(refusal.chars().count() <= SCHEMA_REFUSAL_CHARS);
+        // The default redactor knows no key.
+        let short = Answer::new(json!({"json": {"k": secret}}), None);
+        assert!(every_route(&call, &short).unwrap_err().contains(secret));
+        assert!(
+            !every_route_with(&call, &short, &redactor)
+                .unwrap_err()
+                .contains(secret)
+        );
+        let sound = CallBuilder::new("sound.generate", "sfx-a@acme").build();
+        let kind = format!("text/{secret}");
+        let refusal = every_route_with(&sound, &answer_audio(&kind), &redactor).unwrap_err();
+        assert_eq!(refusal, "requested mp3 but received text/[redacted]");
+    }
+
+    fn answer_audio(kind: &str) -> Answer {
+        answer("audio", kind, media::MP3_FRAME)
     }
 
     #[test]

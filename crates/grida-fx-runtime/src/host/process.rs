@@ -9,6 +9,9 @@
 //! protocol, and its own process group (Unix), so ending it ends what it started. Dropping a
 //! process that was never ended kills it with its group.
 //!
+//! A host inherits the engine's environment, except an adapter host, which starts without the
+//! variables its spec withholds and with those it gives ([`HostSpec::with_environment`]).
+//!
 //! A Python host inherits the engine's stderr. A TypeScript host's stderr is a pipe of its own
 //! (Unix), which a thread ([`StderrCopy`]) copies to the engine's stderr as spec/protocol.md §1
 //! "Output streams" states, with why an inherited stderr would not do: whole lines under the
@@ -67,6 +70,7 @@ use grida_fx_core::{ENGINE_NAME, ENGINE_VERSION};
 use grida_fx_protocol::{
     EngineInfo, ErrorCode, ErrorData, InitializeParams, InitializeResult, PROTOCOL, method,
 };
+use grida_fx_providers::keys::Secret;
 use serde_json::Value;
 use std::ffi::OsString;
 use std::future::Future;
@@ -100,6 +104,11 @@ pub struct HostSpec {
     /// located; a caller that names a program of its own that ignores its arguments (a test's
     /// fake host) leaves it unset ([`HostSpec::unchecked`]).
     pub check_version: bool,
+    /// The variables the host starts without, removed from FX's environment, and those it starts
+    /// with, set over it: an adapter host's ([`HostSpec::with_environment`]; spec/adapters.md
+    /// §9). Both empty for every other host, which inherits FX's environment as it is.
+    pub withheld: Vec<String>,
+    pub given: Vec<(String, Secret)>,
 }
 
 impl HostSpec {
@@ -119,6 +128,8 @@ impl HostSpec {
             project_root: project_root.into(),
             sources,
             check_version: true,
+            withheld: Vec::new(),
+            given: Vec::new(),
         }
     }
 
@@ -139,6 +150,8 @@ impl HostSpec {
             project_root: project_root.into(),
             sources,
             check_version: true,
+            withheld: Vec::new(),
+            given: Vec::new(),
         }
     }
 
@@ -173,6 +186,18 @@ impl HostSpec {
     /// own, such as a test's fake host, that ignores its arguments).
     pub fn unchecked(mut self) -> HostSpec {
         self.check_version = false;
+        self
+    }
+
+    /// The same host, started without the variables `withheld` and with `given` set (an adapter
+    /// host's environment, spec/adapters.md §9). The values never print.
+    pub fn with_environment(
+        mut self,
+        withheld: Vec<String>,
+        given: Vec<(String, Secret)>,
+    ) -> HostSpec {
+        self.withheld = withheld;
+        self.given = given;
         self
     }
 
@@ -233,6 +258,25 @@ impl HostProcess {
         grace: Duration,
     ) -> Result<HostProcess, String> {
         HostProcess::start_at(spec, &spec.project_root, incoming, grace, None, None).await
+    }
+
+    /// [`HostProcess::start`] for an owner that must certify local cleanup: a host dropped
+    /// before it was reaped (its starter dropped while it initializes, or the host itself)
+    /// clears `cleanup_verified`.
+    pub(crate) async fn start_accountable(
+        spec: &HostSpec,
+        incoming: Arc<dyn Incoming>,
+        cleanup_verified: Arc<AtomicBool>,
+    ) -> Result<HostProcess, String> {
+        HostProcess::start_at(
+            spec,
+            &spec.project_root,
+            incoming,
+            GRACE,
+            None,
+            Some(cleanup_verified),
+        )
+        .await
     }
 
     /// Pool startup retains process ownership while cancellation interrupts initialization.
@@ -308,6 +352,12 @@ impl HostProcess {
         }
         let mut command = Command::new(program(&spec.program));
         command.args(&spec.args).current_dir(cwd);
+        for name in &spec.withheld {
+            command.env_remove(name);
+        }
+        for (name, value) in &spec.given {
+            command.env(name, value.expose());
+        }
         if spec.language == Language::Python
             && std::env::var_os("PYTHONSAFEPATH").is_none_or(|value| value.is_empty())
         {
@@ -455,8 +505,17 @@ impl HostProcess {
     }
 
     /// Shutdown evidence for an owner that must certify local cleanup.
-    pub(crate) async fn shutdown_verified(mut self) -> bool {
-        self.end(true, GRACE).await.is_some() && self.running.group_delivery_verified
+    pub(crate) async fn shutdown_verified(self) -> bool {
+        self.shutdown_seen().await.1
+    }
+
+    /// [`HostProcess::shutdown_verified`], with the exit status it saw.
+    pub(crate) async fn shutdown_seen(mut self) -> (Option<ExitStatus>, bool) {
+        let status = self.end(true, GRACE).await;
+        (
+            status,
+            status.is_some() && self.running.group_delivery_verified,
+        )
     }
 
     /// Kills the process and its group at once.
@@ -730,7 +789,8 @@ fn kill_every_host() {
         std::mem::take(&mut groups.live)
     };
     kill_groups_now(&live);
-    // Codex and Grok Build runtimes (spec/providers.md §9.6, §9.8) own process groups too.
+    // Codex and Grok Build runtimes (crates/grida-fx-providers/src/codex/README.md;
+    // crates/grida-fx-providers/src/grok/README.md) own process groups too.
     grida_fx_providers::process_group::end_every_runtime();
 }
 

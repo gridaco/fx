@@ -1,4 +1,4 @@
-//! ElevenLabs sound and speech (spec/providers.md §9.5): every request asserted on a replay
+//! ElevenLabs sound and speech (src/elevenlabs/README.md): every request asserted on a replay
 //! transport, every refusal over `NoNetwork` (nothing may be sent), synthetic MP3 bytes only.
 //!
 //! Mirrors the reference engine's adapter tests (the request each route sends, absent members
@@ -16,7 +16,7 @@ use grida_fx_providers::transport::replay::{
     Exchange, Expect, ExpectBody, NoNetwork, ReplayTransport, Reply,
 };
 use grida_fx_providers::transport::{
-    HttpResponse, Lane, Method, Transport, TransportError, TransportErrorKind,
+    Body, HttpResponse, Lane, Method, Transport, TransportError, TransportErrorKind,
 };
 use grida_fx_providers::{
     Adapter, Adapters, Answer, Endpoints, KeyName, Keys, RequestAdapter, Sent, Setup,
@@ -145,7 +145,7 @@ fn assert_key_only_in_credential(transport: &ReplayTransport) {
         assert!(request.headers.iter().all(|(_, v)| !v.contains(KEY)));
         assert_eq!(request.lane, Lane::Provider);
         assert_eq!(
-            request.credential.as_ref().map(|c| c.header),
+            request.credential.as_ref().map(|c| c.header.as_str()),
             Some("xi-api-key")
         );
     }
@@ -296,10 +296,7 @@ fn the_base_url_comes_from_the_endpoints() {
         .reply(mp3(MP3)),
     ]));
     let setup = Setup {
-        endpoints: Endpoints {
-            elevenlabs: "http://127.0.0.1:8089/v1".into(),
-            ..Endpoints::default()
-        },
+        endpoints: Endpoints::default().with_base("elevenlabs", "http://127.0.0.1:8089/v1"),
         ..Setup::new(transport.clone(), test_keys(), Arc::new(FakeClock::new()))
     };
     let adapter = ElevenLabsSound::new(elevenlabs::client(&setup));
@@ -374,6 +371,86 @@ fn unset_speech_values_and_max_chars_are_never_sent() {
         let sent = block_on(speech(transport.clone(), test_keys()).send(&speech_call(request)));
         assert!(matches!(sent, Sent::Answered(_)), "{sent:?}");
         transport.assert_done();
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Provider options (spec/adapters.md §8)
+
+#[test]
+fn provider_options_follow_the_body_s_own_members() {
+    let call = CallBuilder::new("sound.generate", SOUND_ROUTE)
+        .contract(
+            json!({"adapter": "elevenlabs-sound-effect", "adapter_behavior": 1,
+                         "provider_options": {"elevenlabs": {"seed": 1}}}),
+        )
+        .request(
+            json!({"prompt": "wooden door opens", "duration": 2, "prompt_influence": 0.5,
+                        "provider_options": {"elevenlabs": {"seed": 7, "extra": [1]},
+                                             "openai": {"text": "never read"}}}),
+        )
+        .build();
+    let transport = Arc::new(ReplayTransport::new(vec![
+        expect_sound(
+            r#"{"text":"wooden door opens","model_id":"eleven_text_to_sound_v2","loop":false,"duration_seconds":2.0,"prompt_influence":0.5,"seed":7,"extra":[1]}"#,
+        )
+        .reply(mp3(MP3)),
+    ]));
+    answer_of(block_on(sound(transport.clone(), test_keys()).send(&call)));
+    transport.assert_done();
+    owns_what_it_sent(&transport, &["seed", "extra"], elevenlabs::sound::OWNED);
+    let call = speech_call(
+        json!({"text": "hello there", "voice": "6awt6FKyZGV0HyQEwisX",
+                                  "stability": 0.5, "language_code": "en",
+                                  "provider_options": {"elevenlabs": {"apply_text_normalization": "off"},
+                                                       "fal": {"text": "never read"}}}),
+    );
+    let transport = Arc::new(ReplayTransport::new(vec![
+        expect(
+            &speech_url("6awt6FKyZGV0HyQEwisX"),
+            r#"{"text":"hello there","model_id":"eleven_v3","voice_settings":{"stability":0.5},"language_code":"en","apply_text_normalization":"off"}"#,
+        )
+        .reply(mp3(MP3)),
+    ]));
+    answer_of(block_on(speech(transport.clone(), test_keys()).send(&call)));
+    transport.assert_done();
+    owns_what_it_sent(
+        &transport,
+        &["apply_text_normalization"],
+        elevenlabs::speech::OWNED,
+    );
+}
+
+/// Asserts that every member of the body `transport` captured, but the provider options
+/// `options`, is one in `owned`.
+fn owns_what_it_sent(transport: &ReplayTransport, options: &[&str], owned: &[&str]) {
+    let Body::Json(Value::Object(sent)) = &transport.requests()[0].body else {
+        panic!("a JSON body");
+    };
+    for name in sent.keys().filter(|name| !options.contains(&name.as_str())) {
+        assert!(owned.contains(&name.as_str()), "{name}");
+    }
+}
+
+#[test]
+fn provider_options_set_no_member_the_adapters_own() {
+    let sound = sound(Arc::new(NoNetwork), test_keys());
+    for name in elevenlabs::sound::OWNED {
+        let call = sound_call(json!({"prompt": " ",
+                                     "provider_options": {"elevenlabs": {*name: 1}}}));
+        assert_eq!(
+            refused_without_sending(&sound, &call),
+            format!("provider_options.elevenlabs.{name} is a member FX owns")
+        );
+    }
+    let speech = speech(Arc::new(NoNetwork), test_keys());
+    for name in elevenlabs::speech::OWNED {
+        let call = speech_call(json!({"text": " ", "voice": "v",
+                                      "provider_options": {"elevenlabs": {*name: 1}}}));
+        assert_eq!(
+            refused_without_sending(&speech, &call),
+            format!("provider_options.elevenlabs.{name} is a member FX owns")
+        );
     }
 }
 
@@ -737,7 +814,7 @@ fn the_kind_is_the_normalized_content_type() {
     );
 }
 
-/// spec/providers.md §8: an ElevenLabs key (`sk_` and lowercase hex) is a valid media-type
+/// spec/adapters.md §7: an ElevenLabs key (`sk_` and lowercase hex) is a valid media-type
 /// subtype, so a provider that echoes it in `content-type` makes it the answer's kind. The
 /// check's sentence quotes the kind, redacted; and the adapter a live run registers answers the
 /// retry owner with a redactor over every key of the invocation.
@@ -769,6 +846,7 @@ fn a_key_echoed_in_the_content_type_never_reaches_the_check_s_sentence() {
         model: "eleven_text_to_sound_v2".into(),
         provider: "elevenlabs".into(),
         contract: sound_contract(),
+        limits: Default::default(),
     };
     let Some(Adapter::Request(live)) = registered.serving(&route) else {
         panic!("sound.generate is served on elevenlabs");

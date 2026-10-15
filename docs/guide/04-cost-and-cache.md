@@ -1,6 +1,7 @@
 # Cost, cache and takes
 
-FX never spends money you didn't plan for, and never pays twice for the same work.
+FX prices a run before it spends, reserves every paid call against your ceiling, and never pays
+twice for the same work.
 
 ## When does a step run again?
 
@@ -58,6 +59,30 @@ ships a built-in table with a route for each model and provider it can call (`gr
 `--routes` files replace it. The built-in prices are planning allowances, not provider quotes:
 they size the plan and every reservation against your ceiling, but a call costs what its provider
 reports, and when a provider reports nothing, the call is charged its whole reservation.
+
+**A route with no known price takes a cap.** When you do not know what a route's calls cost, for
+a model the built-in table does not list, give its entry in your route table a cap instead of a
+price. Here a new model id extends OpenRouter's built-in image route, so FX's OpenRouter adapter
+serves it with that route's features and contract, and the cap replaces the route's size tiers.
+OpenRouter reports what each call cost, so that is what each call is booked at:
+
+```yaml
+# routes/prices.yaml, listed in fx.yaml as route_tables: [routes/prices.yaml]
+fx: routes/v1
+routes:
+  - capability: image.generate
+    route: openai/gpt-image-2.5-dusk@openrouter   # made up: a model the built-in table does not list
+    extends: openai/gpt-image-2.5-sunburst@openrouter
+    price: { cap_usd: 1.50 }   # alone in price: no low, high, unit or tiers beside it
+```
+
+The plan prices each of its calls at $0 to $1.50 and adds a `note` line for the route ("… has no
+price: each call holds its cap, $1.50, …"; a stand-in run, which holds nothing, leaves it out),
+`plan --json` marks the step's `price` with `capped: true`, and the viewer shows it as "up to
+$1.50". Each call reserves the whole cap against your ceiling, and is charged what the provider
+reports, else the whole cap. The cap is a reservation, not a limit the provider honours: a call
+that costs more is charged in full, and can take the run past its ceiling by the difference. A
+`price` must state an amount, so `price: {}` is refused; write `usd: 0` for a free route.
 
 In general:
 - **The plan never calls a provider.** It is also how you check a workflow in CI: `grida fx plan

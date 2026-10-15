@@ -1,0 +1,6 @@
+# fx.lock: the source behind each versioned node type; commit it
+fx: lock/v1
+nodes: {}
+adapters:
+  adapters/acme.py#acme@1: f3330785f5399aad6701904d1ee000774592c8ca611c35ed58e274ec13db312a
+  adapters/acme.py#acme_jobs@1: f3330785f5399aad6701904d1ee000774592c8ca611c35ed58e274ec13db312a

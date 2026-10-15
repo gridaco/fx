@@ -1,11 +1,13 @@
 //! GG text: `structured.generate` and `agent.turn`, each one `POST {base}/chat/completions`
-//! answered synchronously (spec/providers.md §9.7; spec/capabilities.md §4–§5).
+//! answered synchronously (src/gg/README.md; spec/capabilities.md §4–§5).
 //!
-//! The messages, the strict JSON-schema response format, the strict function tools and the
-//! answers are [`crate::chat`]'s, the same as OpenRouter's. The body adds nothing GG would have to
-//! route: `{model, messages, response_format, max_completion_tokens, reasoning_effort?}` for
-//! structured output, `{model, messages, tools, tool_choice, max_completion_tokens?,
-//! reasoning_effort?}` for a turn. Every request carries its attempt's `Idempotency-Key`
+//! The messages, the strict JSON-schema response format, the strict function tools and the answers
+//! are [`crate::chat`]'s, the same as OpenRouter's. The body adds nothing GG would have to route:
+//! `{model, messages, response_format, max_completion_tokens, reasoning_effort?}` for structured
+//! output, `{model, messages, tools, tool_choice, max_completion_tokens?, reasoning_effort?}` for a
+//! turn, then the provider options, which may set no member of [`STRUCTURED_OWNED`] or
+//! [`TURN_OWNED`] (spec/adapters.md §8; an agent run's turns take only their route's, since the
+//! engine's agent loop sends none). Every request carries its attempt's `Idempotency-Key`
 //! ([`super::Gateway`]). An answer is priced by [`super::Gateway::priced`] (GG's settled charge
 //! when it gives one, its `x-gg-reserved-mills` as the cost bound), and the tokens its `usage`
 //! counts are the answer's usage.
@@ -18,16 +20,18 @@
 //! - [`GgAgent`]: `adapter: gg-tool-loop`, behaviour `1`, optional `image_detail` and
 //!   `reasoning_effort`. Deadline [`TURN_DEADLINE`].
 //!
-//! A send, in order (spec/providers.md §5): the contract; the capability's check; the key
-//! (`GG_API_KEY is not set`); the values and files of [`crate::chat`]; a body over
+//! A send, in order (spec/adapters.md §4; the engine makes the first two before it, the contract's
+//! other members through `check_contract`, and the adapter again for a direct caller): the
+//! contract; the capability's check; the key (`GG_API_KEY is not set`); provider options
+//! ([`wire::provider_options`]); the values and files of [`crate::chat`]; a body over
 //! [`MAX_REQUEST_BYTES`], GG's limit, is refused (`request body exceeds 20 MiB`); then one
-//! exchange, classified by [`super::classify`] ([`super::Gateway::exchange`]). A 2xx that does
-//! not become an answer is `Failed { retryable: true }`, at GG's settled charge, else `None`
-//! (spec/providers.md §4.4).
+//! exchange, classified by [`super::classify`] ([`super::Gateway::exchange`]). A 2xx that does not
+//! become an answer is `Failed { retryable: true }`, at GG's settled charge, else `None`
+//! (spec/adapters.md §3.4).
 
 use super::Gateway;
 use crate::BoxFuture;
-use crate::adapter::{Answer, CallRequest, RequestAdapter, Sent, Usage};
+use crate::adapter::{Answer, CallRequest, Identity, RequestAdapter, Sent};
 use crate::capabilities;
 use crate::chat;
 use crate::checks;
@@ -47,6 +51,48 @@ pub const STRUCTURED_ADAPTER: &str = "gg-structured";
 
 /// The contract `adapter` of [`GgAgent`].
 pub const TURN_ADAPTER: &str = "gg-tool-loop";
+
+/// The members provider options may not set on a structured call (spec/adapters.md §8;
+/// src/gg/README.md): every member its body has, `max_tokens`, which would set its token limit
+/// twice, and those that would change the answer.
+pub const STRUCTURED_OWNED: &[&str] = &[
+    "model",
+    "messages",
+    "response_format",
+    "max_completion_tokens",
+    "reasoning_effort",
+    "max_tokens",
+    "stream",
+    "n",
+    "tools",
+    "tool_choice",
+];
+
+/// The members provider options may not set on an agent turn, as [`STRUCTURED_OWNED`].
+pub const TURN_OWNED: &[&str] = &[
+    "model",
+    "messages",
+    "tools",
+    "tool_choice",
+    "max_completion_tokens",
+    "reasoning_effort",
+    "max_tokens",
+    "stream",
+    "n",
+    "response_format",
+];
+
+/// The contract [`GgStructured`] serves: [`STRUCTURED_ADAPTER`], behaviour the number 1.
+pub const STRUCTURED_IDENTITY: Identity = Identity {
+    adapter: STRUCTURED_ADAPTER,
+    behavior: "1",
+};
+
+/// The contract [`GgAgent`] serves: [`TURN_ADAPTER`], behaviour the number 1.
+pub const TURN_IDENTITY: Identity = Identity {
+    adapter: TURN_ADAPTER,
+    behavior: "1",
+};
 
 /// The deadline of a structured call.
 pub const STRUCTURED_DEADLINE: Duration = Duration::from_secs(900);
@@ -77,11 +123,11 @@ struct Contract {
     pictures_unchanged: bool,
 }
 
-/// Reads a GG chat contract (module doc) for `adapter` serving `capability`.
+/// Reads a GG chat contract (module doc) for the adapter of `identity` serving `capability`.
 fn contract(
     call: &CallRequest,
     capability: &str,
-    adapter: &str,
+    identity: &Identity,
     takes_pictures: bool,
 ) -> Result<Contract, String> {
     let members: &[&str] = if takes_pictures {
@@ -89,7 +135,13 @@ fn contract(
     } else {
         &["image_detail", "reasoning_effort"]
     };
-    let contract = super::read_contract(call, &[capability], adapter, |v| v == &json!(1), members)?;
+    let contract = super::read_contract(
+        call,
+        &[capability],
+        identity.adapter,
+        |v| identity.behaves(v),
+        members,
+    )?;
     let detail = match contract.get("image_detail") {
         None => None,
         Some(Value::String(detail)) if IMAGE_DETAILS.contains(&detail.as_str()) => {
@@ -187,7 +239,7 @@ async fn exchange(
         let message =
             chat::first_message(&body).ok_or_else(|| format!("{label} returned no message"))?;
         let data = answer(message).map_err(|what| format!("{label} {what}"))?;
-        Ok(match usage(&body) {
+        Ok(match chat::usage(&body) {
             Some(usage) => Answer::new(data, None).with_usage(usage),
             None => Answer::new(data, None),
         })
@@ -201,25 +253,7 @@ async fn exchange(
     }
 }
 
-/// The tokens a completion's `usage` counts, when it counts any: `prompt_tokens` (cache reads
-/// included), `prompt_tokens_details.cached_tokens` and `completion_tokens` (reasoning included).
-fn usage(body: &Map<String, Value>) -> Option<Usage> {
-    let usage = body.get("usage")?.as_object()?;
-    let count = |value: Option<&Value>| value.and_then(Value::as_u64);
-    let counted = Usage {
-        input_tokens: count(usage.get("prompt_tokens")),
-        cached_input_tokens: count(
-            usage
-                .get("prompt_tokens_details")
-                .and_then(|details| details.get("cached_tokens")),
-        ),
-        output_tokens: count(usage.get("completion_tokens")),
-        ..Usage::default()
-    };
-    (counted != Usage::default()).then_some(counted)
-}
-
-/// A structural failure of a 2xx (spec/providers.md §4.4): billed, retryable.
+/// A structural failure of a 2xx (spec/adapters.md §3.4): billed, retryable.
 fn structural(gateway: &Gateway, response: &HttpResponse, reason: &str) -> Sent {
     Sent::Failed {
         reason: gateway.reason(&super::with_request_id(reason.to_string(), response)),
@@ -241,9 +275,10 @@ impl GgStructured {
 
     fn prepare(&self, call: &CallRequest) -> Result<HttpRequest, String> {
         let capability = "structured.generate";
-        let contract = contract(call, capability, STRUCTURED_ADAPTER, true)?;
+        let contract = contract(call, capability, &STRUCTURED_IDENTITY, true)?;
         capabilities::check_request(capability, &call.request)?;
         self.gateway.credential()?;
+        let options = wire::provider_options(call, STRUCTURED_OWNED)?;
         let prompt = chat::structured_prompt(
             call,
             contract.pictures_unchanged,
@@ -257,6 +292,7 @@ impl GgStructured {
         if let Some(effort) = contract.reasoning_effort {
             body.insert("reasoning_effort".into(), json!(effort));
         }
+        body.extend(options);
         request(&self.gateway, call, body, STRUCTURED_DEADLINE)
     }
 }
@@ -279,6 +315,14 @@ impl RequestAdapter for GgStructured {
     fn check(&self, call: &CallRequest, answer: &Answer) -> Result<(), String> {
         checks::structured(call, answer, &self.gateway.client.redactor)
     }
+
+    fn identity(&self) -> Option<Identity> {
+        Some(STRUCTURED_IDENTITY)
+    }
+
+    fn check_contract(&self, call: &CallRequest) -> Result<(), String> {
+        contract(call, "structured.generate", &STRUCTURED_IDENTITY, true).map(|_| ())
+    }
 }
 
 /// GG's agent-turn adapter (module doc).
@@ -294,9 +338,10 @@ impl GgAgent {
 
     fn prepare(&self, call: &CallRequest) -> Result<HttpRequest, String> {
         let capability = "agent.turn";
-        let contract = contract(call, capability, TURN_ADAPTER, false)?;
+        let contract = contract(call, capability, &TURN_IDENTITY, false)?;
         capabilities::check_request(capability, &call.request)?;
         self.gateway.credential()?;
+        let options = wire::provider_options(call, TURN_OWNED)?;
         let prompt = chat::agent_prompt(call, contract.detail.as_deref())?;
         let mut body = Map::new();
         body.insert("model".into(), json!(call.route.model.trim()));
@@ -309,6 +354,7 @@ impl GgAgent {
         if let Some(effort) = contract.reasoning_effort {
             body.insert("reasoning_effort".into(), json!(effort));
         }
+        body.extend(options);
         request(&self.gateway, call, body, TURN_DEADLINE)
     }
 }
@@ -325,5 +371,13 @@ impl RequestAdapter for GgAgent {
             )
             .await
         })
+    }
+
+    fn identity(&self) -> Option<Identity> {
+        Some(TURN_IDENTITY)
+    }
+
+    fn check_contract(&self, call: &CallRequest) -> Result<(), String> {
+        contract(call, "agent.turn", &TURN_IDENTITY, false).map(|_| ())
     }
 }

@@ -249,7 +249,7 @@ new **phase**:
 - When the list exists, FX prices that phase exactly (a `phase_planned` event in the run's
   record) and continues. With `--yes-up-to`, it stops before a phase whose worst case would take
   the run past that amount; running again with a higher one continues. The ceiling holds either
-  way: no paid call is made that could cross it.
+  way: no paid call is made whose reservation would cross it.
 - You don't declare phases; they follow from the wiring.
 
 To avoid a phase, compute the list while planning (next section).

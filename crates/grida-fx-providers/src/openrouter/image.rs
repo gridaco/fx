@@ -1,32 +1,37 @@
-//! OpenRouter images: `POST {base}/images` for both `image.generate` and `image.edit`
-//! (spec/providers.md §9.2; spec/capabilities.md §2–§3).
+//! OpenRouter images on GPT Image: `POST {base}/images` for both `image.generate` and `image.edit`
+//! (src/openrouter/README.md, "Images on GPT Image"; spec/capabilities.md §2–§3). Registered for a
+//! route whose contract names it, as the built-in routes do; a route that names no adapter gets
+//! [`super::generic_image`].
 //!
 //! Contract: `adapter: fx-openrouter-image-v1`, `adapter_behavior: "3"` (a string), each checked
-//! when present (`super::serves`). Refusals, in the order of spec/providers.md §5: the contract; the capability's shape
-//! ([`crate::capabilities::check_request`]); the key; then the values (a blank prompt, a mask,
-//! `background: transparent`, another unknown background, a `size` other than `auto` and the
-//! seven verified sizes ([`ALLOWED_SIZES`]), references on a generate, an edit with more than
+//! when present (`super::serves`). Refusals, in the order of spec/adapters.md §4: the contract; the
+//! capability's shape ([`crate::capabilities::check_request`]); the key; then the values (provider
+//! options that set a member of [`OWNED`], [`crate::wire::provider_options`]; a blank prompt, a
+//! mask, a background other than `auto`, `opaque` and `transparent`, a `size` other than `auto` and
+//! the seven verified sizes ([`ALLOWED_SIZES`]), references on a generate, an edit with more than
 //! [`MAX_PICTURES`] pictures); then the files (each picture must be an `image/*` file with bytes);
 //! and last a serialized body over [`super::MAX_REQUEST_BYTES`].
 //!
-//! Body, members in this order: `{"model", "prompt", "n": 1, "provider": {"allow_fallbacks":
-//! false, "options": {"openai": {"moderation": "low"}}}, "size"?, "quality": "max", "background",
-//! "input_references"?}`. `size` is sent when the request has one (`auto` included);
-//! `background` always (`auto` when absent); `input_references` on an edit only, `image` first and
-//! then `references`, each `{"type": "image_url", "image_url": {"url": <data URL>}}`.
+//! Body, members in this order: `{"model", "prompt", "n": 1, "provider": {"allow_fallbacks": false,
+//! "options": {"openai": {"moderation": "low"}}}, "size"?, "quality": "max", "background",
+//! "input_references"?}`, then the provider options. `size` is sent when the request has one
+//! (`auto` included); `background` always, as given (`auto` when absent; `transparent`, which
+//! Grida Models records for the model's OpenRouter endpoint, included); `input_references` on an
+//! edit only, `image` first and then `references`, each `{"type": "image_url", "image_url":
+//! {"url": <data URL>}}`.
 //!
 //! Answer: `data` must hold exactly one object whose `b64_json` is strict base64 (a `url` is never
 //! fetched). Its kind is `media_type` when that member is present (a parameter-free PNG, JPEG or
 //! WebP; `image/jpg`, `null` and anything else are refused), else sniffed from the bytes. The
 //! answer is file `image` with that kind, `data: null`, and `cost` from `usage`
 //! ([`super::usage_cost`]). A 2xx that cannot become an answer is `Failed { cost, retryable:
-//! true }`, with the reported cost when the body parsed (spec/providers.md §4.4).
+//! true }`, with the reported cost when the body parsed (spec/adapters.md §3.4).
 //! `revised_prompt` is ignored. Deadline 600 s; response cap 64 MiB. `check`:
 //! [`crate::wire::check_image`].
 
 use super::{BODY_TOO_LARGE, classify, not_served, serves, with_request_id};
 use crate::BoxFuture;
-use crate::adapter::{Answer, CallRequest, RequestAdapter, Sent};
+use crate::adapter::{Answer, CallRequest, Identity, RequestAdapter, Sent};
 use crate::setup::Client;
 use crate::transport::{Body, HttpRequest, HttpResponse, Lane, Method};
 use crate::wire;
@@ -36,9 +41,14 @@ use std::time::Duration;
 /// The label of every reason.
 pub const LABEL: &str = "OpenRouter image generation";
 
-/// The contract this adapter serves.
+/// The contract `adapter` this adapter serves.
 pub const CONTRACT_ADAPTER: &str = "fx-openrouter-image-v1";
-pub const CONTRACT_BEHAVIOR: &str = "3";
+
+/// The contract this adapter serves: [`CONTRACT_ADAPTER`], and `adapter_behavior` the text `"3"`.
+pub const IDENTITY: Identity = Identity {
+    adapter: CONTRACT_ADAPTER,
+    behavior: r#""3""#,
+};
 
 /// The exact sizes the route returns exactly.
 pub const ALLOWED_SIZES: [&str; 7] = [
@@ -51,6 +61,21 @@ pub const ALLOWED_SIZES: [&str; 7] = [
     "2560x1712",
 ];
 
+/// The members provider options may not set (spec/adapters.md §8; src/openrouter/README.md):
+/// every member the body has, and those that would change the answer.
+pub const OWNED: &[&str] = &[
+    "model",
+    "prompt",
+    "n",
+    "provider",
+    "size",
+    "quality",
+    "background",
+    "input_references",
+    "response_format",
+    "stream",
+];
+
 pub const DEADLINE: Duration = Duration::from_secs(600);
 pub const MAX_RESPONSE_BYTES: u64 = 64 * 1024 * 1024;
 
@@ -60,7 +85,7 @@ pub const MAX_PICTURES: usize = 16;
 /// The capabilities this adapter is registered for.
 const CAPABILITIES: [&str; 2] = ["image.generate", "image.edit"];
 
-/// The media types an answer may declare (spec/providers.md §9.2).
+/// The media types an answer may declare (src/openrouter/README.md).
 const ANSWER_KINDS: [&str; 3] = ["image/png", "image/jpeg", "image/webp"];
 
 /// OpenRouter's image adapter (module doc).
@@ -74,17 +99,17 @@ impl OpenRouterImages {
         OpenRouterImages { client }
     }
 
-    /// Every refusal of spec/providers.md §5, in order, then the request to send.
+    /// Every refusal of spec/adapters.md §4, in order, then the request to send.
     fn prepare(&self, call: &CallRequest) -> Result<HttpRequest, String> {
         let route = &call.route;
-        let behavior = Value::String(CONTRACT_BEHAVIOR.to_string());
         if !CAPABILITIES.contains(&route.capability.as_str())
-            || !serves(&route.contract, CONTRACT_ADAPTER, |v| v == &behavior)
+            || !serves(&route.contract, CONTRACT_ADAPTER, |v| IDENTITY.behaves(v))
         {
             return Err(not_served(call));
         }
         crate::capabilities::check_request(&route.capability, &call.request)?;
-        let credential = self.client.credential("authorization", "Bearer ")?;
+        let credential = self.client.credential()?;
+        let options = wire::provider_options(call, OWNED)?;
 
         let request = &call.request;
         let edit = route.capability == "image.edit";
@@ -99,12 +124,7 @@ impl OpenRouterImages {
             None | Some(Value::Null) => "auto",
             Some(value) => value.as_str().unwrap_or(""),
         };
-        if background == "transparent" {
-            return Err(
-                "OpenRouter image generation does not support transparent backgrounds".into(),
-            );
-        }
-        if !matches!(background, "auto" | "opaque") {
+        if !matches!(background, "auto" | "opaque" | "transparent") {
             return Err("background must be auto, opaque or transparent".into());
         }
         let size = match request.get("size") {
@@ -168,6 +188,7 @@ impl OpenRouterImages {
         if edit {
             body.insert("input_references".into(), Value::Array(pictures));
         }
+        body.extend(options);
         let body = Value::Object(body);
         if wire::body_exceeds(&body, super::MAX_REQUEST_BYTES) {
             return Err(BODY_TOO_LARGE.into());
@@ -181,7 +202,7 @@ impl OpenRouterImages {
         )
     }
 
-    /// A 2xx response as an answer, or a structural failure (spec/providers.md §4.4).
+    /// A 2xx response as an answer, or a structural failure (spec/adapters.md §3.4).
     fn answer(&self, response: &HttpResponse) -> Sent {
         let failed = |reason: String, cost| Sent::Failed {
             reason: self.client.reason(&with_request_id(reason, response)),
@@ -258,6 +279,10 @@ impl RequestAdapter for OpenRouterImages {
         };
         let size = wire::parse_size(call.request.get("size"))?;
         crate::checks::image(call, image, size)
+    }
+
+    fn identity(&self) -> Option<Identity> {
+        Some(IDENTITY)
     }
 }
 

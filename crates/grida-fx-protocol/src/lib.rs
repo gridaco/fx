@@ -4,14 +4,17 @@
 //! This crate is data and framing only: it never spawns a process and never computes an
 //! identity. [`framing`] reads and writes `Content-Length` frames as bytes; the receiver parses
 //! the bytes with the engine's strict I-JSON reader (`grida_fx_core::value::parse_json`) and
-//! then deserializes the typed messages in [`jsonrpc`] and [`types`]. Every type here mirrors a
-//! `$defs` entry of the schema with the same `lower_snake_case` field names.
+//! then deserializes the typed messages in [`jsonrpc`], [`types`], [`run_types`] and
+//! [`adapter_types`]. Every type here mirrors a `$defs` entry of the schema with the same
+//! `lower_snake_case` field names.
 
+pub mod adapter_types;
 pub mod framing;
 pub mod jsonrpc;
 pub mod run_types;
 pub mod types;
 
+pub use adapter_types::*;
 pub use jsonrpc::{ErrorCode, Id, Message, RpcError};
 pub use run_types::*;
 pub use types::*;
@@ -19,7 +22,8 @@ pub use types::*;
 /// The protocol this engine speaks (protocol.md §2).
 pub const PROTOCOL: &str = "fx-node-protocol-v1";
 
-/// Method names (protocol.md §2, §5, §6; the stand-in's, §5.7).
+/// Method names (protocol.md §2, §5, §6; the stand-in's, §5.7; a project adapter's, §5.8 and
+/// §6.8).
 pub mod method {
     pub const INITIALIZE: &str = "initialize";
     pub const SHUTDOWN: &str = "shutdown";
@@ -39,4 +43,10 @@ pub mod method {
     pub const FILE_PUT: &str = "file.put";
     pub const STAND_IN_LOAD: &str = "stand_in.load";
     pub const STAND_IN_ANSWER: &str = "stand_in.answer";
+    pub const ADAPTER_LOAD: &str = "adapter.load";
+    pub const ADAPTER_SEND: &str = "adapter.send";
+    pub const ADAPTER_SUBMIT: &str = "adapter.submit";
+    pub const ADAPTER_COLLECT: &str = "adapter.collect";
+    /// Host to engine, for a pending adapter call: it carries a `call_id`, never a `run_id`.
+    pub const FETCH: &str = "fetch";
 }

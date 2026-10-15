@@ -1,5 +1,5 @@
 //! GG images: `image.generate` (`POST {base}/images/generations`, JSON) and `image.edit`
-//! (`POST {base}/images/edits`, multipart), both answered synchronously (spec/providers.md §9.7;
+//! (`POST {base}/images/edits`, multipart), both answered synchronously (src/gg/README.md;
 //! spec/capabilities.md §2–§3).
 //!
 //! One [`RequestAdapter`], registered for both capabilities on provider `gg`; the endpoint is
@@ -10,7 +10,8 @@
 //! The wire, in this order: `model`, `prompt` (verbatim), `n: 1`, `size` when the request gives
 //! `WIDTHxHEIGHT` (`auto` and none are left out: the model chooses), the contract's `quality`, and
 //! `background` when the request gives one other than `auto` (the default everywhere, and a member
-//! some models do not take). An edit sends these as text fields, then each input picture (`image`,
+//! some models do not take), then the provider options, which may set no member of [`OWNED`]
+//! (spec/adapters.md §8). An edit sends these as text fields, then each input picture (`image`,
 //! then `references`) as a part `image[]` named `reference-NN.<png|jpg|webp>` from `01`. Every
 //! request carries its attempt's `Idempotency-Key` ([`super::Gateway`]).
 //!
@@ -19,22 +20,25 @@
 //! and its `x-gg-reserved-mills` as the cost bound. The check is every image route's
 //! ([`crate::checks::image`]).
 //!
-//! A send, in order (spec/providers.md §5):
+//! A send, in order (spec/adapters.md §4; the engine makes steps 1 and 2 before it, the
+//! contract's `quality` through `check_contract`, and the adapter again for a direct caller):
 //! 1. the route: `image.generate` or `image.edit`, and a contract this adapter serves;
 //! 2. [`crate::capabilities::check_request`];
 //! 3. the key: `GG_API_KEY is not set`;
-//! 4. values: a blank prompt, an unknown `background`, a `size` that is neither `auto` nor
-//!    `WIDTHxHEIGHT`, references on a generation, a mask, more than [`MAX_INPUT_IMAGES`] pictures;
+//! 4. values: provider options ([`wire::provider_options`]), a blank prompt, an unknown
+//!    `background`, a `size` that is neither `auto` nor `WIDTHxHEIGHT`, references on a generation,
+//!    a mask, more pictures than the route's `max_input_pictures` when it declares one (the
+//!    built-in edit route declares [`MAX_INPUT_IMAGES`]);
 //! 5. files (`image`, then `references[i]`): a digest the call does not carry or an empty store
 //!    copy, a kind other than PNG, JPEG or WebP, bytes that do not decode as their kind;
 //! 6. one exchange, classified by [`super::classify`] ([`super::Gateway::exchange`]).
 //!
-//! Model limits (sizes, counts, which members a model takes) are GG's to refuse, before any paid
-//! work and at no cost.
+//! Model limits (sizes, counts beyond the route's, which members a model takes) are GG's to
+//! refuse, before any paid work and at no cost.
 
 use super::Gateway;
 use crate::BoxFuture;
-use crate::adapter::{Answer, CallRequest, RequestAdapter, Sent};
+use crate::adapter::{Answer, CallRequest, Identity, RequestAdapter, Sent};
 use crate::capabilities;
 use crate::transport::{Body, HttpRequest, HttpResponse, Lane, Method, Part};
 use crate::wire;
@@ -47,8 +51,27 @@ pub const LABEL: &str = "GG image generation";
 /// The route contract's `adapter` this adapter serves.
 pub const ADAPTER: &str = "gg-image";
 
-/// The route contract's `adapter_behavior` this adapter serves: the text `"1"`.
-pub const ADAPTER_BEHAVIOR: &str = "1";
+/// The contract this adapter serves: [`ADAPTER`], and `adapter_behavior` the text `"1"`.
+pub const IDENTITY: Identity = Identity {
+    adapter: ADAPTER,
+    behavior: r#""1""#,
+};
+
+/// The members provider options may not set (spec/adapters.md §8; src/gg/README.md): every
+/// member and part the adapter sends, the mask it refuses, and those that would change the answer.
+pub const OWNED: &[&str] = &[
+    "model",
+    "prompt",
+    "n",
+    "size",
+    "quality",
+    "background",
+    "image",
+    "image[]",
+    "mask",
+    "response_format",
+    "stream",
+];
 
 /// The whole-exchange deadline: GG answers within 600 s, then a margin for its answer to arrive.
 pub const DEADLINE: Duration = Duration::from_secs(630);
@@ -56,7 +79,8 @@ pub const DEADLINE: Duration = Duration::from_secs(630);
 /// The response cap.
 pub const MAX_RESPONSE_BYTES: u64 = 64 * 1024 * 1024;
 
-/// The most input pictures of an edit (`image` plus `references`).
+/// The most input pictures GPT Image takes in an edit (`image` plus `references`): what the
+/// built-in edit route declares as its `max_input_pictures`, which the adapter holds an edit to.
 pub const MAX_INPUT_IMAGES: usize = 16;
 
 /// The refusal of a `size` that is not `auto` or `WxH`.
@@ -83,23 +107,13 @@ impl GgImages {
     /// Steps 1 to 5 of the module doc: the one request to send, or the refusal sentence (not yet
     /// redacted).
     fn prepare(&self, call: &CallRequest) -> Result<HttpRequest, String> {
-        let contract = super::read_contract(
-            call,
-            &["image.generate", "image.edit"],
-            ADAPTER,
-            |behavior| behavior.as_str() == Some(ADAPTER_BEHAVIOR),
-            &["quality"],
-        )?;
-        let quality = match contract.get("quality") {
-            None => None,
-            Some(Value::String(quality)) if !quality.trim().is_empty() => Some(quality.as_str()),
-            Some(_) => return Err(super::not_served(call, Some("quality is text"))),
-        };
+        let quality = contract(call)?;
         let edit = call.route.capability == "image.edit";
         capabilities::check_request(&call.route.capability, &call.request)?;
         let credential = self.gateway.credential()?;
-        let values = Values::read(&call.request, edit)?;
-        let fields = fields(&call.route.model, &values, quality);
+        let options = wire::provider_options(call, OWNED)?;
+        let values = Values::read(&call.request, edit, call.route.limits.max_input_pictures)?;
+        let fields = fields(&call.route.model, &values, quality.as_deref());
         let request = |path: &str| {
             self.gateway.paid(
                 HttpRequest::new(Method::Post, self.gateway.client.url(path), Lane::Provider)
@@ -110,16 +124,18 @@ impl GgImages {
             )
         };
         if !edit {
-            let body: Map<String, Value> = fields
+            let mut body: Map<String, Value> = fields
                 .into_iter()
                 .map(|(name, value)| (name.to_string(), value))
                 .collect();
+            body.extend(options);
             return Ok(request("images/generations").body(Body::Json(Value::Object(body))));
         }
         let mut parts: Vec<Part> = fields
             .iter()
             .map(|(name, value)| Part::text(name, &field_text(value)))
             .collect();
+        parts.extend(wire::option_fields(&options));
         let mut inputs = vec![("image".to_string(), &call.request["image"])];
         inputs.extend(
             values
@@ -136,7 +152,7 @@ impl GgImages {
         Ok(request("images/edits").body(Body::Multipart(parts)))
     }
 
-    /// A 2xx body as the answer, priced (spec/providers.md §4.4): a structural failure is billed
+    /// A 2xx body as the answer, priced (spec/adapters.md §3.4): a structural failure is billed
     /// and may be tried again.
     async fn parse(&self, response: &HttpResponse) -> Sent {
         match answer(&response.body) {
@@ -179,6 +195,30 @@ impl RequestAdapter for GgImages {
             wire::parse_size(call.request.get("size")).map_err(|_| SIZE_SHAPE.to_string())?;
         crate::checks::image(call, image, size)
     }
+
+    fn identity(&self) -> Option<Identity> {
+        Some(IDENTITY)
+    }
+
+    fn check_contract(&self, call: &CallRequest) -> Result<(), String> {
+        contract(call).map(|_| ())
+    }
+}
+
+/// Step 1 (spec/adapters.md §4): the route's contract, and the `quality` it names, if any.
+fn contract(call: &CallRequest) -> Result<Option<String>, String> {
+    let contract = super::read_contract(
+        call,
+        &["image.generate", "image.edit"],
+        ADAPTER,
+        |behavior| IDENTITY.behaves(behavior),
+        &["quality"],
+    )?;
+    match contract.get("quality") {
+        None => Ok(None),
+        Some(Value::String(quality)) if !quality.trim().is_empty() => Ok(Some(quality.clone())),
+        Some(_) => Err(super::not_served(call, Some("quality is text"))),
+    }
 }
 
 /// The request's values after step 4.
@@ -195,8 +235,9 @@ struct Values<'a> {
 }
 
 impl<'a> Values<'a> {
-    /// Reads and checks the values of a request that passed its capability's check.
-    fn read(request: &'a Value, edit: bool) -> Result<Values<'a>, String> {
+    /// Reads and checks the values of a request that passed its capability's check; `most` is the
+    /// route's picture limit, if it declares one.
+    fn read(request: &'a Value, edit: bool, most: Option<u32>) -> Result<Values<'a>, String> {
         let prompt = request.get("prompt").and_then(Value::as_str).unwrap_or("");
         if prompt.trim().is_empty() {
             return Err("an image call needs its prompt as text".into());
@@ -225,9 +266,12 @@ impl<'a> Values<'a> {
         if !wire::is_absent(request.get("mask")) {
             return Err("GG image edits take no mask".into());
         }
-        if edit && 1 + references.len() > MAX_INPUT_IMAGES {
+        if let Some(most) = most
+            && edit
+            && 1 + references.len() > most as usize
+        {
             return Err(format!(
-                "GG image edits support at most {MAX_INPUT_IMAGES} input images"
+                "GG image edits support at most {most} input images"
             ));
         }
         Ok(Values {
@@ -292,7 +336,7 @@ fn input_file(
     Ok((kind, extension, bytes))
 }
 
-/// A 2xx body as the answer, or the structural failure's sentence (spec/providers.md §4.4).
+/// A 2xx body as the answer, or the structural failure's sentence (spec/adapters.md §3.4).
 /// `created`, `media_type` and any usage are not read: the bytes decide the kind.
 fn answer(body: &[u8]) -> Result<Answer, String> {
     let payload = wire::json_object(body, LABEL)?;
@@ -317,7 +361,7 @@ mod tests {
     #[test]
     fn values_are_read_or_refused_in_order() {
         let read = |request: Value, edit: bool| {
-            Values::read(&request, edit)
+            Values::read(&request, edit, Some(16))
                 .map(|v| (v.background.map(str::to_string), v.size.map(str::to_string)))
         };
         assert_eq!(
@@ -334,7 +378,8 @@ mod tests {
             ),
             Ok((Some("transparent".into()), Some("1024x1536".into())))
         );
-        let refused = |request: Value, edit: bool| Values::read(&request, edit).unwrap_err();
+        let refused =
+            |request: Value, edit: bool| Values::read(&request, edit, Some(16)).unwrap_err();
         assert_eq!(
             refused(json!({"prompt": "  "}), false),
             "an image call needs its prompt as text"
@@ -357,15 +402,22 @@ mod tests {
         );
         let many: Vec<Value> = (0..16).map(|_| json!({"file": "a"})).collect();
         assert_eq!(
-            refused(json!({"prompt": "p", "references": many}), true),
+            refused(json!({"prompt": "p", "references": many.clone()}), true),
             "GG image edits support at most 16 input images"
+        );
+        // The limit is the route's: none declared is GG's to check.
+        let request = json!({"prompt": "p", "references": many});
+        assert!(Values::read(&request, true, None).is_ok());
+        assert_eq!(
+            Values::read(&request, true, Some(4)).unwrap_err(),
+            "GG image edits support at most 4 input images"
         );
     }
 
     #[test]
     fn fields_leave_out_what_the_model_chooses() {
         let request = json!({"prompt": "p", "background": "opaque", "size": "1024x1024"});
-        let values = Values::read(&request, false).unwrap();
+        let values = Values::read(&request, false, None).unwrap();
         let names: Vec<&str> = fields(" acme/img-a ", &values, Some("max"))
             .iter()
             .map(|(name, _)| *name)
@@ -375,7 +427,7 @@ mod tests {
             ["model", "prompt", "n", "size", "quality", "background"]
         );
         let bare = json!({"prompt": "p"});
-        let values = Values::read(&bare, false).unwrap();
+        let values = Values::read(&bare, false, None).unwrap();
         assert_eq!(
             fields("acme/img-a", &values, None),
             vec![

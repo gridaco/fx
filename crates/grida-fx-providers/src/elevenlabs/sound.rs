@@ -1,15 +1,17 @@
 //! ElevenLabs sound effects: `POST {base}/sound-generation?output_format=mp3_44100_192` with
 //! `{"text": <prompt>, "model_id": <route model>, "loop", "duration_seconds"?,
-//! "prompt_influence"?}` (spec/providers.md §9.5). Refused before sending: a blank prompt or one
-//! over 450 characters, `duration` outside 0.5..30, `prompt_influence` outside 0..1, no key.
+//! "prompt_influence"?}`, then the provider options, which may set no member of [`OWNED`]
+//! (src/elevenlabs/README.md; spec/adapters.md §8). Refused before sending: provider options
+//! ([`crate::wire::provider_options`]), a blank prompt or one over 450 characters, `duration`
+//! outside 0.5..30, `prompt_influence` outside 0..1, no key.
 //!
 //! The prompt goes out verbatim (not trimmed); `loop` is always sent (false when absent);
 //! `duration` and `prompt_influence` are sent only when given, as floats (`1` goes out as `1.0`),
 //! so the provider's defaults apply otherwise. Characters are counted as Unicode scalar values.
 
-use super::{CREDENTIAL_HEADER, check_route, float, number, post, refused, within};
+use super::{check_route, float, number, post, refused, within};
 use crate::BoxFuture;
-use crate::adapter::{Answer, CallRequest, RequestAdapter, Sent};
+use crate::adapter::{Answer, CallRequest, Identity, RequestAdapter, Sent};
 use crate::capabilities;
 use crate::setup::Client;
 use serde_json::{Map, Value};
@@ -20,8 +22,19 @@ pub const LABEL: &str = "ElevenLabs sound generation";
 /// The capability this adapter serves.
 pub const CAPABILITY: &str = "sound.generate";
 
-/// The contract's `adapter` (spec/providers.md §9.5).
+/// The contract's `adapter` (src/elevenlabs/README.md).
 pub const ADAPTER: &str = "elevenlabs-sound-effect";
+
+/// The members provider options may not set: every member the body has, and `output_format`,
+/// which FX sets in the query.
+pub const OWNED: &[&str] = &[
+    "text",
+    "model_id",
+    "loop",
+    "duration_seconds",
+    "prompt_influence",
+    "output_format",
+];
 
 pub const MAX_PROMPT_CHARS: usize = 450;
 pub const DURATION_SECONDS: std::ops::RangeInclusive<f64> = 0.5..=30.0;
@@ -42,21 +55,26 @@ impl ElevenLabsSound {
 impl RequestAdapter for ElevenLabsSound {
     fn send<'a>(&'a self, call: &'a CallRequest) -> BoxFuture<'a, Sent> {
         Box::pin(async move {
-            // spec/providers.md §5, steps 1 to 3.
+            // spec/adapters.md §4, steps 1 to 3.
             if let Err(reason) = check_route(call, CAPABILITY, ADAPTER)
                 .and_then(|()| capabilities::check_request(CAPABILITY, &call.request))
             {
                 return refused(&self.client, &reason);
             }
-            let credential = match self.client.credential(CREDENTIAL_HEADER, "") {
+            let credential = match self.client.credential() {
                 Ok(credential) => credential,
                 Err(reason) => return refused(&self.client, &reason),
             };
-            // Step 4: the values.
-            let body = match body(call) {
+            // Step 4: the values, provider options first.
+            let options = match crate::wire::provider_options(call, OWNED) {
+                Ok(options) => options,
+                Err(reason) => return refused(&self.client, &reason),
+            };
+            let mut body = match body(call) {
                 Ok(body) => body,
                 Err(reason) => return refused(&self.client, &reason),
             };
+            body.extend(options);
             post(&self.client, LABEL, "sound-generation", credential, body).await
         })
     }
@@ -64,10 +82,14 @@ impl RequestAdapter for ElevenLabsSound {
     fn check(&self, _call: &CallRequest, answer: &Answer) -> Result<(), String> {
         super::check_audio(&self.client, LABEL, answer)
     }
+
+    fn identity(&self) -> Option<Identity> {
+        Some(super::identity(ADAPTER))
+    }
 }
 
 /// The wire body of a request whose shape `capabilities::check_request` accepted, or the
-/// refusal of its first out-of-range value (spec/providers.md §9.5 "Sound").
+/// refusal of its first out-of-range value (src/elevenlabs/README.md, "Sound").
 fn body(call: &CallRequest) -> Result<Map<String, Value>, String> {
     let request = &call.request;
     let prompt = request.get("prompt").and_then(Value::as_str).unwrap_or("");

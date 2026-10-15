@@ -6,20 +6,45 @@
 //!
 //! The catalog is built from tables in this order (identity.md §7): the built-in default table
 //! (left out when any `--routes` file is given), then `fx.yaml` `route_tables` in order, then each
-//! `--routes` file in order. The core knows no built-in table of its own: the caller hands it in
-//! (the `grida-fx` command passes `grida_fx_providers::routes::default_table()`, the table its
-//! adapters serve; tests pass an empty one). A later table's entry for the same capability and route replaces an
-//! earlier one, contract included; two entries for the same capability and route within one
-//! table are refused (`<route> is declared twice for <capability>`).
+//! `--routes` file in order. The core knows no built-in route table of its own: the caller hands it
+//! in (the `grida-fx` command passes `grida_fx_providers::routes::default_table()`, the table its
+//! adapters serve; tests pass an empty one). A later table's entry for the same capability and
+//! route replaces an earlier one, contract included; two entries for the same capability and
+//! route within one table are refused (`<route> is declared twice for <capability>`).
+//!
+//! An entry's contract is completed as it is read (identity.md §7), in this order:
+//! - `extends` names its base, a route of the same capability and provider: an earlier entry of
+//!   the same table, else the entry in force in the catalog so far, else the built-in table's,
+//!   which serves as a base even under `--routes` ([`load_catalog`] hands each table these bases;
+//!   [`RouteTable::from_document_over`] takes them for a document already loaded). The entry
+//!   copies the base's price, features, limits and pacing where it states none, and the base's
+//!   contract members it does not state. Refused: `<base> is not a <provider> route`; `no route
+//!   <base> serves <capability>`.
+//! - [`BUILT_IN_ADAPTERS`]: on a capability and provider FX's adapters serve, a left-out or `null`
+//!   `adapter` becomes the name of that pair's default, and a left-out or `null`
+//!   `adapter_behavior` the behaviour of the pair's adapter `adapter` names ([`complete_contract`]).
+//!   On a provider the planning project declares with a `family`, [`FAMILY_ADAPTERS`] does the
+//!   same for the capabilities that family serves: the family is read from the declarations
+//!   ([`load_catalog`] passes the project's), never from the provider's name. On one it declares
+//!   with an `adapter`, the adapter planning loaded ([`crate::adapters::load_declared`]) does the
+//!   same for the capabilities it declares: its name `<path>#<attribute>`, and its version or
+//!   `source:<digest>` ([`crate::providers::LoadedAdapter::behavior`]); a route whose completed
+//!   contract names it gets the adapter's lock drift ([`Route::drift`]), which the expander
+//!   reports on each step that binds it. The core knows FX's adapters by these tables alone; the
+//!   providers crate's tests hold them to every adapter it registers.
 //!
 //! Prices are read in micro-dollars ([`Usd`]); an amount with more than 6 decimal places is
 //! refused (identity.md §12), judged on the number's JCS text (`1e-7 has more than 6 decimal
-//! places`). A price's other refusals read: `a price is a
-//! non-negative range, low to high`; `a length-priced route declares the most units one call
-//! carries`; `a tiered price names the setting it is priced by, and its tiers`; `price tier
-//! {name} lies outside the route's range`. Every refusal reads `<file>: <where>: <sentence>`,
-//! `<where>` the instance path joined by `.` as in schema refusals: `routes.0.price.low_usd`,
-//! `routes.0.price`, `routes.1` for a duplicate, `routes.0.route` for a bad route id.
+//! places`). A capped route's price is `cap_usd` alone: per call, $0 to the cap, and
+//! [`RoutePrice::capped`]. A price's other refusals read: `a price states an amount (usd,
+//! low_usd, high_usd) or a cap (cap_usd)`; `a cap (cap_usd) stands alone`; `a cap is more than
+//! 0` (at `.cap_usd`); `a price is a non-negative range, low to high`; `a length-priced route
+//! declares the most units one call carries`; `a tiered price names the setting it is priced by,
+//! and its tiers`; `price tier {name} lies outside the route's range`. The schema refuses a cap
+//! beside other members, or of 0, before these are read. Every refusal reads `<file>: <where>:
+//! <sentence>`, `<where>` the instance path joined by `.` as in schema refusals:
+//! `routes.0.price.low_usd`, `routes.0.price`, `routes.1` for a duplicate, `routes.0.route` for a
+//! bad route id, `routes.0.extends` for a base.
 //!
 //! One call's price for a step's with-values (`Route::cost`): the tier is `with[by]` when it is
 //! text, else the whole range. Per call, the range as is. Per unit, the call's length is
@@ -33,6 +58,7 @@
 use crate::docs::project::Project;
 use crate::error::{Error, Result};
 use crate::money::{Units, Usd};
+use crate::providers::Declarations;
 use crate::val::Val;
 use crate::value::as_f64;
 use indexmap::IndexMap;
@@ -58,6 +84,10 @@ pub struct RoutePrice {
     pub max_units: Option<Units>,
     pub by: Option<String>,
     pub tiers: IndexMap<String, (Usd, Usd)>,
+    /// A capped route (`cap_usd`): no price is known, so `low` is 0 and `high` the cap, per call
+    /// and untiered. Each attempt holds the cap and is charged what the provider reports, else the
+    /// cap (spec/adapters.md §5).
+    pub capped: bool,
 }
 
 impl RoutePrice {
@@ -99,8 +129,262 @@ pub struct Route {
     pub max_input_pictures: Option<u32>,
     pub concurrency: Option<u32>,
     pub requests_per_minute: Option<u32>,
-    /// The declared contract object; `{}` when none.
+    /// The contract object, completed as the module doc says; `{}` when none.
     pub contract: Value,
+    /// The serving project adapter's lock drift (module doc): not part of the fingerprint.
+    pub drift: Option<String>,
+}
+
+/// The contract one of FX's adapters serves (spec/providers.md §2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BuiltInAdapter {
+    pub capability: &'static str,
+    pub provider: &'static str,
+    /// The contract's `adapter`.
+    pub adapter: &'static str,
+    /// The contract's `adapter_behavior` as canonical JSON: `"1"` (the string) or `1` (the
+    /// number).
+    pub behavior: &'static str,
+    /// Whether it is its capability and provider's default, which serves a route whose contract
+    /// names no `adapter`: one per pair. Any other serves only a route that names it.
+    pub default: bool,
+}
+
+impl BuiltInAdapter {
+    /// The behaviour as a JSON value.
+    pub fn behavior_value(&self) -> Value {
+        serde_json::from_str(self.behavior).expect("a built-in behaviour is JSON")
+    }
+}
+
+const fn served(
+    capability: &'static str,
+    provider: &'static str,
+    adapter: &'static str,
+    behavior: &'static str,
+) -> BuiltInAdapter {
+    BuiltInAdapter {
+        capability,
+        provider,
+        adapter,
+        behavior,
+        default: true,
+    }
+}
+
+/// An adapter that serves only a route whose contract names it.
+const fn named(
+    capability: &'static str,
+    provider: &'static str,
+    adapter: &'static str,
+    behavior: &'static str,
+) -> BuiltInAdapter {
+    BuiltInAdapter {
+        default: false,
+        ..served(capability, provider, adapter, behavior)
+    }
+}
+
+/// The adapters FX ships, as spec/providers.md §2 lists them: each capability and provider's
+/// default, in its first table's order, then the adapters a route names, in its second's.
+pub const BUILT_IN_ADAPTERS: [BuiltInAdapter; 30] = [
+    served("image.generate", "openai", "fx-openai-image-v1", r#""1""#),
+    served("image.edit", "openai", "fx-openai-image-v1", r#""1""#),
+    served("image.generate", "openrouter", "openrouter-image", r#""1""#),
+    served("image.edit", "openrouter", "openrouter-image", r#""1""#),
+    served(
+        "structured.generate",
+        "openrouter",
+        "openrouter-structured",
+        "1",
+    ),
+    served("agent.turn", "openrouter", "openrouter-tool-loop", "1"),
+    served("music.generate", "openrouter", "openrouter-music", "1"),
+    served("image.generate", "fal", "fal-image", r#""1""#),
+    served("image.edit", "fal", "fal-image", r#""1""#),
+    served("video.generate", "fal", "fal-queue", "1"),
+    served("background.remove", "fal", "fal-run-birefnet", "1"),
+    served("mesh.generate", "tripo", "tripo-multiview", "1"),
+    served("mesh.rig", "tripo", "tripo-rig", "1"),
+    served(
+        "sound.generate",
+        "elevenlabs",
+        "elevenlabs-sound-effect",
+        "1",
+    ),
+    served("speech.generate", "elevenlabs", "elevenlabs-speech", "1"),
+    served("image.generate", "codex", "fx-codex-image-v1", r#""2""#),
+    served("image.edit", "codex", "fx-codex-image-v1", r#""2""#),
+    served("image.generate", "gg", "gg-image", r#""1""#),
+    served("image.edit", "gg", "gg-image", r#""1""#),
+    served("structured.generate", "gg", "gg-structured", "1"),
+    served("agent.turn", "gg", "gg-tool-loop", "1"),
+    served("video.generate", "gg", "gg-video", "1"),
+    served("mesh.generate", "gg", "gg-mesh", "1"),
+    served("mesh.rig", "gg", "gg-rig", "1"),
+    served("image.generate", "grok", "fx-grok-image-v1", r#""1""#),
+    served("image.edit", "grok", "fx-grok-image-v1", r#""1""#),
+    named(
+        "image.generate",
+        "openrouter",
+        "fx-openrouter-image-v1",
+        r#""3""#,
+    ),
+    named(
+        "image.edit",
+        "openrouter",
+        "fx-openrouter-image-v1",
+        r#""3""#,
+    ),
+    named("image.generate", "fal", "fx-fal-image-v1", r#""1""#),
+    named("image.edit", "fal", "fx-fal-image-v1", r#""1""#),
+];
+
+/// The contract one of a family's adapters serves (spec/providers.md §2): the default of its
+/// capability on every provider the planning project declares with that family.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FamilyAdapter {
+    /// The declaration's `family`.
+    pub family: &'static str,
+    pub capability: &'static str,
+    /// The contract's `adapter`.
+    pub adapter: &'static str,
+    /// The contract's `adapter_behavior` as canonical JSON.
+    pub behavior: &'static str,
+}
+
+/// The adapters of each family a declaration may name, as spec/providers.md §2's third table
+/// lists them.
+pub const FAMILY_ADAPTERS: [FamilyAdapter; 2] = [
+    FamilyAdapter {
+        family: "openai-compatible",
+        capability: "structured.generate",
+        adapter: "openai-compatible-structured",
+        behavior: "1",
+    },
+    FamilyAdapter {
+        family: "openai-compatible",
+        capability: "agent.turn",
+        adapter: "openai-compatible-tool-loop",
+        behavior: "1",
+    },
+];
+
+/// The adapter of `family` that serves `capability`, if any.
+pub fn family_adapter(family: &str, capability: &str) -> Option<&'static FamilyAdapter> {
+    FAMILY_ADAPTERS
+        .iter()
+        .find(|served| served.family == family && served.capability == capability)
+}
+
+/// The default FX ships for `capability` on `provider`, if any: the adapter of a route whose
+/// contract names none.
+pub fn built_in_adapter(capability: &str, provider: &str) -> Option<&'static BuiltInAdapter> {
+    BUILT_IN_ADAPTERS.iter().find(|served| {
+        served.default && served.capability == capability && served.provider == provider
+    })
+}
+
+/// The adapter FX ships for `capability` on `provider` under the contract `adapter` name `adapter`,
+/// default or not.
+pub fn built_in_adapter_named(
+    capability: &str,
+    provider: &str,
+    adapter: &str,
+) -> Option<&'static BuiltInAdapter> {
+    BUILT_IN_ADAPTERS.iter().find(|served| {
+        served.capability == capability && served.provider == provider && served.adapter == adapter
+    })
+}
+
+/// One adapter that serves a capability on a provider: its contract `adapter`, its behaviour,
+/// and whether it is the pair's default.
+struct Serving {
+    adapter: String,
+    behavior: Value,
+    default: bool,
+}
+
+/// The adapters that serve `capability` on `provider`: FX's own, else those of the family, or the
+/// loaded adapter, `declarations` give the provider.
+fn serving(capability: &str, provider: &str, declarations: &Declarations) -> Vec<Serving> {
+    let behavior = |text: &str| serde_json::from_str(text).expect("a behaviour is JSON");
+    let own: Vec<_> = BUILT_IN_ADAPTERS
+        .iter()
+        .filter(|served| served.capability == capability && served.provider == provider)
+        .map(|served| Serving {
+            adapter: served.adapter.into(),
+            behavior: behavior(served.behavior),
+            default: served.default,
+        })
+        .collect();
+    if !own.is_empty() {
+        return own;
+    }
+    let Some(declaration) = declarations.get(provider) else {
+        return Vec::new();
+    };
+    let family = declaration
+        .family
+        .as_deref()
+        .and_then(|family| family_adapter(family, capability))
+        .map(|served| Serving {
+            adapter: served.adapter.into(),
+            behavior: behavior(served.behavior),
+            default: true,
+        });
+    let adapter = declaration.adapter.as_ref().and_then(|adapter| {
+        let loaded = adapter.loaded.as_ref().filter(|l| l.serves(capability))?;
+        Some(Serving {
+            adapter: adapter.name(),
+            behavior: loaded.behavior(),
+            default: true,
+        })
+    });
+    family.into_iter().chain(adapter).collect()
+}
+
+/// Completes `contract` from the adapters that serve `capability` on `provider`, if any
+/// (identity.md §7 step 2): FX's own, else the family's or the loaded adapter `declarations` give
+/// `provider`. A left-out or `null` `adapter` becomes the default's name, then a left-out or
+/// `null` `adapter_behavior` the behaviour of the adapter `adapter` names.
+pub fn complete_contract(
+    capability: &str,
+    provider: &str,
+    declarations: &Declarations,
+    contract: &mut Map<String, Value>,
+) {
+    let adapters = serving(capability, provider, declarations);
+    let Some(default) = adapters.iter().find(|served| served.default) else {
+        return;
+    };
+    let left_out = |member: Option<&Value>| member.is_none_or(Value::is_null);
+    if left_out(contract.get("adapter")) {
+        contract.insert("adapter".into(), Value::from(default.adapter.as_str()));
+    }
+    let named = contract.get("adapter").and_then(Value::as_str);
+    let behavior = named
+        .and_then(|name| adapters.iter().find(|served| served.adapter == name))
+        .map(|served| served.behavior.clone());
+    if let Some(behavior) = behavior
+        && left_out(contract.get("adapter_behavior"))
+    {
+        contract.insert("adapter_behavior".into(), behavior);
+    }
+}
+
+/// The lock drift of the project adapter a completed `contract` names on `provider`, for a
+/// capability it serves ([`Route::drift`]).
+fn adapter_drift(
+    capability: &str,
+    provider: &str,
+    declarations: &Declarations,
+    contract: &Map<String, Value>,
+) -> Option<String> {
+    let adapter = declarations.get(provider)?.adapter.as_ref()?;
+    let loaded = adapter.loaded.as_ref().filter(|l| l.serves(capability))?;
+    let named = contract.get("adapter").and_then(Value::as_str)?;
+    (named == adapter.name()).then(|| loaded.drift.clone())?
 }
 
 impl Route {
@@ -181,13 +465,28 @@ impl RouteTable {
         RouteTable::default()
     }
 
-    /// Reads one `fx: routes/v1` table (already loaded from YAML). `file` labels errors; a
-    /// refusal is an [`crate::ErrorKind::Route`] error `"<file>: <where>: <message>"` (exit 2)
-    /// (module doc), except a document outside the schema, which [`crate::docs::validate`]
-    /// refuses.
+    /// Reads one `fx: routes/v1` table (already loaded from YAML) on its own, with FX's own
+    /// declarations: an entry's `extends` names an earlier entry of the same table. `file` labels
+    /// errors; a refusal is an [`crate::ErrorKind::Route`] error `"<file>: <where>: <message>"`
+    /// (exit 2) (module doc), except a document outside the schema, which
+    /// [`crate::docs::validate`] refuses.
     pub fn from_document(document: &Value, file: &str) -> Result<RouteTable> {
+        RouteTable::from_document_over(document, file, &[], &Declarations::built_in())
+    }
+
+    /// [`RouteTable::from_document`] for a table read after others, for a planning project whose
+    /// declarations are `declarations`: an entry's `extends` names an earlier entry of the same
+    /// table, else an entry of the first of `bases` that holds one (the catalog so far, then the
+    /// built-in table: identity.md §7), and a declared family completes its provider's contracts.
+    pub fn from_document_over(
+        document: &Value,
+        file: &str,
+        bases: &[&RouteTable],
+        declarations: &Declarations,
+    ) -> Result<RouteTable> {
         crate::docs::validate(crate::docs::Schema::Routes, document, file)?;
-        parse_table(document).map_err(|message| Error::route(format!("{file}: {message}")))
+        parse_table(document, bases, declarations)
+            .map_err(|message| Error::route(format!("{file}: {message}")))
     }
 
     /// Lays a later table over this one: its entries replace equal (capability, route) entries.
@@ -231,7 +530,10 @@ impl RouteTable {
 /// Builds the catalog for a plan (identity.md §7): `builtin` unless `extra` is non-empty, the
 /// project's `route_tables` (relative to its root, labelled by that path), then `extra`:
 /// `(absolute path, label as the user typed it)`. Each file is read with the strict YAML loader
-/// and validated against fx-routes-v1; a missing file is an Io error naming the label.
+/// and validated against fx-routes-v1; a missing file is an Io error naming the label. Each
+/// table's `extends` resolves against the catalog so far, then `builtin`, even when `extra`
+/// leaves it out of the catalog. The project's declarations complete the contracts of the
+/// providers it declares with a family.
 pub fn load_catalog(
     project: &Project,
     builtin: &RouteTable,
@@ -242,35 +544,60 @@ pub fn load_catalog(
     } else {
         RouteTable::new()
     };
-    for table in &project.document.route_tables {
-        catalog.overlay(read_table(&project.root.join(table), table)?);
-    }
-    for (path, label) in extra {
-        catalog.overlay(read_table(path, label)?);
+    let listed = project
+        .document
+        .route_tables
+        .iter()
+        .map(|table| (project.root.join(table), table.clone()));
+    let declarations = project.declarations();
+    for (path, label) in listed.chain(extra.iter().cloned()) {
+        let table = read_table(&path, &label, &[&catalog, builtin], &declarations)?;
+        catalog.overlay(table);
     }
     Ok(catalog)
 }
 
-/// Reads, checks and parses one route table file.
-fn read_table(path: &Path, label: &str) -> Result<RouteTable> {
+/// Reads, checks and parses one route table file over `bases`.
+fn read_table(
+    path: &Path,
+    label: &str,
+    bases: &[&RouteTable],
+    declarations: &Declarations,
+) -> Result<RouteTable> {
     let document = crate::docs::read_document(path, label, crate::docs::Schema::Routes)?;
-    parse_table(&document).map_err(|message| Error::route(format!("{label}: {message}")))
+    parse_table(&document, bases, declarations)
+        .map_err(|message| Error::route(format!("{label}: {message}")))
 }
 
-/// The parse step after schema validation: every route of the table, then the duplicate check.
-/// Each message starts with where it applies, as the instance path joined by `.`
-/// (`routes.0.price.low_usd: …`), as schema refusals do.
-fn parse_table(document: &Value) -> std::result::Result<RouteTable, String> {
+/// The parse step after schema validation: every route of the table in order, each `extends`
+/// resolved against the entries before it, then `bases`; then the duplicate check. Each message
+/// starts with where it applies, as the instance path joined by `.` (`routes.0.price.low_usd: …`),
+/// as schema refusals do. `declarations` give the families that complete a declared provider's
+/// contracts.
+fn parse_table(
+    document: &Value,
+    bases: &[&RouteTable],
+    declarations: &Declarations,
+) -> std::result::Result<RouteTable, String> {
     let entries = match document.get("routes") {
         Some(Value::Array(entries)) => entries.as_slice(),
         None => &[],
         Some(_) => return Err("routes: not a list".into()),
     };
-    let routes = entries
-        .iter()
-        .enumerate()
-        .map(|(i, entry)| parse_route(entry, &format!("routes.{i}")))
-        .collect::<std::result::Result<Vec<Route>, String>>()?;
+    let mut routes: Vec<Route> = Vec::with_capacity(entries.len());
+    for (i, entry) in entries.iter().enumerate() {
+        let base = |capability: &str, id: &str| {
+            let key = (capability.to_string(), id.to_string());
+            routes
+                .iter()
+                .rev()
+                .find(|route| route.capability == capability && route.id() == id)
+                .or_else(|| bases.iter().find_map(|table| table.entries.get(&key)))
+                .cloned()
+        };
+        let route = parse_route(entry, &format!("routes.{i}"), base, declarations)?;
+        routes.push(route);
+    }
     let mut table = RouteTable::new();
     for (i, route) in routes.into_iter().enumerate() {
         let key = (route.capability.clone(), route.id());
@@ -285,8 +612,14 @@ fn parse_table(document: &Value) -> std::result::Result<RouteTable, String> {
     Ok(table)
 }
 
-/// One route entry at `at` (`routes.0`).
-fn parse_route(entry: &Value, at: &str) -> std::result::Result<Route, String> {
+/// One route entry at `at` (`routes.0`); `base_of(capability, id)` is the route `extends` may
+/// name (module doc).
+fn parse_route(
+    entry: &Value,
+    at: &str,
+    base_of: impl Fn(&str, &str) -> Option<Route>,
+    declarations: &Declarations,
+) -> std::result::Result<Route, String> {
     let entry = entry
         .as_object()
         .ok_or_else(|| format!("{at}: not an object"))?;
@@ -297,14 +630,30 @@ fn parse_route(entry: &Value, at: &str) -> std::result::Result<Route, String> {
     let capability = text("capability")?;
     let (model, provider) =
         parse_route_id(&text("route")?).map_err(|message| format!("{at}.route: {message}"))?;
-    let price = parse_price(
-        entry
-            .get("price")
-            .ok_or_else(|| format!("{at}.price: missing"))?,
-        &format!("{at}.price"),
-    )?;
+    let base = match entry.get("extends") {
+        None => None,
+        Some(_) => {
+            let id = text("extends")?;
+            let (_, of) =
+                parse_route_id(&id).map_err(|message| format!("{at}.extends: {message}"))?;
+            if of != provider {
+                return Err(format!("{at}.extends: {id} is not a {provider} route"));
+            }
+            let base = base_of(&capability, &id)
+                .ok_or_else(|| format!("{at}.extends: no route {id} serves {capability}"))?;
+            Some(base)
+        }
+    };
+    let price = match (entry.get("price"), &base) {
+        (Some(price), _) => parse_price(price, &format!("{at}.price"))?,
+        (None, Some(base)) => base.price.clone(),
+        (None, None) => return Err(format!("{at}.price: missing")),
+    };
     let features = match entry.get("features") {
-        None => BTreeSet::new(),
+        None => base
+            .as_ref()
+            .map(|base| base.features.clone())
+            .unwrap_or_default(),
         Some(Value::Array(items)) => items
             .iter()
             .map(|item| {
@@ -315,8 +664,8 @@ fn parse_route(entry: &Value, at: &str) -> std::result::Result<Route, String> {
             .collect::<std::result::Result<_, _>>()?,
         Some(_) => return Err(format!("{at}.features: not a list of text")),
     };
-    let count = |key: &str| match entry.get(key) {
-        None => Ok(None),
+    let count = |key: &str, inherited: Option<u32>| match entry.get(key) {
+        None => Ok(inherited),
         Some(Value::Number(n)) => n
             .as_u64()
             .filter(|n| *n >= 1)
@@ -325,21 +674,42 @@ fn parse_route(entry: &Value, at: &str) -> std::result::Result<Route, String> {
             .ok_or_else(|| format!("{at}.{key}: not a whole number of at least 1")),
         Some(_) => Err(format!("{at}.{key}: not a whole number of at least 1")),
     };
-    let contract = match entry.get("contract") {
-        None => Value::Object(Map::new()),
-        Some(contract @ Value::Object(_)) => contract.clone(),
+    let inherited = |limit: fn(&Route) -> Option<u32>| base.as_ref().and_then(limit);
+    let max_input_pictures = count(
+        "max_input_pictures",
+        inherited(|base| base.max_input_pictures),
+    )?;
+    let concurrency = count("concurrency", inherited(|base| base.concurrency))?;
+    let requests_per_minute = count(
+        "requests_per_minute",
+        inherited(|base| base.requests_per_minute),
+    )?;
+    let mut contract = match entry.get("contract") {
+        None => Map::new(),
+        Some(Value::Object(contract)) => contract.clone(),
         Some(_) => return Err(format!("{at}.contract: not an object")),
     };
+    // The base's contract members the entry does not state: a merge one level deep.
+    if let Some(Value::Object(members)) = base.as_ref().map(|base| &base.contract) {
+        for (member, value) in members {
+            if !contract.contains_key(member) {
+                contract.insert(member.clone(), value.clone());
+            }
+        }
+    }
+    complete_contract(&capability, &provider, declarations, &mut contract);
+    let drift = adapter_drift(&capability, &provider, declarations, &contract);
     Ok(Route {
         capability,
         model,
         provider,
         price,
         features,
-        max_input_pictures: count("max_input_pictures")?,
-        concurrency: count("concurrency")?,
-        requests_per_minute: count("requests_per_minute")?,
-        contract,
+        max_input_pictures,
+        concurrency,
+        requests_per_minute,
+        contract: Value::Object(contract),
+        drift,
     })
 }
 
@@ -367,6 +737,7 @@ fn parse_price(price: &Value, at: &str) -> std::result::Result<RoutePrice, Strin
             .transpose()
     };
     let usd = read("usd")?;
+    let cap = read("cap_usd")?;
     let low = read("low_usd")?.or(usd).unwrap_or(Usd::ZERO);
     let high = read("high_usd")?.or(usd).unwrap_or(Usd::ZERO);
     let unit = match price.get("unit") {
@@ -403,6 +774,32 @@ fn parse_price(price: &Value, at: &str) -> std::result::Result<RoutePrice, Strin
         }
         Some(_) => return Err(format!("{at}.tiers: not an object")),
     }
+    if let Some(cap) = cap {
+        if price.len() > 1 {
+            return Err(format!("{at}: a cap (cap_usd) stands alone"));
+        }
+        if cap <= Usd::ZERO {
+            return Err(format!("{at}.cap_usd: a cap is more than 0"));
+        }
+        return Ok(RoutePrice {
+            low: Usd::ZERO,
+            high: cap,
+            unit: PriceUnit::Call,
+            max_units: None,
+            by: None,
+            tiers: IndexMap::new(),
+            capped: true,
+        });
+    }
+    // An empty price was $0 up to 0.6.1; a route with no known price is capped instead.
+    if !["usd", "low_usd", "high_usd"]
+        .iter()
+        .any(|member| price.contains_key(*member))
+    {
+        return Err(format!(
+            "{at}: a price states an amount (usd, low_usd, high_usd) or a cap (cap_usd)"
+        ));
+    }
     if low < Usd::ZERO || high < low {
         return Err(format!(
             "{at}: a price is a non-negative range, low to high"
@@ -432,6 +829,7 @@ fn parse_price(price: &Value, at: &str) -> std::result::Result<RoutePrice, Strin
         max_units: max_units.map(Units::from_f64),
         by,
         tiers,
+        capped: false,
     })
 }
 
@@ -441,7 +839,11 @@ mod tests {
     use serde_json::json;
 
     fn table(routes: Value) -> std::result::Result<RouteTable, String> {
-        parse_table(&json!({"fx": "routes/v1", "routes": routes}))
+        parse_table(
+            &json!({"fx": "routes/v1", "routes": routes}),
+            &[],
+            &Declarations::built_in(),
+        )
     }
 
     fn price(price: Value) -> std::result::Result<RoutePrice, String> {
@@ -498,14 +900,15 @@ mod tests {
         assert_eq!(b.contract, json!({}));
         assert_eq!(b.concurrency, None);
         assert!(b.features.is_empty());
-        assert_eq!(price(json!({})).unwrap().high, Usd::ZERO);
+        assert!(!a.price.capped && !b.price.capped);
+        assert_eq!(price(json!({"high_usd": 0.5})).unwrap().low, Usd::ZERO);
         assert_eq!(
             price(json!({"low_usd": 0.5})).unwrap_err(),
             "routes.0.price: a price is a non-negative range, low to high"
         );
         assert!(table(json!([])).unwrap().entries.is_empty());
         assert!(
-            parse_table(&json!({"fx": "routes/v1"}))
+            parse_table(&json!({"fx": "routes/v1"}), &[], &Declarations::built_in())
                 .unwrap()
                 .entries
                 .is_empty()
@@ -567,6 +970,56 @@ mod tests {
             "routes.0.price.tiers.x.high_usd: 1e-7 has more than 6 decimal places"
         );
         assert!(price(json!({"usd": 0.000001})).is_ok());
+        // A price that states no amount is no longer $0.
+        for empty in [json!({}), json!({"unit": "second", "max_units": 10})] {
+            assert_eq!(
+                price(empty).unwrap_err(),
+                "routes.0.price: a price states an amount (usd, low_usd, high_usd) or a cap \
+                 (cap_usd)"
+            );
+        }
+    }
+
+    #[test]
+    fn a_cap_prices_each_call_at_nothing_to_the_cap() {
+        let capped = priced(json!({"cap_usd": 1.5}));
+        assert_eq!(
+            capped.price,
+            RoutePrice {
+                low: Usd::ZERO,
+                high: Usd(1_500_000),
+                unit: PriceUnit::Call,
+                max_units: None,
+                by: None,
+                tiers: IndexMap::new(),
+                capped: true,
+            }
+        );
+        assert_eq!(
+            micros(capped.cost(&with(&[("duration", Val::Number(5.0))]))),
+            (0, 1_500_000)
+        );
+        assert!(price(json!({"cap_usd": 0.000001})).unwrap().capped);
+        for (beside, member) in [("usd", 0.1), ("low_usd", 0.1), ("high_usd", 2.0)] {
+            assert_eq!(
+                price(json!({"cap_usd": 1.5, beside: member})).unwrap_err(),
+                "routes.0.price: a cap (cap_usd) stands alone"
+            );
+        }
+        assert_eq!(
+            price(json!({"cap_usd": 1.5, "unit": "second", "max_units": 10})).unwrap_err(),
+            "routes.0.price: a cap (cap_usd) stands alone"
+        );
+        for nothing in [json!(0), json!(-1)] {
+            assert_eq!(
+                price(json!({"cap_usd": nothing})).unwrap_err(),
+                "routes.0.price.cap_usd: a cap is more than 0"
+            );
+        }
+        assert_eq!(
+            price(json!({"cap_usd": 0.0000001})).unwrap_err(),
+            "routes.0.price.cap_usd: 1e-7 has more than 6 decimal places"
+        );
     }
 
     #[test]
@@ -581,7 +1034,7 @@ mod tests {
             json!({"capability": "image.edit", "route": "img-a@acme", "price": {"usd": 0.04}});
         assert_eq!(table(json!([entry, other])).unwrap().entries.len(), 2);
         // Every entry is read before duplicates are looked for.
-        let bad = json!({"capability": "x", "route": "nope", "price": {}});
+        let bad = json!({"capability": "x", "route": "nope", "price": {"usd": 0.04}});
         assert_eq!(
             table(json!([entry, entry, bad])).unwrap_err(),
             "routes.2.route: a route is model@provider, not 'nope'"
@@ -591,12 +1044,13 @@ mod tests {
     #[test]
     fn shape_errors_name_the_entry() {
         assert_eq!(
-            table(json!([{"route": "m@p", "price": {}}])).unwrap_err(),
+            table(json!([{"route": "m@p", "price": {"usd": 0.04}}])).unwrap_err(),
             "routes.0.capability: missing, or not text"
         );
+        let paced = json!([{"capability": "c", "route": "m@p", "price": {"usd": 0.04},
+                            "concurrency": 0}]);
         assert_eq!(
-            table(json!([{"capability": "c", "route": "m@p", "price": {}, "concurrency": 0}]))
-                .unwrap_err(),
+            table(paced).unwrap_err(),
             "routes.0.concurrency: not a whole number of at least 1"
         );
         assert_eq!(
@@ -783,5 +1237,500 @@ mod tests {
         assert_eq!(route.fingerprint(), before);
         route.contract = json!({"a": 1});
         assert_ne!(route.fingerprint(), before);
+    }
+
+    #[test]
+    fn built_in_adapters_have_one_default_per_capability_and_provider() {
+        let defaults: Vec<(&str, &str)> = BUILT_IN_ADAPTERS
+            .iter()
+            .filter(|served| served.default)
+            .map(|served| (served.capability, served.provider))
+            .collect();
+        let pairs: BTreeSet<(&str, &str)> = BUILT_IN_ADAPTERS
+            .iter()
+            .map(|served| (served.capability, served.provider))
+            .collect();
+        assert_eq!(defaults.len(), pairs.len());
+        assert_eq!(defaults.iter().copied().collect::<BTreeSet<_>>(), pairs);
+        let named: BTreeSet<(&str, &str, &str)> = BUILT_IN_ADAPTERS
+            .iter()
+            .map(|served| (served.capability, served.provider, served.adapter))
+            .collect();
+        assert_eq!(named.len(), BUILT_IN_ADAPTERS.len());
+        for served in BUILT_IN_ADAPTERS {
+            let behavior = served.behavior_value();
+            assert_eq!(crate::value::canon(&behavior), served.behavior);
+            // Images carry their behaviour as text, every other capability as the number 1.
+            assert_eq!(
+                behavior.is_string(),
+                served.capability.starts_with("image."),
+                "{served:?}"
+            );
+        }
+        assert_eq!(
+            built_in_adapter("image.edit", "gg").map(|served| served.adapter),
+            Some("gg-image")
+        );
+        assert_eq!(
+            built_in_adapter("image.edit", "openrouter").map(|served| served.adapter),
+            Some("openrouter-image")
+        );
+        assert_eq!(
+            built_in_adapter_named("image.edit", "openrouter", "fx-openrouter-image-v1")
+                .map(|served| (served.behavior, served.default)),
+            Some((r#""3""#, false))
+        );
+        assert_eq!(
+            built_in_adapter_named("image.edit", "fal", "fx-openrouter-image-v1"),
+            None
+        );
+        assert_eq!(built_in_adapter("vision.review", "gg"), None);
+        assert_eq!(built_in_adapter("image.generate", "acme"), None);
+    }
+
+    fn contract_of(capability: &str, route: &str, contract: Value) -> Value {
+        let entry = json!({"capability": capability, "route": route, "price": {"usd": 0.01},
+                           "contract": contract});
+        table(json!([entry])).unwrap().entries[0].contract.clone()
+    }
+
+    #[test]
+    fn a_contract_is_completed_from_the_adapter_that_serves_its_pair() {
+        let image = |contract| contract_of("image.generate", "img-a@gg", contract);
+        let filled = json!({"adapter": "gg-image", "adapter_behavior": "1"});
+        assert_eq!(image(json!({})), filled);
+        assert_eq!(
+            image(json!({"adapter": null, "adapter_behavior": null})),
+            filled
+        );
+        assert_eq!(
+            image(json!({"quality": "max"})),
+            json!({"adapter": "gg-image", "adapter_behavior": "1", "quality": "max"})
+        );
+        // A stated behaviour is kept, and refused when a call is sent (spec/adapters.md §4).
+        assert_eq!(
+            image(json!({"adapter_behavior": 1})),
+            json!({"adapter": "gg-image", "adapter_behavior": 1})
+        );
+        // Another adapter gets no behaviour.
+        assert_eq!(
+            image(json!({"adapter": "acme-image"})),
+            json!({"adapter": "acme-image"})
+        );
+        // Every capability but the images takes the number 1.
+        assert_eq!(
+            contract_of(
+                "speech.generate",
+                "voice-a@elevenlabs",
+                json!({"adapter": "elevenlabs-speech"})
+            ),
+            json!({"adapter": "elevenlabs-speech", "adapter_behavior": 1})
+        );
+        // A pair with more than one adapter fills in its default, and the behaviour of the one
+        // the contract names.
+        let open = |contract| contract_of("image.edit", "acme/img-a@openrouter", contract);
+        assert_eq!(
+            open(json!({})),
+            json!({"adapter": "openrouter-image", "adapter_behavior": "1"})
+        );
+        assert_eq!(
+            open(json!({"adapter": "fx-openrouter-image-v1"})),
+            json!({"adapter": "fx-openrouter-image-v1", "adapter_behavior": "3"})
+        );
+        // GPT Image's behaviour alone names the default, which refuses it when a call is sent;
+        // up to 0.6.1 it was served by GPT Image's adapter.
+        assert_eq!(
+            open(json!({"adapter_behavior": "3"})),
+            json!({"adapter": "openrouter-image", "adapter_behavior": "3"})
+        );
+        assert_eq!(
+            contract_of(
+                "image.generate",
+                "acme/img-a@fal",
+                json!({"adapter": "fx-fal-image-v1", "adapter_behavior": null})
+            ),
+            json!({"adapter": "fx-fal-image-v1", "adapter_behavior": "1"})
+        );
+        assert_eq!(
+            open(json!({"adapter": "fal-image"})),
+            json!({"adapter": "fal-image"}),
+            "another pair's adapter gets no behaviour"
+        );
+        // A pair no adapter of FX serves keeps its contract, on any provider.
+        assert_eq!(
+            contract_of("vision.review", "review-a@gg", json!({})),
+            json!({})
+        );
+        assert_eq!(
+            contract_of("image.generate", "img-a@acme", json!({"adapter": null})),
+            json!({"adapter": null})
+        );
+        // A table without a contract is completed too.
+        let bare = table(json!([{"capability": "mesh.rig", "route": "rig-a@tripo",
+                                 "price": {"usd": 0.3}}]))
+        .unwrap();
+        assert_eq!(
+            bare.entries[0].contract,
+            json!({"adapter": "tripo-rig", "adapter_behavior": 1})
+        );
+    }
+
+    /// FX's declarations, then `acme` declared with `family` (or none) and `bare` without one.
+    fn declaring(family: Option<&str>) -> Declarations {
+        let declared = |name: &str, family: Option<&str>| crate::providers::Declaration {
+            name: name.into(),
+            label: name.into(),
+            credential: None,
+            base_url: crate::providers::BaseUrl {
+                variable: None,
+                default: format!("https://api.{name}.test/v1"),
+            },
+            download_hosts: Vec::new(),
+            family: family.map(String::from),
+            adapter: None,
+        };
+        Declarations::with(&[declared("acme", family), declared("bare", None)])
+    }
+
+    /// FX's declarations, then `acme` declared with `adapters/acme.py#acme`, loaded with
+    /// `version` and serving `image.generate` (a request) and `video.generate` (a job), or not
+    /// loaded; `drift` is its lock drift.
+    fn declaring_adapter(loaded: bool, version: Option<u64>, drift: Option<&str>) -> Declarations {
+        use crate::providers::{DeclaredAdapter, LoadedAdapter};
+        use grida_fx_protocol::CallKind;
+        let source = crate::registry::SourceDigests {
+            files: [("adapters/acme.py".to_string(), "a".repeat(64))].into(),
+            resources: Default::default(),
+        };
+        let loaded = loaded.then(|| LoadedAdapter {
+            version,
+            capabilities: [
+                ("image.generate".to_string(), CallKind::Request),
+                ("video.generate".to_string(), CallKind::Job),
+            ]
+            .into_iter()
+            .collect(),
+            source,
+            drift: drift.map(String::from),
+        });
+        let mut declarations = declaring(None).declared().to_vec();
+        declarations[0].adapter = Some(DeclaredAdapter {
+            path: "adapters/acme.py".into(),
+            attribute: "acme".into(),
+            loaded,
+        });
+        Declarations::with(&declarations)
+    }
+
+    #[test]
+    fn a_declared_adapter_completes_its_provider_s_contracts() {
+        let read = |declarations: &Declarations, capability: &str, route: &str, contract| {
+            let entry = json!({"capability": capability, "route": route,
+                               "price": {"cap_usd": 0.05}, "contract": contract});
+            let document = json!({"fx": "routes/v1", "routes": [entry]});
+            parse_table(&document, &[], declarations).unwrap().entries[0].clone()
+        };
+        let name = "adapters/acme.py#acme";
+        let versioned = declaring_adapter(true, Some(3), None);
+        let route = read(&versioned, "image.generate", "img-a@acme", json!({}));
+        assert_eq!(
+            route.contract,
+            json!({"adapter": name, "adapter_behavior": 3})
+        );
+        assert_eq!(route.drift, None);
+        let source = crate::registry::SourceDigests {
+            files: [("adapters/acme.py".to_string(), "a".repeat(64))].into(),
+            resources: Default::default(),
+        };
+        let unversioned = declaring_adapter(true, None, None);
+        assert_eq!(
+            read(
+                &unversioned,
+                "video.generate",
+                "vid-a@acme",
+                json!({"adapter": null})
+            )
+            .contract,
+            json!({"adapter": name, "adapter_behavior": format!("source:{}", source.digest())})
+        );
+        // A stated member is kept; another adapter gets no behaviour.
+        assert_eq!(
+            read(
+                &versioned,
+                "image.generate",
+                "img-a@acme",
+                json!({"adapter_behavior": "3"})
+            )
+            .contract,
+            json!({"adapter": name, "adapter_behavior": "3"})
+        );
+        assert_eq!(
+            read(
+                &versioned,
+                "image.generate",
+                "img-a@acme",
+                json!({"adapter": "acme-v2"})
+            )
+            .contract,
+            json!({"adapter": "acme-v2"})
+        );
+        // A capability it does not declare, an adapter not loaded, and another provider keep
+        // their contracts.
+        for (declarations, capability, route) in [
+            (&versioned, "structured.generate", "text-a@acme"),
+            (&versioned, "image.generate", "img-a@bare"),
+            (
+                &declaring_adapter(false, Some(3), None),
+                "image.generate",
+                "img-a@acme",
+            ),
+        ] {
+            let route = read(declarations, capability, route, json!({}));
+            assert_eq!(route.contract, json!({}), "{capability}");
+            assert_eq!(route.drift, None);
+        }
+        // Its drift goes with each route it serves, and with no other.
+        let drifted = declaring_adapter(true, Some(3), Some("drifted"));
+        let route = read(&drifted, "image.generate", "img-a@acme", json!({}));
+        assert_eq!(route.drift.as_deref(), Some("drifted"));
+        assert_eq!(
+            route.fingerprint(),
+            read(&versioned, "image.generate", "img-a@acme", json!({})).fingerprint(),
+            "drift is not part of the fingerprint"
+        );
+        let other = read(
+            &drifted,
+            "image.generate",
+            "img-a@acme",
+            json!({"adapter": "x"}),
+        );
+        assert_eq!(other.drift, None);
+    }
+
+    #[test]
+    fn a_declared_family_completes_its_provider_s_contracts() {
+        let read = |declarations: &Declarations, capability: &str, route: &str, contract| {
+            let entry = json!({"capability": capability, "route": route,
+                               "price": {"cap_usd": 0.05}, "contract": contract});
+            let document = json!({"fx": "routes/v1", "routes": [entry]});
+            parse_table(&document, &[], declarations).unwrap().entries[0]
+                .contract
+                .clone()
+        };
+        let family = declaring(Some("openai-compatible"));
+        assert_eq!(
+            read(&family, "structured.generate", "text-a@acme", json!({})),
+            json!({"adapter": "openai-compatible-structured", "adapter_behavior": 1})
+        );
+        assert_eq!(
+            read(
+                &family,
+                "agent.turn",
+                "text-a@acme",
+                json!({"adapter": null})
+            ),
+            json!({"adapter": "openai-compatible-tool-loop", "adapter_behavior": 1})
+        );
+        // A stated member is kept; another adapter gets no behaviour.
+        assert_eq!(
+            read(
+                &family,
+                "structured.generate",
+                "text-a@acme",
+                json!({"adapter_behavior": 2})
+            ),
+            json!({"adapter": "openai-compatible-structured", "adapter_behavior": 2})
+        );
+        assert_eq!(
+            read(
+                &family,
+                "structured.generate",
+                "text-a@acme",
+                json!({"adapter": "acme-chat"})
+            ),
+            json!({"adapter": "acme-chat"})
+        );
+        // A capability the family does not serve, a provider declared without a family, and one
+        // not declared keep their contracts, whatever their names.
+        for (declarations, capability, route) in [
+            (&family, "image.generate", "img-a@acme"),
+            (&family, "structured.generate", "text-a@bare"),
+            (&family, "structured.generate", "text-a@other"),
+            (&declaring(None), "structured.generate", "text-a@acme"),
+            (
+                &Declarations::built_in(),
+                "structured.generate",
+                "text-a@acme",
+            ),
+        ] {
+            assert_eq!(
+                read(declarations, capability, route, json!({})),
+                json!({}),
+                "{capability} {route}"
+            );
+        }
+        // FX's own providers are completed from FX's adapters, whatever is declared.
+        assert_eq!(
+            read(&family, "structured.generate", "text-a@gg", json!({})),
+            json!({"adapter": "gg-structured", "adapter_behavior": 1})
+        );
+        for served in FAMILY_ADAPTERS {
+            assert_eq!(served.behavior, "1", "{served:?}");
+            assert_eq!(
+                family_adapter(served.family, served.capability),
+                Some(&served)
+            );
+        }
+        assert_eq!(family_adapter("openai-compatible", "image.generate"), None);
+    }
+
+    #[test]
+    fn extends_copies_its_base_and_merges_its_contract() {
+        let builtin = table(json!([
+            {"capability": "image.generate", "route": "img-base@gg",
+             "price": {"low_usd": 0.1, "high_usd": 0.5, "by": "size",
+                       "tiers": {"1024x1024": {"low_usd": 0.2, "high_usd": 0.3}}},
+             "features": ["alpha", "text_to_image"], "max_input_pictures": 4, "concurrency": 1,
+             "requests_per_minute": 60,
+             "contract": {"adapter": "gg-image", "adapter_behavior": "1", "quality": "max",
+                          "nested": {"a": 1}}},
+        ]))
+        .unwrap();
+        let read = |routes: Value| {
+            parse_table(
+                &json!({"fx": "routes/v1", "routes": routes}),
+                &[&builtin],
+                &Declarations::built_in(),
+            )
+        };
+        let extended = read(json!([
+            {"capability": "image.generate", "route": "img-a@gg", "extends": "img-base@gg"},
+        ]))
+        .unwrap();
+        let base = &builtin.entries[0];
+        let route = &extended.entries[0];
+        assert_eq!(route.id(), "img-a@gg");
+        assert_eq!(route.price, base.price);
+        assert_eq!(route.features, base.features);
+        assert_eq!(
+            (
+                route.max_input_pictures,
+                route.concurrency,
+                route.requests_per_minute
+            ),
+            (Some(4), Some(1), Some(60))
+        );
+        assert_eq!(route.contract, base.contract);
+        // A stated member replaces the base's whole; the contract merges one level deep.
+        let restated = read(json!([
+            {"capability": "image.generate", "route": "img-a@gg", "extends": "img-base@gg",
+             "price": {"usd": 0.4}, "features": ["text_to_image"], "concurrency": 2,
+             "contract": {"quality": "high", "nested": {"b": 2}}},
+        ]))
+        .unwrap();
+        let route = &restated.entries[0];
+        assert_eq!(
+            (route.price.low, route.price.high),
+            (Usd(400_000), Usd(400_000))
+        );
+        assert!(route.price.tiers.is_empty());
+        assert_eq!(route.features, BTreeSet::from(["text_to_image".into()]));
+        assert_eq!(
+            (
+                route.max_input_pictures,
+                route.concurrency,
+                route.requests_per_minute
+            ),
+            (Some(4), Some(2), Some(60))
+        );
+        assert_eq!(
+            route.contract,
+            json!({"adapter": "gg-image", "adapter_behavior": "1", "quality": "high",
+                   "nested": {"b": 2}})
+        );
+        // An earlier entry of the same table wins over a base of the same route, and an entry
+        // may extend its own route.
+        let chained = read(json!([
+            {"capability": "image.generate", "route": "img-base@gg", "extends": "img-base@gg",
+             "contract": {"quality": "low"}},
+            {"capability": "image.generate", "route": "img-a@gg", "extends": "img-base@gg"},
+        ]))
+        .unwrap();
+        assert_eq!(chained.entries[0].price, base.price);
+        assert_eq!(chained.entries[1].contract["quality"], json!("low"));
+        // A restated cap replaces the base's whole price, tiers included, and a cap is inherited
+        // as any price is.
+        let capped = read(json!([
+            {"capability": "image.generate", "route": "img-a@gg", "extends": "img-base@gg",
+             "price": {"cap_usd": 2}},
+            {"capability": "image.generate", "route": "img-b@gg", "extends": "img-a@gg"},
+        ]))
+        .unwrap();
+        for route in capped.entries.values() {
+            assert!(route.price.capped, "{}", route.id());
+            assert_eq!(
+                (route.price.low, route.price.high),
+                (Usd::ZERO, Usd(2_000_000))
+            );
+            assert!(route.price.tiers.is_empty() && route.price.by.is_none());
+        }
+        // Without a base, an entry names its price.
+        assert_eq!(
+            table(json!([{"capability": "image.generate", "route": "img-a@gg"}])).unwrap_err(),
+            "routes.0.price: missing"
+        );
+        // `extends` is not part of the fingerprint: stating the same members is the same route.
+        let stated = read(json!([
+            {"capability": "image.generate", "route": "img-a@gg", "price": {"usd": 0.1},
+             "contract": {"quality": "max", "nested": {"a": 1}}},
+        ]))
+        .unwrap();
+        assert_eq!(
+            stated.entries[0].fingerprint(),
+            extended.entries[0].fingerprint()
+        );
+    }
+
+    #[test]
+    fn extends_refusals() {
+        let builtin = table(json!([
+            {"capability": "image.generate", "route": "img-base@gg", "price": {"usd": 0.1}},
+        ]))
+        .unwrap();
+        let read = |extends: &str, capability: &str| {
+            let routes = json!([{"capability": capability, "route": "img-a@gg",
+                                 "extends": extends}]);
+            parse_table(
+                &json!({"fx": "routes/v1", "routes": routes}),
+                &[&builtin],
+                &Declarations::built_in(),
+            )
+            .unwrap_err()
+        };
+        assert_eq!(
+            read("img-z@gg", "image.generate"),
+            "routes.0.extends: no route img-z@gg serves image.generate"
+        );
+        assert_eq!(
+            read("img-base@gg", "image.edit"),
+            "routes.0.extends: no route img-base@gg serves image.edit"
+        );
+        assert_eq!(
+            read("img-base@acme", "image.generate"),
+            "routes.0.extends: img-base@acme is not a gg route"
+        );
+        assert_eq!(
+            read("img-base", "image.generate"),
+            "routes.0.extends: a route is model@provider, not 'img-base'"
+        );
+        // A later entry of the same table is no base yet.
+        let routes = json!([
+            {"capability": "image.generate", "route": "img-a@acme", "extends": "img-b@acme"},
+            {"capability": "image.generate", "route": "img-b@acme", "price": {"usd": 0.1}},
+        ]);
+        assert_eq!(
+            table(routes).unwrap_err(),
+            "routes.0.extends: no route img-b@acme serves image.generate"
+        );
     }
 }

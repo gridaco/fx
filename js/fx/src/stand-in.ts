@@ -20,9 +20,9 @@
  * - **The answer.** An {@link Answer} goes out as `{files: {name: {base64, kind?}}, data}`: a
  *   `Uint8Array` leaves `kind` out (the engine gives the file the kind its capability names), an
  *   `InputFile` gives its own kind, `{bytes, kind}` its `kind`, and a `file:` URL its bytes with the
- *   kind of its suffix (`spec/identity.md` §4). {@link DECLINE} goes out as `{"decline": true}`. A
- *   thrown `CallRefused` is answered `capability_refused`, and a `CallFailed` `call_failed`, each
- *   with its message.
+ *   kind of its suffix (`spec/identity.md` §4); a file whose value is `undefined` is left out.
+ *   {@link DECLINE} goes out as `{"decline": true}`. A thrown `CallRefused` is answered
+ *   `capability_refused`, and a `CallFailed` `call_failed`, each with its message.
  * - **Faults.** Anything else the function throws, a return value that is neither an answer nor
  *   `DECLINE` (`undefined` too), and an answer the SDK cannot send (a file that is not bytes, a file
  *   name that is not `[a-z][a-z0-9_]*`, `data` the engine cannot read) are faults of the stand-in:
@@ -41,7 +41,7 @@ import { createRequire } from "node:module";
 import type { Socket } from "node:net";
 import { fileURLToPath } from "node:url";
 import { CallFailed, CallRefused, isEngineError } from "./engine-errors.js";
-import { DIGEST, type FileRefWire, fileRefOf, InputFile } from "./files.js";
+import { adapterFileOf, DIGEST, type FileRefWire, fileRefOf, InputFile } from "./files.js";
 import { kindOf } from "./kinds.js";
 import {
   CANCELLED,
@@ -171,31 +171,41 @@ function callOf(params: unknown, signal: AbortSignal): StandInCall {
       step: instance.step as string,
     }),
     files: byDigest,
-    request: withInputFiles(request, byDigest) as StandInCall["request"],
+    request: withFiles(request, byDigest, refusedFile) as StandInCall["request"],
     params: Object.freeze({ ...params }) as StandInCall["params"],
     signal,
   });
 }
 
+/** Params that hold a file value their `files` do not hold. */
+function refusedFile(digest: string): Error {
+  return new NotACall(`the request holds the file ${digest}, which files does not hold`);
+}
+
 /** A copy of a JSON value with every file value (an object whose only member is `file`, holding a
- * digest) as the `InputFile` of its digest. */
-function withInputFiles(value: unknown, files: ReadonlyMap<string, InputFile>): unknown {
+ * digest) as the file of its digest in `files`; `missing` makes the error for a digest `files`
+ * does not hold. A stand-in's call gets `InputFile` objects, and an adapter's `AdapterFile`
+ * objects. */
+export function withFiles(
+  value: unknown,
+  files: ReadonlyMap<string, unknown>,
+  missing: (digest: string) => Error,
+): unknown {
   if (Array.isArray(value)) {
-    return value.map((item) => withInputFiles(item, files));
+    return value.map((item) => withFiles(item, files, missing));
   }
   if (isPlainObject(value)) {
     const keys = Object.keys(value);
     const digest = value.file;
     if (keys.length === 1 && typeof digest === "string" && DIGEST.test(digest)) {
-      const file = files.get(digest);
-      if (file === undefined) {
-        throw new NotACall(`the request holds the file ${digest}, which files does not hold`);
+      if (!files.has(digest)) {
+        throw missing(digest);
       }
-      return file;
+      return files.get(digest);
     }
     const copy: Record<string, unknown> = {};
     for (const key of keys) {
-      setOwn(copy, key, withInputFiles(value[key], files));
+      setOwn(copy, key, withFiles(value[key], files, missing));
     }
     return copy;
   }
@@ -285,22 +295,62 @@ export async function encode(returned: unknown): Promise<Record<string, unknown>
       throw new TypeError(`an answer holds files and data, not ${pyRepr(key)}`);
     }
   }
-  const given = returned.files ?? {};
-  if (!isPlainObject(given)) {
+  const files = await encodeFiles(returned.files, STAND_IN_FILES);
+  return { files, data: encodeData(returned.data) };
+}
+
+/** What an answer's file may be beside bytes, `{bytes, kind}` and a file: URL: a stand-in's
+ * takes an `InputFile` of its call, and an adapter's an `AdapterFile` of its call. `refusal`
+ * names them all. */
+export interface AnswerFiles {
+  readonly fileOf: (value: unknown) => { readonly path: string; readonly kind: string } | undefined;
+  readonly refusal: string;
+}
+
+export const STAND_IN_FILES: AnswerFiles = {
+  fileOf: (value) => {
+    const ref = fileRefOf(value);
+    return ref === undefined ? undefined : { path: ref.path, kind: String(ref.kind) };
+  },
+  refusal: "bytes, an InputFile, {bytes, kind} or a file: URL",
+};
+
+export const ADAPTER_FILES: AnswerFiles = {
+  fileOf: adapterFileOf,
+  refusal: "bytes, an AdapterFile, {bytes, kind} or a file: URL",
+};
+
+/** An answer's `files` as `{name: {base64, kind?}}` (none when left out, and a file whose value is
+ * `undefined` left out); a `TypeError` for files the SDK cannot send, which names what a file may
+ * be (`accepted`). */
+export async function encodeFiles(
+  given: unknown,
+  accepted: AnswerFiles,
+): Promise<Record<string, unknown>> {
+  const named = given ?? {};
+  if (!isPlainObject(named)) {
     throw new TypeError(
-      `an answer's files are an object of names to files, not ${typeName(given)}`,
+      `an answer's files are an object of names to files, not ${typeName(named)}`,
     );
   }
   const files: Record<string, unknown> = {};
-  for (const [name, value] of Object.entries(given)) {
+  for (const [name, value] of Object.entries(named)) {
+    if (value === undefined) {
+      continue;
+    }
     if (!FILE_NAME.test(name)) {
       throw new TypeError(
         `an answer's files are named in lowercase ([a-z][a-z0-9_]*), not ${pyRepr(name)}`,
       );
     }
-    files[name] = await encodeFile(name, value);
+    files[name] = await encodeFile(name, value, accepted);
   }
-  const data = returned.data ?? null;
+  return files;
+}
+
+/** An answer's `data` (`null` when left out); a `TypeError` for a value the engine cannot read. */
+export function encodeData(given: unknown): unknown {
+  const data = given ?? null;
   try {
     // The data sits in the result of a response: two levels inside its message.
     checkValue(data, "/data", 2);
@@ -308,16 +358,20 @@ export async function encode(returned: unknown): Promise<Record<string, unknown>
     const why = (error as Error).message;
     throw new TypeError(`an answer's data is not a JSON value FX can read: ${why}`);
   }
-  return { files, data };
+  return data;
 }
 
-async function encodeFile(name: string, value: unknown): Promise<Record<string, unknown>> {
+async function encodeFile(
+  name: string,
+  value: unknown,
+  accepted: AnswerFiles,
+): Promise<Record<string, unknown>> {
   if (value instanceof Uint8Array) {
     return { base64: base64(value) };
   }
-  const ref = fileRefOf(value);
-  if (ref !== undefined) {
-    return { base64: base64(await readFile(ref.path)), kind: String(ref.kind) };
+  const file = accepted.fileOf(value);
+  if (file !== undefined) {
+    return { base64: base64(await readFile(file.path)), kind: file.kind };
   }
   if (value instanceof URL) {
     if (value.protocol !== "file:") {
@@ -338,18 +392,15 @@ async function encodeFile(name: string, value: unknown): Promise<Record<string, 
     }
     return { base64: base64(value.bytes), kind };
   }
-  throw new TypeError(`${refusedFile(name)} ${typeName(value)}`);
+  throw new TypeError(`an answer's file is ${accepted.refusal}; ${name} is ${typeName(value)}`);
 }
 
 /** Schemes said with "an" before them: those that start with a vowel, and those said letter by
  * letter whose first letter is (an https: URL, an s3: URL). */
 const SAID_AN = /^(?:[aeiou]|(?:https?|ftps?|sftp|ssh|smb|nfs|s3):)/i;
 
-function refusedFile(name: string): string {
-  return `an answer's file is bytes, an InputFile, {bytes, kind} or a file: URL; ${name} is`;
-}
-
-function base64(data: Uint8Array): string {
+/** Bytes as base64 with padding. */
+export function base64(data: Uint8Array): string {
   return Buffer.from(data.buffer, data.byteOffset, data.byteLength).toString("base64");
 }
 

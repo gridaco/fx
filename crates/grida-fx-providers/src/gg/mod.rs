@@ -1,6 +1,6 @@
 //! Grida Gateway (GG): Grida's own provider. One organization key serves text, images, video and
 //! 3D through one OpenAI-compatible API, billed to the organization's Grida AI credits
-//! (spec/providers.md §9.7).
+//! (src/gg/README.md).
 //!
 //! Credential `authorization: Bearer <GG_API_KEY>`; base `GG_BASE_URL`, default
 //! `https://gateway.grida.ai/v1`. The adapters: [`image`] (`image.generate`, `image.edit`),
@@ -54,7 +54,7 @@ use std::time::Duration;
 /// The provider name routes use (`model@gg`).
 pub const PROVIDER: &str = "gg";
 
-/// The variable a redirect points at (spec/providers.md §3, §4.3).
+/// The variable a redirect points at (spec/providers.md §1; spec/adapters.md §3.3).
 pub const BASE_URL_VARIABLE: &str = "GG_BASE_URL";
 
 /// Where an organization manages its credits, keys and usage.
@@ -124,7 +124,7 @@ impl Gateway {
     /// The `authorization: Bearer <GG_API_KEY>` credential, or `GG_API_KEY
     /// is not set`.
     pub fn credential(&self) -> Result<Credential, String> {
-        self.client.credential("authorization", "Bearer ")
+        self.client.credential()
     }
 
     /// The `Idempotency-Key` of `call`'s attempt (module doc): printable ASCII, no spaces, at most
@@ -369,7 +369,7 @@ pub fn billing_id(response: &HttpResponse) -> Option<String> {
 }
 
 /// GG's error asks for a new key: `request_not_admitted` and `retry_with_new_idempotency_key` are
-/// both `true` (spec/providers.md §9.7).
+/// both `true` (src/gg/README.md).
 pub fn asks_for_a_new_key(body: &[u8]) -> bool {
     wire::error_envelope(body).is_some_and(|error| {
         ["request_not_admitted", "retry_with_new_idempotency_key"]
@@ -392,7 +392,7 @@ pub fn request_id(response: &HttpResponse) -> Option<String> {
 
 /// The client of GG's API.
 pub fn client(setup: &Setup) -> Client {
-    setup.client(KeyName::GridaGateway, &setup.endpoints.gg)
+    setup.client(KeyName::GridaGateway)
 }
 
 /// GG's error `code` (`invalid_request`, `insufficient_credit`, …) when the body is its error
@@ -407,8 +407,8 @@ pub fn error_code(body: &[u8]) -> Option<String> {
         .map(str::to_string)
 }
 
-/// A refusal whose sentence names the error code, the request id and what to do (spec/providers.md
-/// §8): `<label> returned HTTP <n>: <detail> (request <id>)`, then `; <hint>`.
+/// A refusal whose sentence names the error code, the request id and what to do (spec/adapters.md
+/// §7): `<label> returned HTTP <n>: <detail> (request <id>)`, then `; <hint>`.
 fn status_text(label: &str, response: &HttpResponse, client: &Client) -> String {
     let detail = wire::safe_error_detail(&response.body, &client.redactor);
     let mut text = wire::status_reason(label, response.status, detail.as_deref());
@@ -437,12 +437,12 @@ fn status_text(label: &str, response: &HttpResponse, client: &Client) -> String 
     text
 }
 
-/// How a synchronous exchange that is not a 2xx becomes a [`Sent`] (spec/providers.md §9.7,
+/// How a synchronous exchange that is not a 2xx becomes a [`Sent`] (src/gg/README.md,
 /// "Statuses"); a 2xx comes back as `Ok` for the adapter to parse. `label` names the call
 /// (`GG image generation`, …).
 ///
 /// - A transport failure: `Refused` when the transport refused the request itself, `NotReceived`
-///   when it provably never left, else `Failed { None, retryable }` (spec/providers.md §4.2).
+///   when it provably never left, else `Failed { None, retryable }` (spec/adapters.md §3.2).
 /// - 3xx: `Failed { None, false }`, naming [`BASE_URL_VARIABLE`].
 /// - 408 and 429 (but `key_budget_exceeded`): `NotReceived`, with the wait the response asks
 ///   for. GG admitted nothing. A 429 that asks for a new key has renewed it first
@@ -501,7 +501,7 @@ pub fn classify(
     })
 }
 
-/// A failed exchange of a synchronous request (spec/providers.md §4.2).
+/// A failed exchange of a synchronous request (spec/adapters.md §3.2).
 fn transport_failure(client: &Client, label: &str, error: &TransportError) -> Sent {
     match (error.kind, error.phase) {
         (TransportErrorKind::Refused, Phase::NotSent) => Sent::Refused {
@@ -519,7 +519,7 @@ fn transport_failure(client: &Client, label: &str, error: &TransportError) -> Se
 }
 
 /// GG's money: an exact decimal number of mills (`^(0|[1-9][0-9]{0,19})(\.[0-9]{1,18})?$`), as
-/// micro-dollars rounded up (1 mill is 1 000 micro-dollars, spec/providers.md §6). `None` for
+/// micro-dollars rounded up (1 mill is 1 000 micro-dollars, spec/adapters.md §5). `None` for
 /// anything else.
 pub fn mills(text: &str) -> Option<Usd> {
     static DECIMAL: LazyLock<Regex> = LazyLock::new(|| {
@@ -540,7 +540,7 @@ pub(crate) fn with_request_id(reason: String, response: &HttpResponse) -> String
 }
 
 /// `<route> is not a <capability> route this adapter serves`, then `: <why>` when there is one
-/// (spec/providers.md §5 step 1).
+/// (spec/adapters.md §4 step 1).
 pub(crate) fn not_served(call: &CallRequest, why: Option<&str>) -> String {
     let mut reason = format!(
         "{} is not a {} route this adapter serves",
@@ -554,9 +554,11 @@ pub(crate) fn not_served(call: &CallRequest, why: Option<&str>) -> String {
     reason
 }
 
-/// Reads a GG route contract (spec/providers.md §5 step 1): `null` or an object whose `adapter`,
-/// when present, is `adapter`, whose `adapter_behavior`, when present, is one `behavior` accepts,
-/// and whose other members are among `members`. `null` members count as absent. The contract's
+/// Reads a GG route contract (spec/adapters.md §4 step 1): `null` or an object whose `adapter`,
+/// when present, is `adapter`, whose `adapter_behavior`, when present, is one `behavior` accepts
+/// ([`crate::checks::serves`], the engine's check, made again here for a direct caller), and whose
+/// other members are among `members` or `provider_options`, which the adapter reads when it builds
+/// its body ([`crate::wire::provider_options`]). `null` members count as absent. The contract's
 /// members are handed back.
 pub(crate) fn read_contract(
     call: &CallRequest,
@@ -565,26 +567,19 @@ pub(crate) fn read_contract(
     behavior: impl Fn(&Value) -> bool,
     members: &[&str],
 ) -> Result<serde_json::Map<String, Value>, String> {
-    if !capabilities.contains(&call.route.capability.as_str()) {
+    if !capabilities.contains(&call.route.capability.as_str())
+        || !crate::checks::serves(&call.route.contract, adapter, behavior)
+    {
         return Err(not_served(call, None));
     }
-    let contract = match &call.route.contract {
-        Value::Null => return Ok(serde_json::Map::new()),
-        Value::Object(contract) => contract,
-        _ => return Err(not_served(call, None)),
+    let Some(contract) = call.route.contract.as_object() else {
+        return Ok(serde_json::Map::new());
     };
-    match contract.get("adapter") {
-        None | Some(Value::Null) => {}
-        Some(Value::String(name)) if name == adapter => {}
-        Some(_) => return Err(not_served(call, None)),
-    }
-    match contract.get("adapter_behavior") {
-        None | Some(Value::Null) => {}
-        Some(value) if behavior(value) => {}
-        Some(_) => return Err(not_served(call, None)),
-    }
     if let Some(member) = contract.keys().find(|key| {
-        !matches!(key.as_str(), "adapter" | "adapter_behavior") && !members.contains(&key.as_str())
+        !matches!(
+            key.as_str(),
+            "adapter" | "adapter_behavior" | "provider_options"
+        ) && !members.contains(&key.as_str())
     }) {
         return Err(not_served(
             call,
@@ -674,6 +669,7 @@ mod tests {
                 model: "acme/img-a".into(),
                 provider: PROVIDER.into(),
                 contract: json!({}),
+                limits: Default::default(),
             },
             request: json!({}),
             files: indexmap::IndexMap::new(),
@@ -1012,6 +1008,7 @@ mod tests {
             read(json!({"adapter": "gg-x", "adapter_behavior": 1, "quality": "max"})).unwrap();
         assert_eq!(full.get("quality"), Some(&json!("max")));
         assert!(read(json!({"adapter": null, "adapter_behavior": null, "quality": null})).is_ok());
+        assert!(read(json!({"provider_options": {"gg": {"seed": 1}}})).is_ok());
         let foreign = "acme/img-a@gg is not a image.generate route this adapter serves";
         for contract in [
             json!({"adapter": "gg-y"}),

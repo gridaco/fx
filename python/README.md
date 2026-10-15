@@ -3,9 +3,9 @@
 The Python SDK for [Grida FX](https://github.com/gridaco/fx). Import it as `grida.fx`.
 
 It does three things: it authors node types and workflows (`node`, `Workflow`), it hosts Python
-node bodies, builders and stand-ins when the engine runs them (`python -m grida.fx.host`, started
-by the engine; TypeScript ones run in `@grida/fx`'s host on Node), and it drives the `grida-fx`
-engine from Python. The engine is the only place with engine logic: planning,
+node bodies, builders, stand-ins and project adapters when the engine runs them (`python -m
+grida.fx.host`, started by the engine; TypeScript ones run in `@grida/fx`'s host on Node), and it
+drives the `grida-fx` engine from Python. The engine is the only place with engine logic: planning,
 identities, the cache and budgets all happen in `grida-fx`, never in this package.
 
 ## Install
@@ -34,8 +34,8 @@ python -m grida.fx run workflows/gallery.yaml --poster inputs/poster.png --live 
 
 `python -m grida.fx <verb> …` takes the same arguments as `grida-fx` and exits with its status
 (on POSIX it becomes the `grida-fx` process), so a Python installation needs no Node unless the
-project has TypeScript nodes, builders or stand-ins: those need Node 24 or later (`GRIDA_FX_NODE`
-or `node` on `PATH`) and the project's own `@grida/fx`
+project has TypeScript nodes, builders, stand-ins or adapters: those need Node 24 or later
+(`GRIDA_FX_NODE` or `node` on `PATH`) and the project's own `@grida/fx`
 ([Getting started](https://github.com/gridaco/fx/blob/main/docs/guide/01-getting-started.md#when-fx-needs-node)).
 The binary is the first of:
 
@@ -199,6 +199,141 @@ assert result.failures["touch_up#1"].code == "capability_refused"
   one, replays its answers; delete that folder to forget them. A folder resumes only in the mode
   it was started in, and `reroll` and `pick` refuse it.
 - From the command line: `grida-fx run … --stand-in tests/stand_in.py#answer`.
+
+## Project adapters: a provider of your own
+
+A project serves a provider FX does not ship with its own adapter, which the engine runs in a
+Python node host of the project
+([adapters.md §9](https://github.com/gridaco/fx/blob/main/spec/adapters.md#9-project-adapters);
+the whole job, from the declaration to checking it offline, is the guide's
+[Community providers](https://github.com/gridaco/fx/blob/main/docs/guide/15-community-providers.md)).
+`fx.yaml` declares the provider and names the adapter, `<path>#<name>`:
+
+```yaml
+providers:
+  acme:
+    credential: { variable: ACME_API_KEY }
+    base_url: { default: "https://api.acme.test/v1" }
+    download_hosts: [files.acme.test]
+    adapter: adapters/acme.py#acme
+```
+
+```python
+# adapters/acme.py
+import asyncio
+
+from grida.fx import (
+    Accepted,
+    Answered,
+    Ended,
+    Failed,
+    FetchError,
+    NotReceived,
+    Refused,
+    Uncertain,
+    Unreachable,
+    adapter,
+)
+
+
+async def send(call):  # one structured.generate request, sent once
+    try:
+        response = await call.fetch(
+            f"{call.base_url}/chat",
+            method="POST",
+            json={"model": call.route.model, "prompt": call.request["prompt"]},
+            credential=True,
+            timeout_s=60,
+        )
+    except FetchError as error:  # refused, not_sent or after_send (adapters.md §3.2)
+        if error.phase == "refused":
+            return Refused(error.reason)
+        if error.phase == "not_sent":
+            return NotReceived(error.reason)
+        return Failed(error.reason, retryable=True)
+    if response.status != 200:
+        return Failed(f"acme returned HTTP {response.status}", retryable=response.status >= 500)
+    body = response.json()
+    return Answered.json(body["answer"], cost_usd=body.get("cost_usd"))
+
+
+async def submit(call):  # a video.generate job, submitted once
+    try:
+        response = await call.fetch(
+            f"{call.base_url}/videos",
+            method="POST",
+            json={"prompt": call.request["prompt"]},
+            credential=True,
+            timeout_s=60,
+        )
+    except FetchError as error:
+        if error.phase == "refused":
+            return Refused(error.reason)
+        if error.phase == "not_sent":
+            return NotReceived(error.reason)
+        return Uncertain(error.reason)  # acme may have taken the job
+    if response.status != 202:
+        return Uncertain(f"acme returned HTTP {response.status}")
+    return Accepted({"id": response.json()["id"]})
+
+
+async def collect(call):  # polls with its own clock, until its own deadline
+    for _ in range(120):
+        try:
+            response = await call.fetch(
+                f"{call.base_url}/videos/{call.handle['id']}", credential=True, timeout_s=30
+            )
+        except FetchError as error:
+            return Unreachable(error.reason)
+        job = response.json()
+        if job["status"] == "failed":
+            return Ended("acme could not make the video", cost_usd=job.get("cost_usd"))
+        if job["status"] == "done":
+            clip = await call.fetch(job["url"], lane="download", timeout_s=120)
+            return Answered(files={"video": clip.body}, cost_usd=job.get("cost_usd"))
+        await asyncio.sleep(5)
+    return Unreachable("acme's video is still being made")
+
+
+acme = adapter(
+    requests=["structured.generate"],
+    jobs=["video.generate"],
+    send=send,
+    submit=submit,
+    collect=collect,
+    version=1,
+)
+```
+
+- **The declaration.** `adapter(requests=…, jobs=…, send=…, submit=…, collect=…, version=…)`
+  at a module's top level. `send` serves each capability of `requests`; `submit` and `collect`
+  each of `jobs`. `version` is an integer of at least 0, which `grida-fx lock` locks as a node
+  type's; without one, every edit to the module or a project module it imports changes the
+  identity of its routes. Planning loads the module, so its top-level code runs then too.
+- **The call.** `send`, `submit` and `collect` each take an `AdapterCall`: `capability`,
+  `route.id`, `.model`, `.provider` and `.contract`, `base_url`, `key`, `attempt`, `takes` and
+  `take`, `handle` (in `collect`), `request` (every file in it an `AdapterFile`: `digest`,
+  `kind`, `size`, `path`, `read_bytes()`) and `files` (the same files by digest). A plain
+  function or an `async def`; calls are answered at once, in any order.
+- **The outcome.** `send` returns `Answered`, `NotReceived` (provably not received: sent again),
+  `Refused` (nothing was sent) or `Failed` (`retryable` says whether to try again); `submit`
+  returns `Accepted(handle)`, `Uncertain`, or one of the last three; `collect` returns
+  `Answered`, `Ended` or `Unreachable`. `cost_usd` is the provider's own figure: left out, the
+  engine charges the whole hold or the route's cap. An answer's files are as a stand-in's
+  (`Answered.json(value)` for `structured.generate`), and the engine checks them as it checks a
+  provider's. Anything raised, or another value, ends the call as if the host were lost.
+- **The network.** `await call.fetch(url, method=, headers=, json=, body=, content_type=, lane=,
+  credential=, timeout_s=, max_response_bytes=)` makes one exchange through the engine: never
+  retried, no redirect followed, at most 300 seconds and 64 MiB. With `credential=True` the
+  engine attaches the declaration's key, only to the base URL's origin, so the code never handles
+  it; downloads (`lane="download"`) are held to `download_hosts`. It returns a `FetchResponse`
+  (`status`, `headers`, `body`, `.json()`, `.text()`) or raises `FetchError` (`phase`,
+  `reason`). An adapter may use its own HTTP client instead, keeping the same rules itself, and
+  sending nothing while `GRIDA_FX_NETWORK` is `off`, which the engine cannot stop for it; its
+  host's environment has its own declaration's key and no other's.
+- **Testing.** `grida-fx run … --live --max-usd 1` with `GRIDA_FX_NETWORK=off` runs the adapter
+  with every `fetch` refused before it leaves; `AdapterCall(params, fetch=…)` builds a call for a
+  unit test, with a coroutine function standing in for the engine.
 
 ## Standard bodies
 

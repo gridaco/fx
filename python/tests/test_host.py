@@ -1862,3 +1862,384 @@ def test_a_stand_in_host_cancels_calls(
     first, second = sync.receive(), sync.receive()
     assert first == {"jsonrpc": "2.0", "id": 31, "error": cancelled}
     assert second["id"] == 30 and "result" in second
+
+
+# --- adapters (section 5.8) --------------------------------------------------------------------
+
+ADAPTER = """\
+import asyncio
+import time
+
+from adapters.helpers import PALETTE
+
+from grida.fx import (
+    Accepted,
+    Answered,
+    Ended,
+    Failed,
+    FetchError,
+    NotReceived,
+    Refused,
+    Uncertain,
+    adapter,
+)
+
+print("an adapter module prints too")
+
+
+async def send(call):
+    prompt = call.request["prompt"]
+    if prompt == "fetch":
+        try:
+            response = await call.fetch(
+                call.base_url + "/draw", method="POST", json={"prompt": prompt}, credential=True
+            )
+        except FetchError as error:
+            if error.phase == "refused":
+                return Refused(error.reason)
+            return Failed(error.reason, retryable=True)
+        return Answered.json({"status": response.status, "body": response.json()}, cost_usd=0.01)
+    if prompt == "wait":
+        await asyncio.sleep(30)
+    if prompt == "refuse":
+        return Refused("no kites today")
+    if prompt == "busy":
+        return NotReceived("acme is busy", retry_after_s=1)
+    if prompt == "boom":
+        raise RuntimeError("acme broke")
+    picture = b"".join(file.read_bytes() for file in call.request.get("references", []))
+    return Answered(files={"image": picture}, data={"palette": PALETTE, "take": call.take})
+
+
+def submit(call):
+    if call.request["prompt"] == "fetch":  # a plain function fetches on a loop of its own
+        response = asyncio.run(call.fetch(call.base_url + "/jobs", method="POST", json={}))
+        return Accepted({"status": response.status})
+    time.sleep(0.2)  # a plain function, on a thread of its own
+    if call.request["prompt"] == "lost":
+        return Uncertain("acme did not answer")
+    return Accepted({"job": "j-" + str(call.attempt)})
+
+
+async def collect(call):
+    if call.handle["job"] == "j-2":
+        return Ended("the job was cancelled", cost_usd=0)
+    return Answered.json({"collected": call.handle["job"]})
+
+
+acme = adapter(
+    requests=["structured.generate", "image.generate"],
+    jobs=["acme.render"],
+    send=send,
+    submit=submit,
+    collect=collect,
+    version=2,
+)
+
+NOT_AN_ADAPTER = 3
+"""
+
+ADAPTER_LOAD_RESULT = _result_validator("adapter_load_result")
+ADAPTER_RESULTS = {
+    "adapter.send": _result_validator("adapter_send_result"),
+    "adapter.submit": _result_validator("adapter_submit_result"),
+    "adapter.collect": _result_validator("adapter_collect_result"),
+}
+ACME = {"path": "adapters/acme.py", "attribute": "acme"}
+
+
+@pytest.fixture
+def adapters(project: Path) -> Path:
+    """The project, with an adapter module that imports a module beside it."""
+    folder = project / "adapters"
+    folder.mkdir()
+    (folder / "acme.py").write_text(ADAPTER, "utf-8")
+    (folder / "helpers.py").write_text("PALETTE = ['teal']\n", "utf-8")
+    (folder / "broken.py").write_text(
+        "from grida.fx import adapter\n\nacme = adapter(requests=['image.generate'])\n", "utf-8"
+    )
+    return project
+
+
+def _call(prompt: str, capability: str = "structured.generate", **changes: Any) -> dict[str, Any]:
+    params: dict[str, Any] = {
+        "call_id": "c1",
+        "adapter": ACME,
+        "capability": capability,
+        "route": {
+            "id": "text-a@acme",
+            "model": "text-a",
+            "provider": "acme",
+            "contract": {"adapter": "adapters/acme.py#acme", "adapter_behavior": 2},
+        },
+        "base_url": "https://api.acme.test/v1",
+        "request": {"prompt": prompt},
+        "files": {},
+        "take": [1],
+        "key": "a" * 64,
+        "attempt": 1,
+    }
+    params.update(changes)
+    return params
+
+
+def _outcome(method: str, answer: dict[str, Any]) -> Any:
+    assert "result" in answer, answer
+    _valid(ADAPTER_RESULTS[method], answer["result"])
+    return answer["result"]
+
+
+def test_adapter_load_on_a_planning_host(
+    adapters: Path, stand_ins: Path, start: Callable[..., HostProcess]
+) -> None:
+    host = start(adapters)
+    host.initialize()
+    loaded = host.request("adapter.load", ACME)
+    assert "result" in loaded, loaded
+    _valid(ADAPTER_LOAD_RESULT, loaded["result"])
+    root = adapters.resolve()
+    assert loaded["result"] == {
+        "adapter": {
+            "version": 2,
+            "capabilities": {
+                "structured.generate": "request",
+                "image.generate": "request",
+                "acme.render": "job",
+            },
+        },
+        "closure": [
+            {"label": "adapters/acme.py", "path": str(root / "adapters" / "acme.py")},
+            {"label": "adapters/helpers.py", "path": str(root / "adapters" / "helpers.py")},
+        ],
+    }
+    # Loaded once per session, and the planning host goes on describing.
+    assert host.request("adapter.load", ACME)["result"] == loaded["result"]
+    described = host.describe({"path": "nodes/n.py", "attribute": "echo"})
+    assert "error" not in described["modules"][0], described
+
+    def refused(path: str, attribute: str) -> dict[str, Any]:
+        return host.request("adapter.load", {"path": path, "attribute": attribute})["error"]
+
+    assert refused("adapters/acme.py", "NOT_AN_ADAPTER") == {
+        "code": -32004,
+        "message": "adapters/acme.py: NOT_AN_ADAPTER is not declared with adapter()",
+    }
+    assert refused("adapters/acme.py", "missing") == {
+        "code": -32004,
+        "message": "adapters/acme.py: missing is not declared with adapter()",
+    }
+    assert refused("adapters/broken.py", "acme") == {
+        "code": -32004,
+        "message": "adapters/broken.py failed to import: ValueError: adapter(): requests need send",
+    }
+    assert refused("adapters/none.py", "acme") == {
+        "code": -32004,
+        "message": "no module file adapters/none.py",
+    }
+    assert refused("../adapters/acme.py", "acme")["code"] == -32602
+    assert refused("adapters/acme.py", "not a name") == {
+        "code": -32602,
+        "message": "adapter.load's attribute is a Python name",
+    }
+    assert "an adapter module prints too" in host.stderr()
+
+    # A stand-in host serves its stand-in and nothing else.
+    stand_in = start(adapters)
+    _loaded(stand_in, stand_ins / "stand_in.py")
+    assert stand_in.request("adapter.load", ACME)["error"] == {
+        "code": -32600,
+        "message": "this host answers for a stand-in",
+    }
+
+
+def test_an_adapter_host_serves_calls_at_once(
+    adapters: Path, start: Callable[..., HostProcess]
+) -> None:
+    host = start(adapters)
+    host.initialize()
+    # A call for an adapter the session has not loaded.
+    assert host.request("adapter.send", _call("a kite"))["error"] == {
+        "code": -32602,
+        "message": "no adapter adapters/acme.py#acme is loaded on this host",
+    }
+    assert "result" in host.request("adapter.load", ACME)
+
+    # A call that fetches waits for the engine's answer, while another is answered.
+    host.send({"jsonrpc": "2.0", "id": 100, "method": "adapter.send", "params": _call("fetch")})
+    fetch = host.receive()
+    assert fetch["method"] == "fetch"
+    assert fetch["params"] == {
+        "call_id": "c1",
+        "method": "POST",
+        "url": "https://api.acme.test/v1/draw",
+        "body": {"json": {"prompt": "fetch"}},
+        "lane": "provider",
+        "credential": True,
+    }
+    refused = host.request("adapter.send", _call("refuse", call_id="c2"))
+    assert _outcome("adapter.send", refused) == {"outcome": "refused", "reason": "no kites today"}
+    body = base64.b64encode(b'{"id": "d-1"}').decode("ascii")
+    host.send(
+        {
+            "jsonrpc": "2.0",
+            "id": fetch["id"],
+            "result": {"status": 200, "headers": [["x-acme", "1"]], "base64": body},
+        }
+    )
+    answered = host.receive()
+    assert answered["id"] == 100
+    assert _outcome("adapter.send", answered) == {
+        "outcome": "answered",
+        "files": {},
+        "data": {"json": {"status": 200, "body": {"id": "d-1"}}},
+        "cost_usd": 0.01,
+    }
+    # An exchange the engine refused: the adapter maps its phase onto its outcome.
+    host.send({"jsonrpc": "2.0", "id": 101, "method": "adapter.send", "params": _call("fetch")})
+    fetch = host.receive()
+    failure = {"phase": "refused", "reason": "the network is off (GRIDA_FX_NETWORK=off)"}
+    host.send({"jsonrpc": "2.0", "id": fetch["id"], "result": {"error": failure}})
+    assert _outcome("adapter.send", host.receive()) == {
+        "outcome": "refused",
+        "reason": "the network is off (GRIDA_FX_NETWORK=off)",
+    }
+
+    # A request's files are read from their store copies.
+    picture = adapters / "kite.png"
+    picture.write_bytes(b"\x89PNG kite")
+    digest = "d" * 64
+    file = {"digest": digest, "kind": "image/png", "size": 9, "path": str(picture)}
+    drawn = host.request(
+        "adapter.send",
+        _call(
+            "draw",
+            "image.generate",
+            request={"prompt": "draw", "references": [{"file": digest}]},
+            files={digest: file},
+            take=[1, 2],
+        ),
+    )
+    image = base64.b64encode(b"\x89PNG kite").decode("ascii")
+    assert _outcome("adapter.send", drawn) == {
+        "outcome": "answered",
+        "files": {"image": {"base64": image}},
+        "data": {"palette": ["teal"], "take": 2},
+    }
+    busy = host.request("adapter.send", _call("busy"))
+    assert _outcome("adapter.send", busy) == {
+        "outcome": "not_received",
+        "reason": "acme is busy",
+        "retry_after_s": 1,
+    }
+
+    # Two submits at once, each a plain function on a thread of its own; then their collects.
+    for request_id, attempt in ((110, 1), (111, 2)):
+        params = _call("render", "acme.render", attempt=attempt)
+        message = {"jsonrpc": "2.0", "id": request_id, "method": "adapter.submit", "params": params}
+        host.send(message)
+    started = time.monotonic()
+    submitted = {answer["id"]: answer for answer in (host.receive(), host.receive())}
+    assert time.monotonic() - started < 0.39, "the two waited for each other"
+    assert _outcome("adapter.submit", submitted[110]) == {
+        "outcome": "accepted",
+        "handle": {"job": "j-1"},
+    }
+    assert _outcome("adapter.submit", submitted[111])["handle"] == {"job": "j-2"}
+    fetching = _call("fetch", "acme.render", call_id="c9")
+    host.send({"jsonrpc": "2.0", "id": 112, "method": "adapter.submit", "params": fetching})
+    fetch = host.receive()
+    assert (fetch["method"], fetch["params"]["call_id"]) == ("fetch", "c9")
+    response = {"status": 202, "headers": [], "base64": ""}
+    host.send({"jsonrpc": "2.0", "id": fetch["id"], "result": response})
+    assert _outcome("adapter.submit", host.receive()) == {
+        "outcome": "accepted",
+        "handle": {"status": 202},
+    }
+    lost = host.request("adapter.submit", _call("lost", "acme.render"))
+    assert _outcome("adapter.submit", lost) == {
+        "outcome": "uncertain",
+        "reason": "acme did not answer",
+    }
+    collected = host.request(
+        "adapter.collect", _call("render", "acme.render", handle={"job": "j-1"})
+    )
+    assert _outcome("adapter.collect", collected) == {
+        "outcome": "answered",
+        "files": {},
+        "data": {"json": {"collected": "j-1"}},
+    }
+    ended = host.request("adapter.collect", _call("render", "acme.render", handle={"job": "j-2"}))
+    assert _outcome("adapter.collect", ended) == {
+        "outcome": "ended",
+        "reason": "the job was cancelled",
+        "cost_usd": 0,
+    }
+
+    # A capability the adapter does not serve with the method, and params of another shape.
+    assert host.request("adapter.send", _call("x", "acme.render"))["error"] == {
+        "code": -32602,
+        "message": "adapters/acme.py#acme does not serve acme.render with adapter.send",
+    }
+    assert host.request("adapter.collect", _call("x", handle={}))["error"] == {
+        "code": -32602,
+        "message": "adapters/acme.py#acme does not serve structured.generate with adapter.collect",
+    }
+    assert host.request("adapter.send", _call("x", attempt=0))["error"] == {
+        "code": -32602,
+        "message": "adapter.send's attempt is from 1 to 6",
+    }
+
+    # A fault ends its own call, logged with its traceback; the next call is served.
+    boom = host.request("adapter.send", _call("boom"))
+    assert boom["error"] == {"code": -32099, "message": "RuntimeError: acme broke"}
+    assert _outcome("adapter.send", host.request("adapter.send", _call("refuse")))
+    log = host.stderr()
+    assert "grida.fx.host: the adapter adapters/acme.py#acme failed:" in log
+    assert 'adapters/acme.py", line' in log and "RuntimeError: acme broke" in log
+    assert "_adapter.py" not in log, "the SDK's own frames are left out"
+
+    assert host.request("shutdown")["result"] is None
+    assert host.request("adapter.send", _call("refuse"))["error"] == {
+        "code": -32600,
+        "message": "adapter.send came after shutdown",
+    }
+    host.notify("exit")
+    assert host.wait() == 0
+
+
+def test_an_adapter_host_cancels_calls(adapters: Path, start: Callable[..., HostProcess]) -> None:
+    host = start(adapters)
+    host.initialize()
+    assert "result" in host.request("adapter.load", ACME)
+    cancelled = {"code": -32002, "message": "the engine cancelled adapter.send"}
+    # A coroutine function's call is cancelled where it waits, and answered `cancelled` at once.
+    host.send({"jsonrpc": "2.0", "id": 200, "method": "adapter.send", "params": _call("wait")})
+    host.send({"jsonrpc": "2.0", "method": "$/cancel", "params": {"id": 200}})
+    assert host.receive() == {"jsonrpc": "2.0", "id": 200, "error": cancelled}
+    # A call the engine drops while its fetch is pending: the engine answers the fetch
+    # `cancelled`, and nothing more is answered for the call.
+    host.send({"jsonrpc": "2.0", "id": 201, "method": "adapter.send", "params": _call("fetch")})
+    fetch = host.receive()
+    assert fetch["method"] == "fetch"
+    host.send({"jsonrpc": "2.0", "method": "$/cancel", "params": {"id": 201}})
+    assert host.receive() == {"jsonrpc": "2.0", "id": 201, "error": cancelled}
+    dropped = {"code": -32002, "message": "the adapter call was dropped"}
+    host.send({"jsonrpc": "2.0", "id": fetch["id"], "error": dropped})
+    # The next answer is the next call's.
+    answer = host.request("adapter.send", _call("refuse"))
+    assert _outcome("adapter.send", answer)["outcome"] == "refused"
+    # A plain function runs to its end, and what it returns is discarded.
+    params = _call("render", "acme.render")
+    host.send({"jsonrpc": "2.0", "id": 202, "method": "adapter.submit", "params": params})
+    host.send({"jsonrpc": "2.0", "method": "$/cancel", "params": {"id": 202}})
+    assert host.receive() == {
+        "jsonrpc": "2.0",
+        "id": 202,
+        "error": {"code": -32002, "message": "the engine cancelled adapter.submit"},
+    }
+    time.sleep(0.4)  # the submit has returned by now
+    answer = host.request("adapter.send", _call("busy"))
+    assert _outcome("adapter.send", answer)["outcome"] == "not_received"
+    host.request("shutdown")
+    host.notify("exit")
+    assert host.wait() == 0

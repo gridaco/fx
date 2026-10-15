@@ -1,4 +1,4 @@
-//! The default transport: reqwest over rustls (spec/providers.md §2). It is constructed only when a
+//! The default transport: reqwest over rustls (spec/adapters.md §2). It is constructed only when a
 //! run is live (`grida-fx run --live`, through [`crate::live::live_setup`]); no test ever
 //! constructs it, and nothing else in the engine reaches the network.
 //!
@@ -8,7 +8,7 @@
 //!   (which a request setting `accept` replaces), and the download lane with only that
 //!   `accept: */*`; none has a cookie store (reqwest is built without one), none keeps an idle
 //!   connection (each exchange opens its own, so nothing is ever resent on a stale one);
-//! - **proxies** (spec/providers.md §2 item 9): each lane has a client that uses the proxies the
+//! - **proxies** (spec/adapters.md §2 item 9): each lane has a client that uses the proxies the
 //!   environment names (`HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`, as reqwest reads them) and a
 //!   direct one that uses none. A request goes direct when its URL is plain `http` or its host is
 //!   a loopback host (the private `direct`): a proxy would read a plain request, credential
@@ -267,7 +267,7 @@ fn prepare(request: &HttpRequest) -> Result<Prepared, TransportError> {
             )
         })?;
         value.set_sensitive(true);
-        headers.append(header_name(credential.header)?, value);
+        headers.append(header_name(&credential.header)?, value);
     }
     Ok(Prepared { headers, body })
 }
@@ -433,8 +433,8 @@ mod tests {
 
     fn credential() -> Credential {
         Credential {
-            header: "authorization",
-            prefix: "Bearer ",
+            header: "authorization".into(),
+            prefix: "Bearer ".into(),
             secret: Secret::new("sk-test-transport-1"),
         }
     }
@@ -572,8 +572,8 @@ mod tests {
         assert_eq!(error.kind, TransportErrorKind::Refused);
         assert!(!error.reason.contains("bad name"), "{}", error.reason);
         let bad_key = post(Body::Empty).credential(Credential {
-            header: "xi-api-key",
-            prefix: "",
+            header: "xi-api-key".into(),
+            prefix: "".into(),
             secret: Secret::new("key\r\nx-evil: 1"),
         });
         let error = prepare(&bad_key).unwrap_err();
@@ -831,7 +831,7 @@ mod tests {
         })
     }
 
-    /// spec/providers.md §2 item 9, end to end on loopback only: this test runs
+    /// spec/adapters.md §2 item 9, end to end on loopback only: this test runs
     /// [`proxy_policy_child`] in a process of its own whose `HTTP_PROXY` and `ALL_PROXY` name a listener here (the
     /// "proxy"), and another listener here plays the provider at a plain `http` loopback URL, as
     /// a local gateway would. The child first sends one request through a proxied client, to show
@@ -926,8 +926,8 @@ mod tests {
                 Lane::Provider,
             )
             .credential(Credential {
-                header: "authorization",
-                prefix: "Bearer ",
+                header: "authorization".into(),
+                prefix: "Bearer ".into(),
                 secret: Secret::new("test-key-not-real-proxy"),
             })
             .body(Body::Json(json!({"model": "img-a"})))

@@ -107,7 +107,7 @@
       ]
     },
     "usage": {
-      "description": "What else the call consumed, as its adapter reported it (store.md §3; providers.md §6). Not part of the key.",
+      "description": "What else the call consumed, as its adapter reported it (store.md §3; adapters.md §5). Not part of the key.",
       "type": "object",
       "required": [
         "billing"

@@ -11,12 +11,12 @@
 //! A project module is hosted by the host of its language, chosen by its suffix
 //! (`grida_fx_core::host::Language`): `.py` by the Python host, `.ts`, `.mts`, `.js` and `.mjs`
 //! by the TypeScript host. [`NodeHosts`] implements `grida_fx_core::host::NodeHost` for planning
-//! (`describe`, `build`) with one [`LanguageHost`] per language: `describe` sends each host the
-//! targets of its language and merges the answers back in order, `build` goes to the host of the
-//! builder's language, and built-ins are described by the Python host. Each [`LanguageHost`]
-//! starts its host lazily, on the first `describe` or `build` it gets, so planning a project
-//! without node modules of a language never needs that language; a language whose host failed
-//! leaves the other's working.
+//! (`describe`, `build`, `adapter.load`) with one [`LanguageHost`] per language: `describe` sends
+//! each host the targets of its language and merges the answers back in order, `build` and
+//! `adapter.load` go to the host of the module's language, and built-ins are described by the
+//! Python host. Each [`LanguageHost`] starts its host lazily, on the first `describe`, `build` or
+//! `adapter.load` it gets, so planning a project without modules of a language never needs that
+//! language; a language whose host failed leaves the other's working.
 //!
 //! The Python host is `<python> -P -m grida.fx.host` with its working directory at the project
 //! root, stdin/stdout piped for the protocol and stderr inherited (free-form log text). `-P`
@@ -73,8 +73,8 @@ use connection::{Connection, ConnectionError, NoIncoming};
 use grida_fx_core::ENGINE_VERSION;
 use grida_fx_core::host::{HostFailure, Language, NodeHost};
 use grida_fx_protocol::{
-    BuildParams, BuildResult, DescribeParams, DescribeResult, DescribeTarget, ErrorCode,
-    InitializeResult, ModuleDescription, PROTOCOL, RpcError, method,
+    AdapterLoadParams, AdapterLoadResult, BuildParams, BuildResult, DescribeParams, DescribeResult,
+    DescribeTarget, ErrorCode, InitializeResult, ModuleDescription, PROTOCOL, RpcError, method,
 };
 use process::{HostProcess, HostSpec};
 pub use process::{end_every_host, end_every_host_now};
@@ -473,6 +473,41 @@ impl NodeHost for LanguageHost {
         self.call(method::BUILD, params)
             .map_err(|failure| scrub_failure(failure, &roots))
     }
+
+    /// The host's answer to `adapter.load` (spec/protocol.md §5.8), its texts cut as `describe`'s.
+    /// A host whose SDK predates adapters answers `-32601`: `load_failed`, `the project's <sdk>
+    /// <version> cannot load adapters: upgrade <sdk>`. An answer FX cannot read leaves the host
+    /// running: `the node host answered adapter.load with something FX cannot read: <where>`.
+    fn load_adapter(
+        &mut self,
+        params: &AdapterLoadParams,
+    ) -> Result<AdapterLoadResult, HostFailure> {
+        let roots = self.package_roots();
+        match self.call::<_, serde_json::Value>(method::ADAPTER_LOAD, params) {
+            Ok(value) => serde_json::from_value(value).map_err(|error| {
+                HostFailure::Unavailable(format!(
+                    "the node host answered adapter.load with something FX cannot read: {}",
+                    read_reason(&error)
+                ))
+            }),
+            Err(HostFailure::Rpc(error)) if error.kind() == Some(ErrorCode::MethodNotFound) => {
+                let sdk = self.language.sdk();
+                let version = self
+                    .info
+                    .as_ref()
+                    .map(|info| info.host.sdk_version.as_str());
+                let named = match version {
+                    Some(version) if !version.is_empty() => format!("{sdk} {version}"),
+                    _ => sdk.to_string(),
+                };
+                Err(HostFailure::Rpc(RpcError::new(
+                    ErrorCode::LoadFailed,
+                    format!("the project's {named} cannot load adapters: upgrade {sdk}"),
+                )))
+            }
+            Err(failure) => Err(scrub_failure(failure, &roots)),
+        }
+    }
 }
 
 /// `failure` with `roots` replaced in its text ([`crate::engine::scrub_paths`]).
@@ -625,6 +660,20 @@ impl NodeHost for NodeHosts {
     fn build(&mut self, params: &BuildParams) -> Result<BuildResult, HostFailure> {
         match Language::of_module(&params.path) {
             Ok(language) => self.member(language).build(params),
+            Err(refusal) => Err(HostFailure::Rpc(RpcError::new(
+                ErrorCode::LoadFailed,
+                format!("{}: {refusal}", params.path),
+            ))),
+        }
+    }
+
+    /// Asks the host of the adapter module's language.
+    fn load_adapter(
+        &mut self,
+        params: &AdapterLoadParams,
+    ) -> Result<AdapterLoadResult, HostFailure> {
+        match Language::of_module(&params.path) {
+            Ok(language) => self.member(language).load_adapter(params),
             Err(refusal) => Err(HostFailure::Rpc(RpcError::new(
                 ErrorCode::LoadFailed,
                 format!("{}: {refusal}", params.path),

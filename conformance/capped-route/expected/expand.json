@@ -1,0 +1,308 @@
+{
+ "estimate": {
+  "ceiling_usd": null,
+  "high_usd": 6.04,
+  "low_usd": 0.01
+ },
+ "instances": [
+  {
+   "bindings": [],
+   "id": "priced#1",
+   "identity": "bbb4a14e9e0ec26d0f9904231b52a0d30a391fa09acaa4bd5c3508be0991fc14",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "priced",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.04,
+    "low_usd": 0.01
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+     "route": "img-a@acme"
+    }
+   },
+   "state": "planned",
+   "step": "priced",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "a kite",
+    "vars": {}
+   }
+  },
+  {
+   "bindings": [],
+   "id": "capped#1",
+   "identity": "40f9fd1848e676544aa98464127f29c1d07744819aa56351b4d8750948f1dd96",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "capped",
+   "phase": 1,
+   "price": {
+    "capped": true,
+    "high_usd": 1.5,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "b5be815f2f02884e599402e0f35426c86e63b5a17221d6c8504d6caa69d9fa85",
+     "route": "img-x@acme"
+    }
+   },
+   "state": "planned",
+   "step": "capped",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "a kite",
+    "vars": {}
+   }
+  },
+  {
+   "bindings": [],
+   "id": "again#1",
+   "identity": "79da998b4b74303d1fda9168a3b22ebc0c6833c7db9e824ece59b8b887455b04",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "again",
+   "phase": 1,
+   "price": {
+    "capped": true,
+    "high_usd": 1.5,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "b5be815f2f02884e599402e0f35426c86e63b5a17221d6c8504d6caa69d9fa85",
+     "route": "img-x@acme"
+    }
+   },
+   "state": "planned",
+   "step": "again",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "a lantern",
+    "vars": {}
+   }
+  },
+  {
+   "bindings": [
+    {
+     "source": "capped#1",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "image"
+    }
+   ],
+   "id": "edit#1",
+   "identity": null,
+   "interface_bindings": [
+    {
+     "source": "capped#1",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "image"
+    }
+   ],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "edit",
+   "phase": 1,
+   "price": {
+    "capped": true,
+    "high_usd": 0.75,
+    "low_usd": 0
+   },
+   "reads": [
+    "capped#1"
+   ],
+   "routes": {
+    "image.edit": {
+     "fingerprint": "879887a7a34c25c73cb101310721ed2013f42814da139f8c058d22bdd7e2ba3b",
+     "route": "img-x@acme"
+    }
+   },
+   "state": "planned",
+   "step": "edit",
+   "take": [
+    1
+   ],
+   "type": "fx/image.edit@1.1",
+   "uses": "fx/image.edit@1",
+   "view": false,
+   "waiting_on": [
+    "capped#1"
+   ],
+   "with": {
+    "background": "auto",
+    "image": {
+     "pending": [
+      "capped#1"
+     ]
+    },
+    "prompt": "the kite at dusk",
+    "vars": {}
+   }
+  },
+  {
+   "bindings": [],
+   "id": "extended#1",
+   "identity": "8b9f236a58366bd51b3ee394826f37071f4f017a0831a9c69efbbc0eaf99261f",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "extended",
+   "phase": 1,
+   "price": {
+    "capped": true,
+    "high_usd": 2.25,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "f2104e4876773edd2c2d0652a5483f22725df9de7a3a986da4ebfc711daeed80",
+     "route": "img-y@acme"
+    }
+   },
+   "state": "planned",
+   "step": "extended",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "a kite",
+    "vars": {}
+   }
+  }
+ ],
+ "kind": "fx-graph-v1",
+ "pending": [],
+ "problems": [],
+ "scopes": [],
+ "types": {
+  "fx/image.edit@1": {
+   "identity": "fx/image.edit@1.1",
+   "ports": {
+    "inputs": {
+     "image": "image",
+     "mask": "image?",
+     "references": "image[]?"
+    },
+    "outputs": {
+     "image": "image/png"
+    },
+    "params": {
+     "background": {
+      "default": "auto",
+      "enum": [
+       "opaque",
+       "transparent",
+       "auto"
+      ]
+     },
+     "prompt": {
+      "type": "string",
+      "x-fx-template": true
+     },
+     "provider_options": {
+      "type": "object",
+      "x-fx-optional": true
+     },
+     "size": {
+      "type": "string",
+      "x-fx-optional": true
+     },
+     "vars": {
+      "default": {},
+      "type": "object"
+     }
+    }
+   }
+  },
+  "fx/image.generate@1": {
+   "identity": "fx/image.generate@1.1",
+   "ports": {
+    "inputs": {
+     "references": "image[]?"
+    },
+    "outputs": {
+     "image": "image/png"
+    },
+    "params": {
+     "background": {
+      "default": "auto",
+      "enum": [
+       "opaque",
+       "transparent",
+       "auto"
+      ]
+     },
+     "prompt": {
+      "type": "string",
+      "x-fx-template": true
+     },
+     "provider_options": {
+      "type": "object",
+      "x-fx-optional": true
+     },
+     "size": {
+      "type": "string",
+      "x-fx-optional": true
+     },
+     "vars": {
+      "default": {},
+      "type": "object"
+     }
+    }
+   }
+  }
+ },
+ "workflow": {
+  "file": "workflows/case.yaml",
+  "id": "case",
+  "title": "Capped routes"
+ }
+}

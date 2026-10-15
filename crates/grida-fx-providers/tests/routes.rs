@@ -1,9 +1,12 @@
-//! The built-in route table (spec/providers.md §10) against what it must agree with: the
+//! The built-in route table (spec/providers.md §3) against what it must agree with: the
 //! identities written down here, the features of spec/capabilities.md, the contract names of
-//! spec/providers.md §9, and the adapters this crate registers.
+//! spec/providers.md §2, and the adapters this crate registers.
 
 use grida_fx_core::money::Usd;
-use grida_fx_core::routes::{PriceUnit, Route, RouteTable};
+use grida_fx_core::routes::{
+    BUILT_IN_ADAPTERS, FAMILY_ADAPTERS, PriceUnit, Route, RouteTable, built_in_adapter,
+    built_in_adapter_named,
+};
 use grida_fx_core::val::Val;
 use grida_fx_core::value::{canon, digest};
 use grida_fx_providers::adapter::{Adapter, RouteRef, Sent, Submitted};
@@ -14,7 +17,9 @@ use grida_fx_providers::registry::Adapters;
 use grida_fx_providers::routes::{DEFAULT_ROUTES, default_table};
 use grida_fx_providers::testing::{CallBuilder, block_on, media, setup, test_keys};
 use grida_fx_providers::transport::replay::NoNetwork;
-use grida_fx_providers::{codex, elevenlabs, fal, gg, grok, openai, openrouter, tripo};
+use grida_fx_providers::{
+    codex, elevenlabs, fal, gg, grok, openai, openai_compatible, openrouter, tripo,
+};
 use indexmap::IndexMap;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
@@ -32,7 +37,7 @@ fn usd(dollars: &str) -> Usd {
     Usd::parse(dollars).expect("a test amount")
 }
 
-/// The policy both `openai/gpt-6-astra` routes send (spec/providers.md §9.2).
+/// The policy both `openai/gpt-6-astra` routes send (src/openrouter/README.md).
 fn astra_policy() -> Value {
     json!({
         "provider": {"require_parameters": true, "only": ["openai"], "allow_fallbacks": false},
@@ -269,96 +274,89 @@ fn expected_routes() -> Vec<Expected> {
     ]
 }
 
-/// The contract each adapter serves, by capability and provider (spec/providers.md §9): its
-/// `adapter`, and its `adapter_behavior` where §9 names one.
-const CONTRACTS: &[(&str, &str, &str, Option<&str>)] = &[
-    ("image.generate", "gg", "gg-image", Some("\"1\"")),
-    ("image.edit", "gg", "gg-image", Some("\"1\"")),
-    ("structured.generate", "gg", "gg-structured", Some("1")),
-    ("agent.turn", "gg", "gg-tool-loop", Some("1")),
-    ("video.generate", "gg", "gg-video", Some("1")),
-    ("mesh.generate", "gg", "gg-mesh", Some("1")),
-    ("mesh.rig", "gg", "gg-rig", Some("1")),
-    (
-        "image.generate",
-        "openai",
-        "fx-openai-image-v1",
-        Some("\"1\""),
-    ),
-    ("image.edit", "openai", "fx-openai-image-v1", Some("\"1\"")),
-    (
-        "image.generate",
-        "openrouter",
-        "fx-openrouter-image-v1",
-        Some("\"3\""),
-    ),
-    (
-        "image.edit",
-        "openrouter",
-        "fx-openrouter-image-v1",
-        Some("\"3\""),
-    ),
-    (
-        "structured.generate",
-        "openrouter",
-        "openrouter-structured",
-        Some("1"),
-    ),
-    (
-        "agent.turn",
-        "openrouter",
-        "openrouter-tool-loop",
-        Some("1"),
-    ),
-    (
-        "music.generate",
-        "openrouter",
-        "openrouter-music",
-        Some("1"),
-    ),
-    ("image.generate", "fal", "fx-fal-image-v1", None),
-    (
-        "image.generate",
-        "codex",
-        "fx-codex-image-v1",
-        Some("\"2\""),
-    ),
-    ("image.edit", "codex", "fx-codex-image-v1", Some("\"2\"")),
-    ("image.generate", "grok", "fx-grok-image-v1", Some("\"1\"")),
-    ("image.edit", "grok", "fx-grok-image-v1", Some("\"1\"")),
-    ("image.edit", "fal", "fx-fal-image-v1", None),
-    ("video.generate", "fal", "fal-queue", None),
-    ("background.remove", "fal", "fal-run-birefnet", None),
-    ("mesh.generate", "tripo", "tripo-multiview", None),
-    ("mesh.rig", "tripo", "tripo-rig", None),
-    (
-        "sound.generate",
-        "elevenlabs",
-        "elevenlabs-sound-effect",
-        None,
-    ),
-    ("speech.generate", "elevenlabs", "elevenlabs-speech", None),
-];
+/// The contract the default adapter of `capability` on `provider` serves, its `adapter` and its
+/// `adapter_behavior` as JSON: core's table of FX's adapters, which completes a route's contract
+/// (spec/identity.md §7) and which `core_s_table_is_every_adapter_s_identity` holds to the
+/// adapters.
+fn contract_for(capability: &str, provider: &str) -> Option<(&'static str, &'static str)> {
+    built_in_adapter(capability, provider).map(|served| (served.adapter, served.behavior))
+}
 
-fn contract_for(capability: &str, provider: &str) -> Option<(&'static str, Option<&'static str>)> {
-    CONTRACTS
-        .iter()
-        .find(|(c, p, _, _)| *c == capability && *p == provider)
-        .map(|(_, _, adapter, behavior)| (*adapter, *behavior))
+/// The behaviour, as JSON, of the adapter of `capability` on `provider` named `adapter`, default
+/// or not.
+fn behavior_of(capability: &str, provider: &str, adapter: &str) -> Option<&'static str> {
+    built_in_adapter_named(capability, provider, adapter).map(|served| served.behavior)
 }
 
 fn route_ref(route: &Route) -> RouteRef {
-    RouteRef {
-        capability: route.capability.clone(),
-        model: route.model.clone(),
-        provider: route.provider.clone(),
-        contract: route.contract.clone(),
-    }
+    RouteRef::of(route)
 }
 
 fn read_spec(name: &str) -> String {
     let path = format!("{}/../../spec/{name}", env!("CARGO_MANIFEST_DIR"));
     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"))
+}
+
+/// One row of spec/providers.md §2's tables of built-in adapters.
+struct Written {
+    capability: String,
+    provider: String,
+    adapter: String,
+    /// The behaviour as the table writes it in JSON.
+    behavior: String,
+    /// The adapter's reference, relative to spec/.
+    reference: String,
+    /// Whether the row is in the first table, its pair's default.
+    default: bool,
+}
+
+/// The rows of spec/providers.md §2's tables of built-in adapters: the defaults, then the
+/// adapters a route names. The family table, after them, is [`written_family_adapters`]'s.
+fn written_adapters() -> Vec<Written> {
+    written_rows(false)
+}
+
+/// The rows of spec/providers.md §2's table of family adapters, each with its family as its
+/// provider.
+fn written_family_adapters() -> Vec<Written> {
+    written_rows(true)
+}
+
+/// The rows of spec/providers.md §2's tables: those of the provider tables, or of the family
+/// table.
+fn written_rows(families: bool) -> Vec<Written> {
+    let text = read_spec("providers.md");
+    let start = text
+        .find("## 2. The built-in adapters")
+        .expect("providers.md §2");
+    let end = text[start..]
+        .find("\n## 3. ")
+        .map_or(text.len(), |at| start + at);
+    let section = &text[start..end];
+    let code = |cell: &str| cell.trim_matches('`').to_string();
+    let mut tables = 0;
+    let mut family = false;
+    section
+        .lines()
+        .filter_map(|line| {
+            tables += usize::from(line.starts_with("| Provider | Capability |"));
+            family |= line.starts_with("| Family | Capability |");
+            (line.starts_with("| `") && family == families).then_some((line, tables))
+        })
+        .map(|(line, tables)| {
+            let cells: Vec<&str> = line.trim_matches('|').split(" | ").map(str::trim).collect();
+            assert_eq!(cells.len(), 5, "{line}");
+            let reference = cells[4].split_once("](").expect("a link").1;
+            Written {
+                provider: code(cells[0]),
+                capability: code(cells[1]),
+                adapter: code(cells[2]),
+                behavior: code(cells[3]),
+                reference: reference.trim_end_matches(')').to_string(),
+                default: tables == 1,
+            }
+        })
+        .collect()
 }
 
 #[test]
@@ -369,7 +367,7 @@ fn the_table_holds_29_routes_over_10_capabilities() {
     assert_eq!(capabilities.len(), 10);
     assert!(
         read_spec("providers.md").contains("It holds 29 routes over 10 capabilities."),
-        "spec/providers.md §10 states the table's size"
+        "spec/providers.md §3 states the table's size"
     );
 }
 
@@ -420,6 +418,172 @@ fn every_fingerprint_input_is_as_written_down() {
     }
 }
 
+/// Every built-in route's fingerprint, as literal digests, in the table's order: what every cache
+/// key a built-in route serves is made from. Filling in a contract (spec/identity.md §7) moved
+/// none of them, and nothing else may.
+const FINGERPRINTS: [(&str, &str, &str); 29] = [
+    (
+        "agent.turn",
+        "openai/gpt-5.6-sol@gg",
+        "fae706d0d52419b2d3177bf3bb8634011c8c76b5b530955102bd35627ed14b81",
+    ),
+    (
+        "agent.turn",
+        "openai/gpt-5.6-sol@openrouter",
+        "e2afda9cdf14b34034d12a304e459979801551ed7305b5f26bca20f10fbf2d5b",
+    ),
+    (
+        "agent.turn",
+        "openai/gpt-6-astra@gg",
+        "939609e3a5cf5b56a15ca16a87fe05e067de494f7f5f1be272054b7a29e04c50",
+    ),
+    (
+        "agent.turn",
+        "openai/gpt-6-astra@openrouter",
+        "c30b6b8de0fd741497fd5607fd41ef90dc377c218a9a0d2b1936a1f217b9c512",
+    ),
+    (
+        "image.edit",
+        "gpt-image-2.5-sunburst@openai",
+        "c456b1963f44d5f035e41b27cce8b7002164f3476073cf517a436260e8899de5",
+    ),
+    (
+        "image.edit",
+        "imagegen@codex",
+        "e39d67200ddf392c3ac296da47a08b3392aa80cefb400e8835c345c22ea54375",
+    ),
+    (
+        "image.edit",
+        "imagine@grok",
+        "2789bb47a0b99c2fd47cc84520b381cecdecfae1b405fe6bae282a5b32b95146",
+    ),
+    (
+        "image.edit",
+        "openai/gpt-image-2.5-sunburst@gg",
+        "d6e0f4120166ff3d981d4e6b192eb849cf5bc0c8d898787f363eef44402b7480",
+    ),
+    (
+        "image.edit",
+        "openai/gpt-image-2.5-sunburst@openrouter",
+        "a5eabba76d5f2f9050a921604945a82b5b941b5ebd1800addf8d11c908bfbc6c",
+    ),
+    (
+        "image.edit",
+        "openai/gpt-image-2.5/sunburst@fal",
+        "73ff8b2a07903cf80f5b42e1f934286605506ae99bebe70bd84e5a42666d19b4",
+    ),
+    (
+        "image.generate",
+        "gpt-image-2.5-sunburst@openai",
+        "dda66fe634f878cd82b88bc74d74eb7f571540113cd5006cb591547cf29f4236",
+    ),
+    (
+        "image.generate",
+        "imagegen@codex",
+        "dbb0a7d6073422b1dcf2f9cb0fd12a3b586a8a22e63159e0e6143dd0813cec7c",
+    ),
+    (
+        "image.generate",
+        "imagine@grok",
+        "075c3cee74d095200087f251fe912544e0bb4864ca22ae39f920175570008bbd",
+    ),
+    (
+        "image.generate",
+        "openai/gpt-image-2.5-sunburst@gg",
+        "ecb54b4cc9d53094f25276cd8ba478ecde1e520b28b73815cea014f6b786fe49",
+    ),
+    (
+        "image.generate",
+        "openai/gpt-image-2.5-sunburst@openrouter",
+        "472dbf587d1a20f7ed495e9e923e372f5380eb82173203f524e09602f5548ee6",
+    ),
+    (
+        "image.generate",
+        "openai/gpt-image-2.5/sunburst@fal",
+        "f44fdcd62fdb65f5e46190ec7e87a498cd8584136c829705c2ec350e5987cb5f",
+    ),
+    (
+        "mesh.generate",
+        "P2-20260801@tripo",
+        "2f38aab5c2e1e9a7a38b7a169f5fdfd1731678d2edd517b1d560629b69031e7a",
+    ),
+    (
+        "mesh.generate",
+        "tripo/p2@gg",
+        "87a940723d51b345e53f66234d0f4ec047197f0be0380f77943654647d7df5bf",
+    ),
+    (
+        "mesh.rig",
+        "tripo/rig-v1.0@gg",
+        "fa7536bf483efdcc38f31f4778c41e82f010f201fa8497efb9240fbbdf4d8318",
+    ),
+    (
+        "mesh.rig",
+        "v1.0-20240301@tripo",
+        "4d81220039a7c3b2a13514b85643763d5c5b951258a98fe46e4f80d62fb8f602",
+    ),
+    (
+        "music.generate",
+        "google/lyria-3-pro-preview@openrouter",
+        "59420dcc03ca6b761770613d948da6897c0e243fb35ac3345bcc24c840a61702",
+    ),
+    (
+        "sound.generate",
+        "eleven_text_to_sound_v2@elevenlabs",
+        "b49122935dffdcb64bfa37f0bfc82210d2fa15cfb5a9b2c678ebc81db722d01b",
+    ),
+    (
+        "speech.generate",
+        "eleven_v3@elevenlabs",
+        "630cbb2737943f0faaa6bd018e40b2eb1ecdc870e9d4696a7b80f8390146543c",
+    ),
+    (
+        "structured.generate",
+        "openai/gpt-5.6-sol@gg",
+        "ce4e944398eafc9aec5055abc09f7f18813d4bbeea26b32a239c27ff845b08a6",
+    ),
+    (
+        "structured.generate",
+        "openai/gpt-5.6-sol@openrouter",
+        "a405c28fb5be2b3e74e58a62a0b943ddcde92f77f7aafbb5ceafa90ec0563461",
+    ),
+    (
+        "structured.generate",
+        "openai/gpt-6-astra@gg",
+        "79fc40ba6f22797a3162a93b442fa747218065d94fcc8440a58dc3bb5ac95015",
+    ),
+    (
+        "structured.generate",
+        "openai/gpt-6-astra@openrouter",
+        "849f6d6cc549969e37b91b4ba028edb7113c52bdd9b6fe170479ab9dd3c0c718",
+    ),
+    (
+        "video.generate",
+        "alibaba/wan-3.0@gg",
+        "2760d5dee58f8bf06ea59d7ce750bd0cc8d67c92947e1027a81e51506b29d8e4",
+    ),
+    (
+        "video.generate",
+        "google/gemini-omni-flash/v1.1/image-to-video@fal",
+        "8aed505f280948fe25cc885d9e9dabe770f6b523d7a6b0aa08d74f1b99756226",
+    ),
+];
+
+#[test]
+fn no_built_in_fingerprint_moves() {
+    let table = table();
+    let found: Vec<(&str, String, String)> = table
+        .entries
+        .values()
+        .map(|route| (route.capability.as_str(), route.id(), route.fingerprint()))
+        .collect();
+    let pinned: Vec<(&str, String, String)> = FINGERPRINTS
+        .iter()
+        .map(|(capability, id, fingerprint)| (*capability, id.to_string(), fingerprint.to_string()))
+        .collect();
+    assert_eq!(found, pinned);
+}
+
 #[test]
 fn image_contracts_carry_their_behaviour_as_a_string_and_the_rest_as_an_integer() {
     for route in table().entries.values() {
@@ -435,30 +599,71 @@ fn image_contracts_carry_their_behaviour_as_a_string_and_the_rest_as_an_integer(
 
 #[test]
 fn every_contract_names_the_adapter_that_serves_its_route() {
-    let providers_md = read_spec("providers.md");
     for route in table().entries.values() {
         let id = route.id();
-        let (adapter, behavior) = contract_for(&route.capability, &route.provider)
-            .unwrap_or_else(|| panic!("no adapter serves {} on {id}", route.capability));
+        let adapter = route.contract["adapter"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{} {id} names no adapter", route.capability));
+        let behavior = behavior_of(&route.capability, &route.provider, adapter)
+            .unwrap_or_else(|| panic!("no adapter {adapter} serves {} on {id}", route.capability));
         assert_eq!(
-            route.contract["adapter"],
-            json!(adapter),
+            canon(&route.contract["adapter_behavior"]),
+            behavior,
             "{} {id}",
             route.capability
         );
-        if let Some(behavior) = behavior {
-            assert_eq!(
-                canon(&route.contract["adapter_behavior"]),
-                behavior,
-                "{} {id}",
-                route.capability
-            );
-        }
     }
-    for (capability, _, adapter, _) in CONTRACTS {
+    // The OpenRouter and fal image routes name GPT Image's adapters, not their generic defaults.
+    for route in table().entries.values() {
+        let gpt = match (route.capability.as_str(), route.provider.as_str()) {
+            ("image.generate" | "image.edit", "openrouter") => openrouter::image::CONTRACT_ADAPTER,
+            ("image.generate" | "image.edit", "fal") => fal::image::CONTRACT_ADAPTER,
+            _ => continue,
+        };
+        assert_eq!(route.contract["adapter"], json!(gpt), "{}", route.id());
+    }
+}
+
+#[test]
+fn the_contracts_are_spec_providers_2_and_each_reference_heads_with_its_own() {
+    let written = written_adapters();
+    let rows: Vec<(&str, &str, &str, &str, bool)> = written
+        .iter()
+        .map(|w| {
+            (
+                w.capability.as_str(),
+                w.provider.as_str(),
+                w.adapter.as_str(),
+                w.behavior.as_str(),
+                w.default,
+            )
+        })
+        .collect();
+    // Core's table lists the rows of spec/providers.md §2, in its order, defaults first.
+    let ours: Vec<(&str, &str, &str, &str, bool)> = BUILT_IN_ADAPTERS
+        .iter()
+        .map(|served| {
+            (
+                served.capability,
+                served.provider,
+                served.adapter,
+                served.behavior,
+                served.default,
+            )
+        })
+        .collect();
+    assert_eq!(rows, ours, "spec/providers.md §2");
+    for w in &written {
+        let path = format!("{}/../../spec/{}", env!("CARGO_MANIFEST_DIR"), w.reference);
+        let reference = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+        let row = format!("| `{}` | `{}` |", w.adapter, w.behavior);
         assert!(
-            providers_md.contains(&format!("Contract `adapter`: `{adapter}`")),
-            "spec/providers.md §9 names no adapter {adapter} ({capability})"
+            reference
+                .lines()
+                .any(|line| line.ends_with(&row) && line.contains(&format!("`{}`", w.capability))),
+            "{}: no row for {} {row}",
+            w.reference,
+            w.capability
         );
     }
 }
@@ -486,20 +691,39 @@ fn every_route_is_served_by_an_adapter_of_its_capability_s_shape() {
 }
 
 #[test]
-fn the_adapters_serve_exactly_the_contracts_of_spec_providers_9() {
-    let served: BTreeSet<(String, String)> = registry().served().into_iter().collect();
-    let expected: BTreeSet<(String, String)> = CONTRACTS
+fn the_adapters_serve_exactly_the_contracts_of_spec_providers_2() {
+    let registry = registry();
+    let served: BTreeSet<(String, String)> = registry.served().into_iter().collect();
+    let expected: BTreeSet<(String, String)> = BUILT_IN_ADAPTERS
         .iter()
-        .map(|(c, p, _, _)| (c.to_string(), p.to_string()))
+        .map(|served| (served.capability.to_string(), served.provider.to_string()))
         .collect();
     assert_eq!(served, expected);
+    // Each adapter under its contract `adapter`, and the defaults, as the table lists them.
+    let registered: BTreeSet<(&str, &str, &str, bool)> = registry
+        .registered()
+        .iter()
+        .map(|r| (r.capability, r.provider, r.identity.adapter, r.default))
+        .collect();
+    let listed: BTreeSet<(&str, &str, &str, bool)> = BUILT_IN_ADAPTERS
+        .iter()
+        .map(|served| {
+            (
+                served.capability,
+                served.provider,
+                served.adapter,
+                served.default,
+            )
+        })
+        .collect();
+    assert_eq!(registered, listed);
     for (capability, provider) in &served {
         assert!(
             capability_is_shipped(capability),
             "{capability} on {provider} is not in CAPABILITIES"
         );
     }
-    // Served but routed nowhere: background.remove (spec/providers.md §10).
+    // Served but routed nowhere: background.remove (spec/providers.md §3).
     let routed: BTreeSet<(String, String)> = table()
         .entries
         .values()
@@ -510,6 +734,137 @@ fn the_adapters_serve_exactly_the_contracts_of_spec_providers_9() {
         unrouted,
         vec![&("background.remove".to_string(), "fal".to_string())]
     );
+}
+
+/// Core completes a route's contract from its table of FX's adapters when a table is read
+/// (spec/identity.md §7), knowing nothing of this crate: every adapter registered here names the
+/// contract that table gives its capability and provider, behaviour included, so a completed
+/// contract is always one its adapter serves.
+#[test]
+fn core_s_table_is_every_adapter_s_identity() {
+    let registry = registry();
+    assert_eq!(registry.registered().len(), BUILT_IN_ADAPTERS.len());
+    let read = |capability: &str, provider: &str, contract: Value| {
+        let table = RouteTable::from_document(
+            &json!({"fx": "routes/v1", "routes": [
+                {"capability": capability, "route": format!("m@{provider}"), "price": {"usd": 0},
+                 "contract": contract},
+            ]}),
+            "routes.yaml",
+        )
+        .unwrap();
+        table.entries[0].contract.clone()
+    };
+    for registered in registry.registered() {
+        let (capability, provider, identity) = (
+            registered.capability,
+            registered.provider,
+            registered.identity,
+        );
+        let served =
+            built_in_adapter_named(capability, provider, identity.adapter).unwrap_or_else(|| {
+                panic!(
+                    "core knows no adapter {} of {capability} on {provider}",
+                    identity.adapter
+                )
+            });
+        assert_eq!(
+            (served.behavior, served.default),
+            (identity.behavior, registered.default),
+            "{} for {capability} on {provider}",
+            identity.adapter
+        );
+        // A route that names the adapter alone is completed to its behaviour.
+        let contract = read(capability, provider, json!({"adapter": identity.adapter}));
+        assert!(
+            identity.behaves(&contract["adapter_behavior"]),
+            "{} for {capability} on {provider}",
+            identity.adapter
+        );
+        if !registered.default {
+            continue;
+        }
+        // A route declared with no contract is completed to one its default serves, and the
+        // registry hands it that default.
+        let contract = read(capability, provider, json!({}));
+        assert_eq!(contract["adapter"], json!(identity.adapter));
+        assert!(
+            identity.behaves(&contract["adapter_behavior"]),
+            "{capability} on {provider}"
+        );
+        let route = RouteRef {
+            capability: capability.into(),
+            model: "m".into(),
+            provider: provider.into(),
+            contract,
+            limits: Default::default(),
+        };
+        assert_eq!(
+            registry.serving(&route).and_then(Adapter::identity),
+            Some(identity),
+            "{capability} on {provider}"
+        );
+    }
+}
+
+/// The family table of spec/providers.md §2 is core's `FAMILY_ADAPTERS`, in its order, and each
+/// row is the identity of the family adapter that serves it and a row of its reference.
+#[test]
+fn the_family_adapters_are_spec_providers_2() {
+    let written = written_family_adapters();
+    let rows: Vec<(&str, &str, &str, &str)> = written
+        .iter()
+        .map(|w| {
+            (
+                w.provider.as_str(),
+                w.capability.as_str(),
+                w.adapter.as_str(),
+                w.behavior.as_str(),
+            )
+        })
+        .collect();
+    let ours: Vec<(&str, &str, &str, &str)> = FAMILY_ADAPTERS
+        .iter()
+        .map(|served| {
+            (
+                served.family,
+                served.capability,
+                served.adapter,
+                served.behavior,
+            )
+        })
+        .collect();
+    assert_eq!(rows, ours, "spec/providers.md §2, the family table");
+    let identities = [
+        (
+            openai_compatible::structured::CAPABILITY,
+            openai_compatible::structured::IDENTITY,
+        ),
+        (
+            openai_compatible::agent::CAPABILITY,
+            openai_compatible::agent::IDENTITY,
+        ),
+    ];
+    for (served, (capability, identity)) in FAMILY_ADAPTERS.iter().zip(identities) {
+        assert_eq!(served.family, openai_compatible::FAMILY);
+        assert_eq!(
+            (served.capability, served.adapter, served.behavior),
+            (capability, identity.adapter, identity.behavior)
+        );
+    }
+    for w in &written {
+        let path = format!("{}/../../spec/{}", env!("CARGO_MANIFEST_DIR"), w.reference);
+        let reference = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+        let row = format!("| `{}` | `{}` |", w.adapter, w.behavior);
+        assert!(
+            reference
+                .lines()
+                .any(|line| line.ends_with(&row) && line.contains(&format!("`{}`", w.capability))),
+            "{}: no row for {} {row}",
+            w.reference,
+            w.capability
+        );
+    }
 }
 
 fn capability_is_shipped(name: &str) -> bool {
@@ -543,19 +898,15 @@ fn features_say_what_the_adapters_honour() {
     let openai = "gpt-image-2.5-sunburst@openai";
     let openrouter = "openai/gpt-image-2.5-sunburst@openrouter";
     let fal = "openai/gpt-image-2.5/sunburst@fal";
-    // OpenRouter refuses a mask and a transparent background (spec/providers.md §9.2); GG takes
-    // a transparent background and refuses a mask (§9.7).
+    // Every GPT Image route takes a transparent background: OpenRouter's since Grida Models
+    // recorded its endpoint taking one (src/openrouter/README.md). OpenRouter and GG refuse a mask
+    // (src/openrouter/README.md; src/gg/README.md).
     for capability in ["image.generate", "image.edit"] {
         assert!(has(capability, openai, "alpha") && has(capability, fal, "alpha"));
-        assert!(has(capability, gg, "alpha"));
-        assert!(!has(capability, openrouter, "alpha"));
-        // GG answers in the model's PNG and takes pictures only as bytes.
-        for feature in ["jpeg_output", "webp_output", "hosted_url_reference_input"] {
-            assert!(!has(capability, gg, feature), "{capability} {feature}");
-        }
+        assert!(has(capability, gg, "alpha") && has(capability, openrouter, "alpha"));
     }
     // Codex makes every background and draws from pictures, but takes no exact size and no
-    // mask (§9.6).
+    // mask (src/codex/README.md).
     let codex = "imagegen@codex";
     for capability in ["image.generate", "image.edit"] {
         for feature in [
@@ -574,7 +925,7 @@ fn features_say_what_the_adapters_honour() {
     assert!(has("image.generate", codex, "text_to_image"));
     assert!(!has("image.edit", codex, "text_to_image"));
     // Grok Build draws opaque JPEGs from pictures, sent as PNGs, and takes no exact size, no
-    // transparency and no mask (§9.8).
+    // transparency and no mask (src/grok/README.md).
     let grok = "imagine@grok";
     for capability in ["image.generate", "image.edit"] {
         for feature in [
@@ -582,7 +933,6 @@ fn features_say_what_the_adapters_honour() {
             "auto_background",
             "opaque_background",
             "image_input",
-            "jpeg_output",
             "png_output",
         ] {
             assert!(has(capability, grok, feature), "{capability} {feature}");
@@ -599,14 +949,10 @@ fn features_say_what_the_adapters_honour() {
     for id in [gg, openai, openrouter, fal] {
         assert!(has("image.edit", id, "image_input"), "{id}");
         assert!(!has("image.generate", id, "image_input"), "{id}");
-        assert!(
-            !has("image.generate", id, "hosted_url_reference_input"),
-            "{id}"
-        );
         assert!(has("image.generate", id, "text_to_image"), "{id}");
         assert!(!has("image.edit", id, "text_to_image"), "{id}");
     }
-    // No route keeps a renamed feature (spec/providers.md §11).
+    // No route keeps a renamed feature (spec/providers.md §4).
     for alias in [
         "masked_edit",
         "transparent_background",
@@ -654,24 +1000,43 @@ fn every_example_table_declares_only_what_fx_honours() {
             if !registry.serves(&route.capability, &route.provider) {
                 continue;
             }
-            // Every image.generate adapter of FX but Codex's and Grok Build's refuses references
-            // (spec/providers.md §9).
-            if route.capability == "image.generate"
-                && !matches!(route.provider.as_str(), "codex" | "grok")
-            {
-                assert!(!route.features.contains("image_input"), "{label}: {id}");
+            // Every image.generate adapter of FX refuses references but Codex's, Grok Build's and
+            // OpenRouter's generic one (spec/providers.md §2), so the adapter that serves the
+            // route decides.
+            if route.capability == "image.generate" {
+                let serving = registry
+                    .serving_contract(&route.capability, &route.provider, &route.contract)
+                    .and_then(Adapter::identity)
+                    .map(|identity| identity.adapter);
+                let takes_references = [
+                    codex::ADAPTER,
+                    grok::ADAPTER,
+                    openrouter::generic_image::CONTRACT_ADAPTER,
+                ];
+                if !serving.is_some_and(|adapter| takes_references.contains(&adapter)) {
+                    assert!(!route.features.contains("image_input"), "{label}: {id}");
+                }
             }
-            // OpenRouter's image adapter refuses a mask and a transparent background (§9.2).
+            // OpenRouter's image adapters refuse a mask, and the generic one a transparent
+            // background (src/openrouter/README.md).
             if route.provider == "openrouter" && route.capability.starts_with("image.") {
-                assert!(!route.features.contains("alpha"), "{label}: {id}");
                 assert!(!route.features.contains("mask"), "{label}: {id}");
+                let generic = registry
+                    .serving_contract(&route.capability, &route.provider, &route.contract)
+                    .and_then(Adapter::identity)
+                    .is_some_and(|identity| {
+                        identity.adapter == openrouter::generic_image::CONTRACT_ADAPTER
+                    });
+                if generic {
+                    assert!(!route.features.contains("alpha"), "{label}: {id}");
+                }
             }
         }
     }
 }
 
 #[test]
-fn pacing_is_declared_where_spec_providers_10_says() {
+fn pacing_is_declared_where_spec_providers_3_says() {
     for route in table().entries.values() {
         let id = route.id();
         let image_paced = route.capability.starts_with("image.")
@@ -684,11 +1049,11 @@ fn pacing_is_declared_where_spec_providers_10_says() {
         );
         let concurrency = match (route.capability.as_str(), id.as_str()) {
             ("mesh.generate" | "mesh.rig" | "video.generate", _) => Some(1),
-            // One Codex draws several images at once (spec/providers.md §10).
+            // One Codex draws several images at once (spec/providers.md §3).
             ("image.generate" | "image.edit", "imagegen@codex") => Some(3),
-            // So does one Grok Build (spec/providers.md §10).
+            // So does one Grok Build (spec/providers.md §3).
             ("image.generate" | "image.edit", "imagine@grok") => Some(3),
-            // GG keeps one unsettled GPT Image call per organization (spec/providers.md §10).
+            // GG keeps one unsettled GPT Image call per organization (spec/providers.md §3).
             ("image.generate" | "image.edit", "openai/gpt-image-2.5-sunburst@gg") => Some(1),
             ("structured.generate", _) => Some(4),
             ("agent.turn", "openai/gpt-6-astra@gg" | "openai/gpt-6-astra@openrouter") => Some(1),
@@ -727,7 +1092,7 @@ fn prices_and_tiers_parse() {
             };
             assert_eq!(tiers, expected, "{}", route.id());
         } else if plan.contains(&route.provider) {
-            // Free to FX (spec/providers.md §10).
+            // Free to FX (spec/providers.md §3).
             assert_eq!((price.low, price.high), (Usd::ZERO, Usd::ZERO));
             assert_eq!(price.unit, PriceUnit::Call);
             assert!(price.tiers.is_empty() && price.by.is_none());
@@ -761,7 +1126,7 @@ fn prices_and_tiers_parse() {
 /// low price, the high price of a generate, and of an edit. A low is the output at quality max,
 /// measured or derived from a measured bill, rounded down to the cent; a high adds $0.07 for a
 /// generate's prompt, or $0.21 for an edit's 16 input pictures and long prompt, rounded up
-/// (spec/providers.md §10).
+/// (spec/providers.md §3).
 const IMAGE_TIERS: &[(&str, &str, &str, &str)] = &[
     ("1024x1024", "0.21", "0.29", "0.43"),
     ("1024x1536", "0.16", "0.24", "0.38"),
@@ -779,7 +1144,7 @@ const IMAGE_TIERS: &[(&str, &str, &str, &str)] = &[
 ];
 
 /// The OpenRouter image routes' tiers: only the sizes it serves, with highs that cover twice the
-/// output (spec/providers.md §10).
+/// output (spec/providers.md §3).
 const OPENROUTER_IMAGE_TIERS: &[(&str, &str, &str, &str)] = &[
     ("1024x1024", "0.21", "0.50", "0.64"),
     ("1152x2496", "0.14", "0.37", "0.51"),
@@ -962,12 +1327,12 @@ fn the_adapters_name_their_contracts_as_the_table_does() {
         (
             "image.generate",
             "openrouter",
-            openrouter::image::CONTRACT_ADAPTER,
+            openrouter::generic_image::CONTRACT_ADAPTER,
         ),
         (
             "image.edit",
             "openrouter",
-            openrouter::image::CONTRACT_ADAPTER,
+            openrouter::generic_image::CONTRACT_ADAPTER,
         ),
         (
             "structured.generate",
@@ -984,7 +1349,11 @@ fn the_adapters_name_their_contracts_as_the_table_does() {
             "openrouter",
             openrouter::music::CONTRACT_ADAPTER,
         ),
-        ("image.generate", "fal", fal::image::CONTRACT_ADAPTER),
+        (
+            "image.generate",
+            "fal",
+            fal::generic_image::CONTRACT_ADAPTER,
+        ),
         ("image.generate", "codex", codex::ADAPTER),
         ("image.edit", "codex", codex::ADAPTER),
         ("image.generate", "grok", grok::ADAPTER),
@@ -1007,15 +1376,71 @@ fn the_adapters_name_their_contracts_as_the_table_does() {
         contract_for("speech.generate", "elevenlabs").unwrap().0,
         elevenlabs::speech::ADAPTER
     );
-    assert_eq!(openai::ADAPTER_BEHAVIOR, "1");
-    assert_eq!(gg::image::ADAPTER_BEHAVIOR, "1");
-    assert_eq!(openrouter::image::CONTRACT_BEHAVIOR, "3");
-    assert_eq!(codex::ADAPTER_BEHAVIOR, "2");
-    assert_eq!(grok::ADAPTER_BEHAVIOR, "1");
+    // The contracts the engine checks: each behaviour is the table's, as JSON text.
+    let identities = [
+        ("image.generate", "gg", gg::image::IDENTITY),
+        ("structured.generate", "gg", gg::chat::STRUCTURED_IDENTITY),
+        ("agent.turn", "gg", gg::chat::TURN_IDENTITY),
+        ("video.generate", "gg", gg::video::IDENTITY),
+        ("mesh.generate", "gg", gg::mesh::MESH_IDENTITY),
+        ("mesh.rig", "gg", gg::mesh::RIG_IDENTITY),
+        ("image.generate", "openai", openai::IDENTITY),
+        (
+            "image.generate",
+            "openrouter",
+            openrouter::generic_image::IDENTITY,
+        ),
+        (
+            "structured.generate",
+            "openrouter",
+            openrouter::structured::IDENTITY,
+        ),
+        ("agent.turn", "openrouter", openrouter::agent::IDENTITY),
+        ("music.generate", "openrouter", openrouter::music::IDENTITY),
+        ("image.generate", "fal", fal::generic_image::IDENTITY),
+        ("video.generate", "fal", fal::video::IDENTITY),
+        ("background.remove", "fal", fal::background::IDENTITY),
+        ("mesh.generate", "tripo", tripo::mesh::IDENTITY),
+        ("mesh.rig", "tripo", tripo::rig::IDENTITY),
+        ("image.generate", "codex", codex::IDENTITY),
+        ("image.generate", "grok", grok::IDENTITY),
+        (
+            "sound.generate",
+            "elevenlabs",
+            elevenlabs::identity(elevenlabs::sound::ADAPTER),
+        ),
+        (
+            "speech.generate",
+            "elevenlabs",
+            elevenlabs::identity(elevenlabs::speech::ADAPTER),
+        ),
+    ];
+    for (capability, provider, identity) in identities {
+        assert_eq!(
+            contract_for(capability, provider),
+            Some((identity.adapter, identity.behavior)),
+            "{capability} on {provider}"
+        );
+    }
+    // The adapters a route names: GPT Image's, on both capabilities.
+    for (provider, identity) in [
+        ("openrouter", openrouter::image::IDENTITY),
+        ("fal", fal::image::IDENTITY),
+    ] {
+        for capability in ["image.generate", "image.edit"] {
+            let served = built_in_adapter_named(capability, provider, identity.adapter).unwrap();
+            assert_eq!(
+                served.behavior, identity.behavior,
+                "{capability} on {provider}"
+            );
+            assert!(!served.default, "{capability} on {provider}");
+        }
+    }
 }
 
-/// spec/providers.md §10: a route that takes input pictures declares the most its adapter takes,
-/// except GG's, whose models' limits GG checks; a route that takes none declares nothing.
+/// spec/providers.md §3: a route that takes input pictures declares the most its adapter takes:
+/// the adapter's own limit, or for GG, which holds an edit to its route's, GPT Image's; a route
+/// that takes none declares nothing.
 #[test]
 fn input_picture_limits_are_the_adapters_own() {
     for route in table().entries.values() {
@@ -1026,6 +1451,7 @@ fn input_picture_limits_are_the_adapters_own() {
             ("image.edit", "openai") => Some(openai::MAX_INPUT_IMAGES),
             ("image.edit", "openrouter") => Some(openrouter::image::MAX_PICTURES),
             ("image.edit", "fal") => Some(fal::image::MAX_PICTURES),
+            ("image.edit", "gg") => Some(gg::image::MAX_INPUT_IMAGES),
             _ => None,
         };
         assert_eq!(
@@ -1056,7 +1482,7 @@ fn sample(builder: &mut CallBuilder, ty: MemberType) -> Value {
 }
 
 /// Every built-in route gets past its adapter's contract check and the capability check
-/// (spec/providers.md §5 steps 1–2): with no keys, each call is refused for its key (step 3), or
+/// (spec/adapters.md §4 steps 1–2): with no keys, each call is refused for its key (step 3), or
 /// the Codex and Grok Build routes for their programs, which no test setup has, so no table entry
 /// points a model at a wire its adapter refuses.
 #[test]

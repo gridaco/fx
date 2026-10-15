@@ -1,12 +1,12 @@
 //! OpenRouter music (Lyria): `POST {base}/chat/completions` with `{"model", "messages": [{"role":
 //! "user", "content": <prompt>}], "modalities": ["text", "audio"], "audio": {"format": "mp3"},
-//! "stream": true}` (spec/providers.md §9.2; spec/capabilities.md §9). `duration` is never sent:
-//! it stays in the call key only.
+//! "stream": true}`, then the provider options (src/openrouter/README.md; spec/capabilities.md §9;
+//! spec/adapters.md §8). `duration` is never sent: it stays in the call key only.
 //!
-//! Refusals, in the order of spec/providers.md §5: the contract (`adapter: openrouter-music`,
-//! `adapter_behavior: 1`, each checked when present); the capability's shape; the key; a blank prompt
-//! (`a music call needs its prompt as text`); a serialized body over
-//! [`super::MAX_REQUEST_BYTES`].
+//! Refusals, in the order of spec/adapters.md §4: the contract (`adapter: openrouter-music`,
+//! `adapter_behavior: 1`, each checked when present); the capability's shape; the key; provider
+//! options that set a member of [`OWNED`] ([`wire::provider_options`]); a blank prompt (`a music
+//! call needs its prompt as text`); a serialized body over [`super::MAX_REQUEST_BYTES`].
 //!
 //! The response is SSE when its `content-type` names `text/event-stream` or any line starts
 //! (after blanks) with `data:`; otherwise it is one buffered JSON object. In a stream only lines
@@ -22,13 +22,13 @@
 //! `null`.
 //!
 //! The answer is file `audio` (`audio/mpeg`), `data: null`, and `cost` from the last `usage`
-//! seen, an error event's included (spec/providers.md §6). A 2xx that cannot become an answer is
-//! `Failed { cost, retryable: true }` with that cost when one was seen (spec/providers.md §4.4).
+//! seen, an error event's included (spec/adapters.md §5). A 2xx that cannot become an answer is
+//! `Failed { cost, retryable: true }` with that cost when one was seen (spec/adapters.md §3.4).
 //! Deadline 900 s; response cap 128 MiB. `check`: the MP3 signature.
 
 use super::{BODY_TOO_LARGE, classify, not_served, serves, with_request_id};
 use crate::BoxFuture;
-use crate::adapter::{Answer, CallRequest, RequestAdapter, Sent};
+use crate::adapter::{Answer, CallRequest, Identity, RequestAdapter, Sent};
 use crate::redact::Redactor;
 use crate::setup::Client;
 use crate::transport::{Body, HttpRequest, HttpResponse, Lane, Method};
@@ -41,14 +41,22 @@ use std::time::Duration;
 /// The label of every reason.
 pub const LABEL: &str = "OpenRouter music generation";
 
+/// The members provider options may not set (spec/adapters.md §8; src/openrouter/README.md):
+/// every member the body has, and `n`, which would change the answer.
+pub const OWNED: &[&str] = &["model", "messages", "modalities", "audio", "stream", "n"];
+
 /// The contract `adapter` this adapter serves.
 pub const CONTRACT_ADAPTER: &str = "openrouter-music";
 
 pub const DEADLINE: Duration = Duration::from_secs(900);
 pub const MAX_RESPONSE_BYTES: u64 = 128 * 1024 * 1024;
 
-/// The contract `adapter_behavior` this adapter serves.
-const CONTRACT_BEHAVIOR: f64 = 1.0;
+/// The contract this adapter serves: [`CONTRACT_ADAPTER`], and `adapter_behavior` the number 1
+/// (written `1.0` too, the same number).
+pub const IDENTITY: Identity = Identity {
+    adapter: CONTRACT_ADAPTER,
+    behavior: "1",
+};
 
 /// The only output format the route asks for, and its media type.
 const FORMAT: &str = "mp3";
@@ -73,18 +81,17 @@ impl OpenRouterMusic {
         OpenRouterMusic { client }
     }
 
-    /// Every refusal of spec/providers.md §5, in order, then the request to send.
+    /// Every refusal of spec/adapters.md §4, in order, then the request to send.
     fn prepare(&self, call: &CallRequest) -> Result<HttpRequest, String> {
         let route = &call.route;
         if route.capability != "music.generate"
-            || !serves(&route.contract, CONTRACT_ADAPTER, |v| {
-                v.is_number() && v.as_f64() == Some(CONTRACT_BEHAVIOR)
-            })
+            || !serves(&route.contract, CONTRACT_ADAPTER, |v| IDENTITY.behaves(v))
         {
             return Err(not_served(call));
         }
         crate::capabilities::check_request(&route.capability, &call.request)?;
-        let credential = self.client.credential("authorization", "Bearer ")?;
+        let credential = self.client.credential()?;
+        let options = wire::provider_options(call, OWNED)?;
         let prompt = call
             .request
             .get("prompt")
@@ -93,13 +100,17 @@ impl OpenRouterMusic {
         if prompt.trim().is_empty() {
             return Err("a music call needs its prompt as text".into());
         }
-        let body = json!({
-            "model": route.model.trim(),
-            "messages": [{"role": "user", "content": prompt}],
-            "modalities": ["text", "audio"],
-            "audio": {"format": FORMAT},
-            "stream": true,
-        });
+        let mut body = Map::new();
+        body.insert("model".into(), json!(route.model.trim()));
+        body.insert(
+            "messages".into(),
+            json!([{"role": "user", "content": prompt}]),
+        );
+        body.insert("modalities".into(), json!(["text", "audio"]));
+        body.insert("audio".into(), json!({"format": FORMAT}));
+        body.insert("stream".into(), json!(true));
+        body.extend(options);
+        let body = Value::Object(body);
         if wire::body_exceeds(&body, super::MAX_REQUEST_BYTES) {
             return Err(BODY_TOO_LARGE.into());
         }
@@ -114,7 +125,7 @@ impl OpenRouterMusic {
         .max_response_bytes(MAX_RESPONSE_BYTES))
     }
 
-    /// A 2xx response as an answer, or a structural failure (spec/providers.md §4.4).
+    /// A 2xx response as an answer, or a structural failure (spec/adapters.md §3.4).
     fn answer(&self, response: &HttpResponse) -> Sent {
         let mut track = Track::default();
         match track
@@ -156,6 +167,10 @@ impl RequestAdapter for OpenRouterMusic {
             return Err("the answer has no audio".into());
         };
         crate::checks::audio_signature(audio)
+    }
+
+    fn identity(&self) -> Option<Identity> {
+        Some(IDENTITY)
     }
 }
 

@@ -25,7 +25,7 @@ standalone `grida-fx` command and the source setup are in
 | `grida fx nodes [type]` | built-in and project node types, with settings and routes |
 | `grida fx schema <target>` | the JSON Schema its `inputs:` compile to |
 | `grida fx doctor [target]` | the Python, Node, keys, routes and tools a workflow needs, the target's own routes first ([below](#keys-and-live-runs)) |
-| `grida fx lock [where] [--same <node>]… [--check]` | node version locks; repeat `--same` to confirm several |
+| `grida fx lock [where] [--same <node>]… [--check]` | node and adapter version locks; `--same` confirms a node type's or an adapter's `<path>#<attr>`, repeated for several |
 | `grida fx expand`, `identity`, `price <target> [inputs]` | the expanded graph, each instance's identity, the price by phase, as JSON |
 | `grida fx project <run>` | a run's record projected to its state, as JSON |
 | `grida fx observe <run> [--after cursor] [--limit 256]` / `observe <run> --snapshot` | consistent snapshot or bounded recorded events, as JSON ([contract](../../spec/observation.md)) |
@@ -94,17 +94,33 @@ lists under `route_tables`, then each `--routes` file in the order given. A late
 for the same capability and route replaces an earlier one, and giving any `--routes` file leaves
 the built-in table out ([identity.md §7](../../spec/identity.md#7-route-fingerprint)).
 
+An entry may `extends:` another route of the same capability and provider, from an entry read
+before it (earlier in the same table, or in a table read before) or from the built-in table (even
+when a `--routes` file leaves that table out), and state only what differs. It takes the base's
+price, features, input-picture limit, pacing and contract; a member it states replaces the
+base's whole, except `contract`, whose members merge one by one. `extends` is not part of the
+route's identity, so an entry that extends a route to reprice it keeps every cached result.
+Where FX's adapters serve the capability and provider, a contract that leaves out `adapter`
+gets the name of the provider's default for the capability, and one that leaves out
+`adapter_behavior` gets the behaviour of the adapter it names (none when FX has no adapter of
+that name). A project route on such a capability and provider whose contract left out
+`adapter`, or named one of FX's adapters and left out `adapter_behavior`, under FX 0.6.1 or
+earlier hashes differently once after the upgrade, so its steps and paid calls run again; a
+route on any other pair keeps its fingerprint. A route on a provider the project declares is
+completed the same way, from its family's adapters or its own adapter
+([Community providers](15-community-providers.md#identity-and-the-cache)).
+
 The built-in table ships with the command. Its prices are planning allowances in US dollars, not
 provider quotes: what a call costs is settled from what the provider reports, else from the whole
-amount held for it ([providers.md §10](../../spec/providers.md#10-the-built-in-route-table)).
+amount held for it ([providers.md §3](../../spec/providers.md#3-the-built-in-route-table)).
 
 | Capability | Built-in routes | Key |
 |---|---|---|
 | `image.generate` | `openai/gpt-image-2.5-sunburst@gg` (a call, by `size`: $0.09 – $0.70); also `gpt-image-2.5-sunburst@openai` ($0.09 – $0.70), `openai/gpt-image-2.5-sunburst@openrouter` ($0.13 – $0.70), `openai/gpt-image-2.5/sunburst@fal` ($0.09 – $0.70); `imagegen@codex` ($0 – $0: free, on [your own Codex](12-codex.md)); `imagine@grok` ($0 – $0: free, on [your own Grok Build](14-grok.md)) | `GG_API_KEY`, else each provider's; none for Codex and Grok Build |
-| `image.edit` | `openai/gpt-image-2.5-sunburst@gg` (a call, by `size`: $0.09 – $0.85); also `gpt-image-2.5-sunburst@openai` ($0.09 – $0.85, and the only one with masks), `openai/gpt-image-2.5-sunburst@openrouter` ($0.13 – $0.85), `openai/gpt-image-2.5/sunburst@fal` ($0.09 – $0.85); `imagegen@codex` ($0 – $0: free, on [your own Codex](12-codex.md)); `imagine@grok` ($0 – $0: free, on [your own Grok Build](14-grok.md)) | `GG_API_KEY`, else each provider's; none for Codex and Grok Build |
+| `image.edit` | `openai/gpt-image-2.5-sunburst@gg` (a call, by `size`: $0.09 – $0.85); also `gpt-image-2.5-sunburst@openai` ($0.09 – $0.85, with masks), `openai/gpt-image-2.5-sunburst@openrouter` ($0.13 – $0.85), `openai/gpt-image-2.5/sunburst@fal` ($0.09 – $0.85, with masks); `imagegen@codex` ($0 – $0: free, on [your own Codex](12-codex.md)); `imagine@grok` ($0 – $0: free, on [your own Grok Build](14-grok.md)) | `GG_API_KEY`, else each provider's; none for Codex and Grok Build |
 | `structured.generate` | `openai/gpt-5.6-sol@gg` ($0.02 – $0.60), `openai/gpt-6-astra@gg` ($0.05 – $1.50); also `openai/gpt-5.6-sol@openrouter` ($0.02 – $0.60), `openai/gpt-6-astra@openrouter` ($0.05 – $1.50) | `GG_API_KEY`, else `OPENROUTER_API_KEY` |
 | `agent.turn` | `openai/gpt-5.6-sol@gg` ($0.003 – $0.10), `openai/gpt-6-astra@gg` ($0.01 – $1.50); also `openai/gpt-5.6-sol@openrouter` ($0.003 – $0.10), `openai/gpt-6-astra@openrouter` ($0.01 – $1.50) | `GG_API_KEY`, else `OPENROUTER_API_KEY` |
-| `video.generate` | `alibaba/wan-3.0@gg` (per second, by `resolution`, at most 30 s: $0.05 – $0.20; a first frame, no last frame); also `google/gemini-omni-flash/v1.1/image-to-video@fal` (at most 10 s: $0.03 – $0.375) | `GG_API_KEY`, else `FAL_KEY` |
+| `video.generate` | `alibaba/wan-3.0@gg` (per second, by `resolution`, at most 30 s: $0.05 – $0.20; from the prompt or a first frame, no last frame); also `google/gemini-omni-flash/v1.1/image-to-video@fal` (at most 10 s: $0.03 – $0.375) | `GG_API_KEY`, else `FAL_KEY` |
 | `mesh.generate`, `mesh.rig` | `tripo/p2@gg` ($1.20 – $2.50), `tripo/rig-v1.0@gg` ($0.25 – $0.50); also `P2-20260801@tripo` ($1.20 – $2.50), `v1.0-20240301@tripo` ($0.25 – $0.50) | `GG_API_KEY`, else `TRIPO_API_KEY` |
 | `music.generate` | `google/lyria-3-pro-preview@openrouter` ($0.05 – $0.50) | `OPENROUTER_API_KEY` |
 | `sound.generate`, `speech.generate` | `eleven_text_to_sound_v2@elevenlabs` ($0.001 – $0.10), `eleven_v3@elevenlabs` ($0.001 – $0.05) | `ELEVENLABS_API_KEY` |
@@ -112,13 +128,33 @@ amount held for it ([providers.md §10](../../spec/providers.md#10-the-built-in-
 An image call is priced by its `size`. A size the route's tiers list is priced at its tier:
 `1024x1024` is $0.21 – $0.29 for a generate on `openai/gpt-image-2.5-sunburst@gg`, and
 $0.21 – $0.43 for an edit. `auto`, no size, or a size no tier lists is priced at the whole
-range above ([providers.md §10](../../spec/providers.md#10-the-built-in-route-table)).
+range above ([providers.md §3](../../spec/providers.md#3-the-built-in-route-table)).
 
 A project picks one with `routes:` in `fx.yaml` (or a step's `route:`). To change a price or add
 a route, list a table under `route_tables:`: its entry for the same capability and route replaces
-the built-in one. A route on a provider FX has no adapter for still plans and prices, but a live
-call on it is refused (`no adapter serves …`). `grida fx nodes <type>` lists the routes that
-serve a type; `grida fx doctor` says which of them a live run could serve.
+the built-in one, and `extends` keeps everything but what it states:
+
+```yaml
+# routes/prices.yaml, listed in fx.yaml as route_tables: [routes/prices.yaml]
+fx: routes/v1
+routes:
+  - capability: image.generate
+    route: openai/gpt-image-2.5-sunburst@gg
+    extends: openai/gpt-image-2.5-sunburst@gg
+    price: { low_usd: 0.09, high_usd: 0.80 }
+```
+
+This entry holds $0.80 for each call, more than the built-in entry holds for any size. A `price`
+it states replaces the base's whole, size tiers included, so a price meant for one size holds too
+little for a larger one.
+
+A route on a provider FX has no adapter for, or whose `contract` names an adapter FX does
+not have, still plans and prices, but a live call on it is refused (`no adapter serves …`). A
+model FX does not list, on a provider it has an adapter for, runs on a route of your own
+([AI providers](13-providers.md#a-model-fx-does-not-list)), and a provider FX does not ship runs
+once the project declares it, with its family or an adapter of its own
+([Community providers](15-community-providers.md)). `grida fx nodes <type>` lists the routes
+that serve a type; `grida fx doctor` says which of them a live run could serve.
 
 `<target>` is one of:
 - a workflow file (`workflows/gallery.yaml`);
@@ -138,7 +174,7 @@ Gateway (`@gg`): text, agent turns, images, video, 3D models and rigs, billed to
 organization's Grida AI credits. Create it at [console.grida.co](https://console.grida.co/_/ai-gateway), where
 you also add credits and see what each call was charged. FX books a GG call at what GG charged
 for it, read back once GG has settled it; a charge that has not settled within a short wait is
-booked at the call's whole hold ([providers.md §9.7](../../spec/providers.md#97-grida-gateway)).
+booked at the call's whole hold ([GG's adapter reference](../../crates/grida-fx-providers/src/gg/README.md)).
 
 **Your own provider keys.** Every other route takes its provider's key under its usual name:
 `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `FAL_KEY`, `TRIPO_API_KEY` and `ELEVENLABS_API_KEY`. Sound,
@@ -146,7 +182,9 @@ speech and music have no GG route yet. `GG_BASE_URL`, `OPENAI_BASE_URL`,
 `OPENROUTER_BASE_URL`, `FAL_BASE_URL` and `ELEVENLABS_BASE_URL` point a provider at another
 address, such as a proxy. A key that is missing refuses only the calls that need it, before
 anything is sent and for nothing: the step fails, refused with `GG_API_KEY is not set`.
-Without `--live` no key is used.
+Without `--live` no key is used. A provider FX does not ship is declared in `fx.yaml`, with the
+variables of its own key and address
+([Community providers](15-community-providers.md#declare-the-provider)).
 
 **No API key: your Codex.** With Codex installed and signed in to your ChatGPT account, the route
 `imagegen@codex` draws images with no key and nothing to buy: it is priced at $0, and a run whose
@@ -158,33 +196,39 @@ calls are all on it needs no `--max-usd`. It has caveats, on sizes above all:
 (`HTTPS_PROXY` or `ALL_PROXY`, minus the hosts in `NO_PROXY`), tunnelled, so the proxy never reads
 a key. Requests to `localhost` or a loopback address, the only hosts a plain `http` base URL may
 name, are never proxied: they go straight there, and `HTTP_PROXY` is not used
-([providers.md §2](../../spec/providers.md#2-the-transport)).
+([adapters.md §2](../../spec/adapters.md#2-the-transport)).
 
 **The `.env` file.** A variable set (and not blank) in the environment wins. Otherwise FX reads it
-from the `.env` file of the project you run from, if there is one, and only those eleven names: a
-line naming anything else is skipped without being read. A line is `NAME=value` (an `export`
-before it is fine), with the value unquoted, in `'single quotes'` taken as written, or in `"double
-quotes"` with JSON escapes; blank lines and `#` comments are skipped. A file FX cannot use stops a
-live run before anything is planned (exit 2), with a message that names the variable and the line
-and never the value: a symlink or anything but a plain file, text that is not UTF-8, a name given
-twice, an empty value, a quote out of place, or a control character in the value. Keys are never
-printed, logged or recorded. `GRIDA_FX_DISABLE_DOTENV=1` turns the file off, so only the
-environment counts (credential-free checks set it).
+from the `.env` file of the project you run from, if there is one, and only the eleven key and
+base-URL names above and the ones that project's `fx.yaml` declares: a line naming anything else
+is skipped without being read. A line is `NAME=value` (an `export` before it is fine), with the
+value unquoted, in `'single quotes'` taken as written, or in `"double quotes"` with JSON escapes;
+blank lines and `#` comments are skipped. A file FX cannot use stops a live run before anything is
+planned (exit 2), with a message that names the variable and the line and never the value: a
+symlink or anything but a plain file, text that is not UTF-8, a name given twice, an empty value,
+a quote out of place, or a control character in the value. Keys are never printed, logged or
+recorded. `GRIDA_FX_DISABLE_DOTENV=1` turns the file off, so only the environment counts
+(credential-free checks set it).
 
 **Trying `--live` without the network.** With `GRIDA_FX_NETWORK=off`, a live run builds its
-adapters as usual, but nothing leaves the machine: every provider request is refused before it is
-sent, and the step fails with a message that names `GRIDA_FX_NETWORK`, for nothing. Tests of live
-paths use it.
+adapters as usual, but nothing FX sends leaves the machine: every request through FX's transport
+(FX's adapters, and a [project adapter's](15-community-providers.md#the-network-fetch) `fetch`) is
+refused before it is sent, and the step fails with a message that names `GRIDA_FX_NETWORK`, for
+nothing.
+A project adapter's own HTTP client is not stopped: such an adapter checks the switch itself.
+Tests of live paths use it.
 
 **Checking keys and routes.** `grida fx doctor` prints, after the engine, Python and Node lines,
-where each key comes from, which Codex and Grok Build it found, and which routes a live run could
-serve, for the project you run from (the built-in table and its `route_tables`); with a target, the
-tools and node types the workflow needs follow:
+where each key comes from (and for each provider `fx.yaml` declares, a `provider` line with its
+address too, and for one served by [its own adapter](15-community-providers.md#your-own-adapter) an
+`adapter` line), which Codex and Grok Build it found, and which routes a live run could serve, for
+the project you run from (the built-in table and its `route_tables`); with a target, the tools
+and node types the workflow needs follow:
 
 ```
-engine    grida-fx 0.6.1
-python    .venv/bin/python (grida 0.6.1)
-node      /usr/local/bin/node (@grida/fx 0.6.1)
+engine    grida-fx 0.7.0
+python    .venv/bin/python (grida 0.7.0)
+node      /usr/local/bin/node (@grida/fx 0.7.0)
 key       GG_API_KEY present (.env)
 key       OPENAI_API_KEY missing
 key       OPENROUTER_API_KEY missing
@@ -209,9 +253,12 @@ A `program` line names the Codex or Grok Build a live run would start, where FX 
 A route is `servable`, has `no key` (and names the variable to set), is `not installed (codex)`
 or `not installed (grok)` (no Codex or Grok Build found), `too old (codex 0.150.0; FX needs
 0.160.1+)` or `no version (codex)` (a Codex a live run would refuse), or has `no adapter` (no
-provider of FX serves it). A missing key alone doesn't change doctor's exit status, unless the
-target uses a route that needs it (below); a `.env` or base URL that a live run would refuse does:
-doctor prints `keys      <why>` and exits 1.
+adapter of FX serves the capability on that provider, or none under the `adapter` its contract
+names). A missing key alone doesn't change doctor's exit status, unless the target uses a route
+that needs it (below); a `.env` or base URL that a live run would refuse does: doctor prints
+`keys      <why>` and exits 1. So does an adapter that cannot load, as a plan would refuse it:
+its line reads `adapter   acme adapters/acme.py#acme cannot load: <why>` where a loaded one reads
+`adapter   acme adapters/acme.py#acme version 1: structured.generate (request)`.
 
 **The target's routes come first.** With a target, `grida fx doctor <target>` lists, right after the
 Python and Node lines, the routes the workflow's paid steps use, each with whether a live run could
@@ -219,9 +266,9 @@ serve it and how many steps use it (a repeated step counts once; groups and used
 included):
 
 ```
-engine    grida-fx 0.6.1
-python    .venv/bin/python (grida 0.6.1)
-node      /usr/local/bin/node (@grida/fx 0.6.1)
+engine    grida-fx 0.7.0
+python    .venv/bin/python (grida 0.7.0)
+node      /usr/local/bin/node (@grida/fx 0.7.0)
 uses      image.generate imagegen@codex servable (8 steps)
 key       GG_API_KEY missing
 …
@@ -236,7 +283,7 @@ Doctor takes no `--routes`: routes a run adds with `--routes` show as `not in th
 
 **The Python line.** FX's Python node host needs Python 3.11 or later with `grida`. The Python
 line names the interpreter FX would use and says what it found:
-- `python    .venv/bin/python (grida 0.6.1)`: ready;
+- `python    .venv/bin/python (grida 0.7.0)`: ready;
 - `python    python3 too old (3.9.6; FX needs 3.11+)`: run `uv sync` or `pip install grida` in
   the project, or set `GRIDA_FX_PYTHON` to a newer Python;
 - `python    python3 no grida`: install `grida` into that Python;
@@ -247,7 +294,7 @@ line names the interpreter FX would use and says what it found:
 **The Node line.** FX's TypeScript node host needs Node 24 or later and `@grida/fx`
 ([Getting started](01-getting-started.md#when-fx-needs-node)). The Node line names the Node FX
 would use and says what it found:
-- `node      /usr/local/bin/node (@grida/fx 0.6.1)`: ready;
+- `node      /usr/local/bin/node (@grida/fx 0.7.0)`: ready;
 - `node      /usr/local/bin/node too old (22.12.0; FX needs 24+)`, or `bun not Node.js 24+`:
   install Node 24 or later, or set `GRIDA_FX_NODE` to one;
 - `node      /usr/local/bin/node no @grida/fx`: run `npm install @grida/fx` in the project;
@@ -473,8 +520,8 @@ const images = result.outputs["images"]; // a keyed collection is a Map, in its 
   process, offline and for nothing ([below](#stand-ins-testing-without-a-provider));
   `result.standIn` says whether a run had one.
 - **Your Node runs the TypeScript nodes when nothing else is chosen:** the SDK (and `grida fx`)
-  tells the engine the Node it runs on, and TypeScript node bodies, builders and a TypeScript
-  `--stand-in` file run on it unless `GRIDA_FX_NODE` chooses another. Hosting them needs Node 24
+  tells the engine the Node it runs on, and TypeScript node bodies, builders, adapters and a
+  TypeScript `--stand-in` file run on it unless `GRIDA_FX_NODE` chooses another. Hosting them needs Node 24
   or later ([Getting started](01-getting-started.md#when-fx-needs-node)); run under Bun, the SDK
   leaves the choice to `node` on `PATH`.
 
@@ -518,7 +565,8 @@ is asked only the rest.
 
 **Never with `--live` or `--yes-up-to`** (exit 2): a stand-in run spends nothing and runs every
 phase. `--max-usd` is accepted and changes nothing, since nothing is reserved: the plan shows the
-ceiling but never warns that the run stops before crossing it. `--deliver` works as in any run. `plan` and the other planning commands take no stand-in: planning never makes
+ceiling but never warns that the run stops before crossing it, and notes no capped route.
+`--deliver` works as in any run. `plan` and the other planning commands take no stand-in: planning never makes
 a paid call.
 
 **The function** takes one call, and may be `async`:
@@ -569,8 +617,9 @@ discarded.
 2. **The answer's shape:** the files the capability returns, by name and kind, and its `data`
    (`the answer holds no image`, `image.generate returns no file named mask`,
    `structured.generate returns its data as {"json": <value>}`).
-3. **The route's check:** the check of FX's adapter for the route's provider when FX has one (built
-   with no key, so it sends nothing), else the check the capability makes on every route. For a
+3. **The route's check:** the check of the FX adapter that would serve the route (the one its
+   contract's `adapter` names, else the provider's default for the capability) when FX has one
+   (built with no key, so it sends nothing), else the check the capability makes on every route. For a
    picture: a PNG of the exact `size`, with an alpha channel when `transparent` was asked and no
    transparent pixel when `opaque` was (`the image is 32x32, not 64x64`). For
    `structured.generate`, its schema; for audio, an MP3.
