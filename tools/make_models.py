@@ -94,7 +94,10 @@ CARDS: dict[str, tuple[str, str] | None] = {
     ),
     "eleven_v3@elevenlabs": ("audio.text_to_speech.models", "eleven_v3"),
     "alibaba/wan-3.0@gg": ("video.models", "alibaba/wan-3.0"),
-    "google/gemini-omni-flash/v1.1/image-to-video@fal": ("video.models", "google/gemini-omni-1.1-flash"),
+    "google/gemini-omni-flash/v1.1/image-to-video@fal": (
+        "video.models",
+        "google/gemini-omni-1.1-flash",
+    ),
 }
 RIGGING = "three_d.rigging.models"
 RIG_CHECK = "three_d.rig_check.operation"
