@@ -5,7 +5,7 @@
 > with its price, runs only what changed, caches every result by content, reserves every paid call
 > against a ceiling, and records how each result was made. The command is `grida fx`.
 
-Version: 0.7.0
+Version: 0.7.1
 
 This file is the reference for people and coding agents using FX: what exists, how to write it,
 and how to run it, as complete recipes. It is kept by hand and checked in CI against the engine
@@ -807,7 +807,7 @@ Python nodes need Python 3.11+ with `grida` (Pillow comes with it). A param decl
 
 ```json
 // package.json
-{ "type": "module", "private": true, "dependencies": { "@grida/fx": "0.7.0" } }
+{ "type": "module", "private": true, "dependencies": { "@grida/fx": "0.7.1" } }
 ```
 
 ```ts

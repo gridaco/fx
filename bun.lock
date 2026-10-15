@@ -7,7 +7,7 @@
     },
     "web/fx-react": {
       "name": "@grida/fx-react",
-      "version": "0.7.0",
+      "version": "0.7.1",
       "dependencies": {
         "@grida/fx-web": "workspace:*",
       },
@@ -20,7 +20,7 @@
     },
     "web/fx-web": {
       "name": "@grida/fx-web",
-      "version": "0.7.0",
+      "version": "0.7.1",
       "dependencies": {
         "fflate": "0.8.3",
         "lucide": "1.52.0",

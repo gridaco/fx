@@ -226,9 +226,9 @@ the project you run from (the built-in table and its `route_tables`); with a tar
 and node types the workflow needs follow:
 
 ```
-engine    grida-fx 0.7.0
-python    .venv/bin/python (grida 0.7.0)
-node      /usr/local/bin/node (@grida/fx 0.7.0)
+engine    grida-fx 0.7.1
+python    .venv/bin/python (grida 0.7.1)
+node      /usr/local/bin/node (@grida/fx 0.7.1)
 key       GG_API_KEY present (.env)
 key       OPENAI_API_KEY missing
 key       OPENROUTER_API_KEY missing
@@ -266,9 +266,9 @@ serve it and how many steps use it (a repeated step counts once; groups and used
 included):
 
 ```
-engine    grida-fx 0.7.0
-python    .venv/bin/python (grida 0.7.0)
-node      /usr/local/bin/node (@grida/fx 0.7.0)
+engine    grida-fx 0.7.1
+python    .venv/bin/python (grida 0.7.1)
+node      /usr/local/bin/node (@grida/fx 0.7.1)
 uses      image.generate imagegen@codex servable (8 steps)
 key       GG_API_KEY missing
 …
@@ -283,7 +283,7 @@ Doctor takes no `--routes`: routes a run adds with `--routes` show as `not in th
 
 **The Python line.** FX's Python node host needs Python 3.11 or later with `grida`. The Python
 line names the interpreter FX would use and says what it found:
-- `python    .venv/bin/python (grida 0.7.0)`: ready;
+- `python    .venv/bin/python (grida 0.7.1)`: ready;
 - `python    python3 too old (3.9.6; FX needs 3.11+)`: run `uv sync` or `pip install grida` in
   the project, or set `GRIDA_FX_PYTHON` to a newer Python;
 - `python    python3 no grida`: install `grida` into that Python;
@@ -294,7 +294,7 @@ line names the interpreter FX would use and says what it found:
 **The Node line.** FX's TypeScript node host needs Node 24 or later and `@grida/fx`
 ([Getting started](01-getting-started.md#when-fx-needs-node)). The Node line names the Node FX
 would use and says what it found:
-- `node      /usr/local/bin/node (@grida/fx 0.7.0)`: ready;
+- `node      /usr/local/bin/node (@grida/fx 0.7.1)`: ready;
 - `node      /usr/local/bin/node too old (22.12.0; FX needs 24+)`, or `bun not Node.js 24+`:
   install Node 24 or later, or set `GRIDA_FX_NODE` to one;
 - `node      /usr/local/bin/node no @grida/fx`: run `npm install @grida/fx` in the project;
