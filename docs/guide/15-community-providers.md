@@ -504,7 +504,7 @@ and workflow above stay as they are.
 
 ```json
 // package.json
-{ "type": "module", "private": true, "dependencies": { "@grida/fx": "0.7.0" } }
+{ "type": "module", "private": true, "dependencies": { "@grida/fx": "0.7.1" } }
 ```
 
 ```yaml
