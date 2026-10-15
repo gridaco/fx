@@ -1000,8 +1000,10 @@ Gate: the whole verification list, `check_host` included.
     provider options, community provider, provider declaration and adapter; the source review
     date moves to 2026-10-15. The overview's decision 15 says implemented, pending release;
     "What shipped" keeps released things only.
-- [ ] The follow-ups written up on this page, filed as issues with the pull request.
-- [ ] The whole verification list, green on the branch.
+- [x] The follow-ups written up on this page, filed as issues with the pull request (below).
+- [x] The whole verification list, green on the branch: 2,250 Rust tests in 74 binaries,
+  1,612 Python tests, 508 TypeScript tests, 66 conformance cases (also through `grida fx`), and
+  every check AGENTS.md lists, with `make_models.py --check` and `check_versions.py`.
 
 ## Defaults
 
@@ -1030,6 +1032,29 @@ Gate: the whole verification list, `check_host` included.
 
 Listed here as each milestone leaves something out, with only verified facts, and filed as issues
 with the pull request (the owner asked for it on 2026-10-15).
+
+Filed, grouped by theme, on 2026-10-15:
+
+| Issue | Covers |
+|---|---|
+| [gridaco/fx#91](https://github.com/gridaco/fx/issues/91) | Caps: say a call is capped beyond its instance, and flag a call charged more than it held |
+| [gridaco/fx#92](https://github.com/gridaco/fx/issues/92) | provider_options: agent runs, a plan-time guard, and members FX owns whole |
+| [gridaco/fx#93](https://github.com/gridaco/fx/issues/93) | Generic image adapters: picture count, exact sizes, and more generic adapters |
+| [gridaco/fx#94](https://github.com/gridaco/fx/issues/94) | fal video: route-declared limits, text_to_video at planning, and a generic adapter |
+| [gridaco/fx#95](https://github.com/gridaco/fx/issues/95) | Stand-in runs: route limits, declared providers and an adapter.check method |
+| [gridaco/fx#96](https://github.com/gridaco/fx/issues/96) | OpenAI-compatible family: 408s, contract options, refusals and costs |
+| [gridaco/fx#97](https://github.com/gridaco/fx/issues/97) | Project adapters: fetch, packages, route limits, deadlines and redaction |
+| [gridaco/fx#98](https://github.com/gridaco/fx/issues/98) | Provider declarations: download hosts, the browser opener, headers and redirect sentences |
+| [gridaco/fx#99](https://github.com/gridaco/fx/issues/99) | Grida Models: a project-level pin, media facts and one list of honoured features |
+| [gridaco/fx#100](https://github.com/gridaco/fx/issues/100) | Identity break before 1.0: provider-neutral request fields and the naming review |
+| [gridaco/fx#101](https://github.com/gridaco/fx/issues/101) | Route table: pacing shared across a provider's routes, and ElevenLabs speech's allowance |
+| [gridaco/fx#102](https://github.com/gridaco/fx/issues/102) | Conformance runner: live-run events and files in never_mentions |
+| [gridaco/fx#103](https://github.com/gridaco/fx/issues/103) | Tests that fail under load |
+| [gridaco/fx#104](https://github.com/gridaco/fx/issues/104) | Rustdoc warnings |
+| [gridaco/fx#105](https://github.com/gridaco/fx/issues/105) | A live run whose calls are all on free routes still needs a ceiling |
+| [gridaco/models#21](https://github.com/gridaco/models/issues/21) | Gaps found while pinning v1.20261013.6 in Grida FX |
+
+The list they were filed from:
 
 **gridaco/fx:**
 - a project-level Models pin and model import (#69's P5);
