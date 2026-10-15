@@ -296,8 +296,10 @@ A route is `model@provider`. Pick one per capability in `fx.yaml` `routes:`, or 
   `*_BASE_URL` variables point a provider at a proxy; `HTTPS_PROXY`/`ALL_PROXY` are honoured.
   HTTPS trusts the public roots and the platform's certificate store (`SSL_CERT_FILE`/`SSL_CERT_DIR`
   in its place when set), so a proxy whose root the machine trusts works.
-- **A provider FX does not ship** is declared under `providers:` in `fx.yaml`: the variable its
-  key comes from (sent as `authorization: Bearer <key>` unless `header` and `scheme` say
+- **A provider FX does not ship**, a *community provider*, is declared under `providers:` in
+  `fx.yaml` ([Community providers](https://github.com/gridaco/fx/blob/main/docs/guide/15-community-providers.md)
+  is the whole job, end to end): the variable its key comes from (sent as
+  `authorization: Bearer <key>` unless `header` and `scheme` say
   otherwise; no `credential` for a server that needs no key), its base URL (`https` unless it is
   this machine, with no userinfo, query or fragment) and the variable that may move it, the hosts
   its results may be downloaded from, and either its `family` (`openai-compatible`) or its
@@ -350,7 +352,8 @@ A route is `model@provider`. Pick one per capability in `fx.yaml` `routes:`, or 
   (`phase`: `refused`, `not_sent`, `after_send`). An adapter may use its own HTTP client instead,
   sending each request once with retries off, and sending nothing when `GRIDA_FX_NETWORK` is
   `off`, which FX cannot stop for it. A reason that holds the key reaches no record. It bills
-  dollars.
+  dollars. The engine neither merges nor judges `provider_options` for it: the adapter reads the
+  route's in `call.route.contract` and the step's in `call.request`, each keyed by provider.
 
 ```yaml
 # fx.yaml
@@ -390,9 +393,10 @@ providers:
         openrouter: { seed: 7 }   # read only when the step runs on an @openrouter route
 ```
 - **A model FX does not list** runs on a route of your own table, with a cap when you do not know
-  its price. On OpenRouter and fal, a route whose `contract` names no `adapter` gets FX's generic
-  image adapter: it sends the prompt, the input pictures and the `provider_options`, and nothing
-  chosen for one model, and turns the answer into a PNG. On fal the model is the endpoint id as
+  its price (recipe below). On OpenRouter a new chat model needs only its id, for structured output
+  and agent turns. On OpenRouter and fal, an image route whose `contract` names no `adapter` gets
+  FX's generic image adapter: it sends the prompt, the input pictures and the
+  `provider_options`, and nothing chosen for one model, and turns the answer into a PNG. On fal the model is the endpoint id as
   fal publishes it: the generate endpoint for `image.generate`, the edit endpoint for
   `image.edit`. An exact `size`, a `mask` or a transparent `background` is refused there, before
   anything is sent: give the model's own parameter in `provider_options` instead. A route that
@@ -970,6 +974,75 @@ answer would be (a picture of the wrong size fails the call). It keeps its own c
 `CallRefused`/`CallFailed`; anything else stops the run. From the SDKs: `run(..., stand_in=fn)` in
 Python, `run(..., { standIn: fn })` in JavaScript, in your own process.
 
+### A model FX does not list, on a provider FX speaks
+
+```yaml
+# fx.yaml
+fx: project/v1
+route_tables: [routes/models.yaml]
+```
+
+```yaml
+# routes/models.yaml
+fx: routes/v1
+routes:
+  - capability: structured.generate
+    route: acme/text-b@openrouter            # made up: a chat model OpenRouter serves
+    price: { cap_usd: 0.10 }                 # no known price: each call holds $0.10
+    contract:
+      provider_options: { openrouter: { temperature: 0.2 } }   # sent with every call
+  - capability: structured.generate
+    route: acme/text-b-mini@openrouter       # made up: its smaller sibling
+    extends: acme/text-b@openrouter          # the same contract and options
+    price: { cap_usd: 0.02 }                 # replaces the base's price
+  - capability: image.generate
+    route: acme/img-a@fal                    # made up: fal's text-to-image endpoint of a model
+    price: { cap_usd: 0.20 }
+```
+
+```json
+// schemas/colour.json
+{ "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"] }
+```
+
+```yaml
+# workflows/lantern.yaml
+fx: workflow/v1
+id: lantern
+title: A lantern on models FX does not list
+steps:
+  colour:
+    uses: fx/structured.generate@1
+    route: acme/text-b-mini@openrouter
+    with:
+      prompt: Name a colour for a copper lantern.
+      schema: ./schemas/colour.json
+  draw:
+    uses: fx/image.generate@1
+    route: acme/img-a@fal
+    with:
+      prompt: "A copper lantern, glowing ${{ steps.colour.outputs.json.name }}, flat icon."
+      provider_options:
+        fal: { seed: 7 }                     # read only on an @fal route
+outputs:
+  icon: ${{ steps.draw.outputs.image }}
+```
+
+```sh
+grida fx plan lantern --max-usd 1
+grida fx doctor lantern
+grida fx run lantern --live --max-usd 1
+```
+
+The plan prices each call at $0 to its cap and adds a `note` per capped route; `doctor` says
+`no key (OPENROUTER_API_KEY)` and `no key (FAL_KEY)` for the two routes until the keys are set,
+then `servable`. The routes name no `contract` adapter, so each gets its provider's default:
+OpenRouter's chat adapter, and fal's generic image adapter, which sends the prompt, then
+`seed`. `extends` copies a route of the same capability and provider (here the sibling's contract,
+options included) and restates only what differs; it is not part of the route's identity, the
+contract is. For a GPT Image model FX does not list, extend a built-in GPT Image route instead,
+which keeps its adapter. A provider FX does not ship needs a declaration (below).
+
 ### A provider FX does not ship, from a declaration alone
 
 ```yaml
@@ -1172,25 +1245,30 @@ export const acme = adapter({
 | `<route> does not support exact_size` (or `alpha`, `mask`, `image_input`) | change the setting or the route; for Codex and Grok Build leave `size` out and resize after |
 | `no adapter serves <route> …` | FX cannot call that provider for that capability (a declared provider needs `family: openai-compatible`, which serves `structured.generate` and `agent.turn`, or an `adapter` that declares the capability), or the route's `contract` names an `adapter` FX does not have: pick a built-in route (`grida fx nodes <type>`), declare the family or the capability, or fix or drop `contract.adapter` |
 | `… was refused: <provider>'s generic image adapter sends no exact size: give the model's own parameter in provider_options.<provider>` (or `no mask`, `no transparent background`) | leave `size` (or `mask`, or a transparent `background`) out, and pass the model's own parameter in `provider_options` |
-| `… returned no single image` | the model answered no picture, or several, and FX takes one per call: pick another model or route |
+| `… returned no single image` (or `OpenRouter's image is not decodable`, `… is <kind>, not a picture`) | the model answered no picture, several, or something that is not a picture, and FX takes one per call: pick another model or route |
+| `<step>.with.references: <route> takes at most <n> input pictures, not <m>` | give fewer pictures, or raise the route's `max_input_pictures` when the model takes more |
+| `… was refused: this route draws from a first frame` (or `last_frame needs first_frame`, `this route draws whole seconds from 3 to <n>, not <d>`, `this route draws no <resolution> clip at <ratio>`) | a fal video route: give `first_frame` (or declare `features: [text_to_video]` on a route of your own for a model that draws from the prompt alone), or ask for a length, tier and ratio its price declares |
 | `routes.<n>.extends: no route <base> serves <capability>` | `extends` names a route of the same capability declared earlier (in the same table or one read before) or a built-in one; check the id and the order |
 | `routes.<n>.extends: <base> is not a <provider> route` | a route extends only a route of its own provider |
 | `routes.<n>.price: a price states an amount (usd, low_usd, high_usd) or a cap (cap_usd)` | give the route its price, or `cap_usd: N` when its price is not known; an empty `price` is not $0 |
 | `routes.<n>.price: {…} has more than 1 property` | `cap_usd` stands alone in `price`: drop the other members |
+| `routes.<n>.price.cap_usd: 0 is less than or equal to the minimum of 0` | a cap is more than 0: write `usd: 0` for a free route |
 | `… was refused: provider_options.<provider>.<name> is a member FX owns` (or `contract.provider_options…`) | FX sets that parameter itself: use the type's own setting, or leave it out |
 | `… was refused: provider_options.<provider>.<name> holds a file: provider options are JSON only` (or `provider_options.<provider> holds a file…`) | pass files through the type's inputs; options carry JSON only |
 | `… was refused: Codex takes no provider_options` (or `Grok Build …`) | drop `provider_options.codex` (or `.grok`); other providers' members may stay |
-| `routes.<n>.contract.provider_options.<provider>: … is not of type "object"` | write `provider_options: { <provider>: { <parameter>: <value> } }` |
+| `routes.<n>.contract.provider_options.<provider>: … is not of type "object"` (or a step's `… was refused: provider_options.<provider> is an object`) | write `provider_options: { <provider>: { <parameter>: <value> } }` |
+| `… was refused: <route> is not a <capability> route this adapter serves: the contract takes no member <member>` | the route's `contract` names a member its adapter does not take (an OpenAI-compatible route takes only `adapter`, `adapter_behavior` and `provider_options`): drop it; each adapter's reference lists its members |
+| `… failed: <name> structured generation returned HTTP <n>` (or `<name> tool loop …`, `… was redirected (HTTP <n>); check <VARIABLE>`) | an OpenAI-compatible provider refused the call, billed at its hold or cap unless it was a 408 or a 429: check the model id, the key, the base URL (a redirect means it is wrong), and that the server takes a strict `json_schema` response format or strict tools |
 | `fx.yaml: providers.<name>: <name> is a provider FX ships` | declare it under another name; FX's own providers need no declaration |
 | `fx.yaml: providers.<name>.credential.variable: <VARIABLE> is already read for <provider>` (or `.base_url.variable`) | give the declaration a variable of its own |
 | `fx.yaml: providers.<name>.credential.variable: <VARIABLE> is reserved for FX and the programs it starts` (or `.base_url.variable`) | `GRIDA_FX_*`, proxy, certificate, `PATH` and `HOME` variables cannot hold a key or an address: name another |
 | `fx.yaml: providers.<name>.base_url.default: <name> base_url must use HTTPS unless it targets a loopback host` (or `must be an HTTP(S) URL without credentials, query, or fragment`, `must use a valid network port`) | give the default as `https://host[:port]/path`, or `http://` for this machine only (`localhost`, `127.0.0.1`) |
 | `fx.yaml: providers.<name>: a provider has a family or an adapter, not both` | keep one: `family` for an OpenAI-compatible server, `adapter` for your own code |
-| `fx.yaml: providers.<name>.adapter: <path>: <name> is not declared with adapter()` (TypeScript: `is not an export declared with adapter()`), `no file <path>`, `<path> failed to import: …` (doctor: `adapter   <name> <path>#<name> cannot load: …`) | name a module of the project and a top-level `adapter(...)` in it (exported in TypeScript); fix what its import raised |
+| `fx.yaml: providers.<name>.adapter: <path>: <name> is not declared with adapter()` (TypeScript: `is not an export declared with adapter()`), `no file <path>`, `<path> is outside the project`, `no node host for .<suffix> modules`, `<path>#<name> declares no capability`, `<path> failed to import: …` (doctor: `adapter   <name> <path>#<name> cannot load: …`) | name a `.py`, `.ts`, `.mts`, `.js` or `.mjs` module inside the project and a top-level `adapter(...)` in it (exported in TypeScript) that names a capability; fix what its import raised |
 | `fx.yaml: providers.<name>.adapter: the project's grida <version> cannot load adapters: upgrade grida` (or `@grida/fx`) | upgrade the project's SDK, or set `GRIDA_FX_PYTHON` / `GRIDA_FX_NODE` to one that has it |
-| `… failed: the adapter <path>#<name> failed: <Type>: <message>` (or `the adapter host exited …`, `… answered something FX cannot read: …`) | your adapter raised (its traceback is on standard error), returned what its method does not take, or its host stopped; the call is billed in full: fix the adapter before running again |
+| `… failed: the adapter <path>#<name> failed: <Type>: <message>` (or `the adapter host exited …`, `the adapter host broke the protocol: …`, `… answered something FX cannot read: …`) | your adapter raised (its traceback is on standard error; a `fetch` the SDK refuses before sending raises too: `a GET has no body`, `timeout_s is above 0 and at most 300`), returned what its method does not take, or its host stopped; the call is billed in full: fix the adapter before running again |
 | `… was refused: the adapter <path>#<name> changed since the run was planned` (or `the adapter host for <path>#<name> could not be started: …`) | the module changed, or its host could not start, after planning: run again, which plans again |
-| `FetchError` `<provider>'s credential goes only to the origin of its base URL` (or `the download is not on <provider>'s download hosts`, `the network is off (GRIDA_FX_NETWORK=off)`) | build the URL on `call.base_url`, list the host under the declaration's `download_hosts`, or turn the network on |
+| `FetchError` `<provider>'s credential goes only to the origin of its base URL` (or `the download is not on <provider>'s download hosts`, `a download never carries a credential`, `the <header> header is <provider>'s credential, which the engine attaches when asked`, `the network is off (GRIDA_FX_NETWORK=off)`) | build the URL on `call.base_url`, list the host under the declaration's `download_hosts`, ask for the key with `credential=True` rather than setting its header, or turn the network on |
 | `not installed (codex)` / `not installed (grok)` in doctor | install and sign in to Codex or Grok Build, or set `GRIDA_FX_TOOL_CODEX` / `GRIDA_FX_TOOL_GROK` |
 | `Codex … is older than 0.160.1` (or `too old (codex …)` in doctor) | update the Codex that doctor's `program` line names, or set `GRIDA_FX_TOOL_CODEX` to a newer one |
 | `python … too old` / `no grida` in doctor | `uv sync` or `pip install grida` in the project, or set `GRIDA_FX_PYTHON` |
@@ -1210,6 +1288,7 @@ export const acme = adapter({
 - [Cost, cache and takes](https://github.com/gridaco/fx/blob/main/docs/guide/04-cost-and-cache.md)
 - [Running](https://github.com/gridaco/fx/blob/main/docs/guide/05-running.md): CLI, SDKs, keys, stand-ins
 - [AI providers](https://github.com/gridaco/fx/blob/main/docs/guide/13-providers.md)
+- [Community providers](https://github.com/gridaco/fx/blob/main/docs/guide/15-community-providers.md): a provider of your own, by declaration, the OpenAI-compatible family or an adapter
 - [Images from your own Codex](https://github.com/gridaco/fx/blob/main/docs/guide/12-codex.md) and [Grok Build](https://github.com/gridaco/fx/blob/main/docs/guide/14-grok.md)
 - [Examples](https://github.com/gridaco/fx/tree/main/examples): complete projects
 

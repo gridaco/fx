@@ -204,7 +204,9 @@ assert result.failures["touch_up#1"].code == "capability_refused"
 
 A project serves a provider FX does not ship with its own adapter, which the engine runs in a
 Python node host of the project
-([adapters.md §9](https://github.com/gridaco/fx/blob/main/spec/adapters.md#9-project-adapters)).
+([adapters.md §9](https://github.com/gridaco/fx/blob/main/spec/adapters.md#9-project-adapters);
+the whole job, from the declaration to checking it offline, is the guide's
+[Community providers](https://github.com/gridaco/fx/blob/main/docs/guide/15-community-providers.md)).
 `fx.yaml` declares the provider and names the adapter, `<path>#<name>`:
 
 ```yaml

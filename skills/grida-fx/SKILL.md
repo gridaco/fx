@@ -1,6 +1,6 @@
 ---
 name: grida-fx
-description: Author, plan, run, debug, and inspect Grida FX workflows using its installed CLI and SDKs. Use for FX workflow YAML, Python and TypeScript nodes and builders, JavaScript workflow authoring, stand-ins, routes, budgets, caching, run artifacts, and the local viewer.
+description: Author, plan, run, debug, and inspect Grida FX workflows using its installed CLI and SDKs. Use for FX workflow YAML, Python and TypeScript nodes and builders, JavaScript workflow authoring, stand-ins, routes, models and providers FX does not list (community providers and their adapters), budgets, caching, run artifacts, and the local viewer.
 ---
 
 # Grida FX
@@ -166,6 +166,38 @@ Keep a route the user chose on another provider, and do not switch an existing
 project's routes without asking: a new route is a new cache key. Project
 `route_tables:` overlays the built-in table; explicit `--routes` files replace
 the built-in table. Do not invent prices to make a refused plan pass.
+
+### A model or provider FX does not list
+
+FX 0.7 and later run models and providers its built-in table lacks; check
+`grida fx --version` first.
+
+- **A model FX does not list, on GG, OpenRouter or fal**, needs only a route of
+  the project's own table (`route_tables:`): the model id as the provider names
+  it, and `price: { cap_usd: N }` when its price is unknown. Each call holds the
+  cap against the ceiling and is charged what the provider reports, else the cap:
+  agree N with the user as you agree a ceiling. `extends:` copies another route
+  of the same capability and provider and restates only what differs; the model's
+  own parameters go in `provider_options`, keyed by provider. No adapter is
+  needed.
+- **A provider FX does not ship** is a *community provider*: declare it under
+  `providers:` in `fx.yaml` with the variable its key comes from, its base URL and
+  its download hosts. A server that speaks the OpenAI Chat Completions API needs
+  only `family: openai-compatible` (structured output and agent turns); any other
+  provider needs `adapter: <path>#<name>`, an adapter written with `adapter(...)`
+  from `grida.fx` or `@grida/fx`. Read the
+  [Community providers](https://github.com/gridaco/fx/blob/main/docs/guide/15-community-providers.md)
+  guide before writing one.
+- Ask the user for the provider's key variable and address; they set the key, and
+  you never write it in `fx.yaml`, a route table, `provider_options` or an
+  adapter. Check with `grida fx plan`, `grida fx doctor` (its `provider`, `adapter`
+  and `route` lines), and `GRIDA_FX_NETWORK=off grida fx run TARGET --live
+  --max-usd N`, which runs the adapter and refuses every request FX sends before
+  it leaves, before any paid run.
+- Never reach a provider from a node body to get around this: a direct call
+  escapes FX's pricing, ceiling, retries and cache. An adapter's version is part
+  of its routes' identity: run `grida fx lock` after creating or bumping a
+  versioned one, and commit `fx.lock`.
 
 ## Inspect, resume, and deliver
 

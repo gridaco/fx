@@ -106,7 +106,9 @@ gets the name of the provider's default for the capability, and one that leaves 
 that name). A project route on such a capability and provider whose contract left out
 `adapter`, or named one of FX's adapters and left out `adapter_behavior`, under FX 0.6.1 or
 earlier hashes differently once after the upgrade, so its steps and paid calls run again; a
-route on any other pair keeps its fingerprint.
+route on any other pair keeps its fingerprint. A route on a provider the project declares is
+completed the same way, from its family's adapters or its own adapter
+([Community providers](15-community-providers.md#identity-and-the-cache)).
 
 The built-in table ships with the command. Its prices are planning allowances in US dollars, not
 provider quotes: what a call costs is settled from what the provider reports, else from the whole
@@ -149,8 +151,10 @@ little for a larger one.
 A route on a provider FX has no adapter for, or whose `contract` names an adapter FX does
 not have, still plans and prices, but a live call on it is refused (`no adapter serves …`). A
 model FX does not list, on a provider it has an adapter for, runs on a route of your own
-([AI providers](13-providers.md#a-model-fx-does-not-list)). `grida fx nodes <type>` lists the routes that
-serve a type; `grida fx doctor` says which of them a live run could serve.
+([AI providers](13-providers.md#a-model-fx-does-not-list)), and a provider FX does not ship runs
+once the project declares it, with its family or an adapter of its own
+([Community providers](15-community-providers.md)). `grida fx nodes <type>` lists the routes
+that serve a type; `grida fx doctor` says which of them a live run could serve.
 
 `<target>` is one of:
 - a workflow file (`workflows/gallery.yaml`);
@@ -180,7 +184,7 @@ address, such as a proxy. A key that is missing refuses only the calls that need
 anything is sent and for nothing: the step fails, refused with `GG_API_KEY is not set`.
 Without `--live` no key is used. A provider FX does not ship is declared in `fx.yaml`, with the
 variables of its own key and address
-([AI providers](13-providers.md#a-provider-fx-does-not-ship)).
+([Community providers](15-community-providers.md#declare-the-provider)).
 
 **No API key: your Codex.** With Codex installed and signed in to your ChatGPT account, the route
 `imagegen@codex` draws images with no key and nothing to buy: it is priced at $0, and a run whose
@@ -208,22 +212,23 @@ recorded. `GRIDA_FX_DISABLE_DOTENV=1` turns the file off, so only the environmen
 
 **Trying `--live` without the network.** With `GRIDA_FX_NETWORK=off`, a live run builds its
 adapters as usual, but nothing FX sends leaves the machine: every request through FX's transport
-(FX's adapters, and a [project adapter's](13-providers.md#your-own-adapter) `fetch`) is refused
-before it is sent, and the step fails with a message that names `GRIDA_FX_NETWORK`, for nothing.
+(FX's adapters, and a [project adapter's](15-community-providers.md#the-network-fetch) `fetch`) is
+refused before it is sent, and the step fails with a message that names `GRIDA_FX_NETWORK`, for
+nothing.
 A project adapter's own HTTP client is not stopped: such an adapter checks the switch itself.
 Tests of live paths use it.
 
 **Checking keys and routes.** `grida fx doctor` prints, after the engine, Python and Node lines,
 where each key comes from (and for each provider `fx.yaml` declares, a `provider` line with its
-address too, and for one served by [its own adapter](13-providers.md#your-own-adapter) an
+address too, and for one served by [its own adapter](15-community-providers.md#your-own-adapter) an
 `adapter` line), which Codex and Grok Build it found, and which routes a live run could serve, for
 the project you run from (the built-in table and its `route_tables`); with a target, the tools
 and node types the workflow needs follow:
 
 ```
-engine    grida-fx 0.6.1
-python    .venv/bin/python (grida 0.6.1)
-node      /usr/local/bin/node (@grida/fx 0.6.1)
+engine    grida-fx 0.7.0
+python    .venv/bin/python (grida 0.7.0)
+node      /usr/local/bin/node (@grida/fx 0.7.0)
 key       GG_API_KEY present (.env)
 key       OPENAI_API_KEY missing
 key       OPENROUTER_API_KEY missing
@@ -261,9 +266,9 @@ serve it and how many steps use it (a repeated step counts once; groups and used
 included):
 
 ```
-engine    grida-fx 0.6.1
-python    .venv/bin/python (grida 0.6.1)
-node      /usr/local/bin/node (@grida/fx 0.6.1)
+engine    grida-fx 0.7.0
+python    .venv/bin/python (grida 0.7.0)
+node      /usr/local/bin/node (@grida/fx 0.7.0)
 uses      image.generate imagegen@codex servable (8 steps)
 key       GG_API_KEY missing
 …
@@ -278,7 +283,7 @@ Doctor takes no `--routes`: routes a run adds with `--routes` show as `not in th
 
 **The Python line.** FX's Python node host needs Python 3.11 or later with `grida`. The Python
 line names the interpreter FX would use and says what it found:
-- `python    .venv/bin/python (grida 0.6.1)`: ready;
+- `python    .venv/bin/python (grida 0.7.0)`: ready;
 - `python    python3 too old (3.9.6; FX needs 3.11+)`: run `uv sync` or `pip install grida` in
   the project, or set `GRIDA_FX_PYTHON` to a newer Python;
 - `python    python3 no grida`: install `grida` into that Python;
@@ -289,7 +294,7 @@ line names the interpreter FX would use and says what it found:
 **The Node line.** FX's TypeScript node host needs Node 24 or later and `@grida/fx`
 ([Getting started](01-getting-started.md#when-fx-needs-node)). The Node line names the Node FX
 would use and says what it found:
-- `node      /usr/local/bin/node (@grida/fx 0.6.1)`: ready;
+- `node      /usr/local/bin/node (@grida/fx 0.7.0)`: ready;
 - `node      /usr/local/bin/node too old (22.12.0; FX needs 24+)`, or `bun not Node.js 24+`:
   install Node 24 or later, or set `GRIDA_FX_NODE` to one;
 - `node      /usr/local/bin/node no @grida/fx`: run `npm install @grida/fx` in the project;

@@ -60,9 +60,9 @@ Ratified 2026-10-14.
 
 ## Working rules
 
-- **Local work, one branch.** Everything lands as commits on the branch `provider-contract` and
-  stays local: nothing is pushed and no pull request or issue is opened until the owner asks
-  (2026-10-14). The owner reviews and merges the pull request.
+- **One branch, one pull request.** Everything lands as commits on the branch
+  `provider-contract`. It stayed local until the owner asked for the pull request (2026-10-15).
+  The owner reviews and merges it.
 - **Commits follow the milestones in order.** Each commit builds and passes the checks for what
   it touches, and each milestone ends with its gate green. A milestone ticks its boxes here in
   its last commit.
@@ -70,10 +70,12 @@ Ratified 2026-10-14.
 - **Users' surfaces move together.** Every user-visible change updates `llms.txt` in the same
   milestone, and public changes move `AGENT_READINESS.md` and both SDKs with them (AGENTS.md).
 - **Never stop to ask.** A question this page does not answer takes the default under
-  [Defaults](#defaults); anything left out becomes a follow-up issue, and the work goes on.
+  [Defaults](#defaults); anything left out becomes a follow-up, and the work goes on. The
+  follow-ups below are filed as issues with the pull request (2026-10-15).
 - **Code facts win.** Where this page and the code disagree on a fact, the page is corrected in
   the milestone that finds it.
-- **No release.** The PR bumps no version; a release follows RELEASING.md separately.
+- **The version.** The pull request carries the version bump to 0.7.0, as the owner asked
+  (2026-10-15); publishing follows RELEASING.md once it merges.
 
 ## Milestones
 
@@ -956,12 +958,49 @@ Gate: the whole verification list, `check_host` included.
 
 ### M11. Docs, readiness and the PR
 
-- [ ] Guide page 13, "Use a model or provider FX does not ship"; caps in page 04; routes in
+- [x] Guide page 13, "Use a model or provider FX does not ship"; caps in page 04; routes in
   page 05.
-- [ ] `llms.txt`: a recipe for a new model (M9 wrote the declared provider's); the errors table.
-- [ ] `skills/grida-fx` and its onboarding reference.
-- [ ] `AGENT_READINESS.md`: AR-20 Current, with its evidence.
-- [ ] The follow-ups written up on this page, ready to file when the owner asks.
+  - Page 13 keeps "A model FX does not list" (now with OpenRouter text) and "Parameters FX does
+    not expose"; its "A provider FX does not ship" is a summary that names the term and links
+    page 15, where the detail moved. Pages 01, 03 and 05 link page 15's sections for adapters,
+    `fetch` and declarations, and so do the README and both SDK READMEs. Page 04 already said
+    what M4 built; page 05 now says that a declared provider's routes are completed from its
+    family or adapter, and points to page 15. The guide's chapter list gains page 15.
+- [x] Guide page 15, "Community providers" (asked for by the owner, 2026-10-15): a provider a
+  project declares, end to end, as the one place a user learns it. Choosing the path; the
+  declaration and its refusals; routes; the OpenAI-compatible family; a complete adapter in
+  Python and in TypeScript (the authoring API, request or long job, outcomes and what each costs,
+  `fetch`, provider options, reasons and redaction, its version and `fx.lock`, the adapter host);
+  checking it offline; identity and the cache; sharing it today (adapters in `sources:` packages
+  planned); its limits. Its examples were planned, locked, run with the network off and with a
+  stand-in through the engine, the adapters run against a fake of `acme` on loopback, and the
+  TypeScript one type checked; the output it shows is the engine's.
+  - Code fact: the engine passes `provider_options` to a project adapter as written (the route's
+    in its contract, the step's in its request) and neither merges nor judges them, so the
+    page's adapters merge them themselves; `llms.txt` says so.
+  - Code fact: a live run on a declared provider needs a ceiling even when its routes are free
+    (`usd: 0`): only Codex and Grok Build bill a plan.
+- [x] `llms.txt`: a recipe for a new model (M9 wrote the declared provider's); the errors table.
+  - The recipe, "A model FX does not list, on a provider FX speaks", plans a capped OpenRouter
+    chat route with route options, a sibling that `extends` it, and a capped fal image route
+    with a step's options. The term "community provider" and a link to page 15 join the routes
+    section and the docs list. The errors table gains the sentences this branch added that it
+    lacked: a zero cap, an options member that is not an object, a contract member an adapter
+    does not take, an OpenAI-compatible server's statuses and redirect, the route's picture
+    limit while planning, fal video's frame, length and tier refusals, the generic adapters'
+    unreadable answers, three more load refusals, a broken protocol, and `fetch`'s credential
+    refusals.
+- [x] `skills/grida-fx` and its onboarding reference.
+  - `SKILL.md` gains "A model or provider FX does not list" and its description the jobs;
+    `references/onboarding.md` a community-provider path, doctor's `provider` and `adapter`
+    lines and a route for an unlisted model; `references/authoring.md` points a node that needs
+    another provider at a declaration and an adapter, never a direct call. They say FX 0.7.
+- [x] `AGENT_READINESS.md`: AR-20 Current, with its evidence.
+  - With the guide page, the recipes, and the tests by path; the vocabulary gains route, cap,
+    provider options, community provider, provider declaration and adapter; the source review
+    date moves to 2026-10-15. The overview's decision 15 says implemented, pending release;
+    "What shipped" keeps released things only.
+- [ ] The follow-ups written up on this page, filed as issues with the pull request.
 - [ ] The whole verification list, green on the branch.
 
 ## Defaults
@@ -990,7 +1029,7 @@ Gate: the whole verification list, `check_host` included.
 ## Follow-ups
 
 Listed here as each milestone leaves something out, with only verified facts, and filed as issues
-when the owner asks.
+with the pull request (the owner asked for it on 2026-10-15).
 
 **gridaco/fx:**
 - a project-level Models pin and model import (#69's P5);
@@ -1116,7 +1155,20 @@ when the owner asks.
   engine tests (`python/tests/test_adapter_engine.py`, `js/fx/test/adapter-engine.test.ts`) read
   the files;
 - `fx.lock`'s header: it says `the source behind each versioned node type` also when the file
-  holds adapters, kept so that the lock fixtures do not move.
+  holds adapters, kept so that the lock fixtures do not move;
+- `provider_options` in a project adapter: the engine passes the route's (in `call.route.contract`)
+  and the step's (in `call.request`) as written, unmerged and unjudged, and neither SDK has a
+  helper that merges this provider's member, the step's winning, and refuses a member the adapter
+  sets, so each adapter writes its own (guide page 15's do);
+- the cap note on a route whose adapter reads no cost: the plan's `note` for a capped
+  OpenAI-compatible route says `… is charged what the provider reports, else the cap`, though the
+  family never reads a cost, so each call is charged the cap;
+- `download_hosts` takes an address: the schema and the parser accept `127.0.0.1`, which no
+  download matches, since a download's host must be a name (a collect on a loopback fake that
+  answered such a URL was `Unreachable`, `the download is not on acme's download hosts`);
+- free routes and the ceiling: a live run whose calls are all on `usd: 0` routes, a model server
+  on the user's machine say, is refused without a ceiling (`refused: a live run needs a ceiling:
+  …`); only runs on Codex and Grok Build, which bill a plan, go without one (decision 5).
 
 **gridaco/models**, gaps found against `v1.20261013.6`:
 - no answer shapes for fal's endpoints (only `grida` bindings have `result_schema_url`);

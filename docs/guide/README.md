@@ -45,6 +45,7 @@ steps too. The bundled viewer is a read-only canvas for plans and recorded runs.
 12. [Images from your own Codex](12-codex.md): no API key, with your ChatGPT plan, and its caveats
 13. [AI providers](13-providers.md): no provider, your own Codex or Grok Build, Grida Gateway or your own keys, and what each serves
 14. [Images from your own Grok Build](14-grok.md): no API key, with your Grok subscription, and its caveats
+15. [Community providers](15-community-providers.md): a provider of your own, from a declaration, the OpenAI-compatible family or an adapter in Python or TypeScript
 
 ## Example projects
 

@@ -502,9 +502,10 @@ why. List a file that only a package, a worker or a child process loads under `r
 ## Adapters: a provider of your own
 
 A node never calls a provider itself: it asks FX, which routes, prices, checks, retries and
-caches each call. When the provider is one FX does not ship, you write its **adapter** instead, a
-module of the project in Python or TypeScript that maps FX's request to the provider's and its
-answer back, and `fx.yaml` names it on the provider's declaration:
+caches each call. When the provider is one FX does not ship, a
+[community provider](15-community-providers.md), you write its **adapter** instead, a module of
+the project in Python or TypeScript that maps FX's request to the provider's and its answer back,
+and `fx.yaml` names it on the provider's declaration:
 
 ```yaml
 # fx.yaml
@@ -537,9 +538,10 @@ acme = adapter(requests=["structured.generate"], send=send, version=1)
 An adapter is project code as a node type is: FX loads it in the node host of its language,
 while planning too, and its identity follows its `version`, whose source `grida fx lock` pins, or,
 without one, its source. Every node then reaches the provider through its routes, `<model>@acme`,
-as it reaches FX's own. [AI providers](13-providers.md#your-own-adapter) explains the outcomes an
-adapter returns (this sketch returns only an answer, so a failed exchange is billed in full), how
-it reaches the network, and how to test it with the network off.
+as it reaches FX's own.
+[Community providers](15-community-providers.md#outcomes-and-what-each-costs) explains the
+outcomes an adapter returns (this sketch returns only an answer, so a failed exchange is billed in
+full), how it reaches the network, and how to test it with the network off.
 
 ## Other languages
 

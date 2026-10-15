@@ -52,7 +52,7 @@ subscription, images can come from [your own Codex](12-codex.md) or
 
 The engine itself runs the paid built-in types (`image.generate`, `structured.generate`, …),
 `fx/select@1` and every file fact. Your own nodes, builders and
-[adapters](13-providers.md#your-own-adapter) run in their language: TypeScript ones on Node
+[adapters](15-community-providers.md#your-own-adapter) run in their language: TypeScript ones on Node
 ([below](#when-fx-needs-node)), Python ones on Python. Python runs:
 - your own Python nodes and builders, which import `from grida.fx import node, Ctx`;
 - your own Python adapters, which import `from grida.fx import adapter`: planning loads each one
@@ -74,7 +74,7 @@ The first workflow below uses `image.check_alpha`, so it needs Python.
 ### When FX needs Node
 
 Your own nodes, builders, [stand-ins](05-running.md#stand-ins-testing-without-a-provider) and
-[adapters](13-providers.md#your-own-adapter) in TypeScript (or JavaScript) run on Node, in the
+[adapters](15-community-providers.md#your-own-adapter) in TypeScript (or JavaScript) run on Node, in the
 node host that `@grida/fx` carries; planning loads a project's adapters too. A project with any of
 them needs Node 24 or later (Bun and Deno cannot host nodes), and should install `@grida/fx`
 (`npm install @grida/fx`): your modules import `node` (or `adapter`) from it, and `tsc` checks
