@@ -99,3 +99,72 @@ steps:
   status: 2
   mentions:
   - "fx.yaml: providers.acme.base_url.default: acme base_url must use HTTPS unless it targets a loopback host"
+- files:
+    fx.yaml: |
+      fx: project/v1
+      providers:
+        acme:
+          base_url: { default: "https://api.acme.test/v1" }
+          family: openai-compatible
+    routes.yaml: |
+      fx: routes/v1
+      routes:
+        - capability: structured.generate
+          route: text-a@acme
+          price: { cap_usd: 0.05 }
+          contract:
+            token_limit_field: max_completion_tokens
+            image_detail: high
+            pictures: unchanged
+            billing: { cost: usage.cost, unbilled_statuses: [400, 422] }
+  argv: [run, chat, --routes, routes.yaml, --live, --max-usd, "1", --no-view]
+  status: 1
+  mentions:
+  - "the network is off"
+  never_mentions:
+  - "the contract takes no member"
+- files:
+    routes.yaml: |
+      fx: routes/v1
+      routes:
+        - capability: structured.generate
+          route: text-a@acme
+          price: { cap_usd: 0.05 }
+          contract:
+            billing: { cost: total }
+  argv: [run, chat, --routes, routes.yaml, --live, --max-usd, "1", --no-view]
+  status: 1
+  mentions:
+  - "billing.cost is usage.cost"
+  never_mentions:
+  - "the network is off"
+- files:
+    routes.yaml: |
+      fx: routes/v1
+      routes:
+        - capability: structured.generate
+          route: text-a@acme
+          price: { cap_usd: 0.05 }
+          contract:
+            token_limit_field: other_tokens
+  argv: [run, chat, --routes, routes.yaml, --live, --max-usd, "1", --no-view]
+  status: 1
+  mentions:
+  - "token_limit_field is one of max_tokens, max_completion_tokens"
+  never_mentions:
+  - "the network is off"
+- files:
+    routes.yaml: |
+      fx: routes/v1
+      routes:
+        - capability: structured.generate
+          route: text-a@acme
+          price: { cap_usd: 0.05 }
+          contract:
+            billing: { unbilled_statuses: [408] }
+  argv: [run, chat, --routes, routes.yaml, --live, --max-usd, "1", --no-view]
+  status: 1
+  mentions:
+  - "billing.unbilled_statuses contains only integers from 400 through 499, excluding 408 and 429"
+  never_mentions:
+  - "the network is off"

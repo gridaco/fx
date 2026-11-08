@@ -288,19 +288,52 @@ route     structured.generate small-a@local servable
   `max_tokens` (the step's, else 16,000 for structured output), a strict `json_schema` response
   format (strict function tools and `tool_choice` for an agent turn), and the provider's member of
   `provider_options`, and nothing chosen for one provider. The key as declared, or none.
-- **No cost is read.** Servers report usage differently, or not at all, so each call is booked at
+- **No cost is read by default.** Servers report usage differently, or not at all, so each call is booked at
   its whole reservation: the cap, or the route's high price. The tokens a reply counts are kept
   with the call. Give each route a `cap_usd`, or a price you trust.
-- **Statuses** are FX's defaults: a 408 or a 429 is sent again, unbilled; any other 4xx fails the
-  call, billed; a 5xx is billed and tried again.
+- **Timeouts may cost money.** A 408 is booked at its reported cost, else the whole reservation,
+  and trying again needs a new reservation. A 429 is sent again unbilled, unless the opted-in
+  billing policy finds a cost, an invalid cost or an unreadable nonempty body; then it is booked and retried as a new
+  attempt too. Any other 4xx fails the call without retrying; a 5xx is booked and tried again.
 - **Other capabilities.** The family serves only these two. A route of another capability on a
   family provider has no adapter: `route     image.generate img-a@acme no adapter` in doctor,
   and `no adapter serves image.generate on img-a@acme` when a call is sent. For those, write an
   adapter in place of the family: a declaration has one or the other, so the adapter then serves
   the chat capabilities too.
-- **The contract** of a family route takes only `adapter`, `adapter_behavior` and
-  `provider_options`. Another member is refused when a call is sent: `<route> is not a
+- **The contract** of a family route takes `adapter`, `adapter_behavior`, `provider_options`,
+  `image_detail`, `token_limit_field` and `billing`; structured output also takes `pictures`.
+  Another member is refused when a call is sent: `<route> is not a
   structured.generate route this adapter serves: the contract takes no member <member>`.
+
+For a server that needs another token-limit spelling or documents its final dollar charge,
+add the settings to its route's `contract`:
+
+```yaml
+contract:
+  token_limit_field: max_completion_tokens # default: max_tokens; FX sends exactly one
+  image_detail: high                      # auto, low, high or original; default: omitted
+  pictures: unchanged                     # structured context only; default: fit and flatten
+  billing:
+    cost: usage.cost                      # only if this is its documented full final USD charge
+    unbilled_statuses: [400, 422]          # only if it documents these refusals as unbilled
+```
+
+Each setting is optional; `null` keeps its default. Both token-limit names stay owned by FX,
+so neither can be set in `provider_options`. Reasoning parameters use the server's own wire
+names in `provider_options.<provider>`; there is no model-name guessing or fallback send with
+another spelling. `pictures: unchanged` preserves the original media type and bytes; agent
+turns already send original pictures. Choose only detail values your server supports.
+
+The billing settings are independent. A valid opted-in reported cost, including zero, wins over an
+unbilled-status rule and is rounded up to micro-dollars. Missing or `null` cost permits a
+documented unbilled status to settle at $0; an invalid cost or an unreadable body stays unknown
+and is booked at the whole reservation. An empty body carries no cost. The status list takes
+distinct integers from 400 through 499, excluding 408 and 429. Other cost formats and currencies
+need a project adapter. Without `cost: usage.cost`, cost-looking fields are ignored.
+
+These settings are part of the route fingerprint: changing one changes the route's identity.
+Omitting them keeps existing requests and cached answers. The CLI and both SDKs use the same
+route table and engine rules; no additional SDK options are needed.
 
 The [OpenAI-compatible reference](../../crates/grida-fx-providers/src/openai_compatible/README.md)
 lists what the family sends and the sentences it refuses with.
@@ -984,11 +1017,9 @@ adapter named in a `sources:` package directly, without a project module, is **p
 What a community provider cannot do yet, as the
 [plan's follow-ups](../wg/provider-contract.md#follow-ups) record:
 
-- **The OpenAI-compatible family** serves `structured.generate` and `agent.turn` only (no images);
-  reads no cost, so a server's refusal of a request it never ran is billed at the whole hold or
-  cap; resends a 408 unbilled; its contract cannot ask for a picture detail or a reasoning
-  effort; and it always sends the token limit as `max_tokens`, so a server that takes only
-  `max_completion_tokens` cannot be given one.
+- **The OpenAI-compatible family** serves `structured.generate` and `agent.turn` only (no images).
+  Its optional billing policy reads only a final USD `usage.cost` and documented unbilled
+  refusal statuses; other cost formats and provider-specific outcome rules need a project adapter.
 - **A route's limits do not reach your adapter.** Planning holds a step to the route's
   `max_input_pictures` and features, but a call carries none of the route's limits (its pictures,
   its price's tiers and `max_units`, its features), so your adapter cannot hold a request to them

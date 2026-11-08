@@ -1140,18 +1140,17 @@ The list they were filed from:
 - the redirect sentences' variables: `gg::BASE_URL_VARIABLE`, `elevenlabs::BASE_URL_VARIABLE`,
   fal's `RUN_BASE_VARIABLE`, OpenAI's `BASE_URL_VARIABLE` and OpenRouter's literal restate the
   declarations' base-URL variables;
-- a 408 from an OpenAI-compatible server: the family follows `adapters.md` §3.3, so a 408 is
-  `NotReceived` and resent under the same attempt, unbilled, while FX's OpenAI and OpenRouter
-  adapters treat their providers' 408 as a timeout after the request arrived (`Failed { cost:
-  None, retryable: true }`); a server whose 408 means the same is resent without a bill;
-- family contract options: the family's contract takes only `adapter`, `adapter_behavior` and
-  `provider_options`, so a route cannot ask for a picture `detail`, a reasoning effort or
-  `pictures: unchanged`, and the token limit is always `max_tokens`: the family owns
-  `max_completion_tokens`, so a server that takes only that name cannot be given a limit;
-- an OpenAI-compatible provider's refusals and costs: every 4xx but 408 and 429 costs `None`, so
-  a server that refuses a request it never ran (a `json_schema` response format it does not take,
-  say) is charged the whole hold or cap, and a reported cost (`usage.cost`) is never read; its
-  declaration has no member to say either (a project adapter reports its own cost and outcome);
+- a 408 from an OpenAI-compatible server, resolved in source with #96: it is a possibly billed,
+  retryable failure, settled before a new attempt is reserved; provider-free ledger tests cover
+  both family capabilities and a ceiling that refuses another send;
+- family contract options, resolved in source with #96: `image_detail`, `pictures: unchanged`
+  on structured context and `token_limit_field` select explicit wire differences, with defaults
+  preserving the original bytes; reasoning parameters use `provider_options`;
+- an OpenAI-compatible provider's refusals and costs, resolved in source with #96: an optional
+  route `billing` contract reads a documented final USD `usage.cost` and explicitly unbilled
+  refusal statuses. Valid costs win, invalid costs remain unknown and a 429 carrying a cost
+  becomes a billed attempt. Other billing formats still need a project adapter. The
+  [family reference](../../crates/grida-fx-providers/src/openai_compatible/README.md) is normative;
 - stand-in checks for declared providers: `StandInChecks::new` builds its registry with
   `Keys::none()`, FX's declarations only, so a declared route's stand-in answer gets the
   every-route check, which is what the family checks (a project adapter has no check of its own:
@@ -1196,7 +1195,8 @@ The list they were filed from:
   sets, so each adapter writes its own (guide page 15's do);
 - the cap note on a route whose adapter reads no cost: the plan's `note` for a capped
   OpenAI-compatible route says `… is charged what the provider reports, else the cap`, though the
-  family never reads a cost, so each call is charged the cap;
+  family reads no cost by default, so each call without an opted-in billing policy is charged
+  the cap;
 - `download_hosts` takes an address: the schema and the parser accept `127.0.0.1`, which no
   download matches, since a download's host must be a name (a collect on a loopback fake that
   answered such a URL was `Unreachable`, `the download is not on acme's download hosts`);

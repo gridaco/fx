@@ -641,11 +641,16 @@ fn an_older_codex_is_refused_for_the_invocation_naming_where_it_was_found() {
 
 #[test]
 fn a_usage_limit_ends_the_call_with_its_reset_time() {
+    let resets_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        + 3600;
     let limited = item(
         "thread-a",
         "turn-a",
         json!({"type": "imageGeneration", "id": "ig-a", "status": "failed", "result": "",
-            "failure": {"type": "usageLimitExceeded", "limitId": "codex", "resetsAt": 1792311096}}),
+            "failure": {"type": "usageLimitExceeded", "limitId": "codex", "resetsAt": resets_at}}),
     );
     let script = format!("{}{limited}{}", opening(), completed_a());
     // The limit holds for the invocation's later calls, which start nothing until it resets.
@@ -657,24 +662,24 @@ fn a_usage_limit_ends_the_call_with_its_reset_time() {
     assert!(verified);
     assert_eq!(
         sent.0,
-        failed(
+        failed(&format!(
             "Codex image generation failed: the Codex usage limit is reached; it resets at unix \
-             time 1792311096"
-        )
+             time {resets_at}"
+        ))
     );
     assert_eq!(
         sent.1,
-        refused(
-            "the Codex usage limit is reached; it resets at unix time 1792311096, and no Codex \
+        refused(&format!(
+            "the Codex usage limit is reached; it resets at unix time {resets_at}, and no Codex \
              call starts before then"
-        )
+        ))
     );
     // A limit whose reset time has passed holds no more.
     let png = media::png(2, 2, None);
     let passed = format!(
         "{}{}{}{}{}",
         opening(),
-        limited.replace("1792311096", "1"),
+        limited.replace(&resets_at.to_string(), "1"),
         // A turn that failed is not interrupted: nothing more to read.
         completed_a().replace("read -r line\n", ""),
         call_script(5, "thread-b", "turn-b") + &image_item("thread-b", "turn-b", &png),

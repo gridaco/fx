@@ -7,21 +7,24 @@
 //! The messages, the strict JSON-schema response format, the strict function tools and the answers
 //! are [`crate::chat`]'s, as OpenRouter's and GG's are. A body holds only the members of OpenAI's
 //! Chat Completions API those need, then the provider options. The credential is the
-//! declaration's, and none for a provider declared without one. No cost is read: every answer and
-//! every failure costs `None`, so the engine charges the whole hold, or a capped route's cap; the
-//! tokens a completion's `usage` counts are the answer's usage ([`chat::usage`]). Statuses are
-//! spec/adapters.md §3.3 as written ([`classify`]). Labels name the provider: `<name> structured
-//! generation`, `<name> tool loop`.
+//! declaration's, and none for a provider declared without one. The route contract may opt into
+//! wire settings and documented billing; absent settings preserve the
+//! original wire and whole-hold settlement. A completion's tokens are its usage ([`chat::usage`]).
+//! Statuses follow spec/adapters.md §3.3 with conservative timeout accounting ([`classify`]).
+//! Labels name the provider: `<name> structured generation`, `<name> tool loop`.
 
 pub mod agent;
+mod billing;
+mod policy;
 pub mod structured;
 
-use crate::adapter::{Adapter, Answer, Identity, RouteRef, Sent};
+use crate::adapter::{Adapter, Answer, CallRequest, Identity, RouteRef, Sent};
 use crate::chat;
 use crate::registry::Adapters;
 use crate::setup::{Client, Setup};
 use crate::transport::{HttpResponse, Phase, TransportError, TransportErrorKind};
 use crate::wire;
+use grida_fx_core::money::Usd;
 use grida_fx_core::providers::Declaration;
 use regex::Regex;
 use serde_json::{Map, Value};
@@ -92,9 +95,9 @@ pub fn register(adapters: &mut Adapters, setup: &Setup) {
 /// spec/adapters.md §4 step 1 for the adapter of `identity` serving `capability`: the call is on
 /// `capability`, and the contract's `adapter` and `adapter_behavior`, when present, are the
 /// adapter's ([`crate::checks::contract`], the engine's check, made again for a direct caller);
-/// `provider_options` is read when the body is built; no other member. Refused with `<route> is
-/// not a <capability> route this adapter serves`, followed by `: the contract takes no member
-/// <m>` for another member.
+/// Wire and billing settings are validated here, before any exchange; provider options are read
+/// when the body is built. Refused with `<route> is not a <capability> route this adapter serves`,
+/// followed by `: <why>` for a setting or another member.
 pub(crate) fn read_contract(
     route: &RouteRef,
     capability: &str,
@@ -105,19 +108,40 @@ pub(crate) fn read_contract(
     }
     crate::checks::contract(route, identity)?;
     let mut members = route.contract.as_object().into_iter().flat_map(Map::keys);
-    let allowed = ["adapter", "adapter_behavior", "provider_options"];
-    match members.find(|member| !allowed.contains(&member.as_str())) {
-        Some(member) => Err(format!(
+    let allowed = [
+        "adapter",
+        "adapter_behavior",
+        "provider_options",
+        "image_detail",
+        "token_limit_field",
+        "billing",
+    ];
+    if let Some(member) = members.find(|member| {
+        !allowed.contains(&member.as_str())
+            && !(capability == structured::CAPABILITY && member.as_str() == "pictures")
+    }) {
+        return Err(format!(
             "{}: the contract takes no member {member}",
             crate::checks::not_served(route)
-        )),
-        None => Ok(()),
+        ));
     }
+    let reason = |why| format!("{}: {why}", crate::checks::not_served(route));
+    policy::WirePolicy::from_contract(&route.contract, capability).map_err(reason)?;
+    billing::BillingPolicy::from_contract(&route.contract).map_err(reason)?;
+    Ok(())
 }
 
-/// An answer's `data`, at no cost, with the tokens the completion `body` counts.
-pub(crate) fn answer(data: Value, body: &Map<String, Value>) -> Answer {
-    let answer = Answer::new(data, None);
+/// The documented cost the route opted into, else unknown. Contract validation precedes sending.
+pub(crate) fn cost(call: &CallRequest, response: &HttpResponse) -> Option<Usd> {
+    billing::BillingPolicy::from_contract(&call.route.contract)
+        .expect("billing was checked before sending")
+        .response_cost(response)
+        .reported()
+}
+
+/// An answer's `data` and opted-in cost, with the tokens the completion `body` counts.
+pub(crate) fn answer(data: Value, body: &Map<String, Value>, cost: Option<Usd>) -> Answer {
+    let answer = Answer::new(data, cost);
     match chat::usage(body) {
         Some(usage) => answer.with_usage(usage),
         None => answer,
@@ -128,24 +152,27 @@ pub(crate) fn answer(data: Value, body: &Map<String, Value>) -> Answer {
 static SAFE_SECONDS: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[0-9]{1,6}(?:\.[0-9]{1,3})?$").expect("a valid pattern"));
 
-/// How an exchange that is not a 2xx becomes a [`Sent`] (spec/adapters.md §3.2 and §3.3, with no
-/// override); `label` is the call's (`<name> structured generation`, `<name> tool loop`). A 2xx
-/// comes back as `Ok` for the adapter to parse.
+/// How an exchange that is not a 2xx becomes a [`Sent`] (spec/adapters.md §3.2 and §3.3, with the
+/// family's conservative timeout override and opted-in billing); `label` is the call's
+/// (`<name> structured generation`, `<name> tool loop`). A 2xx comes back as `Ok` to parse.
 /// - a transport failure: refused by the transport → `Refused`; otherwise `not_sent` →
 ///   `NotReceived`; `after_send` → `Failed { cost: None, retryable: true }`;
-/// - 3xx → `Failed { cost: None, retryable: false }`: `<label> was redirected (HTTP <n>); check
+/// - 3xx → `Failed { cost, retryable: false }`: `<label> was redirected (HTTP <n>); check
 ///   <VARIABLE>`, the declaration's base-URL variable, else `providers.<name>.base_url`;
-/// - 408 and 429 → `NotReceived`, the provider's wait as `retry_after`;
-/// - any other 4xx → `Failed { cost: None, retryable: false }`;
-/// - 5xx, and any other status → `Failed { cost: None, retryable: true }`.
+/// - 408 → `Failed { cost, retryable: true }`: a timeout does not prove no work was done;
+/// - 429 → `NotReceived`, the provider's wait as `retry_after`, unless opted-in billing reports
+///   a cost or cannot read one: then `Failed { cost, retryable: true }`;
+/// - any other 4xx → `Failed { cost, retryable: false }`;
+/// - 5xx, and any other status → `Failed { cost, retryable: true }`.
 ///
 /// A status's reason is `<label> returned HTTP <n>`, with the safe detail of an OpenAI-style error
 /// envelope ([`wire::safe_error_detail`]), the request id when the response carries a safe one, and
-/// for a 408 or a 429 `; retry-after <seconds>`. Every reason is redacted.
+/// for an unbilled 429 `; retry-after <seconds>`. Every reason is redacted.
 #[allow(clippy::result_large_err)] // `Sent` is what every caller returns at once
 pub fn classify(
     provider: &Provider,
     label: &str,
+    call: &CallRequest,
     exchange: Result<HttpResponse, TransportError>,
 ) -> Result<HttpResponse, Sent> {
     let client = &provider.client;
@@ -174,13 +201,17 @@ pub fn classify(
     if response.is_success() {
         return Ok(response);
     }
+    let billing = billing::BillingPolicy::from_contract(&call.route.contract)
+        .expect("billing was checked before sending");
+    let reported = billing.response_cost(&response);
+    let cost = reported.reported();
     if (300..400).contains(&status) {
         return Err(Sent::Failed {
             reason: client.reason(&format!(
                 "{label} was redirected (HTTP {status}); check {}",
                 provider.redirect
             )),
-            cost: None,
+            cost,
             retryable: false,
         });
     }
@@ -188,7 +219,7 @@ pub fn classify(
     let reason = wire::status_reason(label, status, detail.as_deref());
     let reason = wire::with_request_id(reason, &response);
     Err(match status {
-        408 | 429 => {
+        429 if !billing.reads_cost || matches!(reported, billing::Cost::Missing) => {
             let named = response
                 .header("retry-after")
                 .map(str::trim)
@@ -202,14 +233,19 @@ pub fn classify(
                 retry_after: crate::adapter::retry_after(&response),
             }
         }
+        408 | 429 => Sent::Failed {
+            reason: client.reason(&reason),
+            cost,
+            retryable: true,
+        },
         400..=499 => Sent::Failed {
             reason: client.reason(&reason),
-            cost: None,
+            cost,
             retryable: false,
         },
         _ => Sent::Failed {
             reason: client.reason(&reason),
-            cost: None,
+            cost,
             retryable: true,
         },
     })
@@ -219,7 +255,7 @@ pub fn classify(
 mod tests {
     use super::*;
     use crate::keys::{Environment, Keys};
-    use crate::testing::setup;
+    use crate::testing::{CallBuilder, TestCall, setup};
     use crate::transport::replay::NoNetwork;
     use grida_fx_core::providers::{BaseUrl, Credential, Declarations};
     use serde_json::json;
@@ -258,21 +294,21 @@ mod tests {
         classify(
             &provider("acme"),
             "acme tool loop",
+            &call(),
             Ok(HttpResponse::json(status, &body)),
         )
         .unwrap_err()
     }
 
+    fn call() -> TestCall {
+        CallBuilder::new("agent.turn", "text-a@acme").build()
+    }
+
     #[test]
-    fn statuses_follow_the_default_table() {
+    fn timeouts_are_possibly_billed_and_rate_limits_are_not_received() {
         let envelope =
             json!({"error": {"code": "invalid_request_error", "message": "bad acme-secret"}});
-        for status in [408, 429] {
-            assert!(
-                matches!(sent(status, json!({})), Sent::NotReceived { .. }),
-                "{status}"
-            );
-        }
+        assert!(matches!(sent(429, json!({})), Sent::NotReceived { .. }));
         for status in [400, 401, 402, 403, 404, 413, 422] {
             assert!(
                 matches!(
@@ -286,7 +322,7 @@ mod tests {
                 "{status}"
             );
         }
-        for status in [500, 502, 503, 504, 520, 600] {
+        for status in [408, 500, 502, 503, 504, 520, 600] {
             assert!(
                 matches!(
                     sent(status, envelope.clone()),
@@ -312,7 +348,7 @@ mod tests {
         let Sent::NotReceived {
             reason,
             retry_after,
-        } = classify(&provider("acme"), "acme tool loop", Ok(response)).unwrap_err()
+        } = classify(&provider("acme"), "acme tool loop", &call(), Ok(response)).unwrap_err()
         else {
             unreachable!()
         };
@@ -325,6 +361,7 @@ mod tests {
             classify(
                 &provider("acme"),
                 "X",
+                &call(),
                 Ok(HttpResponse::new(200, b"{}".to_vec()))
             )
             .is_ok()
@@ -340,7 +377,7 @@ mod tests {
             let label = format!("{name} structured generation");
             let response = HttpResponse::new(307, Vec::new());
             assert_eq!(
-                classify(&provider(name), &label, Ok(response)).unwrap_err(),
+                classify(&provider(name), &label, &call(), Ok(response)).unwrap_err(),
                 Sent::Failed {
                     reason: format!("{label} was redirected (HTTP 307); check {check}"),
                     cost: None,
@@ -352,7 +389,7 @@ mod tests {
 
     #[test]
     fn transport_phases_classify() {
-        let classified = |error| classify(&provider("acme"), "X", Err(error)).unwrap_err();
+        let classified = |error| classify(&provider("acme"), "X", &call(), Err(error)).unwrap_err();
         assert!(matches!(
             classified(TransportError::not_sent(
                 TransportErrorKind::Connect,
