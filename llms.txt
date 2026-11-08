@@ -315,9 +315,24 @@ A route is `model@provider`. Pick one per capability in `fx.yaml` `routes:`, or 
   of those two capabilities, at `{base}/chat/completions`. They send the model, the messages,
   `max_tokens`, a strict `json_schema` response format or strict function tools, and the
   provider's member of `provider_options`, and nothing chosen for one provider; the key as
-  declared, or none for a provider declared without a `credential`. They read no cost, so every
-  call is booked at its whole reservation: give each route a `cap_usd` (or a price you trust).
-  A 408 or a 429 is sent again, another 4xx fails, and a 5xx is billed and tried again. A
+  declared, or none for a provider declared without a `credential`. By default they read no cost,
+  so every call is booked at its whole reservation: give each route a `cap_usd` (or a price you trust).
+  A 408 is possibly billed: book its reservation, then reserve a new attempt before retrying.
+  A 429 is sent again unbilled; another 4xx fails without retrying, and a 5xx is booked and tried again.
+  Optional route `contract` settings: `image_detail` (`auto`, `low`, `high`, `original`, absent
+  sends none), `pictures: unchanged` (structured context only, preserves original bytes instead
+  of fitting and flattening), and `token_limit_field` (`max_tokens`, the default, or
+  `max_completion_tokens`). FX owns both token-limit names and sends exactly one; reasoning
+  parameters use the provider's own names in `provider_options.<provider>`.
+  `contract.billing` may opt into `cost: usage.cost` (the provider's documented full final USD
+  charge, rounded up to micro-dollars) and `unbilled_statuses: [400, 422]` (only documented
+  unbilled refusals; distinct integers 400–499, excluding 408 and 429). A valid opted-in cost wins over
+  a status rule; missing or `null` cost permits its $0 settlement, while an invalid cost or an
+  unreadable body remains unknown and books the reservation. An empty body carries no cost.
+  Without `cost: usage.cost`, cost-looking fields are ignored.
+  With cost reading enabled, a 429 reporting a cost (zero included), an invalid cost or an
+  unreadable nonempty body is booked and retried as a new attempt too. All settings are
+  optional, `null` keeps defaults, and explicit settings enter the route fingerprint. A
   declaration is not part of any identity, but a route on the provider whose `contract` leaves out
   `adapter`, or names the family's adapter and leaves out `adapter_behavior`, is filled in with
   the family's (`openai-compatible-structured`, `openai-compatible-tool-loop`, behaviour `1`), so
@@ -1062,7 +1077,12 @@ fx: routes/v1
 routes:
   - capability: structured.generate
     route: acme/text-a@acme        # the model id as the provider names it
-    price: { cap_usd: 0.05 }       # no cost is read: each call is booked at its cap
+    price: { cap_usd: 0.05 }       # each attempt holds $0.05
+    contract:
+      token_limit_field: max_completion_tokens # only if this server takes that spelling
+      image_detail: high
+      pictures: unchanged
+      billing: { cost: usage.cost, unbilled_statuses: [400, 422] } # documented by this server
   - capability: agent.turn
     route: acme/text-a@acme
     price: { cap_usd: 0.05 }
@@ -1097,11 +1117,14 @@ grida fx run colour --live --max-usd 1
 
 The plan prices the call at $0 to $0.05 and notes its cap. `doctor` says `no key (ACME_API_KEY)`
 for the routes until the key is set (environment or `.env`), then `servable`. The routes name no
-`contract`, so each gets the family's adapter (`openai-compatible-structured`,
-`openai-compatible-tool-loop`), and a run sends the model, the messages, `max_tokens` and the
-strict schema to `https://api.acme.test/v1/chat/completions`; the model's own parameters go in
-`provider_options: { acme: { … } }`. A server on this machine (`http://127.0.0.1:8080/v1`) needs no
-`credential`.
+`adapter` in their contracts, so each gets the family's adapter (`openai-compatible-structured`,
+`openai-compatible-tool-loop`). The structured route explicitly selects `max_completion_tokens`,
+original pictures with high detail, and this server's documented billing rules; it reads the
+final USD `usage.cost`, and an unbilled 400 or 422 settles at $0 when there is no reported cost.
+Other unknown costs book the $0.05 reservation. The agent route keeps the defaults. The strict
+schema and messages go to `https://api.acme.test/v1/chat/completions`; other model parameters go
+in `provider_options: { acme: { … } }`. A server on this machine (`http://127.0.0.1:8080/v1`)
+needs no `credential`.
 
 ### A provider of your own, with an adapter in Python
 
@@ -1257,8 +1280,11 @@ export const acme = adapter({
 | `… was refused: provider_options.<provider>.<name> holds a file: provider options are JSON only` (or `provider_options.<provider> holds a file…`) | pass files through the type's inputs; options carry JSON only |
 | `… was refused: Codex takes no provider_options` (or `Grok Build …`) | drop `provider_options.codex` (or `.grok`); other providers' members may stay |
 | `routes.<n>.contract.provider_options.<provider>: … is not of type "object"` (or a step's `… was refused: provider_options.<provider> is an object`) | write `provider_options: { <provider>: { <parameter>: <value> } }` |
-| `… was refused: <route> is not a <capability> route this adapter serves: the contract takes no member <member>` | the route's `contract` names a member its adapter does not take (an OpenAI-compatible route takes only `adapter`, `adapter_behavior` and `provider_options`): drop it; each adapter's reference lists its members |
-| `… failed: <name> structured generation returned HTTP <n>` (or `<name> tool loop …`, `… was redirected (HTTP <n>); check <VARIABLE>`) | an OpenAI-compatible provider refused the call, billed at its hold or cap unless it was a 408 or a 429: check the model id, the key, the base URL (a redirect means it is wrong), and that the server takes a strict `json_schema` response format or strict tools |
+| `… was refused: <route> is not a <capability> route this adapter serves: the contract takes no member <member>` | the route's `contract` names a member its adapter does not take; an OpenAI-compatible route takes `adapter`, `adapter_behavior`, `provider_options`, `image_detail`, `token_limit_field` and `billing`, plus `pictures` for structured output only: drop any other member |
+| `… was refused: <route> is not a <capability> route this adapter serves: token_limit_field is one of max_tokens, max_completion_tokens` (or `image_detail is one of auto, low, high, original`) | use one of the family's explicit wire settings, or leave it out for the existing default |
+| `… was refused: <route> is not a <capability> route this adapter serves: billing.cost is usage.cost` (or `billing takes no member <member>`) | billing reads only a documented final USD `usage.cost`; other cost paths and currencies need a project adapter |
+| `… was refused: <route> is not a <capability> route this adapter serves: billing.unbilled_statuses contains only integers from 400 through 499, excluding 408 and 429` (or `billing.unbilled_statuses repeats HTTP <n>`) | list only distinct documented unbilled refusal statuses; a timeout never proves an unbilled refusal |
+| `… failed: <name> structured generation returned HTTP <n>` (or `<name> tool loop …`, `… was redirected (HTTP <n>); check <VARIABLE>`) | a family call failed: check the model id, key, base URL and support for a strict schema or tools. A 408 may already be billed; retry needs a new reservation. Costs use the route's billing policy, else its hold or cap; a default 429 resends unbilled |
 | `fx.yaml: providers.<name>: <name> is a provider FX ships` | declare it under another name; FX's own providers need no declaration |
 | `fx.yaml: providers.<name>.credential.variable: <VARIABLE> is already read for <provider>` (or `.base_url.variable`) | give the declaration a variable of its own |
 | `fx.yaml: providers.<name>.credential.variable: <VARIABLE> is reserved for FX and the programs it starts` (or `.base_url.variable`) | `GRIDA_FX_*`, proxy, certificate, `PATH` and `HOME` variables cannot hold a key or an address: name another |

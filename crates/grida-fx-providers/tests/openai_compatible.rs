@@ -452,7 +452,7 @@ fn refusals_come_before_anything_is_sent_in_order() {
             not_served,
         );
     }
-    for member in ["request_policy", "pictures", "image_detail"] {
+    for member in ["request_policy", "unknown_setting"] {
         let mut contract = structured_contract();
         contract[member] = json!("high");
         assert_refused(
@@ -618,7 +618,7 @@ fn provider_options_follow_the_body_s_own_members() {
 // Statuses and answers
 
 #[test]
-fn statuses_follow_the_default_table_and_never_cost_zero() {
+fn timeouts_are_billed_and_other_statuses_keep_the_default_policy() {
     let envelope = |code: &str| json!({"error": {"code": code, "message": format!("bad {KEY}")}});
     let transport = replay(vec![
         expect(ExpectBody::Any).reply(
@@ -651,10 +651,13 @@ fn statuses_follow_the_default_table_and_never_cost_zero() {
         "{:?}",
         outcomes[0]
     );
-    assert!(
-        matches!(&outcomes[1], Sent::NotReceived { .. }),
-        "{:?}",
-        outcomes[1]
+    assert_eq!(
+        outcomes[1],
+        Sent::Failed {
+            reason: format!("{label} returned HTTP 408"),
+            cost: None,
+            retryable: true,
+        }
     );
     assert_eq!(
         outcomes[2],

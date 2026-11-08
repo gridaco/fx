@@ -3,11 +3,13 @@
 //! spec/capabilities.md §5).
 //!
 //! Contract: `adapter: openai-compatible-tool-loop`, `adapter_behavior: 1`, and optional
-//! `provider_options` (spec/adapters.md §8: the engine's agent loop sends none, so an agent run's
-//! turns take only the route's). The transcript, the tools and the reply are [`crate::chat`]'s, as
-//! on OpenRouter, with no `detail` on a picture. The body is `{model, messages, tools, tool_choice,
-//! max_tokens?}`, then the provider options. The answer is `data: {"text", "tool_calls"}`, at no
-//! cost, with its token usage; the engine checks its shape. Deadline [`DEADLINE`].
+//! wire and billing settings, and `provider_options` (spec/adapters.md §8: the engine's agent
+//! loop sends none, so an agent run's turns take only the route's). The transcript, the tools
+//! and the reply are [`crate::chat`]'s, as on OpenRouter. Pictures carry `detail` only when the
+//! contract gives `image_detail`. The body is `{model, messages, tools, tool_choice, max_tokens?}`,
+//! with the selected token-limit field replacing `max_tokens`, then the provider options. The
+//! answer is `data: {"text", "tool_calls"}`, with its configured cost and token usage; the engine
+//! checks its shape. Deadline [`DEADLINE`].
 //!
 //! `send`, in the order of spec/adapters.md §4 (the engine makes steps 1 and 2 before it, the
 //! contract's other members through `check_contract`; the adapter makes them again for a direct
@@ -15,7 +17,7 @@
 //! the provider is declared with one; provider options that set no member of [`OWNED`]
 //! ([`wire::provider_options`]); [`chat::agent_prompt`]'s values and files; a body over 200 MiB;
 //! then one exchange, classified by [`super::classify`]. A 2xx that does not become an answer is
-//! `Failed { cost: None, retryable: true }`.
+//! `Failed { cost, retryable: true }`, with the opted-in reported cost, else unknown.
 
 use super::Provider;
 use crate::BoxFuture;
@@ -73,17 +75,18 @@ impl CompatibleAgent {
     /// The module doc's refusals, then the credential and the body.
     fn prepare(&self, call: &CallRequest) -> Result<(Option<Credential>, Value), String> {
         super::read_contract(&call.route, CAPABILITY, &IDENTITY)?;
+        let policy = super::policy::WirePolicy::from_contract(&call.route.contract, CAPABILITY)?;
         capabilities::check_request(CAPABILITY, &call.request)?;
         let credential = self.provider.client.optional_credential()?;
         let options = wire::provider_options(call, OWNED)?;
-        let prompt = chat::agent_prompt(call, None)?;
+        let prompt = chat::agent_prompt(call, policy.image_detail.as_deref())?;
         let mut body = Map::new();
         body.insert("model".into(), json!(call.route.model.trim()));
         body.insert("messages".into(), Value::Array(prompt.messages));
         body.insert("tools".into(), Value::Array(prompt.tools));
         body.insert("tool_choice".into(), json!(prompt.tool_choice));
         if let Some(max_tokens) = prompt.max_tokens {
-            body.insert("max_tokens".into(), json!(max_tokens));
+            body.insert(policy.token_limit_field.into(), json!(max_tokens));
         }
         body.extend(options);
         let body = Value::Object(body);
@@ -94,20 +97,21 @@ impl CompatibleAgent {
     }
 
     /// A 2xx's body as an answer.
-    fn parse(&self, response: &HttpResponse) -> Sent {
+    fn parse(&self, call: &CallRequest, response: &HttpResponse) -> Sent {
         let client = &self.provider.client;
+        let cost = super::cost(call, response);
         let body = match wire::json_object(&response.body, &self.label) {
             Ok(body) => body,
-            Err(reason) => return chat::structural(client, response, &reason, None),
+            Err(reason) => return chat::structural(client, response, &reason, cost),
         };
         let failed = |what: &str| {
-            chat::structural(client, response, &format!("{} {what}", self.label), None)
+            chat::structural(client, response, &format!("{} {what}", self.label), cost)
         };
         let Some(message) = chat::first_message(&body) else {
             return failed("returned no message");
         };
         match chat::agent_reply(message) {
-            Ok(reply) => Sent::Answered(super::answer(reply, &body)),
+            Ok(reply) => Sent::Answered(super::answer(reply, &body, cost)),
             Err(what) => failed(what),
         }
     }
@@ -132,8 +136,13 @@ impl RequestAdapter for CompatibleAgent {
                 DEADLINE,
                 super::MAX_RESPONSE_BYTES,
             );
-            match super::classify(&self.provider, &self.label, client.send(request).await) {
-                Ok(response) => self.parse(&response),
+            match super::classify(
+                &self.provider,
+                &self.label,
+                call,
+                client.send(request).await,
+            ) {
+                Ok(response) => self.parse(call, &response),
                 Err(sent) => sent,
             }
         })
