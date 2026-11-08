@@ -364,19 +364,29 @@ export const acme = adapter({
   // Polls with its own clock, until its own deadline.
   collect: async (call) => {
     for (let poll = 0; poll < 120; poll += 1) {
-      let job: { status: string; url: string; cost_usd?: number };
+      let job: { status: string; url: string; cost_usd?: number } | undefined;
       try {
         const url = `${call.baseUrl}/videos/${call.handle.id}`;
-        job = (await call.fetch(url, { credential: true, timeoutS: 30 })).json() as typeof job;
+        const response = await call.fetch(url, { credential: true, timeoutS: 30 });
+        if (response.status === 200) job = response.json() as typeof job;
       } catch (error) {
-        if (!(error instanceof FetchError)) throw error;
-        return { outcome: "unreachable", reason: error.reason };
+        if (!(error instanceof FetchError)) throw error; // a poll that saw nothing
       }
-      if (job.status === "failed") {
+      if (job?.status === "failed") {
         return { outcome: "ended", reason: "acme could not make the video", costUsd: job.cost_usd };
       }
-      if (job.status === "done") {
-        const clip = await call.fetch(job.url, { lane: "download", timeoutS: 120 });
+      if (job?.status === "done") {
+        let clip;
+        try {
+          clip = await call.fetch(job.url, { lane: "download", timeoutS: 120 });
+        } catch (error) {
+          if (!(error instanceof FetchError)) throw error;
+          return { outcome: "unreachable", reason: error.reason }; // a later run collects it again
+        }
+        if (clip.status !== 200) {
+          const reason = `acme's video download returned HTTP ${clip.status}`;
+          return { outcome: "unreachable", reason };
+        }
         return { outcome: "answered", files: { video: clip.body }, costUsd: job.cost_usd };
       }
       await sleep(5000);

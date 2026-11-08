@@ -1221,7 +1221,10 @@ once `ACME_API_KEY` is set. With the network off, the adapter runs and its `fetc
 before it leaves: the step fails `… was refused: the network is off (GRIDA_FX_NETWORK=off)`, at
 $0, which tests everything but the provider. A long job (`video.generate`, say) goes in `jobs=`
 with `submit` returning `Accepted({…})` and `collect` polling, by its own clock, until it
-returns `Answered`, `Ended` or `Unreachable`. In TypeScript the module is `adapters/acme.ts`
+returns `Answered`, `Ended` or `Unreachable`. Failed status reads are polls that saw nothing;
+keep polling until the deadline. A failed result download returns `Unreachable`, so a later run
+collects the same job again. Check each `fetch` response's HTTP status before using its body.
+In TypeScript the module is `adapters/acme.ts`
 (`adapter: adapters/acme.ts#acme`), the outcomes are plain objects:
 
 ```ts

@@ -283,14 +283,20 @@ async def collect(call):  # polls with its own clock, until its own deadline
             response = await call.fetch(
                 f"{call.base_url}/videos/{call.handle['id']}", credential=True, timeout_s=30
             )
-        except FetchError as error:
-            return Unreachable(error.reason)
-        job = response.json()
-        if job["status"] == "failed":
-            return Ended("acme could not make the video", cost_usd=job.get("cost_usd"))
-        if job["status"] == "done":
-            clip = await call.fetch(job["url"], lane="download", timeout_s=120)
-            return Answered(files={"video": clip.body}, cost_usd=job.get("cost_usd"))
+        except FetchError:
+            response = None  # a poll that saw nothing
+        if response is not None and response.status == 200:
+            job = response.json()
+            if job["status"] == "failed":
+                return Ended("acme could not make the video", cost_usd=job.get("cost_usd"))
+            if job["status"] == "done":
+                try:
+                    clip = await call.fetch(job["url"], lane="download", timeout_s=120)
+                except FetchError as error:
+                    return Unreachable(error.reason)  # a later run collects it again
+                if clip.status != 200:
+                    return Unreachable(f"acme's video download returned HTTP {clip.status}")
+                return Answered(files={"video": clip.body}, cost_usd=job.get("cost_usd"))
         await asyncio.sleep(5)
     return Unreachable("acme's video is still being made")
 
