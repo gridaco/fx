@@ -8,7 +8,7 @@
 //! phase** first (uploads; for a rig, the riggability check) whose failures are `NotReceived` or
 //! `Refused`, then posts the one **paid** task exactly once. `collect` polls `GET /tasks/<id>`
 //! every [`POLL`] through the injected clock, then downloads every model URL of the finished task
-//! (Tripo's own hosts only, no credential, at most [`MAX_MODEL_BYTES`] each) and sniffs each file.
+//! (no credential, at most [`MAX_MODEL_BYTES`] each) and sniffs each file.
 //! The cost is `credits_consumed` of the finished task × USD 0.01, rounded up
 //! ([`crate::wire::decimal_micros_ceil`] with 10 000 micro-dollars per credit).
 //!
@@ -365,12 +365,11 @@ impl TripoApi {
         Ok(found.into_iter().map(|(url, field)| (field, url)).collect())
     }
 
-    /// Downloads one model from Tripo's own hosts and sniffs its kind: `Ok((kind, bytes))`;
+    /// Downloads one model from the provider-returned URL and sniffs its kind: `Ok((kind, bytes))`;
     /// `Err(Download::…)` says whether the job is over (`Ended`) or may be collected again
     /// (`Unreachable`).
     pub async fn download(&self, url: &str) -> Result<(String, Vec<u8>), Download> {
-        check_model_host(url, &self.client.download_hosts)
-            .map_err(|reason| Download::Ended(reason.into()))?;
+        check_model_url(url).map_err(|reason| Download::Ended(reason.into()))?;
         let redactor = self.client.redactor.with(url);
         let request = HttpRequest::new(Method::Get, url, Lane::Download)
             .timeout(READ_DEADLINE)
@@ -747,14 +746,15 @@ fn visit_output<'a>(
     Ok(())
 }
 
-/// A model URL is on one of Tripo's own hosts (src/tripo/README.md, "Tasks"): its declared
-/// download hosts, `tripo3d.ai`, a subdomain of it, or Tripo's storage host, as
-/// [`crate::wire::download_url`] holds a download to them.
-fn check_model_host(url: &str, hosts: &[String]) -> Result<(), &'static str> {
-    match crate::wire::download_url(url, hosts) {
+/// A model URL has the shape required by src/tripo/README.md, "Tasks". The provider
+/// supplies its location; no vendor hostname catalog is checked.
+fn check_model_url(url: &str) -> Result<(), &'static str> {
+    match crate::wire::result_url(url) {
         Ok(_) => Ok(()),
         Err(OffHost::Malformed) => Err("a Tripo model address is malformed; details withheld"),
-        Err(OffHost::Outside) => Err("a Tripo model address is outside Tripo's own hosts"),
+        Err(OffHost::Outside) => Err(
+            "a Tripo model address must use HTTPS with a DNS host, port 443, no credentials and no fragment",
+        ),
     }
 }
 
@@ -898,34 +898,29 @@ mod tests {
     }
 
     #[test]
-    fn model_hosts_are_tripos_own() {
-        let hosts = &KeyName::Tripo.declaration().download_hosts;
-        let check_model_host = |url| check_model_host(url, hosts);
+    fn model_urls_validate_shape_without_a_vendor_host_catalog() {
         for good in [
             "https://tripo3d.ai/m.glb",
             "https://api.tripo3d.ai/m.glb",
             "https://API.Tripo3D.ai:443/m.glb",
-            "https://tripo-data.rg1.data.tripo3d.com/out/model.fbx?sig=1",
+            "https://cdn.acme.test/out/model.fbx?sig=1",
         ] {
-            assert_eq!(check_model_host(good), Ok(()), "{good}");
+            assert_eq!(check_model_url(good), Ok(()), "{good}");
         }
-        let outside = "a Tripo model address is outside Tripo's own hosts";
+        let outside = "a Tripo model address must use HTTPS with a DNS host, port 443, no credentials and no fragment";
         for bad in [
-            "https://example.com/model.glb",
             "http://api.tripo3d.ai/m.glb",
             "https://user@api.tripo3d.ai/m.glb",
             "https://user:pw@api.tripo3d.ai/m.glb",
             "https://api.tripo3d.ai:8443/m.glb",
-            "https://eviltripo3d.ai/m.glb",
-            "https://tripo3d.ai.example.com/m.glb",
-            "https://other.data.tripo3d.com/m.glb",
+            "https://cdn.acme.test/m.glb#fragment",
             "https://1.2.3.4/m.glb",
         ] {
-            assert_eq!(check_model_host(bad), Err(outside), "{bad}");
+            assert_eq!(check_model_url(bad), Err(outside), "{bad}");
         }
         for malformed in ["not a url", "https://api.tripo3d.ai:99999/m.glb"] {
             assert_eq!(
-                check_model_host(malformed),
+                check_model_url(malformed),
                 Err("a Tripo model address is malformed; details withheld"),
                 "{malformed}"
             );

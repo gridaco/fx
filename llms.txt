@@ -296,6 +296,14 @@ A route is `model@provider`. Pick one per capability in `fx.yaml` `routes:`, or 
   `*_BASE_URL` variables point a provider at a proxy; `HTTPS_PROXY`/`ALL_PROXY` are honoured.
   HTTPS trusts the public roots and the platform's certificate store (`SSL_CERT_FILE`/`SSL_CERT_DIR`
   in its place when set), so a proxy whose root the machine trusts works.
+- **Provider result downloads:** Tripo mesh and rig results and fal image and background-removal
+  results are downloaded from the HTTPS URL their provider returns, with a DNS hostname rather
+  than an IP literal, port 443, no userinfo and no fragment. FX keeps no provider CDN catalog.
+  Downloads carry no provider key, follow no redirects, remain size- and time-bounded, and their
+  bytes must pass the adapter's output checks. Signed URLs never reach portable records or logs.
+  A job already failed and settled by an older FX is not automatically recovered by upgrading;
+  running again can submit new paid work. [Recovery from retained tasks](https://github.com/gridaco/fx/issues/116)
+  and [fal synchronous delivery retries](https://github.com/gridaco/fx/issues/117) remain follow-ups.
 - **A provider FX does not ship**, a *community provider*, is declared under `providers:` in
   `fx.yaml` ([Community providers](https://github.com/gridaco/fx/blob/main/docs/guide/15-community-providers.md)
   is the whole job, end to end): the variable its key comes from (sent as
@@ -363,7 +371,8 @@ A route is `model@provider`. Pick one per capability in `fx.yaml` `routes:`, or 
   unreachable. `await call.fetch(url, method=, json=, credential=True, lane=, timeout_s=)` makes
   one exchange through FX (no retry, no redirect, at most 300 s and 64 MiB): the engine attaches
   the key, only to the base URL's origin, holds downloads (`lane="download"`) to
-  `download_hosts`, and refuses everything with `GRIDA_FX_NETWORK=off`; it raises `FetchError`
+  `download_hosts` (an empty list permits none), and refuses everything with
+  `GRIDA_FX_NETWORK=off`; it raises `FetchError`
   (`phase`: `refused`, `not_sent`, `after_send`). An adapter may use its own HTTP client instead,
   sending each request once with retries off, and sending nothing when `GRIDA_FX_NETWORK` is
   `off`, which FX cannot stop for it. A reason that holds the key reaches no record. It bills
@@ -497,8 +506,7 @@ routes:
   image edits are limited by the route's `max_input_pictures`, not by FX. The built-in OpenRouter
   image routes now take `background: transparent` (they refused it, so a step that `requires:
   [alpha]` now plans on them), and the built-in GG video route declares `text_to_video`. A Tripo
-  model whose address has a fragment is no longer downloaded (`a Tripo model address is outside
-  Tripo's own hosts`), as a fal output's never was.
+  model whose address has a fragment is no longer downloaded, as a fal output's never was.
 
 ## Your own nodes
 
@@ -1272,6 +1280,7 @@ export const acme = adapter({
 | `no adapter serves <route> …` | FX cannot call that provider for that capability (a declared provider needs `family: openai-compatible`, which serves `structured.generate` and `agent.turn`, or an `adapter` that declares the capability), or the route's `contract` names an `adapter` FX does not have: pick a built-in route (`grida fx nodes <type>`), declare the family or the capability, or fix or drop `contract.adapter` |
 | `… was refused: <provider>'s generic image adapter sends no exact size: give the model's own parameter in provider_options.<provider>` (or `no mask`, `no transparent background`) | leave `size` (or `mask`, or a transparent `background`) out, and pass the model's own parameter in `provider_options` |
 | `… returned no single image` (or `OpenRouter's image is not decodable`, `… is <kind>, not a picture`) | the model answered no picture, several, or something that is not a picture, and FX takes one per call: pick another model or route |
+| `a Tripo model address must use HTTPS with a DNS host, port 443, no credentials and no fragment` (or `fal hosted output must use HTTPS with a DNS host, port 443, no credentials and no fragment`) | the provider returned a URL outside the download rules; report the unexpected response without its signed query; FX does not download from that address |
 | `<step>.with.references: <route> takes at most <n> input pictures, not <m>` | give fewer pictures, or raise the route's `max_input_pictures` when the model takes more |
 | `… was refused: this route draws from a first frame` (or `last_frame needs first_frame`, `this route draws whole seconds from 3 to <n>, not <d>`, `this route draws no <resolution> clip at <ratio>`) | a fal video route: give `first_frame` (or declare `features: [text_to_video]` on a route of your own for a model that draws from the prompt alone), or ask for a length, tier and ratio its price declares |
 | `routes.<n>.extends: no route <base> serves <capability>` | `extends` names a route of the same capability declared earlier (in the same table or one read before) or a built-in one; check the id and the order |

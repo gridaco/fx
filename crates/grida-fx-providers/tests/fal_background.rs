@@ -173,26 +173,37 @@ fn a_file_that_is_not_a_picture_is_refused_before_sending() {
 #[test]
 fn a_hosted_cutout_is_downloaded_without_credential() {
     let cutout = media::png(2, 2, Some(0));
-    let transport = Arc::new(ReplayTransport::new(vec![
-        post().reply(HttpResponse::json(
-            200,
-            &json!({"image": {"url": HOSTED}, "usage": {"cost": 0.002}}),
-        )),
-        Expect::download(HOSTED)
-            .header("accept", "image/*")
-            .reply(HttpResponse::new(200, cutout.clone()).with_header("content-type", "image/png")),
-    ]));
-    let answer = answered(send(&transport, &call()));
-    assert_eq!(answer.files["image"].bytes, cutout);
-    assert_eq!(answer.cost, Some(Usd(2_000)));
-    let download = &transport.requests()[1];
-    assert_eq!(download.lane, Lane::Download);
-    assert!(download.credential.is_none());
-    assert_eq!(
-        download.headers,
-        vec![("accept".to_string(), "image/*".to_string())]
-    );
-    assert!(download.timeout <= background::DEADLINE);
+    for hosted in [
+        HOSTED,
+        "https://cdn.acme.test/files/cutout.png?Signature=fixture",
+    ] {
+        let transport = Arc::new(ReplayTransport::new(vec![
+            post().reply(HttpResponse::json(
+                200,
+                &json!({"image": {"url": hosted}, "usage": {"cost": 0.002}}),
+            )),
+            Expect::download(hosted).header("accept", "image/*").reply(
+                HttpResponse::new(200, cutout.clone()).with_header("content-type", "image/png"),
+            ),
+        ]));
+        let answer = answered(send(&transport, &call()));
+        assert_eq!(answer.files["image"].kind, "image/png");
+        assert_eq!(answer.files["image"].bytes, cutout);
+        assert_eq!(answer.cost, Some(Usd(2_000)));
+        let requests = transport.requests();
+        assert_eq!(requests.len(), 2);
+        assert!(requests[0].credential.is_some());
+        let download = &requests[1];
+        assert_eq!(download.url, hosted);
+        assert_eq!(download.lane, Lane::Download);
+        assert!(download.credential.is_none());
+        assert_eq!(download.body, Body::Empty);
+        assert_eq!(
+            download.headers,
+            vec![("accept".to_string(), "image/*".to_string())]
+        );
+        assert!(download.timeout <= background::DEADLINE);
+    }
 }
 
 #[test]
@@ -217,8 +228,8 @@ fn answers_that_fail_as_billed() {
             "fal data URI media type does not match response metadata",
         ),
         (
-            json!({"image": {"url": "https://cdn.example.test/cutout.png"}}),
-            "fal hosted output must use HTTPS on fal.media without userinfo or a custom port",
+            json!({"image": {"url": "https://cdn.acme.test/cutout.png#fragment"}}),
+            "fal hosted output must use HTTPS with a DNS host, port 443, no credentials and no fragment",
         ),
         (
             json!({"image": {"url": "data:image/png;base64,not-base64!"}}),

@@ -164,6 +164,37 @@ fn a_png_answer_is_kept_as_it_is() {
 }
 
 #[test]
+fn a_hosted_png_can_move_to_another_cdn_without_changing_its_bytes_or_cost() {
+    let hosted = "https://cdn.acme.test/files/output.png?Signature=fixture";
+    let png = media::png(3, 2, Some(0));
+    let transport = Arc::new(ReplayTransport::new(vec![
+        post_any(GENERATE_URL).reply(images(json!([{"url": hosted}]))),
+        Expect::download(hosted)
+            .header("accept", "image/*")
+            .reply(HttpResponse::new(200, png.clone()).with_header("content-type", "image/png")),
+    ]));
+    let answer = answered(send(&transport, &generate(json!({"prompt": "p"}))));
+    assert_eq!(answer.files["image"].kind, "image/png");
+    assert_eq!(answer.files["image"].bytes, png);
+    assert_eq!(answer.cost, Some(Usd(30_000)));
+    assert_eq!(answer.data, Value::Null);
+    let requests = transport.requests();
+    assert_eq!(requests.len(), 2);
+    assert!(requests[0].credential.is_some());
+    let download = &requests[1];
+    assert_eq!(download.url, hosted);
+    assert_eq!(download.lane, Lane::Download);
+    assert!(download.credential.is_none());
+    assert_eq!(download.body, Body::Empty);
+    assert_eq!(
+        download.headers,
+        vec![("accept".to_string(), "image/*".to_string())]
+    );
+    assert_eq!(download.max_response_bytes, image::MAX_OUTPUT_BYTES);
+    assert!(download.timeout <= image::DEADLINE);
+}
+
+#[test]
 fn provider_options_set_no_member_the_adapter_owns() {
     let mut builder = CallBuilder::new("image.edit", EDIT);
     let image = builder.file("image/png", &media::png(2, 2, None));
@@ -300,8 +331,8 @@ fn a_picture_that_cannot_be_read_fails_as_billed() {
             "fal image media type must be PNG, JPEG, or WebP",
         ),
         (
-            json!({"url": "https://cdn.example.test/a.png"}),
-            "fal hosted output must use HTTPS on fal.media without userinfo or a custom port",
+            json!({"url": "https://cdn.acme.test/a.png#fragment"}),
+            "fal hosted output must use HTTPS with a DNS host, port 443, no credentials and no fragment",
         ),
         (
             json!({"url": data_url("image/jpeg", media::JPEG_HEAD)}),

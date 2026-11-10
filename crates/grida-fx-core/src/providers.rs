@@ -210,7 +210,7 @@ static BUILT_IN: LazyLock<Declarations> = LazyLock::new(|| {
             "Key",
             Some("FAL_BASE_URL"),
             "https://fal.run",
-            &["fal.media", "*.fal.media"],
+            &[],
         ),
         built(
             "tripo",
@@ -220,11 +220,7 @@ static BUILT_IN: LazyLock<Declarations> = LazyLock::new(|| {
             bearer,
             None,
             "https://openapi.tripo3d.ai/v3",
-            &[
-                "tripo3d.ai",
-                "*.tripo3d.ai",
-                "tripo-data.rg1.data.tripo3d.com",
-            ],
+            &[],
         ),
         built(
             "elevenlabs",

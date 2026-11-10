@@ -2,8 +2,9 @@
 //! "General Use (Light)", "operating_resolution": "1024x1024", "output_mask": false,
 //! "refine_foreground": true, "output_format": "png", "mask_only": false, "sync_mode": true}`, then
 //! the provider options, which may set none of those eight members (src/fal/README.md;
-//! spec/adapters.md §8). The answer `root.image.url` is a data URI (decoded) or a `*.fal.media` URL
-//! (downloaded as for images). File `image` (`image/png`), `data: null`, cost from `usage.cost`.
+//! spec/adapters.md §8). The answer `root.image.url` is a data URI (decoded) or a provider-returned
+//! HTTPS URL (downloaded as for images). File `image` (`image/png`), `data: null`, cost from
+//! `usage.cost`.
 //! `check`: a PNG with its signature. Deadline 300 s. Contract `adapter` must be `fal-run-birefnet`
 //! when present. No route in the default table serves it yet (no published price has been
 //! recorded).

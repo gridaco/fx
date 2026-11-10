@@ -14,7 +14,7 @@ use grida_fx_providers::transport::replay::{
     Exchange, Expect, ExpectBody, NoNetwork, ReplayTransport,
 };
 use grida_fx_providers::transport::{
-    HttpResponse, Lane, Method, Part, Transport, TransportError, TransportErrorKind,
+    Body, HttpResponse, Lane, Method, Part, Transport, TransportError, TransportErrorKind,
 };
 use grida_fx_providers::tripo::rig::{self, CHECK_DEADLINE, TripoRig};
 use grida_fx_providers::tripo::{POLL, TripoApi};
@@ -687,6 +687,43 @@ fn the_paid_rig_follows_the_task_outcomes() {
 
 // ---------------------------------------------------------------------------------------------
 // Collect
+
+#[test]
+fn a_finished_rig_model_url_can_move_to_another_cdn() {
+    for url in [
+        "https://openapi-dl.data.tripo3d.com/example/rigged.glb?Signature=fixture",
+        "https://cdn.acme.test/example/rigged.glb?Signature=fixture",
+    ] {
+        let bytes = glb(7);
+        let h = harness(vec![
+            read("task2", "success", json!({"model_url": url}), json!(110)),
+            download(url, &bytes),
+        ]);
+        let outcome = h.collect(&rig_call(json!({})), plain_handle());
+        let Collected::Answered(answer) = outcome else {
+            panic!("not answered: {outcome:?}");
+        };
+        assert_eq!(answer.files["model"].kind, "model/gltf-binary");
+        assert_eq!(answer.files["model"].bytes, bytes);
+        assert_eq!(answer.cost, Some(Usd(1_100_000)));
+        assert_eq!(
+            answer.data,
+            json!({"facts": {"riggable": true, "checked_rig_type": "biped",
+                             "advisory_override": false}})
+        );
+        h.done();
+        h.assert_no_rig_post();
+        let requests = h.transport.requests();
+        assert_eq!(requests.len(), 2);
+        assert!(requests.iter().all(|request| request.method == Method::Get));
+        let fetch = &requests[1];
+        assert_eq!(fetch.url, url);
+        assert_eq!(fetch.lane, Lane::Download);
+        assert!(fetch.credential.is_none());
+        assert!(fetch.headers.is_empty());
+        assert_eq!(fetch.body, Body::Empty);
+    }
+}
 
 #[test]
 fn a_rig_answers_its_one_glb_with_the_checks_facts() {

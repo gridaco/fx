@@ -114,7 +114,7 @@ providers:
 | the name | `[a-z0-9._-]+`, the provider part of its routes |
 | `credential` | `variable` holds the key. The key is sent as `<header>: <scheme> <key>`: `header` is `authorization` unless you say otherwise, lowercase; `scheme` is `Bearer`, and `""` sends the key bare (`header: x-api-key, scheme: ""` sends `x-api-key: <key>`). Leave `credential` out for a server that needs no key. |
 | `base_url` | `default` is required: `https`, unless it names this machine (`localhost`, `127.0.0.1`), with no userinfo, query or fragment. `variable`, optional, moves it, as `OPENAI_BASE_URL` moves OpenAI. |
-| `download_hosts` | the hosts its results may be downloaded from: a host, or `*.` and a domain for every host below that domain (not the domain itself). None when left out. |
+| `download_hosts` | the hosts your adapter's `fetch` may download results from: a host, or `*.` and a domain for every host below that domain (not the domain itself). None when left out, so no download through `fetch` is allowed. |
 | `family` | the wire it speaks: `openai-compatible`, the one family. |
 | `adapter` | your own adapter, `<path>#<name>`: a module of the project and the name it declares the adapter under. A declaration has a `family` or an `adapter`, not both. |
 
@@ -804,7 +804,9 @@ without writing them yourself:
   yourself is refused.
 - **Downloads go only to `download_hosts`.** `lane="download"` sends no credential and refuses a
   URL off the declaration's hosts, so a declaration that lists none downloads nothing through
-  `fetch`. FX adds each downloaded URL to the redactor of the call's reasons.
+  `fetch`. This is your adapter's explicit boundary; FX's built-in media adapters accept their
+  providers' result hosts without maintaining CDN catalogs. FX adds each downloaded URL to the
+  redactor of the call's reasons.
 - **One exchange.** Never retried, no redirect followed, a deadline (`timeout_s`, at most 300 s)
   and a response cap (`max_response_bytes`, at most 64 MiB, the defaults).
 - **The network switch.** With `GRIDA_FX_NETWORK=off`, every `fetch` is refused before it leaves.

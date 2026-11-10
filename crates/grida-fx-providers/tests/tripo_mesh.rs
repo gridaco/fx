@@ -14,7 +14,7 @@ use grida_fx_providers::transport::replay::{
     Exchange, Expect, ExpectBody, NoNetwork, ReplayTransport, Reply,
 };
 use grida_fx_providers::transport::{
-    HttpResponse, Lane, Method, Part, Transport, TransportError, TransportErrorKind,
+    Body, HttpResponse, Lane, Method, Part, Transport, TransportError, TransportErrorKind,
 };
 use grida_fx_providers::tripo::mesh::{self, COLLECT_DEADLINE, TripoMesh};
 use grida_fx_providers::tripo::{MAX_MODEL_BYTES, POLL, TripoApi, Waited};
@@ -899,6 +899,39 @@ fn a_finished_mesh_is_downloaded_with_its_cost() {
 }
 
 #[test]
+fn a_finished_mesh_model_url_can_move_to_another_cdn() {
+    for url in [
+        "https://openapi-dl.data.tripo3d.com/example/model.glb?Signature=fixture",
+        "https://cdn.acme.test/example/model.glb?Signature=fixture",
+    ] {
+        let bytes = glb(7);
+        let h = harness(vec![
+            success("task1", json!({"model_url": url}), json!(110)),
+            download(url, &bytes),
+        ]);
+        let answer = answered(h.collect(&two_view_call(), handle("task1")));
+        assert_eq!(answer.files["model"].kind, "model/gltf-binary");
+        assert_eq!(answer.files["model"].bytes, bytes);
+        assert_eq!(answer.cost, Some(Usd(1_100_000)));
+        assert_eq!(
+            answer.data,
+            json!({"facts": {"model_kind": "model/gltf-binary"}})
+        );
+        h.done();
+        let requests = h.transport.requests();
+        assert_eq!(requests.len(), 2);
+        assert!(requests.iter().all(|request| request.method == Method::Get));
+        let fetch = &requests[1];
+        assert_eq!(fetch.url, url);
+        assert_eq!(fetch.lane, Lane::Download);
+        assert!(fetch.credential.is_none());
+        assert!(fetch.headers.is_empty());
+        assert_eq!(fetch.body, Body::Empty);
+        assert_eq!(fetch.max_response_bytes, MAX_MODEL_BYTES);
+    }
+}
+
+#[test]
 fn an_fbx_is_preferred_and_every_model_is_downloaded() {
     // src/tripo/README.md, "Tasks": a mesh is posted once and its FBX kept.
     let glb_url = "https://api.tripo3d.ai/out/model.glb";
@@ -1167,13 +1200,13 @@ fn an_answer_about_another_task_or_an_unknown_status_is_unreachable() {
 
 #[test]
 fn the_output_scan_decides_what_is_downloaded() {
-    // src/tripo/README.md, "Tasks": a model from another host is refused.
+    // src/tripo/README.md, "Tasks": only model fields with supported URLs are downloaded.
     // The task succeeded, so an unusable output costs what its success read reports (125 credits).
     let ended = |reason: &str| Collected::Ended {
         reason: reason.into(),
         cost: Some(Usd(1_250_000)),
     };
-    let outside = "a Tripo model address is outside Tripo's own hosts";
+    let unsupported = "a Tripo model address must use HTTPS with a DNS host, port 443, no credentials and no fragment";
     let malformed = "a Tripo model address is malformed; details withheld";
     let no_model = "a finished Tripo task has no model to download";
     let nine: Map<String, Value> = (0..9)
@@ -1186,20 +1219,24 @@ fn the_output_scan_decides_what_is_downloaded() {
         .collect();
     let cases: Vec<(Value, Collected)> = vec![
         (
-            json!({"model": "https://example.com/model.glb"}),
-            ended(outside),
-        ),
-        (
             json!({"model": "http://api.tripo3d.ai/m.glb"}),
             ended(no_model),
         ),
         (
             json!({"model": "https://user@x.tripo3d.ai/m.glb"}),
-            ended(outside),
+            ended(unsupported),
         ),
         (
             json!({"model": "https://x.tripo3d.ai:8443/m.glb"}),
-            ended(outside),
+            ended(unsupported),
+        ),
+        (
+            json!({"model": "https://127.0.0.1/m.glb"}),
+            ended(unsupported),
+        ),
+        (
+            json!({"model": "https://cdn.acme.test/m.glb#fragment"}),
+            ended(unsupported),
         ),
         (
             json!({"models": ["https://api.tripo3d.ai/m.glb"]}),
@@ -1246,7 +1283,7 @@ fn the_output_scan_decides_what_is_downloaded() {
     );
     h.done();
 
-    // Accepted hosts and ports; one download per distinct URL; only model fields.
+    // Supported URLs; one download per distinct URL; only model fields.
     let accepted: Vec<(Value, Vec<&str>)> = vec![
         (
             json!({"model": "https://x.tripo3d.ai:443/m.glb"}),
@@ -1277,16 +1314,19 @@ fn the_output_scan_decides_what_is_downloaded() {
         assert_eq!(answer.files["model"].kind, "model/gltf-binary", "{output}");
         h.done();
     }
-    // A foreign second URL ends the job after the first was downloaded.
+    // Models on different CDNs are both downloaded; the FBX is still preferred.
     let h = harness(vec![
         success(
             "task1",
-            json!({"model": "https://api.tripo3d.ai/m.glb", "pbr_model": "https://example.com/m.fbx"}),
+            json!({"model": "https://api.tripo3d.ai/m.glb", "pbr_model": "https://cdn.acme.test/m.fbx"}),
             json!(125),
         ),
         download("https://api.tripo3d.ai/m.glb", &glb(1)),
+        download("https://cdn.acme.test/m.fbx", &fbx(2)),
     ]);
-    assert_eq!(h.collect(&two_view_call(), handle("task1")), ended(outside));
+    let answer = answered(h.collect(&two_view_call(), handle("task1")));
+    assert_eq!(answer.files["model"].kind, "model/fbx");
+    assert_eq!(answer.files["model"].bytes, fbx(2));
     h.done();
 }
 
@@ -1407,7 +1447,7 @@ fn an_unusable_output_costs_what_its_success_read_reports() {
     // spec/adapters.md §6; src/tripo/README.md, "Collect", "Cost": the task succeeded, so Tripo
     // charged it, and the read says how much. A figure that is absent or cannot be read is the
     // whole hold (`None`).
-    let off_host = json!({"model": "https://example.com/model.glb"});
+    let invalid_url = json!({"model": "https://cdn.acme.test/model.glb#fragment"});
     let not_a_model = json!({"model": STORAGE});
     let cases: Vec<(Option<Value>, Option<Usd>)> = vec![
         (Some(json!(50)), Some(Usd(500_000))),
@@ -1418,7 +1458,7 @@ fn an_unusable_output_costs_what_its_success_read_reports() {
         (Some(json!("lots")), None),
     ];
     for (credits, cost) in cases {
-        for output in [&off_host, &not_a_model] {
+        for output in [&invalid_url, &not_a_model] {
             let mut data = json!({"task_id": "task1", "status": "success", "output": output});
             if let Some(credits) = &credits {
                 data["credits_consumed"] = credits.clone();

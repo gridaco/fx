@@ -531,32 +531,39 @@ fn data_uri_answers_at_the_root_or_under_data() {
 #[test]
 fn a_hosted_answer_is_downloaded_once_with_only_accept() {
     let png = media::png(2, 2, Some(255));
-    let transport = Arc::new(ReplayTransport::new(vec![
-        post_any(GENERATE_URL).reply(HttpResponse::json(
-            200,
-            &json!({"images": [{"url": HOSTED, "content_type": "image/png", "width": 2,
-                                "height": 2}]}),
-        )),
-        Expect::download(HOSTED)
-            .header("accept", "image/*")
-            .reply(HttpResponse::new(200, png.clone()).with_header("content-type", "image/png")),
-    ]));
-    let answer = answered(send(&transport, &generate(json!({"prompt": "p"}))));
-    assert_eq!(answer.files["image"].bytes, png);
-    assert_eq!(answer.data, Value::Null);
-    let requests = transport.requests();
-    assert_eq!(requests.len(), 2);
-    let download = &requests[1];
-    assert_eq!(download.lane, Lane::Download);
-    assert!(download.credential.is_none());
-    assert_eq!(
-        download.headers,
-        vec![("accept".to_string(), "image/*".to_string())]
-    );
-    assert_eq!(download.body, Body::Empty);
-    assert_eq!(download.max_response_bytes, image::MAX_OUTPUT_BYTES);
-    assert!(download.timeout <= image::DEADLINE && download.timeout > Duration::from_secs(590));
-    assert!(requests[0].credential.is_some());
+    for hosted in [
+        HOSTED,
+        "https://cdn.acme.test/files/output.png?Signature=fixture",
+    ] {
+        let transport = Arc::new(ReplayTransport::new(vec![
+            post_any(GENERATE_URL).reply(HttpResponse::json(
+                200,
+                &json!({"images": [{"url": hosted, "content_type": "image/png", "width": 2,
+                                    "height": 2}], "usage": {"cost": 0.03}}),
+            )),
+            Expect::download(hosted).header("accept", "image/*").reply(
+                HttpResponse::new(200, png.clone()).with_header("content-type", "image/png"),
+            ),
+        ]));
+        let answer = answered(send(&transport, &generate(json!({"prompt": "p"}))));
+        assert_eq!(answer.files["image"].bytes, png);
+        assert_eq!(answer.data, Value::Null);
+        assert_eq!(answer.cost, Some(Usd(30_000)));
+        let requests = transport.requests();
+        assert_eq!(requests.len(), 2);
+        let download = &requests[1];
+        assert_eq!(download.url, hosted);
+        assert_eq!(download.lane, Lane::Download);
+        assert!(download.credential.is_none());
+        assert_eq!(
+            download.headers,
+            vec![("accept".to_string(), "image/*".to_string())]
+        );
+        assert_eq!(download.body, Body::Empty);
+        assert_eq!(download.max_response_bytes, image::MAX_OUTPUT_BYTES);
+        assert!(download.timeout <= image::DEADLINE && download.timeout > Duration::from_secs(590));
+        assert!(requests[0].credential.is_some());
+    }
 }
 
 #[test]
@@ -597,15 +604,14 @@ fn a_hosted_answer_without_declared_types_is_sniffed() {
 }
 
 #[test]
-fn untrusted_output_urls_are_never_fetched() {
+fn unsupported_output_urls_are_never_fetched() {
     for hosted in [
         "http://v3b.fal.media/files/output.png",
         "https://127.0.0.1/output.png",
         "https://169.254.169.254/latest/meta-data",
-        "https://cdn.example.test/output.png",
-        "https://fal.media.evil.example/output.png",
         "https://user:secret@fal.media/output.png",
         "https://fal.media:8443/output.png",
+        "https://cdn.acme.test/output.png#fragment",
     ] {
         let transport = Arc::new(ReplayTransport::new(vec![post_any(GENERATE_URL).reply(
             HttpResponse::json(200, &json!({"images": [{"url": hosted}]})),
@@ -613,7 +619,7 @@ fn untrusted_output_urls_are_never_fetched() {
         let (reason, cost) = failed(send(&transport, &generate(json!({"prompt": "p"}))));
         assert_eq!(
             reason,
-            "fal hosted output must use HTTPS on fal.media without userinfo or a custom port",
+            "fal hosted output must use HTTPS with a DNS host, port 443, no credentials and no fragment",
             "{hosted}"
         );
         assert_eq!(cost, None);
