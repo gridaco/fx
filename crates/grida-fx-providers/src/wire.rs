@@ -25,8 +25,8 @@ pub use grida_fx_core::providers::normalize_base_url;
 
 pub(crate) use grida_fx_core::providers::is_loopback;
 
-/// Why a result's URL is not downloaded ([`download_url`]): it does not parse, or it is not on its
-/// provider's hosts. Each caller words its own sentence.
+/// Why a result's URL is not downloaded: it does not parse, fails the result URL checks,
+/// or is not on the declared hosts ([`download_url`]). Each caller words its own sentence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OffHost {
     Malformed,
@@ -55,13 +55,12 @@ pub fn same_origin(url: &str, base: &str) -> bool {
     }
 }
 
-/// A result's URL, parsed, when it may be downloaded from a provider whose declaration lists
-/// `hosts` (spec/providers.md §1): `https`; a host that is a name, not an address, and is one of
-/// `hosts` or lies below a `*.<domain>` entry's domain, compared in lower case without trailing
-/// dots; no userinfo; no port but 443 (which the parser drops); no fragment. A query is allowed.
+/// A provider-returned result URL, parsed (spec/providers.md §1): `https`; a DNS host rather
+/// than an IP address; no userinfo, port but 443 (which the parser drops), or fragment. A query
+/// is allowed. The provider supplies the result location; no vendor hostname catalog is checked.
 /// A download sends the provider's text as given; the transport parses it with the same parser,
 /// so the host checked here is the host asked.
-pub fn download_url(url: &str, hosts: &[String]) -> Result<url::Url, OffHost> {
+pub(crate) fn result_url(url: &str) -> Result<url::Url, OffHost> {
     let parsed = url::Url::parse(url).map_err(|_| OffHost::Malformed)?;
     if parsed.scheme() != "https"
         || !parsed.username().is_empty()
@@ -71,10 +70,22 @@ pub fn download_url(url: &str, hosts: &[String]) -> Result<url::Url, OffHost> {
     {
         return Err(OffHost::Outside);
     }
-    let Some(url::Host::Domain(domain)) = parsed.host() else {
+    if !matches!(parsed.host(), Some(url::Host::Domain(_))) {
         return Err(OffHost::Outside);
-    };
-    let host = domain.trim_end_matches('.').to_ascii_lowercase();
+    }
+    Ok(parsed)
+}
+
+/// A result URL held to a project provider's explicit `download_hosts` (spec/providers.md §1).
+/// In addition to the result URL checks, its host must equal an entry or lie below a
+/// `*.<domain>` entry, compared in lower case without trailing dots. An empty list denies all.
+pub fn download_url(url: &str, hosts: &[String]) -> Result<url::Url, OffHost> {
+    let parsed = result_url(url)?;
+    let host = parsed
+        .host_str()
+        .ok_or(OffHost::Outside)?
+        .trim_end_matches('.')
+        .to_ascii_lowercase();
     let listed = hosts.iter().any(|entry| match entry.strip_prefix("*.") {
         Some(below) => {
             host.strip_suffix(below)
@@ -886,6 +897,30 @@ mod tests {
             normalize_base_url("https://api.example.test:99999", "Acme").unwrap_err(),
             "Acme base_url must use a valid network port"
         );
+    }
+
+    #[test]
+    fn result_urls_accept_provider_locations_without_a_host_catalog() {
+        for good in [
+            "https://cdn.acme.test/model.glb?Signature=fixture",
+            "https://other.storage.test/a.png",
+            "https://CDN.Acme.Test.:443/a.png?sig=a%2Fb~c",
+        ] {
+            assert!(result_url(good).is_ok(), "{good}");
+            // Project adapters still need an explicit declaration for the same URL.
+            assert_eq!(download_url(good, &[]), Err(OffHost::Outside), "{good}");
+        }
+        for bad in [
+            "http://cdn.acme.test/a.png",
+            "https://user:secret@cdn.acme.test/a.png",
+            "https://cdn.acme.test:8443/a.png",
+            "https://cdn.acme.test/a.png#fragment",
+            "https://127.0.0.1/a.png",
+            "https://[::1]/a.png",
+        ] {
+            assert_eq!(result_url(bad), Err(OffHost::Outside), "{bad}");
+        }
+        assert_eq!(result_url("not a url"), Err(OffHost::Malformed));
     }
 
     #[test]

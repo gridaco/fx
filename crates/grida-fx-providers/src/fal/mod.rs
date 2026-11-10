@@ -9,10 +9,10 @@
 //! first refuses a route whose contract is not its own (src/fal/README.md): the engine's check,
 //! made again for a direct caller.
 //!
-//! What the adapters share lives here: the output host check ([`is_fal_media_url`]), the contract
-//! guard, the answer root and reported cost, the run host's status classes (spec/adapters.md
-//! §3.2, §3.3 and src/fal/README.md) and the one place this module builds a `NotReceived`. Reading
-//! a picture out of an answer (a data URL or a hosted download) is `output`.
+//! What the adapters share lives here: the contract guard, the answer root and reported cost,
+//! the run host's status classes (spec/adapters.md §3.2, §3.3 and src/fal/README.md) and the one
+//! place this module builds a `NotReceived`. Reading a picture out of an answer (a data URL or
+//! a hosted download) is `output`.
 
 pub mod background;
 pub mod generic_image;
@@ -29,12 +29,6 @@ use grida_fx_core::money::Usd;
 use serde_json::{Map, Value};
 use std::sync::Arc;
 use std::time::Duration;
-
-/// The image output host check of src/fal/README.md: [`crate::wire::download_url`] over fal's
-/// declared download hosts, `fal.media` and its subdomains (spec/providers.md §1).
-pub fn is_fal_media_url(url: &str) -> bool {
-    crate::wire::download_url(url, &KeyName::Fal.declaration().download_hosts).is_ok()
-}
 
 /// The run-host client and the queue-host client (same key).
 #[derive(Debug, Clone)]
@@ -297,36 +291,6 @@ mod tests {
             take: vec![1],
             key: "0".repeat(64),
             attempt: 1,
-        }
-    }
-
-    #[test]
-    fn output_hosts_are_fal_media_over_https_only() {
-        for good in [
-            "https://fal.media/files/a.png",
-            "https://v3b.fal.media/files/a.png?sig=1",
-            "https://V3.FAL.MEDIA/files/a.png",
-            "https://v3.fal.media./files/a.png",
-            "https://fal.media:443/a.png",
-        ] {
-            assert!(is_fal_media_url(good), "{good}");
-        }
-        for bad in [
-            "http://v3b.fal.media/files/output.png",
-            "https://127.0.0.1/output.png",
-            "https://169.254.169.254/latest/meta-data",
-            "https://cdn.example.test/output.png",
-            "https://fal.media.evil.example/output.png",
-            "https://user:secret@fal.media/output.png",
-            "https://fal.media:8443/output.png",
-            "https://fal.media/a.png#frag",
-            "https://evilfal.media/a.png",
-            "https://[::1]/a.png",
-            "data:image/png;base64,aGVsbG8=",
-            "not a url",
-            "",
-        ] {
-            assert!(!is_fal_media_url(bad), "{bad}");
         }
     }
 

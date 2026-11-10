@@ -14,7 +14,7 @@
 //!
 //! The answer is `root.images`, which must hold exactly one object, else `Failed { cost,
 //! retryable: false }`: FX asks for no count, so another attempt would draw as many. It is read as
-//! GPT Image's ([`super::image`]: a data URL, or one `fal.media` download, a declared PNG, JPEG or
+//! GPT Image's ([`super::image`]: a data URL, or one hosted HTTPS download, a declared PNG, JPEG or
 //! WebP), then becomes a PNG ([`crate::wire::to_png`], on a blocking thread): file `image`
 //! (`image/png`), `data: null`. Deadline, caps and `cost` as GPT Image's. `check`: every image
 //! route's ([`crate::checks::image`]).

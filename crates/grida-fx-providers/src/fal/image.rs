@@ -8,8 +8,8 @@
 //! `quality: "max"`, `background`, `output_format: "png"`, then for an edit `image_urls` (`image`
 //! first, then `references`) and `mask_url`, then the provider options. The answer is
 //! `root.images[0]` (`root` = `data` when that is an object, else the payload): a data URI decoded
-//! in place, or a `*.fal.media` URL downloaded once on the download lane with `accept: image/*`, no
-//! redirects, at most 64 MiB. Deadline 600 s for the POST and the download together. `cost`:
+//! in place, or a provider-returned HTTPS URL downloaded once on the download lane with
+//! `accept: image/*`, no redirects, at most 64 MiB. Deadline 600 s for the POST and download. `cost`:
 //! `usage.cost` at the payload's top level ([`crate::wire::usd_ceil`]), else `None`. `check`:
 //! [`crate::wire::check_image`].
 //!

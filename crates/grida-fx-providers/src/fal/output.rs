@@ -6,8 +6,7 @@
 //! 2. `content_type`, when present and not `null`, normalizes to one of the route's media types;
 //! 3. a data URL is decoded in place: its media type normalized the same way and equal to the
 //!    declared one when both exist, strict base64, at most the cap;
-//! 4. any other URL must pass [`super::is_fal_media_url`], on fal's declared download hosts
-//!    ([`crate::setup::Client::download_url`]), before anything is requested; it is
+//! 4. any other URL must pass [`crate::wire::result_url`] before anything is requested; it is
 //!    added to the redactor, then fetched **once**, at the URL exactly as fal gave it (FX does not
 //!    re-encode it), on the download lane with only `accept: image/*`, no credential, no redirect,
 //!    the cap and the time left. A non-2xx answer
@@ -115,9 +114,9 @@ async fn download(
     remaining: Duration,
 ) -> Result<(Vec<u8>, Option<&'static str>), String> {
     let fail = |text: &str| redactor.reason(text);
-    let Ok(target) = client.download_url(url) else {
+    let Ok(target) = crate::wire::result_url(url) else {
         return Err(fail(
-            "fal hosted output must use HTTPS on fal.media without userinfo or a custom port",
+            "fal hosted output must use HTTPS with a DNS host, port 443, no credentials and no fragment",
         ));
     };
     let redactor = redactor.with(target.as_str());

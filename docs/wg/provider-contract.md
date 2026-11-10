@@ -619,14 +619,19 @@ Gate: `cargo test`, `check_spec`, `make_models.py --check`, `check_llms`.
     `inspect` the working directory's; `view --run` and `view --plan` read no project, so theirs
     are the working directory's project's, else FX's own. `tests/open.rs` plans another
     project's workflow with `--open` and holds the opener to that project's declarations.
-- [x] One download-host allowlist helper, used by fal and Tripo.
-  - `wire::download_url(url, hosts)`, refusing with `OffHost::Malformed` or `Outside`, each caller
-    keeping its sentences; `Client` carries its declaration's hosts. Code fact: fal's image and
-    background-removal answers check hosts, its video adapter and GG take any `https` URL
-    (unchanged; a follow-up).
-  - One rule set, fal's: Tripo now refuses a model URL with a fragment and accepts a host with a
-    trailing `.`; its reference says both, and `llms.txt`'s upgrade note the fragment, the one a
-    user can meet.
+- [x] Result download checks and a project adapter's explicit host boundary.
+  - The original declaration work shared `wire::download_url(url, hosts)` between fal, Tripo
+    and project adapters. The built-in CDN catalogs were removed after
+    [#114](https://github.com/gridaco/fx/issues/114): a successful paid Tripo job returned a valid
+    URL on a provider host FX had not listed. FX owns credential isolation, bounded downloads,
+    redaction and output checks; the provider owns its result hosts.
+  - Tripo and fal's image and background-removal adapters accept provider-returned `https` URLs
+    with a DNS hostname, port 443, no userinfo and no fragment. GG and fal video keep their
+    existing `https` checks. No built-in declaration carries a CDN catalog.
+  - `wire::download_url(url, hosts)` still confines a project adapter's `fetch` to its declared
+    hosts, and an empty list denies every download. No new setting or SDK operation is needed.
+  - Separate follow-ups: [recovery from retained tasks](https://github.com/gridaco/fx/issues/116)
+    and [synchronous fal delivery retries](https://github.com/gridaco/fx/issues/117).
 - [x] `doctor` lists declared providers with their key state and base-URL host.
   - After the built-in `key` lines, which are unchanged: `provider  <name> <host> <VARIABLE>
     present (environment)` (or `present (.env)`, `missing`), or `… needs no key`, `<host>` with
@@ -1128,9 +1133,6 @@ The list they were filed from:
 - exact sizes on the generic image adapters: a model's own size parameter goes in
   `provider_options`, so the image check cannot hold the answer to it, and a step that asks for
   an exact `size` is refused there;
-- download hosts for fal video and GG: `fal/video.rs` (`result_video`) and `gg/job.rs`
-  (`result_file`) download from any `https` host, so their declarations list none (fal's lists
-  `fal.media` for its image and background answers);
 - the browser opener's declarations for a recorded run or plan: `inspect <run>`, `view --run
   <dir>` and `view --plan <file>` withhold those of the working directory's project, which is not
   the run's when its folder lies in another project, since a run's `plan.json` holds only
