@@ -1,0 +1,275 @@
+{
+  "schema_version": 1,
+  "source_sha256": "1da9ec676e7153eabf61558b6b1180b98a0d9f11dd960eb2b4776993bdcc1125",
+  "source_size": [
+    1199,
+    1312
+  ],
+  "head_polygon_xy": [
+    [
+      0,
+      0
+    ],
+    [
+      1198,
+      0
+    ],
+    [
+      1198,
+      770
+    ],
+    [
+      700,
+      770
+    ],
+    [
+      700,
+      704
+    ],
+    [
+      672,
+      726
+    ],
+    [
+      638,
+      744
+    ],
+    [
+      605,
+      754
+    ],
+    [
+      574,
+      746
+    ],
+    [
+      540,
+      728
+    ],
+    [
+      515,
+      706
+    ],
+    [
+      515,
+      770
+    ],
+    [
+      0,
+      770
+    ]
+  ],
+  "neck_fill_polygon_xy": [
+    [
+      519,
+      683
+    ],
+    [
+      549,
+      701
+    ],
+    [
+      578,
+      714
+    ],
+    [
+      606,
+      718
+    ],
+    [
+      635,
+      713
+    ],
+    [
+      662,
+      700
+    ],
+    [
+      690,
+      682
+    ],
+    [
+      692,
+      748
+    ],
+    [
+      692,
+      793
+    ],
+    [
+      675,
+      811
+    ],
+    [
+      647,
+      823
+    ],
+    [
+      570,
+      821
+    ],
+    [
+      537,
+      810
+    ],
+    [
+      519,
+      795
+    ],
+    [
+      520,
+      746
+    ]
+  ],
+  "neck_shadow_polygon_xy": [
+    [
+      515,
+      687
+    ],
+    [
+      548,
+      706
+    ],
+    [
+      579,
+      728
+    ],
+    [
+      605,
+      744
+    ],
+    [
+      641,
+      727
+    ],
+    [
+      675,
+      706
+    ],
+    [
+      700,
+      686
+    ],
+    [
+      702,
+      794
+    ],
+    [
+      680,
+      817
+    ],
+    [
+      635,
+      829
+    ],
+    [
+      563,
+      825
+    ],
+    [
+      516,
+      798
+    ]
+  ],
+  "anchors": {
+    "head": {
+      "cx": 600,
+      "cy": 390,
+      "rx": 410,
+      "ry": 390
+    },
+    "face": [
+      350,
+      350,
+      850,
+      770
+    ],
+    "neck_y": 760,
+    "top_y": 0,
+    "bottom_y": 1312,
+    "hair_root_y": 50,
+    "jaw": {
+      "top": 640,
+      "chin": 752,
+      "half": 0,
+      "open": 0,
+      "round": 0,
+      "wide": 0
+    },
+    "chest": {
+      "cx": 600,
+      "cy": 1040,
+      "rx": 350,
+      "ry": 210
+    }
+  },
+  "pose_bounds": {
+    "angle_x": [
+      -14,
+      14
+    ],
+    "angle_y": [
+      -10,
+      10
+    ],
+    "angle_z": [
+      -6,
+      6
+    ],
+    "body_x": [
+      -2,
+      2
+    ],
+    "body_z": [
+      -1,
+      1
+    ],
+    "breath": [
+      0,
+      1
+    ]
+  },
+  "mask_authoring": "Source-bound head ownership includes the original fine alpha silhouette. The curved jaw excludes the neck; only the explicit completed-neck region imports generated RGB. Neck shadow is coupled to the chin. Pose bounds are conservative candidate ranges requiring target-renderer visual review.",
+  "neck_texture_polygon_xy": [
+    [
+      528,
+      707
+    ],
+    [
+      552,
+      720
+    ],
+    [
+      605,
+      731
+    ],
+    [
+      652,
+      720
+    ],
+    [
+      679,
+      707
+    ],
+    [
+      681,
+      788
+    ],
+    [
+      667,
+      804
+    ],
+    [
+      642,
+      813
+    ],
+    [
+      568,
+      809
+    ],
+    [
+      531,
+      790
+    ]
+  ]
+}

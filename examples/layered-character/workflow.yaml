@@ -1,0 +1,30 @@
+fx: workflow/v1
+id: layered-character
+title: Registered portrait repaints on Codex
+description: Repaint the complete face, align each result to the master, and extract only masked native pixels. No disconnected facial atlas or guessed proportions.
+inputs:
+  portrait: { type: file, kind: image }
+  geometry: { type: file, kind: json }
+steps:
+  images:
+    uses: ./workflows/images.yaml
+    with:
+      portrait: ${{ inputs.portrait }}
+      geometry: ${{ inputs.geometry }}
+  assemble:
+    title: Extract native patches and export LivLiv v4
+    uses: ./nodes/character.py#assemble
+    with:
+      portrait: ${{ inputs.portrait }}
+      geometry: ${{ inputs.geometry }}
+      donors: ${{ steps.images.outputs.donors }}
+outputs:
+  portrait: ${{ inputs.portrait }}
+  donors: ${{ steps.images.outputs.donors }}
+  mask_overlay: ${{ steps.images.outputs.mask_overlay }}
+  model: ${{ steps.assemble.outputs.model }}
+  archive: ${{ steps.assemble.outputs.archive }}
+  preview: ${{ steps.assemble.outputs.preview }}
+  report: ${{ steps.assemble.outputs.report }}
+  patches: ${{ steps.assemble.outputs.patches }}
+  states: ${{ steps.assemble.outputs.states }}

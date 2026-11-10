@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "source_size": [
+    1199,
+    1312
+  ],
+  "source_sha256": "1da9ec676e7153eabf61558b6b1180b98a0d9f11dd960eb2b4776993bdcc1125",
+  "working_crop_xyxy": [
+    200,
+    200,
+    1000,
+    1000
+  ],
+  "feather_px": 3,
+  "features": {
+    "canvas_left_eye": {
+      "polygon_xy": [
+        [
+          375,
+          425
+        ],
+        [
+          460,
+          415
+        ],
+        [
+          535,
+          440
+        ],
+        [
+          562,
+          488
+        ],
+        [
+          548,
+          548
+        ],
+        [
+          475,
+          565
+        ],
+        [
+          405,
+          545
+        ],
+        [
+          365,
+          485
+        ]
+      ]
+    },
+    "canvas_right_eye": {
+      "polygon_xy": [
+        [
+          650,
+          440
+        ],
+        [
+          725,
+          415
+        ],
+        [
+          810,
+          425
+        ],
+        [
+          845,
+          485
+        ],
+        [
+          817,
+          545
+        ],
+        [
+          745,
+          565
+        ],
+        [
+          667,
+          548
+        ],
+        [
+          635,
+          488
+        ]
+      ]
+    },
+    "mouth": {
+      "polygon_xy": [
+        [
+          530,
+          610
+        ],
+        [
+          670,
+          610
+        ],
+        [
+          700,
+          650
+        ],
+        [
+          680,
+          705
+        ],
+        [
+          520,
+          705
+        ],
+        [
+          500,
+          650
+        ]
+      ]
+    }
+  },
+  "anchors": {
+    "head": {
+      "cx": 600,
+      "cy": 390,
+      "rx": 410,
+      "ry": 390
+    },
+    "face": [
+      350,
+      350,
+      850,
+      770
+    ],
+    "neck_y": 750,
+    "top_y": 0,
+    "bottom_y": 1312,
+    "hair_root_y": 50
+  },
+  "mask_authoring": "Agent-authored polygons in original source pixels; inspect mask overlay before repainting."
+}

@@ -1,0 +1,22 @@
+fx: workflow/v1
+id: puppet-repaints
+title: Complete hidden neck in the full portrait
+description: A contextual body backing surface for independent head mesh movement.
+inputs:
+  portrait: { type: file, kind: image }
+steps:
+  prepare:
+    at: plan
+    uses: ./nodes/prepare_full.py#prepare_full
+    with:
+      portrait: ${{ inputs.portrait }}
+  body_neck:
+    uses: fx/image.edit@1
+    route: imagegen@codex
+    with:
+      image: ${{ steps.prepare.outputs.portrait }}
+      prompt: ./prompts/body-neck.md
+      background: opaque
+    view: true
+outputs:
+  body_neck: ${{ steps.body_neck.outputs.image }}

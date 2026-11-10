@@ -1,0 +1,35 @@
+fx: workflow/v1
+id: layered-character-gaze
+title: Source-aligned gaze, blinks and speech
+description: Complete full-face eye surfaces, extract native clipped irises and export a LivLiv gaze rig.
+inputs:
+  portrait: { type: file, kind: image }
+  geometry: { type: file, kind: json }
+  gaze_geometry: { type: file, kind: json }
+steps:
+  expressions:
+    uses: ./workflows/images.yaml
+    with:
+      portrait: ${{ inputs.portrait }}
+      geometry: ${{ inputs.geometry }}
+  eyes:
+    uses: ./workflows/gaze-images.yaml
+    with:
+      portrait: ${{ inputs.portrait }}
+      geometry: ${{ inputs.geometry }}
+  assemble:
+    uses: ./nodes/gaze.py#assemble_gaze
+    with:
+      portrait: ${{ inputs.portrait }}
+      geometry: ${{ inputs.geometry }}
+      gaze_geometry: ${{ inputs.gaze_geometry }}
+      donors: ${{ steps.expressions.outputs.donors }}
+      gaze_donors: ${{ steps.eyes.outputs.donors }}
+outputs:
+  model: ${{ steps.assemble.outputs.model }}
+  archive: ${{ steps.assemble.outputs.archive }}
+  preview: ${{ steps.assemble.outputs.preview }}
+  report: ${{ steps.assemble.outputs.report }}
+  patches: ${{ steps.assemble.outputs.patches }}
+  states: ${{ steps.assemble.outputs.states }}
+  mask_overlay: ${{ steps.eyes.outputs.mask_overlay }}

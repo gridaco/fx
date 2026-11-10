@@ -1,0 +1,13 @@
+fx: workflow/v1
+id: character-master
+title: Draw an anime master portrait
+steps:
+  draw:
+    uses: fx/image.generate@1
+    route: imagegen@codex
+    with:
+      prompt: ./prompts/source.md
+      background: transparent
+    view: true
+outputs:
+  portrait: ${{ steps.draw.outputs.image }}
