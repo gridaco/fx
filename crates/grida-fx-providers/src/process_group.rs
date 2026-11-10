@@ -4,8 +4,8 @@
 //! Each runtime runs in a process group of its own, registered here until it is ended. Its MCP
 //! servers and helpers join that group, so ending the group ends them too:
 //! - a runtime that shuts down asks its program to stop first (stdin closed, then `SIGTERM` to the
-//!   group), and then kills the group ([`Group::finish`]);
-//! - a runtime that is dropped without shutting down kills the group ([`Group`]'s `Drop`);
+//!   group), and then kills the group;
+//! - a runtime that is dropped without shutting down kills the group;
 //! - a command that exits on an interrupt kills every group and lets none start after
 //!   ([`end_every_runtime`]).
 //!

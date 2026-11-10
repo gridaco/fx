@@ -1,6 +1,6 @@
 //! Frames, scopes and step expansions.
 //!
-//! Frames live in the expander's arena (`Expander::frames`) and are named by [`FrameId`]. A
+//! Frames live in the expander's arena (`Expander::frames`) and are named by `FrameId`. A
 //! frame's *scope* is its `owner` when set, else itself: `derive` makes a frame of the same scope
 //! with other variables, takes, judging, budget, phase or `maybe`; `nest` makes a new scope (a
 //! group instance, one take of a regenerating group, a used workflow's root). `find` walks scope,

@@ -543,10 +543,10 @@ fn resolve_other<S: Scope + ?Sized>(value: &Value, scope: &mut S) -> Result<Val,
     }
 }
 
-/// `.name` on any value: a field of an object (`no field 'x'`); a view through the scope; a file
-/// per [`file_member`]; missing and failed values stay themselves; a collection maps the member
-/// over its elements, dropping elements whose field is missing; anything else is refused
-/// (`{kind} has no field 'x'`).
+/// `.name` on any value: a field of an object (`no field 'x'`); a view through the scope; a field
+/// of a JSON-object file's content, or another file's `digest`, `kind` or `key`; missing and
+/// failed values stay themselves; a collection maps the member over its elements, dropping
+/// elements whose field is missing; anything else is refused (`{kind} has no field 'x'`).
 pub fn member<S: Scope + ?Sized>(scope: &mut S, value: Val, name: &str) -> Result<Val, ExprError> {
     // A view on its own path: `steps.x` expands `x` (see `evaluate`).
     match value {

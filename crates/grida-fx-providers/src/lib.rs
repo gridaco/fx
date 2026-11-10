@@ -37,7 +37,7 @@
 //! - [`live`]: the adapters of a live run, the only place the default transport is built;
 //! - [`stand_in`]: the checks a stand-in's answer gets in a stand-in run (spec/protocol.md §5.7):
 //!   its shape, then its route's check, from adapters built keyless over a refusing transport;
-//! - [`fake`] and [`testing`] (feature `testing`): the scripted `FakeAdapter`, test setups,
+//! - `fake` and `testing` (feature `testing`): the scripted `FakeAdapter`, test setups,
 //!   calls, synthetic media and test programs.
 //!
 //! **The engine's checks.** Every adapter here names the contract it serves

@@ -6,7 +6,7 @@
 //! - [`lexer`]: tokens. FX decision: digits and whitespace are ASCII only, not
 //!   Unicode's; `strip()` of a template's inner text strips the same whitespace.
 //! - [`parser`]: a Pratt parser into [`ast::Expr`].
-//! - [`template`]: splitting strings into text and expressions, and rendering them.
+//! - [`mod@template`]: splitting strings into text and expressions, and rendering them.
 //! - [`eval`]: evaluation over a [`eval::Scope`], and [`resolve`] over documents.
 //! - [`functions`]: the eleven functions.
 //!

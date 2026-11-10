@@ -118,7 +118,7 @@ pub fn every_route(call: &CallRequest, answer: &Answer) -> Result<(), String> {
 
 /// The check spec/capabilities.md gives the call's capability for every route, by its section:
 /// - `image.generate`, `image.edit` (§2, §3): the request's `size` read as `auto` or `<W>x<H>`
-///   (`size must be auto or WIDTHxHEIGHT`), then [`image`];
+///   (`size must be auto or WIDTHxHEIGHT`), then [`fn@image`];
 /// - `structured.generate` (§4): [`structured`];
 /// - `music.generate` (§9): [`audio_signature`];
 /// - `sound.generate`, `speech.generate` (§10, §11): [`audio`], labelled with the capability;

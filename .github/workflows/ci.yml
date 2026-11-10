@@ -47,6 +47,12 @@ jobs:
         working-directory: js/fx
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
+      - name: Check Rust documentation
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+        run: |
+          cargo doc --workspace --no-deps
+          cargo doc --workspace --no-deps --all-features
       - run: cargo test --workspace
 
   # docs/guide and docs/wg are published on grida.co/docs (a docs source, see

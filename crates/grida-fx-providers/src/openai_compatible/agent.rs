@@ -13,7 +13,7 @@
 //!
 //! `send`, in the order of spec/adapters.md §4 (the engine makes steps 1 and 2 before it, the
 //! contract's other members through `check_contract`; the adapter makes them again for a direct
-//! caller): the contract ([`super::read_contract`]); `capabilities::check_request`; the key, when
+//! caller): the contract; `capabilities::check_request`; the key, when
 //! the provider is declared with one; provider options that set no member of [`OWNED`]
 //! ([`wire::provider_options`]); [`chat::agent_prompt`]'s values and files; a body over 200 MiB;
 //! then one exchange, classified by [`super::classify`]. A 2xx that does not become an answer is

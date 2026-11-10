@@ -34,7 +34,7 @@
 //! The judges and `independent_of` targets a node step expands once its instances exist are not
 //! what anything around it is waiting for. While a step under way is unfinished (still
 //! `Expanding`, or a node whose instances are not all made: `unfinished`), that work is held
-//! ([`Held`]) and released, oldest first, once none is (`release_held`, after each step); so a
+//! (`Held`) and released, oldest first, once none is (`release_held`, after each step); so a
 //! judge or target that reads the unfinished step later reads it as pending instead of being
 //! refused. A read of the step's result does wait
 //! for its judges: it expands held judges first (`settle_judges`, from `chosen`), and a judge that
@@ -47,7 +47,7 @@
 //! judge is not linked yet, and reads the judged take as it is. A reader that began after the
 //! judges were held reaches them the other way round: it reads the step, the read settles the
 //! judges inside it, and a judge that reads that reader finds it under way. Such a settlement is
-//! a trial ([`Trial`]): when a judge reaches a step under way that began after the judges were
+//! a trial (`Trial`): when a judge reaches a step under way that began after the judges were
 //! held, everything the trial expanded is undone (`end_trial`), the judges stay held, and the
 //! reader reads the take unjudged, as it would inside the judge; the judges expand later and read
 //! it made. Only a reader already under way when the judges were held (it reached the judged step

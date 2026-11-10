@@ -18,8 +18,8 @@
 //!   which serves as a base even under `--routes` ([`load_catalog`] hands each table these bases;
 //!   [`RouteTable::from_document_over`] takes them for a document already loaded). The entry
 //!   copies the base's price, features, limits and pacing where it states none, and the base's
-//!   contract members it does not state. Refused: `<base> is not a <provider> route`; `no route
-//!   <base> serves <capability>`.
+//!   contract members it does not state. Refused: `<base> is not a <provider> route`;
+//!   `no route <base> serves <capability>`.
 //! - [`BUILT_IN_ADAPTERS`]: on a capability and provider FX's adapters serve, a left-out or `null`
 //!   `adapter` becomes the name of that pair's default, and a left-out or `null`
 //!   `adapter_behavior` the behaviour of the pair's adapter `adapter` names ([`complete_contract`]).

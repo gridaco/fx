@@ -135,6 +135,8 @@ Common checks from the repository root:
 # Rust engine
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features
 cargo test --workspace
 
 # Browser viewer

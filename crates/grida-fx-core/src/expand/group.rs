@@ -4,7 +4,7 @@
 //! `parent = context`); members expand on reference or in the final sweep. A regenerating group
 //! creates one nested take scope per take up to `max` (`takes_max` at `<w>.regenerate`), with
 //! `feedback` when asked (take 1 missing, later takes `{member: facts}` of the previous take via
-//! [`Expander::group_feedback`]), evaluates `until` in each (`<w>.regenerate.until`), stops after
+//! `Expander::group_feedback`), evaluates `until` in each (`<w>.regenerate.until`), stops after
 //! the first true one, and makes later takes `maybe` while an `until` is pending. A used workflow:
 //! its whole `with:` evaluated at `<w>.with` (a non-object becomes `{}`), unknown names
 //! `{uses} has no input {name}` at `<w>.with.<name>` (sorted), bound with

@@ -1,19 +1,19 @@
 //! Scopes and step views.
 //!
-//! [`StepScope`] resolves names in a frame, in this order: frame variables
-//! (shadowing the roots), `inputs`, `tables` (raw, never evaluated), `let` (a [`ViewData::Lets`]
+//! `StepScope` resolves names in a frame, in this order: frame variables
+//! (shadowing the roots), `inputs`, `tables` (raw, never evaluated), `let` (a `ViewData::Lets`
 //! view; `let.<n>` resolves the let lazily in the *referencing* scope, unmemoized, refused when it
-//! refers back to itself), `steps` (a [`ViewData::Steps`] view), else `unknown name 'x'`.
-//! `steps.<name>` finds the step lexically ([`Expander::find`]), expands it, and returns
-//! [`Expander::view_of`]: missing (absent), its pending token, or a node / repeat / group /
+//! refers back to itself), `steps` (a `ViewData::Steps` view), else `unknown name 'x'`.
+//! `steps.<name>` finds the step lexically (`Expander::find`), expands it, and returns
+//! `Expander::view_of`: missing (absent), its pending token, or a node / repeat / group /
 //! workflow / regenerating view; a node view's `outputs`,
-//! `facts` and `take` are answered by `judge.rs` ([`Expander::node_result`],
-//! [`Expander::node_take`]). `.*` results are [`ViewData::Every`]; finishing turns them
+//! `facts` and `take` are answered by `judge.rs` (`Expander::node_result`,
+//! `Expander::node_take`). `.*` results are `ViewData::Every`; finishing turns them
 //! into collections (files keyed, verdicts kept for present keys) and refuses any other view. A
 //! repeat indexed by a key only a run gives waits on that key and every instance of the repeat
-//! ([`Expander::repeat_item_pending`]).
+//! (`Expander::repeat_item_pending`).
 //!
-//! [`TemplateScope`] is the prompt-file scope (identity.md §5): `vars`, `inputs`, then each key of
+//! `TemplateScope` is the prompt-file scope (identity.md §5): `vars`, `inputs`, then each key of
 //! `vars` by its bare name; else `a prompt sees vars and inputs, not 'x'`. It has no views.
 
 use super::Expander;

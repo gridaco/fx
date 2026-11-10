@@ -26,7 +26,7 @@
 //!   `Ended`; still running at the deadline, an answer about another task, an unknown status and a
 //!   download that fails or is over the cap are `Unreachable`. An `Ended` for `failed` or
 //!   `cancelled`, whose frozen credits Tripo returns ([`UNBILLED`]), costs the credits the read
-//!   reports, `Some(0)` when it reports none ([`ended_cost`]); an unusable output or a file of
+//!   reports, `Some(0)` when it reports none; an unusable output or a file of
 //!   the wrong kind comes from a task that succeeded, so it costs what that success read reports,
 //!   as an answer would ([`Task::cost`]); `banned` and `expired` cost `None`. A figure that
 //!   cannot be read is `None` throughout.
@@ -140,7 +140,7 @@ pub struct Task {
 }
 
 impl Task {
-    /// What the task cost by this read: its `credits_consumed` as [`credits_cost`] reads it,
+    /// What the task cost by this read: its `credits_consumed` × USD 0.01, rounded up to microdollars,
     /// `None` when absent or unreadable. A finished task costs this whether its output answers
     /// or is unusable (src/tripo/README.md, "Cost").
     pub fn cost(&self) -> Option<Usd> {

@@ -71,6 +71,8 @@ bun --no-env-file run check:www && bun --no-env-file run test:www && bun --no-en
 # js/fx/dist: the TypeScript node host that the engine's tests and conformance start on Node 24+.
 (cd js/fx && bun --no-env-file install --frozen-lockfile && bun --no-env-file run build)
 cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test --workspace
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features
 (cd python && uv run ruff check --config pyproject.toml . ../tools ../conformance ../examples ../fixtures && uv run ruff format --check --config pyproject.toml . ../tools ../conformance/run.py ../examples ../fixtures && uv run pytest)
 (cd js/fx && bun --no-env-file run typecheck && bun --no-env-file test)
 uv run --project python python tools/check_spec.py

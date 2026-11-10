@@ -4,7 +4,7 @@
 //!
 //! FX's own providers are [`built_in`], in the order `grida-fx doctor` lists them; Codex and Grok
 //! Build are [`RUNTIMES`], not declarations. A project declares others under `providers:` in the
-//! planning project's `fx.yaml` ([`parse`]); [`Declarations`] is the built-in ones, then the
+//! planning project's `fx.yaml`; [`Declarations`] is the built-in ones, then the
 //! project's. The keys, the `.env` reader, the base URLs, `doctor` and the variables Codex, Grok
 //! Build, the background service and the browser opener never inherit all read them. A
 //! declaration is configuration and is not hashed; only its `family` or its `adapter` reaches a
@@ -265,7 +265,7 @@ impl Declarations {
         BUILT_IN.clone()
     }
 
-    /// FX's own, then `declared`, which [`parse`] has checked.
+    /// FX's own, then `declared`, checked while the project's `fx.yaml` is read.
     pub fn with(declared: &[Declaration]) -> Declarations {
         if declared.is_empty() {
             return Declarations::built_in();

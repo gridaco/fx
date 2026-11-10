@@ -232,8 +232,11 @@ pub struct LockArgs {
     /// a folder (or a file) in the project to lock (default: here)
     #[arg(value_name = "WHERE")]
     pub r#where: Option<String>,
-    /// confirm that <path>#<attr> did not change behaviour; repeatable
-    #[arg(long = "same", value_name = "NODE")]
+    #[arg(
+        long = "same",
+        value_name = "NODE",
+        help = "confirm that <path>#<attr> did not change behaviour; repeatable"
+    )]
     pub same: Vec<String>,
     /// check fx.lock without writing it
     #[arg(long)]

@@ -34,7 +34,7 @@
 //!   the ref) and takes the output's display name and key.
 //! - The engine's annotations file is written only for a one-file port named `annotations`.
 //! - A store that cannot be written is not a refusal of the result: the executor stops the run
-//!   ([`accept_or_stop`]); [`accept`] reports it as a refusal for callers that only fail the node.
+//!   (`accept_or_stop`); [`accept`] reports it as a refusal for callers that only fail the node.
 //!   A file the body wrote that cannot be read, or that changes while it is stored, is the
 //!   body's: a refusal (`<instance path>/<port>: cannot read …`, `… changed while it was being
 //!   stored`).
