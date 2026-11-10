@@ -17,9 +17,7 @@ Nami and traveler presets remain available separately.
 The helpers in `nodes/_movie_sprite/` belong to this example; they are not FX APIs.
 No other checkout or application package is needed.
 
-This source uses workflow video posters. Until a release includes that feature, use
-the current checkout's SDK and engine, following the
-[source build instructions](https://github.com/gridaco/fx/blob/main/CONTRIBUTING.md#build-from-source).
+This source uses workflow video posters and requires FX 0.8.0 or later.
 
 ## Setup
 
