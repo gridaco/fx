@@ -54,6 +54,7 @@ pub mod judge;
 pub mod node;
 pub mod repeat;
 pub mod scope;
+pub mod skip;
 pub mod wiring;
 
 use crate::docs::takes::Takes;
@@ -69,7 +70,7 @@ use frame::{ExpId, Frame, FrameId, StepExpansion};
 use indexmap::IndexMap;
 use scope::{StepScope, ViewData};
 use serde_json::Value;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::rc::Rc;
 
 /// The most step expansions that may be under way inside each other: a chain of steps each
@@ -254,6 +255,10 @@ impl NodeResult {
 /// The result of one expansion.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Expansion {
+    /// Presentation-only causes for instances whose control flow settled without execution.
+    pub skip_reasons: BTreeMap<String, skip::SkipReason>,
+    /// Omitted positions, matched only against instances a run already knows.
+    pub skipped_positions: Vec<skip::SkippedPosition>,
     pub scopes: Vec<display::Scope>,
     /// In insertion order: the graph's listing order.
     pub instances: IndexMap<String, Instance>,
@@ -328,7 +333,9 @@ pub(crate) struct Position {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Condition {
     True,
-    False,
+    False(Box<skip::SkipReason>),
+    /// Evaluation reported a problem, so there is no valid false outcome to explain.
+    Refused,
     /// Only a run decides: the context becomes `maybe`.
     Pending(Pending),
 }
@@ -343,6 +350,8 @@ pub(crate) struct Expander<'a> {
     /// Scopes registered for the final sweep, in registration order.
     pub(crate) scopes: Vec<FrameId>,
     pub(crate) instances: IndexMap<String, Instance>,
+    pub(crate) skip_reasons: BTreeMap<String, skip::SkipReason>,
+    pub(crate) skipped_positions: Vec<skip::SkippedPosition>,
     pub(crate) pending: Vec<PendingRepeat>,
     pub(crate) problems: Vec<Problem>,
     /// The active read sets, innermost last (`_evaluate_reading`).
@@ -392,6 +401,8 @@ impl<'a> Expander<'a> {
             memo: HashMap::new(),
             scopes: Vec::new(),
             instances: IndexMap::new(),
+            skip_reasons: BTreeMap::new(),
+            skipped_positions: Vec::new(),
             pending: Vec::new(),
             problems: Vec::new(),
             read_sets: Vec::new(),
@@ -449,6 +460,8 @@ impl<'a> Expander<'a> {
         }
         self.finish_display_scopes();
         Ok(Expansion {
+            skip_reasons: self.skip_reasons,
+            skipped_positions: self.skipped_positions,
             scopes: self.display_scopes.into_values().collect(),
             instances: self.instances,
             pending: self.pending,
@@ -613,14 +626,31 @@ impl<'a> Expander<'a> {
         if at.declared.if_.is_some() {
             match self.condition(context, &at.declared, &at.where_) {
                 Condition::True => {}
-                Condition::False => {
+                Condition::False(reason) => {
+                    self.skipped_positions.push(skip::SkippedPosition {
+                        path: path.clone(),
+                        takes: self.frame(context).takes.clone(),
+                        reason: *reason,
+                    });
+                    self.exps[into.0].kind = frame::ExpKind::Absent;
+                    return None;
+                }
+                Condition::Refused => {
                     self.exps[into.0].kind = frame::ExpKind::Absent;
                     return None;
                 }
                 Condition::Pending(_) => context = self.maybe_frame(context),
             }
         }
+        let problems_before = self.problems.len();
         if !self.assertions(&at.declared.asserts, context, &at.where_, None) {
+            if self.problems.len() == problems_before {
+                self.skipped_positions.push(skip::SkippedPosition {
+                    path: path.clone(),
+                    takes: self.frame(context).takes.clone(),
+                    reason: skip::SkipReason::new(skip::SkipCode::AssertionSkip, []),
+                });
+            }
             self.exps[into.0].kind = frame::ExpKind::Absent;
             return None;
         }
@@ -730,15 +760,25 @@ impl<'a> Expander<'a> {
         let Some(condition) = &declared.if_ else {
             return Condition::True;
         };
-        let value = self.evaluate(frame, condition, &format!("{where_}.if"));
+        let problems_before = self.problems.len();
+        let (value, reads) = self.evaluate_reading(frame, condition, &format!("{where_}.if"));
+        let refused = self.problems.len() != problems_before;
         match value {
             Val::Pending(pending) => Condition::Pending(*pending),
             value if value.contains_pending() => {
                 Condition::Pending(Pending::new(value.pending_refs(), &value.token_form()))
             }
-            Val::Failed(_) => Condition::False,
+            Val::Failed(_) if refused => Condition::Refused,
+            Val::Failed(source) => Condition::False(Box::new(skip::SkipReason::new(
+                skip::SkipCode::UpstreamFailed,
+                [source],
+            ))),
             value if value.truthy() => Condition::True,
-            _ => Condition::False,
+            _ if refused => Condition::Refused,
+            _ => Condition::False(Box::new(skip::SkipReason::new(
+                skip::SkipCode::ConditionFalse,
+                reads,
+            ))),
         }
     }
 
@@ -755,6 +795,7 @@ impl<'a> Expander<'a> {
         let mut keep = true;
         for (index, assertion) in asserts.iter().enumerate() {
             let label = format!("{where_}.assert[{index}]");
+            let problems_before = self.problems.len();
             let (value, reads) = self.evaluate_reading(frame, &assertion.check, &label);
             if value.contains_pending() {
                 // Not decidable yet: the step it belongs to waits for what it reads, so it is
@@ -783,6 +824,14 @@ impl<'a> Expander<'a> {
             }
             if assertion.on_fail == OnFail::Skip {
                 keep = false;
+                if self.problems.len() == problems_before
+                    && let Some(id) = owner
+                {
+                    self.skip_reasons.insert(
+                        id.to_string(),
+                        skip::SkipReason::new(skip::SkipCode::AssertionSkip, reads.iter().cloned()),
+                    );
+                }
             }
             if let Some(instance) = owner.and_then(|id| self.instance_mut(id)) {
                 instance.state = match assertion.on_fail {

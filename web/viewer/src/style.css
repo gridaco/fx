@@ -64,6 +64,14 @@ button { touch-action: manipulation; }
 .fx-detail-meta { margin-top: 2px; color: #8b8b94; font-size: 11px; line-height: 16px; overflow-wrap: anywhere; }
 .fx-detail-copy { margin-top: 10px; color: #71717a; font-size: 11px; line-height: 17px; }
 .fx-detail-problem { margin-top: 10px; padding: 8px 10px; border-radius: 4px; background: #fdf4f4; color: #a14c57; font-size: 11px; line-height: 17px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.fx-detail-skip { margin-top: 12px; padding: 10px; border: 1px solid #e4e4e7; border-radius: 6px; background: #fafafa; color: #52525b; font-size: 11px; line-height: 17px; overflow-wrap: anywhere; }
+.fx-detail-skip h3 { margin-bottom: 4px; font-weight: 600; }
+.fx-detail-skip-source { display: flex; align-items: center; gap: 4px; margin-top: 8px; text-align: left; text-decoration: underline; text-underline-offset: 3px; }
+.fx-detail-skip-source:hover { color: #18181b; }
+.fx-detail-skip-source:focus-visible { outline: 2px solid #2563eb; outline-offset: 3px; border-radius: 2px; }
+.fx-detail-skip-diagnostic { margin-top: 10px; color: #71717a; }
+.fx-detail-skip-diagnostic summary { cursor: pointer; }
+.fx-detail-skip-diagnostic p { margin-top: 4px; white-space: pre-wrap; }
 .fx-detail-section { margin-top: 18px; }
 .fx-detail-section > h3 { margin-bottom: 8px; color: #71717a; font-size: 10px; font-weight: 600; line-height: 14px; }
 .fx-detail-download { display: grid; justify-items: start; gap: 6px; margin-bottom: 12px; }

@@ -3,7 +3,8 @@ import type { CanvasGraph, LayoutReport } from "./graph";
 import { CanvasViewport, type CanvasInset, type ViewportState } from "./controller";
 import { displayPortName } from "./ports";
 import { BADGE_BAND, DECK_OFFSET, canvasEdgePath, layoutGraph, type CanvasLayout, type PlacedDeck, type PositionedFrame, type PositionedNode } from "./layout";
-import { DECK_BACK, bookmarkLayout, deckBadge, deckStack, deckTicks, expandedColumns, restingFront, tickHolds, type DeckMember } from "./deck";
+import { DECK_BACK, bookmarkLayout, deckBadge, deckStack, deckTicks, expandedColumns, tickHolds, type DeckMember } from "./deck";
+import { DeckSelection } from "./deck-selection";
 import { element, nodeCard, runningLabel, short } from "./card";
 import { CardVideos } from "./video";
 
@@ -83,6 +84,7 @@ export class CanvasController {
   private readonly incidentEdges = new Map<string, Set<string>>();
   private highlightedEdges = new Set<string>();
   private decks: Deck[] = [];
+  private deckSelection: DeckSelection | null = null;
   private open: OpenDeck | null = null;
   private hovered: DeckHit | null = null;
   /** The open deck's card a bookmark mark points at. */
@@ -297,6 +299,7 @@ export class CanvasController {
     }
     this.videos.redrawn(this.nodes);
     const items = new Map<string, PositionedNode | PositionedFrame>([...this.layout.nodes, ...frames].map((item) => [item.id, item]));
+    this.deckSelection = new DeckSelection(this.layout);
     this.decks = this.layout.decks.map((placed, index) => this.deck(placed, index, layer(placed.frame).cards, items));
     this.decks.forEach((_, index) => this.restDeck(index));
     this.content.replaceChildren(rootEdges, rootCards);
@@ -346,17 +349,7 @@ export class CanvasController {
       card.dataset.deckCard = String(cards.length);
       cards.push(card);
     }
-    // §5.4 rule 4: a member that an instance outside the deck reads.
-    const inside = (id: string) => { const node = this.nodes.get(id); return node ? cards.findIndex((card) => card.contains(node)) : -1; };
-    const bound = new Set<number>();
-    for (const edge of this.edges.values()) {
-      const from = inside(edge.source);
-      if (from >= 0 && inside(edge.target) < 0) bound.add(from);
-    }
-    const members: DeckMember[] = placed.members.map((id, at) => {
-      const item = items.get(id)!;
-      return { id, state: item.state ?? "planned", key: item.key ?? null, take: item.take?.at(-1) ?? null, bound: bound.has(at) };
-    });
+    const members = this.deckSelection!.members[index];
     const title = items.get(placed.members[0])?.title ?? placed.address;
     const badge = deckBadge(members);
     const label = [badge.text, ...badge.detail].join(" · ");
@@ -541,13 +534,7 @@ export class CanvasController {
   }
   /** The member that rests in front of a closed deck (§5.4). */
   private frontOf(index: number) {
-    return restingFront(this.decks[index].members, this.selectedMember(index));
-  }
-  private selectedMember(index: number) {
-    if (this.selected === null) return null;
-    const deck = this.decks[index];
-    const at = this.holding(deck, this.selected);
-    return at >= 0 ? deck.members[at].id : null;
+    return this.deckSelection!.front(index, this.selected);
   }
 
   private cardAt(target: EventTarget | null): DeckHit | null {
@@ -569,8 +556,12 @@ export class CanvasController {
     const previous = this.hovered;
     if (previous?.deck === target?.deck && previous?.card === target?.card) return;
     this.hovered = target;
-    if (previous && previous.deck !== target?.deck) this.restDeck(previous.deck);
-    if (target) this.restDeck(target.deck, target.card, !target.mark);
+    const next = target ? this.deckSelection!.partners(target.deck, target.card) : [];
+    const raised = new Set(next.map((member) => member.deck));
+    if (previous) for (const member of this.deckSelection!.partners(previous.deck, previous.card)) {
+      if (!raised.has(member.deck)) this.restDeck(member.deck);
+    }
+    for (const member of next) this.restDeck(member.deck, member.card, !target?.mark);
   }
   private onDeckClick = (event: MouseEvent) => {
     if ((event.target as Element).closest(CARD_CONTROLS)) return;
@@ -689,9 +680,8 @@ export class CanvasController {
     if (this.open && id !== null && held < 0) this.collapse(true);
     // In the open deck the bookmark marks the selected member.
     if (this.open && held >= 0) this.markFront(this.open.deck, held);
-    this.decks.forEach((deck, index) => {
-      if ([previous, id].some((key) => key !== null && this.holding(deck, key) >= 0)) this.restDeck(index);
-    });
+    const affected = new Set([previous, id].flatMap((key) => key === null ? [] : this.deckSelection?.affected(key) ?? []));
+    for (const index of affected) this.restDeck(index);
   }
   /**
    * A card chosen outside the canvas, from a list: the camera glides to it, in the area the

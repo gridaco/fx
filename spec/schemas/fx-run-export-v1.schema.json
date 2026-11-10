@@ -281,8 +281,27 @@
         },
         "preview": {
           "$ref": "#/$defs/preview"
+        },
+        "skip_reason": {
+          "$ref": "#/$defs/skip_reason"
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "skip_reason"
+            ]
+          },
+          "then": {
+            "properties": {
+              "state": {
+                "const": "skipped"
+              }
+            }
+          }
+        }
+      ]
     },
     "artifact": {
       "type": "object",
@@ -842,6 +861,29 @@
         "poster": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9_]*$"
+        }
+      }
+    },
+    "skip_reason": {
+      "description": "Recorded engine cause for a skipped node. Structural codes and related instance IDs only; no author-written explanation or evaluated values. See spec/skip-reasons.md.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "sources"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "sources": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     }

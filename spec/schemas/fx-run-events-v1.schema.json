@@ -446,6 +446,17 @@
     "preview": {
       "$ref": "#/$defs/preview",
       "description": "Optional workflow-authored video preview on node_started, node_failed and node_skipped. Literal ports of this same instance; display metadata only."
+    },
+    "skip_reason": {
+      "$ref": "#/$defs/skip_reason",
+      "description": "Optional cause on node_skipped. Display-only; never replayed as an execution decision."
+    },
+    "skip_reasons": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/skip_reason"
+      },
+      "description": "scopes_updated: complete snapshot of engine causes for known absent/unneeded instances, keyed by instance ID. Empty replaces earlier snapshot causes. Does not add members."
     }
   },
   "allOf": [
@@ -1167,6 +1178,10 @@
             "string",
             "null"
           ]
+        },
+        "path": {
+          "type": "string",
+          "description": "Optional canonical instance path, without takes, for recovering known display instances across resume. Not a filesystem path."
         }
       }
     },
@@ -1230,6 +1245,29 @@
           "description": "This node's singleton image output port used as the video's poster; an optional singleton is allowed.",
           "type": "string",
           "pattern": "^[a-z][a-z0-9_]*$"
+        }
+      }
+    },
+    "skip_reason": {
+      "description": "Recorded engine cause for a skipped node. Structural codes and related instance IDs only; no author-written explanation or evaluated values. See spec/skip-reasons.md.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "sources"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "sources": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     }

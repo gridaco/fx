@@ -172,6 +172,7 @@ export function projectScopes(view: GraphDocument | ViewerRun, flat: CanvasGraph
     nodes.push({ id: scope.id, source_id: scope.id, kind: "workflow", scope_id: scope.id, path: scope.path, address: scope.step, take: scope.take, key: scope.path,
       title: scope.title || scope.path, subtitle: scope.source ?? scope.path,
       state, pending: false, ...(started_at ? { started_at } : {}),
+      ...(children.some((node) => node.executed) ? { executed: true } : {}),
       ...(waiting_for ? { waiting_for } : {}), ...(waiting_since ? { waiting_since } : {}),
       child_count: children.length, failure_count: failed.length, ...(errors.length ? { errors } : {}), ports: scopePorts(scope) });
   }
@@ -196,6 +197,11 @@ export function projectScopes(view: GraphDocument | ViewerRun, flat: CanvasGraph
     }
   }
   const edges = new Map<string, CanvasConnection>();
+  // Public aliases inherit proven flattened reads; their declaration alone proves no execution.
+  const consumedPairs = new Set(flat.edges.filter((edge) => edge.consumed).flatMap((edge) => {
+    const from = representative(edge.source), to = representative(edge.target);
+    return from && to ? [JSON.stringify([from, to])] : [];
+  }));
   const add = (edge: CanvasConnection) => {
     if (edge.source === edge.target || !displayed.has(edge.source) || !displayed.has(edge.target)) return;
     edges.set(edge.id, edge);
@@ -221,7 +227,8 @@ export function projectScopes(view: GraphDocument | ViewerRun, flat: CanvasGraph
     const id = binding.source_kind === "output" || binding.source_kind === "fact"
       ? JSON.stringify(["data", original, binding.source_kind, binding.source_port, targetOwner, binding.target_port])
       : JSON.stringify(["interface", original, binding.source_kind, binding.source_port, targetOwner, targetSide, binding.target_port]);
-    add({ id, source: from, target, kind: "data", kinds: ["reads"], source_port: binding.source_port, target_port: binding.target_port, source_kind: binding.source_kind === "fact" ? "fact" : "output" });
+    add({ id, source: from, target, kind: "data", kinds: ["reads"], source_port: binding.source_port, target_port: binding.target_port, source_kind: binding.source_kind === "fact" ? "fact" : "output",
+      ...(consumedPairs.has(JSON.stringify([from, target])) ? { consumed: true } : {}) });
   };
   const source = plan ? view.instances : view.nodes;
   const authoritative = new Set(source.filter((node) => node.interface_bindings !== undefined).map((node) => `instance:${node.id}`));
@@ -231,7 +238,7 @@ export function projectScopes(view: GraphDocument | ViewerRun, flat: CanvasGraph
     if (edge.kind === "data" && (authoritative.has(edge.target) || from !== edge.source || to !== edge.target)) {
       // Missing interface attribution still proves a dependency, never a public alias.
       // A displayed precise interface connection removes this fallback below.
-      add({ id: edge.id, source: from, target: to, kind: "dependency", kinds: ["reads"] });
+      add({ id: edge.id, source: from, target: to, kind: "dependency", kinds: ["reads"], ...(edge.consumed ? { consumed: true } : {}) });
     } else add({ ...edge, source: from, target: to });
   }
   for (const node of source) {
@@ -244,6 +251,7 @@ export function projectScopes(view: GraphDocument | ViewerRun, flat: CanvasGraph
   const frames = visibleScopes.filter((scope) => scope.kind === "group").map((scope) => ({
     id: scope.id, title: scope.title || scope.path, address: scope.step, take: scope.take, key: scope.path,
     state: scopeState(descendants(scope).map((node) => node.state), plan),
+    ...(descendants(scope).some((node) => node.executed) ? { executed: true as const } : {}),
     nodes: nodes.filter((node) => (node.kind === "workflow" ? byId.get(node.scope_id!)?.parent : parents.get(node.id)) === scope.id).map((node) => node.id),
     parent: scope.parent !== active && byId.get(scope.parent ?? "")?.kind === "group" ? scope.parent : null,
   }));

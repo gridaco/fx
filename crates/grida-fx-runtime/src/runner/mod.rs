@@ -535,6 +535,7 @@ fn invoke(
         failed: Vec::new(),
         tasks: Vec::new(),
         display_snapshot: None,
+        known_instances: known_instances(&plan.expansion, &prior),
         cleanup_verified: true,
         cleanup_completed: false,
     };
@@ -735,6 +736,8 @@ enum Message {
 /// The loop's state (module doc).
 struct Scheduler<'a> {
     display_snapshot: Option<serde_json::Value>,
+    /// Previously declared members, including conditional positions absent from a later expansion.
+    known_instances: BTreeMap<String, (String, Vec<u32>)>,
     engine: Arc<Engine>,
     planner: &'a mut Planner,
     host: &'a mut dyn NodeHost,
@@ -764,6 +767,71 @@ struct Scheduler<'a> {
     cleanup_completed: bool,
 }
 
+/// Resolves display-only omitted positions against previously known instance metadata.
+/// No absent member is added to the expansion order, and no instance id is parsed.
+fn skip_reasons_document(
+    expansion: &Expansion,
+    known: &BTreeMap<String, (String, Vec<u32>)>,
+) -> serde_json::Value {
+    let mut reasons = serde_json::Map::new();
+    for (id, (path, takes)) in known {
+        let reason = expansion.skip_reasons.get(id).or_else(|| {
+            expansion
+                .skipped_positions
+                .iter()
+                .filter(|position| position.contains(path, takes))
+                .max_by_key(|position| (position.takes.len(), position.path.len()))
+                .map(|position| &position.reason)
+        });
+        if let Some(reason) = reason {
+            let mut reason = reason.clone();
+            reason.sources.retain(|source| known.contains_key(source));
+            reasons.insert(id.clone(), reason.to_value());
+        }
+    }
+    serde_json::Value::Object(reasons)
+}
+
+/// Restore display identities from declarations, never from encoded instance-id syntax.
+fn known_instances(
+    expansion: &Expansion,
+    prior: &[serde_json::Value],
+) -> BTreeMap<String, (String, Vec<u32>)> {
+    let mut known: BTreeMap<_, _> = expansion
+        .instances
+        .iter()
+        .filter(|(_, instance)| instance.state != State::Absent)
+        .map(|(id, instance)| (id.clone(), (instance.path.clone(), instance.takes.clone())))
+        .collect();
+    for event in prior {
+        let entries: Vec<_> = match event["event"].as_str() {
+            Some("scopes_updated") => event["instances"]
+                .as_array()
+                .map(|entries| entries.iter().collect())
+                .unwrap_or_default(),
+            Some("node_started") => vec![event],
+            _ => Vec::new(),
+        };
+        for entry in entries {
+            let (Some(id), Some(path), Some(takes)) = (
+                entry["id"].as_str(),
+                entry["path"].as_str(),
+                entry["take"].as_array(),
+            ) else {
+                continue;
+            };
+            let takes: Option<Vec<u32>> = takes
+                .iter()
+                .map(|take| take.as_u64().and_then(|take| u32::try_from(take).ok()))
+                .collect();
+            if let Some(takes) = takes.filter(|takes| !takes.is_empty()) {
+                known.insert(id.to_string(), (path.to_string(), takes));
+            }
+        }
+    }
+    known
+}
+
 impl Scheduler<'_> {
     /// Writes one event; a failure is an engine fault.
     fn emit(&self, event: &Event) -> Result<(), Error> {
@@ -777,6 +845,16 @@ impl Scheduler<'_> {
     /// in expansion order, and its pending repeats, so a reader knows every member and its step
     /// before it starts.
     fn emit_scopes(&mut self, expansion: &Expansion) -> Result<(), Error> {
+        for instance in expansion
+            .ordered()
+            .filter(|instance| instance.state != State::Absent)
+        {
+            self.known_instances.insert(
+                instance.id.clone(),
+                (instance.path.clone(), instance.takes.clone()),
+            );
+        }
+        let skip_reasons = skip_reasons_document(expansion, &self.known_instances);
         let node_interface_bindings: BTreeMap<_, _> = expansion
             .instances
             .iter()
@@ -787,7 +865,7 @@ impl Scheduler<'_> {
             .filter(|instance| instance.state != State::Absent)
             .map(|instance| {
                 serde_json::json!({
-                    "id": instance.id, "step": instance.step, "take": instance.takes,
+                    "id": instance.id, "path": instance.path, "step": instance.step, "take": instance.takes,
                     "key": instance.key,
                 })
             })
@@ -796,6 +874,7 @@ impl Scheduler<'_> {
         let snapshot = serde_json::json!({
             "scopes": expansion.scopes, "node_interface_bindings": node_interface_bindings,
             "instances": instances, "pending": pending,
+            "skip_reasons": skip_reasons,
         });
         if self.display_snapshot.as_ref() != Some(&snapshot) {
             self.emit(&Event::ScopesUpdated {
@@ -803,6 +882,7 @@ impl Scheduler<'_> {
                 node_interface_bindings: snapshot["node_interface_bindings"].clone(),
                 instances: snapshot["instances"].clone(),
                 pending: snapshot["pending"].clone(),
+                skip_reasons: Some(snapshot["skip_reasons"].clone()),
             })?;
             self.display_snapshot = Some(snapshot);
         }
@@ -1322,6 +1402,57 @@ mod tests {
     use grida_fx_core::spec::{BodyKind, NodeSpec, Retry};
     use std::collections::HashMap;
     use std::rc::Rc;
+
+    #[test]
+    fn skip_snapshots_name_only_known_instances_and_reset_with_the_expansion() {
+        use grida_fx_core::expand::skip::{SkipCode, SkipReason, SkippedPosition};
+        let known = BTreeMap::from([
+            (
+                "gate.branch.draw#2.1".into(),
+                ("gate.branch.draw".into(), vec![2, 1]),
+            ),
+            (
+                "gate.branch.draw#1.1".into(),
+                ("gate.branch.draw".into(), vec![1, 1]),
+            ),
+            ("check#1".into(), ("check".into(), vec![1])),
+        ]);
+        let expansion = Expansion {
+            skipped_positions: vec![SkippedPosition {
+                path: "gate.branch".into(),
+                takes: vec![2],
+                reason: SkipReason::new(
+                    SkipCode::ConditionFalse,
+                    ["check#1".into(), "not-recorded#1".into()],
+                ),
+            }],
+            ..Expansion::default()
+        };
+        assert_eq!(
+            skip_reasons_document(&expansion, &known),
+            serde_json::json!({
+                "gate.branch.draw#2.1": {"code":"condition_false", "sources":["check#1"]}
+            })
+        );
+        assert_eq!(
+            skip_reasons_document(&Expansion::default(), &known),
+            serde_json::json!({})
+        );
+    }
+
+    #[test]
+    fn resume_recovers_dynamic_member_paths_without_parsing_ids() {
+        let prior = [serde_json::json!({"event":"scopes_updated", "instances":[
+            {"id":"opaque-id", "path":"branch.draw", "step":"branch.draw", "take":[2,1], "key":null},
+            {"id":"legacy-id", "step":"branch.draw", "take":[1,1], "key":null},
+        ]})];
+        let known = known_instances(&Expansion::default(), &prior);
+        assert_eq!(
+            known.get("opaque-id"),
+            Some(&("branch.draw".into(), vec![2, 1]))
+        );
+        assert!(!known.contains_key("legacy-id"));
+    }
 
     /// Simulates a nested authored tool that survives the top-level run response. The host
     /// itself observes the event record when shutdown begins, avoiding an observer race.

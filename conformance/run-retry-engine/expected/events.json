@@ -124,6 +124,7 @@
    {
     "id": "flaky#1",
     "key": null,
+    "path": "flaky",
     "step": "flaky",
     "take": [
      1
@@ -136,6 +137,7 @@
   },
   "pending": [],
   "plan": "caa43d0c93e82d42f8e875d76eb2cb6616ac28344b539744d0ba7d59e890afca",
-  "scopes": []
+  "scopes": [],
+  "skip_reasons": {}
  }
 ]

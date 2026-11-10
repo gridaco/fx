@@ -1144,6 +1144,7 @@
    {
     "id": "good#1",
     "key": null,
+    "path": "good",
     "step": "good",
     "take": [
      1
@@ -1152,6 +1153,7 @@
    {
     "id": "refused#1",
     "key": null,
+    "path": "refused",
     "step": "refused",
     "take": [
      1
@@ -1160,6 +1162,7 @@
    {
     "id": "failed#1",
     "key": null,
+    "path": "failed",
     "step": "failed",
     "take": [
      1
@@ -1168,6 +1171,7 @@
    {
     "id": "declined#1",
     "key": null,
+    "path": "declined",
     "step": "declined",
     "take": [
      1
@@ -1176,6 +1180,7 @@
    {
     "id": "small#1",
     "key": null,
+    "path": "small",
     "step": "small",
     "take": [
      1
@@ -1184,6 +1189,7 @@
    {
     "id": "text#1",
     "key": null,
+    "path": "text",
     "step": "text",
     "take": [
      1
@@ -1192,6 +1198,7 @@
    {
     "id": "extra#1",
     "key": null,
+    "path": "extra",
     "step": "extra",
     "take": [
      1
@@ -1200,6 +1207,7 @@
    {
     "id": "missing#1",
     "key": null,
+    "path": "missing",
     "step": "missing",
     "take": [
      1
@@ -1208,6 +1216,7 @@
    {
     "id": "data#1",
     "key": null,
+    "path": "data",
     "step": "data",
     "take": [
      1
@@ -1216,6 +1225,7 @@
    {
     "id": "body#1",
     "key": null,
+    "path": "body",
     "step": "body",
     "take": [
      1
@@ -1237,6 +1247,7 @@
   },
   "pending": [],
   "plan": "a7cb2d938e24f99c3228a033d37b542d21f97dec6dfdaa5290a8417dbc3edbea",
-  "scopes": []
+  "scopes": [],
+  "skip_reasons": {}
  }
 ]

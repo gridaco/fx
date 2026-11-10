@@ -264,6 +264,15 @@ flat; readers MUST NOT infer imported workflow boundaries or aliases from path s
 artifact digests or the filesystem. A saved-plan host refuses invalid, cyclic or dangling scope metadata. A run viewer omits
 such metadata with a warning, without hiding the underlying execution record.
 
+**Skip explanations.** The display snapshot may also carry a complete
+`skip_reasons` map keyed by known instance ID. Each value is a structural
+`{code, sources}` descriptor of an engine decision; `node_skipped` may carry the
+same descriptor as `skip_reason`. These fields are display evidence, not result
+values or scheduling inputs. They change neither membership nor identity, and
+replay ignores them. [Recorded skip reasons](skip-reasons.md) defines the codes,
+snapshot replacement, invocation/start clearing, reference closure and portable
+disclosure. Earlier records remain valid without them.
+
 **Named connection metadata.** New expanded graphs include `types.<uses>.ports`, with
 `inputs` and `outputs` mapped to their declared port notation and `params` mapped to
 their JSON Schemas ([protocol.md](protocol.md) §4). Each instance also includes

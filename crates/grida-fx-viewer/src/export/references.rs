@@ -129,6 +129,15 @@ pub(super) fn validate(manifest: &Value) -> Result<(), ExportError> {
         }
     }
     for node in nodes.values() {
+        if let Some(reason) = node.get("skip_reason")
+            && (node["state"] != "skipped"
+                || super::super::read::skip_reason(Some(reason)).is_none()
+                || list(&reason["sources"])
+                    .iter()
+                    .any(|source| !nodes.contains_key(source.as_str().unwrap_or_default())))
+        {
+            return Err(invalid());
+        }
         if let (Some(preview), Some(ports)) = (node.get("preview"), node.get("ports")) {
             for name in ["video", "poster"] {
                 if let Some(port) = preview.get(name).and_then(Value::as_str)

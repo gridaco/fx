@@ -9,11 +9,12 @@ export interface DeckMember {
   take: number | null;
   /** Whether an instance outside the deck reads this member (§5.4 rule 4). */
   bound?: boolean;
+  /** Recorded execution evidence, including an operation that finished skipped. */
+  executed?: true;
 }
 
 const failed = new Set(["failed", "blocked"]);
 const succeeded = new Set(["done", "succeeded", "cached"]);
-const started = (state: string) => !["planned", "maybe", "absent", "pending", "skipped", "unexpanded"].includes(state);
 const isTakeDeck = (members: DeckMember[]) => new Set(members.map((member) => member.key)).size === 1
   && members.some((member) => member.take !== null && member.take > 1);
 
@@ -28,34 +29,40 @@ export function deckBadge(members: DeckMember[]) {
     ? [`${items.size} items`, ...(takes > 1 ? [each] : [])]
     : [`${members.length} ${isTakeDeck(members) ? "takes" : "items"}`];
   const failures = members.filter((member) => failed.has(member.state)).length;
-  const notRun = members.filter((member) => member.state === "skipped").length;
+  const skipped = members.filter((member) => member.state === "skipped").length;
   const waiting = members.filter((member) => member.state === "waiting").length;
   return {
     text: parts.join(" · "),
     failed: failures,
-    detail: [...(failures ? [`${failures} failed`] : []), ...(waiting ? [`${waiting} waiting`] : []), ...(notRun ? [`${notRun} not run`] : [])],
+    detail: [...(failures ? [`${failures} failed`] : []), ...(waiting ? [`${waiting} waiting`] : []), ...(skipped ? [`${skipped} skipped`] : [])],
   };
 }
 
 /**
  * The member that rests in front (§5.4): the selected one, else the last failed or blocked, else
  * the first running, else the first waiting for its route, else in a take deck the last take read
- * from outside it, else the last succeeded, else the first. A member that never started never
- * rests over one that did.
+ * from outside it, else the last succeeded, else one with execution evidence, else the first.
+ * Explicit inspection may foreground any member; status alone does not establish consumption.
  */
 export function restingFront(members: DeckMember[], selected: string | null): number {
+  return restingRow(members.map((member) => [member]), selected);
+}
+
+/** Apply the same priorities once to corresponding members of linked decks (§5.5). */
+export function restingRow(rows: DeckMember[][], selected: string | null): number {
   const last = (test: (member: DeckMember) => boolean) => {
-    for (let at = members.length - 1; at >= 0; at--) if (test(members[at])) return at;
+    for (let at = rows.length - 1; at >= 0; at--) if (rows[at].some(test)) return at;
     return -1;
   };
+  const first = (test: (member: DeckMember) => boolean) => rows.findIndex((row) => row.some(test));
   const rules = [
-    () => members.findIndex((member) => member.id === selected),
+    () => first((member) => member.id === selected),
     () => last((member) => failed.has(member.state)),
-    () => members.findIndex((member) => member.state === "running"),
-    () => members.findIndex((member) => member.state === "waiting"),
-    () => isTakeDeck(members) ? last((member) => member.bound === true) : -1,
+    () => first((member) => member.state === "running"),
+    () => first((member) => member.state === "waiting"),
+    () => rows[0]?.some((_, column) => isTakeDeck(rows.map((row) => row[column]))) ? last((member) => member.bound === true) : -1,
     () => last((member) => succeeded.has(member.state)),
-    () => last((member) => started(member.state)),
+    () => last((member) => member.executed === true),
   ];
   for (const rule of rules) {
     const found = rule();

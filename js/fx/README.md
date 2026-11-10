@@ -74,6 +74,10 @@ const icon = result.outputs.icon; // a RunFile: digest, kind, path, read()
   `follow({ after, pollIntervalMs, signal })` methods use the same public reader as
   the CLI. Following yields nonempty bounded batches until broken or aborted,
   including across resumes. It owns no execution process or exit code.
+  Observation documents preserve `scopes_updated.skip_reasons` and
+  `node_skipped.skip_reason`: engine cause codes and related instance IDs, without
+  author-written reason text. See [recorded skip reasons](../../spec/skip-reasons.md);
+  older records may have no cause.
 - `inspectControl(run)` and `cancel(run, { invocation, wait, timeout })`: exact-target local
   control, independent of viewer/service lifetime. Results keep their `lower_snake_case` wire
   fields; structured failures raise `RunControlError` with `code` and `result`.

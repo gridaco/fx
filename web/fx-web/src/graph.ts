@@ -2,6 +2,7 @@ import type { ViewerRun } from "./index";
 import { validateViewerApiBase } from "./route";
 import { isNodePorts, isPortBindings, parameterType, type NodePorts, type PortBinding } from "./ports";
 import { isInterfaceBindings, isWorkflowScopes, projectScopes, type InterfaceBinding, type WorkflowScope } from "./scopes";
+import { skipExplanation, type SkipExplanation } from "./skip";
 
 export type PlanState = "planned" | "maybe" | "absent" | "blocked" | "failed" | "done";
 export interface Price { low_usd: number; high_usd: number }
@@ -187,6 +188,8 @@ export interface CanvasVideoPreview extends CanvasPreviewBase {
 export type CanvasPreview = CanvasImagePreview | CanvasVideoPreview;
 export interface CanvasStep {
   id: string; source_id: string; title: string; subtitle: string; state: string; pending: boolean;
+  /** Recorded evidence that the node executed; status alone does not prove this for skipped nodes. */
+  executed?: true;
   /** When the step last started, UTC: a running card counts up from it, less `waited_ms`. */
   started_at?: string;
   /** How long the step's latest start waited for route slots, in waits that ended. */
@@ -207,16 +210,20 @@ export interface CanvasStep {
   child_count?: number;
   failure_count?: number;
   errors?: { id: string; title: string; message: string }[];
+  /** Human-readable presentation of recorded skip facts, never inferred from status or wiring. */
+  skip_explanation?: SkipExplanation;
   preview?: CanvasPreview;
   ports?: { inputs: CanvasPort[]; outputs: CanvasPort[]; settings: { name: string; type: string }[] };
 }
 export interface CanvasPort { name: string; type: string; kind: "artifact" | "parameter" | "fact" | "value" }
 export interface CanvasConnection {
   id: string; source: string; target: string; kinds: string[];
+  /** A runtime read by an executed consumer, excluding its inspection of its judged subject. */
+  consumed?: true;
   kind?: "data" | "control" | "dependency";
   source_port?: string; target_port?: string; source_kind?: "output" | "fact";
 }
-export interface CanvasFrame { id: string; title: string; nodes: string[]; parent?: string | null; address?: string; take?: number[]; key?: string; state?: string }
+export interface CanvasFrame { id: string; title: string; nodes: string[]; parent?: string | null; address?: string; take?: number[]; key?: string; state?: string; executed?: true }
 export interface CanvasGraph { nodes: CanvasStep[]; edges: CanvasConnection[]; frames?: CanvasFrame[] }
 
 /** The files a card previews: inert pictures and native-video candidates, never active documents. */
@@ -278,6 +285,13 @@ function recordedPreview(node: ViewerRun["nodes"][number], artifacts: Map<string
   }, node.preview);
 }
 
+/** A saved plan can seed `succeeded` without a node event; execution needs its own evidence. */
+function recordedExecution(node: ViewerRun["nodes"][number]): boolean {
+  return node.state === "running" || node.state === "waiting" || node.interrupted === true
+    || node.started_at !== undefined || typeof node.duration_ms === "number" || typeof node.cache === "string"
+    || Object.keys(node.outputs).length > 0;
+}
+
 /** Project declared wiring for display; no expressions or execution decisions are evaluated. */
 export function flatCanvasGraph(view: GraphDocument | ViewerRun, apiBase = "/api"): CanvasGraph {
   validateViewerApiBase(apiBase);
@@ -304,6 +318,8 @@ export function flatCanvasGraph(view: GraphDocument | ViewerRun, apiBase = "/api
       ...(item.take ? { take: item.take } : {}), ...(item.key !== undefined ? { key: item.key } : {}),
       title: plan ? view.steps?.[(item as GraphInstance).step]?.title || item.path : (item as ViewerRun["nodes"][number]).title || item.path,
       subtitle: item.uses ?? "Type not recorded", state: item.state, pending: false,
+      ...(run && recordedExecution(run) ? { executed: true as const } : {}),
+      ...(run?.state === "skipped" ? { skip_explanation: skipExplanation(run.skip_reason, (view as ViewerRun).nodes) } : {}),
       ...(started_at ? { started_at } : {}),
       ...(run?.waited_ms !== undefined ? { waited_ms: run.waited_ms } : {}),
       ...(run?.waiting_for !== undefined ? { waiting_for: run.waiting_for } : {}),
@@ -331,9 +347,16 @@ export function flatCanvasGraph(view: GraphDocument | ViewerRun, apiBase = "/api
     subtitle: `Up to ${item.max} items · phase ${item.phase}`, state: "unexpanded", pending: true,
   })));
   const byId = new Map(source.map((item) => [item.id, item]));
+  const byPath = new Map<string, typeof source[number] | null>();
+  for (const item of source) byPath.set(item.path, byPath.has(item.path) ? null : item);
+  const upstreamOf = (id: string) => byId.get(id) ?? byPath.get(id) ?? undefined;
   const connections = new Map<string, CanvasConnection>();
   for (const item of source) {
     const to = `instance:${item.id}`;
+    const readIds = new Set(item.reads.flatMap((id) => upstreamOf(id)?.id ?? []));
+    const judged = item.judges ? upstreamOf(item.judges)?.id : undefined;
+    // A legacy event may update reads while leaving a planned binding behind.
+    const consumed = (id: string) => !plan && nodeBySource.get(item.id)?.executed === true && readIds.has(id) && judged !== id;
     const preciseSources = new Set<string>();
     for (const binding of item.bindings ?? []) {
       const upstream = nodeBySource.get(binding.source);
@@ -343,22 +366,24 @@ export function flatCanvasGraph(view: GraphDocument | ViewerRun, apiBase = "/api
         || !upstream.ports?.outputs.some((port) => port.name === binding.source_port && port.kind === outputKind)
         || !target?.ports?.inputs.some((port) => port.name === binding.target_port)) continue;
       const id = JSON.stringify(["data", upstream.id, binding.source_kind, binding.source_port, to, binding.target_port]);
-      connections.set(id, { id, source: upstream.id, target: to, kind: "data", kinds: ["reads"], source_port: binding.source_port, target_port: binding.target_port, source_kind: binding.source_kind });
+      connections.set(id, { id, source: upstream.id, target: to, kind: "data", kinds: ["reads"], source_port: binding.source_port, target_port: binding.target_port, source_kind: binding.source_kind,
+        ...(consumed(binding.source) ? { consumed: true } : {}) });
       preciseSources.add(binding.source);
     }
     const add = (dependency: string, role: string, kind: "control" | "dependency") => {
-      const pathMatches = source.filter((candidate) => candidate.path === dependency);
-      const upstream = byId.get(dependency) ?? (pathMatches.length === 1 ? pathMatches[0] : undefined);
+      const upstream = upstreamOf(dependency);
       if (!upstream || upstream.id === item.id || (kind === "dependency" && preciseSources.has(upstream.id))) return;
       const from = `instance:${upstream.id}`;
       const control = connections.get(JSON.stringify(["control", from, to]));
       if (kind === "dependency" && control) {
         if (!control.kinds.includes(role)) control.kinds.push(role);
+        if (role === "reads" && consumed(upstream.id)) control.consumed = true;
         return;
       }
       const id = JSON.stringify([kind, from, to]);
       const edge = connections.get(id) ?? { id, source: from, target: to, kind, kinds: [] };
       if (!edge.kinds.includes(role)) edge.kinds.push(role);
+      if (role === "reads" && consumed(upstream.id)) edge.consumed = true;
       connections.set(id, edge);
     };
     item.needs?.forEach((id) => add(id, "needs", "control"));

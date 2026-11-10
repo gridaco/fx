@@ -582,12 +582,38 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
   cache and answered calls replay from the record.
 - **Takes.** The first result of a request is take 1. `reroll` and `pick` write
   `<id>.takes.yaml` beside the workflow (commit it); every run reads it.
+- **Stacked cards.** A collapsed stack's front card represents the group
+  for inspection. Its presentation preference preserves canonical member order, access to
+  every member when expanded, and the workflow's actual picks and outputs. Explicit inspection
+  can bring any member forward. This establishes no universal ranking of execution states:
+  planned wiring does not prove runtime consumption, and `skipped` does not prove nonexecution.
+  The existing priorities use inspection selection, failures, active work and then confirmed
+  reads before completed-work fallbacks. A read requires execution evidence and a matching
+  recorded read; a judge examining its own subject does not count. A consumer can inspect
+  several candidates, so a representative is not labelled chosen or accepted from reads alone.
+  Complete explicit judge mappings link node draw/review decks in the same frame; selection
+  and hover raise corresponding partners. Plan-only records use deterministic fallback.
+  Badges report `1 skipped` without asserting nonexecution. Frame/workflow pairing remains deferred.
+- **Why skipped.** The engine records a structured `skip_reason` with a cause code and related
+  instance IDs for supported decisions, including an earlier accepted take, a false condition,
+  an unavailable prerequisite, a rejection policy, a skipped assertion or no selectable candidate.
+  No author-written explanation or model call is needed. The viewer explains the recorded
+  cause and links to related steps under `Why skipped`; an empty skipped preview can show the
+  same explanation. It never infers business intent or reconstructs a cause from status alone.
+  Older records without a cause say `Reason not recorded.`; unfamiliar future codes say
+  `Skip reason unavailable in this viewer.`. Existing records are not rewritten to add reasons.
+  Causes are display evidence, separate from output availability and execution success. The
+  Python and JavaScript saved-record APIs preserve them in their raw observation documents.
 - **Deliver.** `--deliver icons=out/{key}.png` copies declared outputs after the run, `{key}` per
   element; a missing one makes the command exit non-zero. The viewer's **Download all (.zip)** is
   the same files for a person; agents use `--deliver` or `export`.
 - **Canvas previews.** A run card shows its first available image output, otherwise offers its
   first available `video/*` output to the browser's native player. Container and codec support
-  depend on the browser. Failed or timed-out frame capture shows its reason; hover the message
+  depend on the browser. A skipped card with reserved preview space but no preview candidate
+  shows `Skipped` and its recorded causal explanation, or `Reason not recorded.` when absent.
+  It does not infer why it was skipped or whether it ran or produced output. Available previews
+  still display normally.
+  Failed or timed-out frame capture shows its reason; hover the message
   for the native error code and optional browser diagnostic. These details stay in the browser,
   separate from run failures. Hover playback requires a successfully captured first frame;
   failed previews keep a stable unavailable-video icon and reason instead of a normal play

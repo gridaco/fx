@@ -46,7 +46,7 @@ function run(plan: GraphDocument): ViewerRun {
   return { kind: "fx-viewer-run-v1", workflow: plan.workflow, run_name: "recorded", state: "failed", stand_in: false,
     charged_usd: 0, estimate: null, inputs: {}, outputs: {}, artifacts: [], warnings: [], scopes: plan.scopes,
     nodes: plan.instances.map((node) => ({ id: node.id, path: node.path, title: node.path, uses: node.uses,
-      state: "succeeded", reads: node.reads, with: {}, outputs: {}, cache: null, error: null, duration_ms: null,
+      state: "succeeded", reads: node.reads, with: {}, outputs: {}, cache: null, error: null, duration_ms: 1,
       ports: plan.types?.[node.uses].ports, bindings: node.bindings, interface_bindings: node.interface_bindings, needs: node.needs, judges: node.judges })) };
 }
 
@@ -71,6 +71,26 @@ describe("scope contract", () => {
 });
 
 describe("hierarchical graph projection", () => {
+  test("runtime consumption survives workflow aliases and fallback dependencies without making aliases execution evidence", () => {
+    const view = run(nestedPlan());
+    const before = JSON.stringify(view);
+    const collapsed = canvasGraph(view);
+    const read = collapsed.edges.filter((edge) => edge.target === "instance:save#1");
+    expect(read).toHaveLength(2);
+    expect(read.every((edge) => edge.source === "scope:batch.item#1" && edge.consumed === true)).toBeTrue();
+    expect(collapsed.nodes.find((node) => node.id === "scope:batch.item#1")?.executed).toBeTrue();
+    expect(collapsed.frames?.find((frame) => frame.id === "scope:batch#1")?.executed).toBeTrue();
+    expect(JSON.stringify(view)).toBe(before);
+    delete view.nodes.find((node) => node.id === "save#1")!.interface_bindings;
+    expect(canvasGraph(view).edges.filter((edge) => edge.target === "instance:save#1").every((edge) => edge.kind === "dependency" && edge.consumed === true)).toBeTrue();
+    Object.assign(view.nodes.find((node) => node.id === "save#1")!, { state: "skipped", duration_ms: null });
+    expect(canvasGraph(view).edges.filter((edge) => edge.target === "instance:save#1").every((edge) => edge.consumed === undefined)).toBeTrue();
+    const planned = canvasGraph(nestedPlan());
+    expect(planned.edges.every((edge) => edge.consumed === undefined)).toBeTrue();
+    expect(planned.nodes.every((node) => node.executed === undefined)).toBeTrue();
+    expect(planned.frames?.every((frame) => frame.executed === undefined)).toBeTrue();
+  });
+
   test("a run step carries its start, and a workflow card has run since its first step started", () => {
     const view = run(nestedPlan());
     const at = (id: string) => view.nodes.find((node) => node.id === id)!;

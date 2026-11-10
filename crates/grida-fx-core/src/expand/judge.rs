@@ -183,6 +183,7 @@ impl Expander<'_> {
     /// Links a judge instance to the take it judges.
     pub(crate) fn link_judge(&mut self, judge_id: &str, subject_id: &str, where_: &str) {
         self.not_a_judge(judge_id, where_);
+        let skip_reason = self.skip_reasons.get(subject_id).cloned();
         let Some(subject) = self.instance_mut(subject_id) else {
             return;
         };
@@ -197,6 +198,9 @@ impl Expander<'_> {
         if matches!(state, State::Absent | State::Blocked) && judge.state != State::Done {
             judge.state = state;
             judge.reason = reason;
+            if let Some(reason) = skip_reason {
+                self.skip_reasons.insert(judge_id.to_string(), reason);
+            }
         } else if state == State::Maybe && judge.state == State::Planned {
             judge.state = State::Maybe;
         }
@@ -229,6 +233,47 @@ impl Expander<'_> {
             let Some(before) = self.instances.get(earlier) else {
                 continue;
             };
+            let skip_reason = if verdict == Some(Verdict::Accept) {
+                Some(super::skip::SkipReason::new(
+                    super::skip::SkipCode::EarlierTakeAccepted,
+                    [earlier.clone()],
+                ))
+            } else if before.state == State::Absent {
+                Some(self.skip_reasons.get(earlier).cloned().unwrap_or_else(|| {
+                    super::skip::SkipReason::new(
+                        super::skip::SkipCode::UpstreamAbsent,
+                        [earlier.clone()],
+                    )
+                }))
+            } else if matches!(before.state, State::Blocked | State::Failed) {
+                Some(self.skip_reasons.get(earlier).cloned().unwrap_or_else(|| {
+                    super::skip::SkipReason::new(
+                        super::skip::SkipCode::UpstreamFailed,
+                        [earlier.clone()],
+                    )
+                }))
+            } else if verdict == Some(Verdict::Failed) {
+                Some(super::skip::SkipReason::new(
+                    super::skip::SkipCode::UpstreamFailed,
+                    before
+                        .judged_by
+                        .iter()
+                        .filter(|id| {
+                            self.env
+                                .results
+                                .get(*id)
+                                .is_some_and(|result| result.status == ResultStatus::Failed)
+                        })
+                        .cloned(),
+                ))
+            } else if verdict == Some(Verdict::Reject) && !more {
+                Some(super::skip::SkipReason::new(
+                    super::skip::SkipCode::Rejected,
+                    [earlier.clone()],
+                ))
+            } else {
+                None
+            };
             let change = if before.judged_by.is_empty() {
                 Some((State::Absent, "nothing judges the take before it"))
             } else if matches!(before.state, State::Absent | State::Blocked | State::Failed)
@@ -253,15 +298,26 @@ impl Expander<'_> {
                 instance.reason = Some(reason.to_string());
             }
             let state = instance.state;
+            let judges = instance.judged_by.clone();
+            if state == State::Absent
+                && let Some(reason) = &skip_reason
+            {
+                self.skip_reasons.insert(later.clone(), reason.clone());
+            }
             if !matches!(state, State::Absent | State::Maybe) {
                 continue;
             }
             // The take's judges follow it, without a reason of their own.
-            for judge_id in instance.judged_by.clone() {
+            for judge_id in judges {
                 if let Some(judge) = self.instance_mut(&judge_id)
                     && judge.state != State::Done
                 {
                     judge.state = state;
+                    if state == State::Absent
+                        && let Some(reason) = &skip_reason
+                    {
+                        self.skip_reasons.insert(judge_id.clone(), reason.clone());
+                    }
                 }
             }
         }
@@ -1136,6 +1192,12 @@ pub(crate) mod tests {
         );
         assert_eq!(ex.instances["check#2"].state, State::Absent);
         assert_eq!(ex.instances["check#3"].state, State::Absent);
+        for id in ["draw#2", "draw#3", "check#2", "check#3"] {
+            assert_eq!(
+                ex.skip_reasons[id].to_value(),
+                json!({"code":"earlier_take_accepted", "sources":["draw#1"]})
+            );
+        }
         assert_eq!(ex.chosen(exp, None), Chosen::Instance("draw#1".into()));
         assert_eq!(
             ex.node_take(exp, None).unwrap(),

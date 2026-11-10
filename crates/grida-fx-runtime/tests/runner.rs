@@ -565,7 +565,7 @@ steps:
         .as_array()
         .unwrap()
         .iter()
-        .map(|i| json!({"id": i["id"], "step": i["step"], "take": i["take"], "key": i["key"]}))
+        .map(|i| json!({"id": i["id"], "path": i["path"], "step": i["step"], "take": i["take"], "key": i["key"]}))
         .collect();
     let (first_at, first) = snapshots[0];
     let first_start = events
@@ -595,8 +595,8 @@ steps:
     assert_eq!(
         items,
         [
-            &json!({"id": "loud['0']#1", "step": "loud", "take": [1], "key": "0"}),
-            &json!({"id": "loud['1']#1", "step": "loud", "take": [1], "key": "1"}),
+            &json!({"id": "loud['0']#1", "path": "loud['0']", "step": "loud", "take": [1], "key": "0"}),
+            &json!({"id": "loud['1']#1", "path": "loud['1']", "step": "loud", "take": [1], "key": "1"}),
         ]
     );
     let item_start = events
@@ -612,6 +612,11 @@ steps:
         assert!(!last_ids.contains(&absent.to_string()), "{absent}");
         assert!(
             last["node_interface_bindings"].get(absent).is_some(),
+            "{absent}"
+        );
+        assert_eq!(
+            last["skip_reasons"][absent],
+            json!({"code": "earlier_take_accepted", "sources": ["draw#1"]}),
             "{absent}"
         );
     }

@@ -1,4 +1,4 @@
-import { CanvasController, ExportViewerController, exportArtifactUrl, ownsKeys, type CanvasGraph, type ExportViewerState, type LoadedRunExport, type PinnedRunExport } from "@grida/fx-web";
+import { CanvasController, ExportViewerController, exportArtifactUrl, ownsKeys, skipExplanation, skipSourceScopes, type CanvasGraph, type ExportViewerState, type LoadedRunExport, type PinnedRunExport } from "@grida/fx-web";
 
 export interface Recording extends PinnedRunExport { id: string; label: string }
 export interface CanvasFragment { graph: boolean; recording: string | null; scope: string | null; node: string | null }
@@ -107,6 +107,16 @@ export class RecordedCanvasController {
       return;
     }
     if (event.target.closest("[data-close-inspector]")) { this.viewer.select(null); this.writeFragment(); }
+    const related = event.target.closest<HTMLElement>("[data-skip-source]");
+    const run = this.viewer.getSnapshot().recording?.manifest.view;
+    if (related?.dataset.skipSource && run?.nodes.some((node) => node.id === related.dataset.skipSource)) {
+      const id = related.dataset.skipSource;
+      const scopes = skipSourceScopes(id, run.scopes);
+      if (this.viewer.restore(scopes.at(-1) ?? null, `instance:${id}`)) {
+        this.canvas?.reveal(`instance:${id}`);
+        this.writeFragment();
+      }
+    }
     const crumb = event.target.closest<HTMLElement>("[data-scope]");
     if (crumb) { this.viewer.goToScope(crumb.dataset.scope || null); this.writeFragment(); }
   };
@@ -179,7 +189,22 @@ export class RecordedCanvasController {
     }
     if (!source) return;
     if (source.uses) body.append(this.node("p", source.uses));
-    if (source.error) body.append(this.node("p", source.error));
+    if (source.state === "skipped") {
+      const skipped = skipExplanation(source.skip_reason, loaded.manifest.view.nodes);
+      body.append(this.node("h3", "Why skipped"), this.node("p", skipped.message));
+      for (const related of skipped.related) {
+        const button = this.node("button", `View ${related.label}`);
+        button.setAttribute("type", "button");
+        button.dataset.skipSource = related.id;
+        button.title = related.id;
+        body.append(button);
+      }
+      if (source.error) {
+        const diagnostic = this.node("details");
+        diagnostic.append(this.node("summary", "Recorded diagnostic"), this.node("p", source.error));
+        body.append(diagnostic);
+      }
+    } else if (source.error) body.append(this.node("p", source.error));
     for (const [title, values] of [["Outputs", source.outputs], ["Inputs and settings", source.with]] as const) {
       if (!Object.keys(values).length) continue;
       body.append(this.node("h3", title));

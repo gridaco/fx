@@ -1,7 +1,7 @@
 import { StrictMode, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { ArrowLeft, ArrowUpRight, Check, ChevronRight, Copy, Download, FileText, List, RefreshCw, Square, Workflow, X } from "lucide-react";
-import { OutputArchiveController, ServiceIndexProjection, ViewerController, elapsedLabel, outputFiles, ownsKeys, priceLabel, ViewerEntryController, type Artifact, type CanvasPreview, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun } from "@grida/fx-web";
+import { OutputArchiveController, ServiceIndexProjection, ViewerController, elapsedLabel, outputFiles, ownsKeys, priceLabel, skipExplanation, skipSourceScopes, ViewerEntryController, type Artifact, type CanvasPreview, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun } from "@grida/fx-web";
 import { StateIcon, StateLabel, Status, Values, WorkflowCanvas, money, type WorkflowCanvasHandle } from "@grida/fx-react";
 import "./style.css";
 
@@ -112,7 +112,7 @@ function PlanDetails({ plan, instance, pending, canvasNode }: { plan: GraphDocum
   </>;
 }
 
-function RunDetails({ run, node, canvasNode }: { run: ViewerRun; node?: ViewerRun["nodes"][number]; canvasNode?: CanvasStep }) {
+function RunDetails({ run, node, canvasNode, onInspectSource }: { run: ViewerRun; node?: ViewerRun["nodes"][number]; canvasNode?: CanvasStep; onInspectSource?: (id: string) => void }) {
   const artifacts = new Map(run.artifacts.map((artifact) => [artifact.digest, artifact]));
   if (!node) return <>
     <Heading title={run.workflow.title} id={run.run_name} kind="run name" meta={[run.workflow.id]} />
@@ -121,10 +121,15 @@ function RunDetails({ run, node, canvasNode }: { run: ViewerRun; node?: ViewerRu
     <Section title="Inputs" values={run.inputs} artifacts={artifacts} />
   </>;
   const [inputs, settings] = split(node.with, canvasNode);
+  const skipped = node.state === "skipped" ? skipExplanation(node.skip_reason, run.nodes) : null;
   return <>
     <Heading title={node.title || node.path} id={node.id} kind="step id" state={node.state} meta={[node.cache === "hit" && "cached", node.state === "waiting" && node.waiting_for && `for ${node.waiting_for}`,
       node.duration_ms !== null && duration(node.duration_ms), !!node.waited_ms && `waited ${duration(node.waited_ms)} for a route`]} />
-    {node.error && <Problem>{node.error}</Problem>}
+    {skipped ? <section className="fx-detail-skip" aria-label="Why skipped">
+      <h3>Why skipped</h3><p>{skipped.message}</p>
+      {skipped.related.map((source) => <button key={source.id} type="button" className="fx-detail-skip-source" title={source.id} onClick={() => onInspectSource?.(source.id)}>View {source.label} <ArrowUpRight {...iconProps} /></button>)}
+      {node.error && <details className="fx-detail-skip-diagnostic"><summary>Recorded diagnostic</summary><p>{node.error}</p></details>}
+    </section> : node.error && <Problem>{node.error}</Problem>}
     <Section title="Outputs" values={node.outputs} artifacts={artifacts} videoPreview={canvasNode?.preview} />
     <Section title="Inputs" values={inputs} artifacts={artifacts} />
     <Section title="Settings" values={settings} artifacts={artifacts} />
@@ -173,6 +178,14 @@ function WorkflowView() {
   const pane = useRef<HTMLElement>(null);
   const canvas = useRef<WorkflowCanvasHandle>(null);
   const [reveal, setReveal] = useState<{ id: string } | null>(null);
+  const inspectSource = (id: string) => {
+    if (!run?.nodes.some((node) => node.id === id)) return;
+    controller.goToScope(null);
+    for (const scope of skipSourceScopes(id, run.scopes)) controller.openScope(scope);
+    const selected = `instance:${id}`;
+    select(selected);
+    setReveal({ id: selected });
+  };
   useEffect(() => {
     if (!reveal || !pane.current) return;
     const box = pane.current.getBoundingClientRect();
@@ -222,7 +235,7 @@ function WorkflowView() {
           {selectedNode?.kind ? <ScopeDetails node={selectedNode} />
             : selectedNode ? plan ? <PlanDetails plan={plan} instance={instance} pending={pending} canvasNode={selectedNode} />
               : selectedNode.pending ? <Heading title={selectedNode.title} id={selectedNode.source_id} kind="step path" state={selectedNode.state} meta={[selectedNode.subtitle]} />
-              : <RunDetails run={run!} node={runNode} canvasNode={selectedNode} />
+              : <RunDetails run={run!} node={runNode} canvasNode={selectedNode} onInspectSource={inspectSource} />
             : scopeNode ? <ScopeDetails node={scopeNode} />
             : plan ? <PlanDetails plan={plan} /> : <RunDetails run={run!} />}
           {!selectedNode && <>

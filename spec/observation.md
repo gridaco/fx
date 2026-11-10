@@ -21,6 +21,12 @@ result after execution; they do not expose a live event iterator or viewer handl
 Node-host `progress` notifications currently print to stderr; they are not run
 events. They acquire no persistence or replay guarantee through this decision.
 
+Engine-generated skip explanations are optional structured evidence within the
+same event vocabulary: `scopes_updated.skip_reasons` and
+`node_skipped.skip_reason`. [Recorded skip reasons](skip-reasons.md) defines
+their meaning and lifecycle. They require no author-written reason or new SDK
+operation, and do not change any execution outcome.
+
 ## 2. Ratified requirements
 
 - **One engine-owned event contract.** Observation uses the recorded event

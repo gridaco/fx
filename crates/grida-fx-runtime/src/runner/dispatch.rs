@@ -165,6 +165,10 @@ pub async fn dispatch(
             id: job.id.clone(),
             path: job.path.clone(),
             reason: None,
+            skip_reason: Some(grida_fx_core::expand::skip::SkipReason::new(
+                grida_fx_core::expand::skip::SkipCode::NoCandidate,
+                [],
+            )),
             blocked: false,
             error: result.error.clone(),
             facts: Some(result.facts.clone()),

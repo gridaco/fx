@@ -89,12 +89,29 @@ arriving never moves a card. Group iterations are cards with their steps inside.
 
 Repeated instances of one step (for-each items, matrix combinations, takes) and the
 iterations of a repeated group are drawn as a deck: one stack of cards with a count
-badge such as `5 items`, `3 takes` or `2 items · 3 takes each`, and how many failed
-and how many wait for their route. Hovering a card brings it to the front; moving
+badge such as `5 items`, `3 takes` or `2 items · 3 takes each`, and how many failed,
+wait for their route or are recorded skipped. Hovering a card brings it to the
+front; moving
 away puts the deck back. The card in front at rest is the selected one, else the last
-that failed, else a running one, else a waiting one, else the take its consumers read,
-else the latest that finished. Click a deck (a
-card, its edge or its badge) to spread it into a grid in place; click a card inside to
+that failed, else a running one, else a waiting one, else the last take with a
+confirmed downstream read, else the latest that finished. This is a representative
+for the collapsed view; the members retain their recorded order. Planned wiring
+and a judge examining its own candidate do not establish consumption. A consumer
+may read several candidates, so this preference does not label one as accepted or
+chosen. Plan-only views use their deterministic fallback. Node draw/review decks
+with complete explicit judge correspondences share their representative;
+inspection and hover raise the corresponding partners. A skipped card without a
+preview says `Skipped` and `Reason not recorded.` when it has no causal evidence.
+When the engine recorded a cause, the card explains it instead: for example,
+`This take wasn’t needed because take 2 was accepted.` The step details have a
+neutral **Why skipped** section with links to the related steps or takes. These
+explanations come from recorded control-flow decisions; authors do not have to
+write reason text, and no model generates it. A condition explanation describes
+the engine's decision, without inventing the author's business intent.
+Older recordings without a cause say `Reason not recorded.` in details. They are
+not rewritten to add explanations; a new run records the supported causes.
+See [recorded skip reasons](../../spec/skip-reasons.md) for the contract.
+Click a deck (a card, its edge or its badge) to spread it into a grid in place; click a card inside to
 select it, and press Esc, click outside or use × to put the deck back. Dragging pans
 from anywhere, cards included. Spreading and closing are short slides, and none under
 the system's reduced-motion setting.

@@ -167,6 +167,7 @@
    {
     "id": "nap#1",
     "key": null,
+    "path": "nap",
     "step": "nap",
     "take": [
      1
@@ -175,6 +176,7 @@
    {
     "id": "watch#1",
     "key": null,
+    "path": "watch",
     "step": "watch",
     "take": [
      1
@@ -188,6 +190,7 @@
   },
   "pending": [],
   "plan": "cd398960ec6a953e906ddbe74c7264d83bd45dc58a6e5dc5ad292aae3123f5fe",
-  "scopes": []
+  "scopes": [],
+  "skip_reasons": {}
  }
 ]

@@ -121,6 +121,12 @@ guarantee playback. Local artifact responses serve concrete video kinds matching
 grammar (`video/` followed by `[a-z0-9.+-]+`) inline with their recorded media type. Other
 artifact delivery rules and the portable export allowlist are unchanged.
 
+A skipped card with a reserved preview area but no preview candidate shows a muted skipped
+icon, `Skipped` and its recorded causal explanation ([skip-reasons.md](skip-reasons.md)).
+Without a recorded cause it says `Reason not recorded.`. Its size is unchanged. This describes
+recorded evidence without inferring a skip reason, whether the node started, or whether it
+produced any output. An available preview still displays normally.
+
 A node step's explicit `preview: {video: video, poster: poster}` overrides automatic selection
 ([previews.md](previews.md)). Both selectors name scalar outputs of that same instance; `poster`
 is optional. A valid recorded poster is the resting image, including when native decoding fails
@@ -239,7 +245,8 @@ consumers bind (§5.4, rule 4).
   (§4, rule 11), so a deck never reaches a neighbouring slot.
 - Badge text: `5 items`, `3 takes`, `2 items · 3 takes each` (`up to 3 takes` when item decks
   differ), then `· 1 failed` in the failed colour, `· 1 waiting` for members waiting for their
-  route's slot (store.md §8) and `· 1 not run` for takes that never started.
+  route's slot (store.md §8) and `· 1 skipped` for members recorded skipped. Skipped
+  status alone does not establish whether a member started or why it was skipped.
   Counts come from recorded state and recorded take arrays, never from id strings.
 - The badge sits inside the footprint, scales with the canvas and uses theme tokens. It shows
   while its text is at least 9 px on screen and is gone below 8 px, fading with the zoom between,
@@ -257,28 +264,70 @@ consumers bind (§5.4, rule 4).
 
 ### 5.4 Resting front card
 
+**Purpose and boundaries clarified and ratified, 2026-11-11.** A collapsed deck
+needs one representative card because its members cannot all be fully visible.
+Front selection is a presentation preference for that summary. Canonical member
+order (§4, rule 4) stays unchanged; expansion exposes every member in that order.
+Explicit inspection may bring any member forward. Front selection changes no
+workflow pick, output binding, verdict, execution decision, identity, cache or
+record. The [ratified rationale](../docs/wg/deck-front-selection.md) explains this
+scope and implementation boundaries.
+
+The priority list below remains the existing baseline. This clarification does
+not introduce a new relative order between failures, active work and chosen
+results, or a universal ranking of execution states. A front member's status,
+preview and selection claims must describe its own recorded evidence.
+
 The front card at rest is the first that applies; "first" and "last" are by order key:
 
 1. the selected member;
 2. the last failed member; in the plan view a `blocked` member counts as failed;
 3. the first running member, else the first `waiting` one (run view);
-4. in a take deck, the take consumers bind: the take that instances outside the deck record
-   reading (`reads`, and in the run view `bindings`). That is the picked take (`pick:` or the
-   takes file), or for a regenerating step its last take: the accepted one, or the one `then:`
-   kept. When nothing outside the deck reads one of its takes, this rule does not apply;
+4. in a take deck, the last member with a confirmed read by a consumer outside
+   the deck. A run requires positive execution evidence for the consumer and a
+   matching recorded read; declared topology or a planned binding alone is
+   insufficient. A judge examining its own subject does not establish this
+   preference. Ordinary downstream references can identify a picked or accepted
+   take, but a consumer may inspect several candidates: a read alone does not
+   prove a unique chosen output. The last-match rule supplies a representative
+   without adding such a claim. Plan-only records do not establish runtime
+   consumption. When no such read is established, this rule does not apply;
 5. the last succeeded member (`done` in the plan view);
-6. the first member.
+6. the last member with execution evidence, including an operation that finished
+   skipped;
+7. the first member.
 
-A member that never started never rests over one that did. In the plan view, `planned` and
-`maybe` members have not started; in the run view, `pending` and `skipped` ones (the read model
-also marks members that never started `skipped` once the run ends).
+The automatic fallback prefers work that completed over a member known to have
+remained unused. Explicit inspection selection and temporary hover can still
+bring an unused member forward (§5.7). This preference is scoped to choosing the
+collapsed representative; it does not reorder the members. In the plan view,
+`planned` and `maybe` carry no execution evidence. A run's `skipped` status alone
+does not establish whether a node started or why it was skipped; the read model
+also uses that status for pending members left unused when a run ends. Missing
+or ambiguous consumption evidence falls through the existing priorities without
+inventing a chosen take or a skip reason.
+
+Implemented in source, 2026-11-11: the private browser projection distinguishes
+confirmed reads from wiring and preserves that evidence through scope aliases.
+Execution evidence includes active or interrupted execution, a recorded start,
+duration, cache result or output. A stale planned binding must also match the
+recorded read before it can establish consumption. No browser evaluation of
+workflow expressions or artifact-content comparison is used to infer selection.
 
 ### 5.5 Linked decks
 
-Two decks in one frame whose members correspond one to one, by item key or by take, are linked.
-§5.4 runs once over the pairs, and a pair matches a rule when either of its members does; both
-decks show the winning pair in front. A review deck shows the review of the draw in front.
-Hover raises a card's partner with it.
+Corresponding decks use §5.4 once over their pairs, and a pair matches a rule when
+either member does; both decks show corresponding members in front. Explicit
+inspection can select either partner. Hover raises its corresponding partner
+temporarily, and leaving restores their selected or default representatives.
+
+Implemented in source, 2026-11-11: node draw/review decks in the same frame link
+when explicit judge relationships form a complete one-to-one mapping with matching
+recorded item keys and full take arrays. Matching numbers or titles alone never
+link unrelated work. Multiple complete judge mappings may share a representative;
+partial, ambiguous or inconsistent mappings remain independent. Each deck retains
+its own canonical member order when expanded. Correspondence for frame and
+imported-workflow decks remains deferred.
 
 ### 5.6 Edges on a deck
 
@@ -654,16 +703,20 @@ Ship A, then Ship B. Each step lands with its evidence, recorded here.
    motion; an open deck stays open across live updates, and one that vanishes gives the camera
    back; forward edges are socket curves and backward edges rounded polylines; dagre removed
    (bundle 352 → 317 kB). Evidence: placement, preview reservation, deck badge and
-   resting-card unit tests; the fixture check allows only deck cards to overlap. Not yet:
+   resting-card unit tests; the fixture check allows only deck cards to overlap.
+   Added in source, 2026-11-11: confirmed-read projection, pure representative selection,
+   complete node draw/review correspondence, and shared explicit inspection and hover
+   (§5.4, §5.5). Evidence: `consumption.test.ts`, `deck-selection.test.ts` and scope tests
+   in `web/fx-web/tests`. Not yet:
    placeholders for absent, empty and pending slots in the run view; merged edges on a closed
-   deck (§5.6); linked decks (§5.5); take decks nested inside item cards (a node deck is one
+   deck (§5.6); generalized frame/workflow correspondence (§5.5); take decks nested inside item cards (a node deck is one
    stack in item-then-take order, with the two-level badge); expanding a deck inside an
    expanded card (§5.7, nested levels); a double-click on a closed deck counting as one expand
    (§5.7); the deck's and its cards' accessible names (§5.3); keyboard Tab order inside an
    expanded deck; patching an update whose layout inputs are unchanged instead of redrawing,
    which today drops hover and highlight, and tracks that never shrink within one observation
    (§5.8); the automatic refit, the camera anchor after a layout change and a collapse
-   relative to the collapsed deck (§5.9). No one has checked the canvas in a browser yet.
+   relative to the collapsed deck (§5.9). Remaining interaction cases need browser verification.
 4. Update the viewer fixtures, the [viewing guide](../docs/guide/07-viewing.md) (decks, and absent
    steps kept as placeholders in the run view too) and the viewer checks.
 

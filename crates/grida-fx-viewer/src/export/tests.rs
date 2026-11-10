@@ -606,3 +606,65 @@ fn pending_repeat_dependencies_are_verified_without_requiring_legacy_metadata() 
         }
     }
 }
+
+#[test]
+fn structural_skip_causes_are_portable_without_disclosing_diagnostic_payloads() {
+    use std::io::Write;
+
+    let fixture = source("image/png");
+    let event = json!({
+        "kind":"fx-run-events-v1", "event":"node_skipped", "plan":"a".repeat(64),
+        "invocation_id":"offline-fixture", "offset_ms":0,
+        "id":"later#1", "path":"later", "blocked":true,
+        "skip_reason":{"code":"upstream_failed","sources":["draw#1"],"private_text":"withheld-author-value"}
+    });
+    writeln!(
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(fixture.root().join("events.jsonl"))
+            .unwrap(),
+        "{event}"
+    )
+    .unwrap();
+    writeln!(
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(fixture.root().join("events.jsonl"))
+            .unwrap(),
+        "{}",
+        json!({"kind":"fx-run-events-v1","event":"run_finished","plan":"a".repeat(64),
+            "invocation_id":"offline-fixture","offset_ms":0,"ok":false,"charged_usd":0,"outputs":{}})
+    )
+    .unwrap();
+    let parent = tempfile::tempdir().unwrap();
+    export(&fixture, &parent, ExportOptions::default()).unwrap();
+    let data = manifest(&parent);
+    let node = data["view"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["id"] == "later#1")
+        .unwrap();
+    assert_eq!(
+        node["skip_reason"],
+        json!({"code":"upstream_failed","sources":["draw#1"]})
+    );
+    assert!(node["error"].is_null());
+    assert!(!data.to_string().contains("withheld-author-value"));
+    assert!(!data.to_string().contains("private_text"));
+    references::validate(&data).unwrap();
+
+    let mut dangling = data.clone();
+    dangling["view"]["nodes"][1]["skip_reason"]["sources"] = json!(["unknown#1"]);
+    assert_eq!(
+        references::validate(&dangling).unwrap_err().code,
+        "invalid_record"
+    );
+
+    let mut unrelated_state = data.clone();
+    unrelated_state["view"]["nodes"][1]["state"] = json!("succeeded");
+    assert_eq!(
+        references::validate(&unrelated_state).unwrap_err().code,
+        "invalid_record"
+    );
+}

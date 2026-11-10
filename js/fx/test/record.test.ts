@@ -11,11 +11,11 @@ import { repoRoot, SLOW, temporaryFolder, testEngine } from "./support.js";
 const NODE = spawnSync("node", ["--version"]).status === 0;
 const pause = (milliseconds: number) => new Promise<void>((done) => setTimeout(done, milliseconds));
 const envelope = (event = "future_event", invocation = "inv-1") => ({
-  kind: "fx-run-events-v1", event, invocation_id: invocation,
+  kind: "fx-run-events-v1" as const, event, invocation_id: invocation,
   plan: "a".repeat(64), offset_ms: 0, future_field: { retained: true },
 });
 const batch = (cursor: string, events = [envelope()], more = false) => ({
-  kind: "fx-run-event-batch-v1", cursor, events, has_more: more, future_field: true,
+  kind: "fx-run-event-batch-v1" as const, cursor, events, has_more: more, future_field: true,
 });
 const snapshot = () => ({
   kind: "fx-run-snapshot-v1", cursor: "attached", plan: { kind: "fx-graph-v1" },
@@ -65,6 +65,21 @@ function fake() {
 }
 
 describe.skipIf(!NODE || process.platform === "win32")("saved run observation", () => {
+  test("preserves structured skip causes in observation documents", async () => {
+    const engine = fake();
+    try {
+      const record = await loadRun("case/one", engine.options);
+      const reason = { code: "earlier_take_accepted", sources: ["draw#2"] };
+      const events = [
+        { ...envelope("scopes_updated"), skip_reasons: { "draw#3": reason } },
+        { ...envelope("node_skipped"), id: "select#1", path: "select", skip_reason: { code: "no_candidate", sources: [] } },
+      ];
+      const expected = batch("causes", events);
+      engine.reply({ batches: [expected] });
+      expect(await record.events()).toEqual(expected);
+    } finally { engine.cleanup(); }
+  }, SLOW);
+
   test("exports pinned evidence with opt-in disclosure and structured refusals", async () => {
     const engine = fake();
     try {

@@ -14,6 +14,7 @@ These documents define FX independently of any implementation. The Rust engine, 
 | [service.md](service.md) | Project initialization, local service lifecycle, stable run/plan URLs and standalone inspection |
 | [layout.md](layout.md) | Canvas layout: the automatic grid and decks, and the optional `<workflow id>.layout.json` file (not implemented) |
 | [previews.md](previews.md) | Workflow-authored video selection and image posters, recorded per node instance without execution dependencies |
+| [skip-reasons.md](skip-reasons.md) | Recorded engine causes for skipped nodes, related-instance references, lifecycle and portable presentation |
 | [control.md](control.md) | Local run control: exact invocation targeting, cancellation acceptance, verified local completion and force boundaries |
 | [sdk.md](sdk.md) | SDK user jobs: named execution/resume, pinned saved records, independent observation and in-process stand-ins |
 | [distribution.md](distribution.md) | The ways to run FX (`grida fx`, `grida-fx`, `python -m grida.fx`), the invoker, the host contract and the release order |
