@@ -222,6 +222,7 @@ fn instance(identity: Option<&str>, with: IndexMap<String, Val>) -> Instance {
         judge_policy: None,
         judged_by: Vec::new(),
         view: Value::Bool(false),
+        preview: None,
         at_plan: false,
         budget: None,
         concurrency_group: None,

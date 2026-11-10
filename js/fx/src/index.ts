@@ -193,6 +193,7 @@ export {
   type NodeStep,
   type Regeneration,
   type Step,
+  type VideoPreview,
   type WorkflowDocument,
   workflow,
 } from "./workflow.js";

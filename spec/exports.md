@@ -65,10 +65,13 @@ cannot certify arbitrary author text or file bytes public-safe.
   `low_usd`/`high_usd`/`ceiling_usd`, `inputs`, `outputs`, `nodes`, `scopes`,
   `pending`, `artifacts`, `warnings`. Workflow `file` is always absent.
 - Node: `id`, `path`, `step`, `take`, `key`, `title`, `uses`, `state`, `reads`,
-  `ports`, `bindings`, `interface_bindings`, `needs`, `judges`, `with`, `outputs`,
+  `ports`, `preview`, `bindings`, `interface_bindings`, `needs`, `judges`, `with`, `outputs`,
   `cache`, `error`, `duration_ms`, `started_at`, `interrupted` where present in
   the recorded projection. Required fields stay present. Textual values in
   `with`, `inputs` and `outputs` obey disclosure below.
+  Optional `preview` retains only the literal `video` and optional `poster` output selectors
+  ([previews.md](previews.md)); these are structural port names, included even with values withheld.
+  When ports are recorded, each selector must name one of that node's declared outputs.
 - Scope: `id`, `parent`, `kind`, `path`, `step`, `take`, `title`, `source` (always
   null), `ports`, `input_bindings`, `output_bindings`, `nodes`, `pending`.
   Pending repeats: `path`, `step`, `max`, `phase`, `high_usd`, `waiting_on`.
@@ -162,6 +165,9 @@ The v1 allowlist and deterministic suffixes are:
 | model/gltf-binary | glb |
 
 Selected bytes are copied exactly as recorded, which is how they are verified.
+Poster images use this same inventory and allowlist; no special file inclusion or conversion is
+implied by `preview`. An included image poster may represent a policy-excluded original video,
+while the recording continues to report that video's bytes as unavailable.
 Metadata embedded in a file travels with it: EXIF (including a photo's
 location), PNG text chunks, content credentials (C2PA) and provider labels that
 name a generation, container tags and creation times. FX neither reads nor

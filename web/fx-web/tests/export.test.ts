@@ -79,6 +79,37 @@ describe("portable inspection boundary", () => {
       kind: "video", digest: imageDigest, url: `https://assets.example.com/runs/example/artifacts/${imageDigest}.mp4`, label: "clip: clip.mp4", count: 1,
     });
   });
+  test("explicit video posters survive export even when original video bytes are omitted", () => {
+    const videoDigest = "c".repeat(64);
+    for (const omitted of [false, true]) {
+      const value = withImage();
+      const kind = omitted ? "video/x-matroska" : "video/mp4";
+      value.artifacts.push({ digest: videoDigest, media_type: kind, name: "clip", size: 100, path: omitted ? null : `artifacts/${videoDigest}.mp4`, omitted_reason: omitted ? "policy_excluded" : null });
+      value.view.artifacts.push({ digest: videoDigest, kind, name: "clip", size: 100, available: !omitted, url: null });
+      value.view.nodes[0].preview = { video: "clip", poster: "image" };
+      value.view.nodes[0].outputs.clip = { file: { digest: videoDigest, kind, name: "clip", size: 100 } };
+      const projected = exportCanvasGraph(loaded(value)).nodes[0].preview;
+      expect(projected).toMatchObject({ kind: "video", digest: videoDigest, url: omitted ? null : `https://assets.example.com/runs/example/artifacts/${videoDigest}.mp4`, poster: { digest: imageDigest, url: `https://assets.example.com/runs/example/artifacts/${imageDigest}.png` } });
+      if (omitted) expect(projected).toHaveProperty("unavailable_reason", "not_included");
+      value.artifacts[0].path = null;
+      value.artifacts[0].omitted_reason = "policy_excluded";
+      value.view.artifacts[0].available = false;
+      const noPoster = exportCanvasGraph(loaded(value)).nodes[0].preview;
+      expect(noPoster).toMatchObject({ kind: "video", digest: videoDigest });
+      expect(noPoster && "poster" in noPoster).toBeFalse();
+    }
+  });
+  test("preview selectors close over declared outputs without requiring optional runtime files", () => {
+    const value = withImage();
+    value.view.nodes[0].ports = { inputs: {}, outputs: { image: "image/png", clip: "video?" }, params: {} };
+    value.view.nodes[0].preview = { video: "clip", poster: "image" };
+    expect(parseRunExport(value).view.nodes[0].preview).toEqual({ video: "clip", poster: "image" });
+    expect(exportCanvasGraph(loaded(value)).nodes[0].preview).toBeUndefined();
+    value.view.nodes[0].preview.poster = "foreign_poster";
+    expect(() => parseRunExport(value)).toThrow("preview names a missing node output");
+    delete value.view.nodes[0].ports;
+    expect(parseRunExport(value).view.nodes[0].preview?.poster).toBe("foreign_poster");
+  });
   test("refuses path escapes, invalid omissions and inventory disagreement", () => {
     for (const path of ["../image.png", "/image.png", "https://example.com/image.png", "artifacts/../image.png", "artifacts/%2e%2e/image.png", "artifacts%2fimage.png", `artifacts/${imageDigest}.png?token=x`, `artifacts/${imageDigest}.png#x`, "artifacts\\image.png", `artifacts/${imageDigest}.webp`]) {
       const value = withImage(); value.artifacts[0].path = path;

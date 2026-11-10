@@ -156,6 +156,7 @@ pub(crate) fn instance_of(
         judge_policy: None,
         judged_by: Vec::new(),
         view: Value::Bool(false),
+        preview: None,
         at_plan: false,
         budget: None,
         concurrency_group: None,

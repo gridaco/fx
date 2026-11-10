@@ -101,6 +101,30 @@ missing = result.deliver({"images": "out/{key}.png"})
   cancellation once with SIGTERM and waits for cleanup before unwinding; repeated task
   cancellation does not force the engine. A stuck cleanup can keep the task pending.
 
+## Writing workflows
+
+`Workflow` writes the same document as a workflow file. Its step fields use the same names,
+with `with_`, `if_`, `assert_` and `as_` for Python's reserved words:
+
+```python
+from grida.fx import Workflow
+
+workflow = Workflow("clip", title="A clip")
+clip = workflow.step(
+    "make",
+    uses="./nodes/clip.py#clip",
+    preview={"video": "native", "poster": "cover"},
+)
+workflow.outputs(video=clip.outputs.native)
+document = workflow.document()
+```
+
+The preview values name that node's scalar video and image output ports, not expressions,
+paths or URLs. `poster` is optional; without it the browser reads the video's first frame.
+An explicit preview overrides automatic image selection, and the poster remains visible if
+the browser cannot play the video. The node produces both files; viewing does not convert
+media or change execution results. The engine validates the workflow and selected ports.
+
 ## Saved runs and observation
 
 `load_run(target, verify=False, cwd=None)` returns a `RunRecord` containing the

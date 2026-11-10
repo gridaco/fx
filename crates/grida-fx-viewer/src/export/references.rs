@@ -129,6 +129,15 @@ pub(super) fn validate(manifest: &Value) -> Result<(), ExportError> {
         }
     }
     for node in nodes.values() {
+        if let (Some(preview), Some(ports)) = (node.get("preview"), node.get("ports")) {
+            for name in ["video", "poster"] {
+                if let Some(port) = preview.get(name).and_then(Value::as_str)
+                    && !has_port(&ports["outputs"], port)
+                {
+                    return Err(invalid());
+                }
+            }
+        }
         for field in ["reads", "needs"] {
             if list(&node[field])
                 .iter()

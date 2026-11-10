@@ -111,6 +111,73 @@ fn explicit_disclosure_and_positive_schema_projection() {
 }
 
 #[test]
+fn video_poster_selection_survives_export_when_original_video_is_policy_excluded() {
+    let fixture = source("video/x-matroska");
+    let poster = b"synthetic poster artifact";
+    let digest = sha256_hex(poster);
+    let path = grida_fx_runtime::folder::step_file_path("draw", "poster", None, "image/png");
+    std::fs::write(fixture.root().join(path), poster).unwrap();
+    let event_path = fixture.root().join("events.jsonl");
+    let mut events: Vec<Value> = std::fs::read_to_string(&event_path)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    for event in &mut events {
+        if event["event"] == "node_started" && event["id"] == "draw#1" {
+            event["preview"] = json!({"video":"image", "poster":"poster"});
+            event["ports"] = json!({"inputs":{}, "params":{}, "outputs":{"image":"video/x-matroska", "poster":"image/png"}});
+        }
+        if event["event"] == "node_finished" && event["id"] == "draw#1" {
+            event["outputs"]["poster"] = json!({"file":{"digest":digest, "kind":"image/png", "name":"poster.png", "size":poster.len()}});
+        }
+    }
+    std::fs::write(
+        &event_path,
+        events
+            .iter()
+            .map(|event| format!("{event}\n"))
+            .collect::<String>(),
+    )
+    .unwrap();
+    let parent = tempfile::tempdir().unwrap();
+    export(&fixture, &parent, ExportOptions::default()).unwrap();
+    let data = manifest(&parent);
+    let node = data["view"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["id"] == "draw#1")
+        .unwrap();
+    assert_eq!(node["preview"], json!({"video":"image", "poster":"poster"}));
+    let inventory = data["artifacts"].as_array().unwrap();
+    let master = inventory
+        .iter()
+        .find(|file| file["digest"] == fixture.digest)
+        .unwrap();
+    assert_eq!(master["omitted_reason"], "policy_excluded");
+    let included = inventory
+        .iter()
+        .find(|file| file["digest"] == digest)
+        .unwrap();
+    assert!(included["omitted_reason"].is_null());
+    assert_eq!(
+        std::fs::read(
+            parent
+                .path()
+                .join("export")
+                .join(included["path"].as_str().unwrap())
+        )
+        .unwrap(),
+        poster
+    );
+    references::validate(&data).unwrap();
+    let mut invalid = data.clone();
+    invalid["view"]["nodes"][0]["preview"]["poster"] = json!("missing");
+    assert!(references::validate(&invalid).is_err());
+}
+
+#[test]
 fn raw_plan_marker_objects_stay_opaque_and_never_become_artifacts() {
     let fixture = source("image/png");
     let fake_digest = "c".repeat(64);

@@ -10,7 +10,7 @@ This is a living product and engineering harness. It records current behavior,
 gaps and scenarios against which we design FX. It is not a claim that every
 scenario below works today, nor approval to implement every proposed capability.
 
-**Last source review: 2026-11-10 for provider result downloads; 2026-10-15 for other entries.**
+**Last source review: 2026-11-10 for provider result downloads and native video previews; 2026-10-15 for other entries.**
 Current entries were checked against the CLI,
 SDKs and specifications. The cancellation delivery includes provider-free execution evidence from
 `tools/check_control.py`; run listing and removal rest on the `runs` CLI tests, the
@@ -332,6 +332,32 @@ step identities, cache reuse, recorded history and same-plan resume. Run-status
 updates should preserve the arrangement. Portable run exports carry the captured
 engine layout so inspection does not depend on the author's checkout. A future
 layout-file implementation must preserve that independence.
+
+For AR-04 and AR-19, canvas cards offer available recorded `video/*` artifacts to the native
+browser player, with bounded first-frame loading and explicit failure feedback. A short reason
+and an optional tooltip preserve browser media error categories and diagnostics before reset;
+capture failure, timeout and playback failure stay distinct, and the details are browser-local.
+Hover playback requires a captured first frame. Unavailable videos have a stable noninteractive
+icon; capture-only failures retain a distinct manual playback action.
+Browser preview failure is distinct from file availability: available original video bytes
+remain downloadable from step details, without promising another player's codec support.
+Local serving preserves concrete video MIME types; export inclusion remains governed by its allowlist.
+Preview errors never change execution results and the viewer does not transcode. Evidence:
+the viewer crate's artifact HTTP tests, `web/fx-web/tests/previews.test.ts`, the first-frame
+loader tests, and local browser verification of synthesized supported and unsupported videos.
+Native video detection uses the same recorded outputs for Python and JavaScript workflows,
+without new SDK operations.
+
+Workflow node steps can explicitly select `preview: {video: video, poster: poster}` using own
+scalar output port names; the poster is optional. The engine validates declared video/image
+families and records selection on each instance, including dynamic repeats and cached takes.
+The viewer preserves the poster independently of native playback or exported-video inclusion.
+Python's workflow builder accepts the structured setting and JavaScript exposes `VideoPreview`;
+both hand the document to the engine for validation. The setting creates no execution dependency
+and changes no step/call identity, while authored edits change the plan digest and require a new
+run. Node-type defaults and cross-step/URL/callback previews are intentionally deferred.
+Evidence includes workflow expansion/validation tests, SDK serialization tests, viewer/export
+projection tests and the provider-free movie-sprite fixture with a nonzero selected frame interval.
 
 ## Engineering acceptance scenarios
 

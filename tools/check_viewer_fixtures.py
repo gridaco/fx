@@ -51,6 +51,7 @@ WORKFLOWS = {
     "dynamic-failure": "viewer-dynamic-failure",
     "nesting": "viewer-nesting",
     "nesting-failure": "viewer-nesting-failure",
+    "posters": "viewer-posters",
 }
 
 
@@ -169,15 +170,16 @@ def running_prefix(completed: Path, target: Path, path: str) -> None:
     (target / "events.jsonl").write_bytes(b"".join(lines[: boundary + 1]))
 
 
-def missing_artifact(completed: Path, target: Path, digest: str) -> None:
+def missing_artifact(completed: Path, target: Path, digest: str | list[str]) -> None:
     """Damage only a copy of a real run to exercise unavailable-artifact presentation."""
     shutil.copytree(completed, target)
-    removed = 0
+    wanted = {digest} if isinstance(digest, str) else set(digest)
+    removed = set()
     for path in target.rglob("*"):
-        if path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest() == digest:
+        if path.is_file() and (found := hashlib.sha256(path.read_bytes()).hexdigest()) in wanted:
             path.unlink()
-            removed += 1
-    expect(removed > 0, "the missing-artifact fixture removed no placed image bytes")
+            removed.add(found)
+    expect(removed == wanted, "the missing-artifact fixture did not remove each placed file")
 
 
 def legacy_graph(document: dict[str, Any]) -> dict[str, Any]:
@@ -259,6 +261,13 @@ def generate(output: Path) -> dict[str, Any]:
     )
     takes = checked_run(home, WORKFLOWS["takes"], output / "runs" / "takes")
     ports = checked_run(home, WORKFLOWS["ports"], output / "runs" / "ports")
+    posters = checked_run(home, WORKFLOWS["posters"], output / "runs" / "posters")
+    for missing, port in [("posters-missing", "poster"), ("posters-source-missing", "video")]:
+        missing_artifact(
+            output / "runs" / "posters",
+            output / "runs" / missing,
+            [posters.outputs[f"{name}_{port}"].digest for name in ["ffv1", "native"]],
+        )
     nesting = checked_run(home, WORKFLOWS["nesting"], output / "runs" / "nesting")
     nesting_failure = checked_run(
         home, WORKFLOWS["nesting-failure"], output / "runs" / "nesting-failure", succeeded=False
@@ -294,12 +303,16 @@ def generate(output: Path) -> dict[str, Any]:
             "ports-legacy",
             "running",
             "missing",
+            "posters",
+            "posters-missing",
+            "posters-source-missing",
         ]
     }
     validate_scenarios(output, documents, cold, cached, alternative, takes)
     validate_ports(ports)
     validate_dynamic_failure(dynamic_failure, documents["dynamic-failure"])
     validate_nesting(nesting, nesting_failure)
+    validate_posters(posters)
     subprocess.run(
         [
             "bun",
@@ -328,6 +341,39 @@ def generate(output: Path) -> dict[str, Any]:
     }
     write_json(output / "report.json", report)
     return report
+
+
+def validate_posters(result: fx.RunResult) -> None:
+    """Verify the fixture's real codecs, frames and deliberately distinct poster artwork."""
+    for name, codec in [("ffv1", "ffv1"), ("native", "vp9")]:
+        probe = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-count_frames",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=codec_name,width,height,nb_read_frames",
+                "-of",
+                "json",
+                str(result.outputs[f"{name}_video"].path),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        streams = json.loads(probe.stdout)["streams"]
+        expect(
+            streams == [{"codec_name": codec, "width": 64, "height": 48, "nb_read_frames": "4"}],
+            f"{name}: synthesized video codec or frame contract changed",
+        )
+        with Image.open(result.outputs[f"{name}_poster"].path) as poster:
+            expect(
+                poster.size == (96, 64) and poster.getpixel((0, 0)) == (244, 233, 205),
+                f"{name}: the authored cream poster changed",
+            )
 
 
 def validate_nesting(result: fx.RunResult, failure: fx.RunResult) -> None:

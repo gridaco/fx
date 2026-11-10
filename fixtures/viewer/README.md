@@ -6,9 +6,11 @@ viewer evolves. It is separate from practical projects in `examples/`.
 
 The source fixture is small text: workflow files, ordinary Python nodes and explicit
 expectations. Pillow draws original geometric images; the Python standard library
-synthesizes a short WAV. No external assets, providers, stand-ins or live mode are
-needed. Every custom node has a fixture-private explicit version, so different
-exports in the shared module retain distinct identities.
+synthesizes a short WAV. The poster case uses local FFmpeg to encode those drawn frames as
+FFV1/Matroska and VP9/WebM; install FFmpeg and FFprobe on `PATH` before generating the suite.
+No external assets, providers, stand-ins or live mode are needed. Every custom node has a
+fixture-private explicit version, so different exports in the shared module retain distinct
+identities.
 
 ## Generate, verify, and inspect
 
@@ -28,8 +30,8 @@ uv run --project python python -m grida.fx inspect .fx/viewer-fixtures/demo/runs
 
 To inspect a different case, replace `cold` with `cached`, `alternative`, `failure`,
 `takes`, `running`, `missing`, `ports`, `ports-legacy`, `dynamic-failure`, `nesting`,
-`nesting-failure`, or `nesting-legacy`.
-The suite produces ten plans and thirteen run views. Viewing saved data never reruns the workflow.
+`nesting-failure`, `nesting-legacy`, `posters`, `posters-missing`, or `posters-source-missing`.
+The suite produces eleven plans and sixteen run views. Viewing saved data never reruns the workflow.
 Each viewer stays in the foreground until Ctrl-C. The running case is a static
 recorded prefix; observation does not advance it. For an actual short running workflow:
 
@@ -91,7 +93,7 @@ artifact digests, `--no-view`, and hosted-server shutdown. It imports no runtime
 viewer internals. It also verifies the seven-step ordering, wait passthroughs,
 changed image digests, and cold execution. Reader unit tests own malformed records
 and cursor invalidation.
-The existing ten-plan/thirteen-view suite remains unchanged.
+The existing topology, take, failure, ports and nesting cases remain unchanged.
 
 ## Persistent project service
 
@@ -138,6 +140,9 @@ holds local addresses only; portable workflow records stay unchanged. See
 | `viewer-nesting.yaml` / `nesting` | Two keyed imports of one wrapper, deeper imports, inline group frames, renamed input/output boundaries, and two public aliases of the same internal image; 11 leaf nodes |
 | `viewer-nesting-failure.yaml` / `nesting-failure` | A failed child inside two imported workflow boundaries, blocked inner and outer consumers, an independent success, and failed enclosing cards |
 | `nesting-legacy` | The same nested plan/run with display metadata omitted; old dotted and repeated paths stay flat without invented workflow boundaries |
+| `viewer-posters.yaml` / `posters` | Two original four-frame videos: FFV1/Matroska for browser failure presentation and VP9/WebM for native playback, each with an explicit cream/coral poster distinct from the blue/green video. The checker verifies codecs, frames, descriptor recording and exact source/poster projection; actual browser codec support remains browser-dependent |
+| `posters-missing` | A copy of that real run with both placed PNG posters removed; the original videos remain available for native frame capture |
+| `posters-source-missing` | A copy with both placed video sources removed; authored PNG posters remain available while playback is inert |
 
 JSON content includes `false`, `0`, `[]` and `null`. The image bundle contains both
 a list and a keyed collection, with repeated references to the same three files.
@@ -191,7 +196,7 @@ is no generated HTML, portable publication format or CDN dependency here.
 
 This first suite covers common topology and viewer states, not every engine feature.
 Cancellation/incomplete runs, nested repeats, explicit manual takes, very large
-graphs, video/3D and paid-call retries can be added as focused cases. Existing
+graphs, 3D and paid-call retries can be added as focused cases. Existing
 reader tests own malformed records, traversal, corrupted bytes and torn tails.
 
 Known viewer limits exposed by the suite:

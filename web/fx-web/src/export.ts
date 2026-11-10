@@ -115,6 +115,7 @@ function validateReferences(view: ViewerRun, layout: LayoutReport, artifacts: Ex
   };
   for (const node of view.nodes) {
     if ([...node.reads, ...(node.needs ?? []), ...(node.judges ? [node.judges] : [])].some((id) => !ids.has(id))) refuse("a node dependency is missing.");
+    if (node.preview && node.ports && Object.values(node.preview).some((port) => !(port in node.ports!.outputs))) refuse("a preview names a missing node output port.");
     for (const binding of [...(node.bindings ?? []), ...(node.interface_bindings ?? [])]) {
       checkBinding(binding);
       if (node.ports && !(binding.target_port in node.ports.inputs) && !(binding.target_port in node.ports.params)) refuse("a binding names a missing node input port.");
@@ -225,9 +226,10 @@ export function exportCanvasGraph(loaded: LoadedRunExport, scope: string | null 
     const preview = cardPreview(source.outputs, (id) => {
       const artifact = inventory.get(id);
       const url = artifact ? exportArtifactUrl(loaded, id) : null;
-      return artifact && url ? { media_type: artifact.media_type, name: artifact.name, url } : null;
-    });
+      return artifact ? { media_type: artifact.media_type, name: artifact.name, url, ...(!url ? { unavailable_reason: "not_included" as const } : {}) } : null;
+    }, source.preview);
     if (preview) node.preview = preview;
+    else delete node.preview;
   }
   return projectScopes(view, flat, scope);
 }

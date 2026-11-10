@@ -138,12 +138,20 @@ interface StepCommon {
   description?: string | null;
 }
 
+/** A node card's video and optional poster, selected by their own scalar output port names. */
+export interface VideoPreview {
+  video: string;
+  poster?: string;
+}
+
 /** A step that runs a node type. */
 export interface NodeStep extends StepCommon {
   /** `fx/<name>@<major>` (built-in), `./<path>#<attr>` (a project node), or `./<path>.yaml`. */
   uses: string;
   /** The type's inputs and params; values holding `${{ }}` are expressions. */
   with?: { [name: string]: JsonValue };
+  /** Literal output names, not expressions or URLs. The engine validates the selected ports. */
+  preview?: VideoPreview;
   /** The step this judge gives a verdict on. */
   judges?: string | null;
   on_reject?: "fail" | "continue" | "skip" | { regenerate: Regeneration };

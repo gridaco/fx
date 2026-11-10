@@ -712,6 +712,24 @@
       "pending_count": 0,
       "root_node_count": 11,
       "legacy": true
+    },
+    {
+      "file": "posters.json",
+      "node_count": 2,
+      "edge_count": 0,
+      "pending_count": 0,
+      "requires_previews": [
+        {
+          "id": "ffv1#1",
+          "video": "video",
+          "poster": "poster"
+        },
+        {
+          "id": "native#1",
+          "video": "video",
+          "poster": "poster"
+        }
+      ]
     }
   ],
   "views": [
@@ -1521,6 +1539,63 @@
       "state": "succeeded",
       "preview_count": 10,
       "legacy": true
+    },
+    {
+      "file": "posters.json",
+      "node_count": 2,
+      "edge_count": 0,
+      "state": "succeeded",
+      "preview_count": 2,
+      "requires_previews": [
+        {
+          "id": "ffv1#1",
+          "video": "video",
+          "poster": "poster"
+        },
+        {
+          "id": "native#1",
+          "video": "video",
+          "poster": "poster"
+        }
+      ]
+    },
+    {
+      "file": "posters-missing.json",
+      "node_count": 2,
+      "edge_count": 0,
+      "state": "succeeded",
+      "preview_count": 2,
+      "requires_previews": [
+        {
+          "id": "ffv1#1",
+          "video": "video",
+          "poster": "poster"
+        },
+        {
+          "id": "native#1",
+          "video": "video",
+          "poster": "poster"
+        }
+      ]
+    },
+    {
+      "file": "posters-source-missing.json",
+      "node_count": 2,
+      "edge_count": 0,
+      "state": "succeeded",
+      "preview_count": 2,
+      "requires_previews": [
+        {
+          "id": "ffv1#1",
+          "video": "video",
+          "poster": "poster"
+        },
+        {
+          "id": "native#1",
+          "video": "video",
+          "poster": "poster"
+        }
+      ]
     }
   ]
 }

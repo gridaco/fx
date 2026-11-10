@@ -24,7 +24,8 @@ from PIL import Image, ImageDraw
 WIDTH = 96
 HEIGHT = 160
 FRAME_COUNT = 12
-SOURCE_FPS = 6
+# Quarter-second frame times keep the synthetic trim's timestamps exact.
+SOURCE_FPS = 4
 
 
 def make_frame(index: int) -> Image.Image:
@@ -60,7 +61,7 @@ TAKE = {
     "seconds": 3,
     "resolution": "720p",
 }
-#: Trim the supplied green-backed clip's full interval, then key its exact loop.
+#: Trim the supplied green-backed clip to its marked closed loop, then key it.
 CLIP = {"footage": "actor.mkv", "trim": "trim.json", "finish": "finish.json"}
 
 
@@ -77,7 +78,8 @@ def make_inputs(target: Path) -> None:
     """Write the take's inputs, and a lossless clip with the settings that finish it."""
     write_inputs(target)
     frames = []
-    for index in range(FRAME_COUNT):
+    # Distinct leading/trailing frames make the selected interval's first frame observable.
+    for index in [3, *range(FRAME_COUNT), 7]:
         plate = Image.new("RGBA", (WIDTH, HEIGHT), (0, 255, 0, 255))
         plate.alpha_composite(make_frame(index))
         frames.append(plate)
@@ -128,8 +130,8 @@ def make_inputs(target: Path) -> None:
         json.dumps(
             {
                 "source_sha256": hashlib.sha256((target / "actor.mkv").read_bytes()).hexdigest(),
-                "start_frame": 0,
-                "end_frame": FRAME_COUNT,
+                "start_frame": 1,
+                "end_frame": FRAME_COUNT + 1,
             },
             indent=2,
         )

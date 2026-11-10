@@ -42,6 +42,13 @@ function named(label: string, kind: string) {
   return !suffix || label.endsWith(suffix) ? label : label + suffix;
 }
 
+/** An original artifact's browser download name, with one safe segment and its known suffix. */
+export function artifactDownloadName(file: { name: string; kind: string; digest: string }) {
+  const label = safeName(file.name || file.digest.slice(0, 12));
+  const suffix = SUFFIXES.get(file.kind) ?? "";
+  return suffix && !label.toLowerCase().endsWith(suffix) ? label + suffix : label;
+}
+
 async function sha256(bytes: Uint8Array<ArrayBuffer>) {
   return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), (part) => part.toString(16).padStart(2, "0")).join("");
 }

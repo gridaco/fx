@@ -60,6 +60,7 @@ pub struct NodeDisplay {
     pub bindings: Vec<grida_fx_core::expand::wiring::Binding>,
     pub needs: Vec<String>,
     pub judges: Option<String>,
+    pub preview: Option<grida_fx_core::docs::workflow::Preview>,
 }
 
 /// One event's own fields (module doc). Names and members follow fx-run-events-v1.
@@ -112,6 +113,7 @@ pub enum Event {
         bindings: Vec<grida_fx_core::expand::wiring::Binding>,
         needs: Vec<String>,
         judges: Option<String>,
+        preview: Option<grida_fx_core::docs::workflow::Preview>,
         /// `{capability: route id}`.
         routes: IndexMap<String, String>,
         /// `{name: encoded}`.
@@ -228,6 +230,7 @@ impl Event {
             bindings,
             needs,
             judges,
+            preview,
             ..
         } = self
         {
@@ -238,6 +241,7 @@ impl Event {
                 bindings: bindings.clone(),
                 needs: needs.clone(),
                 judges: judges.clone(),
+                preview: preview.clone(),
             })
         } else {
             None
@@ -338,6 +342,7 @@ impl Event {
                 bindings,
                 needs,
                 judges,
+                preview,
                 routes,
                 with,
             } => {
@@ -354,6 +359,9 @@ impl Event {
                 fields.put("bindings", serde_json::json!(bindings));
                 fields.put("needs", serde_json::json!(needs));
                 fields.text_or_null("judges", judges.as_deref());
+                if let Some(preview) = preview {
+                    fields.put("preview", preview.to_value());
+                }
                 fields.put(
                     "reads",
                     Value::Array(reads.iter().map(|r| Value::from(r.as_str())).collect()),
@@ -562,6 +570,9 @@ impl Fields {
         self.put("bindings", serde_json::json!(display.bindings));
         self.put("needs", serde_json::json!(display.needs));
         self.text_or_null("judges", display.judges.as_deref());
+        if let Some(preview) = &display.preview {
+            self.put("preview", preview.to_value());
+        }
     }
 
     fn put(&mut self, name: &str, value: Value) {

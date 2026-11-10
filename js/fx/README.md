@@ -139,6 +139,13 @@ await writeFile("workflows/icon.yaml", toYaml(icon));
 `toYaml` writes the strict YAML subset the engine reads, as the engine writes it: every string
 that would read back as something else (`on`, `017`, `2026-10-05`, a digest) is quoted.
 
+To choose a node card's video and poster, set its workflow step's
+`preview: { video: "native", poster: "cover" }`. The values are literal names of that node's
+scalar video and image output ports, not expressions, paths or URLs. `poster` is optional;
+without it the browser reads the video's first frame. An explicit preview overrides automatic
+image selection, and the poster remains visible if the browser cannot play the video. The
+node produces both files; viewing does not convert media or change execution results.
+
 ## Writing node types
 
 A node type is an export declared with `node`. Node 24 or later runs the project's `.ts` files as

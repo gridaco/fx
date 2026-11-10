@@ -769,6 +769,7 @@ mod tests {
             requires: Vec::new(),
             independent_of: Vec::new(),
             view: ViewSetting::Flag(false),
+            preview: None,
             timeout: None,
             title: None,
             description: None,

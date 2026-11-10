@@ -132,6 +132,20 @@ def test_every_renamed_field() -> None:
     }
 
 
+def test_video_preview_selects_own_output_names() -> None:
+    wf = Workflow("clip", title="A clip")
+    wf.step(
+        "make",
+        uses="./nodes/clip.py#clip",
+        preview={"video": "native", "poster": "cover"},
+    )
+    wf.step("other", uses="./nodes/clip.py#clip", preview={"video": "native"})
+    document = wf.document()
+    assert document["steps"]["make"]["preview"] == {"video": "native", "poster": "cover"}
+    assert document["steps"]["other"]["preview"] == {"video": "native"}
+    assert _schema_errors(document) == []
+
+
 def test_nested_groups() -> None:
     wf = Workflow("nested", title="Nested groups")
     seed = wf.step("seed", uses="./nodes/s.py#seed")

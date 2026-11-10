@@ -59,6 +59,7 @@ interface CaseExpectation {
   requires_scopes?: ScopeExpectation[];
   requires_interfaces?: InterfaceExpectation[];
   root_node_count?: number;
+  requires_previews?: { id: string; video: string; poster?: string }[];
 }
 interface Expectations {
   kind: "fx-viewer-fixtures-v1";
@@ -129,6 +130,10 @@ function cases(value: unknown, section: string): asserts value is CaseExpectatio
     if ("literal_settings" in item) {
       assert(Array.isArray(item.literal_settings) && item.literal_settings.every((setting) => record(setting) && typeof setting.id === "string" && typeof setting.name === "string"), `${item.file}: literal_settings must name instances and settings`);
     }
+    if ("requires_previews" in item) {
+      assert(Array.isArray(item.requires_previews) && item.requires_previews.every((preview) => record(preview)
+        && typeof preview.id === "string" && typeof preview.video === "string" && (preview.poster === undefined || typeof preview.poster === "string")), `${item.file}: invalid preview expectation`);
+    }
     if ("requires_scopes" in item) {
       assert(Array.isArray(item.requires_scopes), `${item.file}: requires_scopes must be an array`);
       for (const scope of item.requires_scopes) {
@@ -175,6 +180,22 @@ function checkImages(view: ViewerView, graph: CanvasGraph, label: string) {
   for (const node of view.nodes) {
     const projected = graph.nodes.find((item) => item.source_id === node.id);
     assert(projected, `${label}/${node.id}: recorded node is missing from the canvas`);
+    if (node.preview) {
+      const scalar = (name: string) => {
+        const value = node.outputs[name];
+        return record(value) && record(value.file) && typeof value.file.digest === "string" ? value.file.digest : undefined;
+      };
+      const source = scalar(node.preview.video), original = source ? artifacts.get(source) : undefined;
+      const preview = projected.preview;
+      assert(original && preview?.kind === "video" && preview.digest === source, `${label}/${node.id}: explicit video selection was lost`);
+      const available = original.available && original.url === `/api/artifacts/${source}`;
+      assert(preview.url === (available ? original.url : null), `${label}/${node.id}: video source availability changed`);
+      const posterId = node.preview.poster ? scalar(node.preview.poster) : undefined;
+      const poster = posterId ? artifacts.get(posterId) : undefined;
+      const hasPoster = poster?.available && imageKinds.has(poster.kind) && poster.url === `/api/artifacts/${posterId}`;
+      assert(hasPoster ? preview.poster?.digest === posterId && preview.poster.url === poster?.url : preview.poster === undefined, `${label}/${node.id}: authored poster availability or identity changed`);
+      continue;
+    }
     const eligible = [...new Set(Object.values(node.outputs).flatMap(outputFiles))].filter((digest) => {
       const artifact = artifacts.get(digest);
       return artifact?.available && imageKinds.has(artifact.kind) && artifact.url === `/api/artifacts/${digest}`;
@@ -426,6 +447,7 @@ async function checkCase(root: string, section: "plans" | "views", expected: Cas
   count(expected.pending_count, graph.nodes.filter((node) => node.pending).length, `${label} pending repeats`);
   count(expected.preview_count, graph.nodes.filter((node) => node.preview).length, `${label} image previews`);
   for (const id of expected.requires_nodes ?? []) assert(graph.nodes.some((node) => node.source_id === id), `${label}: missing required instance or pending repeat ${id}`);
+  for (const { id, ...preview } of expected.requires_previews ?? []) assert(JSON.stringify(sourceNodes.find((node) => node.id === id)?.preview) === JSON.stringify(preview), `${label}/${id}: authored preview metadata changed`);
   for (const state of expected.required_states ?? []) assert(graph.nodes.some((node) => node.state === state), `${label}: missing required node state ${state}`);
   const byId = new Map(graph.nodes.map((node) => [node.id, node.source_id]));
   for (const required of expected.requires_edges ?? []) {
@@ -466,7 +488,7 @@ async function checkCase(root: string, section: "plans" | "views", expected: Cas
   count((view.scopes ?? []).filter((scope) => scope.kind === "workflow").length, visited.size, `${label} navigable imported workflows`);
   controller.dispose();
   assert(JSON.stringify(view) === original, `${label}: browser projection, layout, or selection mutated the source`);
-  console.log(`PASS ${label}: ${graph.nodes.length} nodes, ${graph.edges.length} edges, ${graph.nodes.filter((node) => node.pending).length} pending, ${graph.nodes.filter((node) => node.preview).length} image previews`);
+  console.log(`PASS ${label}: ${graph.nodes.length} nodes, ${graph.edges.length} edges, ${graph.nodes.filter((node) => node.pending).length} pending, ${graph.nodes.filter((node) => node.preview).length} previews`);
 }
 
 async function main() {

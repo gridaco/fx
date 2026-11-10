@@ -57,7 +57,7 @@ pub mod scope;
 pub mod wiring;
 
 use crate::docs::takes::Takes;
-use crate::docs::workflow::{Assertion, LoadedWorkflow, OnFail, OnReject, Step};
+use crate::docs::workflow::{Assertion, LoadedWorkflow, OnFail, OnReject, Preview, Step};
 use crate::error::{Error, Problem, Result};
 use crate::expr::{self, ExprError};
 use crate::host::NodeHost;
@@ -152,6 +152,8 @@ pub struct Instance {
     /// Judges of this instance, in link order.
     pub judged_by: Vec<String>,
     pub view: Value,
+    /// Workflow-authored display metadata; never an execution input or identity member.
+    pub preview: Option<Box<Preview>>,
     pub at_plan: bool,
     /// The innermost step budget: (owner path with keys, ceiling).
     pub budget: Option<(String, Usd)>,
@@ -707,6 +709,12 @@ impl<'a> Expander<'a> {
         used: Rc<LoadedWorkflow>,
         into: ExpId,
     ) {
+        if at.declared.preview.is_some() {
+            self.problem(
+                &format!("{}.preview", at.where_),
+                "preview applies to a node step, not an imported workflow",
+            );
+        }
         if self.uses_itself(context, &used.source) {
             let uses = at.declared.uses.clone().unwrap_or_default();
             self.problem(&at.where_, format!("{uses} refers back to itself"));
@@ -1051,6 +1059,7 @@ pub(crate) mod testing {
             requires: Vec::new(),
             independent_of: Vec::new(),
             view: ViewSetting::Flag(false),
+            preview: None,
             timeout: None,
             title: None,
             description: None,
@@ -1193,6 +1202,7 @@ pub(crate) mod testing {
             judge_policy: None,
             judged_by: Vec::new(),
             view: Value::Bool(false),
+            preview: None,
             at_plan,
             budget: None,
             concurrency_group: None,
