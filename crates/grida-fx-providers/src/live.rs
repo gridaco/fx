@@ -221,8 +221,7 @@ fn codex_program(env: &dyn Fn(&str) -> Option<String>) -> Option<Program> {
     crate::codex::find_program(env, app)
 }
 
-/// A program the user installed ([`PROGRAMS`]), as a live run would find it (doctor's `program`
-/// lines).
+/// Codex or Grok Build, as a live run would find it (doctor's `program` lines).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Installed {
     /// `codex` or `grok`.
@@ -234,9 +233,9 @@ pub struct Installed {
     pub version: Option<Version>,
 }
 
-/// Every program the user installed ([`PROGRAMS`]), as the process environment finds it, each
-/// asked its version as a live run asks it (in the system's temporary folder, without
-/// `withheld`, the declared variables: [`Setup::withheld`]).
+/// Codex and Grok Build, as the process environment finds them, each asked its version as a live
+/// run asks it (in the system's temporary folder, without `withheld`, the declared variables:
+/// [`Setup::withheld`]).
 pub async fn installed(withheld: &[String]) -> Vec<Installed> {
     let env = |name: &str| std::env::var(name).ok();
     let folder = std::env::temp_dir();

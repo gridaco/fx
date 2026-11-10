@@ -14,7 +14,7 @@
 //! `send`, in the order of spec/adapters.md §4 (the engine makes steps 1 and 2 before it, the
 //! contract's other members through `check_contract`; the adapter makes them again for a direct
 //! caller):
-//! 1. the contract ([`super::read_contract`]);
+//! 1. the contract;
 //! 2. `capabilities::check_request`;
 //! 3. the key, when the provider is declared with one (`<VARIABLE> is not set`);
 //! 4. values: provider options that set no member of [`OWNED`] ([`wire::provider_options`]), then

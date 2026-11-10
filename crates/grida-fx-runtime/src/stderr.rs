@@ -1,8 +1,8 @@
-//! The engine's stderr: the lines the engine prints there itself ([`line`]), the writes of the
+//! The engine's stderr: the lines the engine prints there itself ([`line()`]), the writes of the
 //! copies of TypeScript hosts' stderr (`host::process`), and a forced exit's last word
 //! ([`write_within`]).
 //!
-//! Every line the engine prints to stderr while a command runs goes through [`line`], never
+//! Every line the engine prints to stderr while a command runs goes through [`line()`], never
 //! `eprintln!`: whole, under the stderr lock the copies of hosts' stderr write under too, so the
 //! two never splice. A stderr that a parent made non-blocking and that cannot take more now is
 //! waited for until it can, as a blocking one is; any other failure (the reader has gone) drops

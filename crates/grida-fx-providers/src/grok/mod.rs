@@ -14,13 +14,14 @@
 //!    other than `auto`, a `transparent` background, a mask, more than [`MAX_PICTURES`] pictures
 //!    (`image`, then `references`), and each picture's file: carried, not empty, and PNG or
 //!    JPEG;
-//! 4. the runtime's Grok Build, started if need be ([`runtime`]): no program ([`NOT_INSTALLED`],
+//! 4. the runtime's Grok Build, started if need be ([`GrokRuntime`]): no program ([`NOT_INSTALLED`],
 //!    [`NETWORK_OFF`]), an older one, or a sign-in that is not a subscription is `Sent::Refused`,
 //!    for this call and the invocation's others;
 //! 5. a scratch folder of the call's own holding copies of its pictures (`picture-01.png`, ...),
-//!    and a session in the runtime's folder whose agent offers Grok Build's two image tools and nothing else
-//!    ([`profile`]), which asks before every tool call whatever the user's own permission mode
-//!    (FX grants the image tools only, [`crate::acp`]), at low reasoning effort; then `session/prompt` with [`instructions`], and the
+//!    and a session in the runtime's folder whose curated agent profile offers Grok Build's two
+//!    image tools and nothing else, which asks before every tool call whatever the user's own
+//!    permission mode (FX grants the image tools only, [`crate::acp`]), at low reasoning effort;
+//!    then `session/prompt` with [`instructions`], and the
 //!    session's updates until its first image tool call that completed with an image. The rest of
 //!    the turn is then cancelled, its usage read, and the session deleted.
 //!
@@ -61,7 +62,7 @@ pub const LABEL: &str = "Grok Build image generation";
 pub const ADAPTER: &str = "fx-grok-image-v1";
 
 /// The contract this adapter serves: [`ADAPTER`], and `adapter_behavior` the text `"1"`. The
-/// behaviour names [`instructions`], the session's agent ([`profile`]) and the settings of
+/// behaviour names [`instructions`], the session's image-only agent profile and the settings of
 /// [`environment`]: a change to any is a new behaviour.
 pub const IDENTITY: Identity = Identity {
     adapter: ADAPTER,
@@ -260,13 +261,14 @@ fn installed_program(env: &dyn Fn(&str) -> Option<String>) -> Option<PathBuf> {
 ///   else when it names no executable file;
 /// - else the first `grok` in an absolute `PATH` entry (empty and relative entries are skipped, so
 ///   a project's own folder never supplies it). Never `agent`, which other programs also install;
-/// - else [`installed_program`] when it is executable (origin `~/.grok/bin`).
+/// - else `~/.grok/bin/grok` when it is executable (origin `~/.grok/bin`).
 pub fn find_program(env: &dyn Fn(&str) -> Option<String>) -> Option<Program> {
     let fallback = installed_program(env).map(|path| (path, "~/.grok/bin"));
     installed::find_program(env, PROGRAM_VARIABLE, "grok", fallback)
 }
 
-/// Every variable Grok Build never inherits: the declared `variables`, then [`ALSO_WITHHELD`].
+/// Every variable Grok Build never inherits: the declared `variables`, then `XAI_API_KEY` and
+/// `GROK_CONFIG_PATH`.
 pub fn withheld(variables: &[String]) -> Vec<String> {
     installed::withheld(variables, &ALSO_WITHHELD)
 }

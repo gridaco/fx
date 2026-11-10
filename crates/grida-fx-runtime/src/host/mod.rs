@@ -36,7 +36,7 @@
 //! speaks fx-node-protocol-v1: upgrade grida` or `…: upgrade grida-fx`; `@grida/fx` for the
 //! TypeScript host), then sends one request at a time. A host that cannot start is
 //! `HostFailure::Unavailable` with a sentence naming its program and the variable that chooses
-//! it ([`advice`]: `GRIDA_FX_PYTHON`, `GRIDA_FX_NODE`). A program the host located is checked
+//! it (`GRIDA_FX_PYTHON`, `GRIDA_FX_NODE`). A program the host located is checked
 //! before it is first started ([`locate::probe`]): one that cannot host nodes is refused with
 //! [`locate::refusal`]'s sentence and never started. A TypeScript host with no host program is
 //! unavailable with [`locate::node_host_entry`]'s sentence; one whose host program's `@grida/fx`
@@ -451,8 +451,7 @@ impl NodeHost for LanguageHost {
         Ok(())
     }
 
-    /// The host's answer, with a `@grida/fx` folder outside the project cut from its texts
-    /// ([`LanguageHost::package_roots`]).
+    /// The host's answer, with a `@grida/fx` folder outside the project cut from its texts.
     fn describe(&mut self, params: &DescribeParams) -> Result<DescribeResult, HostFailure> {
         let roots = self.package_roots();
         let mut described = self
@@ -466,8 +465,7 @@ impl NodeHost for LanguageHost {
         Ok(described)
     }
 
-    /// The host's answer, with a `@grida/fx` folder outside the project cut from its texts
-    /// ([`LanguageHost::package_roots`]).
+    /// The host's answer, with a `@grida/fx` folder outside the project cut from its texts.
     fn build(&mut self, params: &BuildParams) -> Result<BuildResult, HostFailure> {
         let roots = self.package_roots();
         self.call(method::BUILD, params)

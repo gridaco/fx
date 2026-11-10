@@ -10,8 +10,8 @@
 //! 2. a live run without a ceiling (docs/wg/overview.md, decision 5): `a live run needs a
 //!    ceiling: pass --max-usd, or set budget.max_usd in the workflow or in fx.yaml`. A plan
 //!    priced at $0 whose calls are all on providers that bill the user's own plan (their adapters
-//!    say so: `Billing::Plan`, the user's Codex) runs without one ([`on_the_users_plan`]), under a
-//!    ceiling of $0, and its ledger admits no other provider ([`ceiling`]);
+//!    say so: `Billing::Plan`, the user's Codex) runs without one, under a
+//!    ceiling of $0, and its ledger admits no other provider;
 //! 3. a tool a live instance declares is not installed: `a program the run needs is not
 //!    installed:` and one line per tool, sorted: `<name> (for <steps, sorted, ", ">): install it,
 //!    or set GRIDA_FX_TOOL_<NAME>`;

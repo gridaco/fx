@@ -24,7 +24,7 @@ pub(crate) fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-/// A program the user installed, and where [`find_program`] found it.
+/// A program the user installed, and where it was found.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Program {
     /// Absolute, to an executable file.

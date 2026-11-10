@@ -1,7 +1,7 @@
 //! Expansion: a workflow document into step instances.
 //!
 //! The public model ([`Instance`], [`PendingRepeat`], [`Expansion`], [`NodeResult`]) is what
-//! planning and the outputs read. The [`Expander`] is internal; its methods are spread over the
+//! planning and the outputs read. The `Expander` is internal; its methods are spread over the
 //! submodules by concern:
 //!
 //! | file | owns |

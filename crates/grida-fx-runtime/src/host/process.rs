@@ -13,16 +13,16 @@
 //! variables its spec withholds and with those it gives ([`HostSpec::with_environment`]).
 //!
 //! A Python host inherits the engine's stderr. A TypeScript host's stderr is a pipe of its own
-//! (Unix), which a thread ([`StderrCopy`]) copies to the engine's stderr as spec/protocol.md §1
+//! (Unix), which a thread copies to the engine's stderr as spec/protocol.md §1
 //! "Output streams" states, with why an inherited stderr would not do: whole lines under the
 //! stderr lock the engine's own lines take too ([`crate::stderr`]), at most 512 bytes of them per
-//! write, a line in parts only past [`LONGEST_LINE`].
+//! write, a line in parts only past 64 KiB.
 //!
 //! Ending a TypeScript host waits for its copy by that section's rule: bound by what the host
-//! left, not by time, unless the copy has waited [`DRAIN`] in all for its pipe, or
-//! [`DRAIN_IN_ALL`] has passed since it read more than the host left. [`end_every_host`], which
+//! left, not by time, unless the copy has waited 1 second in all for its pipe, or
+//! 10 seconds have passed since it read more than the host left. [`end_every_host`], which
 //! the command calls before it exits, waits for every copy left by the same rule;
-//! [`end_every_host_now`], which an interrupted command calls, for [`EXIT_DRAIN`] at most.
+//! [`end_every_host_now`], which an interrupted command calls, for 2 seconds at most.
 //!
 //! [`HostProcess::start`] spawns, opens a [`Connection`] and sends `initialize`
 //! ([`HostProcess::start_in`]: in another working directory, for a stand-in host) with the
@@ -54,7 +54,7 @@
 //!
 //! The host's exit is seen by waiting on the process, not by the end of its output: a process
 //! that forked from the host keeps the protocol pipes open after the host has gone.
-//! [`HostProcess::answer_or_exit`] waits for an answer or the exit, whichever comes first; after
+//! `HostProcess::answer_or_exit` waits for an answer or the exit, whichever comes first; after
 //! an exit (and the group kill, which closes the pipes such a process held) it reads what the
 //! host wrote before it exited, and ends the connection when nothing more arrives within the
 //! grace period (a process that left the group still holds the pipes).
@@ -774,7 +774,7 @@ pub fn end_every_host() {
 }
 
 /// [`end_every_host`] for a command that must end now (an interruption): the copies left are
-/// waited for [`EXIT_DRAIN`] at most from the call, whatever they do (module doc).
+/// waited for 2 seconds at most from the call, whatever they do (module doc).
 pub fn end_every_host_now() {
     kill_every_host();
     COPIES.wait_for_all(true);

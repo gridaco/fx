@@ -13,7 +13,7 @@
 //!    than `auto` (Codex picks its own sizes: asked for 1024x1024 it drew 1254x1254), an unknown
 //!    `background`, a mask, more than [`MAX_PICTURES`] pictures (`image`, then `references`), and
 //!    each picture's file: carried, not empty, and PNG, JPEG or WebP;
-//! 4. the runtime's Codex, started if need be ([`runtime`]): no program ([`NOT_INSTALLED`],
+//! 4. the runtime's Codex, started if need be ([`CodexRuntime`]): no program ([`NOT_INSTALLED`],
 //!    [`NETWORK_OFF`]), one older than [`MIN_VERSION`] or that names no version, MCP servers that
 //!    cannot be listed, or a sign-in other than ChatGPT is `Sent::Refused`, for this call and the
 //!    invocation's others;
@@ -316,7 +316,8 @@ pub(super) fn not_started(error: &std::io::Error) -> String {
     }
 }
 
-/// Every variable Codex never inherits: the declared `variables`, then [`ALSO_WITHHELD`].
+/// Every variable Codex never inherits: the declared `variables`, then `CODEX_API_KEY`,
+/// `OPENAI_ORG_ID`, `OPENAI_ORGANIZATION`, `OPENAI_PROJECT` and `OPENAI_PROJECT_ID`.
 pub fn withheld(variables: &[String]) -> Vec<String> {
     installed::withheld(variables, &ALSO_WITHHELD)
 }

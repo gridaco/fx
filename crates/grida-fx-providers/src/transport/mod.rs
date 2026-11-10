@@ -18,8 +18,8 @@
 //!   A transport that cannot tell reports `AfterSend`.
 //!
 //! Implementations: [`http::HttpTransport`] (reqwest over rustls; constructed only for a live run,
-//! never in a test), and for tests [`replay::ReplayTransport`] (synthetic exchange fixtures, each
-//! request asserted) and [`replay::NoNetwork`] (panics on any send), behind feature `testing`.
+//! never in a test), and for tests `replay::ReplayTransport` (synthetic exchange fixtures, each
+//! request asserted) and `replay::NoNetwork` (panics on any send), behind feature `testing`.
 //!
 //! Credentials never appear in an error's `reason`, in `Debug` output or in a recorded fixture:
 //! [`Secret`] prints as `[redacted]`, and an [`HttpRequest`] or [`HttpResponse`] prints only its

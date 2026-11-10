@@ -23,7 +23,7 @@
 //! it to spec/capabilities.md and spec/providers.md §4.
 //!
 //! A capability step's own request (spec/capabilities.md §1): for `image.generate` and
-//! `image.edit`, the with-values imply features ([`implied_features`]), each one the route lacks
+//! `image.edit`, the with-values imply features (`implied_features`), each one the route lacks
 //! refused at `<w>.with.<member>` as `{route} does not support {feature}` and left out of the
 //! `requires:` check; and a route's `max_input_pictures` refuses a known count of pictures above
 //! it at `<w>.with.references`: `{route} takes at most {n} input pictures, not {count}`.
