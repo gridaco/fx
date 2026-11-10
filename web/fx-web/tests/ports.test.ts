@@ -87,7 +87,10 @@ describe("named connection projection", () => {
     expect(target.ports?.inputs.filter((port) => port.name === "images")).toEqual([{ name: "images", type: "image[]", kind: "artifact" }]);
     expect(target.ports?.inputs.filter((port) => port.name === "keyed")).toEqual([{ name: "keyed", type: "image{}", kind: "artifact" }]);
     expect(JSON.stringify(plan)).toBe(original);
-    expect(canvasGraph(parseViewerRun(runFromPlan(plan)))).toEqual({ ...graph, nodes: graph.nodes.map((node) => ({ ...node, state: "succeeded" })) });
+    expect(canvasGraph(parseViewerRun(runFromPlan(plan)))).toEqual({ ...graph,
+      nodes: graph.nodes.map((node) => ({ ...node, state: "succeeded", executed: true })),
+      edges: graph.edges.map((edge) => edge.kind === "data" ? { ...edge, consumed: true } : edge),
+    });
   });
   test("retains unresolved dependencies without inventing data endpoints or sockets for legacy records", () => {
     const plan = portGraph();
@@ -144,8 +147,9 @@ describe("named connection projection", () => {
       ["alpha", "fact"], ["color", "artifact"], ["mask", "artifact"], ["pixel count", "fact"], ["report", "artifact"], ["report", "fact"],
     ]);
     const run = canvasGraph(runFromPlan(shuffled));
-    // The state is the only plan/run difference in this declaration-only case.
-    run.nodes.forEach((node, index) => { node.state = expected.nodes[index].state; });
+    // Runtime state and evidence do not change the declared sockets, member order or geometry.
+    run.nodes.forEach((node, index) => { node.state = expected.nodes[index].state; delete node.executed; });
+    run.edges.forEach((edge) => { delete edge.consumed; });
     expect(run).toEqual(expected);
     const expectedLayout = layoutGraph(expected);
     expect(layoutGraph(projected)).toEqual(expectedLayout);

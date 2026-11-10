@@ -465,6 +465,11 @@ fn project_view(view: &Value, options: ExportOptions) -> Value {
                 if let Some(preview) = super::read::preview(node.get("preview")) {
                     item["preview"] = preview;
                 }
+                if node["state"] == "skipped"
+                    && let Some(reason) = super::read::skip_reason(node.get("skip_reason"))
+                {
+                    item["skip_reason"] = reason;
+                }
                 for name in ["bindings", "interface_bindings"] {
                     if let Some(value) = node.get(name) {
                         item[name] = list_project(

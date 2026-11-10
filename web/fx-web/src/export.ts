@@ -49,6 +49,7 @@ function inspectionShape(value: unknown): unknown {
       ...(record(item.ports) ? { ports: known(item.ports, ["inputs", "outputs", "params"]) } : {}),
       ...(item.bindings !== undefined ? { bindings: bindings(item.bindings) } : {}),
       ...(item.interface_bindings !== undefined ? { interface_bindings: bindings(item.interface_bindings) } : {}),
+      ...(record(item.skip_reason) ? { skip_reason: known(item.skip_reason, ["code", "sources"]) } : {}),
     }) } : {}),
     ...(Array.isArray(value.scopes) ? { scopes: value.scopes.map((item) => !record(item) ? item : {
       ...known(item, ["id", "parent", "kind", "path", "step", "take", "title", "source", "ports", "input_bindings", "output_bindings", "nodes", "pending"]),
@@ -114,6 +115,7 @@ function validateReferences(view: ViewerRun, layout: LayoutReport, artifacts: Ex
     }
   };
   for (const node of view.nodes) {
+    if (node.skip_reason?.sources.some((id) => !ids.has(id))) refuse("a skip reason names a missing node.");
     if ([...node.reads, ...(node.needs ?? []), ...(node.judges ? [node.judges] : [])].some((id) => !ids.has(id))) refuse("a node dependency is missing.");
     if (node.preview && node.ports && Object.values(node.preview).some((port) => !(port in node.ports!.outputs))) refuse("a preview names a missing node output port.");
     for (const binding of [...(node.bindings ?? []), ...(node.interface_bindings ?? [])]) {

@@ -137,6 +137,7 @@ fn every_event() -> Vec<Event> {
             id: "c#1".into(),
             path: "c".into(),
             reason: Some("something it reads failed".into()),
+            skip_reason: None,
             blocked: true,
             error: None,
             facts: None,
@@ -147,6 +148,7 @@ fn every_event() -> Vec<Event> {
             id: "pick#1".into(),
             path: "pick".into(),
             reason: None,
+            skip_reason: None,
             blocked: false,
             error: None,
             facts: Some(IndexMap::new()),
@@ -230,6 +232,7 @@ fn every_event() -> Vec<Event> {
         },
         Event::ScopesUpdated {
             scopes: json!([]),
+            skip_reasons: None,
             node_interface_bindings: json!({"leaf#1": []}),
             instances: json!([
                 {"id": "leaf#1", "step": "leaf", "take": [1], "key": null},
@@ -363,6 +366,7 @@ fn terminal_display_metadata_is_flattened_without_execution_values() {
             id: "dynamic['two']#1".into(),
             path: "dynamic['two']".into(),
             reason: Some("source failed".into()),
+            skip_reason: None,
             blocked: true,
             error: None,
             facts: None,
@@ -557,6 +561,38 @@ fn a_scope_snapshot_names_its_instances_and_pending_repeats_completely() {
     let mut untaken = leaf.clone();
     untaken["take"] = json!([]);
     assert!(!validator.is_valid(&snapshot(json!([untaken]), json!([]))));
+}
+
+#[test]
+fn structured_skip_causes_are_additive_display_metadata() {
+    use grida_fx_core::expand::skip::{SkipCode, SkipReason};
+    let reason = SkipReason::new(SkipCode::EarlierTakeAccepted, ["draw#2".into()]);
+    let snapshot = Event::ScopesUpdated {
+        scopes: json!([]),
+        node_interface_bindings: json!({}),
+        instances: json!([]),
+        pending: json!([]),
+        skip_reasons: Some(json!({"draw#3": reason.to_value()})),
+    };
+    assert_eq!(
+        snapshot.to_fields()["skip_reasons"]["draw#3"],
+        json!({"code":"earlier_take_accepted", "sources":["draw#2"]})
+    );
+    let skipped = Event::NodeSkipped {
+        id: "select#1".into(),
+        path: "select".into(),
+        reason: None,
+        skip_reason: Some(SkipReason::new(SkipCode::NoCandidate, [])),
+        blocked: false,
+        error: Some("no candidate exists".into()),
+        facts: Some(IndexMap::new()),
+        duration_ms: Some(0),
+        display: None,
+    };
+    assert_eq!(
+        skipped.to_fields()["skip_reason"],
+        json!({"code":"no_candidate", "sources":[]})
+    );
 }
 
 #[test]

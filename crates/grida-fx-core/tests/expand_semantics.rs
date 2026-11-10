@@ -1060,6 +1060,17 @@ fn conditions_and_select() {
     assert_eq!(first_of(&expansion), vec![Val::Missing, image("base#1")]);
     assert!(get(&expansion, "chosen#1").identity.is_some());
     assert_eq!(get(&expansion, "chosen#1").reads, set(&["base#1"]));
+    let skipped = expansion
+        .skipped_positions
+        .iter()
+        .find(|position| position.path == "fix")
+        .unwrap();
+    assert_eq!(
+        skipped.reason.to_value(),
+        json!({"code":"condition_false", "sources":["check#1"]})
+    );
+    assert!(skipped.contains("fix", &[1]));
+    assert!(!skipped.contains("chosen", &[1]));
 
     // A rejected base is read as missing by select, though on_reject is continue.
     judged(&mut project, "check#1", json!({"verdict": "reject"}));
@@ -1077,6 +1088,27 @@ fn conditions_and_select() {
     assert_eq!(state(&expansion, "fix#1").0, State::Failed);
     assert_eq!(state(&expansion, "chosen#1").0, State::Planned);
     assert!(get(&expansion, "chosen#1").identity.is_some());
+}
+
+#[test]
+fn an_invalid_runtime_condition_has_no_invented_false_condition_cause() {
+    let mut project = Project::new();
+    let workflow = CONDITIONS_SELECT.replace(
+        "steps.check.facts.verdict == 'reject'",
+        "steps.check.facts.verdict.missing",
+    );
+    assert_eq!(state(&project.expand(&workflow), "fix#1").0, State::Maybe);
+    drew(&mut project, "base#1");
+    judged(&mut project, "check#1", json!({"verdict": "accept"}));
+    let expansion = project.expand(&workflow);
+    assert!(!expansion.problems.is_empty());
+    assert!(!expansion.instances.contains_key("fix#1"));
+    assert!(
+        expansion
+            .skipped_positions
+            .iter()
+            .all(|position| position.path != "fix")
+    );
 }
 
 #[test]

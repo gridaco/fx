@@ -83,6 +83,9 @@ pub struct Node {
     pub outputs: Value,
     pub cache: Option<String>,
     pub error: Option<String>,
+    /// A recorded engine cause, kept separate from diagnostics and never inferred from status.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub skip_reason: Option<Value>,
     pub duration_ms: Option<u64>,
     /// When this instance last started, UTC RFC3339 milliseconds: its invocation's
     /// `started_at` plus the start's `offset_ms`. Omitted when the record cannot date it.
@@ -279,6 +282,36 @@ pub(crate) fn preview(value: Option<&Value>) -> Option<Value> {
     Some(result)
 }
 
+/// Project only the known structural skip vocabulary. Unknown future codes remain optional
+/// evidence; arbitrary diagnostic strings and payload members never become portable causes.
+pub(crate) fn skip_reason(value: Option<&Value>) -> Option<Value> {
+    let value = value?.as_object()?;
+    let code = value.get("code")?.as_str()?;
+    if !matches!(
+        code,
+        "condition_false"
+            | "earlier_take_accepted"
+            | "earlier_take_settled"
+            | "upstream_failed"
+            | "upstream_absent"
+            | "rejected"
+            | "assertion_skip"
+            | "no_candidate"
+    ) {
+        return None;
+    }
+    let sources = value.get("sources")?.as_array()?;
+    let mut seen = BTreeSet::new();
+    if sources.iter().any(|source| {
+        source
+            .as_str()
+            .is_none_or(|id| id.is_empty() || !seen.insert(id))
+    }) {
+        return None;
+    }
+    Some(json!({"code": code, "sources": sources}))
+}
+
 pub(crate) fn strings(value: Option<&Value>) -> Vec<String> {
     value
         .and_then(Value::as_array)
@@ -338,6 +371,7 @@ fn node(value: &Value, steps: &Map<String, Value>, types: &Map<String, Value>) -
         outputs: json!({}),
         cache: None,
         error: text(value, "reason").map(str::to_string),
+        skip_reason: None,
         duration_ms: None,
         started_at: None,
         waiting_for: None,
@@ -576,6 +610,7 @@ fn project_inventory(
     let mut state = "planned".to_string();
     let mut recorded_run_name = None;
     let mut saw_first_start = false;
+    let mut skip_reasons = BTreeMap::<String, Value>::new();
     let mut stand_in = plan.get("stand_in") == Some(&Value::Bool(true));
     let mut charged = None;
     let mut outputs = json!({});
@@ -609,6 +644,17 @@ fn project_inventory(
         }
         match text(event, "event") {
             Some("scopes_updated") => {
+                // A current display snapshot replaces earlier absent-instance causes. Older
+                // snapshots lacking the optional map cannot preserve a newer stale cause.
+                skip_reasons = event
+                    .get("skip_reasons")
+                    .and_then(Value::as_object)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|(id, reason)| {
+                        skip_reason(Some(reason)).map(|reason| (id.clone(), reason))
+                    })
+                    .collect();
                 scopes = Some(event.get("scopes").cloned().unwrap_or(Value::Null));
                 node_interfaces = Some(
                     event
@@ -636,7 +682,9 @@ fn project_inventory(
                 // A new invocation leaves every earlier wait behind (spec/store.md §8).
                 for current in &mut nodes {
                     current.end_waits();
+                    current.skip_reason = None;
                 }
+                skip_reasons.clear();
                 if !saw_first_start {
                     recorded_run_name = text(event, "name")
                         .filter(|name| super::service::safe_name(name))
@@ -687,6 +735,9 @@ fn project_inventory(
                 };
                 recorded.started.insert(id.to_string());
                 let current = &mut nodes[index];
+                // An actual node event supersedes display-only absent-instance evidence.
+                skip_reasons.remove(id);
+                current.skip_reason = None;
                 // A plan instance's own step and take stay; a node only the run knows takes
                 // them from its start.
                 if current.step.is_none() {
@@ -766,6 +817,9 @@ fn project_inventory(
                             .filter(|s| !s.is_empty())
                             .or_else(|| text(event, "reason"))
                             .map(str::to_string);
+                        if name == "node_skipped" {
+                            current.skip_reason = skip_reason(event.get("skip_reason"));
+                        }
                     }
                 }
                 if name != "node_started" {
@@ -816,6 +870,14 @@ fn project_inventory(
                 current.interrupted = true;
             } else if current.state == "pending" {
                 current.state = "skipped".into();
+            }
+            if current.state == "skipped" && current.skip_reason.is_none() {
+                current.skip_reason = skip_reasons.get(&current.id).cloned();
+                if current.skip_reason.is_some() && !recorded.started.contains(&current.id) {
+                    // Initial plan prose describes a possibility (for example, "only if the
+                    // previous take is rejected"), not the recorded final decision.
+                    current.error = None;
+                }
             }
         }
     }
@@ -870,6 +932,20 @@ fn project_inventory(
         &mut nodes,
         &mut warnings,
     );
+    let node_ids: BTreeSet<_> = nodes.iter().map(|node| node.id.clone()).collect();
+    for node in &mut nodes {
+        if node.state != "skipped"
+            || node.skip_reason.as_ref().is_some_and(|reason| {
+                reason["sources"].as_array().is_none_or(|sources| {
+                    sources
+                        .iter()
+                        .any(|source| source.as_str().is_none_or(|id| !node_ids.contains(id)))
+                })
+            })
+        {
+            node.skip_reason = None;
+        }
+    }
     let scopes = recorded.scopes.clone().map(|mut scopes| {
         super::scopes::retain_nodes(&mut scopes, &nodes);
         scopes

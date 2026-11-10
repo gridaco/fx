@@ -1,6 +1,7 @@
 import { isNodePorts, isPortBindings, type NodePorts, type PortBinding } from "./ports";
 import { isInterfaceBindings, isWorkflowScopes, type InterfaceBinding, type WorkflowScope } from "./scopes";
 import { validateViewerApiBase } from "./route";
+import { isSkipReason, type SkipReason } from "./skip";
 
 export interface Artifact {
   digest: string;
@@ -28,6 +29,8 @@ export interface RunNode {
   outputs: Record<string, unknown>;
   cache: string | null;
   error: string | null;
+  /** Structured engine-recorded cause; absent on older or unexplained skips. */
+  skip_reason?: SkipReason;
   duration_ms: number | null;
   /** When this instance last started, UTC; absent when the record cannot date it. */
   started_at?: string;
@@ -99,12 +102,14 @@ function node(value: unknown): value is RunNode {
     && [value.id, value.path, value.title, value.state].every((item) => typeof item === "string")
     && nullableString(value.uses)
     && (value.step === undefined || typeof value.step === "string")
+    && (value.take === undefined || Array.isArray(value.take) && value.take.length > 0 && value.take.every((take) => Number.isSafeInteger(take) && take >= 1))
     && (value.interrupted === undefined || typeof value.interrupted === "boolean")
     && strings(value.reads)
     && record(value.with)
     && record(value.outputs)
     && nullableString(value.cache)
     && nullableString(value.error)
+    && (value.skip_reason === undefined || value.state === "skipped" && isSkipReason(value.skip_reason))
     && nullableNumber(value.duration_ms)
     && (value.started_at === undefined || utcTimestamp(value.started_at))
     && (value.waiting_for === undefined || typeof value.waiting_for === "string")
@@ -195,3 +200,4 @@ export * from "./export";
 export * from "./export-controller";
 export * from "./values";
 export * from "./outputs";
+export * from "./skip";

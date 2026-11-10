@@ -141,6 +141,8 @@ pub(crate) struct Trial {
     reads: Option<BTreeSet<String>>,
     wiring: super::wiring::Trace,
     display_scopes: IndexMap<String, super::display::Scope>,
+    skip_reasons: std::collections::BTreeMap<String, super::skip::SkipReason>,
+    skipped_positions: usize,
     /// How long the lists it only appends to were.
     pending: usize,
     problems: usize,
@@ -529,6 +531,8 @@ impl Expander<'_> {
             reads: self.read_sets.last().cloned(),
             wiring: self.wiring.clone(),
             display_scopes: self.display_scopes.clone(),
+            skip_reasons: self.skip_reasons.clone(),
+            skipped_positions: self.skipped_positions.len(),
             pending: self.pending.len(),
             problems: self.problems.len(),
             scopes: self.scopes.len(),
@@ -559,6 +563,8 @@ impl Expander<'_> {
         self.held = trial.held;
         self.wiring = trial.wiring;
         self.display_scopes = trial.display_scopes;
+        self.skip_reasons = trial.skip_reasons;
+        self.skipped_positions.truncate(trial.skipped_positions);
         if let (Some(reads), Some(innermost)) = (trial.reads, self.read_sets.last_mut()) {
             *innermost = reads;
         }
@@ -676,6 +682,56 @@ impl Expander<'_> {
             prices
         };
         let context = self.frame(frame);
+        let skip_reason = match state {
+            State::Blocked => Some(super::skip::SkipReason::new(
+                super::skip::SkipCode::UpstreamFailed,
+                reads
+                    .iter()
+                    .filter(|source| {
+                        self.env
+                            .results
+                            .get(*source)
+                            .is_some_and(|result| result.status == ResultStatus::Failed)
+                            || self.instances.get(*source).is_some_and(|instance| {
+                                matches!(instance.state, State::Failed | State::Blocked)
+                            })
+                    })
+                    .cloned(),
+            )),
+            State::Absent => {
+                let rejected: Vec<_> = bindings
+                    .iter()
+                    .filter(|binding| {
+                        spec.inputs
+                            .get(&binding.target_port)
+                            .zip(with.get(&binding.target_port))
+                            .is_some_and(|(port, value)| missing_input_value(port, value))
+                            && self.verdict(&binding.source) == Some(crate::val::Verdict::Reject)
+                            && self.rejection_policy(&binding.source) == super::judge::Policy::Skip
+                    })
+                    .map(|binding| binding.source.clone())
+                    .collect();
+                Some(if rejected.is_empty() {
+                    super::skip::SkipReason::new(
+                        super::skip::SkipCode::UpstreamAbsent,
+                        reads
+                            .iter()
+                            .filter(|source| {
+                                self.instances
+                                    .get(*source)
+                                    .is_some_and(|instance| instance.state == State::Absent)
+                                    || self.env.results.get(*source).is_some_and(|result| {
+                                        result.status == ResultStatus::Skipped
+                                    })
+                            })
+                            .cloned(),
+                    )
+                } else {
+                    super::skip::SkipReason::new(super::skip::SkipCode::Rejected, rejected)
+                })
+            }
+            _ => None,
+        };
         let instance = Instance {
             id: id.clone(),
             path: path.to_string(),
@@ -708,6 +764,20 @@ impl Expander<'_> {
             display_scope: context.display_scope.clone(),
         };
         self.instances.insert(id.clone(), instance);
+        if let Some(reason) = skip_reason {
+            self.skip_reasons.insert(id.clone(), reason);
+        } else if resolved.is_select()
+            && self
+                .env
+                .results
+                .get(&id)
+                .is_some_and(|result| result.status == ResultStatus::Skipped)
+        {
+            self.skip_reasons.insert(
+                id.clone(),
+                super::skip::SkipReason::new(super::skip::SkipCode::NoCandidate, []),
+            );
+        }
         if !declared.asserts.is_empty() && matches!(state, State::Planned | State::Done) {
             self.assertions(&declared.asserts, frame, where_, Some(&id));
         }
@@ -1041,16 +1111,21 @@ pub fn missing_required(spec: &NodeSpec, with: &IndexMap<String, Val>) -> bool {
             // A required input left out of `with:` is a problem already.
             return false;
         };
-        if !port.optional && value.is_nothing() {
-            return true;
-        }
-        // Every item written into a list or map is asked for; a collection is not checked.
-        match value {
-            Val::List(items) => items.iter().any(Val::is_nothing),
-            Val::Object(entries) => entries.values().any(Val::is_nothing),
-            _ => false,
-        }
+        missing_input_value(port, value)
     })
+}
+
+/// The same missing-input predicate used for scheduling and causal attribution.
+fn missing_input_value(port: &Port, value: &Val) -> bool {
+    if !port.optional && value.is_nothing() {
+        return true;
+    }
+    // Every item written into a list or map is asked for; a collection is not checked.
+    match value {
+        Val::List(items) => items.iter().any(Val::is_nothing),
+        Val::Object(entries) => entries.values().any(Val::is_nothing),
+        _ => false,
+    }
 }
 
 #[cfg(test)]
@@ -1066,6 +1141,82 @@ mod tests {
             .iter()
             .map(|(n, v)| (n.to_string(), v.clone()))
             .collect()
+    }
+
+    #[test]
+    fn rejected_optional_input_does_not_explain_an_unrelated_missing_required_input() {
+        use crate::expand::judge::tests::{drawing, instance, succeeded, verdict_type};
+        for target in ["extra", "image"] {
+            let declared = step("./nodes/cases.py#paint");
+            let mut fixture = Fixture::new(&[("paint", declared.clone())]);
+            fixture
+                .results
+                .insert("draw#1".into(), succeeded(json!({})));
+            fixture
+                .results
+                .insert("check#1".into(), succeeded(json!({"verdict":"reject"})));
+            let mut ex = fixture.expander();
+            let mut draw = instance("draw#1", &drawing(), State::Done);
+            draw.judged_by.push("check#1".into());
+            let mut check = instance("check#1", &verdict_type(), State::Done);
+            check.judge_policy = Some(OnReject::Skip);
+            ex.instances.insert(draw.id.clone(), draw);
+            ex.instances.insert(check.id.clone(), check);
+            let ty = project_type(
+                "./nodes/cases.py#paint",
+                spec(
+                    "paint",
+                    &[
+                        ("image", port("image", Shape::One, false)),
+                        ("extra", port("image", Shape::One, true)),
+                    ],
+                    &[],
+                    &[],
+                    false,
+                ),
+            );
+            let position = Position {
+                frame: ROOT,
+                name: "paint".into(),
+                declared: Rc::new(declared),
+                where_: "paint".into(),
+                key: None,
+                variables: IndexMap::new(),
+                suffix: String::new(),
+                concurrency_group: None,
+            };
+            let context = ex.derive(
+                ROOT,
+                FrameChanges {
+                    takes: Some(vec![1]),
+                    ..Default::default()
+                },
+            );
+            let gathered = Gathered {
+                with: WithValues {
+                    values: values(&[("image", Val::Missing), ("extra", Val::Missing)]),
+                    reads: BTreeSet::from(["draw#1".into()]),
+                    bindings: BTreeSet::from([super::super::wiring::Binding {
+                        source: "draw#1".into(),
+                        source_port: "image".into(),
+                        target_port: target.into(),
+                        source_kind: super::super::wiring::SourceKind::Output,
+                    }]),
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            ex.make_instance(&position, context, "paint", &ty, "paint#1".into(), gathered);
+            assert_eq!(ex.instances["paint#1"].state, State::Absent);
+            assert_eq!(
+                ex.skip_reasons["paint#1"].code,
+                if target == "image" {
+                    crate::expand::skip::SkipCode::Rejected
+                } else {
+                    crate::expand::skip::SkipCode::UpstreamAbsent
+                }
+            );
+        }
     }
 
     #[test]

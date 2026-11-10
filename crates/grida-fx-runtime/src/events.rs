@@ -77,6 +77,8 @@ pub enum Event {
         node_interface_bindings: Value,
         instances: Value,
         pending: Value,
+        /// A complete display snapshot for known omitted instances; never replayed.
+        skip_reasons: Option<Value>,
     },
     RunStarted {
         workflow: String,
@@ -145,6 +147,7 @@ pub enum Event {
         id: String,
         path: String,
         reason: Option<String>,
+        skip_reason: Option<grida_fx_core::expand::skip::SkipReason>,
         blocked: bool,
         error: Option<String>,
         facts: Option<IndexMap<String, Value>>,
@@ -284,11 +287,15 @@ impl Event {
                 node_interface_bindings,
                 instances,
                 pending,
+                skip_reasons,
             } => {
                 fields.put("scopes", scopes.clone());
                 fields.put("node_interface_bindings", node_interface_bindings.clone());
                 fields.put("instances", instances.clone());
                 fields.put("pending", pending.clone());
+                if let Some(reasons) = skip_reasons {
+                    fields.put("skip_reasons", reasons.clone());
+                }
             }
             Event::RunStarted {
                 workflow,
@@ -422,6 +429,7 @@ impl Event {
                 id,
                 path,
                 reason,
+                skip_reason,
                 blocked,
                 error,
                 facts,
@@ -432,6 +440,9 @@ impl Event {
                 fields.text("path", path);
                 if let Some(reason) = reason {
                     fields.text("reason", reason);
+                }
+                if let Some(reason) = skip_reason {
+                    fields.put("skip_reason", reason.to_value());
                 }
                 if *blocked {
                     fields.put("blocked", Value::Bool(true));

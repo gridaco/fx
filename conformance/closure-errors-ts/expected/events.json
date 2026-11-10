@@ -106,6 +106,7 @@
    {
     "id": "lazy#1",
     "key": null,
+    "path": "lazy",
     "step": "lazy",
     "take": [
      1
@@ -118,6 +119,7 @@
   },
   "pending": [],
   "plan": "0308245324d6d08e60e695bef354fc906087f1a9654fa87a9416a607beb46533",
-  "scopes": []
+  "scopes": [],
+  "skip_reasons": {}
  }
 ]

@@ -536,3 +536,6 @@ fn failure(status: StatusCode, message: &str) -> Response {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod skip_reasons_tests;

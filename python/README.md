@@ -139,6 +139,11 @@ wire field names. `record.follow(after=cursor, poll_interval=1.0)` is an async
 generator of nonempty batches, continuing through completion and later resumes
 until broken or cancelled. Observation cancellation never cancels execution.
 
+Recorded skip causes remain structured evidence in these documents:
+`scopes_updated.skip_reasons` and `node_skipped.skip_reason` carry engine cause codes
+and related instance IDs. No authored reason text is required. See the
+[skip-reason contract](../spec/skip-reasons.md); older records may have no cause.
+
 Reader failures raise `RunObservationError` with `code` and `document`; malformed
 responses raise `FxError`. Snapshot and inspection are separate samples. See
 [Working with runs from an SDK](../docs/guide/09-sdk-runs.md) for cursor-safe

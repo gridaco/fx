@@ -444,6 +444,7 @@
    {
     "id": "survey#1",
     "key": null,
+    "path": "survey",
     "step": "survey",
     "take": [
      1
@@ -452,6 +453,7 @@
    {
     "id": "garbled#1",
     "key": null,
+    "path": "garbled",
     "step": "garbled",
     "take": [
      1
@@ -460,6 +462,7 @@
    {
     "id": "estimate#1",
     "key": null,
+    "path": "estimate",
     "step": "estimate",
     "take": [
      1
@@ -468,6 +471,7 @@
    {
     "id": "wrong#1",
     "key": null,
+    "path": "wrong",
     "step": "wrong",
     "take": [
      1
@@ -483,6 +487,7 @@
   },
   "pending": [],
   "plan": "6e1394c68eabfda4e81c2af1fbe6c39078229ea616b30550c45fdbcc7c20f568",
-  "scopes": []
+  "scopes": [],
+  "skip_reasons": {}
  }
 ]

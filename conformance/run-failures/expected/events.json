@@ -187,6 +187,12 @@
    "nope#1"
   ],
   "reason": "something it reads failed",
+  "skip_reason": {
+   "code": "upstream_failed",
+   "sources": [
+    "nope#1"
+   ]
+  },
   "uses": "./nodes/fails.py#make"
  },
  {
@@ -273,6 +279,7 @@
    {
     "id": "ok#1",
     "key": null,
+    "path": "ok",
     "step": "ok",
     "take": [
      1
@@ -281,6 +288,7 @@
    {
     "id": "nope#1",
     "key": null,
+    "path": "nope",
     "step": "nope",
     "take": [
      1
@@ -289,6 +297,7 @@
    {
     "id": "after#1",
     "key": null,
+    "path": "after",
     "step": "after",
     "take": [
      1
@@ -297,6 +306,7 @@
    {
     "id": "bang#1",
     "key": null,
+    "path": "bang",
     "step": "bang",
     "take": [
      1
@@ -319,6 +329,132 @@
   },
   "pending": [],
   "plan": "ad4d01a93d3cbab99482d48cd9d78c88148cb27f3bc5e1935f769193f47baf1b",
-  "scopes": []
+  "scopes": [],
+  "skip_reasons": {
+   "after#1": {
+    "code": "upstream_failed",
+    "sources": [
+     "nope#1"
+    ]
+   }
+  }
+ },
+ {
+  "event": "scopes_updated",
+  "instances": [
+   {
+    "id": "ok#1",
+    "key": null,
+    "path": "ok",
+    "step": "ok",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "nope#1",
+    "key": null,
+    "path": "nope",
+    "step": "nope",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "after#1",
+    "key": null,
+    "path": "after",
+    "step": "after",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "bang#1",
+    "key": null,
+    "path": "bang",
+    "step": "bang",
+    "take": [
+     1
+    ]
+   }
+  ],
+  "kind": "fx-run-events-v1",
+  "node_interface_bindings": {
+   "after#1": [
+    {
+     "source": "nope#1",
+     "source_kind": "output",
+     "source_port": "text",
+     "target_port": "text"
+    }
+   ],
+   "bang#1": [],
+   "nope#1": [],
+   "ok#1": []
+  },
+  "pending": [],
+  "plan": "ad4d01a93d3cbab99482d48cd9d78c88148cb27f3bc5e1935f769193f47baf1b",
+  "scopes": [],
+  "skip_reasons": {}
+ },
+ {
+  "event": "scopes_updated",
+  "instances": [
+   {
+    "id": "ok#1",
+    "key": null,
+    "path": "ok",
+    "step": "ok",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "nope#1",
+    "key": null,
+    "path": "nope",
+    "step": "nope",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "after#1",
+    "key": null,
+    "path": "after",
+    "step": "after",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "bang#1",
+    "key": null,
+    "path": "bang",
+    "step": "bang",
+    "take": [
+     1
+    ]
+   }
+  ],
+  "kind": "fx-run-events-v1",
+  "node_interface_bindings": {
+   "after#1": [
+    {
+     "source": "nope#1",
+     "source_kind": "output",
+     "source_port": "text",
+     "target_port": "text"
+    }
+   ],
+   "bang#1": [],
+   "nope#1": [],
+   "ok#1": []
+  },
+  "pending": [],
+  "plan": "ad4d01a93d3cbab99482d48cd9d78c88148cb27f3bc5e1935f769193f47baf1b",
+  "scopes": [],
+  "skip_reasons": {}
  }
 ]

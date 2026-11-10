@@ -533,6 +533,26 @@ def validate_scenarios(
         takes.outputs["image"].digest == rendered["render#2"] != rendered["render#1"],
         "downstream did not receive the second, accepted take",
     )
+    causes = next(
+        event.get("skip_reasons", {})
+        for event in reversed(takes.events)
+        if event.get("event") == "scopes_updated"
+    )
+    accepted = {"code": "earlier_take_accepted", "sources": ["render#2"]}
+    expect(
+        causes.get("render#3") == accepted and causes.get("review#3") == accepted,
+        "unused takes did not record their accepted predecessor",
+    )
+    for result, skipped in [(cold, "skipped#1"), (alternative, "selected#1")]:
+        causes = next(
+            event.get("skip_reasons", {})
+            for event in reversed(result.events)
+            if event.get("event") == "scopes_updated"
+        )
+        expect(
+            causes.get(skipped) == {"code": "condition_false", "sources": ["metrics#1"]},
+            "the runtime-false branch did not record its causal condition read",
+        )
 
 
 def main() -> int:

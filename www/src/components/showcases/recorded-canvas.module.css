@@ -24,6 +24,10 @@
 .inspectorBody pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 11px/1.7 var(--font-mono); }
 .inspectorBody img { display: block; max-height: 230px; max-width: 100%; border: 1px solid var(--color-border); border-radius: 5px; background: repeating-conic-gradient(#f4f4f5 0% 25%, white 0% 50%) 50% / 16px 16px; object-fit: contain; }
 .inspectorBody a { display: inline-block; margin-top: 6px; text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
+.inspectorBody button[data-skip-source] { display: block; margin-top: 8px; cursor: pointer; text-align: left; text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
+.inspectorBody button[data-skip-source]:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 2px; }
+.inspectorBody details { margin-top: 12px; }
+.inspectorBody summary { cursor: pointer; color: var(--color-muted-foreground); }
 .message { min-height: 180px; padding: 64px 24px; border: 1px solid var(--color-border); border-radius: 10px; color: var(--color-muted-foreground); font-size: 13px; line-height: 1.7; }
 .message[role="alert"] { color: #991b1b; }
 .disclosure { margin-top: 12px; color: var(--color-muted-foreground); font-size: 11px; line-height: 1.7; }

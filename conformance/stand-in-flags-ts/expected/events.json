@@ -167,6 +167,7 @@
    {
     "id": "draw#1",
     "key": null,
+    "path": "draw",
     "step": "draw",
     "take": [
      1
@@ -179,6 +180,7 @@
   },
   "pending": [],
   "plan": "8a6e2c7c49ddb08fe7d8f78b84456d3ba8b3862f6a558fbfe8044495270fa7cd",
-  "scopes": []
+  "scopes": [],
+  "skip_reasons": {}
  }
 ]

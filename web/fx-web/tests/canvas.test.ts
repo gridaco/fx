@@ -221,7 +221,7 @@ test("a waiting member rests in front after a running one, and the badge counts 
   const members = [take("a", null, 1, "waiting"), take("b", null, 2, "succeeded"), take("c", null, 3, "waiting")];
   expect(restingFront(members, null)).toBe(0);
   expect(restingFront([...members, take("d", null, 4, "running")], null)).toBe(3);
-  expect(deckBadge([...members, take("d", null, 4, "skipped")]).detail).toEqual(["2 waiting", "1 not run"]);
+  expect(deckBadge([...members, take("d", null, 4, "skipped")]).detail).toEqual(["2 waiting", "1 skipped"]);
 });
 
 test("a running card counts its work, less its waits; a waiting card names its route and counts its wait", () => {

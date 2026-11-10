@@ -201,13 +201,20 @@ reader tests own malformed records, traversal, corrupted bytes and torn tails.
 
 Known viewer limits exposed by the suite:
 
+- The takes run supplies a rejected first candidate, an accepted and consumed second
+  candidate, and an unused third take. Representative selection uses confirmed runtime
+  reads, excluding a judge's examination of its subject. Complete node draw/review
+  mappings share inspection and hover; generalized frame/workflow pairing remains deferred.
+  A representative is not labelled chosen solely because it was read, since consumers
+  such as `fx/select` can inspect several candidates.
 - Old records without port/binding metadata retain ordinary dependency edges.
   Unresolved references and repeat items with ambiguous provenance also retain
   dependency edges until exact evidence exists. The viewer never reconstructs
   port names from filenames, equal content or authored expressions.
 - Planning-time false conditions are omitted. A pending repeat has no recorded
-  dependency wiring. Runtime-false branches have no skip event; the run reader
-  derives their final skipped presentation from the unresolved initial instances.
+  dependency wiring. Runtime-false branches need no dispatched skip event; current
+  engines record their structured cause in the display snapshot, and the run reader
+  attaches it to retained initial instances. Older records may have no final cause.
 - Judge verdicts live in facts/reports, separate from successful node execution.
   A rejected valid candidate is not a failed body. Detailed judge/history and
   incomplete-run presentation still need dedicated viewer work.

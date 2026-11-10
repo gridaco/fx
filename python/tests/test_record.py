@@ -89,6 +89,26 @@ def test_verify_failure_is_retained_inspection_evidence(fake: Fake, tmp_path: Pa
         fx.load_run("case", cwd=tmp_path)
 
 
+def test_skip_causes_remain_available_as_structured_observation_evidence(
+    fake: Fake, tmp_path: Path
+) -> None:
+    record = fx.load_run("case", cwd=tmp_path)
+    reason = {"code": "earlier_take_accepted", "sources": ["draw#2"]}
+    expected = batch(
+        events=[
+            {**event("scopes_updated"), "skip_reasons": {"draw#3": reason}},
+            {
+                **event("node_skipped"),
+                "id": "select#1",
+                "path": "select",
+                "skip_reason": {"code": "no_candidate", "sources": []},
+            },
+        ]
+    )
+    fake.reply(observe={"stdout": json.dumps(expected)})
+    assert record.events() == expected
+
+
 def test_direct_run_record_construction_pins_a_relative_folder(
     fake: Fake, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

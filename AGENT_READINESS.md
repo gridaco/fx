@@ -348,6 +348,41 @@ loader tests, and local browser verification of synthesized supported and unsupp
 Native video detection uses the same recorded outputs for Python and JavaScript workflows,
 without new SDK operations.
 
+Skipped canvas cards with reserved preview space and no preview candidate show `Skipped` and
+their recorded explanation, or `Reason not recorded.` when causal evidence is absent. This
+describes recorded state without inferring a reason, execution history or missing outputs. Actual previews,
+card geometry and deck ordering are unchanged. Browser verification uses the saved provider-free
+takes run; this is shared viewer presentation for CLI, Python and JavaScript records.
+
+For AR-04, AR-17 and AR-19, the [representative-front decision](docs/wg/deck-front-selection.md)
+is ratified and implemented in source (2026-11-11): a collapsed deck chooses a representative for inspection while
+canonical member order, expanded access and execution choices stay unchanged. Explicit
+inspection overrides defaults. The existing layout priorities remain the baseline. Confirmed
+reads require positive execution evidence and matching recorded reads; planned or stale
+bindings and a judge examining its own subject do not establish consumption. A read may
+inspect one of several candidates, so the representative is not labelled chosen or accepted.
+Complete explicit judge correspondences link node draw/review decks in the same frame;
+inspection and hover raise matching partners. Frame/workflow pairing and changes to relative
+priorities remain deferred. Badges say `1 skipped`, since `skipped` does not prove nonexecution.
+Evidence: `web/fx-web/tests/consumption.test.ts`, `deck-selection.test.ts` and scope-projection
+tests cover an accepted second take with an unused third, earlier consumed alternatives,
+explicit skipped inspection, legacy evidence, canonical order and conservative pairing.
+No new CLI or SDK operation is introduced; Python and JavaScript records share the viewer.
+
+For AR-04, AR-11 and AR-19, [recorded skip reasons](spec/skip-reasons.md) preserve
+engine control-flow causes as codes and related instance IDs, independently of presentation
+wording. The viewer can explain why an extra take was unnecessary, a condition was false,
+or an upstream result was unavailable without author-written reason text or a model call.
+Missing legacy evidence stays explicitly unavailable; status and graph wiring are not used
+to invent a cause. The cause changes no execution choice or identity. Python and JavaScript
+`RunRecord` observation methods retain the same structured fields in raw wire documents;
+their record tests cover preservation without a new SDK operation or duplicated engine logic.
+Provider-free browser acceptance uses fresh local copies of the original pet and looping-parallax
+workflows with synthetic stand-ins and a zero-dollar cap. Pet's unused takes identify the accepted
+earlier take; parallax's unused repaint identifies an unmet condition. Related-step navigation
+opens the recorded source instance in both. Default portable exports of these runs retain their
+causes and pass the static browser reader. Published showcase recordings and CDN pins are unchanged.
+
 Workflow node steps can explicitly select `preview: {video: video, poster: poster}` using own
 scalar output port names; the poster is optional. The engine validates declared video/image
 families and records selection on each instance, including dynamic repeats and cached takes.
