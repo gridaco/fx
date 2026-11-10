@@ -302,8 +302,8 @@ A route is `model@provider`. Pick one per capability in `fx.yaml` `routes:`, or 
   Downloads carry no provider key, follow no redirects, remain size- and time-bounded, and their
   bytes must pass the adapter's output checks. Signed URLs never reach portable records or logs.
   A job already failed and settled by an older FX is not automatically recovered by upgrading;
-  running again can submit new paid work. [Recovery from retained tasks](https://github.com/gridaco/fx/issues/116)
-  and [fal synchronous delivery retries](https://github.com/gridaco/fx/issues/117) remain follow-ups.
+  running again can submit new paid work. Recovery from retained tasks (gridaco/fx#116) and
+  fal synchronous delivery retries (gridaco/fx#117) remain follow-ups.
 - **A provider FX does not ship**, a *community provider*, is declared under `providers:` in
   `fx.yaml` ([Community providers](https://github.com/gridaco/fx/blob/main/docs/guide/15-community-providers.md)
   is the whole job, end to end): the variable its key comes from (sent as
