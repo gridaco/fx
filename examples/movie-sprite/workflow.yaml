@@ -128,6 +128,7 @@ steps:
     with:
       video: ${{ steps.take.outputs.video || inputs.footage }}
       settings: ${{ inputs.trim }}
+    preview: { video: video, poster: poster }
     view: true
 
   finish:

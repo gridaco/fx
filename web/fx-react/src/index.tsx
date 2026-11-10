@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
-import { ArtifactController, canPreviewText, jsonShape, jsonSize, parseJson, plainJson, stateIcon, stateIconParts, type Artifact } from "@grida/fx-web";
+import { ArtifactController, artifactDownloadName, canPreviewText, jsonShape, jsonSize, parseJson, plainJson, stateIcon, stateIconParts, type Artifact, type CanvasPreview } from "@grida/fx-web";
 export { WorkflowCanvas, type WorkflowCanvasHandle } from "./canvas";
 
 export function money(value: number | null): string {
@@ -47,20 +47,30 @@ const imageKinds = ["image/png", "image/jpeg", "image/webp", "image/gif", "image
 const jsonKinds = ["json", "application/json", "annotations"];
 
 /** The file itself: a picture, a player or its text. Clicking a picture opens the file. */
-export function ArtifactPreview({ artifact }: { artifact: Artifact }) {
+export function ArtifactPreview({ artifact, poster }: { artifact: Artifact; poster?: Artifact }) {
   const controller = useMemo(() => new ArtifactController(), []);
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   useEffect(() => { void controller.load(artifact); return () => controller.dispose(); }, [controller, artifact]);
   const name = artifact.name || artifact.digest.slice(0, 12);
-  if (!artifact.available || artifact.url === null) return <p className="fx-value-note">{name} · file unavailable</p>;
+  const posterImage = artifact.kind.startsWith("video/") && poster?.available && poster.url !== null && imageKinds.includes(poster.kind) ? poster : undefined;
+  if (!artifact.available || artifact.url === null) return <div className="fx-value-stack">
+    {posterImage && <ArtifactPreview artifact={posterImage} />}
+    <p className="fx-value-note">{name} · file unavailable</p>
+  </div>;
   const url = artifact.url;
   const open = <a className="fx-value-note hover:text-zinc-800" href={url} target="_blank" rel="noopener noreferrer">{name} ↗</a>;
+  if (artifact.kind.startsWith("video/")) return <div className="fx-value-stack">
+    {state.error
+      ? <>{posterImage && <ArtifactPreview artifact={posterImage} />}<p className="fx-value-note">{posterImage ? "Browser playback unavailable." : "Browser preview unavailable."} Download the original to try it in another video player.</p></>
+      : <video className="max-h-64 w-full rounded" controls preload="metadata" src={url} poster={posterImage?.url ?? undefined} onError={controller.fail} />}
+    <p className="fx-value-note">{name} · {artifact.kind}</p>
+    <a className="fx-value-note hover:text-zinc-800" href={url} download={artifactDownloadName(artifact)}>Download original video</a>
+  </div>;
   if (state.error) return open;
   if (imageKinds.includes(artifact.kind)) return <a href={url} target="_blank" rel="noopener noreferrer" title={`${name} · open in a new tab`} className="preview-grid block rounded border border-zinc-200 p-2">
     <img className="mx-auto max-h-64 max-w-full object-contain" src={url} alt={name} loading="lazy" onError={controller.fail} />
   </a>;
   if (artifact.kind.startsWith("audio/")) return <audio className="w-full" controls preload="metadata" src={url} onError={controller.fail} />;
-  if (artifact.kind.startsWith("video/")) return <video className="max-h-64 w-full rounded" controls preload="metadata" src={url} onError={controller.fail} />;
   if (canPreviewText(artifact)) {
     // A JSON file reads as its value does: rows, one line, or folded.
     const json = jsonKinds.includes(artifact.kind) && state.text !== null ? parseJson(state.text) : undefined;
@@ -77,12 +87,14 @@ function image(value: unknown, artifacts: Map<string, Artifact>) {
 }
 
 /** A recorded value in its plain form: text, a file, or a list or collection of them. */
-export function Value({ value, artifacts }: { value: unknown; artifacts: Map<string, Artifact> }) {
+export function Value({ value, artifacts, videoPreview }: { value: unknown; artifacts: Map<string, Artifact>; videoPreview?: CanvasPreview }) {
   if (!record(value)) return <Json value={plainJson(value) ?? value} />;
   if ("value" in value && Object.keys(value).length === 1) return <Json value={value.value} />;
   if (record(value.file) && typeof value.file.digest === "string") {
     const artifact = artifacts.get(value.file.digest);
-    return artifact ? <ArtifactPreview artifact={artifact} /> : <p className="fx-value-note">File not in this run folder</p>;
+    const poster = videoPreview?.kind === "video" && videoPreview.digest === artifact?.digest && videoPreview.poster
+      ? artifacts.get(videoPreview.poster.digest) : undefined;
+    return artifact ? <ArtifactPreview artifact={artifact} poster={poster} /> : <p className="fx-value-note">File not in this run folder</p>;
   }
   if (typeof value.file === "string" && /^[a-f0-9]{64}$/.test(value.file)) return <p className="fx-value-note" title={value.file}>file {value.file.slice(0, 12)}</p>;
   const json = plainJson(value);
@@ -122,6 +134,6 @@ export function Json({ value }: { value: unknown }) {
 }
 
 /** Named values as label/value rows. */
-export function Values({ values, artifacts }: { values: Record<string, unknown>; artifacts: Map<string, Artifact> }) {
-  return <dl className="fx-values">{Object.entries(values).map(([name, value]) => <div key={name}><dt>{name}</dt><dd><Value value={value} artifacts={artifacts} /></dd></div>)}</dl>;
+export function Values({ values, artifacts, videoPreview }: { values: Record<string, unknown>; artifacts: Map<string, Artifact>; videoPreview?: CanvasPreview }) {
+  return <dl className="fx-values">{Object.entries(values).map(([name, value]) => <div key={name}><dt>{name}</dt><dd><Value value={value} artifacts={artifacts} videoPreview={videoPreview} /></dd></div>)}</dl>;
 }

@@ -55,11 +55,21 @@
 .fx-canvas-play:hover circle, .fx-canvas-play:focus-visible circle { fill: #18181b; }
 .fx-canvas-play:focus-visible circle { stroke: #2563eb; stroke-width: 2px; }
 .fx-canvas-play svg { color: #fff; pointer-events: none; }
+.fx-canvas-video-retry-glyph, .fx-canvas-video-retry-label, .fx-canvas-video-disabled-icon { display: none; }
+.fx-canvas-video-retry-label { fill: #52525b; font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.fx-canvas-video.is-retry .fx-canvas-video-play-glyph { display: none; }
+.fx-canvas-video.is-retry .fx-canvas-video-retry-glyph, .fx-canvas-video.is-retry .fx-canvas-video-retry-label { display: block; }
+.fx-canvas-video.is-unavailable .fx-canvas-video-disabled-icon { display: block; color: #71717a; pointer-events: none; }
 .fx-canvas-video.is-unavailable .fx-canvas-play { display: none; }
+.fx-canvas-video-poster { visibility: hidden; }
+.fx-canvas-video.has-poster .fx-canvas-video-poster { visibility: visible; }
+.fx-canvas-video.has-poster .fx-canvas-video-still { visibility: hidden; }
+.fx-canvas-video.has-poster .fx-canvas-image-error { paint-order: stroke; stroke: #fff; stroke-width: 3px; stroke-linejoin: round; }
 /* The video fades in over the first frame and play control, which hide once it has; they show again at once as it fades out. */
 .fx-canvas-video .fx-canvas-node-image, .fx-canvas-video .fx-canvas-play { transition: visibility 0s; }
 .fx-canvas-video.is-shown .fx-canvas-node-image, .fx-canvas-video.is-shown .fx-canvas-play { visibility: hidden; transition-delay: .15s; }
-.fx-canvas-video.is-unavailable .fx-canvas-image-error { visibility: visible; }
+.fx-canvas-video.is-unavailable .fx-canvas-image-error, .fx-canvas-video.is-preview-unavailable .fx-canvas-image-error { visibility: visible; }
+.fx-canvas-video.is-shown .fx-canvas-image-error { visibility: hidden; }
 .fx-canvas-player { position: absolute; box-sizing: border-box; overflow: hidden; border-radius: 6px; outline: none; container-type: inline-size; font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; transition: opacity .15s ease; }
 .fx-canvas-player:focus-visible { box-shadow: 0 0 0 2px #2563eb; }
 /* Until the video shows its frame the card's first frame shows through, and takes the pointer. */

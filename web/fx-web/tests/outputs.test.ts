@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { unzipSync } from "fflate";
-import { OutputArchiveController, outputArchive, outputFiles, placedName, type OutputFile } from "../src/index";
+import { artifactDownloadName, OutputArchiveController, outputArchive, outputFiles, placedName, type OutputFile } from "../src/index";
 
 const bytes = (text: string) => new TextEncoder().encode(text);
 const hash = (data: Uint8Array) => new Bun.CryptoHasher("sha256").update(data).digest("hex");
@@ -12,6 +12,14 @@ function file(text: string, kind = "image/png", key?: string) {
   return { file: { digest: hash(data), kind, name: "ignored.bin", size: data.length, ...(key ? { key } : {}) } };
 }
 const locate = (digest: string) => `https://assets.example.com/artifacts/${digest}`;
+
+test("original artifact downloads keep a useful suffix without folders or duplicate extensions", () => {
+  const video = { name: "trim/video", kind: "video/x-matroska", digest: "a".repeat(64) };
+  expect(artifactDownloadName(video)).toBe("trim_video.mkv");
+  expect(artifactDownloadName({ ...video, name: "clip.MKV" })).toBe("clip.MKV");
+  expect(artifactDownloadName({ ...video, name: "" })).toBe("aaaaaaaaaaaa.mkv");
+  expect(artifactDownloadName({ ...video, name: "custom.clip", kind: "video/x-acme" })).toBe("custom.clip");
+});
 const fetcher = (async (url: string) => {
   const data = contents.get(url.split("/").pop()!);
   return data ? new Response(data) : new Response(null, { status: 404 });

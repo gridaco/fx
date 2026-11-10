@@ -462,6 +462,9 @@ fn project_view(view: &Value, options: ExportOptions) -> Value {
                     ports["params"] = schema_map(&node["ports"]["params"], options.include_values);
                     item["ports"] = ports;
                 }
+                if let Some(preview) = super::read::preview(node.get("preview")) {
+                    item["preview"] = preview;
+                }
                 for name in ["bindings", "interface_bindings"] {
                     if let Some(value) = node.get(name) {
                         item[name] = list_project(

@@ -81,6 +81,9 @@
             "description": "The step's position, from 0, in a pre-order walk of the workflow's declarations: a group before its steps, each level in authored order. Readers order steps by it, since an object keeps no member order. Absent in documents written before it existed.",
             "type": "integer",
             "minimum": 0
+          },
+          "preview": {
+            "$ref": "#/$defs/preview"
           }
         }
       }
@@ -321,6 +324,9 @@
             "items": {
               "$ref": "#/$defs/interface_binding"
             }
+          },
+          "preview": {
+            "$ref": "#/$defs/preview"
           }
         }
       }
@@ -804,6 +810,26 @@
           }
         }
       ]
+    },
+    "preview": {
+      "description": "An explicit video preview using literal scalar output-port names from this node instance (previews.md). No expressions, file paths, URLs, collections or cross-step references.",
+      "type": "object",
+      "required": [
+        "video"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "video": {
+          "description": "This node's singleton video output port; an optional singleton is allowed.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "poster": {
+          "description": "This node's singleton image output port used as the video's poster; an optional singleton is allowed.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        }
+      }
     }
   }
 }

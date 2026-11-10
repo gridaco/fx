@@ -1291,6 +1291,184 @@ fn request(fixture: &Fixture, target: &str) -> PlanRequest {
     }
 }
 
+fn video_preview_project(outputs: &[(&str, &str)], render: Value) -> (Fixture, FakeHost) {
+    let fixture = Fixture::new();
+    fixture.write("fx.yaml", "fx: project/v1\n");
+    fixture.write(
+        "nodes/movie.py",
+        "# Original test node descriptions are supplied by FakeHost.\n",
+    );
+    fixture.write(
+        "workflow.yaml",
+        &json!({"fx":"workflow/v1","id":"movie","title":"Movie",
+        "steps":{"items":{"uses":"./nodes/movie.py#items"},"render":render}})
+        .to_string(),
+    );
+    let mut spec = type_spec("render", Some(1), &[]);
+    spec.params.clear();
+    spec.outputs = outputs
+        .iter()
+        .map(|(name, kind)| (name.to_string(), kind.to_string()))
+        .collect();
+    let mut items = type_spec("items", Some(1), &[]);
+    items.params.clear();
+    items.outputs.clear();
+    let host = FakeHost::new().with_module(described(
+        "nodes/movie.py",
+        vec![("render", spec), ("items", items)],
+        fixture.closure(&["nodes/movie.py"]),
+    ));
+    (fixture, host)
+}
+
+#[test]
+fn integrated_video_preview_validates_scalar_port_families() {
+    for (video, poster, expected) in [
+        ("video/x-matroska?", "image/png?", None),
+        ("video", "image", None),
+        (
+            "image/png",
+            "image/png",
+            Some("render.preview.video: output clip must be one video file"),
+        ),
+        (
+            "video[]",
+            "image/png",
+            Some("render.preview.video: output clip must be one video file"),
+        ),
+        (
+            "video{}?",
+            "image/png",
+            Some("render.preview.video: output clip must be one video file"),
+        ),
+        (
+            "video/mp4",
+            "video/mp4",
+            Some("render.preview.poster: output cover must be one image file"),
+        ),
+        (
+            "video/mp4",
+            "image[]",
+            Some("render.preview.poster: output cover must be one image file"),
+        ),
+        (
+            "video/mp4",
+            "image{}?",
+            Some("render.preview.poster: output cover must be one image file"),
+        ),
+    ] {
+        let (fixture, mut host) = video_preview_project(
+            &[("clip", video), ("cover", poster)],
+            json!({"uses":"./nodes/movie.py#render","preview":{"video":"clip","poster":"cover"}}),
+        );
+        let mut planner = make_planner(&request(&fixture, "movie"), &mut host).unwrap();
+        let plan = make_plan(&mut planner, &mut host, None, &NoCache).unwrap();
+        let problems: Vec<_> = plan.problems.iter().map(ToString::to_string).collect();
+        assert_eq!(
+            problems,
+            expected.into_iter().map(str::to_string).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            plan.expansion.instances["render#1"].preview.is_some(),
+            expected.is_none()
+        );
+    }
+    let (fixture, mut host) = video_preview_project(
+        &[("clip", "video")],
+        json!({"uses":"./nodes/movie.py#render","preview":{"video":"missing","poster":"cover"}}),
+    );
+    let mut planner = make_planner(&request(&fixture, "movie"), &mut host).unwrap();
+    let plan = make_plan(&mut planner, &mut host, None, &NoCache).unwrap();
+    assert_eq!(
+        plan.problems
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>(),
+        [
+            "render.preview.video: no output port missing",
+            "render.preview.poster: no output port cover"
+        ]
+    );
+}
+
+#[test]
+fn integrated_video_preview_survives_dynamic_repeats_and_takes() {
+    use grida_fx_core::plan::output::{graph_document, steps_document};
+    let preview = json!({"video":"clip","poster":"cover"});
+    let (fixture, mut host) = video_preview_project(
+        &[("clip", "video/x-matroska?"), ("cover", "image/png?")],
+        json!({"uses":"./nodes/movie.py#render","for_each":"${{ steps.items.facts.names }}",
+            "max":3,"key":"${{ item }}","takes":2,"preview":preview}),
+    );
+    let mut planner = make_planner(&request(&fixture, "movie"), &mut host).unwrap();
+    let plan = make_plan(&mut planner, &mut host, None, &NoCache).unwrap();
+    assert!(plan.ok(), "{:?}", plan.problems);
+    assert_eq!(plan.expansion.pending.len(), 1);
+    assert_eq!(
+        steps_document(&planner.workflow.workflow.steps)["render"]["preview"],
+        preview
+    );
+    planner.results.insert(
+        "items#1".into(),
+        NodeResult {
+            status: grida_fx_core::expand::ResultStatus::Succeeded,
+            outputs: IndexMap::new(),
+            facts: IndexMap::from([("names".into(), json!(["idle", "run"]))]),
+            error: None,
+        },
+    );
+    let plan = make_plan(&mut planner, &mut host, None, &NoCache).unwrap();
+    assert!(plan.ok(), "{:?}", plan.problems);
+    assert!(plan.expansion.pending.is_empty());
+    let graph = graph_document(&plan, &planner);
+    let render: Vec<_> = graph["instances"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|node| node["step"] == "render")
+        .collect();
+    assert_eq!(render.len(), 4);
+    for node in render {
+        assert_eq!(node["preview"], preview);
+        assert!(node["bindings"].as_array().unwrap().is_empty());
+    }
+    assert!(graph["instances"][0].get("preview").is_none());
+    grida_fx_core::docs::validate(grida_fx_core::docs::Schema::Graph, &graph, "graph").unwrap();
+}
+
+#[test]
+fn integrated_video_preview_changes_only_authored_plan_identity() {
+    use grida_fx_core::plan::output::plan_digest;
+    let (fixture, mut host) = video_preview_project(
+        &[("clip", "video/mp4"), ("cover", "image/png")],
+        json!({"uses":"./nodes/movie.py#render"}),
+    );
+    let mut before = make_planner(&request(&fixture, "movie"), &mut host).unwrap();
+    let baseline = make_plan(&mut before, &mut host, None, &NoCache).unwrap();
+    let path = fixture.root.join("workflow.yaml");
+    let mut document: Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    document["steps"]["render"]["preview"] = json!({"video":"clip","poster":"cover"});
+    std::fs::write(path, document.to_string()).unwrap();
+    let mut after = make_planner(&request(&fixture, "movie"), &mut host).unwrap();
+    let authored = make_plan(&mut after, &mut host, None, &NoCache).unwrap();
+    assert!(baseline.ok() && authored.ok());
+    let (before_node, after_node) = (
+        &baseline.expansion.instances["render#1"],
+        &authored.expansion.instances["render#1"],
+    );
+    assert_eq!(before_node.identity, after_node.identity);
+    assert_eq!(before_node.with, after_node.with);
+    assert_eq!(before_node.reads, after_node.reads);
+    assert_eq!(before_node.needs, after_node.needs);
+    assert_eq!(before_node.bindings, after_node.bindings);
+    assert_eq!(baseline.phases(), authored.phases());
+    assert_ne!(
+        plan_digest(&baseline, &before),
+        plan_digest(&authored, &after)
+    );
+}
+
 #[test]
 fn a_builder_refuses_input_flags_before_it_runs() {
     let fixture = Fixture::new();
@@ -1770,6 +1948,7 @@ fn inst(path: &str, phase: u32, state: State, prices: &[(&str, &str, u32, i64, i
         judge_policy: None,
         judged_by: Vec::new(),
         view: Value::Bool(false),
+        preview: None,
         at_plan: false,
         budget: None,
         concurrency_group: None,

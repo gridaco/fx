@@ -42,6 +42,7 @@ export interface RunNode {
   needs?: string[];
   judges?: string | null;
   interface_bindings?: InterfaceBinding[];
+  preview?: import("./graph").PreviewDescriptor;
 }
 
 export interface ViewerRun {
@@ -113,7 +114,8 @@ function node(value: unknown): value is RunNode {
     && (value.bindings === undefined || isPortBindings(value.bindings))
     && (value.needs === undefined || strings(value.needs))
     && (value.judges === undefined || nullableString(value.judges))
-    && (value.interface_bindings === undefined || isInterfaceBindings(value.interface_bindings));
+    && (value.interface_bindings === undefined || isInterfaceBindings(value.interface_bindings))
+    && (value.preview === undefined || isPreviewDescriptor(value.preview));
 }
 
 function artifact(value: unknown, apiBase: string): value is Artifact {
@@ -175,7 +177,7 @@ export async function readView(signal?: AbortSignal, apiBase = "/api"): Promise<
   return parseViewerView(await response.json(), apiBase);
 }
 
-import { parseGraph, type GraphDocument } from "./graph";
+import { isPreviewDescriptor, parseGraph, type GraphDocument } from "./graph";
 export * from "./graph";
 export * from "./controller";
 export * from "./canvas";

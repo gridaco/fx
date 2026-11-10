@@ -128,6 +128,9 @@ pub fn instance_document(instance: &Instance) -> Value {
     {
         map.insert("reason".into(), Value::String(reason.clone()));
     }
+    if let Some(preview) = &instance.preview {
+        document["preview"] = preview.to_value();
+    }
     document
 }
 
@@ -261,6 +264,9 @@ fn declared_steps(steps: &Steps, prefix: &str, found: &mut Map<String, Value>) {
         document.insert("description".into(), text(&step.description));
         document.insert("uses".into(), text(&step.uses));
         document.insert("view".into(), step.view.to_value());
+        if let Some(preview) = &step.preview {
+            document.insert("preview".into(), preview.to_value());
+        }
         // Every step listed so far comes before this one in the walk.
         document.insert("order".into(), Value::from(found.len()));
         found.insert(path.clone(), Value::Object(document));

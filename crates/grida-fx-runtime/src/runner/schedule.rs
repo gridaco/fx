@@ -475,6 +475,7 @@ mod tests {
             judge_policy: None,
             judged_by: Vec::new(),
             view: serde_json::Value::Bool(false),
+            preview: None,
             at_plan: false,
             budget: None,
             concurrency_group: None,

@@ -359,6 +359,7 @@ fn node_display(instance: &Instance) -> crate::events::NodeDisplay {
         bindings: instance.bindings.clone(),
         needs: instance.needs.clone(),
         judges: instance.judges.clone(),
+        preview: instance.preview.as_deref().cloned(),
     }
 }
 
@@ -382,6 +383,7 @@ fn node_started(instance: &Instance) -> Event {
         bindings: display.bindings,
         needs: display.needs,
         judges: display.judges,
+        preview: display.preview,
         routes: instance
             .routes
             .iter()
@@ -1716,6 +1718,7 @@ while (message := read()) is not None:
             judge_policy: None,
             judged_by: Vec::new(),
             view: serde_json::Value::Bool(false),
+            preview: None,
             at_plan: false,
             budget: None,
             concurrency_group: None,
@@ -1936,6 +1939,10 @@ while (message := read()) is not None:
     #[test]
     fn node_started_lists_reads_routes_and_with() {
         let mut i = instance("join#1", "join", &[], State::Planned);
+        i.preview = Some(Box::new(grida_fx_core::docs::workflow::Preview {
+            video: "clip".into(),
+            poster: Some("cover".into()),
+        }));
         i.reads = ["b#1".to_string(), "join#1".to_string()].into();
         i.needs = vec!["c#1".into()];
         i.judges = Some("b#1".into());
@@ -1959,6 +1966,7 @@ while (message := read()) is not None:
             bindings,
             needs,
             judges,
+            preview,
             ..
         } = node_started(&i)
         else {
@@ -1976,6 +1984,18 @@ while (message := read()) is not None:
         assert_eq!(bindings, i.bindings);
         assert_eq!(needs, ["c#1"]);
         assert_eq!(judges.as_deref(), Some("b#1"));
+        assert_eq!(preview.as_ref(), i.preview.as_deref());
+        let started = node_started(&i);
+        assert_eq!(
+            started.node_display().unwrap().preview.as_ref(),
+            i.preview.as_deref()
+        );
+        assert_eq!(
+            started.to_fields()["preview"],
+            serde_json::json!({"video":"clip","poster":"cover"})
+        );
+        i.preview = None;
+        assert!(!node_started(&i).to_fields().contains_key("preview"));
     }
 
     #[test]

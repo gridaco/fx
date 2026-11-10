@@ -67,6 +67,9 @@ pub struct Node {
     pub reads: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ports: Option<Value>,
+    /// Literal output selectors recorded by the engine, never expressions or file locations.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preview: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bindings: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -252,6 +255,30 @@ fn object(value: Option<&Value>) -> Value {
         .unwrap_or_else(|| json!({}))
 }
 
+/// Keep only the workflow's literal, same-instance video/poster descriptor. A malformed saved
+/// record must not become a browser URL or expression; ordinary previews remain available.
+pub(crate) fn preview(value: Option<&Value>) -> Option<Value> {
+    let value = value?.as_object()?;
+    if value
+        .keys()
+        .any(|name| !matches!(name.as_str(), "video" | "poster"))
+    {
+        return None;
+    }
+    let port = |name: &str| {
+        let name = value.get(name)?.as_str()?;
+        let mut bytes = name.bytes();
+        (bytes.next().is_some_and(|first| first.is_ascii_lowercase())
+            && bytes.all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_'))
+        .then_some(name)
+    };
+    let mut result = json!({"video": port("video")?});
+    if value.contains_key("poster") {
+        result["poster"] = json!(port("poster")?);
+    }
+    Some(result)
+}
+
 pub(crate) fn strings(value: Option<&Value>) -> Vec<String> {
     value
         .and_then(Value::as_array)
@@ -270,6 +297,11 @@ fn node(value: &Value, steps: &Map<String, Value>, types: &Map<String, Value>) -
         .and_then(|step| text(step, "title"))
         .unwrap_or(&path)
         .to_string();
+    let preview = preview(value.get("preview")).or_else(|| {
+        steps
+            .get(text(value, "step").unwrap_or(&path))
+            .and_then(|step| preview(step.get("preview")))
+    });
     Some(Node {
         id,
         path,
@@ -280,6 +312,7 @@ fn node(value: &Value, steps: &Map<String, Value>, types: &Map<String, Value>) -
             .filter(|key| key.is_null() || key.is_string())
             .map(|key| key.as_str().map(str::to_string)),
         title,
+        preview,
         uses: text(value, "uses").map(str::to_string),
         state: if text(value, "state") == Some("done") {
             "succeeded"
@@ -669,6 +702,9 @@ fn project_inventory(
                 }
                 if let Some(ports) = event.get("ports").filter(|v| v.is_object()) {
                     current.ports = Some(ports.clone());
+                }
+                if let Some(preview) = preview(event.get("preview")) {
+                    current.preview = Some(preview);
                 }
                 if let Some(bindings) = event.get("bindings").filter(|v| v.is_array()) {
                     current.bindings = Some(bindings.clone());

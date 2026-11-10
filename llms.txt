@@ -191,6 +191,7 @@ steps:
 | `requires:` | features the route must support: `image_input`, `mask`, `alpha`, `exact_size` |
 | `independent_of:` | refuse a route that shares a model with these steps |
 | `timeout:` | seconds; past it the step fails and is not run again |
+| `preview:` | node steps only: `{ video: video, poster: poster }` selects own scalar video/image output ports; `poster` is optional. Literal names, never expressions, paths or URLs; recorded presentation only |
 
 ### Expressions
 
@@ -584,6 +585,30 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
 - **Deliver.** `--deliver icons=out/{key}.png` copies declared outputs after the run, `{key}` per
   element; a missing one makes the command exit non-zero. The viewer's **Download all (.zip)** is
   the same files for a person; agents use `--deliver` or `export`.
+- **Canvas previews.** A run card shows its first available image output, otherwise offers its
+  first available `video/*` output to the browser's native player. Container and codec support
+  depend on the browser. Failed or timed-out frame capture shows its reason; hover the message
+  for the native error code and optional browser diagnostic. These details stay in the browser,
+  separate from run failures. Hover playback requires a successfully captured first frame;
+  failed previews keep a stable unavailable-video icon and reason instead of a normal play
+  control. If native decoding worked but frame capture failed, use the distinct `Try playback`
+  action. The heading `Browser preview unavailable` describes a browser preview failure, not a broken
+  workflow output. Available video files keep a `Download original video` link in their details
+  for trying another player; files whose bytes are absent remain explicitly unavailable.
+  Viewing never transcodes or changes the run.
+  For a custom video poster, return an image output and set the workflow step's
+  `preview: { video: video, poster: poster }` to those own scalar output port names. `poster`
+  is optional. This overrides automatic image selection; each instance/take uses its own outputs.
+  The poster remains visible if native playback fails or an export omits the video, but never
+  enables hover playback by itself. A missing/broken poster falls back to native first-frame
+  capture when possible. Step details use the same poster and offer the original when available.
+  With a visible poster, native failure says `Browser playback unavailable`; the image preview
+  remains available. A capture-only failure retains the poster and a manual playback action.
+  Preview selectors do not create dependencies or change step/call identities. Editing them
+  changes the authored workflow and its plan digest: start a new run, which can reuse cached results.
+  Node output/body edits still follow the existing version and lock rules. Node-type defaults,
+  cross-step selectors, arbitrary URLs and callbacks are not part of this contract.
+  Portable exports retain their media allowlist; omitted files cannot be previewed.
 - **Exit status.** `0` done; `1` refused or not ok (plan problems, a run not ok, a missing
   delivery); `2` unreadable input or a usage mistake; `130` interrupted or cancelled.
 - **Offline checks.** `GRIDA_FX_NETWORK=off` refuses every request FX's transport would send

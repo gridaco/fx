@@ -5,7 +5,7 @@
  * program reads; the schemas are complete.
  */
 
-import type { JsonValue } from "./workflow.js";
+import type { JsonValue, VideoPreview } from "./workflow.js";
 
 /** A problem that refuses a plan. */
 export interface Problem {
@@ -54,6 +54,8 @@ export interface GraphInstance {
    * reports, else the cap. */
   price: PriceRange & { capped?: true };
   view?: boolean | string;
+  /** Explicit video/poster output selection, when authored on this node step. */
+  preview?: VideoPreview;
   [field: string]: unknown;
 }
 

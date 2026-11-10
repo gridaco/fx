@@ -1,0 +1,22 @@
+fx: workflow/v1
+id: viewer-posters
+title: Authored video posters
+description: Contrasting authored posters for native VP9 and lossless FFV1 videos, synthesized locally.
+
+steps:
+  ffv1:
+    title: FFV1 video with authored poster
+    uses: ./nodes/posters.py#video
+    with: {codec: ffv1}
+    preview: {video: video, poster: poster}
+  native:
+    title: Native VP9 video with authored poster
+    uses: ./nodes/posters.py#video
+    with: {codec: vp9}
+    preview: {video: video, poster: poster}
+
+outputs:
+  ffv1_video: ${{ steps.ffv1.outputs.video }}
+  ffv1_poster: ${{ steps.ffv1.outputs.poster }}
+  native_video: ${{ steps.native.outputs.video }}
+  native_poster: ${{ steps.native.outputs.poster }}

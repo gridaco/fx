@@ -14,9 +14,9 @@ from grida.fx import Ctx, node
 @node(
     "trim",
     inputs={"video": "video", "settings": "json"},
-    outputs={"video": "video/x-matroska", "report": "json"},
+    outputs={"video": "video/x-matroska", "poster": "image/png", "report": "json"},
     tools=["ffmpeg", "ffprobe"],
-    version=2,
+    version=3,
 )
 def trim(ctx: Ctx) -> dict[str, Any]:
     """Keep opaque [start_frame, end_frame); no interpolation or provider call."""
@@ -93,6 +93,29 @@ def trim(ctx: Ctx) -> dict[str, Any]:
         ],
         timeout_s=180,
     )
+    poster = ctx.out.path("poster.png")
+    ctx.tool("ffmpeg").run(
+        [
+            "-v",
+            "error",
+            "-nostdin",
+            "-y",
+            "-i",
+            str(output),
+            "-map",
+            "0:v:0",
+            "-frames:v",
+            "1",
+            "-map_metadata",
+            "-1",
+            "-fflags",
+            "+bitexact",
+            "-flags:v",
+            "+bitexact",
+            str(poster),
+        ],
+        timeout_s=120,
+    )
     report = {
         "kind": "movie_sprite_frame_interval_v1",
         "source_sha256": digest,
@@ -111,4 +134,8 @@ def trim(ctx: Ctx) -> dict[str, Any]:
         "interpolation": False,
         "reason": "Explicit author-selected interval; semantic review remains separate.",
     }
-    return {"video": ctx.out.file(output, "video/x-matroska"), "report": ctx.out.json(report)}
+    return {
+        "video": ctx.out.file(output, "video/x-matroska"),
+        "poster": ctx.out.file(poster, "image/png"),
+        "report": ctx.out.json(report),
+    }

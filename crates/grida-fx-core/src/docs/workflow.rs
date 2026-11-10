@@ -116,6 +116,24 @@ impl ViewSetting {
     }
 }
 
+/// A workflow-authored video preview, naming scalar outputs of the same node instance.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Preview {
+    pub video: String,
+    pub poster: Option<String>,
+}
+
+impl Preview {
+    pub fn to_value(&self) -> Value {
+        let mut value = Map::new();
+        value.insert("video".into(), Value::String(self.video.clone()));
+        if let Some(poster) = &self.poster {
+            value.insert("poster".into(), Value::String(poster.clone()));
+        }
+        Value::Object(value)
+    }
+}
+
 /// One step (fx-workflow-v1 `$defs/step`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Step {
@@ -146,6 +164,7 @@ pub struct Step {
     pub requires: Vec<String>,
     pub independent_of: Vec<String>,
     pub view: ViewSetting,
+    pub preview: Option<Preview>,
     pub timeout: Option<f64>,
     pub title: Option<String>,
     pub description: Option<String>,
@@ -247,7 +266,7 @@ fn step_shape(step: &Map<String, Value>) -> Option<String> {
         return Some("a step repeats over for_each: or matrix:, not both".into());
     }
     if group {
-        for name in ["judges", "takes", "pick", "route", "at"] {
+        for name in ["judges", "takes", "pick", "route", "at", "preview"] {
             if set(step, name) {
                 return Some(format!("{name}: applies to a node step, not a group"));
             }
@@ -266,6 +285,18 @@ fn step_shape(step: &Map<String, Value>) -> Option<String> {
              a group takes regenerate: { max, until }"
                 .into(),
         );
+    }
+    if set(step, "preview")
+        && step
+            .get("uses")
+            .and_then(Value::as_str)
+            .is_some_and(|uses| {
+                (uses.starts_with("./") || uses.starts_with("../"))
+                    && (uses.ends_with(".yaml") || uses.ends_with(".yml"))
+                    && !uses.contains('#')
+            })
+    {
+        return Some("preview: applies to a node step, not an imported workflow".into());
     }
     let on_reject = step.get("on_reject").filter(|v| !v.is_null());
     if on_reject.is_some_and(|v| v.as_str() != Some("fail")) && !set(step, "judges") {
@@ -424,6 +455,16 @@ impl Typed<'_> {
             Some(Value::Number(n)) => Some(crate::value::as_f64(n)),
             Some(_) => return Err(self.refuse(&at("timeout"), "a timeout is a number")),
         };
+        let preview = match map.get("preview") {
+            None => None,
+            Some(value) => {
+                let preview = self.object(value, &at("preview"))?;
+                Some(Preview {
+                    video: self.string(preview.get("video"), &at("preview.video"))?,
+                    poster: self.optional_string(preview.get("poster"), &at("preview.poster"))?,
+                })
+            }
+        };
         Ok(Step {
             uses: self.optional_string(map.get("uses"), &at("uses"))?,
             steps,
@@ -450,6 +491,7 @@ impl Typed<'_> {
             requires: self.strings(map.get("requires"), &at("requires"))?,
             independent_of,
             view,
+            preview,
             timeout,
             title: self.optional_string(map.get("title"), &at("title"))?,
             description: self.optional_string(map.get("description"), &at("description"))?,
@@ -697,6 +739,60 @@ mod tests {
             "steps": {"s": {"uses": "fx/x@1", "at": "plan", "route": null, "judges": null}}});
         let workflow = parse_workflow(&document, "w.yaml").unwrap();
         assert!(workflow.steps["s"].at_plan);
+    }
+
+    #[test]
+    fn preview_selectors_are_literal_node_output_names_only() {
+        let document = |preview: Value| {
+            json!({"fx":"workflow/v1","id":"w","title":"W",
+            "steps":{"render":{"uses":"./nodes/movie.py#render","preview":preview}}})
+        };
+        for preview in [
+            json!({"video":"clip"}),
+            json!({"video":"clip_2","poster":"cover"}),
+        ] {
+            let workflow = parse_workflow(&document(preview.clone()), "w.yaml").unwrap();
+            assert_eq!(
+                workflow.steps["render"]
+                    .preview
+                    .as_ref()
+                    .unwrap()
+                    .to_value(),
+                preview
+            );
+        }
+        for preview in [
+            Value::Null,
+            json!({}),
+            json!({"poster":"cover"}),
+            json!({"video":null}),
+            json!({"video":"clip","poster":null}),
+            json!({"video":"clip","extra":true}),
+            json!({"video":"${{ steps.render.outputs.clip }}"}),
+            json!({"video":"./clip.mp4"}),
+            json!({"video":"https://example.invalid/clip.mp4"}),
+            json!({"video":"other.clip"}),
+            json!({"video":"clips[0]"}),
+            json!({"video":["clip"]}),
+            json!({"video":"Clip"}),
+        ] {
+            assert!(
+                parse_workflow(&document(preview.clone()), "w.yaml").is_err(),
+                "{preview}"
+            );
+        }
+        for step in [
+            json!({"steps":{"inner":{"uses":"fx/x@1"}},"preview":{"video":"clip"}}),
+            json!({"uses":"./other.yaml","if":false,"preview":{"video":"clip"}}),
+        ] {
+            let document = json!({"fx":"workflow/v1","id":"w","title":"W","steps":{"render":step}});
+            assert!(
+                parse_workflow(&document, "w.yaml")
+                    .unwrap_err()
+                    .message
+                    .contains("preview:")
+            );
+        }
     }
 
     #[test]

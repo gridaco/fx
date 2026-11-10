@@ -17,6 +17,10 @@ Nami and traveler presets remain available separately.
 The helpers in `nodes/_movie_sprite/` belong to this example; they are not FX APIs.
 No other checkout or application package is needed.
 
+This source uses workflow video posters. Until a release includes that feature, use
+the current checkout's SDK and engine, following the
+[source build instructions](https://github.com/gridaco/fx/blob/main/CONTRIBUTING.md#build-from-source).
+
 ## Setup
 
 Install [uv](https://docs.astral.sh/uv/) and FFmpeg (`ffmpeg` and `ffprobe` on `PATH`),
@@ -32,8 +36,8 @@ need those dependencies. Commands below use the Python installation; with the
 
 ## Try it without a provider
 
-The fixture draws a geometric figure on green. The workflow trims its full frame
-interval, then keys it to a transparent loop:
+The fixture draws a geometric figure on green. The workflow trims the marked loop
+from its leading and trailing frames, then keys it to transparency:
 
 ```sh
 uv run python fixtures/make_inputs.py .fixtures
@@ -42,7 +46,12 @@ uv run python -m grida.fx run workflow.yaml --inputs .fixtures/clip.yaml --no-vi
 ```
 
 The run produces a transparent FFV1 Matroska loop, its exact first-frame PNG,
-a silent MP4 preview, a contact sheet, manifests and a PNG-frame ZIP. To inspect it in the viewer, start the project service first, then run with `--open`:
+a silent MP4 preview, a contact sheet, manifests and a PNG-frame ZIP. The trim step keeps
+its lossless FFV1 intermediate and also writes a PNG poster of its first selected frame.
+Its workflow `preview: { video: video, poster: poster }` associates those output ports;
+the poster can display even when the browser cannot play FFV1. This does not transcode
+the intermediate or change its pixels. To inspect the run in the viewer, start the
+project service first, then run with `--open`:
 
 ```sh
 uv run python -m grida.fx start --background

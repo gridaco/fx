@@ -126,6 +126,66 @@ fn imported_scope(nodes: &[&str]) -> Value {
 }
 
 #[test]
+fn video_preview_metadata_survives_plan_and_dynamic_event_projection() {
+    let fixture = Fixture::new("image/png");
+    let plan_path = fixture.root().join("plan.json");
+    let mut plan: Value = serde_json::from_slice(&std::fs::read(&plan_path).unwrap()).unwrap();
+    let selected = json!({"video":"video", "poster":"poster"});
+    plan["steps"]["draw"]["preview"] = selected.clone();
+    std::fs::write(&plan_path, plan.to_string()).unwrap();
+    let projected = read::read_inventory(&fixture.root()).unwrap().document;
+    assert_eq!(projected.nodes[0].preview, Some(selected.clone()));
+    assert!(projected.nodes[1].preview.is_none());
+
+    // The runtime descriptor belongs to this repeated instance, including nodes absent from
+    // the original static plan. It does not reuse another take's output or a file location.
+    let mut events = FileForEvents::new(&fixture.root());
+    events.append(
+        json!({"event":"node_started", "id":"clip[item]#2", "path":"clip[item]",
+        "step":"clip", "take":[2], "uses":"acme/clip@1", "reads":[], "with":{},
+        "preview":selected}),
+    );
+    let projected = read::read_inventory(&fixture.root()).unwrap().document;
+    let dynamic = projected
+        .nodes
+        .iter()
+        .find(|node| node.id == "clip[item]#2")
+        .unwrap();
+    assert_eq!(
+        dynamic.preview,
+        Some(json!({"video":"video", "poster":"poster"}))
+    );
+    let encoded = serde_json::to_value(projected).unwrap();
+    let schema: Value = serde_json::from_str(include_str!(
+        "../../../spec/schemas/fx-viewer-run-v1.schema.json"
+    ))
+    .unwrap();
+    jsonschema::validator_for(&schema)
+        .unwrap()
+        .validate(&encoded)
+        .unwrap();
+}
+
+#[test]
+fn malformed_preview_metadata_never_becomes_a_location_or_expression() {
+    for descriptor in [
+        json!(null),
+        json!({}),
+        json!({"video":"steps.clip.video"}),
+        json!({"video":"video", "poster":"${{ steps.cover.image }}"}),
+        json!({"video":"video", "poster":"/tmp/cover.png"}),
+        json!({"video":"video", "poster":null}),
+        json!({"video":"video", "url":"https://example.com/cover.png"}),
+    ] {
+        assert!(read::preview(Some(&descriptor)).is_none(), "{descriptor}");
+    }
+    assert_eq!(
+        read::preview(Some(&json!({"video":"video"}))),
+        Some(json!({"video":"video"}))
+    );
+}
+
+#[test]
 fn scope_projection_uses_latest_snapshot_and_clears_old_interfaces() {
     let fixture = Fixture::new("image/png");
     let path = fixture.root().join("plan.json");
@@ -874,6 +934,69 @@ async fn serves_json_verified_bytes_head_and_ranges() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::RANGE_NOT_SATISFIABLE);
+}
+
+#[tokio::test]
+async fn serves_recorded_matroska_inline_with_head_and_ranges() {
+    let fixture = Fixture::new("video/x-matroska");
+    let url = format!("/api/artifacts/{}", fixture.digest);
+    for method in [Method::GET, Method::HEAD] {
+        let response = fixture
+            .app()
+            .oneshot(
+                Fixture::request(&url)
+                    .method(method.clone())
+                    .header(header::RANGE, "bytes=2-6")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
+        assert_eq!(response.headers()[header::CONTENT_TYPE], "video/x-matroska");
+        assert_eq!(response.headers()[header::CONTENT_DISPOSITION], "inline");
+        assert_eq!(response.headers()[header::ACCEPT_RANGES], "bytes");
+        assert_eq!(response.headers()[header::CONTENT_LENGTH], "5");
+        assert_eq!(
+            response.headers()[header::CONTENT_RANGE],
+            format!("bytes 2-6/{}", fixture.bytes.len())
+        );
+        let body = to_bytes(response.into_body(), 100).await.unwrap();
+        if method == Method::HEAD {
+            assert!(body.is_empty());
+        } else {
+            assert_eq!(body, &fixture.bytes[2..7]);
+        }
+    }
+}
+
+#[test]
+fn inline_video_types_follow_the_recorded_kind_grammar() {
+    for kind in [
+        "video/mp4",
+        "video/webm",
+        "video/x-matroska",
+        "video/vnd.acme+clip",
+    ] {
+        assert_eq!(artifact_mime(kind), (kind, true));
+    }
+    for kind in [
+        "video",
+        "video/",
+        "video/*",
+        "video/MP4",
+        "video/mp4; codecs=avc1",
+        "video/mp4\r\nx-injected: yes",
+        "video/mp4/extra",
+        "video/mp4[]",
+        "video/mp4?",
+        "video/ mp4",
+        "video/\u{00e9}",
+        "text/html",
+        "image/svg+xml",
+    ] {
+        assert_eq!(artifact_mime(kind), ("application/octet-stream", false));
+    }
 }
 
 #[tokio::test]

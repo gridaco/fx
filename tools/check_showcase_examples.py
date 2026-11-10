@@ -87,7 +87,18 @@ def check(home: Path, name: str) -> str:
         result = fx.run("workflow.yaml", cwd=home, input_files=[".fixtures/clip.yaml"])
         assert result.ok and result.cost == 0, f"free finishing failed: {result.failed}"
         assert {"canonical", "loop", "preview"} <= set(result.outputs), result.outputs.keys()
-        return "paid call refused; supplied synthetic footage finished at $0"
+        trimmed = result.steps["trim"].outputs
+        assert trimmed["video"].kind == "video/x-matroska", trimmed["video"].kind
+        assert trimmed["poster"].kind == "image/png", trimmed["poster"].kind
+        with Image.open(home / ".fixtures/character.png") as character:
+            expected = Image.new("RGBA", character.size, (0, 255, 0, 255))
+            expected.alpha_composite(character.convert("RGBA"))
+        with Image.open(trimmed["poster"].path) as poster:
+            assert poster.size == expected.size, poster.size
+            assert poster.convert("RGB").tobytes() == expected.convert("RGB").tobytes(), (
+                "the trim poster does not match its first selected frame"
+            )
+        return "paid call refused; synthetic clip trimmed with an exact poster and finished at $0"
     if name == "portrait-motion":
         run_script(home, "inputs/make_inputs.py", ".fixtures")
         (home / ".fixtures/source.yaml").write_text("reference: sprite.png\n")

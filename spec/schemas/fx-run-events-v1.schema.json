@@ -442,6 +442,10 @@
         "signal",
         "sdk"
       ]
+    },
+    "preview": {
+      "$ref": "#/$defs/preview",
+      "description": "Optional workflow-authored video preview on node_started, node_failed and node_skipped. Literal ports of this same instance; display metadata only."
     }
   },
   "allOf": [
@@ -1206,6 +1210,26 @@
             "type": "string"
           },
           "uniqueItems": true
+        }
+      }
+    },
+    "preview": {
+      "description": "An explicit video preview using literal scalar output-port names from this node instance (previews.md). No expressions, file paths, URLs, collections or cross-step references.",
+      "type": "object",
+      "required": [
+        "video"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "video": {
+          "description": "This node's singleton video output port; an optional singleton is allowed.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "poster": {
+          "description": "This node's singleton image output port used as the video's poster; an optional singleton is allowed.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
         }
       }
     }

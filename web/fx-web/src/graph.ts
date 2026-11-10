@@ -7,6 +7,8 @@ export type PlanState = "planned" | "maybe" | "absent" | "blocked" | "failed" | 
 export interface Price { low_usd: number; high_usd: number }
 /** An instance's price; `capped` when one of its calls is on a capped route, which holds its cap. */
 export interface InstancePrice extends Price { capped?: true }
+/** A step's own scalar output names; expressions and cross-instance references are never evaluated. */
+export interface PreviewDescriptor { video: string; poster?: string }
 export interface GraphInstance {
   id: string; path: string; step: string; take: number[]; uses: string; type: string | null;
   with: Record<string, unknown>;
@@ -16,6 +18,7 @@ export interface GraphInstance {
   price: InstancePrice; view?: boolean | string; reason?: string;
   bindings?: PortBinding[];
   interface_bindings?: InterfaceBinding[];
+  preview?: PreviewDescriptor;
 }
 export interface PendingRepeat { path: string; step?: string; max: number; phase: number; high_usd: number; waiting_on?: string[] }
 export interface GraphDocument {
@@ -30,7 +33,7 @@ export interface GraphDocument {
   stand_in?: true;
   takes_file?: string;
   view_origins?: string[];
-  steps?: Record<string, { title?: string | null; description?: string | null; uses?: string | null; view?: boolean | string; order?: number }>;
+  steps?: Record<string, { title?: string | null; description?: string | null; uses?: string | null; view?: boolean | string; order?: number; preview?: PreviewDescriptor }>;
   types?: Record<string, { identity: string; source?: { files: Record<string, string>; resources: Record<string, string> }; ports?: NodePorts }>;
   scopes?: WorkflowScope[];
 }
@@ -47,6 +50,11 @@ const isDistinctStrings = (value: unknown) => isStrings(value) && new Set(value)
 const isDigest = (value: unknown) => isString(value) && /^[a-f0-9]{64}$/.test(value);
 const isView = (value: unknown) => isString(value) || typeof value === "boolean";
 const isRelative = (value: string) => value.split("/").every((part) => part !== "" && part !== "." && part !== "..");
+
+export function isPreviewDescriptor(value: unknown): value is PreviewDescriptor {
+  const name = (item: unknown) => isString(item) && /^[a-z][a-z0-9_]*$/.test(item);
+  return isRecord(value) && fields(value, ["video"], ["poster"]) && name(value.video) && optional(value, "poster", name);
+}
 
 function fields(value: Record<string, unknown>, required: string[], optional: string[] = []) {
   return required.every((name) => name in value) && Object.keys(value).every((name) => required.includes(name) || optional.includes(name));
@@ -78,7 +86,7 @@ function withValue(value: unknown, depth = 0): boolean {
   return Object.values(value).every((item) => withValue(item, depth + 1));
 }
 function instance(value: unknown): value is GraphInstance {
-  if (!isRecord(value) || !fields(value, ["id", "path", "step", "take", "uses", "type", "with", "routes", "state", "identity", "phase", "key", "judges", "judged_by", "waiting_on", "needs", "reads", "price"], ["view", "reason", "bindings", "interface_bindings"])) return false;
+  if (!isRecord(value) || !fields(value, ["id", "path", "step", "take", "uses", "type", "with", "routes", "state", "identity", "phase", "key", "judges", "judged_by", "waiting_on", "needs", "reads", "price"], ["view", "reason", "bindings", "interface_bindings", "preview"])) return false;
   return [value.id, value.path, value.step, value.uses].every(isString)
     && Array.isArray(value.take) && value.take.length > 0 && value.take.every(isPositiveInteger)
     && isNullableString(value.type) && isRecord(value.with) && Object.values(value.with).every((item) => withValue(item))
@@ -89,7 +97,8 @@ function instance(value: unknown): value is GraphInstance {
     && isPositiveInteger(value.phase) && isNullableString(value.key) && isNullableString(value.judges)
     && [value.judged_by, value.waiting_on, value.needs, value.reads].every(isStrings)
     && price(value.price) && optional(value, "reason", isString) && optional(value, "view", isView)
-    && optional(value, "bindings", isPortBindings) && optional(value, "interface_bindings", isInterfaceBindings);
+    && optional(value, "bindings", isPortBindings) && optional(value, "interface_bindings", isInterfaceBindings)
+    && optional(value, "preview", isPreviewDescriptor);
 }
 function pendingRepeat(value: unknown): value is PendingRepeat {
   return isRecord(value) && fields(value, ["path", "max", "phase", "high_usd"], ["step", "waiting_on"])
@@ -128,9 +137,9 @@ export function parseGraph(value: unknown): GraphDocument {
     && optional(value, "takes_file", (item) => isString(item) && isRelative(item))
     && optional(value, "view_origins", isStrings)
     && optional(value, "steps", (items) => isRecord(items) && Object.values(items).every((item) => isRecord(item)
-      && fields(item, [], ["title", "description", "uses", "view", "order"])
+      && fields(item, [], ["title", "description", "uses", "view", "order", "preview"])
       && ["title", "description", "uses"].every((key) => optional(item, key, isNullableString)) && optional(item, "view", isView)
-      && optional(item, "order", isCount)))
+      && optional(item, "order", isCount) && optional(item, "preview", isPreviewDescriptor)))
     && optional(value, "types", (items) => isRecord(items) && Object.entries(items).every(([key, item]) => key.length > 0 && typeEntry(item)))
     && optional(value, "scopes", isWorkflowScopes);
   if (!valid) throw new Error("The graph response does not match fx-graph-v1.");
@@ -161,12 +170,21 @@ export function parseLayoutReport(value: unknown): LayoutReport {
   return value as unknown as LayoutReport;
 }
 
-/** A card's preview: an image draws as itself, a video as its first frame until it is played. */
-export interface CanvasPreview {
-  kind: "image" | "video"; digest: string; url: string; label: string;
+export interface CanvasPoster { digest: string; url: string; label: string }
+interface CanvasPreviewBase {
+  digest: string; label: string;
   /** The step's distinct output files of the preview's kind. */
   count: number;
 }
+export interface CanvasImagePreview extends CanvasPreviewBase { kind: "image"; url: string }
+export interface CanvasVideoPreview extends CanvasPreviewBase {
+  kind: "video";
+  url: string | null;
+  poster?: CanvasPoster;
+  unavailable_reason?: "not_included" | "unavailable";
+}
+/** Authored posters remain distinct from native decoded frames and do not establish playability. */
+export type CanvasPreview = CanvasImagePreview | CanvasVideoPreview;
 export interface CanvasStep {
   id: string; source_id: string; title: string; subtitle: string; state: string; pending: boolean;
   /** When the step last started, UTC: a running card counts up from it, less `waited_ms`. */
@@ -201,11 +219,13 @@ export interface CanvasConnection {
 export interface CanvasFrame { id: string; title: string; nodes: string[]; parent?: string | null; address?: string; take?: number[]; key?: string; state?: string }
 export interface CanvasGraph { nodes: CanvasStep[]; edges: CanvasConnection[]; frames?: CanvasFrame[] }
 
-/** The files a card previews: pictures and the videos every browser plays, never active documents. */
+/** The files a card previews: inert pictures and native-video candidates, never active documents. */
 const previewKinds: Record<string, CanvasPreview["kind"]> = {
   "image/png": "image", "image/jpeg": "image", "image/webp": "image", "image/gif": "image", "image/avif": "image",
-  "video/mp4": "video", "video/webm": "video",
 };
+// Concrete recorded video kinds follow the FX type grammar. The browser decides whether
+// it can decode a file; its container type alone cannot establish codec support.
+const videoKind = /^video\/[a-z0-9.+-]+$/;
 const compareText = (left: string, right: string) => left < right ? -1 : left > right ? 1 : 0;
 const compareNamed = (left: { name: string; kind?: string }, right: { name: string; kind?: string }) =>
   compareText(left.name, right.name) || compareText(left.kind ?? "", right.kind ?? "");
@@ -224,12 +244,26 @@ export function recordedFileDigests(value: unknown): string[] {
  * A card's preview from a step's output files, in output order: the first image, or without one
  * the first video. `resolve` gives a file's type, name and verified URL, or null to leave it out.
  */
-export function cardPreview(outputs: Record<string, unknown>, resolve: (digest: string) => { media_type: string; name: string; url: string } | null): CanvasPreview | undefined {
+export function cardPreview(outputs: Record<string, unknown>, resolve: (digest: string) => { media_type: string; name: string; url: string | null; unavailable_reason?: CanvasVideoPreview["unavailable_reason"] } | null, selection?: PreviewDescriptor): CanvasPreview | undefined {
+  if (selection) {
+    const scalar = (name: string) => {
+      const value = outputs[name];
+      return isRecord(value) && isRecord(value.file) && isDigest(value.file.digest) ? value.file.digest as string : null;
+    };
+    const digest = scalar(selection.video), video = digest && resolve(digest);
+    if (!digest || !video || !videoKind.test(video.media_type)) return undefined;
+    const posterDigest = selection.poster ? scalar(selection.poster) : null, poster = posterDigest ? resolve(posterDigest) : null;
+    return {
+      kind: "video", digest, url: video.url, label: `${selection.video}: ${video.name}`, count: 1,
+      ...(!video.url ? { unavailable_reason: video.unavailable_reason ?? "unavailable" } : {}),
+      ...(posterDigest && poster?.url && previewKinds[poster.media_type] === "image" ? { poster: { digest: posterDigest, url: poster.url, label: `${selection.poster}: ${poster.name}` } } : {}),
+    };
+  }
   const found = { image: new Map<string, { url: string; label: string }>(), video: new Map<string, { url: string; label: string }>() };
   for (const [port, value] of Object.entries(outputs)) for (const digest of recordedFileDigests(value)) {
     const file = resolve(digest);
-    const kind = file && previewKinds[file.media_type];
-    if (file && kind && !found[kind].has(digest)) found[kind].set(digest, { url: file.url, label: `${port}: ${file.name}` });
+    const kind = file && (videoKind.test(file.media_type) ? "video" : previewKinds[file.media_type]);
+    if (file?.url && kind && !found[kind].has(digest)) found[kind].set(digest, { url: file.url, label: `${port}: ${file.name}` });
   }
   const kind = found.image.size ? "image" : found.video.size ? "video" : undefined;
   const first = kind && found[kind].entries().next().value;
@@ -240,8 +274,8 @@ export function cardPreview(outputs: Record<string, unknown>, resolve: (digest: 
 function recordedPreview(node: ViewerRun["nodes"][number], artifacts: Map<string, ViewerRun["artifacts"][number]>, apiBase: string): CanvasPreview | undefined {
   return cardPreview(node.outputs, (digest) => {
     const artifact = artifacts.get(digest);
-    return artifact?.available && artifact.url === `${apiBase}/artifacts/${digest}` ? { media_type: artifact.kind, name: artifact.name, url: artifact.url } : null;
-  });
+    return artifact ? { media_type: artifact.kind, name: artifact.name, url: artifact.available && artifact.url === `${apiBase}/artifacts/${digest}` ? artifact.url : null } : null;
+  }, node.preview);
 }
 
 /** Project declared wiring for display; no expressions or execution decisions are evaluated. */

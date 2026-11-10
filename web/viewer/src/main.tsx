@@ -1,7 +1,7 @@
 import { StrictMode, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { ArrowLeft, ArrowUpRight, Check, ChevronRight, Copy, Download, FileText, List, RefreshCw, Square, Workflow, X } from "lucide-react";
-import { OutputArchiveController, ServiceIndexProjection, ViewerController, elapsedLabel, outputFiles, ownsKeys, priceLabel, ViewerEntryController, type Artifact, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun } from "@grida/fx-web";
+import { OutputArchiveController, ServiceIndexProjection, ViewerController, elapsedLabel, outputFiles, ownsKeys, priceLabel, ViewerEntryController, type Artifact, type CanvasPreview, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun } from "@grida/fx-web";
 import { StateIcon, StateLabel, Status, Values, WorkflowCanvas, money, type WorkflowCanvasHandle } from "@grida/fx-react";
 import "./style.css";
 
@@ -11,8 +11,8 @@ const controller = new ViewerController(undefined, { apiBase });
 const iconProps = { size: 14, strokeWidth: 1.5, "aria-hidden": true } as const;
 
 /** A titled set of named values, after `children`; nothing when the set is empty. */
-function Section({ title, values, artifacts, children }: { title: string; values: Record<string, unknown>; artifacts: Map<string, Artifact>; children?: ReactNode }) {
-  return Object.keys(values).length > 0 && <section className="fx-detail-section"><h3>{title}</h3>{children}<Values values={values} artifacts={artifacts} /></section>;
+function Section({ title, values, artifacts, children, videoPreview }: { title: string; values: Record<string, unknown>; artifacts: Map<string, Artifact>; children?: ReactNode; videoPreview?: CanvasPreview }) {
+  return Object.keys(values).length > 0 && <section className="fx-detail-section"><h3>{title}</h3>{children}<Values values={values} artifacts={artifacts} videoPreview={videoPreview} /></section>;
 }
 
 /** Copies `text`, and says so for a moment. */
@@ -125,7 +125,7 @@ function RunDetails({ run, node, canvasNode }: { run: ViewerRun; node?: ViewerRu
     <Heading title={node.title || node.path} id={node.id} kind="step id" state={node.state} meta={[node.cache === "hit" && "cached", node.state === "waiting" && node.waiting_for && `for ${node.waiting_for}`,
       node.duration_ms !== null && duration(node.duration_ms), !!node.waited_ms && `waited ${duration(node.waited_ms)} for a route`]} />
     {node.error && <Problem>{node.error}</Problem>}
-    <Section title="Outputs" values={node.outputs} artifacts={artifacts} />
+    <Section title="Outputs" values={node.outputs} artifacts={artifacts} videoPreview={canvasNode?.preview} />
     <Section title="Inputs" values={inputs} artifacts={artifacts} />
     <Section title="Settings" values={settings} artifacts={artifacts} />
   </>;

@@ -73,6 +73,7 @@ fn every_event() -> Vec<Event> {
             bindings: Vec::new(),
             needs: Vec::new(),
             judges: None,
+            preview: None,
             routes: IndexMap::from([("image.generate".to_string(), "img-a@acme".to_string())]),
             with: IndexMap::from([
                 ("text".to_string(), json!({"value": "ada"})),
@@ -85,12 +86,16 @@ fn every_event() -> Vec<Event> {
             step: "a".into(),
             take: vec![1],
             identity: Some(DIGEST.into()),
-            uses: "fx/image.generate@1".into(),
+            uses: "./nodes/movie.py#render".into(),
             reads: vec![],
             ports: json!({"inputs": {}, "params": {}, "outputs": {}}),
             bindings: Vec::new(),
             needs: Vec::new(),
             judges: None,
+            preview: Some(grida_fx_core::docs::workflow::Preview {
+                video: "clip".into(),
+                poster: Some("cover".into()),
+            }),
             routes: IndexMap::new(),
             with: IndexMap::new(),
         },
@@ -339,6 +344,10 @@ fn terminal_display_metadata_is_flattened_without_execution_values() {
         }],
         needs: vec!["barrier#1".into()],
         judges: None,
+        preview: Some(grida_fx_core::docs::workflow::Preview {
+            video: "clip".into(),
+            poster: None,
+        }),
     };
     let events = [
         Event::NodeFailed {
@@ -390,6 +399,7 @@ fn terminal_display_metadata_is_flattened_without_execution_values() {
         );
         assert_eq!(fields["needs"], json!(["barrier#1"]));
         assert_eq!(fields["judges"], Value::Null);
+        assert_eq!(fields["preview"], json!({"video":"clip"}));
         assert!(!fields.contains_key("display"));
         assert!(!fields.contains_key("with"));
         assert!(!fields.contains_key("identity"));
@@ -421,6 +431,16 @@ fn members_follow_the_schema_names() {
         json!({"image.generate": "img-a@acme"})
     );
     assert_eq!(fields(&events[4])["identity"], DIGEST);
+    assert!(
+        !fields(&events[3])
+            .as_object()
+            .unwrap()
+            .contains_key("preview")
+    );
+    assert_eq!(
+        fields(&events[4])["preview"],
+        json!({"video":"clip","poster":"cover"})
+    );
     assert_eq!(fields(&events[5])["cache"], "hit");
     assert_eq!(fields(&events[6])["cache"], "miss");
     assert_eq!(

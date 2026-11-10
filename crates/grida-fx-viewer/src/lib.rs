@@ -466,7 +466,7 @@ async fn artifact(
 }
 
 /// Only inert formats receive an inline media type; recorded HTML and SVG are downloads.
-fn artifact_mime(kind: &str) -> (&'static str, bool) {
+fn artifact_mime(kind: &str) -> (&str, bool) {
     let mime = match kind {
         "image/png" => "image/png",
         "image/jpeg" => "image/jpeg",
@@ -477,8 +477,18 @@ fn artifact_mime(kind: &str) -> (&'static str, bool) {
         "audio/mpeg" => "audio/mpeg",
         "audio/ogg" => "audio/ogg",
         "audio/flac" => "audio/flac",
-        "video/mp4" => "video/mp4",
-        "video/webm" => "video/webm",
+        video
+            if video.strip_prefix("video/").is_some_and(|subtype| {
+                !subtype.is_empty()
+                    && subtype.bytes().all(|byte| {
+                        byte.is_ascii_lowercase()
+                            || byte.is_ascii_digit()
+                            || matches!(byte, b'.' | b'+' | b'-')
+                    })
+            }) =>
+        {
+            video
+        }
         "json" | "annotations" | "application/json" => "application/json",
         "text/plain" | "text/yaml" | "text/toml" => "text/plain; charset=utf-8",
         _ => return ("application/octet-stream", false),

@@ -56,7 +56,7 @@
 use super::frame::{ExpId, ExpKind, FrameChanges, FrameId};
 use super::scope::TemplateScope;
 use super::{Expander, Instance, Position, ResultStatus, State, instance_id};
-use crate::docs::workflow::{OnReject, Step};
+use crate::docs::workflow::{OnReject, Preview, Step};
 use crate::expr;
 use crate::registry::ResolvedType;
 use crate::routes::Route;
@@ -100,6 +100,7 @@ pub(crate) struct NodePlan {
     /// The judges that hand each next take what they said (`feedback: true`).
     feedback: Vec<String>,
     first: u32,
+    preview: Option<Box<Preview>>,
 }
 
 /// What is left of a node step once its instances exist: expanding its judges (and sequencing
@@ -162,9 +163,10 @@ impl Expander<'_> {
         into: ExpId,
     ) {
         self.exp_mut(into).kind = ExpKind::Node;
-        let Some(plan) = self.node_plan(at, context, path, into) else {
+        let Some(mut plan) = self.node_plan(at, context, path, into) else {
             return;
         };
+        plan.preview = self.node_preview(&at.declared, &resolved.spec, &at.where_);
         for &take in &plan.numbers {
             self.make_take(at, &plan, path, &resolved, into, take);
         }
@@ -238,7 +240,39 @@ impl Expander<'_> {
             numbers,
             feedback,
             first,
+            preview: None,
         })
+    }
+
+    /// Validate literal own-output selectors without evaluating expressions or reading a result.
+    fn node_preview(
+        &mut self,
+        declared: &Step,
+        spec: &NodeSpec,
+        where_: &str,
+    ) -> Option<Box<Preview>> {
+        let preview = declared.preview.as_ref()?;
+        let mut valid = true;
+        for (field, name, family) in [
+            ("video", Some(preview.video.as_str()), "video"),
+            ("poster", preview.poster.as_deref(), "image"),
+        ] {
+            let Some(name) = name else { continue };
+            let problem = match spec.outputs.get(name) {
+                None => Some(format!("no output port {name}")),
+                Some(port)
+                    if port.shape != Shape::One || crate::kinds::family(&port.kind) != family =>
+                {
+                    Some(format!("output {name} must be one {family} file"))
+                }
+                Some(_) => None,
+            };
+            if let Some(problem) = problem {
+                self.problem(&format!("{where_}.preview.{field}"), problem);
+                valid = false;
+            }
+        }
+        valid.then(|| Box::new(preview.clone()))
     }
 
     /// One take of a node step: its frame, its instance, then the instance's links.
@@ -254,6 +288,9 @@ impl Expander<'_> {
     ) {
         let take_frame = self.take_frame(at, plan, take);
         let id = self.instance(at, take_frame, path, resolved);
+        if let Some(instance) = self.instance_mut(&id) {
+            instance.preview = plan.preview.clone();
+        }
         self.take_made(at, plan, into, take, id);
     }
 
@@ -658,6 +695,7 @@ impl Expander<'_> {
             judge_policy: None,
             judged_by: Vec::new(),
             view: declared.view.to_value(),
+            preview: None,
             at_plan: declared.at_plan,
             budget: context.budget.clone(),
             concurrency_group: at.concurrency_group.clone(),

@@ -271,6 +271,9 @@
         "interrupted": {
           "description": "True when the run ended while this instance was running: it never finished, and its `state` is `failed`. Read from the recorded events, never from error text.",
           "type": "boolean"
+        },
+        "preview": {
+          "$ref": "#/$defs/preview"
         }
       }
     },
@@ -611,6 +614,24 @@
             "type": "string"
           },
           "uniqueItems": true
+        }
+      }
+    },
+    "preview": {
+      "description": "Literal output ports of this node instance selected for video presentation. See spec/previews.md.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "video"
+      ],
+      "properties": {
+        "video": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "poster": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
         }
       }
     }

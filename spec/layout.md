@@ -115,8 +115,44 @@ Rules 1–10 read no size, so a preview arriving never changes a cell. Footprint
 declarations: ports, settings and kind. A step whose declared output ports include an image or a
 video reserves its preview area in both views, before any artifact exists: a 16:9 frame as wide as
 the card less its padding, in which the file is fitted whole. A recorded card
-previews its first image output, or without one its first MP4 or WebM output, which shows its
-first frame until it is played (§5.7).
+previews its first image output, or without one its first available `video/*` output. A video
+is offered to the browser's native media decoder; its container or MIME type alone does not
+guarantee playback. Local artifact responses serve concrete video kinds matching the type
+grammar (`video/` followed by `[a-z0-9.+-]+`) inline with their recorded media type. Other
+artifact delivery rules and the portable export allowlist are unchanged.
+
+A node step's explicit `preview: {video: video, poster: poster}` overrides automatic selection
+([previews.md](previews.md)). Both selectors name scalar outputs of that same instance; `poster`
+is optional. A valid recorded poster is the resting image, including when native decoding fails
+or the video bytes are absent from a shared export. It is fitted whole in the same preview frame.
+Missing, invalid or unreadable posters fall back to native first-frame capture when the video is
+available. Poster loading and native-video readiness are independent: displaying a poster does
+not enable hover playback. Missing video bytes show a separate file-availability reason and no
+play action; a poster does not make an omitted original downloadable. Step details apply the
+same poster to the native player and keep it visible beside browser-preview or missing-file feedback.
+With a readable poster, native failure says `Browser playback unavailable`, since the poster
+preview remains available. A capture-only failure leaves that poster and a manual playback action.
+
+A video's poster, or without one its first frame, shows until it is played (§5.7). Reading that frame has a bounded
+deadline and never blocks other cards indefinitely. Hover playback is enabled only after a
+first frame has been captured successfully; pending and failed previews never start playback
+on hover, including a hover already queued when their state changes. Native loading or
+playback failures show a noninteractive unavailable-video icon and a short reason instead of
+the ordinary play control. That icon and reason remain stable under hover, click and keyboard
+input. When native decoding succeeded but reading or encoding its pixels failed, a distinct
+manual **Try playback** action remains available, since capture failure does not establish
+playback failure. These states and diagnostics are restored after redraw.
+Native media errors preserve their category and optional
+browser diagnostic before the media element is reset. The diagnostic is available on the
+message's tooltip as bounded plain text. Browser messages may be empty and vary by browser;
+an unsuitable-source error must not be presented as proof of an unsupported codec. Timeout,
+aborted loading and frame-capture failures remain distinct from native media errors.
+Preview diagnostics remain browser-local and are never added to run records or artifacts;
+failures do not change execution state. The viewer does not transcode media.
+The status says `Browser preview unavailable`: a preview failure does not by itself establish
+that the recorded file is broken or absent. When original bytes are available, step details retain a
+**Download original video** link and suggest trying the file in another video player. Missing
+recorded bytes remain a separate file-availability condition; external playback is not promised.
 
 Example: `seed → propose (2 takes) → warm, cool, mono, dusk, night → sheet`, and an island
 `notes → index`.
@@ -276,8 +312,9 @@ including those that leave the deck.
 | A deck inside an expanded card | — | a click expands it one level deeper. Only the innermost level is interactive; the levels around it are its veil, so a click on them collapses one level and selects nothing |
 
 A video plays over its card's preview, following the card as the camera and the deck move it, and
-selects nothing. Resting on it plays it muted, without taking focus or replacing a video someone
-played or pressed. It stops when it ends, when the pointer leaves one that is only hovered, on Esc
+selects nothing. Once its first frame has been captured, resting on it plays it muted, without
+taking focus or replacing a video someone played or pressed. Unavailable previews do not start
+playback on hover (§4). It stops when it ends, when the pointer leaves one that is only hovered, on Esc
 (focus returns to its play control) and as soon as anything covers its card: another card raised
 over it, its deck resting with another card in front, or the veil of a deck it is not in; a covered
 card's video does not start. Until the

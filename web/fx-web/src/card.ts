@@ -2,6 +2,7 @@ import { displayPortName } from "./ports";
 import { canvasNodeGeometry, canvasPreviewReserved, PORT_ROW, PORT_TOP, type PositionedNode } from "./layout";
 import { stateIcon, stateIconParts } from "./state-icon";
 import type { CanvasStep } from "./graph";
+import { createElement, RotateCw, VideoOff } from "lucide";
 
 const SVG = "http://www.w3.org/2000/svg";
 
@@ -113,10 +114,10 @@ export function nodeCard(node: PositionedNode, canvasId: string, index: number, 
     clip.append(element("rect", { ...frame, rx: 6 }));
     group.append(clip);
     const backdrop = element("rect", { ...frame, rx: 6, fill: `url(#${canvasId}-checker)` });
-    const unavailable = preview.kind === "video" ? "Video unavailable" : "Image unavailable";
-    const image = element("image", { ...frame, preserveAspectRatio: "xMidYMid meet", "clip-path": `url(#${clipId})`, role: "img", "aria-label": preview.label, class: "fx-canvas-node-image" });
-    const fallback = element("text", { x: node.width / 2, y: frame.y + frame.height / 2, "text-anchor": "middle", "dominant-baseline": "middle", class: "fx-canvas-image-error", visibility: "hidden" }, unavailable);
-    image.addEventListener("error", () => {
+    const unavailable = preview.kind === "video" ? "Browser preview unavailable" : "Image unavailable";
+    const image = element("image", { ...frame, preserveAspectRatio: "xMidYMid meet", "clip-path": `url(#${clipId})`, role: "img", "aria-label": preview.label, class: `fx-canvas-node-image${preview.kind === "video" ? " fx-canvas-video-still" : ""}` });
+    const fallback = element("text", { x: node.width / 2, y: frame.y + frame.height / 2 + (preview.kind === "video" ? 38 : 0), "text-anchor": "middle", "dominant-baseline": "middle", class: "fx-canvas-image-error", visibility: "hidden" }, unavailable);
+    if (preview.kind === "image") image.addEventListener("error", () => {
       image.setAttribute("visibility", "hidden");
       fallback.setAttribute("visibility", "visible");
       group.setAttribute("aria-label", `${node.title}, ${state}${portsLabel}, ${unavailable}: ${preview.label}`);
@@ -130,11 +131,22 @@ export function nodeCard(node: PositionedNode, canvasId: string, index: number, 
       // control; the canvas plays it over the frame (video.ts). The backdrop takes the pointer, so
       // resting anywhere on the frame plays it muted.
       const video = element("g", { class: "fx-canvas-video", "data-digest": preview.digest });
-      const play = element("g", { class: "fx-canvas-play", role: "button", tabindex: 0, "aria-label": `Play ${preview.label}` });
+      const play = element("g", { class: "fx-canvas-play", role: "button", tabindex: 0, "aria-label": `Play ${preview.label}`, "data-label": preview.label });
       const center = { x: node.width / 2, y: frame.y + frame.height / 2 };
-      play.append(element("circle", { cx: center.x, cy: center.y, r: 18 }),
-        mediaGlyph("play", { x: center.x - 8, y: center.y - 8, width: 16, height: 16 }));
-      video.append(backdrop, image, border, fallback, play);
+      play.append(element("title", {}, `Play ${preview.label}`), element("circle", { cx: center.x, cy: center.y, r: 18 }),
+        mediaGlyph("play", { x: center.x - 8, y: center.y - 8, width: 16, height: 16, class: "fx-canvas-video-play-glyph" }),
+        createElement(RotateCw, { x: center.x - 9, y: center.y - 9, width: 18, height: 18, "stroke-width": 2, "aria-hidden": "true", class: "fx-canvas-video-retry-glyph" }),
+        element("text", { x: center.x, y: center.y - 28, "text-anchor": "middle", class: "fx-canvas-video-retry-label", "aria-hidden": "true" }, "Try playback"));
+      const unavailableIcon = createElement(VideoOff, { x: center.x - 14, y: center.y - 14, width: 28, height: 28, "stroke-width": 1.5, "aria-hidden": "true", class: "fx-canvas-video-disabled-icon" });
+      video.append(backdrop, image);
+      if (preview.poster) {
+        const poster = element("image", { ...frame, preserveAspectRatio: "xMidYMid meet", "clip-path": `url(#${clipId})`, role: "img", "aria-label": preview.poster.label, class: "fx-canvas-node-image fx-canvas-video-poster" });
+        poster.addEventListener("load", () => { video.classList.add("has-poster"); video.classList.remove("poster-failed"); }, { signal });
+        poster.addEventListener("error", () => { video.classList.remove("has-poster"); video.classList.add("poster-failed"); }, { signal });
+        poster.setAttribute("href", preview.poster.url);
+        video.append(poster);
+      }
+      video.append(border, fallback, play, unavailableIcon);
       group.append(video);
     }
     group.append(element("text", { x: node.width - 16, y: node.height - 22, "text-anchor": "end", class: "fx-canvas-image-count" }, count));

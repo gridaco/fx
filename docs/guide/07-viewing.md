@@ -276,7 +276,8 @@ latest consistent snapshot. Images, text/JSON,
 audio, and video use generic previews; other file types can be opened in a new tab.
 
 Run canvas cards also show the first available recorded image output. A step without
-one shows the first frame of its first MP4 or WebM video. Resting the pointer on it
+one offers its first available video output to the browser's native player. Whether it
+can be shown depends on the browser's support for its container and codec. Resting the pointer on it
 plays it muted and looping; click it to keep it playing with sound, or use its play
 button. The video plays over the card, follows it as you pan and zoom, and stops when it
 ends, on Escape, or when another card covers it; played again, it continues where it
@@ -285,13 +286,48 @@ zoom (play, seek, time, mute and full screen, fewer on a small card); with the p
 focused, Space or K plays and pauses, the arrow keys seek, M mutes and F goes full screen. A count indicates multiple distinct available images
 (or videos); select the card to inspect all outputs. The canvas uses the verified
 artifact inventory and never evaluates author code to produce thumbnails; a video's
-first frame is read in the browser once its card comes into view. Plan cards have no
+first frame is read in the browser once its card comes into view. If the frame cannot be
+read or loading times out, the card shows a short reason and an unavailable-video icon.
+The heading is **Browser preview unavailable**; this describes this browser's preview, not
+whether the original file is valid. When the file is available, its details always offer
+**Download original video**, so you can try it in another video player.
+Hover playback starts only after a first frame has been captured successfully; unavailable
+previews do not attempt playback or change their message when hovered. When native decoding
+worked but capturing the image failed, a separate **Try playback** action remains available.
+Hover the message for the browser's error code and diagnostic when available.
+Browsers do not always provide a detailed explanation or distinguish an unsupported format
+from an unavailable source. These diagnostics stay in the browser and are not recorded as
+workflow failures. If browser playback also fails, its reason and the unavailable-video icon are shown.
+FX does not convert unsupported videos. A node can return a separate image output to represent its result.
+To associate that image with a video, select their output port names on the workflow step:
+
+```yaml
+trim:
+  uses: ./nodes/trim.py#trim
+  preview:
+    video: video
+    poster: poster
+```
+
+Here the node declares scalar `video` and `poster` outputs of video and image kinds. The
+poster can be a first frame, a contact sheet or another image the author chooses. `poster` is
+optional. The names are literal outputs of this step, not expressions, paths or URLs; this
+setting overrides automatic image selection. It applies independently to each repeated item
+and take. A valid poster stays visible even if the browser cannot play the original, but does
+not itself enable hover playback. Missing or unreadable posters fall back to the video's first
+frame when possible. Step details also use the poster and retain the original download.
+When a poster is visible but native playback fails, the status says **Browser playback unavailable**.
+Shared exports only include the media types allowed by the export contract; broader native
+playback support does not restore omitted files. An included poster still shows when the
+original video is omitted; that original remains explicitly unavailable. Plan cards have no
 artifact previews, including steps marked `done` by the planner. Updates preserve the
 canvas camera, selection and workflow navigation.
 
-These automatic thumbnails use structured run data. The existing authoring `view`
-declarations are booleans or HTML template paths; custom templates and structured
-preview declarations or callbacks are not yet rendered by this viewer.
+These thumbnails use structured run data. The authoring `view` declarations remain booleans
+or HTML template paths; custom HTML templates and preview callbacks are not rendered by this viewer.
+The separate `preview` declaration selects recorded video and image outputs. Changing it
+changes the authored workflow's plan digest, so use a new run; it does not change step identities
+or paid-call cache keys. Adding an output to a node still follows normal node versioning rules.
 
 Files are matched to recorded content digests. A missing, changed, or store-only file
 is unavailable; this bootstrap does not discover the originating project's cache.

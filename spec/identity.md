@@ -197,6 +197,11 @@ step_identity = digest({
 
 Upstream results enter by content: a file an upstream step wrote is `{"file": digest}`. An upstream step that runs again and writes the same bytes therefore leaves every downstream identity unchanged.
 
+A workflow step's optional [`preview`](previews.md) names its own output ports for display.
+It is not a `with:` value and contributes nothing to a step identity or call key. It creates
+no read, dependency or execution input. The authored declaration still belongs to the
+workflow document used by the plan digest (§10).
+
 ## 9. Call key
 
 Each paid capability call is keyed by its request, the key of the call cache:
@@ -235,6 +240,9 @@ plan_digest = digest({
 ```
 
 - `document` is the workflow document as authored: the JSON value the strict YAML loader produced (or the document a builder returned), with no defaults filled in. Adding an optional field to the format therefore does not change existing plan digests.
+- Adding or editing a step's `preview` declaration changes that authored document and therefore
+  the plan digest. It requires a new run folder; identical work can still reuse the result and
+  call caches. Presentation metadata is not an exception to this authored-document rule.
 - `source` is the document's project-relative POSIX path, or `<path>:<function>` for a builder.
 - `routes` is a list because one route can serve several capabilities, each with its own fingerprint (§7).
 - `inputs` are the values as given, after merging every inputs file and flag, before defaults are filled in. An optional input that was not given is left out.
