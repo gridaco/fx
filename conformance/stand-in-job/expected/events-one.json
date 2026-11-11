@@ -145,7 +145,8 @@
   "plan": "5e564a8e0a7c403dd3f744f32cd75091b3fec1bd32de553b0234d39949f257ca",
   "ports": {
    "inputs": {
-    "views": "image{}"
+    "image": "image?",
+    "views": "image{}?"
    },
    "outputs": {
     "model": "model"

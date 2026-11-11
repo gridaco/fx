@@ -192,15 +192,21 @@ pub enum AdapterSendResult {
     Answered(AdapterAnswer),
     NotReceived {
         reason: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        diagnostic: Option<crate::AdapterDiagnostic>,
         /// The wait the provider asked for, in seconds.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         retry_after_s: Option<f64>,
     },
     Refused {
         reason: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        diagnostic: Option<crate::AdapterDiagnostic>,
     },
     Failed {
         reason: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        diagnostic: Option<crate::AdapterDiagnostic>,
         retryable: bool,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         cost_usd: Option<f64>,
@@ -212,22 +218,28 @@ pub enum AdapterSendResult {
 #[serde(tag = "outcome", rename_all = "snake_case", deny_unknown_fields)]
 pub enum AdapterSubmitResult {
     /// The provider took the job; the handle is what collecting needs.
-    Accepted {
-        handle: IndexMap<String, Value>,
-    },
+    Accepted { handle: IndexMap<String, Value> },
     Uncertain {
         reason: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        diagnostic: Option<crate::AdapterDiagnostic>,
     },
     NotReceived {
         reason: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        diagnostic: Option<crate::AdapterDiagnostic>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         retry_after_s: Option<f64>,
     },
     Refused {
         reason: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        diagnostic: Option<crate::AdapterDiagnostic>,
     },
     Failed {
         reason: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        diagnostic: Option<crate::AdapterDiagnostic>,
         retryable: bool,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         cost_usd: Option<f64>,
@@ -242,11 +254,49 @@ pub enum AdapterCollectResult {
     Ended {
         reason: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        diagnostic: Option<crate::AdapterDiagnostic>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         cost_usd: Option<f64>,
     },
     Unreachable {
         reason: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        diagnostic: Option<crate::AdapterDiagnostic>,
     },
+}
+
+impl AdapterSendResult {
+    pub fn diagnostic(&self) -> Option<&crate::AdapterDiagnostic> {
+        match self {
+            Self::NotReceived { diagnostic, .. }
+            | Self::Refused { diagnostic, .. }
+            | Self::Failed { diagnostic, .. } => diagnostic.as_ref(),
+            _ => None,
+        }
+    }
+}
+
+impl AdapterSubmitResult {
+    pub fn diagnostic(&self) -> Option<&crate::AdapterDiagnostic> {
+        match self {
+            Self::Uncertain { diagnostic, .. }
+            | Self::NotReceived { diagnostic, .. }
+            | Self::Refused { diagnostic, .. }
+            | Self::Failed { diagnostic, .. } => diagnostic.as_ref(),
+            _ => None,
+        }
+    }
+}
+
+impl AdapterCollectResult {
+    pub fn diagnostic(&self) -> Option<&crate::AdapterDiagnostic> {
+        match self {
+            Self::Ended { diagnostic, .. } | Self::Unreachable { diagnostic, .. } => {
+                diagnostic.as_ref()
+            }
+            _ => None,
+        }
+    }
 }
 
 /// One HTTP header: its name, lowercase, and its value (`http_header`).

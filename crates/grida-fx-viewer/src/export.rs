@@ -457,6 +457,11 @@ fn project_view(view: &Value, options: ExportOptions) -> Value {
                 } else {
                     Value::Null
                 };
+                if options.include_diagnostics
+                    && let Some(diagnostic) = node.get("diagnostic")
+                {
+                    item["diagnostic"] = diagnostic.clone();
+                }
                 if node.get("ports").is_some() {
                     let mut ports = fields(&node["ports"], &["inputs", "outputs"]);
                     ports["params"] = schema_map(&node["ports"]["params"], options.include_values);

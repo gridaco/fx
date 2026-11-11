@@ -360,7 +360,7 @@ describe.skipIf(HOST_SKIP !== null)("the TypeScript adapter host", () => {
       });
       expect((await host.request("adapter.send", call("stray"))).error).toEqual({
         code: -32099,
-        message: "TypeError: Refused holds outcome and reason, not 'cost_usd'",
+        message: "TypeError: Refused holds outcome, reason and diagnostic, not 'cost_usd'",
       });
       expect(outcome("adapter.send", await host.request("adapter.send", call("refuse")))).toEqual({
         outcome: "refused",

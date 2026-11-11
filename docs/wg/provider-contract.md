@@ -6,6 +6,12 @@ Status: ratified by the owner, 2026-10-14. It is built in one pull request that 
 Once it lands, [`spec/`](../../spec/) holds the contracts; this page keeps the decisions and
 the record of the plan.
 
+Clarified 2026-11-11 by the [provider boundary](provider-boundary.md): standard
+capability checks do not define every native operation's input schema. The
+existing custom-capability adapter path is the extension foundation. Optional structured
+provider diagnostics and dedicated native-capability acceptance evidence are now
+implemented in source; the linked decision names their contracts and tests.
+
 ## Why
 
 - New models and providers arrive faster than FX can ship adapters, so FX will always be
@@ -516,8 +522,8 @@ Gate: `cargo test`, conformance, `check_llms`.
     (`check_size_envelope`'s literals lifted into a constant, its sentences unchanged), where
     the OpenAI and fal adapters hold a size to it, and the sizes a GPT Image route prices or
     serves, against `image_constraints` and fal's `image_size` edges (GG's routes are priced by
-    size too, but leave sizes to GG); fal's prompt (32,000 characters); Tripo's face limit (48
-    to 25,000, within 48 to 50,000, so no exception: the follow-up stays); a structured route's
+    size too, but leave sizes to GG); fal's prompt (32,000 characters); the then-current Tripo face limit (removed by the
+    [provider boundary](provider-boundary.md): the provider owns its model/topology range); a structured route's
     default `max_tokens` (16,000) within `max_output_tokens` (128,000). Code fact: an agent turn
     sends no `max_tokens` by default (`chat::agent_prompt`), so its routes are not held to it.
   - Prices, the formula decided: (a) a `structured.generate` route's high is at least the default
@@ -1082,7 +1088,7 @@ The list they were filed from:
 - one list of the features each adapter honours: `tests/models.rs` (`honoured`) and
   `tests/routes.rs` (`features_say_what_the_adapters_honour`) each keep their own by hand, since
   no adapter exports one;
-- Tripo's face limit: 25,000 in FX, 50,000 in Models;
+- Tripo's former 25,000-face restriction was removed by the [provider boundary](provider-boundary.md); integer face counts are forwarded and provider rejections retain their diagnostic;
 - caps in a repeat whose list only a run produces: the graph's `pending` entry carries only
   `high_usd`, never `capped`, and the plan notes no capped route that only such a repeat binds,
   since `Plan::capped_notes` reads the expanded instances;

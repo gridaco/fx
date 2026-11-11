@@ -125,6 +125,7 @@ pub async fn dispatch(
         result,
         cache,
         stop,
+        diagnostic,
         code,
         ..
     } = attempt;
@@ -176,6 +177,7 @@ pub async fn dispatch(
             display,
         },
         ResultStatus::Failed => Event::NodeFailed {
+            diagnostic: diagnostic.map(|diagnostic| *diagnostic),
             id: job.id.clone(),
             path: job.path.clone(),
             error: result.error.clone(),
@@ -359,6 +361,7 @@ mod tests {
             retryable,
             stop: None,
             code: None,
+            diagnostic: None,
         }
     }
 

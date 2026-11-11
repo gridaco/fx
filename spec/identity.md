@@ -356,3 +356,10 @@ Each example gives the object, its canonical bytes and its digest. The same exam
 
     instance_id = entity['it\'s'].draw#1
     instance_id = set['a\\b'].shot['1.5'].draw#2.1
+
+The single-image extension of `mesh.generate` adds a previously invalid request
+shape. Existing multiview requests and wire bodies are unchanged: the built-in
+node retains its version and the historical `tripo-multiview` adapter retains
+behavior `1`. Absent optional input ports are omitted, not filled with `null`.
+The new route feature `image_input` is not fingerprinted. Failure diagnostics
+are evidence only and never enter the route, request or call key.

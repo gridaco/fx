@@ -1,0 +1,7 @@
+fx: project/v1
+route_tables: [routes.yaml]
+providers:
+  acme:
+    credential: { variable: ACME_NATIVE_KEY }
+    base_url: { default: "https://native.acme.test/v1" }
+    adapter: adapter.ts#native_adapter

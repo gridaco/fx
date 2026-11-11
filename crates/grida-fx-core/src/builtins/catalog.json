@@ -299,7 +299,8 @@
    "major": 1,
    "version": 1,
    "inputs": {
-    "views": "image{}"
+    "views": "image{}?",
+    "image": "image?"
    },
    "params": {
     "face_limit": {

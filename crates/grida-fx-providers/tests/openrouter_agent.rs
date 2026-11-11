@@ -741,6 +741,7 @@ fn the_key_never_reaches_a_reason_an_answer_or_a_url() {
     let mut seen = Vec::new();
     for _ in 0..3 {
         match block_on(adapter.send(&call)) {
+            Sent::Diagnosed(..) => panic!("unexpected diagnostic in legacy fixture"),
             Sent::Answered(answer) => seen.push(answer.data.to_string()),
             Sent::Failed { reason, .. }
             | Sent::Refused { reason }

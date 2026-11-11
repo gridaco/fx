@@ -449,3 +449,21 @@ export const acme = adapter({
 
 The [guide](https://github.com/gridaco/fx/tree/main/docs/guide) covers workflow files, nodes,
 cost and cache, and running.
+
+## Provider-native operations and diagnostics
+
+Standard capability schemas do not limit the adapter extension path. A project
+node may call an adapter-declared custom capability with arbitrary data and
+files. The adapter implements its provider's wire and job semantics; FX still
+owns routing, identity, caching, holds, settlement and resume. The complete
+[native harness](../../fixtures/native/README.md) demonstrates unknown fields,
+file transport, cancellation, collection without resubmission and independent
+call-cache replay in both languages.
+
+Failure outcomes accept `diagnostic: { source, phase, ... }` (the exported
+`AdapterDiagnostic` type). Optional fields include `operation`, `httpStatus`,
+`code`, `field`, `message`, `requestId`, `taskId`, `detail`, `redacted` and
+`truncated`. A body sees sanitized evidence in `EngineError.data.diagnostic`;
+`RunResult.steps[id].diagnostic` and saved inspection/observation expose its
+recorded lower_snake_case fields. Legacy records may have no diagnostic. Evidence
+never changes retry or billing.

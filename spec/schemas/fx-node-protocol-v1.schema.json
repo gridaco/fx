@@ -1490,10 +1490,77 @@
       "required": ["outcome", "files", "data"],
       "additionalProperties": false
     },
+    "adapter_diagnostic": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "enum": [
+            "engine",
+            "adapter",
+            "transport",
+            "provider"
+          ]
+        },
+        "phase": {
+          "enum": [
+            "validate",
+            "upload",
+            "send",
+            "submit",
+            "poll",
+            "collect",
+            "download"
+          ]
+        },
+        "operation": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "field": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "http_status": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 599
+        },
+        "detail": {
+          "enum": [
+            "available",
+            "unavailable",
+            "unreadable",
+            "withheld"
+          ]
+        },
+        "redacted": {
+          "type": "boolean"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "source",
+        "phase"
+      ],
+      "additionalProperties": false
+    },
     "outcome_not_received": {
       "description": "Provably not received: the engine may send again under the same attempt, at $0, after retry_after_s seconds at least.",
       "type": "object",
       "properties": {
+        "diagnostic": {"$ref": "#/$defs/adapter_diagnostic"},
         "outcome": {"const": "not_received"},
         "reason": {"type": "string", "minLength": 1},
         "retry_after_s": {"type": "number", "minimum": 0}
@@ -1505,6 +1572,7 @@
       "description": "Refused before anything was sent: capability_refused, $0.",
       "type": "object",
       "properties": {
+        "diagnostic": {"$ref": "#/$defs/adapter_diagnostic"},
         "outcome": {"const": "refused"},
         "reason": {"type": "string", "minLength": 1}
       },
@@ -1515,6 +1583,7 @@
       "description": "Received and failed: billed at cost_usd, else the whole hold; a new attempt only when retryable.",
       "type": "object",
       "properties": {
+        "diagnostic": {"$ref": "#/$defs/adapter_diagnostic"},
         "outcome": {"const": "failed"},
         "reason": {"type": "string", "minLength": 1},
         "retryable": {"type": "boolean"},
@@ -1537,6 +1606,7 @@
       "description": "Nobody can say whether the provider took the job: its record stays submitting.",
       "type": "object",
       "properties": {
+        "diagnostic": {"$ref": "#/$defs/adapter_diagnostic"},
         "outcome": {"const": "uncertain"},
         "reason": {"type": "string", "minLength": 1}
       },
@@ -1547,6 +1617,7 @@
       "description": "The job ended without a usable result: its record is settled at cost_usd, else the whole hold.",
       "type": "object",
       "properties": {
+        "diagnostic": {"$ref": "#/$defs/adapter_diagnostic"},
         "outcome": {"const": "ended"},
         "reason": {"type": "string", "minLength": 1},
         "cost_usd": {"type": "number", "minimum": 0}
@@ -1558,6 +1629,7 @@
       "description": "It is not clear that the job is over: its record stays submitted, and a later run collects again.",
       "type": "object",
       "properties": {
+        "diagnostic": {"$ref": "#/$defs/adapter_diagnostic"},
         "outcome": {"const": "unreachable"},
         "reason": {"type": "string", "minLength": 1}
       },

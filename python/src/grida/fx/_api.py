@@ -264,6 +264,7 @@ class Failure:
     code: str | None
     facts: dict[str, Any]
     skipped: bool
+    diagnostic: dict[str, Any] | None = None
 
 
 class RunResult:
@@ -343,6 +344,7 @@ class RunResult:
                 code=code if isinstance(code, str) else None,
                 facts=dict(event.get("facts") or {}),
                 skipped=skip and bool(event.get("blocked")),
+                diagnostic=event.get("diagnostic"),
             )
         return failures
 

@@ -253,9 +253,10 @@ pub const CAPABILITIES: &[Capability] = &[
             opt("texture", Boolean),
             opt("pbr", Boolean),
             opt("provider_options", Object),
-            req("views", FilesByName),
+            opt("views", FilesByName),
+            opt("image", File),
         ],
-        features: &["multiview", "textured_mesh", "quad", "pbr"],
+        features: &["image_input", "multiview", "textured_mesh", "quad", "pbr"],
         files: &[("model", "model")],
     },
     Capability {
@@ -369,6 +370,12 @@ pub fn check_request(capability_name: &str, request: &Value) -> Result<(), Strin
                 return Err(format!("{} is {}", member.name, member.ty.word()));
             }
             Some(_) => {}
+        }
+    }
+    if capability_name == "mesh.generate" {
+        let present = |name| members.get(name).is_some_and(|v| !v.is_null());
+        if present("image") == present("views") {
+            return Err("mesh.generate needs exactly one of image or views".into());
         }
     }
     Ok(())

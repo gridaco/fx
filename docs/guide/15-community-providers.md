@@ -18,6 +18,7 @@ you would write is shown in full, and every output is the engine's.
 | A model FX does not list, on GG, OpenRouter or fal | a route | [below](#a-new-model-needs-only-a-route) |
 | A provider that speaks the OpenAI Chat Completions API, such as a model server on this machine | a declaration with `family: openai-compatible`, and routes | [An OpenAI-compatible server](#an-openai-compatible-server) |
 | Any other provider | a declaration, routes, and an adapter in Python or TypeScript | [Your own adapter](#your-own-adapter) |
+| A provider operation whose inputs do not fit a standard capability | a custom capability, project node and adapter | [Native operations](#native-operations) |
 
 Codex and Grok Build are runtimes FX starts, signed in to your own plan: they take no declaration
 and no adapter of yours.
@@ -1045,3 +1046,73 @@ The contract: [adapters.md §9](../../spec/adapters.md#9-project-adapters) for p
 [providers.md §1](../../spec/providers.md#1-keys-and-endpoints) for declarations, and
 [protocol.md §5.8](../../spec/protocol.md#58-adapters) for the wire between FX and the adapter
 host.
+
+## Native operations
+
+FX's standard capability schemas are optional shared interfaces, not an exhaustive
+catalog of provider operations. A project adapter can declare a custom capability,
+and a project node can call it through `ctx.capability`. The engine accepts its
+arbitrary canonical data and file references without applying a standard
+capability's input schema. Routing, accounting, content identity, caching and job
+recovery still belong to FX. The adapter supplies the operation's wire and
+lifecycle: accepting arbitrary data cannot infer how to submit or collect a job.
+
+The complete [native harness](../../fixtures/native/README.md) has runnable Python
+and TypeScript projects. It sends a file and unknown provider fields through a
+custom operation, cancels after submission, resumes without submitting again,
+replays the call cache independently of the step cache, and checks identities
+when a field, file or operation changes. Its synthetic provider never contacts a
+service. The [llms.txt native recipe](../../llms.txt#a-provider-native-operation-outside-fxs-standard-schemas)
+is a smaller complete project.
+
+A custom operation does not disable checks on a standard capability. If an
+adapter declares `mesh.generate`, its requests still need exactly one `image` or
+`views` and its answers need a model. Declare a custom capability when the native
+operation has a different contract. `provider_options` adds parameters to an
+operation an adapter already understands; it is not an arbitrary endpoint switch.
+
+## Provider diagnostics
+
+A failure outcome can include supplementary evidence. In Python:
+
+```python
+from grida.fx import AdapterDiagnostic, Failed
+
+failure = Failed(
+    "Provider rejected the input", retryable=False,
+    diagnostic=AdapterDiagnostic(
+        source="provider", phase="submit", operation="mesh_from_image",
+        http_status=400, code="bad_input", field="new_field",
+        message="The selected format is unsupported", request_id="req-example",
+        detail="available",
+    ),
+)
+```
+
+In TypeScript, add a `diagnostic` object to the failure outcome with `source`,
+`phase`, `operation`, `httpStatus`, `code`, `field`, `message`, `requestId` and
+`detail`. Evidence is optional and separate from whether the request was received
+or billed. A paid submit with unknown receipt still returns `Uncertain`; an error
+message is not proof of a free refusal.
+
+Extract only known error fields from a provider response. Never forward a body,
+headers, credentials, upload tokens or signed URLs. The engine redacts and bounds
+selected text, input echoes and paths before writing events or errors. This includes
+identifier and operation fields: an identifier-shaped echo is withheld too. If an
+adapter knows a transient secret the engine has not seen, it must withhold or
+remove it before returning the evidence. Mark unavailable or unreadable detail
+honestly; a provider may supply no useful explanation.
+
+A node body can read the sanitized evidence at `EngineError.data["diagnostic"]`.
+Uncaught errors keep it through the host into `node_failed.diagnostic`,
+`grida fx observe`, `grida fx project` and `grida fx inspect --json`. Python exposes
+`result.failures[id].diagnostic`; JavaScript exposes
+`result.steps[id].diagnostic`. Recorded fields are lower_snake_case. The human
+failure also includes the safe explanation. An uncertain job retains its
+original diagnostic on a later invocation; it is not submitted again.
+
+Tripo supplies structured evidence for local mesh validation, upload refusals, paid
+submissions and terminal task failures. Integer mesh face counts are forwarded without
+an FX snapshot of the provider range; Tripo validates its model and topology limits. Other built-in adapters and older hosts may still supply
+only their existing reason. Both remain supported; no provider detail is invented
+for an older record.

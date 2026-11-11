@@ -393,3 +393,10 @@ A folder at a run's place that holds files but no `plan.json` refuses nothing: w
 **What stays.** Every run's `plan.json` and `events.jsonl` name what it needs: file digests, step identities and call keys, each 64 lowercase hexadecimal characters. Every such token names what stays: the result record, call record or file of that name, in the run's store (the stand-in store for a stand-in run). So do the tokens of every record that stays and of every job record, until nothing new is named. A file the store holds that is linked from anywhere else (a link count above one, such as a run folder outside the project's knowledge) stays, with every record that names it. Every `budget_reserved` names the key of the call it holds money for (fx-run-events-v1), written before anything is sent, so a paid answer is named even when its `call` event never got written.
 
 **What goes.** Every other result record, call record and file under `results/`, `calls/` and `files/`, records before files, and the leftovers of §6. Nothing else under the store root is touched: not `jobs/`, `projects/`, `lock` or a name that is not a digest. With `--yes` the stores are locked exclusively first, and everything above is checked and counted again under the lock.
+
+Structured adapter failure evidence ([adapters.md](adapters.md) §7) is optional:
+`node_failed.diagnostic` is distinct from node facts. An uncertain job may retain
+`diagnostic` alongside its `note` only while `submitting`; subsequent
+`job_unsettled` errors preserve it. The engine sanitizes evidence before writing
+it. Older records omit it. This additive metadata changes no identity formula,
+call key, existing job handle or settlement rule.

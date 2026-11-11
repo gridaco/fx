@@ -253,6 +253,8 @@ pub struct Attempts<'a> {
 /// How a call ended (module doc).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Outcome {
+    /// Supplementary diagnostic evidence; execution semantics are those of the inner outcome.
+    Diagnosed(Box<Outcome>, Box<grida_fx_protocol::AdapterDiagnostic>),
     /// The answer, and what its attempt was charged (0 for a collected job).
     Answered {
         answer: Answer,
@@ -277,10 +279,16 @@ pub enum Outcome {
 
 /// Makes a plain call (module doc).
 pub async fn send_plain(adapter: &dyn RequestAdapter, attempts: &Attempts<'_>) -> Outcome {
-    redacted(plain(adapter, attempts).await, &adapter.redactor())
+    let mut diagnostic = None;
+    let outcome = plain(adapter, attempts, &mut diagnostic).await;
+    reported(outcome, diagnostic, attempts, &adapter.redactor())
 }
 
-async fn plain(adapter: &dyn RequestAdapter, attempts: &Attempts<'_>) -> Outcome {
+async fn plain(
+    adapter: &dyn RequestAdapter,
+    attempts: &Attempts<'_>,
+    diagnostic: &mut Option<grida_fx_protocol::AdapterDiagnostic>,
+) -> Outcome {
     let route_id = attempts.call.route.id();
     let mut call = attempts.call.clone();
     let mut sends = 0;
@@ -306,13 +314,20 @@ async fn plain(adapter: &dyn RequestAdapter, attempts: &Attempts<'_>) -> Outcome
             },
         };
         sends += 1;
-        let sent = race(adapter.send(&call), attempts.cancel).await;
+        let sent = race(adapter.send(&call), attempts.cancel)
+            .await
+            .map(|outcome| {
+                let (outcome, detail) = outcome.into_report();
+                *diagnostic = detail;
+                outcome
+            });
         drop(slot);
         let reason = match sent {
             None => {
                 attempts.settle(hold, None);
                 return Outcome::Cancelled;
             }
+            Some(Sent::Diagnosed(..)) => unreachable!("diagnostic separated above"),
             Some(Sent::NotReceived {
                 reason,
                 retry_after,
@@ -370,10 +385,16 @@ async fn plain(adapter: &dyn RequestAdapter, attempts: &Attempts<'_>) -> Outcome
 
 /// Submits a long job and collects it (module doc).
 pub async fn submit_job(adapter: &dyn LongJob, attempts: &Attempts<'_>) -> Outcome {
-    redacted(submit(adapter, attempts).await, &adapter.redactor())
+    let mut diagnostic = None;
+    let outcome = submit(adapter, attempts, &mut diagnostic).await;
+    reported(outcome, diagnostic, attempts, &adapter.redactor())
 }
 
-async fn submit(adapter: &dyn LongJob, attempts: &Attempts<'_>) -> Outcome {
+async fn submit(
+    adapter: &dyn LongJob,
+    attempts: &Attempts<'_>,
+    diagnostic: &mut Option<grida_fx_protocol::AdapterDiagnostic>,
+) -> Outcome {
     let Some(fields) = attempts.job.as_ref() else {
         return no_job_fields(&attempts.call);
     };
@@ -409,7 +430,15 @@ async fn submit(adapter: &dyn LongJob, attempts: &Attempts<'_>) -> Outcome {
             return Outcome::Store(error);
         }
         sends += 1;
-        let submitted = race(adapter.submit(&call), attempts.cancel).await;
+        let submitted = race(adapter.submit(&call), attempts.cancel)
+            .await
+            .map(|outcome| {
+                let (outcome, detail) = outcome.into_report();
+                *diagnostic = detail.map(|d| {
+                    grida_fx_providers::diagnostic::sanitize(d, &call, &adapter.redactor())
+                });
+                outcome
+            });
         drop(slot);
         let reason = match submitted {
             None => {
@@ -417,6 +446,7 @@ async fn submit(adapter: &dyn LongJob, attempts: &Attempts<'_>) -> Outcome {
                 attempts.settle(hold, None);
                 return Outcome::Cancelled;
             }
+            Some(Submitted::Diagnosed(..)) => unreachable!("diagnostic separated above"),
             Some(Submitted::NotReceived {
                 reason,
                 retry_after,
@@ -436,7 +466,7 @@ async fn submit(adapter: &dyn LongJob, attempts: &Attempts<'_>) -> Outcome {
             Some(Submitted::Uncertain { reason }) => {
                 // The note is written redacted, before the hold is settled (spec/store.md §5).
                 let reason = adapter.redactor().reason(&reason);
-                let saved = attempts.note(fields, &reason);
+                let saved = attempts.note(fields, &reason, diagnostic.as_ref());
                 attempts.settle(hold, None);
                 if let Err(error) = saved {
                     return Outcome::Store(error);
@@ -463,8 +493,16 @@ async fn submit(adapter: &dyn LongJob, attempts: &Attempts<'_>) -> Outcome {
                     attempts.settle(hold, None);
                     return Outcome::Store(error);
                 }
-                return collect_held(adapter, attempts, fields, &call, &handle, hold, attempt)
-                    .await;
+                return collect_held(
+                    adapter,
+                    attempts,
+                    fields,
+                    &call,
+                    &handle,
+                    (hold, attempt),
+                    diagnostic,
+                )
+                .await;
             }
         };
         // The attempt failed as billed: a new attempt, when sends are left.
@@ -480,19 +518,23 @@ pub async fn collect_job(
     attempts: &Attempts<'_>,
     handle: &Value,
 ) -> Outcome {
-    redacted(
-        collect(adapter, attempts, handle).await,
-        &adapter.redactor(),
-    )
+    let mut diagnostic = None;
+    let outcome = collect(adapter, attempts, handle, &mut diagnostic).await;
+    reported(outcome, diagnostic, attempts, &adapter.redactor())
 }
 
-async fn collect(adapter: &dyn LongJob, attempts: &Attempts<'_>, handle: &Value) -> Outcome {
+async fn collect(
+    adapter: &dyn LongJob,
+    attempts: &Attempts<'_>,
+    handle: &Value,
+    diagnostic: &mut Option<grida_fx_protocol::AdapterDiagnostic>,
+) -> Outcome {
     let Some(fields) = attempts.job.as_ref() else {
         return no_job_fields(&attempts.call);
     };
     let mut call = attempts.call.clone();
     call.attempt = call.attempt.max(1);
-    match collect_once(adapter, attempts, &call, handle).await {
+    match collect_once(adapter, attempts, &call, handle, diagnostic).await {
         Collect::Cancelled => Outcome::Cancelled,
         Collect::Answered(answer) => Outcome::Answered {
             answer,
@@ -516,10 +558,11 @@ async fn collect_held(
     fields: &JobRecord,
     call: &CallRequest,
     handle: &Value,
-    hold: Hold,
-    attempt: u32,
+    held: (Hold, u32),
+    diagnostic: &mut Option<grida_fx_protocol::AdapterDiagnostic>,
 ) -> Outcome {
-    match collect_once(adapter, attempts, call, handle).await {
+    let (hold, attempt) = held;
+    match collect_once(adapter, attempts, call, handle, diagnostic).await {
         Collect::Cancelled => {
             // Still running at the provider: the record stays `submitted`.
             attempts.settle(hold, None);
@@ -581,14 +624,22 @@ async fn collect_once(
     attempts: &Attempts<'_>,
     call: &CallRequest,
     handle: &Value,
+    diagnostic: &mut Option<grida_fx_protocol::AdapterDiagnostic>,
 ) -> Collect {
     let Some((slot, _admission)) = attempts.admit(&call.route.id()).await else {
         return Collect::Cancelled;
     };
-    let collected = race(adapter.collect(call, handle), attempts.cancel).await;
+    let collected = race(adapter.collect(call, handle), attempts.cancel)
+        .await
+        .map(|outcome| {
+            let (outcome, detail) = outcome.into_report();
+            *diagnostic = detail;
+            outcome
+        });
     drop(slot);
     match collected {
         None => Collect::Cancelled,
+        Some(Collected::Diagnosed(..)) => unreachable!("diagnostic separated above"),
         Some(Collected::Answered(answer)) => {
             let cost = answer.cost;
             match attempts.accept(call, answer, |call, answer| adapter.check(call, answer)) {
@@ -608,6 +659,30 @@ async fn race<T>(request: BoxFuture<'_, T>, cancel: &Cancel) -> Option<T> {
         biased;
         out = request => Some(out),
         () = cancel.cancelled() => None,
+    }
+}
+
+/// Keep evidence only on a failure, after sanitizing it independently of its outcome.
+fn reported(
+    outcome: Outcome,
+    diagnostic: Option<grida_fx_protocol::AdapterDiagnostic>,
+    attempts: &Attempts<'_>,
+    redactor: &Redactor,
+) -> Outcome {
+    let outcome = redacted(outcome, redactor);
+    match (outcome, diagnostic) {
+        (
+            outcome @ (Outcome::Refused(_) | Outcome::Failed(_) | Outcome::Unsettled(_)),
+            Some(diagnostic),
+        ) => Outcome::Diagnosed(
+            Box::new(outcome),
+            Box::new(grida_fx_providers::diagnostic::sanitize(
+                diagnostic,
+                &attempts.call,
+                redactor,
+            )),
+        ),
+        (outcome, _) => outcome,
     }
 }
 
@@ -739,17 +814,24 @@ impl Attempts<'_> {
             state,
             handle: handle.cloned(),
             note: None,
+            diagnostic: None,
             ..fields.clone()
         })
     }
 
     /// Keeps the job record `submitting` with `note`, the redacted reason its submit's outcome is
     /// unknown (spec/store.md §5).
-    fn note(&self, fields: &JobRecord, note: &str) -> Result<(), StoreError> {
+    fn note(
+        &self,
+        fields: &JobRecord,
+        note: &str,
+        diagnostic: Option<&grida_fx_protocol::AdapterDiagnostic>,
+    ) -> Result<(), StoreError> {
         self.jobs.save_job(&JobRecord {
             state: JobState::Submitting,
             handle: None,
             note: Some(note.to_string()),
+            diagnostic: diagnostic.cloned(),
             ..fields.clone()
         })
     }
@@ -965,6 +1047,7 @@ mod tests {
             state: JobState::Submitting,
             handle: None,
             note: None,
+            diagnostic: None,
         }
     }
 

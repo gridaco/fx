@@ -392,3 +392,20 @@ Every picture the bodies write comes from Pillow's own PNG encoder, so `pillow` 
 other bytes, which would change every identity and request downstream of them.
 `grida.fx.std.body_of("fx/<name>@1")` returns a body; `grida.fx.std.pictures` holds the Pillow
 reads and writes behind `ctx.read.image` and `ctx.out.png`.
+
+## Provider-native operations and diagnostics
+
+Standard capability schemas do not limit the adapter extension path. A project
+node may call an adapter-declared custom capability with arbitrary data and
+files. The adapter implements its provider's wire and job semantics; FX still
+owns routing, identity, caching, holds, settlement and resume. The complete
+[native harness](../fixtures/native/README.md) demonstrates unknown fields,
+file transport, cancellation, collection without resubmission and independent
+call-cache replay in both languages.
+
+Failure outcomes accept `diagnostic=AdapterDiagnostic(source=, phase=, ...)`.
+Optional fields include `operation`, `http_status`, `code`, `field`, `message`,
+`request_id`, `task_id`, `detail`, `redacted` and `truncated`. The engine sanitizes
+these before recording them. A body sees them in `EngineError.data["diagnostic"]`;
+`RunResult.failures[id].diagnostic` and saved inspection/observation preserve them.
+Legacy records may have no diagnostic. Evidence never changes retry or billing.

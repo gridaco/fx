@@ -9,12 +9,14 @@
 //! `lower_snake_case` field names.
 
 pub mod adapter_types;
+pub mod diagnostic;
 pub mod framing;
 pub mod jsonrpc;
 pub mod run_types;
 pub mod types;
 
 pub use adapter_types::*;
+pub use diagnostic::*;
 pub use jsonrpc::{ErrorCode, Id, Message, RpcError};
 pub use run_types::*;
 pub use types::*;

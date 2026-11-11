@@ -750,6 +750,7 @@ dependencies = [
  "base64 0.22.1",
  "getrandom 0.3.4",
  "grida-fx-core",
+ "grida-fx-protocol",
  "grida-fx-providers",
  "image",
  "indexmap",

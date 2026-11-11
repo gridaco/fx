@@ -517,7 +517,7 @@ describe("outcomes", () => {
       [SUBMIT, { outcome: "accepted", handle: ["j-1"] }, "a handle is an object, not an array"],
       [SUBMIT, { outcome: "accepted" }, "a handle is an object, not undefined"],
       [SEND, { outcome: "answered", cost_usd: 1 }, "Answered holds outcome, files, data, costUsd and usage, not 'cost_usd'"],
-      [SEND, { outcome: "refused", reason: "x", costUsd: 0 }, "Refused holds outcome and reason, not 'costUsd'"],
+      [SEND, { outcome: "refused", reason: "x", costUsd: 0 }, "Refused holds outcome, reason and diagnostic, not 'costUsd'"],
       [SEND, { outcome: "accepted", handle: {} }, "send returns Answered, NotReceived, Refused or Failed, not Accepted"],
       [SEND, undefined, "send returns Answered, NotReceived, Refused or Failed, not undefined"],
       [SEND, { outcome: "done" }, "send returns Answered, NotReceived, Refused or Failed, not the outcome 'done'"],
@@ -720,4 +720,19 @@ describe("the adapter server", () => {
     expect(replies.answers).toEqual([]);
     expect(server.pending).toBe(0);
   });
+});
+
+test("diagnostics extend failures without changing legacy outcomes", async () => {
+  const diagnostic = { source: "provider", phase: "submit", operation: "future_operation", httpStatus: 400,
+    code: "bad_input", field: "new_field", message: "Unsupported new_field", requestId: "req-1", detail: "available" };
+  for (const [method, outcome] of [
+    [SEND, { outcome: "failed", reason: "rejected", retryable: false, diagnostic }],
+    [SUBMIT, { outcome: "uncertain", reason: "unknown receipt", diagnostic }],
+    [COLLECT, { outcome: "unreachable", reason: "unavailable", diagnostic }],
+  ] as const) {
+    const wire = await encodeOutcome(method, outcome);
+    expect(wire.diagnostic).toMatchObject({ request_id: "req-1", http_status: 400, source: "provider" });
+  }
+  expect(await encodeOutcome(SEND, { outcome: "failed", reason: "legacy", retryable: false })).not.toHaveProperty("diagnostic");
+  await expect(encodeOutcome(SUBMIT, { outcome: "uncertain", reason: "unknown", diagnostic: { source: "unknown", phase: "submit" } })).rejects.toThrow("diagnostic.source");
 });

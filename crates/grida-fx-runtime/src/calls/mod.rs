@@ -768,6 +768,19 @@ impl Lead<'_> {
                 JobState::Settled => None,
                 JobState::Submitting => {
                     let mut data = known.data();
+                    let mut unsettled_text = unsettled_text;
+                    if let Some(diagnostic) = record.diagnostic {
+                        if let Some(message) = &diagnostic.message
+                            && !message.is_empty()
+                        {
+                            unsettled_text.push_str("; ");
+                            unsettled_text.push_str(message);
+                        }
+                        data.insert(
+                            "diagnostic".into(),
+                            serde_json::to_value(diagnostic).expect("diagnostic is JSON"),
+                        );
+                    }
                     if let Some(note) = record.note {
                         data.insert("reason".into(), Value::from(note));
                     }
@@ -823,6 +836,7 @@ impl Lead<'_> {
             state: JobState::Submitting,
             handle: None,
             note: None,
+            diagnostic: None,
         };
         let tally = Tally {
             ledger,
@@ -877,10 +891,15 @@ impl Lead<'_> {
             (Adapter::Job(job), None) => retry::submit_job(job.as_ref(), &attempts).await,
             (Adapter::Request(plain), _) => retry::send_plain(plain.as_ref(), &attempts).await,
         };
+        let (outcome, diagnostic) = match outcome {
+            Outcome::Diagnosed(outcome, diagnostic) => (*outcome, Some(*diagnostic)),
+            outcome => (outcome, None),
+        };
         let charged = tally.charged();
         // What the log could not record stops the run, whatever the outcome.
         let unrecorded = tally.own_fault();
         let ended = match outcome {
+            Outcome::Diagnosed(..) => unreachable!("diagnostic separated above"),
             Outcome::Answered { answer, .. } => Ok(answer),
             Outcome::Refused(reason) => Err(known.error(
                 ErrorCode::CapabilityRefused,
@@ -913,7 +932,24 @@ impl Lead<'_> {
         };
         let answer = match ended {
             Ok(answer) => answer,
-            Err(error) => {
+            Err(mut error) => {
+                if let (Some(diagnostic), CallError::Rpc(rpc)) = (diagnostic, &mut error) {
+                    if let Some(message) = &diagnostic.message
+                        && !message.is_empty()
+                        && !rpc.message.contains(message)
+                    {
+                        rpc.message.push_str("; ");
+                        rpc.message.push_str(message);
+                    }
+                    if let Value::Object(data) =
+                        rpc.data.get_or_insert_with(|| Value::Object(Map::new()))
+                    {
+                        data.insert(
+                            "diagnostic".into(),
+                            serde_json::to_value(diagnostic).expect("diagnostic is JSON"),
+                        );
+                    }
+                }
                 if let Some(charged) = charged {
                     counter.add(charged);
                 }

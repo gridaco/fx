@@ -669,6 +669,7 @@ fn the_key_never_leaves_the_credential_slot() {
             adapter_over(transport.clone(), test_keys()).send(&call(json!({"prompt": "p"}))),
         );
         let shown = match &sent {
+            Sent::Diagnosed(..) => panic!("unexpected diagnostic in legacy fixture"),
             Sent::Answered(answer) => answer.data.to_string(),
             Sent::Failed { reason, .. }
             | Sent::NotReceived { reason, .. }

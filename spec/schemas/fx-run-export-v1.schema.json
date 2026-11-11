@@ -284,6 +284,9 @@
         },
         "skip_reason": {
           "$ref": "#/$defs/skip_reason"
+        },
+        "diagnostic": {
+          "$ref": "#/$defs/adapter_diagnostic"
         }
       },
       "allOf": [
@@ -886,6 +889,72 @@
           }
         }
       }
+    },
+    "adapter_diagnostic": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "enum": [
+            "engine",
+            "adapter",
+            "transport",
+            "provider"
+          ]
+        },
+        "phase": {
+          "enum": [
+            "validate",
+            "upload",
+            "send",
+            "submit",
+            "poll",
+            "collect",
+            "download"
+          ]
+        },
+        "operation": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "field": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "http_status": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 599
+        },
+        "detail": {
+          "enum": [
+            "available",
+            "unavailable",
+            "unreadable",
+            "withheld"
+          ]
+        },
+        "redacted": {
+          "type": "boolean"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "source",
+        "phase"
+      ],
+      "additionalProperties": false
     }
   }
 }

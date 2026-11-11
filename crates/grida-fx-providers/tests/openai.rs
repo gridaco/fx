@@ -1464,6 +1464,7 @@ fn the_key_travels_only_in_the_credential() {
 
     for sent in &outcomes {
         match sent {
+            Sent::Diagnosed(..) => panic!("unexpected diagnostic in legacy fixture"),
             Sent::Answered(answer) => {
                 assert_eq!(answer.data, Value::Null);
                 for file in answer.files.values() {

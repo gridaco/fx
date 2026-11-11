@@ -45,9 +45,12 @@ struct Checked<A: ?Sized> {
 
 impl RequestAdapter for Checked<dyn RequestAdapter> {
     fn send<'a>(&'a self, call: &'a CallRequest) -> BoxFuture<'a, Sent> {
-        match checks::before_send(call, &self.identity, || self.inner.check_contract(call)) {
+        match validation(call, &self.identity, || self.inner.check_contract(call)) {
             Ok(()) => self.inner.send(call),
-            Err(reason) => Box::pin(async move { Sent::Refused { reason } }),
+            Err((source, reason)) => Box::pin(async move {
+                let diagnostic = validation_diagnostic(call, source, &reason);
+                Sent::Refused { reason }.with_diagnostic(diagnostic)
+            }),
         }
     }
 
@@ -75,9 +78,12 @@ impl RequestAdapter for Checked<dyn RequestAdapter> {
 
 impl LongJob for Checked<dyn LongJob> {
     fn submit<'a>(&'a self, call: &'a CallRequest) -> BoxFuture<'a, Submitted> {
-        match checks::before_send(call, &self.identity, || self.inner.check_contract(call)) {
+        match validation(call, &self.identity, || self.inner.check_contract(call)) {
             Ok(()) => self.inner.submit(call),
-            Err(reason) => Box::pin(async move { Submitted::Refused { reason } }),
+            Err((source, reason)) => Box::pin(async move {
+                let diagnostic = validation_diagnostic(call, source, &reason);
+                Submitted::Refused { reason }.with_diagnostic(diagnostic)
+            }),
         }
     }
 
@@ -105,4 +111,29 @@ impl LongJob for Checked<dyn LongJob> {
     fn redactor(&self) -> Redactor {
         self.inner.redactor()
     }
+}
+
+fn validation_diagnostic(
+    call: &CallRequest,
+    source: grida_fx_protocol::DiagnosticSource,
+    reason: &str,
+) -> grida_fx_protocol::AdapterDiagnostic {
+    use grida_fx_protocol::{AdapterDiagnostic, DiagnosticDetail, DiagnosticPhase};
+    let mut diagnostic = AdapterDiagnostic::new(source, DiagnosticPhase::Validate);
+    diagnostic.operation = Some(call.route.capability.clone());
+    diagnostic.message = Some(reason.to_string());
+    diagnostic.detail = DiagnosticDetail::Available;
+    diagnostic
+}
+
+fn validation(
+    call: &CallRequest,
+    identity: &Identity,
+    own: impl FnOnce() -> Result<(), String>,
+) -> Result<(), (grida_fx_protocol::DiagnosticSource, String)> {
+    use grida_fx_protocol::DiagnosticSource;
+    checks::contract(&call.route, identity).map_err(|reason| (DiagnosticSource::Engine, reason))?;
+    own().map_err(|reason| (DiagnosticSource::Adapter, reason))?;
+    checks::request(&call.route.capability, &call.request)
+        .map_err(|reason| (DiagnosticSource::Engine, reason))
 }

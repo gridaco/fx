@@ -305,6 +305,7 @@ pub struct Attempt {
     pub stop: Option<String>,
     /// A failed attempt's error code (module doc, "Error codes"): `node_failed`'s `code`.
     pub code: Option<ErrorCode>,
+    pub diagnostic: Option<Box<grida_fx_protocol::AdapterDiagnostic>>,
 }
 
 impl Attempt {
@@ -317,6 +318,7 @@ impl Attempt {
             retryable: false,
             stop: None,
             code: None,
+            diagnostic: None,
         }
     }
 
@@ -328,7 +330,15 @@ impl Attempt {
             retryable: false,
             stop: Some(reason),
             code: Some(ErrorCode::Internal),
+            diagnostic: None,
         }
+    }
+
+    fn with_diagnostic(mut self, data: Option<&Value>) -> Self {
+        self.diagnostic = data
+            .and_then(|data| data.get("diagnostic"))
+            .and_then(|value| serde_json::from_value(value.clone()).ok());
+        self
     }
 
     /// The same attempt, failed with `code`.
@@ -386,6 +396,7 @@ fn from_cache(store: &Store, job: &InstanceJob) -> Option<Attempt> {
             facts,
             error: None,
         },
+        diagnostic: None,
         cache: CacheUse::Hit,
         retryable: false,
         stop: None,
@@ -440,9 +451,9 @@ async fn paid_builtin(
             let facts = failure_facts(&produced.facts, None);
             finish(store, job, produced.outputs, facts, counter.cost())
         }
-        Ok(Err(CallError::Rpc(error))) => {
-            Attempt::ran(failed(&error.message)).with_code(error.kind())
-        }
+        Ok(Err(CallError::Rpc(error))) => Attempt::ran(failed(&error.message))
+            .with_code(error.kind())
+            .with_diagnostic(error.data.as_ref()),
         Ok(Err(CallError::Cancelled)) => Attempt::ran(failed(STOPPED)),
         Ok(Err(CallError::Fault(message))) => Attempt::stopping(message, IndexMap::new()),
         Err(error) => Attempt::stopping(
@@ -592,7 +603,8 @@ async fn run_on_host(
 /// A host's error answer to `run` (module doc, step 5).
 fn host_error(error: RpcError, reported: &IndexMap<String, Value>, cancel: &Cancel) -> Attempt {
     let facts = failure_facts(reported, error.data.as_ref());
-    match error.kind() {
+    let diagnostic = error.data.clone();
+    let attempt = match error.kind() {
         Some(ErrorCode::NodeError) => {
             let exception = error
                 .data
@@ -618,7 +630,8 @@ fn host_error(error: RpcError, reported: &IndexMap<String, Value>, cancel: &Canc
         }
         // node_failure, load_failed, and every engine error the body let propagate.
         code => Attempt::ran(failure(error.message, facts)).with_code(code),
-    }
+    };
+    attempt.with_diagnostic(diagnostic.as_ref())
 }
 
 /// Steps 6 and 7: the judge's verdict, the `cost_usd` fact and the result record.

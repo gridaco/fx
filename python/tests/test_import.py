@@ -7,6 +7,7 @@ def test_the_sdk_imports() -> None:
         "Accepted",
         "Adapter",
         "AdapterCall",
+        "AdapterDiagnostic",
         "AdapterFile",
         "AdapterRoute",
         "Agent",

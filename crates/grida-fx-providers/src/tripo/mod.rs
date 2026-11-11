@@ -1,10 +1,11 @@
-//! Tripo: `mesh.generate` (multiview to model) and `mesh.rig`, both long jobs
+//! Tripo: `mesh.generate` (one image or named views) and `mesh.rig`, both long jobs
 //! (src/tripo/README.md; spec/capabilities.md §7–§8).
 //!
 //! Credential `authorization: Bearer <TRIPO_API_KEY>` on every request to the API base
 //! (`https://openapi.tripo3d.ai/v3`, no override variable), never on a model download. Every API
 //! answer is the envelope `{"code": 0, "data": {...}}` with HTTP 200 exactly ([`TripoApi::data`]);
-//! Tripo's error text is never read into a reason ("body withheld"). A submit runs a **free
+//! Selected provider error fields become sanitized diagnostic evidence; bodies are never kept.
+//! A submit runs a **free
 //! phase** first (uploads; for a rig, the riggability check) whose failures are `NotReceived` or
 //! `Refused`, then posts the one **paid** task exactly once. `collect` polls `GET /tasks/<id>`
 //! every [`POLL`] through the injected clock, then downloads every model URL of the finished task
@@ -101,6 +102,73 @@ fn error_code(body: &[u8]) -> String {
     }
 }
 
+/// Select only documented Tripo error fields. Never retain the envelope or wire inputs.
+fn error_diagnostic(
+    call: &CallRequest,
+    path: &str,
+    response: &HttpResponse,
+    redactor: &crate::redact::Redactor,
+) -> grida_fx_protocol::AdapterDiagnostic {
+    use grida_fx_protocol::{
+        AdapterDiagnostic, DiagnosticDetail, DiagnosticPhase, DiagnosticSource,
+    };
+    let mut diagnostic =
+        AdapterDiagnostic::new(DiagnosticSource::Provider, DiagnosticPhase::Submit);
+    diagnostic.operation = Some(path.trim_matches('/').replace('/', "."));
+    diagnostic.http_status = Some(response.status);
+    match serde_json::from_slice::<Value>(&response.body) {
+        Ok(Value::Object(body)) => {
+            diagnostic.code = body.get("code").and_then(|code| match code {
+                Value::Number(n) if n.is_i64() || n.is_u64() => Some(n.to_string()),
+                _ => None,
+            });
+            diagnostic.field = body
+                .get("field")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            diagnostic.request_id = body
+                .get("request_id")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            diagnostic.message = body
+                .get("message")
+                .and_then(Value::as_str)
+                .filter(|s| !s.trim().is_empty())
+                .map(str::to_string);
+            diagnostic.detail = if diagnostic.message.is_some() {
+                DiagnosticDetail::Available
+            } else {
+                DiagnosticDetail::Unavailable
+            };
+            diagnostic.task_id = body
+                .get("data")
+                .and_then(|v| v.get("task_id"))
+                .and_then(Value::as_str)
+                .map(str::to_string);
+        }
+        _ => diagnostic.detail = DiagnosticDetail::Unreadable,
+    }
+    sanitize_error(diagnostic, call, redactor)
+}
+
+/// Upload-token shapes may be echoed by a later task, after the submitting process ended.
+/// Retain trace IDs in their designated fields, but never keep file tokens in free text.
+fn sanitize_error(
+    diagnostic: grida_fx_protocol::AdapterDiagnostic,
+    call: &CallRequest,
+    redactor: &crate::redact::Redactor,
+) -> grida_fx_protocol::AdapterDiagnostic {
+    static FILE_TOKEN_TEXT: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"\bfile_[A-Za-z0-9_-]+\b").unwrap());
+    let mut diagnostic = diagnostic;
+    if let Some(message) = &diagnostic.message {
+        let safe = FILE_TOKEN_TEXT.replace_all(message, "[redacted upload token]");
+        diagnostic.redacted |= safe.as_ref() != message;
+        diagnostic.message = Some(safe.into_owned());
+    }
+    crate::diagnostic::sanitize(diagnostic, call, redactor)
+}
+
 /// Paid-POST statuses that say Tripo refused the task (src/tripo/README.md, "Paid POST"). They
 /// cost `None`: Tripo does not document a refusal as unbilled, and $0 is never inferred.
 const PAID_REFUSED: [u16; 5] = [400, 401, 403, 404, 422];
@@ -159,7 +227,7 @@ impl std::fmt::Debug for Task {
 }
 
 /// How waiting for a task ended.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum Waited {
     /// `success`.
     Done(Task),
@@ -168,10 +236,33 @@ pub enum Waited {
     Ended {
         status: String,
         credits_consumed: Option<Value>,
+        error_code: Option<String>,
+        error_message: Option<String>,
     },
     /// Still `queued`/`running` at the deadline, or every read failed until it, or an answer for
     /// another task or with an unknown status: the reason.
     Unreachable(String),
+}
+
+impl std::fmt::Debug for Waited {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Done(task) => f.debug_tuple("Done").field(task).finish(),
+            Self::Unreachable(reason) => f.debug_tuple("Unreachable").field(reason).finish(),
+            Self::Ended {
+                status,
+                credits_consumed,
+                error_code,
+                error_message,
+            } => f
+                .debug_struct("Ended")
+                .field("status", status)
+                .field("credits_consumed", credits_consumed)
+                .field("error_code", error_code)
+                .field("error_message", &error_message.as_ref().map(|_| "withheld"))
+                .finish(),
+        }
+    }
 }
 
 impl TripoApi {
@@ -214,6 +305,7 @@ impl TripoApi {
     /// 401, 403, 404, 413, 415, 422, a missing key, the network off), else `NotReceived`.
     pub async fn upload(
         &self,
+        call: &CallRequest,
         filename: &str,
         content_type: &str,
         bytes: Vec<u8>,
@@ -241,14 +333,24 @@ impl TripoApi {
                 );
             }
         };
+        let diagnostic = || {
+            let mut detail = error_diagnostic(call, "/files", &response, &self.client.redactor);
+            detail.phase = grida_fx_protocol::DiagnosticPhase::Upload;
+            detail
+        };
         if FREE_REFUSED.contains(&response.status) {
-            return Err(self.refused(&format!(
-                "Tripo refused the upload with HTTP {}{}",
-                response.status,
-                error_code(&response.body)
-            )));
+            return Err(self
+                .refused(&format!(
+                    "Tripo refused the upload with HTTP {}{}",
+                    response.status,
+                    error_code(&response.body)
+                ))
+                .with_diagnostic(diagnostic()));
         }
-        let data = Self::data(&response).map_err(|reason| self.took_nothing(reason, &response))?;
+        let data = Self::data(&response).map_err(|reason| {
+            self.took_nothing(reason, &response)
+                .with_diagnostic(diagnostic())
+        })?;
         match data.get("file_token") {
             Some(Value::String(token)) if FILE_TOKEN.is_match(token) => Ok(token.clone()),
             _ => Err(self.not_received("Tripo's upload answer has no usable file handle")),
@@ -329,6 +431,14 @@ impl TripoApi {
                             return Waited::Ended {
                                 status,
                                 credits_consumed: data.remove("credits_consumed"),
+                                error_code: data
+                                    .get("error_code")
+                                    .and_then(Value::as_i64)
+                                    .map(|n| n.to_string()),
+                                error_message: data
+                                    .get("error_message")
+                                    .and_then(Value::as_str)
+                                    .map(str::to_string),
                             };
                         }
                         last_status = Some(status);
@@ -452,7 +562,26 @@ impl TripoApi {
     /// Posts a paid task exactly once (src/tripo/README.md, "Paid POST") and returns its task
     /// id, or the outcome the submit reports. An `Uncertain` after a 200 names the task id Tripo
     /// returned when it is a safe field, so a person can find the task.
-    pub(crate) async fn post_task(&self, path: &str, body: Value) -> Result<String, Submitted> {
+    pub(crate) async fn post_task(
+        &self,
+        call: &CallRequest,
+        path: &str,
+        body: Value,
+    ) -> Result<String, Submitted> {
+        let mut redactor = self.client.redactor.clone();
+        fn tokens(value: &Value, redactor: &mut crate::redact::Redactor) {
+            match value {
+                Value::String(token) => *redactor = redactor.with(token),
+                Value::Array(items) => items.iter().for_each(|v| tokens(v, redactor)),
+                Value::Object(items) => items.values().for_each(|v| tokens(v, redactor)),
+                _ => {}
+            }
+        }
+        for name in ["input", "inputs"] {
+            if let Some(value) = body.get(name) {
+                tokens(value, &mut redactor);
+            }
+        }
         let credential = self.credential().map_err(|reason| self.refused(&reason))?;
         let request = HttpRequest::new(Method::Post, self.client.url(path), Lane::Provider)
             .credential(credential)
@@ -473,10 +602,23 @@ impl TripoApi {
                     self.not_received(&format!("the Tripo task was not sent: {}", error.reason))
                 );
             }
-            Err(error) => return Err(uncertain(&error.reason)),
+            Err(error) => {
+                let mut diagnostic = grida_fx_protocol::AdapterDiagnostic::new(
+                    grida_fx_protocol::DiagnosticSource::Transport,
+                    grida_fx_protocol::DiagnosticPhase::Submit,
+                );
+                diagnostic.operation = Some(path.trim_matches('/').replace('/', "."));
+                diagnostic.message = Some(error.reason.clone());
+                diagnostic.detail = grida_fx_protocol::DiagnosticDetail::Available;
+                return Err(uncertain(&error.reason)
+                    .with_diagnostic(crate::diagnostic::sanitize(diagnostic, call, &redactor)));
+            }
         };
+        let diagnostic = || error_diagnostic(call, path, &response, &redactor);
         if response.status == 429 {
-            return Err(self.took_nothing("Tripo took no task (HTTP 429)".into(), &response));
+            return Err(self
+                .took_nothing("Tripo took no task (HTTP 429)".into(), &response)
+                .with_diagnostic(diagnostic()));
         }
         if PAID_REFUSED.contains(&response.status) {
             return Err(Submitted::Failed {
@@ -487,10 +629,12 @@ impl TripoApi {
                 )),
                 cost: None,
                 retryable: false,
-            });
+            }
+            .with_diagnostic(diagnostic()));
         }
-        let data = Self::data(&response).map_err(|reason| uncertain(&reason))?;
-        match data.get("task_id") {
+        let data = Self::data(&response)
+            .map_err(|reason| uncertain(&reason).with_diagnostic(diagnostic()))?;
+        let result = match data.get("task_id") {
             Some(Value::String(id)) if TASK_ID.is_match(id) => Ok(id.clone()),
             Some(Value::String(id)) if SAFE_FIELD.is_match(id) => Err(uncertain(&format!(
                 "Tripo's answer names task {id}, which is not a task id FX collects"
@@ -499,7 +643,8 @@ impl TripoApi {
                 Err(uncertain("Tripo's answer has a malformed task id"))
             }
             _ => Err(uncertain("Tripo's answer has no task id")),
-        }
+        };
+        result.map_err(|outcome| outcome.with_diagnostic(diagnostic()))
     }
 
     /// Waits for a submitted task, then downloads every model it names, in order: the finished
@@ -509,6 +654,7 @@ impl TripoApi {
     #[allow(clippy::result_large_err)] // `Collected` is what every caller returns at once
     pub(crate) async fn finished_models(
         &self,
+        call: &CallRequest,
         task_id: &str,
         deadline: Duration,
     ) -> Result<(Task, Vec<(String, Vec<u8>)>), Collected> {
@@ -517,14 +663,30 @@ impl TripoApi {
             Waited::Ended {
                 status,
                 credits_consumed,
+                error_code,
+                error_message,
             } => {
                 let cost = ended_cost(&status, credits_consumed.as_ref());
+                let mut diagnostic = grida_fx_protocol::AdapterDiagnostic::new(
+                    grida_fx_protocol::DiagnosticSource::Provider,
+                    grida_fx_protocol::DiagnosticPhase::Collect,
+                );
+                diagnostic.operation = Some("tasks".into());
+                diagnostic.task_id = Some(task_id.into());
+                diagnostic.http_status = Some(200);
+                diagnostic.code = error_code;
+                diagnostic.message = error_message;
+                if diagnostic.message.is_some() {
+                    diagnostic.detail = grida_fx_protocol::DiagnosticDetail::Available;
+                }
+                let diagnostic = sanitize_error(diagnostic, call, &self.client.redactor);
                 return Err(Collected::Ended {
                     reason: self
                         .client
                         .reason(&format!("Tripo ended task {task_id} as {status}")),
                     cost,
-                });
+                }
+                .with_diagnostic(diagnostic));
             }
             Waited::Unreachable(reason) => return Err(Collected::Unreachable { reason }),
         };
@@ -555,6 +717,24 @@ impl TripoApi {
         Submitted::Refused {
             reason: self.client.reason(reason),
         }
+    }
+
+    /// A local encoding or input-format limitation, before any provider request.
+    pub(crate) fn invalid(&self, call: &CallRequest, reason: &str) -> Submitted {
+        use grida_fx_protocol::{
+            AdapterDiagnostic, DiagnosticDetail, DiagnosticPhase, DiagnosticSource,
+        };
+        let mut diagnostic =
+            AdapterDiagnostic::new(DiagnosticSource::Adapter, DiagnosticPhase::Validate);
+        diagnostic.operation = Some(call.route.capability.clone());
+        diagnostic.message = Some(reason.into());
+        diagnostic.detail = DiagnosticDetail::Available;
+        self.refused(reason)
+            .with_diagnostic(crate::diagnostic::sanitize(
+                diagnostic,
+                call,
+                &self.client.redactor,
+            ))
     }
 
     /// `Submitted::NotReceived` with a redacted reason and no wait asked for.

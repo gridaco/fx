@@ -29,6 +29,8 @@ export interface RunNode {
   outputs: Record<string, unknown>;
   cache: string | null;
   error: string | null;
+  /** Safe provider evidence recorded independently of node facts. */
+  diagnostic?: Record<string, unknown>;
   /** Structured engine-recorded cause; absent on older or unexplained skips. */
   skip_reason?: SkipReason;
   duration_ms: number | null;
@@ -97,6 +99,19 @@ function nullableNumber(value: unknown): value is number | null {
   return value === null || (typeof value === "number" && Number.isFinite(value));
 }
 
+function diagnostic(value: unknown): boolean {
+  const allowed = new Set(["source", "phase", "operation", "http_status", "code", "field", "message", "request_id", "task_id", "detail", "redacted", "truncated"]);
+  if (!record(value) || !["engine", "adapter", "transport", "provider"].includes(String(value.source))
+    || !["validate", "upload", "send", "submit", "poll", "collect", "download"].includes(String(value.phase))) return false;
+  if (Object.keys(value).some((key) => !allowed.has(key))) return false;
+  for (const key of ["operation", "code", "field", "message", "request_id", "task_id"]) {
+    if (value[key] !== undefined && typeof value[key] !== "string") return false;
+  }
+  return (value.http_status === undefined || typeof value.http_status === "number" && Number.isInteger(value.http_status) && value.http_status >= 100 && value.http_status <= 599)
+    && (value.detail === undefined || ["available", "unavailable", "unreadable", "withheld"].includes(String(value.detail)))
+    && ["redacted", "truncated"].every((key) => value[key] === undefined || typeof value[key] === "boolean");
+}
+
 function node(value: unknown): value is RunNode {
   return record(value)
     && [value.id, value.path, value.title, value.state].every((item) => typeof item === "string")
@@ -109,6 +124,7 @@ function node(value: unknown): value is RunNode {
     && record(value.outputs)
     && nullableString(value.cache)
     && nullableString(value.error)
+    && (value.diagnostic === undefined || diagnostic(value.diagnostic))
     && (value.skip_reason === undefined || value.state === "skipped" && isSkipReason(value.skip_reason))
     && nullableNumber(value.duration_ms)
     && (value.started_at === undefined || utcTimestamp(value.started_at))

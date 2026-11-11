@@ -116,6 +116,7 @@ fn every_event() -> Vec<Event> {
             duration_ms: 0,
         },
         Event::NodeFailed {
+            diagnostic: None,
             id: "a#1".into(),
             path: "a".into(),
             error: Some("refused on purpose".into()),
@@ -125,6 +126,7 @@ fn every_event() -> Vec<Event> {
             display: None,
         },
         Event::NodeFailed {
+            diagnostic: None,
             id: "a#1".into(),
             path: "a".into(),
             error: Some("an assertion failed".into()),
@@ -354,6 +356,7 @@ fn terminal_display_metadata_is_flattened_without_execution_values() {
     };
     let events = [
         Event::NodeFailed {
+            diagnostic: None,
             id: "dynamic['one']#1".into(),
             path: "dynamic['one']".into(),
             error: Some("assertion failed".into()),

@@ -1,0 +1,5 @@
+fx: routes/v1
+routes:
+  - capability: acme.native
+    route: model-a@acme
+    price: { cap_usd: 0.05 }

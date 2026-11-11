@@ -202,7 +202,7 @@ fn what_a_paid_builtin_sends_passes_the_capability_check() {
         let sent = sent_by(builtin);
         // Only the required members: a param the step left out with no default, and an input
         // port with no value, are absent from the request (spec/capabilities.md §1, §14).
-        let least: Map<String, Value> = sent
+        let mut least: Map<String, Value> = sent
             .iter()
             .filter(|s| s.required)
             .map(|s| {
@@ -212,6 +212,9 @@ fn what_a_paid_builtin_sends_passes_the_capability_check() {
                 (s.name.clone(), sample(*ty))
             })
             .collect();
+        if name == "mesh.generate" {
+            least.insert("image".into(), sample(MemberType::File));
+        }
         assert_eq!(
             check_request(name, &Value::Object(least.clone())),
             Ok(()),
@@ -219,7 +222,7 @@ fn what_a_paid_builtin_sends_passes_the_capability_check() {
             builtin.uses
         );
         // A param whose value is missing or null goes as `null`, which counts as absent.
-        let nulls: Map<String, Value> = sent
+        let mut nulls: Map<String, Value> = sent
             .iter()
             .map(|s| {
                 let value = match (&s.ty, s.required) {
@@ -229,6 +232,9 @@ fn what_a_paid_builtin_sends_passes_the_capability_check() {
                 (s.name.clone(), value)
             })
             .collect();
+        if name == "mesh.generate" {
+            nulls.insert("image".into(), sample(MemberType::File));
+        }
         assert_eq!(
             check_request(name, &Value::Object(nulls)),
             Ok(()),
@@ -236,7 +242,7 @@ fn what_a_paid_builtin_sends_passes_the_capability_check() {
             builtin.uses
         );
         // Every member, defaults where the built-in has them.
-        let most: Map<String, Value> = sent
+        let mut most: Map<String, Value> = sent
             .iter()
             .map(|s| {
                 let value = match (&s.default, &s.ty) {
@@ -247,6 +253,9 @@ fn what_a_paid_builtin_sends_passes_the_capability_check() {
                 (s.name.clone(), value)
             })
             .collect();
+        if name == "mesh.generate" {
+            most.remove("image");
+        }
         assert_eq!(
             check_request(name, &Value::Object(most)),
             Ok(()),

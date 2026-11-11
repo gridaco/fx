@@ -354,6 +354,7 @@ async fn a_submitted_job_is_collected_without_the_engines_refusals() {
             state: JobState::Submitted,
             handle: Some(handle.clone()),
             note: None,
+            diagnostic: None,
         })
         .unwrap();
     let (answered, _) = draw(&services, route, lantern()).await;

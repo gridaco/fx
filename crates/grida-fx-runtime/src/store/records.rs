@@ -516,6 +516,8 @@ pub struct JobRecord {
     /// provider's job id when one was returned (spec/store.md §5). Only a `submitting` record
     /// carries one.
     pub note: Option<String>,
+    /// Safe evidence retained with an uncertain submission.
+    pub diagnostic: Option<grida_fx_protocol::AdapterDiagnostic>,
 }
 
 impl JobRecord {
@@ -529,6 +531,12 @@ impl JobRecord {
         map.insert("take".into(), take_value(&self.take));
         map.insert("state".into(), Value::from(self.state.as_str()));
         map.insert("handle".into(), self.handle.clone().unwrap_or(Value::Null));
+        if let Some(diagnostic) = &self.diagnostic {
+            map.insert(
+                "diagnostic".into(),
+                serde_json::to_value(diagnostic).expect("diagnostic is JSON"),
+            );
+        }
         if let Some(note) = &self.note {
             map.insert("note".into(), Value::from(note.as_str()));
         }
@@ -552,7 +560,7 @@ impl JobRecord {
                 "state",
                 "handle",
             ],
-            &["note"],
+            &["note", "diagnostic"],
         )?;
         let state = map["state"]
             .as_str()
@@ -589,6 +597,9 @@ impl JobRecord {
                 return Err(format!("the note of {what} is {}, not text", word(other)));
             }
         };
+        if map.contains_key("diagnostic") && state != JobState::Submitting {
+            return Err(format!("{what} is {} and has a diagnostic", state.as_str()));
+        }
         Ok(JobRecord {
             key: digest_member(map, "key", what)?,
             capability: capability_member(map, what)?,
@@ -598,6 +609,13 @@ impl JobRecord {
             state,
             handle,
             note,
+            diagnostic: map
+                .get("diagnostic")
+                .map(|v| {
+                    serde_json::from_value(v.clone())
+                        .map_err(|_| "the job diagnostic is not a diagnostic".to_string())
+                })
+                .transpose()?,
         })
     }
 }

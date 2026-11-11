@@ -1,7 +1,9 @@
-//! Tripo `mesh.generate`: multiview to model (src/tripo/README.md).
+//! Tripo `mesh.generate`: one image or named views (src/tripo/README.md).
 //!
-//! `submit`: refuse a bad request (no `front`, a view other than front/back/left/right, `front`
-//! alone, a view that is not PNG or JPEG, `face_limit` outside 48..25 000, no key); upload each
+//! A single `image` uploads once and posts `input` to `/generation/image-to-model`, sharing
+//! defaults and collection with multiview.
+//! `submit`: refuse a bad multiview request (no `front`, a view other than front/back/left/right, `front`
+//! alone, a view that is not PNG or JPEG, no key); upload each
 //! view in the order front, back, left, right (`<view>.png` / `<view>.jpg`); then post `POST
 //! /generation/multiview-to-model` once with `{"model", "quad", "texture", "pbr", "face_limit"?,
 //! "inputs": [{"front": token}, …]}`, then the provider options, which may set no member of
@@ -11,7 +13,7 @@
 //!
 //! Refusals come in the order of spec/adapters.md §4: the route, the request's shape
 //! (spec/capabilities.md §7), the key, the values (provider options, then the view names, then
-//! their count, then `face_limit`), then the view files in the order front, back, left, right
+//! their count), then the view files in the order front, back, left, right
 //! (each: its bytes, then its kind). A multiview task takes two views at least: Tripo refuses
 //! `front` alone only at the paid POST (HTTP 400, after the uploads, a failed call at the whole
 //! hold), so the adapter refuses it first, at $0, before anything is sent.
@@ -28,14 +30,14 @@ pub const COLLECT_DEADLINE: Duration = Duration::from_secs(1200);
 /// The view names Tripo takes, in the order it takes them.
 pub const VIEWS: [&str; 4] = ["front", "back", "left", "right"];
 
-/// The `face_limit` range.
-pub const FACE_LIMIT: std::ops::RangeInclusive<i64> = 48..=25_000;
-
 /// The route contract's `adapter` this adapter serves.
 pub const ADAPTER: &str = "tripo-multiview";
 
 /// The paid task's path.
 pub const PATH: &str = "/generation/multiview-to-model";
+
+/// The single-image task uses the same upload and collection protocol.
+pub const IMAGE_PATH: &str = "/generation/image-to-model";
 
 /// The contract this adapter serves: [`ADAPTER`], and `adapter_behavior` the number 1.
 pub const IDENTITY: Identity = Identity {
@@ -45,7 +47,15 @@ pub const IDENTITY: Identity = Identity {
 
 /// The members provider options may not set (spec/adapters.md §8; src/tripo/README.md): those of
 /// the paid body.
-pub const OWNED: &[&str] = &["model", "quad", "texture", "pbr", "face_limit", "inputs"];
+pub const OWNED: &[&str] = &[
+    "model",
+    "quad",
+    "texture",
+    "pbr",
+    "face_limit",
+    "inputs",
+    "input",
+];
 
 const CAPABILITY: &str = "mesh.generate";
 
@@ -58,9 +68,14 @@ pub struct TripoMesh {
 /// A request's values, checked.
 struct Values {
     /// The views by name.
-    views: Map<String, Value>,
+    source: Source,
     /// The body's parameters, in wire order.
     params: Map<String, Value>,
+}
+
+enum Source {
+    Image(Value),
+    Views(Map<String, Value>),
 }
 
 /// One view ready to upload.
@@ -84,19 +99,24 @@ impl TripoMesh {
             return api.refused(&reason);
         }
         if let Err(reason) = api.client.credential() {
-            return api.refused(&reason);
+            return api.invalid(call, &reason);
         }
         let options = match crate::wire::provider_options(call, OWNED) {
             Ok(options) => options,
-            Err(reason) => return api.refused(&reason),
+            Err(reason) => return api.invalid(call, &reason),
         };
-        let Values { views, params } = match request_values(call) {
+        let Values { source, params } = match request_values(call) {
             Ok(values) => values,
-            Err(reason) => return api.refused(&reason),
+            Err(reason) => return api.invalid(call, &reason),
         };
-        let views = match view_files(call, &views) {
+        let single = matches!(&source, Source::Image(_));
+        let views = match &source {
+            Source::Image(image) => image_file(call, image).map(|image| vec![image]),
+            Source::Views(views) => view_files(call, views),
+        };
+        let views = match views {
             Ok(views) => views,
-            Err(reason) => return api.refused(&reason),
+            Err(reason) => return api.invalid(call, &reason),
         };
 
         // The free phase: every view, in Tripo's order.
@@ -104,11 +124,13 @@ impl TripoMesh {
         for view in views {
             let suffix = if view.kind == "image/png" {
                 "png"
+            } else if view.kind == "image/webp" {
+                "webp"
             } else {
                 "jpg"
             };
             let filename = format!("{}.{suffix}", view.name);
-            match api.upload(&filename, &view.kind, view.bytes).await {
+            match api.upload(call, &filename, &view.kind, view.bytes).await {
                 Ok(token) => {
                     let mut input = Map::new();
                     input.insert(view.name.to_string(), Value::String(token));
@@ -122,9 +144,15 @@ impl TripoMesh {
         let mut body = Map::new();
         body.insert("model".into(), Value::String(call.route.model.clone()));
         body.extend(params);
-        body.insert("inputs".into(), Value::Array(inputs));
+        let path = if single {
+            body.insert("input".into(), inputs[0]["image"].clone());
+            IMAGE_PATH
+        } else {
+            body.insert("inputs".into(), Value::Array(inputs));
+            PATH
+        };
         body.extend(options);
-        match api.post_task(PATH, Value::Object(body)).await {
+        match api.post_task(call, path, Value::Object(body)).await {
             Ok(task_id) => Submitted::Accepted {
                 handle: json!({ "task_id": task_id }),
             },
@@ -132,12 +160,12 @@ impl TripoMesh {
         }
     }
 
-    async fn collect_call(&self, handle: &Value) -> Collected {
+    async fn collect_call(&self, call: &CallRequest, handle: &Value) -> Collected {
         let api = &self.api;
         let Some(task_id) = super::handle_task_id(handle) else {
             return api.unreachable("the Tripo handle has no usable task id");
         };
-        let (task, models) = match api.finished_models(task_id, COLLECT_DEADLINE).await {
+        let (task, models) = match api.finished_models(call, task_id, COLLECT_DEADLINE).await {
             Ok(finished) => finished,
             Err(outcome) => return outcome,
         };
@@ -166,28 +194,35 @@ impl TripoMesh {
 /// least one other), and the body's parameters in wire order (`quad`, `texture`, `pbr`, then
 /// `face_limit` when given).
 fn request_values(call: &CallRequest) -> Result<Values, String> {
-    let views = match call.request.get("views") {
-        Some(Value::Object(views)) if !views.is_empty() => views.clone(),
-        _ => return Err("a mesh call needs its views, by name".into()),
+    let source = if let Some(image) = call.request.get("image").filter(|v| !v.is_null()) {
+        Source::Image(image.clone())
+    } else {
+        let views = match call.request.get("views") {
+            Some(Value::Object(views)) if !views.is_empty() => views.clone(),
+            _ => return Err("a mesh call needs its views, by name".into()),
+        };
+        let mut unknown: Vec<&str> = views
+            .keys()
+            .map(String::as_str)
+            .filter(|name| !VIEWS.contains(name))
+            .collect();
+        unknown.sort_unstable();
+        if !unknown.is_empty() || !views.contains_key("front") {
+            let taken = "a multiview task takes front and any of back, left, right";
+            return Err(if unknown.is_empty() {
+                taken.to_string()
+            } else {
+                format!("{taken}; not {}", unknown.join(", "))
+            });
+        }
+        // Every name is known and one is `front`, so a single name is `front` alone.
+        if views.len() < 2 {
+            return Err(
+                "a multiview task takes front and at least one of back, left, right".into(),
+            );
+        }
+        Source::Views(views)
     };
-    let mut unknown: Vec<&str> = views
-        .keys()
-        .map(String::as_str)
-        .filter(|name| !VIEWS.contains(name))
-        .collect();
-    unknown.sort_unstable();
-    if !unknown.is_empty() || !views.contains_key("front") {
-        let taken = "a multiview task takes front and any of back, left, right";
-        return Err(if unknown.is_empty() {
-            taken.to_string()
-        } else {
-            format!("{taken}; not {}", unknown.join(", "))
-        });
-    }
-    // Every name is known and one is `front`, so a single name is `front` alone.
-    if views.len() < 2 {
-        return Err("a multiview task takes front and at least one of back, left, right".into());
-    }
     let flag = |name: &str, default: bool| {
         call.request
             .get(name)
@@ -199,21 +234,31 @@ fn request_values(call: &CallRequest) -> Result<Values, String> {
     params.insert("texture".into(), Value::Bool(flag("texture", true)));
     params.insert("pbr".into(), Value::Bool(flag("pbr", false)));
     if let Some(limit) = call.request.get("face_limit").filter(|v| !v.is_null()) {
-        let limit = limit
-            .as_f64()
-            .filter(|x| x.fract() == 0.0 && x.is_finite())
-            .map(|x| x as i64)
-            .filter(|x| FACE_LIMIT.contains(x))
-            .ok_or_else(|| {
-                format!(
-                    "face_limit is {} to {}",
-                    FACE_LIMIT.start(),
-                    FACE_LIMIT.end()
-                )
-            })?;
-        params.insert("face_limit".into(), json!(limit));
+        // The capability checks its integer type. Model/topology limits belong to Tripo;
+        // do not narrow or cast a canonical integer using a stale provider snapshot.
+        let integer = serde_json::from_str(&grida_fx_core::value::canon(limit))
+            .expect("a checked canonical integer is JSON");
+        params.insert("face_limit".into(), integer);
     }
-    Ok(Values { views, params })
+    Ok(Values { source, params })
+}
+
+fn image_file(call: &CallRequest, image: &Value) -> Result<View, String> {
+    let file = crate::wire::request_file(call, image, "the source image")?;
+    if !matches!(
+        file.kind.as_str(),
+        "image/png" | "image/jpeg" | "image/webp"
+    ) {
+        return Err(format!(
+            "the source image is {}; Tripo takes PNG, JPEG or WebP",
+            file.kind
+        ));
+    }
+    Ok(View {
+        name: "image",
+        kind: file.kind.clone(),
+        bytes: crate::wire::read_file(file, "the source image")?,
+    })
 }
 
 /// The view files (spec/adapters.md §4 step 5), in Tripo's order: each must resolve to readable
@@ -247,12 +292,8 @@ impl LongJob for TripoMesh {
         Box::pin(self.submit_call(call))
     }
 
-    fn collect<'a>(
-        &'a self,
-        _call: &'a CallRequest,
-        handle: &'a Value,
-    ) -> BoxFuture<'a, Collected> {
-        Box::pin(self.collect_call(handle))
+    fn collect<'a>(&'a self, call: &'a CallRequest, handle: &'a Value) -> BoxFuture<'a, Collected> {
+        Box::pin(self.collect_call(call, handle))
     }
 
     fn identity(&self) -> Option<Identity> {

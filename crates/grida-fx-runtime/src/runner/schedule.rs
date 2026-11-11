@@ -224,6 +224,7 @@ pub fn settle(
                     id: instance.id.clone(),
                     result: crate::executor::failed(&error),
                     event: Event::NodeFailed {
+                        diagnostic: None,
                         id: instance.id.clone(),
                         path: instance.path.clone(),
                         error: Some(error),
@@ -272,6 +273,7 @@ pub fn overturned(
                     ..crate::executor::failed(&error)
                 },
                 event: Event::NodeFailed {
+                    diagnostic: None,
                     id: instance.id.clone(),
                     path: instance.path.clone(),
                     error: Some(error),
@@ -775,6 +777,7 @@ mod tests {
         assert_eq!(
             settled[2].event,
             Event::NodeFailed {
+                diagnostic: None,
                 id: "x['k']#1".into(),
                 path: "x['k']".into(),
                 error: Some("x: the image is too small".into()),

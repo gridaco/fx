@@ -450,15 +450,18 @@ impl GgRig {
             .await
         {
             Ok(job) => job,
-            Err(Collected::Ended { reason, .. }) => return Err(Submitted::Refused { reason }),
-            Err(Collected::Unreachable { reason }) => {
-                return Err(Submitted::NotReceived {
-                    reason,
-                    retry_after: None,
+            Err(outcome) => {
+                let (outcome, diagnostic) = outcome.into_report();
+                let outcome = match outcome {
+                    Collected::Ended { reason, .. } => Submitted::Refused { reason },
+                    Collected::Unreachable { reason } => Submitted::not_received(reason),
+                    Collected::Answered(_) => not_received("GG's rig check answered with a file"),
+                    Collected::Diagnosed(..) => unreachable!("diagnostic separated above"),
+                };
+                return Err(match diagnostic {
+                    Some(diagnostic) => outcome.with_diagnostic(diagnostic),
+                    None => outcome,
                 });
-            }
-            Err(Collected::Answered(_)) => {
-                return Err(not_received("GG's rig check answered with a file"));
             }
         };
         let result = job.get("result");

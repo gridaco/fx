@@ -250,7 +250,7 @@ Types marked *planned* plan and price but cannot run yet.
 | `fx/speech.generate@1` | `text`, `voice`, `stability`, `language_code`, `max_chars` → `audio` | paid |
 | `fx/sound.generate@1` | `prompt`, `duration`, `prompt_influence`, `loop` → `audio` | paid |
 | `fx/music.generate@1` | `prompt`, `duration` → `audio` | paid |
-| `fx/mesh.generate@1` | `views` (`front` plus `back`, `left` or `right`), `face_limit`, `quad`, `texture`, `pbr` → `model` | paid, long job |
+| `fx/mesh.generate@1` | exactly one of `image` or `views` (`front` plus `back`, `left` or `right`), `face_limit`, `quad`, `texture`, `pbr` → `model` | paid, long job |
 | `fx/mesh.rig@1` | `model`, `rig_type`, `skeleton` → `model` (binary glTF) | paid, long job |
 | `fx/image.check_alpha@1` | `image`, `expect` (`transparent`, `opaque`) → verdict | free judge (Python) |
 | `fx/image.check_size@1` | `image`, `width`, `height` → verdict | free judge (Python) |
@@ -270,6 +270,11 @@ Every paid type also takes `provider_options`: parameters FX does not expose, by
 and providers, below). A prompt may be a template file (`prompt: ./prompts/draw.md`), rendered with
 the step's `vars:` and the workflow's `inputs`. Until `vision.review` runs, a model's judgement is a
 `structured.generate` answer read by a judge you write (recipe below).
+
+Single-image mesh generation uses `P2-20260801@tripo`; the built-in GG mesh route
+supports named views only. The plan refuses `image` on a route without `image_input`.
+Tripo uploads the source PNG, JPEG or WebP, submits its image-to-model operation,
+and collects the same kind of long job as multiview. No second view is manufactured.
 
 ## Routes and providers
 
@@ -508,6 +513,36 @@ routes:
   image routes now take `background: transparent` (they refused it, so a step that `requires:
   [alpha]` now plans on them), and the built-in GG video route declares `text_to_video`. A Tripo
   model whose address has a fragment is no longer downloaded, as a fal output's never was.
+
+### Native operations and provider diagnostics
+
+Standard capabilities have FX's schemas and answer guarantees. A project adapter may also
+serve a custom capability, called by a project node through `ctx.capability`. Its request can
+contain arbitrary canonical data and files: the engine does not copy the provider's input
+schema. Its adapter still owns uploads, submission, polling and output mapping. Routing,
+identity, cache, holds, settlement and resume work as for a standard call. `provider_options`
+adds settings to an existing operation; it does not select an arbitrary endpoint or disable a
+standard capability's validation. See the native-operation recipe below.
+
+Failure outcomes may carry `diagnostic`: Python's `AdapterDiagnostic(source=, phase=, ...)`,
+or a TypeScript object with `source`, `phase`, `operation`, `httpStatus`, `code`, `field`,
+`message`, `requestId`, `taskId`, `detail`, `redacted` and `truncated` (all but source and phase
+optional). Wire and recorded fields use lower_snake_case. Sources are `engine`, `adapter`,
+`transport`, `provider`; phases are `validate`, `upload`, `send`, `submit`, `poll`, `collect`,
+`download`. Detail is `available`, `unavailable`, `unreadable` or `withheld`. The engine bounds
+and redacts evidence, input echoes and local paths before recording it. Adapters extract only
+known error fields, never whole bodies or headers; they must register transient secrets or
+withhold them before returning detail.
+
+The sanitized diagnostic is in a body's `EngineError.data["diagnostic"]`, a `node_failed`
+event's `diagnostic`, `project` and `inspect --json`. Python also exposes
+`result.failures[id].diagnostic`; JavaScript exposes `result.steps[id].diagnostic`.
+The provider explanation is included in the human error when safe. Older adapters and records
+may have only a reason. Tripo supplies diagnostics for paid submission, upload refusals and
+terminal task failures; other built-in adapters may still give reasons without structured
+evidence. Receipt and billing remain independent: a provider rejection does not prove $0,
+and a 5xx or unreadable paid-submit response remains uncertain. Its retained diagnostic
+survives a later `job_unsettled`; FX does not submit it again automatically.
 
 ## Your own nodes
 
@@ -1316,6 +1351,100 @@ export const acme = adapter({
   version: 1,
 });
 ```
+
+Tripo mesh calls forward integer `face_limit` values without an FX copy of the provider's
+model/topology ranges. Provider rejections retain their explanation. Local Tripo mesh
+encoding and source-format refusals report `source: adapter`, `phase: validate`.
+Diagnostic input-echo redaction applies to identifiers and operation names as well as messages;
+unsafe optional metadata is withheld. Even exports including diagnostics keep that protection.
+
+### A provider-native operation outside FX's standard schemas
+
+This synthetic provider never opens the network. It demonstrates arbitrary fields and file
+inputs through the managed job path. Replace the adapter bodies with the provider's protocol
+for a real operation; keep retries owned by FX and distinguish uncertain receipt from refusal.
+
+```yaml
+# fx.yaml
+fx: project/v1
+route_tables: [routes.yaml]
+providers:
+  acme:
+    base_url: { default: "https://api.acme.test/v1" }
+    adapter: adapters/native.py#native_adapter
+```
+
+```yaml
+# routes.yaml
+fx: routes/v1
+routes:
+  - capability: acme.native
+    route: model-a@acme
+    price: { cap_usd: 0.05 }
+```
+
+```python
+# adapters/native.py
+from grida.fx import Accepted, Answered, adapter
+
+
+def submit(call):
+    # A real implementation uploads call.request["source"] and submits exactly once.
+    return Accepted({"task_id": call.key[:16]})
+
+
+def collect(call):
+    # A real implementation only polls/downloads; it never creates another task.
+    return Answered.json({
+        "task_id": call.handle["task_id"],
+        "future_face_budget": call.request["future_face_budget"],
+        "source_bytes": len(call.request["source"].read_bytes()),
+    }, cost_usd=0)
+
+
+native_adapter = adapter(jobs=["acme.native"], submit=submit, collect=collect, version=1)
+```
+
+```python
+# nodes/native.py
+from grida.fx import Ctx, node
+
+
+@node("native", inputs={"source": "file"}, outputs={"result": "json"},
+      calls={"acme.native": 1}, version=1)
+async def native(ctx: Ctx) -> dict:
+    answer = await ctx.capability("acme.native", source=ctx.inputs["source"],
+                                  future_face_budget=70000, new_provider_field={"enabled": True})
+    return {"result": ctx.out.json(answer.json)}
+```
+
+```text
+# source.txt
+Synthetic native input.
+```
+
+```yaml
+# workflows/native.yaml
+fx: workflow/v1
+id: native
+title: A native operation managed by FX
+steps:
+  make:
+    uses: ./nodes/native.py#native
+    route: model-a@acme
+    with: { source: ./source.txt }
+outputs:
+  result: ${{ steps.make.outputs.result }}
+```
+
+```sh
+grida fx plan native
+GRIDA_FX_NETWORK=off grida fx run native --live --max-usd 1
+```
+
+[The native harness](https://github.com/gridaco/fx/tree/main/fixtures/native) contains Python
+and TypeScript versions with real cancellation/resume, independent call-cache replay,
+changed-file/field/operation identities and redacted provider errors, tested through both SDKs.
 
 ## When something fails
 
