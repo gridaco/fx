@@ -234,4 +234,4 @@ there is no automatic reconnect. Disposing a client does not close the page or
 affect the FX service or workflow execution.
 
 For the raw message format, context types, and compatibility rules, see the
-[viewer page contract](https://github.com/gridaco/fx/blob/main/spec/viewer.md).
+[viewer page contract](../../spec/viewer.md).

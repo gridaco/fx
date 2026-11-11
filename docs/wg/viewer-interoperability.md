@@ -4,8 +4,8 @@
 [#126](https://github.com/gridaco/fx/issues/126), 2026-11-11; pending release.**
 The delivery is the page-level API, `postMessage` transport, context subscriptions,
 presentation actions, a repo-shared contract, and the browser-safe
-`@grida/fx/viewer/client` entry. [The viewer contract](https://github.com/gridaco/fx/blob/main/spec/viewer.md) is
-normative; [browser/client guidance](https://github.com/gridaco/fx/blob/main/js/fx/README.md#browser-viewer-client)
+`@grida/fx/viewer/client` entry. [The viewer contract](../../spec/viewer.md) is
+normative; [browser/client guidance](../../js/fx/README.md#browser-viewer-client)
 describes the implemented interface.
 
 ## Model
@@ -242,7 +242,7 @@ hosts should avoid echoing unchanged context into presentation calls.
 ## References
 
 - [Issue #126](https://github.com/gridaco/fx/issues/126)
-- [Local service](https://github.com/gridaco/fx/blob/main/spec/service.md)
-- [Run observation](https://github.com/gridaco/fx/blob/main/spec/observation.md)
-- [Portable run exports](https://github.com/gridaco/fx/blob/main/spec/exports.md)
-- [Canvas layout](https://github.com/gridaco/fx/blob/main/spec/layout.md)
+- [Local service](../../spec/service.md)
+- [Run observation](../../spec/observation.md)
+- [Portable run exports](../../spec/exports.md)
+- [Canvas layout](../../spec/layout.md)
