@@ -1,4 +1,4 @@
-import { ViewerProtocol } from "../../../js/fx/src/viewer-protocol.js";
+import { ViewerProtocol } from "../../../js/fx/src/viewer-protocol";
 import type { CanvasGraph, LayoutReport } from "./graph";
 import type { ViewerView } from "./index";
 import { navigationScopes } from "./scopes";

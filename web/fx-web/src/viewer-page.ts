@@ -1,4 +1,4 @@
-import { ViewerProtocol } from "../../../js/fx/src/viewer-protocol.js";
+import { ViewerProtocol } from "../../../js/fx/src/viewer-protocol";
 import { ViewerPresentationError } from "./presentation";
 
 export interface ViewerPageSource {
